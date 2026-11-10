@@ -6,7 +6,9 @@
 // windows and the cover are ordered front without activation.
 #import <Cocoa/Cocoa.h>
 #import <Network/Network.h>
+#import <QuartzCore/QuartzCore.h>
 #import <WebKit/WebKit.h>
+#import "support/event_wait.h"
 #import "support/temporary_folder.h"
 #import "capture.h"
 #import "document_view.h"
@@ -32,25 +34,25 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-// Runs the application event queue and the run loop for the given time.
-static void pump(NSTimeInterval seconds) {
-    NSDate *end = [NSDate dateWithTimeIntervalSinceNow:seconds];
-    do {
-        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]
-            inMode:NSDefaultRunLoopMode dequeue:YES];
-        if (event) [NSApp sendEvent:event];
-    } while ([end timeIntervalSinceNow] > 0);
+// Counts the refreshes of a screen.
+@interface SPRefreshes : NSObject
+@property int left;
+@end
+@implementation SPRefreshes
+- (void)tick:(CADisplayLink *)link {
+    if (--self.left == 0) [link invalidate];
 }
+@end
 
-// Pumps until done answers YES or seconds pass, and returns the last answer.
-static BOOL within(NSTimeInterval seconds, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:seconds];
-    while (!done() && deadline.timeIntervalSinceNow > 0) pump(0.05);
-    return done();
-}
-
-static void until(NSString *what, BOOL (^done)(void)) {
-    if (!within(10, done)) { fprintf(stderr, "FAIL: %s within 10 seconds\n", what.UTF8String); exit(1); }
+// Runs the run loop until the screen of the window has refreshed count times, and sends the events that arrive meanwhile to the
+// application.
+static void afterRefreshes(NSWindow *window, int count, NSString *what) {
+    SPRefreshes *refreshes = [[SPRefreshes new] autorelease];
+    refreshes.left = count;
+    // A link retains its target until it is invalidated.
+    [[(window.screen ?: NSScreen.mainScreen) displayLinkWithTarget:refreshes selector:@selector(tick:)]
+        addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
+    eventWait(what, ^BOOL { return refreshes.left == 0; });
 }
 
 // The page is one static colour.
@@ -82,7 +84,7 @@ static nw_listener_t serve(void) {
         if (state == nw_listener_state_ready) ready = YES;
     });
     nw_listener_start(listener);
-    until(@"the test server did not start", ^BOOL { return ready; });
+    eventWait(@"the test server starts", ^BOOL { return ready; });
     return listener;
 }
 
@@ -93,7 +95,7 @@ static id evaluate(WKWebView *view, NSString *script) {
         result = [value retain];
         done = YES;
     }];
-    until(@"JavaScript did not answer", ^BOOL { return done; });
+    eventWait(@"JavaScript answers", ^BOOL { return done; });
     return [result autorelease];
 }
 
@@ -101,16 +103,20 @@ static NSString *visibility(WKWebView *view) {
     return [evaluate(view, @"document.visibilityState") description];
 }
 
-// Waits until the document has the visibility, and reports whether it has it.
+// Waits until the document has the visibility, and reports whether it has it. Each judgment is a JavaScript round trip.
 static BOOL becomes(WKWebView *view, NSString *state) {
-    return within(10, ^BOOL { return [visibility(view) isEqual:state]; });
+    eventWait([NSString stringWithFormat:@"the document becomes %@", state], ^BOOL { return [visibility(view) isEqual:state]; });
+    return [visibility(view) isEqual:state];
 }
 
+// Waits for the next presentation of the document and then for two refreshes of its screen: the window server composites the
+// presented frame at the next refresh, so a capture after the second one holds it.
 static void waitForPresentation(WKWebView *view) {
     __block BOOL presented = NO;
     [view _doAfterNextPresentationUpdate:^{ presented = YES; }];
-    check(within(10, ^BOOL { return presented; }), @"the document presents");
-    pump(0.5);
+    eventWait(@"the next presentation of the document", ^BOOL { return presented; });
+    check(presented, @"the document presents");
+    afterRefreshes(view.window, 2, @"the screen composites the presented document");
 }
 
 static void changed(void *context, const char *text) {}
@@ -147,7 +153,7 @@ static WKWebView *openDocument(Window window, NSString *store, NSString *address
     sp_document_place(document, left, top, right, bottom, true);
     check(sp_document_load(document, address.UTF8String), @"the local page address is accepted");
     WKWebView *view = (WKWebView *)document;
-    until(@"the page did not load", ^BOOL {
+    eventWait(@"the page loads", ^BOOL {
         return [[evaluate(view, @"document.readyState") description] isEqual:@"complete"];
     });
     return view;
@@ -233,41 +239,50 @@ int main(void) { @autoreleasepool {
     // The region of the first window spans x 40 to 280 and y 60 to 260 of the content view.
     WKWebView *region = openDocument(first, store, address, 40, 60, 220, 140);
     WKWebView *otherRegion = openDocument(other, store, address, 40, 60, 220, 140);
-    until(@"the windows did not come on screen", ^BOOL { return !occluded(first.window) && !occluded(other.window); });
+    eventWait(@"the windows come on screen", ^BOOL { return !occluded(first.window) && !occluded(other.window); });
     check([visibility(region) isEqual:@"visible"] && [visibility(otherRegion) isEqual:@"visible"],
         @"the regions of the uncovered windows show their documents");
     waitForPresentation(region);
     CGFloat scale = first.window.backingScaleFactor;
-    // The window controls of a window that has just appeared can still change, so the capture before the cover is taken
-    // after they settle.
-    pump(3);
+    // The window controls of a window that has just appeared can still change; the comparisons leave out the title bar, so the
+    // capture before the cover follows the composite of the presented document.
     Image uncovered = capture(first.window, folder, @"uncovered");
     check(pixelAt(uncovered, scale, 160, 160) == kPageColor,
         [NSString stringWithFormat:@"the uncovered capture holds the document (%06x)", pixelAt(uncovered, scale, 160, 160)]);
 
-    // Set before the cover.
+    // Set before the cover. WebKit hides the document of an occluded window after a delay, and nothing reports that a document
+    // stayed shown. The first window is covered first and the other window after it, so the delay of the other region starts
+    // after the delay of the first region: when the other region has hidden its document, the first region is past its delay.
     check(sp_document_draw_covered(first.window, true), @"the first window draws its document regions while covered");
+    NSWindow *firstCover = [[[NSWindow alloc] initWithContentRect:NSInsetRect(first.window.frame, -40, -40)
+        styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO] autorelease];
+    [firstCover setReleasedWhenClosed:NO];
+    firstCover.animationBehavior = NSWindowAnimationBehaviorNone;
+    firstCover.backgroundColor = NSColor.blackColor;
+    [firstCover orderFrontRegardless];
+    eventWait(@"the first cover occludes the first window", ^BOOL { return occluded(first.window); });
+    check(!occluded(other.window), @"the first cover leaves a part of the other window visible");
     NSWindow *cover = [[[NSWindow alloc] initWithContentRect:NSInsetRect(NSUnionRect(first.window.frame, other.window.frame), -40, -40)
         styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO] autorelease];
     [cover setReleasedWhenClosed:NO];
     cover.animationBehavior = NSWindowAnimationBehaviorNone;
     cover.backgroundColor = NSColor.blackColor;
     [cover orderFrontRegardless];
-    until(@"the cover did not occlude the windows", ^BOOL { return occluded(first.window) && occluded(other.window); });
+    eventWait(@"the cover occludes both windows", ^BOOL { return occluded(first.window) && occluded(other.window); });
     check(becomes(otherRegion, @"hidden"), @"the region of the other covered window hides its document");
-    // WebKit hides the document of an occluded window after a delay, so the region stays shown past it.
-    pump(3);
     check([visibility(region) isEqual:@"visible"], @"the region of the covered window shows its document when the state was set before the cover");
     waitForPresentation(region);
     Image before = capture(first.window, folder, @"covered-set-before");
     check(sameContent(uncovered, before, scale), [NSString stringWithFormat:
         @"the covered capture with the state set before the cover equals the uncovered capture (%@)", differences(uncovered, before, scale)]);
 
-    // The state ends while the window is covered: the region hides its document and does not draw a change.
+    // The state ends while the window is covered: the region hides its document and does not draw a change. A drawing document
+    // runs the animation frame at the first refresh after the script and commits it, the frame is presented at the next refresh
+    // and the window server composites it at the one after, so a capture after the fourth refresh would hold the change.
     check(sp_document_draw_covered(first.window, false), @"the first window ends drawing its document regions while covered");
     check(becomes(region, @"hidden"), @"the covered region hides its document after the state ends");
     evaluate(region, kBlue);
-    pump(1);
+    afterRefreshes(first.window, 4, @"the screen refreshes four times after the change of the hidden document");
     Image ended = capture(first.window, folder, @"covered-ended");
     check(pixelAt(ended, scale, 160, 160) == kPageColor, [NSString stringWithFormat:
         @"the covered capture after the state ends does not show the change of the hidden document (%06x)", pixelAt(ended, scale, 160, 160)]);
@@ -285,9 +300,13 @@ int main(void) { @autoreleasepool {
     check(sameContent(uncovered, restored, scale), [NSString stringWithFormat:
         @"the covered capture with the state set during the cover equals the uncovered capture (%@)", differences(uncovered, restored, scale)]);
 
-    // A region created later in the covered window takes the state; the other window keeps hiding its region.
+    // A region created later in the covered window takes the state; the other window keeps hiding its region. A probe region
+    // created after it in the other covered window, which has no state, hides its document after the delay of a region created
+    // in a covered window; when it has hidden, the later region is past the same delay.
     WKWebView *later = openDocument(first, store, address, 300, 60, 20, 140);
-    pump(3);
+    WKWebView *probe = openDocument(other, store, address, 300, 60, 20, 140);
+    check(becomes(probe, @"hidden"), @"a region created in a covered window without the state hides its document");
+    sp_document_close(probe);
     check([visibility(later) isEqual:@"visible"], @"a region created while the state is on shows its document while covered");
     waitForPresentation(later);
     Image created = capture(first.window, folder, @"covered-created");
@@ -313,6 +332,7 @@ int main(void) { @autoreleasepool {
     check(sp_document_draw_covered(first.window, false), @"the state of the first window ends");
     check(!NSApp.isActive, @"the application stays inactive");
     [cover close];
+    [firstCover close];
     sp_document_close(later);
     sp_document_close(region);
     sp_document_close(otherRegion);

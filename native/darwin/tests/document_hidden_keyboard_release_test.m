@@ -5,6 +5,7 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
+#import "support/event_wait.h"
 #import "support/temporary_folder.h"
 #import "document_view.h"
 #import "webview_geometry.h"
@@ -71,23 +72,28 @@ static void giveKeyboard(NSWindow *window, void *view) {
 }
 
 // Closes document and waits until it is released, as WebKit can release the last references of a closed web view on a later turn of
-// the main run loop. Each turn runs in its own pool, which it drains. A document that stays names its retain count and its superview.
+// the main run loop. A reference that such a turn autoreleases ends with the pool that each judgment drains, so the release of
+// the document ends the wait. A document that has not gone at the first judgment names its retain count and its superview once.
 static void closeAndWait(void *document, const BOOL *released, NSString *message) {
     @autoreleasepool {
         sp_document_close(document);
     }
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:5];
-    while (!*released && deadline.timeIntervalSinceNow > 0) {
-        @autoreleasepool {
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+    __block BOOL printed = NO;
+    __block NSAutoreleasePool *turnPool = [NSAutoreleasePool new];
+    eventWait(@"the closed document is released", ^BOOL {
+        [turnPool drain];
+        turnPool = [NSAutoreleasePool new];
+        if (*released) return YES;
+        if (!printed) {
+            // The marker was not released, so the document is alive and can be asked.
+            NSView *view = (NSView *)document;
+            fprintf(stdout, "the document %p stays with retain count %lu and superview %p\n", document,
+                (unsigned long)view.retainCount, (void *)view.superview);
         }
-    }
-    if (!*released) {
-        // The marker was not released, so the document is alive and can be asked.
-        NSView *view = (NSView *)document;
-        fprintf(stderr, "the document %p stays with retain count %lu and superview %p\n", document,
-            (unsigned long)view.retainCount, (void *)view.superview);
-    }
+        printed = YES;
+        return NO;
+    });
+    [turnPool drain];
     check(*released, message);
 }
 
@@ -141,10 +147,14 @@ int main(void) { @autoreleasepool {
     check(!holdsKeyboard(window, document), @"the hidden surface took the keyboard from the document");
     closeAndWait(document, &hiddenReleased, @"a document that closes while its hidden surface notes it as the keyboard owner is released");
 
-    // The surface shows again with nothing to give back. A released document is compared by its address only.
+    // The surface shows again with nothing to give back. A released document is compared by its address only. A return of the
+    // keyboard runs in the show or in a block of the main queue that the show schedules, so it has run when a block that the
+    // check schedules after the show runs.
     @autoreleasepool {
         webviewSetSurfaceHidden(surface, false);
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+        __block BOOL passed = NO;
+        dispatch_async(dispatch_get_main_queue(), ^{ passed = YES; });
+        eventWait(@"the main queue runs the block scheduled after the show", ^BOOL { return passed; });
     }
     check(!holdsKeyboard(window, document), @"the surface that shows again gives the keyboard to no closed document");
 

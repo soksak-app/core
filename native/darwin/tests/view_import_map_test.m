@@ -5,20 +5,13 @@
 // insertion depends on.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
+#import "support/event_wait.h"
 
 static int failures = 0;
 
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
-}
-
-static void until(NSString *what, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
-    if (!done()) { fprintf(stderr, "FAIL: %s within 10 seconds\n", what.UTF8String); exit(1); }
 }
 
 static NSDictionary *probeResult;
@@ -102,7 +95,7 @@ int main(void) { @autoreleasepool {
     WKWebView *web = [[[WKWebView alloc] initWithFrame:window.contentView.bounds configuration:configuration] autorelease];
     [window.contentView addSubview:web];
     [web loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@"soksak://probe/index.html"]]];
-    until(@"the inserted-map page posts its result", ^BOOL{ return probeResult != nil; });
+    eventWait(@"the inserted-map page posts its result", ^BOOL{ return probeResult != nil; });
 
     BOOL imported = [probeResult[@"imported"] boolValue];
     NSString *value = probeResult[@"value"] ? [probeResult[@"value"] description] : @"none";

@@ -6,8 +6,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
-#include <signal.h>
-#include <unistd.h>
+#import "support/event_wait.h"
 #import "support/layer_contents.h"
 #import "capture.h"
 #import "image_region.h"
@@ -61,20 +60,18 @@ static NSData *tightSurfaceBytes(IOSurfaceRef surface) {
     return data;
 }
 
-static void expired(int signalNumber) {
-    (void)signalNumber;
-    const char message[] = "FAIL: image-region presentation test exceeded 30000ms\n";
-    write(STDERR_FILENO, message, sizeof message - 1);
-    _exit(1);
-}
+// Counts the refreshes of the display. Each refresh is a source of the run loop, so a wait for a state of the window server
+// judges it again at every refresh.
+@interface SPRefreshes : NSObject
+@property long count;
+@end
 
-static void spinUntil(BOOL (^condition)(void), NSTimeInterval timeout) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:timeout];
-    while (!condition() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
-            beforeDate:[NSDate dateWithTimeIntervalSinceNow:MIN(0.01, deadline.timeIntervalSinceNow)]];
-    }
+@implementation SPRefreshes
+- (void)refresh:(CADisplayLink *)link {
+    (void)link;
+    self.count++;
 }
+@end
 
 static BOOL onScreen(NSWindow *window) {
     NSArray *info = [(NSArray *)CGWindowListCopyWindowInfo(kCGWindowListOptionIncludingWindow,
@@ -184,7 +181,6 @@ static void runPresentationCase(BOOL tagged, BOOL lease) { @autoreleasepool {
     sourceWidth = tagged ? 320 : 96;
     sourceHeight = tagged ? 256 : 32;
     fprintf(stdout, "PRESENTATION_CASE tagged=%d lease=%d\n", tagged, lease);
-    signal(SIGALRM, expired); alarm(30);
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     [NSApp finishLaunching];
@@ -208,8 +204,11 @@ static void runPresentationCase(BOOL tagged, BOOL lease) { @autoreleasepool {
     if (region) sp_region_place(region, 0, 0, 0, 0, true);
     if (region && lease) sp_region_lease(region, discardedLease, NULL);
     check(region != NULL, @"the native image region is created through the normal surface composition");
+    SPRefreshes *refreshes = [[SPRefreshes new] autorelease];
+    CADisplayLink *link = [(window.screen ?: NSScreen.mainScreen) displayLinkWithTarget:refreshes selector:@selector(refresh:)];
+    [link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
     [window orderFrontRegardless];
-    spinUntil(^BOOL { return onScreen(window); }, 5);
+    eventWait(@"the window server puts the fixture window on screen", ^BOOL { return onScreen(window); });
     check(onScreen(window), @"the nonactivating fixture window is on screen");
     double raster[3] = {0};
     BOOL rasterReady = region && sp_region_raster(region, raster)
@@ -254,11 +253,11 @@ static void runPresentationCase(BOOL tagged, BOOL lease) { @autoreleasepool {
         dispatch_release(identityWriter);
     }
     check(!NSApp.isActive, @"the fixture remains inactive before recording");
-    // Match the capture owner’s settled-window path so the first sample is a complete recorded frame.
-    NSDate *settled = [NSDate dateWithTimeIntervalSinceNow:3];
-    while (settled.timeIntervalSinceNow > 0)
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
-            beforeDate:[NSDate dateWithTimeIntervalSinceNow:MIN(0.01, settled.timeIntervalSinceNow)]];
+    // The first sample is a complete recorded frame when the screen already shows the presentation: the refresh after the
+    // presentation composites its committed transaction and the refresh after that shows the composited window.
+    long presentedAt = refreshes.count;
+    eventWait(@"the display refreshes twice after the presentation", ^BOOL { return refreshes.count >= presentedAt + 2; });
+    [link invalidate];
     char *captureError = NULL;
     BOOL opened = sp_capture_open(window.windowNumber, false, &captureError);
     check(opened, [NSString stringWithFormat:@"the nonactivating window opens for recording (%s)", captureError ?: ""]);

@@ -7,24 +7,13 @@
 #import "webview_geometry.h"
 #import "support/records.h"
 #import "private/webkit.h"
+#import "support/event_wait.h"
 
 static int failures = 0;
 
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
-}
-
-static void until(BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
-                                 beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
-    if (!done()) {
-        fprintf(stderr, "FAIL: WebKit did not answer within 10 seconds\n");
-        exit(1);
-    }
 }
 
 @interface SPLoaded : NSObject <WKNavigationDelegate>
@@ -49,7 +38,7 @@ static SPLoaded *load(WKWebView *view, NSString *html) {
     SPLoaded *loaded = [[[SPLoaded alloc] init] autorelease];
     view.navigationDelegate = loaded;
     [view loadHTMLString:html baseURL:nil];
-    until(^BOOL { return loaded.finished; });
+    eventWait(@"the navigation of the document finishes", ^BOOL { return loaded.finished; });
     return [loaded retain];
 }
 
@@ -70,14 +59,14 @@ static long reloadGrowth(WKWebView *view, NSString *html) {
     SPLoaded *loaded = [[[SPLoaded alloc] init] autorelease];
     view.navigationDelegate = loaded;
     [view loadFileURL:file allowingReadAccessToURL:file.URLByDeletingLastPathComponent];
-    until(^BOOL { return loaded.finished; });
+    eventWait(@"the navigation of the document finishes", ^BOOL { return loaded.finished; });
     check(sp_webview_collect_garbage(view), @"the JavaScript garbage collection request is available");
     pid_t process = view._webProcessIdentifier;
     long first = processFootprint(process);
     for (int i = 0; i < 4; i++) {
         loaded.finished = NO;
         [view reload];
-        until(^BOOL { return loaded.finished; });
+        eventWait(@"the navigation of the document finishes", ^BOOL { return loaded.finished; });
         sp_webview_collect_garbage(view);
     }
     long growth = processFootprint(process) - first;
@@ -106,7 +95,7 @@ int main(void) { @autoreleasepool {
         // The end of the WebContent process is injected through WebKit, so the check observes the record of an end that the
         // application did not request.
         [view _killWebContentProcessAndResetState];
-        until(^BOOL { return first.terminated; });
+        eventWait(@"the WebContent process terminates", ^BOOL { return first.terminated; });
     });
     check([ended containsString:@" error native surface webview: web content process terminated: about:blank"],
           [NSString stringWithFormat:@"the end of the WebContent process is recorded with the address (got %@)", ended]);
@@ -123,7 +112,7 @@ int main(void) { @autoreleasepool {
                evaluated = YES;
                (void)error;
            }];
-    until(^BOOL { return evaluated; });
+    eventWait(@"the evaluation of the text answers", ^BOOL { return evaluated; });
     check([value isEqualToString:@"second"],
           @"a page can reload after WebContent termination");
     [value release];

@@ -14,9 +14,12 @@
 #import "private/webkit.h"
 #import "capture.h"
 #import "support/capture_frame.m"
+#import "support/event_wait.h"
 #import "support/temporary_folder.h"
 
 static const int kRefreshes = 12;
+// The refreshes of the screen for which the start document of the reloaded page stays unanswered.
+static const int kHeldRefreshes = 6;
 // The previous page draws a 40pt first row at scale 1, and the new page draws a 72pt first row at scale 2. Each page
 // is painted with one color, and that color tells which page was visible.
 static const double kOldRow = 40, kNewRow = 72;
@@ -29,35 +32,40 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-// Waits for the condition for up to 10 seconds. Returns the waited time (ms); if the limit is exceeded, reports what
-// as a failure and ends.
-static double until(NSString *what, BOOL (^done)(void)) {
-    double start = CACurrentMediaTime() * 1000;
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
-                               beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
-    if (!done()) { fprintf(stderr, "FAIL: %s within 10 seconds\n", what.UTF8String); exit(1); }
-    return CACurrentMediaTime() * 1000 - start;
-}
-
+// Counts the refreshes of a screen and calls done, when it is set, after the last one.
 @interface SPFrames : NSObject
 @property int left;
+@property (copy) void (^done)(void);
 - (void)tick:(CADisplayLink *)link;
 @end
 @implementation SPFrames
 - (void)tick:(CADisplayLink *)link {
-    if (--self.left == 0) [link invalidate];
+    if (--self.left != 0) return;
+    // The link releases its target when it is invalidated, so the block is kept until it has run.
+    void (^done)(void) = [[self.done retain] autorelease];
+    [link invalidate];
+    if (done) done();
+}
+- (void)dealloc {
+    [_done release];
+    [super dealloc];
 }
 @end
 
-static void waitFrames(NSScreen *screen, int count) {
+// Calls done on the main thread after count refreshes of screen.
+static SPFrames *afterFrames(NSScreen *screen, int count, void (^done)(void)) {
     SPFrames *frames = [[SPFrames new] autorelease];
     frames.left = count;
+    frames.done = done;
     [[screen displayLinkWithTarget:frames selector:@selector(tick:)]
         addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
-    until(@"the display refreshed", ^BOOL { return frames.left == 0; });
+    return frames;
+}
+
+static void waitFrames(NSScreen *screen, int count) {
+    SPFrames *frames = [afterFrames(screen, count, nil) retain];
+    eventWait([NSString stringWithFormat:@"the display refreshes %d times", count], ^BOOL { return frames.left == 0; });
+    [frames release];
 }
 
 // Like the main page, the page draws the first screen after it fetches the start document with a render-blocking
@@ -125,10 +133,10 @@ static NSString *page(const uint8_t *color) {
         [task didReceiveData:body];
         [task didFinish];
     };
-    // The start document of the reloaded page is answered after 100ms. As with a page with a slow start, the previous
-    // page stays on screen for several frames during the open transaction, and the check observes the title bar of
-    // those frames in the recording.
-    if (start && reload) dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC), dispatch_get_main_queue(), answer);
+    // The start document of the reloaded page is answered after several refreshes of the screen. As with a page with a slow
+    // start, the previous page stays on screen for those frames during the open transaction, and the check observes the
+    // title bar of those frames in the recording.
+    if (start && reload) afterFrames(window.screen, kHeldRefreshes, answer);
     else answer();
 }
 - (void)webView:(WKWebView *)webView stopURLSchemeTask:(id<WKURLSchemeTask>)task {}
@@ -213,7 +221,7 @@ int main(void) { @autoreleasepool {
     first->done = [[^{ loaded = YES; } copy] autorelease];
     [webview addObserver:first forKeyPath:@"loading" options:0 context:NULL];
     [webview loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@"sptitle://page/"]]];
-    until(@"the old page presented", ^BOOL { return loaded; });
+    eventWait(@"the old page presents", ^BOOL { return loaded; });
     waitFrames(window.screen, kRefreshes);
     pid_t before = webview._webProcessIdentifier;
 
@@ -236,7 +244,7 @@ int main(void) { @autoreleasepool {
     second->done = [[^{ reloaded = YES; } copy] autorelease];
     [webview addObserver:second forKeyPath:@"loading" options:0 context:NULL];
     [webview evaluateJavaScript:@"location.reload()" completionHandler:nil];
-    until(@"the reloaded page presented", ^BOOL { return reloaded; });
+    eventWait(@"the reloaded page presents", ^BOOL { return reloaded; });
     waitFrames(window.screen, kRefreshes);
     double records[SURFACE_LAYOUT_TRACE_STAGES * 8];
     size_t transactions = surfaceLayoutTraceStop(records, 8);

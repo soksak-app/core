@@ -3,8 +3,10 @@
 // This check activates the application and so takes the user's focus. It is not part of make test and
 // runs only by make test-app-activation. The move is delivered directly to the tracking area owner, so it is independent of the real pointer position.
 #import <Cocoa/Cocoa.h>
+#import <objc/runtime.h>
 #import "input_inject.h"
 #import "private/webkit.h"
+#import "support/event_wait.h"
 
 static int failures = 0;
 
@@ -13,17 +15,7 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-// The activation notification arrives as an application event, so the check takes and processes events while waiting.
-static void until(BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny
-            untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01] inMode:NSDefaultRunLoopMode dequeue:YES];
-        if (event) [NSApp sendEvent:event];
-    }
-    if (!done()) { fprintf(stderr, "FAIL: no answer within 10 seconds\n"); exit(1); }
-}
-
+// The activation notification arrives as an application event, which eventWait dispatches while it waits.
 static id evaluate(WKWebView *view, NSString *script) {
     __block BOOL done = NO;
     __block id result = nil;
@@ -32,14 +24,61 @@ static id evaluate(WKWebView *view, NSString *script) {
         result = [value retain];
         done = YES;
     }];
-    until(^BOOL { return done; });
+    eventWait([@"JavaScript answers " stringByAppendingString:script], ^BOOL { return done; });
     return [result autorelease];
 }
 
 static void drain(WKWebView *view) {
     __block BOOL done = NO;
     [view _doAfterProcessingAllPendingMouseEvents:^{ done = YES; }];
-    until(^BOOL { return done; });
+    eventWait(@"WebKit has processed the pending mouse events", ^BOOL { return done; });
+}
+
+// The navigation delegate of a page that a check loads. It is kept on its web view, which does not retain its delegate.
+@interface SPPageLoad : NSObject <WKNavigationDelegate>
+@property BOOL finished;
+@end
+@implementation SPPageLoad
+- (void)webView:(WKWebView *)view didFinishNavigation:(WKNavigation *)navigation {
+    (void)view;
+    (void)navigation;
+    self.finished = YES;
+}
+@end
+static char pageLoadKey;
+
+// Loads html into view and keeps a navigation delegate that hears when the navigation finishes.
+static void loadPage(WKWebView *view, NSString *html) {
+    SPPageLoad *load = [[[SPPageLoad alloc] init] autorelease];
+    objc_setAssociatedObject(view, &pageLoadKey, load, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    view.navigationDelegate = load;
+    [view loadHTMLString:html baseURL:nil];
+}
+
+// Waits until the navigation that loadPage started on view finishes, so the scripts of the document have run.
+static void awaitLoad(WKWebView *view) {
+    SPPageLoad *load = objc_getAssociatedObject(view, &pageLoadKey);
+    eventWait(@"the navigation of the page finishes", ^BOOL { return load.finished; });
+    view.navigationDelegate = nil;
+}
+
+// Waits until the page of view holds condition, a JavaScript expression. The page judges condition at once and again at each
+// event of the type named type that reaches its window, after the listeners that the page added before, so the wait ends at
+// the event of the page that makes condition hold.
+static void awaitPage(WKWebView *view, NSString *what, NSString *type, NSString *condition) {
+    NSString *body = [NSString stringWithFormat:@"if (%@) return true;"
+        "await new Promise(resolve => {"
+        " const heard = () => { if (%@) { removeEventListener(eventType, heard, true); resolve(); } };"
+        " addEventListener(eventType, heard, true); });"
+        "return true;", condition, condition];
+    __block BOOL done = NO;
+    [view callAsyncJavaScript:body arguments:@{ @"eventType": type } inFrame:nil inContentWorld:WKContentWorld.pageWorld
+        completionHandler:^(id value, NSError *error) {
+            (void)value;
+            if (error) fprintf(stderr, "JavaScript: %s\n", error.localizedDescription.UTF8String);
+            done = YES;
+        }];
+    eventWait(what, ^BOOL { return done; });
 }
 
 typedef struct { BOOL done; sp_activate_result result; char frontmost[256]; } SPActivation;
@@ -49,12 +88,14 @@ static void activated(void *context, sp_activate_result result, const char *fron
     state->result = result;
     snprintf(state->frontmost, sizeof state->frontmost, "%s", frontmost ?: "");
     state->done = YES;
+    // The answer can come from the timer of the activation limit, which does not end a turn of the run loop.
+    eventWake();
 }
 
 static SPActivation activate(NSWindow *window, double timeout) {
     __block SPActivation state = {NO, SP_ACTIVATE_DONE, ""};
     sp_input_activate(window, timeout, activated, &state);
-    until(^BOOL { return state.done; });
+    eventWait(@"the activation answers", ^BOOL { return state.done; });
     return state;
 }
 
@@ -124,8 +165,8 @@ static void checkFailures(void) {
     SPYieldingWebView *yielding = [[[SPYieldingWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)] autorelease];
     yielding.other = other;
     // Checks with a web view that has loaded a document, like a surface of the application.
-    [yielding loadHTMLString:@"<!doctype html><script>window.probe = true</script>" baseURL:nil];
-    until(^BOOL { return [evaluate(yielding, @"Boolean(window.probe)") boolValue]; });
+    loadPage(yielding, @"<!doctype html><script>window.probe = true</script>");
+    awaitLoad(yielding);
     NSWindow *lost = makeWindow(NSWindow.class, yielding);
     state = activate(lost, 5);
     check(state.result == SP_ACTIVATE_LOST && other.isKeyWindow,
@@ -165,9 +206,9 @@ int main(void) { @autoreleasepool {
         "for (const type of ['pointerover','pointermove','pointerdown','pointerup','click'])"
         " addEventListener(type,e=>probe.events.push({type,trusted:e.isTrusted,x:e.clientX,y:e.clientY}),true);"
         "</script>";
-    [view loadHTMLString:html baseURL:nil];
+    loadPage(view, html);
     [window orderFront:nil];
-    until(^BOOL { return [evaluate(view, @"Boolean(window.probe)") boolValue]; });
+    awaitLoad(view);
 
     SPActivation state = activate(window, 5);
     check(state.result == SP_ACTIVATE_DONE,
@@ -203,7 +244,7 @@ int main(void) { @autoreleasepool {
     check(responderAtDown == window && window.firstResponder == view,
         [NSString stringWithFormat:@"AppKit moves the first responder, not the driver (at the press %@, after it %@)", responderAtDown, window.firstResponder]);
     [NSEvent removeMonitor:monitor];
-    until(^BOOL { return [evaluate(view, @"probe.events.some(e=>e.type==='click')") boolValue]; });
+    awaitPage(view, @"the page receives the click", @"click", @"probe.events.some(e=>e.type==='click')");
     NSArray *presses = evaluate(view, @"probe.events.filter(e=>['pointerdown','pointerup','click'].includes(e.type))");
     NSArray *types = [presses valueForKey:@"type"];
     check([types isEqual:@[@"pointerdown", @"pointerup", @"click"]] && ![[presses valueForKey:@"trusted"] containsObject:@NO]

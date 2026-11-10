@@ -4,6 +4,7 @@
 #import "capture.h"
 #import "document_view.h"
 #import "private/webkit.h"
+#import "support/event_wait.h"
 #import "support/temporary_folder.h"
 #import "webview_geometry.h"
 #import "window_facts.h"
@@ -33,11 +34,7 @@ static void changed(void *context, const char *json) {
 static BOOL nextPresentation(WKWebView *view) {
     __block BOOL presented = NO;
     [view _doAfterNextPresentationUpdate:^{ presented = YES; }];
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!presented && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
-            beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
+    eventWait(@"the next presentation of the document", ^BOOL { return presented; });
     return presented;
 }
 
@@ -132,11 +129,11 @@ int main(void) { @autoreleasepool {
     webviewSetFrame(surface, 0, 0, 620, 480);
     webviewSetSurfaceHidden(surface, false);
     [window orderFrontRegardless];
-    NSDate *screenDeadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!onScreen(window) && screenDeadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
-            beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
+    // The window server shows the window before it tells the window that it became visible, and that change of the occlusion
+    // state arrives as a window server event.
+    eventWait(@"the window becomes visible", ^BOOL {
+        return (window.occlusionState & NSWindowOcclusionStateVisible) && onScreen(window);
+    });
     check(onScreen(window), @"the window server shows the inactive capture window");
 
     NSString *temporary = temporaryFolder(@"soksak-document-viewport-marker-");
@@ -154,12 +151,9 @@ int main(void) { @autoreleasepool {
         writeToFile:pagePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
     NSURL *pageURL = [NSURL fileURLWithPath:pagePath];
     check(sp_document_load(document, pageURL.absoluteString.UTF8String), @"the document region loads a local color fixture");
-    NSDate *loadDeadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while ((![[latestState objectForKey:@"url"] isEqual:pageURL.absoluteString] || [latestState[@"loading"] boolValue])
-        && loadDeadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
-            beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
+    eventWait(@"the document region finishes loading the local fixture", ^BOOL {
+        return [[latestState objectForKey:@"url"] isEqual:pageURL.absoluteString] && ![latestState[@"loading"] boolValue];
+    });
     check([[latestState objectForKey:@"url"] isEqual:pageURL.absoluteString] && ![latestState[@"loading"] boolValue],
         @"the document region finishes loading the local fixture");
     check(nextPresentation((WKWebView *)document), @"the loaded document page presents before the baseline capture");

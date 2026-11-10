@@ -10,6 +10,7 @@
 #import "input_inject.h"
 #import "input_virtual.h"
 #import "webview_geometry.h"
+#import "support/event_wait.h"
 #import "support/records.h"
 
 static int failures;
@@ -68,8 +69,19 @@ static NSMenuItem *item(NSString *title, SEL action, NSString *key) {
     return made;
 }
 
-// Presses and releases key with modifiers on window and lets the event queue of the application take its turn. Returns the
-// records of the native library that the key writes.
+// Runs the event queue of the application until the key up of the key named name reaches the first responder of window. Every
+// key of the checks ends with its key up, and a key down or an equivalent of the key comes before its key up, so what the key
+// does is complete when its key up is recorded.
+static void awaitKeyUp(NSWindow *window, NSString *name) {
+    Clipboard *clipboard = (Clipboard *)window.firstResponder;
+    NSString *up = [@"keyUp:" stringByAppendingString:name];
+    eventWait([NSString stringWithFormat:@"the key up of %@ reaches the clipboard view", name], ^BOOL {
+        return [clipboard.calls containsObject:up];
+    });
+}
+
+// Presses and releases key with modifiers on window and lets the event queue of the application run until its key up arrives.
+// Returns the records of the native library that the key writes.
 static NSString *press(NSWindow *window, const char *key, unsigned modifiers) {
     __block BOOL down = NO, up = NO;
     NSString *records = capturedRecords(^{
@@ -77,12 +89,7 @@ static NSString *press(NSWindow *window, const char *key, unsigned modifiers) {
         up = sp_input_key(window, key, NULL, modifiers, false) == SP_INPUT_DELIVERED;
     });
     check(down && up, [NSString stringWithFormat:@"the key %s with modifiers %u is delivered", key, modifiers]);
-    NSDate *until = [NSDate dateWithTimeIntervalSinceNow:0.2];
-    while (until.timeIntervalSinceNow > 0) {
-        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]
-            inMode:NSDefaultRunLoopMode dequeue:YES];
-        if (event) [NSApp sendEvent:event];
-    }
+    if (down && up) awaitKeyUp(window, @(key));
     return records;
 }
 
@@ -182,12 +189,7 @@ int main(void) { @autoreleasepool {
             @"the held key Command+A is kept");
         check(clipboard.calls.count == 0, [NSString stringWithFormat:@"a held key waits for its turn (calls %@)", clipboard.calls]);
         sp_window_modal_hold_end(window);
-        NSDate *until = [NSDate dateWithTimeIntervalSinceNow:0.2];
-        while (until.timeIntervalSinceNow > 0) {
-            NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]
-                inMode:NSDefaultRunLoopMode dequeue:YES];
-            if (event) [NSApp sendEvent:event];
-        }
+        awaitKeyUp(window, @"a");
     });
     check([clipboard.calls isEqual:@[@"selectAll:Select All", @"keyUp:a"]],
         [NSString stringWithFormat:@"a held Command+A runs selectAll: once through the Select All item (calls %@)", clipboard.calls]);

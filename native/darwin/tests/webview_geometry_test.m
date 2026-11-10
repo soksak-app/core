@@ -11,6 +11,7 @@
 #import "support/scaled_window.h"
 #import "support/temporary_folder.h"
 #import "document_view.h"
+#import "event_ring.h"
 #import "input_inject.h"
 #import "support/records.h"
 #import "input_press_context.h"
@@ -22,6 +23,7 @@
 #import "window_facts.h"
 #import "surface_layout.h"
 #import "support/surface_view.h"
+#import "support/event_wait.h"
 
 static int failures = 0;
 
@@ -30,25 +32,8 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-// Records the display state of the check window so that a failure can be narrowed to its cause.
-static NSWindow *testWindow = nil;
+// The step of the check that runs, so that a failure names it.
 static const char *currentStep = "setup";
-
-static void failTimeout(const char *reason) {
-    fprintf(stderr, "FAIL: %s within 10 seconds (step: %s, visible: %d, occlusion visible: %d, on active space: %d, "
-        "app active: %d, AppKit mouse-button mask: %lu)\n", reason, currentStep, testWindow.isVisible,
-        (testWindow.occlusionState & NSWindowOcclusionStateVisible) != 0, testWindow.isOnActiveSpace,
-        NSApp.isActive, (unsigned long)NSEvent.pressedMouseButtons);
-    exit(1);
-}
-
-static void until(BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
-    if (!done()) failTimeout("WebKit did not answer");
-}
 
 static id evaluate(WKWebView *view, NSString *script) {
     __block BOOL done = NO;
@@ -58,8 +43,26 @@ static id evaluate(WKWebView *view, NSString *script) {
         result = [value retain];
         done = YES;
     }];
-    until(^BOOL { return done; });
+    eventWait(@"the page answers the evaluation", ^BOOL { return done; });
     return [result autorelease];
+}
+
+// Waits for the next presentation of view.
+static void nextPresentation(WKWebView *view) {
+    __block BOOL shown = NO;
+    [view _doAfterNextPresentationUpdate:^{ shown = YES; }];
+    eventWait(@"the next presentation of the view", ^BOOL { return shown; });
+}
+
+// Evaluates script until accept holds for its result and returns that result. The page takes a change of its size, scale,
+// layout or scroll position in a rendering update, and a presentation of the view follows that update, so the script is
+// evaluated again after each presentation.
+static id evaluateAtPresentations(WKWebView *view, NSString *script, BOOL (^accept)(id value)) {
+    for (;;) {
+        id value = evaluate(view, script);
+        if (accept(value)) return value;
+        nextPresentation(view);
+    }
 }
 
 @interface SPLoaded : NSObject <WKNavigationDelegate>
@@ -74,12 +77,11 @@ static void load(WKWebView *view, NSString *html) {
     SPLoaded *loaded = [[SPLoaded new] autorelease];
     view.navigationDelegate = loaded;
     [view loadHTMLString:html baseURL:nil];
-    until(^BOOL { return loaded.finished; });
+    eventWait(@"the navigation of the document finishes", ^BOOL { return loaded.finished; });
     view.navigationDelegate = nil;
 }
 
-// Waits until the document is laid out again with the new size and scale. If it never matches, reports the last
-// value.
+// Waits until the document is laid out again with the new size and scale.
 static NSDictionary *documentState(WKWebView *view, CGFloat scale, double width, double height) {
     currentStep = __func__;
     // WebKit exposes the CSS viewport as integer CSS pixels. Therefore a 200.5pt AppKit frame is reported as 200 CSS
@@ -87,20 +89,11 @@ static NSDictionary *documentState(WKWebView *view, CGFloat scale, double width,
     // separately and match exactly. innerWidth and innerHeight include a classic scroll bar of the root, which
     // visualViewport excludes, so they state the frame size under both scroller styles.
     double cssHeight = floor(height);
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    NSDictionary *state = nil;
-    for (;;) {
-        state = evaluate(view, @"({ratio: devicePixelRatio, width: innerWidth,"
-            " height: innerHeight, body: document.body?.getBoundingClientRect().height})");
-        BOOL placed = [state[@"ratio"] doubleValue] == scale && [state[@"width"] doubleValue] == width
+    return evaluateAtPresentations(view, @"({ratio: devicePixelRatio, width: innerWidth,"
+        " height: innerHeight, body: document.body?.getBoundingClientRect().height})", ^BOOL(id state) {
+        return [state[@"ratio"] doubleValue] == scale && [state[@"width"] doubleValue] == width
             && [state[@"height"] doubleValue] == cssHeight;
-        if (placed) return state;
-        if (deadline.timeIntervalSinceNow <= 0) break;
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
-    fprintf(stderr, "FAIL: the document did not take scale %g and CSS size %g x %g within 10 seconds: %s\n",
-        scale, width, cssHeight, state.description.UTF8String);
-    exit(1);
+    });
 }
 
 // Checks that the last device pixel row of the snapshot has the document color. A row that the document does not
@@ -112,7 +105,7 @@ static BOOL lastRowIsDocument(WKWebView *view, CGFloat scale) {
     [view takeSnapshotWithConfiguration:configuration completionHandler:^(NSImage *snapshot, NSError *error) {
         image = [snapshot retain];
     }];
-    until(^BOOL { return image != nil; });
+    eventWait(@"the snapshot of the view is taken", ^BOOL { return image != nil; });
     NSBitmapImageRep *bitmap = [NSBitmapImageRep imageRepWithData:image.TIFFRepresentation];
     [image release];
     NSInteger rows = bitmap.pixelsHigh;
@@ -138,6 +131,17 @@ static NSDictionary *pressSurfaceAt(NSWindow *window, WKWebView *surface, double
     check(surfaceHit, [NSString stringWithFormat:@"the last surface pixel resolves to the DOM plane (hit %@)",
         NSStringFromClass(hit.class)]);
     evaluate(surface, @"window.pressed = null; null");
+    // The page answers at the pointerup that its listener records. The question is sent to the web process before the press,
+    // so the page waits for the release of this press.
+    __block BOOL answered = NO;
+    __block NSDictionary *pressed = nil;
+    [surface callAsyncJavaScript:@"if (!window.pressed) await new Promise(resolve =>"
+        " addEventListener('pointerup', resolve, {capture: true, once: true})); return window.pressed;"
+        arguments:nil inFrame:nil inContentWorld:WKContentWorld.pageWorld completionHandler:^(id value, NSError *error) {
+            if (error) fprintf(stderr, "JavaScript: %s\n", error.localizedDescription.UTF8String);
+            pressed = [value isKindOfClass:NSDictionary.class] ? [value retain] : nil;
+            answered = YES;
+        }];
     // Reports the result code and the AppKit button state. While a pressed button is reported, the synthetic press is
     // not delivered (SP_INPUT_BUTTON_HELD). The document cannot receive an undelivered press, so the check fails
     // without waiting.
@@ -152,13 +156,8 @@ static NSDictionary *pressSurfaceAt(NSWindow *window, WKWebView *surface, double
         fprintf(stderr, "FAIL: the press was not delivered (step: %s)\n", currentStep);
         exit(1);
     }
-    __block NSDictionary *pressed = nil;
-    until(^BOOL {
-        id value = evaluate(surface, @"window.pressed");
-        pressed = [value isKindOfClass:NSDictionary.class] ? value : nil;
-        return pressed != nil;
-    });
-    return pressed;
+    eventWait(@"the document receives the release of the press", ^BOOL { return answered; });
+    return [pressed autorelease];
 }
 
 // Presses the horizontal middle of the surface at offset points below its top edge.
@@ -190,11 +189,9 @@ static void checkScrollBarSide(NSWindow *window, WKWebView *surface, NSString *d
         "<body style='margin:0;height:100%%;background:#0d1a14'><div style='height:5000px'></div>"
         "<script>addEventListener('pointerup', e => window.pressed = {trusted: e.isTrusted, x: e.clientX, y: e.clientY}, true)</script>"
         "</body></html>", direction]);
-    __block NSDictionary *state = nil;
-    until(^BOOL {
-        state = evaluate(surface, @"({inner: innerWidth, client: document.documentElement.clientWidth,"
-            " direction: getComputedStyle(document.documentElement).direction})");
-        return [state[@"inner"] doubleValue] - [state[@"client"] doubleValue] == 17;
+    NSDictionary *state = evaluateAtPresentations(surface, @"({inner: innerWidth, client: document.documentElement.clientWidth,"
+        " direction: getComputedStyle(document.documentElement).direction})", ^BOOL(id value) {
+        return [value[@"inner"] doubleValue] - [value[@"client"] doubleValue] == 17;
     });
     double left = [direction isEqualToString:@"rtl"] ? 17 : 0;
     NSDictionary *pressed = pressSurfaceAt(window, surface, 20, 10);
@@ -202,38 +199,6 @@ static void checkScrollBarSide(NSWindow *window, WKWebView *surface, NSString *d
         && [pressed[@"x"] doubleValue] == 20 - left,
         [NSString stringWithFormat:@"a %@ root with a 17 point scroll bar has its client origin %g points right of the frame edge (press %@; %@)",
             direction, left, pressed, state]);
-}
-
-// Waits while it takes events from the app event queue and handles them. Event monitors run when an event is taken.
-// Takes and sends only the wheel events that this check queued. If every kind were taken, the app activation event
-// sent by the OS (NSEventTypeAppKitDefined, activation subtype) would also be handled, and the default check would
-// activate the app. On failure, reports the number of wheel events taken and sent, the mouse button mask that AppKit
-// reported at the start, and the measurement returned by state.
-static void pumpUntil(BOOL (^done)(void), NSString *(^state)(void)) {
-    NSUInteger buttons = NSEvent.pressedMouseButtons;
-    NSUInteger sent = 0;
-    NSMutableArray *seen = [NSMutableArray array];
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskScrollWheel
-            untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01] inMode:NSDefaultRunLoopMode dequeue:YES];
-        if (event) {
-            sent++;
-            NSView *content = event.window.contentView;
-            NSView *hit = [content hitTest:[content.superview convertPoint:event.locationInWindow fromView:nil]];
-            [seen addObject:[NSString stringWithFormat:@"{delta %g,%g modifiers 0x%lx HID-system modifiers 0x%llx precise %d phase %lu momentum %lu window %d at %@ hit %@}",
-                event.scrollingDeltaX, event.scrollingDeltaY, (unsigned long)event.modifierFlags,
-                (unsigned long long)CGEventSourceFlagsState(kCGEventSourceStateHIDSystemState), event.hasPreciseScrollingDeltas,
-                (unsigned long)event.phase, (unsigned long)event.momentumPhase, event.window == testWindow,
-                NSStringFromPoint(event.locationInWindow), hit.class]];
-            [NSApp sendEvent:event];
-        }
-    }
-    if (!done()) {
-        fprintf(stderr, "wheel events dequeued and sent: %lu %s; AppKit button mask at start: %lu; %s\n",
-            (unsigned long)sent, [seen componentsJoinedByString:@" "].UTF8String, (unsigned long)buttons, state().UTF8String);
-        failTimeout("the event was not handled");
-    }
 }
 
 // Waits until the web view finishes scrolling and returns the CSS pixels its document moved. Scrolling has finished
@@ -246,14 +211,13 @@ static double scrolledByView(WKWebView *view) {
     NSDate *start = [NSDate date];
     [scrollSamples release];
     scrollSamples = [[NSMutableString alloc] init];
-    until(^BOOL { return [evaluate(view, @"document.scrollingElement.scrollTop") doubleValue] > 0; });
-    double last = -1, now = [evaluate(view, @"document.scrollingElement.scrollTop") doubleValue];
+    double last = -1, now = [evaluateAtPresentations(view, @"document.scrollingElement.scrollTop", ^BOOL(id top) {
+        return [top doubleValue] > 0;
+    }) doubleValue];
     [scrollSamples appendFormat:@"%g@%.0fms", now, -start.timeIntervalSinceNow * 1000];
     while (now != last) {
         last = now;
-        __block BOOL shown = NO;
-        [view _doAfterNextPresentationUpdate:^{ shown = YES; }];
-        until(^BOOL { return shown; });
+        nextPresentation(view);
         now = [evaluate(view, @"document.scrollingElement.scrollTop") doubleValue];
         [scrollSamples appendFormat:@" %g@%.0fms", now, -start.timeIntervalSinceNow * 1000];
     }
@@ -269,12 +233,10 @@ static double scrollViewCenter(NSWindow *window, WKWebView *view) {
     double x = NSMidX(rect), y = window.contentView.bounds.size.height - NSMidY(rect);
     WKWebView *target = webViewAtTopPoint(window, x, y);
     check(target == view, [NSString stringWithFormat:@"the center of the view at %g,%g is its own hit (got %@)", x, y, target]);
-    __block BOOL shown = NO;
-    [view _doAfterNextPresentationUpdate:^{ shown = YES; }];
-    until(^BOOL { return shown; });
-    __block sp_input_result result = SP_INPUT_REJECTED;
+    nextPresentation(view);
+    sp_input_result result = SP_INPUT_REJECTED, *resultRef = &result;
     sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, x, y, 4, 0, 0, 120, 1, 5, scrollDone, &result);
-    until(^BOOL { return result != SP_INPUT_REJECTED; });
+    eventWait(@"the scroll into the view completes", ^BOOL { return *resultRef != SP_INPUT_REJECTED; });
     check(result == SP_INPUT_DELIVERED, @"a 120-point scroll into the view is delivered");
     return scrolledByView(view);
 }
@@ -302,13 +264,11 @@ static double scrollBy(NSWindow *window, WKWebView *surface, BOOL posted) {
     check(target == surface, [NSString stringWithFormat:
         @"scroll target is the surface DOM plane (got %@ inside host %d, target frame %@, host frame %@)",
         target, insideHost, NSStringFromRect(targetInHost), NSStringFromRect(hostForHit.frame)]);
-    __block BOOL shown = NO;
-    [surface _doAfterNextPresentationUpdate:^{ shown = YES; }];
-    until(^BOOL { return shown; });
+    nextPresentation(surface);
     if (!posted) {
-        __block sp_input_result result = SP_INPUT_REJECTED;
+        sp_input_result result = SP_INPUT_REJECTED, *resultRef = &result;
         sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, x, y, 4, 0, 0, 120, 1, 5, scrollDone, &result);
-        until(^BOOL { return result != SP_INPUT_REJECTED; });
+        eventWait(@"the scroll into the surface completes", ^BOOL { return *resultRef != SP_INPUT_REJECTED; });
         check(result == SP_INPUT_DELIVERED, @"a scroll into the surface is delivered");
         return scrolledByView(surface);
     }
@@ -316,12 +276,6 @@ static double scrollBy(NSWindow *window, WKWebView *surface, BOOL posted) {
     NSPoint local = NSMakePoint(x, content.bounds.size.height - y);
     NSPoint inWindow = [content convertPoint:local toView:nil];
     NSPoint screen = [window convertPointToScreen:inWindow];
-    // Counts so that the failure report states the number of wheel events that reached the document. Counts so that
-    // the failure report states the number of wheel events that reached the document and the number of animation
-    // frames that ran while waiting.
-    evaluate(surface, @"window.wheels = 0; window.animationFrames = 0; if (!window.wheelCounted) { window.wheelCounted = true;"
-        " addEventListener('wheel', () => { window.wheels++; }, {passive: true});"
-        " const tick = () => { window.animationFrames++; requestAnimationFrame(tick); }; requestAnimationFrame(tick); } null");
     CGEventRef wheel = CGEventCreateScrollWheelEvent2(NULL, kCGScrollEventUnitLine, 1, -3, 0, 0);
     // An event without a source inherits the modifier keys of the real keyboard. AppKit converts the vertical
     // movement of a mouse wheel with Shift pressed into horizontal movement, so this scroll did not move the document
@@ -330,15 +284,10 @@ static double scrollBy(NSWindow *window, WKWebView *surface, BOOL posted) {
     CGEventSetLocation(wheel, CGPointMake(screen.x, NSMaxY(NSScreen.screens.firstObject.frame) - screen.y));
     CGEventSetIntegerValueField(wheel, kSPEventWindowNumberField, window.windowNumber);
     CGEventSetWindowLocation(wheel, CGPointMake(inWindow.x, NSHeight(window.frame) - inWindow.y));
+    // The wait of the next evaluation takes the queued wheel event and sends it through the application, so the event
+    // passes the app event monitor as a real event does; scrolledByView waits until the document moved.
     [NSApp postEvent:[NSEvent eventWithCGEvent:wheel] atStart:NO];
     CFRelease(wheel);
-    __block double moved = 0;
-    pumpUntil(^BOOL { moved = [evaluate(surface, @"document.scrollingElement.scrollTop") doubleValue]; return moved > 0; },
-        ^NSString *{ return [NSString stringWithFormat:@"last scrollTop: %g; document state: %@; scale %g; surface frame %@",
-            moved, evaluate(surface, @"JSON.stringify({wheels: window.wheels, animationFrames: window.animationFrames,"
-                " visibility: document.visibilityState, scrollHeight: document.scrollingElement.scrollHeight,"
-                " clientHeight: document.scrollingElement.clientHeight, scrollTop: document.scrollingElement.scrollTop})"),
-            window.backingScaleFactor, NSStringFromRect(surface.frame)]; });
     return scrolledByView(surface);
 }
 
@@ -437,8 +386,16 @@ static void pressDelivered(void *context, sp_input_result result, const sp_input
 
 static NSMutableArray<NSNumber *> *overrideSights;
 
+// The subtype of the application-defined event that ends the queue of the check (sendQueued); the library uses other subtypes.
+static const short kQueueEndSubtype = 0x7165;
+static NSUInteger queueEndsPosted, queueEndsSent;
+
 @implementation SPOverridingApplication
 - (void)sendEvent:(NSEvent *)event {
+    if (event.type == NSEventTypeApplicationDefined && event.subtype == kQueueEndSubtype) {
+        queueEndsSent++;
+        return;
+    }
     [overrideSights addObject:@(event.type)];
     if (event.type == NSEventTypeKeyUp && (event.modifierFlags & NSEventModifierFlagCommand)) [self.keyWindow sendEvent:event];
     else [super sendEvent:event];
@@ -447,24 +404,22 @@ static NSMutableArray<NSNumber *> *overrideSights;
 
 static void heldRegionEvent(void *context, const char *json) {}
 
-// Sends the queued presses and releases of the check until done or the deadline, as the application loop does.
-static void pumpInput(double seconds, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:seconds];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny
-            untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01] inMode:NSDefaultRunLoopMode dequeue:YES];
-        if (event) [NSApp sendEvent:event];
-    }
+// Posts an event of the check at the end of the event queue and waits until the application sends it. The queue gives its
+// events in order and the hold of a layout does not take an application-defined event, so every event that was queued before
+// it has been sent, taken by the hold or not, when it arrives.
+static void sendQueued(NSString *what) {
+    NSUInteger awaited = ++queueEndsPosted;
+    NSEvent *end = [NSEvent otherEventWithType:NSEventTypeApplicationDefined location:NSZeroPoint modifierFlags:0 timestamp:0
+        windowNumber:0 context:nil subtype:kQueueEndSubtype data1:0 data2:0];
+    [NSApp postEvent:end atStart:NO];
+    eventWait(what, ^BOOL { return queueEndsSent >= awaited; });
 }
 
-// Sends the queued presses of the check until done or the deadline, as the application loop does.
-static void pumpPresses(double seconds, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:seconds];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny
-            untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01] inMode:NSDefaultRunLoopMode dequeue:YES];
-        if (event) [NSApp sendEvent:event];
-    }
+// Runs the blocks that the main queue holds now.
+static void mainQueueTurn(NSString *what) {
+    __block BOOL ran = NO;
+    dispatch_async(dispatch_get_main_queue(), ^{ ran = YES; });
+    eventWait(what, ^BOOL { return ran; });
 }
 
 // Adds a native view that covers the native plane, as a native document region does.
@@ -548,11 +503,13 @@ static void checkHitTesting(WKWebView *main) {
     NSPoint pressInContent = [content convertPoint:pressInWindow fromView:nil];
     double pressY = content.isFlipped ? pressInContent.y : content.bounds.size.height - pressInContent.y;
     surfaceLayoutBegin(main.window, 77002, ^(int allowed) {});
-    sp_input_result pressResult = SP_INPUT_UNRECEIVED;
+    sp_input_result pressResult = SP_INPUT_UNRECEIVED, *pressResultRef = &pressResult;
     sp_input_pointer_then(main.window, SP_INPUT_POINTER_MAIN, pressInContent.x, pressY, 1, 0, 0, 0, 1, 5, pressDelivered, &pressResult);
     check(counter.presses == 0, @"an injected press does not reach the surface during its preparation");
     check(surfaceLayoutCommit(main.window, 77002), @"the layout of the injected press commits");
-    pumpPresses(2, ^BOOL { return counter.presses == 1 && pressResult != SP_INPUT_UNRECEIVED; });
+    eventWait(@"the injected press reaches the surface and reports its delivery after the commit", ^BOOL {
+        return counter.presses == 1 && *pressResultRef != SP_INPUT_UNRECEIVED;
+    });
     check(counter.presses == 1, @"an injected press under a preparing surface reaches the surface after the commit");
     check(pressResult == SP_INPUT_DELIVERED, @"the injected press reports its delivery after the commit");
     check(sp_input_pointer(main.window, pressInContent.x, pressY, 3, 0, 0, 0) == SP_INPUT_DELIVERED,
@@ -561,10 +518,10 @@ static void checkHitTesting(WKWebView *main) {
         windowNumber:main.window.windowNumber context:nil eventNumber:0 clickCount:1 pressure:1];
     surfaceLayoutBegin(main.window, 77003, ^(int allowed) {});
     [NSApp postEvent:press atStart:NO];
-    pumpPresses(0.1, ^BOOL { return NO; });
+    sendQueued(@"the application sends the queued press of the window system");
     check(counter.presses == 1, @"a press of the window system does not reach the surface during its preparation");
     check(surfaceLayoutCommit(main.window, 77003), @"the layout of the press of the window system commits");
-    pumpPresses(2, ^BOOL { return counter.presses == 2; });
+    eventWait(@"the press of the window system reaches the surface after the commit", ^BOOL { return counter.presses == 2; });
     check(counter.presses == 2, @"a press of the window system under a preparing surface reaches the surface after the commit");
     // A press and a release that wait for a commit reach every monitor of the application once, whatever order AppKit calls
     // the monitors in, which differs from process to process.
@@ -589,13 +546,18 @@ static void checkHitTesting(WKWebView *main) {
     holding = YES;
     [NSApp postEvent:heldDown atStart:NO];
     [NSApp postEvent:heldUp atStart:NO];
-    pumpInput(0.1, ^BOOL { return NO; });
+    sendQueued(@"the application sends the queued press and release");
     holding = NO;
     NSUInteger heldSights = 0, wrongSights = 0;
     for (int index = 0; index < 32; index++) heldSights += seenWhenHeld[index];
     check(heldSights == 0, [NSString stringWithFormat:@"no monitor sees a press or a release while it waits (%lu sights)", (unsigned long)heldSights]);
     check(surfaceLayoutCommit(main.window, 77004), @"the layout of the held press and release commits");
-    pumpInput(0.5, ^BOOL { return NO; });
+    eventWait(@"every monitor sees the held press and release", ^BOOL {
+        for (int index = 0; index < 32; index++) if (seen[index] < 2) return NO;
+        return YES;
+    });
+    // A monitor that saw an event twice has seen it by the time the application sends an event queued after both came back.
+    sendQueued(@"the application sends the events queued after the held press and release");
     for (int index = 0; index < 32; index++) wrongSights += seen[index] != 2;
     check(wrongSights == 0, [NSString stringWithFormat:@"every monitor sees a held press and release once each (%lu monitors differ)", (unsigned long)wrongSights]);
     for (id watcher in watchers) [NSEvent removeMonitor:watcher];
@@ -617,12 +579,12 @@ static void checkHitTesting(WKWebView *main) {
     surfaceLayoutBegin(main.window, 77006, ^(int allowed) {});
     overrideSights = [NSMutableArray array];
     for (NSEvent *event in ordered) [NSApp postEvent:event atStart:NO];
-    pumpInput(0.1, ^BOOL { return NO; });
+    sendQueued(@"the application sends the queued input of the override");
     check(overrideSights.count == 0,
         [NSString stringWithFormat:@"an override of the application sees no input that waits: %@", overrideSights]);
     [overrideSights removeAllObjects];
     check(surfaceLayoutCommit(main.window, 77006), @"the layout of the input held from the override commits");
-    pumpInput(0.5, ^BOOL { return overrideSights.count >= ordered.count; });
+    eventWait(@"the held input comes back to the override", ^BOOL { return overrideSights.count >= ordered.count; });
     NSMutableArray<NSNumber *> *expectedSights = [NSMutableArray array];
     for (NSEvent *event in ordered) [expectedSights addObject:@(event.type)];
     check([overrideSights isEqual:expectedSights],
@@ -634,14 +596,16 @@ static void checkHitTesting(WKWebView *main) {
     [main.window makeFirstResponder:counter];
     surfaceLayoutBegin(main.window, 77007, ^(int allowed) {});
     inputOrder = [NSMutableArray array];
-    sp_input_result heldPressResult = SP_INPUT_UNRECEIVED;
+    sp_input_result heldPressResult = SP_INPUT_UNRECEIVED, *heldPressResultRef = &heldPressResult;
     sp_input_pointer_then(main.window, SP_INPUT_POINTER_MAIN, pressInContent.x, pressY, 1, 0, 0, 0, 1, 5, pressDelivered, &heldPressResult);
     check(sp_input_key(main.window, "a", "a", 0, true) == SP_INPUT_DELIVERED, @"an injected key behind an injected press is taken");
     sp_input_key(main.window, "a", "a", 0, false);
-    pumpInput(0.1, ^BOOL { return NO; });
+    sendQueued(@"the application sends the events queued behind the injected press and key");
     check(inputOrder.count == 0, [NSString stringWithFormat:@"injected input behind a press that waits reaches no view: %@", inputOrder]);
     check(surfaceLayoutCommit(main.window, 77007), @"the layout of the injected press and key commits");
-    pumpInput(2, ^BOOL { return inputOrder.count >= 2 && heldPressResult != SP_INPUT_UNRECEIVED; });
+    eventWait(@"the injected press and key reach the view after the commit", ^BOOL {
+        return inputOrder.count >= 2 && *heldPressResultRef != SP_INPUT_UNRECEIVED;
+    });
     check([inputOrder isEqual:(@[ @"press", @"key" ])],
         [NSString stringWithFormat:@"an injected press reaches the view before the injected key behind it: %@", inputOrder]);
     check(heldPressResult == SP_INPUT_DELIVERED, @"the injected press behind the commit reports its delivery");
@@ -650,7 +614,7 @@ static void checkHitTesting(WKWebView *main) {
     surfaceLayoutBegin(main.window, 77008, ^(int allowed) {});
     inputOrder = [NSMutableArray array];
     [NSApp postEvent:heldDown atStart:NO];
-    pumpInput(0.1, ^BOOL { return NO; });
+    sendQueued(@"the application sends the queued press of a person");
     sp_input_key(main.window, "a", "a", 0, true);
     sp_input_key(main.window, "a", "a", 0, false);
     check(inputOrder.count == 0, [NSString stringWithFormat:@"an injected key behind a person's press that waits reaches no view: %@", inputOrder]);
@@ -658,11 +622,11 @@ static void checkHitTesting(WKWebView *main) {
     // A key sent right after the commit, before the press comes back from the queue, stays behind it too.
     sp_input_key(main.window, "b", "b", 0, true);
     sp_input_key(main.window, "b", "b", 0, false);
-    pumpInput(2, ^BOOL { return inputOrder.count >= 3; });
+    eventWait(@"the press of a person and the keys behind it reach the view", ^BOOL { return inputOrder.count >= 3; });
     check([inputOrder isEqual:(@[ @"press", @"key", @"key" ])],
         [NSString stringWithFormat:@"a person's press reaches the view before the injected keys behind it: %@", inputOrder]);
     [NSApp postEvent:heldUp atStart:NO];
-    pumpInput(0.2, ^BOOL { return NO; });
+    sendQueued(@"the application sends the queued release of a person");
     inputOrder = nil;
     [counter removeFromSuperview];
 
@@ -673,22 +637,42 @@ static void checkHitTesting(WKWebView *main) {
     load(regionPage, @"<!doctype html><body style='margin:0'></body>");
     void *heldRegion = sp_region_create(moved, "held", heldRegionEvent, NULL);
     sp_region_place(heldRegion, 0, 0, 0, 0, true);
-    [NSRunLoop.mainRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.1]];
+    mainQueueTurn(@"the main queue runs the work queued while the region was placed");
     __block BOOL originDuringHold = NO;
+    __block BOOL probed = NO;
     surfaceLayoutBegin(main.window, 77005, ^(int allowed) {});
+    // The record of a receipt without a wait is at the level info, which the default policy refuses
+    // (docs/spec/logging.md#policy): the capture stores that level, and the default policy, the level error alone, is set again
+    // after it.
+    const int8_t withInfo[SP_CLASS_COUNT] = {SP_EVENT_INFO, SP_EVENT_INFO, SP_EVENT_INFO, SP_EVENT_INFO, SP_EVENT_INFO};
+    const int8_t errorsOnly[SP_CLASS_COUNT] = {SP_EVENT_ERROR, SP_EVENT_ERROR, SP_EVENT_ERROR, SP_EVENT_ERROR, SP_EVENT_ERROR};
+    check(sp_event_set_policy(withInfo), @"the policy stores the level info for the records of the held release");
     NSString *heldRecords = capturedRecords(^{
         [NSApp postEvent:heldDown atStart:NO];
-        pumpInput(0.1, ^BOOL { return NO; });
+        sendQueued(@"the application sends the queued press over the region");
         originDuringHold = sp_input_press_origin_point(main.window, 0, NULL, NULL, NULL);
         [NSApp postEvent:heldUp atStart:NO];
-        pumpInput(1.4, ^BOOL { return NO; });
+        sendQueued(@"the application sends the queued release over the region");
+        // A release that reached the press origin monitor would have started a receipt wait of the page of the region when it
+        // was sent. A receipt that the page posts now answers that wait, or is recorded as a receipt without a wait; the handler
+        // of the receipt has run when the evaluation that posts it answers.
+        [regionPage evaluateJavaScript:@"webkit.messageHandlers.soksakInputReceipt.postMessage('pointerup'); null"
+            inFrame:nil inContentWorld:[WKContentWorld worldWithName:@"soksak-input"]
+            completionHandler:^(id value, NSError *error) {
+                (void)value;
+                if (error) fprintf(stderr, "JavaScript: %s\n", error.localizedDescription.UTF8String);
+                probed = YES;
+            }];
+        eventWait(@"the page of the region answers the receipt that probes for a receipt wait", ^BOOL { return probed; });
     });
+    check(sp_event_set_policy(errorsOnly), @"the default policy is set again");
     check(!originDuringHold, @"the press origin of a press that waits is not recorded while it waits");
-    check([heldRecords rangeOfString:@"receipt of pointerup"].location == NSNotFound
+    check([heldRecords containsString:@"receipt of pointerup arrived without a wait"]
+        && [heldRecords rangeOfString:@"receipt of pointerup did not arrive"].location == NSNotFound
         && [heldRecords rangeOfString:@"paired pointer release"].location == NSNotFound,
-        [NSString stringWithFormat:@"a release that waits past the receipt wait reports no lost release: %@", heldRecords]);
+        [NSString stringWithFormat:@"a release that waits starts no receipt wait and reports no lost release: %@", heldRecords]);
     check(surfaceLayoutCommit(main.window, 77005), @"the layout of the held press over a region commits");
-    pumpInput(0.3, ^BOOL { return NO; });
+    sendQueued(@"the application sends the press and release over the region after the commit");
     sp_region_close(heldRegion);
     uint64_t heldToken = 0;
     if (sp_input_press_origin_point(main.window, 0, NULL, NULL, &heldToken)) sp_input_press_origin_clear(main.window, 0, heldToken);
@@ -731,7 +715,6 @@ int main(void) { @autoreleasepool {
     SPScaledWindow *window = [[SPScaledWindow alloc] initWithContentRect:NSMakeRect(100, 100, 600, 400)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
     [window setReleasedWhenClosed:NO];
-    testWindow = window;
     SPSetScaledWindowResolution(window, 1);
     WKWebView *main = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 600, 400)] autorelease];
     window.contentView = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 600, 400)] autorelease];
@@ -825,7 +808,9 @@ int main(void) { @autoreleasepool {
     // move by that distance too.
     check(sp_document_zoom(region, 1.5), @"a document region takes page zoom 1.5");
     evaluate(region, @"document.body.style.margin = '0'; document.body.innerHTML = '<div style=\"height:5000px\"></div>'; null");
-    until(^BOOL { return [evaluate(region, @"document.scrollingElement.scrollHeight") doubleValue] >= 5000; });
+    evaluateAtPresentations(region, @"document.scrollingElement.scrollHeight", ^BOOL(id height) {
+        return [height doubleValue] >= 5000;
+    });
     double zoomedRegion = scrollViewCenter(window, region);
     WKWebView *plain = [[[WKWebView alloc] initWithFrame:NSMakeRect(380, 220, 200, 120)] autorelease];
     [window.contentView addSubview:plain positioned:NSWindowAbove relativeTo:main];

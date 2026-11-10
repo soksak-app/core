@@ -4,12 +4,14 @@
 // answer sends the bytes of the resolver without a second whole copy.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
+#import <objc/runtime.h>
 #include <libproc.h>
 #include <stdatomic.h>
 #include <stdint.h>
 #include <sys/resource.h>
 #include <unistd.h>
 #import "private/malloc.h"
+#import "support/event_wait.h"
 #import "support/temporary_folder.h"
 #import "support/view_import_map.h"
 #import "document_view.h"
@@ -34,22 +36,31 @@ static void logger(uint32_t type, uintptr_t arg1, uintptr_t arg2, uintptr_t arg3
 }
 
 static int failures = 0;
+// The weak reference to the closed region.
+static id closedRegion;
 
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
 }
 
-static void until(NSString *what, NSTimeInterval seconds, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:seconds];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
-    if (!done()) { fprintf(stderr, "FAIL: %s within %.0f seconds\n", what.UTF8String, seconds); exit(1); }
+// Waits for a JavaScript round trip with the document. Its reply comes after every message that the web content process of the
+// document sent before it, so the work that the host does for the earlier messages of a load has run when it returns.
+static void roundTrip(void *document, NSString *what) {
+    __block BOOL answered = NO;
+    [(WKWebView *)document evaluateJavaScript:@"null" completionHandler:^(id value, NSError *error) {
+        (void)value; (void)error;
+        answered = YES;
+    }];
+    eventWait(what, ^BOOL { return answered; });
 }
 
-static void settle(NSTimeInterval seconds) {
-    [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:seconds]];
+// Whether the object of the weak reference has gone. The weak load autoreleases the object it returns, so it is read inside its
+// own pool and does not hold the object itself.
+static BOOL gone(id *reference) {
+    BOOL alive;
+    @autoreleasepool { alive = objc_loadWeak(reference) != nil; }
+    return !alive;
 }
 
 static double footprintMiB(BOOL peak) {
@@ -150,39 +161,52 @@ int main(void) { @autoreleasepool {
     NSString *store = [temporary stringByAppendingPathComponent:@"store"];
 
     @autoreleasepool {
-        void *region = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe", NULL, NULL, changed, NULL);
-        check(region != NULL, @"a region is created");
-        sp_document_place(region, 0, 0, 0, 0, true);
-
-        check(sp_document_load(region, "soksak://probe/ui/app/nothing.html"), @"the page of an empty file starts a load");
-        until(@"the page reads an empty file", 30, ^BOOL{ return [latest[@"title"] hasPrefix:@"read"]; });
-        check([latest[@"title"] isEqual:@"read 0 0"], [NSString stringWithFormat:@"an empty file answers no bytes: %@", latest[@"title"]]);
-
-        settle(2);
-        double before = footprintMiB(NO);
-        double peakBefore = footprintMiB(YES);
-        atomic_store(&largest, 0);
-        malloc_logger = logger;
-        check(sp_document_load(region, "soksak://probe/ui/app/index.html"), @"the page of a large file starts a load");
-        until(@"the page reads a large file", 60, ^BOOL{ return [latest[@"title"] hasPrefix:@"read 2"]; });
-        malloc_logger = NULL;
-        NSString *expected = [NSString stringWithFormat:@"read %zu %u", kFileBytes, patternSum(kFileBytes)];
-        check([latest[@"title"] isEqual:expected],
-            [NSString stringWithFormat:@"the page receives every byte of the file: %@, expected %@", latest[@"title"], expected]);
-        size_t biggest = atomic_load(&largest);
-        check(biggest < kWholeCopyBytes,
-            [NSString stringWithFormat:@"the largest allocation of the response is %zu bytes, below %zu", biggest, kWholeCopyBytes]);
-
-        settle(2);
-        double peak = footprintMiB(YES);
-        double after = footprintMiB(NO);
+        double before = 0;
         double fileMiB = kFileBytes / 1048576.0;
-        check(peak - peakBefore < fileMiB * 0.75,
-            [NSString stringWithFormat:@"the peak footprint rises by %.1f MiB for a file of %.0f MiB", peak - peakBefore, fileMiB]);
-        check(after - before < fileMiB / 2,
-            [NSString stringWithFormat:@"the footprint stays %.1f MiB above its start after a file of %.0f MiB", after - before, fileMiB]);
-        sp_document_close(region);
-        settle(2);
+        // The region and every autoreleased reference to it live in this pool, so the closed region is released at its end.
+        @autoreleasepool {
+            void *region = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe", NULL, NULL, changed, NULL);
+            check(region != NULL, @"a region is created");
+            sp_document_place(region, 0, 0, 0, 0, true);
+
+            check(sp_document_load(region, "soksak://probe/ui/app/nothing.html"), @"the page of an empty file starts a load");
+            eventWait(@"the page reads an empty file", ^BOOL{ return [latest[@"title"] hasPrefix:@"read"]; });
+            check([latest[@"title"] isEqual:@"read 0 0"], [NSString stringWithFormat:@"an empty file answers no bytes: %@", latest[@"title"]]);
+
+            roundTrip(region, @"the region answers after the empty file");
+            before = footprintMiB(NO);
+            double peakBefore = footprintMiB(YES);
+            atomic_store(&largest, 0);
+            malloc_logger = logger;
+            check(sp_document_load(region, "soksak://probe/ui/app/index.html"), @"the page of a large file starts a load");
+            eventWait(@"the page reads a large file", ^BOOL{ return [latest[@"title"] hasPrefix:@"read 2"]; });
+            malloc_logger = NULL;
+            NSString *expected = [NSString stringWithFormat:@"read %zu %u", kFileBytes, patternSum(kFileBytes)];
+            check([latest[@"title"] isEqual:expected],
+                [NSString stringWithFormat:@"the page receives every byte of the file: %@, expected %@", latest[@"title"], expected]);
+            size_t biggest = atomic_load(&largest);
+            check(biggest < kWholeCopyBytes,
+                [NSString stringWithFormat:@"the largest allocation of the response is %zu bytes, below %zu", biggest, kWholeCopyBytes]);
+
+            roundTrip(region, @"the region answers after the large file");
+            double peak = footprintMiB(YES);
+            double after = footprintMiB(NO);
+            check(peak - peakBefore < fileMiB * 0.75,
+                [NSString stringWithFormat:@"the peak footprint rises by %.1f MiB for a file of %.0f MiB", peak - peakBefore, fileMiB]);
+            check(after - before < fileMiB / 2,
+                [NSString stringWithFormat:@"the footprint stays %.1f MiB above its start after a file of %.0f MiB", after - before, fileMiB]);
+            objc_storeWeak(&closedRegion, (id)region);
+            sp_document_close(region);
+        }
+        // WebKit can release the last references of a closed web view on a later turn of the main run loop. A reference that such
+        // a turn autoreleases ends with the pool that each judgment drains.
+        __block NSAutoreleasePool *turnPool = [NSAutoreleasePool new];
+        eventWait(@"the last reference to the closed region goes", ^BOOL {
+            [turnPool drain];
+            turnPool = [NSAutoreleasePool new];
+            return gone(&closedRegion);
+        });
+        [turnPool drain];
         double closed = footprintMiB(NO);
         check(closed - before < fileMiB / 2,
             [NSString stringWithFormat:@"the footprint stays %.1f MiB above its start after the region closes", closed - before]);
@@ -192,14 +216,14 @@ int main(void) { @autoreleasepool {
         sp_document_place(view, 0, 0, 0, 0, true);
         [latest release];
         latest = nil;
-        settle(2);
+        roundTrip(view, @"the new view answers");
         double corePeakBefore = footprintMiB(YES);
         check(sp_document_load(view, "soksak://probe/ui/app/core.html"), @"the page of a core file starts a load");
-        until(@"the page reads a core file", 60, ^BOOL{ return [latest[@"title"] hasPrefix:@"read 16"]; });
+        eventWait(@"the page reads a core file", ^BOOL{ return [latest[@"title"] hasPrefix:@"read 16"]; });
         NSString *expectedCore = [NSString stringWithFormat:@"read %zu %u", kCoreBytes, patternSum(kCoreBytes)];
         check([latest[@"title"] isEqual:expectedCore],
             [NSString stringWithFormat:@"the page receives every byte of the core file: %@, expected %@", latest[@"title"], expectedCore]);
-        settle(2);
+        roundTrip(view, @"the view answers after the core file");
         double coreRise = footprintMiB(YES) - corePeakBefore;
         double coreMiB = kCoreBytes / 1048576.0;
         check(coreRise < coreMiB * 1.75,

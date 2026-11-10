@@ -6,6 +6,7 @@
 #import "process_exit.h"
 #import "support/records.h"
 #import "event_ring.h"
+#import "support/event_wait.h"
 
 extern char **environ;
 
@@ -40,14 +41,9 @@ static pid_t spawnSleep(const char *seconds) {
     return pid;
 }
 
-// Runs the main run loop until done is called.
+// Runs the main run loop until the answer comes. sp_process_when_exited answers in a block of the main queue.
 static void runUntilAnswered(SPExited *state) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:15];
-    while (state->calls == 0 && deadline.timeIntervalSinceNow > 0) {
-        @autoreleasepool {
-            [[NSRunLoop mainRunLoop] runMode:NSDefaultRunLoopMode beforeDate:deadline];
-        }
-    }
+    eventWait(@"sp_process_when_exited answers", ^BOOL { return state->calls != 0; });
 }
 
 int main(void) { @autoreleasepool {
@@ -95,8 +91,16 @@ int main(void) { @autoreleasepool {
         kill(running, SIGTERM);
         waitpid(running, NULL, 0);
     }
-    // A process that exits after the deadline does not give the reply again.
-    [[NSRunLoop mainRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.2]];
+    // A process that exits after the deadline does not give the reply again. A process started after it was reaped exits
+    // after it, and its exit reaches the main queue through the same notification path, so a second reply for the first
+    // process would come before the answer for the later one.
+    pid_t later = spawnSleep("0");
+    SPExited after = {0};
+    sp_process_when_exited(later, 10, answered, &after);
+    runUntilAnswered(&after);
+    if (later) waitpid(later, NULL, 0);
+    check(after.calls == 1 && after.exited, [NSString stringWithFormat:
+        @"a process started after the reap is reported as exited (calls %d, exited %d)", after.calls, after.exited]);
     check(missed.calls == 1, [NSString stringWithFormat:@"the answer is given once (calls %d)", missed.calls]);
     check(!NSApp.isActive, @"application stays inactive");
     return failures ? 1 : 0;

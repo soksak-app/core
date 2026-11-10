@@ -12,13 +12,12 @@
 #import "private/webkit.h"
 #import "webview_geometry.h"
 #import "window_facts.h"
+#import "support/event_wait.h"
 
 static const int pageCount = 60;
 static const int rowsPerPage = 22500;
 static const int imageWidth = 512;
 static const int imageHeight = 683;
-static const NSTimeInterval stepLimit = 60;
-static const NSTimeInterval settleSeconds = 1.0;
 static const double growthLimit = 1.5;
 
 static int failures = 0;
@@ -32,15 +31,35 @@ static double nowSeconds(void) {
     return NSDate.date.timeIntervalSince1970;
 }
 
-// Pumps the run loop until done() holds or the limit passes. Returns done().
-static BOOL pumpUntil(NSTimeInterval limit, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:limit];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        @autoreleasepool {
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-        }
+// Waits as eventWait does and drains the references that the turns autoreleased before each judgment, as each turn of the run
+// loop of an application does, so an object that a turn releases ends during the wait.
+static void waitDrained(NSString *what, BOOL (^done)(void)) {
+    __block NSAutoreleasePool *pool = [NSAutoreleasePool new];
+    eventWait(what, ^BOOL {
+        [pool drain];
+        pool = [NSAutoreleasePool new];
+        return done();
+    });
+    [pool drain];
+}
+
+// Waits for the exit of a process that is not a child of the test: a dispatch source of the main queue reports the exit, and a
+// process that ended before the source was registered is absent after the registration.
+static void waitForExit(pid_t pid) {
+    __block BOOL exited = NO;
+    dispatch_source_t source = dispatch_source_create(DISPATCH_SOURCE_TYPE_PROC, (uintptr_t)pid, DISPATCH_PROC_EXIT,
+        dispatch_get_main_queue());
+    if (!source) {
+        fprintf(stderr, "FAIL: the exit observation of the process %d cannot start\n", pid);
+        exit(1);
     }
-    return done();
+    dispatch_source_set_event_handler(source, ^{ exited = YES; });
+    dispatch_resume(source);
+    struct proc_bsdinfo info;
+    if (proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, sizeof info) != (int)sizeof info) exited = YES;
+    waitDrained([NSString stringWithFormat:@"the WebContent process %d exits", pid], ^BOOL { return exited; });
+    dispatch_source_cancel(source);
+    dispatch_release(source);
 }
 
 // The physical footprint (bytes) of the process, or -1 when the process cannot be read.
@@ -93,8 +112,22 @@ static id evaluate(WKWebView *web, NSString *script) {
         result = [value retain];
         done = YES;
     }];
-    if (!pumpUntil(10, ^BOOL { return done; })) failStep(@"evaluate", @"JavaScript did not answer within 10 seconds");
+    waitDrained(@"JavaScript answers", ^BOOL { return done; });
     return [result autorelease];
+}
+
+// Waits until the page decoded its image and its fonts are ready, so the footprint counts the allocations of the load.
+static void settle(NSString *step) {
+    __block BOOL done = NO;
+    __block NSError *failure = nil;
+    [view callAsyncJavaScript:@"if (document.images.length) await document.images[0].decode(); await document.fonts.ready;"
+        arguments:nil inFrame:nil inContentWorld:WKContentWorld.pageWorld completionHandler:^(id value, NSError *error) {
+            (void)value;
+            failure = [error retain];
+            done = YES;
+        }];
+    waitDrained(@"the page decodes its image", ^BOOL { return done; });
+    if (failure) failStep(step, [NSString stringWithFormat:@"the page does not decode its image: %@", failure.localizedDescription]);
 }
 
 // The HTML of one page: an image of the page, and about 2 MB of rows of text.
@@ -170,10 +203,7 @@ static nw_listener_t serve(void) {
         if (state == nw_listener_state_ready) ready = YES;
     });
     nw_listener_start(server);
-    if (!pumpUntil(10, ^BOOL { return ready; })) {
-        fprintf(stderr, "FAIL: the test server did not start within 10 seconds\n");
-        exit(1);
-    }
+    waitDrained(@"the test server is ready", ^BOOL { return ready; });
     return server;
 }
 
@@ -247,16 +277,16 @@ int main(void) { @autoreleasepool {
         NSString *url = [base stringByAppendingFormat:@"page/%d", page];
         if (!sp_document_load(document, url.UTF8String)) failStep(step, @"the page address is refused");
         NSString *title = [NSString stringWithFormat:@"Page %d", page];
-        if (!pumpUntil(stepLimit, ^BOOL { return latest && [latest[@"title"] isEqual:title] && ![latest[@"loading"] boolValue]; })) {
-            failStep(step, @"the page did not load within 60 seconds");
-        }
+        waitDrained([NSString stringWithFormat:@"the region shows %@", title], ^BOOL {
+            return latest && [latest[@"title"] isEqual:title] && ![latest[@"loading"] boolValue];
+        });
         fprintf(stdout, "end %s elapsed %.3f s\n", step.UTF8String, nowSeconds() - started);
         fflush(stdout);
         pid_t process = currentProcess(page);
 
         if (page == 10 || page == 20 || page == 40 || page == 60) {
-            // The page settles for one second before the footprint is read, so that the allocations of the load are counted.
-            pumpUntil(settleSeconds, ^BOOL { return NO; });
+            // The page decodes its image before the footprint is read, so that the allocations of the load are counted.
+            settle([NSString stringWithFormat:@"settle page %d", page]);
             process = currentProcess(page);
             long footprint = physicalFootprint(process);
             if (footprint < 0) failStep([NSString stringWithFormat:@"footprint page %d", page], @"proc_pid_rusage did not read the process");
@@ -290,11 +320,8 @@ int main(void) { @autoreleasepool {
     fprintf(stdout, "closed document processes: %s\n", [processes componentsJoinedByString:@" "].UTF8String);
     for (NSNumber *pid in processes) {
         NSDate *start = [NSDate date];
-        BOOL ended = pumpUntil(30, ^BOOL {
-            struct proc_bsdinfo info;
-            return proc_pidinfo(pid.intValue, PROC_PIDTBSDINFO, 0, &info, sizeof info) != (int)sizeof info;
-        });
-        check(ended, [NSString stringWithFormat:@"the WebContent process %d ends after the document closes (%.3f s)", pid.intValue, -start.timeIntervalSinceNow]);
+        waitForExit(pid.intValue);
+        check(YES, [NSString stringWithFormat:@"the WebContent process %d ends after the document closes (%.3f s)", pid.intValue, -start.timeIntervalSinceNow]);
     }
     nw_listener_cancel(listener);
     printf("%s\n", failures ? "FAIL: document_caches_test" : "PASS: document_caches_test");

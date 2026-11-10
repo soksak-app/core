@@ -14,20 +14,13 @@
 #import "webview_geometry.h"
 #import "window_facts.h"
 #import "event_ring.h"
+#import "support/event_wait.h"
 
 static int failures = 0;
 
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
-}
-
-static void until(NSString *what, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
-    if (!done()) { fprintf(stderr, "FAIL: %s within 10 seconds\n", what.UTF8String); exit(1); }
 }
 
 // Test documents. Each path has a different title and body.
@@ -96,7 +89,7 @@ static nw_listener_t serve(void) {
         if (state == nw_listener_state_ready) ready = YES;
     });
     nw_listener_start(listener);
-    until(@"the test server did not start", ^BOOL { return ready; });
+    eventWait(@"the test server starts", ^BOOL { return ready; });
     return listener;
 }
 
@@ -157,7 +150,7 @@ static id evaluate(WKWebView *view, NSString *script) {
         result = [value retain];
         done = YES;
     }];
-    until(@"JavaScript did not answer", ^BOOL { return done; });
+    eventWait(@"JavaScript answers", ^BOOL { return done; });
     return [result autorelease];
 }
 
@@ -172,20 +165,10 @@ static NSUInteger documents(NSView *surface) {
 }
 
 static void settle(NSString *what, BOOL (^condition)(NSDictionary *state)) {
-    until(what, ^BOOL { return latest && condition(latest); });
+    eventWait(what, ^BOOL { return latest && condition(latest); });
 }
 
 static id closedViews[2];
-
-static void pumpEvents(NSString *what, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny
-            untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01] inMode:NSDefaultRunLoopMode dequeue:YES];
-        if (event) [NSApp sendEvent:event];
-    }
-    if (!done()) { fprintf(stderr, "FAIL: %s within 10 seconds\n", what.UTF8String); exit(1); }
-}
 
 // tests/support/no_activation.m: this check activates the application in make test-app-activation.
 void sp_test_declare_activation(void);
@@ -233,9 +216,10 @@ int main(int argc, char **argv) { @autoreleasepool {
         NSArray<NSDictionary *> *creation = capturedEvents(^{
             document = sp_document_create(surface, storeA.fileSystemRepresentation, NULL, NULL, NULL, NULL, changed, NULL);
             sp_document_set_stream(document, stream, NULL);
-            // The first deliveries of the observed properties arrive on the run loop after the creation.
-            NSDate *until = [NSDate dateWithTimeIntervalSinceNow:0.3];
-            while (until.timeIntervalSinceNow > 0) [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:until];
+            // The first deliveries of the observed properties arrive on the run loop after the creation. A JavaScript round trip
+            // starts the web content process of the document, and its answer comes after the changes that the process sent
+            // before it, so the deliveries of the start are captured too.
+            evaluate((WKWebView *)document, @"null");
         });
         check(document != NULL, @"a document view is created inside the surface");
         NSMutableArray *failedEntrances = [NSMutableArray array];
@@ -290,14 +274,14 @@ int main(int argc, char **argv) { @autoreleasepool {
         // so WebKit ends the file navigation with an internal error; here the test proves that the address is accepted and the navigation
         // has started, because, unlike a rejected address, the navigation result remains in the status.
         check(sp_document_load(document, "file:///etc/hosts"), @"a file address is accepted");
-        settle(@"the file navigation did not report", ^BOOL(NSDictionary *state) {
+        settle(@"the file navigation reports", ^BOOL(NSDictionary *state) {
             return ([state[@"url"] isEqual:@"file:///etc/hosts"] || state[@"error"] != NSNull.null)
                 && ![state[@"loading"] boolValue];
         });
         check(!sp_document_load(document, "not a url"), @"an invalid address is rejected");
 
         check(sp_document_load(document, [base stringByAppendingString:@"/one"].UTF8String), @"a web address is accepted");
-        settle(@"the first document did not load", ^BOOL(NSDictionary *state) {
+        settle(@"the first document loads", ^BOOL(NSDictionary *state) {
             return [state[@"title"] isEqual:@"One"] && ![state[@"loading"] boolValue];
         });
         // The document sends the Safari user agent of the same WebKit (docs/spec/native-surfaces.md#document-regions).
@@ -312,13 +296,13 @@ int main(int argc, char **argv) { @autoreleasepool {
         check([evaluate(view, @"matchMedia('(prefers-color-scheme: dark)').matches") boolValue],
             @"the document renderer matches the owner's dark appearance");
         window.appearance = [NSAppearance appearanceNamed:NSAppearanceNameAqua];
-        until(@"the document renderer did not receive the light appearance", ^BOOL {
+        eventWait(@"the document renderer receives the light appearance", ^BOOL {
             return ![evaluate(view, @"matchMedia('(prefers-color-scheme: dark)').matches") boolValue];
         });
         check(![evaluate(view, @"matchMedia('(prefers-color-scheme: dark)').matches") boolValue],
             @"the document renderer follows the owner's light appearance change");
         window.appearance = [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
-        until(@"the document renderer did not receive the dark appearance again", ^BOOL {
+        eventWait(@"the document renderer receives the dark appearance again", ^BOOL {
             return [evaluate(view, @"matchMedia('(prefers-color-scheme: dark)').matches") boolValue];
         });
         check([evaluate(view, @"matchMedia('(prefers-color-scheme: dark)').matches") boolValue],
@@ -338,7 +322,7 @@ int main(int argc, char **argv) { @autoreleasepool {
                 context:nil eventNumber:1 clickCount:1 pressure:0];
             [NSApp postEvent:down atStart:NO];
             [NSApp postEvent:up atStart:NO];
-            pumpEvents(@"the OS click was not delivered", ^BOOL {
+            eventWait(@"the OS click is delivered", ^BOOL {
                 return nativeEvents >= 1 && [evaluate(view, @"document.activeElement && document.activeElement.id") isEqual:@"field"];
             });
             check(nativeEvents == 1 && [latestNativeEvent[@"type"] isEqual:@"click"],
@@ -358,7 +342,7 @@ int main(int argc, char **argv) { @autoreleasepool {
                 context:nil characters:@"x" charactersIgnoringModifiers:@"x" isARepeat:NO keyCode:7];
             [NSApp postEvent:keyDown atStart:NO];
             [NSApp postEvent:keyUp atStart:NO];
-            pumpEvents(@"the OS key was not delivered", ^BOOL {
+            eventWait(@"the OS key is delivered", ^BOOL {
                 return [evaluate(view, @"document.getElementById('field').value") isEqual:@"x"];
             });
             check([evaluate(view, @"document.getElementById('field').value") isEqual:@"x"],
@@ -371,16 +355,16 @@ int main(int argc, char **argv) { @autoreleasepool {
         // A native wheel scroll sent to a document that has just finished loading also moves the document by the requested distance, and that position is reported.
         __block sp_input_result scrollResult = SP_INPUT_REJECTED;
         sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 250, 200, 4, 0, 0, 120, 1, 5, scrollDone, &scrollResult);
-        until(@"the native scroll was not delivered", ^BOOL { return scrollResult != SP_INPUT_REJECTED; });
+        eventWait(@"the native scroll is delivered", ^BOOL { return scrollResult != SP_INPUT_REJECTED; });
         check(scrollResult == SP_INPUT_DELIVERED, @"a native scroll into the region is delivered");
-        settle(@"the native scroll did not reach 120 pixels", ^BOOL(NSDictionary *state) {
+        settle(@"the native scroll reaches 120 pixels", ^BOOL(NSDictionary *state) {
             return [state[@"scroll"][@"y"] doubleValue] >= 120;
         });
         check([latest[@"scroll"][@"y"] doubleValue] == 120,
             [NSString stringWithFormat:@"a native scroll moves the document by the requested 120 pixels (%@)", latest[@"scroll"]]);
 
         evaluate(view, @"scrollTo(0, 300); null");
-        settle(@"the scroll position was not reported", ^BOOL(NSDictionary *state) {
+        settle(@"the scroll position is reported", ^BOOL(NSDictionary *state) {
             return [state[@"scroll"][@"y"] doubleValue] == 300;
         });
         check(YES, @"scrolling the document reports its position");
@@ -392,7 +376,7 @@ int main(int argc, char **argv) { @autoreleasepool {
 
         NSString *refusal = capturedRecords(^{
             evaluate(view, @"document.getElementById('app').click(); null");
-            settle(@"an application-scheme link was not refused", ^BOOL(NSDictionary *state) {
+            settle(@"an application-scheme link is refused", ^BOOL(NSDictionary *state) {
                 return [state[@"error"] isKindOfClass:NSString.class];
             });
         });
@@ -404,7 +388,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         NSString *failed = capturedRecords(^{
             check(sp_document_load(document, "file:///nonexistent/soksak-document-missing.html"), @"a missing file address is accepted");
             // The state of the refused link still holds its error until the new navigation starts.
-            settle(@"the missing file did not fail", ^BOOL(NSDictionary *state) {
+            settle(@"the missing file fails", ^BOOL(NSDictionary *state) {
                 return [state[@"error"] isKindOfClass:NSString.class] && ![state[@"error"] containsString:@"is not a web address"];
             });
         });
@@ -417,7 +401,7 @@ int main(int argc, char **argv) { @autoreleasepool {
             [NSString stringWithFormat:@"the end of the WebContent process is recorded (got %@)", ended]);
 
         check(sp_document_load(document, [base stringByAppendingString:@"/two"].UTF8String), @"a second address is accepted");
-        settle(@"the second document did not load", ^BOOL(NSDictionary *state) {
+        settle(@"the second document loads", ^BOOL(NSDictionary *state) {
             return [state[@"title"] isEqual:@"Two"] && ![state[@"loading"] boolValue] && [state[@"canGoBack"] boolValue];
         });
         check(latest[@"error"] == NSNull.null, @"a new navigation clears the previous error");
@@ -429,31 +413,31 @@ int main(int argc, char **argv) { @autoreleasepool {
         check(!sp_document_go(document, 4, -5), @"an entry outside the history is refused");
         check(!sp_document_go(document, 4, 0), @"an entry at offset 0 is refused");
         check(sp_document_go(document, 4, -1), @"the entry before the current one is accepted");
-        settle(@"the entry did not load the first document", ^BOOL(NSDictionary *state) {
+        settle(@"the entry loads the first document", ^BOOL(NSDictionary *state) {
             return [state[@"title"] isEqual:@"One"] && ![state[@"loading"] boolValue] && [state[@"history"][@"index"] intValue] == 0;
         });
         check(sp_document_go(document, 4, 1), @"the entry after the current one is accepted");
-        settle(@"the entry did not load the second document", ^BOOL(NSDictionary *state) {
+        settle(@"the entry loads the second document", ^BOOL(NSDictionary *state) {
             return [state[@"title"] isEqual:@"Two"] && ![state[@"loading"] boolValue] && [state[@"history"][@"index"] intValue] == 1;
         });
 
         check(sp_document_go(document, 0, 0), @"back is accepted");
-        settle(@"back did not return to the first document", ^BOOL(NSDictionary *state) {
+        settle(@"back returns to the first document", ^BOOL(NSDictionary *state) {
             return [state[@"title"] isEqual:@"One"] && [state[@"canGoForward"] boolValue] && ![state[@"loading"] boolValue];
         });
         check(sp_document_go(document, 1, 0), @"forward is accepted");
-        settle(@"forward did not return to the second document", ^BOOL(NSDictionary *state) {
+        settle(@"forward returns to the second document", ^BOOL(NSDictionary *state) {
             return [state[@"title"] isEqual:@"Two"] && ![state[@"canGoForward"] boolValue];
         });
         check(!sp_document_go(document, 1, 0), @"forward without a next document is refused");
         check(sp_document_go(document, 3, 0), @"stop is accepted");
 
         check(sp_document_go(document, 0, 0), @"back is accepted again");
-        settle(@"back did not return to the first document", ^BOOL(NSDictionary *state) {
+        settle(@"back returns to the first document", ^BOOL(NSDictionary *state) {
             return [state[@"title"] isEqual:@"One"] && ![state[@"loading"] boolValue];
         });
         evaluate(view, @"document.getElementById('blank').click(); null");
-        settle(@"a new-window link did not open in the same region", ^BOOL(NSDictionary *state) {
+        settle(@"a new-window link opens in the same region", ^BOOL(NSDictionary *state) {
             return [state[@"title"] isEqual:@"Blank"];
         });
         check(documents(nativePlane) == 1, @"a new-window link does not create another view");
@@ -461,14 +445,14 @@ int main(int argc, char **argv) { @autoreleasepool {
         // When a new navigation replaces a document that is still loading, the end of loading of the previous document is not reported. The title may arrive in the report after
         // the loading ends, so it is not part of this condition.
         check(sp_document_load(document, [base stringByAppendingString:@"/slow"].UTF8String), @"a slow address is accepted");
-        settle(@"the slow document did not start", ^BOOL(NSDictionary *state) {
+        settle(@"the slow document starts", ^BOOL(NSDictionary *state) {
             return [state[@"url"] hasSuffix:@"/slow"] && [state[@"loading"] boolValue];
         });
         expected = ^BOOL(NSDictionary *state) {
             return [state[@"loading"] boolValue] || [state[@"url"] hasSuffix:@"/two"];
         };
         check(sp_document_load(document, [base stringByAppendingString:@"/two"].UTF8String), @"an address replacing a loading one is accepted");
-        settle(@"the replacing document did not load", ^BOOL(NSDictionary *state) {
+        settle(@"the replacing document loads", ^BOOL(NSDictionary *state) {
             return [state[@"title"] isEqual:@"Two"] && ![state[@"loading"] boolValue];
         });
         expected = nil;
@@ -483,7 +467,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         // state carries no elements and no requests, and a document that changes its element tree on every task, such as a
         // single-page application, reports no state for those changes.
         check(sp_document_load(document, [base stringByAppendingString:@"/inspect"].UTF8String), @"the inspect address is accepted");
-        settle(@"the inspect document did not finish", ^BOOL(NSDictionary *state) { return [state[@"title"] isEqual:@"Inspected"]; });
+        settle(@"the inspect document finishes", ^BOOL(NSDictionary *state) { return [state[@"title"] isEqual:@"Inspected"]; });
         check(latest[@"elements"] == nil && latest[@"requests"] == nil,
             [NSString stringWithFormat:@"the state of a document carries no elements and no requests: %@", latest.allKeys]);
         // Each change runs in a task of its own; a message channel schedules the next task without the timer throttling of
@@ -494,7 +478,7 @@ int main(int argc, char **argv) { @autoreleasepool {
             " channel.port1.onmessage = step; step(); })(); null";
         int before = reports;
         evaluate(view, changes);
-        settle(@"the changing document did not finish its changes", ^BOOL(NSDictionary *state) {
+        settle(@"the changing document finishes its changes", ^BOOL(NSDictionary *state) {
             return [state[@"title"] hasPrefix:@"Changed"];
         });
         check(reports - before <= 2,
@@ -503,7 +487,7 @@ int main(int argc, char **argv) { @autoreleasepool {
 
         // The element stream: turning it on sends one snapshot of the tree in document order.
         check(sp_document_stream_on(document, "elements", true), @"the element stream is turned on");
-        until(@"the element stream sent no snapshot", ^BOOL { return messagesOf(@"elements", @"snapshot", 0).count == 1; });
+        eventWait(@"the element stream sends a snapshot", ^BOOL { return messagesOf(@"elements", @"snapshot", 0).count == 1; });
         NSDictionary *snapshot = messagesOf(@"elements", @"snapshot", 0)[0];
         NSMutableArray *shown = [NSMutableArray array];
         for (NSDictionary *node in [snapshot[@"nodes"] subarrayWithRange:NSMakeRange(0, 7)]) {
@@ -515,12 +499,12 @@ int main(int argc, char **argv) { @autoreleasepool {
                 shown, snapshot[@"seq"], snapshot[@"total"]]);
         // 50 changes while the snapshot is unacknowledged send no snapshot; its acknowledgement releases exactly one more.
         evaluate(view, changes);
-        settle(@"the second changes did not finish", ^BOOL(NSDictionary *state) { return [state[@"title"] isEqual:@"Changed 102"]; });
+        settle(@"the second changes finish", ^BOOL(NSDictionary *state) { return [state[@"title"] isEqual:@"Changed 102"]; });
         check(messagesOf(@"elements", @"snapshot", 0).count == 1,
             [NSString stringWithFormat:@"changes during an unacknowledged snapshot send none: %lu snapshots", (unsigned long)messagesOf(@"elements", @"snapshot", 0).count]);
         check(!sp_document_stream_ack(document, 99), @"an acknowledgement of a seq that was not sent is refused");
         check(sp_document_stream_ack(document, 1), @"the snapshot 1 is acknowledged");
-        until(@"the acknowledgement released no snapshot", ^BOOL { return messagesOf(@"elements", @"snapshot", 0).count == 2; });
+        eventWait(@"the acknowledgement releases a snapshot", ^BOOL { return messagesOf(@"elements", @"snapshot", 0).count == 2; });
         NSDictionary *second = messagesOf(@"elements", @"snapshot", 0)[1];
         check([second[@"seq"] isEqual:@2] && [second[@"total"] isEqual:@(7 + 100)],
             [NSString stringWithFormat:@"the released snapshot holds every change: seq %@ total %@", second[@"seq"], second[@"total"]]);
@@ -540,11 +524,11 @@ int main(int argc, char **argv) { @autoreleasepool {
 
         // The request stream: turning it on sends the navigation first, and later batches hold only new entries.
         check(sp_document_stream_on(document, "requests", true), @"the request stream is turned on");
-        until(@"the request stream sent no entries", ^BOOL { return messagesOf(@"requests", @"entries", 0).count >= 1; });
+        eventWait(@"the request stream sends entries", ^BOOL { return messagesOf(@"requests", @"entries", 0).count >= 1; });
         NSDictionary *navigation = [messagesOf(@"requests", @"entries", 0)[0][@"entries"] firstObject];
         check([navigation[@"type"] isEqual:@"navigation"] && [navigation[@"url"] hasSuffix:@"/inspect"] && [navigation[@"duration"] doubleValue] >= 0,
             [NSString stringWithFormat:@"the navigation is the first entry: %@", navigation]);
-        until(@"the buffered resource entries did not arrive", ^BOOL {
+        eventWait(@"the buffered resource entries arrive", ^BOOL {
             for (NSDictionary *message in messagesOf(@"requests", @"entries", 0)) {
                 for (NSDictionary *item in message[@"entries"]) if ([item[@"type"] isEqual:@"fetch"] && [item[@"url"] hasSuffix:@"/blank"]) return YES;
             }
@@ -552,7 +536,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         });
         NSUInteger mark = streamed.count;
         evaluate(view, @"fetch('/two'); null");
-        until(@"the new request was not sent", ^BOOL { return messagesOf(@"requests", @"entries", mark).count >= 1; });
+        eventWait(@"the new request is sent", ^BOOL { return messagesOf(@"requests", @"entries", mark).count >= 1; });
         NSArray *fresh = messagesOf(@"requests", @"entries", mark)[0][@"entries"];
         check(fresh.count == 1 && [fresh[0][@"url"] hasSuffix:@"/two"],
             [NSString stringWithFormat:@"a later batch holds only the new entry: %@", fresh]);
@@ -562,7 +546,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         // A new document sends reset to each stream that is on, and seq keeps increasing.
         mark = streamed.count;
         check(sp_document_load(document, [base stringByAppendingString:@"/inspect"].UTF8String), @"the inspect address is accepted again");
-        until(@"the new document sent no reset and no snapshot", ^BOOL {
+        eventWait(@"the new document sends a reset and a snapshot", ^BOOL {
             return messagesOf(@"elements", @"reset", mark).count == 1 && messagesOf(@"requests", @"reset", mark).count == 1
                 && messagesOf(@"elements", @"snapshot", mark).count == 1;
         });
@@ -573,10 +557,10 @@ int main(int argc, char **argv) { @autoreleasepool {
         check(sp_document_stream_on(document, "elements", false) && sp_document_stream_on(document, "requests", false),
             @"the streams are turned off");
         check(!sp_document_stream_on(document, "frames", true), @"another stream name is refused");
-        settle(@"the reloaded inspect document did not finish", ^BOOL(NSDictionary *state) { return [state[@"title"] isEqual:@"Inspected"]; });
+        settle(@"the reloaded inspect document finishes", ^BOOL(NSDictionary *state) { return [state[@"title"] isEqual:@"Inspected"]; });
         mark = streamed.count;
         evaluate(view, changes);
-        settle(@"the third changes did not finish", ^BOOL(NSDictionary *state) { return [state[@"title"] hasPrefix:@"Changed"]; });
+        settle(@"the third changes finish", ^BOOL(NSDictionary *state) { return [state[@"title"] hasPrefix:@"Changed"]; });
         check(streamed.count == mark, [NSString stringWithFormat:@"a stream that is off sends nothing: %@",
             [streamed subarrayWithRange:NSMakeRange(mark, streamed.count - mark)]]);
 
@@ -584,11 +568,11 @@ int main(int argc, char **argv) { @autoreleasepool {
         check([latest[@"link"] isEqual:@""], [NSString stringWithFormat:@"a document without a pointed link reports an empty link: %@", latest[@"link"]]);
         evaluate(view, @"const a = document.createElement('a'); a.href = '/target'; a.textContent = 'go'; document.body.append(a);"
             " a.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })); null");
-        settle(@"the link under the pointer was not reported", ^BOOL(NSDictionary *state) {
+        settle(@"the link under the pointer is reported", ^BOOL(NSDictionary *state) {
             return [state[@"link"] isKindOfClass:NSString.class] && [state[@"link"] hasSuffix:@"/target"];
         });
         evaluate(view, @"document.querySelector('a').dispatchEvent(new MouseEvent('mouseout', { bubbles: true })); null");
-        settle(@"leaving the link did not clear it", ^BOOL(NSDictionary *state) {
+        settle(@"leaving the link clears it", ^BOOL(NSDictionary *state) {
             return [state[@"link"] isEqual:@""];
         });
 
@@ -601,13 +585,13 @@ int main(int argc, char **argv) { @autoreleasepool {
             NSHTTPCookieValue: @"a", NSHTTPCookieExpires: [NSDate dateWithTimeIntervalSinceNow:3600]}];
         __block BOOL stored = NO;
         [view.configuration.websiteDataStore.httpCookieStore setCookie:cookie completionHandler:^{ stored = YES; }];
-        until(@"the cookie was not stored", ^BOOL { return stored; });
+        eventWait(@"the cookie is stored", ^BOOL { return stored; });
         NSArray<NSHTTPCookie *> *(^cookies)(void *) = ^NSArray<NSHTTPCookie *> *(void *handle) {
             __block NSArray<NSHTTPCookie *> *found = nil;
             [((WKWebView *)handle).configuration.websiteDataStore.httpCookieStore getAllCookies:^(NSArray<NSHTTPCookie *> *all) {
                 found = [all retain];
             }];
-            until(@"the cookie store did not answer", ^BOOL { return found != nil; });
+            eventWait(@"the cookie store answers", ^BOOL { return found != nil; });
             return [found autorelease];
         };
         BOOL (^hasStoreCookie)(NSArray<NSHTTPCookie *> *) = ^BOOL(NSArray<NSHTTPCookie *> *all) {
@@ -634,31 +618,41 @@ int main(int argc, char **argv) { @autoreleasepool {
         int after = reports;
         __block BOOL passed = NO;
         CFRunLoopPerformBlock(CFRunLoopGetMain(), kCFRunLoopCommonModes, ^{ passed = YES; });
-        until(@"the run loop did not continue", ^BOOL { return passed; });
+        eventWait(@"the run loop performs the block scheduled after the close", ^BOOL { return passed; });
         check(reports == after, @"a closed document reports nothing");
         check(documents(nativePlane) == 0, @"closing removes the document view");
     }
 
     // A closed document ends its web content process only as the last reference to its web view goes, so nothing holds the web
     // view, whether the keyboard was in it at the close or had left it.
+    // WebKit can release the last references of a closed web view on a later turn of the main run loop. A reference that such a
+    // turn autoreleases ends with the pool that each judgment drains. The weak load autoreleases the view it returns, so it is
+    // read inside its own pool and does not hold the view itself.
+    BOOL (^gone)(id *) = ^BOOL(id *closed) {
+        BOOL alive;
+        @autoreleasepool { alive = objc_loadWeak(closed) != nil; }
+        return !alive;
+    };
     BOOL (^freed)(id *) = ^BOOL(id *closed) {
-        NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:5];
-        while (deadline.timeIntervalSinceNow > 0 && objc_loadWeak(closed)) {
-            @autoreleasepool {
-                [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
-            }
-        }
-        return !objc_loadWeak(closed);
+        __block NSAutoreleasePool *turnPool = [NSAutoreleasePool new];
+        eventWait(@"the last reference to the closed web view goes", ^BOOL {
+            [turnPool drain];
+            turnPool = [NSAutoreleasePool new];
+            return gone(closed);
+        });
+        [turnPool drain];
+        return gone(closed);
     };
     check(freed(&closedViews[0]), @"nothing holds the web view of a document closed with the keyboard in it");
     if (activation) {
         @autoreleasepool {
             void *left = sp_document_create(surface, storeA.fileSystemRepresentation, NULL, NULL, NULL, NULL, changed, NULL);
             sp_document_place(left, 10, 20, 30, 40, true);
+            // Each JavaScript round trip with the document comes after the change of focus that its process received before it.
             [window makeFirstResponder:(NSView *)left];
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.2]];
+            evaluate((WKWebView *)left, @"null");
             [window makeFirstResponder:main];
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.2]];
+            evaluate((WKWebView *)left, @"null");
             objc_storeWeak(&closedViews[1], (id)left);
             sp_document_close(left);
             check(window.firstResponder == main, @"closing a document leaves the keyboard where it went");
@@ -671,7 +665,7 @@ int main(int argc, char **argv) { @autoreleasepool {
     [storeErrors removeAllObjects];
     sp_document_store_close(storeA.fileSystemRepresentation, recordStoreClosed, NULL);
     sp_document_store_close(storeB.fileSystemRepresentation, recordStoreClosed, NULL);
-    until(@"the data stores did not end", ^BOOL { return storeClosed == 2; });
+    eventWait(@"the data stores end", ^BOOL { return storeClosed == 2; });
     check(storeErrors.count == 0, [NSString stringWithFormat:@"the data stores end without an error: %@", storeErrors]);
 
     for (id connection in held) nw_connection_cancel((nw_connection_t)connection);

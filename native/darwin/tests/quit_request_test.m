@@ -7,6 +7,7 @@
 #import "quit_request.h"
 #import "support/records.h"
 #import "event_ring.h"
+#import "support/event_wait.h"
 #import <spawn.h>
 #import <sys/wait.h>
 
@@ -84,9 +85,9 @@ typedef struct {
     OSStatus status;
 } SentQuit;
 
-// Starts this executable as the sender of a quit event to this process, runs the main loop until the request arrives or
-// five seconds pass, then lets the sender end and reads the status of its send. The status is 1 when the sender could not
-// be started or reported no status.
+// Starts this executable as the sender of a quit event to this process and reads the status of its send, which the sender
+// writes in one write once the send returns. When the send succeeded, runs the main loop until the request arrives, then
+// lets the sender end. The status is 1 when the sender could not be started or reported no status.
 static SentQuit sendQuitFromChild(const int *requests, int before) {
     SentQuit sent = {-1, 1};
     int input[2], output[2];
@@ -107,25 +108,26 @@ static SentQuit sendQuitFromChild(const int *requests, int before) {
     close(input[0]);
     close(output[1]);
     if (spawned == 0) {
-        NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:5];
-        while (*requests == before && deadline.timeIntervalSinceNow > 0) {
-            NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]
-                inMode:NSDefaultRunLoopMode dequeue:YES];
-            if (event) [NSApp sendEvent:event];
-        }
+        char text[32] = {0};
+        size_t length = 0;
+        ssize_t count;
+        // The sender writes its status once and keeps its output open until its input closes, so the first read returns the
+        // status and does not wait for the end of the sender.
+        while (length == 0 && (count = read(output[0], text, sizeof text - 1)) > 0) length = (size_t)count;
+        char *end = NULL;
+        long status = strtol(text, &end, 10);
+        if (length > 0 && end == text + length) sent.status = (OSStatus)status;
+        // The Apple event manager delivers the event through the event port of the main run loop.
+        if (sent.status == noErr) eventWait(@"the quit request of the sender arrives", ^BOOL { return *requests != before; });
     } else {
         sent.pid = -1;
     }
+    // The sender ends when its input closes; its output reaches the end of file then.
     close(input[1]);
-    char text[32] = {0};
-    size_t length = 0;
-    ssize_t count;
-    while (length < sizeof text - 1 && (count = read(output[0], text + length, sizeof text - 1 - length)) > 0) length += (size_t)count;
+    char rest[32];
+    while (read(output[0], rest, sizeof rest) > 0) {}
     close(output[0]);
     if (sent.pid > 0) waitpid(sent.pid, NULL, 0);
-    char *end = NULL;
-    long status = strtol(text, &end, 10);
-    if (length > 0 && end == text + length) sent.status = (OSStatus)status;
     return sent;
 }
 

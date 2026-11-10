@@ -5,20 +5,13 @@
 #import <WebKit/WebKit.h>
 #import "private/webkit.h"
 #import "surface_layout.h"
+#import "support/event_wait.h"
 
 static int failures;
 
 static void check(BOOL ok, NSString *message) {
     fprintf(ok ? stdout : stderr, "%s: %s\n", ok ? "PASS" : "FAIL", message.UTF8String);
     if (!ok) failures++;
-}
-
-static void until(NSString *what, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [NSRunLoop.mainRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
-    check(done(), [NSString stringWithFormat:@"%@ within 10 s", what]);
 }
 
 // A web view that holds the completion of its next presentation until the check releases it.
@@ -128,7 +121,7 @@ static void checkSettledWithBlock(NSWindow *window) {
     double called = CACurrentMediaTime() * 1000;
     presented(NULL);
     check(!settled, @"the callback of the block does not end the wait before the next display refresh");
-    until(@"the wait ends after the next display refresh", ^BOOL { return settled; });
+    eventWait(@"the settled wait ends at the next display refresh", ^BOOL { return settled; });
     check(displayed >= called, [NSString stringWithFormat:@"the wait reports the display refresh after the block called back (%f, called %f)", displayed, called]);
     [presented release];
     presented = nil;
@@ -156,7 +149,7 @@ static void checkSettledWithBlock(NSWindow *window) {
     presented(NULL);
     [presented release];
     presented = nil;
-    until(@"the wait ends after the block presents the newer transaction", ^BOOL { return settled; });
+    eventWait(@"the settled wait ends after the block presents the newer transaction", ^BOOL { return settled; });
 
     __block const char *failure = NULL;
     surfaceLayoutAfterSettled(window, ^(void (^callback)(const char *)) { callback("the frame failed"); },

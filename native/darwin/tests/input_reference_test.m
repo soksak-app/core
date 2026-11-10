@@ -6,6 +6,7 @@
 #import "input_inject.h"
 #import "input_reference.h"
 #import "input_source.h"
+#import "support/event_wait.h"
 #import "support/records.h"
 
 static int failures;
@@ -23,9 +24,12 @@ static void check(BOOL condition, NSString *message) {
 @implementation SPReferenceReply
 - (void)dealloc { [_value release]; [_failure release]; [_json release]; [super dealloc]; }
 @end
+// A reply can come from the timer of a document wait, which does not end a turn of the run loop, so the reply wakes the wait
+// of the main thread.
 static void replied(void *context, const char *value, const char *failure) {
     SPReferenceReply *reply = context;
     reply.count++;
+    eventWake();
     if (failure) reply.failure = @(failure);
     if (value) {
         reply.json = @(value);
@@ -44,20 +48,11 @@ static NSTextView *reference(NSWindow *window) {
     return nil;
 }
 // Dispatches AppKit events until a marker block that follows every block already on the main queue has run. The main queue
-// runs its blocks in order, so the document checks that earlier notifications scheduled have run when the marker runs; the
-// marker posts an application-defined event so that the wait for the next event ends.
+// runs its blocks in order, so the document checks that earlier notifications scheduled have run when the marker runs.
 static void drain(void) {
     __block BOOL passed = NO;
-    dispatch_async(dispatch_get_main_queue(), ^{
-        passed = YES;
-        [NSApp postEvent:[NSEvent otherEventWithType:NSEventTypeApplicationDefined location:NSZeroPoint modifierFlags:0
-            timestamp:0 windowNumber:0 context:nil subtype:0 data1:0 data2:0] atStart:NO];
-    });
-    while (!passed) {
-        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny
-            untilDate:NSDate.distantFuture inMode:NSDefaultRunLoopMode dequeue:YES];
-        if (event && event.type != NSEventTypeApplicationDefined) [NSApp sendEvent:event];
-    }
+    dispatch_async(dispatch_get_main_queue(), ^{ passed = YES; });
+    eventWait(@"a marker block after the document checks already on the main queue runs", ^BOOL { return passed; });
 }
 static NSString *currentSourceID(void) {
     char *identifier = sp_input_source_current();
@@ -65,25 +60,20 @@ static NSString *currentSourceID(void) {
     free(identifier);
     return result;
 }
-static BOOL pumpUntil(BOOL (^done)(void), NSDate *deadline) {
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        NSDate *next = [NSDate dateWithTimeIntervalSinceNow:0.01];
-        if ([next compare:deadline] == NSOrderedDescending) next = deadline;
-        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny
-            untilDate:next inMode:NSDefaultRunLoopMode dequeue:YES];
-        if (event) [NSApp sendEvent:event];
-    }
-    return done();
-}
-static BOOL selectAndAwaitSource(NSString *source, NSDate *deadline) {
+// Selects source and waits for the answer of its adoption. The answer can come from a timer of the selection, which does not
+// end a turn of the run loop, so the answer wakes the wait.
+static BOOL selectAndAwaitSource(NSString *source) {
     __block BOOL answered = NO;
     __block NSString *failure = nil;
     sp_input_source_select_and_await(source.UTF8String, ^(const char *error) {
         answered = YES;
-        failure = error ? [NSString stringWithUTF8String:error] : nil;
+        failure = error ? [[NSString alloc] initWithUTF8String:error] : nil;
+        eventWake();
     });
-    return pumpUntil(^BOOL { return answered; }, deadline) && failure == nil
-        && [currentSourceID() isEqualToString:source];
+    eventWait([NSString stringWithFormat:@"the adoption of the input source %@ answers", source], ^BOOL { return answered; });
+    BOOL adopted = failure == nil && [currentSourceID() isEqualToString:source];
+    [failure release];
+    return adopted;
 }
 static int runActivationReadiness(void) { @autoreleasepool {
     NSString *outerSource = currentSourceID();
@@ -107,24 +97,24 @@ static int runActivationReadiness(void) { @autoreleasepool {
     previousClient.richText = NO;
     [window.contentView addSubview:previousClient];
     BOOL referenceOpened = NO;
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
     @try {
         [NSApp activateIgnoringOtherApps:YES];
         [window makeKeyAndOrderFront:nil];
-        BOOL active = pumpUntil(^BOOL { return NSApp.isActive && window.isKeyWindow; }, deadline);
-        check(active, @"the readiness window becomes active and key");
-        if (!active) return 1;
+        eventWait(@"the application becomes active with the readiness window as its key window", ^BOOL {
+            return NSApp.isActive && window.isKeyWindow;
+        });
+        check(NSApp.isActive && window.isKeyWindow, @"the readiness window becomes active and key");
 
         check([window makeFirstResponder:previousClient], @"the previous text client becomes first responder");
-        BOOL previousReady = pumpUntil(^BOOL {
+        eventWait(@"the previous text client takes the current input context", ^BOOL {
             return window.firstResponder == previousClient
                 && NSTextInputContext.currentInputContext == previousClient.inputContext;
-        }, deadline);
-        check(previousReady, @"the previous text client owns the current input context");
-        if (!previousReady) return 1;
+        });
+        check(window.firstResponder == previousClient && NSTextInputContext.currentInputContext == previousClient.inputContext,
+            @"the previous text client owns the current input context");
 
         NSString *selectedSource = KOREAN_2SET;
-        BOOL previousSourceReady = selectAndAwaitSource(selectedSource, deadline);
+        BOOL previousSourceReady = selectAndAwaitSource(selectedSource);
         check(previousSourceReady, [NSString stringWithFormat:@"the previous client adopts current input source %@",
             selectedSource ?: @"<unavailable>"]);
         if (!previousSourceReady) return 1;
@@ -137,7 +127,7 @@ static int runActivationReadiness(void) { @autoreleasepool {
         check(focused.count == 1 && focused.failure == nil, @"the AppKit reference becomes first responder");
         if (!focused.count || focused.failure) return 1;
 
-        BOOL referenceSourceReady = selectAndAwaitSource(selectedSource, deadline);
+        BOOL referenceSourceReady = selectAndAwaitSource(selectedSource);
         if (!referenceSourceReady) {
             SPReferenceReply *state = request(window, "read", NULL);
             check(NO, [NSString stringWithFormat:@"the reference context adopts %@ after focus: %@",
@@ -156,23 +146,26 @@ static int runActivationReadiness(void) { @autoreleasepool {
         check(down == SP_INPUT_DELIVERED && up == SP_INPUT_DELIVERED,
             @"the Korean g key is delivered after reference context readiness");
         SPReferenceReply *typed = request(window, "wait-document", "ㅎ");
-        BOOL typedReady = pumpUntil(^BOOL { return typed.count == 1; }, deadline);
-        check(typedReady && typed.failure == nil && [typed.value[@"document"] isEqual:@"ㅎ"],
+        eventWait(@"the reference answers its wait for the document ㅎ", ^BOOL { return typed.count >= 1; });
+        check(typed.count == 1 && typed.failure == nil && [typed.value[@"document"] isEqual:@"ㅎ"],
             [NSString stringWithFormat:@"the ready AppKit reference composes ㅎ (got %@)",
                 typed.json ?: (typed.failure ?: @"no reply")]);
     } @finally {
         if (referenceOpened && window.contentView) request(window, "close", NULL);
         if (window.contentView) [window makeFirstResponder:window.contentView];
-        NSDate *cleanupDeadline = [NSDate dateWithTimeIntervalSinceNow:10];
-        BOOL sourceRestored = selectAndAwaitSource(outerSource, cleanupDeadline);
+        BOOL sourceRestored = selectAndAwaitSource(outerSource);
         check(sourceRestored, [NSString stringWithFormat:@"the original input source %@ is restored before window close",
             outerSource]);
         [window close];
         [window release];
         BOOL appRestored = NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier
-            == outerApplication.processIdentifier || ([outerApplication activateWithOptions:0]
-                && pumpUntil(^BOOL { return NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier
-                    == outerApplication.processIdentifier; }, cleanupDeadline));
+            == outerApplication.processIdentifier;
+        if (!appRestored && [outerApplication activateWithOptions:0]) {
+            eventWait(@"the original application becomes the frontmost application", ^BOOL {
+                return NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier == outerApplication.processIdentifier;
+            });
+            appRestored = YES;
+        }
         check(appRestored, @"the original frontmost application is restored");
         check([currentSourceID() isEqualToString:outerSource],
             @"the original input source remains selected after focus restoration");
@@ -263,11 +256,10 @@ int main(int argc, const char *argv[]) {
     __block SPReferenceReply *timed = nil;
     NSArray<NSDictionary *> *timeoutEvents = capturedEvents(^{
         timed = request(other, "wait", "never");
-        NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:6];
-        while (!timed.count && deadline.timeIntervalSinceNow > 0)
-            [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:deadline];
+        eventWait(@"the timer of the unmet document wait answers", ^BOOL { return timed.count > 0; });
     });
-    check(timed.count == 1 && [timed.failure containsString:@"within 5 seconds"], @"an unmet document fails within the declared wait bound");
+    check(timed.count == 1 && [timed.failure containsString:@"within 5 seconds"],
+        @"an unmet document fails with the failure of the declared wait bound");
     NSArray<NSDictionary *> *timeoutRegistrations = [timeoutEvents filteredArrayUsingPredicate:
         [NSPredicate predicateWithFormat:@"name == 'native.observe.registered' AND fields.source == 'input.reference.timeout'"]];
     NSArray<NSDictionary *> *timeoutDeliveries = [timeoutEvents filteredArrayUsingPredicate:

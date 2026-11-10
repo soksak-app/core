@@ -6,13 +6,15 @@
 // windows are ordered front without activating the application. The benchmark prints the numbers and asserts
 // nothing.
 #import <Cocoa/Cocoa.h>
+#import <QuartzCore/QuartzCore.h>
 #import <WebKit/WebKit.h>
 #import "private/webkit.h"
+#import "support/event_wait.h"
 
 // The window server reports a change of occlusion asynchronously and reports no final state. After B is ordered
-// front each case waits until no occlusion notification of A has arrived for settleSeconds, at most stepLimit.
-static const NSTimeInterval settleSeconds = 2;
-static const NSTimeInterval stepLimit = 10;
+// front and on screen, each case waits until no occlusion notification of A has arrived for kSettleRefreshes refreshes of
+// the display, which the display link of the main screen counts.
+static const NSUInteger kSettleRefreshes = 120;
 
 typedef enum { CoverNone, CoverVisibleFrame, CoverGrown, CoverExact } Cover;
 
@@ -53,25 +55,19 @@ static const Case kCases[] = {
     { "titled B = A +96, A away", NO, CoverGrown, NO, YES, 96, NO },
 };
 
-// Occlusion state changes of the window server arrive as AppKit events. Application activation events are not taken.
-static void pump(void) {
-    NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAppKitDefined
-                                        untilDate:[NSDate dateWithTimeIntervalSinceNow:0.02]
-                                           inMode:NSDefaultRunLoopMode
-                                          dequeue:NO];
-    if (event && event.subtype != NSEventSubtypeApplicationActivated
-        && event.subtype != NSEventSubtypeApplicationDeactivated) {
-        [NSApp sendEvent:[NSApp nextEventMatchingMask:NSEventMaskAppKitDefined untilDate:nil
-                                               inMode:NSDefaultRunLoopMode dequeue:YES]];
-    }
-    [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-}
+// Counts the refreshes of the display. Each refresh is a source of the main run loop, so a wait that counts refreshes judges
+// again at each of them. The display link of the screen refreshes while the windows on it are occluded.
+@interface SPRefreshes : NSObject
+@property(nonatomic) NSUInteger ticks;
+- (void)tick:(CADisplayLink *)link;
+@end
 
-static BOOL until(BOOL (^done)(void)) {
-    NSDate *limit = [NSDate dateWithTimeIntervalSinceNow:stepLimit];
-    while (!done() && limit.timeIntervalSinceNow > 0) pump();
-    return done();
+@implementation SPRefreshes
+- (void)tick:(CADisplayLink *)link {
+    (void)link;
+    self.ticks++;
 }
+@end
 
 @interface SPNavigation : NSObject <WKNavigationDelegate>
 @property BOOL finished;
@@ -81,15 +77,17 @@ static BOOL until(BOOL (^done)(void)) {
 - (void)webView:(WKWebView *)view didFinishNavigation:(WKNavigation *)navigation { self.finished = YES; }
 @end
 
+// Occlusion state changes of the window server arrive as AppKit events, which the wait dispatches.
 static NSString *visibility(WKWebView *view) {
     __block BOOL applied = NO;
     [view _doAfterActivityStateUpdate:^{ applied = YES; }];
-    if (!until(^BOOL { return applied; })) return @"error: no activity state update";
+    eventWait(@"WebKit applies the activity state of the view", ^BOOL { return applied; });
     __block NSString *result = nil;
     [view evaluateJavaScript:@"document.visibilityState" completionHandler:^(id value, NSError *error) {
-        result = error ? [NSString stringWithFormat:@"error: %@", error.localizedDescription] : [value description];
+        result = [(error ? [NSString stringWithFormat:@"error: %@", error.localizedDescription] : [value description]) retain];
     }];
-    return until(^BOOL { return result != nil; }) ? result : @"error: no reply";
+    eventWait(@"the page answers its visibility state", ^BOOL { return result != nil; });
+    return [result autorelease];
 }
 
 int main(void) {
@@ -103,6 +101,9 @@ int main(void) {
         printf("screen %s visible frame %s\n", NSStringFromRect(screen.frame).UTF8String,
                NSStringFromRect(visible).UTF8String);
         printf("%-48s %-26s %-26s %-8s %s\n", "case", "A frame", "B frame", "occluded", "visibilityState");
+        SPRefreshes *refreshes = [[[SPRefreshes alloc] init] autorelease];
+        CADisplayLink *link = [screen displayLinkWithTarget:refreshes selector:@selector(tick:)];
+        [link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
         for (size_t i = 0; i < sizeof kCases / sizeof kCases[0]; i++) {
             const Case c = kCases[i];
             NSSize size = NSMakeSize(997, 647);
@@ -122,12 +123,9 @@ int main(void) {
             view.navigationDelegate = navigation;
             [view loadHTMLString:@"<!doctype html><body>a</body>" baseURL:nil];
             [a orderFrontRegardless];
-            if (!until(^BOOL { return navigation.finished && (a.occlusionState & NSWindowOcclusionStateVisible) != 0; })) {
-                printf("%-48s A did not load in a visible window (occlusion state %lu)\n", c.name,
-                       (unsigned long)a.occlusionState);
-                [a close];
-                continue;
-            }
+            eventWait(@"A loads in a visible window", ^BOOL {
+                return navigation.finished && (a.occlusionState & NSWindowOcclusionStateVisible) != 0;
+            });
             NSWindow *b = nil;
             if (c.cover != CoverNone) {
                 NSRect bFrame = c.cover == CoverVisibleFrame ? visible
@@ -142,16 +140,21 @@ int main(void) {
                 b.hasShadow = c.shadow;
                 [b setFrame:bFrame display:NO];
             }
-            __block NSDate *last = [NSDate date];
+            __block NSUInteger changedAt = refreshes.ticks;
             id token = [NSNotificationCenter.defaultCenter addObserverForName:NSWindowDidChangeOcclusionStateNotification
                                                                        object:a
                                                                         queue:nil
                                                                    usingBlock:^(NSNotification *note) {
-                                                                       last = [NSDate date];
+                                                                       changedAt = refreshes.ticks;
                                                                    }];
             [b orderFrontRegardless];
-            NSDate *limit = [NSDate dateWithTimeIntervalSinceNow:stepLimit];
-            while (-last.timeIntervalSinceNow < settleSeconds && limit.timeIntervalSinceNow > 0) pump();
+            if (b) {
+                eventWait(@"B is on screen", ^BOOL { return (b.occlusionState & NSWindowOcclusionStateVisible) != 0; });
+                changedAt = MAX(changedAt, refreshes.ticks);
+            }
+            eventWait(@"no occlusion notification of A arrives for the settle refreshes", ^BOOL {
+                return refreshes.ticks - changedAt >= kSettleRefreshes;
+            });
             [NSNotificationCenter.defaultCenter removeObserver:token];
             BOOL occluded = (a.occlusionState & NSWindowOcclusionStateVisible) == 0;
             NSString *state = visibility(view);
@@ -160,6 +163,7 @@ int main(void) {
             [b close];
             [a close];
         }
+        [link invalidate];
     }
     return 0;
 }

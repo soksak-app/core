@@ -10,6 +10,7 @@
 #import "main_thread.h"
 #import "webview_geometry.h"
 #import "window_facts.h"
+#import "support/event_wait.h"
 
 static int failures;
 static void runDirectly(void (^work)(void)) { work(); }
@@ -37,6 +38,26 @@ static void check(BOOL ok, const char *message) {
 static void regionEvent(void *context, const char *json) {
     (void)context;
     (void)json;
+}
+
+// Notifies when the load of a page finishes.
+@interface SPLoaded : NSObject <WKNavigationDelegate>
+@property BOOL finished;
+@end
+@implementation SPLoaded
+- (void)webView:(WKWebView *)view didFinishNavigation:(WKNavigation *)navigation {
+    (void)view;
+    (void)navigation;
+    self.finished = YES;
+}
+@end
+
+// Runs the main loop until a block of the main queue sent now has run. The blocks that a change sent to the main queue or to
+// the run loop before it have run then, and the run loop observers of AppKit and Core Animation run when that turn ends.
+static void afterMainTurn(NSString *what) {
+    __block BOOL ran = NO;
+    dispatch_async(dispatch_get_main_queue(), ^{ ran = YES; });
+    eventWait(what, ^BOOL { return ran; });
 }
 
 // The characters of the keys that a region received while block ran, in order.
@@ -72,14 +93,12 @@ static void runQueuedEvents(void) {
     }
 }
 
-// Runs the event queue of the application for the interval, for a hold that must outlast it.
+// Runs the event queue of the application for the interval, for a hold that must outlast it. The interval is the subject of
+// the check that no time ends a wait, so it is a measured window: a block of the main queue ends it.
 static void runEvents(NSTimeInterval interval) {
-    NSDate *until = [NSDate dateWithTimeIntervalSinceNow:interval];
-    while (until.timeIntervalSinceNow > 0) {
-        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]
-            inMode:NSDefaultRunLoopMode dequeue:YES];
-        if (event) [NSApp sendEvent:event];
-    }
+    __block BOOL passed = NO;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(interval * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{ passed = YES; });
+    eventWait([NSString stringWithFormat:@"%.1f s pass while the keys wait", interval], ^BOOL { return passed; });
 }
 
 // The fields of the first event named name in events, nil without one.
@@ -93,7 +112,7 @@ static NSDictionary *eventFields(NSArray<NSDictionary *> *events, NSString *name
 static void placeRegion(void *region) {
     sp_region_place(region, 0, 0, 0, 0, true);
     // A region applies its geometry in a later turn of the main loop.
-    [NSRunLoop.mainRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+    afterMainTurn(@"a turn of the main loop after the placement of the region");
 }
 
 int main(void) { @autoreleasepool {
@@ -219,7 +238,7 @@ int main(void) { @autoreleasepool {
     webviewSetSurfaceHidden(hiddenHost, true);
     check(window.firstResponder == (NSResponder *)region, "a region of a hidden surface leaves the keyboard where it is");
     check(sp_input_pointer(window, 600, 250, 1, 0, 0, 0) == SP_INPUT_DELIVERED, "a press over the frame of the hidden region is delivered");
-    [NSRunLoop.mainRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+    afterMainTurn(@"a turn of the main loop after the press over the frame of the hidden region");
     check(window.firstResponder == browserPage, "a press over the frame of a hidden region stays with the view that it reached");
     check(sp_input_pointer(window, 600, 250, 3, 0, 0, 0) == SP_INPUT_DELIVERED, "the release over the frame of the hidden region is delivered");
     sp_region_close(hidden);
@@ -291,7 +310,7 @@ int main(void) { @autoreleasepool {
     typeKeys(window, "echo");
     void *holdingRegion = sp_region_create(holdingHost, "view", regionEvent, NULL);
     check(holdingRegion != NULL, "the declared region is created");
-    NSString *notShown = regionKeys(^{ [NSRunLoop.mainRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]]; });
+    NSString *notShown = regionKeys(^{ afterMainTurn(@"a turn of the main loop after the creation of the declared region"); });
     check(notShown.length == 0, "a region that does not show receives no key");
     NSString *received = regionKeys(^{ placeRegion(holdingRegion); });
     check(window.firstResponder == (NSResponder *)holdingRegion, "the declared region takes the keyboard when it shows");
@@ -392,13 +411,13 @@ int main(void) { @autoreleasepool {
     placeRegion(hiding);
     check([window makeFirstResponder:(NSResponder *)hiding], "the region takes the keyboard before it hides");
     sp_region_place(hiding, 0, 0, 0, 0, false);
-    [NSRunLoop.mainRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+    afterMainTurn(@"a turn of the main loop after the region hides");
     check(window.firstResponder == window, "AppKit gives the keyboard of a region that hides to the window");
     placeRegion(hiding);
     check(window.firstResponder == (NSResponder *)hiding, "a region that shows again takes back the keyboard it lost to its hide");
     // The keyboard that moved on while the region was hidden stays where it went.
     sp_region_place(hiding, 0, 0, 0, 0, false);
-    [NSRunLoop.mainRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+    afterMainTurn(@"a turn of the main loop after the region hides again");
     sp_window_focus_workbench(window);
     placeRegion(hiding);
     check(window.firstResponder == main, "a region that shows again takes no keyboard that moved on");
@@ -495,8 +514,11 @@ int main(void) { @autoreleasepool {
     // A press on a child web view of the application that no surface holds, a modal document, lets no key wait either: the
     // document of the child answers no keyboard decision of the workbench, so the release of that press asks for none
     // (webview_geometry.m pressOnWorkbench). Without this, every later key of the window waits for a decision that never comes.
+    SPLoaded *holdingLoad = [[SPLoaded new] autorelease];
+    holdingMain.navigationDelegate = holdingLoad;
     [holdingMain loadHTMLString:@"<html></html>" baseURL:[NSURL URLWithString:@"http://localhost/"]];
-    runEvents(0.2);
+    eventWait(@"the load of the workbench page of the holding window finishes", ^BOOL { return holdingLoad.finished; });
+    holdingMain.navigationDelegate = nil;
     void *child = nativeWebviewCreate((uintptr_t)holding, 77, "modal:test", "", 0, 0, 400, 500, false, false);
     check(child != NULL, "the child web view of the modal is created");
     if (child) {

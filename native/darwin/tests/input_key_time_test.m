@@ -5,6 +5,7 @@
 #import <Cocoa/Cocoa.h>
 #import "input_inject.h"
 #import "input_virtual.h"
+#import "support/event_wait.h"
 
 static int failures;
 static void check(BOOL ok, NSString *message) {
@@ -35,11 +36,10 @@ static KeyTime press(NSWindow *window, Clock *clock, const char *key, const char
     result.after = NSProcessInfo.processInfo.systemUptime;
     BOOL up = sp_input_key(window, key, text, 0, false) == SP_INPUT_DELIVERED;
     check(down && up, [NSString stringWithFormat:@"the key %s is delivered", key]);
-    NSDate *until = [NSDate dateWithTimeIntervalSinceNow:0.2];
-    while (until.timeIntervalSinceNow > 0) {
-        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]
-            inMode:NSDefaultRunLoopMode dequeue:YES];
-        if (event) [NSApp sendEvent:event];
+    if (down && up) {
+        eventWait([NSString stringWithFormat:@"the key down of %s reaches the clock view", key], ^BOOL {
+            return clock.downs[@(code)] != nil;
+        });
     }
     NSNumber *time = clock.downs[@(code)];
     check(time != nil, [NSString stringWithFormat:@"the key %s reaches the first responder as a key down", key]);

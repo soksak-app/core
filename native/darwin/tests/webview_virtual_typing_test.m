@@ -13,6 +13,7 @@
 #import "input_inject.h"
 #import "input_virtual.h"
 #import "private/appkit.h"
+#import "support/event_wait.h"
 #import "support/records.h"
 #import "webview_input.h"
 #import "window_facts.h"
@@ -29,8 +30,6 @@ static void check(BOOL ok, NSString *message) {
     fprintf(ok ? stdout : stderr, "%s: %s\n", ok ? "PASS" : "FAIL", message.UTF8String);
     if (!ok) failures++;
 }
-static void spin(double seconds) { [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:seconds]]; }
-static void until(BOOL (^done)(void)) { for (int i = 0; i < 500 && !done(); i++) spin(0.01); }
 static id evaluate(WKWebView *view, NSString *script) {
     __block id out = nil;
     __block BOOL done = NO;
@@ -38,7 +37,7 @@ static id evaluate(WKWebView *view, NSString *script) {
         out = [(error ? error.localizedDescription : result) retain];
         done = YES;
     }];
-    until(^BOOL { return done; });
+    eventWait(@"the page answers the evaluation", ^BOOL { return done; });
     return [out autorelease];
 }
 static sp_input_result lastResult;
@@ -47,33 +46,50 @@ static void onDone(void *context, sp_input_result result, const sp_input_held *h
 static sp_input_result pointer(NSWindow *window, double x, double y, int phase) {
     lastDone = NO;
     sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, x, y, phase, 0, 0, 0, 1, 2, onDone, NULL);
-    until(^BOOL { return lastDone; });
-    return lastDone ? lastResult : (sp_input_result)-1;
+    eventWait(@"the pointer input completes", ^BOOL { return lastDone; });
+    return lastResult;
 }
 
 // A page with one field. Each keyboard, composition and text input event of the page is one entry "<type>:<key or data>",
-// with "!" for an event that is not trusted. While cancel is set, the page cancels each keydown.
+// with "!" for an event that is not trusted. While cancel is set, the page cancels each keydown. seen(prefix) resolves when an
+// entry that starts with prefix is in the list.
 static NSString *const PAGE = @"<!doctype html><style>html,body{margin:0;height:100%}</style>"
     "<input id='field' style='position:absolute;left:10px;top:10px;width:300px;height:30px'><script>"
-    "window.events=[];window.cancel=false;"
+    "window.events=[];window.cancel=false;window.waiters=[];"
+    "window.seen=p=>new Promise(r=>{const f=()=>events.some(e=>e.startsWith(p))?r(true):waiters.push(f);f();});"
     "for(const t of ['keydown','keypress','keyup','beforeinput','input','compositionstart','compositionupdate','compositionend'])"
     "addEventListener(t,e=>{events.push(t+':'+(e.key!==undefined?e.key:(e.data||''))+(e.isTrusted?'':'!'));"
-    "if(t==='keydown'&&cancel)e.preventDefault();},true);</script>";
+    "if(t==='keydown'&&cancel)e.preventDefault();for(const w of waiters.splice(0))w();},true);</script>";
+
+// Asks the page to answer when an entry that starts with prefix is in its list, and sets *seen at the answer. The question
+// is sent to the web process before a key that the caller sends next, so the page answers at the event of that key.
+static void whenSeen(WKWebView *view, NSString *prefix, BOOL *seen) {
+    *seen = NO;
+    [view callAsyncJavaScript:@"return await seen(prefix);" arguments:@{@"prefix": prefix} inFrame:nil
+        inContentWorld:WKContentWorld.pageWorld completionHandler:^(id result, NSError *error) {
+            (void)result;
+            if (error) fprintf(stderr, "JavaScript: %s\n", error.localizedDescription.UTF8String);
+            *seen = YES;
+        }];
+}
 
 // Sends the key down and the key up of key with text, lets the page take each and returns the events that the page saw. records
-// receives the records of the native library that the keys write.
+// receives the records of the native library that the keys write. The key up is sent once the page saw the keydown, and the
+// records end once the page saw the keyup, so a key that waited behind the input of its window is recorded in them too.
 static NSArray<NSString *> *type(NSWindow *window, WKWebView *view, const char *key, NSString *text, NSString **records) {
     evaluate(view, @"events.length=0");
     __block BOOL down = NO, up = NO;
+    static BOOL downSeen, upSeen;
     NSString *written = capturedRecords(^{
+        whenSeen(view, @"keydown:", &downSeen);
         down = sp_input_key(window, key, text.UTF8String, 0, true) == SP_INPUT_DELIVERED;
-        spin(0.2);
+        if (down) eventWait(@"the page sees the keydown", ^BOOL { return downSeen; });
+        whenSeen(view, @"keyup:", &upSeen);
         up = sp_input_key(window, key, text.UTF8String, 0, false) == SP_INPUT_DELIVERED;
-        spin(0.2);
+        if (up) eventWait(@"the page sees the keyup", ^BOOL { return upSeen; });
     });
     if (records) *records = written;
     check(down && up, [NSString stringWithFormat:@"the key %s with the text %@ is delivered", key, text ?: @"(none)"]);
-    until(^BOOL { return [evaluate(view, @"events.some(e=>e.startsWith('keyup:'))") boolValue]; });
     return evaluate(view, @"events.slice()");
 }
 
@@ -85,6 +101,18 @@ static BOOL recordsTextInput(NSString *records, BOOL typed) {
     }
     return NO;
 }
+
+// Notes when the navigation of the document finishes; the script of the document has run then.
+@interface SPLoaded : NSObject <WKNavigationDelegate>
+@property BOOL finished;
+@end
+@implementation SPLoaded
+- (void)webView:(WKWebView *)view didFinishNavigation:(WKNavigation *)navigation {
+    (void)view;
+    (void)navigation;
+    self.finished = YES;
+}
+@end
 
 static NSString *value(WKWebView *view) { return evaluate(view, @"document.getElementById('field').value"); }
 
@@ -163,14 +191,19 @@ int main(void) { @autoreleasepool {
     [window.contentView addSubview:view];
     check(sp_window_set_main_webview(window, view) != NULL, @"the page is the main web view of its window");
     check(webviewInputRegister(view), @"the page registers for pointer input");
+    SPLoaded *loaded = [[SPLoaded new] autorelease];
+    view.navigationDelegate = loaded;
     [view loadHTMLString:PAGE baseURL:nil];
     [window orderFront:nil];
-    until(^BOOL { return [evaluate(view, @"Boolean(window.events)") boolValue]; });
+    eventWait(@"the navigation of the document finishes", ^BOOL { return loaded.finished; });
+    view.navigationDelegate = nil;
+    check([evaluate(view, @"Boolean(window.events)") boolValue], @"the page defines its event list");
 
     // A move makes the window the virtual key window, and a press on the field gives it the focus of the page.
     check(pointer(window, 50, 25, 0) == SP_INPUT_DELIVERED && sp_input_virtual_is(window), @"a move makes the window the virtual key window");
     check(pointer(window, 50, 25, 1) == SP_INPUT_DELIVERED && pointer(window, 50, 25, 3) == SP_INPUT_DELIVERED, @"a press on the field is delivered");
-    until(^BOOL { return [evaluate(view, @"document.activeElement.id") isEqual:@"field"]; });
+    // The press focuses the field in the task of its mouse down, which the web process runs before the receipt of the up that
+    // ended the input above.
     check([evaluate(view, @"document.activeElement.id") isEqual:@"field"], @"the press focuses the field");
     check(window.firstResponder == view, @"the web view holds the keyboard of the window");
 

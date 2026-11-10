@@ -5,6 +5,7 @@
 #import "webview_geometry.h"
 #import "window_facts.h"
 #import "input_virtual.h"
+#import "support/event_wait.h"
 #import <CommonCrypto/CommonDigest.h>
 #import <objc/runtime.h>
 
@@ -38,17 +39,6 @@ static id parse(char *text) {
     id value = [NSJSONSerialization JSONObjectWithData:[NSData dataWithBytes:text length:strlen(text)] options:0 error:nil];
     sp_facts_free(text);
     return value;
-}
-
-// Occlusion state changes of the window server arrive as AppKit events. Takes and sends only window and screen change
-// events. Application activation events are not taken (activation would make the check process active).
-static void pumpOcclusion(void) {
-    NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAppKitDefined untilDate:[NSDate dateWithTimeIntervalSinceNow:0.02]
-        inMode:NSDefaultRunLoopMode dequeue:NO];
-    if (event && event.subtype != NSEventSubtypeApplicationActivated && event.subtype != NSEventSubtypeApplicationDeactivated) {
-        [NSApp sendEvent:[NSApp nextEventMatchingMask:NSEventMaskAppKitDefined untilDate:nil inMode:NSDefaultRunLoopMode dequeue:YES]];
-    }
-    [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
 }
 
 // Counts the reads of the WebKit feature list. A status watcher reads the window facts for each frame of a region, and each read of
@@ -216,9 +206,7 @@ int main(void) { @autoreleasepool {
     __block BOOL pageLoaded = NO;
     [main loadHTMLString:@"<p>page</p>" baseURL:nil];
     [main evaluateJavaScript:@"1" completionHandler:^(id result, NSError *error) { (void)result; (void)error; pageLoaded = YES; }];
-    NSDate *loadDeadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!pageLoaded && loadDeadline.timeIntervalSinceNow > 0)
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+    eventWait(@"the script of the read page answers", ^BOOL{ return pageLoaded; });
     NSDictionary *pageFacts = parse(sp_window_facts(window, sp_window_composition(window)));
     pid_t pageProcess = [[main valueForKey:@"_webProcessIdentifier"] intValue];
     check(pageProcess > 0 && [pageFacts[@"pageProcess"] intValue] == pageProcess,
@@ -283,7 +271,7 @@ int main(void) { @autoreleasepool {
     check(parse(sp_dock_items()) != nil, @"Dock items are reported as an array");
     check(!sp_dock_select("No such item"), @"an unknown Dock item is rejected");
     // When the window is shown or hidden on screen, the window server changes the occlusion state, and the
-    // observation is called for each change.
+    // observation is called for each change. The changes arrive as AppKit events, which the wait sends to the application.
     NSWindow *observed = [[[NSWindow alloc] initWithContentRect:NSMakeRect(40, 40, 200, 120)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO] autorelease];
     [observed setReleasedWhenClosed:NO];
@@ -295,15 +283,13 @@ int main(void) { @autoreleasepool {
     }), @"occlusion observation starts");
     check(!sp_window_observe_occlusion(NULL, ^(bool onScreen) { (void)onScreen; }), @"occlusion observation without a window is rejected");
     [observed orderFrontRegardless];
-    NSDate *limit = [NSDate dateWithTimeIntervalSinceNow:2];
-    while (changes == 0 && [limit timeIntervalSinceNow] > 0) pumpOcclusion();
+    eventWait(@"the shown window reports an occlusion change", ^BOOL{ return changes > 0; });
     check(changes > 0 && (observed.occlusionState & NSWindowOcclusionStateVisible) != 0,
         [NSString stringWithFormat:@"showing the window reports an occlusion change (%d changes)", changes]);
     check(reportedOnScreen, @"the observation of a shown window reports that it is on screen");
     int shown = changes;
     [observed orderOut:nil];
-    limit = [NSDate dateWithTimeIntervalSinceNow:2];
-    while (changes == shown && [limit timeIntervalSinceNow] > 0) pumpOcclusion();
+    eventWait(@"the hidden window reports an occlusion change", ^BOOL{ return changes > shown; });
     check(changes > shown, [NSString stringWithFormat:@"hiding the window reports an occlusion change (%d changes)", changes]);
     check(!reportedOnScreen, @"the observation of a hidden window reports that it is not on screen");
     check(!NSApp.isActive, @"application stays inactive");

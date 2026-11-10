@@ -11,20 +11,13 @@
 #import "webview_geometry.h"
 #import "window_facts.h"
 #import "event_ring.h"
+#import "support/event_wait.h"
 
 static int failures = 0;
 
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
-}
-
-static void until(NSString *what, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
-    if (!done()) { fprintf(stderr, "FAIL: %s within 10 seconds\n", what.UTF8String); exit(1); }
 }
 
 static NSDictionary *latest;
@@ -121,12 +114,12 @@ int main(void) { @autoreleasepool {
         // plugin document; a post now is refused instead of running in that document (docs/spec/native-surfaces.md#document-regions).
         check(!sp_document_post(document, "{\"ping\":3}"),
             @"a plugin document whose load has not committed has no message channel, although the web view reports its address");
-        until(@"the plugin page module runs", ^BOOL{ return [latest[@"title"] hasPrefix:@"ready"]; });
+        eventWait(@"the plugin page module runs", ^BOOL{ return [latest[@"title"] hasPrefix:@"ready"]; });
         check([latest[@"title"] isEqual:@"ready soksak://probe"],
             [NSString stringWithFormat:@"the plugin document has the origin of its plugin: %@", latest[@"title"]]);
 
         check(sp_document_post(document, "{\"ping\":7}"), @"the page posts a message to a plugin document");
-        until(@"the plugin document answers", ^BOOL{ return messages.count >= 2; });
+        eventWait(@"the plugin document answers", ^BOOL{ return messages.count >= 2; });
         check([messages[0] isEqual:@{ @"ping": @7 }], [NSString stringWithFormat:@"the page receives its own message first: %@", messages]);
         check([messages[1] isEqual:@{ @"pong": @7 }], [NSString stringWithFormat:@"the page receives the answer: %@", messages]);
 
@@ -134,7 +127,7 @@ int main(void) { @autoreleasepool {
         // text that is not JSON is reported through the message receiver.
         NSUInteger beforeInvalid = messages.count;
         check(sp_document_post(document, "{\"ping\":"), @"the page posts a text that the document parses");
-        until(@"the document reports the text that is not JSON", ^BOOL{ return messages.count > beforeInvalid; });
+        eventWait(@"the document reports the text that is not JSON", ^BOOL{ return messages.count > beforeInvalid; });
         check([[messages[beforeInvalid][@"error"] description] hasPrefix:@"post failed: "],
             [NSString stringWithFormat:@"a text that is not JSON is reported as a failed post: %@", messages[beforeInvalid]]);
 
@@ -151,7 +144,7 @@ int main(void) { @autoreleasepool {
             check(sp_document_post(document, [NSString stringWithFormat:@"{\"reply\":\"%@\"}", reply[0]].UTF8String),
                 [NSString stringWithFormat:@"the plugin document posts the %@ reply request", reply[0]]);
             // The page receives its own request first, then the answer.
-            until([NSString stringWithFormat:@"the page answers the %@ reply", reply[0]], ^BOOL{ return messages.count >= index + 2; });
+            eventWait([NSString stringWithFormat:@"the page answers the %@ reply", reply[0]], ^BOOL{ return messages.count >= index + 2; });
             check([messages[index] isEqual:@{ @"reply": reply[0] }],
                 [NSString stringWithFormat:@"the page receives its %@ request first: %@", reply[0], messages[index]]);
             check([messages[index + 1] isEqual:reply[1]],
@@ -170,7 +163,7 @@ int main(void) { @autoreleasepool {
         uint64_t before = footprintBytes();
         NSUInteger fetched = messages.count;
         check(sp_document_post(document, "{\"fetch\":\"./large.bin\"}"), @"the plugin document posts the fetch request");
-        until(@"the page fetches the large file", ^BOOL{ return messages.count >= fetched + 2; });
+        eventWait(@"the page fetches the large file", ^BOOL{ return messages.count >= fetched + 2; });
         check([messages[fetched + 1] isEqual:@{ @"size": @(chunks * chunkSize) }],
             [NSString stringWithFormat:@"the page receives the whole file: %@", messages[fetched + 1]]);
         uint64_t after = footprintBytes();
@@ -190,7 +183,7 @@ int main(void) { @autoreleasepool {
             NSArray<NSDictionary *> *events = capturedEvents(^{
                 check(sp_document_load(document, address.UTF8String), [NSString stringWithFormat:@"%@ starts a load", address]);
                 // A failed load keeps the previous document, so the load is settled when the region reports its error.
-                until([NSString stringWithFormat:@"%@ fails", address], ^BOOL{
+                eventWait([NSString stringWithFormat:@"%@ fails", address], ^BOOL{
                     return [latest[@"loading"] isEqual:@NO] && [latest[@"error"] isKindOfClass:NSString.class] &&
                         [latest[@"error"] containsString:[url stringByAppendingString:@" is not found"]];
                 });
@@ -209,7 +202,7 @@ int main(void) { @autoreleasepool {
     }
     // The store ends before the check removes its folder, so the network process writes nothing into it afterward.
     sp_document_store_close(store.fileSystemRepresentation, recordStoreClosed, NULL);
-    until(@"the data store ends", ^BOOL{ return storeClosed; });
+    eventWait(@"the data store ends", ^BOOL{ return storeClosed; });
     check(storeError == nil, [NSString stringWithFormat:@"the data store ends without an error: %@", storeError]);
     sp_surface_close(surface);
     [window close];

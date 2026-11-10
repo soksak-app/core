@@ -66,6 +66,7 @@
 #import <string.h>
 #import <stdlib.h>
 #import <sys/types.h>
+#import "support/event_wait.h"
 #import "support/temporary_folder.h"
 #import "document_view.h"
 #import "private/webkit.h"
@@ -82,11 +83,9 @@ static const double kMarginRight = 10;
 static const double kMarginBottom = 350;
 static const CGFloat kRegionWidth = 1180;
 static const CGFloat kRegionHeight = 400;
-// Waits at most this many seconds for each step (AGENTS: a step that cannot finish is reported with its measured state).
-static const NSTimeInterval stepLimit = 120;
-// The page settles for this long after the load finishes, before the first read.
-static const NSTimeInterval settleSeconds = 2;
-// The reads of each view, in seconds after the load finished.
+// The reads of each view, in seconds after the load finished. The read times, the gap between reloads, the minutes of the long
+// and the collection modes and the seconds around memory pressure are the measurement windows of the benchmark; no other wait
+// has a time.
 static const NSTimeInterval readSeconds[] = { 10, 60 };
 enum { kReads = 2, kMegabyte = 1048576 };
 
@@ -253,25 +252,35 @@ static double nowSeconds(void) {
     return NSDate.date.timeIntervalSince1970;
 }
 
-// Sends the application events until done() holds or the limit passes. Returns done().
-static BOOL pumpUntil(NSTimeInterval limit, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:limit];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        // The window server delivers the occlusion state of a window as an application event, so the pump dequeues and
-        // sends events; a run of the run loop alone leaves occlusionState and the visibility of each page at the state
-        // of the window's creation.
-        @autoreleasepool {
-            NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]
-                inMode:NSDefaultRunLoopMode dequeue:YES];
-            if (event) [NSApp sendEvent:event];
-        }
-    }
-    return done();
+// Waits until done() holds, with an autorelease pool for each turn of the run loop: the condition drains the pool of the turn
+// before it judges, so the objects that a turn autoreleases are released at its end, as a turn of NSApp run does. The window
+// server delivers the occlusion state of a window as an application event, which the wait dispatches; a run of the run loop
+// alone leaves occlusionState and the visibility of each page at the state of the window's creation.
+static void waitTurns(NSString *what, BOOL (^done)(void)) {
+    __block NSAutoreleasePool *turn = [[NSAutoreleasePool alloc] init];
+    eventWait(what, ^BOOL {
+        [turn drain];
+        turn = [[NSAutoreleasePool alloc] init];
+        return done();
+    });
+    [turn drain];
 }
 
-// Pumps the run loop until the time t (seconds since 1970) passes.
+// Runs the run loop until the time t (seconds since 1970), the end of a measurement window. The end is a block of the main queue.
 static void waitUntil(double t) {
-    pumpUntil(t - nowSeconds(), ^BOOL { return NO; });
+    __block BOOL ended = NO;
+    double seconds = t - nowSeconds();
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(seconds > 0 ? seconds * NSEC_PER_SEC : 0)), dispatch_get_main_queue(), ^{
+        ended = YES;
+    });
+    waitTurns(@"the measurement window ends", ^BOOL { return ended; });
+}
+
+// Waits until the view presents its next update, so the page has presented its loaded state.
+static void waitPresentation(WKWebView *view, NSString *step) {
+    __block BOOL presented = NO;
+    [view _doAfterNextPresentationUpdate:^{ presented = YES; }];
+    waitTurns([NSString stringWithFormat:@"the view of step %@ presents its loaded page", step], ^BOOL { return presented; });
 }
 
 // Exits with the step and the measured state when a step cannot run.
@@ -282,16 +291,22 @@ static void failStep(NSString *step, NSString *reason, pid_t process) {
     exit(1);
 }
 
-// Waits until the WebContent process of a closed view has ended. Returns NO when it remains 30 seconds after the close.
-static BOOL untilProcessEnds(pid_t process, NSString *step) {
-    if (!pumpUntil(30, ^BOOL {
-            struct proc_bsdinfo info;
-            return proc_pidinfo(process, PROC_PIDTBSDINFO, 0, &info, sizeof info) != (int)sizeof info;
-        })) {
-        fprintf(stderr, "FAIL: step %s: the WebContent process %d remains 30 seconds after its view closed\n", step.UTF8String, process);
-        return NO;
-    }
-    return YES;
+// Waits until the WebContent process of a closed view has ended. The exit is a dispatch source of the main queue that records
+// it; a process that ended before the source was made gives no event, so a process that cannot be read once the source exists
+// has ended.
+static void untilProcessEnds(pid_t process, NSString *step) {
+    __block BOOL ended = NO;
+    dispatch_source_t source = dispatch_source_create(DISPATCH_SOURCE_TYPE_PROC, (uintptr_t)process, DISPATCH_PROC_EXIT,
+        dispatch_get_main_queue());
+    if (!source) failStep(step, [NSString stringWithFormat:@"the exit observation of the process %d cannot start", process], process);
+    dispatch_source_set_event_handler(source, ^{ ended = YES; });
+    dispatch_resume(source);
+    waitTurns([NSString stringWithFormat:@"the WebContent process %d of step %@ ends after its view closed", process, step], ^BOOL {
+        struct proc_bsdinfo info;
+        return ended || proc_pidinfo(process, PROC_PIDTBSDINFO, 0, &info, sizeof info) != (int)sizeof info;
+    });
+    dispatch_source_cancel(source);
+    dispatch_release(source);
 }
 
 // The output of footprint for the process, or nil when footprint cannot run or fails.
@@ -479,7 +494,7 @@ static void printFacts(const Variant *variant, WKWebView *view, NSWindow *window
         failure = [error retain];
         done = YES;
     }];
-    if (!pumpUntil(stepLimit, ^BOOL { return done; })) failStep(step, @"the page did not answer the facts script within 120 seconds", view._webProcessIdentifier);
+    waitTurns(@"the page answers the facts script", ^BOOL { return done; });
     NSString *userAgent = @"n/a";
     NSString *length = @"n/a";
     NSString *resources = @"n/a";
@@ -628,8 +643,8 @@ static void closeOpenView(OpenView *opened, NSString *step) {
         opened->document = NULL;
         opened->surface = NULL;
     }
-    if (!untilProcessEnds(process, step)) exit(1);
-    if (mainProcess != 0 && mainProcess != process && !untilProcessEnds(mainProcess, step)) exit(1);
+    untilProcessEnds(process, step);
+    if (mainProcess != 0 && mainProcess != process) untilProcessEnds(mainProcess, step);
     if (opened->cacheModelSet) {
         WKContextSetCacheModel(NULL, kWKCacheModelPrimaryWebBrowser);
         if (WKContextGetCacheModel(NULL) != kWKCacheModelPrimaryWebBrowser) failStep(step, @"the cache model is not PrimaryWebBrowser", 0);
@@ -649,11 +664,8 @@ static void measureVariant(int variant, NSWindow *window, NSView *content, NSURL
     OpenView opened = openVariant(spec, window, content, address, persistentStore, documentDirectory, step);
     WKWebView *view = opened.view;
 
-    // The load has finished when the page is not loading and it has a title.
-    if (!pumpUntil(stepLimit, ^BOOL { return !view.loading && view.title.length > 0; })) {
-        failStep(step, @"the page did not finish loading within 120 seconds", view._webProcessIdentifier);
-    }
-    pumpUntil(settleSeconds, ^BOOL { return NO; });
+    // The load has finished when the page is not loading and it has a title. The reads are at their times after it.
+    waitTurns([NSString stringWithFormat:@"the page of step %@ finishes loading", step], ^BOOL { return !view.loading && view.title.length > 0; });
     double loaded = nowSeconds();
     pid_t process = view._webProcessIdentifier;
     fprintf(stdout, "loaded %s: pid=%d title=%s elapsed %.3f s\n", spec->name, process, view.title.UTF8String, loaded - started);
@@ -759,11 +771,9 @@ static void measureLong(int minutes, NSURL *address, WKWebsiteDataStore *persist
     }
     for (int j = 0; j < 2; j++) {
         WKWebView *view = views[j];
-        if (!pumpUntil(stepLimit, ^BOOL { return !view.loading && view.title.length > 0; })) {
-            failStep(steps[j], @"the page did not finish loading within 120 seconds", view._webProcessIdentifier);
-        }
+        waitTurns([NSString stringWithFormat:@"the page of step %@ finishes loading", steps[j]], ^BOOL { return !view.loading && view.title.length > 0; });
     }
-    pumpUntil(settleSeconds, ^BOOL { return NO; });
+    // The reads are at their minutes after both loads.
     double loaded = nowSeconds();
     for (int j = 0; j < 2; j++) {
         fprintf(stdout, "loaded %s: pid=%d title=%s\n", specs[j]->name, views[j]._webProcessIdentifier, views[j].title.UTF8String);
@@ -859,12 +869,8 @@ static void setPressure(NSString *level, NSString *step, pid_t process) {
 }
 // Waits until the navigation that the caller started has finished: the view reports loading, then not loading.
 static void waitNavigation(WKWebView *view, NSString *step) {
-    if (!pumpUntil(stepLimit, ^BOOL { return view.loading; })) {
-        failStep(step, @"the reload did not start within 120 seconds", view._webProcessIdentifier);
-    }
-    if (!pumpUntil(stepLimit, ^BOOL { return !view.loading && view.title.length > 0; })) {
-        failStep(step, @"the reload did not finish within 120 seconds", view._webProcessIdentifier);
-    }
+    waitTurns([NSString stringWithFormat:@"the reload of step %@ starts", step], ^BOOL { return view.loading; });
+    waitTurns([NSString stringWithFormat:@"the reload of step %@ finishes", step], ^BOOL { return !view.loading && view.title.length > 0; });
 }
 // Loads the address in each of the variants, reloads it count times in each, and prints the readings after the first load,
 // after the last reload and after memory pressure.
@@ -879,9 +885,7 @@ static void measureReload(int count, NSString *pressureLevel, NSWindow *window, 
         double requested = nowSeconds();
         OpenView opened = openVariant(spec, window, content, address, persistentStore, documentDirectory, step);
         WKWebView *view = opened.view;
-        if (!pumpUntil(stepLimit, ^BOOL { return !view.loading && view.title.length > 0; })) {
-            failStep(step, @"the page did not finish loading within 120 seconds", view._webProcessIdentifier);
-        }
+        waitTurns([NSString stringWithFormat:@"the page of step %@ finishes loading", step], ^BOOL { return !view.loading && view.title.length > 0; });
         pid_t process = view._webProcessIdentifier;
         double loaded = nowSeconds();
         double firstLoad = loaded - requested;
@@ -1053,11 +1057,10 @@ static void measureCollection(int minutes, NSURL *address, WKWebsiteDataStore *p
     }
     for (int j = 0; j < kCollectionVariantCount; j++) {
         WKWebView *view = opened[j].view;
-        if (!pumpUntil(stepLimit, ^BOOL { return !view.loading && view.title.length > 0; })) {
-            failStep(steps[j], @"the page did not finish loading within 120 seconds", view._webProcessIdentifier);
-        }
+        waitTurns([NSString stringWithFormat:@"the page of step %@ finishes loading", steps[j]], ^BOOL { return !view.loading && view.title.length > 0; });
     }
-    pumpUntil(settleSeconds, ^BOOL { return NO; });
+    // Each view presents its loaded page in its window on screen, after which the occlusion state of the window is judged.
+    for (int j = 0; j < kCollectionVariantCount; j++) waitPresentation(opened[j].view, steps[j]);
     double loaded = nowSeconds();
     for (int j = 0; j < kCollectionVariantCount; j++) {
         fprintf(stdout, "loaded %s: pid=%d visible=%d title=%s\n", specs[j]->name, opened[j].view._webProcessIdentifier,

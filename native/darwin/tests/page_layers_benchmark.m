@@ -8,17 +8,14 @@
 #import <string.h>
 #import <sys/types.h>
 #import "private/webkit.h"
+#import "support/event_wait.h"
 
 static const CGFloat kWidth = 1200;
 static const CGFloat kHeight = 760;
 // The card rectangles that compositor.js cuts out of the background: x, y, w, h in CSS pixels of the viewport.
 static const int kCards[3][4] = { { 20, 60, 560, 340 }, { 600, 60, 580, 340 }, { 20, 420, 1160, 320 } };
-// Waits at most this many seconds for each step (AGENTS: a step that cannot finish is reported with its measured state).
-static const NSTimeInterval stepLimit = 120;
 // Each variant is loaded this many times. The median of the samples is reported.
 enum { kSamples = 3 };
-// The page settles for this long after two animation frames, so that its layers are committed before the read.
-static const NSTimeInterval settleSeconds = 1;
 
 typedef struct {
     const char *name;
@@ -46,15 +43,36 @@ static double nowSeconds(void) {
     return NSDate.date.timeIntervalSince1970;
 }
 
-// Pumps the run loop until done() holds or the limit passes. Returns done().
-static BOOL pumpUntil(NSTimeInterval limit, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:limit];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        @autoreleasepool {
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-        }
+// Waits until done() holds, with an autorelease pool for each turn of the run loop: the condition drains the pool of the turn
+// before it judges, so the objects that a turn autoreleases are released at its end, as a turn of NSApp run does.
+static void waitTurns(NSString *what, BOOL (^done)(void)) {
+    __block NSAutoreleasePool *turn = [[NSAutoreleasePool alloc] init];
+    eventWait(what, ^BOOL {
+        [turn drain];
+        turn = [[NSAutoreleasePool alloc] init];
+        return done();
+    });
+    [turn drain];
+}
+
+// Waits until the process ends. Its exit is a dispatch source of the main queue; a process that ended before the source was
+// made gives no event, so a process that cannot be read once the source exists has ended.
+static void waitProcessEnd(pid_t process, NSString *what) {
+    __block BOOL ended = NO;
+    dispatch_source_t source = dispatch_source_create(DISPATCH_SOURCE_TYPE_PROC, (uintptr_t)process, DISPATCH_PROC_EXIT,
+        dispatch_get_main_queue());
+    if (!source) {
+        fprintf(stderr, "FAIL: the exit observation of the process %d cannot start\n", process);
+        exit(1);
     }
-    return done();
+    dispatch_source_set_event_handler(source, ^{ ended = YES; });
+    dispatch_resume(source);
+    waitTurns(what, ^BOOL {
+        struct proc_bsdinfo info;
+        return ended || proc_pidinfo(process, PROC_PIDTBSDINFO, 0, &info, sizeof info) != (int)sizeof info;
+    });
+    dispatch_source_cancel(source);
+    dispatch_release(source);
 }
 
 // Exits with the step and the measured state when a step cannot run. The WebContent process of the view ends first.
@@ -158,9 +176,7 @@ static long measureVariant(NSView *content, const Variant *variant, int sample) 
 
         NSString *html = pageFor(variant);
         [view loadHTMLString:html baseURL:nil];
-        if (!pumpUntil(stepLimit, ^BOOL { return !view.loading && [view.title isEqual:@"Layers"]; })) {
-            failStep(step, @"the page did not load within 120 seconds", view);
-        }
+        waitTurns(@"the page loads", ^BOOL { return !view.loading && [view.title isEqual:@"Layers"]; });
 
         // Two animation frames reported by the page show that the page has presented its first frame.
         __block BOOL framed = NO;
@@ -170,11 +186,12 @@ static long measureVariant(NSView *content, const Variant *variant, int sample) 
             failure = [error retain];
             framed = YES;
         }];
-        if (!pumpUntil(stepLimit, ^BOOL { return framed; })) {
-            failStep(step, @"the page did not report two animation frames within 120 seconds", view);
-        }
+        waitTurns(@"the page reports two animation frames", ^BOOL { return framed; });
         if (failure) failStep(step, [NSString stringWithFormat:@"the page script failed: %@", failure.localizedDescription], view);
-        pumpUntil(settleSeconds, ^BOOL { return NO; });
+        // The layers of those frames are committed when the view presents the next update after them.
+        __block BOOL presented = NO;
+        [view _doAfterNextPresentationUpdate:^{ presented = YES; }];
+        waitTurns(@"the view presents the layers of the page", ^BOOL { return presented; });
 
         process = view._webProcessIdentifier;
         if (process == 0) failStep(step, @"the web view has no WebContent process", view);
@@ -186,13 +203,7 @@ static long measureVariant(NSView *content, const Variant *variant, int sample) 
         // The view ends with this pool, and WebKit then ends its WebContent process, which serves no other page.
         [view removeFromSuperview];
     }
-    if (!pumpUntil(30, ^BOOL {
-            struct proc_bsdinfo info;
-            return proc_pidinfo(process, PROC_PIDTBSDINFO, 0, &info, sizeof info) != (int)sizeof info;
-        })) {
-        fprintf(stderr, "FAIL: step %s: the WebContent process %d remains 30 seconds after its view closed\n", step.UTF8String, process);
-        exit(1);
-    }
+    waitProcessEnd(process, [NSString stringWithFormat:@"the WebContent process %d of step %@ ends after its view closed", process, step]);
     fprintf(stdout, "end %s sample %d elapsed %.3f s\n", variant->name, sample, nowSeconds() - started);
     fflush(stdout);
     return graphics;

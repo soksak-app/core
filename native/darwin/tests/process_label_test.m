@@ -11,6 +11,7 @@
 #include "soksak_process_identity.h"
 #import "private/webkit.h"
 #import "document_view.h"
+#import "support/event_wait.h"
 #import "support/temporary_folder.h"
 #import "support/view_import_map.h"
 #import "webview_geometry.h"
@@ -69,13 +70,41 @@ static NSString *configuredValue(NSString *key, NSString *fallback) {
     return value.length ? value : fallback;
 }
 
-static BOOL until(BOOL (^done)(void), NSTimeInterval seconds) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:seconds];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
-                                 beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
-    return done();
+// Launches task and wakes the wait of the main thread when the task ends. The task has stopped running when its termination
+// handler runs, and the handler runs on another thread, so it wakes the wait after that change.
+static BOOL launchWatched(NSTask *task, NSError **error) {
+    task.terminationHandler = ^(NSTask *ended) {
+        (void)ended;
+        eventWake();
+    };
+    return [task launchAndReturnError:error];
+}
+
+// Waits until a task that launchWatched launched ends.
+static void waitForExit(NSTask *task, NSString *what) {
+    eventWait(what, ^BOOL { return !task.isRunning; });
+}
+
+// Whether the process pid still exists: its executable path is still known.
+static BOOL processAlive(pid_t pid) {
+    if (pid <= 0) return NO;
+    char path[PROC_PIDPATHINFO_MAXSIZE] = {0};
+    return proc_pidpath(pid, path, sizeof(path)) != 0;
+}
+
+// Waits until the process pid ends and returns that it ended. A process source of the main queue delivers its exit; a process
+// that ended before the source exists is found gone at the first judgment.
+static BOOL processEnds(pid_t pid, NSString *what) {
+    if (pid <= 0) return YES;
+    __block BOOL exited = NO;
+    dispatch_source_t source = dispatch_source_create(DISPATCH_SOURCE_TYPE_PROC, (uintptr_t)pid, DISPATCH_PROC_EXIT,
+        dispatch_get_main_queue());
+    dispatch_source_set_event_handler(source, ^{ exited = YES; });
+    dispatch_resume(source);
+    eventWait(what, ^BOOL { return exited || !processAlive(pid); });
+    dispatch_source_cancel(source);
+    dispatch_release(source);
+    return exited || !processAlive(pid);
 }
 
 @interface SPProcessLabelScheme : NSObject <WKURLSchemeHandler>
@@ -152,7 +181,7 @@ static NSString *processListing(pid_t pid, NSString **displayName, NSString **fa
     task.standardOutput = outputPipe;
     task.standardError = errorPipe;
     NSError *launchError = nil;
-    if (![task launchAndReturnError:&launchError]) {
+    if (!launchWatched(task, &launchError)) {
         *failure = [NSString stringWithFormat:@"lsappinfo launch failed: %@", launchError];
         return nil;
     }
@@ -171,26 +200,10 @@ static NSString *processListing(pid_t pid, NSString **displayName, NSString **fa
         processOutput.standardError = [errorReader readDataToEndOfFile];
         dispatch_group_leave(drained);
     });
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:5];
-    while (task.isRunning && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
-                                 beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
-    if (task.isRunning) {
-        [task terminate];
-        [task waitUntilExit];
-        dispatch_group_wait(drained, dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC));
-        *failure = @"lsappinfo list exceeded 5000ms";
-        dispatch_release(drained);
-        [processOutput release];
-        return nil;
-    }
-    if (dispatch_group_wait(drained, dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC)) != 0) {
-        *failure = @"lsappinfo output did not reach EOF after process exit";
-        dispatch_release(drained);
-        [processOutput release];
-        return nil;
-    }
+    waitForExit(task, @"lsappinfo ends");
+    // The readers run on other threads and reach the end of their pipes once lsappinfo closed its output, so the main thread
+    // need not run while it waits for them.
+    dispatch_group_wait(drained, DISPATCH_TIME_FOREVER);
     dispatch_release(drained);
     NSData *output = processOutput.standardOutput;
     NSData *errors = processOutput.standardError;
@@ -261,10 +274,9 @@ static pid_t measure(NSWindow *window, SPProcessLabelScheme *handler,
     SPProcessLabelNavigation *navigation = [[SPProcessLabelNavigation alloc] init];
     view.navigationDelegate = navigation;
     [view loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:address]]];
-    BOOL navigationFinished = until(^BOOL { return navigation.finished; }, 15);
-    check(navigationFinished, [NSString stringWithFormat:@"%@ navigation finishes within 15000ms", caseName]);
+    eventWait([NSString stringWithFormat:@"the navigation of %@ finishes", caseName], ^BOOL { return navigation.finished; });
     check(navigation.failure == nil, [NSString stringWithFormat:@"%@ navigation succeeds: %@", caseName, navigation.failure]);
-    if (!navigationFinished || navigation.failure) {
+    if (navigation.failure) {
         view.navigationDelegate = nil;
         [view stopLoading];
         [view removeFromSuperview];
@@ -279,8 +291,7 @@ static pid_t measure(NSWindow *window, SPProcessLabelScheme *handler,
         if (error) evaluation.failure = error.localizedDescription;
         evaluation.completed = YES;
     }];
-    BOOL evaluationFinished = until(^BOOL { return evaluation.completed; }, 5);
-    check(evaluationFinished, [NSString stringWithFormat:@"%@ URL evaluation finishes within 5000ms", caseName]);
+    eventWait([NSString stringWithFormat:@"the URL evaluation of %@ answers", caseName], ^BOOL { return evaluation.completed; });
     check(evaluation.failure == nil, [NSString stringWithFormat:@"%@ URL evaluation succeeds: %@", caseName, evaluation.failure]);
     check(evaluation.url && [evaluation.url isEqualToString:address],
         [NSString stringWithFormat:@"%@ keeps the requested URL origin", caseName]);
@@ -366,7 +377,7 @@ static pid_t measureCorePluginViewLabel(NSWindow *window) {
     [pluginViewStateFailure release];
     pluginViewStateFailure = nil;
     check(sp_document_load(document, "soksak://probe/page.html"), @"core plugin view accepts its canonical isolated origin");
-    BOOL pageLoaded = until(^BOOL {
+    eventWait(@"the core plugin page reaches its loaded state", ^BOOL {
         NSData *stateData = [pluginViewState dataUsingEncoding:NSUTF8StringEncoding];
         NSError *parseError = nil;
         NSDictionary *state = stateData ? [NSJSONSerialization JSONObjectWithData:stateData options:0 error:&parseError] : nil;
@@ -374,8 +385,7 @@ static pid_t measureCorePluginViewLabel(NSWindow *window) {
             pluginViewStateFailure = [(parseError.localizedDescription ?: @"plugin state JSON is absent or not an object") copy];
         }
         return [state[@"url"] isEqual:@"soksak://probe/page.html"] && ![state[@"loading"] boolValue];
-    }, 15);
-    check(pageLoaded, [NSString stringWithFormat:@"core plugin page reaches loaded state within 15000ms (got %@)", pluginViewState]);
+    });
     check(pluginViewStateFailure == nil, [NSString stringWithFormat:@"core plugin state JSON is valid: %@", pluginViewStateFailure]);
     SPJavaScriptResult *evaluation = [[SPJavaScriptResult alloc] init];
     [view evaluateJavaScript:@"location.href" completionHandler:^(id result, NSError *error) {
@@ -383,8 +393,7 @@ static pid_t measureCorePluginViewLabel(NSWindow *window) {
         if (error) evaluation.failure = error.localizedDescription;
         evaluation.completed = YES;
     }];
-    BOOL evaluated = until(^BOOL { return evaluation.completed; }, 15);
-    check(evaluated, @"core plugin page completes its URL query within 15000ms");
+    eventWait(@"the core plugin page answers its URL query", ^BOOL { return evaluation.completed; });
     check(evaluation.failure == nil, [NSString stringWithFormat:@"core plugin page URL query succeeds: %@", evaluation.failure]);
     check([evaluation.url isEqualToString:@"soksak://probe/page.html"],
         [NSString stringWithFormat:@"process display label preserves plugin origin (got %@)", evaluation.url]);
@@ -412,7 +421,7 @@ static pid_t measureCorePluginViewLabel(NSWindow *window) {
         check(sp_document_load(secondDocument, "soksak://other/page.html"),
             @"second core plugin view accepts its canonical isolated origin");
         __block NSString *secondStateFailure = nil;
-        BOOL secondLoaded = until(^BOOL {
+        eventWait(@"the second plugin page reaches its loaded state", ^BOOL {
             NSData *stateData = [secondPluginViewState dataUsingEncoding:NSUTF8StringEncoding];
             NSError *parseError = nil;
             NSDictionary *state = stateData ? [NSJSONSerialization JSONObjectWithData:stateData options:0 error:&parseError] : nil;
@@ -420,9 +429,7 @@ static pid_t measureCorePluginViewLabel(NSWindow *window) {
                 secondStateFailure = [(parseError.localizedDescription ?: @"second plugin state JSON is absent or not an object") copy];
             }
             return [state[@"url"] isEqual:@"soksak://other/page.html"] && ![state[@"loading"] boolValue];
-        }, 15);
-        check(secondLoaded, [NSString stringWithFormat:@"second plugin page reaches loaded state within 15000ms (got %@)",
-            secondPluginViewState]);
+        });
         check(secondStateFailure == nil, [NSString stringWithFormat:@"second plugin state JSON is valid: %@", secondStateFailure]);
         [secondStateFailure release];
         pid_t secondPid = ((__bridge WKWebView *)secondDocument)._webProcessIdentifier;
@@ -452,12 +459,11 @@ static pid_t measureCorePluginViewLabel(NSWindow *window) {
     check(region != NULL, [NSString stringWithFormat:@"core creates a document region: %s", sp_document_last_error()]);
     if (region) {
         check(sp_document_load(region, "soksak://probe/page.html"), @"the document region accepts the origin of its plugin");
-        BOOL regionLoaded = until(^BOOL {
+        eventWait(@"the document region reaches its loaded state", ^BOOL {
             NSData *stateData = [regionState dataUsingEncoding:NSUTF8StringEncoding];
             NSDictionary *state = stateData ? [NSJSONSerialization JSONObjectWithData:stateData options:0 error:nil] : nil;
             return [state[@"url"] isEqual:@"soksak://probe/page.html"] && ![state[@"loading"] boolValue];
-        }, 15);
-        check(regionLoaded, [NSString stringWithFormat:@"the document region reaches loaded state within 15000ms (got %@)", regionState]);
+        });
         pid_t regionPid = ((__bridge WKWebView *)region)._webProcessIdentifier;
         check(regionPid > 0 && regionPid != pid,
             [NSString stringWithFormat:@"the view and the region of a plugin use distinct WebContent processes (%d, %d)", pid, regionPid]);
@@ -497,12 +503,6 @@ static pid_t measureCorePluginViewLabel(NSWindow *window) {
     [pluginViewStateFailure release];
     pluginViewStateFailure = nil;
     return pid;
-}
-
-static BOOL processExited(pid_t pid) {
-    if (pid <= 0) return YES;
-    char path[PROC_PIDPATHINFO_MAXSIZE] = {0};
-    return proc_pidpath(pid, path, sizeof(path)) != 0;
 }
 
 static int runWebKitCases(void) {
@@ -568,7 +568,7 @@ static BOOL runWebKitWorkerAndCheckCleanup(void) {
     task.standardOutput = outputPipe;
     task.standardError = errorPipe;
     NSError *launchError = nil;
-    check([task launchAndReturnError:&launchError], [NSString stringWithFormat:@"WebKit measurement worker launches: %@", launchError]);
+    check(launchWatched(task, &launchError), [NSString stringWithFormat:@"WebKit measurement worker launches: %@", launchError]);
     if (!task.isRunning) return NO;
     NSFileHandle *outputReader = outputPipe.fileHandleForReading;
     NSFileHandle *errorReader = errorPipe.fileHandleForReading;
@@ -584,18 +584,10 @@ static BOOL runWebKitWorkerAndCheckCleanup(void) {
         processOutput.standardError = [errorReader readDataToEndOfFile];
         dispatch_group_leave(drained);
     });
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:60];
-    while (task.isRunning && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
-                                 beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
-    if (task.isRunning) {
-        [task terminate];
-        [task waitUntilExit];
-        check(NO, @"WebKit measurement worker exits within 60000ms");
-    }
-    BOOL outputDrained = dispatch_group_wait(drained, dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC)) == 0;
-    check(outputDrained, @"WebKit measurement worker stdout and stderr reach EOF");
+    waitForExit(task, @"the WebKit measurement worker ends");
+    // The readers run on other threads and reach the end of their pipes once the worker closed its output, so the main thread
+    // need not run while it waits for them.
+    dispatch_group_wait(drained, DISPATCH_TIME_FOREVER);
     dispatch_release(drained);
     NSString *output = [[[NSString alloc] initWithData:processOutput.standardOutput encoding:NSUTF8StringEncoding] autorelease];
     NSString *errors = [[[NSString alloc] initWithData:processOutput.standardError encoding:NSUTF8StringEncoding] autorelease];
@@ -617,8 +609,8 @@ static BOOL runWebKitWorkerAndCheckCleanup(void) {
         (unsigned long)matches.count]);
     for (NSTextCheckingResult *match in matches) {
         pid_t pid = (pid_t)[[output substringWithRange:[match rangeAtIndex:1]] intValue];
-        BOOL exited = until(^BOOL { return !processExited(pid); }, 10);
-        check(exited, [NSString stringWithFormat:@"WebContent process %d exits within 10000ms after its owning worker exits", pid]);
+        check(processEnds(pid, [NSString stringWithFormat:@"WebContent process %d ends", pid]),
+            [NSString stringWithFormat:@"WebContent process %d exits after its owning worker exits", pid]);
     }
     return failures == 0;
 }
@@ -634,7 +626,7 @@ static BOOL measureSidecarProcessNameSetter(void) {
     task.standardInput = controlPipe;
     task.standardError = [NSFileHandle fileHandleWithNullDevice];
     NSError *launchError = nil;
-    check([task launchAndReturnError:&launchError], [NSString stringWithFormat:@"process-name helper launches: %@", launchError]);
+    check(launchWatched(task, &launchError), [NSString stringWithFormat:@"process-name helper launches: %@", launchError]);
     if (!task.isRunning) return NO;
     pid_t pid = task.processIdentifier;
     NSFileHandle *reader = outputPipe.fileHandleForReading;
@@ -650,12 +642,12 @@ static BOOL measureSidecarProcessNameSetter(void) {
         processOutput.standardOutput = line;
         dispatch_semaphore_signal(lineReady);
     });
-    BOOL ready = dispatch_semaphore_wait(lineReady, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) == 0;
-    check(ready, @"process-name helper reports its configured name within 5000ms");
+    // The reader runs on another thread and signals at the end of the line or of the output, so the main thread need not run
+    // while it waits.
+    dispatch_semaphore_wait(lineReady, DISPATCH_TIME_FOREVER);
     dispatch_release(lineReady);
-    NSString *helperLine = ready
-        ? [[[NSString alloc] initWithData:processOutput.standardOutput encoding:NSUTF8StringEncoding] autorelease]
-        : nil;
+    NSString *helperLine = [[[NSString alloc] initWithData:processOutput.standardOutput encoding:NSUTF8StringEncoding]
+        autorelease];
     if (helperLine) fputs(helperLine.UTF8String, stdout);
     check(helperLine != nil && [helperLine containsString:[NSString stringWithFormat:@"processName=%@", requestedName]],
         [NSString stringWithFormat:@"NSProcessInfo.processName returns %@ inside the helper (got %@)", requestedName, helperLine]);
@@ -694,15 +686,11 @@ static BOOL measureSidecarProcessNameSetter(void) {
     } @catch (NSException *exception) {
         check(NO, [NSString stringWithFormat:@"process-name helper control pipe closes: %@", exception.reason]);
     }
-    BOOL helperExited = until(^BOOL { return !task.isRunning; }, 5);
-    if (!helperExited) {
-        [task terminate];
-        [task waitUntilExit];
-    }
-    check(helperExited && task.terminationReason == NSTaskTerminationReasonExit && task.terminationStatus == 0,
-        @"the disposable process-name helper exits cleanly within 5000ms after measurement");
-    BOOL exited = until(^BOOL { return !processExited(pid); }, 5);
-    check(exited, [NSString stringWithFormat:@"process-name helper %d is gone within 5000ms", pid]);
+    waitForExit(task, @"the process-name helper ends");
+    check(task.terminationReason == NSTaskTerminationReasonExit && task.terminationStatus == 0,
+        @"the disposable process-name helper exits cleanly after measurement");
+    check(processEnds(pid, @"the process of the process-name helper ends"),
+        [NSString stringWithFormat:@"process-name helper %d is gone", pid]);
     [processOutput release];
     return failures == 0;
 }
@@ -715,21 +703,16 @@ static BOOL registeredHelperRejectsControlEOF(void) {
     task.standardOutput = [NSFileHandle fileHandleWithNullDevice];
     task.standardError = [NSFileHandle fileHandleWithNullDevice];
     NSError *launchError = nil;
-    check([task launchAndReturnError:&launchError],
+    check(launchWatched(task, &launchError),
         [NSString stringWithFormat:@"control EOF helper launches: %@", launchError]);
     if (!task.isRunning) return NO;
     pid_t pid = task.processIdentifier;
-    BOOL exited = until(^BOOL { return !task.isRunning; }, 5);
-    if (!exited) {
-        [task terminate];
-        [task waitUntilExit];
-    }
-    check(exited, @"registered helper reports control EOF within 5000ms");
-    check(exited && task.terminationReason == NSTaskTerminationReasonExit && task.terminationStatus != 0,
+    waitForExit(task, @"the registered helper ends at the end of its control input");
+    check(task.terminationReason == NSTaskTerminationReasonExit && task.terminationStatus != 0,
         [NSString stringWithFormat:@"registered helper rejects control EOF with nonzero exit (got %d)",
             task.terminationStatus]);
-    check(until(^BOOL { return !processExited(pid); }, 5),
-        [NSString stringWithFormat:@"control EOF helper process %d is gone within 5000ms", pid]);
+    check(processEnds(pid, @"the process of the control EOF helper ends"),
+        [NSString stringWithFormat:@"control EOF helper process %d is gone", pid]);
     check(!writeControlByte(-1, "injected invalid descriptor"),
         @"control writer rejects and reports an invalid descriptor");
     return failures == 0;
@@ -751,7 +734,7 @@ static BOOL measureRegisteredDisplayNameHelper(NSString *executable, NSString *c
     environment[@"SOKSAK_SIDECAR_DISPLAY_NAME"] = requestedName;
     task.environment = environment;
     NSError *launchError = nil;
-    check([task launchAndReturnError:&launchError],
+    check(launchWatched(task, &launchError),
         [NSString stringWithFormat:@"%@ helper launches without activating the application: %@", caseName, launchError]);
     if (!task.isRunning) return NO;
 
@@ -769,12 +752,12 @@ static BOOL measureRegisteredDisplayNameHelper(NSString *executable, NSString *c
         processOutput.standardOutput = line;
         dispatch_semaphore_signal(lineReady);
     });
-    BOOL ready = dispatch_semaphore_wait(lineReady, dispatch_time(DISPATCH_TIME_NOW, 5000 * NSEC_PER_MSEC)) == 0;
-    check(ready, [NSString stringWithFormat:@"%@ helper checks into LaunchServices and reports within 5000ms", caseName]);
+    // The reader runs on another thread and signals at the end of the line or of the output, so the main thread need not run
+    // while it waits.
+    dispatch_semaphore_wait(lineReady, DISPATCH_TIME_FOREVER);
     dispatch_release(lineReady);
-    NSString *helperLine = ready
-        ? [[[NSString alloc] initWithData:processOutput.standardOutput encoding:NSUTF8StringEncoding] autorelease]
-        : nil;
+    NSString *helperLine = [[[NSString alloc] initWithData:processOutput.standardOutput encoding:NSUTF8StringEncoding]
+        autorelease];
     if (helperLine) fputs(helperLine.UTF8String, stdout);
     check(helperLine != nil && [helperLine containsString:[NSString stringWithFormat:@"displayName=%@", requestedName]],
         [NSString stringWithFormat:@"%@ helper sets the exact LaunchServices display name %@ (got %@)",
@@ -832,15 +815,11 @@ static BOOL measureRegisteredDisplayNameHelper(NSString *executable, NSString *c
             check(NO, [NSString stringWithFormat:@"%@ helper control pipe closes: %@", caseName, exception.reason]);
         }
     }
-    BOOL exited = until(^BOOL { return !task.isRunning; }, 5);
-    if (!exited) {
-        [task terminate];
-        [task waitUntilExit];
-    }
-    check(exited && task.terminationReason == NSTaskTerminationReasonExit && task.terminationStatus == 0,
-        [NSString stringWithFormat:@"%@ helper exits successfully within 5000ms", caseName]);
-    check(until(^BOOL { return !processExited(pid); }, 5),
-        [NSString stringWithFormat:@"%@ helper process %d is gone within 5000ms", caseName, pid]);
+    waitForExit(task, [NSString stringWithFormat:@"the %@ helper ends", caseName]);
+    check(task.terminationReason == NSTaskTerminationReasonExit && task.terminationStatus == 0,
+        [NSString stringWithFormat:@"%@ helper exits successfully", caseName]);
+    check(processEnds(pid, [NSString stringWithFormat:@"the process of the %@ helper ends", caseName]),
+        [NSString stringWithFormat:@"%@ helper process %d is gone", caseName, pid]);
     check(NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier == baselineFrontmostPid,
         [NSString stringWithFormat:@"%@ helper exit leaves frontmost application pid %d unchanged", caseName, baselineFrontmostPid]);
     [processOutput release];

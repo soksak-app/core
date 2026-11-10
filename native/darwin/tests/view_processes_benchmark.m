@@ -7,13 +7,14 @@
 // benchmark prints:
 //   processes  the number of distinct WebContent processes of the views, the total and the per-process physical footprint
 //              (ri_phys_footprint of RUSAGE_INFO_V4), and the time from creating the views to the navigation finish of all;
-//   closed     after the views are removed, the processes that exit within closeWaitSeconds (exited) and the processes that
+//   closed     after the views are removed, the processes that exit within the measurement window closeWaitSeconds (exited)
+//              and the processes that
 //              are still alive (retained), with the footprint of the retained processes. The exits are observed through
 //              DISPATCH_PROC_EXIT events. A retained process is a measurement, not a failure: the benchmark sends no signal
 //              to any WebContent process;
 //   reuse      a fresh set of N views of the same variant, and how many of its views run in a process retained before it.
 //              A count that stays bounded across the steps shows that the retained processes are reused, not accumulated.
-// The benchmark fails when a navigation does not finish within stepLimit, or when a process cannot be observed. At the end it
+// The benchmark fails when a navigation fails, or when a process cannot be observed. At the end it
 // prints the number of retained processes and writes the pids of the retained processes to the file of --pid-file. The
 // Makefile target checks that none of those pids exists after the benchmark exits.
 // --counts N,N,... measures the listed counts in the listed order (default 1,5,10,20,40).
@@ -25,10 +26,10 @@
 #import <stdlib.h>
 #import <string.h>
 #import "private/webkit.h"
+#import "support/event_wait.h"
 
-// Waits at most this many seconds for each navigation (AGENTS: a step that cannot finish is reported with its measured state).
-static const NSTimeInterval stepLimit = 120;
-// The bound of the wait for the exit of the processes of closed views. It only ends the wait; a process alive after it is retained.
+// The measurement window of the exit of the processes of closed views: a process that exits in it is exited, and a process alive
+// at its end is retained. WebKit may keep a process of a closed view for later views, so no event comes for a retained process.
 static const NSTimeInterval closeWaitSeconds = 10;
 static const long kDefaultCounts[] = { 1, 5, 10, 20, 40 };
 static const long kMaxCount = 200;
@@ -98,18 +99,16 @@ static double nowSeconds(void) {
     return NSDate.date.timeIntervalSince1970;
 }
 
-// Sends the application events until done() holds or the limit passes. Returns done(). The run loop is driven here, not by
-// NSApp run, so each turn has its own autorelease pool; the objects that WebKit autoreleases during a turn are released at its end.
-static BOOL pumpUntil(NSTimeInterval limit, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:limit];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        @autoreleasepool {
-            NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]
-                inMode:NSDefaultRunLoopMode dequeue:YES];
-            if (event) [NSApp sendEvent:event];
-        }
-    }
-    return done();
+// Waits until done() holds, with an autorelease pool for each turn of the run loop: the condition drains the pool of the turn
+// before it judges, so the objects that WebKit autoreleases during a turn are released at its end, as a turn of NSApp run does.
+static void waitTurns(NSString *what, BOOL (^done)(void)) {
+    __block NSAutoreleasePool *turn = [[NSAutoreleasePool alloc] init];
+    eventWait(what, ^BOOL {
+        [turn drain];
+        turn = [[NSAutoreleasePool alloc] init];
+        return done();
+    });
+    [turn drain];
 }
 
 // Exits with the step and the reason when a step cannot run. The benchmark leaves the WebContent processes it started as they are.
@@ -203,7 +202,7 @@ static void loadViews(NSWindow *window, NSUInteger count, BOOL forceNewProcess, 
     fprintf(stdout, "created %s views=%lu\n", step.UTF8String, (unsigned long)count);
     fflush(stdout);
 
-    BOOL finished = pumpUntil(stepLimit, ^BOOL {
+    waitTurns(@"the navigation of every view finishes or fails", ^BOOL {
         for (ViewDelegate *delegate in delegates) {
             if (!delegate.finished && !delegate.failure) return NO;
         }
@@ -211,12 +210,6 @@ static void loadViews(NSWindow *window, NSUInteger count, BOOL forceNewProcess, 
     });
     for (ViewDelegate *delegate in delegates) {
         if (delegate.failure) failStep(step, [NSString stringWithFormat:@"a navigation failed: %@", delegate.failure]);
-    }
-    if (!finished) {
-        NSUInteger pending = 0;
-        for (ViewDelegate *delegate in delegates) if (!delegate.finished) pending++;
-        failStep(step, [NSString stringWithFormat:@"%lu of %lu navigations did not finish within %g seconds", (unsigned long)pending,
-            (unsigned long)count, stepLimit]);
     }
     *seconds = nowSeconds() - created;
     }
@@ -251,7 +244,13 @@ static NSUInteger closeViews(NSWindow *window, NSOrderedSet<NSNumber *> *process
         [window close];
         [window release];
     }
-    pumpUntil(closeWaitSeconds, ^BOOL {
+    // The end of the measurement window is a block of the main queue.
+    __block BOOL windowEnded = NO;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(closeWaitSeconds * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        windowEnded = YES;
+    });
+    waitTurns(@"every process of the closed views exits or the measurement window of the close ends", ^BOOL {
+        if (windowEnded) return YES;
         for (NSNumber *process in processes) {
             if (![exitedProcesses containsObject:process]) return NO;
         }

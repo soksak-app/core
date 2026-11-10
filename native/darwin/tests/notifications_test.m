@@ -3,6 +3,7 @@
 // state once (--bundled). It does not request permission or post a notification. It does not activate the application.
 #import <Cocoa/Cocoa.h>
 #import "notifications.h"
+#import "support/event_wait.h"
 
 static int failures = 0;
 
@@ -27,10 +28,8 @@ int main(int argc, char **argv) { @autoreleasepool {
         return failures ? 1 : 0;
     }
     check(error == NULL, [NSString stringWithFormat:@"notifications start in a bundle (got %s)", error ?: "no error"]);
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (events.count == 0 && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
-    }
+    // The module delivers each event in a block of the main queue.
+    eventWait(@"the notification module reports its first event", ^BOOL { return events.count > 0; });
     NSDictionary *state = events.count ? [NSJSONSerialization JSONObjectWithData:[events[0] dataUsingEncoding:NSUTF8StringEncoding]
         options:0 error:NULL] : nil;
     NSArray *names = @[@"notDetermined", @"denied", @"authorized", @"provisional"];

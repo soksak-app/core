@@ -5,20 +5,13 @@
 #import <WebKit/WebKit.h>
 #import "webview_geometry.h"
 #import "support/records.h"
+#import "support/event_wait.h"
 
 static int failures = 0;
 
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
-}
-
-static void until(NSString *what, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
-    if (!done()) { fprintf(stderr, "FAIL: %s within 10 seconds\n", what.UTF8String); exit(1); }
 }
 
 static id evaluate(WKWebView *view, NSString *script) {
@@ -28,7 +21,7 @@ static id evaluate(WKWebView *view, NSString *script) {
         result = [value retain];
         done = YES;
     }];
-    until(@"JavaScript did not answer", ^BOOL { return done; });
+    eventWait(@"the JavaScript evaluation answers", ^BOOL { return done; });
     return [result autorelease];
 }
 
@@ -51,7 +44,7 @@ static void counted(void *context, long elements, long documents, const char *er
 static Answer count(WKWebView *view, bool document) {
     __block Answer answer = {NO, NO, -1, -1};
     sp_webview_count_objects(view, document, counted, &answer);
-    until(@"the count did not answer", ^BOOL { return answer.answered; });
+    eventWait(@"the object count answers", ^BOOL { return answer.answered; });
     return answer;
 }
 
@@ -59,9 +52,11 @@ static WKWebView *load(NSView *content, NSString *html) {
     WKWebView *view = [[[WKWebView alloc] initWithFrame:content.bounds] autorelease];
     [content addSubview:view];
     [view loadHTMLString:html baseURL:[NSURL URLWithString:@"http://127.0.0.1/"]];
-    // The blank page that the view shows before the load has readyState complete, so the wait is for the title of the loaded page.
-    until(@"the page did not finish loading", ^BOOL {
-        return [[evaluate(view, @"document.title") description] isEqualToString:@"loaded"];
+    // The blank page that the view shows before the load has no title, so the title of the loaded page names the new document,
+    // and the end of loading after it is the end of the load of that document. The view changes both properties on the main
+    // thread when the web process reports the change.
+    eventWait(@"the navigation of the page finishes", ^BOOL {
+        return [view.title isEqualToString:@"loaded"] && !view.isLoading;
     });
     return view;
 }
