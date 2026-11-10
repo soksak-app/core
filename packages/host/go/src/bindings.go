@@ -165,7 +165,7 @@ func (h *Host) WaitPresented(ctx context.Context) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return s.presented()
+	return s.presented(ctx)
 }
 
 func (h *Host) OverlayUpdate(ctx context.Context, reqJSON json.RawMessage) error {

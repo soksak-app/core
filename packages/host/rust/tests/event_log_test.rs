@@ -71,7 +71,7 @@ fn the_first_line_is_log_open_and_seq_is_consecutive() {
         assert!(log.emit(Level::Info, "host.test.event", &json!({"index": index})));
     }
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let events = read(&path);
     assert_eq!(events[0]["event"], "log.open");
     assert_eq!(events[0]["fields"]["schema"], 3);
@@ -180,7 +180,7 @@ fn a_full_queue_returns_false_and_the_writer_records_the_range_as_dropped() {
     let hold = hold_writer(&log);
     let (accepted, refused) = refuse_while_held(&log, &hold, 0);
     assert_eq!((accepted, refused), (4, 16));
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let events = read(log.path());
     let dropped = dropped_ranges(&events);
     assert_eq!(dropped.len(), 1, "{events:?}");
@@ -206,10 +206,10 @@ fn a_record_of_the_loss_between_two_refusals_splits_them_into_two_dropped_ranges
     records::store_every_level(&log);
     let hold = hold_writer(&log);
     let first = refuse_while_held(&log, &hold, 0);
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let second = refuse_while_held(&log, &hold, 20);
     assert_eq!((first, second), ((4, 16), (4, 16)));
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let events = read(log.path());
     let dropped = dropped_ranges(&events);
     assert_eq!(dropped.len(), 2, "{events:?}");
@@ -264,7 +264,7 @@ fn an_error_is_written_without_waiting_for_the_batch_interval() {
             break;
         }
     }
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
 }
 
 // contract: log.writer.files-are-private
@@ -275,7 +275,7 @@ fn the_folder_is_0700_and_the_file_is_0600() {
     let log = event_log::start(options(directory.path())).unwrap();
     records::store_every_level(&log);
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let mode = |p: &Path| fs::metadata(p).unwrap().permissions().mode() & 0o777;
     assert_eq!(mode(&path), 0o600);
     assert_eq!(mode(path.parent().unwrap()), 0o700);
@@ -291,7 +291,7 @@ fn the_file_passes_the_audit_of_the_contract_package() {
         log.emit(Level::Info, "host.app.event", &json!({"kind": "started"}));
     }
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let catalog = directory.path().join("catalog.json");
     fs::write(&catalog, json!({
         "schema": 3,
@@ -348,7 +348,7 @@ fn flush_writes_every_accepted_event_before_it_returns() {
         assert!(log.emit(Level::Info, "host.test.event", &json!({"index": index})));
     }
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let stored = read(&path)
         .iter()
         .filter(|e| e["event"] == "host.test.event")
@@ -393,7 +393,7 @@ fn a_relayed_event_keeps_its_layer_and_time_and_gets_the_seq_of_the_writer() {
     let error = log.emit_relayed(bad_cid).unwrap_err();
     assert!(error.contains("cid"), "{error}");
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let events = read(&path);
     assert_eq!(events.len(), 3, "{events:?}");
     assert_eq!(events[2]["layer"], "page");
@@ -453,7 +453,7 @@ fn a_relayed_event_names_the_document_that_wrote_it_in_the_member_of_its_layer()
         assert_eq!(log.emit_relayed(event).unwrap_err(), want);
     }
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let events = read(&path);
     assert_eq!(events.len(), 6, "{events:?}");
     let members: Vec<(Option<&str>, Option<&str>)> = events[2..]
@@ -510,7 +510,7 @@ fn every_line_carries_the_wall_clock_and_the_monotonic_clock_of_its_call() {
         assert!(log.emit(Level::Info, "host.test.event", &json!({"index": index})));
     }
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let after = system.monotonic_ns().unwrap();
     let after_wall = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -556,7 +556,7 @@ fn an_event_with_cids_is_stored_with_them_and_an_invalid_identifier_is_refused()
         );
     }
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let events = read(&path);
     assert_eq!(events[2]["cids"], json!(["b1.1", "b1.2"]));
     assert!(events[3].get("cids").is_none(), "{}", events[3]);
@@ -590,7 +590,7 @@ fn the_log_rotates_at_the_bound_and_keeps_every_generation() {
         );
     }
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(10)).unwrap();
+    log.flush().unwrap();
     let generation = |n: usize| {
         let mut name = path.clone().into_os_string();
         name.push(format!(".{n}"));
@@ -668,7 +668,7 @@ fn the_writer_announces_each_write_to_its_observer() {
         let _ = sender.send((path.to_path_buf(), size));
     }));
     assert!(log.emit(Level::Info, "host.test.event", &json!({"index": 1})));
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let (path, size) = receiver.recv().expect("the write was not announced");
     assert_eq!(path.file_name().unwrap(), "host-b1.jsonl");
     assert_eq!(size, std::fs::metadata(&path).unwrap().len());
@@ -700,5 +700,5 @@ fn a_steady_stream_of_events_is_written_at_each_batch_interval() {
         written += writes.try_iter().count();
         std::thread::sleep(Duration::from_millis(5));
     }
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
 }

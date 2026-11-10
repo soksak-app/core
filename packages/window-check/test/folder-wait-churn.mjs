@@ -37,14 +37,14 @@ for (let cycle = 0; cycle < cycles; cycle++) {
     reads += 1;
     if (reads === 1) progress(`cycle ${cycle} watch active`);
     return reads > 1 ? reads : undefined;
-  }, 10000, () => new Error(`cycle ${cycle}: no change of ${folder} within 10000 ms`));
+  });
   progress(`cycle ${cycle} ended`);
 }
 progress("cycles ended");
 await writer.terminate();
 // A watch ends after its wait, on the thread of the file system events backend; a process that exits while one ends destroys
 // the mutex that thread still locks, and libc++ ends it with SIGABRT. The process exits after every watch ended.
-const failures = await endWatches(10000);
+const failures = await endWatches();
 for (const failure of failures) process.stderr.write(`${failure.message}\n`);
 process.stdout.write(`cycles ${cycles}\n`);
 process.exit(failures.length ? 1 : 0);

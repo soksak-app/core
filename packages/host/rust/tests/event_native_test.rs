@@ -220,7 +220,7 @@ fn the_writer_stores_pulled_native_records_in_the_layer_native() {
     let directory = folder::Folder::new();
     let log = start(directory.path(), &ring, Duration::from_millis(20));
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let events = read(&path);
     assert_eq!(events.len(), 4, "{events:?}");
     assert_eq!(events[2]["event"], "native.test.first");
@@ -293,7 +293,7 @@ fn a_refused_native_record_and_the_loss_of_the_ring_are_counted_as_dropped() {
     let directory = folder::Folder::new();
     let log = start(directory.path(), &ring, Duration::from_millis(20));
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let events = read(&path);
     let stored = events
         .iter()
@@ -361,7 +361,7 @@ fn a_pulled_native_record_of_a_declared_event_stores_the_catalog_class_and_an_un
     let directory = folder::Folder::new();
     let log = start(directory.path(), &ring, Duration::from_millis(20));
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let events = read(&path);
     assert_eq!(events.len(), 4, "{events:?}");
     assert_eq!(events[2]["class"], "input");
@@ -398,7 +398,7 @@ fn a_pulled_native_record_keeps_its_clock_and_cids() {
     let directory = folder::Folder::new();
     let log = start(directory.path(), &ring, Duration::from_millis(20));
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let events = read(&path);
     assert_eq!(events.len(), 4, "{events:?}");
     assert_eq!(events[2]["mono_ns"], 77_000_000_001u64);

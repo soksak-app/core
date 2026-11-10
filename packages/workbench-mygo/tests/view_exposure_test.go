@@ -24,7 +24,7 @@ type viewRelay struct {
 	mu     sync.Mutex
 	// next numbers the forwards, open holds the forwards that wait, and answers the replies of the main page by request id.
 	next     uint64
-	open     map[uint64]chan map[string]any
+	open     map[uint64]*mailbox[map[string]any]
 	answers  map[float64]map[string]any
 	requests []map[string]any
 	pushed   []map[string]any
@@ -40,7 +40,7 @@ func newViewRelay(t *testing.T) *viewRelay {
 
 func newViewRelayOn(t *testing.T, stored *surfaceHost) *viewRelay {
 	t.Helper()
-	r := &viewRelay{t: t, stored: stored, open: map[uint64]chan map[string]any{}, answers: map[float64]map[string]any{},
+	r := &viewRelay{t: t, stored: stored, open: map[uint64]*mailbox[map[string]any]{}, answers: map[float64]map[string]any{},
 		post: func(map[string]any) (any, error) { return nil, nil }}
 	read := func(argument json.RawMessage) map[string]any {
 		var value map[string]any
@@ -59,11 +59,11 @@ func newViewRelayOn(t *testing.T, stored *surfaceHost) *viewRelay {
 			r.mu.Lock()
 			r.next++
 			id := r.next
-			reply := make(chan map[string]any, 1)
+			reply := newMailbox[map[string]any]()
 			r.open[id] = reply
 			r.mu.Unlock()
 			r.emit("exposure-request", map[string]any{"id": id, "surface": request["surface"], "method": request["method"], "params": request["params"]})
-			return <-reply, nil
+			return reply.take(), nil
 		},
 		"exposureReply": func(_ context.Context, argument json.RawMessage) (any, error) {
 			reply := read(argument)
@@ -78,7 +78,7 @@ func newViewRelayOn(t *testing.T, stored *surfaceHost) *viewRelay {
 				return nil, errors.New("the reply has no request")
 			}
 			delete(r.open, uint64(reply["id"].(float64)))
-			open <- reply
+			open.put(reply)
 			return nil, nil
 		},
 		"exposureChanged": func(_ context.Context, argument json.RawMessage) (any, error) {
@@ -218,14 +218,13 @@ func TestAFailedCommandOfAViewKeepsItsCode(t *testing.T) {
 	}
 }
 
-func TestAViewThatDoesNotReplyEndsItsCommandAtTheDeclaredLimit(t *testing.T) {
-	r := newViewRelay(t)
-	surface := r.surface()
-	r.call(surface, "runtime.command.register", map[string]any{"name": "textprobe.close"})
-	r.ask(9, "command.run", `{"name": "textprobe.close", "params": {}}`)
-	failure := r.answer(9)["error"].(map[string]any)
-	if failure["code"] != float64(workbench.Failed) || failure["message"] != "command textprobe.close did not reply within 40ms" {
-		t.Fatalf("the reply is %v", failure)
+// A command of a view has no time limit (docs/spec/exposure.md, command `timeout`), so the registry keeps no limit to give it.
+func TestTheRegistryKeepsNoTimeLimitOfACommand(t *testing.T) {
+	registry := reflect.TypeOf(&workbench.Registry{})
+	for _, name := range []string{"CommandTimeout"} {
+		if _, present := registry.MethodByName(name); present {
+			t.Errorf("the registry has the method %s, which gives a command a time limit", name)
+		}
 	}
 }
 

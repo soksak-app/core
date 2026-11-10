@@ -32,7 +32,7 @@ func (implementation) PrepareWindow(platform.Window) error {
 	return unsupported("window preparation")
 }
 
-func (implementation) Fullscreen(platform.Window, bool, func()) error {
+func (implementation) Fullscreen(platform.Window, bool, func(platform.FullscreenResult, string)) error {
 	return unsupported("full screen")
 }
 

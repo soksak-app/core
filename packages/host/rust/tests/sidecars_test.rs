@@ -20,9 +20,6 @@ use soksak_host::sidecars::{
     read_message_line,
 };
 
-/// The limit that a flush of the event writer takes as its argument; the answer of the writer ends each flush.
-const FLUSH_LIMIT: Duration = Duration::from_secs(120);
-
 /// The writer of the records is process-wide, so the tests that attach it run one at a time.
 static SERIAL: Mutex<()> = Mutex::new(());
 
@@ -938,7 +935,7 @@ fn the_relay_records_every_message_with_its_whole_body() {
     sidecars.stop();
     // Turning the trace off joins the sampler, so no process that it started outlives the check.
     soksak_host::performance::command(serde_json::json!({"action": "off"})).unwrap();
-    writer.flush(FLUSH_LIMIT).unwrap();
+    writer.flush().unwrap();
     let records_of_the_run = records::read_events(writer.path());
     soksak_host::event_record::use_host_event_log(None);
     assert!(
@@ -1789,7 +1786,7 @@ fn a_dropped_sidecar_message_is_recorded() {
         // The message of s1 follows the discarded one, so the record of s2 is written when it arrives.
         let event = events.recv().expect("no sidecar event; the test stalled");
         assert_eq!(event.surface, "s1");
-        writer.flush(FLUSH_LIMIT).unwrap();
+        writer.flush().unwrap();
         // The sidecar ends at its stop, which ends by that exit; a stop that does not end stops at the limit of the
         // runner.
         sidecars.stop();
@@ -1841,7 +1838,7 @@ fn the_lifetime_of_a_sidecar_is_recorded_as_events() {
             .unwrap();
         first_events.recv().unwrap();
         sidecars.stop();
-        writer.flush(Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         return;
     }
     let config = folder::Folder::new();
@@ -1902,7 +1899,7 @@ fn the_sampler_names_a_running_sidecar_until_it_ends() {
         sidecars.stop();
         soksak_host::performance::sample();
         soksak_host::performance::command(serde_json::json!({"action": "off"})).unwrap();
-        writer.flush(Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         return;
     }
     let config = folder::Folder::new();
@@ -1960,7 +1957,7 @@ fn a_request_with_cids_is_recorded_as_an_event() {
             .send(&window, ECHO, "s1", &raw(r#"{"operation":"input"}"#))
             .unwrap();
         sidecars.stop();
-        writer.flush(Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         return;
     }
     let config = folder::Folder::new();
@@ -2100,7 +2097,7 @@ fn a_reply_of_a_sidecar_is_recorded_with_the_identifiers_of_its_request() {
         events.recv().unwrap();
         events.recv().unwrap();
         sidecars.stop();
-        writer.flush(Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         return;
     }
     let (_, replies) = replies_of_child(
@@ -2158,7 +2155,7 @@ fn the_failure_of_a_sidecar_is_the_failed_reply_of_its_pending_requests() {
             .unwrap();
         let failure = failures.recv().unwrap();
         sidecars.stop();
-        writer.flush(Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         // The parent reads the reason from the output of the child.
         println!("reason: {}", failure.reason);
         return;
@@ -2291,7 +2288,7 @@ fn standard_io_sidecar_first_answer_after_spawn_is_recorded() {
     sidecars.stop();
     // Turning the trace off joins the sampler, so no process that it started outlives the check.
     soksak_host::performance::command(serde_json::json!({"action": "off"})).unwrap();
-    writer.flush(FLUSH_LIMIT).unwrap();
+    writer.flush().unwrap();
     let records_of_the_run = records::read_events(writer.path());
     soksak_host::event_record::use_host_event_log(None);
     assert!(
@@ -2452,7 +2449,7 @@ fn stops_at_the_fourth_failure_within_the_window() {
         "refused send failure = {refused:?}"
     );
     sidecars.stop();
-    writer.flush(Duration::from_secs(5)).unwrap();
+    writer.flush().unwrap();
     let events = records::read_events(&records::event_log_path(writer_folder.path()));
     assert!(
         events.iter().any(
@@ -2517,7 +2514,7 @@ fn surface_open_clears_the_restart_limit() {
     send_at(&clock, &sidecars, &window, "s1", Duration::from_secs(43)).unwrap();
     // The restarted sidecar does not read its input and ends at the terminate signal of the stop.
     sidecars.stop();
-    writer.flush(Duration::from_secs(5)).unwrap();
+    writer.flush().unwrap();
     let events = records::read_events(&records::event_log_path(writer_folder.path()));
     let reset = events
         .iter()
@@ -2559,7 +2556,7 @@ fn enable_clears_the_restart_limit_of_its_sidecars() {
     sidecars.plugin_enabled("plugin-a");
     send_at(&clock, &sidecars, &window, "s2", Duration::from_secs(42)).unwrap();
     sidecars.stop();
-    writer.flush(Duration::from_secs(5)).unwrap();
+    writer.flush().unwrap();
     let events = records::read_events(&records::event_log_path(writer_folder.path()));
     let reset = events
         .iter()

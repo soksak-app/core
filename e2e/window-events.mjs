@@ -21,7 +21,7 @@ export async function openAndCloseWindow(s) {
   await child.presented();
   await child.close();
   return untilEventLine(configDir, offsets,
-    (line) => line.startsWith("info host host.window.event:") && line.includes('"kind":"closed"'), 30000,
-    reading(s.app, WINDOW_EVENT_READS));
+    (line) => line.startsWith("info host host.window.event:") && line.includes('"kind":"closed"'),
+    { ...reading(s.app, WINDOW_EVENT_READS), ended: s.client.ended });
 }
 

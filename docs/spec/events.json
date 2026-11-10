@@ -733,54 +733,6 @@
       },
       "description": "One decision of the keyboard of the page workbench: `cause` is what asked for it (`ring` a move of the focus ring, `press` the release of a left press of the page, `placed` the answer of a drawn placement, `responder` a first responder that reached the workbench, `modal` a change of the modal state, `focusin` and `focusout` the element focus), `target` the surface it chose or null for the workbench, `sent` and `owed` the state before it, `decided` whether a released press waits for this decision, and `decision` whether it sent the call `surfaceFocus` (`send`), sent it for the same target (`same`), waited for a placement that holds the target (`wait`), or kept the keyboard in an open modal (`modal`)."
     },
-    "host.call.timeout": {
-      "layer": "host",
-      "class": "call",
-      "level": "error",
-      "fields": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "type": "object",
-        "properties": {
-          "plugin": {
-            "type": "string"
-          },
-          "command": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "plugin",
-          "command"
-        ]
-      },
-      "description": "A command that the exposure relay forwarded to a surface page got no reply within its declared time limit: plugin is the plugin of the surface and command is the forwarded method (docs/spec/exposure.md#errors)."
-    },
-    "host.trace.call.late-reply": {
-      "layer": "host",
-      "class": "call",
-      "level": "debug",
-      "fields": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "type": "object",
-        "properties": {
-          "plugin": {
-            "type": "string"
-          },
-          "command": {
-            "type": "string"
-          },
-          "delay": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "plugin",
-          "command",
-          "delay"
-        ]
-      },
-      "description": "A reply to a forwarded command arrived after its time limit, and the relay refused it: delay is the time in milliseconds from the send of the command to the reply (docs/spec/exposure.md#errors)."
-    },
     "host.trace.exposure.request": {
       "layer": "host",
       "class": "call",
@@ -849,7 +801,7 @@
           "held"
         ]
       },
-      "description": "An exposure reply matched no waiting request, and the host refused it: held says where the relay keeps the id, as other-target (a request of another document waits under it), expired, ended, or none (the relay holds no request under it)."
+      "description": "An exposure reply matched no waiting request, and the host refused it: held says where the relay keeps the id, as other-target (a request of another document waits under it), ended (the request ended before this reply), or none (the relay holds no request under it)."
     },
     "host.call.peer-lost": {
       "layer": "host",

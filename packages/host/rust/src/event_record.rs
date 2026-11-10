@@ -483,7 +483,6 @@ pub fn emit_host_placed(
     level: Level,
     event: &str,
     fields: serde_json::Value,
-    deadline: std::time::Duration,
 ) -> Result<(String, u64), String> {
     if !event.starts_with("host.") {
         return Err(format!("the event {event:?} does not start with host."));
@@ -494,17 +493,18 @@ pub fn emit_host_placed(
     let Some(log) = log else {
         return Err("the event log of the host is not attached".to_string());
     };
-    let seq = log.emit_placed_fields(level, event, fields, deadline)?;
+    let seq = log.emit_placed_fields(level, event, fields)?;
     Ok((log.boot().to_string(), seq))
 }
 
-/// Waits until the records written so far are in the event log, at most `deadline`. The paths that end the process (a panic
+/// Waits until the records written so far are in the event log; the answer of the writer or its end ends the wait
+/// (docs/spec/logging.md#writers). The paths that end the process (a panic
 /// hook, a fatal handler) call it, so the record of the failure is stored before the process ends. Without an attached
 /// writer there is nothing to wait for: the records wait in the start buffer, and the standard error holds the failure.
-pub fn flush_records(deadline: std::time::Duration) -> Result<(), String> {
+pub fn flush_records() -> Result<(), String> {
     let log = records().log.clone();
     match log {
-        Some(log) => log.flush(deadline),
+        Some(log) => log.flush(),
         None => Ok(()),
     }
 }

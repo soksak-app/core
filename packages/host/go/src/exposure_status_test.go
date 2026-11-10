@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"sync"
 	"testing"
-	"time"
+	"unsafe"
 )
 
 // A connection that starts watching host.window after its earlier watch ended receives the next status of the window,
@@ -137,7 +137,7 @@ func pendingSurface(t *testing.T, s *Surfaces, surface string) <-chan ExposureRe
 	reply := make(chan ExposureResult, 1)
 	sent := make(chan struct{})
 	go func() {
-		reply <- s.requestSurface(surface, RelayCall{}, 0, func(uint64) error {
+		reply <- s.requestSurface(surface, func(uint64) error {
 			close(sent)
 			return nil
 		})
@@ -185,7 +185,7 @@ func TestARequestAfterTheReloadIsRefusedUntilTheNewPageStarts(t *testing.T) {
 	s, _ := reloadFixture()
 	s.askPageToReload(func() {})
 	sent := false
-	reply := s.requestSurface("tab", RelayCall{}, time.Second, func(uint64) error {
+	reply := s.requestSurface("tab", func(uint64) error {
 		sent = true
 		return nil
 	})
@@ -196,7 +196,7 @@ func TestARequestAfterTheReloadIsRefusedUntilTheNewPageStarts(t *testing.T) {
 		t.Fatalf("reply %+v, want %d", reply, codeNoWindow)
 	}
 	s.pageStarted()
-	if reply := s.requestSurface("tab", RelayCall{}, time.Second, func(id uint64) error {
+	if reply := s.requestSurface("tab", func(id uint64) error {
 		sent = true
 		return s.host.relay.Resolve(id, relayTarget{owner: s, surface: "tab"}, ExposureResult{})
 	}); !sent || reply.Error != nil {
@@ -245,4 +245,34 @@ func TestABurstOfWindowChangesIsOneMoreReadingAfterTheLastChange(t *testing.T) {
 	if len(seen) != 2 || seen[0] != 0 || seen[1] != 100 {
 		t.Fatalf("the readings of the burst saw %v, want [0 100]", seen)
 	}
+}
+
+// contract: exposure.relay.surface-process-end-ends-its-requests
+func TestTheEndOfTheProcessOfASurfacePageEndsTheRequestsToThatSurface(t *testing.T) {
+	// The end of the process of a surface page steps on the main thread (surfaceTerminated).
+	useStepFramework(t)
+	s, other := reloadFixture()
+	s.streams = NewDocumentStreams()
+	handle := unsafe.Pointer(new(int))
+	s.named = map[uintptr]string{uintptr(handle): "tab"}
+	const viewID = 987654
+	nativeViews[viewID] = &nativeWebview{owner: s, id: viewID, handle: handle}
+	t.Cleanup(func() { delete(nativeViews, viewID) })
+	mine := pendingSurface(t, s, "tab")
+	sibling := pendingSurface(t, s, "other-tab")
+	theirs := pendingSurface(t, other, "tab")
+	s.surfaceTerminated(viewID)
+	if reply := <-mine; reply.Error == nil || reply.Error.Code != codeNoWindow {
+		t.Fatalf("reply %+v, want %d", reply, codeNoWindow)
+	}
+	for name, reply := range map[string]<-chan ExposureResult{"another surface": sibling, "another window": theirs} {
+		select {
+		case got := <-reply:
+			t.Fatalf("the request to %s ended: %+v", name, got)
+		default:
+		}
+	}
+	s.host.relay.Abandon(func(relayTarget) bool { return true })
+	<-sibling
+	<-theirs
 }

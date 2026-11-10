@@ -14,7 +14,6 @@ import (
 	"syscall"
 	"testing"
 	"testing/fstest"
-	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/src/platform"
@@ -223,7 +222,7 @@ func recordClosedOnSignal(t *testing.T, directory string) {
 		t.Fatal(err)
 	}
 	<-quit
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	host.UseHostEventLog(nil)

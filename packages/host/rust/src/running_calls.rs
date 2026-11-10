@@ -1,9 +1,10 @@
 //! The host calls of each window that have not returned. A reload of a page waits until every call that the page sent has its
-//! reply (docs/spec/native-host.md#page-reload), so a reload that times out names the calls of its window that still run.
+//! reply (docs/spec/native-host.md#page-reload), so a reload that ends before its page reported ready names the calls of its
+//! window that still run.
 
 use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard, PoisonError};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 /// One call that has not returned: its window, its name and its start.
 struct Running {
@@ -77,11 +78,10 @@ impl RunningCalls {
     }
 }
 
-/// The error of a reload whose page did not report ready within `timeout`, with the running calls of its window.
-pub fn reload_timeout_text(timeout: Duration, running: &str) -> String {
-    format!(
-        "the reloaded page did not report ready within {timeout:?}; running host calls: {running}"
-    )
+/// The error of a reload that `end`, the close of its window or the end of its page process, ended before its page reported
+/// ready, with the running calls of its window.
+pub fn reload_end_text(end: &str, running: &str) -> String {
+    format!("{end} before the reloaded page reported ready; running host calls: {running}")
 }
 
 /// The host calls of every window of the process.

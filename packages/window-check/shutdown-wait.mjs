@@ -10,13 +10,15 @@ import { existsSync } from "node:fs";
 /**
  * Resolves with `{ closedMs }`, the time from `from` (a Date.now() value taken before the request that ends the application)
  * to the end of `client`, when `endpointFile` does not exist at that moment. It rejects with an error that names the file
- * when the file exists then, and with the limit when the connection does not end within `limit` ms.
+ * when the file exists then. It has no time limit: the end of the connection ends it.
  */
-export function untilShutdown(client, endpointFile, { from, limit }) {
+export function untilShutdown(client, endpointFile, options) {
+  if (typeof options?.from !== "number" || Object.hasOwn(options, "limit")) {
+    return Promise.reject(new TypeError("untilShutdown takes { from } and no limit: the wait ends by the end of the connection"));
+  }
+  const { from } = options;
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`endpoint connection did not end within ${limit}ms`)), limit);
     client.ended.then(() => {
-      clearTimeout(timer);
       const closedMs = Date.now() - from;
       if (existsSync(endpointFile)) {
         reject(new Error(`${endpointFile} exists ${closedMs}ms after the request; the host removes it before its process ends`));

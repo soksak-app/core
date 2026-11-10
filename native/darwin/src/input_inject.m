@@ -748,7 +748,7 @@ static id viewFacts(NSView *view, NSWindow *window) {
     return facts;
 }
 
-// Records, at the level error, a press or release that the document of target did not receive within the limit: the web view
+// Records, at the level error, a press or release whose wait ended before the document of target received it: the web view
 // whose receipt was awaited, the view the press reached when it was sent (nil when it was not sent) and its page, and the key
 // state of window, so a press that reached another page is told from a page that did not answer.
 static void logUnreceived(NSWindow *window, WKWebView *target, NSView *reached, NSString *type, double x, double y) {
@@ -781,9 +781,9 @@ static WKWebView *webViewAt(NSWindow *window, double x, double y) {
 }
 
 static void pointerThen(SPPointer *pointer, void *handle, double x, double y, int phase, int button, double deltaX, double deltaY,
-    int clicks, double timeoutSeconds, sp_input_done done, void *context);
-static void afterWebViewsActive(NSWindow *window, WKWebView *target, BOOL waitForAll,
-    void (^done)(void), void (^waitCreated)(SPInputActivityWait *));
+    int clicks, sp_input_done done, void *context);
+static void afterWebViewsActive(NSWindow *window, WKWebView *target, BOOL waitForAll, void (^done)(void),
+    void (^ended)(NSString *end, NSArray<NSString *> *unresolved), void (^waitCreated)(SPInputActivityWait *));
 
 // One request of sp_input_pointer_then that waits for its turn. It keeps its window and a copy of the borrowed pointer name until
 // it starts or its window closes.
@@ -791,7 +791,7 @@ static void afterWebViewsActive(NSWindow *window, WKWebView *target, BOOL waitFo
 @public
     NSWindow *window;
     char *name;
-    double x, y, deltaX, deltaY, timeoutSeconds;
+    double x, y, deltaX, deltaY;
     int phase, button, clicks;
     sp_input_done done;
     void *context;
@@ -806,7 +806,7 @@ static void afterWebViewsActive(NSWindow *window, WKWebView *target, BOOL waitFo
 @end
 
 static void pointerStart(void *handle, const char *name, double x, double y, int phase, int button, double deltaX,
-    double deltaY, int clicks, double timeoutSeconds, sp_input_done done, void *context);
+    double deltaY, int clicks, sp_input_done done, void *context);
 
 // The injected pointer requests of the application run one at a time, in the order in which they reached the main thread: the
 // answer of a request is the event that starts the next (docs/spec/exposure.md#named-pointers). A request that waits for its
@@ -826,7 +826,7 @@ static void startPointerRequests(void) {
         pointerRequestRuns = YES;
         // The request is released when it answers, which may happen inside pointerStart.
         pointerStart(request->window, request->name, request->x, request->y, request->phase, request->button, request->deltaX,
-            request->deltaY, request->clicks, request->timeoutSeconds, pointerRequestAnswered, request);
+            request->deltaY, request->clicks, pointerRequestAnswered, request);
     }
     pointerRequestsStarting = NO;
 }
@@ -858,9 +858,9 @@ static void observePointerRequestWindows(void) {
 }
 
 void sp_input_pointer_then(void *handle, const char *name, double x, double y, int phase, int button, double deltaX,
-    double deltaY, int clicks, double timeoutSeconds, sp_input_done done, void *context) {
+    double deltaY, int clicks, sp_input_done done, void *context) {
     if (!NSThread.isMainThread) {
-        pointerStart(handle, name, x, y, phase, button, deltaX, deltaY, clicks, timeoutSeconds, done, context);
+        pointerStart(handle, name, x, y, phase, button, deltaX, deltaY, clicks, done, context);
         return;
     }
     observePointerRequestWindows();
@@ -874,7 +874,6 @@ void sp_input_pointer_then(void *handle, const char *name, double x, double y, i
     request->deltaX = deltaX;
     request->deltaY = deltaY;
     request->clicks = clicks;
-    request->timeoutSeconds = timeoutSeconds;
     request->done = done;
     request->context = context;
     [pointerRequests addObject:request];
@@ -882,20 +881,20 @@ void sp_input_pointer_then(void *handle, const char *name, double x, double y, i
 }
 
 static void pointerStart(void *handle, const char *name, double x, double y, int phase, int button, double deltaX,
-    double deltaY, int clicks, double timeoutSeconds, sp_input_done done, void *context) {
+    double deltaY, int clicks, sp_input_done done, void *context) {
     NSWindow *window = (__bridge NSWindow *)handle;
     SPPointer *pointer = NSThread.isMainThread ? pointerNamed(name) : nil;
     NSPoint at = window && NSThread.isMainThread ? windowPoint(window, x, y) : NSZeroPoint;
     // A press that has no target before the open layout reaches the screen waits for that, and all input waits behind it.
     if (!(window && NSThread.isMainThread && surfaceLayoutHoldCall(window, phase == 1, at.x, at.y, ^{
-            pointerThen(pointer, window, x, y, phase, button, deltaX, deltaY, clicks, timeoutSeconds, done, context);
+            pointerThen(pointer, window, x, y, phase, button, deltaX, deltaY, clicks, done, context);
         }))) {
-        pointerThen(pointer, handle, x, y, phase, button, deltaX, deltaY, clicks, timeoutSeconds, done, context);
+        pointerThen(pointer, handle, x, y, phase, button, deltaX, deltaY, clicks, done, context);
     }
 }
 
 static void pointerThen(SPPointer *pointer, void *handle, double x, double y, int phase, int button, double deltaX, double deltaY,
-    int clicks, double timeoutSeconds, sp_input_done done, void *context) {
+    int clicks, sp_input_done done, void *context) {
     NSWindow *window = (__bridge NSWindow *)handle;
     if (!pointer || !window || !NSThread.isMainThread || (button != 0 && button != 1)) {
         pointerNow(pointer, handle, x, y, phase, button, deltaX, deltaY, clicks, done, context);
@@ -904,39 +903,54 @@ static void pointerThen(SPPointer *pointer, void *handle, double x, double y, in
     const char *reason = NULL;
     if (phase == 0 && !keyForInput(window) && !heldBy(pointer, window, pageAt(window, windowPoint(window, x, y)), 0, NO, &reason)
         && enterVirtual(window)) {
-        // WebKit drops a move until the page has heard that it is active, so the move waits for the state of the web views.
+        // WebKit drops a move until the page has heard that it is active, so the move waits for the state of the web views. The
+        // wait has no limit: the report of each web view ends it, and so do the ends of a web view.
         __block BOOL finished = NO;
         afterWebViewsActive(window, nil, YES, ^{
             if (finished) return;
             finished = YES;
             pointerNow(pointer, handle, x, y, phase, button, deltaX, deltaY, clicks, done, context);
-        }, nil);
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(timeoutSeconds * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        }, ^(NSString *end, NSArray<NSString *> *unresolved) {
             if (finished) return;
             finished = YES;
-            logPointer(pointer, x, y, phase, button, deltaX, deltaY, clicks, SP_INPUT_UNRECEIVED, "the web views did not hear the virtual key window within the limit", nil);
+            NSString *why = [NSString stringWithFormat:@"the web views did not hear the virtual key window before %@", end];
+            logPointer(pointer, x, y, phase, button, deltaX, deltaY, clicks, SP_INPUT_UNRECEIVED, why.UTF8String, nil);
             done(context, SP_INPUT_UNRECEIVED, NULL);
-        });
+        }, nil);
         return;
     }
     NSView *pressed = pointerTarget(pointer, window, windowPoint(window, x, y), phase, button);
     while (pressed && ![pressed isKindOfClass:WKWebView.class]) pressed = pressed.superview;
     WKWebView *target = (WKWebView *)pressed;
     if (phase == 4 && target) {
+        // A window that is minimized or not shown presents nothing until it shows, so its scroll is refused in its turn.
+        if (!window.isVisible || window.isMiniaturized) {
+            logPointer(pointer, x, y, phase, button, deltaX, deltaY, clicks, SP_INPUT_UNRECEIVED,
+                "the window is not shown, so the scroll target presents nothing until it shows", nil);
+            done(context, SP_INPUT_UNRECEIVED, NULL);
+            return;
+        }
         // A wheel event received before the scroll tree of a new document is rendered does not move the document. The event is
-        // delivered after the target web view has rendered its current state. When it does not render within the timeout, the event is not delivered and the failure is reported.
+        // delivered after the target web view has rendered its current state; the ends of the web view end the wait without it.
         __block BOOL finished = NO;
+        __block id ends = nil;
+        ends = [webviewInputObserveEnd(target, ^(NSString *end) {
+            if (finished) return;
+            finished = YES;
+            [ends release];
+            ends = nil;
+            NSString *why = [NSString stringWithFormat:@"the scroll target did not present before %@", end];
+            logPointer(pointer, x, y, phase, button, deltaX, deltaY, clicks, SP_INPUT_UNRECEIVED, why.UTF8String, nil);
+            done(context, SP_INPUT_UNRECEIVED, NULL);
+        }) retain];
         [target _doAfterNextPresentationUpdate:^{
             if (finished) return;
             finished = YES;
+            webviewInputForgetEnd(ends);
+            [ends release];
+            ends = nil;
             pointerNow(pointer, handle, x, y, phase, button, deltaX, deltaY, clicks, done, context);
         }];
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(timeoutSeconds * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            if (finished) return;
-            finished = YES;
-            logPointer(pointer, x, y, phase, button, deltaX, deltaY, clicks, SP_INPUT_UNRECEIVED, "the scroll target did not present within the limit", nil);
-            done(context, SP_INPUT_UNRECEIVED, NULL);
-        });
         return;
     }
     if (phase != 1 && phase != 3) {
@@ -967,10 +981,14 @@ static void pointerThen(SPPointer *pointer, void *handle, double x, double y, in
     // The view that the press or release reaches when it is sent, which deliverPointer chooses in the same way.
     __block NSView *reached = nil;
     @try {
-        webviewInputSendThen(target, type, timeoutSeconds, ^BOOL {
+        webviewInputSendThen(target, type, ^SPInputSend {
             reached = [pointerTarget(pointer, window, windowPoint(window, x, y), phase, button) retain];
             result = pointerInput(pointer, handle, x, y, phase, button, deltaX, deltaY, clicks, &held);
-            return result == SP_INPUT_DELIVERED;
+            if (result != SP_INPUT_DELIVERED) return SPInputSendRefused;
+            // A press or release that reached another view never reaches the awaited document, which ends its wait in this turn.
+            NSView *page = reached;
+            while (page && ![page isKindOfClass:WKWebView.class]) page = page.superview;
+            return page == target ? SPInputSendDelivered : SPInputSendElsewhere;
         }, ^(BOOL received) {
             sp_input_result final = result == SP_INPUT_DELIVERED && received ? SP_INPUT_DELIVERED :
                 result == SP_INPUT_DELIVERED ? SP_INPUT_UNRECEIVED : result;
@@ -978,7 +996,7 @@ static void pointerThen(SPPointer *pointer, void *handle, double x, double y, in
             [reached release];
             reached = nil;
             logPointer(pointer, x, y, phase, button, deltaX, deltaY, clicks, final,
-                final == SP_INPUT_UNRECEIVED ? "the document did not receive the press or release within the limit" : held.why, held.holder);
+                final == SP_INPUT_UNRECEIVED ? "the document did not receive the press or release" : held.why, held.holder);
             heldDone(done, context, final, held);
         });
     } @finally {
@@ -1010,7 +1028,7 @@ static void collectVisibleWebViews(NSView *view, NSMutableArray<WKWebView *> *fo
 
 - (BOOL)installIfActivationPending:(BOOL)pending store:(void (^)(SPInputActivityWait *))store {
     if (!pending) {
-        [self finishAtTimeout];
+        [self finish];
         return NO; // silent: a completed activation discards this late waiter after releasing its completion callback.
     }
     store(self);
@@ -1047,7 +1065,7 @@ static void collectVisibleWebViews(NSView *view, NSMutableArray<WKWebView *> *fo
     return unresolved;
 }
 
-- (NSArray<NSString *> *)finishAtTimeout {
+- (NSArray<NSString *> *)finish {
     if (_finished) return @[];
     NSArray<NSString *> *unresolved = [[self unresolvedIdentifiers] copy];
     _finished = YES;
@@ -1065,12 +1083,12 @@ static void collectVisibleWebViews(NSView *view, NSMutableArray<WKWebView *> *fo
 
 @end
 
-NSString *sp_input_activity_timeout_message(BOOL activationReady, BOOL registrationStarted,
-    NSArray<NSString *> *unresolvedIdentifiers) {
+NSString *sp_input_activity_end_message(BOOL activationReady, BOOL registrationStarted,
+    NSArray<NSString *> *unresolvedIdentifiers, NSString *end) {
     if (!activationReady) return nil;
-    if (!registrationStarted) return @"webview activity-state registration pending at timeout";
+    if (!registrationStarted) return [NSString stringWithFormat:@"webview activity-state registration pending when %@", end];
     if (unresolvedIdentifiers.count == 0) return nil;
-    return [NSString stringWithFormat:@"webview activity state timed out; unresolved members: %@",
+    return [NSString stringWithFormat:@"webview activity state not applied when %@; unresolved members: %@", end,
         [unresolvedIdentifiers componentsJoinedByString:@", "]];
 }
 
@@ -1092,22 +1110,60 @@ static NSArray<NSString *> *activityWaitIdentifiers(NSWindow *window, NSArray<WK
     return identifiers;
 }
 
-static void afterWebViewsActive(NSWindow *window, WKWebView *target, BOOL waitForAll,
-    void (^done)(void), void (^waitCreated)(SPInputActivityWait *)) {
+// The ends of a web view (webviewInputObserveEnd) end the wait with the text of the end and the members that had not reported.
+static void afterWebViewsActive(NSWindow *window, WKWebView *target, BOOL waitForAll, void (^done)(void),
+    void (^ended)(NSString *end, NSArray<NSString *> *unresolved), void (^waitCreated)(SPInputActivityWait *)) {
     dispatch_async(dispatch_get_main_queue(), ^{
         NSMutableArray<WKWebView *> *views = [NSMutableArray array];
         if (target) [views addObject:target];
         else if (waitForAll) collectVisibleWebViews(window.contentView.superview ?: window.contentView, views, YES);
         if (views.count == 0) { if (waitCreated) waitCreated(nil); done(); return; }
+        NSMutableArray *ends = [NSMutableArray array];
+        void (^stop)(void) = ^{
+            for (id token in ends) webviewInputForgetEnd(token);
+            [ends removeAllObjects];
+        };
         SPInputActivityWait *activityWait = [[[SPInputActivityWait alloc]
-            initWithIdentifiers:activityWaitIdentifiers(window, views) completion:done] autorelease];
+            initWithIdentifiers:activityWaitIdentifiers(window, views) completion:^{ stop(); done(); }] autorelease];
         if (waitCreated) waitCreated(activityWait);
+        // A step that ended before this turn finished the wait, which then observes and registers nothing.
+        if ([activityWait unresolvedIdentifiers].count == 0) return;
+        for (WKWebView *view in views) {
+            [ends addObject:webviewInputObserveEnd(view, ^(NSString *end) {
+                NSArray<NSString *> *unresolved = [activityWait finish];
+                stop();
+                ended(end, unresolved);
+            })];
+        }
         [activityWait startWithRegistration:^(NSUInteger index, NSString *identifier,
             sp_input_activity_member_completion completion) {
             (void)identifier;
             [views[index] _doAfterActivityStateUpdate:completion];
         }];
     });
+}
+
+// The ends that the next press or key event of the application fires, each once: a step that macOS refuses without an event ends
+// there, as the layout hold does (docs/spec/native-surfaces.md#layout-transaction).
+static NSMutableArray<void (^)(void)> *nextInputEnds;
+
+static id onNextInput(void (^ended)(void)) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        nextInputEnds = [[NSMutableArray alloc] init];
+        surfaceInputActionObserve(^(NSEvent *event) {
+            NSArray<void (^)(void)> *ends = [[nextInputEnds copy] autorelease];
+            [nextInputEnds removeAllObjects];
+            for (void (^end)(void) in ends) end();
+        });
+    });
+    id token = [[ended copy] autorelease];
+    [nextInputEnds addObject:token];
+    return token;
+}
+
+static void forgetNextInput(id token) {
+    if (token) [nextInputEnds removeObjectIdenticalTo:token];
 }
 
 static void report(sp_activate_done done, void *context, sp_activate_result result) {
@@ -1117,83 +1173,104 @@ static void report(sp_activate_done done, void *context, sp_activate_result resu
     done(context, result, name.UTF8String);
 }
 
-static void activateWindow(NSWindow *window, WKWebView *target, BOOL waitForAll, double timeoutSeconds, sp_activate_done done, void *context) {
+static void activateWindow(NSWindow *window, WKWebView *target, BOOL waitForAll, sp_activate_done done, void *context) {
     if (!window || !NSThread.isMainThread) { report(done, context, SP_ACTIVATE_REJECTED); return; }
+    // macOS sends no notification for a window that cannot become key or is minimized, so such a window is refused in its turn.
+    if (!window.canBecomeKeyWindow || window.isMiniaturized) { report(done, context, SP_ACTIVATE_NOT_KEY); return; }
     // A real activation replaces the virtual state before its order, which the virtual key window would refuse.
     sp_input_virtual_end("activate");
     NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
     __block bool finished = false;
+    // Whether the activation step or the key window step runs; the webview step follows them.
     __block bool waiting = true;
-    __block id keyObserver = nil;
-    __block id appObserver = nil;
+    NSMutableArray *observers = [NSMutableArray array];
+    __block id inputEnd = nil;
     __block SPInputActivityWait *activityWait = nil;
-    void (^stopWaiting)(void) = ^{
-        if (!waiting) return;
-        waiting = false;
-        [center removeObserver:keyObserver];
-        [center removeObserver:appObserver];
+    void (^stopObserving)(void) = ^{
+        for (id observer in observers) [center removeObserver:observer];
+        [observers removeAllObjects];
+        forgetNextInput(inputEnd);
+        [inputEnd release];
+        inputEnd = nil;
     };
     void (^finish)(sp_activate_result) = ^(sp_activate_result result) {
         if (finished) return;
         finished = true;
-        stopWaiting();
+        waiting = false;
+        stopObserving();
+        [activityWait finish];
         [activityWait release];
         activityWait = nil;
         report(done, context, result);
+    };
+    // The activation step and the key window step end without their notification at an event that macOS gives for the refusal
+    // instead of one: the next press or key event of the application, the close of the window, or another window that becomes key.
+    void (^stepEnded)(NSString *) = ^(NSString *end) {
+        if (!waiting) return;
+        sp_log_info("input inject", [NSString stringWithFormat:@"the %@ step of the activation ended: %@",
+            NSApp.isActive ? @"key window" : @"activation", end].UTF8String);
+        finish(NSApp.isActive ? SP_ACTIVATE_NOT_KEY : SP_ACTIVATE_REFUSED);
     };
     // Checks that the window is still active after the web view sent its activity state. Another application or window can take focus in between.
     void (^applied)(void) = ^{
         finish(NSApp.isActive && window.isKeyWindow ? SP_ACTIVATE_DONE : SP_ACTIVATE_LOST);
     };
-    // The order of the key window notification and the application activation notification is not defined, so the check runs on both notifications.
-    void (^check)(void) = ^{
-        if (!waiting || !NSApp.isActive || !window.isKeyWindow) return;
-        stopWaiting();
-        afterWebViewsActive(window, target, waitForAll, applied, ^(SPInputActivityWait *wait) {
+    // The webview step: each visible web view reports that it sent the active state. The loss of the activation of the application
+    // or of the window ends it at once, and the close of the window and the ends of a web view end it as pending.
+    void (^webviews)(void) = ^{
+        waiting = false;
+        stopObserving();
+        [observers addObject:sp_observe_notification("input_inject.app_resign", SP_OBSERVE_RECORD,
+            NSApplicationDidResignActiveNotification, NSApp, nil, ^(NSNotification *note) { finish(SP_ACTIVATE_LOST); })];
+        [observers addObject:sp_observe_notification("input_inject.key_resign", SP_OBSERVE_RECORD,
+            NSWindowDidResignKeyNotification, window, nil, ^(NSNotification *note) { finish(SP_ACTIVATE_LOST); })];
+        void (^pending)(NSString *, NSArray<NSString *> *) = ^(NSString *end, NSArray<NSString *> *unresolved) {
+            if (finished) return;
+            NSString *message = sp_input_activity_end_message(YES, activityWait != nil, unresolved, end);
+            if (message) sp_log_error("input inject", message.UTF8String);
+            finish(SP_ACTIVATE_PENDING);
+        };
+        [observers addObject:sp_observe_notification("input_inject.activate_close", SP_OBSERVE_RECORD,
+            NSWindowWillCloseNotification, window, nil, ^(NSNotification *note) {
+                pending(@"the window closed", [activityWait finish]);
+            })];
+        afterWebViewsActive(window, target, waitForAll, applied, pending, ^(SPInputActivityWait *wait) {
             [wait installIfActivationPending:!finished store:^(SPInputActivityWait *installed) {
                 [activityWait release];
                 activityWait = [installed retain];
             }];
         });
     };
-    // The system can refuse an activation request (cooperative activation in macOS 14), and the user can move focus to
-    // another application right after activation. The timeout applies to the whole of activation and web view state transmission, so the stage at which it stopped is always reported.
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(timeoutSeconds * NSEC_PER_SEC)),
-        dispatch_get_main_queue(), ^{
-            if (finished) return;
-            if (!waiting) {
-                NSArray<NSString *> *unresolved = [activityWait finishAtTimeout];
-                NSString *timeoutMessage = sp_input_activity_timeout_message(YES, activityWait != nil, unresolved);
-                if (timeoutMessage) sp_log_error("input inject", timeoutMessage.UTF8String);
-                finish(SP_ACTIVATE_PENDING);
-            } else finish(NSApp.isActive ? SP_ACTIVATE_NOT_KEY : SP_ACTIVATE_REFUSED);
-        });
+    // The order of the key window notification and the application activation notification is not defined, so the check runs on both notifications.
+    void (^check)(void) = ^{
+        if (waiting && NSApp.isActive && window.isKeyWindow) webviews();
+    };
     if (NSApp.isActive && window.isKeyWindow) {
-        waiting = false;
-        afterWebViewsActive(window, target, waitForAll, applied, ^(SPInputActivityWait *wait) {
-            [wait installIfActivationPending:!finished store:^(SPInputActivityWait *installed) {
-                [activityWait release];
-                activityWait = [installed retain];
-            }];
-        });
+        webviews();
         return;
     }
-    keyObserver = sp_observe_notification("input_inject.key_window", SP_OBSERVE_RECORD, NSWindowDidBecomeKeyNotification, window, nil,
-        ^(NSNotification *note) { check(); });
-    appObserver = sp_observe_notification("input_inject.app_active", SP_OBSERVE_RECORD, NSApplicationDidBecomeActiveNotification, NSApp, nil,
-        ^(NSNotification *note) { check(); });
+    [observers addObject:sp_observe_notification("input_inject.key_window", SP_OBSERVE_RECORD, NSWindowDidBecomeKeyNotification, nil, nil,
+        ^(NSNotification *note) {
+            if (note.object == window) check();
+            else if (NSApp.isActive) stepEnded(@"another window became the key window");
+        })];
+    [observers addObject:sp_observe_notification("input_inject.app_active", SP_OBSERVE_RECORD, NSApplicationDidBecomeActiveNotification, NSApp,
+        nil, ^(NSNotification *note) { check(); })];
+    [observers addObject:sp_observe_notification("input_inject.activate_close", SP_OBSERVE_RECORD, NSWindowWillCloseNotification, window, nil,
+        ^(NSNotification *note) { stepEnded(@"the window closed"); })];
+    inputEnd = [onNextInput(^{ stepEnded(@"the application received a press or key event"); }) retain];
     [window makeKeyAndOrderFront:nil];
     [NSApp activateIgnoringOtherApps:YES];
 }
 
-void sp_input_activate(void *handle, double timeoutSeconds, sp_activate_done done, void *context) {
-    activateWindow((__bridge NSWindow *)handle, nil, YES, timeoutSeconds, done, context);
+void sp_input_activate(void *handle, sp_activate_done done, void *context) {
+    activateWindow((__bridge NSWindow *)handle, nil, YES, done, context);
 }
 
-void sp_input_activate_at(void *handle, double x, double y, double timeoutSeconds, sp_activate_done done, void *context) {
+void sp_input_activate_at(void *handle, double x, double y, sp_activate_done done, void *context) {
     NSWindow *window = (__bridge NSWindow *)handle;
     WKWebView *target = window && NSThread.isMainThread ? webViewAt(window, x, y) : nil;
-    activateWindow(window, target, NO, timeoutSeconds, done, context);
+    activateWindow(window, target, NO, done, context);
 }
 
 typedef struct { const char *name; unsigned short code; } SPKey;

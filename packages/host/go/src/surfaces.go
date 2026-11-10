@@ -526,6 +526,13 @@ type Surfaces struct {
 	// modalPaintChange closes and is replaced at every change of the modal state (modals.go), which wakes the waits of
 	// host.window.presented for the first paint of the open modal.
 	modalPaintChange chan struct{}
+	// waitEnds closes and is replaced at each end that ends the waits of the window for its page: the close of the window and
+	// the end of the process of its main page (endWaits). waitsEnded is the end that still holds, which a wait that begins after it
+	// meets at once: the close of the window, or the end of the page process until a new page starts. lastEnd is the last end.
+	// mu protects the three.
+	waitEnds   chan struct{}
+	waitsEnded string
+	lastEnd    string
 	// workbenchDialog is true while a dialog that the workbench draws itself is open (SetDialogBackground).
 	workbenchDialog bool
 	shapes          map[string]*nativeShape
@@ -1495,7 +1502,7 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 			// Without waiting, a surface resize would show the previous raster while the region is enlarged
 			// (docs/spec/surface-composition.md).
 			return waitSurfaceRasters(win.Name(), &req.Ticket, s.refreshImageRasters, func() error {
-				err := s.images.WaitLayoutRasters(noWaitLimit, req.Settled)
+				err := s.images.WaitLayoutRasters(req.Settled)
 				if errors.Is(err, errLayoutWaitEnded) {
 					return nil
 				}

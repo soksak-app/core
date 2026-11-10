@@ -31,6 +31,8 @@ test("a window that other windows cover completely still opens, draws and leaves
     };
     const s = {
       app: { configDir },
+      // The connection of the fixture stays open, so the event line wait ends only by its line.
+      client: { ended: new Promise(() => {}) },
       window: "main",
       run: async (name) => { calls.push(name); return null; },
       windows: async () => [{ window: "main", ready: true }, { window: "w2", ready: true }],

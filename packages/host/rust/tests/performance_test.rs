@@ -80,7 +80,7 @@ fn the_process_holds_the_switch_and_no_file_does() {
         performance::command(json!({"action": "off"})).unwrap();
         assert!(!performance::enabled(), "the trace is on after off");
         observe();
-        writer.flush(Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         return;
     }
     let config = in_child("the_process_holds_the_switch_and_no_file_does");
@@ -125,7 +125,7 @@ fn the_switch_gates_every_host_trace_event() {
         emit(2);
         performance::command(json!({"action": "off"})).unwrap();
         emit(3);
-        writer.flush(Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         return;
     }
     let config = in_child("the_switch_gates_every_host_trace_event");
@@ -147,7 +147,7 @@ fn already_off_writes_nothing() {
     if let Some(config) = std::env::var_os(CHILD) {
         let writer = records::start_writer(std::path::Path::new(&config));
         performance::command(json!({"action": "off"})).unwrap();
-        writer.flush(Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         return;
     }
     let config = in_child("already_off_writes_nothing");
@@ -250,7 +250,7 @@ fn the_sampler_reads_every_registered_process() {
         sleeper.kill().unwrap();
         sleeper.wait().unwrap();
         performance::command(json!({"action": "off"})).unwrap();
-        writer.flush(Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         return;
     }
     let config = in_child("the_sampler_reads_every_registered_process");
@@ -299,7 +299,7 @@ fn surface_lifecycle_events_hold_the_geometry() {
         );
         performance::surface("destroyed", "s1", None);
         performance::command(json!({"action": "off"})).unwrap();
-        writer.flush(Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         return;
     }
     let config = in_child("surface_lifecycle_events_hold_the_geometry");
@@ -374,7 +374,7 @@ fn the_sampler_reads_the_processes_of_every_window() {
         page.wait().unwrap();
         document.kill().unwrap();
         document.wait().unwrap();
-        writer.flush(Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         let samples = trace_fields(&config, "host.sampler.memory");
         let page_record = samples
             .iter()
@@ -496,7 +496,7 @@ fn the_sampler_divides_the_footprint_of_each_process() {
         performance::command(json!({"action": "off"})).unwrap();
         page.kill().unwrap();
         page.wait().unwrap();
-        writer.flush(Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         return;
     }
     let config = in_child("the_sampler_divides_the_footprint_of_each_process");

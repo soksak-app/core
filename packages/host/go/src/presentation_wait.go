@@ -61,12 +61,9 @@ type presentationWait struct {
 }
 
 // presentationEnds are reasons that end a presentation wait. Cancellation is separate because it aborts its layout transaction.
-// input is a press or key event that ended the hold, and closed is the native close of the view; no wait ends by time
-// (docs/spec/native-surfaces.md#layout-transaction).
+// input is a press or key event that ended the hold, and closed is the close of the view, by the native view or by the close of the
+// documents of its surface; no wait ends by time (docs/spec/native-surfaces.md#layout-transaction).
 var presentationEnds = map[string]bool{"presented": true, "process-ended": true, "hidden": true, "unresponsive": true, "input": true, "closed": true}
-
-// nativeEnds are the ends that the native join reports of itself.
-var nativeEnds = map[string]bool{"input": true, "closed": true}
 
 // prepare records the placements and returns the visible root views whose placement or generation changed.
 func (w *presentationWait) prepare(ticket uint64, placements []Placement, generations map[string]uint64) []Placement {
@@ -128,7 +125,18 @@ func (w *presentationWait) end(surface, reason string) (bool, error) {
 }
 
 // endFor ends a wait only when ticket and generation still identify that wait. Zero identifiers match the current wait for lifecycle events.
+// An end of the host abandons the native join of the wait.
 func (w *presentationWait) endFor(surface string, ticket, generation uint64, reason string) (bool, error) {
+	return w.finish(surface, ticket, generation, reason, false)
+}
+
+// endedNatively ends the wait that ticket and generation identify by an end that its native join reported of itself, which leaves
+// no native join to abandon.
+func (w *presentationWait) endedNatively(surface string, ticket, generation uint64, reason string) (bool, error) {
+	return w.finish(surface, ticket, generation, reason, true)
+}
+
+func (w *presentationWait) finish(surface string, ticket, generation uint64, reason string, native bool) (bool, error) {
 	if !presentationEnds[reason] {
 		return false, fmt.Errorf("presentation wait ends with %q, which is not an end", reason)
 	}
@@ -171,8 +179,9 @@ func (w *presentationWait) endFor(surface string, ticket, generation uint64, rea
 	}
 	tracePresentationJoin("abandoned", surface, join.generation, join.ticket, false, reason)
 	EmitHost(LevelDebug, "host.trace.view.presentation-abandoned", map[string]any{"surface": surface, "reason": reason})
-	// An end of the native join itself, an input that ended the hold or the close of the view, leaves no native join to abandon.
-	if join.abandon != nil && !nativeEnds[reason] {
+	// An end of the native join itself, an input that ended the hold or the native close of the view, leaves no native join to
+	// abandon.
+	if join.abandon != nil && !native {
 		if err := join.abandon(); err != nil {
 			return true, fmt.Errorf("ending the native join of view %s: %w", surface, err)
 		}
@@ -311,7 +320,7 @@ func (s *Surfaces) joinViewForPresentation(window platform.Window, ticket uint64
 	}, func(reason string) {
 		// The native join ended by itself, by a press or key event that ended the hold or by the close of the view, so the end
 		// abandons no native join.
-		if err := system.EnqueueUI(func() { s.endPresentationWaitFor(surface, ticket, generation, reason) }); err != nil {
+		if err := system.EnqueueUI(func() { s.endNativePresentationWait(surface, ticket, generation, reason) }); err != nil {
 			LogError("view channel", err)
 		}
 	})
@@ -344,6 +353,17 @@ func (s *Surfaces) endPresentationWait(surface, reason string) {
 
 func (s *Surfaces) endPresentationWaitFor(surface string, ticket, generation uint64, reason string) {
 	abandoned, err := s.presentation.endFor(surface, ticket, generation, reason)
+	s.presentationWaitEnded(surface, reason, abandoned, err)
+}
+
+// endNativePresentationWait ends the wait that ticket and generation identify by an end that its native join reported of itself.
+func (s *Surfaces) endNativePresentationWait(surface string, ticket, generation uint64, reason string) {
+	abandoned, err := s.presentation.endedNatively(surface, ticket, generation, reason)
+	s.presentationWaitEnded(surface, reason, abandoned, err)
+}
+
+// presentationWaitEnded reports the end of a presentation wait: an error of the end and the abandonment to the page.
+func (s *Surfaces) presentationWaitEnded(surface, reason string, abandoned bool, err error) {
 	if err != nil {
 		LogError("view channel", err)
 	}

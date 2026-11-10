@@ -1,16 +1,16 @@
 // Checks the page side of the commands of a view (docs/spec/native-surfaces.md#view-surfaces): a command that the page runs for
-// its exposure request is sent to the view and answered by the reply of the view. The post and the reports are fakes.
+// its exposure request is sent to the view and answered by the reply of the view. A command has no time limit: its reply, the
+// close of its surface or the end of the view ends it. The post and the reports are fakes.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createViewCommands } from "../view-commands.js";
 
-function setup({ timeoutOf = () => undefined, post = async () => {} } = {}) {
+function setup({ post = async () => {} } = {}) {
   const posted = [];
   const reports = [];
   const commands = createViewCommands({
     plugin: "probe",
     post: async (message) => { posted.push(message); return post(message); },
-    timeoutOf,
     report: (event) => reports.push(event),
   });
   return { commands, posted, reports };
@@ -46,26 +46,29 @@ test("a native stale-source disposition resolves the command without converting 
   const cancellation = { cancelled: true, sourceGeneration: 4 };
   const { commands } = setup({ post: async () => cancellation });
   try {
-    const result = await Promise.race([
-      commands.run("probe.read", { status: "lines" }).then((value) => ({ value })),
-      tick().then(() => ({ pending: true })),
-    ]);
-    assert.deepEqual(result, { value: cancellation });
+    assert.deepEqual(await commands.run("probe.read", { status: "lines" }), cancellation);
   } finally {
     commands.close();
   }
 });
 
-test("a command without a reply in its declared time limit rejects, and its late reply is counted", async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
-  const { commands, posted, reports } = setup({ timeoutOf: () => 50 });
+test("createViewCommands takes no time limit of a command", () => {
+  assert.throws(() => createViewCommands({ plugin: "probe", post: async () => {}, report: () => {}, timeoutOf: () => 50 }),
+    { name: "TypeError", message: /timeoutOf/ }, "the command layer of a view accepted a time limit of a command");
+});
+
+// contract: exposure.command.ends-by-reply-or-peer-end
+test("a command without a reply starts no timer and stays open until the surface closes", async (t) => {
+  const { commands, posted, reports } = setup();
+  const timers = t.mock.method(globalThis, "setTimeout");
   const result = commands.run("probe.run", null);
   await tick();
-  t.mock.timers.tick(50);
-  await assert.rejects(result, { message: "command probe.run did not reply within 50ms" });
-  assert.deepEqual(reports.map((event) => event.kind), ["open-calls", "timeout", "open-calls"]);
-  commands.receive({ surface: "probe-surface", plugin: "probe", id: posted[0].id, result: null });
-  assert.equal(reports.at(-1).kind, "late-reply");
+  assert.equal(posted.length, 1, "the command was not posted to the view");
+  assert.equal(timers.mock.callCount(), 0, "the command layer of a view started a timer for a command");
+  assert.deepEqual(reports.map((event) => event.kind), ["open-calls"]);
+  commands.close();
+  await assert.rejects(result, { message: "command probe.run ended: surface-closed" });
+  assert.deepEqual(reports.map((event) => event.kind), ["open-calls", "peer-lost", "open-calls"]);
 });
 
 test("closing the surface rejects the open command runs and reports the peer loss", async () => {

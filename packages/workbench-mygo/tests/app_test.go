@@ -9,7 +9,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -309,10 +308,10 @@ func TestAPlacementAnsweredAfterTheWorkbenchEndedStatesNothing(t *testing.T) {
 	stored := &storedHost{installed: installedSessionView, common: map[string]any{"memorySaverDelay": 30},
 		projects: []map[string]any{storedProject(tab("tab-bbbbbb", "session"))}}
 	viewPlacements(stored)
-	presenting, release := make(chan struct{}, 8), make(chan struct{})
+	presenting, release := make(chan struct{}, 8), newGate()
 	stored.extra["presentSurfaces"] = func(context.Context, json.RawMessage) (any, error) {
 		presenting <- struct{}{}
-		<-release
+		release.wait()
 		return nil, errors.New("surface preparation 9 is no longer current")
 	}
 	var mu sync.Mutex
@@ -339,7 +338,7 @@ func TestAPlacementAnsweredAfterTheWorkbenchEndedStatesNothing(t *testing.T) {
 	before := len(changes)
 	mu.Unlock()
 	app.Close(window)
-	close(release)
+	release.open()
 	queue.drain(t)
 	mu.Lock()
 	defer mu.Unlock()
@@ -361,14 +360,11 @@ func TestCloseRequestStoresThePlaneAndClosesTheWindow(t *testing.T) {
 	}
 }
 
-// started waits for one start of the workbench of the window.
-func (w *appWindow) started(t *testing.T, stored *storedHost) {
+// started runs the steps until one start of the workbench of the window, the call StartWorkbench, and takes that start.
+func (w *appWindow) started(t *testing.T, queue steps) {
 	t.Helper()
-	select {
-	case <-w.starts:
-	case <-time.After(10 * time.Second):
-		t.Fatalf("the workbench did not start again; the calls are %v", stored.calls)
-	}
+	queue.until(t, func() bool { return len(w.starts) > 0 })
+	<-w.starts
 }
 
 // A change of the installed plugins saves the projects and starts the workbench again, and one start covers the changes before it.
@@ -381,7 +377,7 @@ func TestPluginsChangedStartsTheWorkbenchAgain(t *testing.T) {
 	app.Emit(window, "plugins-changed", map[string]any{"action": "install", "plugin": "probe"})
 	app.Emit(window, "plugins-changed", map[string]any{"action": "enable", "plugin": "probe"})
 	queue.drain(t)
-	window.started(t, stored)
+	window.started(t, queue)
 	queue.drain(t)
 	if len(window.starts) != 0 {
 		t.Fatal("two changes started the workbench twice")
@@ -400,7 +396,7 @@ func TestPluginsChangedWaitsForTheStart(t *testing.T) {
 	}
 	app.Shown(window)
 	queue.drain(t)
-	window.started(t, stored)
+	window.started(t, queue)
 }
 
 // core.plugins.apply starts the workbench again as a change of the plugins does.
@@ -413,7 +409,7 @@ func TestPluginsApplyStartsTheWorkbenchAgain(t *testing.T) {
 	app.Emit(window, "exposure-request", map[string]any{"id": 8, "method": "command.run",
 		"params": map[string]any{"name": "core.plugins.apply", "params": map[string]any{}}})
 	queue.drain(t)
-	window.started(t, stored)
+	window.started(t, queue)
 	if len(*replies) != 1 || (*replies)[0]["result"].(map[string]any)["reloaded"] != true {
 		t.Fatalf("the replies are %v", *replies)
 	}
@@ -423,9 +419,9 @@ func TestPluginsApplyStartsTheWorkbenchAgain(t *testing.T) {
 // that made the change answers (docs/spec/installation.md#applying-a-change).
 func TestAPluginChangeStartsAfterTheReplyOfARunningCommand(t *testing.T) {
 	stored := &storedHost{}
-	release := make(chan struct{})
+	release := newGate()
 	stored.extra = map[string]workbench.HostCall{
-		"pluginsRun": func(context.Context, json.RawMessage) (any, error) { <-release; return nil, nil },
+		"pluginsRun": func(context.Context, json.RawMessage) (any, error) { release.wait(); return nil, nil },
 	}
 	app, window, queue, replies := fixtureApp(t, stored)
 	tester := ui.NewTester(app.Build(window), 1200, 800)
@@ -439,9 +435,9 @@ func TestAPluginChangeStartsAfterTheReplyOfARunningCommand(t *testing.T) {
 	if len(window.starts) != 0 {
 		t.Fatal("the workbench started again before the command that changed the plugins answered")
 	}
-	close(release)
+	release.open()
 	window.settle(t, queue, tester)
-	window.started(t, stored)
+	window.started(t, queue)
 	answered := slices.IndexFunc(*replies, func(reply map[string]any) bool { return reply["id"] == float64(8) })
 	if answered < 0 || (*replies)[answered]["error"] != nil {
 		t.Fatalf("core.plugins.enable did not answer before the new start: the replies are %v", *replies)
@@ -499,14 +495,10 @@ func TestABackgroundSessionWaitsForTheImageDetachOfItsTab(t *testing.T) {
 		t.Fatalf("the session opened during the detach: %s", <-sent)
 	}
 	app.Emit(window, "image-detach-ended", map[string]any{"surface": "tab-bbbbbb", "error": nil})
-	queue.drain(t)
-	select {
-	case line := <-sent:
-		if !strings.Contains(line, `"operation":"open"`) {
-			t.Fatalf("the host received %s", line)
-		}
-	case <-time.After(10 * time.Second):
-		t.Fatalf("the session did not open after the detach; the calls are %v", stored.calls)
+	// The session opens with the host call sidecarSend, which the end of the detach starts.
+	queue.until(t, func() bool { return len(sent) > 0 })
+	if line := <-sent; !strings.Contains(line, `"operation":"open"`) {
+		t.Fatalf("the host received %s", line)
 	}
 }
 

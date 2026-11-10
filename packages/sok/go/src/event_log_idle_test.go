@@ -166,7 +166,7 @@ func TestEventsAfterTheFirstWaitForTheBatch(t *testing.T) {
 	}
 	w.log.Emit(LevelInfo, "writer.idle.second", map[string]any{})
 	w.log.Emit(LevelInfo, "writer.idle.third", map[string]any{})
-	if err := w.log.Flush(5 * time.Second); err != nil {
+	if err := w.log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	if writes := w.wrote(); writes != 1 {
@@ -250,7 +250,7 @@ func TestAWriterThatSleepsTakesTheSourceAtTheEnd(t *testing.T) {
 	w := idleLog(t, time.Hour)
 	log, source := w.log, w.source
 	source.hold("native.idle.flushed")
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	if !fileHas(t, log.Path(), "native.idle.flushed") {
@@ -303,7 +303,7 @@ func TestAFlushThatAFlushFindsBehindItIsAnswered(t *testing.T) {
 	}
 	t.Cleanup(log.Close)
 	armed.Store(true)
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	<-second
@@ -334,38 +334,21 @@ func TestAFlushThatAStopFindsBehindItIsAnswered(t *testing.T) {
 	}
 	armed.Store(true)
 	log.Close()
+	// The answer is received directly; a flush that is never answered is reported by the limit of the test run.
 	<-second
 	if !fileHas(t, log.Path(), "writer.flush.behind") {
 		t.Fatal("the event behind the flush was not stored")
 	}
 }
 
-// A writer that does not answer leaves its caller the deadline, and the error names it.
-// contract: log.writer.flush-at-exit
-func TestAFlushThatGetsNoAnswerReportsItsDeadline(t *testing.T) {
-	useEventLogFilesystemPlatform(t)
-	log, err := StartEventLog(EventLogOptions{
-		Directory: t.TempDir(), Role: "host", Boot: "idle", Layer: "host", Clock: func() uint64 { return 1 },
-		Spawn:       func(string, func()) {},
-		QueueEvents: 64, QueueBytes: 1 << 20, BatchInterval: time.Hour,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := log.Flush(time.Millisecond); err == nil || !strings.Contains(err.Error(), "within") {
-		t.Fatalf("Flush of a writer that does not answer returned %v", err)
-	}
-}
-
-// A writer that ended cannot answer, and its caller learns that at once and not as a deadline that passed.
+// A writer that ended cannot answer, and its caller learns that at once with the end of the writer. A flush takes no time
+// limit, so the answer is received directly.
 // contract: log.writer.flush-behind-a-flush-or-a-stop-is-answered
+// contract: log.writer.flush-at-exit
 func TestAFlushOfAWriterThatEndedSaysSo(t *testing.T) {
 	log := idleLog(t, time.Hour).log
 	log.Close()
-	answered := make(chan error, 1)
-	go func() { answered <- log.Flush(time.Hour) }()
-	err := <-answered
-	if err == nil || !strings.Contains(err.Error(), "ended") || strings.Contains(err.Error(), "within") {
+	if err := log.Flush(); err == nil || err.Error() != "the event writer ended before it answered the flush" {
 		t.Fatalf("Flush of a writer that ended returned %v", err)
 	}
 }

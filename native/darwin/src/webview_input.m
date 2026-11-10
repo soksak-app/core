@@ -7,6 +7,7 @@
 #import "application_log.h"
 #import "event_ring.h"
 #import "observe.h"
+#import "surface_layout.h"
 // _setIgnoresMouseMoveEvents: controls only pointer tracking and does not disable keyboard, click, or
 // drag input. The AppKit hit test selects the web view that receives those events.
 #import "private/webkit.h"
@@ -34,7 +35,8 @@ static void refreshPointerCursor(WKWebView *view, NSEvent *event) {
 }
 
 // Script that reports the trusted pointer events the document received. It runs in a content world
-// separate from the page, and marks that world so a wait that ends at its limit can ask whether the document holds the listener.
+// separate from the page, and marks that world so a wait that ends without its receipt can ask whether the document holds the
+// listener.
 static NSString *const kReceiptWorld = @"soksak-input";
 static NSString *const kReceiptMessage = @"soksakInputReceipt";
 static NSString *const kReceiptScript =
@@ -42,20 +44,99 @@ static NSString *const kReceiptScript =
     " for (const type of ['pointerdown', 'pointerup', 'click']) addEventListener(type, (event) => {"
     " if (event.isTrusted) webkit.messageHandlers.soksakInputReceipt.postMessage(type); }, true);";
 
+@class SPInputReceipts;
+@class SPInputRegistration;
+
+// The key-value context of the responsiveness of the web process of an observed view.
+static char responsivenessContext;
+// The source of the observation of that responsiveness.
+static const char *const kResponsivenessSource = "webview_input.responsiveness";
+
+// The events of a web view that end a wait for it: the close of the window that the view had when the observation began, the report of
+// WebKit that the web process of the view stopped answering, and the end of the input registration of the view.
+typedef NS_ENUM(NSInteger, SPInputViewEndKind) {
+    SPInputViewEndClosed,
+    SPInputViewEndUnresponsive,
+    SPInputViewEndUnregistered,
+};
+
+// The observation of the ends of one web view. It retains the view until it fires or stops, so the view and its registration live
+// while it observes them; it fires once.
+@interface SPInputViewEnd : NSObject
+@property(nonatomic, retain) WKWebView *view;
+@property(nonatomic, copy) void (^ended)(SPInputViewEndKind kind, NSString *end);
+@property(nonatomic, retain) id closeObserver;
+@property(nonatomic) BOOL observesResponsiveness;
+// The registration of the view, which holds this observation in its ends until it fires or stops.
+@property(nonatomic, assign) SPInputRegistration *registration;
+- (void)stop;
+- (void)fire:(SPInputViewEndKind)kind end:(NSString *)end;
+@end
+
+static SPInputViewEnd *observeViewEnd(WKWebView *view, void (^ended)(SPInputViewEndKind kind, NSString *end));
+
+// A receipt wait. Its view end retains the web view until the wait ends.
 @interface SPInputWait : NSObject
 @property(nonatomic, copy) NSString *type;
 @property(nonatomic, copy) void (^done)(BOOL);
+// The receipts of the view, which hold the wait until it ends.
+@property(nonatomic, assign) SPInputReceipts *receipts;
+@property(nonatomic, retain) WKWebView *view;
+@property(nonatomic, retain) SPInputViewEnd *viewEnd;
 @end
 @implementation SPInputWait
-- (void)dealloc { [_type release]; [_done release]; [super dealloc]; }
+- (void)dealloc { [_type release]; [_done release]; [_view release]; [_viewEnd release]; [super dealloc]; }
 @end
 
 // The receipt waits of one web view. The user content controller retains this object.
 @interface SPInputReceipts : NSObject <WKScriptMessageHandler>
 @property(nonatomic, retain) NSMutableArray<SPInputWait *> *waits;
-// The time at which the last wait of each type ended at its limit, until a receipt of that type arrives.
+// The time at which the last wait of each type ended without its receipt, until a receipt of that type arrives.
 @property(nonatomic, retain) NSMutableDictionary<NSString *, NSDate *> *ended;
 @end
+
+// The waits whose event the input context of their view takes first: the next press or key event of the application ends them.
+static NSMutableArray<SPInputWait *> *inputMethodWaits;
+
+// Removes wait from the waits of its view and stops what it observes. Returns NO when the wait has already ended.
+static BOOL takeWait(SPInputWait *wait) {
+    SPInputReceipts *handler = wait.receipts;
+    // silent: a wait that another end already took answers NO, so only the first end answers it.
+    if (!handler || ![handler.waits containsObject:wait]) return NO;
+    [[wait retain] autorelease];
+    [handler.waits removeObject:wait];
+    [inputMethodWaits removeObject:wait];
+    [wait.viewEnd stop];
+    wait.viewEnd = nil;
+    return YES;
+}
+
+// Answers an ended wait once and lets its view go.
+static void answer(SPInputWait *wait, BOOL received) {
+    wait.view = nil;
+    wait.done(received);
+}
+
+// Ends a receipt wait without its receipt: records the event that ended it, notes the time for a receipt that comes later, and
+// records whether the document of the view holds the receipt listener, which the web process answers (or fails to answer) after this
+// turn.
+static void endWithout(SPInputWait *wait, NSString *reason) {
+    WKWebView *view = [[wait.view retain] autorelease];
+    SPInputReceipts *handler = [[wait.receipts retain] autorelease];
+    if (!takeWait(wait)) return;
+    NSString *type = wait.type;
+    sp_log_error("webview input", [NSString stringWithFormat:@"wait for %@ ended: %@", type, reason].UTF8String);
+    handler.ended[type] = [NSDate date];
+    [view evaluateJavaScript:@"globalThis.soksakInputReceipts === true" inFrame:nil
+        inContentWorld:[WKContentWorld worldWithName:kReceiptWorld] completionHandler:^(id value, NSError *error) {
+            NSString *listener = error ? [NSString stringWithFormat:@"not answered: %@", error.localizedDescription]
+                : [value isEqual:@YES] ? @"present" : @"absent";
+            sp_log_error("webview input", [NSString stringWithFormat:@"the receipt listener of the document at the end of the wait for %@: %@",
+                type, listener].UTF8String);
+        }];
+    answer(wait, NO);
+}
+
 @implementation SPInputReceipts
 - (void)dealloc { [_waits release]; [_ended release]; [super dealloc]; }
 - (void)userContentController:(WKUserContentController *)controller didReceiveScriptMessage:(WKScriptMessage *)message {
@@ -67,17 +148,15 @@ static NSString *const kReceiptScript =
     // One event answers every wait of its type: the sender of a press and the monitor of its origin wait for the same event.
     BOOL answered = NO;
     for (SPInputWait *wait in [[self.waits copy] autorelease]) {
-        if (![wait.type isEqualToString:message.body] || ![self.waits containsObject:wait]) continue;
-        [[wait retain] autorelease];
-        [self.waits removeObject:wait];
-        wait.done(YES);
+        if (![wait.type isEqualToString:message.body] || !takeWait(wait)) continue;
+        answer(wait, YES);
         answered = YES;
     }
     if (answered) return;
-    // A receipt after the limit of its wait tells a late document from one that never received the event.
+    // A receipt after the end of its wait tells a late document from one that never received the event.
     NSDate *ended = self.ended[message.body];
     if (ended) {
-        sp_log_error("webview input", [NSString stringWithFormat:@"receipt of %@ arrived %.0f ms after its wait ended at the limit",
+        sp_log_error("webview input", [NSString stringWithFormat:@"receipt of %@ arrived %.0f ms after its wait ended",
             message.body, -ended.timeIntervalSinceNow * 1000].UTF8String);
         [self.ended removeObjectForKey:message.body];
         return;
@@ -96,6 +175,8 @@ static NSString *const kReceiptScript =
 // The address of the web view, which identifies the registration in its records. It is text, so the registration does not
 // retain the web view.
 @property(nonatomic, copy) NSString *identifier;
+// The observations of the ends of the view, which the end of the registration fires.
+@property(nonatomic, retain) NSMutableArray<SPInputViewEnd *> *ends;
 - (void)end;
 @end
 
@@ -116,11 +197,8 @@ static void recordInputPhase(NSString *identifier, const char *phase) {
     if (!self.controller) return;
     [self.controller removeScriptMessageHandlerForName:kReceiptMessage contentWorld:[WKContentWorld worldWithName:kReceiptWorld]];
     self.controller = nil;
-    NSArray *waits = [[self.receipts.waits copy] autorelease];
-    [self.receipts.waits removeAllObjects];
-    for (SPInputWait *wait in waits) {
-        sp_log_info("webview input", [NSString stringWithFormat:@"wait for %@ ended by the end of the registration", wait.type].UTF8String);
-        wait.done(NO);
+    for (SPInputViewEnd *viewEnd in [[self.ends copy] autorelease]) {
+        [viewEnd fire:SPInputViewEndUnregistered end:@"the input registration of the web view ended"];
     }
 }
 - (void)dealloc {
@@ -129,8 +207,41 @@ static void recordInputPhase(NSString *identifier, const char *phase) {
     recordInputPhase(self.identifier, "released");
     [_receipts release];
     [_identifier release];
+    [_ends release];
     [super dealloc];
 }
+@end
+
+@implementation SPInputViewEnd
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {
+    if (context != &responsivenessContext) {
+        [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
+        return;
+    }
+    sp_observe_delivered(kResponsivenessSource);
+    if (![(WKWebView *)object _webProcessIsResponsive]) [self fire:SPInputViewEndUnresponsive end:@"the web process stopped answering"];
+}
+- (void)fire:(SPInputViewEndKind)kind end:(NSString *)end {
+    void (^ended)(SPInputViewEndKind, NSString *) = [[self.ended retain] autorelease];
+    [[self retain] autorelease];
+    [self stop];
+    if (ended) ended(kind, end);
+}
+- (void)stop {
+    if (self.closeObserver) {
+        [NSNotificationCenter.defaultCenter removeObserver:self.closeObserver];
+        self.closeObserver = nil;
+    }
+    if (self.observesResponsiveness) {
+        [self.view removeObserver:self forKeyPath:@"_webProcessIsResponsive" context:&responsivenessContext];
+        self.observesResponsiveness = NO;
+    }
+    [self.registration.ends removeObject:self];
+    self.registration = nil;
+    self.ended = nil;
+    self.view = nil;
+}
+- (void)dealloc { [_view release]; [_ended release]; [_closeObserver release]; [super dealloc]; }
 @end
 
 static const char registrationKey;
@@ -146,22 +257,34 @@ static BOOL hasPendingMouseDrain(WKWebView *view) {
     return NO;
 }
 
-// Ends a receipt wait at its limit: records it, notes the time for a receipt that comes later, and records whether the document
-// of view holds the receipt listener, which the web process answers (or fails to answer) after this turn.
-static void endAtLimit(WKWebView *view, SPInputReceipts *handler, SPInputWait *wait, NSTimeInterval timeout) {
-    NSString *type = wait.type;
-    sp_log_error("webview input", [NSString stringWithFormat:@"receipt of %@ did not arrive within %g seconds", type, timeout].UTF8String);
-    handler.ended[type] = [NSDate date];
-    [view evaluateJavaScript:@"globalThis.soksakInputReceipts === true" inFrame:nil
-        inContentWorld:[WKContentWorld worldWithName:kReceiptWorld] completionHandler:^(id value, NSError *error) {
-            NSString *answer = error ? [NSString stringWithFormat:@"not answered: %@", error.localizedDescription]
-                : [value isEqual:@YES] ? @"present" : @"absent";
-            sp_log_error("webview input", [NSString stringWithFormat:@"the receipt listener of the document at the limit of %@: %@",
-                type, answer].UTF8String);
-        }];
-    [[wait retain] autorelease];
-    [handler.waits removeObject:wait];
-    wait.done(NO);
+static SPInputViewEnd *observeViewEnd(WKWebView *view, void (^ended)(SPInputViewEndKind kind, NSString *end)) {
+    SPInputViewEnd *viewEnd = [[SPInputViewEnd new] autorelease];
+    viewEnd.view = view;
+    viewEnd.ended = ended;
+    NSWindow *window = view.window;
+    if (window) {
+        viewEnd.closeObserver = sp_observe_notification("webview_input.window_close", SP_OBSERVE_RECORD, NSWindowWillCloseNotification,
+            window, nil, ^(NSNotification *note) { [viewEnd fire:SPInputViewEndClosed end:@"the window closed"]; });
+    }
+    if ([view respondsToSelector:@selector(_webProcessIsResponsive)]) {
+        viewEnd.observesResponsiveness = sp_observe_key_path(kResponsivenessSource, SP_OBSERVE_RECORD, view, viewEnd,
+            @"_webProcessIsResponsive", 0, &responsivenessContext);
+    }
+    SPInputRegistration *registration = objc_getAssociatedObject(view, &registrationKey);
+    if (registration.controller) {
+        viewEnd.registration = registration;
+        [registration.ends addObject:viewEnd];
+    }
+    return viewEnd;
+}
+
+id webviewInputObserveEnd(WKWebView *view, void (^ended)(NSString *end)) {
+    NSCAssert(NSThread.isMainThread, @"Webview input ends belong to the main thread");
+    return observeViewEnd(view, ^(SPInputViewEndKind kind, NSString *end) { ended(end); });
+}
+
+void webviewInputForgetEnd(id token) {
+    [(SPInputViewEnd *)token stop];
 }
 
 static void installReceipts(WKWebView *view) {
@@ -181,41 +304,78 @@ static void installReceipts(WKWebView *view) {
     registration.controller = controller;
     registration.receipts = handler;
     registration.identifier = [NSString stringWithFormat:@"%p", view];
+    registration.ends = [NSMutableArray array];
     objc_setAssociatedObject(view, &registrationKey, registration, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     recordInputPhase(registration.identifier, "registered");
 }
 
-void webviewInputReceive(WKWebView *view, NSString *type, NSTimeInterval timeout, void (^done)(BOOL received)) {
-    NSCAssert(NSThread.isMainThread, @"Webview input receipts require the main thread");
-    SPInputReceipts *handler = receiptsFor(view);
-    if (!handler) { done(YES); return; }
+// Begins a receipt wait of view: it ends at the ends of the view, besides the ends that its caller asks for. The end of the
+// registration ends it as the registration ends every wait, at the level info, because the view is going away.
+static SPInputWait *beginWait(WKWebView *view, SPInputReceipts *handler, NSString *type, void (^done)(BOOL received)) {
     SPInputWait *wait = [[SPInputWait new] autorelease];
     wait.type = type;
     wait.done = done;
+    wait.receipts = handler;
+    wait.view = view;
     [handler.waits addObject:wait];
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(timeout * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        if ([handler.waits containsObject:wait]) endAtLimit(view, handler, wait, timeout);
+    wait.viewEnd = observeViewEnd(view, ^(SPInputViewEndKind kind, NSString *end) {
+        if (kind != SPInputViewEndUnregistered) {
+            endWithout(wait, end);
+            return;
+        }
+        if (!takeWait(wait)) return;
+        sp_log_info("webview input", [NSString stringWithFormat:@"wait for %@ ended by the end of the registration", wait.type].UTF8String);
+        answer(wait, NO);
+    });
+    return wait;
+}
+
+// Ends wait at the end of the handling by WebKit of the mouse events that it was given up to the event of the wait. While the view
+// has an input context, the context takes the event first and AppKit reports its answer only to WebKit, so the end of that handling
+// proves nothing and the next press or key event that the application receives ends the wait instead.
+static void awaitHandling(WKWebView *view, SPInputWait *wait) {
+    if (view.inputContext) {
+        static dispatch_once_t once;
+        dispatch_once(&once, ^{
+            inputMethodWaits = [[NSMutableArray alloc] init];
+            surfaceInputActionObserve(^(NSEvent *event) {
+                for (SPInputWait *pending in [[inputMethodWaits copy] autorelease]) {
+                    endWithout(pending, @"the application received another press or key event");
+                }
+            });
+        });
+        [inputMethodWaits addObject:wait];
+        return;
+    }
+    if (!hasPendingMouseDrain(view)) return;
+    [view _doAfterProcessingAllPendingMouseEvents:^{
+        endWithout(wait, @"WebKit handled the mouse events without the receipt");
+    }];
+}
+
+void webviewInputReceiveThenDrain(WKWebView *view, NSString *type, void (^done)(BOOL received)) {
+    NSCAssert(NSThread.isMainThread, @"Webview input receipts require the main thread");
+    SPInputReceipts *handler = receiptsFor(view);
+    if (!handler) { done(YES); return; }
+    SPInputWait *wait = beginWait(view, handler, type, done);
+    // A local monitor sees the event before AppKit gives it to the view, so the handling of WebKit includes the event from the next
+    // turn of the main queue.
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if ([handler.waits containsObject:wait]) awaitHandling(view, wait);
     });
 }
 
-void webviewInputSendThen(WKWebView *view, NSString *type, NSTimeInterval timeout,
-    BOOL (^send)(void), void (^done)(BOOL received)) {
+void webviewInputSendThen(WKWebView *view, NSString *type, SPInputSend (^send)(void), void (^done)(BOOL received)) {
     NSCAssert(NSThread.isMainThread, @"Webview input receipts require the main thread");
     SPInputReceipts *handler = receiptsFor(view);
     if (!handler) {
-        done(send());
+        done(send() == SPInputSendDelivered);
         return;
     }
     if (!hasPendingMouseDrain(view)) { done(NO); return; }
     // The receipt is the end of the input (docs/spec/exposure.md#methods): no later step of WebKit, such as the end of its pending
     // mouse events, delays the answer.
-    SPInputWait *wait = [[SPInputWait new] autorelease];
-    wait.type = type;
-    wait.done = done;
-    [handler.waits addObject:wait];
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(timeout * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        if ([handler.waits containsObject:wait]) endAtLimit(view, handler, wait, timeout);
-    });
+    SPInputWait *wait = beginWait(view, handler, type, done);
     // After input to an image region the native drawing region can be the first responder. When the window is
     // inactive in that state, WebKit can exclude the target page from the mouse handling path, so the
     // drain callback does not arrive until the next synthetic pointer. Before waiting for the pending
@@ -227,17 +387,21 @@ void webviewInputSendThen(WKWebView *view, NSString *type, NSTimeInterval timeou
     BOOL targetOwnsResponder = first == view ||
         ([first isKindOfClass:NSView.class] && [(NSView *)first isDescendantOf:view]);
     if (window && !sp_input_virtual_through_application((__bridge void *)window) && !targetOwnsResponder) [window makeFirstResponder:view];
-    // When a timeout or an unregistration ended the wait before the drain, completion is already
-    // reported, so nothing is sent.
+    // When an end of the wait came before the drain, completion is already reported, so nothing is sent.
     void (^sendAfterDrain)(void) = ^{
         if (![handler.waits containsObject:wait]) return;
-        BOOL sent = send();
-        if (!sent && [handler.waits containsObject:wait]) {
+        SPInputSend sent = send();
+        if (sent == SPInputSendRefused) {
+            if (!takeWait(wait)) return;
             sp_log_error("webview input", [NSString stringWithFormat:@"send of %@ was refused", type].UTF8String);
-            [[wait retain] autorelease];
-            [handler.waits removeObject:wait];
-            wait.done(NO);
+            answer(wait, NO);
+            return;
         }
+        if (sent == SPInputSendElsewhere) {
+            endWithout(wait, @"the input reached another view");
+            return;
+        }
+        if ([handler.waits containsObject:wait]) awaitHandling(view, wait);
     };
     [view _doAfterProcessingAllPendingMouseEvents:sendAfterDrain];
 }

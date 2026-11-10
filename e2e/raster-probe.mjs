@@ -155,7 +155,9 @@ export async function setMeasuredColor(s, surface) {
  * then for the notification that its fake persistent sidecar opened the session. The sidecar runs as the one persistent service
  * with an endpoint. Returns `{surface, session}`.
  */
-export async function prepareRasterSession(client, request, { startupLimit = 15_000 } = {}) {
+export async function prepareRasterSession(client, request, ...rest) {
+  // A watch has no time limit: each ends by its notification, a failed answer or the close of the connection.
+  if (rest.length > 0) throw new TypeError("prepareRasterSession takes no options: its waits end by their notifications or the close of the connection");
   await request(client, "diagnostics.fixture", { window: "main", settings: {} });
   const grid = await request(client, "status.get", { window: "main", name: "core.grid" });
   const card = grid?.cards?.find((item) => item.focused)?.id;
@@ -166,9 +168,9 @@ export async function prepareRasterSession(client, request, { startupLimit = 15_
     throw new Error(`core.card.add-tab returned ${JSON.stringify(added)}, expected a raster probe tab`);
   }
   await client.watch("main", "core.surfaces",
-    (value) => value.some((item) => item.surface === surface && item.plugin === RASTER && item.visible), { timeout: startupLimit });
+    (value) => value.some((item) => item.surface === surface && item.plugin === RASTER && item.visible));
   const session = await client.watch("main", "rasterprobe.session",
-    (value) => typeof value?.session === "string" && value.connected === true && !value.error, { surface, timeout: startupLimit });
+    (value) => typeof value?.session === "string" && value.connected === true && !value.error, { surface });
   return { surface, session: session.session };
 }
 

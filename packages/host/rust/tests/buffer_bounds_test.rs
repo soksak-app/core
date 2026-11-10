@@ -186,7 +186,7 @@ fn response(name: &str, padding: usize) -> Box<RawValue> {
 
 /// The fields of the events `host.buffer.dropped` that the writer stored.
 fn drops(log: &EventLog, config: &Path) -> Vec<Value> {
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     records::read_events(&records::event_log_path(config))
         .into_iter()
         .filter(|event| event["event"] == "host.buffer.dropped")
@@ -303,40 +303,42 @@ fn a_pending_close_beyond_the_bound_is_dropped_and_the_surface_is_not_waited_for
     use_host_event_log(None);
 }
 
-// contract: buffers.relay-expired.bounded-and-counted
+/// A relayed request has no time limit, so the relay keeps no expired requests; the requests that the end of their document
+/// ended are the ones it remembers for their late replies, at most 256 of them.
+// contract: buffers.relay-ended.bounded-and-counted
 #[test]
-fn the_relay_remembers_at_most_256_expired_requests_and_counts_the_ones_it_forgets() {
+fn the_relay_remembers_at_most_256_ended_requests_and_counts_the_ones_it_forgets() {
     let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
     let config = folder::Folder::new();
     let log = roomy_writer(config.path());
     let relay = Relay::default();
     for _ in 0..256 + 5 {
-        let outcome = relay.request("doc", Some(Duration::from_millis(1)), |_| Ok(()));
-        assert!(
-            outcome.is_err(),
-            "a request without a reply did not time out"
+        let outcome = relay.request("doc", |_| {
+            relay.abandon("doc");
+            Ok(())
+        });
+        assert_eq!(
+            outcome.map(|_| ()).map_err(|failure| failure.code),
+            Err(1003),
+            "a request whose document closed did not end with 1003"
         );
     }
     let seen = drops(&log, config.path());
     assert_eq!(seen.len(), 5, "{seen:?}");
     for drop in &seen {
-        assert_eq!(drop["buffer"], "relay expired requests", "{drop}");
+        assert_eq!(drop["buffer"], "relay ended requests", "{drop}");
         assert_eq!(drop["count"], 1, "{drop}");
         assert_eq!(drop["bytes"], 0, "{drop}");
         assert_eq!(drop["reason"], "the buffer holds 256 requests", "{drop}");
     }
-    // The five oldest are forgotten, so a late reply to the first request has no matching request; the newest is remembered.
+    // The five oldest are forgotten, so a late reply to the first request has no matching request; the newest is
+    // remembered, and its late reply is an observation.
     let late = |id: u64| relay.reply("doc", &raw(&format!(r#"{{"id":{id},"result":null}}"#)));
     assert_eq!(
         late(1).unwrap_err(),
         "exposure reply 1 has no matching request"
     );
-    assert!(
-        late(261)
-            .unwrap_err()
-            .contains("its request timed out after 1 ms"),
-        "the newest expired request is forgotten"
-    );
+    assert_eq!(late(261), Ok(()), "the newest ended request is forgotten");
     use_host_event_log(None);
 }
 
@@ -371,7 +373,7 @@ fn an_event_over_the_size_bound_is_stored_cut_with_its_original_size() {
         "host.test.small",
         serde_json::json!({"text": "kept"}),
     );
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let events = records::read_events(&records::event_log_path(config.path()));
     let find = |name: &str| {
         events
@@ -398,7 +400,7 @@ fn an_event_over_the_size_bound_is_stored_cut_with_its_original_size() {
 
 /// The fields of the events `host.sidecar.write_wait` that the writer stored.
 fn write_waits(log: &EventLog, config: &Path) -> Vec<Value> {
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     records::read_events(&records::event_log_path(config))
         .into_iter()
         .filter(|event| event["event"] == "host.sidecar.write_wait")

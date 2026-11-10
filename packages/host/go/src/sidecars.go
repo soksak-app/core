@@ -172,7 +172,6 @@ type Sidecars struct {
 	// presents are the image presents of the sidecars that wait for the main thread, which the stop refuses.
 	presents            imagePresents
 	imageDetachRequests map[string]*imageDetachWaiter
-	imageDetachTimeout  time.Duration
 	// requests remembers the requests with correlation identifiers that wait for a reply (sidecar_reply.go).
 	requests requestLedger
 	// declarations protects declared, displayNames, persistent, basenames and refused.
@@ -401,7 +400,6 @@ type OutdatedSidecar struct {
 func NewSidecars(declarations []SidecarDeclaration, configDirectory string) (*Sidecars, error) {
 	c := &Sidecars{
 		imageDetachRequests: map[string]*imageDetachWaiter{},
-		imageDetachTimeout:  imageDetachTimeout,
 		declared:            map[string]string{},
 		displayNames:        map[string]string{},
 		versions:            map[string]string{},

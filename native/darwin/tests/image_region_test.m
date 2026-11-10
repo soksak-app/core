@@ -1958,7 +1958,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         double logicalInputY97 = window.contentView.isFlipped ? logicalContentPoint97.y :
             NSHeight(window.contentView.bounds) - logicalContentPoint97.y;
         SPInputResultWait logicalDown97 = {NO, SP_INPUT_REJECTED};
-        sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, logicalContentPoint97.x, logicalInputY97, 1, 0, 0, 0, 1, 2,
+        sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, logicalContentPoint97.x, logicalInputY97, 1, 0, 0, 0, 1,
             inputResultWaitDone, &logicalDown97);
         check(waitForInputResult(&logicalDown97, @"the production receipt path answers phase one")
             && logicalDown97.result == SP_INPUT_DELIVERED,
@@ -1989,7 +1989,7 @@ int main(int argc, char **argv) { @autoreleasepool {
             @"press focus: an asynchronous AppKit turn retains the press origin without a mouse event context");
         [collectedEvents removeAllObjects];
         SPInputResultWait logicalUp97 = {NO, SP_INPUT_REJECTED};
-        sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, logicalContentPoint97.x, logicalInputY97, 3, 0, 0, 0, 1, 2,
+        sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, logicalContentPoint97.x, logicalInputY97, 3, 0, 0, 0, 1,
             inputResultWaitDone, &logicalUp97);
         BOOL logicalUpDone97 = waitForInputResult(&logicalUp97, @"the production receipt path answers phase three");
         BOOL logicalUpLostFocus97 = NO;

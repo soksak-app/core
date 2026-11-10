@@ -20,8 +20,8 @@ import (
 type placingHost struct {
 	surfaceHost
 	moved float64
-	// unanswered, when it is set, holds the answer of a placement until it closes.
-	unanswered chan struct{}
+	// unanswered, when it is set, holds the answer of a placement until it opens.
+	unanswered *gate
 	// refusal, when it is set, is the error that answers a placement.
 	refusal error
 	// answered is the last answer of a placement. presented, when it is set, answers a placement in its place: the mygo host answers
@@ -61,7 +61,7 @@ func placingShell(t *testing.T) (*shellFixture, *placingHost) {
 		},
 		"presentSurfaces": func(_ context.Context, argument json.RawMessage) (any, error) {
 			if stored.unanswered != nil {
-				<-stored.unanswered
+				stored.unanswered.wait()
 			}
 			if stored.refusal != nil {
 				return nil, stored.refusal
@@ -139,8 +139,8 @@ func TestTheRuleMarginIsThePaddingThatARuleReaches(t *testing.T) {
 func TestTheVerificationFailsAPlacementTheHostLeavesUnanswered(t *testing.T) {
 	f, stored := placingShell(t)
 	resized(f, 1000)
-	stored.unanswered = make(chan struct{})
-	t.Cleanup(func() { close(stored.unanswered) })
+	stored.unanswered = newGate()
+	t.Cleanup(func() { stored.unanswered.open() })
 	resized(f, 900)
 	verify := status[workbench.VerifyStatus](t, f, "core.verify")
 	skipped := false
@@ -168,10 +168,10 @@ func TestAPlacementWhoseFrameDrewOtherLinesIsOwedAgain(t *testing.T) {
 	f, stored := placingShell(t)
 	resized(f, 1000)
 	drawnAt1000 := stored.answered
-	held := make(chan struct{})
+	held := newGate()
 	t.Cleanup(func() {
 		if stored.unanswered != nil {
-			close(held)
+			held.open()
 		}
 	})
 	stored.unanswered = held
@@ -182,7 +182,7 @@ func TestAPlacementWhoseFrameDrewOtherLinesIsOwedAgain(t *testing.T) {
 	f.tester.Frame()
 	f.pending.drain(t)
 	stored.unanswered = nil
-	close(held)
+	held.open()
 	f.pending.drain(t)
 	if verify := status[workbench.VerifyStatus](t, f, "core.verify"); verify.Failed != 0 {
 		t.Fatalf("a placement answered by a frame of other lines fails %+v", failedRows(verify))
@@ -250,7 +250,7 @@ func TestThePlacementAnsweredAfterACloseVerifiesNoPlane(t *testing.T) {
 	if len(last.Rows) == 0 {
 		t.Fatalf("the plane has no rows before the close: %+v", last)
 	}
-	stored.unanswered = make(chan struct{})
+	stored.unanswered = newGate()
 	resized(f, 900)
 	raw, err := json.Marshal(map[string]string{"id": f.host.projects[0]["id"].(string)})
 	if err != nil {
@@ -259,7 +259,7 @@ func TestThePlacementAnsweredAfterACloseVerifiesNoPlane(t *testing.T) {
 	f.shell.Registry().RunLater("core.project.close", raw, func(any, error) {})
 	f.pending.drain(t)
 	f.shell.Closed()
-	close(stored.unanswered)
+	stored.unanswered.open()
 	f.pending.drain(t)
 	if status[any](t, f, "core.project") != nil {
 		t.Fatal("the project is still shown")

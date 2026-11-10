@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::mpsc::{Receiver, RecvTimeoutError, SyncSender, TrySendError, sync_channel};
+use std::sync::mpsc::{Receiver, TrySendError, sync_channel};
 use std::sync::{Arc, PoisonError};
 use std::thread::JoinHandle;
-use std::time::Duration;
 
 use serde::Deserialize;
 use serde_json::value::RawValue;
@@ -12,8 +11,6 @@ use super::{ImageDetachWaiter, Owner, Sidecars};
 use crate::application_log::log_error;
 use crate::images::{DetachTarget, Images};
 
-/// The deadline after which an unacknowledged detach writes its error; the wait continues after it.
-pub(crate) const IMAGE_DETACH_TIMEOUT: Duration = Duration::from_secs(10);
 /// One service can serve multiple windows, so request ids share one process-wide sequence.
 static NEXT_IMAGE_DETACH_REQUEST: AtomicU64 = AtomicU64::new(1);
 
@@ -30,15 +27,13 @@ pub(crate) enum DetachOutcome {
     SessionEnded,
 }
 
-/// The wait of one detach that `begin_image_detaches` started. `timed_out` disconnects when the deadline error is
-/// recorded, or when the wait ends without it, and `thread` ends when the wait ends; they are the interface through
-/// which a check observes the wait.
+/// The wait of one detach that `begin_image_detaches` started. `thread` ends when the wait ends; it is the interface
+/// through which a check observes the wait.
 #[cfg_attr(
     not(test),
     expect(dead_code, reason = "only a check observes the wait of a detach")
 )]
 pub(crate) struct DetachWait {
-    pub timed_out: Receiver<()>,
     pub thread: JoinHandle<()>,
 }
 
@@ -142,59 +137,34 @@ pub(crate) fn begin_image_detaches<O: Owner>(
     owner: &O,
     images: &Images,
     targets: Vec<DetachTarget>,
-    timeout: Duration,
     ended_event: EndedEvent,
 ) -> Result<Vec<DetachWait>, String> {
     let mut waits = Vec::with_capacity(targets.len());
     for target in targets {
         let (request, result) = sidecars.begin_image_detach(owner, &target)?;
         images.add_pending_detach(&target, &request);
-        let (timed_out_sender, timed_out) = sync_channel(1);
         let images = images.clone();
         let ended_event = Arc::clone(&ended_event);
         let thread = std::thread::Builder::new()
             .name("image-detach-wait".to_string())
-            .spawn(move || {
-                wait_image_detach(
-                    &images,
-                    &target,
-                    &request,
-                    &result,
-                    timeout,
-                    timed_out_sender,
-                    &*ended_event,
-                )
-            })
+            .spawn(move || wait_image_detach(&images, &target, &request, &result, &*ended_event))
             .map_err(|error| format!("image detach wait thread: {error}"))?;
-        waits.push(DetachWait { timed_out, thread });
+        waits.push(DetachWait { thread });
     }
     Ok(waits)
 }
 
-/// Waits for the end of one pending detach. The deadline is a timer because a supplier that does not answer sends no
-/// event; it records that failure and does not end the wait.
+/// Waits for the end of one pending detach. The wait has no time limit and writes no record while it waits: the
+/// acknowledgement, the refusal, the end of the supplier connection and the end of the surface session end it.
 fn wait_image_detach(
     images: &Images,
     target: &DetachTarget,
     request: &str,
     result: &Receiver<DetachOutcome>,
-    timeout: Duration,
-    timed_out: SyncSender<()>,
     ended_event: &dyn Fn(serde_json::Value),
 ) {
     let text = detach_target_text(target);
-    let outcome = match result.recv_timeout(timeout) {
-        Ok(outcome) => Ok(outcome),
-        Err(RecvTimeoutError::Timeout) => {
-            log_error(
-                "image detach",
-                format!("{text} request {request} timed out"),
-            );
-            drop(timed_out);
-            result.recv().map_err(|_| ())
-        }
-        Err(RecvTimeoutError::Disconnected) => Err(()),
-    };
+    let outcome = result.recv().map_err(|_| ());
     let (failure, session) = match outcome {
         Ok(DetachOutcome::Detached) => (None, false),
         Ok(DetachOutcome::Rejected(reason)) => (

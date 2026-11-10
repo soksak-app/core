@@ -58,8 +58,7 @@ fn event_log_enforces_private_directory_and_file_modes() {
     assert_eq!(mode(&directory), 0o700, "the logs directory is private");
     assert_eq!(mode(log.path()), 0o600, "the event file is private");
     assert!(log.emit(Level::Debug, "sok.private.probe", &serde_json::json!({})));
-    log.flush(Duration::from_secs(5))
-        .expect("flush debug event");
+    log.flush().expect("flush debug event");
     assert_eq!(mode(log.debug_path()), 0o600, "the debug file is private");
     log.close();
 }

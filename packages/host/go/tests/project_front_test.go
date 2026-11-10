@@ -2,7 +2,6 @@ package host_test
 
 import (
 	"testing"
-	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
@@ -14,7 +13,7 @@ func TestAProjectFrontIsRecordedAsAnEvent(t *testing.T) {
 	log := support.StartWriter(t, config)
 	active := false
 	host.RecordProjectFront("main", "prj-one", true, &active)
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var seen []map[string]any

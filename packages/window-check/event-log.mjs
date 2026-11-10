@@ -2,7 +2,7 @@
 // `logs/host-<boot>.jsonl` for each run, and an event with level error is an error (docs/spec/logging.md#files).
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { untilFolderState } from "./folder-wait.mjs";
+import { endSignal, untilFolderState } from "./folder-wait.mjs";
 import { policyFile, readPolicy, requireStored } from "./log-policy.mjs";
 
 // The event files of the processes of the application (docs/spec/logging.md#files): the host and every sidecar service, each with its
@@ -131,15 +131,20 @@ export function readEventLines(configDir, offsets) {
 }
 
 /**
- * Waits until a whole line of an event written after offsets satisfies the predicate and returns that line. An
- * asynchronous writer writes the records to the file at every batch interval, so the files are read once the change
- * watch of the folder `logs` is active and again at each change (folder-wait.mjs); the watch reports a new file and
- * content that another process appends to a file. When the deadline passes, it rejects with an error that holds the lines
- * read. `records` names the records that the predicate reads, declared in `catalog`; a record that the policy file of the
- * folder does not store is an error at once that names the record and the policy (docs/spec/logging.md#policy), because
- * the wait would end only at its deadline.
+ * Waits until a whole line of an event written after offsets satisfies the predicate and returns those lines. An asynchronous
+ * writer writes the records to the file at every batch interval, so the files are read once the change watch of the folder `logs`
+ * is active and again at each change (folder-wait.mjs); the watch reports a new file and content that another process appends to
+ * a file. `records` names the records that the predicate reads, declared in `catalog`; a record that the policy file of the folder
+ * does not store is an error at once that names the record and the policy (docs/spec/logging.md#policy), because no line of it
+ * would ever arrive. `ended` is the end of the writer: a promise that settles when the process that writes the log ends, such as
+ * `client.ended` of its endpoint connection, which the kernel closes when the process ends. The wait has no time limit: a line
+ * that matches, an error, or the end of the writer ends it, and the end rejects with the lines read until then.
  */
-export async function untilEventLines(configDir, offsets, predicate, timeout, { catalog, records } = {}) {
+export async function untilEventLines(configDir, offsets, predicate, declared, ...rest) {
+  if (typeof declared !== "object" || declared === null || rest.length > 0) {
+    throw new TypeError("untilEventLines takes no timeout: a wait ends by its line, an error or the end of the writer of the log");
+  }
+  const { catalog, records, ended } = declared;
   if (!Array.isArray(records) || records.length === 0) {
     throw new Error("untilEventLines: the wait names no record; give { catalog, records } of the records that the predicate reads");
   }
@@ -155,13 +160,22 @@ export async function untilEventLines(configDir, offsets, predicate, timeout, { 
       return `unreadable: ${error.message}`;
     }
   };
-  return untilFolderState(join(configDir, "logs"), read, timeout,
-    () => new Error(`no event line matched within ${timeout} ms; the lines after the offsets: ${seen()}`));
+  const signal = ended === undefined ? undefined : endSignal(ended);
+  try {
+    return await untilFolderState(join(configDir, "logs"), read, { signal });
+  } catch (error) {
+    if (!signal?.aborted || error !== signal.reason) throw error;
+    // The lines that the writer wrote before it ended are read once more at its end: a matching line ends the wait with them.
+    const lines = read();
+    if (lines !== undefined) return lines;
+    throw new Error(`the writer of the log ended before an event line matched (${error?.message ?? error}); the lines after the offsets: ${seen()}`);
+  }
 }
 
-/** Returns, within timeout, the first line among the event lines written after offsets that the predicate accepts; `declared` is the { catalog, records } of untilEventLines. */
-export async function untilEventLine(configDir, offsets, predicate, timeout, declared) {
-  const lines = await untilEventLines(configDir, offsets, (all) => all.some(predicate), timeout, declared);
+/** Returns the first line among the event lines written after offsets that the predicate accepts; `declared` is the { catalog, records, ended } of untilEventLines. */
+export async function untilEventLine(configDir, offsets, predicate, declared, ...rest) {
+  if (rest.length > 0) throw new TypeError("untilEventLine takes no timeout: a wait ends by its line, an error or the end of the writer of the log");
+  const lines = await untilEventLines(configDir, offsets, (all) => all.some(predicate), declared);
   return lines.find(predicate);
 }
 

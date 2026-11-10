@@ -5,17 +5,15 @@
 // identifiers (causeCids); a reply is {id, result} or {id, error: {code, message}}; a cancel is {id, cancel: true}. The transport
 // delivers each message to the subscription. send throws when the message cannot be sent.
 //
+// A call has no time limit: its reply, its cancel or the end of its peer ends it, and the layer starts no timer
+// (docs/spec/plugin-processes.md, rule 3). A live peer that does not reply leaves its call open, and openCalls reports it.
+//
 // report(event) receives each count and each change of the open calls:
-//   {kind: "timeout", plugin, command, timeout}      a call whose declared time limit passed
 //   {kind: "peer-lost", plugin, command, reason}     a call ended by its peer; reason is one of PEER_LOST_REASONS
-//   {kind: "late-reply", plugin, command, delay}     a reply to a call that had ended; delay is in milliseconds
+//   {kind: "late-reply", plugin, command, delay}     a reply to a call that its cancel ended; delay is in milliseconds
 //   {kind: "open-calls", plugin, count, oldestStartedAt}  after each change of the open calls
 // The reports are the only output: the caller decides which of them are counted and which are written as events.
 
-/** The time limit of a command that declares none, in milliseconds (docs/spec/exposure.md, command timeout). */
-export const DEFAULT_CALL_TIMEOUT = 10000;
-/** The largest declared time limit of a command, in milliseconds. */
-export const MAX_CALL_TIMEOUT = 600000;
 /**
  * The number of ended calls whose replies are still recognized as late replies. An older ended call is forgotten, and a reply to
  * it is refused as a reply to no request. The bound keeps memory fixed for a peer that never replies.
@@ -69,22 +67,14 @@ export function createCalls({ plugin, send, onMessage, report }) {
     report({ kind: "open-calls", plugin, count, oldestStartedAt });
   };
 
-  /** Removes a call from the open calls and clears its timer and its abort listener. The caller settles the promise. */
+  /** Removes a call from the open calls and its abort listener. The caller settles the promise. */
   function end(id) {
     const call = open.get(id);
     open.delete(id);
-    clearTimeout(call.timer);
     call.detach();
     ended.set(id, { command: call.command, sent: call.sent });
     if (ended.size > ENDED_CALLS_KEPT) ended.delete(ended.keys().next().value);
     return call;
-  }
-
-  function expire(id) {
-    const call = end(id);
-    report({ kind: "timeout", plugin, command: call.command, timeout: call.timeout });
-    changed();
-    call.reject(callError(`command ${call.command} did not reply within ${call.timeout}ms`, { code: -32000 }));
   }
 
   function cancel(id) {
@@ -128,24 +118,19 @@ export function createCalls({ plugin, send, onMessage, report }) {
   /**
    * Sends a command and returns a promise of its reply.
    *
-   *     timeout   the time limit of the command from its declaration, an integer from 1 to MAX_CALL_TIMEOUT. Default DEFAULT_CALL_TIMEOUT.
    *     signal    an AbortSignal. When it aborts, the cancel message is sent and the promise rejects with reason cancelled.
    *     cids      the correlation identifiers of the cause of the request (causeCids); the envelope carries them when there are some.
    */
-  function request(command, params, { timeout = DEFAULT_CALL_TIMEOUT, signal, cids } = {}) {
+  function request(command, params, options = {}) {
     if (typeof command !== "string" || command === "") throw new TypeError("request requires a command name");
-    if (!Number.isInteger(timeout) || timeout < 1 || timeout > MAX_CALL_TIMEOUT) {
-      throw new RangeError(`timeout must be an integer from 1 to ${MAX_CALL_TIMEOUT} ms, got ${timeout}`);
-    }
+    if (Object.hasOwn(options, "timeout")) throw new TypeError("timeout is not an option of a call: a call ends by its reply, its cancel or the end of its peer");
+    const { signal, cids } = options;
     if (signal?.aborted) return Promise.reject(callError("cancelled", { reason: "cancelled" }));
     const id = ++lastId;
     const now = Date.now();
     return new Promise((resolve, reject) => {
-      const call = { command, timeout, resolve, reject, sent: now, started: now, timer: null, detach: () => {} };
+      const call = { command, resolve, reject, sent: now, started: now, detach: () => {} };
       open.set(id, call);
-      // The timer is the only time limit in the layer. A live peer that does not reply sends no event, so the declared
-      // time limit is the only signal of that state (docs/spec/plugin-processes.md, rule 3).
-      call.timer = setTimeout(() => expire(id), timeout);
       if (signal) {
         const onAbort = () => cancel(id);
         signal.addEventListener("abort", onAbort, { once: true });

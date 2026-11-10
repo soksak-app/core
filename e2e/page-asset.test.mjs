@@ -24,8 +24,8 @@ for (const app of MAIN_PAGE_APPS) {
     }
     // The error records reach the file at the next batch of the writer, so the check waits for both of them.
     const lines = await untilEventLines(app.configDir, before,
-      (all) => all.filter((line) => line.startsWith("error ") && line.includes(`missing-${process.pid}`)).length >= 2, 10000,
-      reading(app, ["host.record.error"]));
+      (all) => all.filter((line) => line.startsWith("error ") && line.includes(`missing-${process.pid}`)).length >= 2,
+      { ...reading(app, ["host.record.error"]), ended: s.client.ended });
     const errors = lines.filter((line) => line.startsWith("error "));
     assert.deepEqual(errors.filter((line) => line.includes(`missing-${process.pid}`)).sort(), [
       `error host page asset: ${first}: not found`,

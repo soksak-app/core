@@ -5,7 +5,6 @@
 mod folder;
 
 use std::process::{Command, Stdio};
-use std::time::Duration;
 
 #[path = "support/records.rs"]
 mod records;
@@ -25,7 +24,7 @@ fn a_window_event_is_recorded_as_an_event() {
         }
         // A kind outside the contract is reported on the standard error and stores nothing.
         record_window_event("main-2", "teleport");
-        writer.flush(Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         return;
     }
     let config = folder::Folder::new();

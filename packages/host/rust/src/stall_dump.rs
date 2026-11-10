@@ -3,7 +3,6 @@
 //! exist only in diagnostic builds.
 
 use std::path::Path;
-use std::time::Duration;
 
 use serde_json::{Map, Value, json};
 
@@ -32,11 +31,6 @@ pub fn parse_stall_dump(params: &Map<String, Value>) -> Result<String, Failure> 
 
 /// Stores the event `host.stall.dump`, waits until it is in the log, and returns the boot identifier of the log and the `seq` of
 /// the line.
-pub fn emit_stall_dump(path: &str, deadline: Duration) -> Result<(String, u64), String> {
-    emit_host_placed(
-        Level::Warn,
-        "host.stall.dump",
-        json!({"path": path}),
-        deadline,
-    )
+pub fn emit_stall_dump(path: &str) -> Result<(String, u64), String> {
+    emit_host_placed(Level::Warn, "host.stall.dump", json!({"path": path}))
 }

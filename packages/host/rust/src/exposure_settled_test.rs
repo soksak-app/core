@@ -2,7 +2,6 @@ use std::cell::Cell;
 
 use std::cell::RefCell;
 use std::sync::mpsc;
-use std::time::Duration;
 
 use super::{last_placement_presented, settled_frame};
 use crate::test_framework::{FixtureFrontend, WINDOW};
@@ -81,7 +80,7 @@ fn the_presented_window_waits_for_the_placement_that_its_workbench_holds() {
     let waiting = std::thread::spawn(move || {
         let order = RefCell::new(Vec::new());
         let displayed = last_placement_presented(
-            |_| {
+            || {
                 asked_tx.send(()).unwrap();
                 committed.recv().unwrap();
                 order.borrow_mut().push("placed");
@@ -97,7 +96,6 @@ fn the_presented_window_waits_for_the_placement_that_its_workbench_holds() {
                 order.borrow_mut().push("presented");
                 Ok(12.5)
             },
-            Duration::from_secs(1),
         );
         answer_tx.send((displayed, order.into_inner())).unwrap();
     });
@@ -114,16 +112,16 @@ fn the_presented_window_waits_for_the_placement_that_its_workbench_holds() {
     assert_eq!(order, ["placed", "settled", "presented"]);
 }
 
-/// A placement that fails, or a workbench that does not answer within the limit, ends the wait with that failure before
-/// the window settles.
-// contract: exposure.window-presented.waits-for-the-last-placement
+/// A placement that fails ends the wait with that failure before the window settles. The wait for the answer of the workbench
+/// has no limit: a workbench that takes the request and answers nothing keeps it open until the window closes, which ends it
+/// with 1003 that names the last placement.
+// contract: exposure.window-presented.waits-for-the-last-placement, exposure.window-presented.ends-by-events
 #[test]
 fn the_presented_window_fails_with_its_last_placement() {
     let failure = last_placement_presented(
-        |_| Err(super::internal("surface presentation failed")),
+        || Err(super::internal("surface presentation failed")),
         || panic!("the wait went on after its last placement failed"),
         || panic!("the window presented after its last placement failed"),
-        Duration::from_secs(1),
     )
     .unwrap_err();
     assert!(
@@ -132,24 +130,23 @@ fn the_presented_window_fails_with_its_last_placement() {
         failure.message
     );
 
-    let limit = Duration::from_millis(20);
     let relay = super::Relay::default();
-    let asked = Cell::new(Duration::ZERO);
     let failure = last_placement_presented(
-        |within| {
-            asked.set(within);
-            // The workbench takes the request and answers nothing.
+        || {
+            // The workbench takes the request and answers nothing; the close of its window is the event that ends the
+            // request.
             relay
-                .request("window", Some(within), |_| Ok(()))
+                .request("window", |_| {
+                    relay.abandon("window");
+                    Ok(())
+                })
                 .map(|_| ())
         },
         || panic!("the wait went on without the answer of the workbench"),
         || panic!("the window presented without the answer of the workbench"),
-        limit,
     )
     .unwrap_err();
-    assert_eq!(asked.get(), limit);
-    assert_eq!(failure.code, crate::endpoint::TIMED_OUT);
+    assert_eq!(failure.code, crate::endpoint::MISSING_DOCUMENT);
     assert!(
         failure.message.contains("the last placement of the window"),
         "{}",

@@ -354,7 +354,7 @@ int main(int argc, char **argv) { @autoreleasepool {
 
         // A native wheel scroll sent to a document that has just finished loading also moves the document by the requested distance, and that position is reported.
         __block sp_input_result scrollResult = SP_INPUT_REJECTED;
-        sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 250, 200, 4, 0, 0, 120, 1, 5, scrollDone, &scrollResult);
+        sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 250, 200, 4, 0, 0, 120, 1, scrollDone, &scrollResult);
         eventWait(@"the native scroll is delivered", ^BOOL { return scrollResult != SP_INPUT_REJECTED; });
         check(scrollResult == SP_INPUT_DELIVERED, @"a native scroll into the region is delivered");
         settle(@"the native scroll reaches 120 pixels", ^BOOL(NSDictionary *state) {

@@ -5,7 +5,6 @@
 mod folder;
 
 use std::process::{Command, Stdio};
-use std::time::Duration;
 
 #[path = "support/records.rs"]
 mod records;
@@ -22,7 +21,7 @@ fn a_project_front_is_recorded_as_an_event() {
         let writer = records::start_writer(std::path::Path::new(&config));
         record_project_front("main", "prj-one", true, Some(false));
         record_project_front("main", "prj-two", false, None);
-        writer.flush(Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         return;
     }
     let config = folder::Folder::new();

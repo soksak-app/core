@@ -253,14 +253,12 @@ for (const app of Object.values(APPS)) {
     const samples = [...new Set(widths)];
     const failures = [];
     const measurements = [];
-    const waitForStatus = async (name, predicate, message) => {
-      try {
-        return { value: await s.until(name, predicate, message, { timeout: 1500 }) };
-      } catch (error) {
-        if (error.code !== "ETIMEDOUT") throw error;
-        return { error: error.message };
-      }
-    };
+    // A click that the workbench owns runs the command of its button, and the change of the status is the effect of that command.
+    // The command can end after the next presented frame: core.settings.open loads the settings screen at its first run, and
+    // core.projects.browse waits for the projects before it shows the library. So the judgement waits for the change of the
+    // status, which the command makes, and has no time limit of its own: a click without effect holds the check until the limit
+    // of the test, whose output names the step of the click.
+    const clickEffect = (owner, name, predicate, message) => owner.kind === "workbench" ? s.until(name, predicate, message) : undefined;
     const restoreSetting = async (key) => {
       if (initialSettings.overridden.includes(key)) {
         await s.run("core.settings.set", { patch: { [key]: initialSettings.values[key] }, scope: "project" });
@@ -311,16 +309,9 @@ for (const app of Object.values(APPS)) {
           longestGap: stopped.longestGap, frames: stopped.frames })}`);
       }
       projects.before = projectBefore;
-      const projectResult = projects.owner.kind === "workbench"
-        ? await waitForStatus("core.screen", (value) => value.screen === "library", `projects icon did not open the library at ${width}`)
-        : {};
+      await clickEffect(projects.owner, "core.screen", (value) => value.screen === "library", `projects icon did not open the library at ${width}`);
       projects.after = (await s.get("core.screen")).screen;
       projects.effect = projects.after === "library";
-      if (projectResult.error) {
-        projects.waitError = projectResult.error;
-        // The pointer sequence that the page received. If the pressed element was replaced at release, there is no click.
-        projects.pointer = await s.get("core.pointer");
-      }
       outcomes.push(projects);
       if (projects.effect) {
         await s.run("core.library.return");
@@ -331,34 +322,26 @@ for (const app of Object.values(APPS)) {
       for (const key of ["left", "right"]) {
         const before = initialSettings.values[key];
         const click = await clickChrome(`core.chrome.${key}`);
-        const result = click.owner.kind === "workbench"
-          ? await waitForStatus("core.settings", (settings) => settings.values[key] !== before,
-            `${key} sidebar icon did not change the setting at ${width}`)
-          : {};
+        await clickEffect(click.owner, "core.settings", (settings) => settings.values[key] !== before,
+          `${key} sidebar icon did not change the setting at ${width}`);
         const after = (await s.get("core.settings")).values[key];
-        outcomes.push({ ...click, before, after, effect: after !== before, waitError: result.error });
+        outcomes.push({ ...click, before, after, effect: after !== before });
         await restoreSetting(key);
       }
 
       const mode = initialSettings.values.mode;
       const modeClick = await clickChrome("core.chrome.mode");
       const nextMode = mode === "dark" ? "light" : "dark";
-      const modeResult = modeClick.owner.kind === "workbench"
-        ? await waitForStatus("core.settings", (settings) => settings.values.mode === nextMode,
-          `theme icon did not change the mode at ${width}`)
-        : {};
+      await clickEffect(modeClick.owner, "core.settings", (settings) => settings.values.mode === nextMode,
+        `theme icon did not change the mode at ${width}`);
       const observedMode = (await s.get("core.settings")).values.mode;
-      outcomes.push({ ...modeClick, before: mode, after: observedMode, effect: observedMode !== mode,
-        waitError: modeResult.error });
+      outcomes.push({ ...modeClick, before: mode, after: observedMode, effect: observedMode !== mode });
       await restoreSetting("mode");
 
       const settingsClick = await clickChrome("core.chrome.settings");
-      const settingsResult = settingsClick.owner.kind === "workbench"
-        ? await waitForStatus("core.settings-modal", (modal) => modal.open, `settings icon did not open settings at ${width}`)
-        : {};
+      await clickEffect(settingsClick.owner, "core.settings-modal", (modal) => modal.open, `settings icon did not open settings at ${width}`);
       const settingsOpen = (await s.get("core.settings-modal")).open;
       outcomes.push({ ...settingsClick, effect: settingsOpen });
-      if (settingsResult.error) outcomes.at(-1).waitError = settingsResult.error;
       if (settingsOpen) {
         await s.run("core.settings.close");
         await s.until("core.settings-modal", (modal) => !modal.open, `settings did not close at ${width}`);

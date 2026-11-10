@@ -36,14 +36,15 @@ export function traceSettings(trace) {
 
 /**
  * Sets the trace state (0, 1 or FRAME_RECORDS) in the common scope through `run(command, params)`, which runs a declared command of the application,
- * and resolves when the policy file of the configuration folder holds the policy of the state; a policy that the file does
- * not hold within `limit` ms rejects with the policy that it holds. The policy is set before the trace, so the trace that
- * turns on stores its first events under the policy of the state.
+ * and resolves when the policy file of the configuration folder holds the policy of the state. The wait has no time limit;
+ * `options.ended`, the end of the host that writes the file (`client.ended` of its connection), rejects it with the policy that
+ * the file holds. The policy is set before the trace, so the trace that turns on stores its first events under the policy of the
+ * state.
  */
-export async function applyTrace(run, trace, configDir, limit) {
+export async function applyTrace(run, trace, configDir, options = {}) {
   const settings = traceSettings(trace);
   for (const [key, value] of Object.entries(settings)) {
     await run("core.settings.change", { key, value, scope: "common" });
   }
-  await untilPolicy(configDir, policyOfSetting(settings["diagnostics.log"]), limit);
+  await untilPolicy(configDir, policyOfSetting(settings["diagnostics.log"]), options);
 }

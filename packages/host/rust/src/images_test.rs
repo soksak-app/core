@@ -148,7 +148,7 @@ fn a_failed_attach_takes_back_its_name() {
     );
 }
 
-// contract: images.detach.timeout-keeps-waiting
+// contract: images.detach.ends-by-its-events
 #[test]
 fn a_reload_sends_no_second_detach_for_a_pending_image() {
     let surface = "surface-retry";
@@ -316,7 +316,7 @@ mod presentation_queue {
                 &Presents::default(),
             )
         });
-        // The present enqueues its work, or its sender ends with the present.
+        // The worker either queues the commit or ends, which drops the queue, so the receive ends by one of those events.
         let callback = queued.recv();
         drop(event);
         if let Ok(callback) = callback {
@@ -416,9 +416,51 @@ mod wait_boundary {
     use super::super::*;
     use std::sync::mpsc;
 
+    /// The decision of layout_wait on a raster wait that found a raster pending.
+    const PENDING: &str = "a raster is pending";
+
+    /// Decides the layout raster wait on the current images without time: the wait answers at once when its rasters are
+    /// complete or failed, and a wait that reports a pending check is ended by the end of the layout transaction, as a press
+    /// or a cancel ends it, and decides PENDING.
+    fn layout_wait(images: &Images, settled: bool) -> Result<(), String> {
+        enum Step {
+            Pending,
+            Answer(Result<(), String>),
+        }
+        let (step, steps) = mpsc::channel();
+        let waiter = images.clone();
+        std::thread::spawn(move || {
+            let answer = waiter.wait_layout_rasters_observed(settled, || {
+                step.send(Step::Pending)
+                    .expect("signal a pending check of the wait")
+            });
+            step.send(Step::Answer(answer))
+                .expect("hand over the result of the raster wait");
+        });
+        if let Step::Answer(answer) = steps.recv().expect("the raster wait answers or checks") {
+            return answer;
+        }
+        images.end_waits();
+        loop {
+            if let Step::Answer(answer) = steps
+                .recv()
+                .expect("the end of the layout ends the raster wait")
+            {
+                assert_eq!(
+                    answer,
+                    Err(LAYOUT_WAIT_ENDED.to_string()),
+                    "the pending raster wait ended by the end of its layout"
+                );
+                return Err(PENDING.to_string());
+            }
+        }
+    }
+
     // The end of the connection of a sidecar ends the raster wait of its regions in that turn, because no raster of the ended
-    // connection comes (docs/spec/native-surfaces.md#layout-transaction).
-    // contract: images.wait.sidecar-end-ends-wait
+    // connection comes (docs/spec/native-surfaces.md#layout-transaction). The wait of the current raster has no time limit; it
+    // calls waiting at each check that finds a raster pending, under the owner lock, which marks the points where the wait is
+    // still open.
+    // contract: images.wait.sidecar-end-ends-wait, images.wait.ends-by-its-events
     #[test]
     fn the_end_of_a_sidecar_ends_the_raster_wait_of_its_regions() {
         let images = Images::default();
@@ -438,20 +480,27 @@ mod wait_boundary {
             .expect("image state")
             .last_sequence = 1;
         let waiter = images.clone();
-        let (started, waiting) = mpsc::channel();
-        let (ended, result) = mpsc::channel();
+        let (checked, checks) = mpsc::channel();
+        let (answer, answered) = mpsc::channel();
         std::thread::spawn(move || {
-            let outcome = waiter.wait_current_observed(NO_WAIT_LIMIT, || {
-                // default: the wait reports each check that blocks, and the check reads only the first.
-                if started.send(()).is_err() {}
+            let outcome = waiter.wait_current_observed(&|| None, || {
+                checked
+                    .send(())
+                    .expect("signal a pending check of the wait")
             });
-            ended.send(outcome).expect("the check reads the outcome");
+            answer
+                .send(outcome)
+                .expect("hand over the result of the raster wait");
         });
         // The wait has begun when it reports its first pending check; the end of the sidecar is sent after that, and the result
         // is read after the end, so no check of this test depends on time.
-        waiting.recv().expect("wait begins");
+        checks.recv().expect("the wait checks its pending raster");
+        assert!(
+            answered.try_recv().is_err(),
+            "the raster wait ended before its supplier connection ended"
+        );
         assert_eq!(images.invalidate_sidecar("sidecar"), 1);
-        let outcome = result
+        let outcome = answered
             .recv()
             .expect("the end of the sidecar did not end the raster wait");
         assert!(
@@ -462,7 +511,7 @@ mod wait_boundary {
         );
     }
 
-    // contract: images.wait.newer-sequence-rearms-wait
+    // contract: images.wait.newer-sequence-rearms-wait, images.wait.ends-by-its-events
     #[test]
     fn a_pending_newer_frame_is_required_after_the_wait_begins() {
         let images = Images::default();
@@ -481,60 +530,56 @@ mod wait_boundary {
             .get_mut(&key)
             .expect("image state")
             .last_sequence = 1;
-        // The limit of the wait only ends a check that hangs: the frames that the check gives decide the end of the wait.
-        let waiter = images.clone();
-        let (blocked, blocks) = mpsc::channel();
-        let (done, outcome) = mpsc::channel();
-        let worker = std::thread::spawn(move || {
-            let result = waiter.wait_current_observed(Duration::from_secs(60), || {
-                // default: the check stopped receiving the blocks when it failed, and the wait goes on.
-                if blocked.send(()).is_err() {}
-            });
-            done.send(result)
-                .expect("the check receives the end of the wait");
-        });
-        blocks.recv().expect("wait begins");
-        // The first frame is presented while the second is accepted, and the wait checks that state and blocks again.
-        {
+        let (checked, checks) = mpsc::channel();
+        let wait = || {
+            let waiter = images.clone();
+            let checked = checked.clone();
+            std::thread::spawn(move || {
+                waiter.wait_current_observed(&|| None, || {
+                    checked
+                        .send(())
+                        .expect("signal a pending check of the wait")
+                })
+            })
+        };
+        // The presented sequence and the newest accepted one change under one hold of the owner lock, so the wait checks
+        // after both.
+        let present = |sequence: i32, last: i32| {
             let mut inner = images.lock();
             let state = inner.states.get_mut(&key).expect("image state");
             state.presented_raster = config.raster;
-            state.presented_sequence = 1;
-            state.last_sequence = 2;
+            state.presented_sequence = sequence;
+            state.last_sequence = last;
             images.changed();
-        }
-        blocks
+        };
+        let worker = wait();
+        checks.recv().expect("the wait checks its pending raster");
+        present(1, 2);
+        checks
             .recv()
-            .expect("the wait checks the presented frame and blocks again");
+            .expect("the wait checks again after the change");
         assert!(
-            outcome.try_recv().is_err(),
-            "the wait ended while the newer accepted frame was pending"
+            !worker.is_finished(),
+            "the newer accepted frame remains pending after the earlier frame completed"
         );
         assert!(
             !images.current_presented(),
             "instantaneous status still reports the pending newer frame"
         );
-        assert_eq!(
-            images.wait_current(Duration::ZERO),
-            Err("presentationTimeout".into()),
-            "a new wait must require the already accepted second frame"
+        present(2, 2);
+        assert_eq!(worker.join().expect("join image wait"), Ok(()));
+        // A new wait requires the frame that was accepted before it began.
+        present(2, 3);
+        let worker = wait();
+        checks
+            .recv()
+            .expect("the new wait checks its pending raster");
+        assert!(
+            !worker.is_finished(),
+            "a new wait must require the already accepted frame"
         );
-        // The presentation of the newer frame ends the wait.
-        {
-            let mut inner = images.lock();
-            inner
-                .states
-                .get_mut(&key)
-                .expect("image state")
-                .presented_sequence = 2;
-            images.changed();
-        }
-        assert_eq!(
-            outcome.recv().expect("the wait ends"),
-            Ok(()),
-            "the presented newer frame ends the wait"
-        );
-        worker.join().expect("join image wait");
+        present(3, 3);
+        assert_eq!(worker.join().expect("join image wait"), Ok(()));
     }
 
     #[test]
@@ -721,13 +766,13 @@ mod wait_boundary {
             }
         }
         assert_eq!(
-            images.wait_layout_rasters(Duration::ZERO, false),
+            layout_wait(&images, false),
             Ok(()),
             "continuous wait completes from the installed raster snapshot after a later same-raster acceptance"
         );
         assert_eq!(
-            images.wait_layout_rasters(Duration::ZERO, true),
-            Err("presentationTimeout".into()),
+            layout_wait(&images, true),
+            Err(PENDING.into()),
             "settled wait continues to require the newest sequence"
         );
         assert_eq!(
@@ -771,15 +816,12 @@ mod wait_boundary {
             "an acknowledgment from the previous generation is refused"
         );
         assert_eq!(
-            images.wait_raster_snapshot_observed(Duration::ZERO, || {}),
-            Err("presentationTimeout".into()),
+            layout_wait(&images, false),
+            Err(PENDING.into()),
             "an accepted but unpresented new-generation frame blocks completion"
         );
         assert!(images.mark_presented(&key, new_generation, new_config.raster, 1));
-        assert_eq!(
-            images.wait_raster_snapshot_observed(Duration::ZERO, || {}),
-            Ok(())
-        );
+        assert_eq!(layout_wait(&images, false), Ok(()));
 
         let raster_config = images
             .configure_raster(&key, 801, 600, 2.0, true)
@@ -787,8 +829,8 @@ mod wait_boundary {
             .expect("new raster");
         assert_ne!(raster_config.raster, new_config.raster);
         assert_eq!(
-            images.wait_raster_snapshot_observed(Duration::ZERO, || {}),
-            Err("presentationTimeout".into()),
+            layout_wait(&images, false),
+            Err(PENDING.into()),
             "a changed raster has no installed snapshot"
         );
         images
@@ -806,15 +848,12 @@ mod wait_boundary {
             )
             .expect("authorize changed-raster sequence");
         assert_eq!(
-            images.wait_raster_snapshot_observed(Duration::ZERO, || {}),
-            Err("presentationTimeout".into()),
+            layout_wait(&images, false),
+            Err(PENDING.into()),
             "an accepted but unpresented changed raster blocks completion"
         );
         assert!(images.mark_presented(&key, raster_config.generation, raster_config.raster, 1));
-        assert_eq!(
-            images.wait_raster_snapshot_observed(Duration::ZERO, || {}),
-            Ok(())
-        );
+        assert_eq!(layout_wait(&images, false), Ok(()));
     }
 
     #[test]
@@ -870,13 +909,13 @@ mod wait_boundary {
                 .is_none()
         );
         assert_eq!(
-            images.wait_raster_snapshot_observed(Duration::ZERO, || {}),
+            layout_wait(&images, false),
             Ok(()),
             "a hidden image does not block continuous wait"
         );
         images.set_surface_visible(&hidden_key.0, false);
         assert_eq!(
-            images.wait_raster_snapshot_observed(Duration::ZERO, || {}),
+            layout_wait(&images, false),
             Ok(()),
             "a hidden surface does not block continuous wait"
         );
@@ -912,9 +951,97 @@ mod wait_boundary {
             "continuous presentation failed",
         );
         assert_eq!(
-            images.wait_raster_snapshot_observed(Duration::ZERO, || {}),
+            layout_wait(&images, false),
             Err("continuous presentation failed".into()),
             "presentation failure remains fail-closed"
+        );
+    }
+
+    /// An image region whose raster 1 is accepted and not yet presented, so each raster wait finds it pending.
+    fn pending_raster() -> Images {
+        let images = Images::default();
+        let key = ("surface".into(), "view".into());
+        images
+            .reserve(&key, "owner", "sidecar")
+            .expect("reserve image");
+        assert!(images.set(&key, 100));
+        images
+            .configure_raster(&key, 800, 600, 2.0, true)
+            .expect("configure raster")
+            .expect("new raster");
+        images
+            .lock()
+            .states
+            .get_mut(&key)
+            .expect("image state")
+            .last_sequence = 1;
+        images
+    }
+
+    // The end of the layout transaction of the window ends the raster wait of the presentation request inside it
+    // (docs/spec/native-surfaces.md#layout-transaction). The end is sent after the first pending check, so no check depends
+    // on time.
+    // contract: images.wait.sidecar-end-ends-wait
+    #[test]
+    fn the_end_of_the_layout_ends_the_raster_wait() {
+        let images = pending_raster();
+        let waiter = images.clone();
+        let (checked, checks) = mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            waiter.wait_layout_rasters_observed(true, || {
+                checked
+                    .send(())
+                    .expect("signal a pending check of the wait")
+            })
+        });
+        checks.recv().expect("the wait checks its pending raster");
+        images.end_waits();
+        assert_eq!(
+            worker.join().expect("join raster wait"),
+            Err(LAYOUT_WAIT_ENDED.to_string())
+        );
+    }
+
+    // The wait of host.window.presented for the current rasters ends by the end of its request, and the end of a layout
+    // transaction does not end it: the wait checks again after that end and stays open (docs/spec/host-contract.md). The end
+    // of the layout is sent after the first pending check and the end of the request after the second, so no check depends
+    // on time.
+    // contract: images.wait.ends-by-its-events
+    #[test]
+    fn the_end_of_its_request_ends_the_wait_of_the_current_rasters() {
+        let images = pending_raster();
+        let request_ended = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let waiter = images.clone();
+        let ended = Arc::clone(&request_ended);
+        let (checked, checks) = mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            waiter.wait_current_observed(
+                &|| {
+                    ended
+                        .load(std::sync::atomic::Ordering::SeqCst)
+                        .then(|| "the endpoint connection of the request ended".to_string())
+                },
+                || {
+                    checked
+                        .send(())
+                        .expect("signal a pending check of the wait")
+                },
+            )
+        });
+        checks.recv().expect("the wait checks its pending raster");
+        images.end_waits();
+        checks
+            .recv()
+            .expect("the wait checks again after the end of the layout");
+        assert!(
+            !worker.is_finished(),
+            "the end of a layout transaction ended the wait of the current rasters"
+        );
+        request_ended.store(true, std::sync::atomic::Ordering::SeqCst);
+        images.wake_waits();
+        assert_eq!(
+            worker.join().expect("join raster wait"),
+            Err("the endpoint connection of the request ended".to_string())
         );
     }
 }

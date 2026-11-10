@@ -4,7 +4,7 @@
 // check fails at once instead of waiting until its deadline.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { untilFolderState } from "./folder-wait.mjs";
+import { endSignal, untilFolderState } from "./folder-wait.mjs";
 import { declaration, DEFAULT_POLICY, parsePolicy, POLICY_CLASSES, POLICY_SCHEMA, policyAllows, policyIsBeingWritten } from "@soksak/log-contract";
 
 /** The value of the setting `diagnostics.log` that stores every level of every class, as `core.settings.debug {on: true}` sets it. */
@@ -69,16 +69,17 @@ export function requireStored(policy, catalog, records, source) {
   }
 }
 
-/** How long the preparation waits until the host writes the policy of the setting to the policy file. */
-const POLICY_LIMIT = 10000;
-
 /**
  * Waits until the policy in force in the configuration folder is `policy`. The host writes the file when the page sends it the
  * policy of the setting, so the file is read once the change watch of the folder is active and again at each change
- * (folder-wait.mjs); a file that a writer is writing is read at the next change. When the limit passes, it rejects with an
- * error that names the file and the policy it holds.
+ * (folder-wait.mjs); a file that a writer is writing is read at the next change. The wait has no time limit: the policy or an
+ * error ends it, and `ended`, a promise that settles when the host that writes the file ends, such as `client.ended` of its
+ * endpoint connection, rejects it with an error that names the file and the policy it holds.
  */
-export async function untilPolicy(configDir, policy, limit = POLICY_LIMIT) {
+export async function untilPolicy(configDir, policy, options = {}, ...rest) {
+  if (typeof options !== "object" || options === null || rest.length > 0) {
+    throw new TypeError("untilPolicy takes no limit: a wait ends by the policy, an error or the end of the host");
+  }
   const expected = JSON.stringify(policy.classes);
   let found = "nothing read";
   const read = () => {
@@ -87,6 +88,12 @@ export async function untilPolicy(configDir, policy, limit = POLICY_LIMIT) {
     found = JSON.stringify(readPolicy(configDir).classes);
     return found === expected ? true : undefined;
   };
-  await untilFolderState(configDir, read, limit,
-    () => new Error(`${policyFile(configDir)} did not hold the log policy ${expected} within ${limit} ms; it holds ${found}`));
+  const signal = options.ended === undefined ? undefined : endSignal(options.ended);
+  try {
+    await untilFolderState(configDir, read, { signal });
+  } catch (error) {
+    if (!signal?.aborted || error !== signal.reason) throw error;
+    throw new Error(`${policyFile(configDir)} did not hold the log policy ${expected} before the host ended ` +
+      `(${error?.message ?? error}); it holds ${found}`, { cause: error });
+  }
 }

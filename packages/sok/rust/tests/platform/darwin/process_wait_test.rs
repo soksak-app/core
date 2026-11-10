@@ -1,6 +1,6 @@
 #![cfg(target_os = "macos")]
 
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use serde_json::Value;
 
@@ -9,17 +9,29 @@ mod support;
 
 use support::run;
 
-// contract: cli.process-wait.timeout-is-an-error
+// The wait has no time limit: it answers when the process the test controls exits, which the test causes by closing the
+// standard input of the process.
+// contract: cli.process-wait.takes-no-time-limit
 #[test]
-fn process_wait_reports_timeout() {
-    let pid = std::process::id().to_string();
-    let (code, stdout, stderr) = run(&["process", "wait", &pid, "--timeout-ms", "1"]);
-    assert_eq!(code, 1, "stdout={stdout:?} stderr={stderr:?}");
-    assert!(stdout.is_empty(), "stdout={stdout:?}");
-    assert!(
-        stderr.contains(&format!("process {pid} did not end within 1ms")),
-        "{stderr}"
-    );
+fn process_wait_ends_by_the_exit_of_the_process() {
+    let mut child = Command::new("/bin/cat")
+        .stdin(Stdio::piped())
+        .spawn()
+        .expect("start controlled process");
+    let pid = child.id().to_string();
+    let waiting = {
+        let pid = pid.clone();
+        std::thread::spawn(move || run(&["process", "wait", &pid]))
+    };
+    drop(child.stdin.take());
+    let status = child.wait().expect("reap controlled process");
+    assert!(status.success(), "child exit status was {status}");
+    let (code, stdout, stderr) = waiting.join().expect("process wait thread");
+    assert_eq!(code, 0, "stdout={stdout:?} stderr={stderr:?}");
+    assert!(stderr.is_empty(), "stderr={stderr:?}");
+    let result: Value = serde_json::from_str(&stdout).expect("process wait JSON");
+    assert_eq!(result["pid"], pid.parse::<u32>().expect("pid number"));
+    assert_eq!(result["ended"], true);
 }
 
 // contract: cli.process-wait.reports-pid-absent
@@ -41,15 +53,8 @@ fn process_wait_reports_an_already_ended_pid() {
     assert!(status.success(), "child exit status was {status}");
 
     let pid = pid.to_string();
-    let (code, stdout, stderr) = run(&[
-        "process",
-        "wait",
-        &pid,
-        "--timeout-ms",
-        "1000",
-        "--config-dir",
-        "/tmp/process-wait",
-    ]);
+    let (code, stdout, stderr) =
+        run(&["process", "wait", &pid, "--config-dir", "/tmp/process-wait"]);
     assert_eq!(code, 0, "stdout={stdout:?} stderr={stderr:?}");
     assert!(stderr.is_empty(), "stderr={stderr:?}");
     let result: Value = serde_json::from_str(&stdout).expect("process wait JSON");

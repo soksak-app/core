@@ -26,7 +26,7 @@ func narrowCalls(t *testing.T, log *host.EventLog, level string) {
 // gatedCounts returns the counts that log.gated reports, by class and level.
 func gatedCounts(t *testing.T, log *host.EventLog) map[string]float64 {
 	t.Helper()
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	counts := map[string]float64{}

@@ -1,11 +1,11 @@
 package host
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 	"unsafe"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
@@ -64,7 +64,7 @@ func TestSettledWaitBringsTheContentThroughTheFrontend(t *testing.T) {
 	var brought int
 	window := &settledFrontend{window: native, present: func() { brought++ }}
 	fake := &settledPlatform{window: native, displayed: 12.5}
-	displayed, err := settledSurfaces(t, window, fake).presented()
+	displayed, err := settledSurfaces(t, window, fake).presented(context.Background())
 	if err != nil {
 		t.Fatalf("the settled wait failed: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestSettledWaitBringsTheContentThroughTheFrontend(t *testing.T) {
 func TestSettledWaitEndsWithTheFailureOfTheFrontend(t *testing.T) {
 	refused := errors.New("the main web view is gone")
 	fake := &settledPlatform{}
-	_, err := settledSurfaces(t, &settledFrontend{presented: refused}, fake).presented()
+	_, err := settledSurfaces(t, &settledFrontend{presented: refused}, fake).presented(context.Background())
 	if !errors.Is(err, refused) {
 		t.Fatalf("the settled wait ended with %v, want the error of the Frontend", err)
 	}
@@ -96,7 +96,7 @@ func TestSettledWaitEndsWithTheFailureOfThePresentation(t *testing.T) {
 	native := platform.Window(1)
 	failed := errors.New("the document did not finish")
 	window := &settledFrontend{window: native, present: func() {}}
-	_, err := settledSurfaces(t, window, &settledPlatform{window: native, failure: failed}).presented()
+	_, err := settledSurfaces(t, window, &settledPlatform{window: native, failure: failed}).presented(context.Background())
 	if !errors.Is(err, failed) {
 		t.Fatalf("the settled wait ended with %v, want the failure of the block", err)
 	}
@@ -109,7 +109,7 @@ func TestThePresentedWindowWaitsForThePlacementThatItsWorkbenchHolds(t *testing.
 	asked := make(chan struct{})
 	committed := make(chan struct{})
 	var presentedAt []string
-	placed := func(time.Duration) error {
+	placed := func() error {
 		close(asked)
 		<-committed
 		presentedAt = append(presentedAt, "placed")
@@ -131,7 +131,7 @@ func TestThePresentedWindowWaitsForThePlacementThatItsWorkbenchHolds(t *testing.
 	}
 	answer := make(chan result, 1)
 	go func() {
-		displayed, err := lastPlacementPresented(placed, settled, presented, time.Second)
+		displayed, err := lastPlacementPresented(placed, settled, presented)
 		answer <- result{displayed, err}
 	}()
 	<-asked
@@ -150,9 +150,10 @@ func TestThePresentedWindowWaitsForThePlacementThatItsWorkbenchHolds(t *testing.
 	}
 }
 
-// A placement that fails, or a workbench that does not answer within the limit, ends the wait with that failure before the
-// window settles.
-// contract: exposure.window-presented.waits-for-the-last-placement
+// A placement that fails ends the wait with that failure before the window settles. The wait for the answer of the workbench
+// has no limit: a workbench that takes the request and answers nothing keeps it open until the window closes, which ends it
+// with 1003 that names the last placement.
+// contract: exposure.window-presented.waits-for-the-last-placement, exposure.window-presented.ends-by-events
 func TestThePresentedWindowFailsWithItsLastPlacement(t *testing.T) {
 	failure := errors.New("surface presentation failed")
 	never := func() <-chan struct{} {
@@ -163,23 +164,20 @@ func TestThePresentedWindowFailsWithItsLastPlacement(t *testing.T) {
 		t.Fatal("the window presented after its last placement failed")
 		return 0, nil
 	}
-	if _, err := lastPlacementPresented(func(time.Duration) error { return failure }, never, none, time.Second); !errors.Is(err, failure) {
+	if _, err := lastPlacementPresented(func() error { return failure }, never, none); !errors.Is(err, failure) {
 		t.Fatalf("a failed placement answered %v", err)
 	}
-	const limit = 20 * time.Millisecond
 	relay := NewRelay[string]()
-	var within time.Duration
-	_, err := lastPlacementPresented(func(asked time.Duration) error {
-		within = asked
-		// The workbench takes the request and answers nothing.
-		return relay.Request("window", asked, func(uint64) error { return nil }).Error
-	}, never, none, limit)
-	if within != limit {
-		t.Fatalf("the wait asked the workbench with the limit %s", within)
-	}
-	var timeout *RPCError
-	if !errors.As(err, &timeout) || timeout.Code != codeTimeout {
-		t.Fatalf("a workbench that does not answer ended the wait with %v", err)
+	_, err := lastPlacementPresented(func() error {
+		// The workbench takes the request and answers nothing; the close of its window is the event that ends the request.
+		return relay.Request("window", func(uint64) error {
+			relay.Abandon(func(target string) bool { return target == "window" })
+			return nil
+		}).Error
+	}, never, none)
+	var closed *RPCError
+	if !errors.As(err, &closed) || closed.Code != codeNoWindow {
+		t.Fatalf("a workbench whose window closed ended the wait with %v", err)
 	}
 	if !strings.Contains(err.Error(), "the last placement of the window") {
 		t.Fatalf("the failure does not name the last placement: %v", err)

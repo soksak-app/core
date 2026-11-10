@@ -8,14 +8,14 @@ mod records;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
 use serde_json::value::RawValue;
 use serde_json::{Value, json};
 use soksak_host::event_log::EventLog;
 use soksak_host::event_record::use_host_event_log;
-use soksak_host::exposure::{self, Relay, RelayCall};
+use soksak_host::exposure::{self, Relay};
 use soksak_host::windows::{ListStep, list_entries, window_entry};
 
 const WAIT: Duration = Duration::from_secs(5);
@@ -40,7 +40,7 @@ fn value(text: &RawValue) -> Value {
 fn reply_from_target_document_resolves_request() {
     let relay = Arc::new(Relay::default());
     let replying = relay.clone();
-    let result = relay.request("main", Some(WAIT), move |id| {
+    let result = relay.request("main", move |id| {
         std::thread::spawn(move || {
             replying
                 .reply("main", &text(json!({"id": id, "result": {"ok": true}})))
@@ -57,7 +57,7 @@ fn reply_keeps_the_text_and_key_order_of_the_page_value() {
     // The page sends the response as JSON text. The relay does not change the key order of that value.
     let relay = Arc::new(Relay::default());
     let replying = relay.clone();
-    let result = relay.request("main", Some(WAIT), move |id| {
+    let result = relay.request("main", move |id| {
         let body = format!(r#"{{"id":{id},"result":{{"zeta":1,"alpha":{{"b":2,"a":1}}}}}}"#);
         let payload = RawValue::from_string(body).unwrap();
         replying.reply("main", &payload).unwrap();
@@ -71,7 +71,7 @@ fn reply_keeps_the_text_and_key_order_of_the_page_value() {
 fn missing_result_is_null() {
     let relay = Arc::new(Relay::default());
     let replying = relay.clone();
-    let result = relay.request("main", Some(WAIT), move |id| {
+    let result = relay.request("main", move |id| {
         replying.reply("main", &text(json!({"id": id}))).unwrap();
         Ok(())
     });
@@ -84,7 +84,7 @@ fn error_reply_keeps_code_and_message() {
     let relay = Arc::new(Relay::default());
     let replying = relay.clone();
     let failure = relay
-        .request("main", Some(WAIT), move |id| {
+        .request("main", move |id| {
             replying
                 .reply(
                     "main",
@@ -100,60 +100,49 @@ fn error_reply_keeps_code_and_message() {
     );
 }
 
-// contract: exposure.relay.foreign-document-reply-ignored-timeout-1005
-#[test]
-fn reply_from_another_document_is_ignored_and_request_times_out() {
-    let relay = Arc::new(Relay::default());
-    let replying = relay.clone();
-    let failure = relay
-        .request("main", Some(Duration::from_millis(50)), move |id| {
-            assert!(
-                replying
-                    .reply("surface-main-a", &text(json!({"id": id, "result": 1})))
-                    .is_err()
-            );
-            Ok(())
-        })
-        .unwrap_err();
-    assert_eq!(failure.code, 1005);
-    assert!(
-        relay
-            .reply("main", &text(json!({"id": 1, "result": 1})))
-            .is_err()
-    );
+/// The outcome of a relayed request.
+type Outcome = Result<Box<RawValue>, soksak_host::endpoint::Failure>;
+
+/// Starts a request to target on another thread and returns the receiver of its outcome and the receiver of its id, which the
+/// relay hands over when it sends the request. The send is the event at which the request waits for its reply.
+fn relay_request(
+    relay: &Arc<Relay>,
+    target: &'static str,
+) -> (mpsc::Receiver<Outcome>, mpsc::Receiver<u64>) {
+    let (outcome, outcomes) = mpsc::channel();
+    let (sent, ids) = mpsc::channel();
+    let relay = relay.clone();
+    std::thread::spawn(move || {
+        let result = relay.request(target, move |id| {
+            sent.send(id).map_err(|error| error.to_string())
+        });
+        outcome.send(result).expect("the test holds the receiver");
+    });
+    (outcomes, ids)
 }
 
-// contract: exposure.relay.late-reply-states-its-delay
+/// A reply from another document is refused and changes nothing: the request keeps waiting, and the reply of its document
+/// then ends it with that reply, not with the foreign one.
+// contract: exposure.relay.foreign-document-reply-ignored
 #[test]
-fn late_reply_states_its_delay() {
-    let relay = Relay::default();
-    let failure = relay
-        .request("main", Some(Duration::from_millis(50)), |_| Ok(()))
-        .unwrap_err();
-    assert_eq!(
-        (failure.code, failure.message.as_str()),
-        (1005, "the document did not reply within 50 ms")
-    );
-    let error = relay
-        .reply("main", &text(json!({"id": 1, "result": 1})))
-        .unwrap_err();
-    let delay = error
-        .strip_prefix("exposure reply 1 arrived ")
-        .and_then(|rest| {
-            rest.strip_suffix(" ms after it was sent; its request timed out after 50 ms")
-        });
+fn reply_from_another_document_is_ignored_and_the_request_keeps_waiting() {
+    let relay = Arc::new(Relay::default());
+    let (outcome, ids) = relay_request(&relay, "main");
+    let id = ids.recv().unwrap();
     assert!(
-        delay.is_some_and(
-            |delay| !delay.is_empty() && delay.bytes().all(|byte| byte.is_ascii_digit())
-        ),
-        "{error}"
-    );
-    assert_eq!(
         relay
-            .reply("main", &text(json!({"id": 101, "result": 1})))
-            .unwrap_err(),
-        "exposure reply 101 has no matching request"
+            .reply("surface-main-a", &text(json!({"id": id, "result": 1})))
+            .is_err(),
+        "a reply from another document was accepted"
     );
+    assert!(
+        outcome.try_recv().is_err(),
+        "the request ended after a reply from another document"
+    );
+    relay
+        .reply("main", &text(json!({"id": id, "result": 2})))
+        .expect("the reply of the document of the request");
+    assert_eq!(value(&outcome.recv().unwrap().unwrap()), json!(2));
 }
 
 // contract: exposure.relay.ended-reply-is-observed
@@ -162,7 +151,7 @@ fn a_reply_to_a_request_that_its_document_closed_is_an_observation() {
     let relay = Arc::new(Relay::default());
     let closing = relay.clone();
     let failure = relay
-        .request("surface-main-a", Some(WAIT), move |_| {
+        .request("surface-main-a", move |_| {
             closing.abandon("surface-main-a");
             Ok(())
         })
@@ -188,7 +177,7 @@ fn send_failure_is_reported_without_waiting() {
     let relay = Relay::default();
     // The request has no time limit, so a failed send that waited for a reply would never return.
     let failure = relay
-        .request("main", None, |_| Err("webview is gone".into()))
+        .request("main", |_| Err("webview is gone".into()))
         .unwrap_err();
     assert_eq!(failure.code, 1003);
 }
@@ -199,7 +188,7 @@ fn closed_document_fails_its_pending_requests() {
     let relay = Arc::new(Relay::default());
     let closing = relay.clone();
     let failure = relay
-        .request("main", Some(WAIT), move |_| {
+        .request("main", move |_| {
             closing.abandon("main");
             Ok(())
         })
@@ -207,19 +196,308 @@ fn closed_document_fails_its_pending_requests() {
     assert_eq!(failure.code, 1003);
 }
 
-// contract: exposure.relay.no-timeout-waits-until-close
+/// A request has no time limit: it waits until its document closes, then fails with 1003, and writes no call event on the
+/// way. A reply that comes after the close is an observation, and a reply to an id that the relay never sent fails.
+// contract: exposure.relay.waits-until-reply-or-close
 #[test]
-fn request_without_timeout_waits_until_the_document_closes() {
+fn a_request_waits_until_its_document_closes() {
+    let _serial = RECORDS.lock().unwrap_or_else(|poison| poison.into_inner());
+    let _trace = records::trace_on();
+    let config = folder::Folder::new();
+    let log = records::start_writer(config.path());
     let relay = Arc::new(Relay::default());
-    let closing = relay.clone();
-    let failure = relay
-        .request("surface-main-a", None, move |_| {
-            // After the wait for the response started, another thread announces the end of the document.
-            std::thread::spawn(move || closing.abandon("surface-main-a"));
-            Ok(())
-        })
-        .unwrap_err();
-    assert_eq!(failure.code, 1003);
+    let (outcome, ids) = relay_request(&relay, "surface-main-a");
+    let id = ids.recv().unwrap();
+    assert!(
+        outcome.try_recv().is_err(),
+        "the request ended before its document closed"
+    );
+    relay.abandon("surface-main-a");
+    assert_eq!(outcome.recv().unwrap().unwrap_err().code, 1003);
+    assert_eq!(
+        relay.reply("surface-main-a", &text(json!({"id": id, "result": 1}))),
+        Ok(()),
+        "the reply after the close is an observation"
+    );
+    let never = id + 100;
+    assert_eq!(
+        relay
+            .reply("surface-main-a", &text(json!({"id": never, "result": 1})))
+            .unwrap_err(),
+        format!("exposure reply {never} has no matching request")
+    );
+    for event in ["host.call.timeout", "host.trace.call.late-reply"] {
+        assert_eq!(
+            call_events(&log, config.path(), event),
+            Vec::<Value>::new(),
+            "{event}"
+        );
+    }
+    use_host_event_log(None);
+}
+
+/// The end of the endpoint connection that sent a request ends it on the host. The reply of the document then comes to a
+/// request that ended: the host accepts it, writes the observation and answers nothing, with no delay and no call event.
+// contract: exposure.relay.connection-end-ends-its-requests
+#[test]
+fn the_end_of_its_connection_ends_a_relay_request_and_its_reply_is_an_observation() {
+    let _serial = RECORDS.lock().unwrap_or_else(|poison| poison.into_inner());
+    let config = folder::Folder::new();
+    let log = records::start_writer(config.path());
+    let relay = Arc::new(Relay::default());
+    let (outcome, ids) = relay_request(&relay, "surface-main-a");
+    let id = ids.recv().unwrap();
+    assert!(
+        outcome.try_recv().is_err(),
+        "the request ended before its connection ended"
+    );
+    relay.end(id);
+    assert!(
+        outcome.recv().unwrap().is_err(),
+        "the request whose connection ended answered a result"
+    );
+    assert_eq!(
+        relay.reply("surface-main-a", &text(json!({"id": id, "result": 1}))),
+        Ok(()),
+        "the reply after the end of the connection is an observation"
+    );
+    log.flush().unwrap();
+    let text = records::text_of(&records::read_events(&records::event_log_path(
+        config.path(),
+    )));
+    let want = format!(" info host exposure: exposure reply {id} arrived after its request ended");
+    assert!(text.contains(&want), "no {want:?} in {text}");
+    for removed in [" ms after it was sent", "timed out"] {
+        assert!(
+            !text.contains(removed),
+            "the log states {removed:?}: {text}"
+        );
+    }
+    use_host_event_log(None);
+}
+
+/// The end of a connection recorded in the turn of the send ends the request the same way.
+// contract: exposure.relay.connection-end-ends-its-requests
+#[test]
+fn a_connection_end_in_the_turn_of_the_send_ends_the_relay_request() {
+    let relay = Relay::default();
+    let mut requested = 0;
+    let outcome = relay.request("main", |id| {
+        requested = id;
+        relay.end(id);
+        Ok(())
+    });
+    assert!(
+        outcome.is_err(),
+        "the request whose connection ended answered a result"
+    );
+    assert_eq!(
+        relay.reply("main", &text(json!({"id": requested, "result": 1}))),
+        Ok(()),
+        "the reply after the end of the connection is an observation"
+    );
+}
+
+/// Starts a forward of origin to target on another thread, the way `exposureForward` relays a request that the main page
+/// forwards while it handles the request origin, and returns the receiver of its outcome and the receiver of its id.
+fn relay_forward(
+    relay: &Arc<Relay>,
+    origin: u64,
+    target: &'static str,
+) -> (mpsc::Receiver<Outcome>, mpsc::Receiver<u64>) {
+    let (outcome, outcomes) = mpsc::channel();
+    let (sent, ids) = mpsc::channel();
+    let relay = relay.clone();
+    std::thread::spawn(move || {
+        let result = relay.request_of(origin, target, move |id| {
+            sent.send(id).map_err(|error| error.to_string())
+        });
+        outcome.send(result).expect("the test holds the receiver");
+    });
+    (outcomes, ids)
+}
+
+/// `exposureForward` carries `origin`, the id of the `exposure-request` that the main page handles, as an id.
+// contract: exposure.relay.forward-lives-while-its-origin-is-open
+#[test]
+fn a_forward_carries_its_origin_as_an_id() {
+    let request = json!({"id": 1, "surface": "tab", "method": "probe.run", "params": {}});
+    let mut with_origin = request.clone();
+    with_origin["origin"] = json!(7);
+    assert!(serde_json::from_value::<exposure::Forward>(with_origin).is_ok());
+    assert!(serde_json::from_value::<exposure::Forward>(request.clone()).is_ok());
+    let mut named = request;
+    named["origin"] = json!("seven");
+    assert!(
+        serde_json::from_value::<exposure::Forward>(named).is_err(),
+        "a forward whose origin is not an id was read"
+    );
+}
+
+/// Receives the end of the forward and fails when it carries a result.
+fn expect_ended_without_result(outcome: &mpsc::Receiver<Outcome>, what: &str) {
+    assert!(outcome.recv().unwrap().is_err(), "{what} answered a result");
+}
+
+/// Sends the reply of the surface document to the ended forward id and checks that the host writes it as the observation of an
+/// ended request.
+fn expect_late_reply_observed(relay: &Relay, log: &EventLog, config: &Path, id: u64) {
+    assert_eq!(
+        relay.reply("surface-main-a", &text(json!({"id": id, "result": 5}))),
+        Ok(()),
+        "the reply after the end of the origin is an observation"
+    );
+    log.flush().unwrap();
+    let text = records::text_of(&records::read_events(&records::event_log_path(config)));
+    let want = format!(" info host exposure: exposure reply {id} arrived after its request ended");
+    assert!(text.contains(&want), "no {want:?} in {text}");
+}
+
+/// The end of the connection of the request origin ends the request and with it each forward of that origin on the host,
+/// which answers nothing; the reply of the surface document after it is the observation of an ended request. The ends are
+/// received in any order.
+// contract: exposure.relay.forward-lives-while-its-origin-is-open
+#[test]
+fn the_end_of_the_connection_of_its_origin_ends_a_forward() {
+    let _serial = RECORDS.lock().unwrap_or_else(|poison| poison.into_inner());
+    let config = folder::Folder::new();
+    let log = records::start_writer(config.path());
+    let relay = Arc::new(Relay::default());
+    let (origin_outcome, origin_ids) = relay_request(&relay, "main");
+    let origin = origin_ids.recv().unwrap();
+    let (outcome, ids) = relay_forward(&relay, origin, "surface-main-a");
+    let id = ids.recv().unwrap();
+    assert!(
+        outcome.try_recv().is_err(),
+        "the forward ended before the connection of its origin ended"
+    );
+    relay.end(origin);
+    expect_ended_without_result(&origin_outcome, "the request whose connection ended");
+    expect_ended_without_result(&outcome, "the forward whose origin connection ended");
+    expect_late_reply_observed(&relay, &log, config.path(), id);
+    use_host_event_log(None);
+}
+
+/// The answer of the main page ends the origin request, and a forward of that origin that still waits ends then with no
+/// result.
+// contract: exposure.relay.forward-lives-while-its-origin-is-open
+#[test]
+fn the_answer_of_its_origin_ends_a_waiting_forward() {
+    let _serial = RECORDS.lock().unwrap_or_else(|poison| poison.into_inner());
+    let config = folder::Folder::new();
+    let log = records::start_writer(config.path());
+    let relay = Arc::new(Relay::default());
+    let (origin_outcome, origin_ids) = relay_request(&relay, "main");
+    let origin = origin_ids.recv().unwrap();
+    let (outcome, ids) = relay_forward(&relay, origin, "surface-main-a");
+    let id = ids.recv().unwrap();
+    relay
+        .reply("main", &text(json!({"id": origin, "result": 7})))
+        .expect("the answer of the main page");
+    assert_eq!(value(&origin_outcome.recv().unwrap().unwrap()), json!(7));
+    expect_ended_without_result(&outcome, "the forward whose origin the main page answered");
+    expect_late_reply_observed(&relay, &log, config.path(), id);
+    use_host_event_log(None);
+}
+
+/// The end of the origin request with 1003, here by the close of the main page that runs it, ends its forward with no
+/// result.
+// contract: exposure.relay.forward-lives-while-its-origin-is-open
+#[test]
+fn the_end_of_its_origin_with_1003_ends_a_waiting_forward() {
+    let _serial = RECORDS.lock().unwrap_or_else(|poison| poison.into_inner());
+    let config = folder::Folder::new();
+    let log = records::start_writer(config.path());
+    let relay = Arc::new(Relay::default());
+    let (origin_outcome, origin_ids) = relay_request(&relay, "main");
+    let origin = origin_ids.recv().unwrap();
+    let (outcome, ids) = relay_forward(&relay, origin, "surface-main-a");
+    let id = ids.recv().unwrap();
+    relay.abandon("main");
+    assert_eq!(origin_outcome.recv().unwrap().unwrap_err().code, 1003);
+    expect_ended_without_result(&outcome, "the forward whose origin ended with 1003");
+    expect_late_reply_observed(&relay, &log, config.path(), id);
+    use_host_event_log(None);
+}
+
+/// A forward without origin belongs to no connection: the end of a connection leaves it waiting, checked once the request of
+/// that connection ended, and the reply of the surface ends it with that reply.
+// contract: exposure.relay.forward-lives-while-its-origin-is-open
+#[test]
+fn a_forward_without_origin_is_not_ended_by_a_connection_end() {
+    let relay = Arc::new(Relay::default());
+    let (ended_outcome, ended_ids) = relay_request(&relay, "main");
+    let ended = ended_ids.recv().unwrap();
+    let (outcome, ids) = relay_request(&relay, "surface-main-a");
+    let id = ids.recv().unwrap();
+    relay.end(ended);
+    assert!(ended_outcome.recv().unwrap().is_err());
+    assert!(
+        outcome.try_recv().is_err(),
+        "the forward without origin ended by the end of a connection"
+    );
+    relay
+        .reply("surface-main-a", &text(json!({"id": id, "result": 5})))
+        .expect("the reply of the surface");
+    assert_eq!(value(&outcome.recv().unwrap().unwrap()), json!(5));
+}
+
+/// The end of one origin request ends only its own forwards: a forward of the request of another connection keeps waiting,
+/// checked once the request of the ended connection ended.
+// contract: exposure.relay.forward-lives-while-its-origin-is-open
+#[test]
+fn the_end_of_a_connection_leaves_the_forwards_of_another_origin() {
+    let relay = Arc::new(Relay::default());
+    let (ended_outcome, ended_ids) = relay_request(&relay, "main");
+    let ended = ended_ids.recv().unwrap();
+    let (kept_outcome, kept_ids) = relay_request(&relay, "main");
+    let kept = kept_ids.recv().unwrap();
+    let (outcome, ids) = relay_forward(&relay, kept, "surface-main-a");
+    let id = ids.recv().unwrap();
+    relay.end(ended);
+    assert!(ended_outcome.recv().unwrap().is_err());
+    assert!(
+        outcome.try_recv().is_err(),
+        "the forward of the request of another connection ended"
+    );
+    assert!(
+        kept_outcome.try_recv().is_err(),
+        "the request of another connection ended"
+    );
+    relay
+        .reply("surface-main-a", &text(json!({"id": id, "result": 5})))
+        .expect("the reply of the surface");
+    assert_eq!(value(&outcome.recv().unwrap().unwrap()), json!(5));
+}
+
+/// A forward whose origin names no open request, one that ended by the end of its connection or an id that the relay never
+/// sent, is not sent to the surface and is refused at once with 1003, so the result does not depend on the order of the end
+/// of the origin and the forward.
+// contract: exposure.relay.forward-lives-while-its-origin-is-open
+#[test]
+fn a_forward_whose_origin_is_not_open_is_refused_without_being_sent() {
+    let relay = Arc::new(Relay::default());
+    let (origin_outcome, origin_ids) = relay_request(&relay, "main");
+    let ended = origin_ids.recv().unwrap();
+    relay.end(ended);
+    assert!(origin_outcome.recv().unwrap().is_err());
+    for origin in [ended, ended + 100] {
+        let mut sent = false;
+        let failure = relay
+            .request_of(origin, "surface-main-a", |_| {
+                sent = true;
+                Ok(())
+            })
+            .unwrap_err();
+        assert_eq!(
+            (failure.code, failure.message),
+            (1003, format!("the origin request {origin} has ended"))
+        );
+        assert!(
+            !sent,
+            "the forward of origin {origin} was sent to the surface"
+        );
+    }
 }
 
 // contract: exposure.list.host-owner-without-page
@@ -585,27 +863,6 @@ fn pointer_held_message_names_the_holding_pointer_and_its_reason() {
     );
 }
 
-// contract: exposure.timeout.command-run-default-and-declared, exposure.timeout.every-forward-bounded, exposure.timeout.invalid-timeout-rejected
-#[test]
-fn forwarded_requests_use_the_declared_timeout() {
-    // The time limit does not depend on the method, so every forward request has one.
-    for (timeout, want) in [
-        (Value::Null, exposure::TIMEOUT),
-        (json!(600000), Duration::from_secs(600)),
-        (json!(1), Duration::from_millis(1)),
-    ] {
-        assert_eq!(
-            exposure::forward_timeout(&timeout).unwrap(),
-            Some(want),
-            "{timeout}"
-        );
-    }
-    for invalid in [json!(0), json!(600001), json!(1.5), json!("10"), json!(-1)] {
-        let error = exposure::forward_timeout(&invalid).unwrap_err();
-        assert_eq!(error.code, -32602, "{invalid}");
-    }
-}
-
 // contract: endpoint.names.unknown-host-name-1001
 #[test]
 fn undeclared_host_names_are_unknown() {
@@ -833,81 +1090,12 @@ static RECORDS: Mutex<()> = Mutex::new(());
 
 /// The fields of the events named event that the writer stored.
 fn call_events(log: &EventLog, config: &Path, event: &str) -> Vec<Value> {
-    log.flush(WAIT).unwrap();
+    log.flush().unwrap();
     records::read_events(&records::event_log_path(config))
         .into_iter()
         .filter(|record| record["event"] == event)
         .map(|record| record["fields"].clone())
         .collect()
-}
-
-// contract: exposure.relay.timeout-writes-call-event
-#[test]
-fn timeout_of_a_command_writes_the_call_timeout_event() {
-    let _serial = RECORDS.lock().unwrap_or_else(|poison| poison.into_inner());
-    let config = folder::Folder::new();
-    let log = records::start_writer(config.path());
-    let relay = Relay::default();
-    let call = RelayCall {
-        plugin: "probe".into(),
-        command: "probe.run".into(),
-    };
-    let failure = relay
-        .request_call(
-            "surface-main-a",
-            Some(call),
-            Some(Duration::from_millis(50)),
-            |_| Ok(()),
-        )
-        .unwrap_err();
-    assert_eq!(failure.code, 1005);
-    assert_eq!(
-        call_events(&log, config.path(), "host.call.timeout"),
-        vec![json!({"plugin": "probe", "command": "probe.run"})]
-    );
-    // A request that is not a command writes no call event.
-    relay
-        .request("main", Some(Duration::from_millis(50)), |_| Ok(()))
-        .unwrap_err();
-    assert_eq!(
-        call_events(&log, config.path(), "host.call.timeout").len(),
-        1
-    );
-    use_host_event_log(None);
-}
-
-// contract: exposure.relay.late-reply-writes-call-event
-#[test]
-fn late_reply_to_a_command_writes_the_call_late_reply_event() {
-    let _serial = RECORDS.lock().unwrap_or_else(|poison| poison.into_inner());
-    let _trace = records::trace_on();
-    let config = folder::Folder::new();
-    let log = records::start_writer(config.path());
-    let relay = Relay::default();
-    let call = RelayCall {
-        plugin: "probe".into(),
-        command: "probe.run".into(),
-    };
-    relay
-        .request_call(
-            "surface-main-a",
-            Some(call),
-            Some(Duration::from_millis(50)),
-            |_| Ok(()),
-        )
-        .unwrap_err();
-    assert!(
-        relay
-            .reply("surface-main-a", &text(json!({"id": 1, "result": 1})))
-            .is_err()
-    );
-    let late = call_events(&log, config.path(), "host.trace.call.late-reply");
-    assert_eq!(late.len(), 1, "{late:?}");
-    assert_eq!(late[0]["plugin"], "probe");
-    assert_eq!(late[0]["command"], "probe.run");
-    let delay = late[0]["delay"].as_u64().expect("delay is a number");
-    assert!(delay >= 50, "delay {delay} ms, want at least 50 ms");
-    use_host_event_log(None);
 }
 
 // contract: view.exposure.register

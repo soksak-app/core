@@ -200,11 +200,36 @@ test("status_watch_once without equals returns the next change", async (t) => {
   assert.equal(parseText(reply.result), "project");
 });
 
-test("status_watch_once reports a timeout as a tool error", async (t) => {
+// The wait of status_watch_once has no time limit, as the watch of the client (status.watch in docs/spec/exposure.md): the value
+// or the end of the connection ends it.
+test("status_watch_once declares no timeout", async (t) => {
   const { mcp } = await fixture(t);
-  const reply = await mcp.modern("tools/call", { name: "status_watch_once", arguments: { name: "core.screen", equals: "never", timeout: 50 } });
+  const reply = await mcp.modern("tools/list");
+  const tool = reply.result.tools.find((entry) => entry.name === "status_watch_once");
+  assert.equal(Object.hasOwn(tool.inputSchema.properties, "timeout"), false, "the input schema declares timeout");
+  assert.doesNotMatch(tool.description, /timeout|milliseconds/i, "the description states a time limit");
+});
+
+test("status_watch_once refuses a timeout argument and watches nothing", async (t) => {
+  const { endpoint, mcp } = await fixture(t, ["--window", "main"]);
+  const reply = await mcp.modern("tools/call", { name: "status_watch_once", arguments: { name: "core.screen", equals: "home", timeout: 50 } });
+  assert.equal(reply.error?.code, -32602, `a timeout argument was accepted: ${JSON.stringify(reply)}`);
+  assert.match(reply.error.message, /\btimeout\b/);
+  assert.equal(endpoint.requests.some((m) => m.method === "status.watch"), false, "a refused call watched the status");
+});
+
+test("status_watch_once waits until the end of the connection and reports it as a tool error", async (t) => {
+  const { endpoint, mcp } = await fixture(t, ["--window", "main"]);
+  const got = endpoint.nextRequest("status.get");
+  let settled = false;
+  const waiting = mcp.modern("tools/call", { name: "status_watch_once", arguments: { name: "core.screen", equals: "never" } })
+    .finally(() => { settled = true; });
+  await got;
+  assert.equal(settled, false, "the wait ended before an event that decides it");
+  for (const connection of endpoint.connections) connection.socket.destroy();
+  const reply = await waiting;
   assert.equal(reply.result.isError, true);
-  assert.match(reply.result.content[0].text, /within 50 ms/);
+  assert.match(reply.result.content[0].text, /connection closed/);
 });
 
 test("endpoint errors become tool errors with the code", async (t) => {

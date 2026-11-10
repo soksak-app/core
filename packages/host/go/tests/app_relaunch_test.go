@@ -9,7 +9,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
@@ -68,7 +67,7 @@ func TestTheDetachedRelaunchCommandIsRecordedWhenItStarts(t *testing.T) {
 	if err == nil || !strings.HasPrefix(err.Error(), "application relaunch: start "+filepath.Join(config, "missing-sok")+": ") {
 		t.Fatalf("a command that cannot start gave %v, want an error that names it", err)
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var seen []map[string]any

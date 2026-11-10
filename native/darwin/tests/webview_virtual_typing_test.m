@@ -45,7 +45,7 @@ static BOOL lastDone;
 static void onDone(void *context, sp_input_result result, const sp_input_held *held) { lastResult = result; lastDone = YES; }
 static sp_input_result pointer(NSWindow *window, double x, double y, int phase) {
     lastDone = NO;
-    sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, x, y, phase, 0, 0, 0, 1, 2, onDone, NULL);
+    sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, x, y, phase, 0, 0, 0, 1, onDone, NULL);
     eventWait(@"the pointer input completes", ^BOOL { return lastDone; });
     return lastResult;
 }

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"time"
 )
 
 // The requests for the names that surfaces register (docs/spec/exposure.md#relay). The registry of the page holds the declarations
@@ -76,11 +75,9 @@ type surfaceObserver struct {
 // surfaceTable holds what the registry knows of the plugins and the surfaces of its window.
 type surfaceTable struct {
 	links SurfaceLinks
-	// declared holds the declaration keys of the plugins, exposes their entries as the plugins wrote them, and timeouts the declared
-	// time limit of each command that has one.
+	// declared holds the declaration keys of the plugins, and exposes their entries as the plugins wrote them.
 	declared map[string]bool
 	exposes  map[string][]json.RawMessage
-	timeouts map[string]int64
 	// owners holds the surfaces that registered each declaration key, in registration order.
 	owners map[string][]string
 	// watches holds the watches by watchKey, and observers the observers of this window.
@@ -90,16 +87,9 @@ type surfaceTable struct {
 }
 
 func newSurfaceTable() surfaceTable {
-	return surfaceTable{declared: map[string]bool{}, exposes: map[string][]json.RawMessage{}, timeouts: map[string]int64{},
+	return surfaceTable{declared: map[string]bool{}, exposes: map[string][]json.RawMessage{},
 		owners: map[string][]string{}, watches: map[string]*surfaceWatch{}}
 }
-
-// The time limits of a command in milliseconds: the limit of one that declares none, and the largest declared limit
-// (docs/spec/exposure.md, command timeout).
-const (
-	defaultCommandTimeout = 10000
-	maxCommandTimeout     = 600000
-)
 
 // exposeKinds gives the entry kind of each key of the declaration file.
 var exposeKinds = map[string]string{"status": "status", "commands": "command", "element": "element"}
@@ -120,13 +110,13 @@ func sectionSurface(surface string) bool { return strings.Contains(surface, "/")
 // Link gives the registry the surfaces of its window.
 func (r *Registry) Link(links SurfaceLinks) { r.surfaces.links = links }
 
-// Declare adds the declarations of a plugin. A name of another owner and a name that is declared are refused, and then nothing
-// of exposes is added.
+// Declare adds the declarations of a plugin. A name of another owner, a name that is declared and a command declaration with
+// timeout are refused, and then nothing of exposes is added. A command has no time limit: it ends by its reply or by the end of
+// its peer (docs/spec/exposure.md, command timeout).
 func (r *Registry) Declare(owner string, exposes Exposes) error {
 	type entry struct {
 		key, kind, name string
 		raw             json.RawMessage
-		timeout         int64
 	}
 	var read []entry
 	seen := map[string]bool{}
@@ -152,16 +142,10 @@ func (r *Registry) Declare(owner string, exposes Exposes) error {
 				return fmt.Errorf("%s does not belong to %s", key, owner)
 			}
 			seen[key] = true
-			each := entry{key: key, kind: list.key, name: name, raw: raw}
-			if number, present := fields["timeout"]; present {
-				text, _ := number.(json.Number) // silent: a value of another form is refused below.
-				timeout, err := text.Int64()
-				if err != nil || timeout < 1 || timeout > maxCommandTimeout {
-					return fmt.Errorf("%s timeout must be an integer from 1 to %d ms", key, maxCommandTimeout)
-				}
-				each.timeout = timeout
+			if _, present := fields["timeout"]; present && kind == "command" {
+				return fmt.Errorf("%s exposes %s: timeout is not a member of a command declaration", owner, name)
 			}
-			read = append(read, each)
+			read = append(read, entry{key: key, kind: list.key, name: name, raw: raw})
 		}
 	}
 	r.mu.Lock()
@@ -169,9 +153,6 @@ func (r *Registry) Declare(owner string, exposes Exposes) error {
 	for _, each := range read {
 		r.surfaces.declared[each.key] = true
 		r.surfaces.exposes[each.kind] = append(r.surfaces.exposes[each.kind], each.raw)
-		if each.timeout != 0 {
-			r.surfaces.timeouts[each.name] = each.timeout
-		}
 	}
 	return nil
 }
@@ -185,16 +166,6 @@ func exposureFields(raw json.RawMessage) (map[string]any, error) {
 		return nil, err
 	}
 	return fields, nil
-}
-
-// CommandTimeout returns the time limit of the plugin command name.
-func (r *Registry) CommandTimeout(name string) time.Duration {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if timeout, declared := r.surfaces.timeouts[name]; declared {
-		return time.Duration(timeout) * time.Millisecond
-	}
-	return defaultCommandTimeout * time.Millisecond
 }
 
 // isDeclared tells whether the core or a plugin declares the name of kind.
@@ -399,16 +370,11 @@ func (r *Registry) release(watched *surfaceWatch, answer func(result any, err er
 	r.forward(watched.surface, "status.unwatch", nameOnly(watched.name), answer)
 }
 
-// forward sends a request to a surface. A command whose declaration has a timeout gives it to the host, which waits that long.
+// forward sends a request to a surface. It has no time limit: the reply of the surface ends it.
 func (r *Registry) forward(surface, method string, params json.RawMessage, answer func(result any, err error)) {
 	r.mu.Lock()
 	r.surfaces.forwards++
 	request := map[string]any{"id": r.surfaces.forwards, "surface": surface, "method": method, "params": params}
-	if name, command := commandOf(method, params); command {
-		if timeout, declared := r.surfaces.timeouts[name]; declared {
-			request["timeout"] = timeout
-		}
-	}
 	r.mu.Unlock()
 	r.surfaces.links.Forward(request, func(value any, err error) {
 		if err != nil {

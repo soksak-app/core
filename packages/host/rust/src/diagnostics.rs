@@ -21,7 +21,7 @@ use serde_json::{Map, Value, json};
 use crate::application_log::log_error;
 use crate::documents::Documents;
 use crate::endpoint::Failure;
-use crate::exposure::{self, Exposure, Host, TIMEOUT, on_main};
+use crate::exposure::{self, Exposure, Host, on_main};
 use crate::object_counts::{
     DocumentObjects, HostObjects, ObjectCounter, ObjectCounts, PageObjects,
 };
@@ -244,7 +244,7 @@ pub(crate) fn call(
                 .get("surface")
                 .and_then(Value::as_str)
                 .map(str::to_string);
-            let held = exposure::parsed(&host.page(window, method, params, TIMEOUT)?)?;
+            let held = exposure::parsed(&host.page(window, method, params, reply)?)?;
             // The page refuses a surface that is not a nonempty string, so a hold that it accepted names its surface.
             if let Some(surface) = surface {
                 let released = window.clone();
@@ -263,9 +263,7 @@ pub(crate) fn call(
         | "diagnostics.surface.held"
         | "diagnostics.layout.fail"
         | "diagnostics.page.request"
-        | "diagnostics.page.calls" => {
-            exposure::parsed(&host.page(window, method, params, TIMEOUT)?)
-        }
+        | "diagnostics.page.calls" => exposure::parsed(&host.page(window, method, params, None)?),
         "diagnostics.modal.hold" => {
             let Some(on) = params.get("on").and_then(Value::as_bool) else {
                 return Err(Failure::params("on must be a boolean"));
@@ -276,19 +274,19 @@ pub(crate) fn call(
         "diagnostics.modal.held" => modal_held(window.label()),
         "diagnostics.input.source" => input_source(window, params, &connection),
         "diagnostics.input.reference" => input_reference(window, &params, &connection),
-        "diagnostics.log.flush" => crate::event_record::flush_records(TIMEOUT)
+        "diagnostics.log.flush" => crate::event_record::flush_records()
             .map(|()| Value::Null)
             .map_err(|error| Failure::new(crate::endpoint::HANDLER_FAILED, error)),
         "diagnostics.host.relaunch" => relaunch(host),
         "diagnostics.test.mark" => {
             let mark = crate::test_mark::parse_test_mark(&params)?;
-            crate::test_mark::emit_test_mark(&mark, TIMEOUT)
+            crate::test_mark::emit_test_mark(&mark)
                 .map(|(boot, seq)| json!({"boot": boot, "seq": seq}))
                 .map_err(|error| Failure::new(crate::endpoint::HANDLER_FAILED, error))
         }
         "diagnostics.stall.dump" => {
             let path = crate::stall_dump::parse_stall_dump(&params)?;
-            crate::stall_dump::emit_stall_dump(&path, TIMEOUT)
+            crate::stall_dump::emit_stall_dump(&path)
                 .map(|(boot, seq)| json!({"boot": boot, "seq": seq}))
                 .map_err(|error| Failure::new(crate::endpoint::HANDLER_FAILED, error))
         }
@@ -1349,7 +1347,7 @@ fn fixture(host: &Host, window: &Window, request: Map<String, Value>) -> Result<
         }
         params.insert("debugEntries".into(), entries.clone());
     }
-    exposure::parsed(&host.page(window, "diagnostics.fixture", params, TIMEOUT)?)
+    exposure::parsed(&host.page(window, "diagnostics.fixture", params, None)?)
 }
 
 /// Requests the page to drag one boundary back and forth and sends the step times. It answers after the drag ends and
@@ -1522,7 +1520,7 @@ fn drag_boundary(
     request.insert("axis".into(), params["axis"].clone());
     request.insert("line".into(), params["line"].clone());
     let answer =
-        exposure::parsed(&host.page(window, "diagnostics.drag.boundary", request, TIMEOUT)?)?;
+        exposure::parsed(&host.page(window, "diagnostics.drag.boundary", request, None)?)?;
     match (answer["x"].as_f64(), answer["y"].as_f64()) {
         (Some(x), Some(y)) => Ok((x, y)),
         _ => Err(internal(format!(
@@ -1563,7 +1561,7 @@ fn drag(
     // With native, the page answers the point of the boundary, and the host delivers the drag as native input there.
     let from = if native {
         Some(presented_boundary(
-            || exposure::presented(window, TIMEOUT),
+            || exposure::presented(window, None),
             || drag_boundary(host, window, &params),
         )?)
     } else {
@@ -1599,7 +1597,6 @@ fn drag(
         ),
     );
     let ticking = window.clone();
-    let length = FRAME * steps as u32;
     // When recording, the time at which the step was sent is kept on the same clock as the frames, so that the delay
     // from the step to the screen can be measured.
     let sent = std::sync::Arc::new(std::sync::Mutex::new(Vec::<f64>::new()));
@@ -1646,7 +1643,7 @@ fn drag(
                     }
                 },
                 || {
-                    exposure::presented(window, TIMEOUT)?;
+                    exposure::presented(window, None)?;
                     pressed.set(Instant::now());
                     due.set(0);
                     Ok(())
@@ -1655,13 +1652,9 @@ fn drag(
         }
         // The page discards the previous steps when it starts a drag, so the steps are sent after the request event.
         None => host
-            .page_then(
-                window,
-                "diagnostics.drag",
-                params,
-                Some(TIMEOUT + length),
-                move || tick(ticking, steps, clock, recorded),
-            )
+            .page_then(window, "diagnostics.drag", params, None, move || {
+                tick(ticking, steps, clock, recorded)
+            })
             .and_then(|result| exposure::parsed(&result)),
     };
     let (result, layouts) = stop_after_settled(
@@ -1669,7 +1662,7 @@ fn drag(
             let result = result?;
             // Waits until the last placement is committed and presented. Waiting for one next presentation could end
             // at a presentation before the commit of the last step.
-            exposure::window_presented(host, window)?;
+            exposure::window_presented(host, window, None)?;
             exposure::note(window, "diagnostics: drag presented");
             Ok(result)
         },

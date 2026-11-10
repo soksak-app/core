@@ -243,7 +243,7 @@ int main(int argc, const char **argv) { @autoreleasepool {
         require([evaluate(views[i], @"Boolean(window.probe)") boolValue], @"the document defines its probe");
     }
     __block SPActivation activation = {NO, SP_ACTIVATE_DONE, ""};
-    sp_input_activate(window, 5, activated, &activation);
+    sp_input_activate(window, activated, &activation);
     eventWait(@"the activation of the window ends", ^BOOL { return activation.done; });
     require(activation.result == SP_ACTIVATE_DONE, [NSString stringWithFormat:
         @"the window did not become the key window of the active application (%d, frontmost %s)",

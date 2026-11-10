@@ -9,7 +9,6 @@ import (
 	"regexp"
 	"slices"
 	"strings"
-	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	sok "github.com/soksak-app/core/packages/sok/go/src"
@@ -788,20 +787,17 @@ func (s *Shell) runCommandCall(call viewCallEvent, answer viewAnswer) error {
 }
 
 // runViewCommand sends a command that the view of surface registered to that view. The reply arrives as the event view-reply, and
-// the post may instead settle the command, for a view whose source was replaced. A view that does not reply within the declared
-// limit of the command ends it.
+// the post may instead settle the command, for a view whose source was replaced. The command has no time limit: the reply, the
+// post that settles it or the end of the view ends it (docs/spec/exposure.md, command timeout).
 func (s *Shell) runViewCommand(surface string, view *viewState, name string, params, cids json.RawMessage, answer viewAnswer) {
 	s.surfaces.command++
 	id := s.surfaces.command
-	limit := s.registry.CommandTimeout(name)
-	var timer *time.Timer
 	ended := false
 	settle := func(result any, err error) {
 		if ended {
 			return
 		}
 		ended = true
-		timer.Stop()
 		delete(view.requests, id)
 		view.ended = append(view.ended, id)
 		if len(view.ended) > endedCallsKept {
@@ -811,14 +807,6 @@ func (s *Shell) runViewCommand(surface string, view *viewState, name string, par
 		s.options.Invalidate()
 		answer(result, err)
 	}
-	timer = time.AfterFunc(limit, func() {
-		s.options.Post(func() {
-			if !ended {
-				s.processes.loss(view.plugin).Timeouts++
-			}
-			settle(nil, fmt.Errorf("command %s did not reply within %dms", name, limit.Milliseconds()))
-		})
-	})
 	view.requests[id] = settle
 	s.processes.openCall(id, view.plugin)
 	s.options.Invalidate()

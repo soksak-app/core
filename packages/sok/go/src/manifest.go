@@ -33,7 +33,7 @@ var (
 )
 
 // The limits that the reader names (PLUGIN_DESCRIPTION_MAX, SETTING_LABEL_MAX, SETTING_DESCRIPTION_MAX, ADDRESS_MAX,
-// SET_TITLE_MAX, COMMAND_TIMEOUT_MAX).
+// SET_TITLE_MAX).
 const (
 	pluginDescriptionMax  = 200
 	settingLabelMax       = 40
@@ -41,7 +41,6 @@ const (
 	addressMax            = 2048
 	setTitleMax           = 40
 	menuTitleMax          = 40
-	commandTimeoutMax     = 600000
 )
 
 // topLevelKeys are the members that plugin.json may hold (validateManifest).
@@ -1226,7 +1225,7 @@ func isList(value any) bool {
 
 // checkExposes checks the exposes declaration of the plugin owner (validateExposes of the reader): the kinds status,
 // commands and element, and for each entry a name `<owner>.<name>`, a description, the schemas of its fields, an object
-// params schema of a command, a boolean many of an element entry and a timeout of a command. A name is declared once per kind.
+// params schema of a command and a boolean many of an element entry; a command has no timeout. A name is declared once per kind.
 func checkExposes(owner string, raw any) error {
 	where := owner + " exposes"
 	exposes, ok := raw.(map[string]any)
@@ -1257,12 +1256,14 @@ func checkExposes(owner string, raw any) error {
 			}
 			seen[kind+" "+name] = true
 			at := where + " " + name
+			// A command ends by its reply or by the end of its peer (docs/spec/exposure.md, command timeout), so the former
+			// member is refused by its own name.
+			if _, has := entry["timeout"]; has && kind == "commands" {
+				return fmt.Errorf("%s: timeout is not a member of a command declaration", at)
+			}
 			allowed := append([]string{"name", "description"}, fields[kind]...)
 			if kind == "element" {
 				allowed = append(allowed, "many")
-			}
-			if kind == "commands" {
-				allowed = append(allowed, "timeout")
 			}
 			if err := only(at, entry, allowed...); err != nil {
 				return err
@@ -1290,18 +1291,9 @@ func checkExposes(owner string, raw any) error {
 					return fmt.Errorf("%s: many must be a boolean", at)
 				}
 			}
-			if raw, has := entry["timeout"]; has && !validTimeout(raw) {
-				return fmt.Errorf("%s: timeout must be an integer from 1 to %d milliseconds", at, commandTimeoutMax)
-			}
 		}
 	}
 	return nil
-}
-
-// validTimeout reports whether a timeout is an integer from 1 to commandTimeoutMax.
-func validTimeout(raw any) bool {
-	f, ok := integerValue(raw)
-	return ok && f >= 1 && f <= commandTimeoutMax
 }
 
 // isViewPage reports whether the value is the page of a view: a path inside the release that ends in .html, with no empty,

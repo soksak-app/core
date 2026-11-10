@@ -103,30 +103,40 @@ test("a predicate that answers anything but true or false ends the watch with an
       new RegExp(`^Error: the predicate of core\\.screen returned ${type}, not a boolean$`));
     await unwatched;
   }
-  assert.equal(await client.watch("main", "core.screen", () => false, { timeout: 50 }).catch((error) => error.code), "ETIMEDOUT");
 });
 
-test("watch resolves only after its final status.unwatch is acknowledged", async (t) => {
+test("a predicate that throws ends the watch with its error and unwatches", async (t) => {
+  const sample = sampleHandlers();
+  const server = await startFakeEndpoint(sample.handlers);
+  t.after(() => server.close());
+  const client = await connect({ configDir: server.configDir });
+  t.after(() => client.close());
+  const unwatched = requested(server, (m) => m.method === "status.unwatch");
+  const failure = new Error("the predicate failed");
+  await assert.rejects(client.watch("main", "core.screen", () => { throw failure; }), (error) => error === failure);
+  await unwatched;
+});
+
+test("watch resolves before its status.unwatch is answered, and sends the unwatch after it", async (t) => {
   let finishUnwatch;
+  let entered;
+  // Resolves when the endpoint runs the handler of status.unwatch, which holds its answer until the test sends it.
+  const held = new Promise((resolve) => { entered = resolve; });
   const server = await startFakeEndpoint({
     "status.watch": () => null,
     "status.get": () => "home",
-    "status.unwatch": () => new Promise((resolve) => { finishUnwatch = () => resolve(null); }),
+    "status.unwatch": () => new Promise((resolve) => { finishUnwatch = () => resolve(null); entered(); }),
+    ping: () => null,
   });
   t.after(() => server.close());
   const client = await connect({ configDir: server.configDir });
   t.after(() => client.close());
-  const unwatchRequest = requested(server, (message) => message.method === "status.unwatch");
-  let resolved = false;
-  const watching = client.watch("main", "core.screen", (value) => value === "home").then((value) => {
-    resolved = true;
-    return value;
-  });
-  await unwatchRequest;
-  await Promise.resolve();
-  assert.equal(resolved, false, "watch resolved before the endpoint acknowledged unwatch");
+  assert.equal(await client.watch("main", "core.screen", (value) => value === "home"), "home");
+  await held;
   finishUnwatch();
-  assert.equal(await watching, "home");
+  // The answer of a later request comes after the answer of the unwatch, which changed nothing of the connection.
+  assert.equal(await client.request("ping"), null);
+  assert.equal(client.closed, false);
 });
 
 test("watch resolves from a status.changed notification without further requests", async (t) => {
@@ -136,7 +146,7 @@ test("watch resolves from a status.changed notification without further requests
   const client = await connect({ configDir: server.configDir });
   t.after(() => client.close());
   const got = server.nextRequest("status.get");
-  const waiting = client.watch("main", "core.screen", (value) => value === "project", { timeout: 5000 });
+  const waiting = client.watch("main", "core.screen", (value) => value === "project");
   await got;
   sample.set("core.screen", "settings");
   sample.set("core.screen", "project");
@@ -145,18 +155,24 @@ test("watch resolves from a status.changed notification without further requests
   assert.equal(server.requests.filter((m) => m.method === "status.get").length, 1);
 });
 
-test("watch rejects after the timeout and unwatches", async (t) => {
+// A watch has no time limit (status.watch in docs/spec/exposure.md): a value that does not satisfy the predicate keeps it open,
+// and the close of the connection ends it with the close error.
+test("a watch that no value satisfies waits until the connection closes, and the close rejects it", async (t) => {
   const sample = sampleHandlers();
   const server = await startFakeEndpoint(sample.handlers);
   t.after(() => server.close());
   const client = await connect({ configDir: server.configDir });
-  t.after(() => client.close());
-  await assert.rejects(client.watch("main", "core.screen", () => false, { timeout: 50 }), {
-    code: "ETIMEDOUT",
-    message: 'status core.screen did not satisfy the condition within 50 ms; last value "home"',
-  });
+  const got = server.nextRequest("status.get");
+  let settled = false;
+  const watching = client.watch("main", "core.screen", () => false).finally(() => { settled = true; });
+  await got;
+  sample.set("core.screen", "settings");
+  // The answer of a later request comes after the value of status.get and the change, which the predicate refused.
   await client.request("windows.list");
-  assert.ok(server.requests.some((m) => m.method === "status.unwatch"));
+  assert.equal(settled, false, "the watch ended before an event that decides it");
+  client.close();
+  await assert.rejects(watching, { message: "endpoint connection closed" });
+  assert.equal(server.requests.some((m) => m.method === "status.unwatch"), false, "a closed connection sent status.unwatch");
 });
 
 test("concurrent watches of one name unwatch only after the last one ends", async (t) => {
@@ -185,6 +201,9 @@ test("a watch that ends before its subscription is confirmed is unsubscribed bef
     "status.watch": (params, connection) => {
       if (!first) return sample.handlers["status.watch"](params, connection);
       first = false;
+      // A change that arrives before the answer of status.watch reaches the predicate, which ends the watch before its
+      // subscription is confirmed.
+      connection.notify("status.changed", { window: "main", name: "core.screen", value: "early" });
       return new Promise((resolve) => {
         confirm = () => resolve(sample.handlers["status.watch"](params, connection));
       });
@@ -195,12 +214,13 @@ test("a watch that ends before its subscription is confirmed is unsubscribed bef
   const client = await connect({ configDir: server.configDir });
   t.after(() => client.close());
   const unwatch = requested(server, (message) => message.method === "status.unwatch");
-  const expired = client.watch("main", "core.screen", () => false, { timeout: 20 });
-  const timedOut = assert.rejects(expired, { code: "ETIMEDOUT" });
+  const failure = new Error("the predicate failed");
+  const ended = client.watch("main", "core.screen", () => { throw failure; });
+  const failed = assert.rejects(ended, (error) => error === failure);
   await client.request("windows.list");
   confirm();
   await unwatch;
-  await timedOut;
+  await failed;
   const nextStatusWatch = requested(server, (message) => message.method === "status.watch");
   const next = client.watch("main", "core.screen", (value) => value === "later");
   await nextStatusWatch;
@@ -229,7 +249,7 @@ test("a closed connection rejects pending requests and watches", async (t) => {
   const client = await connect({ configDir: server.configDir });
   const got = server.nextRequest("status.get");
   const pending = client.request("hang");
-  const watching = client.watch("main", "core.screen", () => false, { timeout: Infinity });
+  const watching = client.watch("main", "core.screen", () => false);
   await got;
   for (const connection of server.connections) connection.socket.destroy();
   await assert.rejects(pending, /connection closed/);
@@ -292,7 +312,7 @@ test("a watch with a surface requests that surface and ignores changes of other 
   t.after(() => server.close());
   const client = await connect({ configDir: server.configDir });
   t.after(() => client.close());
-  const waiting = client.watch("main", "probe.lines", (lines) => lines.includes("x"), { surface: "tab-a", timeout: 5000 });
+  const waiting = client.watch("main", "probe.lines", (lines) => lines.includes("x"), { surface: "tab-a" });
   await ready;
   watcher.notify("status.changed", { window: "main", name: "probe.lines", value: ["x"] });
   watcher.notify("status.changed", { window: "main", name: "probe.lines", surface: "tab-b", value: ["x"] });
@@ -316,43 +336,40 @@ test("status.ended rejects the watch with ENDED and a later watch subscribes aga
   t.after(() => server.close());
   const client = await connect({ configDir: server.configDir });
   t.after(() => client.close());
-  const first = client.watch("main", "probe.lines", () => false, { surface: "tab-a", timeout: 5000 });
-  const second = client.watch("main", "probe.lines", () => false, { surface: "tab-a", timeout: 5000 });
+  const first = client.watch("main", "probe.lines", () => false, { surface: "tab-a" });
+  const second = client.watch("main", "probe.lines", () => false, { surface: "tab-a" });
   await reads;
   watcher.notify("status.ended", { window: "main", name: "probe.lines", surface: "tab-b", reason: "surface-closed" });
   watcher.notify("status.ended", { window: "main", name: "probe.lines", surface: "tab-a", reason: "surface-closed" });
   for (const watch of [first, second]) {
     await assert.rejects(watch, (error) => error.code === "ENDED" && error.message === "status probe.lines ended: surface-closed");
   }
-  const again = client.watch("main", "probe.lines", (lines) => lines.length === 0, { surface: "tab-a", timeout: 5000 });
+  // The watch resolves before its unwatch reaches the endpoint, so the check waits for that request.
+  const unwatched = requested(server, (m) => m.method === "status.unwatch");
+  const again = client.watch("main", "probe.lines", (lines) => lines.length === 0, { surface: "tab-a" });
   assert.deepEqual(await again, []);
+  await unwatched;
   assert.deepEqual(server.requests.map((m) => m.method).filter((m) => m !== "status.get"),
     ["status.watch", "status.watch", "status.unwatch"]);
 });
 
-// A reload of the page removes the watches of its document, so an unwatch that the host refuses with 1003 (the document
-// closed or the page is not ready) ends that watch; it is reported to the caller of the watch and the connection stays open.
-test("an unwatch refused with 1003 rejects the watch and keeps the connection", async (t) => {
-  const sample = sampleHandlers();
-  const server = await startFakeEndpoint({ ...sample.handlers,
-    "status.unwatch": () => { throw rpcError(1003, "the main page is not ready"); } });
-  t.after(() => server.close());
-  const client = await connect({ configDir: server.configDir });
-  t.after(() => client.close());
-  await assert.rejects(client.watch("main", "core.screen", (value) => value === "home"), /the main page is not ready/);
-  assert.equal(await client.request("status.get", { window: "main", name: "core.screen" }), "home");
-});
-
-test("an unwatch refused with another code fails the connection", async (t) => {
-  const sample = sampleHandlers();
-  const server = await startFakeEndpoint({ ...sample.handlers,
-    "status.unwatch": () => { throw rpcError(-32603, "internal error"); } });
-  t.after(() => server.close());
-  const client = await connect({ configDir: server.configDir });
-  t.after(() => client.close());
-  await assert.rejects(client.watch("main", "core.screen", (value) => value === "home"), /internal error/);
-  await assert.rejects(client.request("status.get", { window: "main", name: "core.screen" }), /status.unwatch failed: internal error/);
-});
+// The host ends the subscription of the connection before it asks the page, so an unwatch that the host refuses ends the watch
+// whatever its code (status.watch in docs/spec/exposure.md): the caller keeps its value and the connection stays open.
+for (const [code, message] of [[1003, "the main page is not ready"], [-32603, "internal error"]]) {
+  test(`an unwatch refused with ${code} leaves the result of the watch and keeps the connection`, async (t) => {
+    const sample = sampleHandlers();
+    const server = await startFakeEndpoint({ ...sample.handlers,
+      "status.unwatch": () => { throw rpcError(code, message); } });
+    t.after(() => server.close());
+    const client = await connect({ configDir: server.configDir });
+    t.after(() => client.close());
+    const unwatched = requested(server, (m) => m.method === "status.unwatch");
+    assert.equal(await client.watch("main", "core.screen", (value) => value === "home"), "home");
+    await unwatched;
+    assert.equal(await client.request("status.get", { window: "main", name: "core.screen" }), "home");
+    assert.equal(client.closed, false, `an unwatch refused with ${code} closed the connection`);
+  });
+}
 
 // The sample endpoint answers the element methods of the host: exposure.list lists the element entries in `element`, and
 // element.rect and element.act address an element entry by name (docs/spec/exposure.md).

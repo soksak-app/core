@@ -88,7 +88,7 @@ fn every_line_stores_the_class_of_its_catalog_entry() {
         ))
         .unwrap()
     );
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let want = [
         ("log.open", "lifecycle"),
         ("host.app.event", "lifecycle"),
@@ -119,7 +119,7 @@ fn an_event_the_catalog_does_not_declare_is_marked_undeclared_and_has_no_class()
         log.emit_relayed(relayed("plugin", "plugin.editor.opened", "{}"))
             .unwrap()
     );
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let events = read(log.path());
     let marked: Vec<&Value> = events
         .iter()
@@ -151,7 +151,7 @@ fn the_events_of_the_writer_itself_store_their_class() {
     for _ in 0..40 {
         log.emit(Level::Info, "host.app.event", &json!({"kind": "started"}));
     }
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let mut names = Vec::new();
     let path = log.path().to_path_buf();
     for name in [".1", ".2", ".3", ""] {

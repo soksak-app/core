@@ -34,8 +34,7 @@ async function turns() {
 test("a wait reads the folder again when the watch reports dropped events", { timeout: 10000 }, async (t) => {
   const dir = folder(t);
   const file = join(dir, "state");
-  const waiting = untilFolderState(dir, () => (existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : undefined),
-    5000, () => new Error("deadline passed"));
+  const waiting = untilFolderState(dir, () => (existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : undefined));
   await turns();
   writeFileSync(file, '{"ready":true}');
   report(new Error("Events were dropped by the FSEvents client. File system must be re-scanned."));
@@ -44,7 +43,7 @@ test("a wait reads the folder again when the watch reports dropped events", { ti
 
 test("a wait rejects when the watch fails", { timeout: 10000 }, async (t) => {
   const dir = folder(t);
-  const waiting = untilFolderState(dir, () => undefined, 5000, () => new Error("deadline passed"));
+  const waiting = untilFolderState(dir, () => undefined);
   await turns();
   report(new Error("Unable to watch the folder"));
   await assert.rejects(waiting, /Unable to watch the folder/);

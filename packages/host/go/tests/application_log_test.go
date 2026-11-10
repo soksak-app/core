@@ -11,7 +11,6 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
@@ -123,7 +122,7 @@ func TestStartStandardErrorWritesTheRunRecordAsAnEventAndTakesTheStandardErrorOf
 			os.Stdout.WriteString(err.Error() + "\n")
 			os.Exit(2)
 		}
-		if err := log.Flush(5 * time.Second); err != nil {
+		if err := log.Flush(); err != nil {
 			os.Stdout.WriteString(err.Error() + "\n")
 			os.Exit(2)
 		}
@@ -167,7 +166,7 @@ func TestLogErrorWritesAnErrorEventToTheEventLog(t *testing.T) {
 		support.StoreEveryLevel(t, log)
 		host.UseHostEventLog(log)
 		host.LogError("surface input", errors.New("the window has no content view"))
-		if err := log.Flush(5 * time.Second); err != nil {
+		if err := log.Flush(); err != nil {
 			os.Stdout.WriteString(err.Error() + "\n")
 			os.Exit(2)
 		}
@@ -211,7 +210,7 @@ func TestLogInfoWritesAnInfoEventToTheEventLog(t *testing.T) {
 		support.StoreEveryLevel(t, log)
 		host.UseHostEventLog(log)
 		host.LogInfo("webkit children", "pid 7: gone")
-		if err := log.Flush(5 * time.Second); err != nil {
+		if err := log.Flush(); err != nil {
 			os.Stdout.WriteString(err.Error() + "\n")
 			os.Exit(2)
 		}

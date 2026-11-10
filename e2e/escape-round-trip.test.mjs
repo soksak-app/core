@@ -11,8 +11,9 @@ import { currentEventOffsets, readEvents, traceRows, untilEventLines } from "@so
 import { fresh, reading } from "./fixture.mjs";
 
 const RUNS = 5;
-// The limit of one round trip: from the Escape press until the close record is in the event log.
-const ROUND_TIMEOUT = 30000;
+// The limit of the test runner for one round trip, which covers the menu open, the Escape press and the close record in the event
+// log; the waits of the round trip end by their events.
+const ROUND_LIMIT = 60000;
 // The limit of the runs of one host, which covers the menu opens and their closes.
 const HOST_TIMEOUT = 300000;
 const ANSWER = "workbench.trace.modal.answer";
@@ -49,8 +50,7 @@ async function roundTripNs(s, app, card) {
   await s.until("core.picker", (value) => !value.open, "the add menu did not close after Escape");
   await s.flushLog();
   await untilEventLines(app.configDir, before,
-    (lines) => lines.some((line) => line.includes(`${CLOSE}: `) && line.includes('"reason":"dismiss"')),
-    ROUND_TIMEOUT, reading(app, [ANSWER, CLOSE]));
+    (lines) => lines.some((line) => line.includes(`${CLOSE}: `) && line.includes('"reason":"dismiss"')), { ...reading(app, [ANSWER, CLOSE]), ended: s.client.ended });
   const { events } = readEvents(app.configDir, before);
   const rows = traceRows(events);
   const answers = rows.filter((row) => row.event === "modal.answer" && row.key === "core.modal.dismiss");
@@ -79,7 +79,7 @@ for (const app of MAIN_PAGE_APPS) {
     if (!card) throw new Error(`${app.name}: no pane card has an enabled add menu`);
     const values = [];
     for (let run = 1; run <= RUNS; run++) {
-      await t.test(`${app.name}: round trip ${run} of ${RUNS}`, { timeout: ROUND_TIMEOUT + 30000 }, async (u) => {
+      await t.test(`${app.name}: round trip ${run} of ${RUNS}`, { timeout: ROUND_LIMIT }, async (u) => {
         let ns;
         try {
           ns = await roundTripNs(s, app, card.id);

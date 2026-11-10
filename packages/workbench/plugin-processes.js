@@ -19,7 +19,7 @@ const announce = () => {
 
 const lossesOf = (plugin) => {
   if (!lossCounts.has(plugin)) {
-    lossCounts.set(plugin, { plugin, abandoned: 0, lateReplies: 0, timeouts: 0, peerLost: 0 });
+    lossCounts.set(plugin, { plugin, abandoned: 0, lateReplies: 0, peerLost: 0 });
   }
   return lossCounts.get(plugin);
 };
@@ -34,7 +34,7 @@ export function onPluginProcessChange(fn) {
  * Returns the report function of one call layer (createCalls of @soksak/plugin-api). Each call of callReporter makes a new layer,
  * so the open calls of the layers of one plugin add up in openCalls.
  *
- * A timeout counts losses.timeouts, a late reply counts losses.lateReplies, and a surface that closed with a call open counts
+ * A call has no time limit (docs/spec/plugin-processes.md, rule 3). A late reply counts losses.lateReplies, and a surface that closed with a call open counts
  * losses.peerLost. A process or sidecar that ends with a call open is a failure: no loss is counted, and the host relay writes
  * it as an error event.
  */
@@ -44,8 +44,6 @@ export function callReporter(plugin) {
     if (event.kind === "open-calls") {
       if (event.count === 0) layers.delete(layer);
       else layers.set(layer, { plugin, count: event.count, oldestStartedAt: event.oldestStartedAt });
-    } else if (event.kind === "timeout") {
-      lossesOf(plugin).timeouts += 1;
     } else if (event.kind === "late-reply") {
       lossesOf(plugin).lateReplies += 1;
     } else if (event.kind === "peer-lost") {
@@ -78,7 +76,7 @@ export const openCalls = () => {
   return [...totals.values()];
 };
 
-/** The losses of each plugin that has counted one: `{plugin, abandoned, lateReplies, timeouts, peerLost}`. */
+/** The losses of each plugin that has counted one: `{plugin, abandoned, lateReplies, peerLost}`. */
 export const losses = () => [...lossCounts.values()].map((entry) => ({ ...entry }));
 
 /** The responsiveness of each plugin view surface: `{plugin, surface, responsive}`. */

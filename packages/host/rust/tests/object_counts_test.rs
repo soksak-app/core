@@ -13,7 +13,6 @@ use endpoint_client::Connection;
 
 use std::os::unix::fs::PermissionsExt;
 use std::sync::{Arc, Mutex, mpsc};
-use std::time::Duration;
 
 use serde_json::value::RawValue;
 use serde_json::{Map, Value, json};
@@ -179,7 +178,7 @@ fn relay_pending_count_follows_the_waiting_requests() {
     let (sent_tx, sent_rx) = mpsc::channel();
     std::thread::scope(|scope| {
         let waiting = scope.spawn(|| {
-            relay.request("main", Some(Duration::from_secs(10)), |_id| {
+            relay.request("main", |_id| {
                 sent_tx.send(()).unwrap();
                 Ok(())
             })
@@ -322,7 +321,7 @@ fn diagnostics_objects_reply_and_params() {
     )
     .unwrap();
     endpoint.publish("main").unwrap();
-    let mut connection = endpoint_client::connect(endpoint.address(), Duration::from_secs(5));
+    let mut connection = endpoint_client::connect(endpoint.address());
     let missing = request(&mut connection, 1, json!({}));
     assert_eq!(missing["error"]["code"], json!(-32602), "{missing}");
     let unknown = request(&mut connection, 2, json!({"window": "other"}));

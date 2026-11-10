@@ -54,11 +54,11 @@ static void drainMainQueue(NSString *what) {
 }
 static sp_input_result lastResult;
 static BOOL lastDone;
-// The answer can come from the timer of the receipt limit, which does not end a turn of the run loop.
+// The answer can come from a callback that does not end a turn of the run loop.
 static void onDone(void *context, sp_input_result result, const sp_input_held *held) { lastResult = result; lastDone = YES; eventWake(); }
 static sp_input_result pointer(NSWindow *window, double x, double y, int phase) {
     lastDone = NO;
-    sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, x, y, phase, 0, 0, 0, 1, 2, onDone, NULL);
+    sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, x, y, phase, 0, 0, 0, 1, onDone, NULL);
     eventWait(@"the pointer input answers", ^BOOL { return lastDone; });
     return lastResult;
 }

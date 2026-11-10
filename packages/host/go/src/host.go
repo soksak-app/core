@@ -261,7 +261,7 @@ func (s *Session) Shutdown() {
 	if err := host.endpoint.Close(); err != nil {
 		LogError("endpoint close", err)
 	}
-	if err := FlushEventLog(host.events, system.FlushNativeObservers, 2*time.Second); err != nil {
+	if err := FlushEventLog(host.events, system.FlushNativeObservers); err != nil {
 		LogError("event log flush", err)
 	}
 	// The save and the cleanup are finished, so the termination request of the operating system that was received is answered.

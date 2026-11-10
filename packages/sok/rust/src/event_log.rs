@@ -772,7 +772,8 @@ impl EventLog {
         &self.boot
     }
 
-    /// Queues an event of the layer of the writer, waits until it is on disk, at most `deadline`, and returns its `seq`. The
+    /// Queues an event of the layer of the writer, waits until it is on disk, and returns its `seq`; the end of the writer ends
+    /// the wait (docs/spec/logging.md#writers). The
     /// queue refusing the event is an error, so a caller that stores the position never stores one of a line that does not
     /// exist.
     pub fn emit_placed(
@@ -780,9 +781,8 @@ impl EventLog {
         level: Level,
         event: &str,
         fields: Box<RawValue>,
-        deadline: Duration,
     ) -> Result<u64, String> {
-        self.emit_placed_fields(level, event, Fields::whole(fields), deadline)
+        self.emit_placed_fields(level, event, Fields::whole(fields))
     }
 
     /// Like `emit_placed` for fields that a producer serialized up to the bound.
@@ -791,7 +791,6 @@ impl EventLog {
         level: Level,
         event: &str,
         fields: Fields,
-        deadline: Duration,
     ) -> Result<u64, String> {
         let (placed, receiver) = sync_channel(1);
         if self.queued_events.load(Ordering::Relaxed) >= self.queue_events {
@@ -821,7 +820,7 @@ impl EventLog {
                 refusal.reason()
             ));
         }
-        self.flush(deadline)?;
+        self.flush()?;
         receiver
             .try_recv()
             .map_err(|_| format!("the event writer could not write {event}"))
@@ -1096,14 +1095,15 @@ impl EventLog {
         self.rouser.nudge();
     }
 
-    /// Writes everything that is queued and waits until it is on disk, at most `deadline`.
-    pub fn flush(&self, deadline: Duration) -> Result<(), String> {
+    /// Writes everything that is queued and waits until it is on disk. It takes no time limit: the answer of the writer ends
+    /// it, and the end of the writer fails it.
+    pub fn flush(&self) -> Result<(), String> {
         let (done, wait) = sync_channel(1);
         // A request has a reserved slot, so this send is not refused by a full queue of events.
         self.sender
             .try_send(Message::Flush(done))
             .map_err(|e| format!("the event writer did not take the flush request: {e}"))?;
-        wait_for_flush(&wait, deadline)
+        wait_for_flush(&wait)
     }
 
     /// Writes everything that is queued and ends the writer.
@@ -1547,20 +1547,14 @@ impl PullSink for Output {
 
 fn answer_flush(done: SyncSender<()>) {
     if done.send(()).is_err() {
-        eprintln!("event writer: the flush was answered after its deadline");
+        eprintln!("event writer: the flush was answered after its caller ended");
     }
 }
 
-/// A closed answer channel means that the writer ended without taking the request, which is not a deadline that passed.
-fn wait_for_flush(wait: &Receiver<()>, deadline: Duration) -> Result<(), String> {
-    wait.recv_timeout(deadline).map_err(|error| match error {
-        RecvTimeoutError::Timeout => {
-            format!("the event writer did not flush within {deadline:?}")
-        }
-        RecvTimeoutError::Disconnected => {
-            "the event writer ended before it answered the flush".to_string()
-        }
-    })
+/// A closed answer channel means that the writer ended without answering the request.
+fn wait_for_flush(wait: &Receiver<()>) -> Result<(), String> {
+    wait.recv()
+        .map_err(|_| "the event writer ended before it answered the flush".to_string())
 }
 
 #[allow(clippy::too_many_arguments)]

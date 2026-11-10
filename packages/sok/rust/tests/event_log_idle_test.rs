@@ -210,7 +210,7 @@ fn the_events_after_the_first_wait_for_the_batch() {
     assert_eq!(idle.wrote(), 0, "the first event was written twice");
     assert!(idle.log.emit(Level::Info, "writer.idle.second", &json!({})));
     assert!(idle.log.emit(Level::Info, "writer.idle.third", &json!({})));
-    idle.log.flush(Duration::from_secs(5)).unwrap();
+    idle.log.flush().unwrap();
     assert_eq!(
         idle.wrote(),
         1,
@@ -291,7 +291,7 @@ fn close_stores_what_waits_and_what_the_source_holds() {
 fn a_writer_that_sleeps_takes_the_source_when_it_flushes_and_closes() {
     let idle = idle(HOUR);
     idle.source.hold("native.idle.flushed");
-    idle.log.flush(Duration::from_secs(5)).unwrap();
+    idle.log.flush().unwrap();
     assert!(idle.stores("native.idle.flushed"));
     idle.source.hold("native.idle.closed");
     idle.log.close();

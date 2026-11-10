@@ -60,8 +60,7 @@ for (const app of Object.values(APPS)) {
       }
       const ending = currentEventOffsets(app.configDir);
       await change(s, "disable", RASTER);
-      await untilEventLine(app.configDir, ending, (line) => line.includes(`service ${running.version} ended; the sidecar is not declared`),
-        10000, reading(app, ["host.record.info"]));
+      await untilEventLine(app.configDir, ending, (line) => line.includes(`service ${running.version} ended; the sidecar is not declared`), { ...reading(app, ["host.record.info"]), ended: s.client.ended });
       await change(s, "enable", RASTER);
       await s.until("core.plugins", (value) => value.outdated.length === 0, "the enabled raster probe shows an outdated service");
       rmSync(join(app.configDir, folder, ".."), { recursive: true, force: true });
@@ -89,7 +88,7 @@ for (const app of Object.values(APPS)) {
     // The action ends the sessions of the service and replaces it; the host writes the replacement to its log.
     const offsets = currentEventOffsets(app.configDir);
     await s.act("core.library.plugins.replace", "click");
-    await untilEventLine(app.configDir, offsets, (line) => line.includes(`service ${running.version} replaced by ${newer}`), 10000,
-      reading(app, ["host.record.info"]));
+    await untilEventLine(app.configDir, offsets, (line) => line.includes(`service ${running.version} replaced by ${newer}`),
+      { ...reading(app, ["host.record.info"]), ended: s.client.ended });
   });
 }

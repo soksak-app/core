@@ -149,10 +149,9 @@ pub fn start_host_log_policy(
 pub fn flush_event_log(
     log: &EventLog,
     flush_observers: impl FnOnce() -> Result<(), String>,
-    deadline: Duration,
 ) -> Result<(), String> {
     let observers = flush_observers().map_err(|error| format!("flush native observers: {error}"));
-    let writer = log.flush(deadline);
+    let writer = log.flush();
     match (observers, writer) {
         (Ok(()), Ok(())) => Ok(()),
         (Err(error), Ok(())) | (Ok(()), Err(error)) => Err(error),

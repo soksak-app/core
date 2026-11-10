@@ -22,8 +22,13 @@ use crate::source_origins::{ViewSourceOrigins, view_source_origin_event};
 use crate::surfaces::{Rect, Running, SurfaceComposition, Views, Watching};
 use crate::theme::CurrentTheme;
 
-/// A reload that waits for the next page of its window: its number and the sender of its end.
-pub type Readied = (u64, mpsc::Sender<Result<(), String>>);
+/// The end of a reload that its new page did not report ready to: an end of the window or of its main page process, named
+/// by the end (`WindowData::end_waits`), or a start of the new page that failed, with its error.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum ReloadEnd {
+    Ended(String),
+    NotStarted(String),
+}
 
 /// The state of one window.
 #[derive(Default)]
@@ -47,9 +52,11 @@ pub struct WindowData {
     /// The windows that received a close request that was not blocked. These windows disappear from the runtime before
     /// Destroyed, so they are not put in the list.
     pub closing: AtomicBool,
-    /// The reloads that wait for the next page, each with its number: the ready of the page sends `Ok`, and the close of the
-    /// window and a start of the new page that fails send the error that ends the reload.
-    pub readied: Mutex<Vec<Readied>>,
+    /// The reloads that wait for the next page: the ready of the page sends `Ok`, and the close of the window, the end of
+    /// its page process and a start of the new page that fails send the end of the reload.
+    pub(crate) readied: Mutex<Vec<mpsc::Sender<Result<(), ReloadEnd>>>>,
+    /// The ends of the window and of its main page process, which end the requests that wait in the window.
+    pub(crate) ends: WindowEnds,
     /// Set when the window asked its page with `project-close-request` and the page has answered neither `windowClose` nor
     /// `windowCloseKept`, so the end of the page answers it (`answer_close_question`).
     pub close_asked: AtomicBool,
@@ -84,6 +91,49 @@ pub struct WindowData {
     pub shown: Mutex<String>,
     /// The complete composition revision applied last for each surface.
     pub composition_revisions: Mutex<HashMap<String, u64>>,
+}
+
+/// The ends of a window and of its main page process, counted: a request that waits in the window takes the count when it
+/// begins and reads the end that came after it, so an end that comes before the wait reads it ends the wait the same way.
+#[derive(Default)]
+pub(crate) struct WindowEnds(Mutex<(u64, String)>);
+
+impl WindowEnds {
+    /// The count of the ends so far.
+    pub(crate) fn mark(&self) -> u64 {
+        // default: a lock that a panicking thread poisoned still holds the count, which is only read; the panic hook records
+        // the panic.
+        self.0.lock().unwrap_or_else(PoisonError::into_inner).0
+    }
+
+    /// The text of the last end after the count mark, or None when no end came after it.
+    pub(crate) fn since(&self, mark: u64) -> Option<String> {
+        // default: a lock that a panicking thread poisoned still holds the count and the text, which are only read; the
+        // panic hook records the panic.
+        let ends = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        (ends.0 > mark).then(|| ends.1.clone())
+    }
+
+    fn record(&self, end: &str) {
+        // default: a lock that a panicking thread poisoned still holds the count and the text, which this call replaces; the
+        // panic hook records the panic.
+        let mut ends = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        ends.0 += 1;
+        ends.1 = end.to_string();
+    }
+}
+
+impl WindowData {
+    /// Ends the requests that wait in the window with `end`, the close of the window or the end of its main page process: a
+    /// reload that waits for the ready page, a presented wait for the first frame of the modal and a presented wait for the
+    /// end of the continuous update (docs/spec/native-host.md).
+    pub(crate) fn end_waits(&self, end: &str) {
+        self.ends.record(end);
+        self.overlay.wake_paint_waits();
+        self.images.wake_waits();
+        crate::surfaces::end_settled_waits(&self.running);
+        end_reloads(self, Err(ReloadEnd::Ended(end.to_string())));
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -181,7 +231,6 @@ pub fn reload_surface_sidecars<O: crate::sidecars::Owner>(
         owner,
         images,
         targets,
-        crate::sidecars::image_detach::IMAGE_DETACH_TIMEOUT,
         ended_event,
     )?;
     Ok(())
@@ -843,13 +892,13 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
     });
     window.on_window_event(move |event| match event {
         WindowEvent::Destroyed => {
+            context.end_waits("the window closed");
             context.documents.views().forget_all();
             // The close of the window ends its run with its transactions (docs/spec/native-surfaces.md#layout-transaction).
             crate::surfaces::end_run(&context.running);
             // A window that ends keeps no tab, so a removal that asked it is allowed.
             host.state::<Windows>().removals.abandon(host.label());
             crate::exposure::window_closed(&host);
-            end_reloads_of_closed_window(&context);
             let natives = context.clone();
             // The records of the window are removed below, before the main-thread step runs, so the step takes them now.
             let closing = window_data(&host);
@@ -1579,7 +1628,7 @@ pub fn window_ready(window: &Window) -> Result<(), String> {
 
 /// Ends each reload of the window that waits for its new page with result: `Ok` for the ready of that page, and the error
 /// that ends the reload otherwise.
-pub(crate) fn end_reloads(data: &WindowData, result: Result<(), String>) {
+pub(crate) fn end_reloads(data: &WindowData, result: Result<(), ReloadEnd>) {
     let readied = std::mem::take(
         &mut *data
             .readied
@@ -1588,7 +1637,7 @@ pub(crate) fn end_reloads(data: &WindowData, result: Result<(), String>) {
             // hook records the panic.
             .unwrap_or_else(PoisonError::into_inner),
     );
-    for (_, ready) in readied {
+    for ready in readied {
         if ready.send(result.clone()).is_err() {
             crate::application_log::log_info(
                 "window",
@@ -1596,14 +1645,6 @@ pub(crate) fn end_reloads(data: &WindowData, result: Result<(), String>) {
             );
         }
     }
-}
-
-/// Ends each reload of the window that waits for its new page, because the window closed and no page of it reports ready.
-fn end_reloads_of_closed_window(data: &WindowData) {
-    end_reloads(
-        data,
-        Err("the window closed before the reloaded page reported ready".to_string()),
-    );
 }
 
 /// Answers a request to close the window: a window whose page is ready asks its page with ask (`project-close-request`) and
@@ -1942,6 +1983,10 @@ mod page_end_test;
 #[cfg(test)]
 #[path = "windows_removal_end_test.rs"]
 mod removal_end_test;
+
+#[cfg(test)]
+#[path = "windows_ends_test.rs"]
+mod ends_test;
 
 #[cfg(test)]
 #[path = "../tests/project_data_order/project_data_order_test.rs"]

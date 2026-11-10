@@ -48,7 +48,7 @@ function traceCommands(events, name) {
 // waits for the first record of the command.
 async function commandRuns(s, offsets, name) {
   await untilEventLine(s.app.configDir, offsets, (line) => line.includes(` ${REGISTRY_COMMAND}: `)
-    && JSON.parse(line.slice(line.indexOf("{"))).name === name, 15000, reading(s.app, [REGISTRY_COMMAND]));
+    && JSON.parse(line.slice(line.indexOf("{"))).name === name, { ...reading(s.app, [REGISTRY_COMMAND]), ended: s.client.ended });
   return traceCommands(await traceEvents(s, offsets), name).length;
 }
 
@@ -242,8 +242,7 @@ for (const app of Object.values(APPS)) {
     // The input-injection record is emitted after AppKit's synchronous sendEvent dispatch returns.
     await untilEventLines(s.app.configDir, offsets,
       (lines) => lines.filter((line) => line.includes("native input inject:")
-        && line.includes("Escape") && line.includes("delivered")).length >= 2,
-      15000, reading(s.app, [INPUT_INJECTION]));
+        && line.includes("Escape") && line.includes("delivered")).length >= 2, { ...reading(s.app, [INPUT_INJECTION]), ended: s.client.ended });
     const events = await traceEvents(s, offsets);
     const deliveredEscape = injectedKeyEvents(events, "Escape");
     assert.equal(deliveredEscape.length, 2, "the completed Escape press must contain down and up delivery records");

@@ -22,7 +22,7 @@ func TestAnErrorAndAnObservationAreEventsWithWhereAndText(t *testing.T) {
 	log := support.UseEventLog(t)
 	host.LogError("surface input", errors.New("the window has no content view"))
 	host.LogInfo("webkit children", "pid 7: gone")
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
@@ -48,7 +48,7 @@ func TestARecordOfAHelperNamesTheFileAndLineOfItsCall(t *testing.T) {
 	_, _, line, _ := runtime.Caller(0)
 	host.LogError("view channel", "project window is closed")
 	host.LogWarn("view channel", "project window is closed")
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
@@ -88,7 +88,7 @@ func TestRecordsWrittenBeforeTheWriterExistsAreStoredInOrderWithTheirOwnTime(t *
 	support.StoreEveryLevel(t, log)
 	host.UseHostEventLog(log)
 	t.Cleanup(func() { host.UseHostEventLog(nil) })
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
@@ -123,7 +123,7 @@ func TestTheStartBufferRefusesRecordsBeyondItsBoundAndTheWriterCountsThem(t *tes
 	support.StoreEveryLevel(t, log)
 	host.UseHostEventLog(log)
 	t.Cleanup(func() { host.UseHostEventLog(nil) })
-	if err := log.Flush(10 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	stored, dropped := 0, float64(0)
@@ -143,7 +143,7 @@ func TestTheStartBufferRefusesRecordsBeyondItsBoundAndTheWriterCountsThem(t *tes
 // contract: log.record.flush-stores-the-records-written-so-far
 func TestFlushRecordsStoresTheRecordsWrittenSoFarWithoutWaitingForTheBatchInterval(t *testing.T) {
 	host.UseHostEventLog(nil)
-	if err := host.FlushRecords(time.Second); err != nil {
+	if err := host.FlushRecords(); err != nil {
 		t.Fatalf("without a writer there is nothing to wait for: %v", err)
 	}
 	options := support.EventLogOptions(t.TempDir())
@@ -156,7 +156,7 @@ func TestFlushRecordsStoresTheRecordsWrittenSoFarWithoutWaitingForTheBatchInterv
 	host.UseHostEventLog(log)
 	t.Cleanup(func() { host.UseHostEventLog(nil) })
 	host.LogInfo("flush", "stored before the interval")
-	if err := host.FlushRecords(5 * time.Second); err != nil {
+	if err := host.FlushRecords(); err != nil {
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
@@ -182,7 +182,7 @@ func TestAHostObservationOfTheTraceIsAnEvent(t *testing.T) {
 	host.PerformanceObserve("sampler", func() map[string]any {
 		return map[string]any{"event": "memory", "rss_host_kb": float64(42)}
 	})
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
@@ -211,7 +211,7 @@ func TestAHostObservationOfTheTraceIsAnEvent(t *testing.T) {
 	}
 	// An observation without an event name is refused with an error and stores nothing.
 	host.PerformanceObserve("host", func() map[string]any { return map[string]any{"surface": "tab-1"} })
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	events = readEventLog(t, log.Path())
@@ -240,7 +240,7 @@ func TestARegionEventWithCorrelationIdentifiersIsRecordedAsAnInputRelay(t *testi
 			t.Fatalf("%s: error %v, want it to name %q", event, err, message)
 		}
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
@@ -262,7 +262,7 @@ func TestAnUnrecordedEndIsStoredAsAnErrorEventWithItsFields(t *testing.T) {
 	boot, pid, previous := "1700000000-4242", 4242, "123"
 	host.ReportUnrecordedEnd(host.UnrecordedEnd{Previous: &previous})
 	host.ReportUnrecordedEnd(host.UnrecordedEnd{Boot: &boot, PID: &pid})
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var found []map[string]any

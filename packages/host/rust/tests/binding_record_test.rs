@@ -8,7 +8,6 @@ mod folder;
 mod records;
 
 use std::sync::Mutex;
-use std::time::Duration;
 
 use serde_json::{Value, json};
 use soksak_host::binding_record::BindingCall;
@@ -29,7 +28,7 @@ fn calls_of(body: impl FnOnce()) -> Vec<Value> {
     let config = folder::Folder::new();
     let log = records::start_writer(config.path());
     body();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let calls = records::read_events(&records::event_log_path(config.path()))
         .into_iter()
         .filter(|event| event["event"] == "host.binding.call")

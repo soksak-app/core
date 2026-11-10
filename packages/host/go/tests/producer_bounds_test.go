@@ -3,6 +3,10 @@
 package host_test
 
 import (
+	"encoding/binary"
+	"encoding/json"
+	"io"
+	"net"
 	"reflect"
 	"strings"
 	"sync/atomic"
@@ -27,7 +31,7 @@ func (element) MarshalJSON() ([]byte, error) {
 // storedEvent returns the only event `name` that the writer stored.
 func storedEvent(t *testing.T, log *host.EventLog, name string) map[string]any {
 	t.Helper()
-	if err := log.Flush(10 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var found []map[string]any
@@ -126,7 +130,7 @@ func TestTheStartBufferHoldsAtMostFourMebibytesAndTheWriterCountsTheRest(t *test
 	support.StoreEveryLevel(t, log)
 	host.UseHostEventLog(log)
 	t.Cleanup(func() { host.UseHostEventLog(nil) })
-	if err := log.Flush(10 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	stored, dropped, droppedBytes := 0, float64(0), float64(0)
@@ -162,8 +166,9 @@ func TestTheSubscriptionChangesOfATopicHoldAtMost256AndTheRestIsRefusedAndCounte
 	request(1, "status.watch")
 	<-backend.entered
 	const pending, refused = 256, 10
+	// The bound refuses the changes other than status.unwatch, so the queue is filled with watches.
 	for id := 2; id <= 1+pending+refused; id++ {
-		request(id, map[bool]string{true: "status.watch", false: "status.unwatch"}[id%2 == 1])
+		request(id, "status.watch")
 	}
 	// The refusals are answered at once and in no fixed order; the accepted changes wait for the page.
 	refusedIDs := map[int]bool{}
@@ -186,7 +191,7 @@ func TestTheSubscriptionChangesOfATopicHoldAtMost256AndTheRestIsRefusedAndCounte
 			t.Fatalf("reply %d of %d: %+v (%v), want a success", index, 1+pending, got, err)
 		}
 	}
-	if err := log.Flush(10 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	drops := 0
@@ -205,6 +210,69 @@ func TestTheSubscriptionChangesOfATopicHoldAtMost256AndTheRestIsRefusedAndCounte
 	}
 }
 
+// receiveInTurn reads the next frame of conn with no deadline: the test ends by the frame, and a frame that never comes is
+// reported by the limit of the run.
+func receiveInTurn(t *testing.T, conn net.Conn) message {
+	t.Helper()
+	_ = conn.SetReadDeadline(time.Time{})
+	var size [4]byte
+	if _, err := io.ReadFull(conn, size[:]); err != nil {
+		t.Fatalf("read the length of a frame: %v", err)
+	}
+	body := make([]byte, binary.BigEndian.Uint32(size[:]))
+	if _, err := io.ReadFull(conn, body); err != nil {
+		t.Fatalf("read the body of a frame: %v", err)
+	}
+	var got message
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatal(err)
+	}
+	return got
+}
+
+// A status.unwatch is not refused by the bound: with 256 watches waiting behind the watch that the page holds, the unwatch
+// waits in the queue of its topic and the watch after it is refused. The unwatch ends the subscription there: when the page
+// answers, every accepted change succeeds and the page receives the one status.unwatch of the last release.
+// contract: bounds.endpoint.topic-changes-hold-at-most-256
+func TestAnUnwatchIsNotRefusedByTheBoundAndEndsTheSubscriptionInItsQueue(t *testing.T) {
+	backend := newFakeBackend()
+	backend.held = make(chan struct{})
+	backend.holdMethod = "status.watch"
+	backend.entered = make(chan struct{}, 1)
+	_, address, _ := serve(t, backend)
+	conn := dial(t, address)
+	watch := map[string]any{"window": "main", "name": "core.layout"}
+	request := func(id int, method string) {
+		send(t, conn, map[string]any{"jsonrpc": "2.0", "id": id, "method": method, "params": watch})
+	}
+	request(1, "status.watch")
+	<-backend.entered
+	const pending = 256
+	for id := 2; id <= 1+pending; id++ {
+		request(id, "status.watch")
+	}
+	unwatch, refusedWatch := 2+pending, 3+pending
+	request(unwatch, "status.unwatch")
+	request(refusedWatch, "status.watch")
+	// Only a refusal is answered while the page holds the first watch, so the first reply is the refusal of the watch.
+	if got := receiveInTurn(t, conn); got.ID == nil || *got.ID != refusedWatch || got.Error == nil || !strings.Contains(got.Error.Message, "256") {
+		t.Fatalf("reply %+v, want the refusal of the watch %d", got, refusedWatch)
+	}
+	close(backend.held)
+	for index := range 2 + pending {
+		got := receiveInTurn(t, conn)
+		if got.Error != nil {
+			t.Fatalf("reply %d of %d: %+v, want a success", index, 2+pending, got)
+		}
+		if *got.ID == unwatch && string(got.Result) != "null" {
+			t.Fatalf("the unwatch answered %s, want null", got.Result)
+		}
+	}
+	if got := len(backend.unwatched); got != 1 {
+		t.Fatalf("the page received %d status.unwatch, want the 1 of the last release", got)
+	}
+}
+
 // contract: bounds.endpoint.output-queue-holds-at-most-sixteen-mebibytes
 func TestTheOutputQueueOfAConnectionHoldsAtMostSixteenMebibytesAndTheRefusalIsCounted(t *testing.T) {
 	log := support.UseEventLog(t)
@@ -219,7 +287,7 @@ func TestTheOutputQueueOfAConnectionHoldsAtMostSixteenMebibytesAndTheRefusalIsCo
 	for index := 0; index < 80; index++ {
 		endpoint.StatusChanged("main", "core.layout", "", big)
 	}
-	if err := log.Flush(10 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	for _, event := range readEventLog(t, log.Path()) {

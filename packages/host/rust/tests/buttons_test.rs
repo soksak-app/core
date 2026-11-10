@@ -12,7 +12,6 @@ use endpoint_client::Connection;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::Duration;
 
 use serde_json::{Map, Value, json};
 use soksak_host::buttons::Buttons;
@@ -95,7 +94,7 @@ fn buttons_notify_each_mask_change() {
         notifier.notify_watchers("host.buttons", &raw(&value).unwrap())
     }));
     assert!(fake.buttons.set(buttons.clone()).is_ok());
-    let mut connection = endpoint_client::connect(endpoint.address(), Duration::from_secs(5));
+    let mut connection = endpoint_client::connect(endpoint.address());
     let watch = json!({"window": "w1", "name": "host.buttons"});
     assert_eq!(
         request(&mut connection, 1, "status.watch", watch.clone())["result"],

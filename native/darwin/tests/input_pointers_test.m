@@ -88,13 +88,13 @@ static void answered(void *context, sp_input_result result, const sp_input_held 
     if (result == SP_INPUT_POINTER_HELD && held && held->pointer) snprintf(answer->holder, sizeof answer->holder, "%s", held->pointer);
     if (result == SP_INPUT_POINTER_HELD && held && held->reason) snprintf(answer->reason, sizeof answer->reason, "%s", held->reason);
     answer->done = YES;
-    // The answer can come from the timer of the receipt limit, which does not end a turn of the run loop.
+    // The answer can come from a callback that does not end a turn of the run loop.
     eventWake();
 }
 static SPAnswer lastAnswer;
 static sp_input_result input(NSWindow *window, const char *pointer, double x, double y, int phase, int button) {
     lastAnswer = (SPAnswer){0};
-    sp_input_pointer_then(window, pointer, x, y, phase, button, 0, 0, 1, 2, answered, &lastAnswer);
+    sp_input_pointer_then(window, pointer, x, y, phase, button, 0, 0, 1, answered, &lastAnswer);
     eventWait(@"the pointer input answers", ^BOOL { return lastAnswer.done; });
     sp_input_result result = lastAnswer.result;
     // Each answer is written, so a failing check shows the results that led to it.

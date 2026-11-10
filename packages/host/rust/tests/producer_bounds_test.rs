@@ -40,7 +40,7 @@ fn events_of(body: impl FnOnce()) -> Vec<Value> {
     let config = folder::Folder::new();
     let log = records::start_writer(config.path());
     body();
-    log.flush(Duration::from_secs(10)).unwrap();
+    log.flush().unwrap();
     let events = records::read_events(&records::event_log_path(config.path()));
     use_host_event_log(None);
     events
@@ -135,7 +135,7 @@ fn the_start_buffer_holds_at_most_four_mebibytes_and_the_writer_counts_the_rest(
         .unwrap(),
     );
     use_host_event_log(Some(Arc::clone(&log)));
-    log.flush(Duration::from_secs(10)).unwrap();
+    log.flush().unwrap();
     let path = log.path().to_path_buf();
     use_host_event_log(None);
     let events = records::read_events(&path);
@@ -217,7 +217,7 @@ fn the_subscription_changes_of_a_topic_hold_at_most_256_and_the_rest_is_refused_
     )
     .unwrap();
     endpoint.publish("w1").unwrap();
-    let mut connection = endpoint_client::connect(endpoint.address(), Duration::from_secs(10));
+    let mut connection = endpoint_client::connect(endpoint.address());
     let topic = json!({"window": "w1", "name": "core.layout"});
     let request = |connection: &mut Connection, id: u64, method: &str| {
         send(
@@ -228,16 +228,9 @@ fn the_subscription_changes_of_a_topic_hold_at_most_256_and_the_rest_is_refused_
     request(&mut connection, 1, "status.watch");
     assert_eq!(calls.recv().unwrap(), "status.watch");
     let (pending, refused) = (256u64, 10u64);
+    // The bound refuses the changes other than status.unwatch, so the queue is filled with watches.
     for id in 2..=1 + pending + refused {
-        request(
-            &mut connection,
-            id,
-            if id % 2 == 1 {
-                "status.watch"
-            } else {
-                "status.unwatch"
-            },
-        );
+        request(&mut connection, id, "status.watch");
     }
     // The refusals are answered at once; the accepted changes wait for the page.
     let mut refused_ids = HashSet::new();
@@ -261,7 +254,7 @@ fn the_subscription_changes_of_a_topic_hold_at_most_256_and_the_rest_is_refused_
         assert!(reply.get("error").is_none(), "reply {index}: {reply}");
     }
     endpoint.stop();
-    log.flush(Duration::from_secs(10)).unwrap();
+    log.flush().unwrap();
     let events = records::read_events(&records::event_log_path(config.path()));
     use_host_event_log(None);
     let drops = named(&events, "host.buffer.dropped");
@@ -275,4 +268,116 @@ fn the_subscription_changes_of_a_topic_hold_at_most_256_and_the_rest_is_refused_
             "event {drop}"
         );
     }
+}
+
+/// Starts an endpoint whose page holds its first call until the returned gate is opened, and returns it with the receiver of
+/// the method of each page call.
+fn gated_endpoint(config: &folder::Folder, name: &str) -> (Endpoint, Sender<()>, Receiver<String>) {
+    let (open_gate, gate) = mpsc::channel();
+    let (entered, calls) = mpsc::channel();
+    let page = Arc::new(GatedPage {
+        gate: Mutex::new(Some(gate)),
+        entered: Mutex::new(entered),
+    });
+    let endpoint =
+        Endpoint::start(&config.path().join("sockets"), config.path(), name, page).unwrap();
+    endpoint.publish("w1").unwrap();
+    (endpoint, open_gate, calls)
+}
+
+/// Sends the subscription change method of the status core.layout of w1 with id.
+fn change(connection: &mut Connection, id: u64, method: &str) {
+    send(
+        connection,
+        json!({"jsonrpc": "2.0", "id": id, "method": method,
+            "params": {"window": "w1", "name": "core.layout"}}),
+    );
+}
+
+/// A status.unwatch is not refused by the bound: with 256 watches waiting behind the watch that the page holds, the unwatch
+/// waits in the queue of its topic and the watch after it is refused. The unwatch ends the subscription there: when the page
+/// answers, every accepted change succeeds and the page receives the one status.unwatch of the last release.
+// contract: bounds.endpoint.topic-changes-hold-at-most-256
+#[test]
+fn an_unwatch_is_not_refused_by_the_bound_and_ends_the_subscription_in_its_queue() {
+    let _serial = serial();
+    let config = folder::Folder::new();
+    let (endpoint, open_gate, calls) = gated_endpoint(&config, "test-unwatch-bound");
+    let mut connection = endpoint_client::connect(endpoint.address());
+    change(&mut connection, 1, "status.watch");
+    assert_eq!(calls.recv().unwrap(), "status.watch");
+    let pending = 256u64;
+    for id in 2..=1 + pending {
+        change(&mut connection, id, "status.watch");
+    }
+    let (unwatch, refused_watch) = (2 + pending, 3 + pending);
+    change(&mut connection, unwatch, "status.unwatch");
+    change(&mut connection, refused_watch, "status.watch");
+    // Only a refusal is answered while the page holds the first watch, so the first reply is the refusal of the watch.
+    let reply = receive(&mut connection);
+    assert!(
+        reply["id"] == refused_watch
+            && reply["error"]["message"]
+                .as_str()
+                .is_some_and(|m| m.contains("256")),
+        "reply {reply}, want the refusal of the watch {refused_watch}"
+    );
+    open_gate.send(()).unwrap();
+    for index in 0..=pending {
+        let reply = receive(&mut connection);
+        assert!(reply.get("error").is_none(), "reply {index}: {reply}");
+        if reply["id"] == unwatch {
+            assert_eq!(reply["result"], Value::Null, "the unwatch answered {reply}");
+        }
+    }
+    assert_eq!(
+        calls.try_iter().collect::<Vec<_>>(),
+        vec!["status.unwatch".to_string()],
+        "the page calls after the first watch"
+    );
+    endpoint.stop();
+}
+
+/// An unwatch enters the queue of its topic only when the last change of its connection for the topic is a watch. While the
+/// page holds the first watch of connection A, the second unwatch of A, whose last change is the queued unwatch, and the
+/// unwatch of connection B, which never watched, change nothing: each is answered null before the page answers, so neither
+/// waited in the queue. After the page answers, the watch and the first unwatch of A succeed and the page received one
+/// status.unwatch.
+// contract: endpoint.watch.unwatch-enters-the-queue-only-after-a-watch
+#[test]
+fn an_unwatch_after_no_watch_changes_nothing_and_is_answered_without_the_queue() {
+    let _serial = serial();
+    let config = folder::Folder::new();
+    let (endpoint, open_gate, calls) = gated_endpoint(&config, "test-unwatch-without-watch");
+    let mut a = endpoint_client::connect(endpoint.address());
+    let mut b = endpoint_client::connect(endpoint.address());
+    change(&mut a, 1, "status.watch");
+    assert_eq!(calls.recv().unwrap(), "status.watch");
+    change(&mut a, 2, "status.unwatch");
+    change(&mut a, 3, "status.unwatch");
+    change(&mut b, 1, "status.unwatch");
+    for (connection, name, id) in [
+        (&mut a, "the second unwatch of A", 3),
+        (&mut b, "the unwatch of B", 1),
+    ] {
+        let reply = receive(connection);
+        assert!(
+            reply["id"] == id && reply.get("error").is_none() && reply["result"] == Value::Null,
+            "{name} answered {reply} while the page holds the watch, want null"
+        );
+    }
+    open_gate.send(()).unwrap();
+    for id in [1, 2] {
+        let reply = receive(&mut a);
+        assert!(
+            reply["id"] == id && reply.get("error").is_none(),
+            "reply {reply}, want the success of request {id} of A"
+        );
+    }
+    assert_eq!(
+        calls.try_iter().collect::<Vec<_>>(),
+        vec!["status.unwatch".to_string()],
+        "the page calls after the first watch"
+    );
+    endpoint.stop();
 }

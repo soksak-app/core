@@ -103,7 +103,7 @@ func TextOf(events []map[string]any) string {
 // flushed.
 func RecordsText(t *testing.T, config string, log *host.EventLog) string {
 	t.Helper()
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	return TextOf(ReadEvents(t, EventLogPath(t, config)))
@@ -120,7 +120,7 @@ func StoreEveryLevel(t *testing.T, log *host.EventLog) {
 	}
 	log.SetPolicy(policy, "file")
 	// The writer stores the record, which starts a batch interval, so the events of the test gather in the batch of that interval.
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -1,9 +1,9 @@
 {
   "surface": "packages/plugin-api/calls.js#createCalls",
-  "description": "Ordered steps of the time limit of a call: a request step sends a command call (timeout is the declared limit, default 10000 ms), an advance step moves the clock, and a reply step delivers a reply from the peer. Each step lists the messages sent, the reports of the call layer (timeout, late-reply, open-calls) and the settled outcome of the request that the step watches: {resolved} or {rejected, code}, or null while the call is open. A call that its limit ends is rejected with code -32000 and the message command <name> did not reply within <ms>ms; a reply that arrives after that is a late reply, reported with its delay and not passed to the call.",
+  "description": "Ordered steps of the end of a call. A call has no time limit: it ends by its reply, its cancel or the end of its peer, and the call layer starts no timer. A request step sends a command call (signal true gives it an abort signal), a reply step delivers a reply from the peer, a cancel step aborts the signal of the named request, and a peer-lost step ends the peer with its reason. Each step lists the messages sent, the reports of the call layer (peer-lost, late-reply, open-calls) and the settled outcome of the request that the step watches: {resolved} or {rejected, code}, or null while the call is open. A cancelled call is rejected with cancelled; a call that the end of its peer ends is rejected with command <name> ended: <reason>; a reply that arrives after a cancel is a late reply, reported with its delay and not passed to the call.",
   "cases": [
     {
-      "id": "calls.limit.default-limit-rejects-a-silent-call",
+      "id": "calls.end.reply-resolves-the-call",
       "steps": [
         {
           "request": {
@@ -36,26 +36,16 @@
           }
         },
         {
-          "advance": 9999,
-          "watch": "a",
-          "output": {
-            "sent": [],
-            "reports": [],
-            "outcome": null
-          }
-        },
-        {
-          "advance": 1,
+          "reply": {
+            "id": 1,
+            "result": {
+              "count": 2
+            }
+          },
           "watch": "a",
           "output": {
             "sent": [],
             "reports": [
-              {
-                "kind": "timeout",
-                "plugin": "probe",
-                "command": "demo.open",
-                "timeout": 10000
-              },
               {
                 "kind": "open-calls",
                 "plugin": "probe",
@@ -64,15 +54,16 @@
               }
             ],
             "outcome": {
-              "rejected": "command demo.open did not reply within 10000ms",
-              "code": -32000
+              "resolved": {
+                "count": 2
+              }
             }
           }
         }
       ]
     },
     {
-      "id": "calls.limit.declared-timeout-replaces-the-default",
+      "id": "calls.end.error-reply-rejects-with-its-code",
       "steps": [
         {
           "request": {
@@ -80,8 +71,7 @@
             "command": "demo.save",
             "params": {
               "id": "y"
-            },
-            "timeout": 2500
+            }
           },
           "watch": "b",
           "output": {
@@ -106,26 +96,17 @@
           }
         },
         {
-          "advance": 2499,
-          "watch": "b",
-          "output": {
-            "sent": [],
-            "reports": [],
-            "outcome": null
-          }
-        },
-        {
-          "advance": 1,
+          "reply": {
+            "id": 1,
+            "error": {
+              "code": -32602,
+              "message": "bad"
+            }
+          },
           "watch": "b",
           "output": {
             "sent": [],
             "reports": [
-              {
-                "kind": "timeout",
-                "plugin": "probe",
-                "command": "demo.save",
-                "timeout": 2500
-              },
               {
                 "kind": "open-calls",
                 "plugin": "probe",
@@ -134,22 +115,22 @@
               }
             ],
             "outcome": {
-              "rejected": "command demo.save did not reply within 2500ms",
-              "code": -32000
+              "rejected": "bad",
+              "code": -32602
             }
           }
         }
       ]
     },
     {
-      "id": "calls.limit.reply-after-limit-is-a-late-reply",
+      "id": "calls.end.cancel-ends-the-call-and-a-later-reply-is-late",
       "steps": [
         {
           "request": {
             "name": "c",
             "command": "demo.open",
             "params": {},
-            "timeout": 1000
+            "signal": true
           },
           "watch": "c",
           "output": {
@@ -172,17 +153,16 @@
           }
         },
         {
-          "advance": 1000,
+          "cancel": "c",
           "watch": "c",
           "output": {
-            "sent": [],
-            "reports": [
+            "sent": [
               {
-                "kind": "timeout",
-                "plugin": "probe",
-                "command": "demo.open",
-                "timeout": 1000
-              },
+                "id": 1,
+                "cancel": true
+              }
+            ],
+            "reports": [
               {
                 "kind": "open-calls",
                 "plugin": "probe",
@@ -191,8 +171,8 @@
               }
             ],
             "outcome": {
-              "rejected": "command demo.open did not reply within 1000ms",
-              "code": -32000
+              "rejected": "cancelled",
+              "code": null
             }
           }
         },
@@ -209,26 +189,25 @@
                 "kind": "late-reply",
                 "plugin": "probe",
                 "command": "demo.open",
-                "delay": 1000
+                "delay": 0
               }
             ],
             "outcome": {
-              "rejected": "command demo.open did not reply within 1000ms",
-              "code": -32000
+              "rejected": "cancelled",
+              "code": null
             }
           }
         }
       ]
     },
     {
-      "id": "calls.limit.reply-in-time-resolves-and-clears-the-timer",
+      "id": "calls.end.peer-end-rejects-each-open-call",
       "steps": [
         {
           "request": {
             "name": "d",
             "command": "demo.open",
-            "params": {},
-            "timeout": 1000
+            "params": {}
           },
           "watch": "d",
           "output": {
@@ -251,25 +230,49 @@
           }
         },
         {
-          "advance": 500,
+          "request": {
+            "name": "e",
+            "command": "demo.read",
+            "params": {}
+          },
           "watch": "d",
           "output": {
-            "sent": [],
-            "reports": [],
+            "sent": [
+              {
+                "id": 2,
+                "command": "demo.read",
+                "params": {}
+              }
+            ],
+            "reports": [
+              {
+                "kind": "open-calls",
+                "plugin": "probe",
+                "count": 2,
+                "oldestStartedAt": 0
+              }
+            ],
             "outcome": null
           }
         },
         {
-          "reply": {
-            "id": 1,
-            "result": {
-              "count": 2
-            }
-          },
-          "watch": "d",
+          "peerLost": "process-ended",
+          "watch": "e",
           "output": {
             "sent": [],
             "reports": [
+              {
+                "kind": "peer-lost",
+                "plugin": "probe",
+                "command": "demo.open",
+                "reason": "process-ended"
+              },
+              {
+                "kind": "peer-lost",
+                "plugin": "probe",
+                "command": "demo.read",
+                "reason": "process-ended"
+              },
               {
                 "kind": "open-calls",
                 "plugin": "probe",
@@ -278,22 +281,8 @@
               }
             ],
             "outcome": {
-              "resolved": {
-                "count": 2
-              }
-            }
-          }
-        },
-        {
-          "advance": 1000,
-          "watch": "d",
-          "output": {
-            "sent": [],
-            "reports": [],
-            "outcome": {
-              "resolved": {
-                "count": 2
-              }
+              "rejected": "command demo.read ended: process-ended",
+              "code": null
             }
           }
         }

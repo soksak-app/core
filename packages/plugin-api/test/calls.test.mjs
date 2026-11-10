@@ -1,6 +1,10 @@
-// Checks the plugin call layer over a fake transport. The timers and the clock are mocked, so no test waits.
+// Checks the plugin call layer over a fake transport. A call has no time limit: its reply, its cancel or the end of its peer
+// ends it (docs/spec/plugin-processes.md, rule 3). The clock is mocked so that the start of a call and the delay of a late
+// reply are known, and setTimeout is watched so that a test finds that the layer starts no timer.
 import assert from "node:assert/strict";
 import test from "node:test";
+import * as callsModule from "../calls.js";
+import * as pluginApi from "../index.js";
 import { createCalls } from "../calls.js";
 
 function fakeTransport() {
@@ -20,7 +24,8 @@ function fakeTransport() {
 }
 
 function setup(t, overrides = {}) {
-  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  t.mock.timers.enable({ apis: ["Date"] });
+  const timers = t.mock.method(globalThis, "setTimeout");
   const transport = fakeTransport();
   const reports = [];
   const calls = createCalls({
@@ -31,7 +36,7 @@ function setup(t, overrides = {}) {
     ...overrides,
   });
   const ofKind = (kind) => reports.filter((event) => event.kind === kind);
-  return { calls, transport, reports, ofKind, timers: t.mock.timers };
+  return { calls, transport, reports, ofKind, clock: t.mock.timers, timers };
 }
 
 test("createCalls requires a plugin id, the transport functions and a report function", () => {
@@ -99,71 +104,49 @@ test("a call whose signal is already aborted is rejected without sending anythin
 });
 
 test("a reply that arrives after the cancellation is discarded and counted as a late reply", async (t) => {
-  const { calls, transport, ofKind, timers } = setup(t);
+  const { calls, transport, ofKind, clock } = setup(t);
   const controller = new AbortController();
   const cancelled = calls.request("probe.run", {}, { signal: controller.signal });
-  timers.tick(5);
+  clock.tick(5);
   controller.abort();
   await assert.rejects(cancelled, { reason: "cancelled" });
-  timers.tick(20);
+  clock.tick(20);
   transport.deliver({ id: 1, result: "late" });
   assert.deepEqual(ofKind("late-reply"), [{ kind: "late-reply", plugin: "probe", command: "probe.run", delay: 25 }]);
 });
 
-test("a call without a declared timeout is rejected with -32000 after 10000 ms", async (t) => {
-  const { calls, ofKind, timers } = setup(t);
-  const failed = calls.request("probe.run");
-  const rejected = assert.rejects(failed, { code: -32000, message: "command probe.run did not reply within 10000ms" });
-  timers.tick(9999);
-  assert.deepEqual(ofKind("timeout"), []);
-  timers.tick(1);
-  await rejected;
-  assert.deepEqual(ofKind("timeout"), [{ kind: "timeout", plugin: "probe", command: "probe.run", timeout: 10000 }]);
+// contract: exposure.command.ends-by-reply-or-peer-end
+test("a call starts no timer, stays open until its reply, and its reply ends it", async (t) => {
+  const { calls, transport, reports, timers } = setup(t);
+  const done = calls.request("probe.run");
+  assert.equal(timers.mock.callCount(), 0, "the call layer started a timer for a call");
+  assert.deepEqual(calls.openCalls(), { count: 1, oldestStartedAt: 0 });
+  transport.deliver({ id: 1, result: "ok" });
+  assert.equal(await done, "ok");
+  assert.deepEqual(calls.openCalls(), { count: 0, oldestStartedAt: null });
+  assert.deepEqual(reports.map((event) => event.kind), ["open-calls", "open-calls"]);
 });
 
-test("a declared timeout replaces the default, up to the maximum of 600000 ms", async (t) => {
-  const { calls, ofKind, timers } = setup(t);
-  const failed = calls.request("probe.slow", {}, { timeout: 600000 });
-  const rejected = assert.rejects(failed, { code: -32000, message: "command probe.slow did not reply within 600000ms" });
-  timers.tick(599999);
-  assert.deepEqual(ofKind("timeout"), []);
-  timers.tick(1);
-  await rejected;
-  assert.equal(ofKind("timeout")[0].timeout, 600000);
-});
-
-test("a timeout outside the integer range from 1 to 600000 is rejected before anything is sent", (t) => {
+test("a request refuses a timeout option before anything is sent", (t) => {
   const { calls, transport } = setup(t);
-  for (const timeout of [0, 600001, 1.5, "100", Number.NaN]) {
-    assert.throws(() => calls.request("probe.run", {}, { timeout }), /timeout must be an integer from 1 to 600000 ms/);
+  for (const timeout of [1000, 600000, 0]) {
+    assert.throws(() => calls.request("probe.run", {}, { timeout }),
+      (error) => (error instanceof TypeError || error instanceof RangeError) && /\btimeout\b/.test(error.message),
+      `a request accepted the timeout ${timeout}`);
   }
   assert.deepEqual(transport.sent, []);
   assert.deepEqual(calls.openCalls(), { count: 0, oldestStartedAt: null });
 });
 
-test("a reply before the limit clears the timer, so no timeout is counted", async (t) => {
-  const { calls, transport, ofKind, timers } = setup(t);
-  const done = calls.request("probe.run");
-  transport.deliver({ id: 1, result: "ok" });
-  assert.equal(await done, "ok");
-  timers.tick(20000);
-  assert.deepEqual(ofKind("timeout"), []);
-});
-
-test("a reply after the timeout is discarded and counted as a late reply with its delay", async (t) => {
-  const { calls, transport, ofKind, timers } = setup(t);
-  const failed = calls.request("probe.run", {}, { timeout: 1000 });
-  const rejected = assert.rejects(failed, { code: -32000 });
-  timers.tick(1000);
-  await rejected;
-  timers.tick(250);
-  transport.deliver({ id: 1, result: "late" });
-  assert.deepEqual(ofKind("late-reply"), [{ kind: "late-reply", plugin: "probe", command: "probe.run", delay: 1250 }]);
-  assert.equal(ofKind("timeout").length, 1);
+test("the call layer exports no time limit of a call", () => {
+  for (const name of ["DEFAULT_CALL_TIMEOUT", "MAX_CALL_TIMEOUT"]) {
+    assert.equal(name in callsModule, false, `calls.js exports ${name}`);
+    assert.equal(name in pluginApi, false, `@soksak/plugin-api exports ${name}`);
+  }
 });
 
 test("peer lost rejects every open call with the reason and reports each call", async (t) => {
-  const { calls, ofKind, timers } = setup(t);
+  const { calls, ofKind } = setup(t);
   const first = calls.request("probe.a");
   const second = calls.request("probe.b");
   const rejectedFirst = assert.rejects(first, { reason: "process-ended", message: "command probe.a ended: process-ended" });
@@ -175,8 +158,7 @@ test("peer lost rejects every open call with the reason and reports each call", 
     { kind: "peer-lost", plugin: "probe", command: "probe.a", reason: "process-ended" },
     { kind: "peer-lost", plugin: "probe", command: "probe.b", reason: "process-ended" },
   ]);
-  timers.tick(20000);
-  assert.deepEqual(ofKind("timeout"), []);
+  assert.deepEqual(calls.openCalls(), { count: 0, oldestStartedAt: null });
 });
 
 test("surface-closed and sidecar-ended end calls with their own reasons", async (t) => {
@@ -198,10 +180,10 @@ test("a peer-lost reason outside the declared reasons is rejected", (t) => {
 });
 
 test("openCalls gives the count and the start time of the oldest open call, and each change is reported", async (t) => {
-  const { calls, transport, ofKind, timers } = setup(t);
+  const { calls, transport, ofKind, clock } = setup(t);
   const started = Date.now();
   const first = calls.request("probe.a");
-  timers.tick(5);
+  clock.tick(5);
   const second = calls.request("probe.b");
   assert.deepEqual(calls.openCalls(), { count: 2, oldestStartedAt: started });
   transport.deliver({ id: 1, result: null });
@@ -218,14 +200,17 @@ test("a send that throws rejects the call with that error and leaves no open cal
   const { calls, ofKind } = setup(t, { send: () => { throw new Error("transport closed"); } });
   await assert.rejects(calls.request("probe.run"), /transport closed/);
   assert.deepEqual(calls.openCalls(), { count: 0, oldestStartedAt: null });
-  assert.equal(ofKind("timeout").length, 0);
+  assert.deepEqual(ofKind("open-calls").map((event) => event.count), [0]);
 });
 
 test("the last 256 ended calls are remembered, and a reply to an older ended call is refused", async (t) => {
-  const { calls, transport, ofKind, timers } = setup(t);
+  const { calls, transport, ofKind } = setup(t);
   const ended = [];
-  for (let index = 0; index < 257; index += 1) ended.push(calls.request("probe.run").catch(() => {}));
-  timers.tick(10000);
+  for (let index = 0; index < 257; index += 1) {
+    const controller = new AbortController();
+    ended.push(calls.request("probe.run", {}, { signal: controller.signal }).catch(() => {}));
+    controller.abort();
+  }
   await Promise.all(ended);
   transport.deliver({ id: 257, result: 1 });
   assert.equal(ofKind("late-reply").length, 1);

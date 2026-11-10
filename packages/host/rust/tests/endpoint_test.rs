@@ -28,10 +28,10 @@ use soksak_host::endpoint::{self, Endpoint, Failure, Service, UnrecordedEnd, Wat
 struct Fake {
     calls: Mutex<Vec<(String, String, Value)>>,
     seen: Mutex<Sender<(String, String, Value)>>,
-    /// A method of the page that ends with a timeout.
-    timing_out: Mutex<Option<String>>,
     /// The phase of `input.pointer` that is refused, and the code of the refusal.
     refusing: Mutex<Option<(String, i64)>>,
+    /// A method of the page that ends without its result, with the error 1005.
+    without_result: Mutex<Option<String>>,
 }
 
 impl Fake {
@@ -41,8 +41,8 @@ impl Fake {
             Arc::new(Fake {
                 calls: Mutex::new(Vec::new()),
                 seen: Mutex::new(tx),
-                timing_out: Mutex::new(None),
                 refusing: Mutex::new(None),
+                without_result: Mutex::new(None),
             }),
             rx,
         )
@@ -90,11 +90,8 @@ impl Service for Fake {
         if let Some((phase, code)) = refused {
             return Err(Failure::new(code, format!("the {phase} is refused")));
         }
-        if self.timing_out.lock().unwrap().as_deref() == Some(method) {
-            return Err(Failure::new(
-                endpoint::TIMED_OUT,
-                "the document did not reply within 10000 ms",
-            ));
+        if self.without_result.lock().unwrap().as_deref() == Some(method) {
+            return Err(Failure::new(1005, "the document did not receive the input"));
         }
         match method {
             "status.get" => raw(&json!(7)),
@@ -344,7 +341,7 @@ fn mode(path: &Path) -> u32 {
 }
 
 fn open(endpoint: &Endpoint) -> Connection {
-    endpoint_client::connect(endpoint.address(), Duration::from_secs(5))
+    endpoint_client::connect(endpoint.address())
 }
 
 fn send(connection: &mut Connection, message: Value) {
@@ -1183,7 +1180,7 @@ fn the_endpoint_records_why_a_connection_closes() {
         connection.write_all(b"{\"j").unwrap();
         drop(connection);
         loop {
-            writer.flush(Duration::from_secs(5)).unwrap();
+            writer.flush().unwrap();
             let log = records::text_of(&records::read_events(&records::event_log_path(config)));
             if log.contains("connection closed: connection closed inside a frame body") {
                 break;
@@ -1206,7 +1203,7 @@ fn the_endpoint_records_why_a_connection_closes() {
             }
         }
         endpoint.stop();
-        writer.flush(Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         return;
     }
     let config = folder::Folder::new();
@@ -1305,7 +1302,7 @@ fn a_reply_to_a_connection_that_the_peer_closed_is_recorded_as_not_sent() {
         // The serve loop records the close by the peer before the page replies, so the reply meets a closed connection. The
         // serve loop writes those records, and no event reports the writes, so the event log is read until each appears.
         let wait_for = |text: &str| loop {
-            writer.flush(Duration::from_secs(5)).unwrap();
+            writer.flush().unwrap();
             let log = records::text_of(&records::read_events(&records::event_log_path(config)));
             if log.contains(text) {
                 return log;
@@ -1320,7 +1317,7 @@ fn a_reply_to_a_connection_that_the_peer_closed_is_recorded_as_not_sent() {
             "the reply to a closed connection was an error: {log:?}"
         );
         endpoint.stop();
-        writer.flush(Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         return;
     }
     let config = folder::Folder::new();
@@ -1338,20 +1335,20 @@ fn a_reply_to_a_connection_that_the_peer_closed_is_recorded_as_not_sent() {
     child::require_success(&output, config.path());
 }
 
-const TIMEOUT_CHILD: &str = "SOKSAK_ENDPOINT_TIMEOUT_CHILD";
+const NO_RESULT_CHILD: &str = "SOKSAK_ENDPOINT_NO_RESULT_CHILD";
 
-// A request that ends with a timeout error writes the method and the reason to the application log before the client
-// receives the error.
-// contract: endpoint.timeout.is-recorded
+// A request that ends without its result, the error 1005, writes the method and the reason to the application log before
+// the client receives the error.
+// contract: endpoint.no-result.is-recorded
 #[test]
-fn the_endpoint_records_a_timeout_of_a_request() {
-    if let Some(config) = std::env::var_os(TIMEOUT_CHILD) {
+fn the_endpoint_records_a_request_that_ended_without_its_result() {
+    if let Some(config) = std::env::var_os(NO_RESULT_CHILD) {
         let config = Path::new(&config);
         soksak_host::application_log::start_standard_error(config, "com.soksak.test").unwrap();
         let writer = records::start_writer(config);
         let (fake, _calls) = Fake::new();
-        *fake.timing_out.lock().unwrap() = Some("status.get".to_string());
-        let endpoint = start(config, "test-timeout", fake);
+        *fake.without_result.lock().unwrap() = Some("status.get".to_string());
+        let endpoint = start(config, "test-no-result", fake);
         let mut connection = open(&endpoint);
         let reply = request(
             &mut connection,
@@ -1359,20 +1356,20 @@ fn the_endpoint_records_a_timeout_of_a_request() {
             "status.get",
             json!({"window": "w1", "name": "core.layout"}),
         );
-        assert_eq!(reply["error"]["code"], endpoint::TIMED_OUT);
+        assert_eq!(reply["error"]["code"], 1005);
         endpoint.stop();
-        writer.flush(Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         return;
     }
     let config = folder::Folder::new();
     let output = std::process::Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
-            "the_endpoint_records_a_timeout_of_a_request",
+            "the_endpoint_records_a_request_that_ended_without_its_result",
             "--nocapture",
             "--test-threads=1",
         ])
-        .env(TIMEOUT_CHILD, config.path())
+        .env(NO_RESULT_CHILD, config.path())
         .stdin(std::process::Stdio::null())
         .output()
         .unwrap();
@@ -1380,9 +1377,91 @@ fn the_endpoint_records_a_timeout_of_a_request() {
     let log = records::text_of(&records::read_events(&records::event_log_path(
         config.path(),
     )));
-    let want =
-        " error host endpoint timeout: status.get: the document did not reply within 10000 ms";
+    let want = " error host endpoint no result: status.get: the document did not receive the input";
     assert!(log.contains(want), "no {want:?} in {log}");
+    assert!(
+        !log.contains("endpoint timeout"),
+        "the log names a timeout: {log}"
+    );
+}
+
+/// A page that holds each command.run until the request ends on the host: entered receives a signal when the page received
+/// the request, and ended a signal when the end of its connection reached the request through its reply scope.
+struct ConnectionEndPage {
+    entered: Mutex<Sender<()>>,
+    ended: Mutex<Sender<()>>,
+}
+
+impl Service for ConnectionEndPage {
+    fn unwatched(&self, _window: &str, _name: &str) {}
+
+    fn windows(&self) -> Result<Value, Failure> {
+        Ok(json!([]))
+    }
+
+    fn exists(&self, window: &str) -> bool {
+        window == "w1"
+    }
+
+    fn call(
+        &self,
+        _window: &str,
+        method: &str,
+        _params: Map<String, Value>,
+        reply: Option<soksak_host::endpoint::ReplyScope>,
+    ) -> Result<Box<RawValue>, Failure> {
+        if method != "command.run" {
+            return raw(&Value::Null);
+        }
+        let (end, connection_ended) = mpsc::channel();
+        reply
+            .expect("an endpoint request has its reply scope")
+            .after_connection_end(move || {
+                let _ = end.send(());
+            });
+        self.entered.lock().unwrap().send(()).unwrap();
+        connection_ended
+            .recv()
+            .expect("the end of the connection reaches the request");
+        self.ended.lock().unwrap().send(()).unwrap();
+        Err(Failure::new(1003, "the endpoint connection ended"))
+    }
+}
+
+// The end of the endpoint connection that sent a request ends the request on the host: the page request of a command.run
+// that its page holds ends when the client closes the connection, with no time limit before it.
+// contract: exposure.command.ends-by-reply-or-peer-end, exposure.relay.connection-end-ends-its-requests
+#[test]
+fn the_end_of_the_endpoint_connection_ends_its_page_requests() {
+    let config = folder::Folder::new();
+    let (entered, entries) = mpsc::channel();
+    let (ended, ends) = mpsc::channel();
+    let page = Arc::new(ConnectionEndPage {
+        entered: Mutex::new(entered),
+        ended: Mutex::new(ended),
+    });
+    let endpoint = Endpoint::start(
+        &config.path().join("sockets"),
+        config.path(),
+        "test-connection-end",
+        page,
+    )
+    .unwrap();
+    endpoint.publish("w1").unwrap();
+    let mut connection = open(&endpoint);
+    send(
+        &mut connection,
+        json!({"jsonrpc": "2.0", "id": 1, "method": "command.run",
+            "params": {"window": "w1", "name": "probe.run", "params": {}}}),
+    );
+    entries.recv().unwrap();
+    assert!(
+        ends.try_recv().is_err(),
+        "the request ended while its connection is open"
+    );
+    drop(connection);
+    ends.recv().unwrap();
+    endpoint.stop();
 }
 
 // contract: diagnostics.objects.counts-host-objects
@@ -1437,7 +1516,7 @@ fn the_endpoint_records_an_accept_error() {
         // The record is written by the accept loop after accept returns, and no event reports that write, so the event log is
         // read until the record appears.
         loop {
-            writer.flush(Duration::from_secs(5)).unwrap();
+            writer.flush().unwrap();
             let log = records::text_of(&records::read_events(&records::event_log_path(config)));
             if log.contains("error host endpoint accept: accept fault") {
                 break;
@@ -1445,7 +1524,7 @@ fn the_endpoint_records_an_accept_error() {
             std::thread::sleep(Duration::from_millis(10));
         }
         endpoint.stop();
-        writer.flush(Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         return;
     }
     let config = folder::Folder::new();
@@ -1518,7 +1597,7 @@ fn a_zero_ready_termination_intent_replies_before_the_actual_socket_closes() {
     );
     *service.endpoint.lock().unwrap() = Arc::downgrade(&endpoint);
     endpoint.publish("w1").unwrap();
-    let mut client = endpoint_client::connect(endpoint.address(), Duration::from_secs(5));
+    let mut client = endpoint_client::connect(endpoint.address());
     let body = serde_json::to_vec(&json!({"jsonrpc":"2.0","id":71,"method":"command.run","params":{"window":"w1","name":"probe.terminate"}})).unwrap();
     client
         .write_all(&(body.len() as u32).to_be_bytes())

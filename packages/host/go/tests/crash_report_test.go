@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
@@ -29,7 +28,7 @@ func writeCrashReport(t *testing.T, directory, name, application string, pid int
 // foundEvents flushes the writer and returns the events `host.crash.found` that it stored.
 func foundEvents(t *testing.T, log *host.EventLog) []map[string]any {
 	t.Helper()
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var found []map[string]any

@@ -947,7 +947,7 @@ func TestTheRelayRecordsEveryMessageWithItsWholeBody(t *testing.T) {
 		t.Fatalf("event = %+v", event)
 	}
 	sidecars.Stop()
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var sent, received map[string]any
@@ -989,7 +989,7 @@ func TestSidecarRequestWithCorrelationIdentifiersIsRecordedAsAnEvent(t *testing.
 	owner.Next(t)
 	owner.Next(t)
 	sidecars.Stop()
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var requests []map[string]any
@@ -1013,7 +1013,7 @@ func TestSidecarRequestWithCorrelationIdentifiersIsRecordedAsAnEvent(t *testing.
 // sidecarReplies flushes the writer and returns the events `host.sidecar.reply` that it stored.
 func sidecarReplies(t *testing.T, log *host.EventLog, config string) []map[string]any {
 	t.Helper()
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var replies []map[string]any
@@ -1156,7 +1156,7 @@ func TestSidecarLifetimeIsRecordedAsEvents(t *testing.T) {
 	}
 	owner.Next(t)
 	sidecars.Stop()
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var seen []string
@@ -1193,7 +1193,7 @@ func TestTheSamplerNamesARunningSidecarUntilItEnds(t *testing.T) {
 		t.Fatal(err)
 	}
 	samples := func(named bool) int {
-		if err := log.Flush(5 * time.Second); err != nil {
+		if err := log.Flush(); err != nil {
 			t.Fatal(err)
 		}
 		count := 0
@@ -1223,7 +1223,7 @@ func TestTheSamplerNamesARunningSidecarUntilItEnds(t *testing.T) {
 	}
 	sidecars.Stop()
 	host.PerformanceSample()
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	exit, named := -1, []int{}
@@ -1345,7 +1345,7 @@ func TestStandardIOSidecarFirstAnswerAfterSpawnIsRecorded(t *testing.T) {
 	}
 	owner.Next(t)
 	sidecars.Stop()
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var ready map[string]any
@@ -1486,7 +1486,7 @@ func TestSidecarStopsAtTheFourthFailureWithinTheWindow(t *testing.T) {
 		t.Fatalf("refused send failure = %+v", failure)
 	}
 	sidecars.Stop()
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	starts, stops := 0, 0
@@ -1557,7 +1557,7 @@ func TestSurfaceOpenClearsTheRestartLimit(t *testing.T) {
 	}
 	// The restarted sidecar does not read its input and ends at the terminate signal of the stop.
 	sidecars.Stop()
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	found := false

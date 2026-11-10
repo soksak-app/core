@@ -122,9 +122,9 @@ static void checkHiddenSurfaceRegion(void) {
     int down = 0, up = 0;
     int *downAnswer = &down, *upAnswer = &up;
     NSString *records = capturedRecords(^{
-        sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 150, 175, 1, 0, 0, 0, 1, 1.5, pressDone, downAnswer);
+        sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 150, 175, 1, 0, 0, 0, 1, pressDone, downAnswer);
         eventWait(@"the press answers", ^BOOL { return *downAnswer != 0; });
-        sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 150, 175, 3, 0, 0, 0, 1, 1.5, pressDone, upAnswer);
+        sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 150, 175, 3, 0, 0, 0, 1, pressDone, upAnswer);
         // A record of a release that waited for a page is written before the receipt of that release ends and the press origin
         // ends, so the records are judged after the release answered and its press origin ended.
         eventWait(@"the release answers and its press origin ends", ^BOOL { return *upAnswer != 0 && pressOriginEnded(window); });

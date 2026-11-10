@@ -403,19 +403,20 @@ func (l *EventLog) CountLoss(channel Channel, reason LossReason, events, bytes u
 // Boot is the identifier of the run that this writer belongs to; with a seq it names a line of the log.
 func (l *EventLog) Boot() string { return l.boot }
 
-// EmitPlaced queues an event of the layer of the writer, waits until it is on disk, at most deadline, and returns its seq. The
+// EmitPlaced queues an event of the layer of the writer, waits until it is on disk, and returns its seq; the end of the writer
+// ends the wait (docs/spec/logging.md#writers). The
 // queue refusing the event is an error, so a caller that stores the position never stores a position of a line that does not
 // exist.
-func (l *EventLog) EmitPlaced(level Level, event string, fields json.RawMessage, deadline time.Duration) (uint64, error) {
+func (l *EventLog) EmitPlaced(level Level, event string, fields json.RawMessage) (uint64, error) {
 	if !json.Valid(fields) {
 		return 0, fmt.Errorf("the fields of %s are not JSON", event)
 	}
-	return l.EmitPlacedBounded(level, event, fields, 0, deadline)
+	return l.EmitPlacedBounded(level, event, fields, 0)
 }
 
 // EmitPlacedBounded is EmitPlaced for fields that are JSON, or, when produced is not 0, the first bytes of the text that the
 // producer stopped at the bound after it had written produced bytes.
-func (l *EventLog) EmitPlacedBounded(level Level, event string, fields []byte, produced int, deadline time.Duration) (uint64, error) {
+func (l *EventLog) EmitPlacedBounded(level Level, event string, fields []byte, produced int) (uint64, error) {
 	placed := make(chan uint64, 1)
 	if l.queuedEvents.Load() >= l.queueEvents {
 		l.countLoss(ChannelOf(level), LossQueueFull, len(event))
@@ -424,7 +425,7 @@ func (l *EventLog) EmitPlacedBounded(level Level, event string, fields []byte, p
 	if err := l.enqueuePlaced(time.Now().UnixMicro(), l.clock(), l.layer, "", "", level, event, nil, fields, produced, placed); err != nil {
 		return 0, fmt.Errorf("the event writer refused %s because %w", event, err)
 	}
-	if err := l.Flush(deadline); err != nil {
+	if err := l.Flush(); err != nil {
 		return 0, err
 	}
 	seq, ok := <-placed
@@ -736,8 +737,9 @@ var (
 	errPolicy    = errors.New("the policy does not store it")
 )
 
-// Flush writes everything that is queued and waits until it is on disk, at most deadline.
-func (l *EventLog) Flush(deadline time.Duration) error {
+// Flush writes everything that is queued and waits until it is on disk. It takes no time limit: the answer of the writer ends
+// it, and the end of the writer fails it.
+func (l *EventLog) Flush() error {
 	answer := make(chan struct{})
 	// A request has a reserved slot, so this send is not refused by a full queue of events.
 	select {
@@ -745,13 +747,9 @@ func (l *EventLog) Flush(deadline time.Duration) error {
 	default:
 		return fmt.Errorf("the event writer did not take the flush request")
 	}
-	timer := time.NewTimer(deadline)
-	defer timer.Stop()
 	select {
 	case <-answer:
 		return nil
-	case <-timer.C:
-		return fmt.Errorf("the event writer did not flush within %s", deadline)
 	case <-l.done:
 		// A writer answers before it ends, so the two can be ready together.
 		select {

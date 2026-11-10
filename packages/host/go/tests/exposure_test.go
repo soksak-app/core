@@ -1,16 +1,15 @@
 package host_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
 	"reflect"
-	"regexp"
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
@@ -186,11 +185,11 @@ type listBackend struct {
 	reply json.RawMessage
 }
 
-func (b listBackend) PageRequest(window, method string, params json.RawMessage) (json.RawMessage, error) {
+func (b listBackend) PageRequest(ctx context.Context, window, method string, params json.RawMessage) (json.RawMessage, error) {
 	if method == "exposure.list" {
 		return b.reply, nil
 	}
-	return b.fakeBackend.PageRequest(window, method, params)
+	return b.fakeBackend.PageRequest(ctx, window, method, params)
 }
 
 // contract: exposure.list.non-object-list-rejected
@@ -205,38 +204,43 @@ func TestExposureListRejectsANonObjectPageList(t *testing.T) {
 	}
 }
 
-// contract: exposure.timeout.command-run-default-and-declared, exposure.timeout.every-forward-bounded, exposure.timeout.invalid-timeout-rejected
-func TestForwardedRequestsUseTheDeclaredTimeout(t *testing.T) {
-	// The time limit does not depend on the method, so every forwarded request has one.
-	cases := []struct {
-		timeout string
-		want    time.Duration
-	}{
-		{"", 10 * time.Second},
-		{"null", 10 * time.Second},
-		{"600000", 600 * time.Second},
-		{"1", time.Millisecond},
-	}
-	for _, c := range cases {
-		got, invalid := host.ForwardTimeout(json.RawMessage(c.timeout))
-		if invalid != nil || got != c.want {
-			t.Fatalf("%q: %v %v, want %v", c.timeout, got, invalid, c.want)
-		}
-	}
-	for _, timeout := range []string{"0", "600001", "1.5", `"10"`, "-1"} {
-		if _, invalid := host.ForwardTimeout(json.RawMessage(timeout)); invalid == nil || invalid.Code != -32602 {
-			t.Fatalf("timeout %s: %v", timeout, invalid)
-		}
+// A forwarded request has no time limit, so the request of the main page carries none: it ends by its reply or by the end
+// of its peer.
+// contract: exposure.command.ends-by-reply-or-peer-end
+func TestAForwardedRequestCarriesNoTimeLimit(t *testing.T) {
+	if field, found := reflect.TypeOf(host.ExposureForwardRequest{}).FieldByName("Timeout"); found {
+		t.Fatalf("the forward request has the time limit member %s %s", field.Name, field.Tag)
 	}
 }
 
-// relayWait is the time that the relay tests wait for a reply.
-const relayWait = 5 * time.Second
+// relayRequest starts a request to target on relay and returns the channel of its result and the channel that receives its
+// id when the relay sends it. The send is the event at which the request waits for its reply.
+func relayRequest(relay *host.Relay[string], target string) (<-chan host.ExposureResult, <-chan uint64) {
+	result := make(chan host.ExposureResult, 1)
+	sent := make(chan uint64, 1)
+	go func() {
+		result <- relay.Request(target, func(id uint64) error {
+			sent <- id
+			return nil
+		})
+	}()
+	return result, sent
+}
+
+// expectWaiting fails when result already holds the end of the request.
+func expectWaiting(t *testing.T, result <-chan host.ExposureResult, what string) {
+	t.Helper()
+	select {
+	case got := <-result:
+		t.Fatalf("%s ended: %+v", what, got)
+	default:
+	}
+}
 
 // contract: exposure.relay.reply-resolves-request
 func TestRelayReplyFromTheTargetDocumentResolvesTheRequest(t *testing.T) {
 	relay := host.NewRelay[string]()
-	got := relay.Request("main", relayWait, func(id uint64) error {
+	got := relay.Request("main", func(id uint64) error {
 		go func() {
 			if err := relay.Resolve(id, "main", host.ExposureResult{Result: json.RawMessage(`{"ok":true}`)}); err != nil {
 				t.Error(err)
@@ -253,7 +257,7 @@ func TestRelayReplyFromTheTargetDocumentResolvesTheRequest(t *testing.T) {
 func TestRelayReplyKeepsTheTextAndKeyOrderOfThePageValue(t *testing.T) {
 	relay := host.NewRelay[string]()
 	value := `{"zeta":1,"alpha":{"b":2,"a":1}}`
-	got := relay.Request("main", relayWait, func(id uint64) error {
+	got := relay.Request("main", func(id uint64) error {
 		return relay.Resolve(id, "main", host.ExposureResult{Result: json.RawMessage(value)})
 	})
 	if got.Error != nil || string(got.Result) != value {
@@ -264,7 +268,7 @@ func TestRelayReplyKeepsTheTextAndKeyOrderOfThePageValue(t *testing.T) {
 // contract: exposure.relay.missing-result-is-null
 func TestRelayReplyWithoutResultIsNull(t *testing.T) {
 	relay := host.NewRelay[string]()
-	got := relay.Request("main", relayWait, func(id uint64) error {
+	got := relay.Request("main", func(id uint64) error {
 		return relay.Resolve(id, "main", host.ExposureResult{})
 	})
 	if got.Error != nil || len(got.Result) != 0 {
@@ -275,7 +279,7 @@ func TestRelayReplyWithoutResultIsNull(t *testing.T) {
 // contract: exposure.relay.error-reply-keeps-code-and-message
 func TestRelayErrorReplyKeepsCodeAndMessage(t *testing.T) {
 	relay := host.NewRelay[string]()
-	got := relay.Request("main", relayWait, func(id uint64) error {
+	got := relay.Request("main", func(id uint64) error {
 		return relay.Resolve(id, "main", host.ExposureResult{Error: &host.RPCError{Code: 1002, Message: "not registered"}})
 	})
 	if got.Error == nil || got.Error.Code != 1002 || got.Error.Message != "not registered" {
@@ -283,42 +287,96 @@ func TestRelayErrorReplyKeepsCodeAndMessage(t *testing.T) {
 	}
 }
 
-// contract: exposure.relay.foreign-document-reply-ignored-timeout-1005
-func TestRelayReplyFromAnotherDocumentIsRejectedAndTheRequestTimesOut(t *testing.T) {
+// A reply from another document is refused and changes nothing: the request keeps waiting, and the reply of its document
+// then ends it with that reply, not with the foreign one.
+// contract: exposure.relay.foreign-document-reply-ignored
+func TestRelayReplyFromAnotherDocumentIsIgnoredAndTheRequestKeepsWaiting(t *testing.T) {
 	relay := host.NewRelay[string]()
-	var requested uint64
-	got := relay.Request("main", 50*time.Millisecond, func(id uint64) error {
-		requested = id
-		if err := relay.Resolve(id, "surface-main-a", host.ExposureResult{Result: json.RawMessage(`1`)}); err == nil {
-			t.Error("a reply from another document was accepted")
-		}
-		return nil
-	})
-	if got.Error == nil || got.Error.Code != 1005 {
-		t.Fatalf("reply %+v, want 1005", got)
+	result, sent := relayRequest(relay, "main")
+	id := <-sent
+	if err := relay.Resolve(id, "surface-main-a", host.ExposureResult{Result: json.RawMessage(`1`)}); err == nil {
+		t.Fatal("a reply from another document was accepted")
 	}
-	if err := relay.Resolve(requested, "main", host.ExposureResult{Result: json.RawMessage(`1`)}); err == nil {
-		t.Fatal("a late reply was accepted after the timeout")
+	expectWaiting(t, result, "the request after a reply from another document")
+	if err := relay.Resolve(id, "main", host.ExposureResult{Result: json.RawMessage(`2`)}); err != nil {
+		t.Fatalf("the reply of the document of the request: %v", err)
+	}
+	if got := <-result; got.Error != nil || string(got.Result) != `2` {
+		t.Fatalf("reply %+v, want the result 2 of the document of the request", got)
 	}
 }
 
-// contract: exposure.relay.late-reply-states-its-delay
-func TestRelayLateReplyStatesItsDelay(t *testing.T) {
+// A request has no time limit: it waits until its document closes, then fails with 1003, and writes no call event on the
+// way. A reply that comes after the close is an observation, and a reply to an id that the relay never sent fails.
+// contract: exposure.relay.waits-until-reply-or-close
+func TestRelayRequestWaitsUntilItsDocumentCloses(t *testing.T) {
+	log := support.UseRoomyEventLog(t)
+	support.TraceOn(t)
+	relay := host.NewRelay[string]()
+	result, sent := relayRequest(relay, "surface-main-a")
+	id := <-sent
+	expectWaiting(t, result, "the request before its document closed")
+	relay.Abandon(func(target string) bool { return target == "surface-main-a" })
+	if got := <-result; got.Error == nil || got.Error.Code != 1003 {
+		t.Fatalf("reply %+v, want 1003", got)
+	}
+	if err := relay.Resolve(id, "surface-main-a", host.ExposureResult{Result: json.RawMessage(`1`)}); err != nil {
+		t.Fatalf("the reply after the close = %v, want it accepted as an observation", err)
+	}
+	if err := relay.Resolve(id+100, "surface-main-a", host.ExposureResult{Result: json.RawMessage(`1`)}); err == nil ||
+		err.Error() != fmt.Sprintf("exposure reply %d has no matching request", id+100) {
+		t.Fatalf("reply to no request = %v", err)
+	}
+	for _, event := range []string{"host.call.timeout", "host.trace.call.late-reply"} {
+		if got := callEvents(t, log, event); len(got) != 0 {
+			t.Fatalf("%s = %v, want none", event, got)
+		}
+	}
+}
+
+// The end of the endpoint connection that sent a request ends it on the host. The reply of the document then comes to a
+// request that ended: the host accepts it, writes the observation and answers nothing, with no delay and no call event.
+// contract: exposure.relay.connection-end-ends-its-requests
+func TestTheEndOfItsConnectionEndsARelayRequestAndItsReplyIsAnObservation(t *testing.T) {
+	written := support.CaptureLog(t)
+	support.TraceOn(t)
+	relay := host.NewRelay[string]()
+	result, sent := relayRequest(relay, "surface-main-a")
+	id := <-sent
+	expectWaiting(t, result, "the request before its connection ended")
+	relay.End(id)
+	if got := <-result; got.Error == nil {
+		t.Fatalf("the request whose connection ended answered %+v, want no result", got)
+	}
+	if err := relay.Resolve(id, "surface-main-a", host.ExposureResult{Result: json.RawMessage(`1`)}); err != nil {
+		t.Fatalf("the reply after the end of the connection = %v, want it accepted as an observation", err)
+	}
+	log := written()
+	if want := fmt.Sprintf(" info host exposure: exposure reply %d arrived after its request ended", id); !strings.Contains(log, want) {
+		t.Fatalf("the log has no %q:\n%s", want, log)
+	}
+	for _, removed := range []string{" ms after it was sent", "timed out"} {
+		if strings.Contains(log, removed) {
+			t.Fatalf("the log states a delay or a time limit %q:\n%s", removed, log)
+		}
+	}
+}
+
+// The end of a connection recorded in the turn of the send ends the request the same way.
+// contract: exposure.relay.connection-end-ends-its-requests
+func TestAConnectionEndInTheTurnOfTheSendEndsTheRelayRequest(t *testing.T) {
 	relay := host.NewRelay[string]()
 	var requested uint64
-	got := relay.Request("main", 50*time.Millisecond, func(id uint64) error {
+	got := relay.Request("main", func(id uint64) error {
 		requested = id
+		relay.End(id)
 		return nil
 	})
-	if got.Error == nil || got.Error.Code != 1005 || got.Error.Message != "the document did not reply within 50 ms" {
-		t.Fatalf("reply %+v, want 1005 with the timeout in milliseconds", got.Error)
+	if got.Error == nil {
+		t.Fatalf("the request whose connection ended answered %+v, want no result", got)
 	}
-	err := relay.Resolve(requested, "main", host.ExposureResult{Result: json.RawMessage(`1`)})
-	if err == nil || !regexp.MustCompile(fmt.Sprintf(`^exposure reply %d arrived \d+ ms after it was sent; its request timed out after 50 ms$`, requested)).MatchString(err.Error()) {
-		t.Fatalf("late reply = %v", err)
-	}
-	if err := relay.Resolve(requested+100, "main", host.ExposureResult{Result: json.RawMessage(`1`)}); err == nil || err.Error() != fmt.Sprintf("exposure reply %d has no matching request", requested+100) {
-		t.Fatalf("reply to no request = %v", err)
+	if err := relay.Resolve(requested, "main", host.ExposureResult{Result: json.RawMessage(`1`)}); err != nil {
+		t.Fatalf("the reply after the end of the connection = %v, want it accepted as an observation", err)
 	}
 }
 
@@ -326,7 +384,7 @@ func TestRelayLateReplyStatesItsDelay(t *testing.T) {
 func TestRelaySendFailureIsReportedWithoutWaiting(t *testing.T) {
 	relay := host.NewRelay[string]()
 	// The request has no time limit, so a failed send that waited for a reply would never return.
-	got := relay.Request("main", 0, func(uint64) error { return errors.New("webview is gone") })
+	got := relay.Request("main", func(uint64) error { return errors.New("webview is gone") })
 	if got.Error == nil || got.Error.Code != 1003 {
 		t.Fatalf("reply %+v, want 1003", got)
 	}
@@ -335,7 +393,7 @@ func TestRelaySendFailureIsReportedWithoutWaiting(t *testing.T) {
 // contract: exposure.relay.closed-document-fails-pending-1003
 func TestRelayClosedDocumentFailsItsPendingRequests(t *testing.T) {
 	relay := host.NewRelay[string]()
-	got := relay.Request("main", relayWait, func(uint64) error {
+	got := relay.Request("main", func(uint64) error {
 		relay.Abandon(func(target string) bool { return target == "main" })
 		return nil
 	})
@@ -347,7 +405,7 @@ func TestRelayClosedDocumentFailsItsPendingRequests(t *testing.T) {
 // contract: exposure.relay.ended-reply-is-observed
 func TestRelayReplyToARequestTheDocumentClosedIsObserved(t *testing.T) {
 	relay := host.NewRelay[string]()
-	got := relay.Request("main", relayWait, func(uint64) error {
+	got := relay.Request("main", func(uint64) error {
 		relay.Abandon(func(target string) bool { return target == "main" })
 		return nil
 	})
@@ -364,19 +422,6 @@ func TestRelayReplyToARequestTheDocumentClosedIsObserved(t *testing.T) {
 	}
 }
 
-// contract: exposure.relay.no-timeout-waits-until-close
-func TestRelayRequestWithoutTimeoutWaitsUntilTheDocumentCloses(t *testing.T) {
-	relay := host.NewRelay[string]()
-	got := relay.Request("surface-main-a", 0, func(uint64) error {
-		// After the wait for the reply started, another goroutine announces that the document ended.
-		go relay.Abandon(func(target string) bool { return target == "surface-main-a" })
-		return nil
-	})
-	if got.Error == nil || got.Error.Code != 1003 {
-		t.Fatalf("reply %+v, want 1003", got)
-	}
-}
-
 // contract: exposure.status-change.refuses-host-name
 func TestPageStatusChangeRefusesHostName(t *testing.T) {
 	if err := host.CheckPageStatusChange("host.window"); err == nil || err.Error() != "the page cannot change host status host.window" {
@@ -390,7 +435,7 @@ func TestPageStatusChangeRefusesHostName(t *testing.T) {
 // callEvents flushes the writer and returns the fields of the events named event that it stored.
 func callEvents(t *testing.T, log *host.EventLog, event string) []map[string]any {
 	t.Helper()
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var fields []map[string]any
@@ -400,46 +445,6 @@ func callEvents(t *testing.T, log *host.EventLog, event string) []map[string]any
 		}
 	}
 	return fields
-}
-
-// contract: exposure.relay.timeout-writes-call-event
-func TestRelayTimeoutOfACommandWritesCallTimeout(t *testing.T) {
-	log := support.UseRoomyEventLog(t)
-	relay := host.NewRelay[string]()
-	got := relay.RequestCall("surface-main-a", host.RelayCall{Plugin: "probe", Command: "probe.run"}, 50*time.Millisecond, func(uint64) error { return nil })
-	if got.Error == nil || got.Error.Code != 1005 {
-		t.Fatalf("reply %+v, want 1005", got)
-	}
-	if want := []map[string]any{{"plugin": "probe", "command": "probe.run"}}; !reflect.DeepEqual(callEvents(t, log, "host.call.timeout"), want) {
-		t.Fatalf("host.call.timeout = %v, want %v", callEvents(t, log, "host.call.timeout"), want)
-	}
-	// A request that is not a command writes no call event.
-	relay.Request("main", 50*time.Millisecond, func(uint64) error { return nil })
-	if got := callEvents(t, log, "host.call.timeout"); len(got) != 1 {
-		t.Fatalf("host.call.timeout has %d events after a request that is not a command, want 1", len(got))
-	}
-}
-
-// contract: exposure.relay.late-reply-writes-call-event
-func TestRelayLateReplyOfACommandWritesCallLateReply(t *testing.T) {
-	log := support.UseRoomyEventLog(t)
-	support.TraceOn(t)
-	relay := host.NewRelay[string]()
-	var requested uint64
-	relay.RequestCall("surface-main-a", host.RelayCall{Plugin: "probe", Command: "probe.run"}, 50*time.Millisecond, func(id uint64) error {
-		requested = id
-		return nil
-	})
-	if err := relay.Resolve(requested, "surface-main-a", host.ExposureResult{Result: json.RawMessage(`1`)}); err == nil {
-		t.Fatal("a late reply was accepted after the timeout")
-	}
-	late := callEvents(t, log, "host.trace.call.late-reply")
-	if len(late) != 1 || late[0]["plugin"] != "probe" || late[0]["command"] != "probe.run" {
-		t.Fatalf("host.trace.call.late-reply = %v, want one event of plugin probe and command probe.run", late)
-	}
-	if delay, ok := late[0]["delay"].(float64); !ok || delay < 50 {
-		t.Fatalf("delay = %v, want a number of at least 50 ms", late[0]["delay"])
-	}
 }
 
 // contract: view.exposure.register

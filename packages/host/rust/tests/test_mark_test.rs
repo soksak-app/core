@@ -127,8 +127,8 @@ fn assert_test_marks_under_lifecycle_policy(lifecycle: &str) {
         LogPolicy::parse("log-policy.json", policy.as_bytes()).unwrap(),
         "file",
     );
-    let (boot, start) = emit_test_mark(&mark("start", ""), Duration::from_secs(5)).unwrap();
-    let (boot_end, end) = emit_test_mark(&mark("end", "fail"), Duration::from_secs(5)).unwrap();
+    let (boot, start) = emit_test_mark(&mark("start", "")).unwrap();
+    let (boot_end, end) = emit_test_mark(&mark("end", "fail")).unwrap();
     assert_eq!(
         (boot.as_str(), boot_end.as_str(), end),
         ("b1", "b1", start + 1)
@@ -138,7 +138,7 @@ fn assert_test_marks_under_lifecycle_policy(lifecycle: &str) {
         "host.record.info",
         json!({"where": "test", "text": "ordinary lifecycle record"}),
     );
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let lines: Vec<Value> = fs::read_to_string(log.path())
         .unwrap()
         .lines()
@@ -179,7 +179,7 @@ fn a_test_mark_without_an_event_log_is_an_error() {
     let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     use_host_event_log(None);
     assert_eq!(
-        emit_test_mark(&mark("start", ""), Duration::from_secs(1)),
+        emit_test_mark(&mark("start", "")),
         Err("the event log of the host is not attached".to_string())
     );
 }

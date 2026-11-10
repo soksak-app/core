@@ -2,7 +2,6 @@ package host_test
 
 import (
 	"testing"
-	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
@@ -17,7 +16,7 @@ func TestAWindowEventIsRecordedAsAnEvent(t *testing.T) {
 	}
 	// A kind outside the contract is reported on the standard error and stores nothing.
 	host.RecordWindowEvent("main-2", "teleport")
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var seen [][3]string

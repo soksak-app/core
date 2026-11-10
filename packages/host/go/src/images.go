@@ -18,7 +18,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"time"
 	"unsafe"
 )
 
@@ -497,10 +496,16 @@ func (i *Images) InvalidateSidecar(sidecar string) int {
 		if !ok {
 			continue
 		}
+		// A region that the presentation wait waits for has no supplier to present its raster until the new connection
+		// configures it again, so the wait ends with the failure that names the supplier. A new configuration clears it.
+		waited := i.drawingLocked(key, state) && state.Raster > 0
 		state.Configured = false
 		state.LastSequence = 0
 		state.PresentedSequence = 0
 		state.PresentationError = ""
+		if waited {
+			state.PresentationError = fmt.Sprintf("the supplier %s of the image region %s/%s ended", sidecar, key.Surface, key.Name)
+		}
 		// The service of the new connection has no drawing state either.
 		state.DrawingSent = false
 		invalidated++
@@ -707,52 +712,58 @@ func (i *Images) CurrentPresented() bool {
 	return i.currentPresentedLocked()
 }
 
-// WaitCurrent waits until every visible image region displays the current raster or the time limit ends.
-func (i *Images) WaitCurrent(timeout time.Duration) bool {
-	return i.WaitCurrentError(timeout) == nil
+// WaitCurrentError waits until every drawing image region displays its current raster and returns nil, or returns the exact
+// failure of a region. It has no time limit: the presentation of the raster ends it, and so do the removal of its region or
+// surface, a presentation failure, the end of the supplier connection of a region (InvalidateSidecar) and the close of stop, the
+// end of the request that waits (errRasterWaitStopped). The end of a layout transaction does not end it.
+func (i *Images) WaitCurrentError(stop <-chan struct{}) error {
+	return i.waitCurrentObserved(stop, nil)
 }
 
-// WaitCurrentError waits for the current raster or returns its exact failure.
-func (i *Images) WaitCurrentError(timeout time.Duration) error {
-	return i.waitCurrentObserved(timeout, nil)
+// WaitLayoutRasters waits for the completion boundary selected by the layout request. It ends only by the presentation of each
+// required raster, by the removal of its region or surface, by a presentation failure, by the end of the connection of a
+// sidecar of the regions, or by the end of the layout transaction, which a cancel of its ticket or of its window ends
+// (errLayoutWaitEnded) (docs/spec/native-surfaces.md#layout-transaction).
+func (i *Images) WaitLayoutRasters(settled bool) error {
+	return i.waitLayoutRastersObserved(settled, nil)
 }
 
-// WaitLayoutRasters waits for the completion boundary selected by the layout request. With noWaitLimit it ends only by the
-// presentation of each required raster, by a presentation failure, by the end of the connection of a sidecar of the regions, or by
-// the end of the layout transaction (errLayoutWaitEnded).
-func (i *Images) WaitLayoutRasters(timeout time.Duration, settled bool) error {
+// errRasterWaitStopped is the end of a raster wait by the end of the request that waits.
+var errRasterWaitStopped = errors.New("the request of the raster wait ended")
+
+func (i *Images) waitLayoutRastersObserved(settled bool, waiting func()) error {
 	if settled {
-		return i.WaitCurrentError(timeout)
+		return i.waitObserved(true, nil, waiting, i.currentPresentedLocked)
 	}
-	return i.waitRasterSnapshotObserved(timeout, nil)
-}
-
-// noWaitLimit is the time limit of a raster wait that ends only by its events (docs/spec/native-surfaces.md#layout-transaction).
-const noWaitLimit time.Duration = -1
-
-func (i *Images) waitRasterSnapshotObserved(timeout time.Duration, waiting func()) error {
-	return i.waitObserved(timeout, waiting, i.currentRasterSnapshotInstalledLocked)
+	return i.waitObserved(true, nil, waiting, i.currentRasterSnapshotInstalledLocked)
 }
 
 // waitCurrentObserved calls waiting under the owner lock each time the wait finds the presentation incomplete and blocks, so a test
 // orders the next frame after the wait checked the state and knows when the wait checked the frame that it gave.
-func (i *Images) waitCurrentObserved(timeout time.Duration, waiting func()) error {
-	return i.waitObserved(timeout, waiting, i.currentPresentedLocked)
+func (i *Images) waitCurrentObserved(stop <-chan struct{}, waiting func()) error {
+	return i.waitObserved(false, stop, waiting, i.currentPresentedLocked)
 }
 
-func (i *Images) waitObserved(timeout time.Duration, waiting func(), complete func() bool) error {
-	deadline := time.Now().Add(timeout)
+// waitObserved is the wait of the image regions: it ends at complete, at a presentation failure, at the end of the connection
+// of a sidecar of the regions, at the end of the layout transaction when layout is set, and at the close of stop. waiting runs
+// at each check that finds a raster pending, under the owner lock, so tests can order the next change before the wakeup.
+func (i *Images) waitObserved(layout bool, stop <-chan struct{}, waiting func(), complete func() bool) error {
 	i.mu.Lock()
 	ends, sidecars := i.waitEnds, i.endedSidecars
 	i.mu.Unlock()
 	for {
+		select {
+		case <-stop:
+			return errRasterWaitStopped
+		default:
+		}
 		i.mu.Lock()
 		if i.endedSidecars != sidecars {
 			err := fmt.Errorf("the sidecar %s of an image region ended", i.endedSidecar)
 			i.mu.Unlock()
 			return err
 		}
-		if i.waitEnds != ends {
+		if layout && i.waitEnds != ends {
 			i.mu.Unlock()
 			return errLayoutWaitEnded
 		}
@@ -772,26 +783,10 @@ func (i *Images) waitObserved(timeout time.Duration, waiting func(), complete fu
 			waiting()
 		}
 		i.mu.Unlock()
-
-		if timeout < 0 {
-			<-changed
-			continue
-		}
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			return errors.New("presentationTimeout")
-		}
-		timer := time.NewTimer(remaining)
 		select {
 		case <-changed:
-			if !timer.Stop() {
-				select {
-				case <-timer.C:
-				default:
-				}
-			}
-		case <-timer.C:
-			return errors.New("presentationTimeout")
+		case <-stop:
+			return errRasterWaitStopped
 		}
 	}
 }

@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
@@ -37,7 +36,7 @@ func (bindingTarget) Explode(value json.RawMessage) error { panic("the method fa
 // bindingCalls flushes the writer and returns the events `host.binding.call` that it stored, in order.
 func bindingCalls(t *testing.T, log *host.EventLog) []map[string]any {
 	t.Helper()
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var calls []map[string]any

@@ -1,18 +1,13 @@
-//! The endpoint client of the integration tests on macOS: a connection to the unix socket of an endpoint whose reads have a time
-//! limit, so a test whose endpoint does not answer fails instead of waiting.
+//! The endpoint client of the integration tests on macOS: a connection to the unix socket of an endpoint. A read has no time
+//! limit: the answer of the endpoint or the end of its connection ends it.
 
 use std::os::unix::net::UnixStream;
-use std::time::Duration;
 
 /// A connection to the endpoint.
 pub type Connection = UnixStream;
 
-/// Connects to the endpoint socket at address. A read that receives no byte within read_timeout fails.
-pub fn connect(address: &str, read_timeout: Duration) -> Connection {
-    let stream = UnixStream::connect(address)
-        .unwrap_or_else(|error| panic!("cannot connect to {address}: {error}"));
-    stream
-        .set_read_timeout(Some(read_timeout))
-        .unwrap_or_else(|error| panic!("cannot set the read timeout of {address}: {error}"));
-    stream
+/// Connects to the endpoint socket at address.
+pub fn connect(address: &str) -> Connection {
+    UnixStream::connect(address)
+        .unwrap_or_else(|error| panic!("cannot connect to {address}: {error}"))
 }

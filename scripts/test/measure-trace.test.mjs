@@ -80,12 +80,19 @@ test("applying a trace state other than 0, 1 and FRAME_RECORDS fails with its va
   assert.deepEqual(calls, []);
 });
 
-test("applying a trace state fails with the policy that the file holds when the host does not write the policy", async (t) => {
+test("applying a trace state fails with the policy that the file holds when the host ends without writing the policy", async (t) => {
   const configDir = mkdtempSync(join(tmpdir(), "measure-trace-"));
   t.after(() => rmSync(configDir, { recursive: true, force: true }));
   writePolicy(configDir, { input: "trace" });
-  await assert.rejects(applyTrace(async () => null, 1, configDir, 300),
-    /log-policy\.json did not hold the log policy .*"call":"debug".*"frame":"debug".* within 300 ms; it holds .*"input":"trace"/);
+  let end;
+  const ended = new Promise((resolve) => { end = resolve; });
+  const applying = applyTrace(async () => { end(new Error("endpoint connection closed")); }, 1, configDir, { ended });
+  await assert.rejects(applying,
+    /log-policy\.json did not hold the log policy .*"call":"debug".*"frame":"debug".* before the host ended \(endpoint connection closed\); it holds .*"input":"trace"/);
+});
+
+test("applying a trace state takes no time limit", async () => {
+  await assert.rejects(applyTrace(async () => null, 1, "/nonexistent", 300), /untilPolicy takes no limit/);
 });
 
 test("a refused command fails the application of the trace state with its error", async (t) => {

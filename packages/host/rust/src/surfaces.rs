@@ -1260,6 +1260,18 @@ pub(crate) fn when_settled(running: &Running) -> Result<std::sync::mpsc::Receive
     Ok(rx)
 }
 
+/// Ends the waits for the end of the continuous update: their receivers see the senders go, which the presented wait
+/// answers with 1003 (WindowData::end_waits).
+pub(crate) fn end_settled_waits(running: &Running) {
+    running
+        .settled
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the settled senders, which this end drains; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .clear();
+}
+
 pub(crate) fn label_for(window: &Window, id: &str) -> String {
     format!("surface-{}-{id}", window.label())
 }
@@ -2108,9 +2120,7 @@ pub async fn present(window: Window, request: PresentRequest) -> Result<Vec<Plac
                         surface_dispatch_timestamp,
                         record_surface_dispatch,
                         || crate::composition::refresh_image_rasters(&raster_window),
-                        || match images
-                            .wait_layout_rasters(images::NO_WAIT_LIMIT, presentation_settled)
-                        {
+                        || match images.wait_layout_rasters(presentation_settled) {
                             Err(reason) if reason == images::LAYOUT_WAIT_ENDED => Ok(()),
                             Err(reason) => Err(format!(
                                 "the current image raster failed to present: {reason}"

@@ -1,12 +1,12 @@
 package host
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
 	"testing"
-	"time"
 	"unsafe"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
@@ -175,43 +175,55 @@ func TestAModalThatReplacesAnotherKeepsTheWaitUntilItTakesTheKeyboard(t *testing
 	}
 }
 
-// contract: host.window.presented waits for the first paint of the revealed modal (docs/spec/exposure.md, host.window.presented).
+// The first-frame wait of the shown modal takes no time limit: the first frame of the modal ends it, the close of the modal
+// ends it, and no open modal holds no wait. Each end is a change of the modal state that the wait reads, so an end before
+// the wait reads it ends the wait the same way.
+// contract: exposure.window-presented.ends-by-events
 func TestThePresentedWaitEndsAtThePaintOfTheShownModal(t *testing.T) {
 	s, fake := modalKeyboardSurfaces(t, false)
 	showPicker(t, s, "picker")
 	if err := s.ModalReady("picker", s.modal.instance); err != nil {
 		t.Fatalf("ModalReady: %v", err)
 	}
-	// The revealed modal holds its first paint back: the wait of presented stands until its limit, which the check sets to
-	// have passed, and reports the modal as waiting for its paint.
-	if !s.waitForModalPaint(time.Nanosecond) {
-		t.Fatal("the wait of presented ended without the paint of the modal")
-	}
-	// The paint of the modal ends the wait.
-	ended := make(chan bool, 1)
-	go func() { ended <- s.waitForModalPaint(time.Second) }()
+	ended := make(chan error, 1)
+	go func() { ended <- s.waitForModalPaint(context.Background()) }()
 	fake.paint()
-	if waiting := <-ended; waiting {
-		t.Fatal("the wait of presented reported a modal without its paint")
+	if err := <-ended; err != nil {
+		t.Fatalf("the first frame of the modal ended the wait with %v", err)
 	}
-	// A modal that closes before its paint ends the wait of presented.
 	showPicker(t, s, "picker")
 	if err := s.ModalReady("picker", s.modal.instance); err != nil {
 		t.Fatalf("ModalReady of the second modal: %v", err)
 	}
-	go func() { ended <- s.waitForModalPaint(time.Second) }()
+	go func() { ended <- s.waitForModalPaint(context.Background()) }()
 	if err := s.OverlayHide("picker"); err != nil {
 		t.Fatalf("OverlayHide: %v", err)
 	}
-	if waiting := <-ended; waiting {
-		t.Fatal("the wait of presented reported a closed modal without its paint")
+	if err := <-ended; err != nil {
+		t.Fatalf("the close of the modal ended the wait with %v", err)
 	}
-	// A modal whose paint wait never starts reports its paint at once, and a modal that never presents ends the wait at the limit.
+	if err := s.waitForModalPaint(context.Background()); err != nil {
+		t.Fatalf("no open modal ended the wait with %v", err)
+	}
+}
+
+// The end of the endpoint connection of the request ends the first-frame wait of the shown modal and leaves the modal
+// open. A connection that ended before the wait ends it the same way.
+// contract: exposure.window-presented.ends-by-events
+func TestTheEndOfTheConnectionEndsThePaintWaitOfTheShownModal(t *testing.T) {
+	s, _ := modalKeyboardSurfaces(t, false)
 	showPicker(t, s, "picker")
-	if err := s.OverlayHide("picker"); err != nil {
-		t.Fatalf("OverlayHide of the third modal: %v", err)
+	if err := s.ModalReady("picker", s.modal.instance); err != nil {
+		t.Fatalf("ModalReady: %v", err)
 	}
-	if waiting := s.waitForModalPaint(time.Second); waiting {
-		t.Fatal("the wait of presented reported no modal as a modal without its paint")
+	ctx, end := context.WithCancel(context.Background())
+	ended := make(chan error, 1)
+	go func() { ended <- s.waitForModalPaint(ctx) }()
+	end()
+	if err := <-ended; err == nil {
+		t.Fatal("the end of the connection ended the wait without an error")
+	}
+	if s.modal == nil {
+		t.Fatal("the end of the connection closed the modal")
 	}
 }

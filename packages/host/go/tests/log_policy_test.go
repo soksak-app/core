@@ -11,7 +11,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
@@ -109,7 +108,7 @@ func TestAClosedGateStoresNothingAndCountsWhatTheProducerDidNotBuild(t *testing.
 	if !log.Emit(host.LevelDebug, "host.test.event", map[string]any{}) {
 		t.Fatal("the writer refused an undeclared event")
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	counts := map[string]float64{}
@@ -143,7 +142,7 @@ func TestAPolicyChangeIsAnEventAndTheSamePolicyIsNot(t *testing.T) {
 	}
 	log.SetPolicy(narrow, "file")
 	log.SetPolicy(narrow, "file")
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var changes []map[string]any
@@ -166,7 +165,7 @@ func TestAPolicyChangeIsAnEventAndTheSamePolicyIsNot(t *testing.T) {
 func TestTheEventsOfTheWriterItselfPassAGateThatTurnsTheLifecycleOff(t *testing.T) {
 	log := startPolicyLog(t, `{"schema":1,"classes":{"lifecycle":"off","input":"trace","call":"off","io":"trace","frame":"trace"}}`)
 	log.Gate(host.ClassCall, host.LevelDebug)
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	names := map[string]bool{}
@@ -186,7 +185,7 @@ func TestTheStartOfTheWorkbenchPassesAGateThatTurnsTheLifecycleOff(t *testing.T)
 	if _, err := host.LogCommand(log, map[string]any{"action": "batch", "events": []any{start}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	names := []string{}
@@ -460,7 +459,7 @@ func TestThePolicyThatAPageChangeWritesCarriesTheCidsOfTheChange(t *testing.T) {
 			t.Errorf("%s: %v", bad.name, err)
 		}
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var policies [][2]any

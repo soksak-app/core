@@ -6,7 +6,6 @@ package tests
 import (
 	"encoding/json"
 	"testing"
-	"time"
 
 	"github.com/soksak-app/core/packages/sok/go/src"
 )
@@ -69,7 +68,7 @@ func TestAnUndeclaredPluginEventUnderAPolicyThatTurnsLifecycleOffIsRefusedAndCou
 	if ok, err := log.EmitRelayed(relayPlugin("plugin.probe.other", sok.LevelInfo)); err != nil || ok {
 		t.Fatalf("the undeclared plugin event was stored: ok=%v err=%v", ok, err)
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	events := storedLines(t, log.Path())
@@ -99,7 +98,7 @@ func TestAPluginEventBelowTheLevelOfItsClassIsRefusedByTheWriterAndCounted(t *te
 	if ok, err := log.EmitRelayed(relayPlugin("plugin.probe.frame", sok.LevelInfo)); err != nil || ok {
 		t.Fatalf("the plugin event below its class level was stored: ok=%v err=%v", ok, err)
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	events := storedLines(t, log.Path())
@@ -128,7 +127,7 @@ func TestTheViewEndRecordIsStoredUnderAPolicyThatTurnsLifecycleOff(t *testing.T)
 	if !log.Emit(sok.LevelWarn, "host.view.killed", map[string]any{"plugin": "probe", "surface": "view-1", "unsent": true}) {
 		t.Fatal("host.view.killed was refused")
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var stored []map[string]any
@@ -160,7 +159,7 @@ func TestTheCrashRecordIsStoredUnderAPolicyThatTurnsLifecycleOff(t *testing.T) {
 	if !log.Emit(sok.LevelWarn, "host.crash.found", map[string]any{"path": "soksak-1.ips", "pid": 7, "time": "t"}) {
 		t.Fatal("host.crash.found was refused")
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var stored []map[string]any

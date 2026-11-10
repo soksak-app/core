@@ -75,7 +75,7 @@ func TestTheCloseOfAWindowWaitsForNoCommandThatStartsAfterIt(t *testing.T) {
 	app.Shown(window)
 	window.settle(t, queue, tester)
 	stored.geometry = map[string]any{"x": 10, "y": 20, "width": 900, "height": 700}
-	release := make(chan struct{})
+	release := newGate()
 	stored.holdWorkspace = release
 	app.Emit(window, "project-close-request")
 	queue.drain(t)
@@ -85,7 +85,7 @@ func TestTheCloseOfAWindowWaitsForNoCommandThatStartsAfterIt(t *testing.T) {
 	app.Emit(window, "exposure-request", map[string]any{"id": 9, "method": "command.run",
 		"params": map[string]any{"name": "core.file.place", "params": map[string]any{"name": "a.txt"}}})
 	queue.drain(t)
-	close(release)
+	release.open()
 	queue.drain(t)
 	if !stored.called("windowClose") {
 		t.Fatalf("the close waited for a command that started after it; the calls are %v", stored.calls)
@@ -101,7 +101,7 @@ func TestAPluginApplyStartsAgainWithoutARequestDeliveredAfterIt(t *testing.T) {
 	app.Shown(window)
 	window.settle(t, queue, tester)
 	// The apply saves the projects through the workspace before its new start, and that save waits until the test releases it.
-	release := make(chan struct{})
+	release := newGate()
 	stored.holdWorkspace = release
 	app.Emit(window, "exposure-request", map[string]any{"id": 8, "method": "command.run",
 		"params": map[string]any{"name": "core.plugins.apply", "params": map[string]any{}}})
@@ -109,9 +109,9 @@ func TestAPluginApplyStartsAgainWithoutARequestDeliveredAfterIt(t *testing.T) {
 	app.Emit(window, "exposure-request", map[string]any{"id": 9, "method": "command.run",
 		"params": map[string]any{"name": "core.file.place", "params": map[string]any{"name": "a.txt"}}})
 	queue.drain(t)
-	close(release)
+	release.open()
 	queue.drain(t)
-	window.started(t, stored)
+	window.started(t, queue)
 	if len(*replies) == 0 || (*replies)[0]["id"] != float64(8) {
 		t.Fatalf("core.plugins.apply did not answer before the new start: the replies are %v", *replies)
 	}

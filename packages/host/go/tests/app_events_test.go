@@ -2,7 +2,6 @@ package host_test
 
 import (
 	"testing"
-	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
@@ -19,7 +18,7 @@ func TestAnApplicationEventIsRecordedAsAnEvent(t *testing.T) {
 	host.RecordAppEvent("teleport")
 	// No framework of the hosts reports a reopen, so the kind is outside the contract too.
 	host.RecordAppEvent("reopened")
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var seen []string

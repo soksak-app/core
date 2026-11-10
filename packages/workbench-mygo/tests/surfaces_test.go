@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -22,7 +23,7 @@ const installedDocument = `{"plugins": [
 	{"id": "textprobe", "package": "@scope/plugin-textprobe", "version": "1.0.0", "sidecars": {"@scope/sidecar-probe": {}},
 		"manifest": {"id": "textprobe", "name": "터미널", "description": "textprobe", "mark": "◊", "icon": "<path d=\"M1 1h14\"/>",
 			"dependencies": {"@scope/sidecar-probe": "^1.0.0"},
-			"exposes": {"element": [{"name": "textprobe.view", "description": "the view"}], "status": [{"name": "textprobe.screen", "description": "the screen", "schema": {"type": "object", "properties": {}}}], "commands": [{"name": "textprobe.drop", "description": "does it", "params": {"type": "object", "properties": {}}, "result": {"type": "null"}}, {"name": "textprobe.input", "description": "does it", "params": {"type": "object", "properties": {}}, "result": {"type": "null"}}, {"name": "textprobe.close", "description": "does it", "params": {"type": "object", "properties": {}}, "result": {"type": "null"}, "timeout": 40}]},
+			"exposes": {"element": [{"name": "textprobe.view", "description": "the view"}], "status": [{"name": "textprobe.screen", "description": "the screen", "schema": {"type": "object", "properties": {}}}], "commands": [{"name": "textprobe.drop", "description": "does it", "params": {"type": "object", "properties": {}}, "result": {"type": "null"}}, {"name": "textprobe.input", "description": "does it", "params": {"type": "object", "properties": {}}, "result": {"type": "null"}}, {"name": "textprobe.close", "description": "does it", "params": {"type": "object", "properties": {}}, "result": {"type": "null"}}]},
 			"data": {"notes": {"schema": {"type": "string"}, "default": "none", "format": 2},
 				"marks": {"schema": {"type": "array", "items": {"type": "string"}}, "default": ["start"]},
 				"point": {"schema": {"type": "object"}, "default": {}}},
@@ -65,8 +66,8 @@ type surfaceHost struct {
 	// pending is the opened layout that no preparation took over and no cancel ended, which holds the frames of the window as the
 	// host does: while it stands, no other frame opens a layout.
 	pending uint64
-	// presentGate, when set, holds each presentSurfaces until it closes, so a frame draws while a placement runs.
-	presentGate    chan struct{}
+	// presentGate, when set, holds each presentSurfaces until it opens, so a frame draws while a placement runs.
+	presentGate    *gate
 	declareFailure error
 	// presentedFailure is the error of each waitPresented, while a surface has not presented.
 	presentedFailure error
@@ -175,7 +176,7 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 		gate := h.presentGate
 		h.orderMu.Unlock()
 		if gate != nil {
-			<-gate
+			gate.wait()
 		}
 		h.placed++
 		h.called("presentSurfaces")
@@ -1242,25 +1243,44 @@ func TestAPlacementThatKeepsFailingKeepsItsError(t *testing.T) {
 	}
 }
 
-// While a surface has not presented, the placement of another change leaves the failure, because it is still true. When the surface
-// presents, the next wait withdraws it.
+// While a surface has not presented, the placement of another change leaves the failure, because it is still true. A wait for the
+// presentation that fails withdraws nothing and no timer asks again; the next placement that succeeds asks again and withdraws it
+// (core.workbench.error in docs/spec/exposure.md).
 func TestAFailureStaysUntilTheSurfacesPresent(t *testing.T) {
-	f, stored := surfaceShell(t)
+	var asks atomic.Int32
+	var presented atomic.Value
+	presented.Store(errors.New("the current image raster did not present"))
+	stored := &surfaceHost{window: workbench.WindowView{Visible: true, Scale: 2, Width: 1200, Height: 800}}
+	stored.calls = map[string]workbench.HostCall{"waitPresented": func(context.Context, json.RawMessage) (any, error) {
+		asks.Add(1)
+		if err, _ := presented.Load().(error); err != nil && err.Error() != "" {
+			return 0, err
+		}
+		return 0, nil
+	}}
+	f := surfaceShellOn(t, installedDocument, stored)
 	stored.presentFailure = errors.New("the current image raster did not present")
 	f.tester.SetSize(1160, 800)
 	f.shownErrors()
 	stored.presentFailure = nil
-	stored.presentedFailure = errors.New("the current image raster did not present")
 	f.tester.SetSize(1100, 800)
 	f.settle()
 	if got := f.status("core.workbench.error"); !strings.Contains(got, "did not present") {
 		t.Fatalf("while the surface has not presented the banner holds %s", got)
 	}
-	stored.presentedFailure = nil
-	time.Sleep(1100 * time.Millisecond)
+	asked := asks.Load()
+	presented.Store(errors.New(""))
+	f.settle()
+	if got := asks.Load(); got != asked {
+		t.Fatalf("the workbench asked the host for the presentation %d more times without a placement", got-asked)
+	}
+	if got := f.status("core.workbench.error"); !strings.Contains(got, "did not present") {
+		t.Fatalf("without a later placement the banner holds %s", got)
+	}
+	f.tester.SetSize(1160, 800)
 	f.settle()
 	if got := f.status("core.workbench.error"); got != "null" {
-		t.Fatalf("after the surface presented the banner holds %s", got)
+		t.Fatalf("after the next placement that succeeded the banner holds %s", got)
 	}
 }
 
@@ -1894,7 +1914,7 @@ func TestEachPlacementGivesTheFirstRowOfItsFrame(t *testing.T) {
 // the frame. A frame factor that changed after the frame shows with the next frame, which places its own row.
 func TestAPlacementAtTheAnswerGivesTheFirstRowItsFrameDrew(t *testing.T) {
 	f, stored := surfaceShell(t)
-	gate := make(chan struct{})
+	gate := newGate()
 	stored.orderMu.Lock()
 	stored.presentGate = gate
 	stored.orderMu.Unlock()
@@ -1922,7 +1942,7 @@ func TestAPlacementAtTheAnswerGivesTheFirstRowItsFrameDrew(t *testing.T) {
 	stored.orderMu.Lock()
 	stored.presentGate = nil
 	stored.orderMu.Unlock()
-	close(gate)
+	gate.open()
 	f.pending.drain(t)
 	if got := len(stored.requests); got != requests+1 {
 		t.Fatalf("the answer of the running placement made %d placements without a frame, want 1", got-requests)
@@ -2011,7 +2031,7 @@ func TestAFrameThatMovesASurfaceOpensTheLayoutBeforeItsPlacement(t *testing.T) {
 // answer of the running placement places the lines of that frame at once instead of waiting for a frame that the transaction holds.
 func TestAFrameThatMovesASurfaceDuringAPlacementIsPlacedAtItsAnswer(t *testing.T) {
 	f, stored := surfaceShell(t)
-	gate := make(chan struct{})
+	gate := newGate()
 	stored.orderMu.Lock()
 	stored.presentGate = gate
 	stored.orderMu.Unlock()
@@ -2030,7 +2050,7 @@ func TestAFrameThatMovesASurfaceDuringAPlacementIsPlacedAtItsAnswer(t *testing.T
 	stored.orderMu.Lock()
 	stored.presentGate = nil
 	stored.orderMu.Unlock()
-	close(gate)
+	gate.open()
 	f.pending.drain(t)
 	if got := len(stored.requests); got != requests+1 {
 		t.Fatalf("the answer of the running placement made %d placements without a frame, want 1", got-requests)

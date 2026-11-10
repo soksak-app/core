@@ -1,5 +1,6 @@
 //! Checks that each flush request gets the answer that is true: one that the writer finds while it answers another request is
-//! answered, and a caller is not told of a deadline when the writer ended.
+//! answered, and the end of the writer fails a flush. A flush takes no time limit, so a test receives each answer directly
+//! and a flush that is never answered is reported by the limit of the test run.
 
 use std::sync::mpsc::{Receiver, sync_channel};
 use std::sync::{Arc, Mutex};
@@ -9,8 +10,6 @@ use serde_json::json;
 
 use super::lock_test::folder::Folder;
 use super::{EventLog, Level, Message, Options, wait_for_flush};
-
-const DEADLINE: Duration = Duration::from_secs(5);
 
 type Held = Arc<Mutex<Option<Box<dyn FnOnce() + Send>>>>;
 
@@ -66,7 +65,7 @@ fn a_flush_that_a_flush_finds_behind_it_is_answered() {
     let (log, held) = writer(&directory);
     let second = hold_a_request(&log, &held);
 
-    log.flush(DEADLINE).unwrap();
+    log.flush().unwrap();
 
     second
         .recv()
@@ -94,21 +93,21 @@ fn a_flush_that_a_stop_finds_behind_it_is_answered() {
 }
 
 // contract: log.writer.flush-behind-a-flush-or-a-stop-is-answered
+// contract: log.writer.flush-at-exit
 #[test]
-fn a_writer_that_ended_is_not_reported_as_a_deadline() {
+fn the_end_of_the_writer_fails_a_flush() {
     let (done, wait) = sync_channel(1);
     drop(done);
-    let error = wait_for_flush(&wait, DEADLINE).unwrap_err();
-    assert!(
-        error.contains("ended") && !error.contains("within"),
-        "the error names a deadline that did not pass: {error}"
+    assert_eq!(
+        wait_for_flush(&wait),
+        Err("the event writer ended before it answered the flush".to_string())
     );
 }
 
 // contract: log.writer.flush-at-exit
 #[test]
-fn a_flush_that_gets_no_answer_reports_its_deadline() {
-    let (_done, wait) = sync_channel::<()>(1);
-    let error = wait_for_flush(&wait, Duration::from_millis(1)).unwrap_err();
-    assert!(error.contains("within"), "{error}");
+fn a_flush_ends_by_the_answer_of_the_writer() {
+    let (done, wait) = sync_channel(1);
+    done.send(()).unwrap();
+    assert_eq!(wait_for_flush(&wait), Ok(()));
 }

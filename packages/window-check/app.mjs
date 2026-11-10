@@ -106,11 +106,6 @@ export function assertEndpointUsesCurrentBuild(endpoint, resolvedBinary, binaryM
   }
 }
 
-/** The default wait time of one request. It is longer than the document response time of the host. */
-const REQUEST = 20_000;
-// The time limit (ms) for the end of the folder watches that the waits of a check started, at the end of the check.
-const WATCH_END_LIMIT = 10_000;
-
 /**
  * The sequential-run lock between check files. A second check run fails without waiting. The lock file holds the number
  * of the owning process; when that process does not exist, the lock is a remnant and is replaced.
@@ -187,7 +182,8 @@ function lock() {
  * Verifies that the process of endpoint.json is the executable of this repository, so that the check does not test an
  * application of another checkout or an earlier build.
  */
-/** The record of an application whose document stopped replying, in its configuration folder (F351). */
+/** The record of an application whose document did not answer a request until the test runner ended the check, in its configuration
+ * folder (F351). */
 const unresponsivePath = (configDir) => join(configDir, "unresponsive.json");
 
 /** The error of an application that has a record of a document that stopped replying, or null without the record. */
@@ -241,16 +237,6 @@ function exitedReason(app) {
   return `not run: ${app.name} process ${record.pid} exited, found by the check "${record.check}"; ${record.evidence}`;
 }
 
-/** Whether the workbench of the window answers one status request; a reply in any form, also an error, shows that it runs. */
-async function workbenchReplies(client, window) {
-  try {
-    await client.request("status.get", { window, name: "core.workbench.error" });
-    return true;
-  } catch (error) {
-    return !(error instanceof EndpointError && /did not reply within/.test(error.message));
-  }
-}
-
 // A Node after-hook failure prevents later after hooks from running. Own all
 // sessions of a test in one hook, and report failures only after every session
 // has run its full audit and released its connection and window-check slot.
@@ -297,7 +283,7 @@ export async function open(t, app, { clipboard = false, inactive = false } = {})
         "or select another one with SOKSAK_APP.",
     );
   }
-  // An application whose document stopped replying in an earlier check of this configuration fails the check at once (F351).
+  // An application whose document did not reply in an earlier check of this configuration fails the check at once (F351).
   const stopped = unresponsiveError(app, "this check does not run");
   if (stopped) throw stopped;
   // An application whose host process exited in an earlier check reports this check as not run because of that exit; the check
@@ -442,6 +428,13 @@ function disposeSessionRecordings(t, folders, preserve) {
 async function finishSessionAudit(t, session, close, pendingDisposal) {
   const failures = [];
   try {
+    // The record of an application that does not reply is written before the cleanups, so their requests fail at once (F351).
+    try {
+      await session.checkEnded(t);
+    } catch (error) {
+      failures.push(error);
+      t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
+    }
     for (const clean of session.cleanups.reverse()) {
       try {
         await clean();
@@ -470,7 +463,7 @@ async function finishSessionAudit(t, session, close, pendingDisposal) {
       t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
     }
     // A folder watch that a wait of the check started ends with the check (folder-wait.mjs).
-    for (const error of await endWatches(WATCH_END_LIMIT)) {
+    for (const error of await endWatches()) {
       failures.push(error);
       t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
     }
@@ -576,8 +569,28 @@ export class Session {
     // The stall samples that requests of the session started after STALL_AFTER, each as a promise of {line} or {error}.
     // finishSession waits for each one and reports it, so no sample process outlives the check.
     this.stallSamples = new Set();
+    // The requests of the session that have no answer yet, by a key of each request, with the text that names it. checkEnded reads
+    // them when the test runner ends the check (F351).
+    this.unanswered = new Map();
     // The moment the session opened. step writes the time of each step from it.
     this.started = performance.now();
+  }
+
+  /**
+   * Records the application as not replying when the test runner ended the check at its limit while a request of the session had no
+   * answer (F351). No request of the window ends by time (docs/spec/exposure.md: a command has no time limit), so that end of the check
+   * is the event that shows a document that does not reply. The record names the check, the requests and the stall records that those
+   * requests started, and each later request and check of the application fails at once with it. A check that ended in another way
+   * leaves no record: a request that it left in flight can still be answered.
+   */
+  async checkEnded(t) {
+    if (t.error?.failureType !== "testTimeoutFailure" || this.unanswered.size === 0) return;
+    const requests = [...this.unanswered.values()].join(", ");
+    // Each sample ends by the end of its sample process, and a request pending after STALL_AFTER started it long before the limit.
+    const records = (await Promise.all([...this.stallSamples])).map(({ line, error }) => line ?? error.message);
+    const error = [`${requests} had no answer when the test runner ended the check: ${t.error.message}`, ...records].join("; ");
+    writeFileSync(unresponsivePath(this.app.configDir), `${JSON.stringify({ check: this.check ?? t.name, request: requests, error })}\n`);
+    t.diagnostic?.(`${this.app.name} does not reply, so its later checks fail at once: ${error}`);
   }
 
   /** Writes a step that the check starts with its time since the session opened, so a check that its test time limit
@@ -594,8 +607,9 @@ export class Session {
    */
   async relaunch() {
     const previous = this.client.endpoint.pid;
-    // The watch starts before the request, so an endpoint that the new process writes at once is not missed.
-    const next = untilEndpoint(this.app.configDir, previous, 60000);
+    // The watch starts before the request, so an endpoint that the new process writes at once is not missed. The wait ends by
+    // that endpoint and has no time limit: a process that no process replaces holds the check until the limit of the test.
+    const next = untilEndpoint(this.app.configDir, previous);
     this.step(`relaunch process ${previous}`);
     await this.request("diagnostics.host.relaunch");
     let endpoint;
@@ -670,14 +684,20 @@ export class Session {
     other.testName = this.testName;
     other.presses = this.presses;
     other.stallSamples = this.stallSamples;
+    other.unanswered = this.unanswered;
     other.started = this.started;
     other.window = window;
     return other;
   }
 
-  request(method, params = {}, { timeout = REQUEST } = {}) {
+  /**
+   * Sends one request of the window. It ends by its answer or by the close of the connection; it has no time limit
+   * (docs/spec/exposure.md: a command has no time limit). A request pending after STALL_AFTER records the host threads.
+   */
+  request(method, params = {}, ...rest) {
+    if (rest.length > 0) throw new TypeError(`request ${method} takes no options: a request ends by its answer or the close of the connection`);
     const what = `${this.app.name} ${method} ${params.name ?? ""}`.trimEnd();
-    // A request to an application that stopped replying, such as a cleanup of the same check, fails at once (F351).
+    // A request to an application that did not reply, such as a cleanup of the same check, fails at once (F351).
     const stopped = unresponsiveError(this.app);
     if (stopped) return Promise.reject(stopped);
     this.step(`${method} ${params.name ?? ""}`.trimEnd());
@@ -692,29 +712,13 @@ export class Session {
       return `${records.join(", ")}; ${stored}`;
     };
     // The error keeps the name of the failed request. The code stays unchanged.
-    const answer = this.client.request(method, { window: this.window, ...params }).catch(async (error) => {
-      if (error instanceof EndpointError) {
-        error.message = `${what}: ${error.message}`;
-        // A request that the host ended while waiting for the answer of the page is also an unanswered stall, so that
-        // moment is recorded.
-        if (/did not reply within/.test(error.message)) {
-          try {
-            error.message += `; the host's threads at that moment: ${await sample()}`;
-          } catch (failure) {
-            error.message += `; sampling the host failed: ${failure.message}`;
-          }
-          // A workbench that does not reply to one more request either has stopped, so the later checks of the application fail at
-          // once with this record instead of each waiting for its own timeouts (F351).
-          if (!(await workbenchReplies(this.client, this.window))) {
-            error.message += `; ${this.app.name} does not reply to a probe either, so its later checks fail at once`;
-            writeFileSync(unresponsivePath(this.app.configDir),
-              `${JSON.stringify({ check: this.check ?? null, request: what, error: error.message })}\n`);
-          }
-        }
-      }
+    const key = {};
+    this.unanswered.set(key, what);
+    const answer = this.client.request(method, { window: this.window, ...params }).catch((error) => {
+      if (error instanceof EndpointError) error.message = `${what}: ${error.message}`;
       throw error;
-    });
-    return within(answer, timeout, what, sample, (text) => this.step(text),
+    }).finally(() => this.unanswered.delete(key));
+    return whilePending(answer, what, sample, (text) => this.step(text),
       (started) => this.stallSamples.add(started.then((line) => ({ line }), (error) => ({ error }))));
   }
 
@@ -722,8 +726,9 @@ export class Session {
     return this.request("status.get", surface === undefined ? { name } : { name, surface });
   }
 
-  run(name, params = {}, surface, options = {}) {
-    return this.request("command.run", surface === undefined ? { name, params } : { name, params, surface }, options);
+  run(name, params = {}, surface, ...rest) {
+    if (rest.length > 0) throw new TypeError(`run ${name} takes no options: a command ends by its answer or the close of the connection`);
+    return this.request("command.run", surface === undefined ? { name, params } : { name, params, surface });
   }
 
   rect(name, index, surface) {
@@ -965,15 +970,20 @@ export class Session {
   /**
    * Waits by notification until the status satisfies the predicate and returns that status value. The predicate returns true or
    * false (client watch refuses any other answer). A wait on a status of a surface starts when the
-   * surface has registered the status, because a view surface registers its exposure after its phase `ready`.
+   * surface has registered the status, because a view surface registers its exposure after its phase `ready`. The wait has no
+   * time limit: it ends by the value, a failed answer, an error of the predicate or the close of the connection.
    */
-  async until(name, predicate, message, { surface, timeout = REQUEST } = {}) {
+  async until(name, predicate, message, options = {}) {
+    if (Object.hasOwn(options, "timeout")) throw new TypeError(`until ${name} takes no timeout: a wait ends by its event or the close of the connection`);
+    const { surface, ...rest } = options;
+    if (Object.keys(rest).length > 0) throw new TypeError(`until ${name} has no option ${Object.keys(rest).join(", ")}`);
     if (surface !== undefined) await this.registered(surface, [`status ${name}`]);
     this.step(`until ${name}`);
-    return this.client.watch(this.window, name, predicate, { surface, timeout }).catch((error) => {
-      if (error.code === "ETIMEDOUT") error.message = `${this.app.name}: ${message} (${error.message})`;
+    return this.client.watch(this.window, name, predicate, { surface }).catch((error) => {
       // When the watch or the first value request fails, the error names the status. The code stays unchanged.
-      else if (error instanceof EndpointError) error.message = `${this.app.name} status ${name}: ${error.message}`;
+      if (error instanceof EndpointError) error.message = `${this.app.name} status ${name}: ${error.message}`;
+      // A watch that ended by the close of the connection or by an error of the predicate names what did not arrive.
+      else error.message = `${this.app.name}: ${message} (${error.message})`;
       throw error;
     });
   }
@@ -1047,20 +1057,25 @@ export class Session {
     await this.request("diagnostics.transcript", { on: true });
     return {
       lines,
-      /** Waits until a line satisfies the predicate. */
-      until: (predicate, message, timeout = REQUEST) => new Promise((resolve, reject) => {
+      /** Waits until a line satisfies the predicate. The wait ends by that line or by the close of the connection. */
+      until: (predicate, message, ...rest) => new Promise((resolve, reject) => {
+        if (rest.length > 0) throw new TypeError("transcript until takes no time limit: it ends by its line or the close of the connection");
+        let settled = false;
+        const end = () => {
+          settled = true;
+          offCheck();
+        };
         const check = () => {
-          if (predicate(lines)) {
-            clearTimeout(timer);
-            offCheck();
-            resolve(lines);
-          }
+          if (settled || !predicate(lines)) return;
+          end();
+          resolve(lines);
         };
         const offCheck = this.client.on("diagnostics.log", () => queueMicrotask(check));
-        const timer = setTimeout(() => {
-          offCheck();
-          reject(new Error(`${this.app.name}: ${message} within ${timeout} ms:\n${lines.join("\n")}`));
-        }, timeout);
+        this.client.ended.then((error) => {
+          if (settled) return;
+          end();
+          reject(new Error(`${this.app.name}: ${message} before ${error.message}:\n${lines.join("\n")}`));
+        });
         check();
       }),
       stop: async () => {
@@ -1077,50 +1092,30 @@ function compact(object) {
 }
 
 /**
- * Fails when the promise does not answer within ms. When sample is given, it records the host threads at that moment
- * before failing and writes the path of that record into the error (F69). When recording fails, the error states the
- * reason. A sample that starts at STALL_AFTER goes on after the request answers, so hold receives its promise, which
- * resolves to the reported line or rejects with the reason of the failed sample; the session waits for it.
+ * Returns the promise unchanged and records the host threads when it is still pending at STALL_AFTER (F69). The record ends no
+ * wait. A request still pending at STALL_AFTER starts the host and page samples in the same turn, so a stall keeps its stacks.
+ * The sample goes on after the promise answers, so hold receives its promise, which resolves to the reported line or rejects
+ * with the reason of the failed sample; the session waits for it. The line also goes to report.
  */
-export function within(promise, ms, what, sample, report, hold) {
-  let timer;
-  const limit = new Promise((_, reject) => {
-    timer = setTimeout(async () => {
-      const message = `${what} did not answer within ${ms} ms`;
-      if (!sample) return reject(new Error(message));
-      try {
-        reject(new Error(`${message}; the host's threads at that moment: ${await sample()}`));
-      } catch (error) {
-        reject(new Error(`${message}; sampling the host failed: ${error.message}`));
-      }
-    }, ms);
-  });
-  // A request still pending at STALL_AFTER starts the host and page samples in the same turn, so a stall that ends before
-  // the limit keeps its stacks. The result of that sample goes to report, and a failed sample is reported with its reason.
-  let stall;
-  if (sample && ms > STALL_AFTER) {
-    if (typeof report !== "function") throw new Error(`within needs a report function for a sample after ${STALL_AFTER} ms`);
-    if (typeof hold !== "function") throw new Error(`within needs a hold function for a sample after ${STALL_AFTER} ms`);
-    stall = setTimeout(() => {
-      const pending = `${what} still pending after ${STALL_AFTER} ms`;
-      hold(sample().then(
-        (text) => {
-          const line = `${pending}; the host's threads at that moment: ${text}`;
-          report(line);
-          return line;
-        },
-        (error) => {
-          const line = `${pending}; sampling the host failed: ${error.message}`;
-          report(line);
-          throw new Error(line);
-        },
-      ));
-    }, STALL_AFTER);
-  }
-  return Promise.race([promise, limit]).finally(() => {
-    clearTimeout(timer);
-    clearTimeout(stall);
-  });
+export function whilePending(promise, what, sample, report, hold) {
+  if (typeof report !== "function") throw new Error("whilePending needs a report function");
+  if (typeof hold !== "function") throw new Error("whilePending needs a hold function");
+  const stall = setTimeout(() => {
+    const pending = `${what} still pending after ${STALL_AFTER} ms`;
+    hold(sample().then(
+      (text) => {
+        const line = `${pending}; the host's threads at that moment: ${text}`;
+        report(line);
+        return line;
+      },
+      (error) => {
+        const line = `${pending}; sampling the host failed: ${error.message}`;
+        report(line);
+        throw new Error(line);
+      },
+    ));
+  }, STALL_AFTER);
+  return promise.finally(() => clearTimeout(stall));
 }
 
 /** Returns the code of the EndpointError when the request fails, and null when it succeeds. */
@@ -1188,7 +1183,7 @@ export async function prepareFixture(s, { settings = {}, performanceTrace = TRAC
   let records;
   try {
     await s.request("diagnostics.fixture", { settings: { ...settings, "diagnostics.performance": performanceTrace, "diagnostics.log": kept } });
-    await untilPolicy(s.app.configDir, policy);
+    await untilPolicy(s.app.configDir, policy, { ended: s.client.ended });
     await s.presented();
     if (presentationErrors.length) {
       throw new Error(`test preparation reported presentation errors before reload: ${JSON.stringify(presentationErrors)}; ` +
@@ -1411,12 +1406,11 @@ async function dragOnce(s, plan, capture, frameIdentity) {
 }
 
 async function dragDrawing(s, plan, capture, frameIdentity) {
-  const ms = Math.max(1, Math.round(plan.ms / 16)) * 16 * 2 * plan.times;
   const result = await s.request("diagnostics.drag", {
     ...plan,
     capture,
     ...(frameIdentity ? { frameIdentity: true } : {}),
-  }, { timeout: REQUEST + ms * 4 });
+  });
   if (!capture) return result;
   s.trackRecording(result.frames);
   // Records until the time when the last screen of the drag is displayed.

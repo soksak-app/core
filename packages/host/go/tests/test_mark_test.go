@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
-	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
@@ -63,11 +62,11 @@ func assertTestMarksUnderLifecyclePolicy(t *testing.T, lifecycle string) {
 		t.Fatal(err)
 	}
 	log.SetPolicy(policy, "file")
-	boot, start, err := host.EmitTestMark(host.TestMark{Kind: "start", Name: "n", Run: "r"}, 5*time.Second)
+	boot, start, err := host.EmitTestMark(host.TestMark{Kind: "start", Name: "n", Run: "r"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	boot2, end, err := host.EmitTestMark(host.TestMark{Kind: "end", Name: "n", Run: "r", Result: "fail"}, 5*time.Second)
+	boot2, end, err := host.EmitTestMark(host.TestMark{Kind: "end", Name: "n", Run: "r", Result: "fail"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +74,7 @@ func assertTestMarksUnderLifecyclePolicy(t *testing.T, lifecycle string) {
 		t.Fatalf("positions (%s, %d) and (%s, %d)", boot, start, boot2, end)
 	}
 	host.EmitHost(host.LevelInfo, "host.record.info", map[string]any{"where": "test", "text": "ordinary lifecycle record"})
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
@@ -114,7 +113,7 @@ func assertTestMarksUnderLifecyclePolicy(t *testing.T, lifecycle string) {
 // contract: diagnostics.test-mark.needs-the-event-log
 func TestATestMarkWithoutAnEventLogIsAnError(t *testing.T) {
 	host.UseHostEventLog(nil)
-	if _, _, err := host.EmitTestMark(host.TestMark{Kind: "start", Name: "n", Run: "r"}, time.Second); err == nil || err.Error() != "the event log of the host is not attached" {
+	if _, _, err := host.EmitTestMark(host.TestMark{Kind: "start", Name: "n", Run: "r"}); err == nil || err.Error() != "the event log of the host is not attached" {
 		t.Fatalf("error %v", err)
 	}
 }

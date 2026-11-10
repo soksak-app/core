@@ -35,7 +35,11 @@ pub fn set_main_appearance(_view: &PlatformWebview, _dark: bool) -> Result<(), S
     missing("main webview appearance")
 }
 
-pub fn fullscreen(_window: Handle, _on: bool, _done: Box<dyn Fn()>) -> Result<(), String> {
+pub fn fullscreen(
+    _window: Handle,
+    _on: bool,
+    _done: Box<dyn Fn(super::super::FullscreenResult, String)>,
+) -> Result<(), String> {
     missing("full screen")
 }
 

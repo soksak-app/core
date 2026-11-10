@@ -60,7 +60,7 @@ fn a_writer_without_rotation_stores_the_layer_the_clock_and_the_cids_of_its_opti
         &json!({"n": 1})
     ));
     assert!(!log.emit_cids(Level::Info, "host.probe.bad", &["a\"b".into()], &json!({})));
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     log.close();
     let lines = stored_lines(log.path());
     let events: Vec<&str> = lines.iter().map(|l| l["event"].as_str().unwrap()).collect();
@@ -78,7 +78,7 @@ fn refused_loss(name: &str, refuse: impl FnOnce(&EventLog) -> bool) -> Value {
     let directory = Folder::new(name);
     let log = EventLog::start(options(directory.path(), name)).unwrap();
     assert!(!refuse(&log), "the event was accepted");
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     log.close();
     let dropped: Vec<Value> = stored_lines(log.path())
         .into_iter()
@@ -145,7 +145,7 @@ fn a_writer_rotates_at_its_bound_and_the_new_file_starts_with_log_open_and_log_r
             &json!({"text": "x".repeat(100)}),
         );
     }
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     log.close();
     let mut first_generation = log.path().as_os_str().to_owned();
     first_generation.push(".1");
@@ -184,7 +184,7 @@ fn a_writer_stores_the_events_and_the_loss_of_its_pull_source() {
         sink.lost(3, 30, "the source was full", Channel::Other);
     }));
     let log = EventLog::start(pulling).unwrap();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     log.close();
     let lines = stored_lines(log.path());
     assert_eq!(lines.len(), 3, "{lines:?}");
@@ -231,7 +231,7 @@ fn refused_events_are_recorded_as_loss_before_the_next_accepted_event() {
     )
     .unwrap();
     log.set_policy(policy, "file");
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     hold.store(true, Ordering::SeqCst);
     rouser.lock().unwrap().as_ref().unwrap().wake();
     entered_rx.recv().unwrap();
@@ -243,7 +243,6 @@ fn refused_events_are_recorded_as_loss_before_the_next_accepted_event() {
                 Level::Warn,
                 "host.stall.dump",
                 serde_json::value::RawValue::from_string(r#"{"path":"/refused"}"#.into()).unwrap(),
-                Duration::from_secs(5),
             )
             .unwrap_err();
         assert_eq!(
@@ -252,9 +251,9 @@ fn refused_events_are_recorded_as_loss_before_the_next_accepted_event() {
         );
     }
     release_tx.send(()).unwrap();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     assert!(log.emit(Level::Info, "sok.command", &json!({"name": "after"})));
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     log.close();
     let lines = stored_lines(log.path());
     let dropped = lines
@@ -291,14 +290,13 @@ fn a_placed_event_refused_by_the_policy_names_the_policy() {
             Level::Warn,
             "host.buffer.dropped",
             serde_json::value::RawValue::from_string(r#"{"path":"/probe"}"#.into()).unwrap(),
-            Duration::from_secs(5),
         )
         .unwrap_err();
     assert_eq!(
         error, "the event writer refused host.buffer.dropped because the policy does not store it",
         "{error}"
     );
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     log.close();
     let lines = stored_lines(log.path());
     assert!(
@@ -335,7 +333,7 @@ fn a_closed_record_is_stored_under_a_policy_that_turns_lifecycle_off() {
         ),
         "the record was refused"
     );
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let events = stored_lines(log.path());
     let closed: Vec<&Value> = events
         .iter()
@@ -369,7 +367,7 @@ fn the_stall_records_are_stored_under_a_policy_that_turns_lifecycle_off() {
             "{name} was refused"
         );
     }
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let events = stored_lines(log.path());
     for name in names {
         let stored: Vec<&Value> = events

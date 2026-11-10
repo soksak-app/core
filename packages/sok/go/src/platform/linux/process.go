@@ -8,7 +8,6 @@ import (
 	"os"
 	"runtime"
 	"syscall"
-	"time"
 
 	"golang.org/x/sys/unix"
 
@@ -49,8 +48,8 @@ func (linux) BundleVersion(string) (string, error) {
 }
 
 // WaitProcessEnd is an error: the application update replaces a macOS bundle.
-func (linux) WaitProcessEnd(int, time.Duration) (bool, error) {
-	return false, errors.New("waiting for a process end is not implemented on linux")
+func (linux) WaitProcessEnd(int) error {
+	return errors.New("waiting for a process end is not implemented on linux")
 }
 
 // CopyBundle is an error: an application bundle is a macOS file.

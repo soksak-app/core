@@ -12,7 +12,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
@@ -210,7 +209,7 @@ func TestTheIndexCoversEachBatchTheWriterWrote(t *testing.T) {
 	for i := 0; i < 80; i++ {
 		log.Emit(host.LevelInfo, "host.x.y", map[string]any{"n": i, "text": strings.Repeat("x", 120)})
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	// The index of the file covers the lines of the batches without a query: wait for the updates that the writes caused.
@@ -259,7 +258,7 @@ func TestAnIndexBuiltFromTheFileIsAnEventAndAnAppendIsNot(t *testing.T) {
 	path := writeEventFile(t, config, "host-x1.jsonl", eventLines(6))
 	rebuilt := func() []map[string]any {
 		t.Helper()
-		if err := log.Flush(5 * time.Second); err != nil {
+		if err := log.Flush(); err != nil {
 			t.Fatal(err)
 		}
 		var found []map[string]any
@@ -304,7 +303,7 @@ func TestAnIndexBuiltFromTheFileIsAnEventAndAnAppendIsNot(t *testing.T) {
 	report(path, sok.IndexUpdate{}, errors.New("second"))
 	report(path, sok.IndexUpdate{File: "logs/host-x1.jsonl"}, nil)
 	report(path, sok.IndexUpdate{}, errors.New("first"))
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var texts []string

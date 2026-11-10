@@ -28,7 +28,7 @@ type Callbacks struct {
 	QuitRequest               func(int32, *byte)
 	NativeUiRun               func(uintptr)
 	NativeResponderChanged    func(uintptr)
-	NativeFullscreenDone      func(uintptr)
+	NativeFullscreenDone      func(uintptr, int32, *byte)
 	SurfacePressed            func(uintptr, unsafe.Pointer)
 	SurfacePoint              func(uintptr, int32, float64, float64)
 	InputDelivered            func(uintptr, int32, *SpInputHeld)

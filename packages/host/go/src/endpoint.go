@@ -8,6 +8,7 @@ package host
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -156,8 +157,9 @@ type Backend interface {
 	Windows() []WindowEntry
 	// HasWindow returns whether the window window exists.
 	HasWindow(window string) bool
-	// PageRequest sends a request to the main page of the window window and waits for its reply.
-	PageRequest(window, method string, params json.RawMessage) (json.RawMessage, error)
+	// PageRequest sends a request to the main page of the window window and waits for its reply. The end of ctx, the end of the
+	// endpoint connection that sent the request, ends the wait.
+	PageRequest(ctx context.Context, window, method string, params json.RawMessage) (json.RawMessage, error)
 	// HostStatus is the value of the host status name.
 	HostStatus(window, name string) (any, error)
 	// HostCommand runs the host command name.
@@ -706,10 +708,21 @@ type ReplyOutcome struct {
 // ReplyScope is the response context of one endpoint request, for work that must follow the write attempt of that
 // response, such as a normal quit (docs/spec/endpoint.md). Internal subscription maintenance has no scope.
 type ReplyScope struct {
+	// ctx ends when the endpoint connection of the request ends.
+	ctx       context.Context
 	mu        sync.Mutex
 	done      bool
 	outcome   ReplyOutcome
 	callbacks []func(ReplyOutcome)
+}
+
+// Context ends when the endpoint connection that sent the request ends, so a wait of the request ends with its requester. A nil
+// scope, or a scope that no connection sent, never ends.
+func (s *ReplyScope) Context() context.Context {
+	if s == nil || s.ctx == nil {
+		return context.Background()
+	}
+	return s.ctx
 }
 
 // AfterResponse runs callback once after the response attempt of the request completes, outside the locks of the scope
@@ -787,6 +800,9 @@ type endpointConn struct {
 	ends    map[uint64]func()
 	endNext uint64
 	closed  bool
+	// changes are the subscription changes of the connection that wait in the queue of each topic or run there, with the last of
+	// them. Endpoint.queueMu protects it.
+	changes map[topic]*topicChanges
 }
 
 // onClose runs end when the connection closes, before close returns, or at once when it is already closed. remove takes end
@@ -811,6 +827,31 @@ func (c *endpointConn) onClose(end func()) (remove func()) {
 		c.reasonMu.Unlock()
 	}
 }
+
+// topicChanges are the subscription changes of one connection for one topic that are queued or running.
+type topicChanges struct {
+	count int
+	// last is whether the last of them is a watch.
+	last bool
+}
+
+// connectionContext is the context of the requests of a connection: it ends when the connection closes.
+type connectionContext struct{ done <-chan struct{} }
+
+func (connectionContext) Deadline() (time.Time, bool) { return time.Time{}, false }
+func (c connectionContext) Done() <-chan struct{}     { return c.done }
+func (connectionContext) Value(any) any               { return nil }
+func (c connectionContext) Err() error {
+	select {
+	case <-c.done:
+		return context.Canceled
+	default:
+		return nil
+	}
+}
+
+// requestContext is the context of a request of the connection, which ends when the connection closes.
+func (c *endpointConn) requestContext() context.Context { return connectionContext{done: c.done} }
 
 // close closes the connection. It records the reason reason of the first closer before it closes the socket, and later calls do nothing.
 func (c *endpointConn) close(reason string) {
@@ -998,7 +1039,10 @@ func (e *Endpoint) subscription(name string) (subscriptionMethod, bool) {
 }
 
 // changeInOrder puts one subscription change request at the end of the queue of its topic. It is called from the read loop, so
-// changes of the same topic and messages to the page run in the order received, and the reply is sent after the page replied.
+// changes of the same topic and messages to the page run in the order received, and the reply is sent after the page replied. An
+// unwatch enters the queue only when the last change of its connection for the topic, queued or held, is a watch; any other unwatch
+// changes nothing and is answered null at once. Only a watch is refused by the bound of the queue: an unwatch that enters the queue
+// ends a subscription, so the queue holds at most one unwatch for each watch it holds.
 func (e *Endpoint) changeInOrder(c *endpointConn, req request, parse subscriptionMethod) {
 	started := time.Now()
 	t, on, err := parse(e, req.Params)
@@ -1007,11 +1051,18 @@ func (e *Endpoint) changeInOrder(c *endpointConn, req request, parse subscriptio
 		routine.Go("endpoint-reply", func() { e.reply(c, req, nil, err) })
 		return
 	}
-	if !e.enqueue(t, true, func() {
+	queued, entered := e.enqueueChange(c, t, on, func() {
 		err := e.change(c, t, on)
+		e.changeEnded(c, t)
 		recordEndpointCall(req, started, err)
 		e.reply(c, req, nil, err)
-	}) {
+	})
+	if !entered {
+		recordEndpointCall(req, started, nil)
+		routine.Go("endpoint-reply", func() { e.reply(c, req, nil, nil) })
+		return
+	}
+	if !queued {
 		// The page does not answer the changes of this topic as fast as the client sends them; the change is refused.
 		refused := rpcError(codeHandler, "the subscription changes of %s are not keeping up: %d changes are pending, so this change is refused", t.name, EndpointTopicChanges)
 		recordBufferDrop("endpoint topic changes", len(req.Params), fmt.Sprintf("%d messages", EndpointTopicChanges))
@@ -1033,12 +1084,60 @@ func (e *Endpoint) change(c *endpointConn, t topic, on bool) error {
 	return err
 }
 
+// enqueueChange puts the subscription change job of connection c for topic t into the queue of t. entered is false for an unwatch
+// whose last change, queued or held, is not a watch: it is not queued. queued is false for a watch that the bound refused.
+func (e *Endpoint) enqueueChange(c *endpointConn, t topic, on bool, job func()) (queued, entered bool) {
+	e.queueMu.Lock()
+	defer e.queueMu.Unlock()
+	pending := c.changes[t]
+	if !on {
+		watched := pending != nil && pending.last
+		if pending == nil {
+			e.mu.Lock()
+			watched = c.topics[t]
+			e.mu.Unlock()
+		}
+		if !watched {
+			return false, false
+		}
+	}
+	if !e.enqueueLocked(t, on, job) {
+		return false, true
+	}
+	if pending == nil {
+		if c.changes == nil {
+			c.changes = map[topic]*topicChanges{}
+		}
+		pending = &topicChanges{}
+		c.changes[t] = pending
+	}
+	pending.count++
+	pending.last = on
+	return true, true
+}
+
+// changeEnded removes a change of connection c for topic t that ran from its queued changes.
+func (e *Endpoint) changeEnded(c *endpointConn, t topic) {
+	e.queueMu.Lock()
+	defer e.queueMu.Unlock()
+	if pending := c.changes[t]; pending != nil {
+		if pending.count--; pending.count == 0 {
+			delete(c.changes, t)
+		}
+	}
+}
+
 // enqueue puts job into the queue of topic t and starts a goroutine when none is running. A bounded job is refused, and
-// enqueue returns false, when EndpointTopicChanges jobs wait already; the release of the subscriptions of a closed
-// connection is not bounded, because the number of its jobs is the number of topics the connection held.
+// enqueue returns false, when EndpointTopicChanges jobs wait already. An unwatch and the release of the subscriptions of a
+// closed connection are not bounded: each ends a subscription that a watch made, so their number follows the watches.
 func (e *Endpoint) enqueue(t topic, bounded bool, job func()) bool {
 	e.queueMu.Lock()
 	defer e.queueMu.Unlock()
+	return e.enqueueLocked(t, bounded, job)
+}
+
+// enqueueLocked is enqueue with Endpoint.queueMu held.
+func (e *Endpoint) enqueueLocked(t topic, bounded bool, job func()) bool {
 	pending, running := e.queues[t]
 	if bounded && len(pending) >= EndpointTopicChanges {
 		return false
@@ -1096,12 +1195,12 @@ func (e *Endpoint) notifyPage(t topic, on bool) error {
 	switch {
 	case diagnostic:
 		method, params := request(on)
-		_, err = e.backend.PageRequest(t.window, method, mustJSON(params))
+		_, err = e.backend.PageRequest(context.Background(), t.window, method, mustJSON(params))
 	case isHostName(t.name):
 	case on:
-		_, err = e.backend.PageRequest(t.window, "status.watch", mustJSON(t.watchParams()))
+		_, err = e.backend.PageRequest(context.Background(), t.window, "status.watch", mustJSON(t.watchParams()))
 	default:
-		_, err = e.backend.PageRequest(t.window, "status.unwatch", mustJSON(t.watchParams()))
+		_, err = e.backend.PageRequest(context.Background(), t.window, "status.unwatch", mustJSON(t.watchParams()))
 	}
 	return err
 }
@@ -1110,12 +1209,14 @@ func (e *Endpoint) run(c *endpointConn, req request, method endpointMethod) {
 	// The name, the arguments, the result and the time of every endpoint method are the event host.endpoint.call.
 	started := time.Now()
 	scope, answer := newReplyScope()
+	scope.ctx = c.requestContext()
 	result, err := method(e, c, req.Params, scope)
 	recordEndpointCall(req, started, err)
-	// A timeout is an error that the requester receives, but only this record keeps which method and what the request waited for.
+	// A request that ended without its result is an error that the requester receives, but only this record keeps which method
+	// and why it has no result.
 	var coded *RPCError
 	if errors.As(err, &coded) && coded.Code == codeTimeout {
-		LogError("endpoint timeout", fmt.Sprintf("%s: %s", methodOf(req), coded.Message))
+		LogError("endpoint no result", fmt.Sprintf("%s: %s", methodOf(req), coded.Message))
 	}
 	e.replyWithCompletion(c, req, result, err, answer)
 }
@@ -1256,7 +1357,7 @@ func withoutWindow(params json.RawMessage) json.RawMessage {
 	return mustJSON(fields)
 }
 
-func exposureList(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
+func exposureList(e *Endpoint, _ *endpointConn, params json.RawMessage, scope *ReplyScope) (any, error) {
 	window, err := e.window(params)
 	if err != nil {
 		return nil, err
@@ -1274,7 +1375,7 @@ func exposureList(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *Reply
 		if *fields.Owner != "host" {
 			return nil, rpcError(codeInvalidParams, "exposure.list owner must be host")
 		}
-	} else if reply, err = e.backend.PageRequest(window, "exposure.list", json.RawMessage(`{}`)); err != nil {
+	} else if reply, err = e.backend.PageRequest(scope.Context(), window, "exposure.list", json.RawMessage(`{}`)); err != nil {
 		return nil, err
 	}
 	var list map[string][]json.RawMessage
@@ -1297,7 +1398,7 @@ func exposureList(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *Reply
 	return list, nil
 }
 
-func statusGet(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
+func statusGet(e *Endpoint, _ *endpointConn, params json.RawMessage, reply *ReplyScope) (any, error) {
 	window, name, err := e.named(params)
 	if err != nil {
 		return nil, err
@@ -1308,7 +1409,7 @@ func statusGet(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplySco
 		}
 		return e.backend.HostStatus(window, name)
 	}
-	return e.backend.PageRequest(window, "status.get", withoutWindow(params))
+	return e.backend.PageRequest(reply.Context(), window, "status.get", withoutWindow(params))
 }
 
 // watchTopic reads the topic to change from the params of status.watch and status.unwatch.
@@ -1362,11 +1463,11 @@ func commandRun(e *Endpoint, _ *endpointConn, params json.RawMessage, reply *Rep
 		}
 		return e.backend.HostCommand(window, name, fields.Params, reply)
 	}
-	return e.backend.PageRequest(window, "command.run", withoutWindow(params))
+	return e.backend.PageRequest(reply.Context(), window, "command.run", withoutWindow(params))
 }
 
 func elementRequest(method string) endpointMethod {
-	return func(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
+	return func(e *Endpoint, _ *endpointConn, params json.RawMessage, reply *ReplyScope) (any, error) {
 		window, name, err := e.named(params)
 		if err != nil {
 			return nil, err
@@ -1374,7 +1475,7 @@ func elementRequest(method string) endpointMethod {
 		if isHostName(name) {
 			return nil, rpcError(codeUnknownName, "the host declares no element entry %s", name)
 		}
-		return e.backend.PageRequest(window, method, withoutWindow(params))
+		return e.backend.PageRequest(reply.Context(), window, method, withoutWindow(params))
 	}
 }
 

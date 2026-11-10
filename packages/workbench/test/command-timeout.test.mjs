@@ -1,88 +1,70 @@
 import assert from "node:assert/strict";
-import { mock, test } from "node:test";
+import { test } from "node:test";
 import { JSDOM } from "jsdom";
 import { EXPOSURE_ERRORS } from "@soksak/plugin-api";
 
-// A command that this document answers also fails with a report when it does not answer within its declared timeout or the default 10 seconds (docs/spec/exposure.md).
+// A command that this document answers has no time limit: the reply of its handler, an error of its handler or the end of its
+// peer ends it, and a core command then answers after its layout presents (`timeout` in docs/spec/exposure.md). Each handler and
+// presentation here is a deferred that the test settles, and setTimeout is watched so that the test finds that no timer is started.
 const dom = new JSDOM("<body></body>", { url: "https://example.test/" });
 globalThis.window = dom.window;
 globalThis.document = dom.window.document;
 const { createRegistry } = await import("../exposure.js");
 
-function registry() {
-  const made = createRegistry();
-  made.declare("core", {
-    status: [],
-    commands: [
-      { name: "core.fixture.slow", description: "Never replies.", params: { type: "object" }, result: { type: "null" }, timeout: 50 },
-      { name: "core.fixture.hang", description: "Never replies.", params: { type: "object" }, result: { type: "null" } },
-      { name: "core.fixture.quick", description: "Replies.", params: { type: "object" }, result: { type: "integer" } },
-    ],
-    element: [],
-  });
-  const never = () => new Promise(() => {});
-  made.command("core.fixture.slow", never);
-  made.command("core.fixture.hang", never);
-  made.command("core.fixture.quick", () => 7);
-  return made;
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((done, fail) => { resolve = done; reject = fail; });
+  return { promise, resolve, reject };
 }
 
-test("a main-page command without a reply fails after its declared timeout", { timeout: 5000 }, async () => {
-  const made = registry();
-  const started = performance.now();
-  await assert.rejects(made.run("core.fixture.slow", {}),
-    (error) => error.code === EXPOSURE_ERRORS.failed && /core\.fixture\.slow did not reply within 50ms/.test(error.message));
-  assert.ok(performance.now() - started < 5000, "the declared timeout was not applied");
-  assert.equal(await made.run("core.fixture.quick", {}), 7);
+const declare = (made, ...commands) => made.declare("core", {
+  status: [], element: [],
+  commands: commands.map((name) => ({ name, description: "Fixture.", params: { type: "object" }, result: {} })),
 });
 
-test("a main-page command without a declared timeout fails after 10 seconds", { timeout: 5000 }, async (t) => {
-  mock.timers.enable({ apis: ["setTimeout"] });
-  t.after(() => mock.timers.reset());
-  const made = registry();
-  let settled = null;
-  const running = made.run("core.fixture.hang", {}).then(() => { settled = "replied"; }, (error) => { settled = error; });
-  await Promise.resolve();
-  mock.timers.tick(9999);
-  await Promise.resolve();
-  assert.equal(settled, null, "the command failed before 10 seconds");
-  mock.timers.tick(1);
-  await running;
-  assert.ok(settled instanceof Error && /core\.fixture\.hang did not reply within 10000ms/.test(settled.message), String(settled));
+// contract: exposure.command.declaration-refuses-a-time-limit
+test("a main-page command declaration with timeout is refused", () => {
+  const made = createRegistry();
+  assert.throws(() => made.declare("core", {
+    status: [], element: [],
+    commands: [{ name: "core.fixture.slow", description: "Slow.", params: { type: "object" }, result: {}, timeout: 50 }],
+  }), { message: "core exposes core.fixture.slow: timeout is not a member of a command declaration" });
 });
 
-test("a command bound covers its handler and not the presentation it waits for afterwards", { timeout: 5000 }, async () => {
-  const made = registry();
-  // The presentation takes longer than the handler budget of the command (50 ms). The limit of a presentation is set by the side that waits for it.
-  made.configure({ settled: () => new Promise((resolve) => setTimeout(resolve, 150)) });
-  made.declare("core", {
-    status: [],
-    commands: [{ name: "core.fixture.drawn", description: "Replies after its layout presents.", params: { type: "object" },
-      result: { type: "integer" }, timeout: 50 }],
-    element: [],
-  });
-  made.command("core.fixture.drawn", () => 9);
-  assert.equal(await made.run("core.fixture.drawn", {}), 9);
+// contract: exposure.command.ends-by-reply-or-peer-end
+test("a main-page command waits for its handler and then for its presentation, and starts no timer", async (t) => {
+  const made = createRegistry();
+  const presentation = deferred();
+  let presenting;
+  const asked = new Promise((resolve) => { presenting = resolve; });
+  made.configure({ settled: () => { presenting(); return presentation.promise; } });
+  declare(made, "core.fixture.drawn");
+  const handler = deferred();
+  let enter;
+  const entered = new Promise((resolve) => { enter = resolve; });
+  made.command("core.fixture.drawn", () => { enter(); return handler.promise; });
+  const timers = t.mock.method(globalThis, "setTimeout");
+  let answered = false;
+  const running = made.run("core.fixture.drawn", {}).finally(() => { answered = true; });
+  await entered;
+  handler.resolve(9);
+  await asked;
+  assert.equal(answered, false, "the command answered before its layout presented");
+  presentation.resolve();
+  assert.equal(await running, 9);
+  assert.equal(timers.mock.callCount(), 0, "the main page started a timer for a command");
 });
 
-test("a handler that throws fails its command and leaves no reply timer behind", { timeout: 5000 }, async (t) => {
-  mock.timers.enable({ apis: ["setTimeout"] });
-  t.after(() => mock.timers.reset());
-  const unhandled = [];
-  const record = (reason) => unhandled.push(reason);
-  process.on("unhandledRejection", record);
-  t.after(() => process.off("unhandledRejection", record));
-  const made = registry();
-  made.declare("core", {
-    status: [],
-    commands: [{ name: "core.fixture.throws", description: "Throws in its handler.", params: { type: "object" },
-      result: { type: "null" } }],
-    element: [],
-  });
+test("a handler that throws fails its command with its own error and starts no timer", async (t) => {
+  const made = createRegistry();
+  declare(made, "core.fixture.throws", "core.fixture.rejects");
   made.command("core.fixture.throws", () => { throw new Error("fixture handler failed"); });
+  made.command("core.fixture.rejects", () => Promise.reject(new Error("fixture handler rejected")));
+  const timers = t.mock.method(globalThis, "setTimeout");
   await assert.rejects(made.run("core.fixture.throws", {}), /fixture handler failed/);
-  // Even when the handler throws synchronously, the timer of the reply limit is cleared, so no separate rejection for a missing reply appears after 10 seconds.
-  mock.timers.tick(10000);
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.deepEqual(unhandled.map(String), []);
+  await assert.rejects(made.run("core.fixture.rejects", {}), /fixture handler rejected/);
+  assert.equal(timers.mock.callCount(), 0, "the main page started a timer for a command");
+  const answer = await made.handle({ method: "command.run", params: { name: "core.fixture.throws", params: {} } });
+  assert.equal(answer.error.code, EXPOSURE_ERRORS.failed);
 });

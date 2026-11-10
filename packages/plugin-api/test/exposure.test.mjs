@@ -29,11 +29,29 @@ test("exposes with the three kinds are accepted in a manifest and in a core file
   const shared = exposes();
   shared.element[0].name = "probe.lines";
   assert.equal(validateExposes("probe", shared), shared, "a status and an element entry may share a name");
-  const slow = exposes();
-  slow.commands[0].timeout = 600000;
-  assert.equal(validateExposes("probe", slow).commands[0].timeout, 600000, "a command may declare how long its reply takes");
   const core = { exposes: { status: [{ name: "core.value", description: "Value.", schema: {} }] } };
   assert.equal(validateExposureFile(core), core);
+});
+
+// A command has no time limit: it ends by its reply or by the end of its peer (docs/spec/exposure.md, command `timeout`).
+// contract: exposure.command.declaration-refuses-a-time-limit
+test("a command declaration with timeout is refused by the manifest check, the exposure file check and the diagnostics check", () => {
+  for (const timeout of [1, 10000, 600000, 0, "100"]) {
+    const timed = exposes();
+    timed.commands[0].timeout = timeout;
+    const refusal = (where) => ({ message: `${where}: timeout is not a member of a command declaration` });
+    assert.throws(() => validateExposes("probe", timed), refusal("probe exposes probe.send"), `exposes accepted timeout ${timeout}`);
+    assert.throws(() => validateManifest({ ...page, exposes: timed }), refusal("probe exposes probe.send"),
+      `the manifest check accepted timeout ${timeout}`);
+    assert.throws(() => validateDiagnostics(page, { module: "ui/diagnostics.js", exposes: timed }), refusal("probe exposes probe.send"),
+      `the diagnostics check accepted timeout ${timeout}`);
+    const core = { exposes: { commands: [{ name: "core.wait", description: "Waits.", params: { type: "object" }, result: {}, timeout }] } };
+    assert.throws(() => validateExposureFile(core), refusal("core exposes core.wait"), `the exposure file check accepted timeout ${timeout}`);
+  }
+});
+
+test("the plugin API exports no time limit of a command declaration", async () => {
+  assert.equal("COMMAND_TIMEOUT_MAX" in await import("../index.js"), false);
 });
 
 test("exposes are rejected for each invalid field", () => {
@@ -51,9 +69,6 @@ test("exposes are rejected for each invalid field", () => {
     [(e) => { delete e.commands[0].result; }, /result is required/],
     [(e) => { e.commands[0].params = { type: "string" }; }, /params must be an object schema/],
     [(e) => { e.element[0].many = "yes"; }, /many must be a boolean/],
-    [(e) => { e.commands[0].timeout = 0; }, /timeout must be an integer from 1 to 600000/],
-    [(e) => { e.commands[0].timeout = 600001; }, /timeout must be an integer/],
-    [(e) => { e.commands[0].timeout = 1.5; }, /timeout must be an integer/],
     [(e) => { e.status[0].timeout = 10; }, /unknown field timeout/],
     [(e) => { e.element[0].schema = {}; }, /unknown field schema/],
     [(e) => { e.events = []; }, /unknown field events/],

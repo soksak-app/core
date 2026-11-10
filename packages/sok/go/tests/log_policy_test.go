@@ -13,7 +13,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	sok "github.com/soksak-app/core/packages/sok/go/src"
 )
@@ -158,7 +157,7 @@ func TestPageClockAnchorPassesTheDefaultLifecyclePolicy(t *testing.T) {
 	if err != nil || ordinary {
 		t.Fatalf("ordinary lifecycle info stored=%t error=%v, want default-policy refusal", ordinary, err)
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	log.Close()
@@ -189,7 +188,7 @@ func TestWorkbenchFixtureStepPassesTheDefaultLifecyclePolicy(t *testing.T) {
 	if err != nil || !stored {
 		t.Fatalf("fixture step stored=%t error=%v, want stored under the default policy", stored, err)
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	log.Close()

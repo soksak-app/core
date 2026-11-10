@@ -26,9 +26,7 @@ fn ask_page(relay: &Arc<Relay>) -> mpsc::Receiver<Result<Box<RawValue>, Failure>
     let (sent, wait) = mpsc::channel();
     let asking = relay.clone();
     std::thread::spawn(move || {
-        let reply = asking.request("main", None, |_| {
-            sent.send(()).map_err(|error| error.to_string())
-        });
+        let reply = asking.request("main", |_| sent.send(()).map_err(|error| error.to_string()));
         outcome.send(reply).expect("the test holds the receiver");
     });
     wait.recv().expect("the request to the page was not sent");
@@ -56,11 +54,17 @@ fn reload(data: &Arc<WindowData>) -> mpsc::Receiver<Result<Value, Failure>> {
     std::thread::spawn(move || {
         let ended = await_reload(
             &reloading,
+            reloading.ends.mark(),
             || {
                 asked.send("start").expect("the test holds the receiver");
                 Ok(())
             },
-            || Failure::new(crate::endpoint::TIMED_OUT, "the test ends every reload"),
+            |end| {
+                Failure::new(
+                    MISSING_DOCUMENT,
+                    format!("{end} before the reloaded page reported ready"),
+                )
+            },
         );
         outcome.send(ended).expect("the test holds the receiver");
     });
@@ -173,7 +177,7 @@ fn a_reload_ends_with_the_close_of_its_window() {
         )),
         "a window whose page is not ready kept its close"
     );
-    end_reloads_of_closed_window(&data);
+    data.end_waits("the window closed");
     want_reload_ended(
         ended,
         &["the window closed before the reloaded page reported ready"],

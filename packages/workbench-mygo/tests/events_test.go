@@ -34,8 +34,8 @@ type writerHost struct {
 	requests []map[string]any
 	refused  map[string]error
 	classes  map[string]string
-	// hold keeps a batch request in flight until it closes.
-	hold chan struct{}
+	// hold keeps a batch request in flight until it opens.
+	hold *gate
 }
 
 func (h *writerHost) clock() time.Time {
@@ -62,7 +62,7 @@ func (h *writerHost) log(_ context.Context, argument json.RawMessage) (any, erro
 	action, _ := request["action"].(string)
 	if action == "batch" && h.hold != nil {
 		h.mu.Unlock()
-		<-h.hold
+		h.hold.wait()
 		h.mu.Lock()
 	}
 	if err := h.refused[action]; err != nil {
@@ -358,7 +358,7 @@ func TestAClosedGateStoresNoEventAndReportsItsCount(t *testing.T) {
 
 func TestTheReportOfTheCountsArmsNoTimerWhileABatchIsInFlight(t *testing.T) {
 	f := newWriter(t, nil)
-	f.host.hold = make(chan struct{})
+	f.host.hold = newGate()
 	f.events.Info("place: one")
 	f.host.pass(time.Second)
 	f.timers[0]()
@@ -374,7 +374,7 @@ func TestTheReportOfTheCountsArmsNoTimerWhileABatchIsInFlight(t *testing.T) {
 		t.Fatalf("%d timers were armed while a batch was in flight", armed-1)
 	}
 	// The end of the batch sends the count that is due, and then no count and no timer remain.
-	close(f.host.hold)
+	f.host.hold.open()
 	f.queue.until(t, func() bool { return len(f.host.batches()) == 2 })
 	f.sent()
 	if armed := len(f.timers); armed != 1 {
@@ -384,14 +384,14 @@ func TestTheReportOfTheCountsArmsNoTimerWhileABatchIsInFlight(t *testing.T) {
 
 func TestACountRefusedWhileABatchIsInFlightWaitsForTheRestOfItsInterval(t *testing.T) {
 	f := newWriter(t, nil)
-	f.host.hold = make(chan struct{})
+	f.host.hold = newGate()
 	f.events.Info("place: one")
 	f.host.pass(time.Second)
 	f.timers[0]()
 	f.queue.until(t, func() bool { return len(f.host.batches()) == 1 })
 	f.events.Info("place: two")
 	f.host.pass(400 * time.Millisecond)
-	close(f.host.hold)
+	f.host.hold.open()
 	f.queue.until(t, func() bool { return len(f.timers) == 2 })
 	if batches := len(f.host.batches()); batches != 1 {
 		t.Fatalf("the count left in batch %d before its interval ended", batches)
@@ -579,11 +579,11 @@ func TestAnEndedWriterSendsNothing(t *testing.T) {
 func TestABatchInFlightWhenTheWriterEndsIsNotAFailure(t *testing.T) {
 	f := newWriter(t, nil)
 	f.host.refused["batch"] = errors.New("the main window is gone")
-	f.host.hold = make(chan struct{})
+	f.host.hold = newGate()
 	f.events.Error("place: first")
 	f.queue.until(t, func() bool { return len(f.host.batches()) == 1 })
 	f.events.End()
-	close(f.host.hold)
+	f.host.hold.open()
 	f.queue.drain(t)
 	if len(f.reports) != 0 {
 		t.Fatalf("the writer reported %q", f.reports)
@@ -823,7 +823,7 @@ func TestTheWriterOfTheHostStoresTheEvents(t *testing.T) {
 	events.Command("core.test", time.Millisecond, nil)
 	events.Flush(func() { ended = true })
 	f.queue.until(t, func() bool { return ended })
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var lines []string

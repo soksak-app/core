@@ -42,7 +42,7 @@ commands:
                             replaces the application bundle TARGET with BUNDLE after the process PID ended
   app relaunch --wait PID --target PATH [-- ARGUMENT...]
                             starts the application bundle TARGET again in the background after the process PID ended
-  process wait PID --timeout-ms MILLISECONDS
+  process wait PID
                             waits for the operating system to report that PID ended
   registry build DIRECTORY  checks a registry and writes its index.json
   registry use INDEX        sets the registry index that installation reads

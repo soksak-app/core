@@ -359,7 +359,7 @@ func TestE2EAViewPageHoldsTheKeyboardAgainAfterItsSurfaceHidAndShowed(t *testing
 // hostEvents returns the events that the host wrote to the event log of the session, its debug file with them, in the order of their
 // sequence.
 func (s *viewSession) hostEvents() ([]map[string]any, error) {
-	if err := host.FlushRecords(2 * time.Second); err != nil {
+	if err := host.FlushRecords(); err != nil {
 		return nil, err
 	}
 	paths, err := filepath.Glob(filepath.Join(s.config, "logs", "host-*.jsonl"))

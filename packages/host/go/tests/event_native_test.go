@@ -174,7 +174,7 @@ func TestTheWriterStoresPulledNativeRecordsInTheLayerNative(t *testing.T) {
 	ring := &fakeRing{bytes: append(nativeRecord(1_791_000_000_000_001, 5_000_000_001, 1, "", "native.test.first", `{"index":1}`),
 		nativeRecord(1_791_000_000_000_002, 5_000_000_002, 0, "", "native.test.second", `{}`)...)}
 	log := startWithRing(t, ring)
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
@@ -193,7 +193,7 @@ func TestAPulledNativeRecordKeepsItsMonotonicClockAndItsCorrelationIdentifiers(t
 	ring := &fakeRing{bytes: append(nativeRecord(1_791_000_000_000_010, 7_000_000_010, 2, "b1.4,b1.5", "native.test.input", `{"keyCode":36}`),
 		nativeRecord(1_791_000_000_000_011, 7_000_000_011, 2, "", "native.test.plain", `{}`)...)}
 	log := startWithRing(t, ring)
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
@@ -227,7 +227,7 @@ func TestARefusedNativeRecordAndTheLossOfTheRingAreCountedAsDropped(t *testing.T
 	ring := &fakeRing{bytes: append(append(append(append(append(append(append(append(append(good, forged...), badFields...), badLevel...), badCid...), emptyCid...), noClock...), badClass...), wrongClass...), truncated...),
 		lossEvents: 3, lossBytes: 120, debugEvents: 2, debugBytes: 40}
 	log := startWithRing(t, ring)
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	stored, reasons, channels := 0, map[string]float64{}, map[string]float64{}
@@ -255,7 +255,7 @@ func TestAPulledNativeRecordOfADeclaredEventStoresTheCatalogClassAndAnUndeclared
 	ring := &fakeRing{bytes: append(nativeRecordOfClass(1_791_000_000_000_001, 5_000_000_001, 2, 1, "", "native.input.source_changed", `{}`),
 		nativeRecordOfClass(1_791_000_000_000_002, 5_000_000_002, 2, 1, "", "native.test.surprise", `{}`)...)}
 	log := startWithRing(t, ring)
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
