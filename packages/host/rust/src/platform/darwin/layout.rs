@@ -28,20 +28,22 @@ pub fn commit(window: Handle, ticket: u64) -> bool {
 }
 
 /// Joins the view webview to the surface placement transaction of the window with ticket. The native join ends by the
-/// presentation of the view, which runs presented once, or by the returned abandon, whichever comes first. The native side
-/// does not call presented for a join that the abandon ended.
+/// presentation of the view, which runs presented once, by an end of its own, which runs ended once with its reason, or by the
+/// returned abandon, whichever comes first. The native side calls neither for a join that the abandon or a cancel ended.
 pub fn join_view(
     window: Handle,
     ticket: u64,
     view: Handle,
     presented: Box<dyn FnOnce() + Send>,
+    ended_by: Box<dyn FnOnce(&str) + Send>,
 ) -> Result<Option<crate::platform::ViewAbandon>, String> {
     unsafe extern "C" {
-        fn surfaceLayoutJoinView(
+        fn surfaceLayoutJoinViewEnds(
             owner: *mut c_void,
             ticket: u64,
             view: *mut c_void,
             presented: &Block<dyn Fn()>,
+            ended: &Block<dyn Fn(*const c_char)>,
         ) -> bool;
         fn surfaceLayoutAbandonView(owner: *mut c_void, view: *mut c_void) -> bool;
     }
@@ -54,8 +56,30 @@ pub fn join_view(
             presented();
         }
     });
-    let joined =
-        unsafe { surfaceLayoutJoinView(window as *mut c_void, ticket, view as *mut c_void, &done) };
+    let ended_slot = RefCell::new(Some(ended_by));
+    let reason_ended = ended.clone();
+    let end = RcBlock::new(move |reason: *const c_char| {
+        reason_ended.store(true, Ordering::SeqCst);
+        let text = if reason.is_null() {
+            String::new()
+        } else {
+            unsafe { CStr::from_ptr(reason) }
+                .to_string_lossy()
+                .into_owned()
+        };
+        if let Some(ended_by) = ended_slot.borrow_mut().take() {
+            ended_by(&text);
+        }
+    });
+    let joined = unsafe {
+        surfaceLayoutJoinViewEnds(
+            window as *mut c_void,
+            ticket,
+            view as *mut c_void,
+            &done,
+            &end,
+        )
+    };
     if !joined {
         return Ok(None);
     }
@@ -69,6 +93,20 @@ pub fn join_view(
             Err("the native layout transaction has no open join of the view".to_string())
         }
     })))
+}
+
+/// Calls ended with the window on the main thread each time a layout transaction of a window ends. The Rust host registers the
+/// only observer of the layout transactions of its process.
+pub fn watch_ends(ended: Box<dyn Fn(Handle) + Send + Sync>) {
+    unsafe extern "C" {
+        fn surfaceLayoutObserve(
+            started: &Block<dyn Fn(*mut c_void)>,
+            ended: &Block<dyn Fn(*mut c_void)>,
+        );
+    }
+    let started = RcBlock::new(|_window: *mut c_void| {});
+    let end = RcBlock::new(move |window: *mut c_void| ended(window as Handle));
+    unsafe { surfaceLayoutObserve(&started, &end) }
 }
 
 /// Cancels the surface placement transaction in progress of the window.

@@ -1,5 +1,6 @@
 //! The presentation wait of views (docs/spec/plugin-processes.md, rule 6). A changed visible root placement joins its layout
-//! ticket, and the wait ends at presentation, process end, hide, unresponsive notice, the presentation limit, or cancellation of that
+//! ticket, and the wait ends at presentation, process end, hide, unresponsive notice, an input that ends the hold, the close of the
+//! view, or cancellation of that
 //! ticket.
 
 use std::collections::BTreeMap;
@@ -43,14 +44,20 @@ pub(crate) fn trace_presentation_join(
     );
 }
 
-/// The reasons that end a wait. `presented` is the presentation of the view; the others end the wait without it.
-const ENDS: [&str; 5] = [
+/// The reasons that end a wait. `presented` is the presentation of the view; the others end the wait without it. `input` is a press
+/// or key event that ended the hold and `closed` the native close of the view; no wait ends by time
+/// (docs/spec/native-surfaces.md#layout-transaction).
+const ENDS: [&str; 6] = [
     "presented",
     "process-ended",
     "hidden",
     "unresponsive",
-    "timeout",
+    "input",
+    "closed",
 ];
+
+/// The ends that the native join reports of itself, which leave no native join to abandon.
+const NATIVE_ENDS: [&str; 2] = ["input", "closed"];
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ViewPlacement {
@@ -82,9 +89,6 @@ struct Wait {
 struct State {
     waits: BTreeMap<WaitKey, Wait>,
     committed: BTreeMap<String, CommittedPlacement>,
-    /// The view generation of each surface whose wait ended at the presentation limit. That generation joins no later wait, so a
-    /// view that does not present holds no later transaction for the limit again.
-    timed_out: BTreeMap<String, u64>,
 }
 
 /// A root placement of a presentation request: the surface, the generation of its view when the surface has one, and the placement.
@@ -133,20 +137,17 @@ impl PresentationWait {
     pub fn forget_surface(&self, surface: &str) {
         let mut state = self.lock();
         state.committed.remove(surface);
-        state.timed_out.remove(surface);
     }
 
     /// Selects the placements that join the open layout transaction, in request order: a visible placement of a view with a
     /// generation whose placement differs from the committed one. An invisible placement is not selected and ends no wait at
     /// presentation; its wait ends at the sync that applies the invisibility (documents.rs sync_view).
-    /// A generation whose wait ended at the presentation limit is not selected.
     pub fn joinable<'a>(&self, placements: &[RequestedPlacement<'a>]) -> Vec<(&'a str, u64)> {
         placements
             .iter()
             .filter_map(|(surface, generation, placement)| {
                 let generation = (*generation)?;
-                let timed_out = self.lock().timed_out.get(*surface) == Some(&generation);
-                (!timed_out && self.needs_join(surface, generation, *placement))
+                self.needs_join(surface, generation, *placement)
                     .then_some((*surface, generation))
             })
             .collect()
@@ -257,18 +258,13 @@ impl PresentationWait {
         if reason == "presented" || wait.presented {
             return Ok(false);
         }
-        if reason == "timeout" {
-            self.lock()
-                .timed_out
-                .insert(surface.to_string(), generation);
-        }
         trace_presentation_join("abandoned", surface, generation, ticket, None, Some(reason));
         crate::event_record::emit_host(
             crate::event_log::Level::Debug,
             "host.trace.view.presentation-abandoned",
             serde_json::json!({"surface": surface, "reason": reason}),
         );
-        if let Some(abandon) = wait.abandon {
+        if let Some(abandon) = wait.abandon.filter(|_| !NATIVE_ENDS.contains(&reason)) {
             abandon()
                 .map_err(|error| format!("ending the native join of view {surface}: {error}"))?;
         }

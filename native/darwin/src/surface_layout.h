@@ -3,7 +3,7 @@
 #include <stdint.h>
 
 bool surfaceLayoutCommit(void *owner, uint64_t ticket);
-// Returns whether owner has the active layout preparation. Call on the UI thread.
+// Returns whether owner has an open layout transaction. Call on the UI thread.
 bool surfaceLayoutIsPreparing(void *owner);
 // Returns whether a press at the point, in window coordinates, would reach another view once the open transaction of the
 // window has reached the screen. The surface hosts give no hit target during a preparation, so such a press has no target yet.
@@ -13,6 +13,7 @@ bool surfaceLayoutPressWaits(void *owner, double x, double y);
 bool surfaceLayoutRenderAtDisplayRate(void *webview);
 // Returns 1 when the web view prefers rendering updates at about 60 fps, 0 when it does not, and -1 when the feature does not exist.
 int surfaceLayoutPrefersNear60FPS(void *webview);
+// Cancels the open transaction of owner and refuses its waiting preparations. The will-close of a window cancels it too.
 void surfaceLayoutCancel(void *owner);
 // Cancels only the queued or active request with this owner and ticket. Completed or superseded tickets are unaffected.
 void surfaceLayoutCancelTicket(void *owner, uint64_t ticket);
@@ -23,12 +24,14 @@ void surfaceLayoutTraceStart(void);
 // Number of values in the record of one transaction: ticket, begun, presented, committed, requested, commit path, open at commit.
 #define SURFACE_LAYOUT_TRACE_STAGES 7
 // The commit path of a transaction in its record: the presentation of the host, the start transaction of a new page, the
-// presentation of the last joined view, the abandon of the last joined view, or a cancel.
+// presentation of the last joined view, the abandon or close of the last joined view, a cancel, or a press or key event that
+// ended the hold.
 #define SURFACE_LAYOUT_COMMIT_PRESENT 1
 #define SURFACE_LAYOUT_COMMIT_START 2
 #define SURFACE_LAYOUT_COMMIT_VIEW_JOIN 3
 #define SURFACE_LAYOUT_COMMIT_VIEW_ABANDON 4
 #define SURFACE_LAYOUT_COMMIT_CANCEL 5
+#define SURFACE_LAYOUT_COMMIT_INPUT 6
 // Every CATransaction pair of this code opens and closes through these, so the layout trace can say how many were open when a
 // layout transaction committed.
 void surfaceTransactionBegin(void);
@@ -62,6 +65,15 @@ void surfaceLayoutPointerPassing(void *owner, bool down, double x, double y);
 // window that holds a surface.
 void surfaceLayoutObserveWorkbench(bool (^onWorkbench)(void *window, double x, double y));
 void surfaceLayoutBegin(void *owner, uint64_t ticket, void (^ready)(int));
+#ifdef __OBJC__
+@class NSEvent;
+// Adds an observer of the actions of the user: observer(event) runs on the main thread for every press (a mouse down of any
+// button) and every key event (key down, key up, modifier change) that reaches -[NSApplication sendEvent:], a synthetic event
+// sent through it included, before any monitor, gate or view sees the event, and once for each event: an event that a wait kept
+// is not told again when it comes back. The end of the layout hold is one observer
+// (docs/spec/native-surfaces.md#layout-transaction). An observer stays for the life of the process.
+void surfaceInputActionObserve(void (^observer)(NSEvent *event));
+#endif
 // Keeps an injected pointer call behind the input of owner that waits and returns true, or returns false when it runs now. A press
 // at the point, in window coordinates, waits as surfaceLayoutPressWaits says, and a press ends the wait of the keys for the
 // decision and runs after the keys that waited. The event loop of the application runs the call in its turn.
@@ -77,15 +89,16 @@ typedef void (^surfaceLayoutPresent)(void (^presented)(const char *error));
 // Makes the block of a main web view, which reads the document and waits for the presentation update after that read. The
 // result is autoreleased; surfaceLayoutAfterSettled keeps the block that it needs.
 surfaceLayoutPresent surfaceLayoutMainPresentation(void *mainWebview);
-// Calls done on the main thread when present has brought the content of window to the screen while window has no surface
-// layout transaction that is open or waiting. present is asked again when a transaction opened meanwhile. displayed is the time
+// Calls done on the main thread when present has brought the content of window to the screen while no surface layout
+// transaction holds the screen: the hold of every window is shared, so the open transaction of any window holds it. present is asked again when a transaction opened meanwhile. displayed is the time
 // (ms, mach absolute time) at which that presentation appears on the screen. When the window is not on the screen, it is the time
 // of the call.
 void surfaceLayoutAfterSettled(void *window, surfaceLayoutPresent present, void (^done)(double displayed, const char *error));
 // Registers the observer of the layout transactions of the process and replaces the earlier one. started(window) runs on the
 // main thread when a preparation of the window starts, before its ready. ended(window) runs on the main thread when the
-// transaction of the window ends by its commit, deferred or not, or by its cancel, after the Core Animation transaction
-// commits and before the next waiting transaction starts.
+// transaction of the window ends by its commit, deferred or not, by its cancel, by the close of the window or by a press or key
+// event, before the waiting preparations of the window start. It runs after the Core Animation hold commits when no other
+// transaction is open, and inside the hold otherwise.
 void surfaceLayoutObserve(void (^started)(void *window), void (^ended)(void *window));
 // Injects a failure into the next settled-presentation request. Diagnostic builds only.
 void surfaceLayoutInjectSettledFailure(void);
@@ -96,13 +109,20 @@ void surfaceLayoutInjectSettledFailure(void);
 // the registered main web view finishes. When a new preparation of the same window takes over the transaction in the
 // meantime, that preparation commits it. When the height is set, the function calls ready(NULL) on the main thread; when
 // it cannot be set, it cancels the transaction it started and calls ready(failure sentence) on the main thread.
-// When the transaction of another window is open, ready is called after that transaction ends. Call on the main thread.
+// When the commit of the window waits for joined views, ready is called after that commit ends. Call on the main thread.
 void surfaceLayoutStartPage(void *owner, uint64_t ticket, double height, void (^ready)(const char *failure));
 // Joins the view webview to the open layout transaction of owner with ticket. The transaction does not commit until the
-// joined view presents or the view is abandoned: the commit is deferred, and the next transaction of any window starts after
-// the deferred commit. presented is called on the main thread once, when the view presents. Returns false when no transaction of
-// owner with ticket is open or the transaction is already committing (docs/spec/plugin-processes.md, rule 6).
+// joined view presents or its join ends: the commit is deferred, and the next preparation of the window starts after the deferred
+// commit; no other window waits for it. presented is called on the main thread once, when the view presents. Returns false when no
+// transaction of owner with ticket is open or the transaction is already committing (docs/spec/plugin-processes.md, rule 6).
 bool surfaceLayoutJoinView(void *owner, uint64_t ticket, void *viewWebview, void (^presented)(void));
+// surfaceLayoutJoinView whose ended(reason) is called on the main thread once when the join ends without a presentation and
+// without an abandon of the host: "input" when a press or key event ended the hold, "closed" when the view closed. A cancel ends
+// the join without a call (docs/spec/native-surfaces.md#layout-transaction).
+bool surfaceLayoutJoinViewEnds(void *owner, uint64_t ticket, void *viewWebview, void (^presented)(void),
+    void (^ended)(const char *reason));
+// Ends each join of the view webview in the turn of its close, because a view out of its window never presents.
+void surfaceLayoutViewClosed(void *viewWebview);
 // Ends the wait of the view webview for the transaction of owner without a presentation, so the deferred commit can finish.
 // The presented callback of that join is not called afterward. Returns false when the view has no open join of owner.
 bool surfaceLayoutAbandonView(void *owner, void *viewWebview);

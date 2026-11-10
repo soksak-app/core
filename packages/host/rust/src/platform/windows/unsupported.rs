@@ -338,8 +338,14 @@ pub fn join_view(
     _ticket: u64,
     _view: Handle,
     _presented: Box<dyn FnOnce() + Send>,
+    _ended: Box<dyn FnOnce(&str) + Send>,
 ) -> Result<Option<crate::platform::ViewAbandon>, String> {
     missing("view presentation wait")
+}
+
+/// A platform without layout transactions has no end of one to tell.
+pub fn watch_layout_ends() -> Result<(), String> {
+    Ok(())
 }
 
 pub fn start_page_titlebar(

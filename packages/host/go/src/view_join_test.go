@@ -16,8 +16,8 @@ const presentationJoinTrace = "host.trace.view.presentation-join"
 
 type synchronousPresentationPlatform struct{ *lifecyclePlatform }
 
-func (p synchronousPresentationPlatform) JoinView(window platform.Window, ticket uint64, view unsafe.Pointer, presented func()) (func() error, bool, error) {
-	abandon, joined, err := p.lifecyclePlatform.JoinView(window, ticket, view, presented)
+func (p synchronousPresentationPlatform) JoinView(window platform.Window, ticket uint64, view unsafe.Pointer, presented func(), ended func(string)) (func() error, bool, error) {
+	abandon, joined, err := p.lifecyclePlatform.JoinView(window, ticket, view, presented, ended)
 	if err == nil && joined {
 		presented()
 	}
@@ -527,8 +527,12 @@ func TestSynchronousPresentationJoinCallbackPrecedesNativeJoinResult(t *testing.
 	}
 }
 
-// contract: view.presentation-wait.ends-at-the-presentation-limit
-func TestAJoinedViewThatDoesNotPresentEndsItsWaitAtThePresentationLimit(t *testing.T) {
+// A joined view that has neither presented nor ended when a press or key event ends the hold ends its wait with the reason input:
+// the native join ended by itself, so the host abandons no native join, and no wait ends by time
+// (docs/spec/native-surfaces.md#layout-transaction).
+// contract: view.presentation-wait.ends-at-input
+func TestAJoinedViewThatDoesNotPresentEndsItsWaitAtInput(t *testing.T) {
+	isolateTraceRecords(t)
 	s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
 	window := platform.Window(1)
 	placement := Placement{ID: "probe-surface", Rect: Rect{X: 14, Y: 28, W: 320, H: 180}, Visible: true}
@@ -539,31 +543,35 @@ func TestAJoinedViewThatDoesNotPresentEndsItsWaitAtThePresentationLimit(t *testi
 	if len(fake.joins) != 1 {
 		t.Fatalf("the shown view joined %d times, want 1", len(fake.joins))
 	}
-	if len(fake.delayed) != 1 || fake.delayed[0].delay != pageTimeout {
-		t.Fatalf("the join queued %d delayed steps %#v, want one step after the presentation limit %s", len(fake.delayed), fake.delayed, pageTimeout)
+	if len(fake.delayed) != 0 {
+		t.Fatalf("the join queued %d delayed steps %#v, want none: no wait ends by time", len(fake.delayed), fake.delayed)
 	}
-	// The view neither presents nor ends, and no unresponsive notice arrives, as for a page process whose main thread waits.
-	fake.delayed[0].run()
+	fake.joins[0].ended("input")
 	if s.presentation.waits(placement.ID) {
-		t.Fatalf("the wait of a view that did not present still holds the layout transaction %s after its join", pageTimeout)
+		t.Fatal("the wait of a view that did not present still holds after the input ended the hold")
 	}
-	if fake.joins[0].abandons != 1 {
-		t.Fatalf("the native join was abandoned %d times at the limit, want 1", fake.joins[0].abandons)
+	if fake.joins[0].abandons != 0 {
+		t.Fatalf("the host abandoned the native join %d times after the native join ended by itself, want 0", fake.joins[0].abandons)
 	}
-	// The same generation joins no later wait, so it does not hold each later transaction for the limit again.
+	got := bufferedTraces(t, "host.trace.view.presentation-abandoned")
+	if len(got) != 1 || got[0]["reason"] != "input" {
+		t.Fatalf("abandoned records %v, want one with the reason input", got)
+	}
+	// The same generation joins the next transaction, because the input ends one hold and not the view.
 	moved := placement
 	moved.Rect.X = 40
 	next := PresentRequest{Ticket: 42, Placements: []Placement{moved}}
 	if err := s.joinViewsForPresentRequest(window, next, next.Placements); err != nil {
 		t.Fatalf("join the moved view: %v", err)
 	}
-	if len(fake.joins) != 1 {
-		t.Fatalf("the generation whose wait ended at the limit joined again: %d joins", len(fake.joins))
+	if len(fake.joins) != 2 {
+		t.Fatalf("the generation whose wait ended at input joined %d times, want 2", len(fake.joins))
 	}
 }
 
-// contract: view.presentation-wait.ends-at-the-presentation-limit
-func TestTheLimitOfAPresentedJoinChangesNothing(t *testing.T) {
+// contract: view.presentation-wait.ends-at-input
+func TestAnInputEndAfterThePresentationChangesNothing(t *testing.T) {
+	isolateTraceRecords(t)
 	s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
 	window := platform.Window(1)
 	placement := Placement{ID: "probe-surface", Rect: Rect{X: 14, Y: 28, W: 320, H: 180}, Visible: true}
@@ -572,22 +580,12 @@ func TestTheLimitOfAPresentedJoinChangesNothing(t *testing.T) {
 		t.Fatalf("join the view: %v", err)
 	}
 	fake.joins[0].presented()
-	if s.presentation.waits(placement.ID) || len(fake.delayed) != 1 {
-		t.Fatalf("the presented view still waits or queued %d limits, want no wait and one limit", len(fake.delayed))
+	fake.joins[0].ended("input")
+	if s.presentation.waits(placement.ID) || fake.joins[0].abandons != 0 {
+		t.Fatalf("an input end after the presentation changed the join: waits %v, abandons %d", s.presentation.waits(placement.ID), fake.joins[0].abandons)
 	}
-	fake.delayed[0].run()
-	if fake.joins[0].abandons != 0 {
-		t.Fatalf("the limit of a presented join abandoned it %d times", fake.joins[0].abandons)
-	}
-	// The presented generation joins the next transaction, because its wait did not end at the limit.
-	moved := placement
-	moved.Rect.X = 40
-	next := PresentRequest{Ticket: 42, Placements: []Placement{moved}}
-	if err := s.joinViewsForPresentRequest(window, next, next.Placements); err != nil {
-		t.Fatalf("join the moved view: %v", err)
-	}
-	if len(fake.joins) != 2 {
-		t.Fatalf("the presented generation joined %d times after the limit of its first join, want 2", len(fake.joins))
+	if got := bufferedTraces(t, "host.trace.view.presentation-abandoned"); len(got) != 0 {
+		t.Fatalf("an input end after the presentation wrote abandoned records %v", got)
 	}
 }
 
@@ -642,6 +640,9 @@ func (p *keysWaitPlatform) FocusWorkbench(platform.Window) {
 }
 func (p *keysWaitPlatform) KeysDecided(platform.Window)   { p.calls = append(p.calls, "decided") }
 func (p *keysWaitPlatform) KeysPageEnded(platform.Window) { p.calls = append(p.calls, "page ended") }
+
+// CancelLayout answers the cancel of the layouts of the window at the end of its page, which the key checks do not record.
+func (p *keysWaitPlatform) CancelLayout(platform.Window) error { return nil }
 
 // contract: surface-layout.keys-wait-for-the-decision
 func TestADecidedCallGivesTheKeysAndAPlainCallDoesNot(t *testing.T) {

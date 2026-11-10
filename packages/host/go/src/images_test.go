@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 	"unsafe"
@@ -583,5 +584,66 @@ func TestWindowRegionReportsItsNativeBlur(t *testing.T) {
 		if entry["blurred"] != blurred {
 			t.Fatalf("host.window region entry %s of facts with blurred %t", text, blurred)
 		}
+	}
+}
+
+// The end of the connection of a sidecar ends the raster wait of its regions, because no raster of the ended connection comes
+// (docs/spec/native-surfaces.md#layout-transaction). The end is sent after the wait reports its first pending check, and the
+// result is read after the end, so no check depends on time.
+// contract: images.wait.sidecar-end-ends-wait
+func TestTheEndOfASidecarEndsTheRasterWaitOfItsRegions(t *testing.T) {
+	images := NewImages()
+	key := ImageKey{Surface: "surface", Name: "view"}
+	var handle int
+	if err := images.Reserve(key, &ImageOwner{SidecarName: "sidecar", SidecarOwner: imageStatusTestOwner{}}); err != nil {
+		t.Fatal(err)
+	}
+	if !images.Set(key, unsafe.Pointer(&handle)) {
+		t.Fatal("image was not attached")
+	}
+	if config, err := images.ConfigureRaster(key, 800, 600, 2, true); err != nil || config == nil {
+		t.Fatalf("configure raster: %+v, %v", config, err)
+	}
+	images.mu.Lock()
+	images.states[key].LastSequence = 1
+	images.mu.Unlock()
+	started := make(chan struct{})
+	done := make(chan error, 1)
+	go func() { done <- images.waitCurrentObserved(noWaitLimit, func() { close(started) }) }()
+	<-started
+	if ended := images.InvalidateSidecar("sidecar"); ended != 1 {
+		t.Fatalf("the end of the sidecar invalidated %d regions, want 1", ended)
+	}
+	if err := <-done; err == nil || !strings.Contains(err.Error(), "sidecar") {
+		t.Fatalf("the raster wait ended with %v, want the end of its sidecar", err)
+	}
+}
+
+// The end of the layout transaction of the window ends its raster wait, as a press or key event that ends the hold does
+// (docs/spec/native-surfaces.md#layout-transaction).
+// contract: images.wait.sidecar-end-ends-wait
+func TestTheEndOfTheLayoutEndsTheRasterWait(t *testing.T) {
+	images := NewImages()
+	key := ImageKey{Surface: "surface", Name: "view"}
+	var handle int
+	if err := images.Reserve(key, &ImageOwner{SidecarName: "sidecar", SidecarOwner: imageStatusTestOwner{}}); err != nil {
+		t.Fatal(err)
+	}
+	if !images.Set(key, unsafe.Pointer(&handle)) {
+		t.Fatal("image was not attached")
+	}
+	if config, err := images.ConfigureRaster(key, 800, 600, 2, true); err != nil || config == nil {
+		t.Fatalf("configure raster: %+v, %v", config, err)
+	}
+	images.mu.Lock()
+	images.states[key].LastSequence = 1
+	images.mu.Unlock()
+	started := make(chan struct{})
+	done := make(chan error, 1)
+	go func() { done <- images.waitCurrentObserved(noWaitLimit, func() { close(started) }) }()
+	<-started
+	images.EndWaits()
+	if err := <-done; !errors.Is(err, errLayoutWaitEnded) {
+		t.Fatalf("the raster wait ended with %v, want the end of the layout", err)
 	}
 }

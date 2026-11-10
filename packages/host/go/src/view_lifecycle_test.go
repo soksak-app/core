@@ -98,12 +98,13 @@ type viewJoin struct {
 	ticket    uint64
 	view      unsafe.Pointer
 	presented func()
+	ended     func(reason string)
 	abandons  int
 }
 
 // JoinView records the join and returns the function that counts its abandon.
-func (p *lifecyclePlatform) JoinView(window platform.Window, ticket uint64, view unsafe.Pointer, presented func()) (func() error, bool, error) {
-	join := &viewJoin{window: window, ticket: ticket, view: view, presented: presented}
+func (p *lifecyclePlatform) JoinView(window platform.Window, ticket uint64, view unsafe.Pointer, presented func(), ended func(string)) (func() error, bool, error) {
+	join := &viewJoin{window: window, ticket: ticket, view: view, presented: presented, ended: ended}
 	p.joins = append(p.joins, join)
 	return func() error {
 		join.abandons++

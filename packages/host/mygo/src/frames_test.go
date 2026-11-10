@@ -190,3 +190,21 @@ func TestALayoutOutsideTheFrameOfItsWindowHasNoOpeningFrame(t *testing.T) {
 		}
 	}
 }
+
+// Each window owns its layout transaction, and they share one Core Animation hold: the end of one transaction while another window
+// has one open keeps the hold, and the end of the last one releases it (docs/spec/native-surfaces.md#layout-transaction).
+// contract: mygo.framework.hold-ends-with-the-last-transaction
+func TestTheHoldEndsWithTheLastOpenTransaction(t *testing.T) {
+	f := &Framework{frontends: map[*mygo.Window]*Frontend{}}
+	f.layoutStarted(platform.Window(1))
+	f.layoutStarted(platform.Window(2))
+	f.layoutStarted(platform.Window(1))
+	f.layoutEnded(platform.Window(1))
+	if !f.transaction {
+		t.Fatal("the end of the transaction of one window released the hold while another window had one open")
+	}
+	f.layoutEnded(platform.Window(2))
+	if f.transaction {
+		t.Fatal("the end of the last open transaction kept the hold")
+	}
+}
