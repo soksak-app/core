@@ -3,17 +3,17 @@ package sok
 import (
 	"fmt"
 	"io"
+	"os"
+	"os/signal"
 	"strconv"
 	"strings"
-	"time"
+	"syscall"
 
 	"github.com/soksak-app/core/packages/sok/go/src/platform"
 )
 
-const processWaitTimeoutMax = 600000
-
 var processWaitBooleans = map[string]bool{"help": true}
-var processWaitOptions = map[string]bool{"config-dir": true, "timeout-ms": true}
+var processWaitOptions = map[string]bool{"config-dir": true}
 
 // runProcess runs the process commands that do not connect to an application endpoint.
 func runProcess(args []string, stdout io.Writer) error {
@@ -54,29 +54,35 @@ func runProcessWait(args []string, stdout io.Writer) error {
 	if err != nil || parsedPID == 0 {
 		return usage("pid must be an integer from 1 to 2147483647")
 	}
-	timeoutText, ok := parsed.values["timeout-ms"]
-	if !ok {
-		return usage("--timeout-ms is required")
-	}
-	if !decimalDigits(timeoutText) {
-		return usage("timeout must be an integer from 1 to 600000 milliseconds")
-	}
-	timeoutMS, err := strconv.ParseUint(timeoutText, 10, 64)
-	if err != nil || timeoutMS == 0 || timeoutMS > processWaitTimeoutMax {
-		return usage("timeout must be an integer from 1 to 600000 milliseconds")
-	}
 	current, err := platform.Current()
 	if err != nil {
 		return fmt.Errorf("process wait: %w", err)
 	}
-	ended, err := current.WaitProcessEnd(int(parsedPID), time.Duration(timeoutMS)*time.Millisecond)
-	if err != nil {
-		return fmt.Errorf("process wait: %w", err)
-	}
-	if !ended {
-		return fmt.Errorf("process %d did not end within %dms", parsedPID, timeoutMS)
+	// The signals are watched before the wait starts, so a signal while the process runs always ends the wait. The wait runs
+	// in its own goroutine, and the first of its end and a signal ends the command; a wait that a signal ended is left to
+	// the end of the process of sok.
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(signals)
+	ended := make(chan error, 1)
+	Go("process-wait", func() { ended <- current.WaitProcessEnd(int(parsedPID)) })
+	select {
+	case received := <-signals:
+		return fmt.Errorf("process %d wait was interrupted by %s", parsedPID, signalName(received))
+	case err := <-ended:
+		if err != nil {
+			return fmt.Errorf("process wait: %w", err)
+		}
 	}
 	return printJSON(stdout, map[string]any{"pid": int(parsedPID), "ended": true})
+}
+
+// signalName is the name of an interrupt signal as the specification writes it.
+func signalName(received os.Signal) string {
+	if received == syscall.SIGTERM {
+		return "SIGTERM"
+	}
+	return "SIGINT"
 }
 
 func decimalDigits(text string) bool {

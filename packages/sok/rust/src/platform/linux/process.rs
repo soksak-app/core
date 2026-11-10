@@ -21,7 +21,10 @@ impl Platform for Linux {
         Linux::connect(address)
     }
 
-    fn on_interrupt(&self, interrupted: Box<dyn FnOnce() + Send>) -> Result<(), String> {
+    fn on_interrupt(
+        &self,
+        interrupted: Box<dyn FnOnce(&'static str) + Send>,
+    ) -> Result<(), String> {
         Linux::on_interrupt(interrupted)
     }
 
@@ -163,7 +166,7 @@ impl Platform for Linux {
         Err("application bundles are not implemented on linux".into())
     }
 
-    fn wait_process_end(&self, _pid: i32, _timeout: std::time::Duration) -> Result<bool, String> {
+    fn wait_process_end(&self, _pid: i32) -> Result<(), String> {
         Err("waiting for a process end is not implemented on linux".into())
     }
 

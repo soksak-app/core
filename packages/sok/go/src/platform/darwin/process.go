@@ -11,7 +11,6 @@ import (
 	"runtime"
 	"strings"
 	"syscall"
-	"time"
 
 	"golang.org/x/sys/unix"
 
@@ -52,37 +51,36 @@ func (darwin) ExtractBundle(zipped, folder string) error {
 	return nil
 }
 
-// WaitProcessEnd waits with the kernel notification of the end of a process, so no timer asks whether it ended.
-func (darwin) WaitProcessEnd(pid int, timeout time.Duration) (bool, error) {
+// WaitProcessEnd waits with the kernel notification of the end of a process, so no timer asks whether it ended. It takes
+// no time limit: the wait ends by the exit event, or at once when the process is absent.
+func (darwin) WaitProcessEnd(pid int) error {
 	if pid <= 0 {
-		return true, nil
+		return nil
 	}
 	queue, err := syscall.Kqueue()
 	if err != nil {
-		return false, fmt.Errorf("cannot wait for process %d: kqueue: %w", pid, err)
+		return fmt.Errorf("cannot wait for process %d: kqueue: %w", pid, err)
 	}
 	defer syscall.Close(queue)
 	change := syscall.Kevent_t{Ident: uint64(pid), Filter: syscall.EVFILT_PROC, Flags: syscall.EV_ADD | syscall.EV_ONESHOT, Fflags: syscall.NOTE_EXIT}
-	limit := syscall.NsecToTimespec(timeout.Nanoseconds())
 	events := make([]syscall.Kevent_t, 1)
 	for {
-		count, err := syscall.Kevent(queue, []syscall.Kevent_t{change}, events, &limit)
+		// A nil timeout waits for the event.
+		_, err := syscall.Kevent(queue, []syscall.Kevent_t{change}, events, nil)
 		switch {
 		case err == syscall.EINTR:
 			continue
 		case err == syscall.ESRCH:
-			return true, nil
+			return nil
 		case err != nil:
-			return false, fmt.Errorf("cannot wait for process %d: %w", pid, err)
-		case count == 0:
-			return false, nil
+			return fmt.Errorf("cannot wait for process %d: %w", pid, err)
 		case events[0].Flags&syscall.EV_ERROR != 0:
 			if events[0].Data == int64(syscall.ESRCH) {
-				return true, nil
+				return nil
 			}
-			return false, fmt.Errorf("cannot wait for process %d: %w", pid, syscall.Errno(events[0].Data))
+			return fmt.Errorf("cannot wait for process %d: %w", pid, syscall.Errno(events[0].Data))
 		}
-		return true, nil
+		return nil
 	}
 }
 

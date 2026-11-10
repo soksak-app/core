@@ -16,6 +16,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/soksak-app/core/packages/sok/go/src"
@@ -173,15 +174,32 @@ func fakeBundle(t *testing.T, parent, name, text string) string {
 	return bundle
 }
 
-// endingProcess starts a process and returns its pid and a function that ends it.
+// endingProcess starts a process that ends when its standard input closes, and returns its pid and a function that
+// closes that input and receives the end of the process. The process has no end of its own in time, so its end is the
+// event of the test.
 func endingProcess(t *testing.T) (int, func()) {
 	t.Helper()
-	command := exec.Command("sleep", "60")
+	command := exec.Command("cat")
+	input, err := command.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := command.Start(); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { command.Process.Kill(); command.Wait() })
-	return command.Process.Pid, func() { command.Process.Kill(); command.Wait() }
+	var once sync.Once
+	end := func() {
+		once.Do(func() {
+			if err := input.Close(); err != nil {
+				t.Errorf("close the input of the process: %v", err)
+			}
+			if err := command.Wait(); err != nil {
+				t.Errorf("the process ended with %v", err)
+			}
+		})
+	}
+	t.Cleanup(end)
+	return command.Process.Pid, end
 }
 
 // contract: app-update.replace.replaces-the-bundle-after-the-process-ended

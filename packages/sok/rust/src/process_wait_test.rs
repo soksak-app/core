@@ -17,6 +17,16 @@ fn process_wait_args() -> [String; 3] {
     ]
 }
 
+// A raised signal reaches every wait that watches the signals in the test process, so the tests of this module hold one
+// lock for the whole of each test and no wait of another test receives the signal of the signal test.
+static SIGNALS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn hold_the_signals() -> std::sync::MutexGuard<'static, ()> {
+    SIGNALS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 fn run_wait(wait: Box<process::Wait>) -> (i32, String, String) {
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
     let status = run_with_process_wait(
@@ -37,6 +47,7 @@ fn run_wait(wait: Box<process::Wait>) -> (i32, String, String) {
 // contract: cli.process-wait.takes-no-time-limit
 #[test]
 fn process_wait_gives_the_wait_only_the_pid() {
+    let _signals = hold_the_signals();
     let (called_tx, called_rx) = std::sync::mpsc::channel();
     let (status, stdout, stderr) = run_wait(Box::new(move |pid: i32| {
         called_tx.send(pid).expect("record the pid");
@@ -58,6 +69,7 @@ fn process_wait_gives_the_wait_only_the_pid() {
 #[cfg(unix)]
 #[test]
 fn process_wait_ends_by_a_signal() {
+    let _signals = hold_the_signals();
     for (name, signal) in [
         ("SIGINT", signal_hook::consts::SIGINT),
         ("SIGTERM", signal_hook::consts::SIGTERM),
@@ -97,6 +109,7 @@ fn process_wait_ends_by_a_signal() {
 // contract: cli.process-wait.platform-error-is-reported
 #[test]
 fn process_wait_reports_platform_errors() {
+    let _signals = hold_the_signals();
     let (status, stdout, stderr) = run_wait(Box::new(|pid: i32| {
         assert_eq!(pid, 1234);
         Err(process::WaitError::Operation("kernel wait failed".into()))

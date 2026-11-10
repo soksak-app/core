@@ -210,9 +210,20 @@ fn plist_text(bundle: &Path) -> String {
     std::fs::read_to_string(bundle.join("Contents/Info.plist")).unwrap()
 }
 
-/// A process that runs until it is ended.
-fn sleeping() -> std::process::Child {
-    Command::new("sleep").arg("60").spawn().expect("run sleep")
+/// A process that ends when its standard input closes. It has no end of its own in time, so its end is the event of the
+/// test; a test that fails before it ends the process closes that input when it drops the child.
+fn ending() -> std::process::Child {
+    Command::new("cat")
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+        .expect("run cat")
+}
+
+/// Closes the input of the process and receives its end.
+fn end(process: &mut std::process::Child) {
+    drop(process.stdin.take());
+    let status = process.wait().expect("the end of the process");
+    assert!(status.success(), "the process ended with {status}");
 }
 
 /// Whether the process pid still runs. The test ends the process it controls, and the application starts only after that
@@ -235,7 +246,7 @@ fn the_bundle_is_replaced_after_the_process_ended_and_the_application_starts() {
     let parent = Folder::new("appupdate");
     let target = fake_bundle(parent.path(), "soksak.app", "old");
     let staged = fake_bundle(&parent.path().join("updates/0.0.9"), "soksak.app", "new");
-    let mut process = sleeping();
+    let mut process = ending();
     let pid = process.id();
     let started = std::sync::Mutex::new(vec![]);
     let (bundle, to) = (staged.clone(), target.clone());
@@ -263,8 +274,7 @@ fn the_bundle_is_replaced_after_the_process_ended_and_the_application_starts() {
                 },
             )
         });
-        process.kill().unwrap();
-        process.wait().unwrap();
+        end(&mut process);
         handle.join().unwrap()
     });
     replacing.unwrap();
@@ -290,10 +300,9 @@ fn the_earlier_bundle_starts_again_when_the_new_one_fails_to_start() {
     let parent = Folder::new("appupdate");
     let target = fake_bundle(parent.path(), "soksak.app", "old");
     let staged = fake_bundle(parent.path(), "staged.app", "new");
-    let mut process = sleeping();
+    let mut process = ending();
     let pid = process.id() as i32;
-    process.kill().unwrap();
-    process.wait().unwrap();
+    end(&mut process);
     let texts = std::sync::Mutex::new(vec![]);
     let error = replace_app(
         &ReplaceOptions {
@@ -325,7 +334,7 @@ fn the_replacement_refuses_what_is_not_a_bundle() {
     }
     let parent = Folder::new("appupdate");
     let staged = fake_bundle(parent.path(), "staged.app", "new");
-    let mut process = sleeping();
+    let mut process = ending();
     let pid = process.id() as i32;
     let open = |_: &Path, _: &[String]| -> Result<(), String> { panic!("the application started") };
     let plain = parent.path().join("plain");
@@ -350,8 +359,7 @@ fn the_replacement_refuses_what_is_not_a_bundle() {
         assert!(replace_app(&options, &open).is_err(), "{name} was accepted");
     }
     assert_eq!(plist_text(&other), "old");
-    process.kill().unwrap();
-    process.wait().unwrap();
+    end(&mut process);
 }
 
 // The update waits for the exit event of the process and has no limit of its own.
@@ -364,7 +372,7 @@ fn the_replacement_waits_for_the_exit_without_a_limit() {
     let parent = Folder::new("appupdate");
     let target = fake_bundle(parent.path(), "soksak.app", "old");
     let staged = fake_bundle(&parent.path().join("updates/0.0.9"), "soksak.app", "new");
-    let mut process = sleeping();
+    let mut process = ending();
     let pid = process.id() as i32;
     let replacing = std::thread::scope(|scope| {
         let handle = scope.spawn(|| {
@@ -384,8 +392,7 @@ fn the_replacement_waits_for_the_exit_without_a_limit() {
                 },
             )
         });
-        process.kill().unwrap();
-        process.wait().unwrap();
+        end(&mut process);
         handle.join().unwrap()
     });
     replacing.unwrap();
@@ -399,7 +406,7 @@ fn the_relaunch_starts_the_same_bundle_in_the_background_after_the_process_ended
     }
     let parent = Folder::new("appupdate");
     let target = fake_bundle(parent.path(), "soksak.app", "same");
-    let mut process = sleeping();
+    let mut process = ending();
     let pid = process.id();
     let started = std::sync::Mutex::new(vec![]);
     let to = target.clone();
@@ -425,8 +432,7 @@ fn the_relaunch_starts_the_same_bundle_in_the_background_after_the_process_ended
                 },
             )
         });
-        process.kill().unwrap();
-        process.wait().unwrap();
+        end(&mut process);
         handle.join().unwrap()
     });
     relaunching.unwrap();
@@ -447,7 +453,7 @@ fn the_relaunch_refuses_a_folder_that_is_not_a_bundle_and_waits_for_the_exit() {
         return;
     }
     let parent = Folder::new("appupdate");
-    let mut process = sleeping();
+    let mut process = ending();
     let pid = process.id() as i32;
     let refuse = |_: &Path, _: &[String], _: bool| -> Result<(), String> {
         panic!("the application started")
@@ -484,8 +490,7 @@ fn the_relaunch_refuses_a_folder_that_is_not_a_bundle_and_waits_for_the_exit() {
                 },
             )
         });
-        process.kill().unwrap();
-        process.wait().unwrap();
+        end(&mut process);
         handle.join().unwrap()
     });
     relaunching.unwrap();

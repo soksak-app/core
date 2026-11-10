@@ -119,8 +119,6 @@ pub struct ReplaceOptions {
     pub target: PathBuf,
     /// The arguments of the application that starts again.
     pub arguments: Vec<String>,
-    /// How long replace_app waits for the end of the process.
-    pub timeout: std::time::Duration,
 }
 
 /// Whether the folder holds an application bundle, which has an Info.plist.
@@ -177,15 +175,10 @@ pub fn replace_app(options: &ReplaceOptions, open: OpenApplication) -> Result<()
         ));
     }
     let platform = crate::platform::current()?;
-    if !platform
-        .wait_process_end(options.pid, options.timeout)
-        .map_err(|error| format!("application update: {error}"))?
-    {
-        return Err(format!(
-            "application update: process {} did not end within {:?}",
-            options.pid, options.timeout
-        ));
-    }
+    // The wait has no limit: the operating system reports the exit of the process.
+    platform
+        .wait_process_end(options.pid)
+        .map_err(|error| format!("application update: {error}"))?;
     let (next, previous) = (
         beside(&options.target, ".new"),
         beside(&options.target, ".previous"),
@@ -240,8 +233,6 @@ pub struct RelaunchOptions {
     pub target: PathBuf,
     /// The arguments of the application that starts again.
     pub arguments: Vec<String>,
-    /// How long relaunch_app waits for the end of the process.
-    pub timeout: std::time::Duration,
 }
 
 /// Starts the application bundle with arguments, activating it only when the flag is set.
@@ -261,15 +252,10 @@ pub fn relaunch_app(
         ));
     }
     let platform = crate::platform::current()?;
-    if !platform
-        .wait_process_end(options.pid, options.timeout)
-        .map_err(|error| format!("application relaunch: {error}"))?
-    {
-        return Err(format!(
-            "application relaunch: process {} did not end within {:?}",
-            options.pid, options.timeout
-        ));
-    }
+    // The wait has no limit: the operating system reports the exit of the process.
+    platform
+        .wait_process_end(options.pid)
+        .map_err(|error| format!("application relaunch: {error}"))?;
     open(&options.target, &options.arguments, false)
         .map_err(|error| format!("application relaunch: start the bundle: {error}"))
 }
@@ -313,7 +299,6 @@ pub(crate) fn run_app(
             pid,
             target: PathBuf::from(parsed.required("target")?),
             arguments,
-            timeout: std::time::Duration::from_secs(60),
         };
         relaunch_app(&options, &|bundle, arguments, activate| {
             platform.open_application(bundle, arguments, activate)
@@ -329,7 +314,6 @@ pub(crate) fn run_app(
         bundle: PathBuf::from(parsed.required("bundle")?),
         target: PathBuf::from(parsed.required("target")?),
         arguments,
-        timeout: std::time::Duration::from_secs(60),
     };
     replace_app(&options, &|bundle, arguments| {
         platform.open_application(bundle, arguments, true)

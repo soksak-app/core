@@ -7,7 +7,6 @@ package platform
 import (
 	"errors"
 	"os"
-	"time"
 )
 
 // Platform is the operating system specific behavior.
@@ -23,8 +22,8 @@ type Platform interface {
 	ExtractBundle(zipped, folder string) error
 	// BundleVersion is the version that the application bundle at the path declares.
 	BundleVersion(bundle string) (string, error)
-	// WaitProcessEnd waits until the process pid has ended, and reports false when it still runs after timeout.
-	WaitProcessEnd(pid int, timeout time.Duration) (bool, error)
+	// WaitProcessEnd waits until the operating system reports that the process pid ended. It takes no time limit.
+	WaitProcessEnd(pid int) error
 	// CopyBundle copies an application bundle, also across volumes, keeping its modes and signature.
 	CopyBundle(source, destination string) error
 	// OpenApplication starts a new instance of the application bundle with the arguments. It activates the new instance

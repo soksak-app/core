@@ -12,7 +12,10 @@ impl Platform for Windows {
         Err("endpoint connection is not implemented on windows".into())
     }
 
-    fn on_interrupt(&self, _interrupted: Box<dyn FnOnce() + Send>) -> Result<(), String> {
+    fn on_interrupt(
+        &self,
+        _interrupted: Box<dyn FnOnce(&'static str) + Send>,
+    ) -> Result<(), String> {
         Err("interrupt signals is not implemented on windows".into())
     }
 
@@ -84,7 +87,7 @@ impl Platform for Windows {
         Err("application bundles are not implemented on windows".into())
     }
 
-    fn wait_process_end(&self, _pid: i32, _timeout: std::time::Duration) -> Result<bool, String> {
+    fn wait_process_end(&self, _pid: i32) -> Result<(), String> {
         Err("waiting for a process end is not implemented on windows".into())
     }
 

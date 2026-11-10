@@ -13,7 +13,7 @@ fn process_wait_reports_unsupported_platform() {
     assert_eq!(code, 1, "stdout={stdout:?} stderr={stderr:?}");
     assert!(stdout.is_empty(), "stdout={stdout:?}");
     assert!(
-        stderr.contains("waiting for a process end is not implemented on windows"),
+        stderr.contains("interrupt signals is not implemented on windows"),
         "{stderr}"
     );
 }

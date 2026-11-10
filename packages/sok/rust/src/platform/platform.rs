@@ -18,8 +18,9 @@ pub trait Platform {
     fn process_running(&self, pid: i32) -> Result<(), String>;
     /// Connects to the address of endpoint.json.
     fn connect(&self, address: &str) -> Result<Box<dyn Connection>, String>;
-    /// Calls interrupted when the first interrupt signal (SIGINT, SIGTERM) arrives.
-    fn on_interrupt(&self, interrupted: Box<dyn FnOnce() + Send>) -> Result<(), String>;
+    /// Calls interrupted with the name of the first interrupt signal (`SIGINT`, `SIGTERM`) when it arrives.
+    fn on_interrupt(&self, interrupted: Box<dyn FnOnce(&'static str) + Send>)
+    -> Result<(), String>;
     /// The user configuration folder, at the same location as os.UserConfigDir of Go.
     fn config_dir(&self) -> Result<PathBuf, String>;
     /// Whether the file has an execute bit. It sets the mode of a release entry.
@@ -37,8 +38,8 @@ pub trait Platform {
     -> Result<(), String>;
     /// The version that the application bundle at the path declares.
     fn bundle_version(&self, bundle: &std::path::Path) -> Result<String, String>;
-    /// Waits until the process pid has ended and reports false when it still runs after the timeout.
-    fn wait_process_end(&self, pid: i32, timeout: std::time::Duration) -> Result<bool, String>;
+    /// Waits until the operating system reports that the process pid ended. It takes no time limit.
+    fn wait_process_end(&self, pid: i32) -> Result<(), String>;
     /// Copies an application bundle, also across volumes, keeping its modes and signature.
     fn copy_bundle(
         &self,

@@ -69,7 +69,7 @@ commands:
                             replaces the application bundle TARGET with BUNDLE after the process PID ended
   app relaunch --wait PID --target PATH [-- ARGUMENT...]
                             starts the application bundle TARGET again in the background after the process PID ended
-  process wait PID --timeout-ms MILLISECONDS
+  process wait PID
                             waits for the operating system to report that PID ended
   registry build DIRECTORY  checks a registry and writes its index.json
   registry use INDEX        sets the registry index that installation reads
@@ -684,7 +684,7 @@ fn watch(
     {
         let close = client.closer()?;
         let flag = stopped.clone();
-        platform::current()?.on_interrupt(Box::new(move || {
+        platform::current()?.on_interrupt(Box::new(move |_signal| {
             flag.store(true, std::sync::atomic::Ordering::SeqCst);
             crate::routine::interrupted(close());
         }))?;
@@ -779,13 +779,13 @@ pub fn run(
     stderr: &mut dyn Write,
     options: &Options,
 ) -> i32 {
-    let mut wait_process_end = |pid, timeout| {
+    let wait_process_end = Box::new(|pid| {
         let platform = platform::current().map_err(process::WaitError::Platform)?;
         platform
-            .wait_process_end(pid, timeout)
+            .wait_process_end(pid)
             .map_err(process::WaitError::Operation)
-    };
-    run_with_process_wait(args, stdout, stderr, options, &mut wait_process_end)
+    });
+    run_with_process_wait(args, stdout, stderr, options, wait_process_end)
 }
 
 fn run_with_process_wait(
@@ -793,7 +793,7 @@ fn run_with_process_wait(
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
     options: &Options,
-    wait_process_end: &mut dyn FnMut(i32, std::time::Duration) -> Result<bool, process::WaitError>,
+    wait_process_end: Box<process::Wait>,
 ) -> i32 {
     let result = execute(args, stdout, stderr, options, wait_process_end);
     // When the error cannot be written to standard error, there is nowhere to report it, so the code reports it with exit status 3 (docs/spec/cli.md).
@@ -847,7 +847,7 @@ fn execute(
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
     options: &Options,
-    wait_process_end: &mut dyn FnMut(i32, std::time::Duration) -> Result<bool, process::WaitError>,
+    wait_process_end: Box<process::Wait>,
 ) -> Result<(), Error> {
     // The arguments after -- are those of the application that starts again, so the command parses its own.
     if args.first().map(String::as_str) == Some("app") {
