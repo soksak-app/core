@@ -1102,14 +1102,14 @@ fn invalid_json_closes_connection() {
 | `cli.plugin.starter-job-transitions-are-bound-to-snapshot` | 기록된 registry snapshot의 모든 plugin이 설치될 때까지 starter job은 pending으로 남는다. snapshot이 바뀌면 job을 완료하거나 변경할 수 없고, pending 및 completed 상태는 재시작 후에도 유지된다. | all |
 | `cli.plugin.action-runs-the-command` | Installer library는 `install`, `update`, `remove`, `enable`, `disable`을 같은 `sok plugin` 명령의 결과로 실행하고, 다른 action은 `unknown plugin action`으로 거부한다. | all |
 | `cli.file.errors-name-the-path-and-the-reason` | 실패한 파일 작업은 `<경로>: <이유>`로 보고하며, 이유는 소문자로 시작하는 운영체제 오류 문구다. 없는 registry index는 `<경로>: no such file or directory`, 읽을 수 없는 `installed.json`은 `<경로>: permission denied`를 보고한다 | all |
-| `cli.process-wait.rejects-invalid-pid-and-timeout` | process-wait 인수가 누락, 잘못됨, 중복되거나 알 수 없는 경우 exit 2로 끝나고 표준 출력을 쓰지 않으며 잘못된 인수를 명시하고 process-wait operation을 호출하지 않는다. | all |
+| `cli.process-wait.rejects-invalid-arguments` | `--timeout-ms`를 포함해 process-wait 인수가 누락, 잘못됨, 중복되거나 알 수 없는 경우 exit 2로 끝나고 표준 출력을 쓰지 않으며 잘못된 인수를 명시하고 process-wait operation을 호출하지 않는다. | all |
 | `cli.process-wait.requires-an-action` | 하위 command가 없는 `sok process`는 exit 2로 끝나며 process command에 action이 필요하다고 보고한다. | all |
-| `cli.process-wait.option-is-command-scoped` | `--timeout-ms` 옵션은 `sok process wait`에서 허용되고 다른 command의 파싱에는 영향을 주지 않는다. | all |
+| `cli.process-wait.takes-no-time-limit` | `sok process wait`에는 시간 제한이 없다. operation은 PID만 받고, 기다림은 process의 종료 event로 끝난다. | all |
 | `cli.process-wait.repeated-help-is-idempotent` | help flag를 반복해도 같은 process-wait 사용법을 성공적으로 출력한다. | all |
-| `cli.process-wait.timeout-is-an-error` | 요청한 timeout이 끝날 때까지 process가 남아 있으면 `sok process wait`는 exit 1로 끝나고 표준 출력을 쓰지 않으며 PID와 timeout을 보고한다. | all |
+| `cli.process-wait.signal-ends-the-wait` | process가 도는 동안 `sok`이 받은 SIGINT나 SIGTERM은 `sok process wait`를 exit 1로 끝내고 표준 출력을 쓰지 않으며 `process <pid> wait was interrupted by <signal>`을 보고하게 한다. | all |
 | `cli.process-wait.reports-pid-absent` | PID가 이미 없으면 `sok process wait`는 exit 0으로 끝나고 `{pid, ended: true}`를 출력한다. | all |
 | `cli.process-wait.platform-error-is-reported` | 운영체제의 process-wait operation이 실패하면 `sok process wait`는 exit 1로 끝나고 표준 출력을 쓰지 않으며 platform 오류를 보고한다. | all |
-| `cli.process-wait.registered-platform-receives-request` | Go `sok`의 등록된 process-wait 구현은 요청한 PID와 timeout을 받고 command는 그 결과를 직렬화한다. | wailsv3, mygo only: Go CLI는 변경 가능한 platform 등록 API를 제공한다 |
+| `cli.process-wait.registered-platform-receives-request` | Go `sok`의 등록된 process-wait 구현은 요청한 PID를 받고 command는 그 결과를 직렬화한다. | wailsv3, mygo only: Go CLI는 변경 가능한 platform 등록 API를 제공한다 |
 | `cli.debug.query-golden-lines` | `sok debug query`가 모든 사례에서 `docs/spec/cases/log-contract/query`의 golden page의 글 줄을 debug 화면과 같은 줄로 출력하고, 행이 page 뒤에 더 있으면 표준 오류에 `more: --after <cursor>`를 쓴다. | all |
 | `cli.debug.query-errors` | `sok debug query`는 event 파일이 event 구조를 어기면 파일과 줄 번호를 담은 오류로, `logs/` 폴더가 없으면 폴더를 담은 오류로 실패한다. | all |
 | `cli.debug.reports-a-rejected-file` | `sok debug query`는 다른 파일의 줄을 상태 0으로 출력하고, `sok debug query`와 `sok debug replay`는 schema 번호가 다른 파일마다 표준 오류에 `rejected: <error>`를 쓴다. | all |

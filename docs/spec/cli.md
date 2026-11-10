@@ -28,7 +28,7 @@ The current Linux and Windows platform implementations report that process exit 
 | `sok capture [window]` | Diagnostic builds: writes a still image of the window without focusing it |
 | `sok app update --wait <pid> --bundle <path> --target <path> [-- <argument>...]` | Replaces the application bundle `<target>` with `<bundle>` after the process `<pid>` ended and starts it ([application update](installation.md#application-update)) |
 | `sok app relaunch --wait <pid> --target <path> [-- <argument>...]` | Starts the application bundle `<target>` again with the arguments, without activating it, after the process `<pid>` ended ([diagnostic builds](endpoint.md#diagnostic-builds)) |
-| `sok process wait <pid> --timeout-ms <milliseconds>` | Waits for the operating system to report that the process ID ended, without connecting to an application or service |
+| `sok process wait <pid>` | Waits for the operating system to report that the process ID ended, without connecting to an application or service |
 | `sok path install\|remove` | Writes or deletes the path entry of this application; `install` prints the file and the directory it holds |
 | `sok plugin install\|update\|remove\|enable\|disable <id>` | Changes the installed plugins ([installation](installation.md)) |
 | `sok plugin list` | Lists the installed plugins |
@@ -49,9 +49,9 @@ The flags of a declared command come from the parameter schema that `exposure.li
 
 A command writes its result as JSON on standard output; a command without a result writes `null`. An error is written to standard error as `sok: <message>`, with the endpoint error code in parentheses when there is one. A failed file operation names the file and the operating system reason in lower case, `<path>: <reason>`, with the same text in both implementations. The exit status is 0 on success, 1 on a failed command, and 2 on a usage error, which also prints the usage; it is 3 when sok cannot write its error to standard error, and 4 when the command or one of its goroutines or threads panicked ([event log](#event-log)). A cleanup that fails after a failed write or extraction is appended to the error as `; cleanup <path>: <reason>`, and a temporary file that cannot be closed as `; close <path>: <reason>`. A connection to the application that cannot be closed reports `endpoint connection: <reason>`.
 
-`process wait` requires a positive process ID no greater than 2147483647 and an explicit timeout from 1 through 600000 milliseconds. It prints `{"pid": <pid>, "ended": true}` when the operating system reports that the PID is absent or its exit event occurs. It fails with `process <pid> did not end within <milliseconds>ms` when the wait reaches its timeout. Platform errors, including an unsupported process wait, are reported as command failures. The command waits by process ID; it does not establish an identity guarantee across arbitrary PID reuse.
+`process wait` requires a positive process ID no greater than 2147483647. The wait has no time limit: it prints `{"pid": <pid>, "ended": true}` when the operating system reports that the PID is absent or its exit event occurs, and a SIGINT or SIGTERM that `sok` receives ends it with exit 1, no standard output and `process <pid> wait was interrupted by <SIGINT or SIGTERM>`, so the caller ends a wait by a signal, as it ends `sok watch`. Platform errors, including an unsupported process wait, are reported as command failures. The command waits by process ID; it does not establish an identity guarantee across arbitrary PID reuse.
 
-The `--timeout-ms` option is scoped to `process wait`; other commands reject it as unknown. The command uses the same option parser as the other CLI commands. As with other boolean flags, repeated `--help` is idempotent; repeated value options are rejected.
+`process wait` takes no option besides `--help` and `--config-dir`, and an unknown option such as `--timeout-ms` exits 2 as for every command. The command uses the same option parser as the other CLI commands. As with other boolean flags, repeated `--help` is idempotent; repeated value options are rejected.
 
 ## Event log
 

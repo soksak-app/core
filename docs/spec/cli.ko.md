@@ -28,7 +28,7 @@
 | `sok capture [window]` | 진단 build: 창에 focus를 주지 않고 정지 이미지를 쓴다 |
 | `sok app update --wait <pid> --bundle <path> --target <path> [-- <argument>...]` | 프로세스 `<pid>`가 끝난 뒤 애플리케이션 번들 `<target>`을 `<bundle>`로 바꾸고 시작한다([애플리케이션 업데이트](installation.ko.md#애플리케이션-업데이트)) |
 | `sok app relaunch --wait <pid> --target <path> [-- <argument>...]` | 프로세스 `<pid>`가 끝난 뒤 애플리케이션 번들 `<target>`을 인자와 함께 활성화하지 않고 다시 시작한다([진단 빌드](endpoint.ko.md#진단-빌드)) |
-| `sok process wait <pid> --timeout-ms <milliseconds>` | 애플리케이션이나 service에 연결하지 않고 운영체제가 process ID의 종료를 보고할 때까지 기다린다 |
+| `sok process wait <pid>` | 애플리케이션이나 service에 연결하지 않고 운영체제가 process ID의 종료를 보고할 때까지 기다린다 |
 | `sok path install\|remove` | 이 애플리케이션의 경로 항목을 쓰거나 지운다. `install`은 파일과 그 안의 폴더를 출력한다 |
 | `sok plugin install\|update\|remove\|enable\|disable <id>` | 설치된 plugin을 바꾼다([설치](installation.ko.md)) |
 | `sok plugin list` | 설치된 plugin을 나열한다 |
@@ -49,9 +49,9 @@
 
 명령은 결과를 표준 출력에 JSON으로 쓰며, 결과가 없는 명령은 `null`을 쓴다. 오류는 표준 오류에 `sok: <message>`로 쓰고, endpoint 오류 코드가 있으면 괄호 안에 함께 쓴다. 실패한 파일 작업은 파일과 소문자로 시작하는 운영체제 이유를 `<경로>: <이유>`로 적으며, 두 구현의 문구가 같다. 종료 상태는 성공 0, 실패한 명령 1, 사용법 오류 2이며, 사용법 오류는 사용법도 출력한다. sok이 오류를 표준 오류에 쓰지 못하면 종료 상태는 3이고, 명령이나 그 goroutine, thread가 panic하면 4이다([event log](#event-log)). 실패한 쓰기나 풀기 뒤의 정리가 실패하면 오류에 `; cleanup <path>: <reason>`을, 닫지 못한 임시 파일은 `; close <path>: <reason>`을 덧붙인다. 애플리케이션과의 연결을 닫지 못하면 `endpoint connection: <reason>`을 보고한다.
 
-`process wait`는 1부터 2147483647까지의 process ID와 1부터 600000밀리초까지의 제한 시간을 반드시 받는다. 운영체제가 PID가 없거나 종료 event가 발생했다고 보고하면 `{"pid": <pid>, "ended": true}`를 출력한다. 제한 시간에 도달하면 `process <pid> did not end within <milliseconds>ms`로 명령이 실패한다. 지원하지 않는 process wait를 포함한 platform 오류는 명령 실패로 보고한다. 이 명령은 process ID를 기다리며, 임의의 PID 재사용을 넘어 process identity를 보장하지 않는다.
+`process wait`는 1부터 2147483647까지의 process ID를 반드시 받는다. 기다림에는 시간 제한이 없다. 운영체제가 PID가 없거나 종료 event가 발생했다고 보고하면 `{"pid": <pid>, "ended": true}`를 출력하고, `sok`이 받은 SIGINT나 SIGTERM은 exit 1, 표준 출력 없음, `process <pid> wait was interrupted by <SIGINT or SIGTERM>`으로 기다림을 끝낸다. 그래서 호출자는 `sok watch`를 끝내듯 signal로 기다림을 끝낸다. 지원하지 않는 process wait를 포함한 platform 오류는 명령 실패로 보고한다. 이 명령은 process ID를 기다리며, 임의의 PID 재사용을 넘어 process identity를 보장하지 않는다.
 
-`--timeout-ms`는 `process wait`에서만 허용하며 다른 명령에서는 알 수 없는 option으로 거부한다. 이 명령은 다른 CLI 명령과 같은 option parser를 사용한다. 다른 boolean flag와 같이 반복한 `--help`는 같은 flag를 한 번 설정한 것처럼 처리하고, value option을 반복하면 거부한다.
+`process wait`는 `--help`와 `--config-dir` 밖의 option을 받지 않으며, `--timeout-ms` 같은 알 수 없는 option은 모든 명령에서처럼 exit 2로 끝난다. 이 명령은 다른 CLI 명령과 같은 option parser를 사용한다. 다른 boolean flag와 같이 반복한 `--help`는 같은 flag를 한 번 설정한 것처럼 처리하고, value option을 반복하면 거부한다.
 
 ## Event log
 
