@@ -133,7 +133,7 @@ event가 싣는 모든 buffer와 값에는 상한이 있고, 생산자는 값을
 | sidecar의 보류 close | 메시지 1,024개와 4,194,304바이트 | close는 보내지 않고, 표면은 답을 기다리는 목록에 올리지 않으며, `host.buffer.dropped`를 저장하고, sidecar는 끝날 때까지 그 표면의 session을 가진다. |
 | relay의 만료된 요청(늦은 응답) | 요청 256개 | 가장 오래된 요청을 잊으므로 그 요청의 늦은 응답은 `exposure reply <id> has no matching request`로 답하고 `host.buffer.dropped`를 저장한다. |
 | host record의 시작 buffer | record 1,024개와 4,194,304바이트 | 거절한 record는 writer가 생기면 세어서 이유 `the start buffer was full`의 `log.dropped`로 저장한다. |
-| page의 답을 기다리는 endpoint topic 하나의 구독 변경 | 변경 256개 | 변경은 적용하지 않고 거절하며, client는 오류 `-32000: the subscription changes of <name> are not keeping up: 256 changes are pending, so this change is refused`를 받고 `host.buffer.dropped`를 저장한다. 닫힌 연결의 구독 해제는 거절하지 않는다. 그 연결이 가졌던 topic마다 변경 하나뿐이다. |
+| page의 답을 기다리는 endpoint topic 하나의 구독 변경 | 변경 256개 | 변경은 적용하지 않고 거절하며, client는 오류 `-32000: the subscription changes of <name> are not keeping up: 256 changes are pending, so this change is refused`를 받고 `host.buffer.dropped`를 저장한다. 닫힌 연결의 구독 해제는 거절하지 않는다. 그 연결이 가졌던 topic마다 변경 하나뿐이다. `status.unwatch`도 거절하지 않는다. unwatch는 자기 topic의 queue에서 기다렸다가 그 연결의 구독을 끝내므로, unwatch의 거절은 호스트가 구독을 끝낸 뒤 page에서만 온다([노출](exposure.ko.md), `status.watch`). unwatch는 그 topic에 대한 연결의 마지막 변경(가진 것이든 queue에 있는 것이든)이 watch일 때만 queue에 들어가므로, queue에는 받아들인 watch 하나마다 unwatch가 많아야 하나 있다. 다른 unwatch는 아무것도 바꾸지 않고 queue에 들어가지 않은 채 null로 답한다. |
 | endpoint 연결의 출력 큐(Wails host) | frame 256개와 16,777,216바이트 | frame을 거절하고 `host.buffer.dropped`를 저장하며, 읽지 않는 연결을 닫는다. Tauri host는 연결을 쥔 채 각 frame을 소켓에 쓰므로 큐가 없다. |
 
 모든 `host.buffer.dropped` event는 `count`가 1이고 거절한 메시지의 크기를 담으므로, 거절이 쏟아지면 event도 쏟아진다. 이는 writer의 큐가 상한으로 막고 다시 센다.
