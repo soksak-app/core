@@ -1756,6 +1756,9 @@ func (s *Surfaces) viewFailed(surface string, handle unsafe.Pointer, generation 
 		return
 	}
 	system.CloseDocument(handle)
+	// The process end ends the presentation wait of the view before its documents close, so the wait ends with the reason
+	// process-ended and not with the close of the documents.
+	s.endPresentationWaitFor(surface, 0, generation, "process-ended")
 	// The regions of the view belong to the composition of the ended document, so they close with it, and the view that is created
 	// again attaches them again (docs/spec/native-surfaces.md#view-surfaces, regions).
 	s.closeSurfaceDocuments(surface)
@@ -1765,7 +1768,6 @@ func (s *Surfaces) viewFailed(surface string, handle unsafe.Pointer, generation 
 	for _, call := range openCalls {
 		EmitHost(LevelError, "host.call.peer-lost", map[string]any{"plugin": call.plugin, "command": call.command, "reason": "process-ended"})
 	}
-	s.endPresentationWaitFor(surface, 0, generation, "process-ended")
 	// The page forgets the regions that the host closed with the ended view (docs/spec/native-surfaces.md#view-surfaces).
 	s.emitToSurface(surface, "view-process-ended", map[string]any{"surface": surface, "plugin": channel.plugin, "generation": generation})
 	lifecycle := s.viewRecords()

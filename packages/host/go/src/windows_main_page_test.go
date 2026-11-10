@@ -320,7 +320,7 @@ func TestTheEndOfThePageProcessCancelsTheLayoutOfItsWindow(t *testing.T) {
 	fake := &pageLayoutEndPlatform{}
 	framework, system = pagelessFramework{window: window}, fake
 	t.Cleanup(func() { framework, system = previousFramework, previousSystem })
-	host := &Host{windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{}, quit: &Quit{}}
+	host := &Host{windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{}, quit: &Quit{}, relay: NewRelay[relayTarget]()}
 	host.newWindow("main", "")
 	for _, listener := range window.listeners[WindowWorkbenchEnded] {
 		listener()

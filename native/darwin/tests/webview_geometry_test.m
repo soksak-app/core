@@ -414,13 +414,6 @@ static void sendQueued(NSString *what) {
     eventWait(what, ^BOOL { return queueEndsSent >= awaited; });
 }
 
-// Runs the blocks that the main queue holds now.
-static void mainQueueTurn(NSString *what) {
-    __block BOOL ran = NO;
-    dispatch_async(dispatch_get_main_queue(), ^{ ran = YES; });
-    eventWait(what, ^BOOL { return ran; });
-}
-
 // Adds a native view that covers the native plane, as a native document region does.
 static NSView *addNativeView(NSView *surface) {
     NSView *plane = nativePlaneOf(surface);
