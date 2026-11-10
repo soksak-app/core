@@ -133,6 +133,7 @@ int main(void) { @autoreleasepool {
         window.backgroundColor = NSColor.blueColor;
     }, &directory);
     if (frames > 0) frameIs(directory, frames, NSMakeSize(320, 160), @"growing");
+    NSString *growingDirectory = directory;
 
     // A new recording of a window shrunk outside a recording has the shrunk window size from the first frame. It does not inherit the output size changed by the previous recording.
     [window setFrame:NSMakeRect(80, 80, 200, 100) display:YES];
@@ -156,6 +157,11 @@ int main(void) { @autoreleasepool {
         @"background capture stop completes main-run-loop display-link invalidation without blocking the window thread");
     check(!NSApp.isActive, @"recording does not activate the application");
     [window close];
+    // The frames, the callback statuses and the display link trace of both recordings are the evidence of a failure.
+    if (failures) {
+        if (growingDirectory) keepTemporaryFolder(growingDirectory);
+        if (directory) keepTemporaryFolder(directory);
+    }
     fprintf(stderr, "%s: native capture follows a growing window (%.1fms)\n", failures ? "FAIL" : "PASS",
         (CACurrentMediaTime() - began) * 1000);
     return failures ? 1 : 0;

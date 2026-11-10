@@ -472,6 +472,11 @@ comma := ,
 executables = $(foreach entry,$(1),$(firstword $(subst $(comma), ,$(entry))))
 NATIVE_TEST_EXECUTABLES := $(call executables,$(NATIVE_TESTS))
 NATIVE_TEST_RUNNER := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../scripts/native-tests.mjs)
+# A check keeps the temporary folders that hold the evidence of its failure (keepTemporaryFolder of tests/support/temporary_folder.h),
+# and its exit moves them into NATIVE_TEST_EVIDENCE, by default target/native-test-evidence of the repository, and not into the
+# temporary folder, which the test runner removes (docs/operations/examples.md#temporary-folders).
+NATIVE_TEST_EVIDENCE ?= $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../target/native-test-evidence)
+export NATIVE_TEST_EVIDENCE
 # The shared cases of the view page insertion, which the plugin-api test and the native tests run (docs/spec/plugin-processes.md, rule 4).
 VIEW_PAGE_CASES := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../packages/plugin-api/contract/view-page.json)
 

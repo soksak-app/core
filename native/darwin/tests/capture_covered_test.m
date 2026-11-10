@@ -404,6 +404,8 @@ int main(void) { @autoreleasepool {
     CFRelease(surface);
     CFRelease(changedSurface);
     free(first.bytes); free(back.bytes); free(covered.bytes); free(changed.bytes);
+    // The images of a failed run are its evidence.
+    if (failures) keepTemporaryFolder(directory);
     if (failures == 0) fprintf(stderr, "PASS: covered window capture\n");
     return failures == 0 ? 0 : 1;
 } }

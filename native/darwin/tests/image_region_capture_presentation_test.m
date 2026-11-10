@@ -413,6 +413,8 @@ static void runPresentationCase(BOOL tagged, BOOL lease) { @autoreleasepool {
     [page removeFromSuperview];
     if (surfaceHost) sp_surface_close(surfaceHost);
     [page release]; [main release]; [window close]; [content release]; [window release];
+    // The recorded frames and callback statuses of a crop that differs from the source are its evidence.
+    if (!exact) keepTemporaryFolder([NSString stringWithUTF8String:directory]);
 } }
 
 int main(int argc, const char **argv) {

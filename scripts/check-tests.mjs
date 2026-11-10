@@ -12353,10 +12353,15 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "scripts/check-tests.mjs", symbol: "export function auditFixedTemporaryPaths(files, readSource" },
       { file: "native/darwin/tests/support/temporary_folder.m", symbol: "NSString *temporaryFolder(NSString *prefix) {" },
+      { file: "native/darwin/tests/support/temporary_folder.m", symbol: "void keepTemporaryFolder(NSString *folder) {" },
     ],
-    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "a test source creates its temporary folders and files in TMPDIR, not under a fixed temporary path" }],
-    expected: "A test source creates each temporary folder and file in TMPDIR, which the test runner removes with the process folder, and the test inventory check refuses a mkdtemp or mkstemp template under /tmp, /private/tmp or /var/folders and a creation call whose folder is such a path.",
-    levels: ["unit"],
+    tests: [
+      { file: "scripts/test/check-tests.test.mjs", id: "a test source creates its temporary folders and files in TMPDIR, not under a fixed temporary path" },
+      { file: "native/darwin/tests/temporary_folder_test.m", id: "the exit moves a kept folder with its files into NATIVE_TEST_EVIDENCE and names it" },
+      { file: "native/darwin/tests/temporary_folder_test.m", id: "a process without NATIVE_TEST_EVIDENCE removes its kept folder and fails" },
+    ],
+    expected: "A test source creates each temporary folder and file in TMPDIR, which the test runner removes with the process folder, and the test inventory check refuses a mkdtemp or mkstemp template under /tmp, /private/tmp or /var/folders and a creation call whose folder is such a path. A native check keeps the folders of the evidence of its failure with keepTemporaryFolder, which moves them at exit into NATIVE_TEST_EVIDENCE, target/native-test-evidence by default, and a process without it removes the kept folder and fails.",
+    levels: ["unit", "native"],
   },
   {
     id: "F316",
