@@ -1125,20 +1125,46 @@ type replacement struct {
 // (docs/spec/persistent-services.md#updates). A sidecar without a running service of another version is refused.
 func (c *Sidecars) Replace(ctx context.Context, name string) error {
 	c.mu.Lock()
+	process, err := c.reserveReplacementLocked(name)
+	c.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	return c.runReplacement(ctx, name, process)
+}
+
+// reserveReplacementLocked records the replacement of the persistent service of the sidecar name, which a replacement that
+// is already recorded or a service that is not outdated refuses, and returns its process. The caller holds c.mu.
+func (c *Sidecars) reserveReplacementLocked(name string) (*sidecar, error) {
 	process, running := c.running[name]
 	if c.stopped || !running || !c.outdated(process) {
-		c.mu.Unlock()
-		return fmt.Errorf("sidecar %s: no running service of another version than the installed one", name)
+		return nil, fmt.Errorf("sidecar %s: no running service of another version than the installed one", name)
 	}
 	if _, replacing := c.replacing[name]; replacing {
-		c.mu.Unlock()
-		return fmt.Errorf("sidecar %s: a replacement is running", name)
+		return nil, fmt.Errorf("sidecar %s: a replacement is running", name)
 	}
 	c.declarations.RLock()
 	installed := c.installedLocked(name)
 	c.declarations.RUnlock()
 	c.replacing[name] = replacement{running: process.version, installed: installed, pid: process.servicePID}
-	c.mu.Unlock()
+	return process, nil
+}
+
+// Replacing returns the sidecars whose replacement is recorded, sorted by name. A call that replaces records each replacement
+// that it decides before it returns.
+func (c *Sidecars) Replacing() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	names := make([]string, 0, len(c.replacing))
+	for name := range c.replacing {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// runReplacement closes the owner of the recorded replacement of name and its connection; a failed close drops the record.
+func (c *Sidecars) runReplacement(ctx context.Context, name string, process *sidecar) error {
 	if err := c.closePersistentOwner(process, ctx, true); err != nil {
 		c.mu.Lock()
 		delete(c.replacing, name)
@@ -1150,18 +1176,26 @@ func (c *Sidecars) Replace(ctx context.Context, name string) error {
 
 // replaceIdle replaces each outdated service that no open surface of this application and no project layout holds. Before the
 // first list of the layouts the host does not know what they hold, so it replaces nothing.
+// It records each replacement that it decides before it returns, so the caller that ran it can read what it decided
+// (Replacing), and the replacement runs on its own routine.
 func (c *Sidecars) replaceIdle() {
 	for _, item := range c.Outdated() {
 		c.mu.Lock()
 		_, busy := c.replacing[item.Sidecar]
 		known := c.layout != nil
-		c.mu.Unlock()
 		if item.Sessions != 0 || busy || !known {
+			c.mu.Unlock()
 			continue
 		}
 		name := item.Sidecar
+		process, err := c.reserveReplacementLocked(name)
+		c.mu.Unlock()
+		if err != nil {
+			LogError("replace", err)
+			continue
+		}
 		routine.Go("sidecar-replace", func() {
-			if err := c.Replace(context.Background(), name); err != nil {
+			if err := c.runReplacement(context.Background(), name, process); err != nil {
 				LogError("replace", err)
 			}
 		})

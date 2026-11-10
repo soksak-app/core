@@ -1244,6 +1244,16 @@ pub(crate) fn unconnected_socket() -> PersistentSocket {
 }
 /// Receives the result of the service for every close and shutdown request.
 type ReplyWaiters = Arc<Mutex<HashMap<String, SyncSender<Result<(), String>>>>>;
+/// The handles of the connection of a recorded replacement: the outbox, the waiters of close-owner and shutdown,
+/// whether the connection runs, whether its owner closed, and the socket.
+type ReplaceHandles = (
+    SyncSender<Outgoing>,
+    ReplyWaiters,
+    ReplyWaiters,
+    Arc<AtomicBool>,
+    Arc<Mutex<bool>>,
+    PersistentSocket,
+);
 
 /// A check hook called with the name of a persistent service that retain has started.
 type RetainHook = Box<dyn Fn(&str) + Send + Sync>;
@@ -2381,7 +2391,7 @@ impl<O: Owner> Sidecars<O> {
     /// the installed executable through the creation path and notifies the surfaces that sent to the sidecar
     /// (docs/spec/persistent-services.md#updates). A sidecar without a running service of another version is refused.
     pub fn replace(&self, name: &str) -> Result<(), String> {
-        let (outbox, close_waiters, shutdown_waiters, connected, owner_closed, socket) = {
+        let handles = {
             let mut state = self
                 .core
                 .state
@@ -2389,44 +2399,74 @@ impl<O: Owner> Sidecars<O> {
                 // default: a lock that a panicking thread poisoned still holds the sidecar state, which the replacement
                 // amends; the panic hook records the panic.
                 .unwrap_or_else(PoisonError::into_inner);
-            let refused = || {
-                format!(
-                    "sidecar {name}: no running service of another version than the installed one"
-                )
-            };
-            if state.stopped {
-                return Err(refused());
-            }
-            let process = state.running.get(name).ok_or_else(refused)?;
-            if !is_outdated(&self.core, name, process) {
-                return Err(refused());
-            }
-            let Some(connection) = process.persistent.as_ref() else {
-                return Err(refused());
-            };
-            let handles = (
-                process.outbox.clone(),
-                Arc::clone(&connection.close_waiters),
-                Arc::clone(&connection.shutdown_waiters),
-                Arc::clone(&connection.connected),
-                Arc::clone(&connection.owner_closed),
-                Arc::clone(&connection.socket),
-            );
-            let running = connection.version.clone();
-            let service_pid = connection.service_pid;
-            if state.replacing.contains_key(name) {
-                return Err(format!("sidecar {name}: a replacement is running"));
-            }
-            state.replacing.insert(
-                name.to_string(),
-                Replacement {
-                    running,
-                    installed: self.core.installed(name),
-                    pid: service_pid,
-                },
-            );
-            handles
+            self.reserve_replacement(&mut state, name)?
         };
+        self.run_replacement(name, handles)
+    }
+
+    /// The sidecars whose replacement is recorded, sorted by name. A call that replaces records each replacement that
+    /// it decides before it returns.
+    pub fn replacing(&self) -> Vec<String> {
+        let state = self
+            .core
+            .state
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the sidecar state, which is only read; the
+            // panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner);
+        let mut names: Vec<String> = state.replacing.keys().cloned().collect();
+        names.sort();
+        names
+    }
+
+    /// Records the replacement of the persistent service of the sidecar name, which a replacement that is already
+    /// recorded or a service that is not outdated refuses, and returns the handles of its connection. The caller holds
+    /// the state lock.
+    fn reserve_replacement(
+        &self,
+        state: &mut State<O>,
+        name: &str,
+    ) -> Result<ReplaceHandles, String> {
+        let refused = || {
+            format!("sidecar {name}: no running service of another version than the installed one")
+        };
+        if state.stopped {
+            return Err(refused());
+        }
+        let process = state.running.get(name).ok_or_else(refused)?;
+        if !is_outdated(&self.core, name, process) {
+            return Err(refused());
+        }
+        let Some(connection) = process.persistent.as_ref() else {
+            return Err(refused());
+        };
+        let handles = (
+            process.outbox.clone(),
+            Arc::clone(&connection.close_waiters),
+            Arc::clone(&connection.shutdown_waiters),
+            Arc::clone(&connection.connected),
+            Arc::clone(&connection.owner_closed),
+            Arc::clone(&connection.socket),
+        );
+        let running = connection.version.clone();
+        let service_pid = connection.service_pid;
+        if state.replacing.contains_key(name) {
+            return Err(format!("sidecar {name}: a replacement is running"));
+        }
+        state.replacing.insert(
+            name.to_string(),
+            Replacement {
+                running,
+                installed: self.core.installed(name),
+                pid: service_pid,
+            },
+        );
+        Ok(handles)
+    }
+
+    /// Closes the owner of the recorded replacement of name and its connection; a failed close drops the record.
+    fn run_replacement(&self, name: &str, handles: ReplaceHandles) -> Result<(), String> {
+        let (outbox, close_waiters, shutdown_waiters, connected, owner_closed, socket) = handles;
         static REPLACEMENTS: AtomicU64 = AtomicU64::new(0);
         let prefix = format!(
             "{}-replace-{}",
@@ -2479,26 +2519,31 @@ impl<O: Owner> Sidecars<O> {
         O: 'static,
     {
         for item in self.outdated() {
-            let (busy, known) = {
-                let state = self
+            let reserved = {
+                let mut state = self
                     .core
                     .state
                     .lock()
-                    // default: a lock that a panicking thread poisoned still holds the sidecar state, which is only
-                    // read; the panic hook records the panic.
+                    // default: a lock that a panicking thread poisoned still holds the sidecar state, which the call
+                    // amends; the panic hook records the panic.
                     .unwrap_or_else(PoisonError::into_inner);
-                (
-                    state.replacing.contains_key(&item.sidecar),
-                    state.layout.is_some(),
-                )
+                let busy = state.replacing.contains_key(&item.sidecar);
+                if item.sessions != 0 || busy || state.layout.is_none() {
+                    continue;
+                }
+                self.reserve_replacement(&mut state, &item.sidecar)
             };
-            if item.sessions != 0 || busy || !known {
-                continue;
-            }
+            let handles = match reserved {
+                Ok(handles) => handles,
+                Err(error) => {
+                    log_error("replace", error);
+                    continue;
+                }
+            };
             let core = Arc::clone(&self.core);
             crate::routine::spawn_named("sidecar-replace", move || {
                 let sidecars = Sidecars { core };
-                if let Err(error) = sidecars.replace(&item.sidecar) {
+                if let Err(error) = sidecars.run_replacement(&item.sidecar, handles) {
                     log_error("replace", error);
                 }
             });
