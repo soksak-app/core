@@ -16,8 +16,8 @@ use std::time::Duration;
 use super::DocumentViewportMarker;
 use super::{
     ClipboardValue, CoreRootHost, CoreRootResolver, DOMOverlay, Delivery, DocumentOptions, Frame,
-    Handle, Hit, ImagePresentation, ImageReleased, Insets, Key, Listener, NativeEventWait,
-    PersistentStream, Platform, Pointer, ProcessFootprint, Raster, WindowOverlay,
+    FullscreenResult, Handle, Hit, ImagePresentation, ImageReleased, Insets, Key, Listener,
+    NativeEventWait, PersistentStream, Platform, Pointer, ProcessFootprint, Raster, WindowOverlay,
 };
 
 #[cfg(feature = "diagnostics")]
@@ -93,7 +93,12 @@ impl Platform for Windows {
         unsupported::end_responder_observation(observation)
     }
 
-    fn fullscreen(&self, window: Handle, on: bool, done: Box<dyn Fn()>) -> Result<(), String> {
+    fn fullscreen(
+        &self,
+        window: Handle,
+        on: bool,
+        done: Box<dyn Fn(FullscreenResult, String)>,
+    ) -> Result<(), String> {
         unsupported::fullscreen(window, on, done)
     }
     fn titlebar_height(&self, window: Handle) -> Result<f64, String> {

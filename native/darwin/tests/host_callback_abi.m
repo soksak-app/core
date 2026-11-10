@@ -56,7 +56,7 @@ int sp_test_callback_run(void) {
     sp_host_callback_quit_request(-37, text);
     sp_host_callback_native_ui_run(token);
     sp_host_callback_native_responder_changed(token);
-    sp_host_callback_native_fullscreen_done(token);
+    sp_host_callback_native_fullscreen_done(token, -37, text);
     if (sp_host_callback_surface_hit(token, &context) != -51) return 1;
     sp_host_callback_surface_point(token, -37, -12.5, -12.5);
     sp_host_callback_input_delivered(token, -37, &held);

@@ -1667,9 +1667,10 @@ func (s *Surfaces) hit(x, y float64) (map[string]any, error) {
 	}
 }
 
-// fullscreen switches the window to full screen or back and returns after the transition ends, with the native result: a refusal
-// is 1006, the close of the window is 1003 and a started transition that did not end is 1005, each with the native message. macOS
-// ignores a request during a transition, so the native code continues the handling after that transition ends.
+// fullscreen switches the window to full screen or back and returns once with the native result: the end of the transition, a
+// refusal with 1006, the close of the window with 1003 and the failure of a started transition with 1005, each with the native
+// message. It has no time limit, because the native change answers every request by one of these events. macOS ignores a request
+// during a transition, so the native code continues the handling after that transition ends.
 func (s *Surfaces) fullscreen(on bool) error {
 	type ended struct {
 		result  platform.FullscreenResult
@@ -1682,21 +1683,16 @@ func (s *Surfaces) fullscreen(on bool) error {
 	if err != nil {
 		return err
 	}
-	// The native change does not report every refusal yet, so the limit stays until it does.
-	select {
-	case got := <-done:
-		switch got.result {
-		case platform.FullscreenDone:
-			return nil
-		case platform.FullscreenRefused:
-			return rpcError(codeInactive, "%s", got.message)
-		case platform.FullscreenClosed:
-			return rpcError(codeNoWindow, "%s", got.message)
-		default:
-			return rpcError(codeTimeout, "%s", got.message)
-		}
-	case <-time.After(pageTimeout):
-		return rpcError(codeTimeout, "the window did not change full screen within %s", pageTimeout)
+	got := <-done
+	switch got.result {
+	case platform.FullscreenDone:
+		return nil
+	case platform.FullscreenRefused:
+		return rpcError(codeInactive, "%s", got.message)
+	case platform.FullscreenClosed:
+		return rpcError(codeNoWindow, "%s", got.message)
+	default:
+		return rpcError(codeTimeout, "%s", got.message)
 	}
 }
 

@@ -229,6 +229,20 @@ pub struct FrontmostApplication {
     pub pid: i32,
 }
 
+/// How a full screen change ended. The values are those of native/darwin/src/window_fullscreen.h.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FullscreenResult {
+    /// The transition ended in the asked state, or the window was already in it.
+    Done,
+    /// The window is minimized, not shown or showing a sheet, macOS did not start the transition, or a later request
+    /// replaced the request.
+    Refused,
+    /// The window closed during the transition.
+    Closed,
+    /// macOS failed a started transition.
+    Failed,
+}
+
 /// The result of delivering pointer input.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Delivery {
@@ -437,9 +451,14 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// (docs/spec/hosts.md#launch-activation). Call it on the main thread.
     fn show_window(&self, window: Handle) -> Result<(), String>;
     fn set_main_appearance(&self, view: &PlatformWebview, dark: bool) -> Result<(), String>;
-    /// Changes the window to full screen or back, and calls done when the transition ends. A request that arrives
-    /// during a transition is handled after that transition ends.
-    fn fullscreen(&self, window: Handle, on: bool, done: Box<dyn Fn()>) -> Result<(), String>;
+    /// Changes the window to full screen or back, and calls done once on the UI thread with the result of the change and
+    /// its native message. A request that arrives during a transition is handled after that transition ends.
+    fn fullscreen(
+        &self,
+        window: Handle,
+        on: bool,
+        done: Box<dyn Fn(FullscreenResult, String)>,
+    ) -> Result<(), String>;
     /// Calls changed on the UI thread with whether the window is on screen whenever the occlusion state of the window changes. The observation ends with the
     /// window.
     fn observe_occlusion(&self, window: Handle, changed: Box<dyn Fn(bool)>) -> Result<(), String>;

@@ -2194,8 +2194,10 @@ fn reload(
     }
 }
 
-/// Changes the window to full screen or back, and returns after the transition ends. macOS ignores a request during a
-/// transition, so the native code continues to handle it after that transition ends.
+/// Changes the window to full screen or back, and returns once with the native result: the end of the transition, a
+/// refusal with 1006, the close of the window with 1003 and the failure of a started transition with 1005, each with the
+/// native message. It has no time limit, because the native change answers every request by one of these events. macOS
+/// ignores a request during a transition, so the native code continues to handle it after that transition ends.
 fn fullscreen(window: &Window, on: bool) -> Result<Value, Failure> {
     let platform = platform::current().map_err(internal)?;
     let (tx, rx) = mpsc::channel();
@@ -2203,8 +2205,8 @@ fn fullscreen(window: &Window, on: bool) -> Result<Value, Failure> {
         platform.fullscreen(
             handle,
             on,
-            Box::new(move || {
-                if tx.send(()).is_err() {
+            Box::new(move |result, message| {
+                if tx.send((result, message)).is_err() {
                     crate::application_log::log_info(
                         "exposure",
                         "fullscreen completion arrived after its request ended",
@@ -2214,14 +2216,30 @@ fn fullscreen(window: &Window, on: bool) -> Result<Value, Failure> {
         )
     })
     .map_err(native_failure(window.label(), -32603))?;
-    match rx.recv_timeout(TIMEOUT) {
-        Ok(()) => Ok(Value::Null),
-        Err(_) => Err(Failure::new(
-            TIMED_OUT,
-            format!("the window did not change full screen within {TIMEOUT:?}"),
-        )),
+    match rx.recv() {
+        Ok((result, message)) => fullscreen_answer(result, message),
+        // default: the native side releases the answer of a window that it no longer owns.
+        Err(_) => Err(Failure::new(MISSING_DOCUMENT, "the window closed")),
     }
 }
+
+/// The answer of host.window.fullscreen for the native result of the change: a refusal is 1006, the close of the window
+/// is 1003 and the failure of a started transition is 1005, each with the native message.
+fn fullscreen_answer(
+    result: platform::FullscreenResult,
+    message: String,
+) -> Result<Value, Failure> {
+    match result {
+        platform::FullscreenResult::Done => Ok(Value::Null),
+        platform::FullscreenResult::Refused => Err(Failure::new(NOT_ACTIVE, message)),
+        platform::FullscreenResult::Closed => Err(Failure::new(MISSING_DOCUMENT, message)),
+        platform::FullscreenResult::Failed => Err(Failure::new(TIMED_OUT, message)),
+    }
+}
+
+#[cfg(test)]
+#[path = "exposure_fullscreen_test.rs"]
+mod fullscreen_tests;
 
 /// Asks the settled wait wait of the platform for the window of frontend, with the block of the settled presentation of
 /// frontend. Call it on the main thread.

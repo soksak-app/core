@@ -263,7 +263,10 @@ static void nativeWindowStartPageOnMain(void *window, uint64_t ticket, double he
 }
 
 static bool nativeWindowFullscreenOnMain(void *handle, bool on, uintptr_t callback) {
-    return sp_window_fullscreen(handle, on, ^{ hostRunOnWorker(^{ sp_host_callback_native_fullscreen_done(callback); }); });
+    // The message of a result is a static string, so it outlives the turn of the worker.
+    return sp_window_fullscreen(handle, on, ^(int result, const char *message) {
+        hostRunOnWorker(^{ sp_host_callback_native_fullscreen_done(callback, result, (char *)message); });
+    });
 }
 
 static void *nativeWindowObserveResponderOnMain(void *handle, uintptr_t callback) {
