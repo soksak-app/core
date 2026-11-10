@@ -1,5 +1,6 @@
 #import "temporary_folder.h"
 #import "document_view.h"
+#import "event_wait.h"
 #include <pthread.h>
 #include <errno.h>
 #include <fts.h>
@@ -62,6 +63,7 @@ typedef struct {
 static void recordStoreEnd(void *context, const char *error) {
     StoreEnd *end = context;
     end->ended = YES;
+    eventWake();
     if (!error) return;
     end->failed = YES;
     fprintf(stderr, "FAIL: the data store of %s does not end: %s\n", end->directory, error);
@@ -89,17 +91,10 @@ static BOOL endDocumentStores(void) {
     for (size_t i = 0; i < count; i++) sp_document_store_close(ends[i].directory, recordStoreEnd, &ends[i]);
     BOOL ended = YES;
     @autoreleasepool {
-        NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:20];
         for (size_t i = 0; i < count; i++) {
-            while (!ends[i].ended && deadline.timeIntervalSinceNow > 0) {
-                [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-            }
-            // A store that has not ended keeps a pointer to this array, so the process ends here.
-            if (!ends[i].ended) {
-                fprintf(stderr, "FAIL: the data store of %s does not end within 20 seconds\n", ends[i].directory);
-                _exit(1);
-            }
-            if (ends[i].failed) ended = NO;
+            StoreEnd *end = &ends[i];
+            eventWait([NSString stringWithFormat:@"the end of the data store of %s", end->directory], ^BOOL { return end->ended; });
+            if (end->failed) ended = NO;
         }
     }
     for (size_t i = 0; i < count; i++) free(ends[i].directory);
