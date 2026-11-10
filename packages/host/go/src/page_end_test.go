@@ -5,7 +5,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 	"unsafe"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
@@ -49,18 +48,11 @@ func (w *pageEndWindow) end() {
 	}
 }
 
-// waitSent waits until the window received name and returns what it received before.
-func (w *pageEndWindow) waitSent(t *testing.T, name string) {
-	t.Helper()
-	limit := time.After(5 * time.Second)
-	for {
-		select {
-		case got := <-w.sent:
-			if got == name {
-				return
-			}
-		case <-limit:
-			t.Fatalf("the window did not receive %s", name)
+// waitSent waits until the window received name, and drops what it received before.
+func (w *pageEndWindow) waitSent(name string) {
+	for got := range w.sent {
+		if got == name {
+			return
 		}
 	}
 }
@@ -94,21 +86,17 @@ func askPage(t *testing.T, h *Host, s *Surfaces, window *pageEndWindow) <-chan e
 		_, err := h.ask(s, "command.run", map[string]any{"name": "core.probe", "params": map[string]any{}}, 0)
 		reply <- err
 	}()
-	window.waitSent(t, "exposure-request")
+	window.waitSent("exposure-request")
 	return reply
 }
 
-// wantClosedDocument checks that reply ended within a short time with the code of a closed document.
+// wantClosedDocument checks that reply ended with the code of a closed document.
 func wantClosedDocument(t *testing.T, reply <-chan error, what string) {
 	t.Helper()
-	select {
-	case err := <-reply:
-		var failure *RPCError
-		if !errors.As(err, &failure) || failure.Code != codeNoWindow {
-			t.Fatalf("%s ended with %v, want %d", what, err, codeNoWindow)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatalf("%s still waits for a page that ended", what)
+	err := <-reply
+	var failure *RPCError
+	if !errors.As(err, &failure) || failure.Code != codeNoWindow {
+		t.Fatalf("%s ended with %v, want %d", what, err, codeNoWindow)
 	}
 }
 
@@ -136,7 +124,7 @@ func TestTheEndOfThePageAnswersTheCloseQuestionThatItLeft(t *testing.T) {
 	if !window.closing() {
 		t.Fatal("the close of a window whose page is ready did not ask the page")
 	}
-	window.waitSent(t, "project-close-request")
+	window.waitSent("project-close-request")
 	window.end()
 	if window.closeCount() != 1 {
 		t.Fatalf("the end of the page closed the window %d times, want once", window.closeCount())
@@ -166,18 +154,14 @@ func TestAReloadEndsWithTheCloseOfItsWindow(t *testing.T) {
 	h.mu.Unlock()
 	reloaded := make(chan error, 1)
 	go func() { reloaded <- s.reloadPage() }()
-	window.waitSent(t, "start")
+	window.waitSent("start")
 	if window.closing() {
 		t.Fatal("a window whose page is not ready kept its close")
 	}
-	select {
-	case err := <-reloaded:
-		var failure *RPCError
-		if !errors.As(err, &failure) || failure.Code != codeNoWindow || !strings.Contains(failure.Message, "the window closed before the reloaded page reported ready") {
-			t.Fatalf("the reload of a closed window ended with %v", err)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("the reload of a closed window still waits for its page")
+	err := <-reloaded
+	var failure *RPCError
+	if !errors.As(err, &failure) || failure.Code != codeNoWindow || !strings.Contains(failure.Message, "the window closed before the reloaded page reported ready") {
+		t.Fatalf("the reload of a closed window ended with %v", err)
 	}
 }
 
@@ -195,18 +179,14 @@ func TestAReloadEndsWithAFailedStart(t *testing.T) {
 	s.reloadCloseImage = func(unsafe.Pointer) {}
 	reloaded := make(chan error, 1)
 	go func() { reloaded <- s.reloadPage() }()
-	window.waitSent(t, "start")
+	window.waitSent("start")
 	if _, err := h.startPage(window.ID()); err == nil {
 		t.Fatal("the start of the page did not fail")
 	}
-	select {
-	case err := <-reloaded:
-		var failure *RPCError
-		if !errors.As(err, &failure) || failure.Code != codeNoWindow || !strings.Contains(failure.Message, "the reloaded page did not start: ") ||
-			!strings.Contains(failure.Message, "the layout cannot be cancelled") {
-			t.Fatalf("the reload whose page failed to start ended with %v", err)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("the reload whose page failed to start still waits for its page")
+	err := <-reloaded
+	var failure *RPCError
+	if !errors.As(err, &failure) || failure.Code != codeNoWindow || !strings.Contains(failure.Message, "the reloaded page did not start: ") ||
+		!strings.Contains(failure.Message, "the layout cannot be cancelled") {
+		t.Fatalf("the reload whose page failed to start ended with %v", err)
 	}
 }

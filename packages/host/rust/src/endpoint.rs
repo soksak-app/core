@@ -241,10 +241,6 @@ impl Drop for ConnectionWatch {
 pub struct ReplyScope(Arc<Mutex<ReplyState>>);
 
 impl ReplyScope {
-    pub(crate) fn pending() -> (Self, ReplyCompletion) {
-        Self::pending_on(ConnectionEnd::default())
-    }
-
     /// The scope of a request of the connection whose end is connection.
     pub(crate) fn pending_on(connection: ConnectionEnd) -> (Self, ReplyCompletion) {
         let scope = Self(Arc::new(Mutex::new(ReplyState {

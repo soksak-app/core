@@ -1041,7 +1041,7 @@ fn request_surface(
 /// calls, and a call that waits for an answer of the page gets none, because the page sends no call after the reload
 /// request (docs/spec/native-host.md#page-reload). The requests end after the event, so a page that receives the failure
 /// already sends no report of it.
-fn ask_page_to_reload(
+pub(crate) fn ask_page_to_reload(
     relay: &Relay,
     reloading: &AtomicBool,
     main: &str,
@@ -1054,13 +1054,13 @@ fn ask_page_to_reload(
 
 /// Ends every request to the main page of the window main and to its surface documents with 1003, and refuses the later
 /// requests to those documents until the next page starts (docs/spec/hosts.md#process-lifecycle).
-fn end_page_requests(relay: &Relay, reloading: &AtomicBool, main: &str) {
+pub(crate) fn end_page_requests(relay: &Relay, reloading: &AtomicBool, main: &str) {
     reloading.store(true, Ordering::SeqCst);
     let surfaces = format!("surface-{main}-");
     relay.abandon_matching(|target| target == main || target.starts_with(&surfaces));
 }
 
-/// Ends the requests to the main page of the window and to its surface documents when the process of the page ended.
+/// Ends the requests to the main page of the window and to its surface documents (`end_page_requests`).
 pub(crate) fn page_ended(window: &Window, data: &WindowData) {
     end_page_requests(
         &window.state::<Exposure>().relay,
@@ -2206,70 +2206,88 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
 /// the screen until the new page first draws visible content, and the cleanup of the previous page is done by the start
 /// document request of the new page (docs/spec/native-host.md#page-start).
 fn reload(host: &Host, window: &Window) -> Result<Value, Failure> {
-    let ready = window_data(window)
-        .map_err(internal)?
-        .ready
-        .load(Ordering::Relaxed);
+    let data = window_data(window).map_err(internal)?;
+    let ready = data.ready.load(Ordering::Relaxed);
     if ready {
         let mut flush = Map::new();
         flush.insert("name".into(), Value::from("core.projects.flush"));
         flush.insert("params".into(), Value::Object(Map::new()));
         host.page(window, "command.run", flush, TIMEOUT)?;
     }
-    let (tx, rx) = mpsc::channel();
-    let wait = RELOAD_WAITS.fetch_add(1, Ordering::Relaxed);
-    window_data(window)
-        .map_err(internal)?
-        .readied
-        .lock()
-        // default: a lock that a panicking thread poisoned still holds the readiness senders, which this call fills;
-        // the panic hook records the panic.
-        .unwrap_or_else(PoisonError::into_inner)
-        .push((wait, tx));
-    if ready {
-        // A ready page reloads itself after all the calls it sent have received their answers. If the host reloaded it,
-        // the response being written at that moment would be lost (docs/spec/native-host.md#page-reload).
-        ask_page_to_reload(
-            &window.state::<Exposure>().relay,
-            &window_data(window).map_err(internal)?.page_reloading,
-            window.label(),
-            || {
-                crate::windows::emit_window(window, "page-reload", serde_json::json!({}))
-                    .map_err(|error| error.to_string())
-            },
-        )
-        .map_err(internal)?;
-        // The event ended the page, so the rest that it owed ends in the same turn.
-        let data = window_data(window).map_err(internal)?;
-        crate::windows::page_left(window, &data).map_err(internal)?;
-    } else {
-        let target = window.clone();
-        on_main(window, move || {
-            target.start_workbench().map_err(|error| error.to_string())
-        })
-        .map_err(internal)?;
-    }
-    match rx.recv_timeout(TIMEOUT) {
-        Ok(Ok(())) => Ok(Value::Null),
-        Ok(Err(ended)) => Err(Failure::new(MISSING_DOCUMENT, ended)),
-        Err(_) => {
-            // The reload ended, so a later ready of the window answers no ended reload.
-            if let Ok(data) = window_data(window) {
-                data.readied
-                    .lock()
-                    // default: a lock that a panicking thread poisoned still holds the reloads, from which this one is
-                    // removed; the panic hook records the panic.
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .retain(|(held, _)| *held != wait);
+    await_reload(
+        &data,
+        || {
+            if ready {
+                // A ready page reloads itself after all the calls it sent have received their answers. If the host reloaded
+                // it, the response being written at that moment would be lost (docs/spec/native-host.md#page-reload).
+                crate::windows::reload_ready_page(
+                    &window.state::<Exposure>().relay,
+                    &data,
+                    window.label(),
+                    || {
+                        crate::windows::emit_window(window, "page-reload", serde_json::json!({}))
+                            .map_err(|error| error.to_string())
+                    },
+                    || crate::surfaces::keys_page_ended(window),
+                    || crate::windows::close_window(window),
+                )
+                .map_err(internal)
+            } else {
+                let target = window.clone();
+                on_main(window, move || {
+                    target.start_workbench().map_err(|error| error.to_string())
+                })
+                .map_err(internal)
             }
-            Err(Failure::new(
+        },
+        || {
+            Failure::new(
                 TIMED_OUT,
                 crate::running_calls::reload_timeout_text(
                     TIMEOUT,
                     &crate::running_calls::RUNNING_CALLS
                         .of(window.label(), std::time::Instant::now()),
                 ),
-            ))
+            )
+        },
+    )
+}
+
+/// Holds a reload of the window data until its new page reports ready: the reload takes its place among the reloads of the
+/// window before begin asks for the new page, so an end that comes in the turn of begin reaches it. The ready of the page
+/// answers it, and the close of the window and a start of the new page that fails end it with 1003 (`end_reloads`).
+pub(crate) fn await_reload(
+    data: &WindowData,
+    begin: impl FnOnce() -> Result<(), Failure>,
+    timed_out: impl FnOnce() -> Failure,
+) -> Result<Value, Failure> {
+    let (tx, rx) = mpsc::channel();
+    let wait = RELOAD_WAITS.fetch_add(1, Ordering::Relaxed);
+    data.readied
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the readiness senders, which this call fills;
+        // the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .push((wait, tx));
+    // The reload ended, so a later ready of the window answers no ended reload.
+    let forget = || {
+        data.readied
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the reloads, from which this one is removed;
+            // the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .retain(|(held, _)| *held != wait);
+    };
+    if let Err(failure) = begin() {
+        forget();
+        return Err(failure);
+    }
+    match rx.recv_timeout(TIMEOUT) {
+        Ok(Ok(())) => Ok(Value::Null),
+        Ok(Err(ended)) => Err(Failure::new(MISSING_DOCUMENT, ended)),
+        Err(_) => {
+            forget();
+            Err(timed_out())
         }
     }
 }

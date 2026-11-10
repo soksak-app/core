@@ -4,7 +4,7 @@ use std::sync::mpsc;
 // contract: endpoint.response.follows-the-socket-write
 #[test]
 fn reply_scope_completion_and_late_registration_run_once_outside_the_scope_lock() {
-    let (scope, mut completion) = ReplyScope::pending();
+    let (scope, mut completion) = ReplyScope::pending_on(ConnectionEnd::default());
     let (tx, rx) = mpsc::channel();
     let nested = scope.clone();
     scope.after_response(move |outcome| {
@@ -23,7 +23,7 @@ fn reply_scope_completion_and_late_registration_run_once_outside_the_scope_lock(
 // contract: endpoint.response.reports-its-outcome
 #[test]
 fn dropping_a_scope_clone_does_not_complete_but_abandoning_its_answer_does() {
-    let (scope, completion) = ReplyScope::pending();
+    let (scope, completion) = ReplyScope::pending_on(ConnectionEnd::default());
     let (tx, rx) = mpsc::channel();
     scope.after_response(move |outcome| tx.send(outcome).unwrap());
     drop(scope.clone());
@@ -63,7 +63,7 @@ impl Connection for FailedFlush {
 #[test]
 fn a_failed_response_flush_releases_intent_with_failure_after_unlocking_writer() {
     let writer: Arc<Mutex<Box<dyn Connection>>> = Arc::new(Mutex::new(Box::new(FailedFlush)));
-    let (scope, completion) = ReplyScope::pending();
+    let (scope, completion) = ReplyScope::pending_on(ConnectionEnd::default());
     let (tx, rx) = mpsc::channel();
     let observed = writer.clone();
     scope.after_response(move |outcome| {
@@ -89,7 +89,7 @@ fn a_failed_response_flush_releases_intent_with_failure_after_unlocking_writer()
 #[test]
 fn a_notification_releases_intent_without_claiming_a_response_was_written() {
     let writer: Arc<Mutex<Box<dyn Connection>>> = Arc::new(Mutex::new(Box::new(FailedFlush)));
-    let (scope, completion) = ReplyScope::pending();
+    let (scope, completion) = ReplyScope::pending_on(ConnectionEnd::default());
     let (tx, rx) = mpsc::channel();
     scope.after_response(move |outcome| tx.send(outcome).unwrap());
     Answer {

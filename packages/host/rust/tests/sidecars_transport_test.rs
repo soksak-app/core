@@ -1984,6 +1984,7 @@ fn persistent_start_does_not_delay_other_sidecars() {
 // The stop waits for no start: a stop during the start of a service returns before the service answers its hello, the
 // send that waited for that start fails as a send after the stop, and the start that ends later closes the connection that it
 // opened (docs/spec/sidecars.md#declaration-and-startup).
+// contract: sidecars.stop.waits-for-no-start
 #[test]
 fn the_stop_does_not_wait_for_a_start() {
     let executable_directory = folder::Folder::new();
