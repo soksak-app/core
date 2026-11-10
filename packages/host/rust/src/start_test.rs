@@ -132,3 +132,34 @@ fn a_page_start_ends_the_waits_the_layout_and_the_key_wait_of_the_earlier_page()
         Err("abandon failed; ending the key wait: no window".to_string())
     );
 }
+
+// WebKit asks for the start document on the main thread, and its title bar may wait for a later turn of that thread, so the
+// document is built on a thread of its own and answered when it is built (docs/spec/native-host.md#page-start).
+#[test]
+fn the_start_document_is_built_off_the_thread_that_asks_for_it() {
+    let (answered, answer) = mpsc::channel();
+    let (later_turn, turn) = mpsc::channel::<()>();
+    let asking = std::thread::current().id();
+    super::serve_async(
+        "soksak://page",
+        super::CORE.to_string(),
+        super::START_DOCUMENT_PATH.to_string(),
+        "main".to_string(),
+        move |_| {
+            // The document waits for a turn that the asking thread runs only after the request returned.
+            turn.recv().map_err(|error| error.to_string())?;
+            Ok(b"{}".to_vec())
+        },
+        move |response| {
+            answered
+                .send((std::thread::current().id(), response.status().as_u16(), response.into_body()))
+                .unwrap();
+        },
+    );
+    later_turn.send(()).unwrap();
+    let (thread, status, body) = answer
+        .recv_timeout(Duration::from_secs(5))
+        .expect("the start document was not answered");
+    assert_ne!(thread, asking, "the start document was built on the thread that asked for it");
+    assert_eq!((status, body), (200, b"{}".to_vec()));
+}

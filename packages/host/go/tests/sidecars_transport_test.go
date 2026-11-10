@@ -1611,6 +1611,76 @@ func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 	}
 }
 
+// The stop waits for no start: a stop during the start of a service returns before the service answers its hello, the send that
+// waited for that start fails as a send after the stop, and the start that ends later closes the connection that it opened
+// (docs/spec/sidecars.md#declaration-and-startup).
+func TestTheStopDoesNotWaitForAStart(t *testing.T) {
+	root := t.TempDir()
+	socket := filepath.Join(support.SocketParent(t), "s.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	writeHarnessEndpoint(t, root, socket)
+	helloSeen := make(chan struct{})
+	release := make(chan struct{})
+	ended := make(chan struct{})
+	go func() {
+		defer close(ended)
+		connection, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer connection.Close()
+		reader := bufio.NewReader(connection)
+		if _, err := reader.ReadBytes('\n'); err != nil {
+			return
+		}
+		close(helloSeen)
+		<-release
+		_, _ = io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n")
+		// The start that ends after the stop closes its connection, so the service reads to the end.
+		for {
+			if _, err := reader.ReadBytes('\n'); err != nil {
+				return
+			}
+		}
+	}()
+	sidecars, err := NewSidecars(support.HarnessDeclarations(t.TempDir()), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sidecars.HelloTimeout = 30 * time.Second
+	sidecars.StopTimeout = 100 * time.Millisecond
+	owner := &support.HarnessOwner{Root: "/stop", Seen: make(chan SidecarMessage, 1)}
+	started := make(chan error, 1)
+	go func() {
+		started <- sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`))
+	}()
+	<-helloSeen
+	stopped := make(chan struct{})
+	go func() {
+		sidecars.Stop()
+		close(stopped)
+	}()
+	select {
+	case <-stopped:
+		close(release)
+	case <-time.After(5 * time.Second):
+		close(release)
+		t.Fatal("the stop waited for the start of a service that had not answered its hello")
+	}
+	if err := <-started; err == nil || err.Error() != "sidecars are stopped" {
+		t.Fatalf("the send that waited for the start = %v, want the failure of a send after the stop", err)
+	}
+	select {
+	case <-ended:
+	case <-time.After(30 * time.Second):
+		t.Fatal("the start that ended after the stop left its connection open")
+	}
+}
+
 // A start to a service that received hello and does not reply fails after 5 seconds with a fixed sentence.
 // contract: sidecars-transport.hello.times-out
 func TestPersistentStartFailsWhenHelloIsNotAnswered(t *testing.T) {

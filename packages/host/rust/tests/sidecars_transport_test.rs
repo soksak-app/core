@@ -1981,6 +1981,90 @@ fn persistent_start_does_not_delay_other_sidecars() {
     server.join().unwrap();
 }
 
+// The stop waits for no start: a stop during the start of a service returns before the service answers its hello, the
+// send that waited for that start fails as a send after the stop, and the start that ends later closes the connection that it
+// opened (docs/spec/sidecars.md#declaration-and-startup).
+#[test]
+fn the_stop_does_not_wait_for_a_start() {
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
+    let service_directory = config_directory.path().join("services/echo");
+    std::fs::create_dir_all(&service_directory).unwrap();
+    let socket_path = service_directory.join("stop.sock");
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    let endpoint = serde_json::json!({
+        "protocol": 1,
+        "pid": std::process::id(),
+        "socket": socket_path,
+        "token": "stop-token"
+    });
+    std::fs::write(
+        service_directory.join("endpoint.json"),
+        serde_json::to_vec(&endpoint).unwrap(),
+    )
+    .unwrap();
+    let (hello_seen, hello_received) = channel();
+    let (release, released) = channel::<()>();
+    let (ended, connection_ended) = channel::<()>();
+    let server = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let mut hello = String::new();
+        reader.read_line(&mut hello).unwrap();
+        hello_seen.send(()).unwrap();
+        let _ = released.recv();
+        let _ = writeln!(
+            stream,
+            "{{\"operation\":\"hello\",\"protocol\":1,\"ok\":true}}"
+        );
+        // The start that ends after the stop closes its connection, so the service reads to the end.
+        let mut line = String::new();
+        while reader.read_line(&mut line).unwrap_or(0) > 0 {
+            line.clear();
+        }
+        ended.send(()).unwrap();
+    });
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
+    let mut sidecars = Sidecars::new(
+        &declare(&fixture, executable_directory.path()),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap()
+    .with_hello_timeout(Duration::from_secs(30));
+    sidecars.stop_timeout = Duration::from_millis(100);
+    let (window, _events) = owner("stop", "/projects/stop");
+    let sidecars = &sidecars;
+    let window = &window;
+    thread::scope(|scope| {
+        let start = scope.spawn(move || {
+            sidecars.send(window, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
+        });
+        hello_received.recv_timeout(STALL).unwrap();
+        let (stopped, stop_returned) = channel();
+        scope.spawn(move || {
+            sidecars.stop();
+            stopped.send(()).unwrap();
+        });
+        let returned = stop_returned.recv_timeout(Duration::from_secs(5));
+        release.send(()).unwrap();
+        assert!(
+            returned.is_ok(),
+            "the stop waited for the start of a service that had not answered its hello"
+        );
+        assert_eq!(
+            start.join().unwrap(),
+            Err("sidecars are stopped".to_string()),
+            "the send that waited for the start fails as a send after the stop"
+        );
+    });
+    connection_ended
+        .recv_timeout(STALL)
+        .expect("the start that ended after the stop left its connection open");
+    server.join().unwrap();
+}
+
 /// Sends to the sidecar and returns the result within limit. If it does not return, the check fails.
 fn send_within(
     sidecars: Sidecars<FakeOwner>,
