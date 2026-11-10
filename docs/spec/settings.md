@@ -208,6 +208,8 @@ An input and a select of the page without a rule of their own take their look fr
 
 The focus ring of such a control is the focus color of the system in the dark appearance, which the page always has, so it follows the accent color and no declaration holds it. Its other colors do not follow the system: the placeholder is the color of the stylesheet of the browser, and the magnifier and the cancel of a search are images of the system in colors of their own, whatever the color of the text is.
 
+A scroll pane of the workbench follows the scroller style of the system. Under the overlay style its scroll bars take no room. Under the classic style a pane whose content overflows takes the width of its vertical bar, the value of `scrollerWidthForControlSize:scrollerStyle:` of AppKit for the legacy style, 17 points at the regular size and 13 at the small size of a `scrollbar-width:thin` pane, from the width that lays out its content, and the same height for a horizontal bar. The web view of a page host does this. The mygo workbench does not yet: its framework draws overlay scroll bars only, so under the classic style its panes are wider than those of a page.
+
 ## Status
 
 `core.settings-modal` reports:

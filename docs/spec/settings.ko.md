@@ -208,6 +208,8 @@ theme catalog와 mode, font, menu 언어와 기본 언어, 그리고 이 설정�
 
 그런 control의 focus ring은 page가 항상 가지는 dark appearance의 시스템 focus 색이다. 그래서 accent color를 따르고 선언에 값이 없다. 다른 색은 시스템을 따르지 않는다. placeholder는 browser stylesheet의 색이고, search의 magnifier와 cancel은 text 색과 상관없이 자기 색을 가진 시스템 image다.
 
+워크벤치의 scroll pane은 시스템 scroller style을 따른다. overlay style에서는 scroll bar가 자리를 차지하지 않는다. classic style에서 content가 넘친 pane은 content를 배치하는 폭에서 세로 bar 폭을 뺀다. 그 폭은 AppKit legacy style의 `scrollerWidthForControlSize:scrollerStyle:` 값으로, regular 크기는 17 point, `scrollbar-width:thin` pane의 small 크기는 13 point다. 가로 bar는 같은 높이를 뺀다. page host의 web view는 이렇게 한다. mygo 워크벤치는 아직 하지 않는다. 그 framework는 overlay scroll bar만 그리므로 classic style에서 mygo의 pane은 page의 pane보다 넓다.
+
 ## 상태
 
 `core.settings-modal`은 다음을 보고한다.
