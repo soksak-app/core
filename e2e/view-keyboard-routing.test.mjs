@@ -39,6 +39,16 @@ async function traceEvents(s, offsets) {
   return readEvents(s.app.configDir, offsets).events;
 }
 
+// The events written after offsets once the page picker that a modal web view showed has closed. The page publishes the status of
+// the closed picker within the turn that closes it, and its traces of that turn, the modal answer and the close, leave in the batch
+// at the end of the turn (docs/spec/logging.md#writers): the status reaches the check before the records, and a flush of the host
+// writer does not wait for a batch the page has not sent, so the read waits for the record of the close.
+async function pageCloseEvents(s, offsets) {
+  await untilEventLine(s.app.configDir, offsets, (line) => line.includes(` ${PICKER_CLOSE}: `),
+    { ...reading(s.app, [PICKER_CLOSE]), ended: s.client.ended });
+  return traceEvents(s, offsets);
+}
+
 function traceCommands(events, name) {
   return events.filter((event) => event.event === REGISTRY_COMMAND && event.fields?.name === name);
 }
@@ -153,7 +163,7 @@ for (const app of MAIN_PAGE_APPS) {
       await s.request("diagnostics.modal.hold", { on: false });
       held = false;
       await s.until("core.picker", (picker) => !picker.open, "the Escape that waited did not dismiss the picker");
-      const events = await traceEvents(s, offsets);
+      const events = await pageCloseEvents(s, offsets);
       assertDeliveredKey(events, "Escape", "loading page-picker Escape");
       const reached = injectedKeyEvents(events, "Escape").map((event) => JSON.parse(event.fields.text).responder);
       assert.deepEqual(await documentKeysAfter(s, surface, before), [],
@@ -202,7 +212,7 @@ for (const app of Object.values(APPS)) {
     const before = await lastDocumentKey(s, surface);
     await s.press("Escape");
     await s.until("core.picker", (picker) => !picker.open, "native picker Escape did not close the picker");
-    const events = await traceEvents(s, offsets);
+    const events = webView ? await pageCloseEvents(s, offsets) : await traceEvents(s, offsets);
     assertDeliveredKey(events, "Escape", "native picker Escape");
     const reached = injectedKeyEvents(events, "Escape").map((event) => JSON.parse(event.fields.text).responder);
     assert.deepEqual(await documentKeysAfter(s, surface, before), [],

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { APPS, MAIN_PAGE_APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents, traceRows } from "@soksak/window-check/event-log.mjs";
 import { cardSidebar, fresh, probeSidebarSets, settingsShown } from "./fixture.mjs";
 
@@ -189,6 +189,15 @@ for (const app of Object.values(APPS)) {
     await section(s, "sidebars");
     const sets = await settingsValue(s, "sets");
     assert.ok(sets.length > 0, "the check needs a sidebar set");
+    // element.rect of a control of a native modal answers the report of the modal document, which core.modal holds
+    // (docs/spec/exposure.md), so the check waits until that report names the line and the edit button of every set. A host that
+    // draws its modal itself has no modal document and answers element.rect at once.
+    if (MAIN_PAGE_APPS.some((candidate) => candidate.name === app.name)) {
+      const reported = (modal, name) => (modal?.document?.elements ?? []).filter((item) => item.name === name).length;
+      await s.until("core.modal", (modal) => reported(modal, "core.settings-modal.set-caption") >= sets.length
+        && reported(modal, "core.settings-modal.edit") >= sets.length,
+      `the settings document did not report the line and the edit button of ${sets.length} sets`);
+    }
     for (const [index, set] of sets.entries()) {
       // The height of one line is lower than the edit button of the same row. A line folded into two or more lines is higher than the button.
       const line = await s.rect("core.settings-modal.set-caption", index);
