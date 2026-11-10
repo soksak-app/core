@@ -2064,8 +2064,13 @@ func serveReplaceService(t *testing.T, root, oldVersion, installedVersion string
 	}
 	t.Cleanup(func() { listener.Close() })
 	writeHarnessEndpoint(t, root, socket)
-	// The endpoint names a process that stands for the service and ends when the service shuts down.
-	process := exec.Command("sleep", "60")
+	// The endpoint names a process that stands for the service and ends when the service shuts down. It reads its input, whose
+	// write end the check holds, so it runs until the fixture ends it and ends with the check process also when the check is
+	// killed.
+	process := exec.Command("cat")
+	if _, err := process.StdinPipe(); err != nil {
+		t.Fatal(err)
+	}
 	if err := process.Start(); err != nil {
 		t.Fatal(err)
 	}

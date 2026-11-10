@@ -4,7 +4,6 @@ import (
 	"errors"
 	"os/exec"
 	"testing"
-	"time"
 
 	platform "github.com/soksak-app/core/packages/host/go/src/platform"
 )
@@ -21,11 +20,13 @@ func TestAZombieServiceProcessDoesNotExist(t *testing.T) {
 	if err := sleep.Process.Kill(); err != nil {
 		t.Fatalf("kill sleep failed: %v", err)
 	}
-	// Waits for it to become a zombie: the parent did not wait, so it stays in the table after it dies.
-	time.Sleep(100 * time.Millisecond)
 	current, err := platform.Current()
 	if err != nil {
 		t.Fatalf("platform failed: %v", err)
+	}
+	// The exit event makes it a zombie: the parent did not wait, so it stays in the table after it dies.
+	if ended, err := current.WaitServiceProcessEnd(sleep.Process.Pid, nil); err != nil || !ended {
+		t.Fatalf("the killed sleep did not end: ended %v, %v", ended, err)
 	}
 	exists, err := current.ServiceProcessExists(sleep.Process.Pid)
 	if err != nil {
@@ -65,10 +66,19 @@ func TestTheWaitForTheEndOfAServiceProcess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("platform failed: %v", err)
 	}
-	ending := exec.Command("sleep", "30")
-	if err := ending.Start(); err != nil {
-		t.Fatalf("start sleep failed: %v", err)
+	// The processes read their input, whose write end the check holds, so each runs until the check ends it and ends with the
+	// check process also when the check is killed.
+	cat := func() *exec.Cmd {
+		process := exec.Command("cat")
+		if _, err := process.StdinPipe(); err != nil {
+			t.Fatal(err)
+		}
+		if err := process.Start(); err != nil {
+			t.Fatalf("start cat failed: %v", err)
+		}
+		return process
 	}
+	ending := cat()
 	waited := make(chan error, 1)
 	go func() {
 		ended, err := current.WaitServiceProcessEnd(ending.Process.Pid, nil)
@@ -85,10 +95,7 @@ func TestTheWaitForTheEndOfAServiceProcess(t *testing.T) {
 		t.Fatalf("a process that ends: %v", err)
 	}
 	ending.Wait()
-	running := exec.Command("sleep", "30")
-	if err := running.Start(); err != nil {
-		t.Fatalf("start sleep failed: %v", err)
-	}
+	running := cat()
 	defer func() { running.Process.Kill(); running.Wait() }()
 	stop := make(chan struct{})
 	close(stop)

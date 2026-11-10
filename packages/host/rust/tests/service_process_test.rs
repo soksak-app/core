@@ -9,12 +9,11 @@ fn a_zombie_service_process_does_not_exist() {
         .expect("spawn sleep");
     let pid = child.id();
     child.kill().expect("kill sleep");
-    // Wait to become a zombie: the parent did not wait, so it remains in the table even after it died.
-    std::thread::sleep(std::time::Duration::from_millis(100));
-    let exists = soksak_host::platform::current()
-        .expect("platform")
-        .service_process_exists(pid)
-        .expect("inspect");
+    let platform = soksak_host::platform::current().expect("platform");
+    // The exit makes it a zombie: the parent did not wait, so it remains in the table even after it died. The wait for
+    // the exit does not reap it.
+    platform.wait_process_exit(pid).expect("wait for the exit");
+    let exists = platform.service_process_exists(pid).expect("inspect");
     assert!(!exists, "a zombie service process must not exist");
     child.wait().expect("reap sleep");
 }
