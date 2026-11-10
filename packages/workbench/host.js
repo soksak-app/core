@@ -1024,6 +1024,7 @@ export const overlay = native ? {
       }).then(undefined, (reason) => {
         if (showing !== show) return;
         this.hide();
+        // default: hide() closed the modal, so an owner without a layer of its own to close passes no refused.
         refused?.(reason);
       });
     },
