@@ -5,9 +5,9 @@
 // release; a surface that the host does not hold yet receives the keyboard after the placement that shows it, when it stands.
 // A placement ends when the host answered the keyboard call that follows it, so a command, which answers after the placement,
 // answers after the keyboard reached its target (docs/spec/exposure.md#the-keyboard-follows-the-focus-ring).
-// The host holds the input of the window from the release of a press on the workbench until a call that carries decided, so each
-// release of a left press in this document owes one decided call, sent after the handlers of the press ran, also for the same
-// target or for the workbench.
+// Each release of a left press in this document asks for one decided call, which goes out in the dispatch of the release, from what
+// the press changed, also for the same target or for the workbench: the keys of the window wait for it on the host
+// (docs/spec/native-surfaces.md#keyboard-of-a-surface).
 import { modalState, onModalState, report, surfaces } from "./host.js";
 import { emitEvent } from "./page-log.js";
 
@@ -21,11 +21,8 @@ let owed = false;
 let sent = null;
 /* The last keyboard call, fulfilled when the host answered it. */
 let flight = Promise.resolve();
-/*
- * A press released on the workbench waits for the call, which carries decided and ends the hold of the input of the window. It is
- * due once the handlers of the release ran, so no call of a handler ends the hold before the state that the press leaves.
- */
-let due = false;
+/* The targets of the keyboard calls that the host has not answered. */
+const unanswered = [];
 
 const editable = (element) => element !== null && element.matches("input, textarea, select, [contenteditable]");
 
@@ -35,27 +32,39 @@ function target() {
   return ringSurface();
 }
 
-function send(surface) {
-  if (surface === sent && !owed) return;
-  const ends = due;
-  owed = false;
-  due = false;
-  sent = surface;
+/** Sends one keyboard call and returns its answer, which is fulfilled also when the host refused it. */
+function call(surface, decided) {
+  const entry = { surface };
+  unanswered.push(entry);
   // An element that kept the focus would still show as focused beside the surface that holds the keyboard.
   if (surface !== null) document.activeElement?.blur();
-  flight = Promise.resolve(surfaces.focus(surface, ends)).catch((why) => report(`surface focus: ${why}`));
+  return Promise.resolve(surfaces.focus(surface, decided))
+    .catch((why) => report(`surface focus: ${why}`))
+    .finally(() => unanswered.splice(unanswered.indexOf(entry), 1));
+}
+
+function send(surface) {
+  if (surface === sent && !owed) return;
+  owed = false;
+  sent = surface;
+  flight = call(surface, false);
+}
+
+/**
+ * Sends the decided call at once. An earlier call to another target that the host has not answered may reach the host after it,
+ * so a call to the decided target follows the earlier calls in their order, and the keyboard ends at the decision.
+ */
+function decide(surface) {
+  const behind = unanswered.some((entry) => entry.surface !== surface);
+  owed = false;
+  sent = surface;
+  flight = call(surface, true);
+  if (behind) flight = call(surface, false);
 }
 
 /** Records one decision of the keyboard, the call it sent or why it sent none (docs/spec/exposure.md#the-keyboard-follows-the-focus-ring). */
-function record(cause, surface, decision) {
-  emitEvent("debug", "workbench.keyboard.follow", { cause, target: surface, sent, owed, decided: due, decision });
-}
-
-/** An open modal keeps the keyboard, so a press that waits for its decision ends the hold without a move of the keyboard. */
-function keepInModal() {
-  if (!due) return;
-  due = false;
-  Promise.resolve(surfaces.keyboardDecided()).catch((why) => report(`keyboard decided: ${why}`));
+function record(cause, surface, decision, decided = false) {
+  emitEvent("debug", "workbench.keyboard.follow", { cause, target: surface, sent, owed, decided, decision });
 }
 
 /** Sends the call when the host holds the target. A target that no placement placed yet waits for the placement. */
@@ -63,7 +72,6 @@ function follow(cause) {
   if (modalState() !== null) {
     owed = true;
     record(cause, null, "modal");
-    keepInModal();
     return;
   }
   const surface = target();
@@ -87,18 +95,25 @@ export function followRing(read) {
 }
 
 /**
- * A left press of the workbench was released: the decided call follows the state that the handlers of the press leave. A browser
- * runs the microtasks between the listeners of one event and dispatches the click of the release in the same task, so the call
- * waits for the next task, after the last handler of the release.
+ * A left press of the workbench was released: the decided call goes out in this dispatch, from the state that the handlers of the
+ * press left, for the surface of the ring when the host holds it and for the workbench otherwise. A placement that later gives the
+ * host the surface of the ring moves the keyboard with a call without decided. An open modal keeps the keyboard and the host
+ * returns it to the decided target when the modal closes, which also moves it again from here.
  */
 export function keyboardPressed() {
-  setTimeout(() => {
-    owed = true;
-    due = true;
-    follow("press");
-  }, 0);
+  let surface = null;
+  let decision = "send";
+  try {
+    const ring = target();
+    surface = ring !== null && (shown.has(ring) || held.has(ring)) ? ring : null;
+    if (modalState() !== null) decision = "modal";
+    else if (surface === sent && !owed) decision = "same";
+  } finally {
+    record("press", surface, decision, true);
+    decide(surface);
+    if (decision === "modal") owed = true;
+  }
 }
-
 /** The ring moved, so the keyboard moves even to the target that it had. It follows the state that the move leaves. */
 export function keyboardOwed() {
   owed = true;
@@ -116,7 +131,6 @@ export function keyboardPlaced(ids, placedIds) {
   if (modalState() !== null) {
     owed = true;
     record("placed", null, "modal");
-    keepInModal();
     return flight;
   }
   const surface = target();

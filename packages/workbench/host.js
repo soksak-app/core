@@ -437,9 +437,21 @@ const tellInTurn = (name, payload) => {
 };
 
 /**
+ * Sends at once, ahead of the ordered calls that wait, and the ordered calls sent after it wait for its answer too. The decided
+ * keyboard call answers the release in its dispatch and waits for no earlier call (docs/spec/native-surfaces.md#keyboard-of-a-surface).
+ */
+const tellAhead = (name, payload) => {
+  const answered = tell(name, payload);
+  const before = turn;
+  const ended = Promise.resolve(answered).catch((why) => reportRecord("error", `host ${name} failed: ${why}`));
+  turn = Promise.all([before, ended]);
+  return answered;
+};
+
+/**
  * Ends when the host answered every ordered call sent so far, also a call that failed, whose failure tellInTurn wrote to the
- * application log. A core command answers after it, so a modal that the command opened holds the input of the window when the
- * command answers (docs/spec/native-modals.md#keyboard).
+ * application log. A core command answers after it, so the key wait of a modal that the command opened is open when the command
+ * answers (docs/spec/native-modals.md#keyboard).
  */
 export function orderedCallsAnswered() {
   return turn;
@@ -618,11 +630,11 @@ export const surfaces = native ? {
     /** Sends one failure line to the application log. */
     report: (line) => reportRecord("error", line),
 
-    /** Gives the keyboard of the window to a surface, and to the workbench for null (docs/spec/native-surfaces.md#keyboard-of-a-surface). */
-    focus: (surface, decided = false) => tellInTurn("surfaceFocus", decided ? { surface, decided: true } : { surface }),
-
-    /** Ends the hold of the input of the window and leaves the keyboard where it is, in an open modal (docs/spec/native-surfaces.md#keyboard-of-a-surface). */
-    keyboardDecided: () => tellInTurn("keyboardDecided"),
+    /**
+     * Gives the keyboard of the window to a surface, and to the workbench for null (docs/spec/native-surfaces.md#keyboard-of-a-surface).
+     * A decided call answers a release and goes out at once; a call without decided follows the ordered calls.
+     */
+    focus: (surface, decided = false) => decided ? tellAhead("surfaceFocus", { surface, decided: true }) : tellInTurn("surfaceFocus", { surface }),
 
     theme(values) {
       themeReply = tellInTurn("setTheme", values);
@@ -795,7 +807,6 @@ export const surfaces = native ? {
   // A failure of a document without a host is written to the error level of the console (docs/spec/plugins.md).
   report: (line) => console.error(line),
   focus: () => {},
-  keyboardDecided: () => {},
   theme: () => {},
   menuLanguage: () => {},
   // Without a host, the place where this document seats the surface is the actual place. The compositor records that reply.

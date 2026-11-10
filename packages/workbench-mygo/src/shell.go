@@ -860,6 +860,8 @@ func (s *Shell) View(c *ui.Context) {
 	s.frameWindowFailure = nil
 	s.building = true
 	defer func() {
+		// The pass answers the releases that asked for it also when it fails (keyboardDue).
+		s.keyboardDue()
 		s.building = false
 		s.frameWindowRead = false
 		s.frameWindow = WindowView{}
