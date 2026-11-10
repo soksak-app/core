@@ -83,7 +83,7 @@ Registry index와 release는 위치에서 읽는다. 위치는 `https:` URL, 절
 - 연결은 운영체제가 신뢰하는 인증 기관으로 TLS를 쓴다.
 - redirect는 대상이 `https:` URL일 때 최대 5번 따라간다. 다른 scheme으로의 redirect는 `<url>: redirect to <target> is not https`로, 여섯 번째 redirect는 `<url>: more than 5 redirects`로 실패한다.
 - 200이 아닌 응답은 `<url>: HTTP <status>`로 실패한다.
-- 연결부터 마지막 byte까지 한 요청은 index는 60초, release는 600초 안에 끝나야 한다. 더 느린 요청은 `<url>: timed out after <seconds> s`로 실패한다.
+- 연결부터 마지막 byte까지 한 요청은 index는 60초, release는 600초 안에 끝나야 한다. 더 느린 요청은 `<url>: timed out after <seconds> s`로 실패한다. 그 밖에 요청은 자기 event에서 끝난다. 곧 응답의 마지막 byte, 연결의 오류나 닫힘이다. 연결을 열어 둔 채 아무것도 보내지 않는 server는 event를 주지 않고, TCP는 그런 peer의 끝을 알리지 않으므로, 이 한도가 server가 끝내지 않는 요청의 끝이다.
 - index는 최대 8 MiB, release는 최대 256 MiB다. 더 큰 본문은 `<url>: larger than <bytes> bytes`로 실패한다.
 - 연결하거나 읽지 못하면 `<url>: cannot connect: <reason>`으로 실패하며, reason은 network library의 문장이다.
 

@@ -83,7 +83,7 @@ A registry index and an release are read from a location: an `https:` URL, an ab
 - The connection uses TLS with the certificate authorities that the operating system trusts.
 - A redirect is followed when its target is an `https:` URL, at most 5 times; a redirect to another scheme fails with `<url>: redirect to <target> is not https`, and a sixth redirect fails with `<url>: more than 5 redirects`.
 - A response other than 200 fails with `<url>: HTTP <status>`.
-- The whole request, from connecting to the last byte, takes at most 60 seconds for an index and 600 seconds for an release; a slower request fails with `<url>: timed out after <seconds> s`.
+- The whole request, from connecting to the last byte, takes at most 60 seconds for an index and 600 seconds for an release; a slower request fails with `<url>: timed out after <seconds> s`. The request otherwise ends at its own events: the last byte of the response, an error of the connection or its close. A server that keeps the connection open and sends nothing gives no event, and TCP reports no end for such a peer, so this limit is the end of a request that the server does not end.
 - An index holds at most 8 MiB and an release at most 256 MiB; a larger body fails with `<url>: larger than <bytes> bytes`.
 - A failure to connect or to read fails with `<url>: cannot connect: <reason>`, where the reason is the text of the network library.
 

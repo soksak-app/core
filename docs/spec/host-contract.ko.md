@@ -631,8 +631,8 @@ fn invalid_json_closes_connection() {
 | `sidecars.stderr.lines-are-written-as-records` | 표준 입출력 사이드카의 표준 오류 각 줄과 줄바꿈 없이 끝난 마지막 글은 기록 `<time> info sidecar <name>: <line>`으로 사이드카의 중지가 끝나기 전에 쓴다. | all |
 | `log.panic.records-an-event` | 진입점(`routine.Go`, `spawn_named`)으로 시작한 goroutine이나 스레드가 panic하면 프로세스가 0이 아닌 상태(Go는 2, Rust는 101)로 끝나기 전에 받은 `name`, panic 값 `text`, `stack`을 담은 `error` 수준 event `host.panic` 하나와, 그 뒤에 그 상태를 `code`로 담은 원인 `exit`의 `log.closed`를 저장한다. | all |
 | `log.panic.does-not-wait-for-the-writer` | panic hook은 writer가 멈춰 있어도 writer를 기다리지 않고 panic한 스레드에 돌아오며, writer가 풀리면 event가 저장되고 프로세스가 끝난다. | tauriv2 only: goroutine의 panic은 진입점이 recover하며 hook이 없다 |
-| `log.panic.before-writer-is-stored-when-the-writer-opens` | writer가 붙기 전의 host panic은 시작 buffer에 남고, writer가 붙으면 event가 저장되고 저장 뒤 프로세스가 상태로 끝난다. 5초 안에 붙은 writer가 없으면 프로세스는 상태로 끝나고 record와 stack이 표준 오류에 남는다. | all |
-| `log.panic.without-writer-is-written-to-the-standard-error` | writer가 저장하지 못한 panic은 표준 오류에 전부 쓰인다. writer가 열리지 않았다는 줄 뒤에 `host.panic name=<name> text=<text>` 줄과 stack이 온다. | all |
+| `log.panic.before-writer-is-stored-when-the-writer-opens` | writer가 붙기 전의 host panic은 시작 buffer에 남고, writer가 붙으면 event가 저장되고 저장 뒤 프로세스가 상태로 끝난다. host의 시작이 writer를 붙이지 않고 끝나면 프로세스는 상태로 끝나고 record와 stack이 표준 오류에 남는다. 어떤 시간 한도도 writer 기다림을 끝내지 않는다. | all |
+| `log.panic.without-writer-is-written-to-the-standard-error` | writer가 저장하지 못한 panic은 표준 오류에 전부 쓰인다. host의 시작이 writer 없이 끝났다는 줄 뒤에 `host.panic name=<name> text=<text>` 줄과 stack이 온다. | all |
 | `host.stall.passes-every-gate` | stall 기록 `host.stall`, `host.stall.sampled`, `host.stall.dump`는 lifecycle 기록을 끄는 policy에서도 저장된다. 로깅 명세의 이름 붙은 gate 예외로 모든 gate를 `warn`에서 지나가기 때문이다. | all |
 | `host.crash.found.passes-every-gate` | crash 기록 `host.crash.found`는 lifecycle 기록을 끄는 policy에서도 저장된다. 명세의 이름 붙은 gate 예외로 `warn`에서 모든 gate를 지나기 때문이다. | all |
 | `host.view.killed.passes-every-gate` | 종료 기록 `host.view.killed`는 lifecycle 기록을 끄는 policy에서도 저장된다. 명세의 이름 붙은 gate 예외로 `warn`에서 모든 gate를 지나기 때문이다. | all |

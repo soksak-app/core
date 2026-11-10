@@ -66,6 +66,9 @@ type Session struct {
 // assets as the asset root. The caller calls End of the session that it returns when the framework ended.
 func Prepare(adapter Framework, assets fs.FS, options Options) (_ *Session, failure error) {
 	framework = adapter
+	// The start ends here, with the writer attached or, after a failure before the writer exists, without it; a panic that waits
+	// for the writer ends its wait at this end (docs/spec/hosts.md#process-lifecycle).
+	defer NotifyStartEnded()
 	session := &Session{started: make(chan struct{}), unpublished: make(chan error, 1)}
 	defer func() {
 		if failure != nil {
