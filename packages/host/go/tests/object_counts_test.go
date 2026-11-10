@@ -85,7 +85,6 @@ func TestSidecarSessionAndPendingReplyCountsFollowTheOwner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sidecars.StopTimeout = support.Stall
 	t.Cleanup(sidecars.Stop)
 	owner := support.NewFakeOwner(directory)
 	other := support.NewFakeOwner(directory)
@@ -126,7 +125,6 @@ func TestSidecarSessionsListOnlyTheSurfacesThatSent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sidecars.StopTimeout = support.Stall
 	t.Cleanup(sidecars.Stop)
 	owner := support.NewFakeOwner(directory)
 	for _, surface := range []string{"terminal-b", "terminal-a"} {

@@ -36,7 +36,9 @@ const (
 // AwaitAwake blocks while that run loop waits and returns while it does not.
 // Sample writes the stacks of the threads of the process into a file, Folder is the logs folder and EmitHost stores an event of
 // the host. Clock is the time since the watch started, which measures the lateness of the watch's own wake, and Wait waits one
-// beat; nil takes the monotonic clock and time.Sleep.
+// beat; nil takes the monotonic clock and time.Sleep. StopWaits is called by the stop when it begins to wait for a sample that
+// runs, before it waits; a check releases the sample that it holds after this event, so a stop that returns before it finds the
+// sample running. nil calls nothing.
 type StallWatchOptions struct {
 	Heartbeat  func() (now, answered time.Duration)
 	AwaitAwake func()
@@ -45,6 +47,7 @@ type StallWatchOptions struct {
 	EmitHost   func(Level, string, map[string]any)
 	Clock      func() time.Duration
 	Wait       func(time.Duration)
+	StopWaits  func()
 }
 
 // StallHeartbeat is the heartbeat of the watch that the platform answers on the main thread in C.
@@ -134,7 +137,12 @@ func StartStallWatch(options StallWatchOptions) func() {
 	return func() {
 		ending.Lock()
 		stopped.Store(true)
+		// A sample starts only under this lock and before the stop, so a sample that is not running now never runs.
+		running := sampling.Load()
 		ending.Unlock()
+		if running && options.StopWaits != nil {
+			options.StopWaits()
+		}
 		samples.Wait()
 	}
 }

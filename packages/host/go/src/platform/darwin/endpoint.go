@@ -5,6 +5,7 @@ package darwin
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -12,9 +13,9 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
+	"github.com/soksak-app/core/packages/host/go/src/routine"
 )
 
 // privateDirectory makes path a directory that only the current user can access. When it already exists, it
@@ -125,9 +126,13 @@ func (implementation) ServiceProcessExists(pid int) (bool, error) {
 	return !strings.HasPrefix(strings.TrimSpace(string(state)), "Z"), nil
 }
 
-// WaitServiceProcessEnd waits for the end of the service process pid with the kqueue notification NOTE_EXIT, for at
-// most timeout. A process that does not exist has ended; the registration for it fails with ESRCH.
-func (implementation) WaitServiceProcessEnd(pid int, timeout time.Duration) (bool, error) {
+// stopEvent is the identifier of the user event that wakes the wait for a service process when its stop closes.
+const stopEvent = 1
+
+// WaitServiceProcessEnd waits for the end of the service process pid with the kqueue notification NOTE_EXIT, or for stop,
+// which triggers a user event of the same queue. A process that does not exist has ended; the registration for it fails
+// with ESRCH.
+func (implementation) WaitServiceProcessEnd(pid int, stop <-chan struct{}) (bool, error) {
 	if pid <= 0 {
 		return true, nil
 	}
@@ -136,30 +141,60 @@ func (implementation) WaitServiceProcessEnd(pid int, timeout time.Duration) (boo
 		return false, fmt.Errorf("cannot wait for service process %d: kqueue: %w", pid, err)
 	}
 	defer syscall.Close(queue)
+	wake := syscall.Kevent_t{Ident: stopEvent, Filter: syscall.EVFILT_USER, Flags: syscall.EV_ADD | syscall.EV_CLEAR}
+	if _, err := syscall.Kevent(queue, []syscall.Kevent_t{wake}, nil, nil); err != nil {
+		return false, fmt.Errorf("cannot wait for service process %d: stop event: %w", pid, err)
+	}
+	// The trigger runs before the queue closes: the wait ends the trigger goroutine and waits for it. A trigger that fails leaves
+	// the wait to the exit of the process, and the wait returns that failure with its answer.
+	done, triggered := make(chan struct{}), make(chan error, 1)
+	routine.Go("service-process-wait-stop", func() {
+		select {
+		case <-stop:
+			trigger := syscall.Kevent_t{Ident: stopEvent, Filter: syscall.EVFILT_USER, Fflags: syscall.NOTE_TRIGGER}
+			_, err := syscall.Kevent(queue, []syscall.Kevent_t{trigger}, nil, nil)
+			triggered <- err
+		case <-done:
+			triggered <- nil
+		}
+	})
+
+	ended, err := waitProcessExitEvent(queue, pid)
+	close(done)
+	if triggerErr := <-triggered; triggerErr != nil && err == nil {
+		err = fmt.Errorf("cannot wake the wait for service process %d: %w", pid, triggerErr)
+	}
+	return ended, err
+}
+
+// waitProcessExitEvent registers the exit of pid in queue and waits for it or for the stop event of the queue.
+func waitProcessExitEvent(queue, pid int) (bool, error) {
 	change := syscall.Kevent_t{
 		Ident:  uint64(pid),
 		Filter: syscall.EVFILT_PROC,
 		Flags:  syscall.EV_ADD | syscall.EV_ONESHOT,
 		Fflags: syscall.NOTE_EXIT,
 	}
-	limit := syscall.NsecToTimespec(timeout.Nanoseconds())
+	changes := []syscall.Kevent_t{change}
 	events := make([]syscall.Kevent_t, 1)
 	for {
-		count, err := syscall.Kevent(queue, []syscall.Kevent_t{change}, events, &limit)
+		_, err := syscall.Kevent(queue, changes, events, nil)
 		switch {
 		case err == syscall.EINTR:
+			// The kernel applied the registration before the wait; a repeated wait only reads events.
+			changes = nil
 			continue
 		case err == syscall.ESRCH:
 			return true, nil
 		case err != nil:
 			return false, fmt.Errorf("cannot wait for service process %d: %w", pid, err)
-		case count == 0:
-			return false, nil
 		case events[0].Flags&syscall.EV_ERROR != 0:
 			if events[0].Data == int64(syscall.ESRCH) {
 				return true, nil
 			}
 			return false, fmt.Errorf("cannot wait for service process %d: %w", pid, syscall.Errno(events[0].Data))
+		case events[0].Filter == syscall.EVFILT_USER:
+			return false, nil
 		}
 		return true, nil
 	}
@@ -169,6 +204,58 @@ func (implementation) WaitServiceProcessEnd(pid int, timeout time.Duration) (boo
 func (implementation) NewSession(command *exec.Cmd) error {
 	command.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	return nil
+}
+
+// NewProcessGroup makes command the leader of a new process group with setpgid.
+func (implementation) NewProcessGroup(command *exec.Cmd) error {
+	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	return nil
+}
+
+// EndProcessGroup sends SIGKILL to the process group pid; ESRCH means that no process of the group remains.
+func (implementation) EndProcessGroup(pid int) error {
+	if err := syscall.Kill(-pid, syscall.SIGKILL); err != nil && !errors.Is(err, syscall.ESRCH) {
+		return fmt.Errorf("end process group %d: %w", pid, err)
+	}
+	return nil
+}
+
+// TerminateProcessGroup sends SIGTERM to the process group pid; ESRCH means that no process of the group remains.
+func (implementation) TerminateProcessGroup(pid int) error {
+	if err := syscall.Kill(-pid, syscall.SIGTERM); err != nil && !errors.Is(err, syscall.ESRCH) {
+		return fmt.Errorf("terminate process group %d: %w", pid, err)
+	}
+	return nil
+}
+
+// ExitedByTermination answers whether the wait status of state is the end by SIGTERM.
+func (implementation) ExitedByTermination(state *os.ProcessState) bool {
+	status, ok := state.Sys().(syscall.WaitStatus)
+	return ok && status.Signaled() && status.Signal() == syscall.SIGTERM
+}
+
+// ReadAvailable reads once from the non-blocking descriptor of file: EAGAIN and a read of 0 bytes are the end of what it
+// holds.
+func (implementation) ReadAvailable(file *os.File, buffer []byte) (int, error) {
+	raw, err := file.SyscallConn()
+	if err != nil {
+		return 0, err
+	}
+	var n int
+	var readErr error
+	if err := raw.Read(func(descriptor uintptr) bool {
+		n, readErr = syscall.Read(int(descriptor), buffer)
+		return true
+	}); err != nil {
+		return 0, err
+	}
+	switch {
+	case errors.Is(readErr, syscall.EAGAIN), readErr == nil && n == 0:
+		return 0, io.EOF
+	case readErr != nil:
+		return 0, readErr
+	}
+	return n, nil
 }
 
 // ExitStatus reads the exit of an ended process from the wait status and writes it as `exit status <code>` or `signal <number>`.

@@ -9,6 +9,7 @@
 #import "window_controls.h"
 #import "capture.h"
 #import "support/capture_frame.m"
+#import "support/event_wait.h"
 #import "support/temporary_folder.h"
 
 // The number of display refreshes to wait while the transaction is open and after the commit.
@@ -19,15 +20,6 @@ static int failures = 0;
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
-}
-
-static void until(BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
-                               beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
-    if (!done()) { fprintf(stderr, "FAIL: the display did not refresh within 10 seconds\n"); exit(1); }
 }
 
 // Counts a fixed number of display refreshes.
@@ -49,7 +41,7 @@ static double waitFrames(NSScreen *screen, int count) {
     frames.left = count;
     [[screen displayLinkWithTarget:frames selector:@selector(tick:)]
         addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
-    until(^BOOL { return frames.left == 0; });
+    eventWait([NSString stringWithFormat:@"the display refreshes %d times", count], ^BOOL { return frames.left == 0; });
     return CACurrentMediaTime() * 1000 - start;
 }
 

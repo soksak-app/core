@@ -2,6 +2,7 @@
 // the host can move it. The check does not activate the application.
 #import <Cocoa/Cocoa.h>
 #import "webview_input.h"
+#import "support/event_wait.h"
 
 static int failures = 0;
 
@@ -10,23 +11,15 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-static void until(BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
-    if (!done()) { fprintf(stderr, "FAIL: WebKit did not answer within 10 seconds\n"); exit(1); }
-}
-
 // Waits until the page focuses an input element and the result reaches the UI process.
 static void focusInPage(WKWebView *view) {
     __block BOOL done = NO;
     [view evaluateJavaScript:@"document.getElementById('field').focus(); document.activeElement.id"
         completionHandler:^(id value, NSError *error) { done = YES; }];
-    until(^BOOL { return done; });
+    eventWait(@"the page answers the focus request", ^BOOL { return done; });
     __block BOOL settled = NO;
     [view evaluateJavaScript:@"null" completionHandler:^(id value, NSError *error) { settled = YES; }];
-    until(^BOOL { return settled; });
+    eventWait(@"the page answers the evaluation after the focus request", ^BOOL { return settled; });
 }
 
 // Notifies when the document load finishes.
@@ -43,7 +36,7 @@ static WKWebView *page(NSWindow *window, NSRect frame) {
     SPLoaded *loaded = [[SPLoaded new] autorelease];
     view.navigationDelegate = loaded;
     [view loadHTMLString:@"<!doctype html><input id='field'>" baseURL:nil];
-    until(^BOOL { return loaded.finished; });
+    eventWait(@"the navigation of the document finishes", ^BOOL { return loaded.finished; });
     view.navigationDelegate = nil;
     return view;
 }

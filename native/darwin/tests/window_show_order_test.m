@@ -1,8 +1,10 @@
 #import <Cocoa/Cocoa.h>
+#import <QuartzCore/QuartzCore.h>
 #import <stdio.h>
 #import <stdlib.h>
 #import <unistd.h>
 #import "window_reveal.h"
+#import "support/event_wait.h"
 
 // A window that an application that is not active puts on the screen stays behind the front application, which stays
 // the front application: the first window goes behind every window and a later window directly above the frontmost window
@@ -17,8 +19,27 @@ static void check(BOOL condition, NSString *what) {
     failures++;
 }
 
-static void spin(void) {
-    [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.3]];
+// Counts the refreshes of a screen.
+@interface SPRefreshes : NSObject
+@property int left;
+@end
+@implementation SPRefreshes
+- (void)tick:(CADisplayLink *)link {
+    if (--self.left == 0) [link invalidate];
+}
+@end
+
+// Runs the run loop until the screen has refreshed twice. The window server applies the order of a window, and an activation
+// that the order or the launch would cause, before it composites the frame that shows the result, and the events of that
+// change reach the application before the second refresh after it, so the state is judged after that refresh. The wait
+// sends the events that arrive to the application meanwhile.
+static void afterRefreshes(NSScreen *screen) {
+    SPRefreshes *refreshes = [[SPRefreshes new] autorelease];
+    refreshes.left = 2;
+    // A link retains its target until it is invalidated.
+    [[(screen ?: NSScreen.mainScreen) displayLinkWithTarget:refreshes selector:@selector(tick:)]
+        addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
+    eventWait(@"the screen refreshes twice", ^BOOL { return refreshes.left == 0; });
 }
 
 static NSWindow *makeWindow(void) {
@@ -69,7 +90,7 @@ int main(void) { @autoreleasepool {
     // an accessory application stays behind it either way, so that policy would not tell the show from an order front.
     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
     [NSApp finishLaunching];
-    spin();
+    afterRefreshes(NSScreen.mainScreen);
 
     NSRunningApplication *front = NSWorkspace.sharedWorkspace.frontmostApplication;
     check(front != nil && front.processIdentifier != getpid(), @"another application is in front at the start");
@@ -79,7 +100,7 @@ int main(void) { @autoreleasepool {
 
     NSWindow *first = makeWindow();
     sp_window_show(first);
-    spin();
+    afterRefreshes(first.screen);
     check(first.isVisible, @"the first window is on the screen");
     check(frontPlace < 0 || placeOf(first) > frontPlace, [NSString stringWithFormat:
         @"the first window is at place %ld, behind the front application at place %ld", (long)placeOf(first), (long)frontPlace]);
@@ -90,7 +111,7 @@ int main(void) { @autoreleasepool {
 
     NSWindow *second = makeWindow();
     sp_window_show(second);
-    spin();
+    afterRefreshes(second.screen);
     check(second.isVisible, @"the second window is on the screen");
     check(frontPlace < 0 || placeOf(second) > frontPlace, [NSString stringWithFormat:
         @"the second window is at place %ld, behind the front application at place %ld", (long)placeOf(second), (long)frontPlace]);

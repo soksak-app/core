@@ -15,6 +15,7 @@
 #import "private/webkit.h"
 #import "webview_geometry.h"
 #import "window_facts.h"
+#import "support/event_wait.h"
 
 extern char **environ;
 
@@ -25,20 +26,39 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-// Pumps the run loop, one pool per turn, until done() holds or the limit passes. Returns done().
-static BOOL pumpUntil(NSTimeInterval limit, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:limit];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        @autoreleasepool {
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-        }
-    }
-    return done();
+// Waits as eventWait does and drains the references that the turns autoreleased before each judgment, as each turn of the run
+// loop of an application does.
+static void waitDrained(NSString *what, BOOL (^done)(void)) {
+    __block NSAutoreleasePool *pool = [NSAutoreleasePool new];
+    eventWait(what, ^BOOL {
+        [pool drain];
+        pool = [NSAutoreleasePool new];
+        return done();
+    });
+    [pool drain];
 }
 
 static BOOL processRuns(pid_t pid) {
     struct proc_bsdinfo info;
     return proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, sizeof info) == (int)sizeof info;
+}
+
+// Waits for the exit of a process that is not a child of the test: a dispatch source of the main queue reports the exit, and a
+// process that ended before the source was registered is absent after the registration.
+static void waitForExit(pid_t pid) {
+    __block BOOL exited = NO;
+    dispatch_source_t source = dispatch_source_create(DISPATCH_SOURCE_TYPE_PROC, (uintptr_t)pid, DISPATCH_PROC_EXIT,
+        dispatch_get_main_queue());
+    if (!source) {
+        fprintf(stderr, "FAIL: the exit observation of the process %d cannot start\n", pid);
+        exit(1);
+    }
+    dispatch_source_set_event_handler(source, ^{ exited = YES; });
+    dispatch_resume(source);
+    if (!processRuns(pid)) exited = YES;
+    waitDrained([NSString stringWithFormat:@"the WebContent process %d exits", pid], ^BOOL { return exited; });
+    dispatch_source_cancel(source);
+    dispatch_release(source);
 }
 
 static NSDictionary *latest;
@@ -64,10 +84,7 @@ static int runApplication(NSString *folder) {
     [window.contentView addSubview:main];
     [window orderBack:nil];
     [main loadHTMLString:@"<title>Main</title><p>main</p>" baseURL:nil];
-    if (!pumpUntil(30, ^BOOL { return !main.loading && [main.title isEqual:@"Main"]; })) {
-        fprintf(stderr, "FAIL: the main page did not load within 30 seconds\n");
-        return 1;
-    }
+    waitDrained(@"the main page loads", ^BOOL { return !main.loading && [main.title isEqual:@"Main"]; });
     void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     if (!surface) {
         fprintf(stderr, "FAIL: a logical surface is not created\n");
@@ -91,10 +108,7 @@ static int runApplication(NSString *folder) {
         fprintf(stderr, "FAIL: the document region refuses its file address\n");
         return 1;
     }
-    if (!pumpUntil(30, ^BOOL { return [latest[@"title"] isEqual:@"Region"] && ![latest[@"loading"] boolValue]; })) {
-        fprintf(stderr, "FAIL: the region page did not load within 30 seconds\n");
-        return 1;
-    }
+    waitDrained(@"the region page loads", ^BOOL { return [latest[@"title"] isEqual:@"Region"] && ![latest[@"loading"] boolValue]; });
     WKWebView *region = (WKWebView *)document;
     printf("process %d\n", main._webProcessIdentifier);
     printf("process %d\n", region._webProcessIdentifier);
@@ -151,8 +165,8 @@ int main(int argc, char **argv) { @autoreleasepool {
             [processes componentsJoinedByString:@" "]]);
     for (NSNumber *process in processes) {
         NSDate *start = [NSDate date];
-        BOOL ended = pumpUntil(30, ^BOOL { return !processRuns(process.intValue); });
-        check(ended, [NSString stringWithFormat:@"the WebContent process %d ends after its application ends (%.3f s)",
+        waitForExit(process.intValue);
+        check(!processRuns(process.intValue), [NSString stringWithFormat:@"the WebContent process %d ends after its application ends (%.3f s)",
             process.intValue, [NSDate.date timeIntervalSinceDate:start]]);
     }
     printf("%s\n", failures ? "FAIL: application_end_processes_test" : "PASS: application_end_processes_test");

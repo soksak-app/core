@@ -84,14 +84,10 @@ func WatchCrashReportsIn(t *testing.T, directory, application string) *CrashRepo
 	return &CrashReports{watcher: watcher, directory: directory, application: application}
 }
 
-// Remove waits until the system wrote the crash report of the process pid and removes it. The wait ends one second before the
-// limit of the test when no report arrives, so the failure names the missing report instead of the limit.
+// Remove waits until the system wrote the crash report of the process pid and removes it. A report that never arrives leaves
+// the check to the limit of its runner.
 func (r *CrashReports) Remove(t *testing.T, pid int) {
 	t.Helper()
-	var limit <-chan time.Time
-	if deadline, ok := t.Deadline(); ok {
-		limit = time.After(time.Until(deadline) - time.Second)
-	}
 	for {
 		select {
 		case event := <-r.watcher.Events:
@@ -108,8 +104,6 @@ func (r *CrashReports) Remove(t *testing.T, pid int) {
 			return
 		case err := <-r.watcher.Errors:
 			t.Fatalf("crash report watch of %s: %v", r.directory, err)
-		case <-limit:
-			t.Fatalf("the system wrote no crash report of process %d in %s", pid, r.directory)
 		}
 	}
 }

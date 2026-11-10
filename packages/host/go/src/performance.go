@@ -82,12 +82,73 @@ func PerformanceCommand(request map[string]any) (any, error) {
 }
 
 // The sampler stores the resident size of the host every 5 seconds while the trace is on. It ends with the switch: turning
-// the trace off waits until the goroutine returned, and turning it on again starts a new one.
+// the trace off waits until the goroutine returned, and turning it on again starts a new one. samplerRearm brings a new
+// interval to the wait of the goroutine.
 var (
-	samplerMu   sync.Mutex
-	samplerStop chan struct{}
-	samplerDone chan struct{}
+	samplerMu    sync.Mutex
+	samplerStop  chan struct{}
+	samplerDone  chan struct{}
+	samplerRearm chan struct{}
 )
+
+// samplerEvery is the time between two samples of the sampler (docs/spec/performance-trace.md).
+const samplerEvery = 5 * time.Second
+
+// samplerInterval is the time between two samples, in nanoseconds; zero is samplerEvery.
+var samplerInterval atomic.Int64
+
+// sampleWatch guards the samples that the sampler stored since it started and the observer that hears each of them.
+var (
+	sampleWatch    sync.Mutex
+	sampleCount    int
+	sampleObserver func()
+)
+
+// PerformanceSetSamplerInterval sets the time between two samples of the sampler, and zero takes the 5 seconds of the trace
+// again. A sampler that waits starts its wait again with the new time and takes no sample for the change. A check sets the
+// time as its input instead of waiting for it to pass.
+func PerformanceSetSamplerInterval(interval time.Duration) {
+	samplerInterval.Store(int64(interval))
+	samplerMu.Lock()
+	defer samplerMu.Unlock()
+	if samplerRearm != nil {
+		select {
+		case samplerRearm <- struct{}{}:
+		default:
+			// A change that waits already brings the time to the wait.
+		}
+	}
+}
+
+// PerformanceOnSample sets the observer that the sampler calls after each sample it stored. A sampler that stored a sample since
+// it started calls it at once. It runs on the goroutine of the sampler or of the caller, so it must not wait. A check of what the
+// sampler does not do between two samples starts from this event.
+func PerformanceOnSample(observer func()) {
+	sampleWatch.Lock()
+	defer sampleWatch.Unlock()
+	if sampleCount > 0 && observer != nil {
+		observer()
+	}
+	sampleObserver = observer
+}
+
+// performanceSampled counts a sample of the sampler and tells the observer.
+func performanceSampled() {
+	sampleWatch.Lock()
+	defer sampleWatch.Unlock()
+	sampleCount++
+	if sampleObserver != nil {
+		sampleObserver()
+	}
+}
+
+// performanceSamplerEvery is the time between two samples.
+func performanceSamplerEvery() time.Duration {
+	if interval := time.Duration(samplerInterval.Load()); interval != 0 {
+		return interval
+	}
+	return samplerEvery
+}
 
 func performanceSamplerStart() {
 	samplerMu.Lock()
@@ -95,16 +156,28 @@ func performanceSamplerStart() {
 	if samplerStop != nil {
 		return
 	}
-	stop, done := make(chan struct{}), make(chan struct{})
-	samplerStop, samplerDone = stop, done
+	stop, done, rearm := make(chan struct{}), make(chan struct{}), make(chan struct{}, 1)
+	samplerStop, samplerDone, samplerRearm = stop, done, rearm
+	sampleWatch.Lock()
+	sampleCount = 0
+	sampleWatch.Unlock()
 	routine.Go("performance-sampler", func() {
 		defer close(done)
 		for {
 			PerformanceSample()
-			select {
-			case <-stop:
-				return
-			case <-time.After(5 * time.Second):
+			performanceSampled()
+			// A new interval starts the wait again with it.
+			for waiting := true; waiting; {
+				timer := time.NewTimer(performanceSamplerEvery())
+				select {
+				case <-stop:
+					timer.Stop()
+					return
+				case <-rearm:
+					timer.Stop()
+				case <-timer.C:
+					waiting = false
+				}
 			}
 		}
 	})
@@ -118,7 +191,7 @@ func performanceSamplerEnd() {
 	}
 	close(samplerStop)
 	<-samplerDone
-	samplerStop, samplerDone = nil, nil
+	samplerStop, samplerDone, samplerRearm = nil, nil, nil
 }
 
 // processes is the process registry: every sidecar process the host started or connected to, by pid, with the role and the

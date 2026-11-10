@@ -2,12 +2,18 @@
 // finished. Measures whether the still image of the revealed window has the color of the page and whether a window
 // whose load failed is also revealed. The check does not activate the application.
 #import <Cocoa/Cocoa.h>
+#import <QuartzCore/QuartzCore.h>
 #import <WebKit/WebKit.h>
+#import "support/event_wait.h"
 #import "support/temporary_folder.h"
 #import "capture.h"
 #import "surface_layout.h"
 #import "window_facts.h"
 #import "window_reveal.h"
+
+@interface WKWebView (Presentation)
+- (void)_doAfterNextPresentationUpdate:(void (^)(void))update;
+@end
 
 static int failures = 0;
 
@@ -27,14 +33,42 @@ static NSWindow *makeWindow(WKWebView **webview) {
     return window;
 }
 
-// Runs the run loop until the window becomes opaque. Stores the loading value at the time of the reveal in
-// loadingAtReveal. It is NO if the window is not revealed within 10 seconds.
+// Counts the refreshes of a screen and calls done after the given number of them.
+@interface RefreshCount : NSObject
+@property NSUInteger remaining;
+@property (copy) void (^done)(void);
+@end
+
+@implementation RefreshCount
+- (void)tick:(CADisplayLink *)link {
+    if (--self.remaining > 0) return;
+    // The link releases its target when it is invalidated, so the block is kept until it has run.
+    void (^done)(void) = [[self.done retain] autorelease];
+    [link invalidate];
+    done();
+}
+- (void)dealloc {
+    [_done release];
+    [super dealloc];
+}
+@end
+
+// Calls done on the main thread after count refreshes of screen.
+static void afterRefreshes(NSScreen *screen, NSUInteger count, void (^done)(void)) {
+    RefreshCount *refreshes = [[RefreshCount new] autorelease];
+    refreshes.remaining = count;
+    refreshes.done = done;
+    // A link retains its target until it is invalidated.
+    [[screen displayLinkWithTarget:refreshes selector:@selector(tick:)] addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
+}
+
+// Runs the run loop until the window becomes opaque, which the presentation update of the web view does. Stores the loading
+// value at the time of the reveal in loadingAtReveal.
 static BOOL waitRevealed(NSWindow *window, WKWebView *webview, BOOL *loadingAtReveal) {
-    NSDate *limit = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (window.alphaValue == 0 && limit.timeIntervalSinceNow > 0) {
-        [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.005]];
+    eventWait(@"the window becomes opaque", ^BOOL{
         *loadingAtReveal = webview.loading;
-    }
+        return window.alphaValue != 0;
+    });
     return window.alphaValue == 1;
 }
 
@@ -98,17 +132,21 @@ int main(void) { @autoreleasepool {
         settled = YES;
         alphaAtSettle = unrevealed.alphaValue;
     });
-    NSDate *before = [NSDate dateWithTimeIntervalSinceNow:0.3];
-    while (!settled && before.timeIntervalSinceNow > 0) {
-        [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.005]];
-    }
+    // A settled wait that did not wait for the reveal would end at the first refresh of the screen after the next presentation of
+    // the web view of the window. A presentation request made after the request of the wait ends after it, a block of the main
+    // queue sent then runs after the block that the end of that request sent, and the second refresh after that block is after
+    // the refresh that the wait would take, so the wait is judged there.
+    __block BOOL pastSettle = NO;
+    [waiting _doAfterNextPresentationUpdate:^{
+        dispatch_async(dispatch_get_main_queue(), ^{
+            afterRefreshes(unrevealed.screen ?: NSScreen.mainScreen, 2, ^{ pastSettle = YES; });
+        });
+    }];
+    eventWait(@"two refreshes of the screen after the presentation that the settled wait asked for", ^BOOL{ return pastSettle; });
     check(!settled, @"a settled wait of a window that is not revealed does not end before the reveal");
     [waiting loadHTMLString:@"<body style='margin:0;background:rgb(0,0,255)'></body>" baseURL:nil];
     check(waitRevealed(unrevealed, waiting, &loading), @"the window that a settled wait asks about is revealed");
-    NSDate *after = [NSDate dateWithTimeIntervalSinceNow:2];
-    while (!settled && after.timeIntervalSinceNow > 0) {
-        [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.005]];
-    }
+    eventWait(@"the settled wait of the revealed window ends", ^BOOL{ return settled; });
     check(settled && alphaAtSettle == 1,
         [NSString stringWithFormat:@"the settled wait of a window ends after its reveal (settled %d, alpha %.1f)", settled, alphaAtSettle]);
     [unrevealed close];

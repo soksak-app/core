@@ -3,8 +3,9 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc::{Receiver, channel};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use serde_json::json;
 use serde_json::value::RawValue;
@@ -36,6 +37,10 @@ struct Idle {
     source: Arc<Source>,
     rouser: Rouser,
     path: PathBuf,
+    /// Each sleep of the writer, with whether it holds a count of the gate.
+    sleeps: Receiver<bool>,
+    /// Each batch that the writer wrote.
+    writes: Receiver<()>,
     _folder: Folder,
 }
 
@@ -63,7 +68,7 @@ fn options(directory: &Path, interval: Duration) -> Options {
     }
 }
 
-/// Starts a writer with a source, and returns it once the writer took what its start left.
+/// Starts a writer with a source, and returns it once the writer took what its start left and slept.
 fn idle(interval: Duration) -> Idle {
     let folder = Folder::new("event-log-idle");
     let source = Arc::new(Source::default());
@@ -94,14 +99,24 @@ fn idle(interval: Duration) -> Idle {
     let log = EventLog::start(options).unwrap();
     let rouser = given.lock().unwrap().take().unwrap();
     let path = log.path().to_path_buf();
+    let (slept, sleeps) = channel();
+    log.set_on_sleep(Box::new(move |count_held| {
+        slept.send(count_held).unwrap();
+    }));
+    let (wrote, writes) = channel();
     let idle = Idle {
         log,
         source,
         rouser,
         path,
+        sleeps,
+        writes,
         _folder: folder,
     };
-    idle.settle();
+    idle.slept();
+    idle.log.set_on_write(Box::new(move |_, _| {
+        wrote.send(()).unwrap();
+    }));
     idle
 }
 
@@ -110,17 +125,15 @@ impl Idle {
         self.source.pulls.load(Ordering::SeqCst)
     }
 
-    /// Returns the pull count after the intervals that have started ended.
-    fn settle(&self) -> u64 {
-        let deadline = Instant::now() + Duration::from_secs(5);
-        loop {
-            let before = self.pulls();
-            std::thread::sleep(Duration::from_millis(30));
-            if self.pulls() == before && before > 0 {
-                return before;
-            }
-            assert!(Instant::now() < deadline, "the writer did not settle");
-        }
+    /// Waits for the next sleep of the writer and returns whether it holds a count of the gate. Only an event, a wake, a loss, a
+    /// request or the report of a held count wakes a writer that sleeps, so what follows a sleep is what the test does.
+    fn slept(&self) -> bool {
+        self.sleeps.recv().expect("the writer did not sleep")
+    }
+
+    /// The writes that the writer made so far and the test did not take, without waiting.
+    fn wrote(&self) -> usize {
+        self.writes.try_iter().count()
     }
 
     fn stores(&self, event: &str) -> bool {
@@ -129,33 +142,40 @@ impl Idle {
             .contains(event)
     }
 
+    /// Waits for the writes of the writer until one of them left `event` in the file. It takes the write that stored it, so a
+    /// count of the writes that follow starts after it.
     fn wait_for(&self, event: &str) {
-        let deadline = Instant::now() + Duration::from_secs(2);
-        while !self.stores(event) {
-            assert!(Instant::now() < deadline, "{event} was not stored at once");
-            std::thread::sleep(Duration::from_millis(1));
+        loop {
+            self.writes
+                .recv()
+                .unwrap_or_else(|_| panic!("{event} was not stored at once"));
+            if self.stores(event) {
+                return;
+            }
         }
     }
 }
 
 // A wakeup of each interval would be ten wakeups each second of an idle application, which G2 of docs/spec/hosts.md does not
-// leave room for.
+// leave room for. The start takes the source once and sleeps.
 // contract: log.writer.sleeps-with-nothing-to-write
 #[test]
 fn a_writer_with_nothing_to_write_does_not_wake() {
     let idle = idle(Duration::from_millis(5));
-    let from = idle.settle();
-    std::thread::sleep(Duration::from_millis(100));
-    assert_eq!(idle.pulls() - from, 0);
+    assert_eq!(
+        idle.pulls(),
+        1,
+        "the pulls before the writer slept, want the one of its start"
+    );
 }
 
 // contract: log.writer.sleeps-with-nothing-to-write
 #[test]
 fn the_writer_sleeps_again_after_a_wake() {
     let idle = idle(Duration::from_millis(5));
-    let from = idle.settle();
+    let from = idle.pulls();
     idle.rouser.wake();
-    std::thread::sleep(Duration::from_millis(100));
+    idle.slept();
     assert_eq!(
         idle.pulls() - from,
         2,
@@ -180,64 +200,68 @@ fn the_first_record_of_the_source_is_stored_at_once() {
     idle.wait_for("native.idle.first");
 }
 
+/// The flush is the one write after the first, and the writer writes before it answers the flush.
 // contract: log.writer.stores-the-first-event-at-once
 #[test]
 fn the_events_after_the_first_wait_for_the_batch() {
     let idle = idle(HOUR);
     assert!(idle.log.emit(Level::Info, "writer.idle.first", &json!({})));
     idle.wait_for("writer.idle.first");
+    assert_eq!(idle.wrote(), 0, "the first event was written twice");
     assert!(idle.log.emit(Level::Info, "writer.idle.second", &json!({})));
-    std::thread::sleep(Duration::from_millis(50));
-    assert!(!idle.stores("writer.idle.second"));
+    assert!(idle.log.emit(Level::Info, "writer.idle.third", &json!({})));
     idle.log.flush().unwrap();
-    assert!(idle.stores("writer.idle.second"));
+    assert_eq!(
+        idle.wrote(),
+        1,
+        "the writes for the two events of an interval and the flush, want the one of the flush"
+    );
+    assert!(idle.stores("writer.idle.second") && idle.stores("writer.idle.third"));
 }
 
 /// A refused event makes no write of its own, which would wake the indexer as well: a writer that sleeps keeps the count, and
-/// the next event carries it to the file.
+/// the next event carries it to the file. The first count wakes the writer for the start and the end of one interval, after
+/// which it sleeps with the count held, and a further count wakes nothing. The check sets the bound on the rate of the reports
+/// to zero, so the carrier is not held back by it.
 // contract: log.writer.a-count-waits-for-a-write
 #[test]
 fn a_count_waits_for_the_next_write() {
     let idle = idle(Duration::from_millis(5));
-    let from = idle.settle();
-    for _ in 0..50 {
+    idle.log.set_gated_report_interval(Duration::ZERO);
+    let from = idle.pulls();
+    assert!(!idle.log.gate(Class::Io, Level::Trace));
+    assert!(
+        idle.slept(),
+        "the writer slept without the count of the gate"
+    );
+    for _ in 0..49 {
         assert!(!idle.log.gate(Class::Io, Level::Trace));
-        std::thread::sleep(Duration::from_millis(30));
     }
     assert!(
-        !idle.stores("log.gated"),
+        !idle.stores("log.gated") && idle.wrote() == 0,
         "a count alone was written to the file"
     );
     let pulls = idle.pulls() - from;
-    assert!(
-        pulls <= 2,
+    assert_eq!(
+        pulls, 2,
         "the counts woke the writer for {pulls} pulls; the first count takes the start and the end of one interval"
     );
     assert!(
         idle.log
             .emit(Level::Info, "writer.idle.carrier", &json!({}))
     );
-    let deadline = Instant::now() + Duration::from_secs(2);
-    while !idle.stores("log.gated") {
-        assert!(
-            Instant::now() < deadline,
-            "the count did not leave with the event"
-        );
-        std::thread::sleep(Duration::from_millis(1));
-    }
+    idle.wait_for("log.gated");
 }
 
+/// The check sets the wait and the bound on the rate of the reports to zero, so the report follows the end of one interval.
 // contract: log.writer.a-count-waits-for-a-write
 #[test]
 fn a_count_of_the_gate_wakes_the_writer() {
     let idle = idle(Duration::from_millis(5));
-    idle.log.set_gated_wait(Duration::from_millis(50));
+    idle.log.set_gated_wait(Duration::ZERO);
+    idle.log.set_gated_report_interval(Duration::ZERO);
     assert!(!idle.log.gate(Class::Io, Level::Trace));
-    let deadline = Instant::now() + Duration::from_secs(3);
-    while !idle.stores("log.gated") {
-        assert!(Instant::now() < deadline, "the count was not reported");
-        std::thread::sleep(Duration::from_millis(5));
-    }
+    idle.wait_for("log.gated");
 }
 
 // contract: log.writer.sleeps-with-nothing-to-write

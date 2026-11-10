@@ -14,7 +14,6 @@ import (
 	"syscall"
 	"testing"
 	"testing/fstest"
-	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/src/platform"
@@ -142,12 +141,9 @@ func quitAfterTheStart(directory string) {
 		fmt.Println(err)
 		return
 	}
-	select {
-	case <-quit:
-		fmt.Println("quit requested")
-	case <-time.After(5 * time.Second):
-		fmt.Println("the framework received no quit")
-	}
+	// A framework that receives no quit leaves the child waiting, and the check of its parent stops at the limit of its runner.
+	<-quit
+	fmt.Println("quit requested")
 }
 
 // quitFramework is the framework of the start of the host without an application. A step of the main thread is a native call that

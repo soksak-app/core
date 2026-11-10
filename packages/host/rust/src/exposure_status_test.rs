@@ -311,9 +311,11 @@ fn a_reload_asked_of_a_page_ends_the_requests_to_its_surfaces() {
         matches!(ended, Err(failure) if failure.code == MISSING_DOCUMENT),
         "the request to a surface of the reloading page did not end with the closed-document code"
     );
-    assert!(
-        theirs.try_recv().is_err(),
-        "the request to a surface of another window ended"
+    // The reload ends the requests that it ends before it returns, so the relay still holds the request of the other window.
+    assert_eq!(
+        relay.pending_count("surface-second-tab"),
+        1,
+        "the requests to a surface of another window that the relay holds after the reload"
     );
     relay.abandon("surface-second-tab");
     assert!(
@@ -395,21 +397,20 @@ fn a_burst_of_window_changes_is_one_more_read_on_one_thread() {
         begins,
     } = held_latest_work();
     work.ask("main", 0);
-    begins.recv_timeout(Duration::from_secs(5)).unwrap();
+    begins.recv().unwrap();
     for value in 1..=100 {
         work.ask("main", value);
     }
-    // Every run that the burst started has begun or never will: it is released, and the last value decides the end.
-    for _ in 0..101 {
-        release.send(()).unwrap();
-    }
-    let deadline = std::time::Instant::now() + Duration::from_secs(5);
-    while runs.lock().unwrap().last().map(|run| run.0) != Some(100)
-        && std::time::Instant::now() < deadline
-    {
-        std::thread::sleep(Duration::from_millis(5));
-    }
-    std::thread::sleep(Duration::from_millis(100));
+    // The first run ends, and the requests of the burst begin one further run.
+    release.send(()).unwrap();
+    begins.recv().unwrap();
+    // While that run is held no request waits, so it is the last run: none begins after it until a new request.
+    let waiting = work.shared.0.lock().unwrap().asked.len();
+    release.send(()).unwrap();
+    assert_eq!(
+        waiting, 0,
+        "the requests that wait during the run after the burst"
+    );
     let runs = runs.lock().unwrap();
     let values: Vec<u32> = runs.iter().map(|run| run.0).collect();
     assert_eq!(values, [0, 100], "the runs of the burst");
@@ -428,17 +429,17 @@ fn each_window_keeps_its_own_latest_read_on_the_same_thread() {
         begins,
     } = held_latest_work();
     work.ask("main", 1);
-    begins.recv_timeout(Duration::from_secs(5)).unwrap();
+    begins.recv().unwrap();
     work.ask("second", 2);
     work.ask("third", 3);
     release.send(()).unwrap();
-    begins.recv_timeout(Duration::from_secs(5)).unwrap();
+    begins.recv().unwrap();
     release.send(()).unwrap();
-    begins.recv_timeout(Duration::from_secs(5)).unwrap();
+    begins.recv().unwrap();
     release.send(()).unwrap();
     // The queue is empty now; the thread waits and takes the next request.
     work.ask("main", 4);
-    begins.recv_timeout(Duration::from_secs(5)).unwrap();
+    begins.recv().unwrap();
     release.send(()).unwrap();
     let runs = runs.lock().unwrap();
     let mut values: Vec<u32> = runs.iter().map(|run| run.0).collect();

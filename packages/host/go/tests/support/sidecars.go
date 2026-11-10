@@ -17,8 +17,8 @@ import (
 // EchoSidecar is the name of the sidecar that Declare declares.
 const EchoSidecar = "@fixture/sidecar-echo"
 
-// Stall is the upper bound that ends a hung check. Success is decided by the received events and the ended processes and not by this time.
-// Even on a heavily loaded machine, the reply and the exit of the sidecar arrive within it.
+// Stall bounds a read of a fixture connection, as a fixture read timeout does; it decides no outcome, and a check sets no
+// bound of its own on a wait for an event, which its runner ends.
 const Stall = 120 * time.Second
 
 // MessageLimit is the maximum size before the line break in one line of a sidecar message (docs/spec/sidecars.md#messages).
@@ -58,14 +58,10 @@ func (o *FakeOwner) DeliverSidecarMessage(message host.SidecarMessage) {
 	o.Seen <- struct{}{}
 }
 
-// Next waits for the next sidecar event and returns it.
+// Next waits for the next sidecar event and returns it. The runner ends a check whose event does not come.
 func (o *FakeOwner) Next(t *testing.T) host.SidecarMessage {
 	t.Helper()
-	select {
-	case <-o.Seen:
-	case <-time.After(Stall):
-		t.Fatalf("no sidecar event within %v; the test stalled", Stall)
-	}
+	<-o.Seen
 	o.Mu.Lock()
 	defer o.Mu.Unlock()
 	return o.Events[len(o.Events)-1]
@@ -78,15 +74,10 @@ type SidecarFailure struct {
 	Reason  string `json:"reason"`
 }
 
-// Failure waits for the next failure event and returns it in the JSON form.
+// Failure waits for the next failure event and returns it in the JSON form. The runner ends a check whose failure does not come.
 func (o *FakeOwner) Failure(t *testing.T) SidecarFailure {
 	t.Helper()
-	var value any
-	select {
-	case value = <-o.Failures:
-	case <-time.After(Stall):
-		t.Fatalf("no sidecar failure within %v; the test stalled", Stall)
-	}
+	value := <-o.Failures
 	data, err := json.Marshal(value)
 	if err != nil {
 		t.Fatal(err)
@@ -156,20 +147,9 @@ func HarnessDeclarations(folder string) []host.SidecarDeclaration {
 		Data: []byte(`{"executable":"service","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}`)}}
 }
 
-// SendWithin sends to fixture-service and returns the result within limit. If it does not return, the check fails.
-func SendWithin(t *testing.T, sidecars *host.Sidecars, owner *HarnessOwner, limit time.Duration) error {
-	t.Helper()
-	result := make(chan error, 1)
-	go func() {
-		result <- sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`))
-	}()
-	select {
-	case err := <-result:
-		return err
-	case <-time.After(limit):
-		t.Fatalf("the send did not return within %v", limit)
-		return nil
-	}
+// SendOpen sends the open request to fixture-service and returns its result. The runner ends a check whose send does not return.
+func SendOpen(sidecars *host.Sidecars, owner *HarnessOwner) error {
+	return sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`))
 }
 
 // SocketParent is a short temporary directory that fits within the socket path length limit.

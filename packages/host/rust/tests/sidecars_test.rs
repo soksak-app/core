@@ -20,10 +20,6 @@ use soksak_host::sidecars::{
     read_message_line,
 };
 
-/// The upper limit that ends a stalled check. Success is decided by the received event and the ended process and not by
-/// this time. Even on a heavily loaded machine, the answer and the end of the sidecar come within this time.
-const STALL: Duration = Duration::from_secs(120);
-
 /// The writer of the records is process-wide, so the tests that attach it run one at a time.
 static SERIAL: Mutex<()> = Mutex::new(());
 
@@ -144,17 +140,19 @@ fn echo_sidecars() -> (Sidecars<FakeOwner>, folder::Folder) {
     let directory = folder::Folder::new();
     let record = directory.path().join("requests");
     let program = directory.path().join("echo");
-    std::fs::write(&program, format!("#!/bin/sh\ntee {}\n", record.display())).unwrap();
+    // The sidecar records the lines that remain on its way out, so it ignores the terminate signal of the stop and ends
+    // with its input.
+    std::fs::write(
+        &program,
+        format!("#!/bin/sh\ntrap '' TERM\ntee {}\n", record.display()),
+    )
+    .unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let mut sidecars = create(
+    let sidecars = create(
         &files(r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#),
         directory.path(),
     )
     .unwrap();
-    // stop closes stdin and waits for echo to record the remaining lines and end. With a short deadline it would be
-    // ended by force before recording under load, so the deadline is set to STALL. echo ends soon at EOF, so the check
-    // does not become slow.
-    sidecars.stop_timeout = STALL;
     (sidecars, directory)
 }
 
@@ -170,7 +168,7 @@ fn messages_reach_the_owning_window_only() {
     sidecars
         .send(&second, ECHO, "s2", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    let event = first_events.recv_timeout(STALL).unwrap();
+    let event = first_events.recv().unwrap();
     assert_eq!(
         (
             event.sidecar.as_str(),
@@ -179,7 +177,7 @@ fn messages_reach_the_owning_window_only() {
         ),
         (ECHO, "s1", r#"{"operation":"open"}"#)
     );
-    assert_eq!(second_events.recv_timeout(STALL).unwrap().surface, "s2");
+    assert_eq!(second_events.recv().unwrap().surface, "s2");
     let error = sidecars.send(&second, ECHO, "s1", &raw("{}")).unwrap_err();
     assert!(error.contains("another window"), "{error}");
     sidecars.retain(&first, &|_| false).unwrap();
@@ -202,12 +200,14 @@ fn messages_reach_the_owning_window_only() {
 #[test]
 fn a_surface_keeps_the_root_it_was_opened_with() {
     let (sidecars, directory) = echo_sidecars();
-    let (before, _before_events) = owner("a", "/projects/a");
+    let (before, before_events) = owner("a", "/projects/a");
     // Even after the same window changed to another project, an already opened surface sends with the first root.
     let (after, _after_events) = owner("a", "/projects/b");
     sidecars
         .send(&before, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
+    // The echo is the event that the sidecar ignores the terminate signal of the stop, so it records every line.
+    before_events.recv().unwrap();
     sidecars
         .send(&after, ECHO, "s1", &raw(r#"{"operation":"input"}"#))
         .unwrap();
@@ -231,12 +231,14 @@ fn a_surface_keeps_the_root_it_was_opened_with() {
 #[test]
 fn closing_a_surface_keeps_other_sessions() {
     let (sidecars, directory) = echo_sidecars();
-    let (window, _events) = owner("a", "/projects/a");
+    let (window, events) = owner("a", "/projects/a");
     for surface in ["s1", "state:files:p1"] {
         sidecars
             .send(&window, ECHO, surface, &raw(r#"{"operation":"open"}"#))
             .unwrap();
     }
+    // The echo is the event that the sidecar ignores the terminate signal of the stop, so it records every line.
+    events.recv().unwrap();
     // The surface synchronization closes only the removed surfaces.
     sidecars
         .retain(&window, &|surface| surface != "s1")
@@ -279,7 +281,11 @@ fn close_reaches_only_the_sidecar_that_holds_the_surface() {
         (&second, second.path().join("requests")),
     ] {
         let program = dir.path().join("echo");
-        std::fs::write(&program, format!("#!/bin/sh\ntee {}\n", record.display())).unwrap();
+        std::fs::write(
+            &program,
+            format!("#!/bin/sh\ntrap '' TERM\ntee {}\n", record.display()),
+        )
+        .unwrap();
         std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
     }
     let declare_in = |name: &str, folder: &Path| SidecarDeclaration {
@@ -295,15 +301,18 @@ fn close_reaches_only_the_sidecar_that_holds_the_surface() {
         declare_in(ECHO, first.path()),
         declare_in(SECOND, second.path()),
     ];
-    let mut sidecars = Sidecars::new(&declarations, first.path().to_path_buf()).unwrap();
-    sidecars.stop_timeout = STALL;
-    let (window, _events) = owner("a", "/projects/a");
+    let sidecars = Sidecars::new(&declarations, first.path().to_path_buf()).unwrap();
+    let (window, events) = owner("a", "/projects/a");
     sidecars
         .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     sidecars
         .send(&window, SECOND, "s2", &raw(r#"{"operation":"open"}"#))
         .unwrap();
+    // The echo of each sidecar is the event that it ignores the terminate signal of the stop, so it records every line.
+    let mut echoed: Vec<String> = (0..2).map(|_| events.recv().unwrap().sidecar).collect();
+    echoed.sort();
+    assert_eq!(echoed, [ECHO.to_string(), SECOND.to_string()]);
     // The surface synchronization closes the removed s1 only.
     sidecars
         .retain(&window, &|surface| surface != "s1")
@@ -377,18 +386,17 @@ fn a_sidecar_receives_the_log_directory() {
     )
     .unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let mut created = create(
+    let created = create(
         &files(r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#),
         directory.path(),
     )
     .unwrap();
-    created.stop_timeout = STALL;
     // The application stops its sidecars when it exits (docs/spec/sidecars.md#messages), so the check stops them in drop,
     // even when it fails.
     let sidecars = Stopping(created);
     let (window, events) = owner("a", "/projects/a");
     sidecars.send(&window, ECHO, "s1", &raw("{}")).unwrap();
-    events.recv_timeout(STALL).unwrap();
+    events.recv().unwrap();
     let config = directory.path().canonicalize().unwrap();
     assert_eq!(
         std::fs::read_to_string(&record).unwrap(),
@@ -402,10 +410,13 @@ fn declaring_adds_sidecars_installed_after_the_start() {
     let directory = folder::Folder::new();
     let record = directory.path().join("requests");
     let program = directory.path().join("echo");
-    std::fs::write(&program, format!("#!/bin/sh\ntee {}\n", record.display())).unwrap();
+    std::fs::write(
+        &program,
+        format!("#!/bin/sh\ntrap '' TERM\ntee {}\n", record.display()),
+    )
+    .unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let mut sidecars = create(&Vec::new(), directory.path()).unwrap();
-    sidecars.stop_timeout = STALL;
+    let sidecars = create(&Vec::new(), directory.path()).unwrap();
     let (window, events) = owner("a", "/projects/a");
     let error = sidecars.send(&window, ECHO, "s1", &raw("{}")).unwrap_err();
     assert!(error.contains("is not declared by any plugin"), "{error}");
@@ -418,7 +429,7 @@ fn declaring_adds_sidecars_installed_after_the_start() {
     sidecars
         .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    let event = events.recv_timeout(STALL).unwrap();
+    let event = events.recv().unwrap();
     assert_eq!(
         (event.surface.as_str(), event.body.get()),
         ("s1", r#"{"operation":"open"}"#)
@@ -512,7 +523,7 @@ fn an_invalid_declaration_leaves_the_other_sidecars_declared() {
     const EARLIER: &str = "@fixture/sidecar-earlier";
     let directory = folder::Folder::new();
     let program = directory.path().join("echo");
-    std::fs::write(&program, "#!/bin/sh\ncat\n").unwrap();
+    std::fs::write(&program, "#!/bin/sh\ntrap '' TERM\ncat\n").unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
     let fixture: Files = vec![
         (
@@ -524,8 +535,7 @@ fn an_invalid_declaration_leaves_the_other_sidecars_declared() {
     ];
     let path = directory.path().join("sidecar.json").display().to_string();
     let refused = format!("sidecar {EARLIER}: {path}: displayName is required");
-    let mut sidecars = create(&fixture, directory.path()).unwrap();
-    sidecars.stop_timeout = STALL;
+    let sidecars = create(&fixture, directory.path()).unwrap();
     let (window, events) = owner("a", "/projects/a");
     assert_eq!(
         sidecars
@@ -536,7 +546,7 @@ fn an_invalid_declaration_leaves_the_other_sidecars_declared() {
     sidecars
         .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    assert_eq!(events.recv_timeout(STALL).unwrap().surface, "s1");
+    assert_eq!(events.recv().unwrap().surface, "s1");
     // A declaration after the start keeps the valid sidecar running and the invalid one undeclared.
     sidecars
         .declare(&declare(&fixture, directory.path()))
@@ -550,10 +560,7 @@ fn an_invalid_declaration_leaves_the_other_sidecars_declared() {
     sidecars
         .send(&window, ECHO, "s1", &raw(r#"{"operation":"next"}"#))
         .unwrap();
-    assert_eq!(
-        events.recv_timeout(STALL).unwrap().body.get(),
-        r#"{"operation":"next"}"#
-    );
+    assert_eq!(events.recv().unwrap().body.get(), r#"{"operation":"next"}"#);
     sidecars.stop();
 }
 
@@ -595,19 +602,18 @@ fn plugins_without_sidecars_declare_none() {
     assert!(error.contains("is not declared by any plugin"), "{error}");
 }
 
-// contract: sidecars.send.fails-fast-when-sidecar-not-keeping-up, sidecars.send.slow-sidecar-does-not-block-others, sidecars.stop.honors-stop-timeout
+// contract: sidecars.send.fails-fast-when-sidecar-not-keeping-up, sidecars.send.slow-sidecar-does-not-block-others
 #[test]
 fn slow_sidecar_does_not_block_other_sends() {
     // The slow sidecar does not read stdin, and the other sidecar works normally. If more than 256 are sent to the slow
-    // sidecar, it eventually fails with an "is not keeping up" error. This test checks two properties:
-    // 1. Even when the channel of the slow sidecar is full, send() to the fast sidecar does not block.
-    // 2. stop() keeps stop_timeout.
+    // sidecar, it eventually fails with an "is not keeping up" error. Even when the channel of the slow sidecar is full,
+    // send() to the fast sidecar does not block.
 
     let directory = folder::Folder::new();
 
-    // The slow sidecar: it does not read stdin, so the pipe fills and stop kills it after the deadline. A program that
-    // reads stdin, such as cat, has a read speed that depends on the load, so whether the channel fills is not
-    // determined.
+    // The slow sidecar: it does not read stdin, so the pipe fills and it ends at the terminate signal of the stop. A
+    // program that reads stdin, such as cat, has a read speed that depends on the load, so whether the channel fills is
+    // not determined.
     let slow_program = directory.path().join("slow");
     std::fs::write(&slow_program, "#!/bin/sh\nexec sleep 600\n").unwrap();
     std::fs::set_permissions(&slow_program, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -630,14 +636,10 @@ fn slow_sidecar_does_not_block_other_sends() {
                 .to_string(),
         ),
     ];
-    let mut sidecars = create(&files, directory.path()).unwrap();
-    // The deadline is set to 100 ms for the test.
-    sidecars.stop_timeout = Duration::from_millis(100);
+    let sidecars = create(&files, directory.path()).unwrap();
     let (owner, _events) = owner("a", "/projects/test");
 
-    // The first send to the fast sidecar starts that process. The start time is unrelated to property 1, so it is
-    // started first and only recorded.
-    let started = std::time::Instant::now();
+    // The first send to the fast sidecar starts that process, so the send of property 1 goes to a running process.
     sidecars
         .send(
             &owner,
@@ -646,10 +648,6 @@ fn slow_sidecar_does_not_block_other_sends() {
             &raw(r#"{"data":"start"}"#),
         )
         .unwrap();
-    println!(
-        "the first fast send, which starts the process, took {:?}",
-        started.elapsed()
-    );
 
     // Send to the slow sidecar until its channel is full.
     let large_body = raw(&format!(r#"{{"data":"{}"}}"#, "x".repeat(20 * 1024)));
@@ -671,9 +669,9 @@ fn slow_sidecar_does_not_block_other_sends() {
         last_err
     );
 
-    // Property 1: even when the channel of the slow sidecar is full, send() to the fast sidecar does not block. send()
-    // only puts into the channel of the already started process and returns at once, so it must take less than 50 ms.
-    let start = std::time::Instant::now();
+    // Property 1: even when the channel of the slow sidecar is full, send() to the fast sidecar does not block. The slow
+    // sidecar reads nothing until the stop, so a send that waits for its channel does not return, and the check stops at
+    // the limit of its runner.
     sidecars
         .send(
             &owner,
@@ -682,40 +680,24 @@ fn slow_sidecar_does_not_block_other_sends() {
             &raw(r#"{"data":"test"}"#),
         )
         .unwrap();
-    let send_elapsed = start.elapsed();
-    assert!(
-        send_elapsed < Duration::from_millis(50),
-        "fast send took {:?}, want < 50ms",
-        send_elapsed
-    );
 
-    // Property 2: stop() keeps stop_timeout (100 ms). Asserting with a 200 ms deadline distinguishes it clearly from
-    // the default 5 seconds. The earlier code measured send and stop together and asserted 110 ms, which was the
-    // unreasonable claim that "the OS kills and reaps the process in 10 ms or less".
-    let start = std::time::Instant::now();
+    // The slow sidecar does not read its input and ends at the terminate signal of the stop.
     sidecars.stop();
-    let stop_elapsed = start.elapsed();
-    assert!(
-        stop_elapsed < Duration::from_millis(200),
-        "stop() took {:?}, want < 200ms (2 × stop_timeout)",
-        stop_elapsed
-    );
 }
 
 // contract: sidecars.stop.graceful-on-stdin-eof
 #[test]
 fn stop_graceful_shutdown() {
-    // Verifies that, when the sidecar actually reads stdin, stop() ends normally by stdin EOF. The measurement starts
-    // after the sidecar received the echo of send, and checks that it ends at once without waiting for the deadline (1
-    // second).
+    // Verifies that, when the sidecar actually reads stdin, stop() ends by the exit of the sidecar at stdin EOF.
 
     let directory = folder::Folder::new();
 
-    // The sidecar: it echoes the received line as it is and ends normally at stdin EOF.
+    // The sidecar: it echoes the received line as it is and ends normally at stdin EOF. It ignores the terminate signal
+    // of the stop, so it ends by its input.
     let graceful_program = directory.path().join("graceful");
     std::fs::write(
         &graceful_program,
-        "#!/bin/sh\nwhile read line; do echo \"$line\"; done\nexit 0\n",
+        "#!/bin/sh\ntrap '' TERM\nwhile read line; do echo \"$line\"; done\nexit 0\n",
     )
     .unwrap();
     std::fs::set_permissions(&graceful_program, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -726,11 +708,7 @@ fn stop_graceful_shutdown() {
             .to_string(),
     )];
 
-    let mut sidecars = create(&files, directory.path()).unwrap();
-    // stop() ends by force only after the deadline passes. If it returns before the deadline, the sidecar ended by
-    // itself at stdin EOF. The deadline is set to STALL, which is sufficiently longer than the process end time on a
-    // loaded machine.
-    sidecars.stop_timeout = STALL;
+    let sidecars = create(&files, directory.path()).unwrap();
     let (owner, events) = owner("a", "/projects/test");
 
     // Start the sidecar.
@@ -743,27 +721,16 @@ fn stop_graceful_shutdown() {
         )
         .unwrap();
 
-    // Check that the sidecar actually reads stdin: wait for the echo event. In this way the start time of the shell
-    // process is not included in the measurement.
-    let event = events
-        .recv_timeout(STALL)
-        .expect("no echo event; the test stalled");
+    // Check that the sidecar actually reads stdin: wait for the echo event.
+    let event = events.recv().expect("no echo event; the test stalled");
     assert_eq!(
         (event.sidecar.as_str(), event.surface.as_str()),
         ("@fixture/sidecar-graceful", "s1")
     );
 
-    // Now measure the time of the stop() call. It must end normally at stdin EOF.
-    let start = std::time::Instant::now();
+    // The stop ends by the exit of the sidecar at the end of its input; a stop that does not end stops at the limit of
+    // the runner.
     sidecars.stop();
-    let elapsed = start.elapsed();
-
-    assert!(
-        elapsed < sidecars.stop_timeout,
-        "graceful stop took {:?}, which reached the {:?} deadline",
-        elapsed,
-        sidecars.stop_timeout
-    );
 }
 
 // contract: sidecars.stop.closes-unread-output
@@ -794,7 +761,7 @@ fn stop_closes_unread_output_in_child() {
     let program = directory.path().join("talkative");
     std::fs::write(
         &program,
-        "#!/bin/sh\nwhile read line; do echo \"$line\"; done\n\
+        "#!/bin/sh\ntrap '' TERM\nwhile read line; do echo \"$line\"; done\n\
          i=0\nwhile [ $i -lt 3000 ]; do echo '{\"surface\":\"s1\",\"closed\":true}'; i=$((i+1)); done\nexit 0\n",
     )
     .unwrap();
@@ -804,10 +771,7 @@ fn stop_closes_unread_output_in_child() {
         r#"{"executable":"talkative","displayName":"soksak://sidecar/probe","protocol":1}"#
             .to_string(),
     )];
-    let mut sidecars = create(&files, directory.path()).unwrap();
-    // stop() ends by force only after the deadline passes. If it returns before the deadline, the sidecar wrote all of
-    // its output and ended by itself.
-    sidecars.stop_timeout = STALL;
+    let sidecars = create(&files, directory.path()).unwrap();
     let (owner, events) = owner("a", "/projects/test");
     sidecars
         .send(
@@ -817,18 +781,10 @@ fn stop_closes_unread_output_in_child() {
             &raw(r#"{"test":"data"}"#),
         )
         .unwrap();
-    let event = events
-        .recv_timeout(STALL)
-        .expect("no echo event; the test stalled");
+    let event = events.recv().expect("no echo event; the test stalled");
     assert_eq!(event.surface, "s1");
-    let start = std::time::Instant::now();
+    // A stop that waits on the unread output does not return, and the check stops at the limit of its runner.
     sidecars.stop();
-    let elapsed = start.elapsed();
-    assert!(
-        elapsed < sidecars.stop_timeout,
-        "stop took {elapsed:?} and reached the {:?} deadline: the host left the unread output open",
-        sidecars.stop_timeout
-    );
 }
 
 // contract: sidecars.stop.reads-output-to-end
@@ -840,30 +796,20 @@ fn stop_reads_output_to_its_end() {
     // close sends when the application ends.
     let Some(stderr) = logged_by_child("stop_reads_output_to_its_end") else {
         records::capturing(|| {
-            let (mut sidecars, directory) = script_sidecars(
-                "#!/bin/sh\nclosed=\nwhile read line; do case \"$line\" in *'\"closed\":true'*) closed=1;; *) echo \"$line\";; esac; done\n\
+            let (sidecars, directory) = script_sidecars(
+                "#!/bin/sh\ntrap '' TERM\nclosed=\nwhile read line; do case \"$line\" in *'\"closed\":true'*) closed=1;; *) echo \"$line\";; esac; done\n\
              [ -n \"$closed\" ] || exit 4\necho '{\"surface\":\"s1\",\"closed\":true}' || exit 5\n\
              i=0\nwhile [ $i -lt 3000 ]; do echo '{\"surface\":\"s1\",\"body\":\"late\"}' || exit 5; i=$((i+1)); done\n\
              echo finished > DIR/finished\nexit 0\n",
             );
-            sidecars.0.stop_timeout = STALL;
             let (window, events) = owner("a", "/projects/test");
             sidecars
                 .send(&window, ECHO, "s1", &raw(r#"{"test":"data"}"#))
                 .unwrap();
-            let event = events
-                .recv_timeout(STALL)
-                .expect("no echo event; the test stalled");
+            let event = events.recv().expect("no echo event; the test stalled");
             assert_eq!(event.surface, "s1");
             sidecars.retain(&window, &|_| false).unwrap();
-            let start = std::time::Instant::now();
             sidecars.stop();
-            let elapsed = start.elapsed();
-            assert!(
-                elapsed < sidecars.stop_timeout,
-                "stop took {elapsed:?} and reached the {:?} deadline",
-                sidecars.stop_timeout
-            );
             let finished = std::fs::read_to_string(directory.path().join("finished"));
             assert!(
                 matches!(&finished, Ok(text) if text == "finished\n"),
@@ -885,18 +831,15 @@ fn stop_reports_exit_status() {
     // the same format by both hosts.
     let Some(stderr) = logged_by_child("stop_reports_exit_status") else {
         records::capturing(|| {
-            for ending in ["exit 3", "kill -TERM $$"] {
-                let (mut sidecars, _directory) = script_sidecars(&format!(
-                    "#!/bin/sh\nwhile read line; do echo \"$line\"; done\n{ending}\n"
+            for ending in ["exit 3", "kill -HUP $$"] {
+                let (sidecars, _directory) = script_sidecars(&format!(
+                    "#!/bin/sh\ntrap '' TERM\nwhile read line; do echo \"$line\"; done\n{ending}\n"
                 ));
-                sidecars.0.stop_timeout = STALL;
                 let (window, events) = owner("a", "/projects/test");
                 sidecars
                     .send(&window, ECHO, "s1", &raw(r#"{"test":"data"}"#))
                     .unwrap();
-                let event = events
-                    .recv_timeout(STALL)
-                    .expect("no echo event; the test stalled");
+                let event = events.recv().expect("no echo event; the test stalled");
                 assert_eq!(event.surface, "s1");
                 sidecars.stop();
             }
@@ -905,7 +848,7 @@ fn stop_reports_exit_status() {
     };
     for want in [
         "error host sidecar @fixture/sidecar-echo: exited while stopping: exit status 3\n",
-        "error host sidecar @fixture/sidecar-echo: exited while stopping: signal 15\n",
+        "error host sidecar @fixture/sidecar-echo: exited while stopping: signal 1\n",
     ] {
         assert!(
             stderr.contains(want),
@@ -922,21 +865,17 @@ fn the_standard_error_of_a_sidecar_is_written_as_records() {
     let Some(stderr) = logged_by_child("the_standard_error_of_a_sidecar_is_written_as_records")
     else {
         records::capturing(|| {
-            let (mut sidecars, _directory) = script_sidecars(
+            let (sidecars, _directory) = script_sidecars(
                 "#!/bin/sh\necho 'first line' >&2\nprintf 'no line feed' >&2\nwhile read line; do echo \"$line\"; done\n",
             );
-            sidecars.0.stop_timeout = STALL;
             let (window, events) = owner("a", "/projects/test");
             sidecars
                 .send(&window, ECHO, "s1", &raw(r#"{"test":"data"}"#))
                 .unwrap();
-            let event = events
-                .recv_timeout(STALL)
-                .expect("no echo event; the test stalled");
+            let event = events.recv().expect("no echo event; the test stalled");
             assert_eq!(event.surface, "s1");
+            // The stop ends after the last record of the standard error.
             sidecars.stop();
-            // The reader of the standard error ends with the process; let it write its last record.
-            std::thread::sleep(Duration::from_millis(200));
         });
         return;
     };
@@ -975,10 +914,9 @@ fn the_relay_records_every_message_with_its_whole_body() {
     }
     // Every request that the host sends to a sidecar and every message that it receives is a trace event with its whole
     // body, in the order of the relay (docs/spec/diagnostics.md).
-    let (mut sidecars, directory) = script_sidecars(
+    let (sidecars, directory) = script_sidecars(
         "#!/bin/sh\nread request\necho '{\"surface\":\"s1\",\"body\":{\"event\":\"state\",\"text\":\"\\ud55c\"}}'\nwhile read line; do :; done\n",
     );
-    sidecars.0.stop_timeout = STALL;
     let events_directory = folder::Folder::new();
     let writer = records::start_writer(events_directory.path());
     let _ = &directory;
@@ -992,9 +930,7 @@ fn the_relay_records_every_message_with_its_whole_body() {
             &raw(r#"{"operation":"input","bytes":"7ZWc"}"#),
         )
         .unwrap();
-    let event = events
-        .recv_timeout(STALL)
-        .expect("no event; the test stalled");
+    let event = events.recv().expect("no event; the test stalled");
     assert_eq!(event.surface, "s1");
     sidecars.stop();
     // Turning the trace off joins the sampler, so no process that it started outlives the check.
@@ -1033,7 +969,8 @@ fn close_during_stop_sends_nothing() {
     let directory = folder::Folder::new();
     // The sidecar: at the start it opens ended and release for writing and reading. It echoes the received line, and
     // when the input ends it writes one line to ended and stays alive until one line arrives in release. The sidecar
-    // keeps both pipes open, so the line it wrote is not discarded and the side that opens them is not blocked.
+    // keeps both pipes open, so the line it wrote is not discarded and the side that opens them is not blocked. It
+    // ignores the terminate signal of the stop, so it ends with its input and its release.
     let ended = directory.path().join("ended");
     let release = directory.path().join("release");
     for fifo in [&ended, &release] {
@@ -1049,7 +986,7 @@ fn close_during_stop_sends_nothing() {
     std::fs::write(
         &program,
         format!(
-            "#!/bin/sh\nexec 3<>{} 4<>{}\nwhile read line; do echo \"$line\"; done\n\
+            "#!/bin/sh\ntrap '' TERM\nexec 3<>{} 4<>{}\nwhile read line; do echo \"$line\"; done\n\
              echo ended >&4\nread -r released <&3\nexit 0\n",
             release.display(),
             ended.display()
@@ -1075,8 +1012,7 @@ fn close_during_stop_sends_nothing() {
         r#"{"executable":"lingering","displayName":"soksak://sidecar/probe","protocol":1}"#
             .to_string(),
     )];
-    let mut sidecars = create(&files, directory.path()).unwrap();
-    sidecars.stop_timeout = STALL;
+    let sidecars = create(&files, directory.path()).unwrap();
     let (owner, events) = owner("a", "/projects/test");
     for surface in ["s1", "s2"] {
         sidecars
@@ -1087,9 +1023,7 @@ fn close_during_stop_sends_nothing() {
                 &raw(r#"{"test":"data"}"#),
             )
             .unwrap();
-        let event = events
-            .recv_timeout(STALL)
-            .expect("no echo event; the test stalled");
+        let event = events.recv().expect("no echo event; the test stalled");
         assert_eq!(event.surface, surface);
     }
 
@@ -1113,68 +1047,218 @@ fn close_during_stop_sends_nothing() {
     });
 }
 
-// contract: sidecars.stop.kills-after-timeout
+// A sidecar that ignores the end of its input ends at the terminate signal of the stop: the stop ends by that exit, and
+// the host writes neither an error line nor an "exited while stopping" line for it.
+// contract: sidecars.stop.terminates-the-process-group
 #[test]
-fn stop_forced_kill() {
-    // Verifies that a sidecar that does not end after the deadline is killed and that kill is written to the log.
-    let Some(stderr) = logged_by_child("stop_forced_kill") else {
-        records::capturing(stop_forced_kill_in_child);
+fn a_stop_terminates_a_sidecar_that_ignores_its_input() {
+    let Some(stderr) = logged_by_child("a_stop_terminates_a_sidecar_that_ignores_its_input") else {
+        records::capturing(|| {
+            // The sidecar does not read stdin, so it keeps running after stdin EOF.
+            let (sidecars, directory) = script_sidecars("#!/bin/sh\nexec cat DIR/hold\n");
+            let _hold = hold_fifo(directory.path(), "hold");
+            let (window, _events) = owner("a", "/projects/test");
+            sidecars
+                .send(&window, ECHO, "s1", &raw(r#"{"test":"data"}"#))
+                .unwrap();
+            // A stop that waits for no exit and kills does not return before the exit, and a stop that waits forever
+            // stops at the limit of the runner.
+            sidecars.stop();
+        });
         return;
     };
-    let want = "error host sidecar @fixture/sidecar-stubborn: did not end within the stop timeout and was killed\n";
     assert!(
-        stderr.contains(want),
-        "log {stderr:?} does not contain {want:?}"
-    );
-    assert!(
-        !stderr.contains("exited while stopping"),
-        "log {stderr:?} reports the exit that the kill caused"
+        !stderr.contains("error host ") && !stderr.contains("exited while stopping"),
+        "the stop by the terminate signal wrote {stderr:?}"
     );
 }
 
-fn stop_forced_kill_in_child() {
-    let directory = folder::Folder::new();
-
-    // The sidecar: it does not read stdin, so it keeps running after stdin EOF. The stdin of a background command can
-    // become /dev/null depending on the shell and end at once, so it is not used.
-    let stubborn_program = directory.path().join("stubborn");
-    std::fs::write(&stubborn_program, "#!/bin/sh\nexec sleep 600\n").unwrap();
-    std::fs::set_permissions(&stubborn_program, std::fs::Permissions::from_mode(0o755)).unwrap();
-
-    let files: Files = vec![(
-        "@fixture/sidecar-stubborn",
-        r#"{"executable":"stubborn","displayName":"soksak://sidecar/probe","protocol":1}"#
-            .to_string(),
-    )];
-
-    let mut sidecars = create(&files, directory.path()).unwrap();
-    // The deadline is set to 100 ms for the test.
-    sidecars.stop_timeout = Duration::from_millis(100);
-    let (owner, _events) = owner("a", "/projects/test");
-
-    // Start the sidecar.
+// A stop other than the quit returns before the process exits: a declaration that removes a running sidecar returns
+// while the sidecar, which ignores the terminate signal and holds its exit until the check opens its gate, still runs,
+// and the host reaps it at its exit (docs/spec/sidecars.md#declaration-and-startup).
+// contract: sidecars.stop.returns-at-once-outside-the-quit
+#[test]
+fn a_stop_outside_the_quit_returns_before_the_exit() {
+    use std::io::Write;
+    let (sidecars, directory) = script_sidecars(
+        "#!/bin/sh\ntrap '' TERM\necho $$ > DIR/started\nread request\nread gate < DIR/gate\nexit 3\n",
+    );
+    let started = child_fifo(directory.path(), "started");
+    let mut gate = hold_fifo(directory.path(), "gate");
+    let (window, _events) = owner("a", "/projects/a");
     sidecars
-        .send(
-            &owner,
-            "@fixture/sidecar-stubborn",
-            "s1",
-            &raw(r#"{"test":"data"}"#),
-        )
+        .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-
-    // Call stop(). It must be killed after the deadline.
-    let start = std::time::Instant::now();
+    let pid = child_pid(&started);
+    let _killed = Killed(pid);
+    // A declaration that waits for the exit does not return before the gate opens, and the check stops at the limit of
+    // its runner.
+    sidecars.declare(&[]).unwrap();
+    assert_eq!(
+        unsafe { libc::kill(pid, 0) },
+        0,
+        "the declaration returned after the stopping sidecar {pid} ended: {}",
+        std::io::Error::last_os_error()
+    );
+    gate.write_all(b"open\n").unwrap();
+    require_gone(pid);
     sidecars.stop();
-    let elapsed = start.elapsed();
+}
 
-    // stop() kills after it waited for the deadline. If it returns before the deadline, it did not wait, and the upper
-    // limit catches only a stop. The time for the process to end after the kill grows with the load, so success is not
-    // decided by the upper limit.
+// The stop of the quit writes, for each process that it waits for, the record of that wait
+// (docs/spec/sidecars.md#declaration-and-startup).
+// contract: sidecars.stop.records-what-the-quit-waits-for
+#[test]
+fn the_quit_records_the_processes_that_it_waits_for() {
+    const STARTED: &str = "the check started the sidecar as process ";
+    let Some(stderr) = logged_by_child("the_quit_records_the_processes_that_it_waits_for") else {
+        records::capturing(|| {
+            let (sidecars, directory) = script_sidecars(
+                "#!/bin/sh\necho $$ > DIR/started\nwhile read line; do echo \"$line\"; done\n",
+            );
+            let started = child_fifo(directory.path(), "started");
+            let (window, _events) = owner("a", "/projects/a");
+            sidecars
+                .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+                .unwrap();
+            // The parent reads the process id from the standard error of this child.
+            eprintln!("{STARTED}{}", child_pid(&started));
+            sidecars.stop();
+        });
+        return;
+    };
+    let pid = stderr
+        .lines()
+        .find_map(|line| line.strip_prefix(STARTED))
+        .unwrap_or_else(|| panic!("the child named no process in {stderr:?}"));
+    let want = format!("info host sidecar {ECHO}: the quit waits for the exit of process {pid}\n");
     assert!(
-        elapsed >= sidecars.stop_timeout && elapsed <= STALL,
-        "forced kill stop took {:?}, want at least the {:?} deadline",
-        elapsed,
-        sidecars.stop_timeout
+        stderr.contains(&want),
+        "log {stderr:?} does not contain {want:?}"
+    );
+}
+
+// The quit stop refuses the exit while a sidecar that it stops runs, ends at the exit of that sidecar, and accepts the
+// exit after it; without a sidecar to stop it accepts the exit at once (docs/spec/hosts.md#process-lifecycle).
+// contract: sidecars.stop.quit-exits-after-its-sidecars
+#[test]
+fn the_quit_stop_exits_after_its_sidecars() {
+    const STARTED: &str = "the check started the sidecar as process ";
+    let Some(stderr) = logged_by_child("the_quit_stop_exits_after_its_sidecars") else {
+        records::capturing(|| {
+            use std::io::Write;
+            // The sidecar ignores the terminate signal and the end of its input and exits when the check opens its
+            // gate.
+            let (sidecars, directory) = script_sidecars(
+                "#!/bin/sh\ntrap '' TERM\necho $$ > DIR/started\nread request\nread gate < DIR/gate\nexit 0\n",
+            );
+            let started = child_fifo(directory.path(), "started");
+            let mut gate = hold_fifo(directory.path(), "gate");
+            let (window, _events) = owner("a", "/projects/a");
+            sidecars
+                .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+                .unwrap();
+            let pid = child_pid(&started);
+            let _killed = Killed(pid);
+            eprintln!("{STARTED}{pid}");
+            let (end, ended) = channel::<()>();
+            assert!(
+                !sidecars.quit_stop(false, move || end.send(()).unwrap()),
+                "the quit stop accepted the exit while its sidecar runs"
+            );
+            // The gate holds the sidecar, so no exit can end the stop before the gate opens.
+            assert!(
+                ended.try_recv().is_err(),
+                "the quit stop ended while its sidecar runs"
+            );
+            assert_eq!(
+                unsafe { libc::kill(pid, 0) },
+                0,
+                "the quit stop ended the sidecar {pid} that it waits for"
+            );
+            gate.write_all(b"open\n").unwrap();
+            ended.recv().unwrap();
+            require_gone(pid);
+            assert!(
+                sidecars.quit_stop(false, || panic!("the end of an ended quit stop ran again")),
+                "the quit stop refused the exit after its sidecars exited"
+            );
+            let (empty, _empty_directory) = script_sidecars("#!/bin/sh\ncat\n");
+            assert!(
+                empty.quit_stop(false, || panic!(
+                    "the quit stop without a sidecar ran its end"
+                )),
+                "the quit stop without a sidecar refused the exit"
+            );
+        });
+        return;
+    };
+    let pid = stderr
+        .lines()
+        .find_map(|line| line.strip_prefix(STARTED))
+        .unwrap_or_else(|| panic!("the child named no process in {stderr:?}"));
+    let want = format!("info host sidecar {ECHO}: the quit waits for the exit of process {pid}\n");
+    assert!(
+        stderr.contains(&want),
+        "log {stderr:?} does not contain {want:?}"
+    );
+}
+
+// A quit request while the quit stop runs force-kills the process group of each sidecar that has not exited and records
+// it; the stop then ends by that exit (docs/spec/hosts.md#process-lifecycle).
+// contract: sidecars.stop.second-quit-kills-what-remains
+#[test]
+fn a_second_quit_kills_the_sidecars_that_the_quit_stop_waits_for() {
+    const STARTED: &str = "the check started the sidecar as process ";
+    let Some(stderr) =
+        logged_by_child("a_second_quit_kills_the_sidecars_that_the_quit_stop_waits_for")
+    else {
+        records::capturing(|| {
+            // The sidecar ignores the terminate signal and the end of its input, and the check never opens its gate.
+            let (sidecars, directory) = script_sidecars(
+                "#!/bin/sh\ntrap '' TERM\necho $$ > DIR/started\nread request\nread gate < DIR/gate\nexit 0\n",
+            );
+            let started = child_fifo(directory.path(), "started");
+            let _gate = hold_fifo(directory.path(), "gate");
+            let (window, _events) = owner("a", "/projects/a");
+            sidecars
+                .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+                .unwrap();
+            let pid = child_pid(&started);
+            let _killed = Killed(pid);
+            eprintln!("{STARTED}{pid}");
+            let (end, ended) = channel::<()>();
+            assert!(
+                !sidecars.quit_stop(false, move || end.send(()).unwrap()),
+                "the quit stop accepted the exit while its sidecar runs"
+            );
+            assert!(
+                !sidecars.quit_stop(false, || panic!("the second quit ran a second end")),
+                "the second quit accepted the exit while the sidecar runs"
+            );
+            // A second quit that kills nothing leaves the stop waiting, and the check stops at the limit of its runner.
+            ended.recv().unwrap();
+            require_gone(pid);
+            assert!(
+                sidecars.quit_stop(false, || {}),
+                "the quit stop refused the exit after the kill"
+            );
+        });
+        return;
+    };
+    let pid = stderr
+        .lines()
+        .find_map(|line| line.strip_prefix(STARTED))
+        .unwrap_or_else(|| panic!("the child named no process in {stderr:?}"));
+    let want = format!("info host sidecar {ECHO}: the second quit kills process {pid}\n");
+    assert!(
+        stderr.contains(&want),
+        "log {stderr:?} does not contain {want:?}"
+    );
+    // The exit by the force-kill signal of the second quit is the quit itself.
+    assert!(
+        !stderr.contains("exited while stopping"),
+        "log {stderr:?} reports the exit that the second quit caused"
     );
 }
 
@@ -1276,9 +1360,7 @@ fn a_message_at_the_limit_is_delivered() {
     sidecars
         .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    let event = events
-        .recv_timeout(STALL)
-        .expect("no sidecar event; the test stalled");
+    let event = events.recv().expect("no sidecar event; the test stalled");
     let body = event.body.get();
     assert_eq!(event.surface, "s1");
     assert_eq!(body.len(), padding + 2, "body length");
@@ -1304,7 +1386,7 @@ fn an_oversize_message_terminates_and_notifies() {
         .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     let failure = failures
-        .recv_timeout(STALL)
+        .recv()
         .expect("no sidecar failure; the test stalled");
     assert_eq!(
         (failure.sidecar.as_str(), failure.surface.as_str()),
@@ -1329,7 +1411,7 @@ fn an_invalid_message_terminates_and_notifies() {
             .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
             .unwrap();
         let failure = failures
-            .recv_timeout(STALL)
+            .recv()
             .unwrap_or_else(|_| panic!("{line}: no sidecar failure; the test stalled"));
         assert_eq!(
             (failure.sidecar.as_str(), failure.surface.as_str()),
@@ -1346,19 +1428,22 @@ fn an_invalid_message_terminates_and_notifies() {
 // contract: sidecars.failure.output-close-notifies-each-surface
 #[test]
 fn an_output_close_notifies_each_surface() {
-    let (sidecars, directory) =
-        script_sidecars("#!/bin/sh\necho $$ >> DIR/pids\nread first\nread second\nexit 3\n");
-    let (first, _first_events, first_failures) = failing_owner("a", "/projects/a");
+    // Each process answers its first line after it recorded its pid, so the answer is the event that the pid is recorded.
+    let (sidecars, directory) = script_sidecars(
+        "#!/bin/sh\necho $$ >> DIR/pids\nread first\nprintf '%s\\n' '{\"surface\":\"s1\",\"body\":\"recorded\"}'\nread second\nexit 3\n",
+    );
+    let (first, first_events, first_failures) = failing_owner("a", "/projects/a");
     let (second, _second_events, second_failures) = failing_owner("b", "/projects/b");
     sidecars
         .send(&first, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
+    first_events.recv().unwrap();
     sidecars
         .send(&second, ECHO, "s2", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     for (surface, failures) in [("s1", &first_failures), ("s2", &second_failures)] {
         let failure = failures
-            .recv_timeout(STALL)
+            .recv()
             .unwrap_or_else(|_| panic!("{surface}: no sidecar failure; the test stalled"));
         assert_eq!(
             (failure.sidecar.as_str(), failure.surface.as_str()),
@@ -1373,6 +1458,8 @@ fn an_output_close_notifies_each_surface() {
     sidecars
         .send(&first, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
+    // The new process recorded its pid when it answers, before the stop ends it.
+    first_events.recv().unwrap();
     sidecars.stop();
     assert!(
         first_failures.try_recv().is_err(),
@@ -1403,15 +1490,13 @@ fn closed_surface_messages_are_discarded_and_unknown_ones_fail() {
         .retain(&window, &|surface| surface != "s2")
         .unwrap();
     // The late message of s2 is discarded, and the s1 message after it is the first event.
-    let event = events
-        .recv_timeout(STALL)
-        .expect("no sidecar event; the test stalled");
+    let event = events.recv().expect("no sidecar event; the test stalled");
     assert_eq!(
         (event.surface.as_str(), event.body.get()),
         ("s1", r#""after""#)
     );
     let failure = failures
-        .recv_timeout(STALL)
+        .recv()
         .expect("no sidecar failure; the test stalled");
     assert_eq!(
         (
@@ -1469,8 +1554,8 @@ fn closed_surface_stays_closing_until_the_sidecar_answers() {
         .send(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
         .unwrap();
     sidecars.retain(&window, &|_| false).unwrap();
-    assert_eq!(snapshots.recv_timeout(STALL).unwrap(), closing_of("s1"));
-    assert_eq!(snapshots.recv_timeout(STALL).unwrap(), vec![]);
+    assert_eq!(snapshots.recv().unwrap(), closing_of("s1"));
+    assert_eq!(snapshots.recv().unwrap(), vec![]);
     sidecars.stop();
 }
 
@@ -1487,8 +1572,8 @@ fn failed_close_answer_is_logged() {
                 .send(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
                 .unwrap();
             sidecars.retain(&window, &|_| false).unwrap();
-            assert_eq!(snapshots.recv_timeout(STALL).unwrap(), closing_of("s1"));
-            assert_eq!(snapshots.recv_timeout(STALL).unwrap(), vec![]);
+            assert_eq!(snapshots.recv().unwrap(), closing_of("s1"));
+            assert_eq!(snapshots.recv().unwrap(), vec![]);
             sidecars.stop();
         });
         return;
@@ -1527,7 +1612,7 @@ fn failed_close_answer_is_logged_before_the_closing_entry_ends() {
                 .send(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
                 .unwrap();
             sidecars.retain(&window, &|_| false).unwrap();
-            end.recv_timeout(STALL).unwrap();
+            end.recv().unwrap();
             sidecars.stop();
         });
         return;
@@ -1582,16 +1667,13 @@ fn declaration_replaces_a_sidecar_whose_folder_changed() {
     sidecars
         .send(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
         .unwrap();
-    assert_eq!(
-        messages.recv_timeout(STALL).unwrap().body.get(),
-        r#"{"from":"first"}"#
-    );
+    assert_eq!(messages.recv().unwrap().body.get(), r#"{"from":"first"}"#);
     sidecars.declare(&declare(&files, &second)).unwrap();
     sidecars
         .send(&window, ECHO, "s1", &raw(r#"{"data":2}"#))
         .unwrap();
     assert_eq!(
-        messages.recv_timeout(STALL).unwrap().body.get(),
+        messages.recv().unwrap().body.get(),
         r#"{"from":"second"}"#,
         "the answer after the folder changed did not come from the sidecar of the new folder"
     );
@@ -1615,16 +1697,16 @@ fn repeated_close_awaits_each_answer() {
             sidecars
                 .send(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
                 .unwrap();
-            events.recv_timeout(STALL).unwrap();
+            events.recv().unwrap();
             sidecars.retain(&window, &|_| false).unwrap();
-            assert_eq!(snapshots.recv_timeout(STALL).unwrap(), closing_of("s1"));
+            assert_eq!(snapshots.recv().unwrap(), closing_of("s1"));
         }
-        while !snapshots.recv_timeout(STALL).unwrap().is_empty() {}
+        while !snapshots.recv().unwrap().is_empty() {}
         // The echo of a later request follows both answers in the output, so a failure of either answer is logged first.
         sidecars
             .send(&window, ECHO, "s2", &raw(r#"{"data":2}"#))
             .unwrap();
-        events.recv_timeout(STALL).unwrap();
+        events.recv().unwrap();
         sidecars.stop();
         return;
     }
@@ -1655,7 +1737,7 @@ fn close_answer_for_an_open_surface_fails_the_sidecar() {
     sidecars
         .send(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
         .unwrap();
-    let failure = failures.recv_timeout(STALL).unwrap();
+    let failure = failures.recv().unwrap();
     assert_eq!(failure.reason, "unexpected close answer for s1");
     sidecars.stop();
 }
@@ -1671,8 +1753,8 @@ fn ended_sidecar_leaves_no_closing_surface() {
         .send(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
         .unwrap();
     sidecars.retain(&window, &|_| false).unwrap();
-    assert_eq!(snapshots.recv_timeout(STALL).unwrap(), closing_of("s1"));
-    assert_eq!(snapshots.recv_timeout(STALL).unwrap(), vec![]);
+    assert_eq!(snapshots.recv().unwrap(), closing_of("s1"));
+    assert_eq!(snapshots.recv().unwrap(), vec![]);
     sidecars.stop();
 }
 
@@ -1702,20 +1784,12 @@ fn a_dropped_sidecar_message_is_recorded() {
             .retain(&window, &|surface| surface != "s2")
             .unwrap();
         // The message of s1 follows the discarded one, so the record of s2 is written when it arrives.
-        let event = events
-            .recv_timeout(STALL)
-            .expect("no sidecar event; the test stalled");
+        let event = events.recv().expect("no sidecar event; the test stalled");
         assert_eq!(event.surface, "s1");
         writer.flush().unwrap();
-        // The sidecar ends when its input closes, so the stop does not wait for its deadline.
-        let stopping = std::time::Instant::now();
+        // The sidecar ends at its stop, which ends by that exit; a stop that does not end stops at the limit of the
+        // runner.
         sidecars.stop();
-        let elapsed = stopping.elapsed();
-        assert!(
-            elapsed < Duration::from_secs(1),
-            "stop took {elapsed:?}; the sidecar ends with its input and must not wait the stop deadline of {:?}",
-            sidecars.stop_timeout
-        );
         return;
     }
     let config = folder::Folder::new();
@@ -1745,22 +1819,24 @@ fn a_dropped_sidecar_message_is_recorded() {
 fn the_lifetime_of_a_sidecar_is_recorded_as_events() {
     // The writer of the records is shared by the process, so the scenario runs in a child process that nothing else writes in.
     if let Some(config) = std::env::var_os("SOKSAK_LIFETIME_CHILD") {
-        // The first process ends by itself with a status; the second ends when the host stops it.
-        let (mut sidecars, _directory) = script_sidecars(
-            "#!/bin/sh\nif [ ! -f DIR/ran ]; then touch DIR/ran; read first; exit 3; fi\ncat >/dev/null\n",
+        // The first process ends by itself with a status; the second ends when the host stops it. It ignores the
+        // terminate signal of the stop, so it ends with its input and its status is 0. It answers its first line after
+        // it set the trap, so the answer is the event that it ignores the signal.
+        let (sidecars, _directory) = script_sidecars(
+            "#!/bin/sh\nif [ ! -f DIR/ran ]; then touch DIR/ran; read first; exit 3; fi\ntrap '' TERM\nread first\nprintf '%s\\n' '{\"surface\":\"s2\",\"body\":\"trapped\"}'\ncat >/dev/null\n",
         );
-        sidecars.0.stop_timeout = STALL;
         let writer = records::start_writer(Path::new(&config));
-        let (first, _first_events, failures) = failing_owner("a", "/projects/a");
+        let (first, first_events, failures) = failing_owner("a", "/projects/a");
         sidecars
             .send(&first, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
             .unwrap();
         failures
-            .recv_timeout(STALL)
+            .recv()
             .expect("no sidecar failure; the test stalled");
         sidecars
             .send(&first, ECHO, "s2", &raw(r#"{"operation":"open"}"#))
             .unwrap();
+        first_events.recv().unwrap();
         sidecars.stop();
         writer.flush().unwrap();
         return;
@@ -1811,8 +1887,7 @@ fn the_lifetime_of_a_sidecar_is_recorded_as_events() {
 fn the_sampler_names_a_running_sidecar_until_it_ends() {
     // The writer of the records and the trace switch belong to the process, so the scenario runs in a child process.
     if let Some(config) = std::env::var_os("SOKSAK_SAMPLER_CHILD") {
-        let (mut sidecars, _directory) = script_sidecars("#!/bin/sh\ncat >/dev/null\n");
-        sidecars.0.stop_timeout = STALL;
+        let (sidecars, _directory) = script_sidecars("#!/bin/sh\ncat >/dev/null\n");
         let writer = records::start_writer(Path::new(&config));
         soksak_host::performance::command(serde_json::json!({"action": "on"})).unwrap();
         records::wait_for_first_sample(Path::new(&config), &writer);
@@ -1866,8 +1941,7 @@ fn the_sampler_names_a_running_sidecar_until_it_ends() {
 fn a_request_with_cids_is_recorded_as_an_event() {
     // The writer of the records is shared by the process, so the scenario runs in a child process that nothing else writes in.
     if let Some(config) = std::env::var_os("SOKSAK_REQUEST_CHILD") {
-        let (mut sidecars, _directory) = script_sidecars("#!/bin/sh\ncat >/dev/null\n");
-        sidecars.0.stop_timeout = STALL;
+        let (sidecars, _directory) = script_sidecars("#!/bin/sh\ncat >/dev/null\n");
         let writer = records::start_writer(Path::new(&config));
         let (window, _events) = owner("a", "/projects/a");
         sidecars
@@ -1914,8 +1988,7 @@ fn a_request_with_cids_is_recorded_as_an_event() {
 // contract: sidecars.protocol.request-line-carries-cids
 #[test]
 fn a_request_carries_the_correlation_identifiers() {
-    let (mut sidecars, directory) = script_sidecars("#!/bin/sh\ntee DIR/requests\n");
-    sidecars.0.stop_timeout = STALL;
+    let (sidecars, directory) = script_sidecars("#!/bin/sh\ntee DIR/requests\n");
     let (window, events) = owner("a", "/projects/a");
     sidecars
         .send_with_cids(
@@ -1929,8 +2002,8 @@ fn a_request_carries_the_correlation_identifiers() {
     sidecars
         .send(&window, ECHO, "s1", &raw(r#"{"operation":"input"}"#))
         .unwrap();
-    events.recv_timeout(STALL).unwrap();
-    events.recv_timeout(STALL).unwrap();
+    events.recv().unwrap();
+    events.recv().unwrap();
     sidecars.stop();
     let requests = std::fs::read_to_string(directory.path().join("requests")).unwrap();
     assert_eq!(
@@ -1988,13 +2061,13 @@ fn a_message_of_a_sidecar_reaches_its_owner_with_the_identifiers_of_its_request(
             &["b1.7".to_string(), "b1.8".to_string()],
         )
         .unwrap();
-    assert_eq!(events.recv_timeout(STALL).unwrap().cids, ["b1.7", "b1.8"]);
+    assert_eq!(events.recv().unwrap().cids, ["b1.7", "b1.8"]);
     sidecars
         .send_with_cids(&window, ECHO, "s1", &body, &["b1.9".to_string()])
         .unwrap();
-    assert_eq!(events.recv_timeout(STALL).unwrap().cids, ["b1.9"]);
+    assert_eq!(events.recv().unwrap().cids, ["b1.9"]);
     sidecars.send(&window, ECHO, "s1", &body).unwrap();
-    assert!(events.recv_timeout(STALL).unwrap().cids.is_empty());
+    assert!(events.recv().unwrap().cids.is_empty());
 }
 
 // contract: sidecars.protocol.reply-with-cids-is-recorded
@@ -2002,8 +2075,7 @@ fn a_message_of_a_sidecar_reaches_its_owner_with_the_identifiers_of_its_request(
 fn a_reply_of_a_sidecar_is_recorded_with_the_identifiers_of_its_request() {
     // The writer of the records is shared by the process, so the scenario runs in a child process that nothing else writes in.
     if let Some(config) = std::env::var_os("SOKSAK_REPLY_CHILD") {
-        let (mut sidecars, _directory) = script_sidecars(REPLY_SCRIPT);
-        sidecars.0.stop_timeout = STALL;
+        let (sidecars, _directory) = script_sidecars(REPLY_SCRIPT);
         let writer = records::start_writer(Path::new(&config));
         let (window, events) = owner("a", "/projects/a");
         let body = raw(r#"{"operation":"input"}"#);
@@ -2016,14 +2088,14 @@ fn a_reply_of_a_sidecar_is_recorded_with_the_identifiers_of_its_request() {
                 &["b1.7".to_string(), "b1.8".to_string()],
             )
             .unwrap();
-        events.recv_timeout(STALL).unwrap();
+        events.recv().unwrap();
         sidecars
             .send_with_cids(&window, ECHO, "s1", &body, &["b1.9".to_string()])
             .unwrap();
-        events.recv_timeout(STALL).unwrap();
+        events.recv().unwrap();
         sidecars.send(&window, ECHO, "s1", &body).unwrap();
-        events.recv_timeout(STALL).unwrap();
-        events.recv_timeout(STALL).unwrap();
+        events.recv().unwrap();
+        events.recv().unwrap();
         sidecars.stop();
         writer.flush().unwrap();
         return;
@@ -2070,9 +2142,8 @@ fn a_reply_of_a_sidecar_is_recorded_with_the_identifiers_of_its_request() {
 #[test]
 fn the_failure_of_a_sidecar_is_the_failed_reply_of_its_pending_requests() {
     if let Some(config) = std::env::var_os("SOKSAK_REPLY_FAILURE_CHILD") {
-        let (mut sidecars, _directory) =
+        let (sidecars, _directory) =
             script_sidecars("#!/bin/sh\nread first\nread second\nexit 3\n");
-        sidecars.0.stop_timeout = STALL;
         let writer = records::start_writer(Path::new(&config));
         let (window, _events, failures) = failing_owner("a", "/projects/a");
         let body = raw(r#"{"operation":"input"}"#);
@@ -2082,7 +2153,7 @@ fn the_failure_of_a_sidecar_is_the_failed_reply_of_its_pending_requests() {
         sidecars
             .send_with_cids(&window, ECHO, "s1", &body, &["b1.8".to_string()])
             .unwrap();
-        let failure = failures.recv_timeout(STALL).unwrap();
+        let failure = failures.recv().unwrap();
         sidecars.stop();
         writer.flush().unwrap();
         // The parent reads the reason from the output of the child.
@@ -2126,7 +2197,7 @@ fn an_image_of_a_closed_surface_is_answered_closed() {
         .retain(&window, &|surface| surface != "s2")
         .unwrap();
     let event = events
-        .recv_timeout(STALL)
+        .recv()
         .expect("no answer of the image of the closed surface; the test stalled");
     let answer: serde_json::Value = serde_json::from_str(event.body.get()).unwrap();
     assert_eq!(event.surface, "s1");
@@ -2134,15 +2205,8 @@ fn an_image_of_a_closed_surface_is_answered_closed() {
         answer,
         serde_json::json!({"surface": "s2", "body": {"image": {"error": "closed", "name": "view", "generation": 3, "raster": 4, "sequence": 5}}})
     );
-    // The sidecar ends when its input closes, so the stop does not wait for its deadline.
-    let stopping = std::time::Instant::now();
+    // The sidecar ends at its stop, which ends by that exit; a stop that does not end stops at the limit of the runner.
     sidecars.stop();
-    let elapsed = stopping.elapsed();
-    assert!(
-        elapsed < Duration::from_secs(1),
-        "stop took {elapsed:?} after the answer; the sidecar ends with its input and must not wait the stop deadline of {:?}",
-        sidecars.stop_timeout
-    );
 }
 
 // contract: sidecars.read.unfinished-line-ends-the-connection
@@ -2210,10 +2274,9 @@ fn standard_io_sidecar_first_answer_after_spawn_is_recorded() {
         );
         return;
     }
-    let (mut sidecars, directory) = script_sidecars(
+    let (sidecars, directory) = script_sidecars(
         "#!/bin/sh\necho $$ > DIR/pid\nread request\necho '{\"surface\":\"s1\",\"body\":{\"event\":\"state\"}}'\nwhile read line; do :; done\n",
     );
-    sidecars.0.stop_timeout = STALL;
     let events_directory = folder::Folder::new();
     let writer = records::start_writer(events_directory.path());
     soksak_host::performance::command(serde_json::json!({"action": "on"})).unwrap();
@@ -2221,9 +2284,7 @@ fn standard_io_sidecar_first_answer_after_spawn_is_recorded() {
     sidecars
         .send(&window, ECHO, "s1", &raw(r#"{"operation":"input"}"#))
         .unwrap();
-    events
-        .recv_timeout(STALL)
-        .expect("no event; the test stalled");
+    events.recv().expect("no event; the test stalled");
     sidecars.stop();
     // Turning the trace off joins the sampler, so no process that it started outlives the check.
     soksak_host::performance::command(serde_json::json!({"action": "off"})).unwrap();
@@ -2252,8 +2313,8 @@ fn standard_io_sidecar_first_answer_after_spawn_is_recorded() {
 }
 
 /// The failing restart script: each request gets an invalid message, unless the file ok exists in the folder; then the
-/// process runs without failing.
-const RESTART_SCRIPT: &str = "#!/bin/sh\nread request\nif [ -f DIR/ok ]; then exec sleep 600; fi\nprintf 'not json\\n'\nexec sleep 600\n";
+/// process answers its first request with that request and runs without failing.
+const RESTART_SCRIPT: &str = "#!/bin/sh\nread -r request\nif [ -f DIR/ok ]; then printf '%s\\n' \"$request\"; exec sleep 600; fi\nprintf 'not json\\n'\nexec sleep 600\n";
 
 /// A clock that a restart-limit check moves. Its time is the base plus the offset that the check set.
 #[derive(Clone)]
@@ -2300,12 +2361,9 @@ fn restart_sidecars(clock: &RestartClock) -> (Stopping, folder::Folder) {
         dependents: vec!["plugin-a".to_string()],
     }];
     let clock = clock.clone();
-    let mut sidecars = Sidecars::new(&declarations, directory.path().to_path_buf())
+    let sidecars = Sidecars::new(&declarations, directory.path().to_path_buf())
         .unwrap()
         .with_clock(move || clock.read());
-    // The restarted sidecar runs the script that does not answer the shutdown, so the stop waits its stop timeout. The
-    // test sets a short timeout, as the other tests of a sidecar that ignores the shutdown do.
-    sidecars.stop_timeout = Duration::from_millis(100);
     (Stopping(sidecars), directory)
 }
 
@@ -2324,7 +2382,7 @@ fn send_at(
 /// Waits for the next failure of the window and checks that it is an invalid message of sidecar s1.
 fn require_invalid_failure(failures: &Receiver<Failure>, offset: Duration) {
     let failure = failures
-        .recv_timeout(STALL)
+        .recv()
         .expect("no sidecar failure; the test stalled");
     assert!(
         failure.sidecar == ECHO
@@ -2349,7 +2407,7 @@ fn require_restart_limit(result: Result<(), String>, offset: Duration) {
 fn restarts_after_three_failures_within_the_window() {
     let clock = RestartClock::new();
     let (sidecars, directory) = restart_sidecars(&clock);
-    let (window, _events, failures) = failing_owner("a", "/projects/a");
+    let (window, events, failures) = failing_owner("a", "/projects/a");
     for seconds in [0, 10, 20] {
         let offset = Duration::from_secs(seconds);
         send_at(&clock, &sidecars, &window, "s1", offset).unwrap();
@@ -2358,18 +2416,12 @@ fn restarts_after_three_failures_within_the_window() {
     // After three failures within 300 seconds the next send starts a process, which runs without failing.
     std::fs::write(directory.path().join("ok"), b"").unwrap();
     send_at(&clock, &sidecars, &window, "s1", Duration::from_secs(30)).unwrap();
-    assert!(
-        failures.recv_timeout(Duration::from_millis(200)).is_err(),
-        "the restarted sidecar failed"
-    );
-    // The restarted sidecar does not answer the shutdown, so the stop ends at the stop timeout of the sidecars.
-    let stopping = std::time::Instant::now();
+    // The answer comes after the check of the file, so the restarted process writes no invalid message after it, and a
+    // failure that its start caused is delivered before it.
+    events.recv().unwrap();
+    assert!(failures.try_recv().is_err(), "the restarted sidecar failed");
+    // The restarted sidecar does not read its input and ends at the terminate signal of the stop.
     sidecars.stop();
-    assert!(
-        stopping.elapsed() < Duration::from_secs(1),
-        "the stop took {:?}",
-        stopping.elapsed()
-    );
 }
 
 // contract: sidecars.restart.fourth-failure-stops
@@ -2391,7 +2443,7 @@ fn stops_at_the_fourth_failure_within_the_window() {
         send_at(&clock, &sidecars, &window, "s1", Duration::from_secs(40)),
         Duration::from_secs(40),
     );
-    let refused = failures.recv_timeout(STALL).expect("no refusal failure");
+    let refused = failures.recv().expect("no refusal failure");
     assert!(
         refused.sidecar == ECHO && refused.surface == "s1" && refused.reason == "restart limit",
         "refused send failure = {refused:?}"
@@ -2447,27 +2499,21 @@ fn surface_open_clears_the_restart_limit() {
         send_at(&clock, &sidecars, &window, "s1", Duration::from_secs(40)),
         Duration::from_secs(40),
     );
-    failures.recv_timeout(STALL).expect("no refusal failure");
+    failures.recv().expect("no refusal failure");
     // The creation of a surface of a plugin that does not list the sidecar leaves the stop in place.
     sidecars.surface_opened("plugin-b", "s2");
     require_restart_limit(
         send_at(&clock, &sidecars, &window, "s2", Duration::from_secs(41)),
         Duration::from_secs(41),
     );
-    failures.recv_timeout(STALL).expect("no refusal failure");
+    failures.recv().expect("no refusal failure");
     // The creation of a surface of plugin-a, which lists the sidecar, clears the record; the next send starts the process.
     std::fs::write(directory.path().join("ok"), b"").unwrap();
     sidecars.surface_opened("plugin-a", "s2");
     send_at(&clock, &sidecars, &window, "s2", Duration::from_secs(42)).unwrap();
     send_at(&clock, &sidecars, &window, "s1", Duration::from_secs(43)).unwrap();
-    // The restarted sidecar does not answer the shutdown, so the stop ends at the stop timeout of the sidecars.
-    let stopping = std::time::Instant::now();
+    // The restarted sidecar does not read its input and ends at the terminate signal of the stop.
     sidecars.stop();
-    assert!(
-        stopping.elapsed() < Duration::from_secs(1),
-        "the stop took {:?}",
-        stopping.elapsed()
-    );
     writer.flush().unwrap();
     let events = records::read_events(&records::event_log_path(writer_folder.path()));
     let reset = events
@@ -2497,14 +2543,14 @@ fn enable_clears_the_restart_limit_of_its_sidecars() {
         send_at(&clock, &sidecars, &window, "s1", Duration::from_secs(40)),
         Duration::from_secs(40),
     );
-    failures.recv_timeout(STALL).expect("no refusal failure");
+    failures.recv().expect("no refusal failure");
     // The enable of a plugin that does not list the sidecar leaves the stop in place.
     sidecars.plugin_enabled("plugin-b");
     require_restart_limit(
         send_at(&clock, &sidecars, &window, "s2", Duration::from_secs(41)),
         Duration::from_secs(41),
     );
-    failures.recv_timeout(STALL).expect("no refusal failure");
+    failures.recv().expect("no refusal failure");
     // The enable of plugin-a, which lists the sidecar, clears the record; the next send starts the process.
     std::fs::write(directory.path().join("ok"), b"").unwrap();
     sidecars.plugin_enabled("plugin-a");
@@ -2525,7 +2571,7 @@ fn enable_clears_the_restart_limit_of_its_sidecars() {
 /// Waits for the next failure of the window and checks that it is an invalid message of surface.
 fn require_invalid_failure_of(failures: &Receiver<Failure>, surface: &str, offset: Duration) {
     let failure = failures
-        .recv_timeout(STALL)
+        .recv()
         .expect("no sidecar failure; the test stalled");
     assert!(
         failure.sidecar == ECHO
@@ -2555,9 +2601,7 @@ fn refuses_an_already_open_surface() {
         send_at(&clock, &sidecars, &first, "s3", Duration::from_secs(40)),
         Duration::from_secs(40),
     );
-    let refused = first_failures
-        .recv_timeout(STALL)
-        .expect("no refusal failure");
+    let refused = first_failures.recv().expect("no refusal failure");
     assert!(
         refused.surface == "s3" && refused.reason == "restart limit",
         "refused send failure = {refused:?}"
@@ -2576,4 +2620,160 @@ fn a_disconnect_record_names_how_the_connection_ended() {
         fields["waiting"], 2,
         "the disconnect record counts the requests that waited"
     );
+}
+
+/// Makes the FIFO DIR/name to which a script writes the process id of a process that it started.
+fn child_fifo(directory: &Path, name: &str) -> std::path::PathBuf {
+    let path = directory.join(name);
+    let text = std::ffi::CString::new(path.display().to_string()).unwrap();
+    assert_eq!(
+        unsafe { libc::mkfifo(text.as_ptr(), 0o600) },
+        0,
+        "mkfifo {}: {}",
+        path.display(),
+        std::io::Error::last_os_error()
+    );
+    path
+}
+
+/// Makes the FIFO DIR/name and holds its write end while the returned file lives. A fixture process that reads it ends at the
+/// end of the check, also when the check is killed, because the kernel then closes the write end.
+fn hold_fifo(directory: &Path, name: &str) -> std::fs::File {
+    let path = child_fifo(directory, name);
+    // A read-write open does not wait for a reader, and the check holds the only writer.
+    std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)
+        .unwrap()
+}
+
+/// The process id that a script writes to the FIFO path; the read ends when the script closes its write.
+fn child_pid(path: &Path) -> i32 {
+    let text = std::fs::read_to_string(path).unwrap();
+    let pid = text.trim().parse::<i32>().unwrap();
+    assert!(pid > 0, "the script wrote {text:?} as a process id");
+    pid
+}
+
+/// Kills the process when the check ends, so that no process of a check remains.
+struct Killed(i32);
+
+impl Drop for Killed {
+    fn drop(&mut self) {
+        unsafe { libc::kill(self.0, libc::SIGKILL) };
+    }
+}
+
+/// Waits for the exit of the process pid, as a process of an ended process group exits; a process that is gone already has
+/// exited too (ESRCH).
+fn require_gone(pid: i32) {
+    let queue = unsafe { libc::kqueue() };
+    assert!(queue >= 0, "kqueue: {}", std::io::Error::last_os_error());
+    let change = libc::kevent {
+        ident: pid as libc::uintptr_t,
+        filter: libc::EVFILT_PROC,
+        flags: libc::EV_ADD | libc::EV_ONESHOT,
+        fflags: libc::NOTE_EXIT,
+        data: 0,
+        udata: std::ptr::null_mut(),
+    };
+    let mut event: libc::kevent = unsafe { std::mem::zeroed() };
+    let result = loop {
+        let count = unsafe { libc::kevent(queue, &change, 1, &mut event, 1, std::ptr::null()) };
+        if count >= 0 {
+            break Ok(count);
+        }
+        let error = std::io::Error::last_os_error();
+        if error.raw_os_error() != Some(libc::EINTR) {
+            break Err(error);
+        }
+    };
+    unsafe { libc::close(queue) };
+    match result {
+        Err(error) if error.raw_os_error() == Some(libc::ESRCH) => {}
+        Err(error) => panic!("watch the exit of process {pid}: {error}"),
+        Ok(1)
+            if event.flags & libc::EV_ERROR != 0 && event.data != libc::ESRCH as libc::intptr_t =>
+        {
+            panic!(
+                "watch the exit of process {pid}: {}",
+                std::io::Error::from_raw_os_error(event.data as i32)
+            )
+        }
+        Ok(_) => {}
+    }
+}
+
+// The end of a sidecar is the exit of its process: a process that it started keeps its output open, and the exit still fails the
+// running sidecar and ends its process group (docs/spec/sidecars.md#declaration-and-startup).
+// contract: sidecars.end.is-the-process-exit
+#[test]
+fn a_sidecar_that_exits_fails_while_its_child_keeps_the_output() {
+    let (sidecars, directory) = script_sidecars(
+        "#!/bin/sh\necho $$ > DIR/pid\ncat DIR/hold &\necho $! > DIR/child\nread request\nexit 3\n",
+    );
+    let _hold = hold_fifo(directory.path(), "hold");
+    let fifo = child_fifo(directory.path(), "child");
+    let (window, _events, failures) = failing_owner("a", "/projects/a");
+    sidecars
+        .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    let child = child_pid(&fifo);
+    let killed = Killed(child);
+    // A host that waits for the end of the output delivers no failure, and the check stops at the limit of its runner.
+    let failure = failures
+        .recv()
+        .expect("the sidecar ended without a failure");
+    assert_eq!(failure.surface, "s1");
+    assert_eq!(failure.reason, "output closed: exit status 3");
+    require_gone(child);
+    drop(killed);
+    sidecars.stop();
+}
+
+// A process that left the process group of the sidecar and keeps its output open does not hold the end of the sidecar
+// (docs/spec/sidecars.md#declaration-and-startup).
+// contract: sidecars.end.is-the-process-exit
+#[test]
+fn a_sidecar_that_exits_fails_while_a_process_outside_its_group_keeps_the_output() {
+    let (sidecars, directory) = script_sidecars(
+        "#!/bin/sh\necho $$ > DIR/pid\n/usr/bin/perl -MPOSIX -e 'exit if fork; POSIX::setsid(); open(my $f, \">\", \"DIR/child\"); print $f $$; close $f; open(my $h, \"<\", \"DIR/hold\"); my $line = <$h>'\nread request\nexit 3\n",
+    );
+    let _hold = hold_fifo(directory.path(), "hold");
+    let fifo = child_fifo(directory.path(), "child");
+    let (window, _events, failures) = failing_owner("a", "/projects/a");
+    sidecars
+        .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    let child = child_pid(&fifo);
+    let killed = Killed(child);
+    let failure = failures
+        .recv()
+        .expect("the sidecar ended without a failure");
+    assert_eq!(failure.surface, "s1");
+    assert_eq!(failure.reason, "output closed: exit status 3");
+    drop(killed);
+    sidecars.stop();
+}
+
+// A stop ends by the exit of the sidecar and ends its process group, also when a process that the sidecar started keeps its
+// output open (docs/spec/sidecars.md#declaration-and-startup).
+// contract: sidecars.end.is-the-process-exit
+#[test]
+fn a_stop_ends_by_the_sidecar_exit_and_ends_its_process_group() {
+    let (sidecars, directory) = script_sidecars(
+        "#!/bin/sh\necho $$ > DIR/pid\ncat DIR/hold &\necho $! > DIR/child\nexec cat >/dev/null\n",
+    );
+    let _hold = hold_fifo(directory.path(), "hold");
+    let fifo = child_fifo(directory.path(), "child");
+    let (window, _events) = owner("a", "/projects/a");
+    sidecars
+        .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    let child = child_pid(&fifo);
+    let _killed = Killed(child);
+    // A stop that waits for the end of the output does not return, and the check stops at the limit of its runner.
+    sidecars.stop();
+    require_gone(child);
 }

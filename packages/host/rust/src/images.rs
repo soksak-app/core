@@ -2097,25 +2097,154 @@ pub fn presentation_outcome(
     )
 }
 
-/// Runs an image presentation selected by the sidecar frame handler.
+/// The refusal of an image present that the stop of the sidecars ended (docs/spec/sidecars.md#declaration-and-startup).
+pub(crate) const PRESENTS_REFUSED: &str = "the host is stopping its sidecars";
+
+/// The image presents of the sidecars that wait for the main thread. The stop of the sidecars refuses each of them and each
+/// later one, so a read thread of a sidecar never waits for the main thread while the main thread runs the stop
+/// (docs/spec/sidecars.md#declaration-and-startup).
+#[derive(Default)]
+pub(crate) struct Presents(Mutex<PresentsState>);
+
+#[derive(Default)]
+struct PresentsState {
+    refused: bool,
+    next: u64,
+    waiting: HashMap<u64, Arc<PresentAnswer>>,
+}
+
+/// The one answer of a present: the result of the presentation on the main thread, the refusal of the stop, or the end of
+/// a presentation that the main thread dropped without running it, whichever comes first.
+#[derive(Default)]
+struct PresentAnswer {
+    answer: Mutex<Option<Result<(), String>>>,
+    answered: Condvar,
+}
+
+impl PresentAnswer {
+    /// Gives the answer, and returns false when the present had its answer already.
+    fn give(&self, answer: Result<(), String>) -> bool {
+        let mut slot = self
+            .answer
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the answer, which is set once; the panic hook
+            // records the panic.
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if slot.is_some() {
+            return false;
+        }
+        *slot = Some(answer);
+        self.answered.notify_all();
+        true
+    }
+
+    /// Waits for the answer.
+    fn take(&self) -> Result<(), String> {
+        let mut slot = self
+            .answer
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the answer, which is set once; the panic hook
+            // records the panic.
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        loop {
+            if let Some(answer) = slot.take() {
+                // The slot keeps an answer so that a later answer is a late one.
+                *slot = Some(Ok(()));
+                return answer;
+            }
+            slot = self
+                .answered
+                .wait(slot)
+                // default: a lock that a panicking thread poisoned still holds the answer, which is set once; the panic
+                // hook records the panic.
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+        }
+    }
+}
+
+/// The presentation that the main thread runs; one that is dropped without running ends its present.
+struct PresentWork {
+    work: Box<dyn Fn() -> Result<(), String> + Send>,
+    answer: Arc<PresentAnswer>,
+}
+
+impl PresentWork {
+    fn run(self) {
+        let result = (self.work)();
+        if !self.answer.give(result.clone()) {
+            match result {
+                Err(error) => log_error("image present", error),
+                Ok(()) => crate::application_log::log_info(
+                    "image present",
+                    "native result arrived after its request ended",
+                ),
+            }
+        }
+    }
+}
+
+impl Drop for PresentWork {
+    fn drop(&mut self) {
+        // A presentation that ran gave its answer already, so this answer only ends one that did not run.
+        self.answer.give(Err(
+            "native image presentation result: the main thread dropped the presentation"
+                .to_string(),
+        ));
+    }
+}
+
+impl Presents {
+    fn lock(&self) -> std::sync::MutexGuard<'_, PresentsState> {
+        self.0
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the waiting presents, which the call amends;
+            // the panic hook records the panic.
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// Registers the answer of a present, or refuses it when the presents are refused.
+    fn begin(&self, answer: Arc<PresentAnswer>) -> Result<u64, String> {
+        let mut state = self.lock();
+        if state.refused {
+            return Err(PRESENTS_REFUSED.to_string());
+        }
+        state.next += 1;
+        let id = state.next;
+        state.waiting.insert(id, answer);
+        Ok(id)
+    }
+
+    fn end(&self, id: u64) {
+        self.lock().waiting.remove(&id);
+    }
+
+    /// Refuses each waiting present and each later one. A present whose answer already arrived keeps that answer.
+    pub(crate) fn refuse(&self) {
+        let waiting = {
+            let mut state = self.lock();
+            state.refused = true;
+            std::mem::take(&mut state.waiting)
+        };
+        for (_, answer) in waiting {
+            answer.give(Err(PRESENTS_REFUSED.to_string()));
+        }
+    }
+}
+
+/// Runs an image presentation selected by the sidecar frame handler. The answer is the result of the presentation on the
+/// main thread, or the refusal of presents when the stop of the sidecars comes first.
 pub(crate) fn present_on_ui(
     work: Box<dyn Fn() -> Result<(), String> + Send>,
     enqueue: impl FnOnce(Box<dyn FnOnce() + Send>) -> Result<(), String>,
+    presents: &Presents,
 ) -> Result<(), String> {
-    let (done, result) = std::sync::mpsc::sync_channel(1);
-    enqueue(Box::new(move || match done.send(work()) {
-        Ok(()) => {}
-        Err(std::sync::mpsc::SendError(Err(error))) => {
-            log_error("image present", error);
-        }
-        Err(std::sync::mpsc::SendError(Ok(()))) => {
-            crate::application_log::log_info(
-                "image present",
-                "native result arrived after its request ended",
-            );
-        }
-    }))?;
+    let answer = Arc::new(PresentAnswer::default());
+    let id = presents.begin(Arc::clone(&answer))?;
+    let present = PresentWork {
+        work,
+        answer: Arc::clone(&answer),
+    };
+    let result = enqueue(Box::new(move || present.run())).and_then(|()| answer.take());
+    presents.end(id);
     result
-        .recv()
-        .map_err(|error| format!("native image presentation result: {error}"))?
 }

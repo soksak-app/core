@@ -7,6 +7,7 @@
 #import <WebKit/WebKit.h>
 #import "document_view.h"
 #import "surface_layout.h"
+#import "support/event_wait.h"
 #import "support/temporary_folder.h"
 #import "webview_geometry.h"
 #import "window_facts.h"
@@ -22,33 +23,22 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-// WindowServer occlusion changes arrive as AppKit events. Process window and screen events without taking application
-// activation events so the inactive fixture observes the same state changes as production windows.
-static void pumpOcclusion(void) {
-    NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAppKitDefined
-        untilDate:[NSDate dateWithTimeIntervalSinceNow:0.02] inMode:NSDefaultRunLoopMode dequeue:NO];
-    if (event && event.subtype != NSEventSubtypeApplicationActivated
-        && event.subtype != NSEventSubtypeApplicationDeactivated) {
-        [NSApp sendEvent:[NSApp nextEventMatchingMask:NSEventMaskAppKitDefined untilDate:nil
-            inMode:NSDefaultRunLoopMode dequeue:YES]];
-    }
-    [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode
-        beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+// WindowServer occlusion changes arrive as AppKit events, which the waits of the check send to the application. The
+// application of the check handles the window and screen events among them and no application activation event and no
+// other event, so the inactive fixture observes the same state changes as production windows.
+@interface SPInactiveApplication : NSApplication
+@end
+
+@implementation SPInactiveApplication
+- (void)sendEvent:(NSEvent *)event {
+    if (event.type != NSEventTypeAppKitDefined || event.subtype == NSEventSubtypeApplicationActivated
+        || event.subtype == NSEventSubtypeApplicationDeactivated) return;
+    [super sendEvent:event];
 }
+@end
 
 @class SPResizeCadenceReceiver;
 static void changed(void *context, const char *state);
-
-static void until(BOOL (^done)(void), NSString *reason) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:12];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        pumpOcclusion();
-    }
-    if (!done()) {
-        fprintf(stderr, "FAIL: %s within 12 seconds\n", reason.UTF8String);
-        exit(1);
-    }
-}
 
 @interface SPResizeCadenceReceiver : NSObject <WKScriptMessageHandler>
 @property(nonatomic, assign) WKWebView *view;
@@ -220,14 +210,7 @@ static id evaluate(WKWebView *view, NSString *script) {
         result = [value retain];
         done = YES;
     }];
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:12];
-    while (!done && deadline.timeIntervalSinceNow > 0) {
-        pumpOcclusion();
-    }
-    if (!done) {
-        fprintf(stderr, "FAIL: JavaScript evaluation completed within 12 seconds\n");
-        exit(1);
-    }
+    eventWait(@"the page answers the evaluation", ^BOOL { return done; });
     return [result autorelease];
 }
 
@@ -260,8 +243,10 @@ static void runCadenceCase(NSString *name, NSWindow *window, WKWebView *view,
     if (!screen) return;
     CADisplayLink *link = [[screen displayLinkWithTarget:receiver selector:@selector(tick:)] retain];
     [link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
-    until(^BOOL { return receiver.tickCount == resizeSteps; }, [NSString stringWithFormat:@"%@ native display-paced resize steps", name]);
-    until(^BOOL { return receiver.done; }, [NSString stringWithFormat:@"%@ final ResizeObserver-to-rAF row", name]);
+    eventWait([NSString stringWithFormat:@"the display link of %@ runs every native resize step", name],
+        ^BOOL { return receiver.tickCount == resizeSteps; });
+    eventWait([NSString stringWithFormat:@"the page of %@ reports its final ResizeObserver-to-rAF row", name],
+        ^BOOL { return receiver.done; });
     [link invalidate];
     [link release];
     id rows = evaluate(view, @"window.cadenceFrames");
@@ -396,7 +381,7 @@ static void runCadenceCase(NSString *name, NSWindow *window, WKWebView *view,
 }
 
 int main(void) { @autoreleasepool {
-    [NSApplication sharedApplication];
+    [SPInactiveApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
@@ -457,62 +442,20 @@ int main(void) { @autoreleasepool {
         "requestAnimationFrame(()=>{observer.observe(root,{box:'content-box'});});"
         "</script></body></html>";
     [view loadHTMLString:html baseURL:nil];
-    NSDate *loadDeadline = [NSDate dateWithTimeIntervalSinceNow:12];
-    while (!([parsedDocumentState(receiver)[@"navigations"] unsignedLongLongValue] > 0
-        && ![parsedDocumentState(receiver)[@"loading"] boolValue]) && loadDeadline.timeIntervalSinceNow > 0) {
-        pumpOcclusion();
-    }
-    if (!([parsedDocumentState(receiver)[@"navigations"] unsignedLongLongValue] > 0
-        && ![parsedDocumentState(receiver)[@"loading"] boolValue])) {
-        check(NO, [NSString stringWithFormat:@"the plugin root test page completes navigation (%@)", stateFor(window, receiver, (NSView *)surface, view)]);
-        [view.configuration.userContentController removeScriptMessageHandlerForName:@"cadence"];
-        [[NSNotificationCenter defaultCenter] removeObserver:receiver name:NSWindowDidChangeOcclusionStateNotification object:window];
-        sp_document_close(document);
-        sp_surface_close(surface);
-        [window orderOut:nil];
-        [window close];
-        return failures ? 1 : 0;
-    }
-    NSDate *readyDeadline = [NSDate dateWithTimeIntervalSinceNow:12];
-    while (!receiver.ready && readyDeadline.timeIntervalSinceNow > 0) {
-        pumpOcclusion();
-    }
-    if (!receiver.ready) {
-        id diagnostics = evaluate(view, @"JSON.stringify({readyState:document.readyState,href:location.href,"
-            "framesType:typeof window.cadenceFrames,frames:window.cadenceFrames,errors:window.cadenceErrors,"
-            "handlerType:typeof webkit.messageHandlers.cadence,visibility:document.visibilityState})");
-        check(NO, [NSString stringWithFormat:@"the view root receives its observer readiness message (page=%@ native=%@)",
-            diagnostics ?: @"evaluation returned nil", stateFor(window, receiver, (NSView *)surface, view)]);
-        [view.configuration.userContentController removeScriptMessageHandlerForName:@"cadence"];
-        [[NSNotificationCenter defaultCenter] removeObserver:receiver name:NSWindowDidChangeOcclusionStateNotification object:window];
-        sp_document_close(document);
-        sp_surface_close(surface);
-        [window orderOut:nil];
-        [window close];
-        return failures ? 1 : 0;
-    }
-    NSDate *visibleDeadline = [NSDate dateWithTimeIntervalSinceNow:12];
-    while (!(window.isVisible && window.isOnActiveSpace
-        && (window.occlusionState & NSWindowOcclusionStateVisible) != 0
-        && [receiver.documentVisibility isEqualToString:@"visible"]
-        && !((NSView *)surface).hidden && !view.isHiddenOrHasHiddenAncestor
-        && receiver.occlusionNotifications > 0) && visibleDeadline.timeIntervalSinceNow > 0) {
-        pumpOcclusion();
-    }
-    if (!(window.isVisible && window.isOnActiveSpace
-        && (window.occlusionState & NSWindowOcclusionStateVisible) != 0
-        && [receiver.documentVisibility isEqualToString:@"visible"]
-        && receiver.occlusionNotifications > 0)) {
-        check(NO, [NSString stringWithFormat:@"the visible inactive fixture reaches its observed window/document state (%@)",
-            stateFor(window, receiver, (NSView *)surface, view)]);
-        [view.configuration.userContentController removeScriptMessageHandlerForName:@"cadence"];
-        [[NSNotificationCenter defaultCenter] removeObserver:receiver name:NSWindowDidChangeOcclusionStateNotification object:window];
-        sp_document_close(document);
-        sp_surface_close(surface);
-        [window orderOut:nil];
-        [window close];
-        return failures ? 1 : 0;
-    }
+    eventWait(@"the plugin root test page completes its navigation", ^BOOL {
+        return [parsedDocumentState(receiver)[@"navigations"] unsignedLongLongValue] > 0
+            && ![parsedDocumentState(receiver)[@"loading"] boolValue];
+    });
+    eventWait(@"the view root receives its observer readiness message", ^BOOL { return receiver.ready; });
+    // The occlusion notification comes from a window event that the wait sends, and the visibility of the document from a
+    // message of the page.
+    eventWait(@"the visible inactive fixture reaches its observed window and document state", ^BOOL {
+        return window.isVisible && window.isOnActiveSpace
+            && (window.occlusionState & NSWindowOcclusionStateVisible) != 0
+            && [receiver.documentVisibility isEqualToString:@"visible"]
+            && !((NSView *)surface).hidden && !view.isHiddenOrHasHiddenAncestor
+            && receiver.occlusionNotifications > 0;
+    });
     runCadenceCase(@"visible-inactive", window, view, receiver);
 
     [view.configuration.userContentController removeScriptMessageHandlerForName:@"cadence"];

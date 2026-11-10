@@ -2,6 +2,7 @@
 // and that a delayed callback runs once on the main queue after the callbacks enqueued without delay.
 #import <Foundation/Foundation.h>
 #import "ui_queue.h"
+#import "support/event_wait.h"
 
 static NSLock *eventLock;
 static int calls;
@@ -33,10 +34,8 @@ int main(void) { @autoreleasepool {
     sp_ui_enqueue(completed, 123);
     if (calls != 0) failed = YES;
     [eventLock unlock];
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:2];
-    while (!calls && deadline.timeIntervalSinceNow > 0) {
-        [NSRunLoop.mainRunLoop runMode:NSDefaultRunLoopMode beforeDate:deadline];
-    }
+    // The UI queue runs each callback in a block of the main queue.
+    eventWait(@"the UI completion runs", ^BOOL { return calls > 0; });
     if (calls != 1) failed = YES;
     fprintf(failed ? stderr : stdout, "%s: UI completion runs once after the caller releases its event lock\n",
         failed ? "FAIL" : "PASS");
@@ -44,10 +43,7 @@ int main(void) { @autoreleasepool {
     sp_ui_enqueue_after(50 * NSEC_PER_MSEC, delayed, 456);
     sp_ui_enqueue(immediate, 789);
     if (delayedCalls != 0 || immediateCalls != 0) failed = YES;
-    deadline = [NSDate dateWithTimeIntervalSinceNow:2];
-    while (!delayedCalls && deadline.timeIntervalSinceNow > 0) {
-        [NSRunLoop.mainRunLoop runMode:NSDefaultRunLoopMode beforeDate:deadline];
-    }
+    eventWait(@"the delayed UI completion runs", ^BOOL { return delayedCalls > 0; });
     if (delayedCalls != 1 || immediateCalls != 1) failed = YES;
     fprintf(failed && !failedBefore ? stderr : stdout, "%s: a delayed UI completion runs once on the main queue after the completions without delay\n",
         failed && !failedBefore ? "FAIL" : "PASS");

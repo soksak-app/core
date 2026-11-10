@@ -6,6 +6,7 @@
 #import "process_exit.h"
 #import "support/records.h"
 #import "event_ring.h"
+#import "support/event_wait.h"
 
 extern char **environ;
 
@@ -40,13 +41,9 @@ static pid_t spawnSleep(const char *seconds) {
     return pid;
 }
 
-// Runs the main run loop until done is called; each turn waits for a source of the run loop.
+// Runs the main run loop until the answer comes. sp_process_when_exited answers in a block of the main queue.
 static void runUntilAnswered(SPExited *state) {
-    while (state->calls == 0) {
-        @autoreleasepool {
-            [[NSRunLoop mainRunLoop] runMode:NSDefaultRunLoopMode beforeDate:NSDate.distantFuture];
-        }
-    }
+    eventWait(@"sp_process_when_exited answers", ^BOOL { return state->calls != 0; });
 }
 
 int main(void) { @autoreleasepool {
@@ -102,6 +99,15 @@ int main(void) { @autoreleasepool {
     SPExited after = {0};
     sp_process_when_exited(running, answered, &after);
     runUntilAnswered(&after);
+    // A process started after it was reaped exits after it, and its exit reaches the main queue through the same notification
+    // path, so a second answer for the process whose wait ended would come before the answer for the later one.
+    pid_t later = spawnSleep("0");
+    SPExited afterLater = {0};
+    sp_process_when_exited(later, answered, &afterLater);
+    runUntilAnswered(&afterLater);
+    if (later) waitpid(later, NULL, 0);
+    check(afterLater.calls == 1 && afterLater.exited, [NSString stringWithFormat:
+        @"a process started after the reap is reported as exited (calls %d, exited %d)", afterLater.calls, afterLater.exited]);
     check(missed.calls == 1, [NSString stringWithFormat:@"the answer is given once (calls %d)", missed.calls]);
     check(after.calls == 1 && after.exited, @"a wait of the ended process answers that it exited");
     check(!NSApp.isActive, @"application stays inactive");

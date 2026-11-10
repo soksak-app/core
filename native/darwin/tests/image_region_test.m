@@ -17,6 +17,8 @@
 #import "webview_input.h"
 #import "support/surface_view.h"
 #import "support/temporary_folder.h"
+#import "support/event_wait.h"
+#import "private/webkit.h"
 
 /// An input context that takes every key and answers nothing, as the input method does for a key outside the key window
 /// of the active application after the application was active once.
@@ -43,22 +45,72 @@ static void inputResultWaitDone(void *context, sp_input_result result, const sp_
     wait->done = YES;
 }
 
-static BOOL waitForInputResult(SPInputResultWait *wait, NSTimeInterval timeout) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:timeout];
-    while (!wait->done && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
-            beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
-    }
+// The input functions call the result on the main queue or while they run, so the wait ends at that call.
+static BOOL waitForInputResult(SPInputResultWait *wait, NSString *what) {
+    eventWait(what, ^BOOL { return wait->done; });
     return wait->done;
 }
 
+// A posted event is in the queue of the application when postEvent returns, so taking it does not wait.
 static BOOL dispatchQueuedEvent(NSEvent *event, NSEventMask mask) {
     [NSApp postEvent:event atStart:NO];
     NSEvent *dequeued = [NSApp nextEventMatchingMask:mask
-        untilDate:[NSDate dateWithTimeIntervalSinceNow:1.0] inMode:NSDefaultRunLoopMode dequeue:YES];
+        untilDate:NSDate.distantPast inMode:NSDefaultRunLoopMode dequeue:YES];
     if (!dequeued) return NO;
     [NSApp sendEvent:dequeued];
     return NSApp.currentEvent == dequeued;
+}
+
+// Waits until the application dispatched every event that is in its queue now: a marker event posted at the end of the
+// queue reaches sendEvent after all of them.
+static void waitForPostedEvents(NSString *what) {
+    static NSInteger markers = 0;
+    NSInteger marker = ++markers;
+    __block BOOL dispatched = NO;
+    id monitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskApplicationDefined handler:^NSEvent *(NSEvent *event) {
+        if (event.subtype == 0x5350 && event.data1 == marker) dispatched = YES;
+        return event;
+    }];
+    [NSApp postEvent:[NSEvent otherEventWithType:NSEventTypeApplicationDefined location:NSZeroPoint modifierFlags:0
+        timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:0 context:nil subtype:0x5350 data1:marker data2:0]
+        atStart:NO];
+    eventWait(what, ^BOOL { return dispatched; });
+    [NSEvent removeMonitor:monitor];
+}
+
+// Waits until the main queue ran every block that was queued on it before this call.
+static void waitForMainQueueTurn(NSString *what) {
+    __block BOOL ran = NO;
+    dispatch_async(dispatch_get_main_queue(), ^{ ran = YES; });
+    eventWait(what, ^BOOL { return ran; });
+}
+
+// Waits until the page answered a script, so every message that the page sent before the script ran was delivered.
+static void waitForPageAnswer(WKWebView *page, NSString *what) {
+    __block BOOL answered = NO;
+    [page evaluateJavaScript:@"0" completionHandler:^(id result, NSError *error) {
+        (void)result;
+        (void)error;
+        answered = YES;
+    }];
+    eventWait(what, ^BOOL { return answered; });
+}
+
+// Waits for the end of a release, the event after which a focus loss that the release causes would already be reported:
+// the application dispatched the posted events, the press origin of the window is cleared (after the receipt of the
+// release by the page or at the limit of that receipt, whose error record comes before the clear), WebKit finished the
+// mouse events of the page and the page answered a script after them, and the main queue ran the responder restoration
+// that the press queued.
+static void waitForReleaseEnd(NSWindow *window, WKWebView *page, NSString *what) {
+    waitForPostedEvents([what stringByAppendingString:@": the posted events are dispatched"]);
+    eventWait([what stringByAppendingString:@": the press origin of the window is cleared"], ^BOOL {
+        return !sp_input_press_origin_point(window, 0, NULL, NULL, NULL);
+    });
+    __block BOOL drained = NO;
+    [page _doAfterProcessingAllPendingMouseEvents:^{ drained = YES; }];
+    eventWait([what stringByAppendingString:@": WebKit finishes the mouse events of the page"], ^BOOL { return drained; });
+    waitForPageAnswer(page, [what stringByAppendingString:@": the page answers after its mouse events"]);
+    waitForMainQueueTurn([what stringByAppendingString:@": the queued responder work runs"]);
 }
 
 static BOOL jsonBooleanMatches(id value, BOOL expected) {
@@ -684,9 +736,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         [window setContentSize:NSMakeSize(600, 500)];
         // The contentView of the window may not be resized automatically, so it is set explicitly
         webviewSetFrame(surface, 0, 0, 600, 500);
-        // Runs the run loop so that the frame change notification is delivered
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
+        // The frame change notification of the surface is delivered while its frame is set, so the region follows at once.
         sp_region_frame(region5, frame);
         // 600x500, margins kept: 600-50-70=480, 500-60-80=360
         check(frame[0] == 50 && frame[1] == 60 && frame[2] == 480 && frame[3] == 360,
@@ -1790,11 +1840,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         InputPageLoadHandler *inputPageLoad97 = [[[InputPageLoadHandler alloc] init] autorelease];
         page.navigationDelegate = inputPageLoad97;
         [page loadHTMLString:@"<!doctype html><html><body style='margin:0;width:500px;height:400px'></body></html>" baseURL:nil];
-        NSDate *inputPageDeadline97 = [NSDate dateWithTimeIntervalSinceNow:5.0];
-        while (!inputPageLoad97.finished && inputPageDeadline97.timeIntervalSinceNow > 0) {
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
-                beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
-        }
+        eventWait(@"the navigation of the logical page finishes", ^BOOL { return inputPageLoad97.finished; });
         check(inputPageLoad97.finished && inputPageLoad97.error == nil,
             [NSString stringWithFormat:@"press focus: the registered logical page finishes loading (%@)", inputPageLoad97.error]);
         page.navigationDelegate = nil;
@@ -1826,10 +1872,7 @@ int main(int argc, char **argv) { @autoreleasepool {
                 check(error == nil, [NSString stringWithFormat:@"press focus: logical page installs its focus callback (%@)", error]);
                 listenerReady97 = YES;
             }];
-        NSDate *listenerDeadline97 = [NSDate dateWithTimeIntervalSinceNow:2.0];
-        while (!listenerReady97 && listenerDeadline97.timeIntervalSinceNow > 0) {
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
-        }
+        eventWait(@"the logical page answers the script that installs its focus callback", ^BOOL { return listenerReady97; });
         check(listenerReady97, @"press focus: logical page focus callback is ready");
         // The posted AppKit path receives a same-region page focus command between the physical down and up. Keep
         // the release over the region for one click and outside it for the next. The observer counter is process-wide,
@@ -1852,12 +1895,8 @@ int main(int argc, char **argv) { @autoreleasepool {
             }
             unsigned long long logicalMonitorBefore97 = sp_observe_count("image_region.press_origin");
             [NSApp postEvent:down atStart:NO];
-            NSDate *pageCommandDeadline = [NSDate dateWithTimeIntervalSinceNow:2.0];
-            while (focusHandler97.count == 0 && pageCommandDeadline.timeIntervalSinceNow > 0) {
-                NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny
-                    untilDate:[NSDate dateWithTimeIntervalSinceNow:0.02] inMode:NSDefaultRunLoopMode dequeue:YES];
-                if (pending) [NSApp sendEvent:pending];
-            }
+            eventWait(@"the posted press reaches the focus command of the logical page",
+                ^BOOL { return focusHandler97.count > 0; });
             check(focusHandler97.count == 1,
                 [NSString stringWithFormat:@"press focus: logical AppKit down reaches the page command once (release case %lu)",
                     (unsigned long)control97]);
@@ -1873,12 +1912,7 @@ int main(int argc, char **argv) { @autoreleasepool {
                     logicalOriginX97, logicalOriginY97]);
             sp_region_focus(logicalRegion97);
             [NSApp postEvent:up atStart:NO];
-            NSDate *physicalReleaseDeadline = [NSDate dateWithTimeIntervalSinceNow:0.4];
-            while (physicalReleaseDeadline.timeIntervalSinceNow > 0) {
-                NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny
-                    untilDate:[NSDate dateWithTimeIntervalSinceNow:0.02] inMode:NSDefaultRunLoopMode dequeue:YES];
-                if (pending) [NSApp sendEvent:pending];
-            }
+            waitForReleaseEnd(window, page, @"the posted release of the logical page ends");
             BOOL lostLogicalFocus = NO;
             for (NSString *eventStr in collectedEvents) {
                 if ([eventStr rangeOfString:@"\"type\":\"focus\""].location != NSNotFound
@@ -1898,12 +1932,7 @@ int main(int argc, char **argv) { @autoreleasepool {
                 context:nil eventNumber:97 clickCount:1 pressure:0];
             [NSApp postEvent:down atStart:NO];
             [NSApp postEvent:up atStart:NO];
-            NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:1.5];
-            while (deadline.timeIntervalSinceNow > 0) {
-                NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny
-                    untilDate:[NSDate dateWithTimeIntervalSinceNow:0.02] inMode:NSDefaultRunLoopMode dequeue:YES];
-                if (pending) [NSApp sendEvent:pending];
-            }
+            waitForReleaseEnd(window, page, @"the posted click on the logical page ends");
         });
         check(![logicalReleaseRecords97 containsString:@"_doAfterProcessingAllPendingMouseEvents: is unavailable"]
             && ![logicalReleaseRecords97 containsString:@"paired pointer release was not received"],
@@ -1931,13 +1960,11 @@ int main(int argc, char **argv) { @autoreleasepool {
         SPInputResultWait logicalDown97 = {NO, SP_INPUT_REJECTED};
         sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, logicalContentPoint97.x, logicalInputY97, 1, 0, 0, 0, 1,
             inputResultWaitDone, &logicalDown97);
-        check(waitForInputResult(&logicalDown97, 2) && logicalDown97.result == SP_INPUT_DELIVERED,
+        check(waitForInputResult(&logicalDown97, @"the production receipt path answers phase one")
+            && logicalDown97.result == SP_INPUT_DELIVERED,
             @"press focus: the production receipt path delivers phase one");
-        NSDate *logicalCallbackDeadline97 = [NSDate dateWithTimeIntervalSinceNow:2.0];
-        while (focusHandler97.count == 0 && logicalCallbackDeadline97.timeIntervalSinceNow > 0) {
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
-                beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
-        }
+        eventWait(@"the production phase-one pointerdown reaches the focus command of the logical page",
+            ^BOOL { return focusHandler97.count > 0; });
         check(focusHandler97.count == 1,
             @"press focus: the production phase-one pointerdown runs the page focus callback");
         check(window.firstResponder == (NSResponder *)logicalRegion97,
@@ -1955,7 +1982,7 @@ int main(int argc, char **argv) { @autoreleasepool {
             context:nil subtype:0 data1:0 data2:0];
         [NSApp postEvent:pressGap97 atStart:NO];
         NSEvent *dequeuedGap97 = [NSApp nextEventMatchingMask:NSEventMaskApplicationDefined
-            untilDate:[NSDate dateWithTimeIntervalSinceNow:0.2] inMode:NSDefaultRunLoopMode dequeue:YES];
+            untilDate:NSDate.distantPast inMode:NSDefaultRunLoopMode dequeue:YES];
         if (dequeuedGap97) [NSApp sendEvent:dequeuedGap97];
         check(NSApp.currentEvent.type == NSEventTypeApplicationDefined
             && sp_input_press_origin_point(window, 0, NULL, NULL, NULL),
@@ -1964,17 +1991,14 @@ int main(int argc, char **argv) { @autoreleasepool {
         SPInputResultWait logicalUp97 = {NO, SP_INPUT_REJECTED};
         sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, logicalContentPoint97.x, logicalInputY97, 3, 0, 0, 0, 1,
             inputResultWaitDone, &logicalUp97);
-        BOOL logicalUpDone97 = waitForInputResult(&logicalUp97, 2);
+        BOOL logicalUpDone97 = waitForInputResult(&logicalUp97, @"the production receipt path answers phase three");
         BOOL logicalUpLostFocus97 = NO;
         for (NSString *eventStr in collectedEvents) {
             if ([eventStr rangeOfString:@"\"type\":\"focus\""].location != NSNotFound
                 && [eventStr rangeOfString:@"\"focused\":false"].location != NSNotFound) logicalUpLostFocus97 = YES;
         }
-        NSDate *logicalResponderDeadline97 = [NSDate dateWithTimeIntervalSinceNow:1.0];
-        while (window.firstResponder != (NSResponder *)logicalRegion97 && logicalResponderDeadline97.timeIntervalSinceNow > 0) {
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
-                beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
-        }
+        eventWait(@"the responder restoration that phase three queued returns the responder to the logical region",
+            ^BOOL { return window.firstResponder == (NSResponder *)logicalRegion97; });
         check(logicalUpDone97 && logicalUp97.result == SP_INPUT_DELIVERED && !logicalUpLostFocus97
             && window.firstResponder == (NSResponder *)logicalRegion97,
             [NSString stringWithFormat:@"press focus: production receipt phase three preserves logical region focus after its queued responder restoration (%@, %@)",
@@ -2008,12 +2032,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         NSString *logicalSurfaceRecords15 = capturedRecords(^{
             [NSApp postEvent:down15 atStart:NO];
             [NSApp postEvent:up15 atStart:NO];
-            NSDate *drain15 = [NSDate dateWithTimeIntervalSinceNow:2.0];
-            while ([drain15 timeIntervalSinceNow] > 0) {
-                NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]
-                    inMode:NSDefaultRunLoopMode dequeue:YES];
-                if (pending) [NSApp sendEvent:pending];
-            }
+            waitForReleaseEnd(window, page, @"the posted click on the logical surface ends");
         });
         check(![logicalSurfaceRecords15 containsString:@"_doAfterProcessingAllPendingMouseEvents: is unavailable"],
             [NSString stringWithFormat:@"press focus: logical surface release resolves its page webview before draining (%@)",
@@ -2051,10 +2070,7 @@ int main(int argc, char **argv) { @autoreleasepool {
                 check(error == nil, [NSString stringWithFormat:@"press focus: the page installs its focus command listener (%@)", error]);
                 focusListenerReady15 = YES;
             }];
-        NSDate *listenerDeadline15 = [NSDate dateWithTimeIntervalSinceNow:2.0];
-        while (!focusListenerReady15 && listenerDeadline15.timeIntervalSinceNow > 0) {
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
-        }
+        eventWait(@"the page answers the script that installs its focus command listener", ^BOOL { return focusListenerReady15; });
         check(focusListenerReady15, @"press focus: the page focus command listener is ready");
 
         // Direct pointer injection returns before the page's command callback. Preserve the logical press across that
@@ -2066,11 +2082,7 @@ int main(int argc, char **argv) { @autoreleasepool {
             : NSHeight(window.contentView.bounds) - directContentPoint15.y;
         check(sp_input_pointer(window, directContentPoint15.x, directY15, 1, 0, 0, 0) == SP_INPUT_DELIVERED,
             @"press focus: direct pointer phase one is delivered");
-        NSDate *directCommandDeadline15 = [NSDate dateWithTimeIntervalSinceNow:2.0];
-        while (focusHandler15.count == 0 && directCommandDeadline15.timeIntervalSinceNow > 0) {
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
-                beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
-        }
+        eventWait(@"the direct press reaches the focus command of the page", ^BOOL { return focusHandler15.count > 0; });
         check(focusHandler15.count == 1,
             [NSString stringWithFormat:@"press focus: the direct press reaches its asynchronous page command once (got %lu)",
                 (unsigned long)focusHandler15.count]);
@@ -2084,11 +2096,7 @@ int main(int argc, char **argv) { @autoreleasepool {
                 collectedEvents, NSStringFromClass(window.firstResponder.class)]);
         check(sp_input_pointer(window, directContentPoint15.x, directY15, 3, 0, 0, 0) == SP_INPUT_DELIVERED,
             @"press focus: direct pointer phase three is delivered");
-        NSDate *directReleaseDeadline15 = [NSDate dateWithTimeIntervalSinceNow:0.3];
-        while (directReleaseDeadline15.timeIntervalSinceNow > 0) {
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
-                beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
-        }
+        waitForReleaseEnd(window, page, @"the direct release ends");
         BOOL directLossAfterRelease15 = NO;
         for (NSString *eventStr in collectedEvents) {
             if ([eventStr rangeOfString:@"\"type\":\"focus\""].location != NSNotFound
@@ -2100,12 +2108,7 @@ int main(int argc, char **argv) { @autoreleasepool {
 
         focusHandler15.count = 0;
         [NSApp postEvent:downRoundTrip15 atStart:NO];
-        NSDate *commandDeadline15 = [NSDate dateWithTimeIntervalSinceNow:2.0];
-        while (focusHandler15.count == 0 && commandDeadline15.timeIntervalSinceNow > 0) {
-            NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny
-                untilDate:[NSDate dateWithTimeIntervalSinceNow:0.02] inMode:NSDefaultRunLoopMode dequeue:YES];
-            if (pending) [NSApp sendEvent:pending];
-        }
+        eventWait(@"the posted press reaches the focus command of the page", ^BOOL { return focusHandler15.count > 0; });
         check(focusHandler15.count == 1,
             [NSString stringWithFormat:@"press focus: the same-region pointerdown runs the page focus command once (got %lu)",
                 (unsigned long)focusHandler15.count]);
@@ -2115,12 +2118,7 @@ int main(int argc, char **argv) { @autoreleasepool {
             [NSString stringWithFormat:@"press focus: AppKit tracks the physical down origin before the focus command (tracked %@ at %.2f,%.2f expected %@)",
                 trackedOrigin15 ? @"yes" : @"no", trackedX15, trackedY15, NSStringFromPoint(inside15)]);
         [NSApp postEvent:upRoundTrip15 atStart:NO];
-        NSDate *drainRoundTrip15 = [NSDate dateWithTimeIntervalSinceNow:0.3];
-        while ([drainRoundTrip15 timeIntervalSinceNow] > 0) {
-            NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny
-                untilDate:[NSDate dateWithTimeIntervalSinceNow:0.02] inMode:NSDefaultRunLoopMode dequeue:YES];
-            if (pending) [NSApp sendEvent:pending];
-        }
+        waitForReleaseEnd(window, page, @"the posted release after the page focus command ends");
         BOOL reportedRoundTripLoss15 = NO;
         for (NSString *eventStr in collectedEvents) {
             if ([eventStr rangeOfString:@"\"type\":\"focus\""].location != NSNotFound
@@ -2141,10 +2139,7 @@ int main(int argc, char **argv) { @autoreleasepool {
                 check(error == nil, [NSString stringWithFormat:@"press focus: the page removes its test focus listener (%@)", error]);
                 focusListenerRemoved15 = YES;
             }];
-        NSDate *removeListenerDeadline15 = [NSDate dateWithTimeIntervalSinceNow:2.0];
-        while (!focusListenerRemoved15 && removeListenerDeadline15.timeIntervalSinceNow > 0) {
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
-        }
+        eventWait(@"the page answers the script that removes its focus command listener", ^BOOL { return focusListenerRemoved15; });
         check(focusListenerRemoved15, @"press focus: the page test listener is removed before the API-only control");
         [focusController15 removeScriptMessageHandlerForName:@"f89Focus"];
 
@@ -2173,12 +2168,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         commandOrigin15 = sp_input_press_origin_point(window, 0, &commandOriginX15, &commandOriginY15, NULL);
         check(commandUpQueued15,
             @"press focus: queued physical release is dispatched through NSApplication");
-        NSDate *drainCommand15 = [NSDate dateWithTimeIntervalSinceNow:0.3];
-        while (drainCommand15.timeIntervalSinceNow > 0) {
-            NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny
-                untilDate:[NSDate dateWithTimeIntervalSinceNow:0.02] inMode:NSDefaultRunLoopMode dequeue:YES];
-            if (pending) [NSApp sendEvent:pending];
-        }
+        waitForReleaseEnd(window, page, @"the queued release after the exported focus command ends");
         BOOL reportedCommandLoss15 = NO;
         for (NSString *eventStr in collectedEvents) {
             if ([eventStr rangeOfString:@"\"focused\":false"].location != NSNotFound) reportedCommandLoss15 = YES;
@@ -2212,12 +2202,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         outsideOrigin15 = sp_input_press_origin_point(window, 0, &outsideOriginX15, &outsideOriginY15, NULL);
         check(outsideUpQueued15,
             @"press focus: queued release outside the region is dispatched through NSApplication");
-        NSDate *drainOutsideRelease15 = [NSDate dateWithTimeIntervalSinceNow:0.3];
-        while ([drainOutsideRelease15 timeIntervalSinceNow] > 0) {
-            NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny
-                untilDate:[NSDate dateWithTimeIntervalSinceNow:0.02] inMode:NSDefaultRunLoopMode dequeue:YES];
-            if (pending) [NSApp sendEvent:pending];
-        }
+        waitForReleaseEnd(window, page, @"the queued release outside the region ends");
         BOOL reportedOutsideReleaseLoss15 = NO;
         for (NSString *eventStr in collectedEvents) {
             if ([eventStr rangeOfString:@"\"type\":\"focus\""].location != NSNotFound
@@ -2250,12 +2235,7 @@ int main(int argc, char **argv) { @autoreleasepool {
             context:nil eventNumber:2 clickCount:1 pressure:0];
         [NSApp postEvent:downOut15 atStart:NO];
         [NSApp postEvent:upOut15 atStart:NO];
-        NSDate *drainOut15 = [NSDate dateWithTimeIntervalSinceNow:2.0];
-        while ([drainOut15 timeIntervalSinceNow] > 0) {
-            NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]
-                inMode:NSDefaultRunLoopMode dequeue:YES];
-            if (pending) [NSApp sendEvent:pending];
-        }
+        waitForReleaseEnd(window, page, @"the posted click outside the region ends");
         BOOL reportedOutsideLoss15 = NO;
         for (NSString *eventStr in collectedEvents) {
             if ([eventStr rangeOfString:@"\"type\":\"focus\""].location != NSNotFound &&
@@ -2275,12 +2255,7 @@ int main(int argc, char **argv) { @autoreleasepool {
     if (activation) {
         // If the last mouse-up of the previous section remains in the queue and is processed in the middle of this section, the responder change happens
         // during a release, not a press. The queue is drained first to measure only changes during a press.
-        while (YES) {
-            NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny
-                untilDate:[NSDate dateWithTimeIntervalSinceNow:0.1] inMode:NSDefaultRunLoopMode dequeue:YES];
-            if (!pending) break;
-            [NSApp sendEvent:pending];
-        }
+        waitForPostedEvents(@"the events that the previous section left in the queue are dispatched");
         void *regionA16 = sp_region_create(surface, "testA16", testEvent, (void *)1);
         void *regionB16 = sp_region_create(surface, "testB16", testEvent, (void *)2);
         // The placement arguments are insets (left, top, right, bottom). B is at the same position as test15 (coordinates whose press routing was
@@ -2291,12 +2266,9 @@ int main(int argc, char **argv) { @autoreleasepool {
         // the resign of A happens at a place other than a press and the reproduction is disturbed.
         [NSApp activateIgnoringOtherApps:YES];
         [window makeKeyAndOrderFront:nil];
-        NSDate *settleB16 = [NSDate dateWithTimeIntervalSinceNow:0.3];
-        while ([settleB16 timeIntervalSinceNow] > 0) {
-            NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny
-                untilDate:[NSDate dateWithTimeIntervalSinceNow:0.05] inMode:NSDefaultRunLoopMode dequeue:YES];
-            if (pending) [NSApp sendEvent:pending];
-        }
+        eventWait(@"the application is active and the window is key", ^BOOL { return NSApp.isActive && window.isKeyWindow; });
+        waitForPostedEvents(@"the events of the activation are dispatched");
+        waitForMainQueueTurn(@"the work that the activation queued runs");
         sp_region_focus(regionA16);
         check(window.firstResponder == (NSResponder *)regionA16,
             @"press focus A->B: region A starts as the window first responder");
@@ -2316,19 +2288,8 @@ int main(int argc, char **argv) { @autoreleasepool {
             context:nil eventNumber:3 clickCount:1 pressure:0];
         [NSApp postEvent:downB16 atStart:NO];
         [NSApp postEvent:upB16 atStart:NO];
-        NSDate *drainB16 = [NSDate dateWithTimeIntervalSinceNow:2.0];
-        while ([drainB16 timeIntervalSinceNow] > 0) {
-            NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]
-                inMode:NSDefaultRunLoopMode dequeue:YES];
-            if (pending) [NSApp sendEvent:pending];
-        }
-        // Runs the queue once more so that the asynchronous return (makeFirstResponder) flows.
-        NSDate *drainB16b = [NSDate dateWithTimeIntervalSinceNow:0.3];
-        while ([drainB16b timeIntervalSinceNow] > 0) {
-            NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]
-                inMode:NSDefaultRunLoopMode dequeue:YES];
-            if (pending) [NSApp sendEvent:pending];
-        }
+        // The end of the release includes the main queue turn that runs the asynchronous hand-over (makeFirstResponder).
+        waitForReleaseEnd(window, page, @"the click that presses region B and releases over region A ends");
 
         BOOL reportedA16Loss = NO;
         BOOL reportedB16Gain = NO;
@@ -2385,10 +2346,7 @@ int main(int argc, char **argv) { @autoreleasepool {
             check(sp_input_pointer(window, x17, y17, 3, 0, 0, 0) == SP_INPUT_DELIVERED,
                 @"direct pointer focus: the paired release reaches the pressed view after the focus command");
             dispatch_async(dispatch_get_main_queue(), ^{ nextMainTurn17 = YES; });
-            NSDate *deadline17 = [NSDate dateWithTimeIntervalSinceNow:1.0];
-            while (!nextMainTurn17 && deadline17.timeIntervalSinceNow > 0) {
-                [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-            }
+            eventWait(@"the main queue runs the turn after the direct click", ^BOOL { return nextMainTurn17; });
         });
         check(nextMainTurn17, @"direct pointer focus: the responder restoration turn completed");
         check(!sp_input_press_context_point(window, NULL, NULL),
@@ -2424,10 +2382,7 @@ int main(int argc, char **argv) { @autoreleasepool {
             check(sp_input_pointer(window, x17 + 100, y17, 3, 0, 0, 0) == SP_INPUT_DELIVERED,
                 @"direct pointer focus: a release outside uses the original press target");
             dispatch_async(dispatch_get_main_queue(), ^{ nextMainTurn17 = YES; });
-            NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:1.0];
-            while (!nextMainTurn17 && deadline.timeIntervalSinceNow > 0) {
-                [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-            }
+            eventWait(@"the main queue runs the turn after the direct release outside", ^BOOL { return nextMainTurn17; });
         });
         BOOL reportedOutsideReleaseLoss17 = NO;
         for (NSString *eventStr in collectedEvents) {
@@ -2460,10 +2415,7 @@ int main(int argc, char **argv) { @autoreleasepool {
                 check(error == nil, [NSString stringWithFormat:@"press focus: direct logical page listener loads (%@)", error]);
                 listenerReady = YES;
             }];
-        NSDate *listenerDeadline = [NSDate dateWithTimeIntervalSinceNow:2.0];
-        while (!listenerReady && listenerDeadline.timeIntervalSinceNow > 0) {
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
-        }
+        eventWait(@"the page answers the script that installs its direct focus listener", ^BOOL { return listenerReady; });
         check(listenerReady, @"press focus: direct logical page listener is ready");
         NSRect frame = [((NSView *)logicalRegion) convertRect:[((NSView *)logicalRegion) bounds] toView:nil];
         NSPoint point = [window.contentView convertPoint:NSMakePoint(NSMidX(frame), NSMidY(frame)) fromView:nil];
@@ -2471,10 +2423,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         [collectedEvents removeAllObjects];
         check(sp_input_pointer(window, point.x, y, 1, 0, 0, 0) == SP_INPUT_DELIVERED,
             @"press focus: logical direct phase one is delivered");
-        NSDate *commandDeadline = [NSDate dateWithTimeIntervalSinceNow:2.0];
-        while (handler.count == 0 && commandDeadline.timeIntervalSinceNow > 0) {
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
-        }
+        eventWait(@"the direct logical press reaches the focus callback of the page", ^BOOL { return handler.count > 0; });
         check(handler.count == 1,
             [NSString stringWithFormat:@"press focus: asynchronous page focus callback runs before phase three (got %lu)",
                 (unsigned long)handler.count]);
@@ -2488,10 +2437,7 @@ int main(int argc, char **argv) { @autoreleasepool {
                 collectedEvents]);
         check(sp_input_pointer(window, point.x, y, 3, 0, 0, 0) == SP_INPUT_DELIVERED,
             @"press focus: logical direct phase three is delivered");
-        NSDate *releaseDeadline = [NSDate dateWithTimeIntervalSinceNow:0.3];
-        while (releaseDeadline.timeIntervalSinceNow > 0) {
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
-        }
+        waitForReleaseEnd(window, page, @"the direct logical release ends");
         lost = NO;
         for (NSString *eventStr in collectedEvents) {
             if ([eventStr rangeOfString:@"\"type\":\"focus\""].location != NSNotFound

@@ -10,20 +10,13 @@
 #import "private/webkit.h"
 #import "webview_geometry.h"
 #import "window_facts.h"
+#import "support/event_wait.h"
 
 static int failures = 0;
 
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
-}
-
-static void until(NSString *what, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
-    if (!done()) { fprintf(stderr, "FAIL: %s within 10 seconds\n", what.UTF8String); exit(1); }
 }
 
 static int viewEnded = 0;
@@ -144,7 +137,7 @@ int main(void) { @autoreleasepool {
         check(hasChannelScript((WKWebView *)view), @"the view configuration runs the channel script at document start");
         latest = nil;
         check(sp_document_load(view, "soksak://probe/ui/page.html"), @"the view loads the page of its plugin");
-        until(@"the view page reports its handler", ^BOOL{ return [latest[@"title"] hasPrefix:@"handler"]; });
+        eventWait(@"the view page reports its handler", ^BOOL{ return [latest[@"title"] hasPrefix:@"handler"]; });
         check(viewStates.count > 0, @"the view reports its navigation state");
         BOOL everyLoadingIsBoolean = YES;
         for (NSDictionary *state in viewStates) {
@@ -161,7 +154,7 @@ int main(void) { @autoreleasepool {
             [NSString stringWithFormat:@"every view state of one load counts one navigation: %@", viewStates.lastObject[@"navigations"]]);
         check([latest[@"title"] isEqual:@"handler object"],
             [NSString stringWithFormat:@"the view page has the sok-view handler: %@", latest[@"title"]]);
-        until(@"the ready message reaches the view receiver", ^BOOL{ return viewMessages.count > 0; });
+        eventWait(@"the ready message reaches the view receiver", ^BOOL{ return viewMessages.count > 0; });
         check([viewMessages[0][@"message"][@"event"] isEqual:@"view.ready"]
             && [viewMessages[0][@"message"][@"document"] isEqual:@"doc-1"],
             [NSString stringWithFormat:@"the view receives the ready message: %@", viewMessages[0]]);
@@ -169,7 +162,7 @@ int main(void) { @autoreleasepool {
         // registrations the main page holds under the same source generation; the view keeps its first document.
         NSUInteger readyMessages = viewMessages.count;
         [(WKWebView *)view evaluateJavaScript:@"location.reload()" completionHandler:nil];
-        until(@"the view reports the refused reload", ^BOOL{ return [latest[@"error"] isKindOfClass:NSString.class]; });
+        eventWait(@"the view reports the refused reload", ^BOOL{ return [latest[@"error"] isKindOfClass:NSString.class]; });
         check([latest[@"error"] hasPrefix:@"a view keeps its first document"],
             [NSString stringWithFormat:@"the view refuses a reload of its document: %@", latest[@"error"]]);
         check([latest[@"navigations"] isEqual:@1] && viewMessages.count == readyMessages,
@@ -202,7 +195,7 @@ int main(void) { @autoreleasepool {
         sp_document_place(region, 0, 0, 0, 0, true);
         latest = nil;
         check(sp_document_load(region, "soksak://probe/ui/page.html"), @"the region loads the page of its plugin");
-        until(@"the region page reports its handler", ^BOOL{ return [latest[@"title"] hasPrefix:@"handler"]; });
+        eventWait(@"the region page reports its handler", ^BOOL{ return [latest[@"title"] hasPrefix:@"handler"]; });
         check([latest[@"title"] isEqual:@"handler undefined"],
             [NSString stringWithFormat:@"the region page has no sok-view handler: %@", latest[@"title"]]);
         check(viewMessages.count == 1, @"the region sends no message to a view receiver");
@@ -220,7 +213,7 @@ int main(void) { @autoreleasepool {
         sp_document_place(themed, 0, 0, 0, 0, true);
         latest = nil;
         check(sp_document_load(themed, "soksak://probe/ui/theme.html"), @"the themed view loads its page");
-        until(@"the theme page reports the scheme of its first script", ^BOOL{ return [latest[@"title"] hasPrefix:@"theme"]; });
+        eventWait(@"the theme page reports the scheme of its first script", ^BOOL{ return [latest[@"title"] hasPrefix:@"theme"]; });
         check([latest[@"title"] isEqual:@"theme dark"],
             [NSString stringWithFormat:@"the first page script reads the theme from window.sokTheme: %@", latest[@"title"]]);
         sp_document_close(themed);

@@ -53,6 +53,8 @@ fn native_view_removal_still_closes_a_standard_io_session() {
                 persistent: None,
                 surfaces: HashSet::from([surface.into()]),
                 closed_surfaces: HashSet::new(),
+                read_ended: None,
+                terminated: Default::default(),
             },
         );
     }
@@ -646,6 +648,8 @@ pub(crate) fn mounted_project_probe_wire<O: Owner>(
             persistent: None,
             surfaces: HashSet::new(),
             closed_surfaces: HashSet::new(),
+            read_ended: None,
+            terminated: Default::default(),
         },
     );
     (sidecars, move || match receiver.try_recv() {
@@ -669,7 +673,10 @@ pub(crate) fn mounted_full_project_wire<O: Owner>(
             assert!(
                 process
                     .outbox
-                    .try_send(Outgoing::Line(super::QueuedLine::new(b"{}\n".to_vec())))
+                    .try_send(Outgoing::Line(super::QueuedLine::new(
+                        b"{}\n".to_vec(),
+                        std::time::Instant::now()
+                    )))
                     .is_ok()
             );
         }
@@ -709,6 +716,8 @@ pub(crate) fn background_race_sidecars<O: Owner>(
             persistent: None,
             surfaces: HashSet::new(),
             closed_surfaces: HashSet::new(),
+            read_ended: None,
+            terminated: Default::default(),
         },
     );
     (sidecars, move || {

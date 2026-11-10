@@ -26,9 +26,7 @@ fn ask_page(relay: &Arc<Relay>) -> mpsc::Receiver<Result<Box<RawValue>, Failure>
     let (sent, wait) = mpsc::channel();
     let asking = relay.clone();
     std::thread::spawn(move || {
-        let reply = asking.request("main", None, |_| {
-            sent.send(()).map_err(|error| error.to_string())
-        });
+        let reply = asking.request("main", |_| sent.send(()).map_err(|error| error.to_string()));
         outcome.send(reply).expect("the test holds the receiver");
     });
     wait.recv().expect("the request to the page was not sent");
@@ -64,7 +62,7 @@ fn reload(data: &Arc<WindowData>) -> mpsc::Receiver<Result<Value, Failure>> {
             |end| {
                 Failure::new(
                     MISSING_DOCUMENT,
-                    crate::running_calls::reload_end_text(end, "none"),
+                    format!("{end} before the reloaded page reported ready"),
                 )
             },
         );
@@ -100,7 +98,7 @@ fn the_end_of_the_page_process_ends_the_requests_to_the_page() {
     let relay = Arc::new(Relay::default());
     let data = ready_page();
     let reply = ask_page(&relay);
-    end_page_of(&relay, &data, "main", || Ok(()), || Ok(())).expect("the page ends");
+    end_page_of(&relay, &data, "main", || (), || Ok(()), || Ok(())).expect("the page ends");
     want_closed_document(reply, "the command request to the page");
     assert!(
         !data.ready.load(Ordering::Relaxed),
@@ -126,14 +124,14 @@ fn the_end_of_the_page_answers_the_close_question_that_it_left() {
         closes.set(closes.get() + 1);
         Ok(())
     };
-    end_page_of(&relay, &data, "main", || Ok(()), close).expect("the page ends");
+    end_page_of(&relay, &data, "main", || (), || Ok(()), close).expect("the page ends");
     assert_eq!(
         closes.get(),
         1,
         "the end of the page closed the window {} times, want once",
         closes.get()
     );
-    end_page_of(&relay, &data, "main", || Ok(()), close).expect("the page ends again");
+    end_page_of(&relay, &data, "main", || (), || Ok(()), close).expect("the page ends again");
     assert_eq!(
         closes.get(),
         1,
@@ -150,8 +148,16 @@ fn the_reload_request_ends_the_requests_to_the_page() {
     let relay = Arc::new(Relay::default());
     let data = ready_page();
     let reply = ask_page(&relay);
-    reload_ready_page(&relay, &data, "main", || Ok(()), || Ok(()), || Ok(()))
-        .expect("the reload request is sent");
+    reload_ready_page(
+        &relay,
+        &data,
+        "main",
+        || Ok(()),
+        || (),
+        || Ok(()),
+        || Ok(()),
+    )
+    .expect("the reload request is sent");
     want_closed_document(reply, "the command request to the reloading page");
     assert!(
         !data.ready.load(Ordering::Relaxed),

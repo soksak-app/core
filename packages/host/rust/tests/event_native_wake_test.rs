@@ -4,8 +4,6 @@
 #[path = "support/platform/native_event.rs"]
 mod native_event;
 
-use std::time::Duration;
-
 use soksak_host::platform;
 
 // contract: log.native.wake-stores-a-record-at-once
@@ -15,6 +13,12 @@ fn a_native_event_ends_the_wait_of_the_platform() {
     let mut wait = system.native_event_wake().unwrap();
     let mut buffer = [0u8; 4096];
     assert_eq!(system.pull_native_events(&mut buffer).unwrap(), 0);
+    // The wait ends exactly when the pipe of the wake is readable, so a pipe that is not readable with an empty ring is a wait that
+    // does not end.
+    assert!(
+        !native_event::wake_is_ready(),
+        "the wait ends with an empty ring"
+    );
     let (ended, ends) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         loop {
@@ -24,12 +28,8 @@ fn a_native_event_ends_the_wait_of_the_platform() {
             }
         }
     });
-    assert!(
-        ends.recv_timeout(Duration::from_millis(100)).is_err(),
-        "the wait ended with an empty ring"
-    );
     assert!(native_event::record(c"native.test.wake"));
-    ends.recv_timeout(Duration::from_secs(5))
+    ends.recv()
         .expect("the wait did not end after a native event");
     assert!(system.pull_native_events(&mut buffer).unwrap() > 0);
 }

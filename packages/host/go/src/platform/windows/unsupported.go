@@ -7,7 +7,6 @@ import (
 	"net"
 	"os"
 	"os/exec"
-	"time"
 	"unsafe"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
@@ -549,12 +548,32 @@ func (implementation) ServiceProcessExists(int) (bool, error) {
 	return false, unsupported("service process inspection")
 }
 
-func (implementation) WaitServiceProcessEnd(int, time.Duration) (bool, error) {
+func (implementation) WaitServiceProcessEnd(int, <-chan struct{}) (bool, error) {
 	return false, unsupported("service process wait")
 }
 
 func (implementation) NewSession(*exec.Cmd) error {
 	return unsupported("new process session")
+}
+
+func (implementation) NewProcessGroup(*exec.Cmd) error {
+	return unsupported("new process group")
+}
+
+func (implementation) EndProcessGroup(int) error {
+	return unsupported("process group end")
+}
+
+func (implementation) TerminateProcessGroup(int) error {
+	return unsupported("process group termination")
+}
+
+func (implementation) ExitedByTermination(*os.ProcessState) bool {
+	return false
+}
+
+func (implementation) ReadAvailable(*os.File, []byte) (int, error) {
+	return 0, unsupported("available pipe read")
 }
 
 func (implementation) ExitStatus(*os.ProcessState) (string, error) {

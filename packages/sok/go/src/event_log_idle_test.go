@@ -33,10 +33,20 @@ func (s *idleSource) pull(accept func(RelayedEvent), _ func(uint64, uint64, stri
 	s.held = nil
 }
 
-// idleLog starts a writer with a source and the batch interval, and returns them once the writer took what its start left.
-// A writer that holds an interval of an hour can store nothing by the end of an interval, so a test of it shows what the
+// idleWriter is a writer of a test with its source, its Wake and the events of its sleeps and its writes.
+type idleWriter struct {
+	log    *EventLog
+	source *idleSource
+	wake   chan struct{}
+	// sleeps receives each sleep of the writer, with whether it holds a count of the gate; writes receives each batch it wrote.
+	sleeps chan bool
+	writes chan struct{}
+}
+
+// idleLog starts a writer with a source and the batch interval, and returns it once the writer took what its start left and
+// slept. A writer that holds an interval of an hour can store nothing by the end of an interval, so a test of it shows what the
 // writer does at once.
-func idleLog(t *testing.T, interval time.Duration) (*EventLog, *idleSource, chan struct{}) {
+func idleLog(t *testing.T, interval time.Duration) *idleWriter {
 	t.Helper()
 	useEventLogFilesystemPlatform(t)
 	source := &idleSource{}
@@ -52,23 +62,36 @@ func idleLog(t *testing.T, interval time.Duration) (*EventLog, *idleSource, chan
 		t.Fatal(err)
 	}
 	t.Cleanup(log.Close)
-	return log, source, wake
+	w := &idleWriter{log: log, source: source, wake: wake, sleeps: make(chan bool, 64), writes: make(chan struct{}, 64)}
+	log.SetOnSleep(func(countHeld bool) {
+		select {
+		case w.sleeps <- countHeld:
+		default:
+			t.Error("the test did not take the sleeps of the writer")
+		}
+	})
+	w.slept(t)
+	log.SetOnWrite(func(string, int64) {
+		select {
+		case w.writes <- struct{}{}:
+		default:
+			t.Error("the test did not take the writes of the writer")
+		}
+	})
+	return w
 }
 
-// settledPulls returns the pull count after the intervals that the start left have ended.
-func settledPulls(t *testing.T, source *idleSource) int64 {
+// slept waits for the next sleep of the writer and returns whether it holds a count of the gate. Only an event, a Wake, a
+// loss, a request or the report of a held count wakes a writer that sleeps, so what follows a sleep is what the test does.
+func (w *idleWriter) slept(t *testing.T) bool {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		before := source.pulls.Load()
-		time.Sleep(30 * time.Millisecond)
-		if after := source.pulls.Load(); after == before && after > 0 {
-			return after
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("the writer did not settle")
-		}
-	}
+	countHeld := <-w.sleeps
+	return countHeld
+}
+
+// wrote reports the writes that the writer made and the test did not take, without waiting.
+func (w *idleWriter) wrote() int {
+	return len(w.writes)
 }
 
 func fileHas(t *testing.T, path, text string) bool {
@@ -80,37 +103,36 @@ func fileHas(t *testing.T, path, text string) bool {
 	return strings.Contains(string(data), text)
 }
 
-func waitForFile(t *testing.T, path, text, what string) {
+// waitForFile waits for the writes of the writer until one of them left text in the file. It takes the write that stored text,
+// so a count of the writes that follow starts after it.
+func (w *idleWriter) waitForFile(t *testing.T, text, what string) {
 	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
-	for !fileHas(t, path, text) {
-		if time.Now().After(deadline) {
-			t.Fatalf("%s: %s is not stored", what, text)
+	for {
+		<-w.writes
+		if fileHas(t, w.log.Path(), text) {
+			return
 		}
-		time.Sleep(time.Millisecond)
 	}
 }
 
 // A writer with nothing to write does not wake: the batch interval of the host would be ten wakeups each second of an idle
-// application, which G2 of docs/spec/hosts.md does not leave room for.
+// application, which G2 of docs/spec/hosts.md does not leave room for. The start takes the source once and sleeps.
 // contract: log.writer.sleeps-with-nothing-to-write
 func TestWriterSleepsWithNothingToWrite(t *testing.T) {
-	_, source, _ := idleLog(t, 5*time.Millisecond)
-	from := settledPulls(t, source)
-	time.Sleep(100 * time.Millisecond)
-	if woke := source.pulls.Load() - from; woke != 0 {
-		t.Fatalf("the writer pulled %d times in 100 ms with nothing to write", woke)
+	w := idleLog(t, 5*time.Millisecond)
+	if pulls := w.source.pulls.Load(); pulls != 1 {
+		t.Fatalf("the writer pulled %d times before it slept, want the one of its start", pulls)
 	}
 }
 
 // One Wake takes the source at once and once at the end of the interval it starts, and the writer sleeps again.
 // contract: log.writer.sleeps-with-nothing-to-write
 func TestWriterSleepsAgainAfterAWake(t *testing.T) {
-	_, source, wake := idleLog(t, 5*time.Millisecond)
-	from := settledPulls(t, source)
-	wake <- struct{}{}
-	time.Sleep(100 * time.Millisecond)
-	if got := source.pulls.Load() - from; got != 2 {
+	w := idleLog(t, 5*time.Millisecond)
+	from := w.source.pulls.Load()
+	w.wake <- struct{}{}
+	w.slept(t)
+	if got := w.source.pulls.Load() - from; got != 2 {
 		t.Fatalf("the writer pulled %d times after one Wake", got)
 	}
 }
@@ -118,103 +140,105 @@ func TestWriterSleepsAgainAfterAWake(t *testing.T) {
 // An event that wakes a writer that slept is stored at once, without an interval and without a flush.
 // contract: log.writer.stores-the-first-event-at-once
 func TestFirstEventIsStoredAtOnce(t *testing.T) {
-	log, source, _ := idleLog(t, time.Hour)
-	settledPulls(t, source)
-	log.Emit(LevelInfo, "writer.idle.first", map[string]any{})
-	waitForFile(t, log.Path(), "writer.idle.first", "a writer that slept")
+	w := idleLog(t, time.Hour)
+	w.log.Emit(LevelInfo, "writer.idle.first", map[string]any{})
+	w.waitForFile(t, "writer.idle.first", "a writer that slept")
 }
 
 // A record of the source that wakes a writer that slept is stored at once.
 // contract: log.native.wake-stores-a-record-at-once
 func TestFirstRecordOfTheSourceIsStoredAtOnce(t *testing.T) {
-	log, source, wake := idleLog(t, time.Hour)
-	settledPulls(t, source)
-	source.hold("native.idle.first")
-	wake <- struct{}{}
-	waitForFile(t, log.Path(), "native.idle.first", "a Wake of a writer that slept")
+	w := idleLog(t, time.Hour)
+	w.source.hold("native.idle.first")
+	w.wake <- struct{}{}
+	w.waitForFile(t, "native.idle.first", "a Wake of a writer that slept")
 }
 
-// The events after the first gather into the batch of the interval: the writer does not write each event.
+// The events after the first gather into the batch of the interval: the writer does not write each event. The flush is the
+// one write after the first, and the writer writes before it answers the flush.
 // contract: log.writer.stores-the-first-event-at-once
 func TestEventsAfterTheFirstWaitForTheBatch(t *testing.T) {
-	log, source, _ := idleLog(t, time.Hour)
-	settledPulls(t, source)
-	log.Emit(LevelInfo, "writer.idle.first", map[string]any{})
-	waitForFile(t, log.Path(), "writer.idle.first", "a writer that slept")
-	log.Emit(LevelInfo, "writer.idle.second", map[string]any{})
-	time.Sleep(50 * time.Millisecond)
-	if fileHas(t, log.Path(), "writer.idle.second") {
-		t.Fatal("the second event of an interval was written alone")
+	w := idleLog(t, time.Hour)
+	w.log.Emit(LevelInfo, "writer.idle.first", map[string]any{})
+	w.waitForFile(t, "writer.idle.first", "a writer that slept")
+	if w.wrote() != 0 {
+		t.Fatal("the first event was written twice")
 	}
-	if err := log.Flush(); err != nil {
+	w.log.Emit(LevelInfo, "writer.idle.second", map[string]any{})
+	w.log.Emit(LevelInfo, "writer.idle.third", map[string]any{})
+	if err := w.log.Flush(); err != nil {
 		t.Fatal(err)
 	}
-	if !fileHas(t, log.Path(), "writer.idle.second") {
+	if writes := w.wrote(); writes != 1 {
+		t.Fatalf("the writer made %d writes for the two events of an interval and the flush, want the one of the flush", writes)
+	}
+	if !fileHas(t, w.log.Path(), "writer.idle.second") || !fileHas(t, w.log.Path(), "writer.idle.third") {
 		t.Fatal("the flush did not write the batch")
 	}
 }
 
 // A refused event makes no write of its own, which would wake the indexer as well: a writer that sleeps keeps the count, and
-// the next event carries it to the file.
+// the next event carries it to the file. The first count wakes the writer for the start and the end of one interval, after
+// which it sleeps with the count held, and a further count wakes nothing. The check sets the bound on the rate of the reports
+// to zero, so the carrier is not held back by it.
 // contract: log.writer.a-count-waits-for-a-write
 func TestACountWaitsForTheNextWrite(t *testing.T) {
-	log, source, _ := idleLog(t, 5*time.Millisecond)
-	from := settledPulls(t, source)
-	for range 50 {
-		if log.Gate(ClassIo, LevelTrace) {
-			t.Fatal("the default policy stores io at trace")
-		}
-		time.Sleep(30 * time.Millisecond)
-	}
-	if fileHas(t, log.Path(), "log.gated") {
-		t.Fatal("a count alone was written to the file")
-	}
-	if pulls := source.pulls.Load() - from; pulls > 2 {
-		t.Fatalf("the counts woke the writer for %d pulls; the first count takes the start and the end of one interval", pulls)
-	}
-	log.Emit(LevelInfo, "writer.idle.carrier", map[string]any{})
-	waitForFile(t, log.Path(), "log.gated", "the count that waited for an event")
-}
-
-// A count of the gate leaves a sleeping writer as log.gated after its wait: no other event may be there to carry it.
-// contract: log.writer.a-count-waits-for-a-write
-func TestGateCountWakesTheWriter(t *testing.T) {
-	log, source, _ := idleLog(t, 5*time.Millisecond)
-	settledPulls(t, source)
-	log.SetGatedWait(50 * time.Millisecond)
-	if log.Gate(ClassIo, LevelTrace) {
+	w := idleLog(t, 5*time.Millisecond)
+	w.log.SetGatedReportInterval(0)
+	from := w.source.pulls.Load()
+	if w.log.Gate(ClassIo, LevelTrace) {
 		t.Fatal("the default policy stores io at trace")
 	}
-	deadline := time.Now().Add(3 * time.Second)
-	for !fileHas(t, log.Path(), "log.gated") {
-		if time.Now().After(deadline) {
-			t.Fatal("the count of the gate was not reported")
-		}
-		time.Sleep(5 * time.Millisecond)
+	if !w.slept(t) {
+		t.Fatal("the writer slept without the count of the gate")
 	}
+	for range 49 {
+		if w.log.Gate(ClassIo, LevelTrace) {
+			t.Fatal("the default policy stores io at trace")
+		}
+	}
+	if fileHas(t, w.log.Path(), "log.gated") || w.wrote() != 0 {
+		t.Fatal("a count alone was written to the file")
+	}
+	if pulls := w.source.pulls.Load() - from; pulls != 2 {
+		t.Fatalf("the counts woke the writer for %d pulls; the first count takes the start and the end of one interval", pulls)
+	}
+	w.log.Emit(LevelInfo, "writer.idle.carrier", map[string]any{})
+	w.waitForFile(t, "log.gated", "the count that waited for an event")
+}
+
+// A count of the gate leaves a sleeping writer as log.gated after its wait: no other event may be there to carry it. The
+// check sets the wait and the bound on the rate of the reports to zero, so the report follows the end of one interval.
+// contract: log.writer.a-count-waits-for-a-write
+func TestGateCountWakesTheWriter(t *testing.T) {
+	w := idleLog(t, 5*time.Millisecond)
+	w.log.SetGatedWait(0)
+	w.log.SetGatedReportInterval(0)
+	if w.log.Gate(ClassIo, LevelTrace) {
+		t.Fatal("the default policy stores io at trace")
+	}
+	w.waitForFile(t, "log.gated", "the count of the gate")
 }
 
 // A loss that no message carries leaves a sleeping writer as log.dropped at once.
 // contract: log.writer.sleeps-with-nothing-to-write
 func TestLossWakesTheWriter(t *testing.T) {
-	log, source, _ := idleLog(t, time.Hour)
-	settledPulls(t, source)
-	log.countLoss(ChannelOther, LossQueueFull, 7)
-	waitForFile(t, log.Path(), "log.dropped", "a loss of a writer that slept")
+	w := idleLog(t, time.Hour)
+	w.log.countLoss(ChannelOther, LossQueueFull, 7)
+	w.waitForFile(t, "log.dropped", "a loss of a writer that slept")
 }
 
 // Close stores what waits for an interval and what the source holds, and needs no Wake for it.
 // contract: log.native.close-stores-the-ring
 func TestCloseStoresWhatWaits(t *testing.T) {
-	log, source, _ := idleLog(t, time.Hour)
-	settledPulls(t, source)
-	log.Emit(LevelInfo, "writer.idle.first", map[string]any{})
-	waitForFile(t, log.Path(), "writer.idle.first", "a writer that slept")
-	log.Emit(LevelInfo, "writer.idle.second", map[string]any{})
-	source.hold("native.idle.held")
-	log.Close()
+	w := idleLog(t, time.Hour)
+	w.log.Emit(LevelInfo, "writer.idle.first", map[string]any{})
+	w.waitForFile(t, "writer.idle.first", "a writer that slept")
+	w.log.Emit(LevelInfo, "writer.idle.second", map[string]any{})
+	w.source.hold("native.idle.held")
+	w.log.Close()
 	for _, event := range []string{"writer.idle.second", "native.idle.held"} {
-		if !fileHas(t, log.Path(), event) {
+		if !fileHas(t, w.log.Path(), event) {
 			t.Fatalf("Close did not store %s", event)
 		}
 	}
@@ -223,8 +247,8 @@ func TestCloseStoresWhatWaits(t *testing.T) {
 // Close and Flush of a writer that sleeps take the source, which may not have said that it holds something.
 // contract: log.native.close-stores-the-ring
 func TestAWriterThatSleepsTakesTheSourceAtTheEnd(t *testing.T) {
-	log, source, _ := idleLog(t, time.Hour)
-	settledPulls(t, source)
+	w := idleLog(t, time.Hour)
+	log, source := w.log, w.source
 	source.hold("native.idle.flushed")
 	if err := log.Flush(); err != nil {
 		t.Fatal(err)
@@ -282,11 +306,7 @@ func TestAFlushThatAFlushFindsBehindItIsAnswered(t *testing.T) {
 	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case <-second:
-	case <-time.After(5 * time.Second):
-		t.Fatal("the flush behind the flush was not answered")
-	}
+	<-second
 }
 
 // A flush request and an event are in the queue behind the stop: the source puts them there while the writer pulls for it.
@@ -326,7 +346,7 @@ func TestAFlushThatAStopFindsBehindItIsAnswered(t *testing.T) {
 // contract: log.writer.flush-behind-a-flush-or-a-stop-is-answered
 // contract: log.writer.flush-at-exit
 func TestAFlushOfAWriterThatEndedSaysSo(t *testing.T) {
-	log, _, _ := idleLog(t, time.Hour)
+	log := idleLog(t, time.Hour).log
 	log.Close()
 	if err := log.Flush(); err == nil || err.Error() != "the event writer ended before it answered the flush" {
 		t.Fatalf("Flush of a writer that ended returned %v", err)

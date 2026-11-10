@@ -4,24 +4,19 @@
 #import "support/records.h"
 #import "event_ring.h"
 #import "private/webkit.h"
+#import "support/event_wait.h"
 
 static int failures;
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
 }
-static void until(BOOL (^condition)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!condition() && deadline.timeIntervalSinceNow > 0)
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    if (!condition()) { fprintf(stderr, "FAIL: receipt fixture timed out\n"); exit(1); }
-}
 // Runs the main queue until a marker block that it enqueues now has run: the point at which a check sees what the turns
 // before it decided, with no time in the check.
 static void runMarker(void) {
     __block BOOL ran = NO;
     dispatch_async(dispatch_get_main_queue(), ^{ ran = YES; });
-    until(^BOOL { return ran; });
+    eventWait(@"the marker block runs", ^BOOL { return ran; });
 }
 
 // The receipts that the test posted and the web process has not answered, and the drains that wait for them.
@@ -98,7 +93,7 @@ int main(void) { @autoreleasepool {
     check(webviewInputRegister(view), @"available pointer APIs register");
     [view loadHTMLString:@"<!doctype html><script>window.ready=true</script>" baseURL:nil];
     __block BOOL loaded = NO;
-    until(^BOOL {
+    eventWait(@"the document loads and answers that its script ran", ^BOOL {
         if (!loaded && !view.loading && view.URL) {
             [view evaluateJavaScript:@"window.ready===true" completionHandler:^(id value, NSError *error) {
                 if (error) { fprintf(stderr, "FAIL: load: %s\n", error.localizedDescription.UTF8String); exit(1); }
@@ -111,21 +106,21 @@ int main(void) { @autoreleasepool {
     __block BOOL received = YES;
     view.missingDrain = YES;
     webviewInputSendThen(view, @"pointerdown", ^SPInputSend { sent++; return SPInputSendRefused; }, ^(BOOL value) { received=value; completed++; });
-    until(^BOOL { return completed > 0; });
+    eventWait(@"the input completes", ^BOOL { return completed > 0; });
     check(sent == 0 && completed == 1 && !received, @"capability loss before delivery rejects without sending");
     view.missingDrain = NO;
     completed=0; received=YES; view.drains=0;
     webviewInputSendThen(view, @"pointerdown", ^SPInputSend {
         view.missingDrain=YES; postReceipt(view); return SPInputSendDelivered;
     }, ^(BOOL value) { received=value; completed++; });
-    until(^BOOL { return completed > 0; });
+    eventWait(@"the input completes", ^BOOL { return completed > 0; });
     // The receipt is the end of the input (docs/spec/exposure.md#methods): no step of WebKit after it is consulted.
     check(received && completed == 1 && view.drains == 1, @"the receipt completes the input without the drain API after the send");
     view.missingDrain=NO; completed=0; received=NO; view.drains=0;
     webviewInputSendThen(view, @"pointerdown", ^SPInputSend {
         check(view.drains == 1, @"pending work drains before send"); postReceipt(view); return SPInputSendDelivered;
     }, ^(BOOL value) { received=value; completed++; });
-    until(^BOOL { return completed > 0; });
+    eventWait(@"the input completes", ^BOOL { return completed > 0; });
     // The drain after the send watches for a handling without the receipt; the receipt still answers first.
     check(received && completed == 1 && view.drains == 2,
         [NSString stringWithFormat:@"a receipt completes the input before the drain after the send (drains %lu)", (unsigned long)view.drains]);
@@ -133,7 +128,7 @@ int main(void) { @autoreleasepool {
     completed=0; received=NO; view.drains=0; view.held=nil;
     webviewInputSendThen(view, @"pointerdown", ^SPInputSend { view.hold=YES; postReceipt(view); return SPInputSendDelivered; },
         ^(BOOL value) { received=value; completed++; });
-    until(^BOOL { return completed > 0; });
+    eventWait(@"the input completes", ^BOOL { return completed > 0; });
     check(received && completed == 1 && view.held != nil,
         [NSString stringWithFormat:@"a down returns at its receipt while WebKit holds pending mouse work (completed %lu, held %d)",
             (unsigned long)completed, view.held != nil]);
@@ -149,14 +144,14 @@ int main(void) { @autoreleasepool {
         postReceipt(view);
         return SPInputSendDelivered;
     }, ^(BOOL value) { received=value; completed++; });
-    until(^BOOL { return completed > 0; });
-    until(^BOOL { return heardByMonitor; });
+    eventWait(@"the input completes", ^BOOL { return completed > 0; });
+    eventWait(@"the monitor of the press origin hears the receipt", ^BOOL { return heardByMonitor; });
     check(received && heardByMonitor, @"one receipt answers every wait of its type");
     // If sending is rejected, ends the wait as a failure and records the reason.
     view.hold=NO; view.held=nil; completed=0; received=YES;
     NSString *refusedSend = capturedRecords(^{
         webviewInputSendThen(view, @"pointerdown", ^SPInputSend { return SPInputSendRefused; }, ^(BOOL value) { received=value; completed++; });
-        until(^BOOL { return completed > 0; });
+        eventWait(@"the input completes", ^BOOL { return completed > 0; });
     });
     check(!received && completed == 1 && [refusedSend containsString:@" error native webview input: send of pointerdown was refused"],
         [NSString stringWithFormat:@"a refused send ends the wait and is recorded (got %@)", refusedSend]);
@@ -165,7 +160,7 @@ int main(void) { @autoreleasepool {
     NSString *handled = capturedRecords(^{
         webviewInputSendThen(view, @"pointerdown", ^SPInputSend { return SPInputSendDelivered; },
             ^(BOOL value) { received=value; completed++; });
-        until(^BOOL { return completed > 0; });
+        eventWait(@"the input completes", ^BOOL { return completed > 0; });
     });
     check(completed == 1 && !received, @"an input that WebKit handled without a receipt ends at the end of that handling");
     check([handled containsString:@" error native webview input: wait for pointerdown ended: WebKit handled the mouse events without the receipt"],
@@ -174,7 +169,7 @@ int main(void) { @autoreleasepool {
     completed=0; received=YES;
     webviewInputSendThen(view, @"pointerdown", ^SPInputSend { return SPInputSendElsewhere; },
         ^(BOOL value) { received=value; completed++; });
-    until(^BOOL { return completed > 0; });
+    eventWait(@"the input completes", ^BOOL { return completed > 0; });
     check(completed == 1 && !received, @"an input that reached another view ends without a receipt");
     // The close of the window and a web process that stops answering end a pending wait once.
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 300, 200) styleMask:NSWindowStyleMaskTitled
@@ -186,7 +181,7 @@ int main(void) { @autoreleasepool {
         ^(BOOL value) { received=value; completed++; });
     NSString *closedRecords = capturedRecords(^{
         [window close];
-        until(^BOOL { return completed > 0; });
+        eventWait(@"the input completes", ^BOOL { return completed > 0; });
     });
     check(completed == 1 && !received && sent == 0, @"the close of the window ends a pending wait once without sending");
     check([closedRecords containsString:@" error native webview input: wait for pointerdown ended: the window closed"],
@@ -202,7 +197,7 @@ int main(void) { @autoreleasepool {
         [view willChangeValueForKey:@"_webProcessIsResponsive"];
         view.unresponsive = YES;
         [view didChangeValueForKey:@"_webProcessIsResponsive"];
-        until(^BOOL { return completed > 0; });
+        eventWait(@"the input completes", ^BOOL { return completed > 0; });
     });
     view.unresponsive = NO;
     check(completed == 1 && !received, @"a web process that stops answering ends a pending wait once");
@@ -215,14 +210,14 @@ int main(void) { @autoreleasepool {
     view.hold=NO; view.held=nil; view.inputMethod=YES; completed=0; received=YES; sent=0;
     webviewInputSendThen(view, @"pointerdown", ^SPInputSend { sent++; return SPInputSendDelivered; },
         ^(BOOL value) { received=value; completed++; });
-    until(^BOOL { return sent > 0 || completed > 0; });
+    eventWait(@"the input is sent or completes", ^BOOL { return sent > 0 || completed > 0; });
     runMarker();
     check(completed == 0, @"a wait through the input method outlasts the end of the handling of WebKit");
     NSString *nextInput = capturedRecords(^{
         NSEvent *event = [NSEvent keyEventWithType:NSEventTypeFlagsChanged location:NSZeroPoint modifierFlags:0 timestamp:0
             windowNumber:0 context:nil characters:@"" charactersIgnoringModifiers:@"" isARepeat:NO keyCode:56];
         [NSApp sendEvent:event];
-        until(^BOOL { return completed > 0; });
+        eventWait(@"the input completes", ^BOOL { return completed > 0; });
     });
     check(completed == 1 && !received, @"the next key event that the application receives ends a wait through the input method once");
     check([nextInput containsString:@" error native webview input: wait for pointerdown ended: the application received another press or key event"],
@@ -233,7 +228,7 @@ int main(void) { @autoreleasepool {
     // receipt script, so the answer of that script follows both records.
     NSString *late = capturedRecords(^{
         postReceipt(view);
-        until(^BOOL { return receiptsInFlight == 0; });
+        eventWait(@"the web process answers the posted receipts", ^BOOL { return receiptsInFlight == 0; });
     });
     NSString *both = [nextInput stringByAppendingString:late];
     check([both containsString:@" error native webview input: the receipt listener of the document at the end of the wait for pointerdown: present"],
@@ -245,7 +240,7 @@ int main(void) { @autoreleasepool {
     completed=0; received=NO;
     webviewInputSendThen(view, @"pointerdown", ^SPInputSend { postReceipt(view); return SPInputSendDelivered; },
         ^(BOOL value) { received=value; completed++; });
-    until(^BOOL { return completed > 0; });
+    eventWait(@"the input completes", ^BOOL { return completed > 0; });
     check(completed == 1 && received, @"a receipt through the input method ends its wait as received");
     view.inputMethod=NO;
     view.hold=YES;

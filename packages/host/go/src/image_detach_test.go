@@ -8,7 +8,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 	"unsafe"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
@@ -80,11 +79,7 @@ func TestReloadSurfaceImagesRetainsOldDetachTargetThroughGenerationAdvance(t *te
 	if !c.tryHandleImageEnvelope(surfaces, "fixture-sidecar", key.Surface, ack) {
 		t.Fatal("host did not consume the supplier acknowledgement")
 	}
-	select {
-	case <-ends:
-	case <-time.After(5 * time.Second):
-		t.Fatal("the acknowledgement of the old image sent no ended event")
-	}
+	<-ends
 }
 
 // sentImageDetachRequest reads the detach request that the supplier service received and returns its request id.
@@ -153,11 +148,7 @@ func pendingImageDetachOf(t *testing.T, surfaces *Surfaces, target imageDetachTa
 // waitClosed waits for a channel that the waiter of a pending detach closes.
 func waitClosed(t *testing.T, done <-chan struct{}, what string) {
 	t.Helper()
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		t.Fatalf("%s did not occur", what)
-	}
+	<-done
 }
 
 func imageDetachFixture(t *testing.T, names ...string) (*Surfaces, map[string]*sidecar) {
@@ -214,7 +205,8 @@ func TestAnImageDetachHasNoLimitAndWritesNoRecordWhileItWaits(t *testing.T) {
 	default:
 	}
 	acknowledgeImageDetach(t, c, surfaces, target, request, map[string]any{"ok": true, "result": "detached"})
-	if data := <-ends; fmt.Sprint(data) != endedEvent("surface-a", nil) {
+	data := <-ends
+	if fmt.Sprint(data) != endedEvent("surface-a", nil) {
 		t.Fatalf("ended event data %v, want surface-a without error", data)
 	}
 	if errors := bufferedTraces(t, "host.record.error"); len(errors) != 0 {
@@ -248,11 +240,7 @@ func TestASurfaceEndsItsDetachesOnlyAfterTheAcknowledgementOfEachOfItsImages(t *
 	default:
 	}
 	acknowledgeImageDetach(t, c, surfaces, targets[1], second, map[string]any{"ok": true, "result": "alreadyAbsent"})
-	select {
-	case <-ends:
-	case <-time.After(5 * time.Second):
-		t.Fatal("the surface sent no ended event after the acknowledgement of each image")
-	}
+	<-ends
 	if err := surfaces.pendingImageDetachError("surface-a"); err != nil {
 		t.Fatalf("pending detach after both acknowledgements: %v", err)
 	}
@@ -308,13 +296,9 @@ func TestTheEndedEventOfASurfaceCarriesEachRejectionInImageNameOrder(t *testing.
 	}
 	want := fmt.Sprintf("image detach sidecar fixture-sidecar surface surface-a image view-a generation 7 request %s rejected: imageNameMismatch; "+
 		"image detach sidecar fixture-sidecar surface surface-a image view-b generation 7 request %s rejected: imageNameMismatch", requests[1], requests[0])
-	select {
-	case data := <-ends:
-		if fmt.Sprint(data) != endedEvent("surface-a", want) {
-			t.Fatalf("ended event data %v, want both rejections %q", data, want)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("the surface sent no ended event after both rejections")
+	data := <-ends
+	if fmt.Sprint(data) != endedEvent("surface-a", want) {
+		t.Fatalf("ended event data %v, want both rejections %q", data, want)
 	}
 }
 
@@ -532,13 +516,9 @@ func TestImageDetachWaitsForTheMatchingSupplierAcknowledgement(t *testing.T) {
 	c.handleImageDetachAck(surfaces, target.Sidecar, target.Surface, imageDetachAck{
 		Request: request, Name: target.Name, Generation: target.Generation, OK: true, Result: "detached",
 	})
-	select {
-	case got := <-result:
-		if !got.ok || got.result != "detached" {
-			t.Fatalf("matching acknowledgement result %+v, want detached success", got)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("the matching acknowledgement did not settle the image detach")
+	got := <-result
+	if !got.ok || got.result != "detached" {
+		t.Fatalf("matching acknowledgement result %+v, want detached success", got)
 	}
 }
 

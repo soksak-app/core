@@ -230,17 +230,17 @@ $(HOST_CALLBACK_ABI_LIBRARY): tests/host_callback_abi.m src/host_callbacks.m src
 build-host-callback-abi: $(HOST_CALLBACK_ABI_LIBRARY)
 
 $(BUILD)/%_test: tests/%_test.m tests/support/no_activation.m $(LIBRARY) $(PROCESS_IDENTITY_LIBRARY) $(wildcard src/*.h src/private/*.h tests/support/*.h tests/support/*.m)
-	@clang $(CFLAGS) -I$(CURDIR)/process-identity/include -DVIEW_PAGE_CASES='"$(VIEW_PAGE_CASES)"' -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m tests/support/records.m tests/support/temporary_folder.m tests/support/view_import_map.m -L$(BUILD) -lsoksak-darwin -L$(CURDIR)/process-identity/lib -lsoksak-process-identity $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
+	@clang $(CFLAGS) -I$(CURDIR)/process-identity/include -DVIEW_PAGE_CASES='"$(VIEW_PAGE_CASES)"' -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/event_wait.m tests/support/no_activation.m tests/support/records.m tests/support/temporary_folder.m tests/support/view_import_map.m -L$(BUILD) -lsoksak-darwin -L$(CURDIR)/process-identity/lib -lsoksak-process-identity $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
 
 $(BUILD)/site_cost_test: tests/site_cost_test.m tests/support/site_cost.m tests/support/site_cost.h tests/support/no_activation.m | $(BUILD)
 	@clang $(CFLAGS) -I$(CURDIR)/tests $< tests/support/site_cost.m tests/support/no_activation.m -framework Foundation -framework AppKit -o $@
 
 # A measurement tool is not a test. It prints numbers, asserts nothing, and is not part of the test target.
-$(BUILD)/%_benchmark: tests/%_benchmark.m tests/support/temporary_folder.m tests/support/temporary_folder.h $(LIBRARY) $(wildcard src/*.h src/private/*.h)
-	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/temporary_folder.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
+$(BUILD)/%_benchmark: tests/%_benchmark.m tests/support/event_wait.m tests/support/event_wait.h tests/support/temporary_folder.m tests/support/temporary_folder.h $(LIBRARY) $(wildcard src/*.h src/private/*.h)
+	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/event_wait.m tests/support/temporary_folder.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
 
-$(BUILD)/site_cost_benchmark: tests/site_cost_benchmark.m tests/support/site_cost.m tests/support/site_cost.h tests/support/temporary_folder.m tests/support/temporary_folder.h $(LIBRARY) $(wildcard src/*.h src/private/*.h)
-	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/site_cost.m tests/support/temporary_folder.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
+$(BUILD)/site_cost_benchmark: tests/site_cost_benchmark.m tests/support/event_wait.m tests/support/event_wait.h tests/support/site_cost.m tests/support/site_cost.h tests/support/temporary_folder.m tests/support/temporary_folder.h $(LIBRARY) $(wildcard src/*.h src/private/*.h)
+	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/site_cost.m tests/support/event_wait.m tests/support/temporary_folder.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
 
 benchmark: $(BUILD)/event_ring_benchmark
 	@$(BUILD)/event_ring_benchmark
@@ -308,17 +308,17 @@ $(BUILD)/capture_source_writer_test: src/capture.m
 
 $(BUILD)/capture_resize_test: src/capture.m
 
-$(BUILD)/capture_covered_test: tests/capture_covered_test.m tests/support/temporary_folder.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h tests/support/*.h)
-	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m tests/support/temporary_folder.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Metal -framework Network $(MINIMUM) -o $@
+$(BUILD)/capture_covered_test: tests/capture_covered_test.m tests/support/event_wait.m tests/support/temporary_folder.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h tests/support/*.h)
+	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m tests/support/event_wait.m tests/support/temporary_folder.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Metal -framework Network $(MINIMUM) -o $@
 
 $(BUILD)/capture_presentation_test: tests/capture_presentation_test.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h)
 	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Metal -framework Network $(MINIMUM) -o $@
 
-$(BUILD)/image_region_capture_presentation_test: tests/image_region_capture_presentation_test.m tests/support/no_activation.m tests/support/temporary_folder.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h tests/support/*.h)
-	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m tests/support/temporary_folder.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
+$(BUILD)/image_region_capture_presentation_test: tests/image_region_capture_presentation_test.m tests/support/event_wait.m tests/support/no_activation.m tests/support/temporary_folder.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h tests/support/*.h)
+	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/event_wait.m tests/support/no_activation.m tests/support/temporary_folder.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
 
-$(BUILD)/image_capture_match_test: tests/image_capture_match_test.m tests/support/temporary_folder.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h tests/support/*.h)
-	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m tests/support/temporary_folder.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
+$(BUILD)/image_capture_match_test: tests/image_capture_match_test.m tests/support/event_wait.m tests/support/temporary_folder.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h tests/support/*.h)
+	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m tests/support/event_wait.m tests/support/temporary_folder.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
 
 $(BUILD)/capture_frame_identity_test: tests/capture_frame_identity_test.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h)
 	@clang $(CFLAGS) -I$(CURDIR)/src $< -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) $(MINIMUM) -o $@
@@ -560,13 +560,13 @@ test-ime-source-restoration: $(BUILD)/ime_source_restore_test
 	@$(BUILD)/ime_source_restore_test
 
 $(BUILD)/image_region_ime_test: tests/image_region_ime_test.m tests/support/ime_cli.m tests/support/ime_cli.h tests/support/ime_source_restore.m tests/support/ime_source_restore.h Makefile $(LIBRARY) $(PROCESS_IDENTITY_LIBRARY) $(wildcard src/*.h src/private/*.h tests/support/*.h tests/support/*.m)
-	@clang $(CFLAGS) -DVIEW_PAGE_CASES='"$(VIEW_PAGE_CASES)"' -I$(CURDIR)/process-identity/include -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/ime_cli.m tests/support/ime_source_restore.m tests/support/no_activation.m tests/support/records.m tests/support/temporary_folder.m tests/support/view_import_map.m -L$(BUILD) -lsoksak-darwin -L$(CURDIR)/process-identity/lib -lsoksak-process-identity $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
+	@clang $(CFLAGS) -DVIEW_PAGE_CASES='"$(VIEW_PAGE_CASES)"' -I$(CURDIR)/process-identity/include -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/ime_cli.m tests/support/ime_source_restore.m tests/support/event_wait.m tests/support/no_activation.m tests/support/records.m tests/support/temporary_folder.m tests/support/view_import_map.m -L$(BUILD) -lsoksak-darwin -L$(CURDIR)/process-identity/lib -lsoksak-process-identity $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
 
 $(BUILD)/ime_source_probe: tests/ime_source_probe.m Makefile | $(BUILD)
 	@clang $(CFLAGS) $< $(FRAMEWORKS) -o $@
 
 $(BUILD)/ime_source_restore_test: tests/ime_source_restore_test.m tests/support/ime_source_restore.m tests/support/ime_source_restore.h $(LIBRARY) $(PROCESS_IDENTITY_LIBRARY) $(wildcard src/*.h src/private/*.h tests/support/*.h tests/support/*.m)
-	@clang $(CFLAGS) -I$(CURDIR)/process-identity/include -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/ime_source_restore.m tests/support/no_activation.m -L$(BUILD) -lsoksak-darwin -L$(CURDIR)/process-identity/lib -lsoksak-process-identity $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
+	@clang $(CFLAGS) -I$(CURDIR)/process-identity/include -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/ime_source_restore.m tests/support/event_wait.m tests/support/no_activation.m -L$(BUILD) -lsoksak-darwin -L$(CURDIR)/process-identity/lib -lsoksak-process-identity $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
 
 test-ime-wire-document: $(BUILD)/ime_wire_document_test
 	@$(BUILD)/ime_wire_document_test

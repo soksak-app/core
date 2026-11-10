@@ -9,6 +9,7 @@
 #import <libproc.h>
 #import <string.h>
 #import <sys/types.h>
+#import "support/event_wait.h"
 #import "support/temporary_folder.h"
 #import "document_view.h"
 #import "private/webkit.h"
@@ -22,15 +23,61 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-// Pumps the run loop until done() holds or the limit passes. Returns done().
-static BOOL pumpUntil(NSTimeInterval limit, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:limit];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        @autoreleasepool {
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+// Waits until done() holds, with an autorelease pool for each turn of the run loop: the condition drains the pool of the turn
+// before it judges, so the objects that WebKit autoreleases during a turn are released at its end, as a turn of the run loop of
+// the applications does, and a closed region keeps no autoreleased reference.
+static void waitTurns(NSString *what, BOOL (^done)(void)) {
+    __block NSAutoreleasePool *turn = [[NSAutoreleasePool alloc] init];
+    eventWait(what, ^BOOL {
+        [turn drain];
+        turn = [[NSAutoreleasePool alloc] init];
+        return done();
+    });
+    [turn drain];
+}
+
+// Whether the process can no longer be read, which is the state of a process that ended.
+static BOOL processGone(pid_t pid) {
+    struct proc_bsdinfo info;
+    return proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, sizeof info) != (int)sizeof info;
+}
+
+// Waits until each of the processes ends. Each exit is a dispatch source of the main queue that records it; a process that ended
+// before its source was made gives no event, so a process that cannot be read once its source exists has ended.
+static void waitProcessesEnd(NSArray<NSNumber *> *processes, NSString *what) {
+    NSMutableSet<NSNumber *> *exited = [NSMutableSet set];
+    NSMutableArray *sources = [NSMutableArray array];
+    for (NSNumber *process in processes) {
+        dispatch_source_t source = dispatch_source_create(DISPATCH_SOURCE_TYPE_PROC, (uintptr_t)process.intValue, DISPATCH_PROC_EXIT,
+            dispatch_get_main_queue());
+        if (!source) {
+            fprintf(stderr, "FAIL: the exit observation of the process %d cannot start\n", process.intValue);
+            exit(1);
         }
+        dispatch_source_set_event_handler(source, ^{ [exited addObject:process]; });
+        dispatch_resume(source);
+        [sources addObject:(id)source];
+        dispatch_release(source);
     }
-    return done();
+    waitTurns(what, ^BOOL {
+        for (NSNumber *process in processes) {
+            if (![exited containsObject:process] && !processGone(process.intValue)) return NO;
+        }
+        return YES;
+    });
+    for (id source in sources) dispatch_source_cancel((dispatch_source_t)source);
+}
+
+// Waits for a round trip of JavaScript to the WebContent process of the view. The process sends its messages to the host in
+// order, so every state change that the process reported before the round trip has arrived when its answer arrives.
+static void roundTrip(WKWebView *view, NSString *what) {
+    __block BOOL answered = NO;
+    [view evaluateJavaScript:@"0" completionHandler:^(id value, NSError *error) {
+        (void)value;
+        (void)error;
+        answered = YES;
+    }];
+    waitTurns(what, ^BOOL { return answered; });
 }
 
 // The physical footprint (bytes) of the process, or -1 when the process cannot be read.
@@ -130,7 +177,8 @@ static nw_listener_t serve(void) {
         if (state == nw_listener_state_ready) ready = YES;
     });
     nw_listener_start(listener);
-    check(pumpUntil(10, ^BOOL { return ready; }), @"a test server is ready within 10 seconds");
+    waitTurns(@"a test server is ready", ^BOOL { return ready; });
+    check(ready, @"a test server is ready");
     return listener;
 }
 
@@ -182,15 +230,21 @@ static BOOL regionsLoadEnded(const Region *regions, int count) {
     return YES;
 }
 
-// The wait after which a scenario whose loads have not ended is a stall. The stall closes the regions whose load ended, so
-// the record shows whether the region that waits continues after their WebContent processes end; the scenario then fails.
-// A run with --unanswered-region sets 10 seconds, because WebKit ends a request without an answer after about 30 seconds.
-static NSTimeInterval stallSeconds = 30;
+// Whether the stall that a run with --unanswered-region asks for has come: the server holds the request of the region without an
+// answer and every other region has ended its load, so only the held region waits.
+static BOOL heldStallCame(const Region *regions, int count) {
+    if (!holdRequests || heldConnections.count == 0) return NO;
+    for (int i = 0; i < count; i++) {
+        if (i + 1 == unansweredRegion) continue;
+        if (regions[i].document && !regionLoadEnded(&regions[i])) return NO;
+    }
+    return YES;
+}
 
-// Closes the regions whose load ended, waits up to 30 seconds until their WebContent processes end and then up to
-// stallSeconds until the other regions end their loads, and writes each result as a stall record line. A region that loads
-// after the processes ended waited for a resource that those processes held; a region that still waits holds the resource
-// itself or waits for another process.
+// Closes the regions whose load ended, waits until their WebContent processes end and then for a round trip of JavaScript to
+// each region that still waits, and writes each result as a stall record line. A region whose load waited for a resource that
+// the ended processes held continues when they end, and its process reports the end of its load before it answers the round
+// trip, so a region that still waits after the round trip holds the resource itself or waits for another process.
 static void closeEndedRegions(Region *regions, int count) {
     NSMutableArray<NSNumber *> *ended = [NSMutableArray array];
     for (int i = 0; i < count; i++) {
@@ -205,23 +259,20 @@ static void closeEndedRegions(Region *regions, int count) {
         regions[i].document = NULL;
     }
     NSDate *start = [NSDate date];
-    BOOL processesEnded = pumpUntil(30, ^BOOL {
-        for (NSNumber *process in ended) {
-            struct proc_bsdinfo info;
-            if (proc_pidinfo(process.intValue, PROC_PIDTBSDINFO, 0, &info, sizeof info) == (int)sizeof info) return NO;
-        }
-        return YES;
-    });
-    printf("stall record: the processes %s of the closed regions %s after %.3f s\n", [ended componentsJoinedByString:@","].UTF8String,
-        processesEnded ? "ended" : "remain", [NSDate.date timeIntervalSinceDate:start]);
+    waitProcessesEnd(ended, @"the WebContent processes of the closed regions end");
+    printf("stall record: the processes %s of the closed regions ended after %.3f s\n", [ended componentsJoinedByString:@","].UTF8String,
+        [NSDate.date timeIntervalSinceDate:start]);
     start = [NSDate date];
-    pumpUntil(stallSeconds, ^BOOL { return regionsLoadEnded(regions, count); });
+    for (int i = 0; i < count; i++) {
+        if (!regions[i].document) continue;
+        roundTrip((WKWebView *)regions[i].document,
+            [NSString stringWithFormat:@"region %d answers a round trip after the processes of the closed regions ended", i + 1]);
+    }
     for (int i = 0; i < count; i++) {
         if (!regions[i].document) continue;
         if (!regionLoadEnded(&regions[i])) stallWaitingRegions++;
-        printf("stall record: region %d %s %.3f s after the processes of the closed regions %s\n", i + 1,
-            regionLoadEnded(&regions[i]) ? "ended its load" : "still waits", [NSDate.date timeIntervalSinceDate:start],
-            processesEnded ? "ended" : "remained");
+        printf("stall record: region %d %s at its round trip %.3f s after the processes of the closed regions ended\n", i + 1,
+            regionLoadEnded(&regions[i]) ? "ended its load" : "still waits", [NSDate.date timeIntervalSinceDate:start]);
     }
     fflush(stdout);
 }
@@ -235,8 +286,9 @@ static NSString *regionState(WKWebView *view, NSDictionary *state) {
         (!error || error == NSNull.null) ? @"none" : error];
 }
 
-// The seconds after which a scenario whose loads have not ended writes the stall record once. The argument
-// --stall-record-after=<seconds> sets it, so a run checks the record without a stall.
+// The seconds after which a scenario whose loads have not ended writes the stall record once. The record is a diagnostic: a block
+// of the main queue makes it due, and it neither ends nor judges the wait. The argument --stall-record-after=<seconds> sets it,
+// so a run checks the record without a stall; a negative value writes no record.
 static NSTimeInterval stallRecordAfter = 30;
 
 // The number of region lines that the stall records wrote, and the number of WebKit log lines that they wrote.
@@ -385,26 +437,26 @@ static NSArray<NSNumber *> *runScenario(NSString *name, NSArray<NSString *> *add
     }
 
     // Each region reports its state through changed when a navigation finishes or fails (document_view.m, webView:
-    // didFinishNavigation: and fail:) and when its loading or title changes. The wait is bounded by the per-test limit of
-    // the runner. A wait longer than stallRecordAfter writes the stall record once; it does not end the wait.
-    NSDate *stallAt = [NSDate dateWithTimeIntervalSinceNow:stallRecordAfter];
-    NSDate *closeAt = [NSDate dateWithTimeIntervalSinceNow:stallSeconds];
-    BOOL stallRecorded = NO;
-    while (!regionsLoadEnded(regions, 4)) {
-        if (!stallRecorded && stallAt.timeIntervalSinceNow <= 0) {
-            writeStallRecord(regions, 4, NO);
-            stallRecorded = YES;
-        }
-        if (closeAt.timeIntervalSinceNow <= 0) {
-            // A region whose request the server holds is the stall that the run asked for.
-            if (!holdRequests) check(NO, [NSString stringWithFormat:@"the loads of scenario %@ end within %.0f seconds", name, stallSeconds]);
-            closeEndedRegions(regions, 4);
-            break;
-        }
-        @autoreleasepool {
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-        }
+    // didFinishNavigation: and fail:) and when its loading or title changes; each report runs in a turn of the main run loop.
+    // The wait has no limit of its own: the limit of the case ends it. A wait longer than stallRecordAfter writes the stall
+    // record once; it does not end the wait. A run with --unanswered-region ends the wait at the stall that it asks for.
+    Region *all = regions;
+    __block BOOL stallRecordDue = stallRecordAfter == 0;
+    __block BOOL stallRecorded = NO;
+    if (stallRecordAfter > 0) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(stallRecordAfter * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            stallRecordDue = YES;
+        });
     }
+    waitTurns([NSString stringWithFormat:@"the loads of scenario %@ end", name], ^BOOL {
+        if (regionsLoadEnded(all, 4) || heldStallCame(all, 4)) return YES;
+        if (stallRecordDue && !stallRecorded) {
+            stallRecorded = YES;
+            writeStallRecord(all, 4, NO);
+        }
+        return NO;
+    });
+    if (!regionsLoadEnded(regions, 4)) closeEndedRegions(regions, 4);
     for (int i = 0; i < 4; i++) {
         WKWebView *view = (WKWebView *)regions[i].document;
         if (!view) continue;
@@ -418,8 +470,11 @@ static NSArray<NSNumber *> *runScenario(NSString *name, NSArray<NSString *> *add
         check(loaded, loaded ? [NSString stringWithFormat:@"region %d loads its page", i + 1]
             : [NSString stringWithFormat:@"region %d loads its page with the title Region; state: %@", i + 1, regionState(view, regions[i].state)]);
     }
-    // The state of the last loads settles before the processes are read.
-    pumpUntil(0.5, ^BOOL { return NO; });
+    // The state of the last loads has arrived when each region answers a round trip after its load ended.
+    for (int i = 0; i < 4; i++) {
+        if (!regions[i].document) continue;
+        roundTrip((WKWebView *)regions[i].document, [NSString stringWithFormat:@"region %d answers a round trip after its load", i + 1]);
+    }
     // A run with --stall-record-after=0 also writes the record after the loads end, so it samples the WebContent process of
     // every region.
     if (stallRecordAfter == 0) writeStallRecord(regions, 4, YES);
@@ -475,11 +530,8 @@ static void checkProcessesEnd(NSArray<NSNumber *> *processes) {
     for (NSNumber *process in processes) {
         pid_t pid = process.intValue;
         NSDate *start = [NSDate date];
-        BOOL ended = pumpUntil(30, ^BOOL {
-            struct proc_bsdinfo info;
-            return proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, sizeof info) != (int)sizeof info;
-        });
-        check(ended, [NSString stringWithFormat:@"the WebContent process %d ends after its regions close (%.3f s)", pid, -start.timeIntervalSinceNow]);
+        waitProcessesEnd(@[ process ], [NSString stringWithFormat:@"the WebContent process %d ends after its regions close", pid]);
+        check(YES, [NSString stringWithFormat:@"the WebContent process %d ends after its regions close (%.3f s)", pid, -start.timeIntervalSinceNow]);
     }
 }
 
@@ -493,8 +545,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         } else if (sscanf(argv[i], "--unanswered-region=%d", &region) == 1 && region >= 1 && region <= 4) {
             // The held region is the stall; the record of the full stall is not written, so the run stays within its limit.
             unansweredRegion = region;
-            stallRecordAfter = 1e9;
-            stallSeconds = 10;
+            stallRecordAfter = -1;
         } else {
             fprintf(stderr, "FAIL: unknown argument %s\n", argv[i]);
             return 2;

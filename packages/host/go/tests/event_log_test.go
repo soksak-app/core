@@ -225,11 +225,7 @@ func refuseWhileHeld(t *testing.T, log *host.EventLog, hold *writerHold, first i
 	if !log.Emit(host.LevelError, "host.test.failure", map[string]any{"reason": "the writer is held"}) {
 		t.Fatal("the error was refused")
 	}
-	select {
-	case <-hold.entered:
-	case <-time.After(5 * time.Second):
-		t.Fatal("the writer did not write the error")
-	}
+	<-hold.entered
 	for index := first; index < first+20; index++ {
 		if log.Emit(host.LevelInfo, "host.test.event", map[string]any{"index": index}) {
 			accepted++
@@ -368,22 +364,19 @@ func TestAnEventLogErrorIsWrittenWithoutWaitingForTheBatchInterval(t *testing.T)
 		t.Fatal(err)
 	}
 	support.StoreEveryLevel(t, log)
+	writes := make(chan struct{}, 16)
+	log.SetOnWrite(func(string, int64) { writes <- struct{}{} })
 	if !log.Emit(host.LevelError, "host.test.failure", map[string]any{"reason": "disk"}) {
 		t.Fatal("the error was refused")
 	}
-	// The file is the only place where the write shows; no event source announces it, so the test reads it in short
-	// steps until a deadline.
-	deadline := time.Now().Add(5 * time.Second)
+	// The interval of 30 seconds ends in no test, so a write that stores the error was not the write of an interval.
 	for {
+		<-writes
 		for _, event := range readEventLog(t, log.Path()) {
 			if event["event"] == "host.test.failure" {
 				return
 			}
 		}
-		if time.Now().After(deadline) {
-			t.Fatal("the error was not written within 5 seconds")
-		}
-		time.Sleep(5 * time.Millisecond)
 	}
 }
 
@@ -677,14 +670,10 @@ func TestTheWriterAnnouncesEachWriteToItsObserver(t *testing.T) {
 	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case got := <-announcements:
-		info, err := os.Stat(got.path)
-		if err != nil || filepath.Base(got.path) != "host-b1.jsonl" || got.size != info.Size() {
-			t.Fatalf("announced %+v, the file is %v (%v)", got, info, err)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("the write was not announced")
+	got := <-announcements
+	info, err := os.Stat(got.path)
+	if err != nil || filepath.Base(got.path) != "host-b1.jsonl" || got.size != info.Size() {
+		t.Fatalf("announced %+v, the file is %v (%v)", got, info, err)
 	}
 	log.Close()
 }
@@ -702,21 +691,26 @@ func TestASteadyStreamOfEventsIsWrittenAtEachBatchInterval(t *testing.T) {
 		t.Fatal(err)
 	}
 	support.StoreEveryLevel(t, log)
-	started := time.Now()
-	index := 0
-	for time.Since(started) < 400*time.Millisecond {
+	writes := make(chan struct{}, 16)
+	log.SetOnWrite(func(string, int64) {
+		select {
+		case writes <- struct{}{}:
+		default:
+		}
+	})
+	// The first event is written at once, by a writer that slept or at the end of its interval; the second write comes while
+	// the stream still runs. The pause between two events only keeps the stream steady and decides nothing; a writer that waits
+	// for a quiet interval leaves the check to the limit of its runner.
+	for index, wrote := 0, 0; wrote < 2; index++ {
 		if !log.Emit(host.LevelInfo, "host.test.event", map[string]any{"index": index}) {
 			t.Fatalf("event %d was refused", index)
 		}
-		index++
+		select {
+		case <-writes:
+			wrote++
+		default:
+		}
 		time.Sleep(5 * time.Millisecond)
-	}
-	data, err := os.ReadFile(log.Path())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if written := strings.Count(string(data), "\n"); written <= 1 {
-		t.Fatalf("after 400 ms of events every 5 ms (%d emitted) the file holds %d line(s); the writer waits for a quiet interval", index, written)
 	}
 	if err := log.Flush(); err != nil {
 		t.Fatal(err)

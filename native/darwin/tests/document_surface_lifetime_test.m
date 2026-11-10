@@ -9,6 +9,7 @@
 #import "document_view.h"
 #import "webview_geometry.h"
 #import "window_facts.h"
+#import "support/event_wait.h"
 
 static int failures = 0;
 
@@ -106,13 +107,15 @@ int main(void) { @autoreleasepool {
         sp_document_close(document);
     }
     check(surfaceReleased, @"the surface is released after its document closed");
-    // WebKit can release the last references of a closed web view on a later turn of the main run loop.
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:5];
-    while (!documentReleased && deadline.timeIntervalSinceNow > 0) {
-        @autoreleasepool {
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-        }
-    }
+    // WebKit can release the last references of a closed web view on a later turn of the main run loop. A reference that such
+    // a turn autoreleases ends with the pool that each judgment drains, so the release of the document ends the wait.
+    __block NSAutoreleasePool *turnPool = [NSAutoreleasePool new];
+    eventWait(@"the closed document is released", ^BOOL{
+        [turnPool drain];
+        turnPool = [NSAutoreleasePool new];
+        return documentReleased;
+    });
+    [turnPool drain];
     check(documentReleased, @"the document is released after it closes, so its web view closes its page");
 
     [window close];

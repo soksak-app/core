@@ -10,8 +10,9 @@ mod records;
 use std::fs;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc::{Receiver, channel};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use serde_json::Value;
 use soksak_host::event_log::{self, Channel, EventLog, Level, Options, Rouser};
@@ -124,9 +125,6 @@ fn ring_options(directory: &Path, ring: &Arc<Mutex<FakeRing>>, interval: Duratio
     }
 }
 
-/// How long a test waits for what the writer does at once.
-const AT_ONCE: Duration = Duration::from_secs(2);
-
 /// An interval that does not end during a test, so what a test finds in the file was not written at the end of an interval.
 const NO_INTERVAL: Duration = Duration::from_secs(3600);
 
@@ -134,31 +132,73 @@ fn stores(path: &Path, event: &str) -> bool {
     path.exists() && read(path).iter().any(|line| line["event"] == event)
 }
 
-fn wait_for(path: &Path, event: &str) {
-    let deadline = Instant::now() + AT_ONCE;
-    while !stores(path, event) {
-        assert!(Instant::now() < deadline, "{event} was not stored at once");
-        std::thread::sleep(Duration::from_millis(2));
+/// A writer with the ring, the handle that wakes it and the events of its sleeps and its writes.
+struct Waking {
+    log: EventLog,
+    rouser: Rouser,
+    /// Each sleep of the writer.
+    sleeps: Receiver<bool>,
+    /// Each batch that the writer wrote.
+    writes: Receiver<()>,
+}
+
+impl Waking {
+    /// Waits for the next sleep of the writer. Only an event, a wake, a loss, a request or the report of a held count wakes a
+    /// writer that sleeps, so what follows a sleep is what the test does.
+    fn slept(&self) {
+        self.sleeps.recv().expect("the writer did not sleep");
+    }
+
+    /// Waits for the writes of the writer until one of them stored `event`. It takes the write that stored it, so a count of
+    /// the writes that follow starts after it.
+    fn wait_for(&self, event: &str) {
+        loop {
+            self.writes
+                .recv()
+                .unwrap_or_else(|_| panic!("{event} was not stored at once"));
+            if stores(self.log.path(), event) {
+                return;
+            }
+        }
+    }
+
+    /// The writes that the writer made and the test did not take, without waiting.
+    fn wrote(&self) -> usize {
+        self.writes.try_iter().count()
     }
 }
 
-/// A writer with the ring and the handle that wakes it, after it took what its start left.
-fn start_waking(
-    directory: &Path,
-    ring: &Arc<Mutex<FakeRing>>,
-    interval: Duration,
-) -> (EventLog, Rouser) {
+/// A writer with the ring and the handle that wakes it, after it took what its start left and slept.
+fn start_waking(directory: &Path, ring: &Arc<Mutex<FakeRing>>, interval: Duration) -> Waking {
+    waking(ring_options(directory, ring, interval))
+}
+
+/// A writer with the options and the handle that wakes it, after it took what its start left and slept.
+fn waking(mut options: Options) -> Waking {
     let rouser = Arc::new(Mutex::new(None));
-    let mut options = ring_options(directory, ring, interval);
     let given = Arc::clone(&rouser);
     options.wake = Some(Box::new(move |handle| {
         *given.lock().unwrap() = Some(handle);
         Ok(())
     }));
     let log = event_log::start(options).unwrap();
-    wait_for(log.path(), "log.open");
     let handle = rouser.lock().unwrap().take().unwrap();
-    (log, handle)
+    let (slept, sleeps) = channel();
+    log.set_on_sleep(Box::new(move |count_held| {
+        slept.send(count_held).unwrap();
+    }));
+    let (wrote, writes) = channel();
+    let waking = Waking {
+        log,
+        rouser: handle,
+        sleeps,
+        writes,
+    };
+    waking.slept();
+    waking.log.set_on_write(Box::new(move |_, _| {
+        wrote.send(()).unwrap();
+    }));
+    waking
 }
 
 // contract: log.native.stores-pulled-records-in-the-layer-native
@@ -373,11 +413,10 @@ fn a_pulled_native_record_keeps_its_clock_and_cids() {
 fn a_wake_of_the_ring_stores_its_record_at_once() {
     let ring = Arc::new(Mutex::new(FakeRing::default()));
     let directory = folder::Folder::new();
-    let (log, rouser) = start_waking(directory.path(), &ring, NO_INTERVAL);
-    let path = log.path().to_path_buf();
+    let waking = start_waking(directory.path(), &ring, NO_INTERVAL);
     ring.lock().unwrap().bytes = native_record(1_791_000_000_000_001, 2, "native.test.late", "{}");
-    rouser.wake();
-    wait_for(&path, "native.test.late");
+    waking.rouser.wake();
+    waking.wait_for("native.test.late");
 }
 
 // contract: log.native.close-stores-the-ring
@@ -385,13 +424,14 @@ fn a_wake_of_the_ring_stores_its_record_at_once() {
 fn close_stores_the_records_of_the_ring_without_a_wake() {
     let ring = Arc::new(Mutex::new(FakeRing::default()));
     let directory = folder::Folder::new();
-    let (log, _rouser) = start_waking(directory.path(), &ring, NO_INTERVAL);
-    let path = log.path().to_path_buf();
+    let waking = start_waking(directory.path(), &ring, NO_INTERVAL);
     ring.lock().unwrap().bytes = native_record(1_791_000_000_000_001, 2, "native.test.late", "{}");
-    log.close();
-    assert!(stores(&path, "native.test.late"));
+    waking.log.close();
+    assert!(stores(waking.log.path(), "native.test.late"));
 }
 
+/// The start takes the ring once and sleeps, and a wake takes it at once and at the end of the interval it starts, after which
+/// the writer sleeps again.
 // contract: log.writer.sleeps-with-nothing-to-write
 #[test]
 fn a_writer_with_nothing_to_write_does_not_pull() {
@@ -404,26 +444,39 @@ fn a_writer_with_nothing_to_write_does_not_pull() {
         counted.fetch_add(1, Ordering::SeqCst);
         Ok(0)
     }));
-    let log = event_log::start(options).unwrap();
-    wait_for(log.path(), "log.open");
-    std::thread::sleep(Duration::from_millis(30));
-    let from = pulls.load(Ordering::SeqCst);
-    std::thread::sleep(Duration::from_millis(100));
-    assert_eq!(pulls.load(Ordering::SeqCst), from);
+    let waking = waking(options);
+    assert_eq!(
+        pulls.load(Ordering::SeqCst),
+        1,
+        "the pulls before the writer slept, want the one of its start"
+    );
+    waking.rouser.wake();
+    waking.slept();
+    assert_eq!(
+        pulls.load(Ordering::SeqCst) - 1,
+        2,
+        "the pulls after one wake, want at once and at the end of the interval"
+    );
 }
 
+/// The close is the one write after the first event, and the writer writes before the close returns.
 // contract: log.writer.stores-the-first-event-at-once
 #[test]
 fn a_writer_that_slept_stores_the_first_event_at_once_and_gathers_the_next() {
     let ring = Arc::new(Mutex::new(FakeRing::default()));
     let directory = folder::Folder::new();
-    let (log, _rouser) = start_waking(directory.path(), &ring, NO_INTERVAL);
-    let path = log.path().to_path_buf();
+    let waking = start_waking(directory.path(), &ring, NO_INTERVAL);
+    let log = &waking.log;
     assert!(log.emit(Level::Info, "host.test.first", &serde_json::json!({})));
-    wait_for(&path, "host.test.first");
+    waking.wait_for("host.test.first");
+    assert_eq!(waking.wrote(), 0, "the first event was written twice");
     assert!(log.emit(Level::Info, "host.test.second", &serde_json::json!({})));
-    std::thread::sleep(Duration::from_millis(50));
-    assert!(!stores(&path, "host.test.second"));
+    assert!(log.emit(Level::Info, "host.test.third", &serde_json::json!({})));
     log.close();
-    assert!(stores(&path, "host.test.second"));
+    assert_eq!(
+        waking.wrote(),
+        1,
+        "the writes for the two events of an interval and the close, want the one of the close"
+    );
+    assert!(stores(log.path(), "host.test.second") && stores(log.path(), "host.test.third"));
 }

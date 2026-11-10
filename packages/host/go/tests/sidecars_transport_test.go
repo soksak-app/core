@@ -13,7 +13,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"slices"
 	"strconv"
@@ -151,11 +150,7 @@ func runHarnessReconnect(t *testing.T, sequential bool) {
 	secondOwner := &support.HarnessOwner{Root: "/second", Seen: make(chan SidecarMessage, 4)}
 
 	awaitInitial := func(owner *support.HarnessOwner) {
-		select {
-		case <-owner.Seen:
-		case <-time.After(support.Stall):
-			t.Fatal("no initial event; the test stalled")
-		}
+		<-owner.Seen
 	}
 	// The host connects the cut socket again immediately and sends the connection event. A send after
 	// it receives that event goes to the connection made again, so endpoint reuse and reconnection are verified.
@@ -165,8 +160,6 @@ func runHarnessReconnect(t *testing.T, sequential bool) {
 			if string(event.Body) != `{"connected":true,"event":"connection"}` {
 				t.Fatalf("event after the connection loss = %s, want the connection event", event.Body)
 			}
-		case <-time.After(support.Stall):
-			t.Fatal("no connection event; the test stalled")
 		}
 	}
 	if sequential {
@@ -223,18 +216,12 @@ func runHarnessReconnect(t *testing.T, sequential bool) {
 			if string(event.Body) != `{"operation":"reconnect"}` {
 				t.Fatalf("reconnect event = %s", event.Body)
 			}
-		case <-time.After(support.Stall):
-			t.Fatal("no reconnect event; the test stalled")
 		}
 	}
 
-	startStop := time.Now()
+	// A failed close-owner reply ends the stop; a stop that waits past it stops at the limit of the runner.
 	first.Stop()
 	second.Stop()
-	// A failed close-owner reply ends without waiting for the deadline of Stop. If it took until the deadline, it did not wait for the reply.
-	if elapsed := time.Since(startStop); elapsed >= first.StopTimeout {
-		t.Fatalf("close-owner failure was not reported before the %s stop deadline: %s", first.StopTimeout, elapsed)
-	}
 	if err := <-serverDone; err != nil {
 		t.Fatal(err)
 	}
@@ -583,11 +570,7 @@ func TestPersistentStopAnswersADiscardedImageBeforeServiceShutdown(t *testing.T)
 	if err := sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case <-owner.Seen:
-	case <-time.After(support.Stall):
-		t.Fatal("the service's open event did not reach its owner")
-	}
+	<-owner.Seen
 	sidecars.Close("surface")
 	sidecars.Stop()
 	got := written()
@@ -790,13 +773,9 @@ func TestPersistentTransportReplacesEndpointLeftByDeadService(t *testing.T) {
 	if err := sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case event := <-owner.Seen:
-		if event.Surface != "surface" {
-			t.Fatalf("unexpected surface: %s", event.Surface)
-		}
-	case <-time.After(support.Stall):
-		t.Fatal("no replacement event; the test stalled")
+	event := <-owner.Seen
+	if event.Surface != "surface" {
+		t.Fatalf("unexpected surface: %s", event.Surface)
 	}
 	if _, err := os.Stat(filepath.Join(serviceDir, "endpoint.json")); !os.IsNotExist(err) {
 		t.Fatalf("stale endpoint was not removed: %v", err)
@@ -1028,10 +1007,10 @@ func TestPersistentRetainSkipsAServiceWithoutEndpoint(t *testing.T) {
 	}
 }
 
-// TestPersistentRetainTimeoutNamesHowFarTheRequestWent verifies that a retain that the service reads and does not answer fails
-// after the retain timeout with the stage of its request line: written, and the time since the last line from the service.
-// contract: sidecars.retain.timeout-names-the-request-stage
-func TestPersistentRetainTimeoutNamesHowFarTheRequestWent(t *testing.T) {
+// TestAnUnansweredRetainEndsWithItsConnection verifies that a retain that the service reads and does not answer waits past any time
+// limit and fails when its connection ends, and leaves no waiter (docs/spec/persistent-services.md#service-transport).
+// contract: sidecars.retain.ends-by-its-answer-or-its-connection
+func TestAnUnansweredRetainEndsWithItsConnection(t *testing.T) {
 	root := t.TempDir()
 	socketDirectory := support.SocketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
@@ -1043,11 +1022,15 @@ func TestPersistentRetainTimeoutNamesHowFarTheRequestWent(t *testing.T) {
 	writeHarnessEndpoint(t, root, socket)
 
 	read := make(chan struct{}, 1)
+	// The test sends on end when the service ends the connection that carried the retain.
+	end := make(chan struct{})
 	go func() {
 		connection, err := listener.Accept()
 		if err != nil {
 			return
 		}
+		// A connection that the host opens again finds no service.
+		listener.Close()
 		defer connection.Close()
 		reader := bufio.NewReader(connection)
 		for {
@@ -1059,23 +1042,17 @@ func TestPersistentRetainTimeoutNamesHowFarTheRequestWent(t *testing.T) {
 			if json.Unmarshal(line, &request) != nil {
 				return
 			}
-			var reply map[string]any
 			switch request["operation"] {
 			case "hello":
-				reply = map[string]any{"operation": "hello", "protocol": 1, "ok": true}
-			case "close-owner":
-				reply = map[string]any{"operation": "closed-owner", "request": request["request"], "ok": true}
-			case "shutdown":
-				reply = map[string]any{"operation": "shutdown", "request": request["request"], "ok": true}
-			case "retain":
-				// The service reads the retain and does not answer it.
-				read <- struct{}{}
-			}
-			if reply != nil {
-				encoded, _ := json.Marshal(reply)
+				encoded, _ := json.Marshal(map[string]any{"operation": "hello", "protocol": 1, "ok": true})
 				if _, err := connection.Write(append(encoded, '\n')); err != nil {
 					return
 				}
+			case "retain":
+				// The service reads the retain, does not answer it and ends the connection when the test says so.
+				read <- struct{}{}
+				<-end
+				return
 			}
 		}
 	}()
@@ -1085,18 +1062,28 @@ func TestPersistentRetainTimeoutNamesHowFarTheRequestWent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer sidecars.Stop()
-	_, err = sidecars.Retain([]host.RetainedSurface{})
+	ended := make(chan error, 1)
+	go func() {
+		_, err := sidecars.Retain([]host.RetainedSurface{})
+		ended <- err
+	}()
 	select {
 	case <-read:
-	default:
-		t.Fatal("the service did not read the retain")
+	case err := <-ended:
+		t.Fatalf("the retain ended with %v before the service read it", err)
 	}
+	select {
+	case err := <-ended:
+		t.Fatalf("the retain ended with %v while its connection was open", err)
+	default:
+	}
+	close(end)
+	err = <-ended
 	if err == nil {
 		t.Fatal("a retain that the service did not answer succeeded")
 	}
-	pattern := regexp.MustCompile(`^sidecar fixture-service: retain was not answered within 10s: the request line was written \d+ ms ago, and the last line from the service arrived \d+ ms ago$`)
-	if !pattern.MatchString(err.Error()) {
-		t.Fatalf("retain error = %q, want it to match %s", err, pattern)
+	if want := "sidecar fixture-service: retain: the service connection ended before the answer"; err.Error() != want {
+		t.Fatalf("retain error = %q, want %q when its connection ends", err, want)
 	}
 }
 
@@ -1413,13 +1400,8 @@ func TestPersistentConnectionNoticeReachesOnlyTheSurfacesThatSent(t *testing.T) 
 
 func receiveSidecarMessage(t *testing.T, seen <-chan SidecarMessage) SidecarMessage {
 	t.Helper()
-	select {
-	case message := <-seen:
-		return message
-	case <-time.After(support.Stall):
-		t.Fatalf("no sidecar message arrived within %v; the test stalled", support.Stall)
-		return SidecarMessage{}
-	}
+	message := <-seen
+	return message
 }
 
 // failureOwner is a window that collects sidecar messages and failures separately.
@@ -1495,14 +1477,8 @@ func expectConnectionFailure(t *testing.T, payload []byte, reason string) {
 		}
 	case message := <-owner.seen:
 		t.Fatalf("the bad line was delivered as a message: %+v", message)
-	case <-time.After(support.Stall):
-		t.Fatal("no sidecar failure; the test stalled")
 	}
-	select {
-	case <-closed:
-	case <-time.After(support.Stall):
-		t.Fatal("the host kept the connection open; the test stalled")
-	}
+	<-closed
 }
 
 // contract: sidecars-transport.persistent.invalid-event-fails-the-connection
@@ -1516,8 +1492,9 @@ func TestPersistentTransportFailsTheConnectionOnAnOversizeLine(t *testing.T) {
 	expectConnectionFailure(t, bytes.Repeat([]byte("x"), support.MessageLimit+2), fmt.Sprintf("message exceeds %d bytes", support.MessageLimit))
 }
 
-// The start of a persistent sidecar (the service connection and hello) does not make the send to another sidecar wait. The service replies to hello
-// 500 ms late, and meanwhile it sends to another sidecar that is already running.
+// The start of a persistent sidecar (the service connection and hello) does not make the send to another sidecar wait. The service holds
+// its answer to hello until the send to another sidecar that is already running returned, so a send that waits for the start does not
+// return, and the check stops at the limit of its runner.
 // contract: sidecars.send.start-does-not-block-other-sidecars
 func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 	root := t.TempDir()
@@ -1530,6 +1507,7 @@ func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 	defer listener.Close()
 	writeHarnessEndpoint(t, root, socket)
 	helloSeen := make(chan struct{})
+	release := make(chan struct{})
 	go func() {
 		connection, err := listener.Accept()
 		if err != nil {
@@ -1541,9 +1519,9 @@ func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 			return
 		}
 		close(helloSeen)
-		time.Sleep(500 * time.Millisecond)
+		<-release
 		_, _ = io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n")
-		// The service answers close-owner and shutdown, so that Stop ends without its deadline.
+		// The service answers close-owner and shutdown, and the answers end the close of the stop.
 		for {
 			line, err := reader.ReadBytes('\n')
 			if err != nil {
@@ -1591,24 +1569,15 @@ func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 		started <- sidecars.Send(owner, "fixture-service", "service-surface", json.RawMessage(`{"operation":"open"}`))
 	}()
 	<-helloSeen
-	begin := time.Now()
 	if err := sidecars.Send(owner, "fixture-fast", "fast-surface", json.RawMessage(`{"data":"during"}`)); err != nil {
 		t.Fatalf("fast send during the service start: %v", err)
 	}
-	waited := time.Since(begin)
+	close(release)
 	if err := <-started; err != nil {
 		t.Fatalf("service start: %v", err)
 	}
-	if waited > 50*time.Millisecond {
-		t.Fatalf("a send to another sidecar waited %v for the service start, want < 50ms", waited)
-	}
-	stopping := time.Now()
+	// The service answers close-owner and shutdown, which end the stop; a stop that waits past them stops at the limit of the runner.
 	sidecars.Stop()
-	// Stop also waits for the standard input and output sidecar to exit, a child process whose exit takes longer under load than the
-	// 1 s bound that this check used before. The check is that the service does not make Stop wait the deadline, so the bound is the deadline.
-	if elapsed := time.Since(stopping); elapsed >= sidecars.StopTimeout {
-		t.Fatalf("stop took %v; the service answers close-owner and shutdown, so the stop must not wait the stop deadline of %v", elapsed, sidecars.StopTimeout)
-	}
 }
 
 // The stop waits for no start: a stop during the start of a service returns before the service answers its hello, the send that
@@ -1652,8 +1621,6 @@ func TestTheStopDoesNotWaitForAStart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sidecars.HelloTimeout = 30 * time.Second
-	sidecars.StopTimeout = 100 * time.Millisecond
 	owner := &support.HarnessOwner{Root: "/stop", Seen: make(chan SidecarMessage, 1)}
 	started := make(chan error, 1)
 	go func() {
@@ -1676,20 +1643,37 @@ func TestTheStopDoesNotWaitForAStart(t *testing.T) {
 	<-ended
 }
 
-// A start to a service that received hello and does not reply fails after 5 seconds with a fixed sentence.
-// contract: sidecars-transport.hello.times-out
-func TestPersistentStartFailsWhenHelloIsNotAnswered(t *testing.T) {
-	root := t.TempDir()
-	socketDirectory := support.SocketParent(t)
-	socket := filepath.Join(socketDirectory, "s.sock")
+// holdPipe makes the FIFO path and holds its write end until the check ends. A fixture process that reads it ends at the end
+// of the check, also when the check is killed, because the kernel then closes the write end.
+func holdPipe(t *testing.T, path string) {
+	t.Helper()
+	if err := makeFifo(path); err != nil {
+		t.Fatal(err)
+	}
+	// A read-write open does not wait for a reader, and the check holds the only writer.
+	hold, err := os.OpenFile(path, os.O_RDWR, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := hold.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+}
+
+// unansweredHelloService serves one connection whose hello it reads and does not answer: it signals read after the hello and
+// closes the connection when end closes.
+func unansweredHelloService(t *testing.T, root string) (read, end chan struct{}) {
+	t.Helper()
+	socket := filepath.Join(support.SocketParent(t), "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer listener.Close()
+	t.Cleanup(func() { listener.Close() })
 	writeHarnessEndpoint(t, root, socket)
-	release := make(chan struct{})
-	defer close(release)
+	read, end = make(chan struct{}), make(chan struct{})
 	go func() {
 		connection, err := listener.Accept()
 		if err != nil {
@@ -1697,31 +1681,76 @@ func TestPersistentStartFailsWhenHelloIsNotAnswered(t *testing.T) {
 		}
 		defer connection.Close()
 		_, _ = bufio.NewReader(connection).ReadBytes('\n')
-		<-release
+		close(read)
+		<-end
 	}()
+	return read, end
+}
+
+// A start whose service reads the hello and does not answer waits past any time limit and fails when the connection ends.
+// contract: sidecars-transport.hello.ends-by-its-reply-its-connection-or-the-stop
+func TestAnUnansweredHelloEndsWithItsConnection(t *testing.T) {
+	root := t.TempDir()
+	read, end := unansweredHelloService(t, root)
 	sidecars, err := NewSidecars(support.HarnessDeclarations(t.TempDir()), root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	sidecars.HelloTimeout = 100 * time.Millisecond
+	t.Cleanup(sidecars.Stop)
 	owner := &support.HarnessOwner{Root: "/hello", Seen: make(chan SidecarMessage, 1)}
-	begin := time.Now()
-	err = support.SendWithin(t, sidecars, owner, 30*time.Second)
-	if elapsed := time.Since(begin); elapsed >= time.Second {
-		t.Fatalf("the start failed after %v; the check gives the hello a bound of 100ms, so the default bound of 5s must not apply", elapsed)
+	sent := make(chan error, 1)
+	go func() {
+		sent <- sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`))
+	}()
+	<-read
+	select {
+	case early := <-sent:
+		t.Fatalf("the start ended with %v while the connection of its hello was open", early)
+	default:
 	}
-	if want := "sidecar fixture-service: the service did not answer hello within 100ms"; err == nil || err.Error() != want {
-		t.Fatalf("unanswered hello = %v after %v, want %q", err, time.Since(begin), want)
+	close(end)
+	// A start that waits past the end of its connection stops at the limit of the runner.
+	err = <-sent
+	if want := "sidecar fixture-service: the service connection ended before the hello answer"; err == nil || err.Error() != want {
+		t.Fatalf("the unanswered hello ended with %v, want %q", err, want)
 	}
 }
 
-// When a newly started service does not print the endpoint, the start fails after ReadyTimeout with a fixed sentence, and the host ends and reaps
-// that service. The check gives 1 second instead of the default 30 seconds. The service starts its work later than the bound, so it ends right at the start regardless of
-// the load, and the check looks through that distinct path to see that no process remains running.
-// contract: sidecars-transport.startup.times-out
-func TestPersistentStartFailsWhenTheServicePrintsNoEndpoint(t *testing.T) {
+// A stop ends a start whose hello the service does not answer: the start fails with "sidecars are stopped" and the stop returns.
+// contract: sidecars-transport.hello.ends-by-its-reply-its-connection-or-the-stop
+func TestAStopEndsAStartWhoseHelloIsNotAnswered(t *testing.T) {
+	root := t.TempDir()
+	read, end := unansweredHelloService(t, root)
+	t.Cleanup(func() { close(end) })
+	sidecars, err := NewSidecars(support.HarnessDeclarations(t.TempDir()), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := &support.HarnessOwner{Root: "/hello", Seen: make(chan SidecarMessage, 1)}
+	sent := make(chan error, 1)
+	go func() {
+		sent <- sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`))
+	}()
+	<-read
+	// A stop that waits for the hello does not return, and the check stops at the limit of its runner.
+	sidecars.Stop()
+	if err := <-sent; err == nil || err.Error() != "sidecars are stopped" {
+		t.Fatalf("the start ended with %v, want sidecars are stopped", err)
+	}
+}
+
+// A newly started service that prints no endpoint keeps its start waiting past any time limit: a stop ends and reaps the service
+// and fails the start with "sidecars are stopped".
+// contract: sidecars-transport.startup.ends-by-the-line-the-exit-or-the-stop
+func TestAStopEndsAStartWhoseServicePrintsNoEndpoint(t *testing.T) {
 	folder := t.TempDir()
-	script := "#!/bin/sh\nsleep 2\nwhile :; do sleep 1; done\n"
+	started := filepath.Join(folder, "started")
+	if err := makeFifo(started); err != nil {
+		t.Fatal(err)
+	}
+	hold := filepath.Join(folder, "hold")
+	holdPipe(t, hold)
+	script := "#!/bin/sh\necho $$ > " + started + "\nexec cat " + hold + "\n"
 	if err := os.WriteFile(filepath.Join(folder, "service"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -1730,15 +1759,33 @@ func TestPersistentStartFailsWhenTheServicePrintsNoEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sidecars.ReadyTimeout = time.Second
 	owner := &support.HarnessOwner{Root: "/startup", Seen: make(chan SidecarMessage, 1)}
-	begin := time.Now()
-	err = support.SendWithin(t, sidecars, owner, 30*time.Second)
-	if want := "sidecar fixture-service: the service did not print its endpoint within 1s"; err == nil || err.Error() != want {
-		t.Fatalf("silent service = %v after %v, want %q", err, time.Since(begin), want)
+	sent := make(chan error, 1)
+	go func() {
+		sent <- sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`))
+	}()
+	// The read ends when the service wrote its pid.
+	data, err := os.ReadFile(started)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if running, err := exec.Command("pgrep", "-f", filepath.Join(folder, "service")).Output(); err == nil {
-		t.Fatalf("the silent service still runs: %s", running)
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case early := <-sent:
+		t.Fatalf("the start ended with %v while the service ran without an endpoint", early)
+	default:
+	}
+	// A stop that waits for the endpoint does not return, and the check stops at the limit of its runner.
+	sidecars.Stop()
+	if err := <-sent; err == nil || err.Error() != "sidecars are stopped" {
+		t.Fatalf("the start ended with %v, want sidecars are stopped", err)
+	}
+	// The start reaped the service before it failed, so no process has its pid.
+	if err := processAbsent(pid); err != nil {
+		t.Fatalf("the service %d is not reaped: %v", pid, err)
 	}
 }
 
@@ -1755,7 +1802,7 @@ func TestPersistentServiceWritesItsStandardErrorToItsLog(t *testing.T) {
 		t.Fatal(err)
 	}
 	owner := &support.HarnessOwner{Root: "/exit", Seen: make(chan SidecarMessage, 1)}
-	if err := support.SendWithin(t, sidecars, owner, 30*time.Second); err == nil {
+	if err := support.SendOpen(sidecars, owner); err == nil {
 		t.Fatal("the service that exits started")
 	}
 	data, err := os.ReadFile(filepath.Join(config, "logs", "service.log"))
@@ -1785,7 +1832,7 @@ func TestPersistentStartFailsWhenTheServiceLogCannotOpen(t *testing.T) {
 		t.Fatal(err)
 	}
 	owner := &support.HarnessOwner{Root: "/exit", Seen: make(chan SidecarMessage, 1)}
-	err = support.SendWithin(t, sidecars, owner, 30*time.Second)
+	err = support.SendOpen(sidecars, owner)
 	if want := "sidecar fixture-service: service log: create logs directory: "; err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Fatalf("service log failure = %v, want prefix %q", err, want)
 	}
@@ -1806,7 +1853,7 @@ func TestPersistentStartFailsWhenTheServiceExitsBeforeItsEndpoint(t *testing.T) 
 		t.Fatal(err)
 	}
 	owner := &support.HarnessOwner{Root: "/exit", Seen: make(chan SidecarMessage, 1)}
-	err = support.SendWithin(t, sidecars, owner, 30*time.Second)
+	err = support.SendOpen(sidecars, owner)
 	if want := "sidecar fixture-service: service exited before endpoint"; err == nil || err.Error() != want {
 		t.Fatalf("exited service = %v, want %q", err, want)
 	}
@@ -2050,8 +2097,13 @@ func serveReplaceService(t *testing.T, root, oldVersion, installedVersion string
 	}
 	t.Cleanup(func() { listener.Close() })
 	writeHarnessEndpoint(t, root, socket)
-	// The endpoint names a process that stands for the service and ends when the service shuts down.
-	process := exec.Command("sleep", "60")
+	// The endpoint names a process that stands for the service and ends when the service shuts down. It reads its input, whose
+	// write end the check holds, so it runs until the fixture ends it and ends with the check process also when the check is
+	// killed.
+	process := exec.Command("cat")
+	if _, err := process.StdinPipe(); err != nil {
+		t.Fatal(err)
+	}
 	if err := process.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -2093,13 +2145,11 @@ func serveReplaceService(t *testing.T, root, oldVersion, installedVersion string
 			_ = remaining.Kill()
 		}
 		// The host waits for its own child (cmd.Wait in the sidecar exit path), so this test does not reap the pid: a reap here could take
-		// that child. A killed child is reaped by the host; a zombie that remains is already ended, and ps reports its state as Z.
-		deadline := time.Now().Add(time.Second)
-		for installedProcessRunning(pid) && time.Now().Before(deadline) {
+		// that child. A killed child is reaped by the host; a zombie that remains is already ended, and ps reports its state as Z. The
+		// end of a process that is not a child of the test gives the test no event, so the cleanup polls its state until the kill ended
+		// it; a process that the kill does not end leaves the check to the limit of its runner.
+		for installedProcessRunning(pid) {
 			time.Sleep(10 * time.Millisecond)
-		}
-		if installedProcessRunning(pid) {
-			t.Errorf("installed service process %d outlived the test", pid)
 		}
 	})
 	service := &replaceService{listener: listener, second: make(chan struct{}), process: process, folder: folder}
@@ -2163,7 +2213,9 @@ func serveReplaceService(t *testing.T, root, oldVersion, installedVersion string
 						return
 					}
 					if operation == "shutdown" {
-						// The process of the service ends after the answer, as that of a real service does.
+						// The process of the service ends after the answer, as that of a real service does. endsAfter delays that end so that
+						// a host that does not wait for it starts the installed service first: the order of the two ends decides the check, and
+						// a host that waits for the end passes at any delay.
 						service.ended.Add(1)
 						time.AfterFunc(service.endsAfter, func() {
 							defer service.ended.Done()
@@ -2319,15 +2371,14 @@ func TestAnOutdatedServiceIsReplacedWhenItsSessionsEnd(t *testing.T) {
 	}
 }
 
-// awaitNoReplacement checks that the service keeps running: a retain that the service answers comes after the lines of what the
-// close started, and a replacement runs on its own routine, so the check also gives that routine time to send.
-func awaitNoReplacement(t *testing.T, service *replaceService, sidecars *host.Sidecars, layout []host.RetainedSurface) {
+// requireNoReplacement checks that the service keeps running after the calls that may replace it returned: each such call
+// records the replacement that it decides before it returns, and a replacement sends close-owner only after that record, so no
+// record and no close-owner mean that no replacement runs.
+func requireNoReplacement(t *testing.T, service *replaceService, sidecars *host.Sidecars) {
 	t.Helper()
-	time.Sleep(200 * time.Millisecond)
-	if _, err := sidecars.Retain(layout); err != nil {
-		t.Fatal(err)
+	if replacing := sidecars.Replacing(); len(replacing) != 0 {
+		t.Fatalf("the host replaces %v", replacing)
 	}
-	time.Sleep(200 * time.Millisecond)
 	if got := service.received(); slices.Contains(got, "close-owner") || slices.Contains(got, "shutdown") {
 		t.Fatalf("the service with a session that a layout holds received %v", got)
 	}
@@ -2358,7 +2409,7 @@ func TestAnOutdatedServiceKeepsASurfaceThatALayoutHolds(t *testing.T) {
 	}
 	// A close of any other surface asks for the replacement as well.
 	sidecars.NativeViewRemoved("tab-of-another-plugin")
-	awaitNoReplacement(t, service, sidecars, layout)
+	requireNoReplacement(t, service, sidecars)
 	got := sidecars.Outdated()
 	if len(got) != 1 || got[0].Sessions != 1 {
 		t.Fatalf("outdated with a section that a layout holds: %+v", got)
@@ -2398,7 +2449,10 @@ func TestAnOutdatedServiceWaitsForTheFirstLayoutList(t *testing.T) {
 	}
 	receiveSidecarMessage(t, owner.Seen)
 	sidecars.Close("surface-1")
-	time.Sleep(200 * time.Millisecond)
+	// The close decided before it returned, and it records each replacement that it decides.
+	if replacing := sidecars.Replacing(); len(replacing) != 0 {
+		t.Fatalf("the host replaces %v before the first layout list", replacing)
+	}
 	if got := service.received(); slices.Contains(got, "close-owner") || slices.Contains(got, "shutdown") {
 		t.Fatalf("the service before the first layout list received %v", got)
 	}
@@ -2480,8 +2534,8 @@ func TestTheHelloCarriesTheConfigurationDirectoryAsClient(t *testing.T) {
 	}
 }
 
-// contract: sidecars-transport.hello.deadline-ends-with-its-answer
-// The deadline of the hello ends with its answer: a service may stay silent for longer, and what it sends then arrives.
+// contract: sidecars-transport.hello.silence-keeps-the-connection
+// The host reads a connection without a deadline: a service may stay silent after its hello answer, and what it sends then arrives.
 func TestAPersistentConnectionHasNoDeadlineAfterItsHello(t *testing.T) {
 	root := t.TempDir()
 	socketDirectory := support.SocketParent(t)
@@ -2492,8 +2546,8 @@ func TestAPersistentConnectionHasNoDeadlineAfterItsHello(t *testing.T) {
 	}
 	defer listener.Close()
 	writeHarnessEndpoint(t, root, socket)
-	const deadline = 50 * time.Millisecond
-	silence := 4 * deadline
+	// The service holds each echo until the test ends its silence.
+	silence := make(chan struct{})
 	go func() {
 		connection, err := listener.Accept()
 		if err != nil {
@@ -2514,7 +2568,7 @@ func TestAPersistentConnectionHasNoDeadlineAfterItsHello(t *testing.T) {
 				io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n")
 				continue
 			}
-			time.Sleep(silence)
+			<-silence
 			connection.Write(line)
 		}
 	}()
@@ -2523,16 +2577,17 @@ func TestAPersistentConnectionHasNoDeadlineAfterItsHello(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer sidecars.Stop()
-	sidecars.HelloTimeout = deadline
 	owner := &support.HarnessOwner{Root: "/silence", Seen: make(chan SidecarMessage, 1)}
-	began := time.Now()
 	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	receiveSidecarMessage(t, owner.Seen)
-	if elapsed := time.Since(began); elapsed < silence {
-		t.Fatalf("the message arrived after %v, before the silence of %v ended", elapsed, silence)
+	select {
+	case early := <-owner.Seen:
+		t.Fatalf("a message %+v arrived while the service was silent", early)
+	default:
 	}
+	close(silence)
+	receiveSidecarMessage(t, owner.Seen)
 }
 
 // contract: sidecars-transport.stop.leaves-the-close-of-a-replacement-to-the-replacement
@@ -2541,6 +2596,7 @@ func TestAStopLeavesTheCloseOfAReplacementToTheReplacement(t *testing.T) {
 	service := serveReplaceService(t, root, "0.0.6", "0.0.7")
 	service.hold = make(chan struct{})
 	service.closeOwner = make(chan struct{}, 4)
+	service.firstEnded = make(chan struct{})
 	sidecars := replaceSidecars(t, root, service)
 	owner := &support.HarnessOwner{Root: "/replace", Seen: make(chan SidecarMessage, 8)}
 	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
@@ -2582,7 +2638,7 @@ func TestAStopLeavesTheCloseOfAReplacementToTheReplacement(t *testing.T) {
 		sidecars.Stop()
 		close(stopped)
 	}()
-	// The stop has begun when the host refuses a send because the sidecars are stopped; give its close time to reach the service.
+	// The stop has begun when the host refuses a send because the sidecars are stopped.
 	for {
 		err := sidecars.Send(owner, "fixture-service", "surface-2", json.RawMessage(`{"operation":"open"}`))
 		if err != nil && strings.Contains(err.Error(), "sidecars are stopped") {
@@ -2593,12 +2649,16 @@ func TestAStopLeavesTheCloseOfAReplacementToTheReplacement(t *testing.T) {
 		}
 		runtime.Gosched()
 	}
-	time.Sleep(200 * time.Millisecond)
 	close(service.hold)
 	<-stopped
-	if err := <-replaced; err != nil {
+	// The replacement either sends shutdown into the room that the answers make or ends the connection because the sidecars are
+	// stopped; both end the connection without a second close-owner.
+	if err := <-replaced; err != nil && !strings.Contains(err.Error(), "sidecars are stopped") {
 		t.Fatalf("the replacement failed: %v", err)
 	}
+	// The service reads every line of the connection until it ends, so after the end it has read each close-owner that any stop
+	// could have sent.
+	<-service.firstEnded
 	closes := 0
 	for _, operation := range service.received() {
 		if operation == "close-owner" {
@@ -2607,6 +2667,50 @@ func TestAStopLeavesTheCloseOfAReplacementToTheReplacement(t *testing.T) {
 	}
 	if closes != 1 {
 		t.Fatalf("the service received %d close-owner requests: %v", closes, service.received())
+	}
+}
+
+// A quit request while the quit stop waits for the close of a persistent owner ends the connection of the service and records it;
+// the stop then ends by the end of the connection (docs/spec/hosts.md#process-lifecycle).
+// contract: sidecars.stop.second-quit-ends-service-connections
+func TestASecondQuitEndsTheConnectionOfAServiceThatTheQuitStopWaitsFor(t *testing.T) {
+	written := support.CaptureLog(t)
+	root := t.TempDir()
+	service := serveReplaceService(t, root, "0.0.7", "0.0.7")
+	// The service holds its answer to close-owner, so only the end of the connection ends the close of the stop.
+	service.hold = make(chan struct{})
+	defer close(service.hold)
+	service.closeOwner = make(chan struct{}, 4)
+	service.firstEnded = make(chan struct{})
+	sidecars := replaceSidecars(t, root, service)
+	owner := &support.HarnessOwner{Root: "/replace", Seen: make(chan SidecarMessage, 8)}
+	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	receiveSidecarMessage(t, owner.Seen)
+	ended := make(chan struct{})
+	if sidecars.QuitStop(false, func() { close(ended) }) {
+		t.Fatal("the quit stop accepted the exit while the close of the owner runs")
+	}
+	// The close of the stop has reached the service, which holds its answer.
+	<-service.closeOwner
+	select {
+	case <-ended:
+		t.Fatal("the quit stop ended while the service holds its answer to close-owner")
+	default:
+	}
+	if sidecars.QuitStop(false, func() { t.Error("the second quit ran a second end") }) {
+		t.Fatal("the second quit accepted the exit while the close of the owner runs")
+	}
+	// A second quit that ends no connection leaves the stop waiting, and the check stops at the limit of its runner.
+	<-ended
+	<-service.firstEnded
+	if !sidecars.QuitStop(false, func() {}) {
+		t.Fatal("the quit stop refused the exit after the end of the connection")
+	}
+	want := "info host sidecar fixture-service: the second quit ends the connection of the service\n"
+	if logged := written(); !strings.Contains(logged, want) {
+		t.Fatalf("log %q does not contain %q", logged, want)
 	}
 }
 
@@ -2623,11 +2727,7 @@ func TestDetachClosesTheConnectionOfAPersistentServiceWithoutClosingTheOwner(t *
 	receiveSidecarMessage(t, owner.Seen)
 	sidecars.Detach()
 	// The connection ends, which is the only thing that the service learns, and the sessions of the service stay.
-	select {
-	case <-service.firstEnded:
-	case <-time.After(10 * time.Second):
-		t.Fatal("the connection of the service did not end")
-	}
+	<-service.firstEnded
 	for _, operation := range service.received() {
 		if operation == "close-owner" || operation == "shutdown" {
 			t.Fatalf("the service received %v", service.received())
@@ -3089,13 +3189,9 @@ func TestPersistentProtocolViolationsStopTheRestarts(t *testing.T) {
 		if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 			t.Fatalf("send at %v: %v", offset, err)
 		}
-		select {
-		case failure := <-owner.failures:
-			if !strings.HasPrefix(failure.Reason, "invalid message: ") {
-				t.Fatalf("failure at %v = %+v", offset, failure)
-			}
-		case <-time.After(support.Stall):
-			t.Fatalf("no sidecar failure at %v; the test stalled", offset)
+		failure := <-owner.failures
+		if !strings.HasPrefix(failure.Reason, "invalid message: ") {
+			t.Fatalf("failure at %v = %+v", offset, failure)
 		}
 	}
 	clock.set(40 * time.Second)

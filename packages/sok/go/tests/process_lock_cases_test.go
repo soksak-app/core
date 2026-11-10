@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"syscall"
 	"testing"
 )
 
@@ -63,7 +62,7 @@ func TestAWritingCommandReadsTheProcessLockCaseTable(t *testing.T) {
 					t.Fatal(err)
 				}
 				defer owner.Close()
-				if err := syscall.Flock(int(owner.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+				if err := holdLock(owner); err != nil {
 					t.Fatal(err)
 				}
 			}

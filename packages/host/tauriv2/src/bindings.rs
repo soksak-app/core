@@ -303,8 +303,8 @@ fn cancel_surfaces(window: Window, request: Argument<CancelRequest>) -> Result<(
     surfaces::cancel(&window, request)
 }
 
-/// Waits for the DOM and native raster presentation of the last stable frame. The page call belongs to no endpoint request, so
-/// the close of the window and the end of its page process end the wait.
+/// Waits for the DOM and native raster presentation of the last stable frame. The page asks it without an endpoint
+/// connection, so the close of the window and the end of its page process end the wait besides its presentation.
 #[tauri::command]
 async fn wait_presented(window: Window) -> Result<f64, String> {
     blocking(move || exposure::presented(&window, None).map_err(|error| error.message)).await

@@ -260,6 +260,7 @@ fn the_bundle_is_replaced_after_the_process_ended_and_the_application_starts() {
                     arguments: vec!["--config-dir".into(), "/config".into()],
                 },
                 &|opened: &Path, arguments: &[String]| {
+                    // The application starts after the process ended and the bundle was replaced.
                     assert!(
                         !running(pid as i32),
                         "the application started before the process ended"

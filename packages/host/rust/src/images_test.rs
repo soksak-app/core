@@ -294,7 +294,7 @@ fn a_page_start_returns_the_failures_of_the_ends_it_clears() {
 }
 
 mod presentation_queue {
-    use super::super::present_on_ui;
+    use super::super::{PRESENTS_REFUSED, Presents, present_on_ui};
     use std::sync::{Arc, Mutex, mpsc};
 
     // contract: images.presentation.runs-after-framework-event
@@ -313,6 +313,7 @@ mod presentation_queue {
                     Ok(())
                 }),
                 |work| enqueue.send(work).map_err(|error| error.to_string()),
+                &Presents::default(),
             )
         });
         // The worker either queues the commit or ends, which drops the queue, so the receive ends by one of those events.
@@ -332,9 +333,11 @@ mod presentation_queue {
     // contract: images.presentation.runs-after-framework-event
     #[test]
     fn image_enqueue_failure_reaches_the_frame_handler() {
-        let result = present_on_ui(Box::new(|| panic!("refused work ran")), |_| {
-            Err("native queue refused".into())
-        });
+        let result = present_on_ui(
+            Box::new(|| panic!("refused work ran")),
+            |_| Err("native queue refused".into()),
+            &Presents::default(),
+        );
         assert_eq!(result, Err("native queue refused".into()));
     }
 
@@ -347,8 +350,65 @@ mod presentation_queue {
                 work();
                 Ok(())
             },
+            &Presents::default(),
         );
         assert_eq!(result, Err("native presentation refused".into()));
+    }
+
+    // A present that waits for the main thread ends when the stop of the sidecars refuses the presents, and the main thread that
+    // runs the held presentation later does not wait (docs/spec/sidecars.md#declaration-and-startup).
+    // contract: images.presentation.ends-with-the-sidecar-stop
+    #[test]
+    fn a_present_that_waits_for_the_main_thread_ends_with_the_refusal_of_the_presents() {
+        let presents = Arc::new(Presents::default());
+        let (enqueue, queued) = mpsc::sync_channel::<Box<dyn FnOnce() + Send>>(1);
+        let (answered, answer) = mpsc::channel();
+        let waiting = Arc::clone(&presents);
+        std::thread::spawn(move || {
+            answered
+                .send(present_on_ui(
+                    Box::new(|| Ok(())),
+                    |work| enqueue.send(work).map_err(|error| error.to_string()),
+                    &waiting,
+                ))
+                .expect("the test holds the receiver");
+        });
+        // The main thread holds the presentation and does not run it, as the main thread that runs the stop at exit does.
+        let held = queued.recv().expect("the present enqueued no presentation");
+        presents.refuse();
+        // A present that still waits for the main thread does not answer, and the check stops at the limit of its runner.
+        assert_eq!(
+            answer.recv().expect("the present ended without an answer"),
+            Err(PRESENTS_REFUSED.to_string())
+        );
+        held();
+        assert_eq!(
+            present_on_ui(
+                Box::new(|| panic!("a refused presentation ran")),
+                |_| panic!("a refused presentation was enqueued"),
+                &presents,
+            ),
+            Err(PRESENTS_REFUSED.to_string()),
+            "a present after the refusal was not refused at once"
+        );
+    }
+
+    // A presentation that the main thread drops without running it ends its present.
+    // contract: images.presentation.ends-with-the-sidecar-stop
+    #[test]
+    fn a_presentation_that_the_main_thread_drops_ends_its_present() {
+        let result = present_on_ui(
+            Box::new(|| panic!("a dropped presentation ran")),
+            |work| {
+                drop(work);
+                Ok(())
+            },
+            &Presents::default(),
+        );
+        assert!(
+            result.is_err(),
+            "a dropped presentation answered {result:?}"
+        );
     }
 }
 

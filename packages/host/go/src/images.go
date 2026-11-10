@@ -738,6 +738,8 @@ func (i *Images) waitLayoutRastersObserved(settled bool, waiting func()) error {
 	return i.waitObserved(true, nil, waiting, i.currentRasterSnapshotInstalledLocked)
 }
 
+// waitCurrentObserved calls waiting under the owner lock each time the wait finds the presentation incomplete and blocks, so a test
+// orders the next frame after the wait checked the state and knows when the wait checked the frame that it gave.
 func (i *Images) waitCurrentObserved(stop <-chan struct{}, waiting func()) error {
 	return i.waitObserved(false, stop, waiting, i.currentPresentedLocked)
 }

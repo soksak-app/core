@@ -667,14 +667,27 @@ type Platform interface {
 	// ServiceProcessExists checks, before an endpoint is reused after the application restarted,
 	// whether the preserved sidecar service process is still alive. It is an error when this cannot be determined.
 	ServiceProcessExists(pid int) (bool, error)
-	// WaitServiceProcessEnd waits until the service process pid ends, for at most timeout, and answers whether it ended.
-	// A process that does not exist has ended. The wait uses the kernel notification of the end of a process, which
-	// also reports a process that stays as a zombie, so it does not poll (docs/spec/persistent-services.md#updates).
-	WaitServiceProcessEnd(pid int, timeout time.Duration) (bool, error)
+	// WaitServiceProcessEnd waits until the service process pid ends or stop closes, and answers whether it ended. A process
+	// that does not exist has ended. The wait uses the kernel notification of the end of a process, which also reports a
+	// process that stays as a zombie, so it does not poll, and no time limit ends it (docs/spec/persistent-services.md#updates).
+	WaitServiceProcessEnd(pid int, stop <-chan struct{}) (bool, error)
 	// NewSession makes command start in a new session. A persistent service belongs to the configuration directory and not to the application process,
 	// so it does not receive the signals of the process group and the terminal of the application. Call it before starting
 	// command.
 	NewSession(command *exec.Cmd) error
+	// NewProcessGroup makes command start as the leader of a new process group, so the processes that it starts belong to that
+	// group unless they leave it (docs/spec/sidecars.md#declaration-and-startup). Call it before starting command.
+	NewProcessGroup(command *exec.Cmd) error
+	// EndProcessGroup sends the force-kill signal to the process group whose leader is pid. A group without a process has ended.
+	EndProcessGroup(pid int) error
+	// TerminateProcessGroup sends the terminate signal to the process group whose leader is pid, the stop of a sidecar
+	// (docs/spec/sidecars.md#declaration-and-startup). A group without a process has ended.
+	TerminateProcessGroup(pid int) error
+	// ExitedByTermination answers whether an ended process ended by the terminate signal.
+	ExitedByTermination(state *os.ProcessState) bool
+	// ReadAvailable reads into buffer what the pipe file holds now, without waiting: it returns io.EOF when the pipe holds
+	// nothing or its writers closed it. Clear the read deadline of file before calling it.
+	ReadAvailable(file *os.File, buffer []byte) (int, error)
 	// ExitStatus writes the exit of an ended process as `exit status <code>` or `signal <number>`. Both hosts write the exit of a
 	// sidecar to the log with the same text (docs/spec/sidecars.md#declaration-and-startup).
 	ExitStatus(state *os.ProcessState) (string, error)

@@ -10,6 +10,8 @@
 #import "event_ring.h"
 #import "input_inject.h"
 #import "input_virtual.h"
+#import "private/webkit.h"
+#import "support/event_wait.h"
 #import "support/records.h"
 #import "webview_geometry.h"
 #import "webview_input.h"
@@ -17,12 +19,13 @@
 #import "window_reveal.h"
 #include <unistd.h>
 
-// Sets the flag when the object that holds it ends.
+// Sets the flag when the object that holds it ends, and wakes the wait of the main thread, since the end can come in a turn
+// that does not end the wait by itself.
 @interface EndWatch : NSObject
 @property(assign) BOOL *ended;
 @end
 @implementation EndWatch
-- (void)dealloc { *self.ended = YES; [super dealloc]; }
+- (void)dealloc { *self.ended = YES; eventWake(); [super dealloc]; }
 @end
 
 static int failures;
@@ -30,23 +33,34 @@ static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
 }
-static void spin(double seconds) { [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:seconds]]; }
-static void until(BOOL (^done)(void)) { for (int i = 0; i < 500 && !done(); i++) spin(0.01); }
 static id evaluate(WKWebView *view, NSString *script) {
     __block id out = nil;
     __block BOOL done = NO;
     [view evaluateJavaScript:script completionHandler:^(id result, NSError *error) { out = [(error ? error.localizedDescription : result) retain]; done = YES; }];
-    until(^BOOL { return done; });
+    eventWait([@"JavaScript answers " stringByAppendingString:script], ^BOOL { return done; });
     return [out autorelease];
+}
+// Waits until WebKit has given the page every mouse event that its view received before.
+static void drain(WKWebView *view) {
+    __block BOOL done = NO;
+    [view _doAfterProcessingAllPendingMouseEvents:^{ done = YES; }];
+    eventWait(@"WebKit has processed the pending mouse events", ^BOOL { return done; });
+}
+// Runs the main queue until a marker block queued after every block already on it has run.
+static void drainMainQueue(NSString *what) {
+    __block BOOL passed = NO;
+    dispatch_async(dispatch_get_main_queue(), ^{ passed = YES; });
+    eventWait(what, ^BOOL { return passed; });
 }
 static sp_input_result lastResult;
 static BOOL lastDone;
-static void onDone(void *context, sp_input_result result, const sp_input_held *held) { lastResult = result; lastDone = YES; }
+// The answer can come from a callback that does not end a turn of the run loop.
+static void onDone(void *context, sp_input_result result, const sp_input_held *held) { lastResult = result; lastDone = YES; eventWake(); }
 static sp_input_result pointer(NSWindow *window, double x, double y, int phase) {
     lastDone = NO;
     sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, x, y, phase, 0, 0, 0, 1, onDone, NULL);
-    until(^BOOL { return lastDone; });
-    return lastDone ? lastResult : (sp_input_result)-1;
+    eventWait(@"the pointer input answers", ^BOOL { return lastDone; });
+    return lastResult;
 }
 
 // The answers that this test gives in place of AppKit.
@@ -68,6 +82,53 @@ static NSWindow *makeWindow(CGFloat shift) {
     [window setReleasedWhenClosed:NO];
     return window;
 }
+// The navigation delegate of a page that a check loads. It is kept on its web view, which does not retain its delegate.
+@interface SPPageLoad : NSObject <WKNavigationDelegate>
+@property BOOL finished;
+@end
+@implementation SPPageLoad
+- (void)webView:(WKWebView *)view didFinishNavigation:(WKNavigation *)navigation {
+    (void)view;
+    (void)navigation;
+    self.finished = YES;
+}
+@end
+static char pageLoadKey;
+
+// Loads html into view and keeps a navigation delegate that hears when the navigation finishes.
+static void loadPage(WKWebView *view, NSString *html) {
+    SPPageLoad *load = [[[SPPageLoad alloc] init] autorelease];
+    objc_setAssociatedObject(view, &pageLoadKey, load, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    view.navigationDelegate = load;
+    [view loadHTMLString:html baseURL:nil];
+}
+
+// Waits until the navigation that loadPage started on view finishes, so the scripts of the document have run.
+static void awaitLoad(WKWebView *view) {
+    SPPageLoad *load = objc_getAssociatedObject(view, &pageLoadKey);
+    eventWait(@"the navigation of the page finishes", ^BOOL { return load.finished; });
+    view.navigationDelegate = nil;
+}
+
+// Waits until the page of view holds condition, a JavaScript expression. The page judges condition at once and again at each
+// event of the type named type that reaches its window, after the listeners that the page added before, so the wait ends at
+// the event of the page that makes condition hold.
+static void awaitPage(WKWebView *view, NSString *what, NSString *type, NSString *condition) {
+    NSString *body = [NSString stringWithFormat:@"if (%@) return true;"
+        "await new Promise(resolve => {"
+        " const heard = () => { if (%@) { removeEventListener(eventType, heard, true); resolve(); } };"
+        " addEventListener(eventType, heard, true); });"
+        "return true;", condition, condition];
+    __block BOOL done = NO;
+    [view callAsyncJavaScript:body arguments:@{ @"eventType": type } inFrame:nil inContentWorld:WKContentWorld.pageWorld
+        completionHandler:^(id value, NSError *error) {
+            (void)value;
+            if (error) fprintf(stderr, "JavaScript: %s\n", error.localizedDescription.UTF8String);
+            done = YES;
+        }];
+    eventWait(what, ^BOOL { return done; });
+}
+
 static NSString *const PAGE = @"<!doctype html><style>html,body{margin:0;height:100%}</style>"
     "<input id='field' style='position:absolute;left:10px;top:10px;width:200px;height:30px'>"
     "<button id='target' style='position:absolute;left:10px;top:60px;width:100px;height:40px'>x</button><script>"
@@ -78,15 +139,16 @@ static WKWebView *makePage(NSWindow *window) {
     [window.contentView addSubview:view];
     check(sp_window_set_main_webview(window, view) != NULL, @"the page is the main web view of its window");
     check(webviewInputRegister(view), @"the page registers for pointer input");
-    [view loadHTMLString:PAGE baseURL:nil];
+    loadPage(view, PAGE);
     return view;
 }
-static void pageReady(WKWebView *view) {
-    until(^BOOL { return [evaluate(view, @"Boolean(window.events)") boolValue]; });
-    spin(0.5);
-}
+// Waits until the page has loaded, so its listeners record the input that follows. A press after it answers at the receipt of
+// the document, and a move or a key is judged at a later event of the page.
+static void pageReady(WKWebView *view) { awaitLoad(view); }
+// The types of the events that the page received, read after WebKit has given the page every mouse event that its view
+// received before.
 static NSArray *eventTypes(WKWebView *view) {
-    spin(0.2);
+    drain(view);
     return evaluate(view, @"events.map(e=>e.type)");
 }
 // The facts of host.window; nil for a window without its composition, which has none (window_facts.h).
@@ -191,7 +253,7 @@ int main(void) { @autoreleasepool {
     check(!cover.isKeyWindow && !second.isKeyWindow, @"another window does not answer as key");
     pointer(window, 40, 80, 0);
     pointer(window, 42, 82, 0);
-    until(^BOOL { return [evaluate(view, @"document.getElementById('target').matches(':hover')") boolValue]; });
+    drain(view);
     check([evaluate(view, @"document.getElementById('target').matches(':hover')") boolValue], @"hover reaches the element under the point");
     NSArray *moves = evaluate(view, @"events.filter(e=>e.type==='pointermove')");
     check(moves.count > 0 && ![[moves valueForKey:@"trusted"] containsObject:@NO], [NSString stringWithFormat:@"moves are trusted page events (%lu)", (unsigned long)moves.count]);
@@ -223,7 +285,7 @@ int main(void) { @autoreleasepool {
     check([gesture containsObject:@"pointerdown"] && [gesture containsObject:@"pointerup"] && [gesture containsObject:@"click"], [NSString stringWithFormat:@"the gesture reaches the page (%@)", [gesture componentsJoinedByString:@","]]);
     check([evaluate(view, @"document.activeElement.id") isEqual:@"field"], @"the press focuses the field");
     check(sp_input_key(window, "a", "a", 0, true) == SP_INPUT_DELIVERED && sp_input_key(window, "a", "a", 0, false) == SP_INPUT_DELIVERED, @"a key is delivered");
-    spin(0.2);
+    awaitPage(view, @"the field takes the text a", @"input", @"document.getElementById('field').value === 'a'");
     check([evaluate(view, @"document.getElementById('field').value") isEqual:@"a"], [NSString stringWithFormat:@"the key types into the page (%@)", evaluate(view, @"document.getElementById('field').value")]);
     check(monitored == 0, @"input of a virtual key window does not pass the application");
     [NSEvent removeMonitor:monitor];
@@ -239,11 +301,11 @@ int main(void) { @autoreleasepool {
     check(held.count > 0 && ![held containsObject:@1], [NSString stringWithFormat:@"no page event carries the real button (%@)", held]);
     personButtons = 0;
 
-    // Any order to the front keeps the window where it is.
+    // Any order to the front keeps the window where it is. An order of a window reaches the window server in the call, as the
+    // order of cover below shows, so the index is judged after the calls.
     [window orderFront:nil];
     [window makeKeyAndOrderFront:nil];
     [window orderFrontRegardless];
-    spin(0.1);
     check(window.orderedIndex == orderBefore, [NSString stringWithFormat:@"a virtual key window is not ordered to the front (%ld, %ld)", (long)window.orderedIndex, (long)orderBefore]);
     NSInteger coverBefore = cover.orderedIndex;
     [cover orderFront:nil];
@@ -278,6 +340,7 @@ int main(void) { @autoreleasepool {
     @autoreleasepool {
         void *surface = sp_surface_create(sp_window_set_main_webview(window, view));
         WKWebView *closing = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 420, 300)] autorelease];
+        loadPage(closing, @"<!doctype html><script>window.ups=0;addEventListener('keyup',()=>ups++,true);</script>");
         EndWatch *watch = [[EndWatch new] autorelease];
         watch.ended = &closedPageEnded;
         static char watchKey;
@@ -285,12 +348,13 @@ int main(void) { @autoreleasepool {
         check(sp_surface_place_view(surface, closing), @"the page of a surface is placed");
         webviewSetFrame(surface, 0, 0, 420, 300);
         webviewSetSurfaceHidden(surface, false);
+        awaitLoad(closing);
         check([window makeFirstResponder:closing], @"the page of the surface holds the keyboard");
         check(sp_input_key(window, "c", "c", 0, true) == SP_INPUT_DELIVERED && sp_input_key(window, "c", "c", 0, false) == SP_INPUT_DELIVERED, @"a key reaches the page of the surface");
-        spin(0.2);
+        awaitPage(closing, @"the page of the surface receives the key up", @"keyup", @"ups > 0");
         sp_surface_close(surface);
     }
-    until(^BOOL { return closedPageEnded; });
+    eventWait(@"the page of the closed surface ends", ^BOOL { return closedPageEnded; });
     check(closedPageEnded, @"the page of a surface that closes with the keyboard ends");
 
     NSUInteger closed = count(^{ [window close]; }, @"closed");
@@ -325,12 +389,14 @@ int main(void) { @autoreleasepool {
     check([facts(shown)[@"virtualKey"] boolValue], @"host.window of the shown window reports the virtual key window");
     [shown close];
     [shown release];
-    spin(0.2);
+    drainMainQueue(@"the blocks that the close of the shown window queued run");
 
     sp_input_virtual_end("no state");
     [second close];
     [cover close];
-    spin(0.2);
+    // An activation that the closes caused is decided in the closes or in the blocks that they queued, so the front is judged
+    // after those blocks.
+    drainMainQueue(@"the blocks that the closes of the windows queued run");
     check(stayedBehind(), @"the application has not taken the front at the end");
     return failures ? 1 : 0;
 } }

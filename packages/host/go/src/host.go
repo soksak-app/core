@@ -254,6 +254,8 @@ func (s *Session) Shutdown() {
 		update.start()
 		host.sidecars.Detach()
 	} else {
+		// The quit hook ended the quit stop before the framework shut down, so this stop finds no sidecar that runs then
+		// (docs/spec/hosts.md#process-lifecycle).
 		host.sidecars.Stop()
 	}
 	if err := host.endpoint.Close(); err != nil {

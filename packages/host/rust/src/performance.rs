@@ -164,13 +164,93 @@ fn civil_from_days(days: i64) -> (i64, u32, u32) {
 }
 
 /// The sampler stores the resident size of the host every 5 seconds while the trace is on. It ends with the switch: turning
-/// the trace off waits until the thread returned, and turning it on again starts a new one.
+/// the trace off waits until the thread returned, and turning it on again starts a new one. A message on `stop` brings a new
+/// interval to the wait of the thread, and the end of the channel stops it.
 struct Sampler {
     stop: std::sync::mpsc::Sender<()>,
     thread: std::thread::JoinHandle<()>,
 }
 
 static SAMPLER: Mutex<Option<Sampler>> = Mutex::new(None);
+
+/// The time between two samples of the sampler (docs/spec/performance-trace.md).
+const SAMPLER_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// The time between two samples, in nanoseconds; zero is `SAMPLER_INTERVAL`.
+static INTERVAL: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// The observer of the samples of the sampler.
+pub type SampleObserver = Box<dyn Fn() + Send>;
+
+/// The samples that the sampler stored since it started, and the observer that hears each of them.
+struct SampleWatch {
+    samples: u64,
+    observer: Option<SampleObserver>,
+}
+
+static SAMPLE_WATCH: Mutex<SampleWatch> = Mutex::new(SampleWatch {
+    samples: 0,
+    observer: None,
+});
+
+/// Sets the time between two samples of the sampler, and zero takes the 5 seconds of the trace again. A sampler that waits
+/// starts its wait again with the new time and takes no sample for the change. A check sets the time as its input instead of
+/// waiting for it to pass.
+pub fn set_sampler_interval(interval: std::time::Duration) {
+    INTERVAL.store(
+        // default: a time beyond the nanoseconds that a u64 holds (585 years) waits the longest time that the count holds.
+        u64::try_from(interval.as_nanos()).unwrap_or(u64::MAX),
+        Ordering::SeqCst,
+    );
+    if let Some(sampler) = SAMPLER
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the sampler, which the change only reads; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .as_ref()
+        && sampler.stop.send(()).is_err()
+    {
+        // The thread of a sampler that ended holds no wait any more; the end of the switch joins it.
+        crate::application_log::log_info(
+            "performance trace",
+            "the sampler ended before its interval changed",
+        );
+    }
+}
+
+/// Sets the observer that the sampler calls after each sample it stored. A sampler that stored a sample since it started calls
+/// it at once. It runs on the thread of the sampler or of the caller, so it must not wait. A check of what the sampler does
+/// not do between two samples starts from this event.
+pub fn set_on_sample(observer: Option<SampleObserver>) {
+    // default: a lock that a panicking thread poisoned still holds the count and the observer, which the call replaces; the
+    // panic hook records the panic.
+    let mut watch = SAMPLE_WATCH.lock().unwrap_or_else(PoisonError::into_inner);
+    if watch.samples > 0
+        && let Some(observer) = &observer
+    {
+        observer();
+    }
+    watch.observer = observer;
+}
+
+/// Counts a sample of the sampler and tells the observer.
+fn sampled() {
+    // default: a lock that a panicking thread poisoned still holds the count and the observer; the panic hook records the
+    // panic.
+    let mut watch = SAMPLE_WATCH.lock().unwrap_or_else(PoisonError::into_inner);
+    watch.samples += 1;
+    if let Some(observer) = &watch.observer {
+        observer();
+    }
+}
+
+/// The time between two samples.
+fn sampler_interval() -> std::time::Duration {
+    match INTERVAL.load(Ordering::SeqCst) {
+        0 => SAMPLER_INTERVAL,
+        nanos => std::time::Duration::from_nanos(nanos),
+    }
+}
 
 fn start_sampler() {
     #[cfg(test)]
@@ -182,17 +262,26 @@ fn start_sampler() {
         return;
     }
     let (stop, stopped) = std::sync::mpsc::channel::<()>();
+    SAMPLE_WATCH
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the count, which the start sets again; the panic
+        // hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .samples = 0;
     let thread = std::thread::Builder::new()
         .name("performance-sampler".into())
         .spawn(move || {
             loop {
                 sample();
-                // A message or the end of the channel stops the thread; the timeout is the interval of the samples.
-                if !matches!(
-                    stopped.recv_timeout(std::time::Duration::from_secs(5)),
-                    Err(std::sync::mpsc::RecvTimeoutError::Timeout)
-                ) {
-                    return;
+                sampled();
+                // The timeout is the interval of the samples; a message starts the wait again with a new interval, and the
+                // end of the channel stops the thread.
+                loop {
+                    match stopped.recv_timeout(sampler_interval()) {
+                        Ok(()) => continue,
+                        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => break,
+                        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return,
+                    }
                 }
             }
         })

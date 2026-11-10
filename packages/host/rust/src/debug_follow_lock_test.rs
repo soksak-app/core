@@ -39,7 +39,7 @@ fn a_poisoned_notice_lock_still_publishes_the_notice_and_stops() {
         ..IndexUpdate::default()
     });
     let notice = received
-        .recv_timeout(Duration::from_secs(10))
+        .recv()
         .expect("no notice was published while the notice lock was poisoned");
     assert_eq!(
         (notice.path.as_str(), notice.size),

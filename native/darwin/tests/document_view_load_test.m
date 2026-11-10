@@ -7,20 +7,13 @@
 #import "document_view.h"
 #import "webview_geometry.h"
 #import "window_facts.h"
+#import "support/event_wait.h"
 
 static int failures = 0;
 
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
-}
-
-static void until(NSString *what, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
-    if (!done()) { fprintf(stderr, "FAIL: %s within 10 seconds\n", what.UTF8String); exit(1); }
 }
 
 static NSDictionary *latest;
@@ -70,7 +63,7 @@ int main(void) { @autoreleasepool {
         sp_document_place(view, 0, 0, 0, 0, true);
         latest = nil;
         check(sp_document_load(view, "soksak://probe/ui/page.html"), @"the view loads the page of its plugin");
-        until(@"the view page runs its script", ^BOOL{ return [latest[@"title"] hasPrefix:@"loaded"]; });
+        eventWait(@"the view page runs its script", ^BOOL{ return [latest[@"title"] hasPrefix:@"loaded"]; });
         check([latest[@"title"] isEqual:@"loaded soksak://probe"],
             [NSString stringWithFormat:@"the page of the view runs with the origin of its plugin: %@", latest[@"title"]]);
         check([latest[@"error"] isEqual:NSNull.null], @"loading the view page reports no error");

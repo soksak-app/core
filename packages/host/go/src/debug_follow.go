@@ -31,6 +31,7 @@ type LogNotice struct {
 // interval runs out become one notice with the latest path and size.
 type LogNotices struct {
 	interval time.Duration
+	space    func()
 	emit     func(LogNotice)
 
 	mu        sync.Mutex
@@ -49,7 +50,19 @@ type LogNotices struct {
 // NewLogNotices starts the goroutine that publishes the notices: it calls emit with each notice and then waits for interval before the
 // next one. Stop ends the goroutine and waits until it returned.
 func NewLogNotices(interval time.Duration, emit func(LogNotice)) *LogNotices {
-	n := &LogNotices{interval: interval, emit: emit, wake: make(chan struct{}, 1), quit: make(chan struct{}), done: make(chan struct{})}
+	return startLogNotices(&LogNotices{interval: interval, emit: emit})
+}
+
+// NewLogNoticesSpacedBy starts the goroutine that publishes the notices with space in place of the interval: after each notice the
+// goroutine calls space, which returns when the next notice may be published. A check sets the end of the interval with it, so the
+// bound on the rate is an input of the check and not a time that the check waits for. Stop waits until space returned.
+func NewLogNoticesSpacedBy(space func(), emit func(LogNotice)) *LogNotices {
+	return startLogNotices(&LogNotices{space: space, emit: emit})
+}
+
+// startLogNotices starts the goroutine of n.
+func startLogNotices(n *LogNotices) *LogNotices {
+	n.wake, n.quit, n.done = make(chan struct{}, 1), make(chan struct{}), make(chan struct{})
 	routine.Go("debug-follow", func() {
 		defer close(n.done)
 		for {
@@ -69,6 +82,10 @@ func NewLogNotices(interval time.Duration, emit func(LogNotice)) *LogNotices {
 			notice := n.value
 			n.mu.Unlock()
 			n.emit(notice)
+			if n.space != nil {
+				n.space()
+				continue
+			}
 			select {
 			case <-n.quit:
 				return

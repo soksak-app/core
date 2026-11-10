@@ -68,7 +68,7 @@ fn a_poisoned_observer_lock_still_sets_and_calls_the_write_observer() {
     );
     log.flush().unwrap();
     let (path, size) = written
-        .recv_timeout(Duration::from_secs(10))
+        .recv()
         .expect("the observer was not called while its lock was poisoned");
     assert_eq!(path, log.path(), "the observer received another file");
     assert!(size > 0, "the observer received an empty file");

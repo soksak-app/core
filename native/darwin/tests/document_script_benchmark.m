@@ -8,6 +8,7 @@
 #import <libproc.h>
 #import <string.h>
 #import <sys/types.h>
+#import "support/event_wait.h"
 #import "support/temporary_folder.h"
 #import "document_view.h"
 #import "private/webkit.h"
@@ -40,22 +41,52 @@ static NSString *const kPage = @"<!doctype html><title>Benchmark</title><body><s
     "})();"
     "</script></body>";
 
-// Waits at most this many seconds for each step (AGENTS: a step that cannot finish is reported with its measured state).
-static const NSTimeInterval stepLimit = 120;
+// Waits until done() holds, with an autorelease pool for each turn of the run loop: the condition drains the pool of the turn
+// before it judges, so the objects that a turn autoreleases are released at its end, as a turn of NSApp run does.
+static void waitTurns(NSString *what, BOOL (^done)(void)) {
+    __block NSAutoreleasePool *turn = [[NSAutoreleasePool alloc] init];
+    eventWait(what, ^BOOL {
+        [turn drain];
+        turn = [[NSAutoreleasePool alloc] init];
+        return done();
+    });
+    [turn drain];
+}
 
 static double nowSeconds(void) {
     return NSDate.date.timeIntervalSince1970;
 }
 
-// Pumps the run loop until done() holds or the limit passes. Returns done().
-static BOOL pumpUntil(NSTimeInterval limit, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:limit];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        @autoreleasepool {
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-        }
+// Waits for a round trip of JavaScript to the WebContent process of the view. The process sends its messages to the host in
+// order, so every message that the page posted before the round trip has arrived when its answer arrives.
+static void roundTrip(WKWebView *view, NSString *what) {
+    __block BOOL answered = NO;
+    [view evaluateJavaScript:@"0" completionHandler:^(id value, NSError *error) {
+        (void)value;
+        (void)error;
+        answered = YES;
+    }];
+    waitTurns(what, ^BOOL { return answered; });
+}
+
+// Waits until the process ends. Its exit is a dispatch source of the main queue; a process that ended before the source was
+// made gives no event, so a process that cannot be read once the source exists has ended.
+static void waitProcessEnd(pid_t process, NSString *what) {
+    __block BOOL ended = NO;
+    dispatch_source_t source = dispatch_source_create(DISPATCH_SOURCE_TYPE_PROC, (uintptr_t)process, DISPATCH_PROC_EXIT,
+        dispatch_get_main_queue());
+    if (!source) {
+        fprintf(stderr, "FAIL: the exit observation of the process %d cannot start\n", process);
+        exit(1);
     }
-    return done();
+    dispatch_source_set_event_handler(source, ^{ ended = YES; });
+    dispatch_resume(source);
+    waitTurns(what, ^BOOL {
+        struct proc_bsdinfo info;
+        return ended || proc_pidinfo(process, PROC_PIDTBSDINFO, 0, &info, sizeof info) != (int)sizeof info;
+    });
+    dispatch_source_cancel(source);
+    dispatch_release(source);
 }
 
 // The physical footprint (bytes) of the process, or -1 when the process cannot be read.
@@ -94,12 +125,10 @@ static void runStep(WKWebView *view, long changes) {
         failure = [error retain];
         finished = YES;
     }];
-    if (!pumpUntil(stepLimit, ^BOOL { return finished; })) {
-        failStep(step, @"the page did not finish the changes within 120 seconds", view);
-    }
+    waitTurns(@"the page finishes the changes", ^BOOL { return finished; });
     if (failure) failStep(step, [NSString stringWithFormat:@"the page script failed: %@", failure.localizedDescription], view);
-    // The state reports of the last changes arrive after the page task that made them.
-    pumpUntil(0.5, ^BOOL { return NO; });
+    // The state reports of the last changes are posted by the page before the round trip that follows them.
+    roundTrip(view, @"the state reports of the last changes arrive");
     fprintf(stdout, "end %s elapsed %.3f s\n", step.UTF8String, nowSeconds() - started);
     fflush(stdout);
 }
@@ -145,10 +174,7 @@ static nw_listener_t serve(void) {
         if (state == nw_listener_state_ready) ready = YES;
     });
     nw_listener_start(listener);
-    if (!pumpUntil(10, ^BOOL { return ready; })) {
-        fprintf(stderr, "FAIL: the benchmark server did not start within 10 seconds\n");
-        exit(1);
-    }
+    waitTurns(@"the benchmark server is ready", ^BOOL { return ready; });
     return listener;
 }
 
@@ -203,13 +229,11 @@ int main(void) { @autoreleasepool {
         return 1;
     }
     double loadStarted = nowSeconds();
-    if (!pumpUntil(stepLimit, ^BOOL {
+    waitTurns(@"the benchmark page loads", ^BOOL {
         return view._webProcessIdentifier != 0 && !view.loading && [view.title isEqual:@"Benchmark"];
-    })) {
-        failStep(@"load", @"the benchmark page did not load within 120 seconds", view);
-    }
-    // The state reports of the load arrive after the title.
-    pumpUntil(0.5, ^BOOL { return NO; });
+    });
+    // The state reports of the load arrive after the title, before the round trip that follows the load.
+    roundTrip(view, @"the state reports of the load arrive");
     fprintf(stdout, "end load elapsed %.3f s\n", nowSeconds() - loadStarted);
     fflush(stdout);
 
@@ -239,13 +263,7 @@ int main(void) { @autoreleasepool {
     [window close];
     [window release];
     }
-    if (!pumpUntil(30, ^BOOL {
-            struct proc_bsdinfo info;
-            return proc_pidinfo(process, PROC_PIDTBSDINFO, 0, &info, sizeof info) != (int)sizeof info;
-        })) {
-        fprintf(stderr, "FAIL: the WebContent process %d of the closed document remains 30 seconds after the close\n", process);
-        return 1;
-    }
+    waitProcessEnd(process, [NSString stringWithFormat:@"the WebContent process %d of the closed document ends", process]);
     fprintf(stdout, "closed document process %d ended\n", process);
     nw_listener_cancel(listener);
     fprintf(stdout, "end benchmark elapsed %.3f s\n", nowSeconds() - started);

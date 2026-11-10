@@ -795,14 +795,14 @@ type endpointConn struct {
 	reason   string
 	// pressesReleased is set when the close of the connection released its presses; Endpoint.pressMu protects it.
 	pressesReleased bool
-	// changes are the subscription changes of the connection that wait in the queue of each topic or run there, with the last of
-	// them. Endpoint.queueMu protects it.
-	changes map[topic]*topicChanges
 	// ends are the callbacks that run when the connection closes, by their number; closed is set by the close. Both are
 	// protected by reasonMu.
 	ends    map[uint64]func()
 	endNext uint64
 	closed  bool
+	// changes are the subscription changes of the connection that wait in the queue of each topic or run there, with the last of
+	// them. Endpoint.queueMu protects it.
+	changes map[topic]*topicChanges
 }
 
 // onClose runs end when the connection closes, before close returns, or at once when it is already closed. remove takes end

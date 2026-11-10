@@ -864,7 +864,7 @@ fn watchers_belong_to_their_connection() {
     // When the connection of the last watcher closes, the page is asked to unwatch.
     while seen.try_recv().is_ok() {}
     drop(first);
-    let (window, method, params) = seen.recv_timeout(Duration::from_secs(5)).unwrap();
+    let (window, method, params) = seen.recv().unwrap();
     assert_eq!((window.as_str(), method.as_str()), ("w1", "status.unwatch"));
     assert_eq!(params, json!({"name": "core.layout"}));
     assert!(!notifier.watched("w1", "core.layout"));
@@ -936,7 +936,7 @@ fn surface_watches_are_separate() {
 
     while seen.try_recv().is_ok() {}
     request(&mut connection, 4, "status.unwatch", named);
-    let (_, method, params) = seen.recv_timeout(Duration::from_secs(5)).unwrap();
+    let (_, method, params) = seen.recv().unwrap();
     assert_eq!(method, "status.unwatch");
     assert_eq!(params, json!({"name": "probe.lines", "surface": "tab-a"}));
     assert!(
@@ -1179,17 +1179,12 @@ fn the_endpoint_records_why_a_connection_closes() {
         connection.write_all(&10u32.to_be_bytes()).unwrap();
         connection.write_all(b"{\"j").unwrap();
         drop(connection);
-        let deadline = std::time::Instant::now() + Duration::from_secs(5);
         loop {
             writer.flush().unwrap();
             let log = records::text_of(&records::read_events(&records::event_log_path(config)));
             if log.contains("connection closed: connection closed inside a frame body") {
                 break;
             }
-            assert!(
-                std::time::Instant::now() < deadline,
-                "no close record for the frame that ended early in {log:?}"
-            );
             std::thread::sleep(Duration::from_millis(10));
         }
         // The record of a close by the peer is written before the page is told that the last watcher ended.
@@ -1202,7 +1197,7 @@ fn the_endpoint_records_why_a_connection_closes() {
         );
         drop(connection);
         loop {
-            let (_, method, _) = calls.recv_timeout(Duration::from_secs(5)).unwrap();
+            let (_, method, _) = calls.recv().unwrap();
             if method == "status.unwatch" {
                 break;
             }
@@ -1302,20 +1297,16 @@ fn a_reply_to_a_connection_that_the_peer_closed_is_recorded_as_not_sent() {
             json!({"jsonrpc": "2.0", "id": 9, "method": "status.get",
                 "params": {"window": "w1", "name": "core.layout"}}),
         );
-        entered.recv_timeout(Duration::from_secs(5)).unwrap();
+        entered.recv().unwrap();
         drop(connection);
-        // The serve loop records the close by the peer before the page replies, so the reply meets a closed connection.
-        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        // The serve loop records the close by the peer before the page replies, so the reply meets a closed connection. The
+        // serve loop writes those records, and no event reports the writes, so the event log is read until each appears.
         let wait_for = |text: &str| loop {
             writer.flush().unwrap();
             let log = records::text_of(&records::read_events(&records::event_log_path(config)));
             if log.contains(text) {
                 return log;
             }
-            assert!(
-                std::time::Instant::now() < deadline,
-                "no {text:?} in {log:?}"
-            );
             std::thread::sleep(Duration::from_millis(10));
         };
         wait_for("connection closed: peer closed");
@@ -1524,17 +1515,12 @@ fn the_endpoint_records_an_accept_error() {
         let endpoint = start(config, "test-accept-error", fake);
         // The record is written by the accept loop after accept returns, and no event reports that write, so the event log is
         // read until the record appears.
-        let deadline = std::time::Instant::now() + Duration::from_secs(5);
         loop {
             writer.flush().unwrap();
             let log = records::text_of(&records::read_events(&records::event_log_path(config)));
             if log.contains("error host endpoint accept: accept fault") {
                 break;
             }
-            assert!(
-                std::time::Instant::now() < deadline,
-                "no accept record in {log:?}"
-            );
             std::thread::sleep(Duration::from_millis(10));
         }
         endpoint.stop();
@@ -1621,10 +1607,7 @@ fn a_zero_ready_termination_intent_replies_before_the_actual_socket_closes() {
         .unwrap()
         .expect("normal result must precede terminal EOF");
     assert_eq!(response, json!({"jsonrpc":"2.0","id":71,"result":null}));
-    assert_eq!(
-        rx.recv_timeout(Duration::from_secs(5)).unwrap(),
-        endpoint::ReplyOutcome::Written
-    );
+    assert_eq!(rx.recv().unwrap(), endpoint::ReplyOutcome::Written);
     assert_eq!(endpoint::read_frame(&mut client).unwrap(), None);
 }
 

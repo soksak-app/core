@@ -765,11 +765,7 @@ func TestWatchersBelongToTheirConnection(t *testing.T) {
 	}
 	// When a connection closes, the watches of that connection disappear and the page receives the release.
 	_ = second.Close()
-	select {
-	case <-backend.unwatched:
-	case <-time.After(2 * time.Second):
-		t.Fatalf("page did not receive status.unwatch after the last watcher closed")
-	}
+	<-backend.unwatched
 	if endpoint.Watching("main", "core.layout") {
 		t.Fatal("the registry lists a watch after the last watcher closed")
 	}
@@ -830,11 +826,7 @@ func TestSurfaceWatchesAreSeparate(t *testing.T) {
 	if err != nil || got.Method != "status.changed" {
 		t.Fatalf("the watch without surface got %+v (%v)", got, err)
 	}
-	select {
-	case <-backend.unwatched:
-	case <-time.After(2 * time.Second):
-		t.Fatal("page did not receive status.unwatch")
-	}
+	<-backend.unwatched
 	backend.mu.Lock()
 	last := backend.bodies[len(backend.bodies)-1]
 	backend.mu.Unlock()
@@ -1371,11 +1363,7 @@ func TestEndpointRecordsWhyAConnectionCloses(t *testing.T) {
 		t.Fatalf("status.watch: %+v", got)
 	}
 	_ = conn.Close()
-	select {
-	case <-backend.unwatched:
-	case <-time.After(2 * time.Second):
-		t.Fatal("page did not receive status.unwatch after the last watcher closed")
-	}
+	<-backend.unwatched
 	closeRecord(t, written, "peer closed")
 }
 
@@ -1392,27 +1380,18 @@ func TestEndpointRecordsAReadErrorInsideAFrame(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = conn.Close()
-	deadline := time.Now().Add(5 * time.Second)
-	for !strings.Contains(written(), "connection closed: connection closed inside a frame body") {
-		if time.Now().After(deadline) {
-			t.Fatalf("no close record for the frame that ended early:\n%s", written())
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	waitForLog(t, written, "connection closed: connection closed inside a frame body")
 }
 
 // waitForLog reads the log until it holds text. The records are written by the connection goroutines, and no event reports
-// those writes, so the log is read until the record appears.
+// those writes, so the log is read until the record appears; a record that never appears leaves the check to the limit of
+// its runner.
 func waitForLog(t *testing.T, written func() string, text string) string {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
 	for {
 		log := written()
 		if strings.Contains(log, text) {
 			return log
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("the log has no %q:\n%s", text, log)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -1507,11 +1486,7 @@ func TestEndpointRecordsAnAcceptError(t *testing.T) {
 	t.Cleanup(func() { _ = endpoint.Close() })
 	// The record is written by the accept goroutine after Accept returns, and no event reports that write, so the log is read until it appears.
 	want := " error host endpoint accept: accept fault"
-	deadline := time.Now().Add(5 * time.Second)
 	for !strings.Contains(written(), want) {
-		if time.Now().After(deadline) {
-			t.Fatalf("the log has no %q:\n%s", want, written())
-		}
 		time.Sleep(10 * time.Millisecond)
 	}
 }

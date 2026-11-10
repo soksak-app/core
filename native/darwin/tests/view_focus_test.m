@@ -11,6 +11,7 @@
 #import "window_facts.h"
 #import "input_inject.h"
 #import "application_log.h"
+#import "support/event_wait.h"
 #import "support/records.h"
 
 // Declared by the activation checks of make test-app-activation (tests/support/no_activation.m).
@@ -50,21 +51,6 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-// Runs the main run loop until done returns YES or 10 seconds pass, and returns the result of done.
-static BOOL waitForWithin(BOOL (^done)(void), NSTimeInterval timeoutSeconds) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:timeoutSeconds];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny
-            untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01] inMode:NSDefaultRunLoopMode dequeue:YES];
-        if (event) [NSApp sendEvent:event];
-    }
-    return done();
-}
-
-static BOOL waitFor(BOOL (^done)(void)) {
-    return waitForWithin(done, 10);
-}
-
 static void applicationEventPumpTest(void) {
     const NSInteger subtype = 23995;
     __block BOOL delivered = NO;
@@ -77,9 +63,9 @@ static void applicationEventPumpTest(void) {
         modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:0 context:nil
         subtype:(short)subtype data1:1 data2:0];
     [NSApp postEvent:event atStart:NO];
-    BOOL processed = waitForWithin(^BOOL { return delivered; }, 0.1);
+    eventWait(@"the wait dispatches the queued application event", ^BOOL { return delivered; });
     [NSEvent removeMonitor:monitor];
-    check(processed, @"waitFor dispatches a queued AppKit application event");
+    check(delivered, @"the wait dispatches a queued AppKit application event");
 }
 
 static NSDictionary *latest;
@@ -87,6 +73,7 @@ static NSDictionary *latest;
 static void changed(void *context, const char *text) {
     (void)context;
     latest = [[NSJSONSerialization JSONObjectWithData:[NSData dataWithBytes:text length:strlen(text)] options:0 error:nil] retain];
+    eventWake();
 }
 
 static void writeFile(NSString *root, NSString *path, NSString *text) {
@@ -165,6 +152,8 @@ static void storeActivationResult(sp_activate_result result, NSString *frontmost
     activationResult = result;
     activationFrontmost = snapshot;
     activationDone = YES;
+    // The answer can come from the timer of the activation limit, which does not end a turn of the run loop.
+    eventWake();
 }
 
 static void clearActivationFrontmost(void) {
@@ -273,11 +262,7 @@ static BOOL restoreFrontmost(NSRunningApplication *previous, BOOL activationAtte
         ^BOOL(pid_t previousPID) { (void)previousPID; return [previous activateWithOptions:0]; },
         NSWorkspace.sharedWorkspace.notificationCenter,
         ^BOOL(BOOL (^condition)(void)) {
-            NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-            NSRunLoop *runLoop = NSRunLoop.currentRunLoop;
-            while (!condition() && deadline.timeIntervalSinceNow > 0) {
-                [runLoop runMode:NSDefaultRunLoopMode beforeDate:deadline];
-            }
+            eventWait(@"the workspace notifies the activation of the previous frontmost application", condition);
             return condition();
         });
     pid_t actual = NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier;
@@ -345,7 +330,7 @@ static int frontmostRestoreTest(void) {
         ^BOOL(pid_t previousPID) { (void)previousPID; activationRequests++; return YES; }, center,
         ^BOOL(BOOL (^condition)(void)) { waits++; return NO; });
     check(!timeout, @"frontmost restoration fails when no activation notification arrives");
-    check(waits == 1, @"frontmost restoration applies its bounded notification wait");
+    check(waits == 1, @"frontmost restoration applies its notification wait");
 
     waits = 0;
     BOOL alreadyFrontmost = restoreFrontmostUsing(100, YES, 100,
@@ -398,9 +383,10 @@ int main(int argc, char **argv) { @autoreleasepool {
     [main loadHTMLString:mainPageHTML baseURL:nil];
     // WebKit sends the title of the page to the web view apart from the end of its navigation, and in some runs after it, so the
     // page is ready when both arrived.
-    BOOL mainReady = waitFor(^BOOL {
+    eventWait(@"the main page finishes its navigation and its title arrives", ^BOOL {
         return (mainPage.finished && [main.title isEqual:@"main-ready"]) || mainPage.failure != nil;
-    }) && mainPage.failure == nil;
+    });
+    BOOL mainReady = mainPage.failure == nil;
     check(mainReady, mainPage.failure
         ? [NSString stringWithFormat:@"the registered app DOM web view finishes its main page before activation (%@)", mainPage.failure]
         : [NSString stringWithFormat:@"the registered app DOM web view finishes its main page before activation (finished %d, title \"%@\")",
@@ -440,11 +426,7 @@ int main(int argc, char **argv) { @autoreleasepool {
     check(frame[4] == 1, @"a later presentation restores the wanted view");
     latest = nil;
     check(sp_document_load(view, "soksak://probe/ui/page.html"), @"the view loads the page of its plugin");
-    if (!waitFor(^BOOL { return [latest[@"title"] isEqual:@"ready"]; })) {
-        fprintf(stderr, "FAIL: the view page did not load within 10 seconds\n");
-        restoreFrontmost(previous, activation);
-        return 1;
-    }
+    eventWait(@"the view page reports that it has loaded", ^BOOL { return [latest[@"title"] isEqual:@"ready"]; });
 
     if (activation) {
         activationDone = NO;
@@ -452,7 +434,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         activationFrontmost = nil;
         NSArray<NSDictionary *> *events = capturedEvents(^{
             sp_input_activate(window, activationReported, NULL);
-            (void)waitFor(^BOOL { return activationDone; });
+            eventWait(@"the activation answers", ^BOOL { return activationDone; });
         });
         NSString *report = inputActivityErrorReport(events);
         if (report.length > 0) fprintf(stderr, "%s\n", report.UTF8String);
@@ -472,14 +454,16 @@ int main(int argc, char **argv) { @autoreleasepool {
     // The press and the release are at the center of the view, which is inside the text field of the view page.
     [window sendEvent:mouseEvent(window, NSEventTypeLeftMouseDown, NSMakePoint(250, 200), 1, 1)];
     [window sendEvent:mouseEvent(window, NSEventTypeLeftMouseUp, NSMakePoint(250, 200), 1, 0)];
-    check(waitFor(^BOOL { return [latest[@"title"] isEqual:@"down"]; }), @"the page of the view receives the press");
+    eventWait(@"the page of the view reports the press", ^BOOL { return [latest[@"title"] isEqual:@"down"]; });
+    check([latest[@"title"] isEqual:@"down"], @"the page of the view receives the press");
     if (activation) {
         NSTimeInterval time = NSProcessInfo.processInfo.systemUptime;
         [NSApp sendEvent:[NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:0 timestamp:time
             windowNumber:window.windowNumber context:nil characters:@"x" charactersIgnoringModifiers:@"x" isARepeat:NO keyCode:7]];
         [NSApp sendEvent:[NSEvent keyEventWithType:NSEventTypeKeyUp location:NSZeroPoint modifierFlags:0 timestamp:time
             windowNumber:window.windowNumber context:nil characters:@"x" charactersIgnoringModifiers:@"x" isARepeat:NO keyCode:7]];
-        check(waitFor(^BOOL { return [latest[@"title"] isEqual:@"key:x"]; }),
+        eventWait(@"the page of the view reports the key x", ^BOOL { return [latest[@"title"] isEqual:@"key:x"]; });
+        check([latest[@"title"] isEqual:@"key:x"],
             [NSString stringWithFormat:@"the page of the view receives the key x (title %@)", latest[@"title"]]);
     }
 

@@ -496,6 +496,7 @@ fn invalid_json_closes_connection() {
 | `flush.buffer.closes-delivered-after-drain` | 대기열이 가득 찬 동안 버퍼에 넣은 표면 닫기 알림이 사이드카에 도착한다. | all |
 | `flush.buffer.consumed-acks-not-coalesced` | 버퍼에 넣은 consumed 응답은 같은 이미지의 두 응답을 포함해 각각 한 번 도착한다. | all |
 | `flush.buffer.delivered-after-queued-bodies` | 버퍼에 넣은 응답과 닫기 알림은 이미 대기열에 있던 본문 뒤에 도착한다. | all |
+| `flush.buffer.written-in-the-order-of-sending` | 호스트는 사이드카의 줄을 받아들인 순서로 쓴다: 대기열이 가득 찬 동안 버퍼에 넣은 응답이나 닫기 알림은 그 뒤에 대기열이 받아들이는 모든 줄보다 먼저 사이드카에 도착한다. | all |
 | `verification.flush-fixture.receives-before-cleanup` | Tauri drain scenario는 cleanup callback보다 먼저 receive callback을 호출한다. 이 test-only case는 child process나 sidecar queue를 검증하지 않는다. | tauriv2 only: 이 fixture는 Tauri sidecar test harness에 속한다 |
 | `verification.trace-switch.requires-the-test-switch` | test switch를 쥐지 않고 performance trace를 전환하는 test는 첫 호출에서 실패한다. 이 test-only case는 전환 자체를 검증하지 않는다. | tauriv2 only: 이 guard는 Rust host의 lib test에 속한다 |
 | `images.invalidate.sidecar-connection-loss-resends-configure` | 사이드카의 그림을 무효화하면 같은 크기의 configure 를 다시 보내고 다른 사이드카의 그림은 그대로 둔다. | all |
@@ -627,7 +628,7 @@ fn invalid_json_closes_connection() {
 | `sidecars.protocol.reply-with-cids-is-recorded` | 줄이 `cids`를 밝히거나 body가 `error` member를 가진 객체인 sidecar의 메시지는 event `host.sidecar.reply`이다. `name`, `surface`, body 크기 `bytes`, `ok`(`error`이면 false), 줄의 `cids`, 그 첫 번째 요청을 host가 기억하면 `micros`, 오류이면 `error` `-32603: <text>`(문자열 오류는 그 글, 다른 값은 JSON 글)를 level `warn`(오류가 없는 reply는 `info`)으로 가진다. 둘 다 없는 메시지는 이 event를 저장하지 않는다. | all |
 | `sidecars.protocol.failure-fails-the-pending-requests` | sidecar의 실패는 기다리는 요청이 있는 surface마다 level `warn`에 `ok: false`, `bytes: 0`, `error` `-32603: <reason>`(page가 받는 이유)과 그 요청들의 `cids`를 가진 event `host.sidecar.reply`를 저장한다. | all |
 | `log.input.region-event-with-cids-is-recorded` | JSON에 `cids`가 있는 image region event는 그 `cids`, region의 `surface`와 `name`, event의 `type`을 가진 level `info`의 event `host.input.relay`가 된다. `cids`가 없는 region event는 `host.input.relay`를 저장하지 않는다. | all |
-| `sidecars.stderr.lines-are-written-as-records` | 표준 입출력 사이드카의 표준 오류 각 줄과 줄바꿈 없이 끝난 마지막 글은 기록 `<time> info sidecar <name>: <line>`으로 쓴다. | all |
+| `sidecars.stderr.lines-are-written-as-records` | 표준 입출력 사이드카의 표준 오류 각 줄과 줄바꿈 없이 끝난 마지막 글은 기록 `<time> info sidecar <name>: <line>`으로 사이드카의 중지가 끝나기 전에 쓴다. | all |
 | `log.panic.records-an-event` | 진입점(`routine.Go`, `spawn_named`)으로 시작한 goroutine이나 스레드가 panic하면 프로세스가 0이 아닌 상태(Go는 2, Rust는 101)로 끝나기 전에 받은 `name`, panic 값 `text`, `stack`을 담은 `error` 수준 event `host.panic` 하나와, 그 뒤에 그 상태를 `code`로 담은 원인 `exit`의 `log.closed`를 저장한다. | all |
 | `log.panic.does-not-wait-for-the-writer` | panic hook은 writer가 멈춰 있어도 writer를 기다리지 않고 panic한 스레드에 돌아오며, writer가 풀리면 event가 저장되고 프로세스가 끝난다. | tauriv2 only: goroutine의 panic은 진입점이 recover하며 hook이 없다 |
 | `log.panic.before-writer-is-stored-when-the-writer-opens` | writer가 붙기 전의 host panic은 시작 buffer에 남고, writer가 붙으면 event가 저장되고 저장 뒤 프로세스가 상태로 끝난다. 5초 안에 붙은 writer가 없으면 프로세스는 상태로 끝나고 record와 stack이 표준 오류에 남는다. | all |
@@ -690,6 +691,7 @@ fn invalid_json_closes_connection() {
 | `images.wait.successful-handle-replies-consumed` | 주 스레드 표시에 성공한 봉투를 처리하면 consumed로 응답한다. | all |
 | `images.wait.newer-sequence-rearms-wait` | 같은 raster의 새 sequence를 결정하면 settled presentation wait가 다시 대기한다. | all |
 | `images.wait.continuous-raster-snapshot` | Continuous layout 대기는 후속 같은 raster sequence가 수락되더라도 현재 generation과 raster에 positive presented sequence가 설치되면 완료된다. Generation 또는 raster 변경은 설치된 snapshot을 지우고, presentation error는 대기를 실패시키며, 숨긴 영역은 대기를 막지 않는다. Settled 대기는 최신 accepted sequence를 계속 요구한다. | all |
+| `images.presentation.ends-with-the-sidecar-stop` | 사이드카의 중지는 main thread를 기다리는 image present와 그 뒤의 image present를 모두 `the host is stopping its sidecars`로 거부한다. main thread가 거부 뒤에 실행하거나 버리는 presentation은 기다리지 않는다. | all |
 | `images.presentation.runs-after-framework-event` | Tauri image presentation은 framework event가 lock을 놓은 뒤 commit하며, queue enqueue와 native presentation 오류를 frame handler에 그대로 전달한다. | tauriv2 only: Tauri UI callback adapter의 lock 및 오류 경계를 검증한다 |
 | `images.wait.reconfigure-clears-presented` | raster를 다시 구성하면 표시 상태를 지운다. | all |
 | `images.wait.hidden-image-does-not-block` | 숨긴 이미지는 표시 대기를 막지 않고, 다시 보이면 다시 막는다. | all |
@@ -750,7 +752,7 @@ fn invalid_json_closes_connection() {
 | `sidecars.retain.sends-authoritative-layout` | retain은 실행 중이거나 엔드포인트가 게시된 영속 서비스마다 authoritative layout 표면과 request preparation 중 허용된 session을 담은 요청을 보낸다. 이전에 알려진 일반 surface 중 layout에 없는 항목은 제외하며 남은 항목이 없으면 빈 keep 목록을 보낸다. 서비스가 닫은 수를 반환한다. | all |
 | `sidecars.retain.reports-service-failure` | `ok: false`인 `retained` 응답은 서비스의 사유를 담은 오류로 반환한다. | all |
 | `sidecars.retain.skips-service-without-endpoint` | 실행 중인 서비스와 그 엔드포인트 파일이 없으면 retain은 서비스를 시작하지 않고 아무것도 닫지 않는다. | all |
-| `sidecars.retain.timeout-names-the-request-stage` | service가 읽고 답하지 않은 retain은 10초 뒤 요청 줄의 stage, 즉 쓰인 뒤의 시간과 service에서 마지막 줄이 도착한 뒤의 시간으로 실패한다. | all |
+| `sidecars.retain.ends-by-its-answer-or-its-connection` | 서비스가 읽고 답하지 않은 retain은 어떤 시간 limit도 넘어 기다리고 그 연결이 끝날 때 `retain: the service connection ended before the answer`로 실패하며 waiter를 남기지 않는다. | all |
 | `sidecars.retain.keeps-surface-first-sent-during-start` | Persistent service가 시작된 뒤 keep 목록을 모으기 전에 처음 보낸 일반 surface session도 해당 retain에 포함된다. | all |
 | `sidecars.send.page-needs-a-project-root` | project를 보여 주지 않는 window에서 root가 기록되지 않은 surface로 보내는 page 요청은 실패하고, 어떤 sidecar에도 가지 않으며, 진행 중인 retain은 계속된다. root가 기록된 surface는 그 root로 계속 보낸다. | all |
 | `sidecars.send.host-send-leaves-no-session-without-a-root` | project를 보여 주지 않는 window에서 host의 send는 sidecar에 도달하되 root를 기록하지 않아, 어떤 retain도 그 surface를 유지하지 않는다. | all |
@@ -787,7 +789,6 @@ fn invalid_json_closes_connection() {
 | `sidecars.send.rejects-after-stop` | 사이드카가 멈춘 뒤 보내면 "stopped"로 실패한다. | all |
 | `sidecars.send.rejects-when-no-plugin-declares-sidecars` | 선언된 사이드카가 없으면 생성은 성공하고 모든 보내기는 "not declared by any plugin"으로 실패한다. | all |
 | `sidecars.start.fails-on-missing-executable` | 디스크에 없는 선언된 실행 파일은 첫 보내기를 사이드카 이름과 함께 실패시킨다. | all |
-| `sidecars.start.refuses-zero-hello-timeout` | 영값 `Sidecars`로 영속 서비스를 시작하면 서비스 생성 전에 거부하며 `HelloTimeout`을 이름 붙인 오류를 낸다. | wailsv3, mygo only: Go는 영값 `Sidecars`를 허용하지만 Tauri는 공개 영값 구조체가 아니라 builder로 사이드카 core를 만든다 |
 | `sidecars.start.passes-log-directory` | 표준 입출력 sidecar는 인자 `--log-dir <config-dir>/logs`만 받아 시작한다. | all |
 | `sidecars.declaration.refuses-missing-sidecar-json` | sidecar.json이 없는 설치 sidecar 폴더나 installed.json에 version이 없는 sidecar는 선언되지 않고, 그 sidecar에 대한 요청은 없는 파일이나 그 sidecar를 나열한 plugin.json을 밝히는 `sidecar <name>: <path>: <reason>`으로 실패한다. | all |
 | `installed.sidecars.unreadable-installation-starts-without-sidecars` | `installed.json`이 이전 형식이거나 사용 중인 plugin의 `plugin.json`이 parse되지 않으면, host 시작의 sidecar channel은 선언 없이 만들어지고, host는 `installed plugins: <error>`를 기록하며, 설치된 sidecar에 대한 요청은 `sidecar <name> is not declared by any plugin`으로 실패한다. | all |
@@ -817,12 +818,16 @@ fn invalid_json_closes_connection() {
 | `sidecars.close.repeated-close-awaits-each-answer` | 사이드카가 앞 닫기에 답하기 전에 다시 닫은 표면은 사이드카가 닫기마다 답할 때까지 닫는 중으로 남고, 어느 답도 사이드카를 실패시키지 않는다. | all |
 | `sidecars.close.unexpected-answer-fails` | host가 닫고 있지 않은 표면의 닫기 응답은 "unexpected close answer for <surface>"로 사이드카를 실패시킨다. | all |
 | `sidecars.close.process-end-clears-closing` | 사이드카 process가 답하지 않고 끝나면 그 표면은 `host.sidecars`에서 빠진다. | all |
-| `sidecars.stop.honors-stop-timeout` | 입력을 비우지 않는 사이드카의 중지는 중지 제한 시간의 두 배 안에 반환된다. | all |
-| `sidecars.stop.graceful-on-stdin-eof` | 입력 끝에서 종료하는 사이드카는 제한 시간을 기다리지 않고 멈춘다. | all |
-| `sidecars.stop.kills-after-timeout` | 입력 끝을 무시하는 사이드카는 중지 제한 시간 뒤에 강제 종료되고, 호스트는 오류 줄 "error host sidecar <name>: did not end within the stop timeout and was killed"를 쓰며 "exited while stopping" 줄은 쓰지 않는다. | all |
-| `sidecars.stop.closes-unread-output` | 멈추는 동안 표준 입출력 사이드카의 프로토콜 실패는 오류 줄 "error host sidecar <name>: failed: <reason>"을 쓰고 실패 이벤트를 전달하지 않으며, 호스트는 파이프의 자기 쪽 끝을 닫으므로, 그 뒤 파이프가 담는 것보다 많이 쓰는 사이드카는 쓰기 오류를 받고 "exited while stopping" 줄 없이 중지 제한 시간 전에 끝난다. | all |
-| `sidecars.stop.reads-output-to-end` | 멈추는 동안 호스트는 표준 입출력 사이드카의 출력을 끝날 때까지 읽는다. 중지 전에 보낸 닫기에 입력이 끝난 뒤에야 답하고 그다음 파이프가 담는 것보다 많이 쓰는 사이드카는 모든 쓰기를 마치고 중지 제한 시간 전에 끝나며, 호스트는 오류 줄을 쓰지 않는다. | all |
-| `sidecars.stop.reports-exit-status` | 멈추는 동안 종료 상태 3이나 신호 15로 끝난 표준 입출력 사이드카는 오류 줄 "error host sidecar <name>: exited while stopping: exit status 3"이나 "error host sidecar <name>: exited while stopping: signal 15"를 쓴다. | all |
+| `sidecars.stop.graceful-on-stdin-eof` | 입력 끝에서 종료하는 사이드카는 그 종료로 중지를 끝낸다. | all |
+| `sidecars.stop.terminates-the-process-group` | 중지는 표준 입출력 사이드카의 입력을 닫고 그 process group에 SIGTERM을 보낸다. 입력 끝을 무시하고 마지막 쓰기 뒤 SIGTERM에서 끝나는 사이드카는 그 종료로 중지를 끝내고, 그 group의 process도 함께 끝나며, 호스트는 그 signal로 인한 종료에 오류 줄도 "exited while stopping" 줄도 쓰지 않는다. | all |
+| `sidecars.stop.closes-unread-output` | 멈추는 동안 표준 입출력 사이드카의 프로토콜 실패는 오류 줄 "error host sidecar <name>: failed: <reason>"을 쓰고 실패 이벤트를 전달하지 않으며, 호스트는 파이프의 자기 쪽 끝을 닫으므로, 그 뒤 파이프가 담는 것보다 많이 쓰는 사이드카는 쓰기 오류를 받고, 중지는 그 오류가 일으킨 종료로 "exited while stopping" 줄 없이 끝난다. | all |
+| `sidecars.stop.reads-output-to-end` | 멈추는 동안 호스트는 표준 입출력 사이드카의 출력을 사이드카가 종료할 때까지 읽는다. 중지 전에 보낸 닫기에 입력이 끝난 뒤에야 답하고 그다음 파이프가 담는 것보다 많이 쓰는 사이드카는 모든 쓰기를 마치고 끝나며, 호스트는 오류 줄을 쓰지 않는다. | all |
+| `sidecars.stop.reports-exit-status` | 멈추는 동안 종료 상태 3이나 신호 1로 끝난 표준 입출력 사이드카는 오류 줄 "error host sidecar <name>: exited while stopping: exit status 3"이나 "error host sidecar <name>: exited while stopping: signal 1"을 쓴다. 중지 자체의 종료 신호는 그런 끝이 아니다. | all |
+| `sidecars.stop.returns-at-once-outside-the-quit` | 실행 중인 사이드카를 없애는 선언처럼 quit이 아닌 중지는 process가 종료하기 전에 반환한다. 호스트는 그 process를 종료 때 회수하고 그때 종료 줄을 쓰며, 그사이 같은 사이드카의 시작은 멈추는 process의 출력을 받지 않는 새 process를 실행한다. | all |
+| `sidecars.stop.records-what-the-quit-waits-for` | quit의 중지는 기다리는 각 process에 대해 "info host sidecar <name>: the quit waits for the exit of process <pid>"를 쓴다. | all |
+| `sidecars.stop.quit-exits-after-its-sidecars` | quit 중지는 멈추는 표준 입출력 사이드카가 실행되는 동안 exit를 거절하고, 그 사이드카의 종료로 끝나며(그 뒤 호스트는 quit을 다시 요청한다), 그다음 exit를 받아들인다. 멈출 사이드카가 없으면 exit를 바로 받아들인다. | all |
+| `sidecars.stop.second-quit-kills-what-remains` | quit 중지가 실행되는 동안의 quit 요청은 아직 종료하지 않은 표준 입출력 사이드카마다 그 프로세스 그룹에 SIGKILL을 보내고 "info host sidecar <name>: the second quit kills process <pid>"를 쓴다. 그 뒤 중지는 그 종료로 끝난다. | all |
+| `sidecars.stop.second-quit-ends-service-connections` | quit 중지가 persistent owner의 close를 기다리는 동안의 quit 요청은 그 서비스의 연결을 끝내고 "info host sidecar <name>: the second quit ends the connection of the service"를 쓴다. 그 뒤 중지는 연결의 끝으로 끝난다. | all |
 | `sidecars.stop.waits-for-no-start` | 영속 서비스가 시작하는 동안의 멈춤은 서비스가 hello에 답하기 전에 반환하고, 그 시작을 기다린 보내기는 멈춘 뒤의 보내기처럼 실패하며, 뒤에 끝나는 시작은 자기가 연 연결을 닫는다. | all |
 | `sidecars.stop.records-open-requests` | host가 sidecar를 멈추거나 떼어낼 때 응답을 기다리는 식별자 있는 요청은 `host.sidecar.reply` 오류 기록을 얻는다. 기록은 그 surface, sidecar, 식별자를 밝히며, 이유는 `the host stopped before the sidecar replied`다. surface는 이 요청에 대해 `sidecar-failure` event를 받지 않는다. | all |
 | `sidecars.reply.error-text-cut-is-marked` | 1,024바이트 한도에서 잘린 오류 글을 가진 `host.sidecar.reply`는 `truncated: true`를 가지며, 잘리지 않은 오류 글은 `truncated` member가 없다. | all |
@@ -852,9 +857,9 @@ fn invalid_json_closes_connection() {
 | `sidecars-transport.hello.client-is-the-configuration-directory` | host가 상주 service에 보내는 `hello` 메시지는 애플리케이션의 설정 폴더를 `client`로 싣는다. | all |
 | `sidecars-transport.hello.rejects-auth-failure` | 실패한 hello 응답은 보내기를 "authentication handshake failed"로 실패시킨다. | all |
 | `sidecars-transport.hello.rejects-unsupported-protocol-without-replacing-endpoint` | 다른 프로토콜의 hello 응답은 보내기를 실패시키고 endpoint.json을 바꾸지 않는다. | all |
-| `sidecars-transport.hello.times-out` | hello를 받고 답하지 않는 service는 5초 뒤 "the service did not answer hello within 5s"로 보내기를 실패시킨다. | all |
-| `sidecars-transport.hello.deadline-ends-with-its-answer` | hello 의 deadline 은 그 답과 함께 끝난다. persistent service 가 더 오래 조용해도 그 뒤에 보낸 내용은 owner 에게 도착한다. | all |
-| `sidecars-transport.startup.times-out` | 준비 상한 안에 endpoint를 출력하지 않는 시작한 service는 "the service did not print its endpoint within <bound>"로 보내기를 실패시키고, host는 그 service를 끝내고 회수한다. | all |
+| `sidecars-transport.hello.ends-by-its-reply-its-connection-or-the-stop` | hello를 받고 답하지 않는 service는 시작을 기다리게 둔다. 그 연결의 끝은 보내기를 "the service connection ended before the hello answer"로 실패시키고, 중지는 그것을 "sidecars are stopped"로 실패시키며 시작을 기다리지 않고 반환한다. | all |
+| `sidecars-transport.hello.silence-keeps-the-connection` | 호스트는 연결을 deadline 없이 읽는다. persistent service 가 hello 답 뒤에 조용해도 그 뒤에 보낸 내용은 owner 에게 도착한다. | all |
+| `sidecars-transport.startup.ends-by-the-line-the-exit-or-the-stop` | endpoint를 출력하지 않는 시작한 service는 중지까지 시작을 기다리게 두고, 중지는 그 service를 끝내고 회수하며 보내기를 "sidecars are stopped"로 실패시킨다. | all |
 | `sidecars-transport.startup.exits-before-endpoint` | endpoint 전에 끝난 시작한 service는 "service exited before endpoint"로 보내기를 실패시킨다. | all |
 | `sidecars-transport.endpoint.replaces-dead-service-endpoint` | 죽은 서비스가 남긴 엔드포인트는 새 서비스 엔드포인트로 바뀐다. | all |
 | `sidecars-transport.endpoint.live-unreachable-reported-without-replacement` | 살아 있지만 연결할 수 없는 서비스의 엔드포인트는 보내기를 실패시키고 바뀌지 않는다. | all |
@@ -885,8 +890,8 @@ fn invalid_json_closes_connection() {
 | `sidecars-transport.persistent.starts-in-new-session` | 호스트가 시작한 영속 서비스는 새 session의 leader이므로 애플리케이션의 process group이나 terminal의 signal을 받지 않는다. | all |
 | `sidecars-transport.endpoint.zombie-service-does-not-exist` | 좀비 서비스 pid 는 존재하는 서비스로 치지 않아 낡은 endpoint 를 교체한다. | all |
 | `sidecars-transport.endpoint.foreign-service-process-exists` | 다른 사용자가 소유한 프로세스의 service pid 는 존재하는 service 다. 거부된 signal 확인이 그 프로세스가 있음을 보이기 때문이다. | all |
-| `sidecars-transport.endpoint.waits-for-the-end-of-a-service-process` | service process의 종료를 기다리면 시간 안에 process가 끝났을 때와 process가 없을 때 true를, 시간이 지나도 실행 중이면 false를 답한다. | all |
-| `sidecars-transport.replace.waits-for-the-end-of-the-service-process` | 교체한 상주 service는 endpoint의 process가 끝난 뒤에만 설치된 service를 시작하고, 중지 기한 안에 끝나지 않는 process는 sidecar를 밝히는 오류 줄과 함께 교체를 실패시켜 sidecar를 오래된 채로 둔다. | all |
+| `sidecars-transport.endpoint.waits-for-the-end-of-a-service-process` | service process의 끝을 기다리면 process가 끝날 때, 그리고 process가 없을 때 true를 답하고, 실행 중에 그 중지가 오면 false를 답한다. 그 기다림을 끝내는 time limit은 없다. | all |
+| `sidecars-transport.replace.waits-for-the-end-of-the-service-process` | 교체한 상주 service는 endpoint의 process가 종료한 뒤에만 설치된 service를 시작하고, 호스트는 그 종료를 종료 event로 안다. 그 기다림 중의 중지는 교체를 "sidecars are stopped"로 실패시키고 sidecar를 오래된 채로 둔다. | all |
 | `sidecars-transport.persistent.revive-failure-is-reported` | 재시작 실패는 연결 끊김과 그 까닭을 소유 표면에 알린다. | all |
 | `sidecars-transport.persistent.oversize-line-fails-the-connection` | 64 MiB 메시지 한도보다 긴 service 줄은 줄의 나머지를 읽지 않고 연결을 닫으며, 보낸 surface에 `message exceeds 67108864 bytes`와 함께 `sidecar-failure`를 보낸다. | all |
 | `sidecars-transport.persistent.invalid-event-fails-the-connection` | JSON 객체가 아닌 service 줄이나 문자열 `surface`가 없는 surface event는 연결을 닫고 보낸 surface에 `invalid message: ...`와 함께 `sidecar-failure`를 보낸다. 다음 전송은 다시 연결한다. | all |
@@ -1051,6 +1056,9 @@ fn invalid_json_closes_connection() {
 | `quit.request.begins-the-quit-state` | quit 요청은 준비된 창이 있든 없든 quit을 실행하기 전에 종료 상태를 시작하므로, 그 종료 중의 page process 종료는 오류 줄을 쓰지 않는다. | all |
 | `project-removal.ask.waits-for-the-owner-answer` | 프로젝트의 제거 요청은 그 프로젝트를 보이는 창의 답으로 이행한다. 요청이 대기 중인 프로젝트에 대한 두 번째 요청, 요청 없는 답, 올바르지 않은 project id는 오류로 실패하고, 요청을 받은 창이 끝나면 제거해도 된다고 답한 것으로 본다. | all |
 | `project-removal.abandon.records-each-allowed-removal` | 제거에 대한 질문을 받은 창이 끝나면 제거를 허용하고, 그 요청마다 `window`와 `project`를 가진 event `host.project.removal_allowed`를 저장한다. 다른 창의 요청에는 저장하지 않는다. | all |
+| `project-removal.ask.ends-with-the-owner-page` | 제거 요청은 요청받은 창의 페이지가 끝나면(WebContent process가 끝나거나 다음 페이지가 시작하면) 끝난다. host는 그 끝의 turn에 제거해도 된다고 답한다. | all |
+| `sidecars.end.is-the-process-exit` | 표준 입출력 사이드카는 새 프로세스 그룹의 leader로 시작한다. 그 종료가 프로세스 그룹과 읽기를 끝내므로, 출력을 열어 둔 프로세스가 실행 중인 사이드카의 실패나 중지를 붙잡지 않는다. | all |
+| `sidecars-transport.stop.waits-for-no-room` | 중지는 영속 서비스의 `close-owner`와 `shutdown`을 그 queue에 자리를 기다리지 않고 보낸다. 가득 찬 queue는 닫기를 그 자리에서 실패시키고 연결을 끝낸다. | all |
 | `project.open-ready-shown-order` | project를 열 때 workbench가 새 project를 선택하기 전까지 이전에 commit된 project를 유지하며, 선택 전에는 staged project를 게시하지 않는다. | all |
 | `project.open.prepare-before-show` | 이미 보이는 project를 다시 열 때 workbench가 그 project의 root를 선택하기 전까지 commit된 root를 유지한다. | all |
 | `project.open.registers-owner-without-commit` | 새 project를 열 때 owner는 등록하지만 workbench가 표시된 project를 알릴 때까지 기존 commit 상태를 유지하고 project를 게시하지 않는다. | all |
@@ -1263,7 +1271,7 @@ fn invalid_json_closes_connection() {
 | `log.policy.endpoint-call-is-gated` | 정책이 저장하지 않는 endpoint 요청은 event를 만들지 않고 `log.gated`로 센다. | all |
 | `log.policy.counts-each-second` | writer는 닫힌 gate의 정확한 수(`log.gated`)를 이전 보고 뒤 1초가 지났을 때, flush할 때, 멈출 때 보고한다. 여러 batch 간격에 걸친 1초 미만의 거부된 event는 `log.gated`를 저장하지 않고, flush는 그 정확한 합을 저장한다. | all |
 | `log.policy.producer-builds-nothing-for-a-closed-gate` | 인자를 직렬화하는 host의 생산자는 class와 level의 gate가 닫혀 있으면 field를 만들지 않는다. | all |
-| `log.policy.closed-gate-costs-a-branch` | 닫힌 gate의 질문은 열린 gate의 enqueue보다 훨씬 싸고 넉넉한 한도 안에 머물며, 수치를 출력한다. | all |
+| `log.policy.closed-gate-costs-a-branch` | 닫힌 gate의 질문은 할당하지 않고 열린 gate의 enqueue는 할당하며, 둘의 시간은 출력하되 어떤 한도로도 판정하지 않는다. | all |
 | `log.retention.removes-the-oldest-runs-over-the-bound` | `logs/`의 실행들의 파일이 상한을 넘으면 writer는 실행을 통째로, 가장 새로운 파일이 가장 오래된 실행부터 지우고, 파일을 지우는 각 회차는 `files`, `bytes`, `runs`, `from_us`, `to_us`, `remaining`, `bound`를 담은 `log.pruned` 하나다. | all |
 | `log.retention.keeps-a-pinned-run-and-the-current-run` | writer의 실행과 `<role>-<boot>.keep` 파일이 있는 실행은 지우지 않으며, 파일이 상한을 넘은 채로 두는 회차는 level `warn`의 `log.pruned`를 저장한다. | all |
 | `log.retention.stores-nothing-under-the-bound` | 상한 안의 파일은 지우지 않고 event도 저장하지 않는다. | all |

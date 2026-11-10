@@ -6,3 +6,8 @@ use std::ffi::CStr;
 pub fn record(_name: &CStr) -> bool {
     panic!("the native ring is not supported on Windows")
 }
+
+/// Fails the test: the native ring is not supported on Windows.
+pub fn wake_is_ready() -> bool {
+    panic!("the native ring is not supported on Windows")
+}

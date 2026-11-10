@@ -175,6 +175,7 @@ fn a_reply_to_a_request_that_its_document_closed_is_an_observation() {
 #[test]
 fn send_failure_is_reported_without_waiting() {
     let relay = Relay::default();
+    // The request has no time limit, so a failed send that waited for a reply would never return.
     let failure = relay
         .request("main", |_| Err("webview is gone".into()))
         .unwrap_err();

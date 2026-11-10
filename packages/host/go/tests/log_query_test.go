@@ -12,7 +12,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
@@ -339,12 +338,8 @@ func TestAFileThatRotationOrRetentionRemovedIsNotAFailureOfTheIndex(t *testing.T
 	// away between the notice and the update.
 	observe(filepath.Join(logs, "aaa-gone-b1.jsonl"), 0)
 	observe(real, 0)
-	select {
-	case got := <-results:
-		if got != "ok host-b1.jsonl" {
-			t.Fatalf("the first result is %q, want the update of the file that exists and no failure for the file that was removed", got)
-		}
-	case <-time.After(10 * time.Second):
-		t.Fatal("no update of the index was reported")
+	got := <-results
+	if got != "ok host-b1.jsonl" {
+		t.Fatalf("the first result is %q, want the update of the file that exists and no failure for the file that was removed", got)
 	}
 }

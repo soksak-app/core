@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
-	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
@@ -40,7 +39,5 @@ func TestACreatedPolicyFileIsWatchedBeforeItsRead(t *testing.T) {
 		if !slices.Contains(watched, options.PolicyPath) {
 			t.Fatalf("the read of the created policy file started while the watch held %v, without the file", watched)
 		}
-	case <-time.After(10 * time.Second):
-		t.Fatal("no notification of the created policy file within 10 seconds")
 	}
 }

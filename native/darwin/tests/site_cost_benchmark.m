@@ -11,17 +11,20 @@
 //      a browser panel reads them, and reads the load time from the load request to the end of the load. The streams are what makes
 //      a page that changes its tree cost anything in the region;
 //   3. after 10 seconds reads the CPU of the three processes over 30 seconds with the tab shown and no input, and then their memory;
-//   4. reads the input delay of 20 native presses, from the native event of each press to the first handler of the page. The handlers
-//      cancel the press, so the page does not follow a link;
+//   4. reads the input delay of 20 native presses, from the native event of each press to the first handler of the page. Each press
+//      and each release is sent after the page handled the one before it, and the handlers cancel the press, so the page does not
+//      follow a link;
 //   5. places the region as not visible, as a tab that is not shown, and after 10 seconds reads the CPU over 30 seconds.
-// A run takes about two minutes, and seven sites of five runs about an hour. A step that cannot finish ends the run with
-// its measured state, and a run that fails ends the benchmark: a report has the same runs for each site.
+// The 10 seconds before a reading and the 30 seconds of a CPU reading are the measurement windows of the run; no other wait has a
+// time. A run takes about two minutes, and seven sites of five runs about an hour. A step that fails ends the run with its
+// measured state, and a run that fails ends the benchmark: a report has the same runs for each site.
 #import <Cocoa/Cocoa.h>
 #import <Network/Network.h>
 #import <WebKit/WebKit.h>
 #import <libproc.h>
 #import <mach/mach_time.h>
 #import <sys/resource.h>
+#import "support/event_wait.h"
 #import "support/site_cost.h"
 #import "support/temporary_folder.h"
 #import "document_view.h"
@@ -38,25 +41,24 @@ static const double kAnchorMargins[4] = { 10, 420, 10, 10 };
 // The point of each press: the middle of the region of the site, in points from the top left of the content area.
 static const double kPressX = 600;
 static const double kPressY = 210;
-// Waits at most this many seconds for a step.
-static const NSTimeInterval kStepLimit = 120;
-// The seconds between the end of a load, or the hiding of the region, and the next reading.
+// The measurement window between the end of a load, or the hiding of the region, and the next reading, in seconds.
 static const NSTimeInterval kSettleSeconds = 10;
-// The seconds of each CPU reading.
+// The measurement window of each CPU reading, in seconds.
 static const NSTimeInterval kCpuSeconds = 30;
-// A press takes this long down and this long until the next press, so the presses do not merge.
-static const NSTimeInterval kPressSeconds = 0.05;
-static const NSTimeInterval kPressGapSeconds = 0.1;
 enum { kPressCount = 20 };
-// The seconds that the processes of a run may stay after the process of the run has ended.
-static const NSTimeInterval kProcessEndLimit = 30;
 
 // Records the delay of each press and ends the press there, so the page does not act on it. The time of the event is the moment
-// that sp_input_pointer made the native event, and the delay ends at the first handler that a page can have.
+// that sp_input_pointer made the native event, and the delay ends at the first handler that a page can have. The page counts the
+// presses and the releases that it handled, and soksakHandled(type, count) resolves once the page handled count of that type.
 static NSString *const kPressScript = @"const delays = []; globalThis.soksakPressDelays = delays;"
+    "const handled = { pointerdown: 0, pointerup: 0 }; const waiting = [];"
+    "const settle = () => { for (const wait of waiting.splice(0)) {"
+    " if (handled[wait.type] >= wait.count) wait.resolve(handled[wait.type]); else waiting.push(wait); } };"
+    "globalThis.soksakHandled = (type, count) => new Promise((resolve) => { waiting.push({ type, count, resolve }); settle(); });"
     "addEventListener('pointerdown', (event) => { delays.push(performance.now() - event.timeStamp);"
-    " event.preventDefault(); event.stopImmediatePropagation(); }, true);"
-    "for (const type of ['pointerup', 'mousedown', 'mouseup', 'click'])"
+    " event.preventDefault(); event.stopImmediatePropagation(); handled.pointerdown++; settle(); }, true);"
+    "addEventListener('pointerup', (event) => { event.preventDefault(); event.stopImmediatePropagation(); handled.pointerup++; settle(); }, true);"
+    "for (const type of ['mousedown', 'mouseup', 'click'])"
     " addEventListener(type, (event) => { event.preventDefault(); event.stopImmediatePropagation(); }, true);"
     "return delays.length;";
 static NSString *const kAnchorPage = @"<!doctype html><title>anchor</title>";
@@ -65,22 +67,25 @@ static double nowSeconds(void) {
     return NSDate.date.timeIntervalSince1970;
 }
 
-// Sends the application events until done() holds or the limit passes. Returns done(). The window server delivers the occlusion
-// state of a window as an application event, so the run loop alone would leave the page at the state of the creation of the window.
-static BOOL pumpUntil(NSTimeInterval limit, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:limit];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        @autoreleasepool {
-            NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]
-                inMode:NSDefaultRunLoopMode dequeue:YES];
-            if (event) [NSApp sendEvent:event];
-        }
-    }
-    return done();
+// Waits until done() holds, with an autorelease pool for each turn of the run loop: the condition drains the pool of the turn
+// before it judges, so the objects that a turn autoreleases are released at its end, as a turn of NSApp run does. The wait
+// dispatches the application events, and the window server delivers the occlusion state of a window as an application event, so
+// the page does not stay at the state of the creation of the window.
+static void waitTurns(NSString *what, BOOL (^done)(void)) {
+    __block NSAutoreleasePool *turn = [[NSAutoreleasePool alloc] init];
+    eventWait(what, ^BOOL {
+        [turn drain];
+        turn = [[NSAutoreleasePool alloc] init];
+        return done();
+    });
+    [turn drain];
 }
 
-static void pumpFor(NSTimeInterval seconds) {
-    pumpUntil(seconds, ^BOOL { return NO; });
+// Runs the run loop for a measurement window of the given seconds. The end of the window is a block of the main queue.
+static void measureFor(NSTimeInterval seconds, NSString *what) {
+    __block BOOL ended = NO;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(seconds * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{ ended = YES; });
+    waitTurns(what, ^BOOL { return ended; });
 }
 
 // Ends the run with the step and the measured state.
@@ -154,7 +159,7 @@ static nw_listener_t serve(const char *site) {
         if (state == nw_listener_state_ready) ready = YES;
     });
     nw_listener_start(listener);
-    if (!pumpUntil(10, ^BOOL { return ready; })) failStep(site, @"server", @"the server of the benchmark is not ready within 10 seconds");
+    waitTurns(@"the server of the benchmark is ready", ^BOOL { return ready; });
     return listener;
 }
 
@@ -183,7 +188,7 @@ static double measureCpu(const char *site, NSString *step, const int processes[k
     if (mach_timebase_info(&timebase) != KERN_SUCCESS) failStep(site, step, @"the mach timebase cannot be read");
     uint64_t startTicks = readCpuTicks(site, step, processes);
     double started = nowSeconds();
-    pumpFor(kCpuSeconds);
+    measureFor(kCpuSeconds, [NSString stringWithFormat:@"the CPU reading of step %@ ends", step]);
     uint64_t endTicks = readCpuTicks(site, step, processes);
     double percent = 0;
     NSString *refused = siteCostCpuPercent(startTicks, endTicks, nowSeconds() - started, timebase.numer, timebase.denom, &percent);
@@ -201,7 +206,7 @@ static id runScript(const char *site, NSString *step, WKWebView *view, NSString 
         failure = [error retain];
         done = YES;
     }];
-    if (!pumpUntil(kStepLimit, ^BOOL { return done; })) failStep(site, step, @"the page did not answer the script within 120 seconds");
+    waitTurns([NSString stringWithFormat:@"the page answers the script of step %@", step], ^BOOL { return done; });
     if (failure) failStep(site, step, [NSString stringWithFormat:@"the script failed: %@", failure.localizedDescription]);
     return [result autorelease];
 }
@@ -210,21 +215,18 @@ static id runScript(const char *site, NSString *step, WKWebView *view, NSString 
 static double measureInputDelay(const char *site, NSWindow *window, WKWebView *view) {
     NSString *step = @"input";
     runScript(site, step, view, kPressScript);
+    // Each press and each release is sent after the page handled the one before it, so the presses do not merge.
     for (int i = 0; i < kPressCount; i++) {
         sp_input_result down = sp_input_pointer(window, kPressX, kPressY, 1, 0, 0, 0);
         if (down != SP_INPUT_DELIVERED) failStep(site, step, [NSString stringWithFormat:@"press %d has the result %d", i + 1, down]);
-        pumpFor(kPressSeconds);
+        runScript(site, step, view, [NSString stringWithFormat:@"return await globalThis.soksakHandled('pointerdown', %d);", i + 1]);
         sp_input_result up = sp_input_pointer(window, kPressX, kPressY, 3, 0, 0, 0);
         if (up != SP_INPUT_DELIVERED) failStep(site, step, [NSString stringWithFormat:@"release %d has the result %d", i + 1, up]);
-        pumpFor(kPressGapSeconds);
+        runScript(site, step, view, [NSString stringWithFormat:@"return await globalThis.soksakHandled('pointerup', %d);", i + 1]);
     }
-    __block NSArray *handled = nil;
-    BOOL complete = pumpUntil(kStepLimit, ^BOOL {
-        handled = runScript(site, step, view, @"return globalThis.soksakPressDelays ?? [];");
-        return handled.count == kPressCount;
-    });
-    if (!complete) {
-        failStep(site, step, [NSString stringWithFormat:@"the page handled %lu of %d presses within 120 seconds", (unsigned long)handled.count, kPressCount]);
+    NSArray *handled = runScript(site, step, view, @"return globalThis.soksakPressDelays ?? [];");
+    if (handled.count != kPressCount) {
+        failStep(site, step, [NSString stringWithFormat:@"the page handled %lu of %d presses", (unsigned long)handled.count, kPressCount]);
     }
     double delays[kPressCount];
     for (int i = 0; i < kPressCount; i++) {
@@ -264,9 +266,7 @@ static Region openRegion(const char *site, NSString *step, void *surface, NSStri
 // The load has finished when the page is not loading and it has a title. Returns the time of that.
 static double untilLoaded(const char *site, NSString *step, Region region) {
     WKWebView *view = region.view;
-    if (!pumpUntil(kStepLimit, ^BOOL { return !view.loading && view.title.length > 0; })) {
-        failStep(site, step, @"the page did not finish loading within 120 seconds");
-    }
+    waitTurns([NSString stringWithFormat:@"the page of step %@ finishes loading", step], ^BOOL { return !view.loading && view.title.length > 0; });
     return nowSeconds();
 }
 
@@ -321,7 +321,7 @@ static void measureRun(const SiteCostSite *site, NSString *output) {
     double requested = 0;
     Region anchor = openRegion(name, @"anchor", surface, directory, kAnchorMargins, NO, [origin stringByAppendingString:@"/anchor"], &requested);
     untilLoaded(name, @"anchor", anchor);
-    pumpFor(kSettleSeconds);
+    measureFor(kSettleSeconds, @"the window before the baseline reading ends");
     pid_t graphicsBaselineProcess = anchor.view._gpuProcessIdentifier;
     pid_t networkBaselineProcess = anchor.view._networkProcessIdentifier;
     long graphicsBaseline = baselineFootprint(name, @"baseline", graphicsBaselineProcess);
@@ -333,7 +333,7 @@ static void measureRun(const SiteCostSite *site, NSString *output) {
     run.values[SiteCostLoad] = (loaded - requested) * 1000;
     fprintf(stdout, "loaded %s: title=%s elapsed %.0f ms\n", name, region.view.title.UTF8String, run.values[SiteCostLoad]);
     fflush(stdout);
-    pumpFor(kSettleSeconds);
+    measureFor(kSettleSeconds, @"the window after the load ends");
     if (!(window.occlusionState & NSWindowOcclusionStateVisible)) failStep(name, @"rest", @"the window is occluded, so the page is not shown");
 
     run.processes[0] = region.view._webProcessIdentifier;
@@ -352,7 +352,7 @@ static void measureRun(const SiteCostSite *site, NSString *output) {
     run.values[SiteCostInputDelay] = measureInputDelay(name, window, region.view);
 
     sp_document_place(region.document, kSiteMargins[0], kSiteMargins[1], kSiteMargins[2], kSiteMargins[3], false);
-    pumpFor(kSettleSeconds);
+    measureFor(kSettleSeconds, @"the window after the region is hidden ends");
     run.values[SiteCostCpuBackground] = measureCpu(name, @"background", run.processes);
     if (region.view._webProcessIdentifier != run.processes[0]) {
         failStep(name, @"background", [NSString stringWithFormat:@"the WebContent process changed from %d to %d during the run",
@@ -375,18 +375,25 @@ static void measureRun(const SiteCostSite *site, NSString *output) {
     }
 }
 
-// Waits until the process has ended. A process that the next run would meet is a failure of the run.
+// Waits until the process has ended, because a process that the next run would meet is a failure of the run. The exit is a
+// dispatch source of the main queue that records it; a process that ended before the source was made gives no event, so a
+// process that cannot be read once the source exists has ended.
 static void untilProcessEnds(const char *site, int run, int process) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:kProcessEndLimit];
-    for (;;) {
-        struct proc_bsdinfo info;
-        if (proc_pidinfo(process, PROC_PIDTBSDINFO, 0, &info, sizeof info) != (int)sizeof info) return;
-        if (deadline.timeIntervalSinceNow <= 0) {
-            fprintf(stderr, "FAIL: site %s run %d: the process %d remains %g seconds after its run ended\n", site, run, process, kProcessEndLimit);
-            exit(1);
-        }
-        [NSThread sleepForTimeInterval:0.1];
+    __block BOOL ended = NO;
+    dispatch_source_t source = dispatch_source_create(DISPATCH_SOURCE_TYPE_PROC, (uintptr_t)process, DISPATCH_PROC_EXIT,
+        dispatch_get_main_queue());
+    if (!source) {
+        fprintf(stderr, "FAIL: site %s run %d: the exit observation of the process %d cannot start\n", site, run, process);
+        exit(1);
     }
+    dispatch_source_set_event_handler(source, ^{ ended = YES; });
+    dispatch_resume(source);
+    waitTurns([NSString stringWithFormat:@"the process %d of site %s run %d ends", process, site, run], ^BOOL {
+        struct proc_bsdinfo info;
+        return ended || proc_pidinfo(process, PROC_PIDTBSDINFO, 0, &info, sizeof info) != (int)sizeof info;
+    });
+    dispatch_source_cancel(source);
+    dispatch_release(source);
 }
 
 // Runs each site `runs` times, each run in its own process, and prints each run and the report.

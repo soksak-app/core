@@ -8,6 +8,8 @@
 #import "event_ring.h"
 #import "image_region.h"
 #import "input_inject.h"
+#import "input_press_context.h"
+#import "support/event_wait.h"
 #import "support/records.h"
 #import "webview_geometry.h"
 #import "window_facts.h"
@@ -24,14 +26,44 @@ static void testEvent(void *context, const char *json) {
     (void)json;
 }
 
-static void runEvents(NSTimeInterval seconds) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:seconds];
-    while (deadline.timeIntervalSinceNow > 0) {
-        NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny
-            untilDate:[NSDate dateWithTimeIntervalSinceNow:0.02] inMode:NSDefaultRunLoopMode dequeue:YES];
-        if (pending) [NSApp sendEvent:pending];
-    }
+// Runs the main queue and the application events until a marker block queued after every block already on the main queue has run.
+static void drainMainQueue(NSString *what) {
+    __block BOOL passed = NO;
+    dispatch_async(dispatch_get_main_queue(), ^{ passed = YES; });
+    eventWait(what, ^BOOL { return passed; });
 }
+
+// Whether the press origin of the left button of window has ended. The monitor of the press origin clears it when the receipt
+// of the paired release ends, after it wrote the record of a release that the page did not receive.
+static BOOL pressOriginEnded(NSWindow *window) { return !sp_input_press_origin_point(window, 0, NULL, NULL, NULL); }
+// The navigation delegate of a page that a check loads. It is kept on its web view, which does not retain its delegate.
+@interface SPPageLoad : NSObject <WKNavigationDelegate>
+@property BOOL finished;
+@end
+@implementation SPPageLoad
+- (void)webView:(WKWebView *)view didFinishNavigation:(WKNavigation *)navigation {
+    (void)view;
+    (void)navigation;
+    self.finished = YES;
+}
+@end
+static char pageLoadKey;
+
+// Loads html into view and keeps a navigation delegate that hears when the navigation finishes.
+static void loadPage(WKWebView *view, NSString *html) {
+    SPPageLoad *load = [[[SPPageLoad alloc] init] autorelease];
+    objc_setAssociatedObject(view, &pageLoadKey, load, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    view.navigationDelegate = load;
+    [view loadHTMLString:html baseURL:nil];
+}
+
+// Waits until the navigation that loadPage started on view finishes, so the scripts of the document have run.
+static void awaitLoad(WKWebView *view) {
+    SPPageLoad *load = objc_getAssociatedObject(view, &pageLoadKey);
+    eventWait(@"the navigation of the page finishes", ^BOOL { return load.finished; });
+    view.navigationDelegate = nil;
+}
+
 
 // The real activation, which this test gives in place of AppKit.
 static BOOL reallyActive;
@@ -53,6 +85,7 @@ static BOOL testIsActive(id self, SEL selector) { return reallyActive; }
 static void pressDone(void *context, sp_input_result result, const sp_input_held *held) {
     int *out = context;
     *out = result + 1;
+    eventWake();
 }
 static void checkHiddenSurfaceRegion(void) {
     reallyActive = YES;
@@ -68,7 +101,7 @@ static void checkHiddenSurfaceRegion(void) {
     void *shown = sp_surface_create(root);
     webviewInputRegister(page);
     sp_surface_place_view(shown, page);
-    [page loadHTMLString:@"<!doctype html><style>html,body{margin:0;height:100%}</style>" baseURL:nil];
+    loadPage(page, @"<!doctype html><style>html,body{margin:0;height:100%}</style>");
     webviewSetFrame(shown, 0, 0, 500, 400);
     webviewSetSurfaceHidden(shown, false);
     sp_region_place(sp_region_create(shown, "shown", testEvent, NULL), 100, 150, 100, 50, true);
@@ -82,16 +115,19 @@ static void checkHiddenSurfaceRegion(void) {
         webviewSetFrame(surface, 0, 0, 500, 400);
         webviewSetSurfaceHidden(surface, false);
         sp_region_place(sp_region_create(surface, "hidden", testEvent, NULL), 100, 150, 100, 50, true);
-        runEvents(0.1);
+        drainMainQueue(@"the blocks that the shown surface queued run");
         webviewSetSurfaceHidden(surface, true);
     }
-    runEvents(0.6);
-    __block int down = 0, up = 0;
+    awaitLoad(page);
+    int down = 0, up = 0;
+    int *downAnswer = &down, *upAnswer = &up;
     NSString *records = capturedRecords(^{
-        sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 150, 175, 1, 0, 0, 0, 1, pressDone, &down);
-        runEvents(0.3);
-        sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 150, 175, 3, 0, 0, 0, 1, pressDone, &up);
-        runEvents(1.4);
+        sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 150, 175, 1, 0, 0, 0, 1, pressDone, downAnswer);
+        eventWait(@"the press answers", ^BOOL { return *downAnswer != 0; });
+        sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 150, 175, 3, 0, 0, 0, 1, pressDone, upAnswer);
+        // A record of a release that waited for a page is written before the receipt of that release ends and the press origin
+        // ends, so the records are judged after the release answered and its press origin ended.
+        eventWait(@"the release answers and its press origin ends", ^BOOL { return *upAnswer != 0 && pressOriginEnded(window); });
     });
     check(down == SP_INPUT_DELIVERED + 1 && up == SP_INPUT_DELIVERED + 1, [NSString stringWithFormat:@"the press and the release reach their page (%d, %d)", down, up]);
     check(![records containsString:@"paired pointer release"] && ![records containsString:@"receipt of pointerup did not arrive"],
@@ -125,6 +161,12 @@ int main(void) { @autoreleasepool {
     NSView *regionView = (NSView *)region;
     NSRect frame = [regionView convertRect:regionView.bounds toView:nil];
     NSPoint point = NSMakePoint(NSMidX(frame), NSMidY(frame));
+    // Hears when the application delivers the posted release.
+    __block BOOL released = NO;
+    id releaseMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseUp handler:^NSEvent *(NSEvent *event) {
+        released = YES;
+        return event;
+    }];
     NSString *records = capturedRecords(^{
         const NSEventType types[] = {NSEventTypeLeftMouseDown, NSEventTypeLeftMouseUp};
         for (int i = 0; i < 2; i++) {
@@ -132,8 +174,11 @@ int main(void) { @autoreleasepool {
                 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber context:nil
                 eventNumber:1 clickCount:1 pressure:i == 0 ? 1 : 0] atStart:NO];
         }
-        runEvents(1.6);
+        // The record of the release that the page does not receive is written when the receipt of the release ends, before
+        // the press origin ends.
+        eventWait(@"the posted release is delivered and its press origin ends", ^BOOL { return released && pressOriginEnded(window); });
     });
+    [NSEvent removeMonitor:releaseMonitor];
     NSRegularExpression *state = [NSRegularExpression regularExpressionWithPattern:
         @"paired pointer release was not received before press-origin cleanup: button 0, "
         @"application active at the press: no, window key at the press: no" options:0 error:NULL];

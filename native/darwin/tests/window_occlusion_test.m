@@ -7,6 +7,7 @@
 #import "window_facts.h"
 #import "webview_geometry.h"
 #import "private/webkit.h"
+#import "support/event_wait.h"
 
 static int failures = 0;
 
@@ -15,22 +16,7 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-// Occlusion state changes of the window server arrive as AppKit events. Application activation events are not taken.
-static void pump(void) {
-    NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAppKitDefined untilDate:[NSDate dateWithTimeIntervalSinceNow:0.02]
-        inMode:NSDefaultRunLoopMode dequeue:NO];
-    if (event && event.subtype != NSEventSubtypeApplicationActivated && event.subtype != NSEventSubtypeApplicationDeactivated) {
-        [NSApp sendEvent:[NSApp nextEventMatchingMask:NSEventMaskAppKitDefined untilDate:nil inMode:NSDefaultRunLoopMode dequeue:YES]];
-    }
-    [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-}
-
-static void until(BOOL (^done)(void), NSString *what) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) pump();
-    if (!done()) { fprintf(stderr, "FAIL: %s within 10 seconds\n", what.UTF8String); exit(1); }
-}
-
+// Occlusion state changes of the window server arrive as AppKit events, which the wait sends to the application.
 @interface SPNavigation : NSObject <WKNavigationDelegate>
 @property BOOL finished;
 @end
@@ -46,19 +32,18 @@ static NSString *visibility(WKWebView *view) {
         result = error ? [NSString stringWithFormat:@"error: %@", error.localizedDescription] : [value copy];
         done = YES;
     }];
-    until(^BOOL { return done; }, @"WebKit did not report document visibility");
+    eventWait(@"WebKit reports the document visibility", ^BOOL { return done; });
     return [result autorelease];
 }
 
-// Waits for one animation frame in the document. It is nil if none arrives within 5 seconds.
+// Waits for one animation frame in the document and returns its result.
 static NSString *animationFrame(WKWebView *view) {
     __block NSString *frame = nil;
     [view callAsyncJavaScript:@"return await new Promise((resolve) => requestAnimationFrame(() => resolve('frame')));"
         arguments:nil inFrame:nil inContentWorld:WKContentWorld.pageWorld completionHandler:^(id value, NSError *error) {
             frame = error ? [[NSString alloc] initWithFormat:@"error: %@", error.localizedDescription] : [value copy];
         }];
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:5];
-    while (!frame && deadline.timeIntervalSinceNow > 0) pump();
+    eventWait(@"the document runs an animation frame", ^BOOL { return frame != nil; });
     return [frame autorelease];
 }
 
@@ -66,7 +51,7 @@ static NSString *animationFrame(WKWebView *view) {
 static void afterActivityState(WKWebView *view) {
     __block BOOL done = NO;
     [view _doAfterActivityStateUpdate:^{ done = YES; }];
-    until(^BOOL { return done; }, @"WebKit did not apply the activity state");
+    eventWait(@"WebKit applies the activity state", ^BOOL { return done; });
 }
 
 int main(void) { @autoreleasepool {
@@ -95,9 +80,8 @@ int main(void) { @autoreleasepool {
     [main loadHTMLString:@"<!doctype html><body>main</body>" baseURL:nil];
     [page loadHTMLString:@"<!doctype html><body>surface</body>" baseURL:nil];
     [window orderFrontRegardless];
-    until(^BOOL { return navigation.finished && surfaceNavigation.finished
-        && (window.occlusionState & NSWindowOcclusionStateVisible) != 0; },
-        @"the main and surface pages did not load in a visible window");
+    eventWait(@"the main and surface pages load in a visible window", ^BOOL { return navigation.finished && surfaceNavigation.finished
+        && (window.occlusionState & NSWindowOcclusionStateVisible) != 0; });
     afterActivityState(main);
     afterActivityState(page);
     check([visibility(main) isEqualToString:@"visible"], @"the uncovered document is visible");
@@ -111,28 +95,28 @@ int main(void) { @autoreleasepool {
     [cover setReleasedWhenClosed:NO];
     cover.backgroundColor = NSColor.blackColor;
     [cover orderFrontRegardless];
-    until(^BOOL { return (window.occlusionState & NSWindowOcclusionStateVisible) == 0; },
-        [NSString stringWithFormat:@"the covering window did not occlude the main window (window %@ on %@ level %ld, cover %@ on %@ level %ld visible %d)",
+    eventWait([NSString stringWithFormat:@"the covering window occludes the main window (window %@ on %@ level %ld, cover %@ on %@ level %ld visible %d)",
             NSStringFromRect(window.frame), NSStringFromRect(window.screen.frame), (long)window.level,
-            NSStringFromRect(cover.frame), NSStringFromRect(cover.screen.frame), (long)cover.level, cover.isVisible]);
+            NSStringFromRect(cover.frame), NSStringFromRect(cover.screen.frame), (long)cover.level, cover.isVisible],
+        ^BOOL { return (window.occlusionState & NSWindowOcclusionStateVisible) == 0; });
     check(!sp_window_on_screen(window), @"the covered window is not on screen");
     afterActivityState(main);
     afterActivityState(page);
     NSString *covered = visibility(main);
     check([covered isEqualToString:@"visible"], [NSString stringWithFormat:@"the covered document stays visible (actual %@)", covered]);
     NSString *frame = animationFrame(main);
-    check([frame isEqualToString:@"frame"], [NSString stringWithFormat:@"the covered document runs an animation frame (result %@)", frame ?: @"none within 5 seconds"]);
+    check([frame isEqualToString:@"frame"], [NSString stringWithFormat:@"the covered document runs an animation frame (result %@)", frame]);
     covered = visibility(page);
     check([covered isEqualToString:@"visible"], [NSString stringWithFormat:@"the covered surface document stays visible (actual %@)", covered]);
     frame = animationFrame(page);
-    check([frame isEqualToString:@"frame"], [NSString stringWithFormat:@"the covered surface document runs an animation frame (result %@)", frame ?: @"none within 5 seconds"]);
+    check([frame isEqualToString:@"frame"], [NSString stringWithFormat:@"the covered surface document runs an animation frame (result %@)", frame]);
 
     check(!NSApp.isActive, @"application stays inactive");
     [cover close];
-    until(^BOOL { return (window.occlusionState & NSWindowOcclusionStateVisible) != 0; }, @"the window was not visible after the cover closed");
+    eventWait(@"the window is visible after the cover closed", ^BOOL { return (window.occlusionState & NSWindowOcclusionStateVisible) != 0; });
     check(sp_window_on_screen(window), @"the window is on screen again after the cover closed");
     [window orderOut:nil];
-    until(^BOOL { return (window.occlusionState & NSWindowOcclusionStateVisible) == 0; }, @"the ordered-out window stayed visible");
+    eventWait(@"the ordered-out window is no longer visible", ^BOOL { return (window.occlusionState & NSWindowOcclusionStateVisible) == 0; });
     check(!sp_window_on_screen(window), @"the ordered-out window is not on screen");
     check(!sp_window_on_screen(NULL), @"no window is not on screen");
     [window close];

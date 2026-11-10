@@ -5,6 +5,7 @@
 // so this check does not cover them. The window check observes that path through host.buttons.
 #import <Cocoa/Cocoa.h>
 #import "mouse_buttons.h"
+#import "support/event_wait.h"
 
 static int failures = 0;
 
@@ -24,17 +25,6 @@ static NSEvent *mouse(NSEventType type) {
     return [NSEvent mouseEventWithType:type location:NSZeroPoint modifierFlags:0
         timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:0 context:nil eventNumber:0
         clickCount:type == NSEventTypeMouseMoved ? 0 : 1 pressure:0];
-}
-
-// Takes the events of the event queue and delivers them to the application. The local event monitor receives events in this delivery.
-static void pump(NSString *what, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny
-            untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01] inMode:NSDefaultRunLoopMode dequeue:YES];
-        if (event) [NSApp sendEvent:event];
-    }
-    if (!done()) { fprintf(stderr, "FAIL: %s within 10 seconds (%lu reports)\n", what.UTF8String, (unsigned long)reports.count); exit(1); }
 }
 
 int main(void) { @autoreleasepool {
@@ -76,7 +66,9 @@ int main(void) { @autoreleasepool {
         return event;
     }];
     [NSApp postEvent:marker atStart:NO];
-    pump(@"the posted events were not delivered", ^BOOL { return drained; });
+    // eventWait takes the events of the event queue and delivers them to the application, and the local event monitor receives
+    // events in this delivery.
+    eventWait(@"the application delivers the posted events up to the marker", ^BOOL { return drained; });
     [NSEvent removeMonitor:markerMonitor];
     BOOL matching = reports.count == 7;
     for (NSArray<NSNumber *> *report in reports) {

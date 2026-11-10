@@ -12,7 +12,7 @@ mod endpoint_client;
 mod records;
 
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
 use serde_json::value::RawValue;
@@ -148,9 +148,63 @@ fn an_endpoint_request_that_the_policy_does_not_store_is_counted() {
     assert_eq!(counts["call/debug"], 2);
 }
 
+/// The allocator of this test binary: the system allocator, which counts the allocations of each thread, so a check can ask
+/// whether a call allocated.
+struct Counting;
+
+thread_local! {
+    static ALLOCATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Counts an allocation of the current thread; a thread whose locals ended counts nothing.
+fn count_allocation() {
+    ALLOCATIONS
+        .try_with(|count| count.set(count.get() + 1))
+        .ok();
+}
+
+// SAFETY: every call passes its arguments to the system allocator unchanged, and the count is a thread-local cell without a
+// destructor, which allocates nothing.
+unsafe impl std::alloc::GlobalAlloc for Counting {
+    unsafe fn alloc(&self, layout: std::alloc::Layout) -> *mut u8 {
+        count_allocation();
+        // SAFETY: the caller holds the contract of alloc, which the system allocator takes.
+        unsafe { std::alloc::GlobalAlloc::alloc(&std::alloc::System, layout) }
+    }
+
+    unsafe fn alloc_zeroed(&self, layout: std::alloc::Layout) -> *mut u8 {
+        count_allocation();
+        // SAFETY: the caller holds the contract of alloc_zeroed, which the system allocator takes.
+        unsafe { std::alloc::GlobalAlloc::alloc_zeroed(&std::alloc::System, layout) }
+    }
+
+    unsafe fn realloc(&self, ptr: *mut u8, layout: std::alloc::Layout, size: usize) -> *mut u8 {
+        count_allocation();
+        // SAFETY: the caller holds the contract of realloc for a block of the system allocator.
+        unsafe { std::alloc::GlobalAlloc::realloc(&std::alloc::System, ptr, layout, size) }
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: std::alloc::Layout) {
+        // SAFETY: the caller holds the contract of dealloc for a block of the system allocator.
+        unsafe { std::alloc::GlobalAlloc::dealloc(&std::alloc::System, ptr, layout) }
+    }
+}
+
+#[global_allocator]
+static ALLOCATOR: Counting = Counting;
+
+/// The allocations of the current thread during `rounds` calls of `call`.
+fn allocations(rounds: u32, mut call: impl FnMut()) -> usize {
+    let before = ALLOCATIONS.with(std::cell::Cell::get);
+    for _ in 0..rounds {
+        call();
+    }
+    ALLOCATIONS.with(std::cell::Cell::get) - before
+}
+
 // contract: log.policy.closed-gate-costs-a-branch
 #[test]
-fn a_closed_gate_costs_far_less_than_an_open_one_and_stays_under_a_limit() {
+fn a_closed_gate_allocates_nothing_and_its_times_are_printed() {
     use soksak_host::event_log::{Level as L, Options};
     use soksak_host::log_policy::Class;
     let directory = folder::Folder::new();
@@ -173,29 +227,37 @@ fn a_closed_gate_costs_far_less_than_an_open_one_and_stays_under_a_limit() {
     const ROUNDS: u32 = 20_000;
     let fields =
         json!({"name": "echo", "args": "[{\"a\":1}]", "micros": 1, "ok": true, "truncated": false});
+    let enqueue = || {
+        log.emit(L::Debug, "host.binding.call", &fields);
+    };
+    let question = || assert!(!log.gate(Class::Call, L::Debug), "the gate is open");
+    // An enqueue with the gate open builds the owned event; the question of a closed gate is a branch and an atomic add, which
+    // allocate nothing.
+    let enqueued = allocations(100, enqueue);
     let started = std::time::Instant::now();
     for _ in 0..ROUNDS {
-        log.emit(L::Debug, "host.binding.call", &fields);
+        enqueue();
     }
     let open_each = started.elapsed() / ROUNDS;
     narrow_calls(&log, "warn");
+    let asked = allocations(100, question);
     let started = std::time::Instant::now();
     for _ in 0..ROUNDS {
-        assert!(!log.gate(Class::Call, L::Debug), "the gate is open");
+        question();
     }
     let closed_each = started.elapsed() / ROUNDS;
+    // The times are a measurement, which the check prints and does not judge (the numbers on a quiet machine are recorded
+    // under F160.17).
     println!(
-        "an enqueue with the gate open: {open_each:?}; the question of a closed gate: {closed_each:?} ({ROUNDS} rounds)"
+        "an enqueue with the gate open: {open_each:?} and {enqueued} allocations in 100; the question of a closed gate: {closed_each:?} and {asked} allocations in 100 ({ROUNDS} rounds)"
     );
-    // The limits are generous: the closed gate is a branch and an atomic add, so it is at most a few nanoseconds on a quiet machine, and a
-    // machine under load runs it up to 100 times slower (the numbers on a quiet machine are recorded under F160.17).
-    assert!(
-        closed_each <= Duration::from_micros(25),
-        "a closed gate costs {closed_each:?} for each question, over the limit of 25 µs"
+    assert_eq!(
+        asked, 0,
+        "the allocations of 100 questions of a closed gate"
     );
     assert!(
-        closed_each * 4 < open_each,
-        "a closed gate costs {closed_each:?} and an open enqueue {open_each:?}: the closed gate is not far cheaper"
+        enqueued > 0,
+        "an enqueue with the gate open allocated nothing, so the allocations tell nothing of the closed gate"
     );
 }
 
@@ -244,16 +306,30 @@ fn the_counts_of_a_closed_gate_are_reported_each_second_and_at_a_flush() {
     .unwrap();
     records::store_every_level(&log);
     narrow_calls(&log, "warn");
+    // The least time between two reports is an input of the check: an hour, so every batch below comes before it, whatever
+    // time the batches take.
+    log.set_gated_report_interval(Duration::from_secs(3600));
+    let (sleeps, slept) = mpsc::sync_channel::<()>(1);
+    log.set_on_sleep(Box::new(move |_count_held| {
+        // A full channel already tells of a sleep, and a check that ended hears none.
+        sleeps.try_send(()).ok();
+    }));
     let fields = json!({"name": "echo", "args": "[]", "micros": 1, "ok": true, "truncated": false});
-    let started = std::time::Instant::now();
+    let path = log.path().to_path_buf();
     let mut emitted = 0u64;
-    // 400 ms of refused events cross 20 batch intervals and no second.
-    while started.elapsed() < Duration::from_millis(400) {
+    // Each round refuses an event and stores a marker, and the round ends when the writer wrote the marker and slept, so the
+    // refused events cross 20 written batches.
+    for round in 0..20 {
         log.emit(L::Debug, "host.binding.call", &fields);
         emitted += 1;
-        std::thread::sleep(Duration::from_millis(5));
+        let marker = format!("marker-{round}");
+        log.emit(
+            L::Warn,
+            "host.binding.call",
+            &json!({"name": marker, "args": "[]", "micros": 1, "ok": false, "truncated": false}),
+        );
+        await_marker(&path, &slept, &marker);
     }
-    let path = log.path().to_path_buf();
     let before = records::read_events(&path);
     let reports = before
         .iter()
@@ -261,9 +337,25 @@ fn the_counts_of_a_closed_gate_are_reported_each_second_and_at_a_flush() {
         .count();
     assert_eq!(
         reports, 0,
-        "{reports} log.gated events within 400 ms; the counts are reported each second"
+        "{reports} log.gated events before the least time between two reports passed"
     );
     log.flush().unwrap();
     let counts = gated_counts(&records::read_events(&path));
     assert_eq!(counts.get("call/debug"), Some(&emitted), "{counts:?}");
+}
+
+/// Returns when a writer that slept has written the event whose name field is `marker`: the writer sleeps only when it wrote
+/// everything that was queued.
+fn await_marker(path: &std::path::Path, slept: &mpsc::Receiver<()>, marker: &str) {
+    loop {
+        slept
+            .recv()
+            .unwrap_or_else(|_| panic!("the writer did not sleep after the marker {marker}"));
+        if records::read_events(path)
+            .iter()
+            .any(|event| event["fields"]["name"] == marker)
+        {
+            return;
+        }
+    }
 }

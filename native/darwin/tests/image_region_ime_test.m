@@ -14,6 +14,7 @@
 #import "image_region.h"
 #import "input_inject.h"
 #import "input_source.h"
+#import "support/event_wait.h"
 #import "support/ime_cli.h"
 #import "support/ime_reference_state.h"
 #import "support/ime_source_restore.h"
@@ -25,7 +26,6 @@
 
 static NSString *const ABC = @"com.apple.keylayout.ABC";
 static NSString *const KOREAN_2SET = @"com.apple.inputmethod.Korean.2SetKorean";
-static NSDate *traceDeadline = nil;
 static NSString *runSource = nil;  // The input source to return to when a run ends early.
 static BOOL focusedSourceTrace = NO;
 
@@ -36,8 +36,6 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-static BOOL pumpUntil(BOOL (^done)(void), NSDate *deadline);
-
 static NSMutableArray<NSDictionary *> *events = nil;
 
 static void regionEvent(void *context, const char *json) {
@@ -46,17 +44,13 @@ static void regionEvent(void *context, const char *json) {
     [events addObject:event ?: @{@"type": @"invalid", @"raw": [NSString stringWithUTF8String:json]}];
 }
 
-// Takes and processes application events while waiting. Activation and input method responses arrive as events.
-static BOOL pump(BOOL (^done)(void)) {
-    NSDate *localDeadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    NSDate *deadline = traceDeadline && [traceDeadline compare:localDeadline] == NSOrderedAscending
-        ? traceDeadline : localDeadline;
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny
-            untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01] inMode:NSDefaultRunLoopMode dequeue:YES];
-        if (event) [NSApp sendEvent:event];
-    }
-    return done();
+// A change of the selected input source of the system is posted to every process as a distributed notification. Its
+// observer wakes the waits, so a wait for a source judges again when the source changes, also while the application is not
+// active.
+static void inputSourceChanged(CFNotificationCenterRef center, void *observer, CFNotificationName name, const void *object,
+    CFDictionaryRef userInfo) {
+    (void)center; (void)observer; (void)name; (void)object; (void)userInfo;
+    eventWake();
 }
 
 static NSString *currentSourceID(void) {
@@ -100,15 +94,19 @@ static NSDictionary *independentSourceProbe(NSString *executable, NSString **fai
     return value;
 }
 
-static BOOL selectAndAwaitInputSource(NSString *source, NSDate *deadline) {
+// The answer of the selection can come from a timer of the library, which does not end a turn of the run loop, so the answer
+// wakes the wait.
+static BOOL selectAndAwaitInputSource(NSString *source) {
     NSString *before = currentSourceID();
     __block BOOL answered = NO;
     __block NSString *reason = nil;
     sp_input_source_select_and_await(source.UTF8String, NULL, ^(const char *error) {
         answered = YES;
         reason = error ? [NSString stringWithUTF8String:error] : nil;
+        eventWake();
     });
-    BOOL observed = pumpUntil(^BOOL { return answered; }, deadline) && reason == nil;
+    eventWait([NSString stringWithFormat:@"the selection of %@ answers", source], ^BOOL { return answered; });
+    BOOL observed = reason == nil;
     NSString *after = currentSourceID();
     BOOL matches = [after isEqualToString:source];
     if (focusedSourceTrace) {
@@ -119,16 +117,18 @@ static BOOL selectAndAwaitInputSource(NSString *source, NSDate *deadline) {
     return observed && matches;
 }
 
-static NSArray<NSString *> *outerStateRestoreErrors(NSString *outerSource, NSRunningApplication *outerApplication,
-    NSDate *deadline) {
+static NSArray<NSString *> *outerStateRestoreErrors(NSString *outerSource, NSRunningApplication *outerApplication) {
     pid_t outerPID = outerApplication.processIdentifier;
-    SPIMESelectAndAwaitSource select = ^BOOL(NSString *source) { return selectAndAwaitInputSource(source, deadline); };
+    SPIMESelectAndAwaitSource select = ^BOOL(NSString *source) { return selectAndAwaitInputSource(source); };
     SPIMEReadSource readSource = ^NSString * { return currentSourceID(); };
     SPIMEActivateProcess activate = ^BOOL(pid_t processIdentifier) {
         if (!outerApplication || outerApplication.processIdentifier != processIdentifier) return NO;
         if (NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier == processIdentifier) return YES;
-        return [outerApplication activateWithOptions:0]
-            && pumpUntil(^BOOL { return NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier == processIdentifier; }, deadline);
+        if (![outerApplication activateWithOptions:0]) return NO;
+        eventWait(@"the outer application becomes the frontmost application", ^BOOL {
+            return NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier == processIdentifier;
+        });
+        return YES;
     };
     SPIMEReadFrontmostProcess readFrontmost = ^pid_t { return NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier; };
     NSMutableArray<NSString *> *errors = [NSMutableArray arrayWithArray:
@@ -141,15 +141,18 @@ static NSArray<NSString *> *outerStateRestoreErrors(NSString *outerSource, NSRun
 static void closeTraceWindow(NSWindow *window, void *region, void *surface);
 
 static NSArray<NSString *> *baselineAndOuterRestoreErrors(NSString *baselineSource, NSString *outerSource,
-    NSRunningApplication *outerApplication, NSDate *deadline, NSWindow *window, void *region, void *surface) {
+    NSRunningApplication *outerApplication, NSWindow *window, void *region, void *surface) {
     pid_t outerPID = outerApplication.processIdentifier;
-    SPIMESelectAndAwaitSource select = ^BOOL(NSString *source) { return selectAndAwaitInputSource(source, deadline); };
+    SPIMESelectAndAwaitSource select = ^BOOL(NSString *source) { return selectAndAwaitInputSource(source); };
     SPIMEReadSource readSource = ^NSString * { return currentSourceID(); };
     SPIMEActivateProcess activate = ^BOOL(pid_t processIdentifier) {
         if (!outerApplication || outerApplication.processIdentifier != processIdentifier) return NO;
         if (NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier == processIdentifier) return YES;
-        return [outerApplication activateWithOptions:0]
-            && pumpUntil(^BOOL { return NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier == processIdentifier; }, deadline);
+        if (![outerApplication activateWithOptions:0]) return NO;
+        eventWait(@"the outer application becomes the frontmost application", ^BOOL {
+            return NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier == processIdentifier;
+        });
+        return YES;
     };
     SPIMEReadFrontmostProcess readFrontmost = ^pid_t { return NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier; };
     return sp_ime_source_cleanup_errors(baselineSource, outerSource, outerPID,
@@ -349,7 +352,7 @@ static void abandonRun(NSString *key) {
     NSRunningApplication *frontmost = NSWorkspace.sharedWorkspace.frontmostApplication;
     check(NO, [NSString stringWithFormat:@"the test window keeps the front through %@ (frontmost %@, pid %d)",
         key, frontmost.localizedName ?: @"unknown", frontmost.processIdentifier]);
-    check(selectAndAwaitInputSource(runSource, [NSDate dateWithTimeIntervalSinceNow:2]), @"the previous input source is restored");
+    check(selectAndAwaitInputSource(runSource), @"the previous input source is restored");
     exit(1);
 }
 
@@ -360,15 +363,16 @@ static void typeKey(NSWindow *window, NSString *key, NSUInteger (^answered)(void
         check(NO, [NSString stringWithFormat:@"the injector sends %@", key]);
         return;
     }
-    pump(^BOOL { return answered() > before || !holdsFront(window); });
+    eventWait([NSString stringWithFormat:@"the client answers %@ or the test window loses the front", key],
+        ^BOOL { return answered() > before || !holdsFront(window); });
     if (!holdsFront(window)) abandonRun(key);
     check(answered() > before, [NSString stringWithFormat:@"the client answers %@", key]);
 }
 
 static void selectSource(NSString *source, NSTextInputContext *context) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:2];
-    check(selectAndAwaitInputSource(source, deadline), [NSString stringWithFormat:@"%@ is selected and adopted", source]);
-    pump(^BOOL { return [context.selectedKeyboardInputSource isEqual:source]; });
+    check(selectAndAwaitInputSource(source), [NSString stringWithFormat:@"%@ is selected and adopted", source]);
+    eventWait([NSString stringWithFormat:@"the input context selects %@", source],
+        ^BOOL { return [context.selectedKeyboardInputSource isEqual:source]; });
 }
 
 // Types the first syllable (U+D55C) and Space right after the input source switch. The input method composes this syllable with a replacement range.
@@ -387,41 +391,32 @@ static void typeDddHangul(NSWindow *window, NSTextInputContext *context, NSUInte
     for (NSString *key in @[@"g", @"k", @"s", @"r", @"m", @"f", @"Space"]) typeKey(window, key, answered);
 }
 
-static BOOL pumpUntil(BOOL (^done)(void), NSDate *deadline) {
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        NSDate *pollUntil = [NSDate dateWithTimeIntervalSinceNow:MIN(0.01, deadline.timeIntervalSinceNow)];
-        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:pollUntil
-            inMode:NSDefaultRunLoopMode dequeue:YES];
-        if (event) [NSApp sendEvent:event];
-    }
-    return done();
-}
-
-static BOOL typeKeyUntil(NSWindow *window, NSString *key, NSUInteger (^answered)(void), NSDate *deadline) {
-    if (deadline.timeIntervalSinceNow <= 0) {
-        check(NO, [NSString stringWithFormat:@"the bounded trace deadline expired before %@", key]);
-        return NO;
-    }
+static BOOL traceKey(NSWindow *window, NSString *key, NSUInteger (^answered)(void)) {
     NSUInteger before = answered();
     sp_input_result down = sp_input_key(window, key.UTF8String, NULL, 0, true);
     sp_input_result up = sp_input_key(window, key.UTF8String, NULL, 0, false);
     if (down != SP_INPUT_DELIVERED || up != SP_INPUT_DELIVERED) {
-        check(NO, [NSString stringWithFormat:@"the bounded trace sends %@ (down %@, up %@)", key,
+        check(NO, [NSString stringWithFormat:@"the trace sends %@ (down %@, up %@)", key,
             @(down), @(up)]);
         return NO;
     }
-    pumpUntil(^BOOL { return answered() > before || !holdsFront(window); }, deadline);
+    eventWait([NSString stringWithFormat:@"the trace client answers %@ or the test window loses the front", key],
+        ^BOOL { return answered() > before || !holdsFront(window); });
     BOOL received = answered() > before;
     check(holdsFront(window), [NSString stringWithFormat:@"the test window keeps the front through %@", key]);
-    check(received, [NSString stringWithFormat:@"the bounded trace receives %@ before its shared deadline", key]);
+    check(received, [NSString stringWithFormat:@"the trace receives %@", key]);
     return received;
 }
 
-static BOOL selectSourceUntil(NSString *source, NSTextInputContext *context, NSDate *deadline) {
-    BOOL selected = selectAndAwaitInputSource(source, deadline);
-    check(selected, [NSString stringWithFormat:@"%@ is selected and adopted for the bounded trace", source]);
-    BOOL adopted = selected && pumpUntil(^BOOL { return [context.selectedKeyboardInputSource isEqual:source]; }, deadline);
-    check(adopted, [NSString stringWithFormat:@"%@ reaches the focused input context before the shared deadline", source]);
+static BOOL selectTraceSource(NSString *source, NSTextInputContext *context) {
+    BOOL selected = selectAndAwaitInputSource(source);
+    check(selected, [NSString stringWithFormat:@"%@ is selected and adopted for the trace", source]);
+    if (selected) {
+        eventWait([NSString stringWithFormat:@"the focused input context selects %@", source],
+            ^BOOL { return [context.selectedKeyboardInputSource isEqual:source]; });
+    }
+    BOOL adopted = selected && [context.selectedKeyboardInputSource isEqual:source];
+    check(adopted, [NSString stringWithFormat:@"%@ reaches the focused input context", source]);
     return selected && adopted;
 }
 
@@ -482,10 +477,9 @@ static void checkRegionKeyRecords(NSArray<NSDictionary *> *records, NSString *ke
 // The focused activation-tier reproduction. It compares the system input method's full text-view document and selection
 // with the image-region's committed and preedit reports after each physical-layout key.
 static void backspaceTrace(NSWindow *window, SPRecordingTextView *control, void *region) {
-    NSDate *deadline = traceDeadline;
     check(sp_event_set_boot("native-ime"), @"native input trace sets its boot identifier before recording callbacks");
     int8_t levels[] = {SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE};
-    check(sp_event_set_policy(levels), @"native input trace records are enabled for the bounded run");
+    check(sp_event_set_policy(levels), @"native input trace records are enabled for the run");
     NSMutableArray<NSDictionary *> *controlStates = [NSMutableArray array];
     NSMutableArray<NSArray<NSDictionary *> *> *controlNative = [NSMutableArray array];
     NSUInteger (^controlAnswered)(void) = ^NSUInteger {
@@ -497,11 +491,11 @@ static void backspaceTrace(NSWindow *window, SPRecordingTextView *control, void 
     [control.inputContext discardMarkedText];
     control.string = @"";
     [control.calls removeAllObjects];
-    if (!selectSourceUntil(ABC, control.inputContext, deadline)
-        || !selectSourceUntil(KOREAN_2SET, control.inputContext, deadline)) return;
-    for (NSUInteger index = 0; index < 8 && deadline.timeIntervalSinceNow > 0; index++) {
+    if (!selectTraceSource(ABC, control.inputContext)
+        || !selectTraceSource(KOREAN_2SET, control.inputContext)) return;
+    for (NSUInteger index = 0; index < 8; index++) {
         __block BOOL received = NO;
-        NSArray *native = capturedEvents(^{ received = typeKeyUntil(window, @"k", controlAnswered, deadline); });
+        NSArray *native = capturedEvents(^{ received = traceKey(window, @"k", controlAnswered); });
         NSDictionary *controlStateNow = textViewState(control);
         [controlStates addObject:controlStateNow];
         [controlNative addObject:native];
@@ -510,14 +504,14 @@ static void backspaceTrace(NSWindow *window, SPRecordingTextView *control, void 
     }
     __block BOOL backspaceReceived = NO;
     NSArray *controlBackspace = capturedEvents(^{
-        backspaceReceived = typeKeyUntil(window, @"Backspace", controlAnswered, deadline);
+        backspaceReceived = traceKey(window, @"Backspace", controlAnswered);
     });
     NSDictionary *controlAfterBackspace = textViewState(control);
     [controlStates addObject:controlAfterBackspace];
     [controlNative addObject:controlBackspace];
     printTrace(@"AppKit reference", @"Backspace", controlAfterBackspace, @{}, controlBackspace);
     __block BOOL spaceReceived = NO;
-    NSArray *controlSpace = capturedEvents(^{ spaceReceived = typeKeyUntil(window, @"Space", controlAnswered, deadline); });
+    NSArray *controlSpace = capturedEvents(^{ spaceReceived = traceKey(window, @"Space", controlAnswered); });
     NSDictionary *controlAfterSpace = textViewState(control);
     [controlStates addObject:controlAfterSpace];
     [controlNative addObject:controlSpace];
@@ -525,18 +519,20 @@ static void backspaceTrace(NSWindow *window, SPRecordingTextView *control, void 
 
     sp_region_focus(region);
     NSTextInputContext *regionContext = ((NSView *)region).inputContext;
-    check(pumpUntil(^BOOL { return NSTextInputContext.currentInputContext == regionContext; }, deadline),
+    eventWait(@"the image region input context becomes current",
+        ^BOOL { return NSTextInputContext.currentInputContext == regionContext; });
+    check(NSTextInputContext.currentInputContext == regionContext,
         @"the image region input context becomes current before the trace");
-    if (!selectSourceUntil(ABC, regionContext, deadline)
-        || !selectSourceUntil(KOREAN_2SET, regionContext, deadline)) return;
+    if (!selectTraceSource(ABC, regionContext)
+        || !selectTraceSource(KOREAN_2SET, regionContext)) return;
     [events removeAllObjects];
     NSMutableArray<NSDictionary *> *regionStates = [NSMutableArray array];
     NSMutableArray<NSArray<NSDictionary *> *> *regionNative = [NSMutableArray array];
     NSUInteger regionStart = events.count;
     NSUInteger (^regionAnswered)(void) = ^NSUInteger { return events.count; };
-    for (NSUInteger index = 0; index < 8 && deadline.timeIntervalSinceNow > 0; index++) {
+    for (NSUInteger index = 0; index < 8; index++) {
         __block BOOL received = NO;
-        NSArray *native = capturedEvents(^{ received = typeKeyUntil(window, @"k", regionAnswered, deadline); });
+        NSArray *native = capturedEvents(^{ received = traceKey(window, @"k", regionAnswered); });
         NSDictionary *state = regionState(regionStart);
         checkRegionKeyRecords(native, @"k");
         [regionStates addObject:state];
@@ -546,7 +542,7 @@ static void backspaceTrace(NSWindow *window, SPRecordingTextView *control, void 
     }
     __block BOOL regionBackspaceReceived = NO;
     NSArray *regionBackspace = capturedEvents(^{
-        regionBackspaceReceived = typeKeyUntil(window, @"Backspace", regionAnswered, deadline);
+        regionBackspaceReceived = traceKey(window, @"Backspace", regionAnswered);
     });
     NSDictionary *regionAfterBackspace = regionState(regionStart);
     checkRegionKeyRecords(regionBackspace, @"Backspace");
@@ -554,7 +550,7 @@ static void backspaceTrace(NSWindow *window, SPRecordingTextView *control, void 
     [regionNative addObject:regionBackspace];
     printTrace(@"image region", @"Backspace", @{}, regionAfterBackspace, regionBackspace);
     __block BOOL regionSpaceReceived = NO;
-    NSArray *regionSpace = capturedEvents(^{ regionSpaceReceived = typeKeyUntil(window, @"Space", regionAnswered, deadline); });
+    NSArray *regionSpace = capturedEvents(^{ regionSpaceReceived = traceKey(window, @"Space", regionAnswered); });
     NSDictionary *regionAfterSpace = regionState(regionStart);
     checkRegionKeyRecords(regionSpace, @"Space");
     [regionStates addObject:regionAfterSpace];
@@ -562,10 +558,10 @@ static void backspaceTrace(NSWindow *window, SPRecordingTextView *control, void 
     printTrace(@"image region", @"Space", @{}, regionAfterSpace, regionSpace);
 
     check(controlStates.count == 10 && regionStates.count == 10,
-        [NSString stringWithFormat:@"both inputs complete eight k keys, Backspace, and Space before the shared deadline (reference %@ states, region %@ states)",
+        [NSString stringWithFormat:@"both inputs complete eight k keys, Backspace, and Space (reference %@ states, region %@ states)",
             @(controlStates.count), @(regionStates.count)]);
     check(backspaceReceived && spaceReceived && regionBackspaceReceived && regionSpaceReceived,
-        @"both controls answer Backspace and Space before the shared deadline");
+        @"both controls answer Backspace and Space");
     NSUInteger count = MIN(controlStates.count, regionStates.count);
     for (NSUInteger index = 0; index < count; index++) {
         NSDictionary *reference = controlStates[index];
@@ -591,7 +587,6 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
     BOOL abcBaselineTrace = mode == SP_IME_CLI_ABC_BASELINE;
     BOOL focusedTrace = abcBaselineTrace;
     focusedSourceTrace = focusedTrace;
-    if (focusedTrace) traceDeadline = [NSDate dateWithTimeIntervalSinceNow:55];
     NSString *previousSource = currentSourceID();
     runSource = previousSource;
     NSRunningApplication *previousApp = [[NSWorkspace.sharedWorkspace.frontmostApplication retain] autorelease];
@@ -613,7 +608,7 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
         return 1;
     }
     if (focusedTrace) {
-        printf("PRECHECK: inputSource=%s frontmostPid=%d frontmostBundle=%s abcBaseline=%d window=single-key-window budgetSeconds=55 cleanupSeconds=5\n",
+        printf("PRECHECK: inputSource=%s frontmostPid=%d frontmostBundle=%s abcBaseline=%d window=single-key-window\n",
             previousSource.UTF8String, previousApp.processIdentifier,
             previousApp.bundleIdentifier.UTF8String ?: "unknown", abcBaselineTrace);
         NSString *expectedSource = [NSProcessInfo.processInfo.environment objectForKey:@"SOKSAK_IME_EXPECTED_OUTER_SOURCE"];
@@ -630,15 +625,13 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
         }
     }
     if (abcBaselineTrace) {
-        NSDate *setupDeadline = [NSDate dateWithTimeIntervalSinceNow:5];
         NSArray<NSString *> *setupErrors = sp_ime_source_select_errors(ABC,
-            ^BOOL(NSString *source) { return selectAndAwaitInputSource(source, setupDeadline); },
+            ^BOOL(NSString *source) { return selectAndAwaitInputSource(source); },
             ^NSString * { return currentSourceID(); });
         reportRestoreErrors(setupErrors, @"ABC baseline setup");
         if (setupErrors.count > 0) {
-            reportRestoreErrors(outerStateRestoreErrors(previousSource, previousApp,
-                [NSDate dateWithTimeIntervalSinceNow:5]), @"outer state cleanup after baseline setup failure");
-            traceDeadline = nil;
+            reportRestoreErrors(outerStateRestoreErrors(previousSource, previousApp),
+                @"outer state cleanup after baseline setup failure");
             return 1;
         }
     }
@@ -661,8 +654,8 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
     if (abcBaselineTrace) {
         [NSApp activateIgnoringOtherApps:YES];
         [window makeKeyAndOrderFront:nil];
-        check(pump(^BOOL { return NSApp.isActive && window.isKeyWindow; }),
-            @"the IME test window becomes the key window from the ABC baseline");
+        eventWait(@"the IME test window becomes the key window of the active application", ^BOOL { return holdsFront(window); });
+        check(holdsFront(window), @"the IME test window becomes the key window from the ABC baseline");
         sp_region_focus(region);
         check(window.firstResponder == (NSResponder *)region,
             @"the image region becomes first responder before selecting Korean 2-Set");
@@ -671,7 +664,7 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
     if (abcBaselineTrace) {
         NSMutableArray<NSString *> *adoptionErrors = [NSMutableArray array];
         BOOL adopted = sp_ime_source_run_after_adoption(KOREAN_2SET,
-            ^BOOL(NSString *source) { return selectAndAwaitInputSource(source, traceDeadline); },
+            ^BOOL(NSString *source) { return selectAndAwaitInputSource(source); },
             ^NSString * { return currentSourceID(); },
             ^BOOL { return NSTextInputContext.currentInputContext == context
                 && [context.selectedKeyboardInputSource isEqual:KOREAN_2SET]; },
@@ -679,31 +672,33 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
         check(adopted, @"Korean 2-Set is selected and adopted by the focused image region before the gesture");
         reportRestoreErrors(adoptionErrors, @"Korean input-context adoption");
         if (!adopted) {
-            NSDate *cleanupDeadline = [NSDate dateWithTimeIntervalSinceNow:5];
             reportRestoreErrors(baselineAndOuterRestoreErrors(ABC, previousSource, previousApp,
-                cleanupDeadline, window, region, surface), @"baseline and outer cleanup after Korean adoption failure");
-            traceDeadline = nil;
+                window, region, surface), @"baseline and outer cleanup after Korean adoption failure");
             return 1;
         }
     } else {
-        if (!selectAndAwaitInputSource(KOREAN_2SET, traceDeadline)) {
+        if (!selectAndAwaitInputSource(KOREAN_2SET)) {
             fprintf(stderr, "FAIL: the %s input source is not enabled\n", KOREAN_2SET.UTF8String);
             return 1;
         }
-        check(pump(^BOOL { return [currentSourceID() isEqual:KOREAN_2SET]; }),
+        eventWait(@"Korean 2-Set becomes the current input source", ^BOOL { return [currentSourceID() isEqual:KOREAN_2SET]; });
+        check([currentSourceID() isEqual:KOREAN_2SET],
             [NSString stringWithFormat:@"Korean 2-Set is the current input source (got %@)", currentSourceID()]);
     }
     if (!abcBaselineTrace) {
         [NSApp activateIgnoringOtherApps:YES];
         [window makeKeyAndOrderFront:nil];
-        check(pump(^BOOL { return NSApp.isActive && window.isKeyWindow; }), @"the test window becomes the key window");
+        eventWait(@"the test window becomes the key window of the active application", ^BOOL { return holdsFront(window); });
+        check(holdsFront(window), @"the test window becomes the key window");
         sp_region_focus(region);
         check(window.firstResponder == (NSResponder *)region, @"the image region is the first responder");
     }
     // Waits until the input context of the region has selected Korean 2-set before sending keys.
     if (!abcBaselineTrace) {
-        check(pump(^BOOL { return NSTextInputContext.currentInputContext == context
-                && [context.selectedKeyboardInputSource isEqual:KOREAN_2SET]; }),
+        BOOL (^regionReady)(void) = ^BOOL { return NSTextInputContext.currentInputContext == context
+            && [context.selectedKeyboardInputSource isEqual:KOREAN_2SET]; };
+        eventWait(@"the input context of the region is current and selects Korean 2-Set", regionReady);
+        check(regionReady(),
             [NSString stringWithFormat:@"the region's input context is current and selects Korean 2-Set (current %d, selected %@)",
                 NSTextInputContext.currentInputContext == context, context.selectedKeyboardInputSource]);
     }
@@ -714,12 +709,14 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
     control.calls = [NSMutableArray array];
     [window.contentView addSubview:control];
     [window makeFirstResponder:control];
-    BOOL controlContextReady = pump(^BOOL { return NSTextInputContext.currentInputContext == control.inputContext
-        && [control.inputContext.selectedKeyboardInputSource isEqual:KOREAN_2SET]; });
+    BOOL (^controlReady)(void) = ^BOOL { return NSTextInputContext.currentInputContext == control.inputContext
+        && [control.inputContext.selectedKeyboardInputSource isEqual:KOREAN_2SET]; };
+    eventWait(@"the input context of the control is current and selects Korean 2-Set", controlReady);
+    BOOL controlContextReady = controlReady();
     if (focusedTrace) {
         NSMutableArray<NSString *> *adoptionErrors = [NSMutableArray array];
         BOOL adopted = sp_ime_source_run_after_adoption(KOREAN_2SET,
-            ^BOOL(NSString *source) { return selectAndAwaitInputSource(source, traceDeadline); },
+            ^BOOL(NSString *source) { return selectAndAwaitInputSource(source); },
             ^NSString * { return currentSourceID(); },
             ^BOOL { return controlContextReady && NSTextInputContext.currentInputContext == control.inputContext
                 && [control.inputContext.selectedKeyboardInputSource isEqual:KOREAN_2SET]
@@ -727,11 +724,9 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
             ^{ backspaceTrace(window, control, region); }, adoptionErrors);
         check(adopted, @"Korean 2-Set remains adopted by both input contexts before sending keys");
         reportRestoreErrors(adoptionErrors, @"reference and image-region Korean adoption");
-        traceDeadline = nil;
-        NSDate *cleanupDeadline = [NSDate dateWithTimeIntervalSinceNow:5];
         if (abcBaselineTrace) {
             NSArray<NSString *> *restoreErrors = baselineAndOuterRestoreErrors(ABC, previousSource, previousApp,
-                cleanupDeadline, window, region, surface);
+                window, region, surface);
             reportRestoreErrors(restoreErrors, @"baseline and outer state restoration");
             NSDictionary *inProcess = sourceProbeSnapshot();
             NSData *inProcessJSON = [NSJSONSerialization dataWithJSONObject:inProcess options:NSJSONWritingFragmentsAllowed error:NULL];
@@ -758,17 +753,21 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
             }
             fflush(stdout);
         } else {
-            check(selectAndAwaitInputSource(previousSource, cleanupDeadline), @"the previous input source is restored");
-            check(pumpUntil(^BOOL { return [currentSourceID() isEqual:previousSource]; }, cleanupDeadline),
-                @"the previous input source is active before cleanup ends");
+            BOOL (^previousSourceActive)(void) = ^BOOL { return [currentSourceID() isEqual:previousSource]; };
+            check(selectAndAwaitInputSource(previousSource), @"the previous input source is restored");
+            eventWait(@"the previous input source becomes the current input source", previousSourceActive);
+            check(previousSourceActive(), @"the previous input source is active before cleanup ends");
             closeTraceWindow(window, region, surface);
             if (previousApp) {
                 [previousApp activateWithOptions:0];
-                check(pumpUntil(^BOOL { return NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier
-                    == previousApp.processIdentifier; }, cleanupDeadline),
-                    @"the frontmost application is restored before cleanup ends");
+                BOOL (^previousAppFront)(void) = ^BOOL {
+                    return NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier == previousApp.processIdentifier;
+                };
+                eventWait(@"the previous application becomes the frontmost application", previousAppFront);
+                check(previousAppFront(), @"the frontmost application is restored before cleanup ends");
             }
-            check(pumpUntil(^BOOL { return [currentSourceID() isEqual:previousSource]; }, cleanupDeadline),
+            eventWait(@"the previous input source is current after the frontmost application is restored", previousSourceActive);
+            check(previousSourceActive(),
                 [NSString stringWithFormat:@"the previous input source is active after the frontmost application is restored (got %@)",
                     currentSourceID()]);
         }
@@ -824,8 +823,10 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
     minimal.committed = [NSMutableString string];
     [window.contentView addSubview:minimal];
     [window makeFirstResponder:minimal];
-    pump(^BOOL { return NSTextInputContext.currentInputContext == minimal.inputContext
-        && [minimal.inputContext.selectedKeyboardInputSource isEqual:KOREAN_2SET]; });
+    eventWait(@"the input context of the minimal client is current and selects Korean 2-Set", ^BOOL {
+        return NSTextInputContext.currentInputContext == minimal.inputContext
+            && [minimal.inputContext.selectedKeyboardInputSource isEqual:KOREAN_2SET];
+    });
     typeDddHangul(window, minimal.inputContext, ^NSUInteger { return minimal.calls.count; });
     // Only measured values are recorded. This client is not product code; it shows the callbacks that the input method sends when there is no document.
     printf("MEASURE: minimal client committed %s, marked %s, calls %s\n", minimal.committed.UTF8String,
@@ -839,8 +840,10 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
     plain.selected = NSMakeRange(0, 0);
     [window.contentView addSubview:plain];
     [window makeFirstResponder:plain];
-    pump(^BOOL { return NSTextInputContext.currentInputContext == plain.inputContext
-        && [plain.inputContext.selectedKeyboardInputSource isEqual:KOREAN_2SET]; });
+    eventWait(@"the input context of the plain client is current and selects Korean 2-Set", ^BOOL {
+        return NSTextInputContext.currentInputContext == plain.inputContext
+            && [plain.inputContext.selectedKeyboardInputSource isEqual:KOREAN_2SET];
+    });
     __block NSUInteger plainEdits = 0;
     __block NSString *plainSeen = @"";
     typeDddHangul(window, plain.inputContext, ^NSUInteger {
@@ -851,8 +854,9 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
         [NSString stringWithFormat:@"plain NSView client with its own document: ddd한글 Space produces ddd한글 and a space (document %@)", plain.document]);
     [plain removeFromSuperview];
     sp_region_focus(region);
-    check(pump(^BOOL { return NSTextInputContext.currentInputContext == context; }),
-        @"the region's input context is current again");
+    eventWait(@"the input context of the region becomes current again",
+        ^BOOL { return NSTextInputContext.currentInputContext == context; });
+    check(NSTextInputContext.currentInputContext == context, @"the region's input context is current again");
     [events removeAllObjects];
 
     // User report: typing ddd followed by the Hangul word U+D55C U+AE00 yields ddd followed by only U+AE00. The committed input of the image region must be exactly ddd followed by the whole word.
@@ -974,7 +978,9 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
     sp_region_place(first, 10, 60, 10, 10, true);
     sp_region_focus(first);
     NSTextInputContext *firstContext = ((NSView *)first).inputContext;
-    check(pump(^BOOL { return NSTextInputContext.currentInputContext == firstContext; }),
+    eventWait(@"the input context of the region of the first focus becomes current",
+        ^BOOL { return NSTextInputContext.currentInputContext == firstContext; });
+    check(NSTextInputContext.currentInputContext == firstContext,
         @"the input context of a region focused with Korean selected is current");
     check(!activeDocumentStatesDocumentAccess(), @"image region: first focus: the document states no document access");
     for (NSString *key in @[@"g", @"k", @"s", @"Space"]) typeKey(window, key, regionAnswered);
@@ -985,8 +991,7 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
             committed, preedit, events]);
     sp_region_close(first);
 
-    check(selectAndAwaitInputSource(previousSource, [NSDate dateWithTimeIntervalSinceNow:2]),
-        @"the previous input source is restored");
+    check(selectAndAwaitInputSource(previousSource), @"the previous input source is restored");
     sp_region_close(region);
     [window close];
     [window release];
@@ -1000,7 +1005,12 @@ typedef struct {
 
 static void runIMECommand(sp_ime_cli_mode mode, void *opaque) {
     sp_ime_cli_context *context = opaque;
+    static int observer;
+    CFNotificationCenterAddObserver(CFNotificationCenterGetDistributedCenter(), &observer, inputSourceChanged,
+        kTISNotifySelectedKeyboardInputSourceChanged, NULL, CFNotificationSuspensionBehaviorDeliverImmediately);
     context->status = runIME(mode);
+    CFNotificationCenterRemoveObserver(CFNotificationCenterGetDistributedCenter(), &observer,
+        kTISNotifySelectedKeyboardInputSourceChanged, NULL);
 }
 
 int main(int argc, const char *argv[]) {

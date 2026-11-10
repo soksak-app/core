@@ -31,7 +31,7 @@ fn background_sidecar_admission_rechecks_root_after_process_start() {
             &[],
         )
     });
-    let hello = received.recv_timeout(std::time::Duration::from_secs(5));
+    let hello = received.recv();
     let admitted = hello
         .as_ref()
         .is_ok_and(|message| message["operation"] == "hello");

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"os"
 	"strings"
 	"syscall"
 	"testing"
@@ -97,7 +96,7 @@ func TestProcessWaitEndsByASignal(t *testing.T) {
 				t.Fatalf("the wait answered before the process ended: %+v", got)
 			default:
 			}
-			if err := syscall.Kill(os.Getpid(), c.signal); err != nil {
+			if err := signalSelf(c.signal); err != nil {
 				t.Fatal(err)
 			}
 			got := <-answered

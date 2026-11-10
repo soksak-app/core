@@ -7,7 +7,6 @@ import (
 	"errors"
 	"reflect"
 	"testing"
-	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 )
@@ -43,13 +42,9 @@ func TestMemoryPressureRelaysLevelAndSeq(t *testing.T) {
 		{"memory-pressure", map[string]any{"level": "warn", "seq": uint64(1)}},
 		{"memory-pressure", map[string]any{"level": "normal", "seq": uint64(2)}},
 	} {
-		select {
-		case got := <-sent:
-			if !reflect.DeepEqual(got, want) {
-				t.Fatalf("sent %#v, want %#v", got, want)
-			}
-		case <-time.After(5 * time.Second):
-			t.Fatalf("no emit of %#v within 5 seconds", want)
+		got := <-sent
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("sent %#v, want %#v", got, want)
 		}
 	}
 	failing := &fakeMemoryPressureSource{err: errors.New("failed to start the memory pressure source")}
@@ -78,21 +73,14 @@ func TestMemoryPressureReportsArriveInSeqOrderWithoutWaiting(t *testing.T) {
 		source.report("normal", 2)
 		close(reported)
 	}()
-	select {
-	case <-reported:
-	case <-time.After(5 * time.Second):
-		close(release)
-		t.Fatal("a report waited for the emit of an earlier report")
-	}
+	// The emit of the first report is held, so a report that waits for it does not return, and the check stops at the
+	// limit of its runner.
+	<-reported
 	close(release)
 	for _, want := range []string{"critical", "normal"} {
-		select {
-		case got := <-sent:
-			if got != want {
-				t.Fatalf("emitted %q, want %q in seq order", got, want)
-			}
-		case <-time.After(5 * time.Second):
-			t.Fatalf("no emit of %q within 5 seconds", want)
+		got := <-sent
+		if got != want {
+			t.Fatalf("emitted %q, want %q in seq order", got, want)
 		}
 	}
 }

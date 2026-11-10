@@ -6,13 +6,13 @@
 #import "input_inject.h"
 #import "input_virtual.h"
 #import "input_activity_wait.h"
+#import "support/event_wait.h"
 #import "support/records.h"
 #import "event_ring.h"
 #import "private/webkit.h"
 #import "webview_input.h"
 
 static int failures = 0;
-static NSString *lastEvaluationScript = nil;
 
 // When the real pointer is over the window, AppKit and WebKit also process its moves, which mix into the test events.
 // The window is placed away from the pointer, and if the pointer enters the window during the measurement, the measurement is reported invalid.
@@ -148,22 +148,7 @@ static BOOL hasRecord(NSString *records, NSArray<NSString *> *parts) {
     return NO;
 }
 
-static void until(BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
-                               beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
-    if (!done()) {
-        fprintf(stderr, "FAIL: WebKit did not answer within 10 seconds; last JavaScript: %s\n",
-            lastEvaluationScript.UTF8String ?: "none");
-        exit(1);
-    }
-}
-
 static id evaluate(WKWebView *view, NSString *script) {
-    [lastEvaluationScript release];
-    lastEvaluationScript = [script copy];
     __block BOOL done = NO;
     __block id result = nil;
     [view evaluateJavaScript:script completionHandler:^(id value, NSError *error) {
@@ -171,14 +156,61 @@ static id evaluate(WKWebView *view, NSString *script) {
         result = [value retain];
         done = YES;
     }];
-    until(^BOOL { return done; });
+    eventWait([@"JavaScript answers " stringByAppendingString:script], ^BOOL { return done; });
     return [result autorelease];
 }
 
 static void drain(WKWebView *view) {
     __block BOOL done = NO;
     [view _doAfterProcessingAllPendingMouseEvents:^{ done = YES; }];
-    until(^BOOL { return done; });
+    eventWait(@"WebKit has processed the pending mouse events", ^BOOL { return done; });
+}
+
+// The navigation delegate of a page that a check loads. It is kept on its web view, which does not retain its delegate.
+@interface SPPageLoad : NSObject <WKNavigationDelegate>
+@property BOOL finished;
+@end
+@implementation SPPageLoad
+- (void)webView:(WKWebView *)view didFinishNavigation:(WKNavigation *)navigation {
+    (void)view;
+    (void)navigation;
+    self.finished = YES;
+}
+@end
+static char pageLoadKey;
+
+// Loads html into view and keeps a navigation delegate that hears when the navigation finishes.
+static void loadPage(WKWebView *view, NSString *html) {
+    SPPageLoad *load = [[[SPPageLoad alloc] init] autorelease];
+    objc_setAssociatedObject(view, &pageLoadKey, load, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    view.navigationDelegate = load;
+    [view loadHTMLString:html baseURL:nil];
+}
+
+// Waits until the navigation that loadPage started on view finishes, so the scripts of the document have run.
+static void awaitLoad(WKWebView *view) {
+    SPPageLoad *load = objc_getAssociatedObject(view, &pageLoadKey);
+    eventWait(@"the navigation of the page finishes", ^BOOL { return load.finished; });
+    view.navigationDelegate = nil;
+}
+
+// Waits until the page of view holds condition, a JavaScript expression. The page judges condition at once and again at each
+// event of the type named type that reaches its window, after the listeners that the page added before, so the wait ends at
+// the event of the page that makes condition hold.
+static void awaitPage(WKWebView *view, NSString *what, NSString *type, NSString *condition) {
+    NSString *body = [NSString stringWithFormat:@"if (%@) return true;"
+        "await new Promise(resolve => {"
+        " const heard = () => { if (%@) { removeEventListener(eventType, heard, true); resolve(); } };"
+        " addEventListener(eventType, heard, true); });"
+        "return true;", condition, condition];
+    __block BOOL done = NO;
+    [view callAsyncJavaScript:body arguments:@{ @"eventType": type } inFrame:nil inContentWorld:WKContentWorld.pageWorld
+        completionHandler:^(id value, NSError *error) {
+            (void)value;
+            if (error) fprintf(stderr, "JavaScript: %s\n", error.localizedDescription.UTF8String);
+            done = YES;
+        }];
+    eventWait(what, ^BOOL { return done; });
 }
 
 typedef struct { BOOL done; sp_input_result result; NSUInteger seen; WKWebView *view; BOOL held; } SPReceipt;
@@ -190,21 +222,38 @@ static void received(void *context, sp_input_result result, const sp_input_held 
     // The numbers of presses and releases that the document received at completion time. Read synchronously on the main thread.
     receipt->seen = [evaluate(receipt->view, @"probe.events.filter(e=>e.type==='pointerdown'||e.type==='pointerup').length") unsignedIntegerValue];
     receipt->done = YES;
+    // The answer can come from a callback that does not end a turn of the run loop.
+    eventWake();
 }
 
-typedef struct { BOOL done; sp_input_result result; } SPAnswer;
+// The answer of an input: for a press sent while the document runs a busy script, busyEnded is set when the busy script
+// answers, and busyEndedAtAnswer keeps whether it had ended when the press answered.
+typedef struct { BOOL done; sp_input_result result; BOOL busyEnded; BOOL busyEndedAtAnswer; } SPAnswer;
 
 static void answered(void *context, sp_input_result result, const sp_input_held *held) {
     SPAnswer *state = context;
     state->result = result;
+    state->busyEndedAtAnswer = state->busyEnded;
     state->done = YES;
+    eventWake();
+}
+
+// Runs script, a busy script of the document, and sets busyEnded of state when the script answers. The document receives the
+// script before any input sent after it and answers it on the connection of the input receipts, so a receipt of that input
+// comes after the answer of the script.
+static void runBusy(WKWebView *view, NSString *script, SPAnswer *state) {
+    [view evaluateJavaScript:script completionHandler:^(id value, NSError *error) {
+        (void)value;
+        (void)error;
+        state->busyEnded = YES;
+    }];
 }
 
 static SPReceipt pointerThen(NSWindow *window, WKWebView *view, double x, double y, int phase) {
     SPReceipt receipt = {NO, SP_INPUT_REJECTED, 0, view, NO};
     SPReceipt *state = &receipt;
     sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, x, y, phase, 0, 0, 0, 1, received, state);
-    until(^BOOL { return state->done; });
+    eventWait(@"the pointer input answers", ^BOOL { return state->done; });
     return receipt;
 }
 
@@ -224,7 +273,7 @@ static SPReceipt pointerThen(NSWindow *window, WKWebView *view, double x, double
 static void runMarker(void) {
     __block BOOL ran = NO;
     dispatch_async(dispatch_get_main_queue(), ^{ ran = YES; });
-    until(^BOOL { return ran; });
+    eventWait(@"the marker block runs", ^BOOL { return ran; });
 }
 
 // Checks that the completion of a press and release is called after the document receives them. A content world that the page cannot see reports the receipt.
@@ -234,10 +283,10 @@ static void checkReceipts(void) {
     [window setReleasedWhenClosed:NO];
     SPPressedWebView *view = [[[SPPressedWebView alloc] initWithFrame:NSMakeRect(0, 0, 300, 200)] autorelease];
     window.contentView = view;
-    [view loadHTMLString:@"<!doctype html><body style='margin:0;height:200px'><script>window.probe={events:[]};"
+    loadPage(view, @"<!doctype html><body style='margin:0;height:200px'><script>window.probe={events:[]};"
         "for (const type of ['pointerdown','pointerup']) addEventListener(type,e=>probe.events.push({type}),true);"
-        "</script>" baseURL:nil];
-    until(^BOOL { return [evaluate(view, @"Boolean(window.probe)") boolValue]; });
+        "</script>");
+    awaitLoad(view);
     [window orderBack:nil];
 
     // An unregistered web view does not report receipt, so the completion is immediate on delivery.
@@ -259,12 +308,16 @@ static void checkReceipts(void) {
     check(up.result == SP_INPUT_DELIVERED && up.seen == 2,
         [NSString stringWithFormat:@"a release completes after the document received it (%d, %lu events)", up.result, (unsigned long)up.seen]);
 
-    // A busy document receives the press after it finishes, so the completion is also after that: at the completion the
-    // document already holds the press.
-    [view evaluateJavaScript:@"{const end=Date.now()+1000; while(Date.now()<end){}} null" completionHandler:nil];
-    SPReceipt late = pointerThen(window, view, 50, 50, 1);
-    check(late.result == SP_INPUT_DELIVERED && late.seen == 3,
-        [NSString stringWithFormat:@"a press completes only after a busy document received it (%d, %lu events)", late.result, (unsigned long)late.seen]);
+    // A busy document receives the press after it finishes, so the completion is also after that: when the press answers, the
+    // busy script has answered.
+    SPAnswer late = {NO, SP_INPUT_REJECTED, NO, NO};
+    SPAnswer *lateState = &late;
+    runBusy(view, @"{const end=Date.now()+1000; while(Date.now()<end){}} null", lateState);
+    sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 50, 50, 1, 0, 0, 0, 1, answered, lateState);
+    eventWait(@"the press sent to a busy document answers", ^BOOL { return lateState->done; });
+    check(late.result == SP_INPUT_DELIVERED && late.busyEndedAtAnswer,
+        [NSString stringWithFormat:@"a press completes only after a busy document is free to receive it (%d, busy script ended %d)",
+            late.result, late.busyEndedAtAnswer]);
     pointerThen(window, view, 50, 50, 3);
 
     // A scroll into a window that is not shown is refused in its turn, because that window presents nothing until it shows.
@@ -287,10 +340,10 @@ static void checkReceipts(void) {
     NSString *unreceived = capturedRecords(^{
         NSUInteger pressed = view.presses;
         sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 50, 50, 1, 0, 0, 0, 1, answered, busyState);
-        until(^BOOL { return view.presses > pressed || busyState->done; });
+        eventWait(@"the press reaches the web view", ^BOOL { return view.presses > pressed || busyState->done; });
         check(!busyState->done, @"a press into a busy document waits for its receipt");
         [window close];
-        until(^BOOL { return busyState->done; });
+        eventWait(@"the close of the window ends the press", ^BOOL { return busyState->done; });
     });
     check(busy.result == SP_INPUT_UNRECEIVED,
         [NSString stringWithFormat:@"a press that the close of its window ends is reported as not received (%d)", busy.result]);
@@ -316,6 +369,7 @@ static void queued(void *context, sp_input_result result, const sp_input_held *h
     state->result = result;
     state->done = YES;
     [state->order addObject:state->name];
+    eventWake();
 }
 
 static void checkPointerQueue(void) {
@@ -324,10 +378,10 @@ static void checkPointerQueue(void) {
     [window setReleasedWhenClosed:NO];
     WKWebView *view = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 300, 200)] autorelease];
     window.contentView = view;
-    [view loadHTMLString:@"<!doctype html><body style='margin:0;height:200px'><script>window.probe={events:[]};"
+    loadPage(view, @"<!doctype html><body style='margin:0;height:200px'><script>window.probe={events:[]};"
         "for (const type of ['pointerdown','pointerup']) addEventListener(type,e=>probe.events.push({type}),true);"
-        "</script>" baseURL:nil];
-    until(^BOOL { return [evaluate(view, @"Boolean(window.probe)") boolValue]; });
+        "</script>");
+    awaitLoad(view);
     [window orderBack:nil];
     check(webviewInputRegister(view), @"the webview of the queue registers for pointer input");
     pointerOutside(window);
@@ -341,10 +395,10 @@ static void checkPointerQueue(void) {
     sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 50, 50, 1, 0, 0, 0, 1, queued, pressState);
     sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 50, 50, 1, 5, 0, 0, 1, queued, refusedState);
     check(!refused.done, @"a request does not start while the request before it has not answered");
-    until(^BOOL { return pressState->done && refusedState->done; });
+    eventWait(@"the press and the refused request answer", ^BOOL { return pressState->done && refusedState->done; });
     check([order isEqual:@[@"press", @"refused"]] && press.result == SP_INPUT_DELIVERED && refused.result == SP_INPUT_REJECTED,
         [NSString stringWithFormat:@"each request answers once, in the order of the requests (%@, %d, %d)", order, press.result, refused.result]);
-    pointerThen(window, view, 50, 50, 3, 5);
+    pointerThen(window, view, 50, 50, 3);
     drain(view);
 
     // A request of a window that closes while it waits for its turn answers in the close turn, before the request ahead of it.
@@ -363,9 +417,9 @@ static void checkPointerQueue(void) {
     check(closed.done && !ahead.done && closed.result == SP_INPUT_REJECTED,
         [NSString stringWithFormat:@"a waiting request of a closed window answers in the close turn (done %d, ahead %d, result %d)",
             closed.done, ahead.done, closed.result]);
-    until(^BOOL { return aheadState->done; });
+    eventWait(@"the request ahead of the closed window answers", ^BOOL { return aheadState->done; });
     check([order isEqual:@[@"closed", @"ahead"]], [NSString stringWithFormat:@"each request answers once (%@)", order]);
-    pointerThen(window, view, 50, 50, 3, 5);
+    pointerThen(window, view, 50, 50, 3);
     webviewInputUnregister(view);
     [window close];
 }
@@ -589,16 +643,17 @@ static void checkIndependentWindowKeys(void) {
     second.contentView = secondView;
     NSString *html = @"<input id='field'><script>window.keys=[];"
         "addEventListener('keydown',e=>keys.push(e.key),true);</script>";
-    // The second window records the received key 200 ms late. WebContent processes delivered keys asynchronously, so the check must
-    // wait for that processing before judging. This delay reproduces processing delayed by load.
+    // The second window records the received key 200 ms late and then sends the event recorded. WebContent processes delivered
+    // keys asynchronously, so the check waits for that processing before judging. This delay reproduces processing delayed by load.
     NSString *late = @"<input id='field'><script>window.keys=[];"
-        "addEventListener('keydown',e=>{const key=e.key;setTimeout(()=>keys.push(key),200);},true);</script>";
-    [firstView loadHTMLString:html baseURL:nil];
-    [secondView loadHTMLString:late baseURL:nil];
+        "addEventListener('keydown',e=>{const key=e.key;setTimeout(()=>{keys.push(key);dispatchEvent(new Event('recorded'));},200);},true);"
+        "</script>";
+    loadPage(firstView, html);
+    loadPage(secondView, late);
     [first orderBack:nil];
     [second orderBack:nil];
-    until(^BOOL { return [evaluate(firstView, @"Boolean(window.keys)") boolValue] &&
-        [evaluate(secondView, @"Boolean(window.keys)") boolValue]; });
+    awaitLoad(firstView);
+    awaitLoad(secondView);
 
     check(sp_input_pointer(first, 20, 20, 1, 0, 0, 0) == SP_INPUT_DELIVERED &&
         sp_input_pointer(first, 20, 20, 3, 0, 0, 0) == SP_INPUT_DELIVERED,
@@ -612,11 +667,12 @@ static void checkIndependentWindowKeys(void) {
         @"a key is delivered to the first window target");
     check((sp_input_key(second, "Escape", NULL, 0, true) == SP_INPUT_DELIVERED) && (sp_input_key(second, "Escape", NULL, 0, false) == SP_INPUT_DELIVERED),
         @"Escape is delivered to the second window target");
-    until(^BOOL { return [[evaluate(firstView, @"document.getElementById('field').value") description] isEqual:@"a"]; });
+    awaitPage(firstView, @"the field of the first window takes the text a", @"input",
+        @"document.getElementById('field').value === 'a'");
     check([evaluate(firstView, @"document.getElementById('field').value") isEqual:@"a"],
         @"the first window keeps its input");
     // Waits until both windows have processed the key, then judges, and keeps the received key.
-    until(^BOOL { return [evaluate(secondView, @"keys.length") integerValue] > 0; });
+    awaitPage(secondView, @"the second window records its key", @"recorded", @"keys.length > 0");
     NSArray *firstKeys = evaluate(firstView, @"keys");
     NSArray *secondKeys = evaluate(secondView, @"keys");
     check([secondKeys isEqual:@[@"Escape"]],
@@ -665,14 +721,14 @@ static void checkClickCount(void) {
 
     WKWebView *view = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 300, 200)] autorelease];
     window.contentView = view;
-    [view loadHTMLString:@"<!doctype html><body style='margin:0;height:200px'><script>window.probe={double:0,detail:0};"
-        "addEventListener('dblclick',e=>{probe.double++;probe.detail=e.detail},true);window.ready=true;</script>" baseURL:nil];
-    until(^BOOL { return [evaluate(view, @"Boolean(window.ready)") boolValue]; });
+    loadPage(view, @"<!doctype html><body style='margin:0;height:200px'><script>window.probe={double:0,detail:0};"
+        "addEventListener('dblclick',e=>{probe.double++;probe.detail=e.detail},true);window.ready=true;</script>");
+    awaitLoad(view);
     pointerOutside(window);
     check(sp_input_pointer_clicks(window, 50, 50, 1, 0, 1) == SP_INPUT_DELIVERED && sp_input_pointer_clicks(window, 50, 50, 3, 0, 1) == SP_INPUT_DELIVERED
         && sp_input_pointer_clicks(window, 50, 50, 1, 0, 2) == SP_INPUT_DELIVERED && sp_input_pointer_clicks(window, 50, 50, 3, 0, 2) == SP_INPUT_DELIVERED,
         @"the presses of a double click are delivered to the page");
-    until(^BOOL { return [evaluate(view, @"probe.double") unsignedIntegerValue] > 0; });
+    awaitPage(view, @"the page receives the dblclick", @"dblclick", @"probe.double > 0");
     check([evaluate(view, @"probe.double") unsignedIntegerValue] == 1 && [evaluate(view, @"probe.detail") unsignedIntegerValue] == 2,
         @"the second press with the count 2 makes one dblclick with the detail 2");
     [window close];
@@ -687,30 +743,30 @@ static void checkButtonsReachPage(BOOL focused) {
     [window setReleasedWhenClosed:NO];
     WKWebView *view = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 300, 200)] autorelease];
     window.contentView = view;
-    [view loadHTMLString:@"<!doctype html><body style='margin:0;height:200px'><input id=field style='position:absolute;left:0;top:150px'><script>window.seen={};"
+    loadPage(view, @"<!doctype html><body style='margin:0;height:200px'><input id=field style='position:absolute;left:0;top:150px'><script>window.seen={};"
         "for (const type of ['pointerdown','mousedown','pointermove','mousemove','pointerup','mouseup'])"
-        "addEventListener(type,e=>{(seen[type]=seen[type]||[]).push(e.buttons)},true);window.ready=true;</script>" baseURL:nil];
-    until(^BOOL { return [evaluate(view, @"Boolean(window.ready)") boolValue]; });
+        "addEventListener(type,e=>{(seen[type]=seen[type]||[]).push(e.buttons)},true);window.ready=true;</script>");
+    awaitLoad(view);
     [window orderBack:nil];
     pointerOutside(window);
     if (focused) {
         check(sp_input_pointer(window, 20, 160, 1, 0, 0, 0) == SP_INPUT_DELIVERED && sp_input_pointer(window, 20, 160, 3, 0, 0, 0) == SP_INPUT_DELIVERED,
             @"a press focuses the field");
         drain(view);
-        until(^BOOL { return [evaluate(view, @"document.activeElement.id") isEqual:@"field"]; });
+        awaitPage(view, @"the field takes the focus", @"focus", @"document.activeElement && document.activeElement.id === 'field'");
         evaluate(view, @"seen={}; null");
     }
     NSString *mode = focused ? @"with a focused field" : @"without a focused field";
     // The input method of a focused field passes each event to WebKit later, so the next step waits for the page like a person's hand.
     check(sp_input_pointer(window, 50, 50, 1, 0, 0, 0) == SP_INPUT_DELIVERED, @"the press of a drag is delivered");
-    until(^BOOL { return [evaluate(view, @"(seen.mousedown||[]).length") unsignedIntegerValue] > 0; });
+    awaitPage(view, @"the page receives the mousedown", @"mousedown", @"(seen.mousedown||[]).length > 0");
     check((NSEvent.pressedMouseButtons & 1) != 0 && sp_input_physical_buttons() == 0,
         @"an open press is in the mask of AppKit that WebKit reads and not in the mask of a person");
     check(sp_input_pointer(window, 90, 50, 2, 0, 0, 0) == SP_INPUT_DELIVERED, @"the drag is delivered");
-    until(^BOOL { return [evaluate(view, @"(seen.mousemove||[]).length") unsignedIntegerValue] > 0; });
+    awaitPage(view, @"the page receives the mousemove", @"mousemove", @"(seen.mousemove||[]).length > 0");
     check(sp_input_pointer(window, 90, 50, 3, 0, 0, 0) == SP_INPUT_DELIVERED, @"the release of a drag is delivered");
     check(NSEvent.pressedMouseButtons == sp_input_physical_buttons(), @"a release takes the button out of the mask");
-    until(^BOOL { return [evaluate(view, @"(seen.mouseup||[]).length") unsignedIntegerValue] > 0; });
+    awaitPage(view, @"the page receives the mouseup", @"mouseup", @"(seen.mouseup||[]).length > 0");
     NSString *seen = evaluate(view, @"JSON.stringify(seen)");
     fprintf(stdout, "measured %s: mask after the release %lu, page %s\n", mode.UTF8String, (unsigned long)NSEvent.pressedMouseButtons, seen.UTF8String);
     NSDictionary *events = [NSJSONSerialization JSONObjectWithData:[seen dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
@@ -750,7 +806,7 @@ static void checkButtonsByWindow(void) {
             @"after the release the pointer presses both buttons in the second window");
         [second release];
     }
-    until(^BOOL { return NSEvent.pressedMouseButtons == 0; });
+    eventWait(@"the released window ends its open presses", ^BOOL { return NSEvent.pressedMouseButtons == 0; });
     check(NSEvent.pressedMouseButtons == 0, @"a window that goes away ends its open presses");
     check(sp_input_pointer(first, 20, 20, 1, 1, 0, 0) == SP_INPUT_DELIVERED && sp_input_pointer(first, 20, 20, 3, 1, 0, 0) == SP_INPUT_DELIVERED
         && NSEvent.pressedMouseButtons == 0, @"the pointer presses again after the window went away, and the last release leaves no button");
@@ -823,12 +879,12 @@ int main(void) { @autoreleasepool {
         "for (const type of ['pointerdown','pointerup','pointermove','click','wheel','keydown','input'])"
         " addEventListener(type,e=>probe.events.push({type,trusted:e.isTrusted,x:e.clientX,y:e.clientY,key:e.key,code:e.code}),true);"
         "</script>";
-    [view loadHTMLString:html baseURL:nil];
+    loadPage(view, html);
     [window orderBack:nil];
-    until(^BOOL { return [evaluate(view, @"Boolean(window.probe)") boolValue]; });
+    awaitLoad(view);
     __block BOOL painted = NO;
     [view _doAfterNextPresentationUpdate:^{ painted = YES; }];
-    until(^BOOL { return painted; });
+    eventWait(@"the next presentation of the page", ^BOOL { return painted; });
 
     evaluate(view, @"probe.events.length=0; null");
     pointerOutside(window);
@@ -850,11 +906,11 @@ int main(void) { @autoreleasepool {
     evaluate(view, @"probe.events.length=0; null");
     check(sp_input_pointer(window, 100, 200, 4, 0, 0, 120) == SP_INPUT_DELIVERED, @"scroll delivered");
     drain(view);
-    until(^BOOL { return [evaluate(view, @"probe.events.filter(e=>e.type==='wheel').length") intValue] > 0; });
+    awaitPage(view, @"the page receives the wheel event", @"wheel", @"probe.events.filter(e=>e.type==='wheel').length > 0");
     NSArray *wheel = evaluate(view, @"probe.events.filter(e=>e.type==='wheel')");
     check(wheel.count > 0 && ![[wheel valueForKey:@"trusted"] containsObject:@NO],
         [NSString stringWithFormat:@"scroll reaches the page as a trusted wheel event (%lu)", (unsigned long)wheel.count]);
-    until(^BOOL { return [evaluate(view, @"document.getElementById('pad').scrollTop") doubleValue] > 0; });
+    awaitPage(view, @"the element under the point scrolls", @"scroll", @"document.getElementById('pad').scrollTop > 0");
     check([evaluate(view, @"document.getElementById('pad').scrollTop") doubleValue] == 120, @"scroll moves the element under the point by the requested 120 pixels");
 
     check(sp_input_pointer(window, 50, 20, 1, 0, 0, 0) == SP_INPUT_DELIVERED && sp_input_pointer(window, 50, 20, 3, 0, 0, 0) == SP_INPUT_DELIVERED, @"field click delivered");
@@ -885,7 +941,7 @@ int main(void) { @autoreleasepool {
         check(hasRecord(records, @[@"\"kind\":\"pointer\"", @"\"pointer\":\"main\"", @"\"phase\":2", @"\"result\":\"rejected\"", @"\"reason\":\"no open press of the pointer and button in the window\""]),
             [NSString stringWithFormat:@"a rejected pointer input is recorded with its reason (got %@)", records]);
     }
-    until(^BOOL { return [evaluate(view, @"probe.events.filter(e=>e.type==='keydown').length") intValue] >= 2; });
+    awaitPage(view, @"the page receives both keydown events", @"keydown", @"probe.events.filter(e=>e.type==='keydown').length >= 2");
     NSArray *keysSeen = evaluate(view, @"probe.events.filter(e=>e.type==='keydown').map(e=>e.key)");
     check([keysSeen isEqual:@[@"a", @"Enter"]],
         [NSString stringWithFormat:@"keys reach the focused field in a window that is not key: %@", keysSeen]);
@@ -897,7 +953,7 @@ int main(void) { @autoreleasepool {
     check(equalDown == SP_INPUT_DELIVERED && equalUp == SP_INPUT_DELIVERED,
         @"the equal character is delivered through its physical ANSI key");
     if (equalDown == SP_INPUT_DELIVERED && equalUp == SP_INPUT_DELIVERED) {
-        until(^BOOL { return [evaluate(view, @"probe.events.filter(e=>e.type==='keydown').length") unsignedIntegerValue] >= 1; });
+        awaitPage(view, @"the page receives the keydown", @"keydown", @"probe.events.filter(e=>e.type==='keydown').length >= 1");
         NSArray *equalKey = evaluate(view, @"probe.events.filter(e=>e.type==='keydown').map(e=>({key:e.key,code:e.code}))");
         check([equalKey isEqual:@[@{@"key": @"=", @"code": @"Equal"}]],
             [NSString stringWithFormat:@"the equal character keeps its physical ANSI key identity: %@", equalKey]);
@@ -909,7 +965,7 @@ int main(void) { @autoreleasepool {
     check(minusDown == SP_INPUT_DELIVERED && minusUp == SP_INPUT_DELIVERED,
         @"the minus character is delivered through its physical ANSI key");
     if (minusDown == SP_INPUT_DELIVERED && minusUp == SP_INPUT_DELIVERED) {
-        until(^BOOL { return [evaluate(view, @"probe.events.filter(e=>e.type==='keydown').length") unsignedIntegerValue] >= 1; });
+        awaitPage(view, @"the page receives the keydown", @"keydown", @"probe.events.filter(e=>e.type==='keydown').length >= 1");
         NSArray *minusKey = evaluate(view, @"probe.events.filter(e=>e.type==='keydown').map(e=>({key:e.key,code:e.code}))");
         check([minusKey isEqual:@[@{@"key": @"-", @"code": @"Minus"}]],
             [NSString stringWithFormat:@"the minus character keeps its physical ANSI key identity: %@", minusKey]);
@@ -928,8 +984,8 @@ int main(void) { @autoreleasepool {
     // When another web view in the window is pressed, that web view receives key input as in AppKit.
     WKWebView *child = [[WKWebView alloc] initWithFrame:NSMakeRect(220, 0, 180, 50)];
     [view addSubview:child];
-    [child loadHTMLString:@"<!doctype html><input id='other' style='width:160px'><script>window.ready=true</script>" baseURL:nil];
-    until(^BOOL { return [evaluate(child, @"Boolean(window.ready)") boolValue]; });
+    loadPage(child, @"<!doctype html><input id='other' style='width:160px'><script>window.ready=true</script>");
+    awaitLoad(child);
     // WKWebView has a flipped coordinate system, so the frame of a subview is relative to the top left of the content area.
     check(sp_input_pointer(window, 300, 20, 1, 0, 0, 0) == SP_INPUT_DELIVERED && sp_input_pointer(window, 300, 20, 3, 0, 0, 0) == SP_INPUT_DELIVERED,
         @"child webview click delivered");
@@ -941,7 +997,7 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"child page remains responsive and focuses its input after click (got %@)", childActiveElement]);
     // In the focus routing check of the child web view, English b is specified without input source conversion.
     check((sp_input_key(window, "b", "b", 0, true) == SP_INPUT_DELIVERED) && (sp_input_key(window, "b", "b", 0, false) == SP_INPUT_DELIVERED), @"key after child click accepted");
-    until(^BOOL { return [[evaluate(child, @"document.getElementById('other').value") description] isEqual:@"b"]; });
+    awaitPage(child, @"the field of the pressed webview takes the text b", @"input", @"document.getElementById('other').value === 'b'");
     check([evaluate(child, @"document.getElementById('other').value") isEqual:@"b"], @"keys reach the pressed webview");
     check([evaluate(view, @"document.getElementById('field').value") isEqual:@"a"], @"the previous webview keeps its text");
     [child release];

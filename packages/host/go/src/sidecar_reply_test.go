@@ -73,17 +73,6 @@ func TestASidecarErrorTextCutAtTheBoundIsMarked(t *testing.T) {
 	}
 }
 
-// contract: sidecars.start.refuses-zero-hello-timeout
-// A Sidecars value that was not built by NewSidecars has no hello timeout. A zero timeout would fail every persistent service at once,
-// so the start of a persistent service refuses the value with a named error before it spawns anything.
-func TestAZeroHelloTimeoutIsRefusedBeforeAServiceStarts(t *testing.T) {
-	c := &Sidecars{}
-	_, err := c.processPersistent("probe-service", "probe-service", nil)
-	if err == nil || !strings.Contains(err.Error(), "HelloTimeout is not set") {
-		t.Fatalf("a persistent start with a zero HelloTimeout returned %v, want an error that names HelloTimeout is not set", err)
-	}
-}
-
 // contract: sidecars.disconnect.record-end
 func TestDisconnectRecordNamesHowTheConnectionEnded(t *testing.T) {
 	fields := disconnectFields("svc", 42, false, "", "eof", 2)

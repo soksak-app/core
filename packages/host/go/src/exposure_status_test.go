@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"sync"
 	"testing"
-	"time"
 	"unsafe"
 )
 
@@ -26,11 +25,7 @@ func TestAWatchStartedAfterAnUnwatchReceivesTheNextWindowStatus(t *testing.T) {
 	endpoint.StatusChanged("main", "host.window", "", open)
 
 	for n := 1; n <= 2; n++ {
-		select {
-		case <-conn.out:
-		case <-time.After(5 * time.Second):
-			t.Fatalf("the status announced by change %d did not reach the connection that watches the window", n)
-		}
+		<-conn.out
 	}
 }
 
@@ -110,31 +105,23 @@ func TestSidecarStatusNotificationDoesNotWaitForWindowRegistry(t *testing.T) {
 	}()
 	t.Cleanup(func() {
 		h.mu.Unlock()
-		select {
-		case <-done:
-		case <-time.After(5 * time.Second):
-			t.Error("sidecar status notification did not finish after registry release")
-		}
+		<-done
 	})
-	select {
-	case frame := <-conn.out:
-		data := frame.body
-		var got struct {
-			Method string
-			Params struct {
-				Name  string
-				Value struct{ Closing []ClosingSurface }
-			}
+	frame := <-conn.out
+	data := frame.body
+	var got struct {
+		Method string
+		Params struct {
+			Name  string
+			Value struct{ Closing []ClosingSurface }
 		}
-		if err := json.Unmarshal(data, &got); err != nil {
-			t.Fatal(err)
-		}
-		if got.Method != "status.changed" || got.Params.Name != "host.sidecars" ||
-			len(got.Params.Value.Closing) != 1 || got.Params.Value.Closing[0].Surface != "s1" {
-			t.Fatalf("closing transition notification = %s", data)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("closing transition notification waited for the window registry")
+	}
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Method != "status.changed" || got.Params.Name != "host.sidecars" ||
+		len(got.Params.Value.Closing) != 1 || got.Params.Value.Closing[0].Surface != "s1" {
+		t.Fatalf("closing transition notification = %s", data)
 	}
 }
 
@@ -181,13 +168,13 @@ func TestReloadAskedOfAPageEndsTheRequestsToItsSurfaces(t *testing.T) {
 		if reply.Error == nil || reply.Error.Code != codeNoWindow {
 			t.Fatalf("reply %+v, want %d", reply, codeNoWindow)
 		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("the request to a surface of the reloading page is still waiting")
 	}
-	select {
-	case reply := <-theirs:
-		t.Fatalf("the request to a surface of another window ended: %+v", reply)
-	default:
+	// The reload ends the requests that it ends before it returns, so the relay still holds the request of the other window.
+	other.host.relay.mu.Lock()
+	held := len(other.host.relay.waiting)
+	other.host.relay.mu.Unlock()
+	if held != 1 {
+		t.Fatalf("the relay holds %d requests after the reload, want the request to a surface of another window", held)
 	}
 	other.host.relay.Abandon(func(relayTarget) bool { return true })
 	<-theirs
@@ -235,29 +222,24 @@ func TestABurstOfWindowChangesIsOneMoreReadingAfterTheLastChange(t *testing.T) {
 		<-release
 	}
 	reads.ask("window-status", read)
-	select {
-	case <-began:
-	case <-time.After(5 * time.Second):
-		t.Fatal("the first reading did not begin")
-	}
+	<-began
 	for n := 1; n <= 100; n++ {
 		mu.Lock()
 		current = n
 		mu.Unlock()
 		reads.ask("window-status", read)
 	}
+	// The first reading ends, and the changes of the burst begin one further reading.
+	release <- struct{}{}
+	<-began
+	// While that reading is held no change waits, so it is the last reading: none begins after it until a new change.
+	reads.mu.Lock()
+	running, again := reads.running, reads.again
+	reads.mu.Unlock()
 	close(release)
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		mu.Lock()
-		last := seen[len(seen)-1]
-		mu.Unlock()
-		if last == 100 {
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
+	if !running || again {
+		t.Fatalf("during the reading after the burst: running %v, another reading asked %v", running, again)
 	}
-	time.Sleep(100 * time.Millisecond)
 	mu.Lock()
 	defer mu.Unlock()
 	if len(seen) != 2 || seen[0] != 0 || seen[1] != 100 {

@@ -213,7 +213,7 @@ pub fn logged(
         let record = record.clone();
         set_interrupt_recorder(Some(Arc::new(move |status: i32, text: &str| {
             record.finish(status, text);
-            if let Err(error) = record.log.flush(FLUSH_DEADLINE) {
+            if let Err(error) = record.log.flush() {
                 eprintln!("sok: event log: {error}");
             }
         })));

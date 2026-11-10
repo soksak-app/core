@@ -11,6 +11,7 @@
 #import <Network/Network.h>
 #import <WebKit/WebKit.h>
 #import <string.h>
+#import "support/event_wait.h"
 #import "support/temporary_folder.h"
 #import "document_view.h"
 #import "input_inject.h"
@@ -18,21 +19,11 @@
 #import "webview_geometry.h"
 #import "window_facts.h"
 
-static const NSTimeInterval stepLimit = 20;
-
 static int failures = 0;
 
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
-}
-
-static BOOL pumpUntil(NSTimeInterval limit, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:limit];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
-    return done();
 }
 
 // The latest state of the first region (context 1) and of the restored region (context 2).
@@ -53,7 +44,8 @@ static void failStep(NSString *step, NSString *reason) {
 static int framePort;
 static NSData *silence;
 // The number of requests of the form page. The frame of the second form page, which the reload requests, is answered
-// one second late, so a press that a wait sends before the frame of the reload has loaded misses the field of the frame.
+// one second late, so a press that a wait sends before the frame of the reload has loaded misses the field of the frame. The
+// delay belongs to the served site and is no wait of the check.
 static int formRequests;
 
 static void respond(nw_connection_t connection, NSString *request) {
@@ -122,7 +114,7 @@ static nw_listener_t serve(void) {
         if (state == nw_listener_state_ready) ready = YES;
     });
     nw_listener_start(server);
-    if (!pumpUntil(10, ^BOOL { return ready; })) failStep(@"serve", @"the test server did not start within 10 seconds");
+    eventWait(@"the test server starts", ^BOOL { return ready; });
     return server;
 }
 
@@ -152,14 +144,15 @@ static NSDictionary *query(void *document, NSString *step) {
     NSDictionary *reply = nil;
     NSDictionary **slot = &reply;
     sp_document_query(document, queried, slot);
-    if (!pumpUntil(10, ^BOOL { return *slot != nil; })) failStep(step, @"the query did not reply within 10 seconds");
+    eventWait([NSString stringWithFormat:@"the query of %@ replies", step], ^BOOL { return *slot != nil; });
     return [reply autorelease];
 }
 
-// Queries the region until the field has the value, and returns the last reply.
+// Queries the region until the field has the value, and returns the last reply. The flags change at the messages of the page and
+// at the navigations of the region, each of which arrives as a source of the run loop, so the query is judged again after each.
 static NSDictionary *queryUntil(void *document, NSString *step, NSString *field, id value) {
     __block NSDictionary *reply = nil;
-    pumpUntil(stepLimit, ^BOOL {
+    eventWait([NSString stringWithFormat:@"the %@ query reports %@ %@", step, field, value], ^BOOL {
         reply = query(document, step);
         return [reply[field] isEqual:value];
     });
@@ -176,14 +169,14 @@ static id evaluate(WKWebView *view, NSString *script) {
             result = [value retain];
             done = YES;
         }];
-    if (!pumpUntil(10, ^BOOL { return done; })) failStep(@"evaluate", @"JavaScript did not answer within 10 seconds");
+    eventWait(@"JavaScript answers", ^BOOL { return done; });
     return [result autorelease];
 }
 
 static void waitForTitle(NSUInteger index, NSString *step, NSString *title) {
-    if (!pumpUntil(stepLimit, ^BOOL { return [latest[index][@"title"] isEqual:title] && ![latest[index][@"loading"] boolValue]; })) {
-        failStep(step, [NSString stringWithFormat:@"the region did not show %@", title]);
-    }
+    eventWait([NSString stringWithFormat:@"the region shows %@ at the %@ step", title, step], ^BOOL {
+        return [latest[index][@"title"] isEqual:title] && ![latest[index][@"loading"] boolValue];
+    });
 }
 
 // The state of a press that did not focus its target: the load state of the main frame and of its frame, the state that
@@ -199,6 +192,8 @@ static NSString *pressState(NSWindow *window, WKWebView *view, double x, double 
 }
 
 // Presses the window point, waits until the expression of the main frame focused is true, and types one key with native events.
+// Each judgment of the focus is a JavaScript round trip, and the state of the press is printed once when the first judgment
+// finds no focus.
 static void type(NSWindow *window, WKWebView *view, double x, double y, NSString *focused, NSString *step) {
     sp_input_result press = sp_input_pointer(window, x, y, 1, 0, 0, 0);
     sp_input_result release = press == SP_INPUT_DELIVERED ? sp_input_pointer(window, x, y, 3, 0, 0, 0) : SP_INPUT_REJECTED;
@@ -207,9 +202,14 @@ static void type(NSWindow *window, WKWebView *view, double x, double y, NSString
             press, release]);
     }
     NSString *script = [NSString stringWithFormat:@"return %@;", focused];
-    if (!pumpUntil(stepLimit, ^BOOL { return [evaluate(view, script) isEqual:@YES]; })) {
-        failStep(step, [NSString stringWithFormat:@"the press did not focus %@ (%@)", focused, pressState(window, view, x, y)]);
-    }
+    __block BOOL printed = NO;
+    eventWait([NSString stringWithFormat:@"the press focuses %@ at the %@ step", focused, step], ^BOOL {
+        if ([evaluate(view, script) isEqual:@YES]) return YES;
+        if (!printed) fprintf(stdout, "%s: the press has not focused %s yet (%s)\n", step.UTF8String, focused.UTF8String,
+            pressState(window, view, x, y).UTF8String);
+        printed = YES;
+        return NO;
+    });
     sp_input_result down = sp_input_key(window, "a", "a", 0, true);
     sp_input_result up = down == SP_INPUT_DELIVERED ? sp_input_key(window, "a", "a", 0, false) : SP_INPUT_REJECTED;
     if (down != SP_INPUT_DELIVERED || up != SP_INPUT_DELIVERED) {
@@ -265,8 +265,9 @@ int main(void) { @autoreleasepool {
     // Form flags.
     sp_document_load(document, [base stringByAppendingString:@"form"].UTF8String);
     waitForTitle(1, @"form", @"Form 1");
+    // The listener of the form script posts its message synchronously while the event is dispatched, so the message comes to
+    // the region before the reply of the script that dispatched the event, and the query after that reply judges the flag.
     evaluate(view, @"field.value = 'script'; field.dispatchEvent(new Event('input', {bubbles: true})); return true;");
-    pumpUntil(0.5, ^BOOL { return NO; });
     NSDictionary *scripted = query(document, @"script input");
     check([scripted[@"form"] isEqual:@NO], [NSString stringWithFormat:@"an input event of a script sets no form flag (%@)", scripted]);
     type(window, view, 50, 20, @"document.activeElement === field", @"main field");

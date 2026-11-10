@@ -49,7 +49,8 @@ func (w *pageEndWindow) end() {
 	}
 }
 
-// waitSent waits until the window received name, and drops what it received before.
+// waitSent waits until the window received name and drops what it received before. The receipt ends the wait; the limit of the
+// test runner reports a window that never receives name.
 func (w *pageEndWindow) waitSent(name string) {
 	for got := range w.sent {
 		if got == name {
@@ -91,7 +92,8 @@ func askPage(t *testing.T, h *Host, s *Surfaces, window *pageEndWindow) <-chan e
 	return reply
 }
 
-// wantClosedDocument checks that reply ended with the code of a closed document.
+// wantClosedDocument checks that reply ended with the code of a closed document. The reply ends the wait; the limit of the test
+// runner reports a request that still waits for a page that ended.
 func wantClosedDocument(t *testing.T, reply <-chan error, what string) {
 	t.Helper()
 	err := <-reply

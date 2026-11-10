@@ -9,15 +9,16 @@
 #import <Cocoa/Cocoa.h>
 #import <Network/Network.h>
 #import <WebKit/WebKit.h>
+#import <errno.h>
 #import <libproc.h>
+#import <signal.h>
 #import <string.h>
+#import "support/event_wait.h"
 #import "support/temporary_folder.h"
 #import "document_view.h"
 #import "private/webkit.h"
 #import "webview_geometry.h"
 #import "window_facts.h"
-
-static const NSTimeInterval stepLimit = 20;
 
 static int failures = 0;
 
@@ -26,14 +27,18 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-static BOOL pumpUntil(NSTimeInterval limit, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:limit];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        @autoreleasepool {
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-        }
-    }
-    return done();
+// Waits for the exit of the process pid, which its dispatch source reports on the main queue.
+static void awaitExit(pid_t pid) {
+    __block BOOL exited = NO;
+    dispatch_source_t source = dispatch_source_create(DISPATCH_SOURCE_TYPE_PROC, (uintptr_t)pid, DISPATCH_PROC_EXIT,
+        dispatch_get_main_queue());
+    dispatch_source_set_event_handler(source, ^{ exited = YES; });
+    dispatch_resume(source);
+    // A process that ended before the registration reports no exit, and a process that does not exist after it has ended.
+    if (kill(pid, 0) != 0 && errno == ESRCH) exited = YES;
+    eventWait([NSString stringWithFormat:@"the WebContent process %d ends", pid], ^BOOL { return exited; });
+    dispatch_source_cancel(source);
+    dispatch_release(source);
 }
 
 // The navigation delegate calls of the region since the proxy was installed, by selector name.
@@ -95,16 +100,16 @@ static id evaluate(NSString *script) {
         result = [value retain];
         done = YES;
     }];
-    if (!pumpUntil(10, ^BOOL { return done; })) failStep(@"evaluate", @"JavaScript did not answer within 10 seconds");
+    eventWait(@"JavaScript answers", ^BOOL { return done; });
     return [result autorelease];
 }
 
 // Waits until the region shows the page and has ended loading, and returns the load identifier of the page.
 static NSString *waitForPage(NSString *step, int page) {
     NSString *title = [NSString stringWithFormat:@"Page %d", page];
-    if (!pumpUntil(stepLimit, ^BOOL { return [latest[@"title"] isEqual:title] && ![latest[@"loading"] boolValue]; })) {
-        failStep(step, [NSString stringWithFormat:@"the region did not show %@ within %.0f seconds", title, stepLimit]);
-    }
+    eventWait([NSString stringWithFormat:@"the region shows %@ at the %@ step", title, step], ^BOOL {
+        return [latest[@"title"] isEqual:title] && ![latest[@"loading"] boolValue];
+    });
     NSString *identifier = evaluate(@"window.loadId");
     fprintf(stdout, "%s: page %d load identifier %s\n", step.UTF8String, page, identifier.UTF8String);
     return identifier;
@@ -156,13 +161,10 @@ static void acknowledge(NSString *step, NSUInteger from) {
 static void waitForData(NSString *step, int page, NSString *base, NSUInteger from) {
     NSString *address = [NSString stringWithFormat:@"%@page/%d", base, page];
     NSString *style = [NSString stringWithFormat:@"%@style/%d.css", base, page];
-    if (!pumpUntil(stepLimit, ^BOOL {
+    eventWait([NSString stringWithFormat:@"the streams send the data of page %d at the %@ step", page, step], ^BOOL {
         NSArray<NSString *> *urls = entriesSince(from);
         return snapshotSince(from) && [urls containsObject:address] && [urls containsObject:style];
-    })) {
-        failStep(step, [NSString stringWithFormat:@"the streams did not send the data of page %d: snapshot %@, entries %@", page,
-            snapshotSince(from), entriesSince(from)]);
-    }
+    });
 }
 
 // Prints the stream messages from index from on, one line each.
@@ -227,10 +229,7 @@ static nw_listener_t serve(void) {
         if (state == nw_listener_state_ready) ready = YES;
     });
     nw_listener_start(server);
-    if (!pumpUntil(10, ^BOOL { return ready; })) {
-        fprintf(stderr, "FAIL: the test server did not start within 10 seconds\n");
-        exit(1);
-    }
+    eventWait(@"the test server starts", ^BOOL { return ready; });
     return server;
 }
 
@@ -293,7 +292,9 @@ int main(void) { @autoreleasepool {
     check([restored isEqualToString:first], [NSString stringWithFormat:
         @"the region restores page 1 from the back-forward cache (identifier %@, before %@)", restored, first]);
     NSString *style = [base stringByAppendingString:@"style/1.css"];
-    pumpUntil(5, ^BOOL {
+    // The checks below judge the reset of each stream; a restored page whose streams send no reset still ends this wait with
+    // its data, so the checks find the missing reset.
+    eventWait(@"the streams send the data of the restored page 1", ^BOOL {
         NSArray<NSString *> *urls = entriesSince(afterReset(@"requests", mark));
         return snapshotSince(afterReset(@"elements", mark)) && [urls containsObject:page1] && [urls containsObject:style];
     });
@@ -318,10 +319,9 @@ int main(void) { @autoreleasepool {
     // the processes of the back-forward cache included.
     for (NSNumber *pid in processes) {
         NSDate *start = [NSDate date];
-        BOOL ended = pumpUntil(30, ^BOOL {
-            struct proc_bsdinfo info;
-            return proc_pidinfo(pid.intValue, PROC_PIDTBSDINFO, 0, &info, sizeof info) != (int)sizeof info;
-        });
+        awaitExit(pid.intValue);
+        struct proc_bsdinfo info;
+        BOOL ended = proc_pidinfo(pid.intValue, PROC_PIDTBSDINFO, 0, &info, sizeof info) != (int)sizeof info;
         check(ended, [NSString stringWithFormat:@"the WebContent process %d ends after the document closes (%.3f s)", pid.intValue, -start.timeIntervalSinceNow]);
     }
     nw_listener_cancel(listener);
