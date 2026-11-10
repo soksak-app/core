@@ -301,6 +301,8 @@ static BOOL keyWaitTakes(void *owner, SPHeldInput *piece) {
     return piece.press && wait.decision && endDecision(owner, piece);
 }
 
+static void forgetReturnedActions(void *owner);
+
 // Runs one turn of a release: an injected call, or the end of the release, which sends on what arrived while it returned. A key
 // call that comes back while the keys of its window wait waits again, in its order, and a press call ends the decision.
 static void runHeldTurn(long turn) {
@@ -312,6 +314,7 @@ static void runHeldTurn(long turn) {
         if (!keyWaitTakes(input.owner, input)) input.call();
     } else {
         [returning removeObject:[NSValue valueWithPointer:input.owner]];
+        if (![returning containsObject:[NSValue valueWithPointer:input.owner]]) forgetReturnedActions(input.owner);
         releaseWhenFree(input.owner);
     }
 }
@@ -332,9 +335,43 @@ static void endHoldByInput(void);
 // The observers of the actions of the user, which surfaceInputActionObserve adds.
 static NSMutableArray *actionObservers;
 
-// Marks a press or key event whose action was told: a kept event comes back through -[NSApplication sendEvent:] carrying the mark,
-// and an event that never comes back takes its mark with it.
-static char noticedAction;
+// The told press and key events that a release gave back to the queue, each as its owner and its content. -[NSApplication
+// postEvent:atStart:] hands the event back as another object with the same content, so the content names it. The end of the
+// release of owner comes after its events in the queue, so it forgets what of owner did not come back, as an event that a
+// tracking loop discarded.
+static NSMutableArray<NSArray *> *returnedActions;
+
+static NSString *actionContent(NSEvent *event) {
+    BOOL key = event.type == NSEventTypeKeyDown || event.type == NSEventTypeKeyUp || event.type == NSEventTypeFlagsChanged;
+    return [NSString stringWithFormat:@"%lu %.9f %ld %lu %ld %.3f %.3f", (unsigned long)event.type, event.timestamp,
+        (long)event.windowNumber, (unsigned long)event.modifierFlags, key ? (long)event.keyCode : (long)event.buttonNumber,
+        event.locationInWindow.x, event.locationInWindow.y];
+}
+
+static void markReturnedAction(void *owner, NSEvent *event) {
+    if (!returnedActions) returnedActions = [[NSMutableArray alloc] init];
+    [returnedActions addObject:@[ [NSValue valueWithPointer:owner], actionContent(event) ]];
+}
+
+// Whether event is a told action that comes back; it takes its mark.
+static BOOL takeReturnedAction(NSEvent *event) {
+    if (returnedActions.count == 0) return NO;
+    NSString *content = actionContent(event);
+    for (NSUInteger index = 0; index < returnedActions.count; index++) {
+        if (![returnedActions[index][1] isEqualToString:content]) continue;
+        [returnedActions removeObjectAtIndex:index];
+        return YES;
+    }
+    return NO;
+}
+
+static void forgetReturnedActions(void *owner) {
+    NSValue *key = [NSValue valueWithPointer:owner];
+    NSIndexSet *gone = [returnedActions indexesOfObjectsPassingTest:^BOOL(NSArray *mark, NSUInteger index, BOOL *stop) {
+        return [mark[0] isEqual:key];
+    }];
+    [returnedActions removeObjectsAtIndexes:gone];
+}
 
 static void sendEventAfterLayout(id application, SEL selector, NSEvent *event) {
     if (event.type == NSEventTypeApplicationDefined && event.subtype == kHeldTurnSubtype) {
@@ -345,10 +382,9 @@ static void sendEventAfterLayout(id application, SEL selector, NSEvent *event) {
     // is told to each observer of the actions of the user before any monitor, gate or view sees it.
     // The end of the layout hold is one of these observers. When input of the window of the event waits for the hold, the event
     // takes its place behind that input, which the end of the hold gives back in its order.
-    // An event that was kept comes back through this method once; its action was already told, so it is told once.
-    BOOL action = endsHold(event) && !objc_getAssociatedObject(event, &noticedAction);
+    // An event that a release gave back comes through this method again; its action was already told, so it is told once.
+    BOOL action = endsHold(event) && !takeReturnedAction(event);
     if (action) {
-        objc_setAssociatedObject(event, &noticedAction, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         NSWindow *window = event.window;
         BOOL behind = holdOpen && window && !passesHold(event) && inputHeld(window);
         if (behind) keepInput(heldPiece(window, event, nil, NO, NO));
@@ -425,8 +461,13 @@ static void returnInput(void *owner, NSArray<SPHeldInput *> *pieces) {
     end.owner = owner;
     postHeldTurn(end);
     for (SPHeldInput *input in pieces.reverseObjectEnumerator) {
-        if (input.event) [NSApp postEvent:input.event atStart:YES];
-        else postHeldTurn(input);
+        if (input.event) {
+            // Each press and key event was told when it first reached the application; its return is not told again.
+            if (endsHold(input.event)) markReturnedAction(owner, input.event);
+            [NSApp postEvent:input.event atStart:YES];
+        } else {
+            postHeldTurn(input);
+        }
     }
 }
 

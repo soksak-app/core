@@ -1,5 +1,5 @@
 // The layout observer reports where the transaction of a window starts and ends, and a settled wait takes the block that
-// brings the content of the window to the screen. No window of this check is put on screen.
+// brings the content of the window to the screen. Only the window of the press check is put on screen.
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
 #import <WebKit/WebKit.h>
@@ -306,6 +306,8 @@ static void checkPressEndsHold(void) {
     [window.contentView addSubview:target];
     SPHeldPresentation *stalled = [[[SPHeldPresentation alloc] initWithFrame:NSMakeRect(100, 0, 100, 100)] autorelease];
     [window.contentView addSubview:stalled];
+    // AppKit delivers a press only to a view of a window that is on the screen, so this window is put on the screen.
+    [window orderFrontRegardless];
     __block BOOL presented = NO;
     surfaceLayoutBegin(window, 61, ^(int allowed) {});
     check(surfaceLayoutJoinView(window, 61, stalled, ^{ presented = YES; }), @"the stalled peer joins the transaction");
@@ -322,6 +324,7 @@ static void checkPressEndsHold(void) {
     check(surfaceLayoutViewJoinCount(window) == 0, @"the press abandons the join of the stalled peer");
     check(!presented, @"the stalled peer reports no presentation");
     check(!endedInOpenTransaction, @"the press commits the Core Animation hold");
+    runQueue();
     check(target.presses == 1, [NSString stringWithFormat:@"the press reaches its view (%d)", target.presses]);
     stalled.held = nil;
     surfaceLayoutAbandonView(window, stalled);
