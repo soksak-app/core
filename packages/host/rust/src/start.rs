@@ -159,7 +159,12 @@ pub fn start_page(app: &AppHandle, webview: &str) -> Result<Vec<u8>, String> {
         .ok_or_else(|| NO_WINDOW.to_string())?;
     start_waited_page(
         || crate::windows::window_data(&window),
-        || crate::windows::page_started(&window),
+        // The start document is built off the main thread, and the cleanup of the earlier page calls the native layout,
+        // which runs only on the main thread (docs/spec/native-host.md#page-start).
+        || {
+            let started = window.clone();
+            crate::exposure::on_main(&window, move || crate::windows::page_started(&started))
+        },
         || {
             let snapshot = serde_json::from_value(serde_json::json!({ "kind": "snapshot" }))
                 .map_err(|error| error.to_string())

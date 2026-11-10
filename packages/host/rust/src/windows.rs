@@ -1971,7 +1971,9 @@ pub fn window_chrome(window: &Window) -> Result<Chrome, String> {
 /// line.
 pub(crate) fn window_controls(window: &Window) -> Result<Rect, String> {
     let handle = native_owner(window)?;
-    let (x, y, w, h) = platform::current()?.window_controls(handle)?;
+    // The window buttons belong to the main thread, and the start document reads them off it.
+    let (x, y, w, h) =
+        crate::exposure::on_main(window, move || platform::current()?.window_controls(handle))?;
     Ok(Rect { x, y, w, h })
 }
 
