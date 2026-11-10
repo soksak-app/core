@@ -2240,8 +2240,8 @@ fn reload(host: &Host, window: &Window) -> Result<Value, Failure> {
         )
         .map_err(internal)?;
         // The event ended the page, so the rest that it owed ends in the same turn.
-        crate::windows::page_left(window, &window_data(window).map_err(internal)?)
-            .map_err(internal)?;
+        let data = window_data(window).map_err(internal)?;
+        crate::windows::page_left(window, &data).map_err(internal)?;
     } else {
         let target = window.clone();
         on_main(window, move || {
