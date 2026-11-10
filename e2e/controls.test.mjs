@@ -47,7 +47,9 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: the soksak logo letters are light in dark mode and dark in light mode`, async (t) => {
     const s = await open(t, app);
     await fresh(s);
-    s.cleanup(() => s.run("core.settings.reset", { key: "mode" }));
+    // The check writes the common mode, so the cleanup writes the initial common mode back to the common scope.
+    const initialMode = (await s.get("core.settings")).common.mode;
+    s.cleanup(() => s.run("core.settings.change", { key: "mode", value: initialMode, scope: "common" }));
     // Logo text color. The icon tile is the same in both modes.
     for (const [mode, letters] of [["dark", [237, 230, 216]], ["light", [22, 24, 29]]]) {
       await s.run("core.settings.change", { key: "mode", value: mode, scope: "common" });

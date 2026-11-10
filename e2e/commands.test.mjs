@@ -170,14 +170,19 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     const initialWindow = await s.get("host.window");
     const initialSettings = await s.get("core.settings");
-    s.cleanup(async () => {
-      for (const key of ["left", "right", "mode"]) {
-        if (initialSettings.overridden.includes(key)) {
-          await s.run("core.settings.set", { patch: { [key]: initialSettings.values[key] }, scope: "project" });
-        } else {
-          await s.run("core.settings.reset", { key });
-        }
+    // A chrome switch writes the scope that the applied value comes from (docs/spec/settings.md#scope-of-a-control):
+    // the common scope for a key that the project does not override. So the restore writes the initial common value
+    // back to the common scope, and the initial project value back to the project scope or removes the project value.
+    const writeInitial = async (key) => {
+      await s.run("core.settings.set", { patch: { [key]: initialSettings.common[key] }, scope: "common" });
+      if (initialSettings.overridden.includes(key)) {
+        await s.run("core.settings.set", { patch: { [key]: initialSettings.values[key] }, scope: "project" });
+      } else {
+        await s.run("core.settings.reset", { key });
       }
+    };
+    s.cleanup(async () => {
+      for (const key of ["left", "right", "mode"]) await writeInitial(key);
       await s.run("host.window.maximize", { on: false });
       await s.run("host.window.resize", { width: initialWindow.content.width, height: initialWindow.content.height });
     });
@@ -260,12 +265,9 @@ for (const app of Object.values(APPS)) {
     // of the test, whose output names the step of the click.
     const clickEffect = (owner, name, predicate, message) => owner.kind === "workbench" ? s.until(name, predicate, message) : undefined;
     const restoreSetting = async (key) => {
-      if (initialSettings.overridden.includes(key)) {
-        await s.run("core.settings.set", { patch: { [key]: initialSettings.values[key] }, scope: "project" });
-      } else {
-        await s.run("core.settings.reset", { key });
-      }
+      await writeInitial(key);
       await s.until("core.settings", (settings) => settings.values[key] === initialSettings.values[key] &&
+        settings.common[key] === initialSettings.common[key] &&
         settings.overridden.includes(key) === initialSettings.overridden.includes(key),
       `${key} setting did not return to its initial value and scope`);
       await s.presented();
