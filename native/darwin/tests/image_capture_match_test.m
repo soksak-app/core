@@ -556,8 +556,11 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
     dispatch_release(writerProgress);
     check(secondEnqueued && secondError == NULL,
         @"the later sample callback returns while the earlier QR decode remains blocked");
-    // The second QR decode starts before the blocked first decode is released, which happens only after this wait.
+    // The first decode is released only after this wait, so a second decode that waited for it would hold this wait until the
+    // runner ends the run.
     dispatch_semaphore_wait(identityDecodeSecondEntered, DISPATCH_TIME_FOREVER);
+    check(atomic_load(&identityDecodeHookCount) >= 2,
+        @"the second QR decode starts before the blocked first decode is released");
     BOOL acceptedThroughLimit = YES;
     for (uint64_t frame = 3; frame <= 16; frame++) {
         char *enqueueError = NULL;
