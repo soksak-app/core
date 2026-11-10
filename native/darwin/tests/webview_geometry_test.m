@@ -580,8 +580,9 @@ static void checkHitTesting(WKWebView *main) {
     check(!surfaceLayoutIsPreparing(main.window), @"a press of the window system ends the preparation of its window");
     check(counter.presses == 2, @"a press of the window system during the preparation reaches the surface at once");
     check(surfaceLayoutCommit(main.window, 77003), @"the commit after the press reports the commit that the press made");
-    // The press ends the transaction before any monitor sees it, so every monitor of the application sees the press and its
-    // release once each and none sees them while the transaction is open, whatever order AppKit calls the monitors in, which
+    // The press ends the transaction before any monitor sees it, so every monitor of the application, the press origin monitor
+    // of the image regions among them, sees the press and its release once each in their turns and none sees them while the
+    // transaction is open, whatever order AppKit calls the monitors in, which
     // differs from process to process.
     NSUInteger *seen = calloc(32, sizeof(NSUInteger));
     NSUInteger *seenWhenOpen = calloc(32, sizeof(NSUInteger));
@@ -677,16 +678,6 @@ static void checkHitTesting(WKWebView *main) {
     inputOrder = nil;
     [counter removeFromSuperview];
 
-    // A press during the preparation records its press origin in its turn, because it ends the hold and goes on at once; no
-    // press waits for a layout, so no release waits for one either.
-    surfaceLayoutBegin(main.window, 77005, ^(int allowed) {});
-    [NSApp postEvent:heldDown atStart:NO];
-    runQueue();
-    check(sp_input_press_origin_point(main.window, 0, NULL, NULL, NULL),
-        @"a press during the preparation records its press origin in its turn");
-    [NSApp postEvent:heldUp atStart:NO];
-    runQueue();
-    check(surfaceLayoutCommit(main.window, 77005), @"the commit after the press over the surface reports the commit that the press made");
     uint64_t heldToken = 0;
     if (sp_input_press_origin_point(main.window, 0, NULL, NULL, &heldToken)) sp_input_press_origin_clear(main.window, 0, heldToken);
     sp_surface_close(otherSurface);

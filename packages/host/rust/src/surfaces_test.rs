@@ -1152,7 +1152,7 @@ fn the_layout_commits_after_the_presentation_notice_of_the_frontend() {
     let worker = thread::spawn(move || {
         commit_tx
             .send(complete_layout_presentation(
-                || ask_presentation_notice(&window, 7, ready_tx),
+                || ask_presentation_notice(&window, 7, ready_tx, crate::images::Images::default()),
                 || await_presentation_notice(&ready_rx),
                 || {
                     past.store(true, Ordering::SeqCst);
@@ -1187,7 +1187,7 @@ fn a_failed_presentation_notice_ends_the_present_with_its_error() {
     let notice = frontend.clone();
     let worker = thread::spawn(move || {
         complete_layout_presentation(
-            || ask_presentation_notice(&window, 8, ready_tx),
+            || ask_presentation_notice(&window, 8, ready_tx, crate::images::Images::default()),
             || await_presentation_notice(&ready_rx),
             || panic!("a failed notice reached the raster"),
             || Ok(()),
