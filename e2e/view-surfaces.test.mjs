@@ -20,7 +20,7 @@ import {
   acceptedCurrentViewReplies, currentPageNativeViewCalls, currentPageViewCallCoverage,
 } from "./reload-view-reply.mjs";
 import { unansweredViewCalls } from "@soksak/window-check/view-calls.mjs";
-import { appDomWebviews, expectedPresentations, rasterIdentity, viewPresentationJoins } from "./view-display.mjs";
+import { appDomWebviews, expectedPresentations, rasterIdentity, viewPresentationJoins, viewWebviews } from "./view-display.mjs";
 import {
   closeRasterTabs, ensureRasters, MEASURED, presentedFrame, RASTER, rasterReady, rasterServiceSnapshot, REGION, setMeasuredColor,
 } from "./raster-probe.mjs";
@@ -175,6 +175,14 @@ for (const app of Object.values(APPS)) {
     await s.until("core.surfaces", (surfaces) => documentViews(surfaces).length >= 2, "two document views did not become visible");
     for (const raster of rasters) await sessionOf(s, raster.surface, `session ${raster.surface} did not open`);
     await s.presented();
+    // A document region renders independently and joins no presentation wait (docs/spec/native-surfaces.md), so the presented
+    // window does not tell that the page of a new layout probe view attached its region. The check waits for the region of each
+    // loaded layout probe view, shown or retained, before it counts the web views.
+    const probeViews = viewWebviews(await s.get("core.surfaces")).tabs.filter((item) => item.plugin === START_PLUGIN)
+      .map((item) => item.surface);
+    await s.until("host.window", (state) => probeViews.every((surface) =>
+      state.documents.some((item) => item.surface === surface && item.document === "page")),
+    `the layout probe views ${probeViews.join(", ")} did not all attach their document region`);
     const window = await s.get("host.window");
     // The app DOM webviews are the main page of a window that has one and one view web view per loaded view surface, shown or
     // retained: the first raster probe tab was added to the card of a layout probe tab, whose view stays retained behind it. A
@@ -354,44 +362,59 @@ for (const app of Object.values(APPS)) {
       "the tab notice stayed after the tab came into view");
   });
 
-  test(`${app.name}: a presentation that fails while the sidecar service is stopped leaves the next fixture and splits usable`, async (t) => {
+  test(`${app.name}: a split while the sidecar service is stopped waits for its raster and leaves the next fixture and splits usable`, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
+    // The trace records each raster that the host hands a sidecar, which tells when the split waits for the stopped service.
+    await fresh(s, { performanceTrace: true });
     s.cleanup(() => closeRasterTabs(s));
     const [raster] = await ensureRasters(s, 1);
     await s.presented();
-    // Stopping the service makes the display of the split wait for a new raster of the existing image region and fail.
+    const shown = regionOf(await s.get("host.window"), raster.surface);
+    assert.ok(shown?.presented, `${raster.surface} presented no raster before the split: ${JSON.stringify(shown)}`);
     const { service } = rasterServiceSnapshot(app.configDir);
     process.kill(service, "SIGSTOP");
     let stopped = true;
     s.cleanup(() => { if (stopped) process.kill(service, "SIGCONT"); });
     const card = (await s.get("core.grid")).cards.find((item) => item.active === raster.surface);
-    // The time limit that the display request of the split received is shown by the page as one error line. The host and other paths do not write the same failure again
-    // (docs/spec/hosts.md#application-log).
-    s.expectError(/^error workbench workbench: surface presentation failed: the current image raster did not present within /);
-    const { tab } = await s.run("core.card.split", { card: card.id, side: "right", plugin: RASTER });
-    await s.until("core.workbench.error", (error) => /did not present/.test(error ?? ""),
-      "the presentation did not fail while the sidecar service was stopped");
-    // After the failure, a new raster probe page places the region. The service stays stopped until the placement ends or the surface reports an error.
+    const offsets = currentEventOffsets(app.configDir);
+    // The split halves the card of the image region, so its presentation waits for a raster of the new size, which the stopped
+    // service does not draw. No limit ends that wait: the presentation of the raster, the end of the connection of the service or a
+    // press or key event of the user ends it (docs/spec/native-surfaces.md#layout-transaction).
+    const split = s.run("core.card.split", { card: card.id, side: "right", plugin: RASTER });
+    const settled = split.then(() => "answered", () => "failed");
+    // Once the host has handed the raster of the new size to the stopped service, the split cannot answer before that raster
+    // presents, so the check then looks once without blocking.
+    await untilFolderState(join(app.configDir, "logs"), () => traceRows(readEvents(app.configDir, offsets).events).find((row) =>
+      row.layer === "host" && row.event === "image.raster" && row.phase === "sent" && row.surface === raster.surface &&
+      row.width !== shown.presented.width), { signal: endSignal(s.client.ended) });
+    assert.equal(await Promise.race([settled, Promise.resolve("waiting")]), "waiting",
+      "the split answered while the stopped service drew no raster of the new size");
+    process.kill(service, "SIGCONT");
+    stopped = false;
+    const { tab } = await split;
+    await s.until("host.window", (value) => {
+      const region = regionOf(value, raster.surface);
+      return region?.visible === true && region.presented !== null &&
+        region.presented.width === Math.round(region.frame.width * region.presented.scale);
+    }, `${raster.surface} did not present the raster of the split after the service continued`);
+    // The new raster probe page places its region, or its surface reports an error.
     const placed = s.until("host.window", (value) => value.regions.some((region) => region.surface === tab),
       "the new raster probe did not place its region").then(() => null);
     const failure = s.until("core.surfaces", (surfaces) => surfaces.find((item) => item.surface === tab)?.status.phase === "error",
       "the new raster probe did not report an error").then((surfaces) => surfaces.find((item) => item.surface === tab).status.error);
     const error = await Promise.race([placed, failure]);
-    process.kill(service, "SIGCONT");
-    stopped = false;
-    assert.equal(error, null, "the new raster probe failed to place its region after the failed presentation");
-    // Runs the cleanup of the failed check and the preparation of the next check in the same order.
+    assert.equal(error, null, "the new raster probe failed to place its region after the split waited for the stopped service");
+    // Runs the cleanup of the check and the preparation of the next check in the same order.
     await closeRasterTabs(s);
     await fresh(s);
     const rasters = await ensureRasters(s, 3);
     for (const item of rasters) {
       await s.until("host.window", (value) => value.regions.some((region) => region.surface === item.surface &&
         region.visible && region.presented !== null && region.presented.width === Math.round(region.frame.width * region.presented.scale)),
-        `${item.surface} did not present after the failed presentation`);
+        `${item.surface} did not present after the split that waited`);
     }
     const failed = (await s.get("core.surfaces")).filter((item) => item.status.phase === "error");
-    assert.deepEqual(failed, [], "a surface reported an error after the failed presentation");
+    assert.deepEqual(failed, [], "a surface reported an error after the split that waited");
   });
 
   test(`${app.name}: a view split from a view starts in the directory that view reported`, async (t) => {
