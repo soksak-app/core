@@ -56,6 +56,16 @@ static NSMutableArray *deferredDrains;
 }
 @end
 
+// Runs the drain that the view holds, once. The property owns the only copy of the block, so the check keeps its own reference
+// before it clears the property: under manual reference counting a local variable owns nothing, and clearing the property first
+// would free the block that the call then runs.
+static void runHeld(SPReceiptView *view) {
+    void (^held)(void) = [view.held copy];
+    view.held = nil;
+    if (held) held();
+    [held release];
+}
+
 // Injects a received message in a separate content world. input_inject_test verifies the real trusted input order. WebKit
 // answers the receipt of an event before the end of its handling of that event, so a drain asked while a receipt is on its way
 // ends after the receipt, as the fixture view defers it.
@@ -132,7 +142,7 @@ int main(void) { @autoreleasepool {
     check(received && completed == 1 && view.held != nil,
         [NSString stringWithFormat:@"a down returns at its receipt while WebKit holds pending mouse work (completed %lu, held %d)",
             (unsigned long)completed, view.held != nil]);
-    if (view.held) { void (^held)(void) = view.held; view.held = nil; held(); }
+    runHeld(view);
     runMarker();
     check(completed == 1, @"the end of the held mouse work after the receipt completes nothing again");
     view.hold=NO; view.held=nil;
@@ -186,7 +196,7 @@ int main(void) { @autoreleasepool {
     check(completed == 1 && !received && sent == 0, @"the close of the window ends a pending wait once without sending");
     check([closedRecords containsString:@" error native webview input: wait for pointerdown ended: the window closed"],
         [NSString stringWithFormat:@"the close of the window is recorded as the end of the wait (got %@)", closedRecords]);
-    if (view.held) { void (^held)(void) = view.held; view.held = nil; held(); }
+    runHeld(view);
     check(completed == 1, @"the held drain after the close completes nothing again");
     [view removeFromSuperview];
     [window release];
@@ -203,7 +213,7 @@ int main(void) { @autoreleasepool {
     check(completed == 1 && !received, @"a web process that stops answering ends a pending wait once");
     check([stopped containsString:@" error native webview input: wait for pointerdown ended: the web process stopped answering"],
         [NSString stringWithFormat:@"the stop of the web process is recorded as the end of the wait (got %@)", stopped]);
-    if (view.held) { void (^held)(void) = view.held; view.held = nil; held(); }
+    runHeld(view);
     // Through the input method, the end of the handling of WebKit does not end the wait, because the input method can still hold
     // the event; AppKit tells the host nothing of it, so the wait has no limit and ends at the next press or key event that the
     // application receives.
