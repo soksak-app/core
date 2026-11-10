@@ -528,9 +528,9 @@ fn invalid_json_closes_connection() {
 | `platform.windows.input.failed-call-answers-its-failure` | 실패로 끝난 호출은 그 실패를 호출자에게 답한다. | all |
 | `platform.windows.input.unanswered-failure-goes-to-next-input` | 답할 호출자가 없는 호출의 실패는 다음 입력이 돌려주고, 그다음 입력은 받는다. | all |
 | `platform.windows.input.call-that-cannot-start-answers-and-next-runs` | web view가 시작을 거절한 호출은 그 실패를 곧바로 답하고, 다음 호출은 보낸다. | all |
-| `platform.windows.input.incomplete-call-ends-wait-and-stops-queue` | 기다리는 시간 안에 끝나지 않은 호출은 시간이 다 됐다고 답하고, 그 호출이 열린 동안 다음 입력은 `did not complete`로 실패하며, 늦은 완료는 아무것도 답하지 않고, 그 뒤 queue는 다시 보낸다. | all |
-| `platform.windows.input.completed-call-ends-its-wait` | 끝난 호출은 기다림의 timer를 취소한다. | all |
-| `platform.windows.input.call-answer-becomes-pointer-result` | pointer 호출의 답이 그 결과가 된다. 끝난 호출은 delivered, 시간이 다 된 호출은 unreceived, 실패한 호출은 rejected다. | all |
+| `platform.windows.input.page-end-ends-its-calls` | web view의 page가 끝나면 열린 호출과 기다리는 호출은 web view가 끝났다고 답하고, 그 늦은 완료는 아무것도 답하지 않으며, 다음 입력은 focus emulation 뒤에 다시 보낸다. | all |
+| `platform.windows.input.webview-end-ends-its-calls` | web view가 끝나면 열린 호출과 기다리는 호출은 web view가 끝났다고 답하고, 그 뒤 입력은 그 끝으로 바로 실패하며 보내지 않고, 늦은 완료는 아무것도 답하지 않는다. | all |
+| `platform.windows.input.call-answer-becomes-pointer-result` | pointer 호출의 답이 그 결과가 된다. 끝난 호출은 delivered, page나 web view가 끝난 호출은 unreceived, 실패한 호출은 rejected다. | all |
 | `platform.windows.capture.view-that-does-not-draw-is-refused` | 최소화된 창, 보이지 않는 창, 숨은 view의 capture는 그 상태를 이름으로 든 실패로 거절하고, 보이는 view는 capture한다. | all |
 | `platform.windows.capture.incomplete-capture-ends-its-wait` | 기다리는 시간 안에 끝나지 않은 capture는 가려진 view를 이름으로 든 실패를 답하고, 늦은 완료는 아무것도 답하지 않는다. | all |
 | `platform.windows.capture.completed-capture-answers-once` | 끝난 capture는 한 번 답하고 기다림의 timer를 취소한다. | all |

@@ -526,9 +526,9 @@ Items:
 | `platform.windows.input.failed-call-answers-its-failure` | A call that completes with a failure answers that failure to its caller. | all |
 | `platform.windows.input.unanswered-failure-goes-to-next-input` | The failure of a call that has no caller to answer is returned by the next input, and the input after that is accepted. | all |
 | `platform.windows.input.call-that-cannot-start-answers-and-next-runs` | A call that the web view refuses to start answers that failure at once, and the next call is sent. | all |
-| `platform.windows.input.incomplete-call-ends-wait-and-stops-queue` | A call that does not complete within its wait answers that it timed out, the next input fails with `did not complete` while that call is open, its late completion answers nothing, and the queue sends again after it. | all |
-| `platform.windows.input.completed-call-ends-its-wait` | A call that completes cancels the timer of its wait. | all |
-| `platform.windows.input.call-answer-becomes-pointer-result` | The answer of the call of a pointer becomes its result: a completed call is delivered, a call that timed out is unreceived, and a failed call is rejected. | all |
+| `platform.windows.input.page-end-ends-its-calls` | The end of the page of a web view answers its open call and its waiting calls that the web view ended, their late completions answer nothing, and the next input is sent after the focus emulation again. | all |
+| `platform.windows.input.webview-end-ends-its-calls` | The end of a web view answers its open call and its waiting calls that the web view ended, a later input fails at once with that end and is not sent, and a late completion answers nothing. | all |
+| `platform.windows.input.call-answer-becomes-pointer-result` | The answer of the call of a pointer becomes its result: a completed call is delivered, a call whose page or web view ended is unreceived, and a failed call is rejected. | all |
 | `platform.windows.capture.view-that-does-not-draw-is-refused` | A capture of a view in a minimized window, a window that is not shown, or a hidden view is refused with a failure that names that state; a shown view is captured. | all |
 | `platform.windows.capture.incomplete-capture-ends-its-wait` | A capture that does not complete within its wait answers a failure that names a covered view, and its late completion answers nothing. | all |
 | `platform.windows.capture.completed-capture-answers-once` | A capture that completes answers once and cancels the timer of its wait. | all |
