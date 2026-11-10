@@ -476,7 +476,7 @@ fn invalid_json_closes_connection() {
 | `exposure.relay.no-timeout-waits-until-close` | timeout이 없는 요청은 문서가 닫힐 때까지 기다린 뒤 1003으로 실패한다. | all |
 | `exposure.relay.surface-process-end-ends-its-requests` | 표면 문서로 전달한 요청은 표면 페이지의 WebContent 프로세스가 끝나는 turn에 1003으로 끝나고, 그 뒤의 답은 아무것도 완료하지 않는다. | all |
 | `exposure.window-presented.ends-by-events` | `host.window.presented`에는 자기 한도가 없다. 표시 중인 modal의 WebContent 프로세스 끝은 그 paint 기다림을 끝내고, 창 닫힘은 기다리는 요청을 1003으로 실패시킨다. | all |
-| `exposure.fullscreen.answers-once-by-its-event` | `host.window.fullscreen`은 한 번 답한다. 전환의 끝에서, 최소화되었거나 보이지 않거나 sheet를 보이거나 macOS가 전환을 시작하지 않는 창에는 곧바로 1006으로, 창 닫힘에는 1003으로, 시작한 뒤 10초 안에 끝나지 않는 전환에는 1005로 답한다. | all |
+| `exposure.fullscreen.answers-once-by-its-event` | `host.window.fullscreen`은 한 번 답한다. 전환의 끝에서, 최소화되었거나 보이지 않거나 sheet를 보이거나 macOS가 전환을 시작하지 않는 창에는 곧바로 1006으로, 창 닫힘에는 1003으로, 시작한 전환의 `windowDidFailToEnterFullScreen:`이나 `windowDidFailToExitFullScreen:`에는 1005로 답한다. 요청에는 한도가 없다. | all |
 | `exposure.window.dropped-view-work-reports-no-view` | 실행되기 전에 파괴된 웹뷰로 보낸 작업은 수신 오류 대신 결과 없음이 되어, `host.window`가 닫히는 모달을 뷰 없이 보고한다. 실행되어 실패한 작업은 그 오류를 유지한다. | tauriv2 only: Tauri는 웹뷰 작업을 dispatch로 실행하며 웹뷰가 파괴되면 작업을 버리고, Wails는 모달 뷰를 자기 기록에서 읽는다 |
 | `exposure.window.region-reports-presented-frame` | 설정과 표시된 프레임 뒤 `host.window`는 영역의 `presented`에 그 프레임의 `generation`, `raster`, `sequence`를 보고한다. 래스터가 바뀐 뒤에는 새 래스터의 프레임이 표시되기 전까지 `presented`가 null이다. | all |
 | `exposure.window.region-reports-presented-frames` | `host.window`의 각 image region 항목은 `presentedFrames`를 보고한다. 이는 region이 attach된 뒤 host가 presented로 표시한 그 region의 frame 수다. 새 region에서는 0이고, host가 presented로 표시하는 frame마다 하나 늘며, host가 presented로 표시하지 않는 frame과 raster 변경에는 바뀌지 않고, 같은 이름으로 다시 attach된 region에서는 다시 0이다. | all |
@@ -645,7 +645,7 @@ fn invalid_json_closes_connection() {
 | `images.detach.ack-exact-owner` | request, supplier, surface, image name, generation이 일치하는 응답만 detach를 완료한다. 불일치 응답은 대기를 끝내지 않는다. | all |
 | `images.detach.malformed-ack-names-its-member` | member가 없거나 다른 type인 응답은 그 member를 밝히는, 두 호스트에서 같은 오류 text로 거부되고 그 pending detach는 계속 기다린다. | all |
 | `images.detach.refusal-ends-pending` | supplier 거부는 pending detach를 끝낸다. 그 surface의 `image-detach-ended` event는 supplier가 알리면 현재 generation을 담은 `... rejected: <reason>`을 담고, 여러 image의 실패는 이름의 byte 순서로 `; `로 이어지며, 호스트는 그 실패의 오류 기록을 쓰지 않는다. | all |
-| `images.detach.limit-ends-the-detach` | 10초 안에 응답이 없는 detach는 그 surface의 ended event에 `... timed out: the supplier sent no acknowledgement within 10s`를 담아 끝나고 다른 기록을 쓰지 않는다. 한도 전의 reload는 pending image에 두 번째 detach를 보내지 않고, 한도 뒤의 응답은 아무것도 완료하지 않고 `host.trace.image.detach.late`를 쓴다. | all |
+| `images.detach.ends-by-its-events` | detach에는 한도가 없다. 그 응답, supplier 연결 종료, surface session 종료로 끝나며, 기다리는 동안 아무것도 기록하지 않는다. 기다리는 동안의 reload는 pending image에 두 번째 detach를 보내지 않는다. | all |
 | `images.detach.surface-ends-after-its-last-detach` | surface는 그 image detach가 모두 끝날 때까지 pending이고, 창 event `image-detach-ended {surface, error}`는 마지막 detach가 끝난 뒤에 온다. | all |
 | `images.reload.captures-old-image-owner` | Reload는 native 영역을 닫고 surface generation을 올리기 전에 각 이미지의 supplier와 현재 generation을 캡처한다. | all |
 | `images.reload.start-sends-detach-without-waiting` | reload는 native image를 닫은 뒤 캡처한 각 image의 detach를 보내고, 응답을 기다리지 않고 start document를 돌려준다. 각 image의 surface는 pending으로 남는다. | all |
