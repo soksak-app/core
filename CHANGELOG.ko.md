@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F718-10: window 의 어떤 배치도 view 를 기다리지 않는다. 배치는 composition 을 선언한 view 를 보내고, 진행 중인 선언은 host 의 답을 기다리며, 선언하지 않은 view 는 deferred 로 둔다. 그 view 의 선언이 page 를 다시 layout 한다. core 명령의 drawn 대기는 진행 중인 선언에 대한 host 의 답만 기다린다.
+- F718-11: Rust host test 가 release 를 `POINTER_HELD` 로 거절하고, 다음 press 의 끝에서 그것이 전달됨을 Go test 옆에서 확인한다.
 - F727: virtual key window 와 가려진 capture 의 native 검사는 자기 process 가 앞으로 오지 않았다는 것만 판정하므로, run 중에 다른 애플리케이션이 앞으로 와도 더는 실패하지 않는다.
 - F718-2: window 마다 자기 layout transaction 을 갖고 어떤 window 도 다른 window 뒤에서 기다리지 않는다. 공유 Core Animation hold 는 마지막 열린 transaction 과 함께 commit 되고, press 나 key event 는 peer 가 표시한 것으로 그것을 곧바로 끝내며, window 나 join 한 view 의 닫힘은 그 wait 를 끝내고, 어떤 layout wait 도 시간으로 끝나지 않는다.
 - F718-4: page 의 끝은 page 가 진 것을 끝의 턴에 답한다. WebContent process 의 끝과 host 의 reload 요청은 window 를 not ready 로 두고, page 와 그 surface document 로 간 모든 요청을 1003 으로 끝내며, page 가 남긴 close 나 quit 질문에는 window 를 닫는다. reload 는 window 가 닫히거나 새 page 가 시작하지 못하면 1003 으로 끝나고, 끝난 reload 는 자기 대기를 지운다. reload 중인 page 는 이후의 host call 을 `host call <name>: the page is reloading` 으로 바로 거절하고, page start 의 앞 단계가 실패하면 memory readiness 를 reject 한다. mygo 의 close, 새 start, event flush 는 결정한 때 돌던 command, 요청, event 만 기다리고, view 가 요청한 detach 는 두 workbench 에서 그 surface 의 자리를 유지한다.

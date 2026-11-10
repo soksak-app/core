@@ -236,9 +236,10 @@ test("a retained dormant view is validated with the host superset and projected 
     [fullRequest[0], { ...dormant, surface: { composition: { kind: "dom" } } }],
     async () => ({ placements: [currentPlacement], deferred: ["tab-c2zkow"] }), ["placement-superset-probe"], retainedLifecycle),
   /surface placement cannot defer tab-c2zkow: composition kind is dom/);
-  await assert.rejects(placeCompositorRecord({ ...visibleRecord, drawn: true }, fullRequest,
+  // A drawn placement defers a view whose composition is not declared yet, as an undrawn one does (docs/spec/native-surfaces.md).
+  assert.deepEqual(await placeCompositorRecord({ ...visibleRecord, drawn: true }, fullRequest,
     async () => ({ placements: [currentPlacement], deferred: ["tab-c2zkow"] }), ["placement-superset-probe"], retainedLifecycle),
-  /a drawn surface placement cannot defer a surface/);
+  { placements: [currentPlacement], deferred: [] }, "a drawn placement refused to defer a view");
 
   slot.remove();
   const emptyRecordResult = await compositor.publishAhead(new Map(), new Map());
@@ -248,7 +249,7 @@ test("a retained dormant view is validated with the host superset and projected 
   dom.window.close();
 });
 
-test("placement results reject missing, extra, duplicate, and drawn-deferred surfaces", async (t) => {
+test("placement results reject missing, extra, and duplicate surfaces, and a drawn placement defers a view", async (t) => {
   const dom = new JSDOM(`<div id="plane"><div data-card-id="card">
     <div data-native-surface data-native-surface-id="contract-view" data-native-plugin="placement-contract" data-native-layer="0"></div>
   </div></div>`, { url: "https://example.test/", pretendToBeVisual: true });
@@ -269,7 +270,8 @@ test("placement results reject missing, extra, duplicate, and drawn-deferred sur
     composition: { kind: "view", page: "ui/page.html" } });
   compositor.onCommit(() => ({ placements: [], deferred: ["contract-view"] }));
   try {
-    assert.throws(() => compositor.publish(), /drawn surface placement cannot defer/);
+    // A drawn placement defers a view whose composition is not declared yet (docs/spec/native-surfaces.md#view-surfaces).
+    assert.doesNotThrow(() => compositor.publish(), "a drawn placement refused to defer a view");
     compositor.onCommit(() => ({ placements: [], deferred: [] }));
     assert.throws(() => compositor.publish(), /surface placement result is missing contract-view/);
     compositor.onCommit(() => ({ placements: [{ id: "unexpected" }], deferred: [] }));

@@ -34,13 +34,13 @@ async function setup(t, surfaceModule, query) {
   return { dom, surfaces };
 }
 
-test("a drawn view fails when its required composition wait is missing", async (t) => {
+test("a drawn view fails when its required composition state is missing", async (t) => {
   const { dom, surfaces } = await setup(t, {
     mountedSurface: () => ({ disposed: false }),
   }, "missing-wait");
   try {
-    await assert.rejects(surfaces.place(record(true)), /waitSurfaceCompositionDeclared is not a function/,
-      "a missing composition readiness API must not let a view placement proceed");
+    await assert.rejects(surfaces.place(record(true)), /compositionState is not a function/,
+      "a missing composition state must not let a view placement proceed");
   } finally {
     dom.window.close();
   }
@@ -48,7 +48,7 @@ test("a drawn view fails when its required composition wait is missing", async (
 
 test("an undrawn view fails when its required mount lookup is missing", async (t) => {
   const { dom, surfaces } = await setup(t, {
-    waitSurfaceCompositionDeclared: async () => {},
+    compositionState: () => ({ state: "declared" }),
   }, "missing-mounted-surface");
   try {
     await assert.rejects(surfaces.place(record(false)), /mountedSurface is not a function/,

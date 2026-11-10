@@ -17,7 +17,7 @@ test("one presentation timeout writes one workbench error line", async () => {
   const lines = [];
   mock.module("../surface-modules.js", { namedExports: {
     mountedSurface: (surfaceId) => surfaceId === "tab-1" ? { surfaceId } : null,
-    waitSurfaceCompositionDeclared: async () => {},
+    compositionState: () => ({ state: "declared" }),
   } });
   mock.module("@soksak/runtime", { namedExports: { windows: null, host: {
     on: () => {},
@@ -55,7 +55,7 @@ test("one presentation timeout writes one workbench error line", async () => {
     compositor: { publishAhead: () => surfaces.place(record) },
     textSize: () => 1,
     rendered: () => rendered,
-    waitSurfaceCompositionDeclared: async () => {},
+    compositionState: () => ({ state: "declared" }),
   });
   await connectExposure({ settled: page.drawn, report });
   await surfaces.theme({ scheme: "light", tokens: {} });

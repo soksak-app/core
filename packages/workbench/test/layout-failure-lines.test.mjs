@@ -48,7 +48,7 @@ const page = createPageLayout({
   compositor: { publishAhead: () => Promise.reject(new Error(TIMEOUT)), cancelPrepared: async () => {} },
   textSize: () => 1,
   rendered: () => Promise.resolve(),
-  waitSurfaceCompositionDeclared: async () => {},
+  waitSurfaceCompositionAnswered: async () => {},
 });
 await connectExposure({ settled: page.drawn, report });
 /** The plane schedules a layout. The preparation of that layout fails. */
@@ -94,7 +94,7 @@ test("a successful presentation reports completion", async () => {
   const page = createPageLayout({
     document, showError, setVerify: () => {}, log: () => {}, surfaces: { waitPresented: async () => {} },
     plane: {}, compositor: {}, textSize: () => 1, rendered: async () => {},
-    waitSurfaceCompositionDeclared: async () => {},
+    waitSurfaceCompositionAnswered: async () => {},
   });
   assert.equal(await page.presented(), true);
 });
@@ -108,7 +108,7 @@ test("the last placement answers after the layout that waited behind the running
       publishAhead: () => new Promise((resolve, reject) => opened.push({ resolve, reject })),
       cancelPrepared: async () => {},
     }, textSize: () => 1, rendered: async () => {},
-    waitSurfaceCompositionDeclared: async () => {},
+    waitSurfaceCompositionAnswered: async () => {},
   });
   const layout = () => page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
   layout();
