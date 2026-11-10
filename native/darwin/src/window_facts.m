@@ -132,9 +132,8 @@ static BOOL lives(pid_t process) {
     int name[] = { CTL_KERN, KERN_PROC, KERN_PROC_PID, process };
     struct kinfo_proc info;
     size_t size = sizeof info;
-    if (sysctl(name, 4, &info, &size, NULL, 0) != 0) return errno != ESRCH;
-    // A process that the table no longer holds answers no row.
-    if (size == 0) return NO;
+    if (sysctl(name, 4, &info, &size, NULL, 0) != 0) return errno != ESRCH; // silent: a process that the table cannot read for another reason than its absence lives, as kill answers it
+    if (size == 0) return NO; // silent: a process that the table no longer holds answers no row, so it does not live
     return info.kp_proc.p_stat != SZOMB && !(info.kp_proc.p_flag & P_WEXIT);
 }
 
