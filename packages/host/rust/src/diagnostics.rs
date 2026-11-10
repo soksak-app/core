@@ -119,6 +119,7 @@ pub(crate) fn call(
     let _connection = match method {
         "diagnostics.drag" | "diagnostics.capture.start" | "diagnostics.capture.stop" => reply
             .and_then(|reply| {
+                // default: without a platform no capture wait runs, and the method reports the platform failure itself.
                 let platform = platform::current().ok()?;
                 Some(
                     reply
