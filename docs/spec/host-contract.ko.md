@@ -441,6 +441,7 @@ fn invalid_json_closes_connection() {
 | `status.window.latest-value-last` | 읽는 동안 들어온 host.window 변경은 그 마지막 변경 뒤에 시작하는 읽기 하나로 합쳐지므로, 변경이 몰려도 읽기는 하나이고 새 값 뒤에 옛 값을 보내지 않는다. | all |
 | `status.window.latest-reads-run-on-one-thread` | 창들의 latest read는 유지되는 thread 하나에서 돈다. 각 창은 자기 latest read를 가지고, burst가 끝난 뒤의 요청은 그 thread를 쓴다. | tauriv2 only: Go의 읽기는 goroutine에서 돌므로 유지되는 thread가 필요 없다 |
 | `endpoint.watch.other-requests-not-blocked-by-pending-subscription` | workbench 구독 해제가 대기 중이어도 같은 연결의 다음 요청에 응답한다. | all |
+| `endpoint.watch.unwatch-enters-the-queue-only-after-a-watch` | `status.unwatch`는 그 연결의 topic에 대한 마지막 변경(보유 중이거나 queue에 있는)이 watch일 때만 topic의 queue에 들어간다. 다른 unwatch는 아무것도 바꾸지 않고 workbench에 아무것도 보내지 않으며 queue의 변경을 기다리지 않고 null로 답한다. | all |
 | `exposure-reply.payload.main-reply-unscoped` | surface가 없는 주 문서 응답 페이로드는 빈 surface로 해석된다. | all |
 | `exposure-reply.payload.scoped-reply-keeps-surface` | surface가 있는 응답 페이로드는 인코딩과 해석을 거쳐도 surface를 유지한다. | all |
 | `exposure-reply.target.main-and-surface-distinct` | surface가 없는 응답은 창의 주 문서를, surface가 있는 응답은 그 표면 문서를 대상으로 한다. | all |
@@ -1276,7 +1277,7 @@ fn invalid_json_closes_connection() {
 | `bounds.producer.fields-are-cut-while-serialized` | host event의 fields는 1,048,576바이트까지만 직렬화한다. 상한을 넘는 값은 `fields` `{"head": <첫 4,096바이트>}`와 상한을 막 넘은 `truncated`(직렬화가 멈출 때까지 쓴 바이트 수)로 저장하고, 상한에 들어가는 fields는 그 JSON으로 저장한다. | all |
 | `bounds.producer.record-text-is-cut` | host record의 `text`는 최대 8,192바이트, `where`는 최대 1,024바이트이며 각각 문자 경계에서 자르고, 둘 중 하나라도 잘렸으면 fields에 `truncated: true`가 있다. | all |
 | `bounds.start-buffer.holds-at-most-four-mebibytes` | record의 시작 buffer는 record 1,024개 외에 최대 4,194,304바이트를 담고, writer는 거절한 record와 그 바이트를 `log.dropped`로 센다. | all |
-| `bounds.endpoint.topic-changes-hold-at-most-256` | topic 하나의 구독 변경 256개가 workbench를 기다리면 다음 변경은 적용하지 않고, 오류 코드 `-32000`과 topic과 256을 말하는 메시지로 답하며, buffer `endpoint topic changes`와 이유 `the buffer holds 256 messages`를 가진 `host.buffer.dropped`로 저장한다. | all |
+| `bounds.endpoint.topic-changes-hold-at-most-256` | topic 하나의 구독 변경 256개가 workbench를 기다리면 `status.unwatch`가 아닌 다음 변경은 적용하지 않고, 오류 코드 `-32000`과 topic과 256을 말하는 메시지로 답하며, buffer `endpoint topic changes`와 이유 `the buffer holds 256 messages`를 가진 `host.buffer.dropped`로 저장한다. `status.unwatch`는 거절하지 않는다. 그 topic의 queue에서 기다리고 거기서 연결의 구독을 끝낸다. | all |
 | `bounds.endpoint.output-queue-holds-at-most-sixteen-mebibytes` | 연결의 출력 큐가 16,777,216바이트를 넘게 담게 하는 frame은 거절하고, buffer `endpoint output queue`와 이유 `the buffer holds 16777216 bytes`를 가진 `host.buffer.dropped`로 저장하며, 연결을 닫는다. | wailsv3, mygo only: Go host는 연결의 frame을 writer goroutine이 비우는 큐로 보내지만, Tauri host는 연결을 쥔 채 각 frame을 소켓에 쓴다 |
 | `log.record.flush-stores-the-records-written-so-far` | 기록 flush는 지금까지 쓴 기록이 event log에 들어갈 때까지 기다리고, 붙은 writer가 없으면 곧바로 돌아온다. | all |
 | `log.batch.stores-workbench-events-in-order` | workbench의 `log` 중계는 `batch` 요청의 event를 workbench가 준 `start`와 `ts_us`, writer의 `seq`로, 순서대로, 계층 `workbench`에 저장한다. | all |
