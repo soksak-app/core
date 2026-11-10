@@ -412,6 +412,46 @@ test("a forwarded request carries no timeout", async () => {
   for (const request of forwarded) assert.deepEqual(Object.keys(request).sort(), ["id", "method", "params", "surface"]);
 });
 
+// A forward that the main page makes while it handles an exposure-request carries origin, the id of that request, so the end of
+// the endpoint connection that sent it ends the forward on the host; a forward that the page starts itself carries no origin
+// (exposureForward in docs/spec/exposure.md).
+function originRegistry() {
+  const host = fakeHost(() => ({ result: null }));
+  const made = createRegistry({ call: host.call, report: (error) => { throw error; } });
+  made.declare("core", coreExposes());
+  made.declare("probe", probeExposes());
+  made.configure({ surfacePlugin: () => "probe" });
+  made.registered({ surface: "tab-a", kind: "command", name: "probe.send" });
+  made.registered({ surface: "tab-a", kind: "status", name: "probe.lines" });
+  made.registered({ surface: "tab-a", kind: "element", name: "probe.lines" });
+  const forwards = () => host.calls.filter(([name]) => name === "exposureForward").map(([, arg]) => arg);
+  return { made, forwards };
+}
+
+// contract: exposure.relay.connection-end-ends-its-requests
+test("a forward made while the main page handles an exposure-request carries the id of that request as origin", async () => {
+  const { made, forwards } = originRegistry();
+  await made.handle({ id: 41, method: "command.run", params: { name: "probe.send", params: {} } });
+  await made.handle({ id: 42, method: "status.get", params: { name: "probe.lines" } });
+  await made.handle({ id: 43, method: "element.rect", params: { name: "probe.lines" } });
+  await made.handle({ id: 44, method: "status.watch", params: { name: "probe.lines" } });
+  await made.handle({ id: 45, method: "status.unwatch", params: { name: "probe.lines" } });
+  assert.deepEqual(forwards().map(({ method, origin }) => [method, origin]), [
+    ["command.run", 41], ["status.get", 42], ["element.rect", 43], ["status.watch", 44], ["status.unwatch", 45],
+  ]);
+  assert.equal(new Set(forwards().map(({ id }) => id)).size, 5, "each forward keeps its own id");
+});
+
+test("a forward that the main page starts itself carries no origin", async () => {
+  const { made, forwards } = originRegistry();
+  assert.equal(await made.run("probe.send", {}), null);
+  const values = [];
+  const stop = made.observe("probe.lines", "tab-a", (value) => values.push(value), { exact: true });
+  stop();
+  assert.deepEqual(forwards().map(({ method }) => method), ["command.run", "status.watch", "status.unwatch"]);
+  for (const forward of forwards()) assert.equal(Object.hasOwn(forward, "origin"), false, `${forward.method} carries origin`);
+});
+
 test("the core exposure file declares no command with timeout", () => {
   const file = JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8"));
   const timed = file.exposes.commands.filter((command) => "timeout" in command).map((command) => command.name);
