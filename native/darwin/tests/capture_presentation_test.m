@@ -227,7 +227,6 @@ int main(void) { @autoreleasepool {
     window.animationBehavior = NSWindowAnimationBehaviorNone;
     window.backgroundColor = [NSColor colorWithWhite:0.35 alpha:1];
     NSView *view = [[NSView alloc] initWithFrame:window.contentView.bounds];
-    view.wantsLayer = YES;
     CAMetalLayer *layer = [CAMetalLayer layer];
     layer.device = device;
     layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
@@ -236,7 +235,9 @@ int main(void) { @autoreleasepool {
     layer.frame = view.bounds;
     layer.drawableSize = CGSizeMake(view.bounds.size.width * layer.contentsScale, view.bounds.size.height * layer.contentsScale);
     layer.backgroundColor = [NSColor colorWithWhite:0.35 alpha:1].CGColor;
+    // The layer is set before wantsLayer, so the view hosts it and AppKit does not draw into it as a layer-backed view.
     view.layer = layer;
+    view.wantsLayer = YES;
     [window.contentView addSubview:view];
     [window orderFrontRegardless];
     until(@"the window is visible", ^BOOL { return (window.occlusionState & NSWindowOcclusionStateVisible) != 0; });
