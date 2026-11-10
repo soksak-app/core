@@ -73,12 +73,15 @@ function mount(entry) {
  * closed tab; a sidebar that draws the section again mounts the surface in its new slot (docs/spec/plugins.md#sections).
  */
 function release(entry) {
-  // A sidebar that draws the section again holds a new surface, which the memory saver has not unloaded.
-  unloaded.delete(entry.surface.surfaceId);
   entry.mount = null;
   entry.mounted = false;
   entry.error = null;
   clearSlotSurface(entry.body);
+  // A section that another drawn set holds keeps its surface: a window sidebar that its switch hides or shows moves its sections
+  // between its card and the kept sets, and the commit keeps their views (docs/spec/plugins.md#sections).
+  if (drawnEntry(entry.surface.surfaceId)) return;
+  // A sidebar that draws the section again holds a new surface, which the memory saver has not unloaded.
+  unloaded.delete(entry.surface.surfaceId);
   hideSectionSurface(entry.surface.surfaceId);
 }
 
@@ -134,8 +137,8 @@ export function restoreSection(id) {
 export function clearSet(container) {
   const record = drawn.get(container);
   if (!record) return;
-  for (const entry of record.entries) release(entry);
   drawn.delete(container);
+  for (const entry of record.entries) release(entry);
   container.replaceChildren();
   delete container.dataset.sidebar;
   delete container.dataset.orientation;
@@ -175,7 +178,8 @@ function apply(record) {
     if (height === "fill") entry.element.style.removeProperty("--section-height");
     else entry.element.style.setProperty("--section-height", `${height}px`);
     seat(entry);
-    const shown = record.layout === "tabs" ? choice.tab === id : !choice.folded.has(id);
+    // The kept set of a hidden window sidebar shows no section: a placement that holds them mounts them (mountPlacedSections).
+    const shown = !record.context.hidden && (record.layout === "tabs" ? choice.tab === id : !choice.folded.has(id));
     if (!shown) continue;
     // A shown unloaded section takes its seat again, which gives the memory saver its show.
     if (unloaded.has(entry.surface.surfaceId)) entry.body.dataset.nativeSurface = "view";
@@ -235,7 +239,6 @@ export function drawSet(container, sidebar, set, context) {
   if (context.orientation !== "horizontal" && context.orientation !== "vertical") throw new Error("section orientation must be horizontal or vertical");
   const { space } = context;
   if (typeof space !== "string" || !space) throw new Error(`sidebar ${sidebar} draws sections without the space of its layout`);
-  sweep();
   if (set.layout !== "list" && set.layout !== "tabs") throw new Error(`set ${set.id} layout must be list or tabs`);
   // The sections of a plugin that is not loaded remain in the set but are not drawn (docs/spec/plugins.md).
   const sections = set.sections.filter(hasSection).map(section);
@@ -244,7 +247,8 @@ export function drawSet(container, sidebar, set, context) {
   if (set.layout === "tabs" && !sections.some((s) => s.id === choice.tab)) choice.tab = sections[0]?.id ?? null;
   // Neither the orientation nor the followed surface is part of the key: a change of either keeps the section surfaces, and the
   // section views read the change from core.sidebars (docs/spec/plugins.md#sections).
-  const key = JSON.stringify([space, sidebar, set.id, set.title, set.layout, sections.map((s) => s.id), context.card, context.window === true]);
+  const key = JSON.stringify([space, sidebar, set.id, set.title, set.layout, sections.map((s) => s.id), context.card, context.window === true,
+    context.hidden === true]);
   let record = drawn.get(container);
   if (record?.key !== key) {
     if (record) clearSet(container);
@@ -282,6 +286,8 @@ export function drawSet(container, sidebar, set, context) {
       entry.body.dataset.nativePlugin = section.plugin;
       entry.body.dataset.nativeTitle = section.name;
       entry.body.dataset.nativeDim = "false";
+      // An unloaded section has no seat while it is hidden, also in the set that holds it next (unloadSections).
+      if (unloaded.has(surfaceId)) delete entry.body.dataset.nativeSurface;
       const params = { sidebar, section: section.id };
       if (strip) {
         entry.tab = document.createElement("button");
@@ -322,12 +328,18 @@ export function drawSet(container, sidebar, set, context) {
   }
   record.context = context;
   apply(record);
+  // The kept set of a hidden window sidebar names no element: core.sidebars and the elements report the drawn sidebars only.
+  if (context.hidden === true) for (const el of [container, ...container.querySelectorAll("[data-expose]")]) delete el.dataset.expose;
+  // The sets that left the document release their sections after this set holds its own, so a section that moved here keeps its surface.
+  sweep();
 }
 
 function recordsOf(sidebar, section) {
   sweep();
-  const records = [...drawn.values()].filter((record) => record.sidebar === sidebar);
-  if (records.length === 0) throw new Error(`no sidebar ${sidebar} is drawn`);
+  // The drawn set goes first; the kept set of the same sidebar follows the choice with it.
+  const records = [...drawn.values()].filter((record) => record.sidebar === sidebar)
+    .sort((a, b) => Number(a.context.hidden === true) - Number(b.context.hidden === true));
+  if (!records.some((record) => !record.context.hidden)) throw new Error(`no sidebar ${sidebar} is drawn`);
   if (!records[0].entries.some((entry) => entry.section.id === section)) {
     throw new Error(`sidebar ${sidebar} has no section ${section}`);
   }
@@ -408,7 +420,7 @@ export function restoreSidebarChoices(saved) {
 
 /** Drawn sidebars in document order. The value of core.sidebars. */
 export function sidebarsState() {
-  return [...document.querySelectorAll(".set[data-sidebar]")].map((container) => drawn.get(container)).filter(Boolean)
+  return [...document.querySelectorAll(".set[data-sidebar]")].map((container) => drawn.get(container)).filter((record) => record && !record.context.hidden)
     .map((record) => {
       const choice = choiceOf(record.sidebar);
       return {

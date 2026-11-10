@@ -399,8 +399,40 @@ func windowSidebarStatus(place, plugin string) string {
 
 // Frame returns the frame of the fixed sidebar place in the space, and records the sidebar in the build.
 func (s *Sidebars) Frame(place, space string, focused FocusedSurface) (SidebarFrame, error) {
+	frame, set, owner, err := s.windowFrame(place, space, focused)
+	if err != nil || set == nil {
+		return frame, err
+	}
+	s.drawn = append(s.drawn, &drawnSidebar{frame: frame, set: set.ID, owner: owner})
+	return frame, nil
+}
+
+// HiddenSeats returns the seats of the sections of the fixed sidebar place that the build does not draw, because its switch is off or a
+// fullscreen card hides it, each not visible: the sidebar keeps its section surfaces hidden (docs/spec/plugins.md#sections). It records
+// nothing, so core.sidebars reports only the drawn sidebars.
+func (s *Sidebars) HiddenSeats(place, space string, focused FocusedSurface) ([]SidebarSeat, error) {
+	for _, drawn := range s.drawn {
+		if drawn.frame.Sidebar == place {
+			return nil, nil
+		}
+	}
+	frame, _, _, err := s.windowFrame(place, space, focused)
+	if err != nil {
+		return nil, err
+	}
+	seats := SidebarSeats(frame)
+	for i := range seats {
+		seats[i].Visible = false
+		seats[i].Box = layout.Rect{}
+	}
+	return seats, nil
+}
+
+// windowFrame returns the frame of the fixed sidebar place in the space with its set, nil without a choice, and the surface that its
+// sections follow.
+func (s *Sidebars) windowFrame(place, space string, focused FocusedSurface) (SidebarFrame, *SidebarSet, FocusedSurface, error) {
 	if !s.Holds(place) {
-		return SidebarFrame{}, fmt.Errorf("unknown window sidebar %s", place)
+		return SidebarFrame{}, nil, FocusedSurface{}, fmt.Errorf("unknown window sidebar %s", place)
 	}
 	// The sections of a top or bottom window sidebar lie horizontally, of a left or right one vertically (docs/spec/external-sidebars.md).
 	orientation := "vertical"
@@ -410,15 +442,14 @@ func (s *Sidebars) Frame(place, space string, focused FocusedSurface) (SidebarFr
 	set, plugin := s.windowSet(place, focused)
 	frame := SidebarFrame{Sidebar: place, Space: space, Orientation: orientation, Side: place, Status: windowSidebarStatus(place, plugin)}
 	if set == nil {
-		return frame, nil
+		return frame, nil, FocusedSurface{}, nil
 	}
 	owner := FocusedSurface{}
 	if plugin != "" {
 		owner = focused
 	}
 	s.fill(&frame, set)
-	s.drawn = append(s.drawn, &drawnSidebar{frame: frame, set: set.ID, owner: owner})
-	return frame, nil
+	return frame, set, owner, nil
 }
 
 // CardFrame returns the frame of the side of a card that shows set, and records the sidebar in the build. owner is the card with

@@ -524,6 +524,24 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F719",
+    implementation: [
+      { file: "packages/workbench-mygo/src/shell_sidebars.go", symbol: "func (s *Shell) keepHiddenSidebars(c *ui.Context) {" },
+      { file: "packages/workbench-mygo/src/sidebars.go", symbol: "func (s *Sidebars) HiddenSeats(place, space string, focused FocusedSurface) ([]SidebarSeat, error) {" },
+      { file: "packages/workbench/plane.js", symbol: "function keepHiddenSidebars() {" },
+      { file: "packages/workbench/sidebar-sections.js", symbol: "if (drawnEntry(entry.surface.surfaceId)) return;" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/sidebar_keep_test.go", id: "TestASwitchedWindowSidebarKeepsItsSectionSurfaces" },
+      { file: "packages/workbench-mygo/tests/sidebar_keep_test.go", id: "TestAnArrangementKeepsTheSectionsOfTheSidebarThatStays" },
+      { file: "packages/workbench-mygo/tests/sidebar_keep_test.go", id: "TestTheSwitchDrawsThePlaneBeforeTheSettingsWriteAnswers" },
+      { file: "packages/workbench/test/window-sidebar-keep.test.mjs", id: "a switched window sidebar keeps its section surfaces hidden in the plane, and an arrangement keeps the sidebar that stays" },
+      { file: "packages/workbench/test/settings-switch-order.test.mjs", id: "a switch reaches the drawing before the settings write, and answers after the write" },
+    ],
+    expected: "A window sidebar that its switch hides keeps its section surfaces hidden in every placement and a show places them without a new view, an arrangement keeps the sections of the sidebar that stays, and the frame after a switch press presents its placement before the settings write answers, in both workbenches.",
+    levels: ["unit"],
+  },
+  {
     id: "F721",
     implementation: [
       { file: "packages/workbench-mygo/src/settings_draw.go", symbol: "ui.Text(c, row.value).NoWrap().FontSize(s.textControl()).TextColor(s.palette.Fg)" },

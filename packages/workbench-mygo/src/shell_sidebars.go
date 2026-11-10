@@ -44,6 +44,23 @@ func (s *Shell) drawSidebarCard(c *ui.Context, id string, rect layout.Rect, inse
 	})
 }
 
+// keepHiddenSidebars seats, not visible, the sections of each window sidebar of a side with a choice that the frame did not draw: its
+// switch is off or a fullscreen card hides it. The frame then holds their section surfaces, so the host keeps their views hidden and a
+// show places them again without a new view (docs/spec/plugins.md#sections).
+func (s *Shell) keepHiddenSidebars(c *ui.Context) {
+	space, focused := s.opened().ActiveSpaceID, s.focusedSurface()
+	for _, side := range s.sidebars.Sides() {
+		seats, err := s.sidebars.HiddenSeats(side, space, focused)
+		if err != nil {
+			s.fail(err)
+			return
+		}
+		for _, seat := range seats {
+			s.drawSectionSeat(c, seat)
+		}
+	}
+}
+
 // gripThreshold is the movement in points that tells a drag from a press.
 const gripThreshold = 3
 

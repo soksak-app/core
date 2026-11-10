@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F719: 두 workbench 에서 switch 나 fullscreen card 가 숨긴 window sidebar 는 그 section surface 를 숨긴 view 로 유지한다. 그래서 보이기는 web content process 를 다시 시작하지 않고 그것을 다시 놓으며, 재배치는 남는 sidebar 의 section 을 유지한다.
 - F720: window chrome 의 변 switch 와 mode switch, window sidebar 의 접기 control 은 적용 값이 나온 scope 에 쓰므로 더는 project 값을 더하지 않는다. 설정 창의 전역 탭은 project 가 덮어쓴 설정의 project 값을 보이고 쓰며 프로젝트 값으로 표시하고, project 값을 더하거나 없애는 것은 project 탭만 한다.
 - F721: mygo workbench 의 순서 row 는 page 처럼 ▲ 와 ▼ 옆에 자기 값의 이름을 보이고, 첫 row 는 사이드바 순서를 보인다.
 - F722: mygo workbench 의 rail group 과 `core.rail` 은 page 처럼 네 window 변의 plugin set 을 그 순서로 읽는다.

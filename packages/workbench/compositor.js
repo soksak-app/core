@@ -429,9 +429,27 @@ export function publishAhead(rects, seated, titlebar) {
   aheadRecord = null;
   aheadComplete = true;
   const seats = [];
+  // The kept sections of a window sidebar that its switch hides stand in no card (docs/spec/plugins.md#sections). Their slots are
+  // hidden in every layout, so the prediction measures the same hidden frame as the drawn commit, and they are no card seat.
+  let unseated = 0;
   for (const slot of slots()) {
     const id = slot.dataset.nativeSurfaceId;
     const el = cardEl(slot);
+    if (!el && slot.closest("[hidden]")) {
+      unseated++;
+      seats.push({
+        id,
+        layer: Number(slot.dataset.nativeLayer),
+        title: slot.dataset.nativeTitle,
+        plugin: slot.dataset.nativePlugin,
+        dim: slot.dataset.nativeDim === "true",
+        bands: null,
+        visible: false,
+        surface: slotSurface(slot),
+        frame: planeFrame(slot.getBoundingClientRect(), plane.getBoundingClientRect()),
+      });
+      continue;
+    }
     const card = el && rects.get(el.dataset.cardId);
     if (card && slot.parentElement !== el) {
       // A section surface has no seat of its card. It keeps its measured offsets from the card, so the drawn commit of a
@@ -496,7 +514,7 @@ export function publishAhead(rects, seated, titlebar) {
       } : { x: 0, y: 0, w: 0, h: 0 },
     });
   }
-  aheadComplete &&= seats.length === seated.size;
+  aheadComplete &&= seats.length - unseated === seated.size;
   aheadSeq = ++seq;
   return deliver(aheadSeq, seats, titlebar);
 }
