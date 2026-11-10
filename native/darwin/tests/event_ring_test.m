@@ -10,6 +10,13 @@
 #import "support/records.h"
 
 static int failures;
+
+// The clock of the report of the gate (docs/spec/logging.md#policy): the check sets it, so a second of the rule passes when the check
+// moves it, without a sleep. It starts above zero, because zero is the time of no earlier report.
+static const uint64_t oneSecond = 1000000000ull;
+static uint64_t reportNow = 1000000000ull;
+static uint64_t reportClock(void) { return reportNow; }
+
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
@@ -53,6 +60,7 @@ static void *produce(void *argument) {
 }
 
 int main(void) { @autoreleasepool {
+    sp_event_test_set_report_clock(reportClock);
     // A pushed event comes back whole and in order.
     sp_event_ring *ring = sp_event_ring_create(1024);
     pushString(ring, @"first");
@@ -177,8 +185,8 @@ int main(void) { @autoreleasepool {
     for (NSNumber *count in defaultGated.allValues) everyGateCountedOnce = everyGateCountedOnce && [count intValue] == 1;
     check(defaultStored == SP_CLASS_COUNT && defaultStoredAreErrors, @"the drain holds exactly the five errors of the default policy");
     check(everyGateCountedOnce, [NSString stringWithFormat:@"the drain reports each refused warn, info, debug and trace event of each class as a gated count of one (%@)", defaultGated]);
-    // The report of a count waits a second after the earlier report, so the counts of the following tests are reported on time.
-    usleep(1100 * 1000);
+    // The report of a count waits a second after the earlier report, so the second passes for the counts of the following tests.
+    reportNow += oneSecond;
     // The tests below store every level, so they set the policy that stores everything; the default policy is tested above.
     const int8_t everything[SP_CLASS_COUNT] = {SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE};
     check(sp_event_set_policy(everything), @"the policy that stores every level of every class is accepted");
@@ -308,7 +316,10 @@ int main(void) { @autoreleasepool {
     for (int index = 0; index < 3; index++) (void)sp_event_gate(SP_CLASS_CALL, SP_EVENT_DEBUG);
     used = sp_event_drain(pulled, sizeof pulled);
     check(used == 0, [NSString stringWithFormat:@"a drain within a second of the earlier report reports no count (%zu bytes)", used]);
-    usleep(1100 * 1000);
+    reportNow += oneSecond - 1;
+    used = sp_event_drain(pulled, sizeof pulled);
+    check(used == 0, [NSString stringWithFormat:@"a drain a nanosecond before the second reports no count (%zu bytes)", used]);
+    reportNow += 1;
     used = sp_event_drain(pulled, sizeof pulled);
     NSDictionary *later = used > 4 ? ({ uint32_t length; memcpy(&length, pulled, sizeof length); decodedRecord(pulled + 4, length); }) : nil;
     check([later[@"name"] isEqualToString:@"native.log.gated"] && [later[@"fields"][@"count"] intValue] == 3,
@@ -318,7 +329,7 @@ int main(void) { @autoreleasepool {
     const int8_t lifecycleOff[SP_CLASS_COUNT] = {-1, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE};
     check(sp_event_set_policy(lifecycleOff), @"a policy that turns the class lifecycle off is accepted");
     (void)sp_event_gate(SP_CLASS_LIFECYCLE, SP_EVENT_INFO);
-    usleep(1100 * 1000);
+    reportNow += oneSecond;
     used = sp_event_drain(pulled, sizeof pulled);
     NSDictionary *reported = used > 4 ? ({ uint32_t length; memcpy(&length, pulled, sizeof length); decodedRecord(pulled + 4, length); }) : nil;
     check([reported[@"name"] isEqualToString:@"native.log.gated"] && [reported[@"fields"][@"class"] isEqualToString:@"lifecycle"] && [reported[@"fields"][@"count"] intValue] == 1,

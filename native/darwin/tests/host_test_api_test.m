@@ -1,4 +1,5 @@
 #include "support/host_test_api.h"
+#import "support/run_until.h"
 #include <Block.h>
 #include <CoreFoundation/CoreFoundation.h>
 #include <IOSurface/IOSurface.h>
@@ -13,7 +14,8 @@
 static int failures;
 #define CHECK(value, text) do { if (!(value)) { fprintf(stderr, "FAIL: %s\n", text); failures++; } else puts("PASS: " text); } while (0)
 static bool injected;
-static void timerFired(CFRunLoopTimerRef timer, void *info) { (void)timer; (void)info; }
+static bool fired;
+static void timerFired(CFRunLoopTimerRef timer, void *info) { (void)timer; (void)info; fired = true; }
 static void counts(uint64_t *sent, uint64_t *waiting, uint64_t *answered) { *sent = 17; *waiting = 3; *answered = 11; }
 static void setter(bool value) { injected = value; }
 static void otherCounts(uint64_t *sent, uint64_t *waiting, uint64_t *answered) { *sent = 99; *waiting = 99; *answered = 99; }
@@ -59,8 +61,8 @@ int main(void) {
     CHECK(sp_host_test_sampler_capture_main() == 1, "native main stack is captured");
     CHECK(sp_host_test_sampler_start() == 0, "native sampler thread starts");
     sp_host_test_sampler_set_phase(0);
-    // A bounded native workload gives the sampler real stack observations; this is not a readiness poll.
-    usleep(30000);
+    // The sampler signals each sample that it took, so the check waits for the first sample of the phase.
+    sp_host_test_sampler_await_samples(0, 1);
     CHECK(sp_host_test_sampler_stop() == 0, "sampler thread joins");
     CHECK(sp_host_test_sampler_phase_samples(0) > 0, "native stack samples are required");
     CHECK(sp_host_test_sampler_phase_outside(0) == 0 && sp_host_test_sampler_phase_first_outside(0) == 0, "samples remain inside the real native main stack");
@@ -69,7 +71,7 @@ int main(void) {
     sp_host_test_recorder_start();
     CFRunLoopTimerRef timer = CFRunLoopTimerCreate(NULL, CFAbsoluteTimeGetCurrent() + 0.001, 0, 0, 0, timerFired, NULL);
     CFRunLoopAddTimer(CFRunLoopGetMain(), timer, kCFRunLoopDefaultMode);
-    CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.01, false);
+    sp_run_until("the timer of the recorded turn fires", ^BOOL { return fired; });
     CFRunLoopTimerInvalidate(timer);
     CFRelease(timer);
     uint64_t recorded = sp_host_test_recorder_stop();

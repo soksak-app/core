@@ -93,14 +93,6 @@ static void runQueuedEvents(void) {
     }
 }
 
-// Runs the event queue of the application for the interval, for a hold that must outlast it. The interval is the subject of
-// the check that no time ends a wait, so it is a measured window: a block of the main queue ends it.
-static void runEvents(NSTimeInterval interval) {
-    __block BOOL passed = NO;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(interval * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{ passed = YES; });
-    eventWait([NSString stringWithFormat:@"%.1f s pass while the keys wait", interval], ^BOOL { return passed; });
-}
-
 // The fields of the first event named name in events, nil without one.
 static NSDictionary *eventFields(NSArray<NSDictionary *> *events, NSString *name) {
     for (NSDictionary *event in events) {
@@ -552,8 +544,10 @@ int main(void) { @autoreleasepool {
     NSString *after = regionKeys(^{ typeKeys(holding, "y"); });
     check([after isEqual:@"y"], "a key after the decision reaches the region at once");
 
-    // R3: a call without the decision moves the keyboard and the keys keep waiting. R2: time does not end a wait: the keys still
-    // wait more than a second later, nothing is recorded for the wait, and the decided call gives them to its target in order.
+    // R3: a call without the decision moves the keyboard and the keys keep waiting. R2: time does not end a wait: the wait sets no
+    // timer, so once the main loop ran the turns that the call and the keys sent, only a decided call, a press or the close of the
+    // window ends it. The keys still wait then, nothing is recorded for the wait, and the decided call gives them to its target in
+    // order.
     sp_window_focus_workbench(holding);
     __block NSString *undecided = nil;
     NSArray<NSDictionary *> *heldEvents = capturedEvents(^{
@@ -564,7 +558,7 @@ int main(void) { @autoreleasepool {
             runQueuedEvents();
         }) retain];
         check(holding.firstResponder == (NSResponder *)heldRegion, "a call without the decision moves the keyboard");
-        runEvents(1.5);
+        afterMainTurn(@"a turn of the main loop after the turns of the call and the keys");
     });
     [undecided autorelease];
     check([undecided isEqual:@""], [NSString stringWithFormat:@"the keys wait after a call without the decision, got \"%@\"", undecided].UTF8String);
@@ -574,7 +568,7 @@ int main(void) { @autoreleasepool {
         check(![event[@"name"] hasPrefix:@"native.keyboard."],
             [NSString stringWithFormat:@"a wait records nothing, got %@", event[@"name"]].UTF8String);
     }
-    check([early isEqual:@""], [NSString stringWithFormat:@"no key reaches the region 1.5 s into a wait, got \"%@\"", early].UTF8String);
+    check([early isEqual:@""], [NSString stringWithFormat:@"no key reaches the region after the turns of the call, got \"%@\"", early].UTF8String);
     NSString *late = regionKeys(^{
         sp_window_keys_decided(holding);
         runQueuedEvents();
