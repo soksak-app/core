@@ -457,7 +457,7 @@ fn invalid_json_closes_connection() {
 | `exposure.host-window.reads-during-surface-close` | 네이티브 surface view는 닫는 단계가 id를 잊을 때까지 surface id를 유지하므로, view가 열려 있는 동안 window status 읽기는 surface id가 없는 네이티브 view를 만나지 않는다. | all |
 | `exposure.host-window.unregistered-surface-named` | window status 읽기가 등록된 surface가 없는 네이티브 surface view를 만나면 `unregistered native surface <id>`로 실패하며, `<id>`는 window facts의 네이티브 view 주소이고 두 host의 글은 같다. | all |
 | `exposure.command.ends-by-reply-or-peer-end` | command.run에는 시간 제한이 없다. 그 답, 그것을 실행하는 문서의 끝, 그것을 보낸 endpoint 연결의 끝으로 끝난다. | all |
-| `exposure.relay.connection-end-ends-its-requests` | endpoint 연결의 끝은 호스트에서 그 연결의 전달된 요청을 각각 끝내고 호스트는 아무것도 답하지 않는다. 그 뒤 문서의 답은 끝난 요청의 관찰로 쓴다. | all |
+| `exposure.relay.connection-end-ends-its-requests` | endpoint 연결의 끝은 호스트에서 그 연결의 요청과 `origin`이 그 요청 중 하나인 `exposureForward`를 각각 끝내고 호스트는 아무것도 답하지 않는다. 그 뒤 문서의 답은 끝난 요청의 관찰로 쓴다. `origin`이 없는 전달은 어떤 연결의 끝으로도 끝나지 않는다. | all |
 | `exposure.command.declaration-refuses-a-time-limit` | `timeout`을 가진 명령 선언은 manifest 검사와 registry가 `<where>: timeout is not a member of a command declaration`로 거절한다. | all |
 | `exposure.relay.reply-resolves-request` | 대상 문서에서 온 같은 id의 응답은 그 결과로 요청을 완료한다. | all |
 | `exposure.relay.keeps-value-text` | workbench 응답은 workbench가 보낸 텍스트 그대로 중계되므로 값의 key 순서가 유지된다(`{"zeta":1,"alpha":{"b":2,"a":1}}`는 보낸 그대로다). | all |
