@@ -797,12 +797,8 @@ impl Platform for Windows {
     fn service_process_exists(&self, pid: u32) -> Result<bool, String> {
         unsupported::service_process_exists(pid)
     }
-    fn wait_service_process_end(
-        &self,
-        pid: u32,
-        timeout: std::time::Duration,
-    ) -> Result<bool, String> {
-        unsupported::wait_service_process_end(pid, timeout)
+    fn wait_service_process_end(&self, pid: u32, stop: &super::StopSignal) -> Result<bool, String> {
+        unsupported::wait_service_process_end(pid, stop)
     }
     fn new_session(&self, command: &mut std::process::Command) -> Result<(), String> {
         unsupported::new_session(command)
@@ -815,6 +811,12 @@ impl Platform for Windows {
     }
     fn end_process_group(&self, _pid: u32) -> Result<(), String> {
         Err("process group end is not implemented on windows".to_string())
+    }
+    fn terminate_process_group(&self, _pid: u32) -> Result<(), String> {
+        Err("process group termination is not implemented on windows".to_string())
+    }
+    fn exited_by_termination(&self, _status: std::process::ExitStatus) -> bool {
+        false
     }
     fn wait_process_exit(&self, _pid: u32) -> Result<(), String> {
         Err("process exit wait is not implemented on windows".to_string())

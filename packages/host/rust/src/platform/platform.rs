@@ -20,10 +20,86 @@ pub trait PersistentStream: Read + Write + Send {
     /// Closes both directions of the connection. The io error is returned as it is so that the caller can tell an
     /// unconnected socket (ENOTCONN).
     fn shutdown(&self) -> std::io::Result<()>;
-    /// Makes the next read finish within the deadline. None waits indefinitely. It keeps the hello round trip from
-    /// stopping forever while it holds the state lock (V5-106). The read thread that follows is set back to wait
-    /// indefinitely.
-    fn set_read_deadline(&self, timeout: Option<std::time::Duration>) -> Result<(), String>;
+}
+
+/// The stop of the sidecars, which ends the waits that no time limit ends: the start of a service, its hello and a
+/// replacement (docs/spec/sidecars.md#declaration-and-startup). A wait registers a wake with [`StopSignal::watch`]; the stop
+/// calls each registered wake once under its lock, so a wake does not run after its watch is dropped.
+#[derive(Default)]
+pub struct StopSignal {
+    state: std::sync::Arc<std::sync::Mutex<StopState>>,
+}
+
+type StopWake = Box<dyn FnOnce() + Send>;
+
+#[derive(Default)]
+struct StopState {
+    stopped: bool,
+    next: u64,
+    wakes: std::collections::HashMap<u64, StopWake>,
+}
+
+/// The registration of a wake with a [`StopSignal`]. Dropping it removes the wake.
+pub struct StopWatch {
+    state: std::sync::Arc<std::sync::Mutex<StopState>>,
+    key: u64,
+}
+
+impl StopSignal {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    fn state(&self) -> std::sync::MutexGuard<'_, StopState> {
+        self.state
+            .lock()
+            // default: a wake that panicked leaves the stop state whole: the flag and the wakes that remain.
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// Stops the signal and calls every registered wake. A second stop does nothing.
+    pub fn stop(&self) {
+        let mut state = self.state();
+        if state.stopped {
+            return;
+        }
+        state.stopped = true;
+        for (_, wake) in state.wakes.drain() {
+            wake();
+        }
+    }
+
+    /// Whether the signal is stopped.
+    pub fn stopped(&self) -> bool {
+        self.state().stopped
+    }
+
+    /// Registers wake, which the stop calls once, and answers the watch that keeps it registered. A stopped signal
+    /// registers nothing and answers None: the caller is stopped already.
+    pub fn watch(&self, wake: impl FnOnce() + Send + 'static) -> Option<StopWatch> {
+        let mut state = self.state();
+        if state.stopped {
+            return None;
+        }
+        let key = state.next;
+        state.next += 1;
+        state.wakes.insert(key, Box::new(wake));
+        Some(StopWatch {
+            state: std::sync::Arc::clone(&self.state),
+            key,
+        })
+    }
+}
+
+impl Drop for StopWatch {
+    fn drop(&mut self) {
+        self.state
+            .lock()
+            // default: a wake that panicked leaves the stop state whole: the flag and the wakes that remain.
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .wakes
+            .remove(&self.key);
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -1112,14 +1188,10 @@ pub trait Platform: CoreRootHost + Send + Sync {
     fn secure_service_directory(&self, path: &Path) -> Result<(), String>;
     /// Checks whether the process of the persistent service endpoint still exists.
     fn service_process_exists(&self, pid: u32) -> Result<bool, String>;
-    /// Waits until the service process `pid` ends, for at most `timeout`, and answers whether it ended. A process that
-    /// does not exist has ended. The wait uses the kernel notification of the end of a process, which also reports a
-    /// process that stays as a zombie, so it does not poll (docs/spec/persistent-services.md#updates).
-    fn wait_service_process_end(
-        &self,
-        pid: u32,
-        timeout: std::time::Duration,
-    ) -> Result<bool, String>;
+    /// Waits until the service process `pid` ends or `stop` stops, and answers whether it ended. A process that does not
+    /// exist has ended. No time limit ends the wait. The wait uses the kernel notification of the end of a process, which
+    /// also reports a process that stays as a zombie, so it does not poll (docs/spec/persistent-services.md#updates).
+    fn wait_service_process_end(&self, pid: u32, stop: &StopSignal) -> Result<bool, String>;
     /// Makes command start in a new session. A persistent service belongs to the configuration directory and not to the
     /// application process, so it does not receive the signals of the process group of the application and of the
     /// terminal. Call it before command starts.
@@ -1132,6 +1204,11 @@ pub trait Platform: CoreRootHost + Send + Sync {
     fn new_process_group(&self, command: &mut std::process::Command) -> Result<(), String>;
     /// Sends the force-kill signal to the process group whose leader is `pid`. A group without a process has ended.
     fn end_process_group(&self, pid: u32) -> Result<(), String>;
+    /// Sends the terminate signal to the process group whose leader is `pid`, the stop of a sidecar
+    /// (docs/spec/sidecars.md#declaration-and-startup). A group without a process has ended.
+    fn terminate_process_group(&self, pid: u32) -> Result<(), String>;
+    /// Whether an ended process ended by the terminate signal.
+    fn exited_by_termination(&self, status: std::process::ExitStatus) -> bool;
     /// Waits until the child process `pid` exits, without reaping it, so its owner still reaps it.
     fn wait_process_exit(&self, pid: u32) -> Result<(), String>;
     /// Makes the reads of an output pipe of a child process end with the function that it returns: a read then takes what

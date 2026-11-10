@@ -943,12 +943,8 @@ impl Platform for Darwin {
     fn service_process_exists(&self, pid: u32) -> Result<bool, String> {
         endpoint::service_process_exists(pid)
     }
-    fn wait_service_process_end(
-        &self,
-        pid: u32,
-        timeout: std::time::Duration,
-    ) -> Result<bool, String> {
-        endpoint::wait_service_process_end(pid, timeout)
+    fn wait_service_process_end(&self, pid: u32, stop: &super::StopSignal) -> Result<bool, String> {
+        endpoint::wait_service_process_end(pid, stop)
     }
     fn new_session(&self, command: &mut std::process::Command) -> Result<(), String> {
         endpoint::new_session(command);
@@ -963,6 +959,12 @@ impl Platform for Darwin {
     }
     fn end_process_group(&self, pid: u32) -> Result<(), String> {
         child_process::end_process_group(pid)
+    }
+    fn terminate_process_group(&self, pid: u32) -> Result<(), String> {
+        child_process::terminate_process_group(pid)
+    }
+    fn exited_by_termination(&self, status: std::process::ExitStatus) -> bool {
+        child_process::exited_by_termination(status)
     }
     fn wait_process_exit(&self, pid: u32) -> Result<(), String> {
         child_process::wait_process_exit(pid)
@@ -1005,10 +1007,6 @@ impl PersistentStream for PersistentUnixStream {
 
     fn shutdown(&self) -> std::io::Result<()> {
         self.0.shutdown(std::net::Shutdown::Both)
-    }
-
-    fn set_read_deadline(&self, timeout: Option<std::time::Duration>) -> Result<(), String> {
-        self.0.set_read_timeout(timeout).map_err(|e| e.to_string())
     }
 }
 

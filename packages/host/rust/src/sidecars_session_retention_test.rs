@@ -53,6 +53,7 @@ fn native_view_removal_still_closes_a_standard_io_session() {
                 persistent: None,
                 surfaces: HashSet::from([surface.into()]),
                 closed_surfaces: HashSet::new(),
+                read_ended: None,
             },
         );
     }
@@ -646,6 +647,7 @@ pub(crate) fn mounted_project_probe_wire<O: Owner>(
             persistent: None,
             surfaces: HashSet::new(),
             closed_surfaces: HashSet::new(),
+            read_ended: None,
         },
     );
     (sidecars, move || match receiver.try_recv() {
@@ -709,6 +711,7 @@ pub(crate) fn background_race_sidecars<O: Owner>(
             persistent: None,
             surfaces: HashSet::new(),
             closed_surfaces: HashSet::new(),
+            read_ended: None,
         },
     );
     (sidecars, move || {

@@ -12,15 +12,32 @@ pub fn new_process_group(command: &mut std::process::Command) {
 
 /// Sends SIGKILL to the process group pid; ESRCH means that no process of the group remains.
 pub fn end_process_group(pid: u32) -> Result<(), String> {
-    let group = i32::try_from(pid).map_err(|_| format!("process group {pid} is out of range"))?;
-    if unsafe { libc::kill(-group, libc::SIGKILL) } == 0 {
+    signal_process_group(pid, libc::SIGKILL)
+        .map_err(|error| format!("end process group {pid}: {error}"))
+}
+
+/// Sends SIGTERM to the process group pid; ESRCH means that no process of the group remains.
+pub fn terminate_process_group(pid: u32) -> Result<(), String> {
+    signal_process_group(pid, libc::SIGTERM)
+        .map_err(|error| format!("terminate process group {pid}: {error}"))
+}
+
+fn signal_process_group(pid: u32, signal: i32) -> Result<(), String> {
+    let group = i32::try_from(pid).map_err(|_| "out of range".to_string())?;
+    if unsafe { libc::kill(-group, signal) } == 0 {
         return Ok(());
     }
     let error = std::io::Error::last_os_error();
     if error.raw_os_error() == Some(libc::ESRCH) {
         return Ok(());
     }
-    Err(format!("end process group {pid}: {error}"))
+    Err(error.to_string())
+}
+
+/// Whether an ended process ended by SIGTERM.
+pub fn exited_by_termination(status: std::process::ExitStatus) -> bool {
+    use std::os::unix::process::ExitStatusExt;
+    status.signal() == Some(libc::SIGTERM)
 }
 
 /// Waits until the child process pid exits, without reaping it, so its owner still reaps it and reads its status. A child
