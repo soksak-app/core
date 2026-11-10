@@ -24,10 +24,12 @@ pub fn terminate_process_group(pid: u32) -> Result<(), String> {
         .map_err(|error| format!("terminate process group {pid}: {error}"))
 }
 
-/// Sends `signal` to the process group of the leader `pid`, a child of the host. The wait for the exit of the leader
-/// (wait_process_exit) leaves it unreaped, and Darwin answers kill of a group whose processes are all zombies with EPERM,
-/// not ESRCH; a group with a process that runs is signalled. So EPERM while the leader has exited is the end of the group,
-/// as ESRCH is; EPERM while the leader runs is an error.
+/// Sends `signal` to the process group of the leader `pid`, a child of the host that the caller has not reaped: the host
+/// reaps a sidecar only after the end of its group (ProcessExit of sidecars.rs) and a service after its own signal. The
+/// wait for the exit of the leader (wait_process_exit) leaves it unreaped, and Darwin answers kill of a group whose
+/// processes are all zombies with EPERM, not ESRCH; a group with a process that runs is signalled. So EPERM while the
+/// unreaped leader has exited is the end of the group, as ESRCH is; EPERM while the leader runs, or for a process that is
+/// not an unreaped child, is an error.
 fn signal_process_group(pid: u32, signal: i32) -> Result<(), String> {
     let group = i32::try_from(pid).map_err(|_| "out of range".to_string())?;
     if unsafe { libc::kill(-group, signal) } == 0 {

@@ -266,6 +266,7 @@ fn fast_close_answer_preserves_both_closing_transitions() {
             "fixture-standard".into(),
             super::Process {
                 child: None,
+                exit: None,
                 outbox,
                 writing: Arc::new(AtomicUsize::new(0)),
                 persistent: None,
@@ -322,6 +323,7 @@ fn status_only_consumer_receives_stop_closing_removal() {
             "fixture-standard".into(),
             super::Process {
                 child: None,
+                exit: None,
                 outbox,
                 writing: Arc::new(AtomicUsize::new(0)),
                 persistent: None,
@@ -366,6 +368,7 @@ fn detach_notification_contains_the_complete_final_status() {
             "fixture-standard".into(),
             super::Process {
                 child: None,
+                exit: None,
                 outbox,
                 writing: Arc::new(AtomicUsize::new(0)),
                 persistent: None,
@@ -379,6 +382,7 @@ fn detach_notification_contains_the_complete_final_status() {
             "fixture-service".into(),
             super::Process {
                 child: None,
+                exit: None,
                 outbox: persistent_outbox,
                 writing: Arc::new(AtomicUsize::new(0)),
                 persistent: Some(super::PersistentConnection {
@@ -442,6 +446,7 @@ fn outdated_fixture(
             declaration.name.clone(),
             super::Process {
                 child: None,
+                exit: None,
                 outbox,
                 writing: Arc::new(AtomicUsize::new(0)),
                 persistent: Some(super::PersistentConnection {

@@ -384,7 +384,11 @@ struct QuitTarget {
 /// How a second quit ends a process of the quit stop.
 enum QuitEnd {
     /// The force-kill signal to the process group whose leader is pid; killed marks the exit as the quit itself.
-    Process { pid: u32, killed: Arc<AtomicBool> },
+    Process {
+        pid: u32,
+        exit: Arc<ProcessExit>,
+        killed: Arc<AtomicBool>,
+    },
     /// The end of the connection of a persistent service, which ends the close of its owner.
     Connection(PersistentSocket),
 }
@@ -414,14 +418,15 @@ fn kill_quit_stop(quit: &QuitStop) {
         }
         let place = format!("sidecar {}", target.name);
         match &target.end {
-            QuitEnd::Process { pid, killed } => {
+            QuitEnd::Process { pid, exit, killed } => {
                 killed.store(true, Ordering::Release);
                 crate::application_log::log_info(
                     &place,
                     format!("the second quit kills process {pid}"),
                 );
-                if let Err(error) = current().and_then(|platform| platform.end_process_group(*pid))
-                {
+                if let Err(error) = exit.signal_group(|| {
+                    current().and_then(|platform| platform.end_process_group(*pid))
+                }) {
                     log_error(&place, format!("second quit: {error}"));
                 }
             }
@@ -1201,8 +1206,77 @@ struct Started {
     threads: Vec<Thread>,
 }
 
+/// The exit of the process of a standard-I/O sidecar, which orders the end of its process group before its reap
+/// (docs/spec/sidecars.md#declaration-and-startup). The exit wait reads the exit without reaping it and then ends the group;
+/// the process is reaped only after that end. So until the end of the group its leader is a process of the host that no
+/// one reaped, and its pid names its group in every signal: a group that holds only zombies is told by the exited leader
+/// (end_process_group). After the end of the group no process of the group runs, and a signal has nothing to end.
+struct ProcessExit {
+    state: Mutex<ExitState>,
+    group_ended: Condvar,
+}
+
+#[derive(Default)]
+struct ExitState {
+    group_ended: bool,
+}
+
+impl ProcessExit {
+    fn new() -> ProcessExit {
+        ProcessExit {
+            state: Mutex::new(ExitState::default()),
+            group_ended: Condvar::new(),
+        }
+    }
+
+    fn lock(&self) -> MutexGuard<'_, ExitState> {
+        self.state
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the exit state, which the call amends; the panic
+            // hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Sends a signal to the process group through `signal` while the group has not ended; after its end nothing of it
+    /// runs, so nothing is sent.
+    fn signal_group(&self, signal: impl FnOnce() -> Result<(), String>) -> Result<(), String> {
+        let state = self.lock();
+        if state.group_ended {
+            return Ok(());
+        }
+        signal()
+    }
+
+    /// The end of the process group through `end`, which the exit wait runs after the exit of the process and before
+    /// its reap. It lets the reap go on also when the end fails.
+    fn end_group(&self, end: impl FnOnce() -> Result<(), String>) -> Result<(), String> {
+        let mut state = self.lock();
+        let ended = end();
+        state.group_ended = true;
+        self.group_ended.notify_all();
+        ended
+    }
+
+    /// Reaps `child` after the exit wait ended its process group. The exit of the process ends the wait; no time limit
+    /// ends it.
+    fn reap(&self, child: &mut Child) -> std::io::Result<std::process::ExitStatus> {
+        let mut state = self.lock();
+        while !state.group_ended {
+            state = self
+                .group_ended
+                .wait(state)
+                // default: a lock that a panicking thread poisoned still holds the exit state, which the call reads; the
+                // panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner);
+        }
+        child.wait()
+    }
+}
+
 struct Process {
     child: Option<Child>,
+    /// The exit of the process of a standard-I/O sidecar; None for a persistent connection, which has no child.
+    exit: Option<Arc<ProcessExit>>,
     outbox: SyncSender<Outgoing>, // channel with capacity 256
     /// The size in bytes of the line that the writer is writing, and 0 between lines.
     writing: Arc<AtomicUsize>,
@@ -3103,11 +3177,12 @@ impl<O: Owner> Sidecars<O> {
             }
             let Process {
                 child,
+                exit,
                 read_ended,
                 terminated,
                 ..
             } = process;
-            let Some(mut child) = child else {
+            let (Some(mut child), Some(exit)) = (child, exit) else {
                 continue;
             };
             let pid = child.id();
@@ -3118,12 +3193,15 @@ impl<O: Owner> Sidecars<O> {
                 done,
                 end: QuitEnd::Process {
                     pid,
+                    exit: Arc::clone(&exit),
                     killed: Arc::clone(&killed),
                 },
             });
             // The stop terminates the process group, so a sidecar that ignores the end of its input ends, and so do the
             // processes that it started in its group.
-            match current().and_then(|platform| platform.terminate_process_group(pid)) {
+            match exit.signal_group(|| {
+                current().and_then(|platform| platform.terminate_process_group(pid))
+            }) {
                 Ok(()) => {}
                 Err(error) => log_error(&format!("sidecar {name}"), format!("terminate: {error}")),
             }
@@ -3136,7 +3214,7 @@ impl<O: Owner> Sidecars<O> {
             let handle = crate::routine::spawn_named("sidecar-close", move || {
                 let _done = done_guard;
                 // The exit of the process ends the wait; no time limit ends it.
-                let waited = child.wait();
+                let waited = exit.reap(&mut child);
                 // The read thread reads the output to its end and judges it; the stop reads that judgment after it.
                 if let Some(read_ended) = read_ended {
                     match read_ended.recv() {
@@ -3410,6 +3488,8 @@ impl<O: Owner> Core<O> {
         // The end of the sidecar is the exit of its process, which the operating system reports: the host then ends its
         // process group and the reads of both outputs (docs/spec/sidecars.md#declaration-and-startup).
         let exit_name = name.to_string();
+        let exit = Arc::new(ProcessExit::new());
+        let process_exit = Arc::clone(&exit);
         crate::routine::spawn_named("sidecar-wait", move || {
             log_failure(
                 &format!("sidecar {exit_name}"),
@@ -3417,7 +3497,7 @@ impl<O: Owner> Core<O> {
             );
             log_failure(
                 &format!("sidecar {exit_name}"),
-                platform.end_process_group(pid),
+                process_exit.end_group(|| platform.end_process_group(pid)),
             );
             end_stdout();
             end_stderr();
@@ -3486,6 +3566,7 @@ impl<O: Owner> Core<O> {
         Ok(Started {
             process: Process {
                 child: Some(child),
+                exit: Some(exit),
                 outbox: tx,
                 writing,
                 persistent: None,
@@ -4091,6 +4172,7 @@ impl<O: Owner> Core<O> {
         Ok(Started {
             process: Process {
                 child: None,
+                exit: None,
                 outbox: tx,
                 writing,
                 surfaces: HashSet::new(),
@@ -4834,15 +4916,22 @@ fn fail<O: Owner>(
     if let Some(changed) = changed {
         changed();
     }
-    let Process { child, outbox, .. } = process;
+    let Process {
+        child,
+        exit,
+        outbox,
+        ..
+    } = process;
     let mut failures = Vec::new();
-    let exit = match child {
-        Some(mut child) => {
+    let exit = match (child, exit) {
+        (Some(mut child), Some(exit)) => {
             // The protocol state after a failure is undefined, so the process group of the sidecar ends.
-            if let Err(error) = current().and_then(|platform| platform.end_process_group(pid)) {
+            if let Err(error) =
+                exit.signal_group(|| current().and_then(|platform| platform.end_process_group(pid)))
+            {
                 failures.push(format!("kill: {error}"));
             }
-            match child.wait() {
+            match exit.reap(&mut child) {
                 Ok(status) => exit_text(status),
                 Err(error) => {
                     failures.push(format!("wait: {error}"));
@@ -4850,7 +4939,7 @@ fn fail<O: Owner>(
                 }
             }
         }
-        None => "no child process".to_string(),
+        _ => "no child process".to_string(),
     };
     join_stderr();
     crate::event_record::emit_host(
