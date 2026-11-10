@@ -36,6 +36,8 @@ type FakeOwner struct {
 	Events   []host.SidecarMessage
 	Seen     chan struct{}
 	Failures chan any
+	// next is the index in Events of the event that the next call of Next returns.
+	next int
 }
 
 // NewFakeOwner is a FakeOwner of the project root root.
@@ -58,13 +60,17 @@ func (o *FakeOwner) DeliverSidecarMessage(message host.SidecarMessage) {
 	o.Seen <- struct{}{}
 }
 
-// Next waits for the next sidecar event and returns it. The runner ends a check whose event does not come.
+// Next waits for the next sidecar event and returns it, in the order of delivery: each delivery adds one notice to Seen, so the
+// event of a notice is the one after the event of the notice before it, whether or not later events arrived meanwhile. The runner
+// ends a check whose event does not come.
 func (o *FakeOwner) Next(t *testing.T) host.SidecarMessage {
 	t.Helper()
 	<-o.Seen
 	o.Mu.Lock()
 	defer o.Mu.Unlock()
-	return o.Events[len(o.Events)-1]
+	event := o.Events[o.next]
+	o.next++
+	return event
 }
 
 // SidecarFailure is the JSON form of the sidecar-failure event value (docs/spec/sidecars.md#failure).
