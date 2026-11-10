@@ -16,6 +16,10 @@
 // is scheduled (test/folder-wait-stream-start.test.mjs). Watcher::notify of 2.6.0 wakes the callbacks only for a list that
 // holds events, so a report of lost events in a batch that adds no event stays unseen until a later event; the patch wakes
 // them for the report too (test/folder-wait-drop.test.mjs).
+// The end of a watch erased the shared backend from its map on a libuv worker thread while a start in flight had taken it,
+// and both threads used the maps of the backends and the watchers without a lock, so a watch that ends while the next ones
+// start left its stream open until no stream started; the patch keeps a backend in the map while a runner holds it and locks
+// both maps (test/platform/darwin/system/folder-wait-overlap.test.mjs).
 import { subscribe } from "@parcel/watcher";
 
 // FSEvents marks a batch after events were lost, and the FSEvents backend of @parcel/watcher passes that to the callback as

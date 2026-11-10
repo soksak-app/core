@@ -1618,6 +1618,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F724",
+    implementation: [
+      { file: "patches/@parcel__watcher@2.6.0.patch", symbol: "void Backend::release() {" },
+      { file: "patches/@parcel__watcher@2.6.0.patch", symbol: "static std::mutex& getSharedWatchersMutex() {" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/platform/darwin/system/folder-wait-overlap.test.mjs", id: "waits whose watches end while the next watches start leave no stream open and the process continues" },
+    ],
+    expected: "The end of a watch that overlaps the start of the next watches leaves no stream open, and the process that runs them ends by no signal.",
+    levels: ["unit"],
+  },
+  {
     id: "F560",
     implementation: [
       { file: "native/darwin/src/webview_input.m", symbol: "static void pointerLeft(WKWebView *view, NSEvent *event)" },

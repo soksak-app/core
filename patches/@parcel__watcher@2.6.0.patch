@@ -1,5 +1,5 @@
 diff --git a/package.json b/package.json
-index dbdfab2d65b65c10a2ad68a7c1f1a30627fccb75..124128fd7db75f8325a4145bc98587a5a4209c67 100644
+index dbdfab2..124128f 100644
 --- a/package.json
 +++ b/package.json
 @@ -32,7 +32,7 @@
@@ -11,11 +11,154 @@ index dbdfab2d65b65c10a2ad68a7c1f1a30627fccb75..124128fd7db75f8325a4145bc98587a5
      "test": "mocha"
    },
    "engines": {
+diff --git a/src/Backend.cc b/src/Backend.cc
+index 09a53d5..4ca307a 100644
+--- a/src/Backend.cc
++++ b/src/Backend.cc
+@@ -19,8 +19,17 @@
+ #include "shared/BruteForceBackend.hh"
+ 
+ #include "Backend.hh"
++#include <mutex>
+ #include <unordered_map>
+ 
++// The JavaScript thread finds and inserts shared backends (Backend::getShared), and a libuv worker thread and the thread of a
++// backend erase them (Backend::unref, Backend::release, Backend::handleError), so every access holds this mutex. A thread that
++// holds the mutex of a backend may take this one, and never the reverse.
++static std::mutex& getSharedBackendsMutex() {
++  static std::mutex* sharedBackendsMutex = new std::mutex();
++  return *sharedBackendsMutex;
++}
++
+ static std::unordered_map<std::string, std::shared_ptr<Backend>>& getSharedBackends() {
+   static std::unordered_map<std::string, std::shared_ptr<Backend>>* sharedBackends = 
+     new std::unordered_map<std::string, std::shared_ptr<Backend>>();
+@@ -68,23 +77,31 @@ std::shared_ptr<Backend> getBackend(std::string backend) {
+   return nullptr;
+ }
+ 
++// Each call takes the backend for one runner, which releases it when it ends (Backend::release): a backend leaves the map only
++// when no runner holds it and it has no subscription, so a subscribe never takes a backend that an unsubscribe in flight removes,
++// and the unsubscribe of its watch finds the same backend.
+ std::shared_ptr<Backend> Backend::getShared(std::string backend) {
++  std::unique_lock<std::mutex> lock(getSharedBackendsMutex());
+   auto found = getSharedBackends().find(backend);
+   if (found != getSharedBackends().end()) {
++    found->second->mUsers++;
+     return found->second;
+   }
+ 
+   auto result = getBackend(backend);
+   if (!result) {
++    lock.unlock();
+     return getShared("default");
+   }
+ 
+   result->run();
++  result->mUsers++;
+   getSharedBackends().emplace(backend, result);
+   return result;
+ }
+ 
+-void removeShared(Backend *backend) {
++// The caller holds the mutex of the shared backends.
++static void removeShared(Backend *backend) {
+   for (auto it = getSharedBackends().begin(); it != getSharedBackends().end(); it++) {
+     if (it->second.get() == backend) {
+       getSharedBackends().erase(it);
+@@ -165,8 +182,20 @@ void Backend::unwatch(WatcherRef watcher) {
+   }
+ }
+ 
++// The caller holds the mutex of this backend.
+ void Backend::unref() {
+-  if (mSubscriptions.size() == 0) {
++  std::unique_lock<std::mutex> lock(getSharedBackendsMutex());
++  if (mUsers == 0 && mSubscriptions.size() == 0) {
++    removeShared(this);
++  }
++}
++
++// Ends the use of one runner that took this backend with getShared.
++void Backend::release() {
++  std::unique_lock<std::mutex> lock(mMutex);
++  std::unique_lock<std::mutex> sharedLock(getSharedBackendsMutex());
++  mUsers--;
++  if (mUsers == 0 && mSubscriptions.size() == 0) {
+     removeShared(this);
+   }
+ }
+@@ -182,5 +211,6 @@ void Backend::handleError(std::exception &err) {
+     (*it)->notifyError(err);
+   }
+ 
++  std::unique_lock<std::mutex> sharedLock(getSharedBackendsMutex());
+   removeShared(this);
+ }
+diff --git a/src/Backend.hh b/src/Backend.hh
+index d673bd1..e43e8be 100644
+--- a/src/Backend.hh
++++ b/src/Backend.hh
+@@ -23,12 +23,15 @@ public:
+   void watch(WatcherRef watcher);
+   void unwatch(WatcherRef watcher);
+   void unref();
++  void release();
+   void handleWatcherError(WatcherError &err);
+ 
+   std::mutex mMutex;
+   std::thread mThread;
+ private:
+   std::unordered_set<WatcherRef> mSubscriptions;
++  // The runners that took this backend from the shared map and have not ended, guarded by the mutex of that map.
++  size_t mUsers = 0;
+   Signal mStartedSignal;
+ 
+   void handleError(std::exception &err);
 diff --git a/src/Watcher.cc b/src/Watcher.cc
-index a58ff37..244825b 100644
+index a58ff37..09556ce 100644
 --- a/src/Watcher.cc
 +++ b/src/Watcher.cc
-@@ -69,7 +69,8 @@ void Watcher::notify() {
+@@ -1,4 +1,5 @@
+ #include "Watcher.hh"
++#include <mutex>
+ #include <unordered_set>
+ 
+ using namespace Napi;
+@@ -15,6 +16,14 @@ struct WatcherCompare {
+   }
+ };
+ 
++// The JavaScript thread finds and inserts shared watchers (Watcher::getShared) and erases them (Watcher::unwatch), and the
++// thread of a backend erases them when it reports an error (Watcher::notifyError), so every access holds this mutex. A thread
++// that holds the mutex of a watcher may take this one, and never the reverse.
++static std::mutex& getSharedWatchersMutex() {
++  static std::mutex* sharedWatchersMutex = new std::mutex();
++  return *sharedWatchersMutex;
++}
++
+ static std::unordered_set<WatcherRef , WatcherHash, WatcherCompare>& getSharedWatchers() {
+   static std::unordered_set<WatcherRef , WatcherHash, WatcherCompare>* sharedWatchers = 
+     new std::unordered_set<WatcherRef , WatcherHash, WatcherCompare>();
+@@ -23,6 +32,7 @@ static std::unordered_set<WatcherRef , WatcherHash, WatcherCompare>& getSharedWa
+ 
+ WatcherRef Watcher::getShared(std::string dir, std::unordered_set<std::string> ignorePaths, std::unordered_set<Glob> ignoreGlobs) {
+   WatcherRef watcher = std::make_shared<Watcher>(dir, ignorePaths, ignoreGlobs);
++  std::unique_lock<std::mutex> lock(getSharedWatchersMutex());
+   auto found = getSharedWatchers().find(watcher);
+   if (found != getSharedWatchers().end()) {
+     return *found;
+@@ -32,7 +42,8 @@ WatcherRef Watcher::getShared(std::string dir, std::unordered_set<std::string> i
+   return watcher;
+ }
+ 
+-void removeShared(Watcher *watcher) {
++static void removeShared(Watcher *watcher) {
++  std::unique_lock<std::mutex> lock(getSharedWatchersMutex());
+   for (auto it = getSharedWatchers().begin(); it != getSharedWatchers().end(); it++) {
+     if (it->get() == watcher) {
+       getSharedWatchers().erase(it);
+@@ -69,7 +80,8 @@ void Watcher::notify() {
    std::unique_lock<std::mutex> lk(mMutex);
    mCond.notify_all();
  
@@ -25,8 +168,69 @@ index a58ff37..244825b 100644
      // We must release our lock before calling into the debouncer
      // to avoid a deadlock: the debouncer thread itself will require
      // our lock from its thread when calling into `triggerCallbacks`
+diff --git a/src/binding.cc b/src/binding.cc
+index 057b61b..64013f6 100644
+--- a/src/binding.cc
++++ b/src/binding.cc
+@@ -79,7 +79,7 @@ public:
+ 
+   ~WriteSnapshotRunner() {
+     watcher->unref();
+-    backend->unref();
++    backend->release();
+   }
+ private:
+   std::shared_ptr<Backend> backend;
+@@ -107,7 +107,7 @@ public:
+ 
+   ~GetEventsSinceRunner() {
+     watcher->unref();
+-    backend->unref();
++    backend->release();
+   }
+ private:
+   std::shared_ptr<Backend> backend;
+@@ -175,16 +175,26 @@ public:
+     watcher->watch(fn.As<Function>());
+   }
+ 
++  // The runner ends on the JavaScript thread: the callbacks of a watch that failed to start are released there, because their
++  // references are values of the JavaScript engine, and the backend is released for this runner.
++  ~SubscribeRunner() {
++    if (failed) {
++      watcher->destroy();
++    }
++    backend->release();
++  }
++
+ private:
+   WatcherRef watcher;
+   std::shared_ptr<Backend> backend;
+   FunctionReference callback;
++  bool failed = false;
+ 
+   void execute() override {
+     try {
+       backend->watch(watcher);
+     } catch (std::exception&) {
+-      watcher->destroy();
++      failed = true;
+       throw;
+     }
+   }
+@@ -203,6 +213,10 @@ public:
+     shouldUnwatch = watcher->unwatch(fn.As<Function>());
+   }
+ 
++  ~UnsubscribeRunner() {
++    backend->release();
++  }
++
+ private:
+   WatcherRef watcher;
+   std::shared_ptr<Backend> backend;
 diff --git a/src/macos/FSEventsBackend.cc b/src/macos/FSEventsBackend.cc
-index cfda9625fc7d9beb00a0014d87333bf97c130c84..d7a46091a7bfef68ee0ec5cf1db6312696867e71 100644
+index cfda962..d7a4609 100644
 --- a/src/macos/FSEventsBackend.cc
 +++ b/src/macos/FSEventsBackend.cc
 @@ -246,6 +246,13 @@ void FSEventsBackend::startStream(WatcherRef watcher, FSEventStreamEventId id) {
