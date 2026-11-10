@@ -253,8 +253,8 @@ export function classifiedFiles(classification) {
   return new Set(classification.files.map((entry) => entry.file));
 }
 
-// The sources of the gate of a core release: the build, the window check runner, the candidate acceptance and the publication gate.
-export const GATE_SOURCES = ["Makefile", "scripts/acceptance-run.mjs", "scripts/candidate-acceptance.mjs", "scripts/test-app.mjs"];
+// The sources of the gate of a core release: the build, the window check runner, the candidate acceptance, the candidate context and the publication gate.
+export const GATE_SOURCES = ["Makefile", "scripts/acceptance-run.mjs", "scripts/candidate-acceptance.mjs", "scripts/candidate-context.mjs", "scripts/test-app.mjs"];
 const GATE_RULES = [
   { what: "a registry index URL", pattern: /https?:\/\/[^\s"'`)]*(?:registry|index\.json)/ },
   { what: "a plugin repository path", pattern: /\.\.\/(?:plugins|sidecars)\b/ },

@@ -85,6 +85,7 @@ lane("candidate identity", "js-ts", ["scripts/candidate-identity.mjs"], ["script
 lane("candidate acceptance gate", "js-ts", ["scripts/candidate-policy.mjs", "scripts/candidate-report.mjs", "scripts/candidate-acceptance.mjs"], ["scripts/test/candidate-acceptance.test.mjs"]),
 lane("release packages", "js-ts", ["scripts/pack-release-packages.mjs"], ["scripts/test/pack-release-packages.test.mjs"]),
 lane("candidate acceptance collection", "js-ts", ["scripts/acceptance-run.mjs"], ["scripts/test/acceptance-run.test.mjs"]),
+lane("candidate context", "js-ts", ["scripts/candidate-context.mjs"], ["scripts/test/candidate-context.test.mjs"]),
   lane("workspace version audit", "js-ts", ["scripts/check-versions.mjs"], ["scripts/test/versions.test.mjs", "scripts/test/entry-guards.test.mjs"]),
   lane("fallback and discarded error audit", "js-ts", ["scripts/check-fallbacks.mjs"], ["scripts/test/fallbacks.test.mjs"]),
   lane("native window ownership audit", "js-ts", ["scripts/check-native-windows.mjs"], ["scripts/test/native-windows.test.mjs"]),
