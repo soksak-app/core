@@ -6,15 +6,9 @@
 // An object is usually released on the main thread, but the library does not decide which thread drops
 // the last reference, so the count uses atomic operations.
 static atomic_long counts[3];
-// Whether a request waits for a count, read by sp_window_object_change on any thread.
-static atomic_bool waiting;
-
-static void postDrain(void);
 
 void sp_window_object_change(sp_window_object_kind kind, long delta) {
     atomic_fetch_add(&counts[kind], delta);
-    // A change while a request waits drains the next autorelease pool, which may hold what this release autoreleased.
-    if (atomic_load(&waiting)) dispatch_async(dispatch_get_main_queue(), ^{ if (atomic_load(&waiting)) postDrain(); });
 }
 
 sp_window_objects sp_window_objects_count(void) {
@@ -49,6 +43,7 @@ static const short kDrainSubtype = 0x5350;
 
 static NSMutableArray<SPObjectsWaiter *> *waiters;
 static id drainMonitor;
+static CFRunLoopObserverRef idleObserver;
 // Whether a queued event has not been handled yet. At most one unhandled event is kept.
 static BOOL drainPending;
 
@@ -68,7 +63,9 @@ static void settle(SPObjectsWaiter *waiter, bool reached) {
         drainMonitor = nil;
         // An unhandled event is dispatched without a monitor, so the next request queues a new event.
         drainPending = NO;
-        atomic_store(&waiting, false);
+        CFRunLoopObserverInvalidate(idleObserver);
+        CFRelease(idleObserver);
+        idleObserver = NULL;
     }
     sp_window_objects current = sp_window_objects_count();
     waiter->done(waiter->context, &current, reached);
@@ -85,9 +82,9 @@ static void compareWaiters(void) {
 // AppKit releases an object that was autoreleased by an object released while the autorelease pool of an
 // event iteration is emptied when the pool of the next iteration is emptied. A window that was on screen is
 // released when its close animation ends, and when its content view is autoreleased this way, the objects
-// inside it are released after two events. Each release changes the count, and each change while a request
-// waits queues one event that empties the next pool, so the drains follow the releases and stop when nothing
-// changes.
+// inside it are released after two events. No event reports an object left in the pool, so while a request
+// waits, one event is queued before the main run loop sleeps each time to empty the pool, and the count
+// is compared. The wait has no limit: the count, or the end of its request (sp_window_objects_end), ends it.
 static void installDrain(void) {
     if (!waiters) waiters = [[NSMutableArray alloc] init];
     if (drainMonitor) return;
@@ -99,6 +96,8 @@ static void installDrain(void) {
         dispatch_async(dispatch_get_main_queue(), ^{ compareWaiters(); });
         return nil;
     });
+    // The run loop waits at the rate of its turns, so the deliveries are counted.
+    idleObserver = sp_observe_run_loop("window_objects.idle", SP_OBSERVE_COUNT, CFRunLoopGetMain(), kCFRunLoopBeforeWaiting, true, INT_MAX, ^{ postDrain(); });
 }
 
 void sp_window_objects_when(const sp_window_objects *expected, sp_window_objects_done done, void *context) {
@@ -110,7 +109,6 @@ void sp_window_objects_when(const sp_window_objects *expected, sp_window_objects
     waiter->context = context;
     installDrain();
     [waiters addObject:waiter];
-    atomic_store(&waiting, true);
     postDrain();
 }
 
