@@ -10,7 +10,7 @@ import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
 
-/** How long the person has to operate the panel. */
+/** How long the test runner lets the person operate the two panels; the commands themselves have no time limit. */
 const PERSON = 180000;
 
 for (const app of Object.values(APPS)) {
@@ -28,7 +28,7 @@ for (const app of Object.values(APPS)) {
 
     // The panel shows the name of the file; the person presses Save in it.
     t.diagnostic(`${app.name}: PRESS SAVE in the save panel (name: ${name})`);
-    const saved = await s.run("core.debug.save", { path: entry }, undefined, { timeout: PERSON });
+    const saved = await s.run("core.debug.save", { path: entry });
     assert.equal(typeof saved?.saved, "string", `the panel answered ${JSON.stringify(saved)}`);
     s.cleanup(() => rmSync(saved.saved, { force: true }));
     assert.ok(saved.saved.endsWith(name), `the saved file is ${saved.saved}`);
@@ -38,7 +38,7 @@ for (const app of Object.values(APPS)) {
 
     // The person presses Cancel in the panel.
     t.diagnostic(`${app.name}: PRESS CANCEL in the save panel`);
-    const cancelled = await s.run("core.debug.save", { path: entry }, undefined, { timeout: PERSON });
+    const cancelled = await s.run("core.debug.save", { path: entry });
     assert.equal(cancelled?.saved ?? null, null, `a cancelled panel answered ${JSON.stringify(cancelled)}`);
   });
 }

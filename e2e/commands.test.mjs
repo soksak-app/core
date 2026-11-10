@@ -253,13 +253,13 @@ for (const app of Object.values(APPS)) {
     const samples = [...new Set(widths)];
     const failures = [];
     const measurements = [];
-    const waitForStatus = async (name, predicate, message) => {
-      try {
-        return { value: await s.until(name, predicate, message, { timeout: 1500 }) };
-      } catch (error) {
-        if (error.code !== "ETIMEDOUT") throw error;
-        return { error: error.message };
-      }
+    // The page handles a delivered click in the turn it receives it, and the next presented frame comes after that turn. The
+    // status read after that frame is the effect of the click; a status that does not satisfy the predicate then is no effect.
+    // The judgement waits for no time.
+    const statusAfterPresented = async (name, predicate, message) => {
+      await s.presented();
+      const value = await s.get(name);
+      return predicate(value) ? { value } : { error: `${message}; the status is ${JSON.stringify(value)}` };
     };
     const restoreSetting = async (key) => {
       if (initialSettings.overridden.includes(key)) {
@@ -312,7 +312,7 @@ for (const app of Object.values(APPS)) {
       }
       projects.before = projectBefore;
       const projectResult = projects.owner.kind === "workbench"
-        ? await waitForStatus("core.screen", (value) => value.screen === "library", `projects icon did not open the library at ${width}`)
+        ? await statusAfterPresented("core.screen", (value) => value.screen === "library", `projects icon did not open the library at ${width}`)
         : {};
       projects.after = (await s.get("core.screen")).screen;
       projects.effect = projects.after === "library";
@@ -332,7 +332,7 @@ for (const app of Object.values(APPS)) {
         const before = initialSettings.values[key];
         const click = await clickChrome(`core.chrome.${key}`);
         const result = click.owner.kind === "workbench"
-          ? await waitForStatus("core.settings", (settings) => settings.values[key] !== before,
+          ? await statusAfterPresented("core.settings", (settings) => settings.values[key] !== before,
             `${key} sidebar icon did not change the setting at ${width}`)
           : {};
         const after = (await s.get("core.settings")).values[key];
@@ -344,7 +344,7 @@ for (const app of Object.values(APPS)) {
       const modeClick = await clickChrome("core.chrome.mode");
       const nextMode = mode === "dark" ? "light" : "dark";
       const modeResult = modeClick.owner.kind === "workbench"
-        ? await waitForStatus("core.settings", (settings) => settings.values.mode === nextMode,
+        ? await statusAfterPresented("core.settings", (settings) => settings.values.mode === nextMode,
           `theme icon did not change the mode at ${width}`)
         : {};
       const observedMode = (await s.get("core.settings")).values.mode;
@@ -354,7 +354,7 @@ for (const app of Object.values(APPS)) {
 
       const settingsClick = await clickChrome("core.chrome.settings");
       const settingsResult = settingsClick.owner.kind === "workbench"
-        ? await waitForStatus("core.settings-modal", (modal) => modal.open, `settings icon did not open settings at ${width}`)
+        ? await statusAfterPresented("core.settings-modal", (modal) => modal.open, `settings icon did not open settings at ${width}`)
         : {};
       const settingsOpen = (await s.get("core.settings-modal")).open;
       outcomes.push({ ...settingsClick, effect: settingsOpen });

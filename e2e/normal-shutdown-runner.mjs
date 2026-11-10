@@ -13,24 +13,14 @@ import { joinedFailure } from "./fixture.mjs";
 const STARTUP_LIMIT = 15_000;
 const SHUTDOWN_LIMIT = 5_000;
 const SERVICE_WAIT_LIMIT = 5_000;
-const REQUEST_LIMIT = 10_000;
-
-async function request(client, method, params) {
-  let timer;
-  const timeout = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`${method} exceeded ${REQUEST_LIMIT}ms`)), REQUEST_LIMIT);
-  });
-  try {
-    return await Promise.race([client.request(method, params), timeout]);
-  } finally {
-    clearTimeout(timer);
-  }
+// A request and a watch have no time limit: each ends by its answer or notification, or by the close of the connection.
+function request(client, method, params) {
+  return client.request(method, params);
 }
 
 async function waitForReady(client) {
   await client.watch("main", "host.windows",
-    (windows) => windows.length === 1 && windows[0].ready,
-    { timeout: STARTUP_LIMIT });
+    (windows) => windows.length === 1 && windows[0].ready);
 }
 
 function serviceEndpointFiles(configDir, { allowMissing = false } = {}) {
@@ -194,7 +184,7 @@ export async function runNormalShutdown({
     };
     await waitReady(client);
     const raster = env.SOKSAK_SHUTDOWN_SERVICE === "1"
-      ? await prepare(client, request, { startupLimit: STARTUP_LIMIT }) : null;
+      ? await prepare(client, request) : null;
     const by = env.SOKSAK_SHUTDOWN_BY ?? "command";
     if (by !== "command" && by !== "signal") throw new Error(`SOKSAK_SHUTDOWN_BY is ${by}, expected command or signal`);
     service = raster ? serviceEndpoint(app.configDir) : null;

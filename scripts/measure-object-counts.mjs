@@ -327,8 +327,6 @@ export function parseOptions(args) {
   return { repetitions, sok: values.sok, configDir: values["config-dir"], trace, plugins: values.plugin, b3Out };
 }
 
-const STEP_LIMIT_MS = 60_000;
-
 if (import.meta.main) {
   const options = parseOptions(process.argv.slice(2));
   const { sok, configDir } = options;
@@ -375,25 +373,19 @@ if (import.meta.main) {
 
   let mark = null;
   let lastStep = "none";
-  const measuredState = () => JSON.stringify({ lastStep, notifications: changes.count, pendingSince: mark });
-
+  // A step has no time limit: it ends by the answer, the notification or the close of the connection that its work waits for.
+  // The start line names the step that a run left pending.
   const step = async (label, work) => {
     lastStep = label;
     log(`start ${label}`);
     const started = Date.now();
-    let timer;
-    const limit = new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new Error(`${label} did not finish within ${STEP_LIMIT_MS / 1000}s; measured state: ${measuredState()}`)), STEP_LIMIT_MS);
-    });
     try {
-      const result = await Promise.race([work(), limit]);
+      const result = await work();
       log(`end ${label} ${Date.now() - started}ms`);
       return result;
     } catch (error) {
       log(`fail ${label} ${Date.now() - started}ms`);
       throw error;
-    } finally {
-      clearTimeout(timer);
     }
   };
 
@@ -404,7 +396,7 @@ if (import.meta.main) {
     // diagnostics.objects and diagnostics.drag are methods of the local endpoint of a diagnostic build, not declared commands, so the
     // client calls them.
     request: (method, params) => client.request(method, params),
-    until: (name, predicate) => client.watch(window, name, predicate, { timeout: STEP_LIMIT_MS }),
+    until: (name, predicate) => client.watch(window, name, predicate),
   });
   const entries = [];
   try {

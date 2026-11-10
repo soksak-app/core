@@ -35,9 +35,8 @@ test("a failed pointer-outside move retains its input and final geometry", async
   session.until = async (name, predicate, message) => {
     assert.equal(name, "host.window");
     assert.equal(predicate(final), false);
-    throw Object.assign(new Error(`fixture: ${message}; last value ${JSON.stringify(final)}`), {
-      code: "ETIMEDOUT",
-    });
+    // A wait has no time limit; the close of the connection is the end that leaves the predicate false.
+    throw new Error(`fixture: ${message} (endpoint connection closed); last value ${JSON.stringify(final)}`);
   };
 
   await assert.rejects(session.keepPointerOutside(), (error) => {

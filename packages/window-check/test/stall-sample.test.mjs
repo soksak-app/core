@@ -1,5 +1,5 @@
-// When a request does not answer within the limit, the check keeps the stacks of the host process at that time (F69).
-// What the main thread did while it did not answer can be seen only at that moment.
+// When a request is still pending at STALL_AFTER, the check keeps the stacks of the host process at that time (F69).
+// What the main thread did while it did not answer can be seen only at that moment. The record ends no request.
 import assert from "node:assert/strict";
 import * as childProcess from "node:child_process";
 import test, { mock } from "node:test";
@@ -25,26 +25,42 @@ mock.module("node:child_process", {
   namedExports: { ...childProcess, execFile },
   defaultExport: { ...childProcess.default, execFile },
 });
-const { within } = await import("../app.mjs");
+const { whilePending, within } = await import("../app.mjs");
 const { sampleProcess } = await import("../stall-sample.mjs");
 
-test("a request that does not answer within its limit records what the host was doing and names the record", async () => {
-  const never = new Promise(() => {});
-  let sampled = 0;
-  await assert.rejects(within(never, 10, "wailsv3 status.get host.windows", async () => { sampled++; return "/tmp/stall-1.txt"; }),
-    /^Error: wailsv3 status\.get host\.windows did not answer within 10 ms; the host's threads at that moment: \/tmp\/stall-1\.txt$/);
-  assert.equal(sampled, 1);
+test("a search that does not end within its limit fails naming the search", async () => {
+  await assert.rejects(within(new Promise(() => {}), 10, "the chain probe"), /^Error: the chain probe did not answer within 10 ms$/);
 });
 
-test("a failed sample is named in the timeout instead of hiding it", async () => {
-  await assert.rejects(within(new Promise(() => {}), 10, "probe", async () => { throw new Error("sample: no such process"); }),
-    /^Error: probe did not answer within 10 ms; sampling the host failed: sample: no such process$/);
+test("a search that ends within its limit returns its value", async () => {
+  assert.equal(await within(Promise.resolve(7), 1000, "probe"), 7);
 });
 
-test("a request that answers in time does not sample", async () => {
-  let sampled = 0;
-  assert.equal(await within(Promise.resolve(7), 1000, "probe", async () => { sampled++; return ""; }), 7);
-  assert.equal(sampled, 0);
+test("a failed sample of a pending request is named in the report instead of hiding it", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const reports = [];
+  const held = [];
+  void whilePending(new Promise(() => {}), "probe", async () => { throw new Error("sample: no such process"); },
+    (text) => reports.push(text), (started) => held.push(started));
+  t.mock.timers.tick(3000);
+  await assert.rejects(held[0], /^Error: probe still pending after 3000 ms; sampling the host failed: sample: no such process$/);
+  assert.deepEqual(reports, ["probe still pending after 3000 ms; sampling the host failed: sample: no such process"]);
+});
+
+test("a request of a session has no time limit and takes no options", async (t) => {
+  const { mkdtempSync, rmSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { tmpdir } = await import("node:os");
+  const { Session } = await import("../app.mjs");
+  const configDir = mkdtempSync(join(tmpdir(), "soksak-stall-config-"));
+  t.after(() => rmSync(configDir, { recursive: true }));
+  const s = new Session({ name: "tauriv2", configDir }, { endpoint: { pid: ABSENT_HOST }, request: async () => 1 });
+  assert.throws(() => s.request("status.get", { name: "core.verify" }, { timeout: 10 }), {
+    name: "TypeError", message: "request status.get takes no options: a request ends by its answer or the close of the connection",
+  });
+  assert.throws(() => s.run("core.verify", {}, undefined, { timeout: 10 }), {
+    name: "TypeError", message: "run core.verify takes no options: a command ends by its answer or the close of the connection",
+  });
 });
 
 test("sampleProcess runs sample on the host process into the given file and reports its failure", async () => {
@@ -182,7 +198,7 @@ test("a request pending past 3 s starts the host and page samples in the same tu
   const sample = async () => (await sampleStall({ host: 10, pages: [12, 13], directory: "/x/logs", time: 7,
     sample: (pid, file) => { started.push(pid); return file; }, flock: async () => null })).join(", ");
   const reports = [];
-  void within(new Promise(() => {}), 10_000, "wailsv3 status.get host.windows", sample, (text) => reports.push(text), () => {});
+  void whilePending(new Promise(() => {}), "wailsv3 status.get host.windows", sample, (text) => reports.push(text), () => {});
   t.mock.timers.tick(2999);
   assert.deepEqual(started, []);
   t.mock.timers.tick(1);
@@ -194,7 +210,7 @@ test("a request pending past 3 s starts the host and page samples in the same tu
 test("a request that answers before 3 s does not start a sample", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   let sampled = 0;
-  const answer = within(new Promise((resolve) => setTimeout(() => resolve(5), 1000)), 10_000, "probe",
+  const answer = whilePending(new Promise((resolve) => setTimeout(() => resolve(5), 1000)), "probe",
     async () => { sampled++; return ""; }, () => {}, () => {});
   t.mock.timers.tick(1000);
   assert.equal(await answer, 5);

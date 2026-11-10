@@ -29,9 +29,8 @@ import {
 const regionOf = (host, surface) => host.regions.find((item) => item.surface === surface && item.name === REGION);
 
 /** Waits until the raster probe `surface` has an open session and returns its session status. */
-const sessionOf = (s, surface, message = `${surface} did not open a sidecar session`, timeout) =>
-  s.until("rasterprobe.session", (state) => typeof state?.session === "string" && state.connected === true, message,
-    { surface, ...(timeout === undefined ? {} : { timeout }) });
+const sessionOf = (s, surface, message = `${surface} did not open a sidecar session`) =>
+  s.until("rasterprobe.session", (state) => typeof state?.session === "string" && state.connected === true, message, { surface });
 
 async function lastFrame(session) {
   await session.request("diagnostics.capture.start", {});
@@ -94,7 +93,7 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     s.cleanup(() => closeRasterTabs(s));
     const rasters = await ensureRasters(s, 3);
-    for (const raster of rasters) await sessionOf(s, raster.surface, undefined, 10000);
+    for (const raster of rasters) await sessionOf(s, raster.surface);
     const regionsOf = (host) => rasters.map((raster) => regionOf(host, raster.surface));
     for (let round = 1; round <= 5; round++) {
       const layout = await s.get("core.layout");
@@ -106,7 +105,7 @@ for (const app of Object.values(APPS)) {
       await s.presented();
       await s.run("core.layout.balance", {});
       await s.until("host.window", (host) => regionsOf(host).every((region) => presentsFrame(region, host.scale)),
-        `round ${round}: an image region did not present a raster of its new size after the balance`, { timeout: 5000 });
+        `round ${round}: an image region did not present a raster of its new size after the balance`);
     }
   });
 
@@ -115,7 +114,7 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     t.diagnostic(`${app.name}: START four image region presentation`);
     const rasters = await ensureRasters(s, 4);
-    for (const raster of rasters) await sessionOf(s, raster.surface, undefined, 10000);
+    for (const raster of rasters) await sessionOf(s, raster.surface);
     const host = await s.get("host.window");
     const regions = host.regions.filter((region) => rasters.some((raster) =>
       raster.surface === region.surface && region.name === REGION));
@@ -303,7 +302,7 @@ for (const app of Object.values(APPS)) {
     s.cleanup(() => s.run("layoutprobe.title", { text: null }, surface));
     await s.run("layoutprobe.title", { text: title }, surface);
     const grid = await s.until("core.grid", (value) => tabs(value).find((tab) => tab.id === surface)?.label === title,
-      "the tab did not show the long title that its view reported", { timeout: 10000 });
+      "the tab did not show the long title that its view reported");
     // The tabs of every card are in document order, which is the order of the cards and of their tabs in core.grid.
     const rect = await s.rect("core.card.tab", tabs(grid).findIndex((tab) => tab.id === surface));
     assert.ok(rect.width <= 200, `the tab with a title of ${title.length} characters is ${rect.width} points wide, more than 200`);
@@ -319,7 +318,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(notice(await s.get("core.grid"), shown), null, "the tab in view received a notice");
     await s.run("layoutprobe.notify", { text: "NOTICE-CHECK" }, hidden);
     await s.until("core.grid", (grid) => notice(grid, hidden) === "NOTICE-CHECK",
-      "the view out of view did not show a tab notice", { timeout: 10000 });
+      "the view out of view did not show a tab notice");
     await s.run("core.card.focus", { card: cardOf(await s.get("core.grid"), hidden).id });
     await s.until("core.grid", (grid) => notice(grid, hidden) === null,
       "the notice stayed after the tab came into view");
@@ -336,7 +335,7 @@ for (const app of Object.values(APPS)) {
     const decided = (state) => state.posted.includes(hidden) || state.error !== null || state.authorization === "denied";
     try {
       await s.until("core.notifications", decided,
-        "the system notification policy produced neither a post, a native error, nor a denied authorization", { timeout: 10000 });
+        "the system notification policy produced neither a post, a native error, nor a denied authorization");
     } catch (error) {
       const state = await s.get("core.notifications");
       if (state.authorization === "notDetermined") {
@@ -348,7 +347,7 @@ for (const app of Object.values(APPS)) {
     const posted = (await s.get("core.notifications")).posted.length;
     await s.run("layoutprobe.notify", { text: "TAB-NOTICE", policy: "tab" }, hidden);
     await s.until("core.grid", (grid) => notice(grid, hidden) === "TAB-NOTICE",
-      "the view out of view did not show a tab notice", { timeout: 10000 });
+      "the view out of view did not show a tab notice");
     assert.equal((await s.get("core.notifications")).posted.length, posted, "the tab policy posted a system notification");
     await s.run("core.card.focus", { card: cardOf(await s.get("core.grid"), hidden).id });
     await s.until("core.grid", (grid) => notice(grid, hidden) === null,

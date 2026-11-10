@@ -106,8 +106,6 @@ export function assertEndpointUsesCurrentBuild(endpoint, resolvedBinary, binaryM
   }
 }
 
-/** The default wait time of one request. It is longer than the document response time of the host. */
-const REQUEST = 20_000;
 // The time limit (ms) for the end of the folder watches that the waits of a check started, at the end of the check.
 const WATCH_END_LIMIT = 10_000;
 
@@ -675,7 +673,12 @@ export class Session {
     return other;
   }
 
-  request(method, params = {}, { timeout = REQUEST } = {}) {
+  /**
+   * Sends one request of the window. It ends by its answer or by the close of the connection; it has no time limit
+   * (docs/spec/exposure.md: a command has no time limit). A request pending after STALL_AFTER records the host threads.
+   */
+  request(method, params = {}, ...rest) {
+    if (rest.length > 0) throw new TypeError(`request ${method} takes no options: a request ends by its answer or the close of the connection`);
     const what = `${this.app.name} ${method} ${params.name ?? ""}`.trimEnd();
     // A request to an application that stopped replying, such as a cleanup of the same check, fails at once (F351).
     const stopped = unresponsiveError(this.app);
@@ -714,7 +717,7 @@ export class Session {
       }
       throw error;
     });
-    return within(answer, timeout, what, sample, (text) => this.step(text),
+    return whilePending(answer, what, sample, (text) => this.step(text),
       (started) => this.stallSamples.add(started.then((line) => ({ line }), (error) => ({ error }))));
   }
 
@@ -722,8 +725,9 @@ export class Session {
     return this.request("status.get", surface === undefined ? { name } : { name, surface });
   }
 
-  run(name, params = {}, surface, options = {}) {
-    return this.request("command.run", surface === undefined ? { name, params } : { name, params, surface }, options);
+  run(name, params = {}, surface, ...rest) {
+    if (rest.length > 0) throw new TypeError(`run ${name} takes no options: a command ends by its answer or the close of the connection`);
+    return this.request("command.run", surface === undefined ? { name, params } : { name, params, surface });
   }
 
   rect(name, index, surface) {
@@ -965,15 +969,20 @@ export class Session {
   /**
    * Waits by notification until the status satisfies the predicate and returns that status value. The predicate returns true or
    * false (client watch refuses any other answer). A wait on a status of a surface starts when the
-   * surface has registered the status, because a view surface registers its exposure after its phase `ready`.
+   * surface has registered the status, because a view surface registers its exposure after its phase `ready`. The wait has no
+   * time limit: it ends by the value, a failed answer, an error of the predicate or the close of the connection.
    */
-  async until(name, predicate, message, { surface, timeout = REQUEST } = {}) {
+  async until(name, predicate, message, options = {}) {
+    if (Object.hasOwn(options, "timeout")) throw new TypeError(`until ${name} takes no timeout: a wait ends by its event or the close of the connection`);
+    const { surface, ...rest } = options;
+    if (Object.keys(rest).length > 0) throw new TypeError(`until ${name} has no option ${Object.keys(rest).join(", ")}`);
     if (surface !== undefined) await this.registered(surface, [`status ${name}`]);
     this.step(`until ${name}`);
-    return this.client.watch(this.window, name, predicate, { surface, timeout }).catch((error) => {
-      if (error.code === "ETIMEDOUT") error.message = `${this.app.name}: ${message} (${error.message})`;
+    return this.client.watch(this.window, name, predicate, { surface }).catch((error) => {
       // When the watch or the first value request fails, the error names the status. The code stays unchanged.
-      else if (error instanceof EndpointError) error.message = `${this.app.name} status ${name}: ${error.message}`;
+      if (error instanceof EndpointError) error.message = `${this.app.name} status ${name}: ${error.message}`;
+      // A watch that ended by the close of the connection or by an error of the predicate names what did not arrive.
+      else error.message = `${this.app.name}: ${message} (${error.message})`;
       throw error;
     });
   }
@@ -1047,20 +1056,25 @@ export class Session {
     await this.request("diagnostics.transcript", { on: true });
     return {
       lines,
-      /** Waits until a line satisfies the predicate. */
-      until: (predicate, message, timeout = REQUEST) => new Promise((resolve, reject) => {
+      /** Waits until a line satisfies the predicate. The wait ends by that line or by the close of the connection. */
+      until: (predicate, message, ...rest) => new Promise((resolve, reject) => {
+        if (rest.length > 0) throw new TypeError("transcript until takes no time limit: it ends by its line or the close of the connection");
+        let settled = false;
+        const end = () => {
+          settled = true;
+          offCheck();
+        };
         const check = () => {
-          if (predicate(lines)) {
-            clearTimeout(timer);
-            offCheck();
-            resolve(lines);
-          }
+          if (settled || !predicate(lines)) return;
+          end();
+          resolve(lines);
         };
         const offCheck = this.client.on("diagnostics.log", () => queueMicrotask(check));
-        const timer = setTimeout(() => {
-          offCheck();
-          reject(new Error(`${this.app.name}: ${message} within ${timeout} ms:\n${lines.join("\n")}`));
-        }, timeout);
+        this.client.ended.then((error) => {
+          if (settled) return;
+          end();
+          reject(new Error(`${this.app.name}: ${message} before ${error.message}:\n${lines.join("\n")}`));
+        });
         check();
       }),
       stop: async () => {
@@ -1076,51 +1090,40 @@ function compact(object) {
   return Object.fromEntries(Object.entries(object).filter(([, value]) => value !== undefined));
 }
 
-/**
- * Fails when the promise does not answer within ms. When sample is given, it records the host threads at that moment
- * before failing and writes the path of that record into the error (F69). When recording fails, the error states the
- * reason. A sample that starts at STALL_AFTER goes on after the request answers, so hold receives its promise, which
- * resolves to the reported line or rejects with the reason of the failed sample; the session waits for it.
- */
-export function within(promise, ms, what, sample, report, hold) {
+/** Fails when the promise does not answer within ms. A search of a check that has its own end uses it; a request does not. */
+export function within(promise, ms, what) {
   let timer;
   const limit = new Promise((_, reject) => {
-    timer = setTimeout(async () => {
-      const message = `${what} did not answer within ${ms} ms`;
-      if (!sample) return reject(new Error(message));
-      try {
-        reject(new Error(`${message}; the host's threads at that moment: ${await sample()}`));
-      } catch (error) {
-        reject(new Error(`${message}; sampling the host failed: ${error.message}`));
-      }
-    }, ms);
+    timer = setTimeout(() => reject(new Error(`${what} did not answer within ${ms} ms`)), ms);
   });
-  // A request still pending at STALL_AFTER starts the host and page samples in the same turn, so a stall that ends before
-  // the limit keeps its stacks. The result of that sample goes to report, and a failed sample is reported with its reason.
-  let stall;
-  if (sample && ms > STALL_AFTER) {
-    if (typeof report !== "function") throw new Error(`within needs a report function for a sample after ${STALL_AFTER} ms`);
-    if (typeof hold !== "function") throw new Error(`within needs a hold function for a sample after ${STALL_AFTER} ms`);
-    stall = setTimeout(() => {
-      const pending = `${what} still pending after ${STALL_AFTER} ms`;
-      hold(sample().then(
-        (text) => {
-          const line = `${pending}; the host's threads at that moment: ${text}`;
-          report(line);
-          return line;
-        },
-        (error) => {
-          const line = `${pending}; sampling the host failed: ${error.message}`;
-          report(line);
-          throw new Error(line);
-        },
-      ));
-    }, STALL_AFTER);
-  }
-  return Promise.race([promise, limit]).finally(() => {
-    clearTimeout(timer);
-    clearTimeout(stall);
-  });
+  return Promise.race([promise, limit]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * Returns the promise unchanged and records the host threads when it is still pending at STALL_AFTER (F69). The record ends no
+ * wait. A request still pending at STALL_AFTER starts the host and page samples in the same turn, so a stall keeps its stacks.
+ * The sample goes on after the promise answers, so hold receives its promise, which resolves to the reported line or rejects
+ * with the reason of the failed sample; the session waits for it. The line also goes to report.
+ */
+export function whilePending(promise, what, sample, report, hold) {
+  if (typeof report !== "function") throw new Error("whilePending needs a report function");
+  if (typeof hold !== "function") throw new Error("whilePending needs a hold function");
+  const stall = setTimeout(() => {
+    const pending = `${what} still pending after ${STALL_AFTER} ms`;
+    hold(sample().then(
+      (text) => {
+        const line = `${pending}; the host's threads at that moment: ${text}`;
+        report(line);
+        return line;
+      },
+      (error) => {
+        const line = `${pending}; sampling the host failed: ${error.message}`;
+        report(line);
+        throw new Error(line);
+      },
+    ));
+  }, STALL_AFTER);
+  return promise.finally(() => clearTimeout(stall));
 }
 
 /** Returns the code of the EndpointError when the request fails, and null when it succeeds. */
@@ -1411,12 +1414,11 @@ async function dragOnce(s, plan, capture, frameIdentity) {
 }
 
 async function dragDrawing(s, plan, capture, frameIdentity) {
-  const ms = Math.max(1, Math.round(plan.ms / 16)) * 16 * 2 * plan.times;
   const result = await s.request("diagnostics.drag", {
     ...plan,
     capture,
     ...(frameIdentity ? { frameIdentity: true } : {}),
-  }, { timeout: REQUEST + ms * 4 });
+  });
   if (!capture) return result;
   s.trackRecording(result.frames);
   // Records until the time when the last screen of the drag is displayed.
