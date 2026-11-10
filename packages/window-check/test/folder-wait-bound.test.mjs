@@ -12,9 +12,11 @@ import test, { mock } from "node:test";
 let startWatch = () => {};
 let endWatch = () => {};
 let failEnd = () => {};
+let subscriptions = 0;
 mock.module("@parcel/watcher", {
   namedExports: {
     subscribe: () => new Promise((resolve) => {
+      subscriptions += 1;
       startWatch = () => resolve({ unsubscribe: () => new Promise((ended, failed) => { endWatch = ended; failEnd = failed; }) });
     }),
   },
@@ -65,6 +67,24 @@ test("a wait whose watch does not end settles with its value, and endWatches rep
   failEnd(new Error("stream stop failed"));
   assert.deepEqual((await ended).map((error) => error.message), [`the watch of ${dir} failed to end: stream stop failed`]);
   assert.deepEqual(await endWatches(), [], "a watch end was reported twice");
+});
+
+test("a watch of a folder starts after the end of the earlier watch of that folder answered", { timeout: 10000 }, async (t) => {
+  const dir = folder(t);
+  const first = untilFolderState(dir, () => 1);
+  startWatch();
+  assert.equal(await outcome(first), 1, "the first wait did not settle with its value");
+  const started = subscriptions;
+  const second = untilFolderState(dir, () => 2);
+  await turns();
+  assert.equal(subscriptions, started, "a watch of the folder started while the end of its earlier watch had not answered");
+  endWatch();
+  await turns();
+  assert.equal(subscriptions, started + 1, "the watch of the folder did not start after the end of its earlier watch answered");
+  startWatch();
+  assert.equal(await outcome(second), 2, "the second wait did not settle with its value");
+  endWatch();
+  assert.deepEqual(await endWatches(), []);
 });
 
 test("endWatches and a folder wait take no limit", async () => {

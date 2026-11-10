@@ -82,7 +82,12 @@ export function untilFolderState(folder, read, options = {}, ...rest) {
       }
       finish(value !== undefined ? resolve : reject, value !== undefined ? value : signal.reason);
     }, { once: true });
-    const subscribed = subscribe(folder, (error) => (error && !RESCAN_REPORT.test(error.message) ? finish(reject, error) : check()));
+    // A new watch of a folder starts after the ends of the earlier watches of that folder answered: @parcel/watcher ends a
+    // watch on its worker thread after the call returned (UnsubscribeRunner::execute), and a watch of the same folder that
+    // starts while that end runs can receive no change of the folder.
+    const earlier = [...ending].filter(([end]) => end.folder === folder).map(([, ended]) => ended);
+    const start = () => subscribe(folder, (error) => (error && !RESCAN_REPORT.test(error.message) ? finish(reject, error) : check()));
+    const subscribed = earlier.length > 0 ? Promise.all(earlier).then(start) : start();
     subscribed.then(() => {
       active = true;
       check();
