@@ -3,6 +3,7 @@ package windows
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -310,26 +311,60 @@ func TestACallThatCannotStartAnswersItsFailureAndTheNextOneRuns(t *testing.T) {
 	}
 }
 
-// A page that ends never completes its calls, so its end answers them, and the next page takes input after the focus emulation again.
-// contract: platform.windows.input.page-end-ends-its-calls
-func TestTheEndOfAPageEndsItsCalls(t *testing.T) {
+// A call may never complete, and no limit ends its wait: a later input waits behind it and is sent after its completion.
+// contract: platform.windows.input.call-waits-for-its-completion
+func TestACallWaitsForItsCompletion(t *testing.T) {
+	q, f := newFakeQueue()
+	q.focused = true
+	var got []error
+	if err := q.push(devToolsCall{method: "a"}, func(err error) { got = append(got, err) }); err != nil {
+		t.Fatal(err)
+	}
+	if err := q.push(devToolsCall{method: "b"}, nil); err != nil {
+		t.Fatalf("the input after an open call answered %v", err)
+	}
+	if want := []string{"a"}; !reflect.DeepEqual(f.methods(), want) {
+		t.Fatalf("calls %v, want %v", f.methods(), want)
+	}
+	if len(got) != 0 {
+		t.Fatalf("an open call answered %v", got)
+	}
+	f.completes[0](nil)
+	if len(got) != 1 || got[0] != nil {
+		t.Fatalf("the completion answered %v", got)
+	}
+	if want := []string{"a", "b"}; !reflect.DeepEqual(f.methods(), want) {
+		t.Fatalf("calls %v, want %v", f.methods(), want)
+	}
+}
+
+// The end of the DevTools connection answers the open call and every waiting call with that end, a late completion answers nothing,
+// and the next input goes to the new connection with the focus emulation first.
+// contract: platform.windows.input.connection-end-answers-open-calls
+func TestTheEndOfTheConnectionAnswersTheOpenCalls(t *testing.T) {
 	q, f := newFakeQueue()
 	var got []error
+	answer := func(err error) { got = append(got, err) }
 	for _, method := range []string{"a", "b"} {
-		if err := q.push(devToolsCall{method: method}, func(err error) { got = append(got, err) }); err != nil {
+		if err := q.push(devToolsCall{method: method}, answer); err != nil {
 			t.Fatal(err)
 		}
 	}
-	q.pageEnded()
-	if len(got) != 2 || !errors.Is(got[0], errWebviewEnded) || !errors.Is(got[1], errWebviewEnded) {
-		t.Fatalf("got %v", got)
+	q.connectionEnded("the process of the page ended")
+	if len(got) != 2 {
+		t.Fatalf("the end answered %v", got)
+	}
+	for _, err := range got {
+		if err == nil || !strings.Contains(err.Error(), "the process of the page ended") {
+			t.Fatalf("the end answered %v", err)
+		}
 	}
 	f.completes[0](nil)
 	if len(got) != 2 {
 		t.Fatalf("a late completion answered again: %v", got)
 	}
-	if err := q.push(devToolsCall{method: "c"}, nil); err != nil {
-		t.Fatalf("the next page answered %v", err)
+	if err := q.push(devToolsCall{method: "c"}, answer); err != nil {
+		t.Fatalf("the input after the end of the connection answered %v", err)
 	}
 	if want := []string{focusEmulation.method, focusEmulation.method}; !reflect.DeepEqual(f.methods(), want) {
 		t.Fatalf("calls %v, want %v", f.methods(), want)
@@ -340,21 +375,22 @@ func TestTheEndOfAPageEndsItsCalls(t *testing.T) {
 	}
 }
 
-// A web view that ends never completes its calls, so its end answers them, and a later input fails at once.
-// contract: platform.windows.input.webview-end-ends-its-calls
-func TestTheEndOfAWebViewEndsItsCalls(t *testing.T) {
+// The end of the window answers the open call with that end and refuses every later input with it.
+// contract: platform.windows.input.window-end-ends-queue
+func TestTheEndOfTheWindowEndsTheQueue(t *testing.T) {
 	q, f := newFakeQueue()
 	q.focused = true
 	var got []error
 	if err := q.push(devToolsCall{method: "a"}, func(err error) { got = append(got, err) }); err != nil {
 		t.Fatal(err)
 	}
-	q.end()
-	if len(got) != 1 || !errors.Is(got[0], errWebviewEnded) {
-		t.Fatalf("got %v", got)
+	q.end("the window ended")
+	if len(got) != 1 || got[0] == nil || !strings.Contains(got[0].Error(), "the window ended") {
+		t.Fatalf("the end answered %v", got)
 	}
-	if err := q.push(devToolsCall{method: "b"}, nil); !errors.Is(err, errWebviewEnded) {
-		t.Fatalf("an input after the end answered %v", err)
+	err := q.push(devToolsCall{method: "b"}, nil)
+	if err == nil || !strings.Contains(err.Error(), "the window ended") {
+		t.Fatalf("the input after the end answered %v", err)
 	}
 	f.completes[0](nil)
 	if len(got) != 1 {
@@ -372,8 +408,8 @@ func TestAnAnswerOfACallBecomesThePointerResult(t *testing.T) {
 		want platform.PointerResult
 	}{
 		{nil, platform.PointerDelivered},
-		{errWebviewEnded, platform.PointerUnreceived},
 		{errors.New("refused"), platform.PointerRejected},
+		{fmt.Errorf("%w: the window ended", errInputEnded), platform.PointerUnreceived},
 	} {
 		if got := pointerResult(test.err); got != test.want {
 			t.Fatalf("%v gives %v, want %v", test.err, got, test.want)

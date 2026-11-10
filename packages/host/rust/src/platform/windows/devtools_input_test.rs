@@ -373,39 +373,60 @@ fn a_call_that_cannot_start_answers_its_failure_and_the_next_one_runs() {
     assert_eq!(*fake.methods.borrow(), ["b"]);
 }
 
-// contract: platform.windows.input.page-end-ends-its-calls
+/// A call may never complete, and no limit ends its wait: a later input waits behind it and is sent after its completion.
+// contract: platform.windows.input.call-waits-for-its-completion
 #[test]
-fn the_end_of_a_page_ends_its_calls() {
+fn a_call_waits_for_its_completion() {
+    let (queue, fake) = focused_queue();
+    let (got, answer) = answers();
+    queue.push(call("a"), Some(answer())).unwrap();
+    queue.push(call("b"), None).unwrap();
+    assert_eq!(*fake.methods.borrow(), ["a"]);
+    assert!(got.borrow().is_empty());
+    fake.complete(0, Ok(()));
+    assert_eq!(*got.borrow(), [Ok(())]);
+    assert_eq!(*fake.methods.borrow(), ["a", "b"]);
+}
+
+/// The end of the DevTools connection answers the open call and every waiting call with that end, a late completion answers nothing,
+/// and the next input goes to the new connection with the focus emulation first.
+// contract: platform.windows.input.connection-end-answers-open-calls
+#[test]
+fn the_end_of_the_connection_answers_the_open_calls() {
     let (queue, fake) = queue();
     let (got, answer) = answers();
     queue.push(call("a"), Some(answer())).unwrap();
     queue.push(call("b"), Some(answer())).unwrap();
-    queue.page_ended();
-    assert_eq!(
-        *got.borrow(),
-        [
-            Err(InputFailure::WebviewEnded),
-            Err(InputFailure::WebviewEnded)
-        ]
-    );
+    queue.connection_ended("the process of the page ended");
+    assert_eq!(got.borrow().len(), 2);
+    for result in got.borrow().iter() {
+        let Err(InputFailure::Ended(text)) = result else {
+            panic!("the end answered {result:?}");
+        };
+        assert!(text.contains("the process of the page ended"), "{text}");
+    }
     fake.complete(0, Ok(()));
     assert_eq!(got.borrow().len(), 2);
-    queue.push(call("c"), None).unwrap();
+    queue.push(call("c"), Some(answer())).unwrap();
     assert_eq!(*fake.methods.borrow(), [FOCUS, FOCUS]);
     fake.complete(1, Ok(()));
     assert_eq!(*fake.methods.borrow(), [FOCUS, FOCUS, "c"]);
 }
 
-// contract: platform.windows.input.webview-end-ends-its-calls
+/// The end of the window answers the open call with that end and refuses every later input with it.
+// contract: platform.windows.input.window-end-ends-queue
 #[test]
-fn the_end_of_a_web_view_ends_its_calls() {
+fn the_end_of_the_window_ends_the_queue() {
     let (queue, fake) = focused_queue();
     let (got, answer) = answers();
     queue.push(call("a"), Some(answer())).unwrap();
-    queue.end();
-    assert_eq!(*got.borrow(), [Err(InputFailure::WebviewEnded)]);
+    queue.end("the window ended");
+    let Some(Err(InputFailure::Ended(text))) = got.borrow().first().cloned() else {
+        panic!("the end answered {:?}", got.borrow());
+    };
+    assert!(text.contains("the window ended"), "{text}");
     let failure = queue.push(call("b"), None).unwrap_err();
-    assert_eq!(failure, WEBVIEW_ENDED);
+    assert!(failure.contains("the window ended"), "{failure}");
     fake.complete(0, Ok(()));
     assert_eq!(got.borrow().len(), 1);
     assert_eq!(*fake.methods.borrow(), ["a"]);
@@ -416,12 +437,14 @@ fn the_end_of_a_web_view_ends_its_calls() {
 fn an_answer_of_a_call_becomes_the_pointer_result() {
     assert_eq!(pointer_delivery(&Ok(())), Delivery::Delivered);
     assert_eq!(
-        pointer_delivery(&Err(InputFailure::WebviewEnded)),
-        Delivery::Unreceived
-    );
-    assert_eq!(
         pointer_delivery(&Err(InputFailure::Failed("refused".to_string()))),
         Delivery::Rejected
+    );
+    assert_eq!(
+        pointer_delivery(&Err(InputFailure::Ended(
+            "the input of the web view ended: the window ended".to_string()
+        ))),
+        Delivery::Unreceived
     );
 }
 
