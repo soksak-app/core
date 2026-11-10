@@ -16,6 +16,7 @@
 #import "webview_geometry.h"
 #import "window_facts.h"
 #import "support/surface_view.h"
+#import "support/temporary_folder.h"
 #import "support/capture_frame.m"
 
 static size_t sourceWidth = 96;
@@ -187,9 +188,7 @@ static void runPresentationCase(BOOL tagged, BOOL lease) { @autoreleasepool {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     [NSApp finishLaunching];
-    char directory[] = "/tmp/soksak-image-region-pixels-XXXXXX";
-    BOOL directoryReady = mkdtemp(directory) != NULL;
-    check(directoryReady, @"a private capture-artifact directory is created");
+    const char *directory = temporaryFolder(@"soksak-image-region-pixels-").fileSystemRepresentation;
 
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(120, 120, 240, 160)
         styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
@@ -261,7 +260,7 @@ static void runPresentationCase(BOOL tagged, BOOL lease) { @autoreleasepool {
         [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
             beforeDate:[NSDate dateWithTimeIntervalSinceNow:MIN(0.01, settled.timeIntervalSinceNow)]];
     char *captureError = NULL;
-    BOOL opened = directoryReady && sp_capture_open(window.windowNumber, false, &captureError);
+    BOOL opened = sp_capture_open(window.windowNumber, false, &captureError);
     check(opened, [NSString stringWithFormat:@"the nonactivating window opens for recording (%s)", captureError ?: ""]);
     free(captureError); captureError = NULL;
     BOOL started = opened && sp_capture_start(directory, false, &captureError);
@@ -414,7 +413,6 @@ static void runPresentationCase(BOOL tagged, BOOL lease) { @autoreleasepool {
     [page removeFromSuperview];
     if (surfaceHost) sp_surface_close(surfaceHost);
     [page release]; [main release]; [window close]; [content release]; [window release];
-    if (exact) [[NSFileManager defaultManager] removeItemAtPath:[NSString stringWithUTF8String:directory] error:NULL];
 } }
 
 int main(int argc, const char **argv) {

@@ -12,14 +12,9 @@ static NEXT: AtomicUsize = AtomicUsize::new(0);
 pub struct Folder(PathBuf);
 
 impl Folder {
-    /// Creates `sok-<label>-<process>-<n>` in the temporary directory of the system.
+    /// Creates `sok-<label>-<process>-<n>` in the temporary directory that TMPDIR names.
     pub fn new(label: &str) -> Folder {
-        Folder::new_in(&std::env::temp_dir(), label)
-    }
-
-    /// Creates `sok-<label>-<process>-<n>` in `base`; a socket path fits its length limit only under a short base.
-    pub fn new_in(base: &Path, label: &str) -> Folder {
-        let path = base.join(format!(
+        let path = std::env::temp_dir().join(format!(
             "sok-{label}-{}-{}",
             std::process::id(),
             NEXT.fetch_add(1, Ordering::SeqCst)

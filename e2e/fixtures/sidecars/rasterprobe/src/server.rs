@@ -8,6 +8,7 @@ use std::ffi::CString;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::os::fd::AsRawFd;
+use std::os::unix::ffi::OsStringExt;
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
@@ -235,7 +236,10 @@ pub fn run(service_dir: &Path, log_dir: Option<PathBuf>) -> Result<(), String> {
     // The lock lives as long as the process.
     std::mem::forget(lock_file);
 
-    let template = CString::new("/tmp/rasterprobe.XXXXXX").expect("the template holds no NUL");
+    // The socket folder lies in the temporary folder that TMPDIR names, so the folder of a test run holds it and removes
+    // it with that run also when the sidecar is killed.
+    let template = CString::new(std::env::temp_dir().join("rasterprobe.XXXXXX").into_os_string().into_vec())
+        .map_err(|error| format!("the socket folder template: {error}"))?;
     let mut template = template.into_bytes_with_nul();
     // SAFETY: the template is a writable NUL-terminated buffer that mkdtemp fills in place.
     if unsafe { libc::mkdtemp(template.as_mut_ptr().cast()) }.is_null() {

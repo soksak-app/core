@@ -6,14 +6,15 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #import "application_log.h"
+#import "support/temporary_folder.h"
 
 typedef void (^Crash)(void);
 
 /// Runs crash in a child process with its standard error in a file; returns the written text and the terminating signal.
 static NSString *run(Crash crash, int *signalNumber) {
-    char path[] = "/tmp/application_log_fatal_test.XXXXXX";
-    int file = mkstemp(path);
-    if (file < 0) { perror("mkstemp"); exit(1); }
+    NSString *path = [temporaryFolder(@"soksak-application-log-fatal-") stringByAppendingPathComponent:@"stderr"];
+    int file = open(path.fileSystemRepresentation, O_WRONLY | O_CREAT | O_EXCL, 0600);
+    if (file < 0) { perror("open"); exit(1); }
     fflush(NULL);
     pid_t child = fork();
     if (child < 0) { perror("fork"); exit(1); }
@@ -27,9 +28,7 @@ static NSString *run(Crash crash, int *signalNumber) {
     if (waitpid(child, &status, 0) < 0) { perror("waitpid"); exit(1); }
     *signalNumber = WIFSIGNALED(status) ? WTERMSIG(status) : 0;
     close(file);
-    NSString *written = [NSString stringWithContentsOfFile:@(path) encoding:NSUTF8StringEncoding error:nil];
-    unlink(path);
-    return written;
+    return [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:nil];
 }
 
 /// The record of a line without its time: `<ISO-8601 time with milliseconds> <rest>`; nil when line has another shape.
