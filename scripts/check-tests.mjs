@@ -513,6 +513,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F722",
+    implementation: [
+      { file: "packages/workbench-mygo/src/shell_statuses.go", symbol: "for _, side := range layout.WindowSides {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/shell_sidebars_test.go", id: "TestTheRailGroupsHoldThePluginSetsOfTheFourWindowSides" },
+    ],
+    expected: "The rail groups of the mygo workbench read the plugin sets of the four window sides in their order, so a top window sidebar set joins the rail and core.rail.",
+    levels: ["unit"],
+  },
+  {
     id: "F717",
     implementation: [
       { file: "packages/sok/go/src/identity.go", symbol: "func IdentityOf(application string) (string, error) {" },

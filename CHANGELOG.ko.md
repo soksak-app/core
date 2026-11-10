@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F722: mygo workbench 의 rail group 과 `core.rail` 은 page 처럼 네 window 변의 plugin set 을 그 순서로 읽는다.
 - F723: 두 workbench 에서 card 도구의 tooltip 은 workbench.json `cardTools` 의 이름(탭 추가, 세로로 나누기, 가로로 나누기, 카드 전체 화면, 카드 배치 복원, 카드 닫기)이고, 거절은 dash 없이 이유를 말하며, ⋯ menu 는 이름을 자르지 않고 쓴다.
 - F717: Go host 는 설정 폴더의 식별자를 framework adapter 의 application 이름에서 가져오므로, mygo application 은 Wails application 의 폴더가 아니라 `app.soksak.mygo` 를 쓴다.
 - F716: 두 host 는 writer 가 첫 policy 를 적용한 뒤 native 활동 observer 를 설치하므로, class `lifecycle` 을 `info` 로 저장하는 policy 는 host 시작부터 각 활동 observer 의 `native.observe.registered` 기록을 저장한다.
