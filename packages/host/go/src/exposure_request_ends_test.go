@@ -29,25 +29,25 @@ func askFixture() (*Host, *Surfaces, *askWindow) {
 	return h, s, window
 }
 
-// pageAnswer is the answer of a page request of the endpoint.
-type pageAnswer struct {
+// commandAnswer is the answer of a page request of the endpoint.
+type commandAnswer struct {
 	result json.RawMessage
 	err    error
 }
 
-// commandRun sends the endpoint request command.run of the connection ctx to the main page of window-a and returns the
+// pageCommandRun sends the endpoint request command.run of the connection ctx to the main page of window-a and returns the
 // channel of its answer.
-func commandRun(ctx context.Context, h *Host) <-chan pageAnswer {
-	answer := make(chan pageAnswer, 1)
+func pageCommandRun(ctx context.Context, h *Host) <-chan commandAnswer {
+	answer := make(chan commandAnswer, 1)
 	go func() {
 		result, err := hostBackend{h: h}.PageRequest(ctx, "window-a", "command.run", json.RawMessage(`{"name":"probe.run","params":{}}`))
-		answer <- pageAnswer{result, err}
+		answer <- commandAnswer{result, err}
 	}()
 	return answer
 }
 
 // expectOpen fails when answer already holds the end of the request.
-func expectOpen(t *testing.T, answer <-chan pageAnswer, what string) {
+func expectOpen(t *testing.T, answer <-chan commandAnswer, what string) {
 	t.Helper()
 	select {
 	case got := <-answer:
@@ -60,7 +60,7 @@ func expectOpen(t *testing.T, answer <-chan pageAnswer, what string) {
 // contract: exposure.command.ends-by-reply-or-peer-end
 func TestACommandRunEndsByItsReply(t *testing.T) {
 	h, s, window := askFixture()
-	answer := commandRun(context.Background(), h)
+	answer := pageCommandRun(context.Background(), h)
 	id := <-window.requests
 	expectOpen(t, answer, "the command.run that its page received")
 	if err := h.relay.Resolve(id, relayTarget{owner: s}, ExposureResult{Result: json.RawMessage(`7`)}); err != nil {
@@ -75,7 +75,7 @@ func TestACommandRunEndsByItsReply(t *testing.T) {
 // contract: exposure.command.ends-by-reply-or-peer-end
 func TestACommandRunEndsByTheEndOfItsPage(t *testing.T) {
 	h, s, window := askFixture()
-	answer := commandRun(context.Background(), h)
+	answer := pageCommandRun(context.Background(), h)
 	<-window.requests
 	expectOpen(t, answer, "the command.run that its page received")
 	h.relay.Abandon(func(target relayTarget) bool { return target.owner == s })
@@ -92,7 +92,7 @@ func TestACommandRunEndsByTheEndOfItsEndpointConnection(t *testing.T) {
 	isolateTraceRecords(t)
 	h, s, window := askFixture()
 	ctx, end := context.WithCancel(context.Background())
-	answer := commandRun(ctx, h)
+	answer := pageCommandRun(ctx, h)
 	id := <-window.requests
 	expectOpen(t, answer, "the command.run that its page received")
 	end()
@@ -121,7 +121,7 @@ func TestACommandRunOfAnEndedConnectionEnds(t *testing.T) {
 	h, _, _ := askFixture()
 	ctx, end := context.WithCancel(context.Background())
 	end()
-	if got := <-commandRun(ctx, h); got.err == nil {
+	if got := <-pageCommandRun(ctx, h); got.err == nil {
 		t.Fatalf("command.run of an ended connection answered %s, want no result", got.result)
 	}
 }
@@ -204,7 +204,7 @@ func TestTheEndOfTheConnectionOfItsOriginEndsAForward(t *testing.T) {
 	isolateTraceRecords(t)
 	h, s, window, page := forwardFixture()
 	connection, end := context.WithCancel(context.Background())
-	answer := commandRun(connection, h)
+	answer := pageCommandRun(connection, h)
 	origin := <-window.requests
 	reply := forward(page, h, forwardOf(origin))
 	forwarded := <-window.requests
@@ -222,7 +222,7 @@ func TestTheEndOfTheConnectionOfItsOriginEndsAForward(t *testing.T) {
 func TestTheAnswerOfItsOriginEndsAWaitingForward(t *testing.T) {
 	isolateTraceRecords(t)
 	h, s, window, page := forwardFixture()
-	answer := commandRun(context.Background(), h)
+	answer := pageCommandRun(context.Background(), h)
 	origin := <-window.requests
 	reply := forward(page, h, forwardOf(origin))
 	forwarded := <-window.requests
@@ -242,7 +242,7 @@ func TestTheAnswerOfItsOriginEndsAWaitingForward(t *testing.T) {
 func TestTheEndOfItsOriginWith1003EndsAWaitingForward(t *testing.T) {
 	isolateTraceRecords(t)
 	h, s, window, page := forwardFixture()
-	answer := commandRun(context.Background(), h)
+	answer := pageCommandRun(context.Background(), h)
 	origin := <-window.requests
 	reply := forward(page, h, forwardOf(origin))
 	forwarded := <-window.requests
@@ -261,7 +261,7 @@ func TestTheEndOfItsOriginWith1003EndsAWaitingForward(t *testing.T) {
 func TestAForwardWithoutOriginIsNotEndedByAConnectionEnd(t *testing.T) {
 	h, s, window, page := forwardFixture()
 	connection, end := context.WithCancel(context.Background())
-	answer := commandRun(connection, h)
+	answer := pageCommandRun(connection, h)
 	<-window.requests
 	reply := forward(page, h, `{"id":1,"surface":"tab","method":"probe.run","params":{}}`)
 	forwarded := <-window.requests
@@ -282,9 +282,9 @@ func TestAForwardWithoutOriginIsNotEndedByAConnectionEnd(t *testing.T) {
 func TestTheEndOfAConnectionLeavesTheForwardsOfAnotherOrigin(t *testing.T) {
 	h, s, window, page := forwardFixture()
 	ending, end := context.WithCancel(context.Background())
-	endedAnswer := commandRun(ending, h)
+	endedAnswer := pageCommandRun(ending, h)
 	<-window.requests
-	keptAnswer := commandRun(context.Background(), h)
+	keptAnswer := pageCommandRun(context.Background(), h)
 	kept := <-window.requests
 	reply := forward(page, h, forwardOf(kept))
 	forwarded := <-window.requests
@@ -308,7 +308,7 @@ func TestTheEndOfAConnectionLeavesTheForwardsOfAnotherOrigin(t *testing.T) {
 func TestAForwardWhoseOriginIsNotOpenIsRefusedWithoutBeingSent(t *testing.T) {
 	h, _, window, page := forwardFixture()
 	connection, end := context.WithCancel(context.Background())
-	answer := commandRun(connection, h)
+	answer := pageCommandRun(connection, h)
 	ended := <-window.requests
 	end()
 	<-answer
