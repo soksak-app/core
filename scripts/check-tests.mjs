@@ -6235,14 +6235,14 @@ const FEATURE_LINKS = [
   {
     id: "F0.5.7-1",
     implementation: [
-      { file: "packages/workbench/page-layout.js", symbol: "waitSurfaceCompositionDeclared" },
-      { file: "packages/workbench/surface-modules.js", symbol: "waitSurfaceCompositionDeclared" },
+      { file: "packages/workbench/page-layout.js", symbol: "waitSurfaceCompositionAnswered" },
+      { file: "packages/workbench/surface-modules.js", symbol: "waitSurfaceCompositionAnswered" },
     ],
     tests: [
       { file: "e2e/projects.test.mjs", id: "project windows persist files, inherit settings, and isolate native state" },
       { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
     ],
-    expected: "Command settling waits for the composition declaration of a view without waiting on native presentation, so surface startup cannot form a presentation cycle; project-window and normal-shutdown evidence must pass independently.",
+    expected: "Command settling waits for the answer of the composition declaration of a view without waiting on native presentation, so surface startup cannot form a presentation cycle; project-window and normal-shutdown evidence must pass independently.",
     levels: ["unit", "application"],
   },
   {
@@ -10708,8 +10708,8 @@ const FEATURE_LINKS = [
   {
     id: "F239-66",
     implementation: [{ file: "packages/workbench/surface-modules.js", symbol: "export function mountSurface" }],
-    tests: [{ file: "packages/workbench/test/host-chrome.test.mjs", id: "native view placement waits for current-page composition readiness" }],
-    expected: "Native view placement waits for the current page composition before presenting a view.",
+    tests: [{ file: "packages/workbench/test/host-chrome.test.mjs", id: "native view placement waits for the answer of a composition declaration in flight" }],
+    expected: "Native view placement waits for the answer of the composition declaration of the current page before presenting a view.",
     levels: ["unit"],
   },
   {
@@ -13618,7 +13618,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "apps/tauriv2/test/runtime.test.mjs", id: "ordered event listener errors are reported without blocking later subscribers or messages" },
       { file: "apps/tauriv2/test/runtime.test.mjs", id: "ordered listener failures fail explicitly when the page error path is unavailable" },
-      { file: "packages/workbench/test/host-required-surface-module.test.mjs", id: "a drawn view fails when its required composition wait is missing" },
+      { file: "packages/workbench/test/host-required-surface-module.test.mjs", id: "a drawn view fails when its required composition state is missing" },
       { file: "packages/workbench/test/host-required-surface-module.test.mjs", id: "an undrawn view fails when its required mount lookup is missing" },
     ],
     expected: "Required runtime behavior and error-reporting paths fail explicitly instead of being replaced by no-op or discarded-error fallbacks.",
