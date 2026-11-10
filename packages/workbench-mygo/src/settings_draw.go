@@ -228,6 +228,29 @@ func (s *Shell) drawSettingsRow(c *ui.Context, row settingsRow, pane settingsPan
 		})
 		return
 	}
+	if row.value != "" {
+		// An order row: the name column, then a segment of the name of its value and the segment of its buttons, as orderRows of
+		// packages/workbench/settings-ui.js draws it; a mark stands after the segment.
+		ui.Row(c).FillWidth().MinHeight(pane.rowH).Gap(pane.rowGap).AlignItems(ui.Center).Children(func() {
+			s.drawRowName(c, row.name, pane)
+			ui.Row(c).Shrink(0).Gap(pane.segGap).Padding(pane.segPad).AlignItems(ui.Center).Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.radiusSmall()).Background(s.palette.Bg).Children(func() {
+				ui.Text(c, row.value).NoWrap().FontSize(s.textControl()).TextColor(s.palette.Fg)
+				ui.Row(c).Shrink(0).Gap(pane.segGap).Padding(pane.segPad).Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.radiusSmall()).Background(s.palette.Bg).Children(func() {
+					for _, control := range row.controls {
+						if control.Name == "core.settings-modal.order" {
+							s.drawSegmentButton(c, control, pane)
+						}
+					}
+				})
+			})
+			for _, control := range row.controls {
+				if control.Name != "core.settings-modal.order" {
+					s.drawControl(c, control, pane)
+				}
+			}
+		})
+		return
+	}
 	if row.list {
 		ui.Row(c).FillWidth().Wrap().Children(func() {
 			for _, control := range row.controls {
@@ -238,16 +261,13 @@ func (s *Shell) drawSettingsRow(c *ui.Context, row settingsRow, pane settingsPan
 	}
 	// A row that wraps stacks its lines at its start, so a control stands in the middle of its row only in a row that does not.
 	line := ui.Row(c).FillWidth().MinHeight(pane.rowH).Gap(pane.rowGap).AlignItems(ui.Center)
-	if slices.ContainsFunc(row.controls, func(control *SettingsControl) bool { return strings.HasPrefix(control.item(), "reset:") }) {
+	if slices.ContainsFunc(row.controls, func(control *SettingsControl) bool {
+		return strings.HasPrefix(control.item(), "reset:") || control.kind == controlMark
+	}) {
 		line.Wrap()
 	}
 	line.Children(func() {
-		if row.name != "" {
-			ui.Text(c, row.name).Width(pane.rowNameW).FontSize(s.textControl()).TextColor(s.palette.Muted)
-		} else {
-			// A row without a name keeps the empty name column of the grid of the page.
-			ui.Box(c).Width(pane.rowNameW)
-		}
+		s.drawRowName(c, row.name, pane)
 		for _, control := range row.controls {
 			s.drawControl(c, control, pane)
 		}
@@ -255,6 +275,15 @@ func (s *Shell) drawSettingsRow(c *ui.Context, row settingsRow, pane settingsPan
 	if row.description != "" {
 		ui.Text(c, row.description).Wrap().TextColor(s.palette.Muted).FontSize(s.textSmall()).Margin(0, 0, pane.captionGap, 0)
 	}
+}
+
+// drawRowName draws the name column of a row, which a row without a name keeps empty as the grid of the page does.
+func (s *Shell) drawRowName(c *ui.Context, name string, pane settingsPane) {
+	if name != "" {
+		ui.Text(c, name).Width(pane.rowNameW).FontSize(s.textControl()).TextColor(s.palette.Muted)
+		return
+	}
+	ui.Box(c).Width(pane.rowNameW)
 }
 
 func (s *Shell) drawControl(c *ui.Context, control *SettingsControl, pane settingsPane) {
@@ -274,6 +303,11 @@ func (s *Shell) drawControl(c *ui.Context, control *SettingsControl, pane settin
 	case controlCaption:
 		s.exposedBox(c, control.Name, "", "").Grow(1).Basis(0).Role(ui.RoleGroup).Label(control.Label).Children(func() {
 			ui.Text(c, control.Label).Wrap().FontSize(s.textSmall()).TextColor(s.palette.Muted)
+		})
+	case controlMark:
+		// The mark that the project value applies, the .set-applied of packages/workbench/app.css (docs/spec/settings.md#scope-of-a-control).
+		s.exposedBox(c, control.Name, "", control.item()).Shrink(0).Role(ui.RoleGroup).Label(control.Label).Children(func() {
+			ui.Text(c, control.Label).NoWrap().FontSize(s.textCaption()).TextColor(s.palette.Focus)
 		})
 	}
 }

@@ -91,7 +91,7 @@ Every section row control runs `core.settings.sets.row {id, action, index, secti
 | − | `remove` | Removes row `index` |
 | + | `add` | Appends the first registered section, in plugin and declaration order, that the set does not contain |
 
-A change that would repeat a section in the set fails with -32602 (invalid params) and the error "section <id> is already in set <id>", and changes nothing; so does + when the set already contains every registered section, with "set <id> already contains every registered section". Every change is saved immediately to the scope shown.
+A change that would repeat a section in the set fails with -32602 (invalid params) and the error "section <id> is already in set <id>", and changes nothing; so does + when the set already contains every registered section, with "set <id> already contains every registered section". Every change is saved immediately to the scope of `sets` that the [scope rule](#scope-of-a-control) gives.
 
 ## Controls
 
@@ -110,6 +110,15 @@ The window draws every setting with one control of a fixed set, chosen by the fo
 The set editor uses the same controls: 이름 is a text field, 배치 a select box and each section row a select box. Buttons run actions (전역값 사용, 편집, 삭제, 새 세트, the ▲ ▼ − + of a set row, 목록, 플러그인 관리) and are not setting controls; the ▲ ▼ of an order row are its control; the scope tabs select the shown scope and are not a setting. A setting without a control in this table, such as `textSize`, `sets`, `diagnostics.performance` and `diagnostics.log`, is changed by its own command or the settings file.
 
 The workbench defines this control set instead of rendering the window with the form library at `~/Projects/polyspec/crudui`. That library compiles a form template, binds a record that the application submits as a whole, and keeps row identity, an undo history, `name`-based controls and its own event binding (`connectForm`). The settings window applies each change at once through a declared command, every control names its command through the shared binder and carries an element name ([exposure](exposure.md)), and the host draws a copy of the card in which no listener runs ([native modals](native-modals.md)). The library's markup and binding meet none of these rules without a layer that rewrites its output, while the plugin setting declarations need only the forms of the table above, so adding the dependency is not justified.
+
+### Scope of a control
+
+Every control of a setting follows one rule, in this window and outside it: it shows the applied value of its setting and the scope that value comes from, and it writes to that scope. A setting that the selected project overrides comes from the project scope; every other setting comes from the common scope.
+
+- In the project tab a control shows the applied value and writes the project scope: a change of a setting that the project does not override adds a project value, and 전역값 사용 removes it.
+- In the common tab a control of a setting that the selected project overrides shows the project value and, in the place of the 전역값 사용 button of the project tab, the mark 프로젝트 값 (`core.settings-modal.applied`, key `applied:<setting>`), and a change writes the project scope. Every other control of the common tab shows and writes the common value. The common tab adds no project value and removes none.
+- A link control follows `links` and takes the sets of the scope of `links` as its options; the set list, its buttons and the set editor follow `sets`; the swatches follow `theme`; the order rows follow their key. The mark of `links` stands in its own row after the link controls, the mark of `sets` after the set list, the mark of `theme` in the swatch grid and the mark of an order on its first row, each where the project tab has the button that removes that project value.
+- The switches of the window chrome follow the same rule: a side switch and the fold control of a window sidebar follow their side ([window controls](external-sidebars.md#window-controls)), and the mode switch follows `mode`.
 
 ## Values
 
@@ -148,7 +157,7 @@ The settings files are read only in their current form, and the page does not co
 
 ## Stored sets and links
 
-`sets` and `links` are settings. Their default values come from normalized plugin sidebar declarations, replaced by explicit `environment.json` `sidebars` when present. A change writes the whole list to the shown scope, like any other setting; a project override of `sets` or `links` replaces the common list.
+`sets` and `links` are settings. Their default values come from normalized plugin sidebar declarations, replaced by explicit `environment.json` `sidebars` when present. A change writes the whole list to the scope that the [scope rule](#scope-of-a-control) gives, like any other setting; a project override of `sets` or `links` replaces the common list.
 
 A set is `{id, title, sections, layout}`:
 
@@ -228,3 +237,5 @@ The focus ring of such a control is the focus color of the system in the dark ap
 - General, plugin-window and internal card choices remain independent through focus and tab changes. A disabled window column does not replace another plugin column.
 - The layout values change internal sidebar limits and initial size and the initial size of a window sidebar on its axis.
 - The order rows move a side up and down through `core.settings.change` with the whole order, and the window sidebars arrange in the new order.
+- Each order row shows the name of its value beside its buttons, and the first row shows the name of the setting.
+- A window chrome switch, the fold control of a window sidebar and every control of the common tab change the value that they show, in the scope that the value comes from; after a press of a chrome switch the common tab shows the same value as the chrome, and only the project tab adds or removes a project value.

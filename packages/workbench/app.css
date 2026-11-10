@@ -597,6 +597,8 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 #applicationError { border-bottom: var(--error-border) solid var(--edge); }
 .set-reset { font-size: var(--text-caption); }
 .set-row:has(.set-reset) { flex-wrap: wrap; }
+/* The mark of the common tab that the project value of a setting applies stands where the project tab has its reset (docs/spec/settings.md#scope-of-a-control). */
+.set-applied { font-size: var(--text-caption); color: var(--focus); white-space: nowrap; }
 
 /* The text scale of card content is the product of the frame scale and the card scale (docs/spec/text-size.md). The plane uses data-text-zoom and --text-zoom only when that value is not
    1. WebKit does not enlarge the percentage size of a zoom element, so the host

@@ -1,14 +1,18 @@
 // Manages the display and the command bindings of the card header tools.
 import { bind } from "./commands.js";
 import { declaredIcons as icons } from "./icons.js";
+import declaration from "./workbench.json" with { type: "json" };
+
+/** The names of the card tools and the reasons of their refusals, declared in workbench.json for both workbenches (docs/spec/example-model.md#card-tools). */
+const names = declaration.cardTools;
 
 export const CARD_TOOL_MENUS = { add: "add", x: "split-x", y: "split-y" };
 const definitions = [
-  ["add", "이 카드에 탭 추가 — 무엇을 띄울지 묻는다", "core.card.add", icons["card-add"]],
-  ["x", "세로선으로 쪼개기 — 좌우로 나뉜다", "core.card.split-x", icons["card-split-x"]],
-  ["y", "가로선으로 쪼개기 — 위아래로 나뉜다", "core.card.split-y", icons["card-split-y"]],
-  ["fullscreen", "카드 전체 화면", "core.card.fullscreen", icons["card-expand"]],
-  ["close", "이 카드를 닫는다 — 안의 탭이 몇 개든 함께 간다", "core.card.close", icons["card-close"]],
+  ["add", names.add, "core.card.add", icons["card-add"]],
+  ["x", names["split-x"], "core.card.split-x", icons["card-split-x"]],
+  ["y", names["split-y"], "core.card.split-y", icons["card-split-y"]],
+  ["fullscreen", names.fullscreen, "core.card.fullscreen", icons["card-expand"]],
+  ["close", names.close, "core.card.close", icons["card-close"]],
 ];
 const icon = (path) => `<svg viewBox="0 0 16 16" aria-hidden="true">${path}</svg>`;
 
@@ -41,10 +45,10 @@ export function updateCardTools(toolbar, { canClose, canSplitX, canSplitY, fulls
     const disabled = fullscreen && layout ? true
       : action === "close" ? !canClose : action === "x" ? !canSplitX : action === "y" ? !canSplitY : false;
     if (button.disabled !== disabled) button.disabled = disabled;
-    let title = fullscreen && layout ? "전체 화면에서는 배치를 바꾸지 않는다 — 먼저 카드 배치를 복원한다"
-      : disabled && action === "close" ? "닫을 수 없다 — 어느 이웃도 이 위치를 빈틈없이 못 메운다" : button.dataset.title;
+    let title = fullscreen && layout ? names["layout-held"]
+      : disabled && action === "close" ? names["close-refused"] : button.dataset.title;
     if (action === "fullscreen") {
-      title = fullscreen ? "카드 배치 복원" : "카드 전체 화면";
+      title = fullscreen ? names.restore : names.fullscreen;
       const pressed = String(fullscreen);
       if (button.getAttribute("aria-pressed") !== pressed) {
         button.innerHTML = icon(icons[fullscreen ? "card-restore" : "card-expand"]);

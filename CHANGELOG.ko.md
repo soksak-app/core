@@ -4,6 +4,10 @@
 
 ## 미배포
 
+- F720: window chrome 의 변 switch 와 mode switch, window sidebar 의 접기 control 은 적용 값이 나온 scope 에 쓰므로 더는 project 값을 더하지 않는다. 설정 창의 전역 탭은 project 가 덮어쓴 설정의 project 값을 보이고 쓰며 프로젝트 값으로 표시하고, project 값을 더하거나 없애는 것은 project 탭만 한다.
+- F721: mygo workbench 의 순서 row 는 page 처럼 ▲ 와 ▼ 옆에 자기 값의 이름을 보이고, 첫 row 는 사이드바 순서를 보인다.
+- F722: mygo workbench 의 rail group 과 `core.rail` 은 page 처럼 네 window 변의 plugin set 을 그 순서로 읽는다.
+- F723: 두 workbench 에서 card 도구의 tooltip 은 workbench.json `cardTools` 의 이름(탭 추가, 세로로 나누기, 가로로 나누기, 카드 전체 화면, 카드 배치 복원, 카드 닫기)이고, 거절은 dash 없이 이유를 말하며, ⋯ menu 는 이름을 자르지 않고 쓴다.
 - F717: Go host 는 설정 폴더의 식별자를 framework adapter 의 application 이름에서 가져오므로, mygo application 은 Wails application 의 폴더가 아니라 `app.soksak.mygo` 를 쓴다.
 - F716: 두 host 는 writer 가 첫 policy 를 적용한 뒤 native 활동 observer 를 설치하므로, class `lifecycle` 을 `info` 로 저장하는 policy 는 host 시작부터 각 활동 observer 의 `native.observe.registered` 기록을 저장한다.
 - F715-6: `@soksak/window-check` 의 `soksak-test-app` 은 build 된 registry index 의 `--index <file URL or path>` 를 받는다: 그 run 은 check registry 를 build 하지 않고 plugin 을 설치하지 않으며, 각 bundle 의 sok 이 그 index 로 registry use 를 실행하고, 각 앱의 첫 실행이 내장 environment.json 이 정한 starter pack 을 설치한다. 없거나 읽을 수 없는 index 는 그것을 정한 단계를 실패시키고, `--index` 는 `--pack` 과 `--real` 을 받지 않으며, check 는 `SOKSAK_REGISTRY_INDEX` 를 받는다.

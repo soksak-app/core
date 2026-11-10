@@ -188,8 +188,7 @@ func (s *Shell) openCardTools(card string) error {
 	}
 	for _, tool := range s.headTools(card) {
 		if tool.Enabled {
-			name := firstPart(tool.Title, " — ")
-			items = append(items, pickerItem{Key: tool.Do, Name: name, Icon: s.headIconElements(tool.Icon), Active: tool.Pressed})
+			items = append(items, pickerItem{Key: tool.Do, Name: tool.Title, Icon: s.headIconElements(tool.Icon), Active: tool.Pressed})
 		}
 	}
 	s.focusCard(card)

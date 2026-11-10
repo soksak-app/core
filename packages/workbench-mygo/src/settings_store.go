@@ -363,6 +363,15 @@ func (s *SettingsStore) Overridden(key string) bool {
 	return ok
 }
 
+// Source is the scope that the applied value of key comes from: the project scope while the selected project overrides key, and
+// the common scope otherwise (docs/spec/settings.md#scope-of-a-control).
+func (s *SettingsStore) Source(key string) string {
+	if s.project != "" && s.Overridden(key) {
+		return "project"
+	}
+	return "common"
+}
+
 // Status is the value of core.settings.
 func (s *SettingsStore) Status() SettingsStatus {
 	var project *string

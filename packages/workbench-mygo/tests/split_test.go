@@ -663,21 +663,27 @@ func (f *shellFixture) tool(t *testing.T, card, key string) (enabled bool, title
 	return false, ""
 }
 
+// The tooltip of a card tool is its name, and a refusal states its reason (docs/spec/example-model.md#card-tools).
 func TestTheToolsOfAHeadFollowWhatTheCardCanDo(t *testing.T) {
-	const held = "전체 화면에서는 배치를 바꾸지 않는다 — 먼저 카드 배치를 복원한다"
+	const held = "전체 화면에서는 배치를 바꿀 수 없다"
 	f := narrowCard(t, 1, "a")
 	f.run("core.card.close", map[string]string{"card": "other"})
 	f.settle()
 	// The last card of the plane has no neighbor that fills its place.
-	if enabled, title := f.tool(t, "main", "close"); enabled || title != "닫을 수 없다 — 어느 이웃도 이 위치를 빈틈없이 못 메운다" {
+	if enabled, title := f.tool(t, "main", "close"); enabled || title != "이 자리를 빈틈없이 메울 이웃이 없어 닫을 수 없다" {
 		t.Fatalf("the close tool of the last card is %v %q", enabled, title)
 	}
 	node, ok := exposedNode(f.tester.ElementTree(), "core.card.close", "main")
 	if !ok || node.Actions&ui.ActionPress != 0 {
 		t.Fatalf("the close tool of the last card takes a press: %+v", node)
 	}
-	if enabled, title := f.tool(t, "main", "split-x"); !enabled || title != "세로선으로 쪼개기 — 좌우로 나뉜다" {
+	if enabled, title := f.tool(t, "main", "split-x"); !enabled || title != "세로로 나누기" {
 		t.Fatalf("the split tool is %v %q", enabled, title)
+	}
+	for key, name := range map[string]string{"add": "탭 추가", "split-y": "가로로 나누기", "fullscreen": "카드 전체 화면"} {
+		if _, title := f.tool(t, "main", key); title != name {
+			t.Fatalf("the tool %s is %q, want %q", key, title, name)
+		}
 	}
 
 	f.click("core.card.fullscreen", "main")
@@ -715,6 +721,13 @@ func TestATooNarrowCardCannotSplitAndItsMenuHoldsWhatItCan(t *testing.T) {
 	keys := f.menu().keys()
 	if slices.Contains(keys, "x") || !slices.Contains(keys, "y") || !slices.Contains(keys, "fullscreen") {
 		t.Fatalf("the tool menu holds %q", keys)
+	}
+	// The menu takes the names of the tools as their tooltips hold them.
+	names := map[string]string{"add": "탭 추가", "y": "가로로 나누기", "fullscreen": "카드 전체 화면", "close": "카드 닫기"}
+	for _, item := range f.menu().Items {
+		if want, ok := names[item.Key]; ok && item.Name != want {
+			t.Fatalf("the menu item %s is %q, want %q", item.Key, item.Name, want)
+		}
 	}
 }
 

@@ -238,3 +238,26 @@ func TestAProjectWithAnUnknownSectionInItsSetsDoesNotOpen(t *testing.T) {
 		t.Fatalf("the window shows %v after the refusal, %v before", after["id"], before["id"])
 	}
 }
+
+// The rail groups read the plugin sets of the four window sides in their order, as railSidebars of the page does
+// (docs/spec/external-sidebars.md#override-context-and-rail-border).
+func TestTheRailGroupsHoldThePluginSetsOfTheFourWindowSides(t *testing.T) {
+	f := sidebarShell(t)
+	f.run("core.settings.set", map[string]any{"patch": map[string]any{"top": true}, "scope": "common"})
+	f.run("core.settings.link", map[string]any{"place": "window-top", "plugin": "boxprobe", "set": "set-page", "scope": "common"})
+	type group struct {
+		Card     string   `json:"card"`
+		Sidebars []string `json:"sidebars"`
+	}
+	var found []group
+	for _, card := range f.tabbedCards() {
+		f.run("core.card.focus", map[string]string{"card": card})
+		rail := status[struct {
+			Groups []group `json:"groups"`
+		}](t, f, "core.rail")
+		found = append(found, rail.Groups...)
+	}
+	if len(found) != 1 || strings.Join(found[0].Sidebars, ",") != "right,top" {
+		t.Fatalf("the rail groups are %+v, want one group of the sidebars right and top", found)
+	}
+}

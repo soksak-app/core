@@ -75,15 +75,22 @@ func (s *Shell) drawChromeActs(c *ui.Context, browsing bool) {
 		// (docs/spec/external-sidebars.md#window-controls).
 		for _, side := range layout.WindowSides {
 			on, _ := s.settings.Value(side).(bool) // silent: the settings store checks the type of the value.
-			s.chromeAct(c, "core.chrome."+side, "core.settings.set", sideNames[side]+" 사이드바 보이기", "panel-"+side, on, settingsPatchParam{map[string]any{side: !on}})
+			// The switch writes the scope that the applied value comes from (docs/spec/settings.md#scope-of-a-control).
+			s.chromeAct(c, "core.chrome."+side, "core.settings.set", sideNames[side]+" 사이드바 보이기", "panel-"+side, on, s.appliedPatch(side, !on))
 		}
 	}
 	next, icon := "light", "sun"
 	if s.settings.Value("mode") != "dark" {
 		next, icon = "dark", "moon"
 	}
-	s.chromeAct(c, "core.chrome.mode", "core.settings.set", "밝게 / 어둡게", icon, false, settingsPatchParam{map[string]any{"mode": next}})
+	s.chromeAct(c, "core.chrome.mode", "core.settings.set", "밝게 / 어둡게", icon, false, s.appliedPatch("mode", next))
 	s.chromeAct(c, "core.chrome.settings", "core.settings.open", "설정", "settings", false, nil)
+}
+
+// appliedPatch is the parameter of core.settings.set that writes value of key to the scope that the applied value of key comes
+// from (docs/spec/settings.md#scope-of-a-control).
+func (s *Shell) appliedPatch(key string, value any) settingsPatchParam {
+	return settingsPatchParam{Patch: map[string]any{key: value}, Scope: s.settings.Source(key)}
 }
 
 // chromeAct draws an icon switch of the chrome bar, the .act of packages/workbench/app.css.

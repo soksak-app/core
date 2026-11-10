@@ -66,6 +66,8 @@ const (
 	controlSlider
 	controlText
 	controlCaption
+	// controlMark is the mark of the common tab that the project value of its setting applies.
+	controlMark
 )
 
 // ControlCommand is the command of a control, without the value that the control adds.
@@ -110,6 +112,8 @@ type settingsRow struct {
 	controls    []*SettingsControl
 	// list says that the controls stand in the flow of a line, one after the other (.set-list).
 	list bool
+	// value is the name of the value of an order row, which stands before its buttons.
+	value string
 }
 
 // settingsGroup is a group of rows with its name and its one-line text.
@@ -236,13 +240,49 @@ func (b *settingsBuilder) group(name, text string, rows ...settingsRow) {
 	b.model.groups = append(b.model.groups, settingsGroup{name: name, text: text, rows: rows})
 }
 
-// row is a row of one control. In the project scope a setting that the project overrides adds its reset button.
+// row is a row of one control. A setting that the project overrides adds its reset button in the project tab and its mark in
+// the common tab.
 func (s *Shell) row(b *settingsBuilder, name string, control *SettingsControl) settingsRow {
 	row := settingsRow{name: name, controls: []*SettingsControl{control}}
-	if s.settingsWindow.scope == "project" && control.Key != nil && s.settings.Overridden(*control.Key) {
-		row.controls = append(row.controls, b.resetButton(*control.Key, "전역값 사용"))
+	if control.Key != nil {
+		row.controls = append(row.controls, s.overrideControls(b, *control.Key, "전역값 사용")...)
 	}
 	return row
+}
+
+// overrideControls are the controls of a setting that the selected project overrides: the button that removes the project value in
+// the project tab, and the mark that the project value applies in the common tab (docs/spec/settings.md#scope-of-a-control).
+func (s *Shell) overrideControls(b *settingsBuilder, key, reset string) []*SettingsControl {
+	if !s.settings.Overridden(key) || s.settings.Project() == "" {
+		return nil
+	}
+	if s.settingsWindow.scope == "project" {
+		return []*SettingsControl{b.resetButton(key, reset)}
+	}
+	return []*SettingsControl{b.add(SettingsControl{Name: "core.settings-modal.applied", Key: text("applied:" + key), Label: "프로젝트 값", kind: controlMark})}
+}
+
+// settingOf is the setting of the key of a control: links for a link, sets for a control of the set editor, and the key itself
+// for every other control.
+func settingOf(key string) string {
+	for _, prefix := range []string{"title:", "layout:", "row:"} {
+		if strings.HasPrefix(key, prefix) {
+			return "sets"
+		}
+	}
+	if strings.HasPrefix(key, "link:") {
+		return "links"
+	}
+	return key
+}
+
+// controlScope is the scope that a control of the key shows and writes: the project scope in the project tab, and in the common
+// tab the scope that the applied value of its setting comes from (docs/spec/settings.md#scope-of-a-control).
+func (s *Shell) controlScope(key string) string {
+	if s.settingsWindow.scope == "project" {
+		return "project"
+	}
+	return s.settings.Source(settingOf(key))
 }
 
 func (b *settingsBuilder) resetButton(key, label string) *SettingsControl {
@@ -252,7 +292,7 @@ func (b *settingsBuilder) resetButton(key, label string) *SettingsControl {
 // setting is the command of a control of the setting key: core.settings.change, or core.settings.link for a link key of the
 // form link:<place>:<plugin>.
 func (s *Shell) setting(key string) (*ControlCommand, string) {
-	scope := s.settingsWindow.scope
+	scope := s.controlScope(key)
 	if rest, ok := strings.CutPrefix(key, "link:"); ok {
 		place, plugin, _ := strings.Cut(rest, ":") // silent: the key of a link control is written with both parts.
 		params := map[string]any{"place": place, "plugin": nil, "scope": scope}
@@ -264,7 +304,7 @@ func (s *Shell) setting(key string) (*ControlCommand, string) {
 	return settingCommand("core.settings.change", map[string]any{"key": key, "scope": scope}), "value"
 }
 
-func (s *Shell) value(key string) any { return s.settings.Scoped(key, s.settingsWindow.scope) }
+func (s *Shell) value(key string) any { return s.settings.Scoped(key, s.controlScope(key)) }
 
 // choose is the select box of the setting key.
 func (s *Shell) choose(b *settingsBuilder, key string, options [][2]string, now string) (*SettingsControl, error) {
@@ -364,6 +404,7 @@ func labelled(values []string, labels map[string]string) ([][2]string, error) {
 func (s *Shell) buildGeneral(b *settingsBuilder) error {
 	catalog := s.settings.Catalog
 	scope := s.settingsWindow.scope
+	themeScope := s.controlScope("theme")
 	var failed error
 	choice := func(name, key string, labels map[string]string) settingsRow {
 		options, err := labelled(catalog.choices(key), labels)
@@ -386,13 +427,11 @@ func (s *Shell) buildGeneral(b *settingsBuilder) error {
 	for i := range catalog.Themes {
 		item := &catalog.Themes[i]
 		theme.controls = append(theme.controls, b.pressedButton("theme:"+item.Name, "core.settings-modal.theme", "", "core.settings.theme",
-			map[string]any{"name": item.Name, "scope": scope}, item.Name == s.value("theme")))
+			map[string]any{"name": item.Name, "scope": themeScope}, item.Name == s.value("theme")))
 		last := theme.controls[len(theme.controls)-1]
 		last.kind, last.theme, last.Label = controlSwatch, item, item.Name
 	}
-	if scope == "project" && s.settings.Overridden("theme") {
-		theme.controls = append(theme.controls, b.resetButton("theme", "전역 테마 사용"))
-	}
+	theme.controls = append(theme.controls, s.overrideControls(b, "theme", "전역 테마 사용")...)
 	b.group("테마", "테마가 색과 형태의 기본값을 정하고, 모드는 그 테마의 밝은 쪽과 어두운 쪽을 고른다.", theme,
 		choice("모드", "mode", map[string]string{"dark": "어두움", "light": "밝음"}))
 
@@ -409,11 +448,12 @@ func (s *Shell) buildGeneral(b *settingsBuilder) error {
 	b.group("위치", "프로젝트 탭이 놓이는 위치. 바꾸면 카드 배치도 함께 바뀐다.",
 		choice("프로젝트 탭 위치", "projectTabs", map[string]string{"top": "위", "left": "왼쪽"}))
 
-	sets, err := s.settings.Sets(scope)
+	// A link control takes the sets of the scope of the links as its options.
+	sets, err := s.settings.Sets(s.controlScope("links"))
 	if err != nil {
 		return err
 	}
-	links, err := s.settings.Links(scope)
+	links, err := s.settings.Links(s.controlScope("links"))
 	if err != nil {
 		return err
 	}
@@ -429,10 +469,10 @@ func (s *Shell) buildGeneral(b *settingsBuilder) error {
 		}
 		rows = append(rows, row)
 	}
-	if scope == "project" && s.settings.Overridden("links") {
-		rows = append(rows, settingsRow{controls: []*SettingsControl{b.resetButton("links", "전역 연결 사용")}})
+	if controls := s.overrideControls(b, "links", "전역 연결 사용"); controls != nil {
+		rows = append(rows, settingsRow{controls: controls})
 	}
-	rows = append(rows, s.orderRows(b, "sidebarOrder", "사이드바 순서", sideNames, scope)...)
+	rows = append(rows, s.orderRows(b, "sidebarOrder", "사이드바 순서", sideNames)...)
 	b.group("사이드바", "한 변에는 고정 사이드바가 하나 있고, 포커스된 플러그인의 창 세트는 같은 자리의 내용을 바꾼다. 순서가 앞선 변의 사이드바가 먼저 공간을 차지한다.", rows...)
 
 	widths := catalog.Settings.LayoutRanges
@@ -530,7 +570,7 @@ func (s *Shell) declaredControl(b *settingsBuilder, definition SettingDefinition
 }
 
 func (s *Shell) buildPluginPage(b *settingsBuilder, plugin *LoadedPlugin) error {
-	scope := s.settingsWindow.scope
+	scope := s.controlScope("links")
 	back := b.button("plugins:list", "core.settings-modal.back", "목록", "core.settings-modal.plugin", map[string]any{"plugin": nil})
 	b.group(plugin.Name, plugin.ID, settingsRow{controls: []*SettingsControl{back}})
 	var rows []settingsRow
@@ -608,7 +648,7 @@ func (s *Shell) registeredSections() []string {
 // sectionSelect is the select box of one section row, grouped by plugin. A section of a plugin that is not loaded stands in a
 // group of its own as the current value.
 func (s *Shell) sectionSelect(b *settingsBuilder, set StoredSet, index int, now string) *SettingsControl {
-	scope := s.settingsWindow.scope
+	scope := s.controlScope("sets")
 	labels := map[string]string{}
 	var groups []OptionGroup
 	var options []string
@@ -635,7 +675,7 @@ func (s *Shell) sectionSelect(b *settingsBuilder, set StoredSet, index int, now 
 
 // setEditor is the group of the edited set.
 func (s *Shell) setEditor(b *settingsBuilder, set StoredSet) {
-	scope := s.settingsWindow.scope
+	scope := s.controlScope("sets")
 	update := map[string]any{"id": set.ID, "scope": scope}
 	title := b.add(SettingsControl{Name: "core.settings-modal.set", Key: text("title:" + set.ID), Value: text(set.Title), Command: settingCommand("core.settings.sets.update", update), kind: controlText, param: "title", maxLength: setTitleMax})
 	layout := b.add(SettingsControl{Name: "core.settings-modal.set", Key: text("layout:" + set.ID), Value: text(set.Layout), Options: []string{"list", "tabs"}, Command: settingCommand("core.settings.sets.update", update),
@@ -663,7 +703,8 @@ func (s *Shell) setEditor(b *settingsBuilder, set StoredSet) {
 
 func (s *Shell) buildSidebars(b *settingsBuilder) error {
 	w := &s.settingsWindow
-	sets, err := s.settings.Sets(w.scope)
+	scope := s.controlScope("sets")
+	sets, err := s.settings.Sets(scope)
 	if err != nil {
 		return err
 	}
@@ -679,11 +720,11 @@ func (s *Shell) buildSidebars(b *settingsBuilder) error {
 		line := b.add(SettingsControl{Name: "core.settings-modal.set-caption", Label: set.Title + " · " + layout + " · " + joinedOr(s.sectionNames(set.Sections), ", ", "섹션 없음"), kind: controlCaption})
 		rows = append(rows, settingsRow{controls: []*SettingsControl{line,
 			b.pressedButton("edit:"+set.ID, "core.settings-modal.edit", "편집", "core.settings-modal.edit", map[string]any{"set": set.ID}, set.ID == w.editing),
-			b.button("delete:"+set.ID, "core.settings-modal.delete", "삭제", "core.settings.sets.delete", map[string]any{"id": set.ID, "scope": w.scope})}})
+			b.button("delete:"+set.ID, "core.settings-modal.delete", "삭제", "core.settings.sets.delete", map[string]any{"id": set.ID, "scope": scope})}})
 	}
-	rows = append(rows, settingsRow{controls: []*SettingsControl{b.button("sets:create", "core.settings-modal.create", "새 세트", "core.settings.sets.create", map[string]any{"scope": w.scope})}})
-	if w.scope == "project" && s.settings.Overridden("sets") {
-		rows = append(rows, settingsRow{controls: []*SettingsControl{b.resetButton("sets", "전역 세트 사용")}})
+	rows = append(rows, settingsRow{controls: []*SettingsControl{b.button("sets:create", "core.settings-modal.create", "새 세트", "core.settings.sets.create", map[string]any{"scope": scope})}})
+	if controls := s.overrideControls(b, "sets", "전역 세트 사용"); controls != nil {
+		rows = append(rows, settingsRow{controls: controls})
 	}
 	b.group("세트", "사이드바에 보여 줄 섹션 묶음. 어느 사이드바에 보일지는 일반과 플러그인 페이지에서 고른다.", rows...)
 	for _, set := range sets {
@@ -1280,7 +1321,7 @@ func (s *Shell) registerSettingsWindow() {
 			w.editing = ""
 			return nil
 		}
-		sets, err := s.settings.Sets(w.scope)
+		sets, err := s.settings.Sets(s.controlScope("sets"))
 		if err != nil {
 			return err
 		}
@@ -1425,12 +1466,14 @@ func (s *Shell) sendTraceSwitch() {
 // orderRows are the rows of an order of listed values (docs/spec/settings.md#controls): one row per value in the current order, named by
 // names, with ▲ (absent on the first row) and ▼ (absent on the last row). A button swaps its row with the row above or below and runs
 // core.settings.change with the whole new order.
-func (s *Shell) orderRows(b *settingsBuilder, key, label string, names map[string]string, scope string) []settingsRow {
-	now, _ := s.settings.Value(key).([]any) // silent: the settings store checks that the value is an order of its values.
+func (s *Shell) orderRows(b *settingsBuilder, key, label string, names map[string]string) []settingsRow {
+	scope := s.controlScope(key)
+	now, _ := s.value(key).([]any) // silent: the settings store checks that the value is an order of its values.
 	rows := []settingsRow{}
 	for index, item := range now {
 		name, _ := item.(string) // silent: the settings store checks that the value is an order of its values.
-		row := settingsRow{description: names[name], list: true}
+		// The row shows the name of its value before its buttons, and the first row the name of the setting, as orderRows of the page.
+		row := settingsRow{value: names[name]}
 		if index == 0 {
 			row.name = label
 		}
@@ -1445,6 +1488,9 @@ func (s *Shell) orderRows(b *settingsBuilder, key, label string, names map[strin
 		}
 		if index < len(now)-1 {
 			act("down", "▼", index+1)
+		}
+		if index == 0 {
+			row.controls = append(row.controls, s.overrideControls(b, key, "전역값 사용")...)
 		}
 		rows = append(rows, row)
 	}

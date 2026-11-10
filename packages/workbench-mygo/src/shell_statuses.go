@@ -284,7 +284,8 @@ func (s *Shell) railGroups() []railGroup {
 	}
 	focused := s.focusedSurface()
 	var sidebars []string
-	for _, side := range []string{"left", "right"} {
+	// The four window sides in their order, as railSidebars of the page reads them (docs/spec/external-sidebars.md).
+	for _, side := range layout.WindowSides {
 		if _, plugin := s.sidebars.windowSet(side, focused); plugin != "" {
 			if _, ok := s.plane.Card(side); ok {
 				sidebars = append(sidebars, side)

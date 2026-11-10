@@ -498,6 +498,59 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F723",
+    implementation: [
+      { file: "packages/workbench/workbench.json", symbol: "\"cardTools\": {" },
+      { file: "packages/workbench/card-tools.js", symbol: "const names = declaration.cardTools;" },
+      { file: "packages/workbench-mygo/src/cards.go", symbol: "names := s.options.Declared.CardTools" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/card-tool-names.test.mjs", id: "the tooltip of a card tool is its name and a refusal states its reason" },
+      { file: "packages/workbench-mygo/tests/split_test.go", id: "TestTheToolsOfAHeadFollowWhatTheCardCanDo" },
+      { file: "packages/workbench-mygo/tests/split_test.go", id: "TestATooNarrowCardCannotSplitAndItsMenuHoldsWhatItCan" },
+    ],
+    expected: "The tooltip of a card tool is its name from cardTools of workbench.json, a refusal states its reason without a dash, and the tool menu takes the names uncut, in both workbenches.",
+    levels: ["unit"],
+  },
+  {
+    id: "F722",
+    implementation: [
+      { file: "packages/workbench-mygo/src/shell_statuses.go", symbol: "for _, side := range layout.WindowSides {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/shell_sidebars_test.go", id: "TestTheRailGroupsHoldThePluginSetsOfTheFourWindowSides" },
+    ],
+    expected: "The rail groups of the mygo workbench read the plugin sets of the four window sides in their order, so a top window sidebar set joins the rail and core.rail.",
+    levels: ["unit"],
+  },
+  {
+    id: "F721",
+    implementation: [
+      { file: "packages/workbench-mygo/src/settings_draw.go", symbol: "ui.Text(c, row.value).NoWrap().FontSize(s.textControl()).TextColor(s.palette.Fg)" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/settings_modal_test.go", id: "TestAnOrderRowShowsTheNameOfItsValueAndTheFirstRowTheNameOfTheSetting" },
+      { file: "packages/workbench/test/settings-controls.test.mjs", id: "every setting form is drawn with its one control" },
+    ],
+    expected: "Each order row shows the name of its value beside its buttons and the first row the name of the setting, in both workbenches, and the tests read the drawn names.",
+    levels: ["unit"],
+  },
+  {
+    id: "F720",
+    implementation: [
+      { file: "packages/workbench-mygo/src/settings_store.go", symbol: "func (s *SettingsStore) Source(key string) string {" },
+      { file: "packages/workbench-mygo/src/settings_modal.go", symbol: "func (s *Shell) controlScope(key string) string {" },
+      { file: "packages/workbench/settings.js", symbol: "export const sourceScope = (key) =>" },
+      { file: "packages/workbench/settings-ui.js", symbol: "const scopeOf = (key) =>" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/settings_scope_test.go", id: "TestAControlChangesTheValueThatItShowsInTheScopeThatTheValueComesFrom" },
+      { file: "packages/workbench/test/settings-control-scope.test.mjs", id: "a control of a setting changes the value that it shows in the scope that the value comes from" },
+    ],
+    expected: "The window chrome switches, the fold control and every control of the common tab show the applied value and write the scope that it comes from, the common tab marks a project value, and only the project tab adds or removes one.",
+    levels: ["unit"],
+  },
+  {
     id: "F717",
     implementation: [
       { file: "packages/sok/go/src/identity.go", symbol: "func IdentityOf(application string) (string, error) {" },

@@ -1605,3 +1605,36 @@ func TestASelectWithALongChoiceKeepsTheWidthOfItsColumn(t *testing.T) {
 		t.Fatalf("the title stands at %+v and the layout at %+v, a select of the column at %+v", title.Bounds, layout.Bounds, short.Bounds)
 	}
 }
+
+// An order row shows the name of its value beside its buttons, and the first row shows the name of the setting, as the page draws
+// them (docs/spec/settings.md#controls): the texts that the window draws hold 사이드바 순서 once, and the names of the sides in their
+// order after it.
+func TestAnOrderRowShowsTheNameOfItsValueAndTheFirstRowTheNameOfTheSetting(t *testing.T) {
+	f := opened(t)
+	f.tester.SetSize(1200, 3200)
+	f.settle()
+	texts := f.tester.Texts()
+	label := slices.Index(texts, "사이드바 순서")
+	if label < 0 || slices.Index(texts[label+1:], "사이드바 순서") >= 0 {
+		t.Fatalf("the window draws 사이드바 순서 not once: %q", texts)
+	}
+	end := slices.Index(texts[label:], "사이드바 크기")
+	if end < 0 {
+		t.Fatalf("no group 사이드바 크기 after the order: %q", texts)
+	}
+	var names []string
+	for _, text := range texts[label : label+end] {
+		if slices.Contains([]string{"왼쪽", "오른쪽", "위", "아래"}, text) {
+			names = append(names, text)
+		}
+	}
+	if !slices.Equal(names, []string{"왼쪽", "오른쪽", "위", "아래"}) {
+		t.Fatalf("the order rows show the names %q in %q", names, texts[label:label+end])
+	}
+	// Each name stands in the line of its buttons: the first ▼ and the name of the first row share a line.
+	first := element(t, f.tester, "core.settings-modal.order", "order:sidebarOrder:0:down").Bounds
+	name, ok := f.tester.Find("사이드바 순서")
+	if !ok || name.Y+name.H < first.Y || name.Y > first.Y+first.H {
+		t.Fatalf("the name %+v stands outside the line of the first row %+v", name, first)
+	}
+}
