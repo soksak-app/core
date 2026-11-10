@@ -1838,11 +1838,11 @@ fn forget(shared: &Arc<Shared>, peer: u64) {
         .remove(&peer);
     // The connection is gone from the peers, so a `down` of it that is delivered after this releases its press itself.
     let owned: Vec<(PressKey, Press)> = {
-        // default: a lock that a panicking thread poisoned still holds the presses, and the presses of the connection are
-        // taken from them; the panic hook records the panic.
         let mut presses = shared
             .presses
             .lock()
+            // default: a lock that a panicking thread poisoned still holds the presses, and the presses of the
+            // connection are taken from them; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner);
         let mut keys: Vec<PressKey> = presses
             .open
@@ -1891,11 +1891,11 @@ fn delivered(shared: &Shared, peer: u64, window: String, input: &crate::platform
                 // hook records the panic.
                 let peers = shared.peers.lock().unwrap_or_else(PoisonError::into_inner);
                 if peers.contains_key(&peer) {
-                    // default: a lock that a panicking thread poisoned still holds the presses, which take the new press;
-                    // the panic hook records the panic.
                     let mut presses = shared
                         .presses
                         .lock()
+                        // default: a lock that a panicking thread poisoned still holds the presses, which take the new
+                        // press; the panic hook records the panic.
                         .unwrap_or_else(PoisonError::into_inner);
                     // A release that waits for an earlier press of this pointer and button found that press ended, since a
                     // new press of them was delivered.
@@ -1908,11 +1908,11 @@ fn delivered(shared: &Shared, peer: u64, window: String, input: &crate::platform
             release(shared, key, press);
         }
         2 => {
-            // default: a lock that a panicking thread poisoned still holds the presses, whose point the drag moves; the
-            // panic hook records the panic.
             let mut presses = shared
                 .presses
                 .lock()
+                // default: a lock that a panicking thread poisoned still holds the presses, whose point the drag moves;
+                // the panic hook records the panic.
                 .unwrap_or_else(PoisonError::into_inner);
             if let Some(press) = presses.open.get_mut(&key) {
                 press.x = input.x;
@@ -1921,11 +1921,11 @@ fn delivered(shared: &Shared, peer: u64, window: String, input: &crate::platform
         }
         3 => {
             {
-                // default: a lock that a panicking thread poisoned still holds the presses, which the release ends; the
-                // panic hook records the panic.
                 let mut presses = shared
                     .presses
                     .lock()
+                    // default: a lock that a panicking thread poisoned still holds the presses, which the release ends;
+                    // the panic hook records the panic.
                     .unwrap_or_else(PoisonError::into_inner);
                 presses.open.remove(&key);
                 // A release that waits for this press finds it ended.
@@ -1961,11 +1961,11 @@ fn release(shared: &Shared, key: PressKey, press: Press) {
     );
     params.insert("clicks".into(), json!(press.clicks));
     loop {
-        // default: a lock that a panicking thread poisoned still holds the presses, whose lift counts are only read; the
-        // panic hook records the panic.
         let before = shared
             .presses
             .lock()
+            // default: a lock that a panicking thread poisoned still holds the presses, whose lift counts are only
+            // read; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner)
             .lifts;
         let failure = match shared
@@ -1991,11 +1991,11 @@ fn release(shared: &Shared, key: PressKey, press: Press) {
             return;
         }
         {
-            // default: a lock that a panicking thread poisoned still holds the presses, which keep the release that waits;
-            // the panic hook records the panic.
             let mut presses = shared
                 .presses
                 .lock()
+                // default: a lock that a panicking thread poisoned still holds the presses, which keep the release that
+                // waits; the panic hook records the panic.
                 .unwrap_or_else(PoisonError::into_inner);
             let index = lift_index(failure.code);
             // The event that lifts the refusal came while the release was refused, so the release goes again now.
@@ -2028,11 +2028,11 @@ fn release(shared: &Shared, key: PressKey, press: Press) {
 /// Delivers again the releases that wait for the event that lifts the refusal code.
 fn release_waiting(shared: &Shared, code: i64) {
     let lifted: Vec<Release> = {
-        // default: a lock that a panicking thread poisoned still holds the presses, whose waiting releases are taken; the
-        // panic hook records the panic.
         let mut presses = shared
             .presses
             .lock()
+            // default: a lock that a panicking thread poisoned still holds the presses, whose waiting releases are
+            // taken; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner);
         presses.lifts[lift_index(code)] += 1;
         let (lifted, kept) = std::mem::take(&mut presses.waiting)
