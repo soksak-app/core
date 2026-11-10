@@ -204,12 +204,14 @@ fn messages_reach_the_owning_window_only() {
 #[test]
 fn a_surface_keeps_the_root_it_was_opened_with() {
     let (sidecars, directory) = echo_sidecars();
-    let (before, _before_events) = owner("a", "/projects/a");
+    let (before, before_events) = owner("a", "/projects/a");
     // Even after the same window changed to another project, an already opened surface sends with the first root.
     let (after, _after_events) = owner("a", "/projects/b");
     sidecars
         .send(&before, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
+    // The echo is the event that the sidecar ignores the terminate signal of the stop, so it records every line.
+    before_events.recv().unwrap();
     sidecars
         .send(&after, ECHO, "s1", &raw(r#"{"operation":"input"}"#))
         .unwrap();
@@ -233,12 +235,14 @@ fn a_surface_keeps_the_root_it_was_opened_with() {
 #[test]
 fn closing_a_surface_keeps_other_sessions() {
     let (sidecars, directory) = echo_sidecars();
-    let (window, _events) = owner("a", "/projects/a");
+    let (window, events) = owner("a", "/projects/a");
     for surface in ["s1", "state:files:p1"] {
         sidecars
             .send(&window, ECHO, surface, &raw(r#"{"operation":"open"}"#))
             .unwrap();
     }
+    // The echo is the event that the sidecar ignores the terminate signal of the stop, so it records every line.
+    events.recv().unwrap();
     // The surface synchronization closes only the removed surfaces.
     sidecars
         .retain(&window, &|surface| surface != "s1")
@@ -302,13 +306,17 @@ fn close_reaches_only_the_sidecar_that_holds_the_surface() {
         declare_in(SECOND, second.path()),
     ];
     let sidecars = Sidecars::new(&declarations, first.path().to_path_buf()).unwrap();
-    let (window, _events) = owner("a", "/projects/a");
+    let (window, events) = owner("a", "/projects/a");
     sidecars
         .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     sidecars
         .send(&window, SECOND, "s2", &raw(r#"{"operation":"open"}"#))
         .unwrap();
+    // The echo of each sidecar is the event that it ignores the terminate signal of the stop, so it records every line.
+    let mut echoed: Vec<String> = (0..2).map(|_| events.recv().unwrap().sidecar).collect();
+    echoed.sort();
+    assert_eq!(echoed, [ECHO.to_string(), SECOND.to_string()]);
     // The surface synchronization closes the removed s1 only.
     sidecars
         .retain(&window, &|surface| surface != "s1")
@@ -1313,13 +1321,16 @@ fn an_invalid_message_terminates_and_notifies() {
 // contract: sidecars.failure.output-close-notifies-each-surface
 #[test]
 fn an_output_close_notifies_each_surface() {
-    let (sidecars, directory) =
-        script_sidecars("#!/bin/sh\necho $$ >> DIR/pids\nread first\nread second\nexit 3\n");
-    let (first, _first_events, first_failures) = failing_owner("a", "/projects/a");
+    // Each process answers its first line after it recorded its pid, so the answer is the event that the pid is recorded.
+    let (sidecars, directory) = script_sidecars(
+        "#!/bin/sh\necho $$ >> DIR/pids\nread first\nprintf '%s\\n' '{\"surface\":\"s1\",\"body\":\"recorded\"}'\nread second\nexit 3\n",
+    );
+    let (first, first_events, first_failures) = failing_owner("a", "/projects/a");
     let (second, _second_events, second_failures) = failing_owner("b", "/projects/b");
     sidecars
         .send(&first, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
+    first_events.recv().unwrap();
     sidecars
         .send(&second, ECHO, "s2", &raw(r#"{"operation":"open"}"#))
         .unwrap();
@@ -1340,6 +1351,8 @@ fn an_output_close_notifies_each_surface() {
     sidecars
         .send(&first, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
+    // The new process recorded its pid when it answers, before the stop ends it.
+    first_events.recv().unwrap();
     sidecars.stop();
     assert!(
         first_failures.try_recv().is_err(),
@@ -1700,12 +1713,13 @@ fn the_lifetime_of_a_sidecar_is_recorded_as_events() {
     // The writer of the records is shared by the process, so the scenario runs in a child process that nothing else writes in.
     if let Some(config) = std::env::var_os("SOKSAK_LIFETIME_CHILD") {
         // The first process ends by itself with a status; the second ends when the host stops it. It ignores the
-        // terminate signal of the stop, so it ends with its input and its status is 0.
+        // terminate signal of the stop, so it ends with its input and its status is 0. It answers its first line after
+        // it set the trap, so the answer is the event that it ignores the signal.
         let (sidecars, _directory) = script_sidecars(
-            "#!/bin/sh\nif [ ! -f DIR/ran ]; then touch DIR/ran; read first; exit 3; fi\ntrap '' TERM\ncat >/dev/null\n",
+            "#!/bin/sh\nif [ ! -f DIR/ran ]; then touch DIR/ran; read first; exit 3; fi\ntrap '' TERM\nread first\nprintf '%s\\n' '{\"surface\":\"s2\",\"body\":\"trapped\"}'\ncat >/dev/null\n",
         );
         let writer = records::start_writer(Path::new(&config));
-        let (first, _first_events, failures) = failing_owner("a", "/projects/a");
+        let (first, first_events, failures) = failing_owner("a", "/projects/a");
         sidecars
             .send(&first, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
             .unwrap();
@@ -1715,6 +1729,7 @@ fn the_lifetime_of_a_sidecar_is_recorded_as_events() {
         sidecars
             .send(&first, ECHO, "s2", &raw(r#"{"operation":"open"}"#))
             .unwrap();
+        first_events.recv().unwrap();
         sidecars.stop();
         writer.flush(Duration::from_secs(5)).unwrap();
         return;

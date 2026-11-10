@@ -2623,6 +2623,7 @@ func TestAStopLeavesTheCloseOfAReplacementToTheReplacement(t *testing.T) {
 	service := serveReplaceService(t, root, "0.0.6", "0.0.7")
 	service.hold = make(chan struct{})
 	service.closeOwner = make(chan struct{}, 4)
+	service.firstEnded = make(chan struct{})
 	sidecars := replaceSidecars(t, root, service)
 	owner := &support.HarnessOwner{Root: "/replace", Seen: make(chan SidecarMessage, 8)}
 	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
@@ -2664,7 +2665,7 @@ func TestAStopLeavesTheCloseOfAReplacementToTheReplacement(t *testing.T) {
 		sidecars.Stop()
 		close(stopped)
 	}()
-	// The stop has begun when the host refuses a send because the sidecars are stopped; give its close time to reach the service.
+	// The stop has begun when the host refuses a send because the sidecars are stopped.
 	for {
 		err := sidecars.Send(owner, "fixture-service", "surface-2", json.RawMessage(`{"operation":"open"}`))
 		if err != nil && strings.Contains(err.Error(), "sidecars are stopped") {
@@ -2675,12 +2676,16 @@ func TestAStopLeavesTheCloseOfAReplacementToTheReplacement(t *testing.T) {
 		}
 		runtime.Gosched()
 	}
-	time.Sleep(200 * time.Millisecond)
 	close(service.hold)
 	<-stopped
-	if err := <-replaced; err != nil {
+	// The replacement either sends shutdown into the room that the answers make or ends the connection because the sidecars are
+	// stopped; both end the connection without a second close-owner.
+	if err := <-replaced; err != nil && !strings.Contains(err.Error(), "sidecars are stopped") {
 		t.Fatalf("the replacement failed: %v", err)
 	}
+	// The service reads every line of the connection until it ends, so after the end it has read each close-owner that any stop
+	// could have sent.
+	<-service.firstEnded
 	closes := 0
 	for _, operation := range service.received() {
 		if operation == "close-owner" {

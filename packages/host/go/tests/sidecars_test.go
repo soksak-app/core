@@ -80,11 +80,13 @@ func TestSidecarMessageAtTheLimitIsDelivered(t *testing.T) {
 
 // contract: sidecars.failure.output-close-notifies-each-surface
 func TestSidecarOutputCloseNotifiesEachSurface(t *testing.T) {
-	sidecars, directory := support.ScriptSidecars(t, "#!/bin/sh\necho $$ >> DIR/pids\nread first\nread second\nexit 3\n")
+	// Each process answers its first line after it recorded its pid, so the answer is the event that the pid is recorded.
+	sidecars, directory := support.ScriptSidecars(t, "#!/bin/sh\necho $$ >> DIR/pids\nread first\nprintf '%s\\n' '{\"surface\":\"s1\",\"body\":\"recorded\"}'\nread second\nexit 3\n")
 	first, second := support.NewFakeOwner("/projects/a"), support.NewFakeOwner("/projects/b")
 	if err := sidecars.Send(first, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
+	first.Next(t)
 	if err := sidecars.Send(second, support.EchoSidecar, "s2", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
@@ -98,6 +100,8 @@ func TestSidecarOutputCloseNotifiesEachSurface(t *testing.T) {
 	if err := sidecars.Send(first, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatalf("send after failure: %v", err)
 	}
+	// The new process recorded its pid when it answers, before the stop ends it.
+	first.Next(t)
 	sidecars.Stop()
 	select {
 	case value := <-first.Failures:
@@ -171,6 +175,8 @@ func TestSurfaceKeepsTheRootItWasOpenedWith(t *testing.T) {
 	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
+	// The echo is the event that the sidecar ignores the terminate signal of the stop, so it records every line.
+	owner.Next(t)
 	// Even after the same window changed to another project, a surface that is already open sends with the first root.
 	owner.Root = "/projects/b"
 	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"input"}`)); err != nil {
@@ -615,6 +621,8 @@ func TestClosingASurfaceKeepsOtherSessions(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// The echo is the event that the sidecar ignores the terminate signal of the stop, so it records every line.
+	owner.Next(t)
 	sidecars.Close("s1")
 	// Even after the project of the window left, a session that was not closed sends with the first root.
 	owner.Root = ""
@@ -667,6 +675,14 @@ func TestCloseReachesOnlyTheSidecarThatHoldsTheSurface(t *testing.T) {
 	}
 	if err := sidecars.Send(owner, second, "s2", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
+	}
+	// The echo of each sidecar is the event that it ignores the terminate signal of the stop, so it records every line.
+	echoed := map[string]bool{}
+	for range 2 {
+		echoed[owner.Next(t).Sidecar] = true
+	}
+	if !echoed[support.EchoSidecar] || !echoed[second] {
+		t.Fatalf("the echoes came from %v", echoed)
 	}
 	sidecars.Close("s1")
 	sidecars.Stop()
@@ -1152,7 +1168,8 @@ func TestSidecarLifetimeIsRecordedAsEvents(t *testing.T) {
 	log := support.StartWriter(t, config)
 	// The first process ends by itself with a status; the second ends when the host stops it.
 	// The second process ignores the terminate signal of the stop, so it ends with its input and its status is 0.
-	sidecars, _ := support.ScriptSidecars(t, "#!/bin/sh\nif [ ! -f DIR/ran ]; then touch DIR/ran; read first; exit 3; fi\ntrap '' TERM\ncat >/dev/null\n")
+	// The second process answers its first line after it set the trap, so the answer is the event that it ignores the signal.
+	sidecars, _ := support.ScriptSidecars(t, "#!/bin/sh\nif [ ! -f DIR/ran ]; then touch DIR/ran; read first; exit 3; fi\ntrap '' TERM\nread first\nprintf '%s\\n' '{\"surface\":\"s2\",\"body\":\"trapped\"}'\ncat >/dev/null\n")
 	owner := support.NewFakeOwner("/projects/a")
 	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
@@ -1161,6 +1178,7 @@ func TestSidecarLifetimeIsRecordedAsEvents(t *testing.T) {
 	if err := sidecars.Send(owner, support.EchoSidecar, "s2", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
+	owner.Next(t)
 	sidecars.Stop()
 	if err := log.Flush(5 * time.Second); err != nil {
 		t.Fatal(err)

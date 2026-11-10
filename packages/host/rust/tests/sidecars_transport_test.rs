@@ -1128,8 +1128,10 @@ fn stdio_stop_cancels_an_image_emitted_after_stdin_eof() {
     let config_directory = folder::Folder::new();
     let program = executable_directory.path().join("echo");
     let emitted = executable_directory.path().join("late-image-emitted");
+    // The script ignores the terminate signal of the stop, so it emits its image after the end of its input; its answer
+    // to the open is the event that it set the trap.
     let script = format!(
-        "#!/bin/sh\nprintf '%s\\n' \"$$\" > '{}'\nread open\nprintf '%s\\n' '{{\"surface\":\"surface\",\"body\":{{\"event\":\"opened\"}}}}'\nread close\ncat >/dev/null\nprintf '%s\\n' '{{\"surface\":\"surface\",\"body\":{{\"image\":{{\"format\":\"bgra8\",\"generation\":3,\"height\":10,\"name\":\"view\",\"raster\":4,\"scale\":1.0,\"sequence\":5,\"token\":{{\"id\":7,\"kind\":\"iosurface-global\"}},\"width\":10}}}}}}'\nprintf emitted > '{}'\n",
+        "#!/bin/sh\ntrap '' TERM\nprintf '%s\\n' \"$$\" > '{}'\nread open\nprintf '%s\\n' '{{\"surface\":\"surface\",\"body\":{{\"event\":\"opened\"}}}}'\nread close\ncat >/dev/null\nprintf '%s\\n' '{{\"surface\":\"surface\",\"body\":{{\"image\":{{\"format\":\"bgra8\",\"generation\":3,\"height\":10,\"name\":\"view\",\"raster\":4,\"scale\":1.0,\"sequence\":5,\"token\":{{\"id\":7,\"kind\":\"iosurface-global\"}},\"width\":10}}}}}}'\nprintf emitted > '{}'\n",
         executable_directory.path().join("pid").display(),
         emitted.display(),
     );

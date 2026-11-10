@@ -189,18 +189,23 @@ func TestClosedSurfaceMessagesAreDiscardedAndUnknownOnesFail(t *testing.T) {
 // contract: sidecars.stop.stdin-eof-cancels-late-image
 func TestStopCancelsAnImageEmittedAfterStdioSidecarInputCloses(t *testing.T) {
 	written := support.CaptureLog(t)
-	script := "#!/bin/sh\necho $$ > DIR/pid\nread open\nread closed\ncat >/dev/null\n" +
+	// The script ignores the terminate signal of the stop, so it emits its image after the end of its input; its answer to the
+	// open is the event that it set the trap and recorded its pid.
+	script := "#!/bin/sh\ntrap '' TERM\necho $$ > DIR/pid\nread open\nprintf '%s\\n' '{\"surface\":\"s2\",\"body\":\"ready\"}'\nread closed\ncat >/dev/null\n" +
 		"printf '%s\\n' '{\"surface\":\"s2\",\"body\":{\"image\":{\"format\":\"bgra8\",\"generation\":3,\"height\":10,\"name\":\"view\",\"raster\":4,\"scale\":1.0,\"sequence\":5,\"token\":{\"id\":7,\"kind\":\"iosurface-global\"},\"width\":10}}}'\n"
 	sidecars, directory := support.ScriptSidecars(t, script)
 	owner := support.NewFakeOwner("/projects/a")
 	if err := sidecars.Send(owner, support.EchoSidecar, "s2", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
+	if ready := owner.Next(t); ready.Surface != "s2" || string(ready.Body) != `"ready"` {
+		t.Fatalf("ready event = %+v", ready)
+	}
 	sidecars.Close("s2")
 	sidecars.Stop()
 	requireEnded(t, support.ProcessID(t, directory))
 	owner.Mu.Lock()
-	delivered := append([]host.SidecarMessage(nil), owner.Events...)
+	delivered := append([]host.SidecarMessage(nil), owner.Events[1:]...)
 	owner.Mu.Unlock()
 	if len(delivered) != 0 {
 		t.Fatalf("messages delivered while stopping after stdin EOF: %+v, want the late image canceled", delivered)
