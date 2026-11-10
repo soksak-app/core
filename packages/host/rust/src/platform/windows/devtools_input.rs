@@ -459,28 +459,78 @@ pub(crate) fn capture_refusal(minimized: bool, shown: bool, visible: bool) -> Re
     }
 }
 
-/// Limits the wait for CapturePreview, whose behavior in a covered window no document states. It returns the function that receives the
-/// completion. done runs once: with the completion, or with the failure of the wait, and a later completion answers nothing.
+/// Ends the wait of a still capture, given the reason of the end of its request.
 #[cfg(any(test, feature = "diagnostics"))]
-pub(crate) fn capture_wait(after: &After, wait: Duration, done: Complete) -> Complete {
-    let done = Rc::new(RefCell::new(Some(done)));
-    let timed = done.clone();
-    let cancel = after(
-        wait,
-        Box::new(move || {
-            if let Some(done) = timed.borrow_mut().take() {
-                done(Err(format!(
-                    "capture: CapturePreview did not complete within {wait:?}, and the web view reports that it draws; the window may be covered"
-                )));
+pub(crate) type CaptureEnd = Box<dyn FnOnce(String) + Send>;
+
+/// The failure of a still capture whose wait the end of its request ended. CapturePreview is reported never to complete in a
+/// covered window, which no document states, so no limit ends the wait.
+#[cfg(any(test, feature = "diagnostics"))]
+pub(crate) fn capture_end_failure(reason: &str) -> String {
+    format!(
+        "capture: CapturePreview did not complete before {reason}, and the web view reports that it draws; the window may be covered"
+    )
+}
+
+/// The end of each still capture that waits, by its token, and the reason of each end that came before its capture waited. The
+/// host gives each capture a new, larger token, so a capture that returns forgets the ends of its token and of every earlier one.
+#[cfg(any(test, feature = "diagnostics"))]
+#[derive(Default)]
+pub(crate) struct CaptureEnds(std::sync::Mutex<CaptureEndsState>);
+
+#[cfg(any(test, feature = "diagnostics"))]
+#[derive(Default)]
+struct CaptureEndsState {
+    waiting: HashMap<u64, CaptureEnd>,
+    early: HashMap<u64, String>,
+}
+
+#[cfg(any(test, feature = "diagnostics"))]
+impl CaptureEnds {
+    fn state(&self) -> std::sync::MutexGuard<'_, CaptureEndsState> {
+        self.0
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the ends, which the caller amends; the panic hook
+            // records the panic.
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// Keeps end as the end of the capture of token until forget, and ends it at once with an end that came before.
+    pub(crate) fn wait(&self, token: u64, end: CaptureEnd) {
+        let reason = {
+            let mut state = self.state();
+            match state.early.remove(&token) {
+                Some(reason) => reason,
+                None => {
+                    state.waiting.insert(token, end);
+                    return;
+                }
             }
-        }),
-    );
-    Box::new(move |result| {
-        cancel();
-        if let Some(done) = done.borrow_mut().take() {
-            done(result);
+        };
+        end(reason);
+    }
+
+    /// Forgets the ends of the capture of token, which returned, and of every earlier capture.
+    pub(crate) fn forget(&self, token: u64) {
+        let mut state = self.state();
+        state.waiting.remove(&token);
+        state.early.retain(|early, _| *early > token);
+    }
+
+    /// Ends the capture of token with reason, or keeps reason for a capture of token that has not waited yet.
+    pub(crate) fn end(&self, token: u64, reason: &str) {
+        let end = {
+            let mut state = self.state();
+            let end = state.waiting.remove(&token);
+            if end.is_none() {
+                state.early.insert(token, reason.to_string());
+            }
+            end
+        };
+        if let Some(end) = end {
+            end(reason.to_string());
         }
-    })
+    }
 }
 
 /// Checks that CapturePreview wrote an image.

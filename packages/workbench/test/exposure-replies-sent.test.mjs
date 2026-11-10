@@ -97,14 +97,10 @@ test("whenRepliesSent ends the diagnostic holds of surface replies, so a reload 
     handlers.get("exposure-request")({ id: 41, surface: "fixture-held", method: "command.run", params: { name: "core.fixture.held", params: {} } });
     await hold.held("fixture-held");
     assert.deepEqual(calls.filter(([name]) => name === "exposureReply"), [], "the held reply was sent before the reload");
-    // The bound is the observation of the test: a reload that waits for a held reply fails the check instead of stopping the run.
-    let observation;
-    const sent = await Promise.race([
-      whenRepliesSent().then(() => true),
-      new Promise((resolve) => { observation = setTimeout(() => resolve(false), 2000); }),
-    ]);
-    clearTimeout(observation);
-    assert.equal(sent, true, "whenRepliesSent waited for the reply that the hold kept");
+    // whenRepliesSent ends the holds before it waits, so the held reply is on its way when it is called.
+    const sent = whenRepliesSent();
+    assert.throws(() => hold.held("fixture-held"), /are not held/, "whenRepliesSent kept the hold of the reply");
+    await sent;
     assert.deepEqual(calls.filter(([name]) => name === "exposureReply"), [["exposureReply", { id: 41, result: "held" }]]);
     assert.deepEqual(lines, ['held exposure replies of surface "fixture-held" were sent after their hold ended (1)']);
   } finally {

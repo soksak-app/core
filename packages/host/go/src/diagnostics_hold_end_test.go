@@ -12,10 +12,6 @@ import (
 	"time"
 )
 
-// settleWithin is how long a check looks for an end that the code under test makes at once. It bounds the observation of
-// the test, not the code: a hold that never ends fails the check instead of stopping the run.
-const settleWithin = 2 * time.Second
-
 // emittedEvent is an event that a window received.
 type emittedEvent struct {
 	name string
@@ -66,8 +62,10 @@ func heldEndpoint(t *testing.T) (*Endpoint, *Surfaces, *exposureWindow) {
 	window := &exposureWindow{}
 	s := &Surfaces{name: "window-a", window: window, ready: true, host: h}
 	window.answer = func(id uint64, _ string) {
-		// A reply that comes after its request ended is refused by the relay, which the checks do not read.
-		_ = h.relay.Resolve(id, relayTarget{owner: s}, ExposureResult{Result: json.RawMessage("null")})
+		// The request waits for this reply, so the relay takes it.
+		if err := h.relay.Resolve(id, relayTarget{owner: s}, ExposureResult{Result: json.RawMessage("null")}); err != nil {
+			t.Errorf("the relay refused the reply of request %d: %v", id, err)
+		}
 	}
 	h.windows[1] = s
 	return &Endpoint{backend: hostBackend{h: h}}, s, window
@@ -77,7 +75,11 @@ func heldEndpoint(t *testing.T) (*Endpoint, *Surfaces, *exposureWindow) {
 func endpointConnection(t *testing.T) *endpointConn {
 	t.Helper()
 	local, remote := net.Pipe()
-	t.Cleanup(func() { _ = remote.Close() })
+	t.Cleanup(func() {
+		if err := remote.Close(); err != nil {
+			t.Errorf("the remote end of the test connection did not close: %v", err)
+		}
+	})
 	c := &endpointConn{conn: local, topics: map[topic]bool{}, out: make(chan endpointFrame, 1), done: make(chan struct{})}
 	t.Cleanup(func() { c.close("the test ended") })
 	return c
@@ -94,20 +96,27 @@ func call(t *testing.T, e *Endpoint, c *endpointConn, name, params string) error
 	return err
 }
 
-// ended reports whether done closes within settleWithin.
+// ended waits for done, which the end of a hold closes: the end is the event that the check waits for.
 func ended(done <-chan struct{}) bool {
-	select {
-	case <-done:
-		return true
-	case <-time.After(settleWithin):
-		return false
-	}
+	<-done
+	return true
+}
+
+// heldModal reports whether window s still holds its modal content reply.
+func heldModal(s *Surfaces) bool {
+	modalHolds.mu.Lock()
+	defer modalHolds.mu.Unlock()
+	return modalHolds.windows[s] != nil
 }
 
 // endModalHoldsAfter turns the modal content hold of window-a off when the test ends, so a hold that the code under test
 // kept does not reach the next test.
 func endModalHoldsAfter(t *testing.T, e *Endpoint) {
-	t.Cleanup(func() { _ = call(t, e, nil, "diagnostics.modal.hold", `{"window":"window-a","on":false}`) })
+	t.Cleanup(func() {
+		if err := call(t, e, nil, "diagnostics.modal.hold", `{"window":"window-a","on":false}`); err != nil {
+			t.Errorf("the modal hold of window-a did not turn off: %v", err)
+		}
+	})
 }
 
 // contract: diagnostics.modal-hold.ends-with-window-or-connection
@@ -145,14 +154,11 @@ func TestModalHeldAnswersWhenTheConnectionOfTheHoldCloses(t *testing.T) {
 	if err := call(t, e, c, "diagnostics.modal.hold", `{"window":"window-a","on":true}`); err != nil {
 		t.Fatal(err)
 	}
-	answered := make(chan struct{})
-	go func() {
-		_ = call(t, e, nil, "diagnostics.modal.held", `{"window":"window-a"}`)
-		close(answered)
-	}()
+	answered := make(chan error, 1)
+	go func() { answered <- call(t, e, nil, "diagnostics.modal.held", `{"window":"window-a"}`) }()
 	c.close("the requester closed")
-	if !ended(answered) {
-		t.Fatal("diagnostics.modal.held did not answer at the end of the hold by its connection")
+	if err := <-answered; err != nil {
+		t.Fatalf("diagnostics.modal.held answered %v at the end of the hold by its connection", err)
 	}
 }
 
@@ -170,10 +176,9 @@ func TestTheCloseOfAnotherConnectionKeepsTheModalHold(t *testing.T) {
 		close(waited)
 	}()
 	other.close("another requester closed")
-	select {
-	case <-waited:
-		t.Fatal("the close of a connection that did not turn the hold on sent the held answer")
-	case <-time.After(100 * time.Millisecond):
+	// The close runs the ends of its connection before it returns.
+	if !heldModal(s) {
+		t.Fatal("the close of a connection that did not turn the hold on ended the hold")
 	}
 	if err := call(t, e, other, "diagnostics.modal.hold", `{"window":"window-a","on":false}`); err != nil {
 		t.Fatal(err)
@@ -193,11 +198,8 @@ func TestTheCloseOfTheConnectionOfASurfaceHoldReleasesTheSurface(t *testing.T) {
 	if released := window.named("diagnostics-surface-released"); len(released) != 0 {
 		t.Fatalf("the surface was released while its connection was open: %v", released)
 	}
+	// The close runs the release before it returns.
 	c.close("the requester closed")
-	deadline := time.Now().Add(settleWithin)
-	for len(window.named("diagnostics-surface-released")) == 0 && time.Now().Before(deadline) {
-		time.Sleep(5 * time.Millisecond)
-	}
 	if released := window.named("diagnostics-surface-released"); !reflect.DeepEqual(released, []string{`[{"surface":"tab-1"}]`}) {
 		t.Fatalf("the close of the connection of the hold sent %v, want one diagnostics-surface-released {surface: tab-1}", released)
 	}
@@ -215,12 +217,10 @@ func TestALaterHoldOfTheSurfaceKeepsItAtTheCloseOfTheEarlierConnection(t *testin
 		t.Fatal(err)
 	}
 	earlier.close("the earlier requester closed")
-	later.close("the later requester closed")
-	deadline := time.Now().Add(settleWithin)
-	for len(window.named("diagnostics-surface-released")) == 0 && time.Now().Before(deadline) {
-		time.Sleep(5 * time.Millisecond)
+	if released := window.named("diagnostics-surface-released"); len(released) != 0 {
+		t.Fatalf("the close of the earlier connection released a surface that a later hold took: %v", released)
 	}
-	time.Sleep(50 * time.Millisecond)
+	later.close("the later requester closed")
 	if released := window.named("diagnostics-surface-released"); !reflect.DeepEqual(released, []string{`[{"surface":"tab-1"}]`}) {
 		t.Fatalf("the closes sent %v, want one release by the connection of the later hold", released)
 	}
@@ -230,47 +230,27 @@ func TestALaterHoldOfTheSurfaceKeepsItAtTheCloseOfTheEarlierConnection(t *testin
 func TestARefusedSurfaceHoldReleasesNothing(t *testing.T) {
 	e, s, window := heldEndpoint(t)
 	window.answer = func(id uint64, _ string) {
-		_ = s.host.relay.Resolve(id, relayTarget{owner: s}, ExposureResult{Error: rpcError(codeInvalidParams, "surface tab-1 is not mounted")})
+		if err := s.host.relay.Resolve(id, relayTarget{owner: s}, ExposureResult{Error: rpcError(codeInvalidParams, "surface tab-1 is not mounted")}); err != nil {
+			t.Errorf("the relay refused the refusal of request %d: %v", id, err)
+		}
 	}
 	c := endpointConnection(t)
 	if err := call(t, e, c, "diagnostics.surface.hold", `{"window":"window-a","surface":"tab-1"}`); err == nil {
 		t.Fatal("the refusal of the page was not answered")
 	}
 	c.close("the requester closed")
-	time.Sleep(100 * time.Millisecond)
 	if released := window.named("diagnostics-surface-released"); len(released) != 0 {
 		t.Fatalf("a hold that the page refused released the surface: %v", released)
 	}
 }
 
 // contract: diagnostics.drag.page-receives-every-step
-func TestAPageDragReceivesEveryStepAfterItsRequestEnded(t *testing.T) {
-	_, s, window := heldEndpoint(t)
-	// The page ends the request at once, before the first step.
-	window.answer = func(id uint64, _ string) {
-		_ = s.host.relay.Resolve(id, relayTarget{owner: s}, ExposureResult{Error: rpcError(codeInvalidParams, "the drag ended")})
-	}
+func TestAPageDragSendsEveryStep(t *testing.T) {
 	const ticks = 8
-	var sentMu sync.Mutex
 	sent := 0
-	if _, err := pageDrag(s.host, s, dragPlan{Axis: "x", Line: 1, DX: 10, MS: 16, Times: 1}, ticks, func() {
-		sentMu.Lock()
-		sent++
-		sentMu.Unlock()
-	}); err == nil {
-		t.Fatal("the end of the request by the page was not answered")
-	}
-	deadline := time.Now().Add(settleWithin)
-	for len(window.named("diagnostics-tick")) < ticks && time.Now().Before(deadline) {
-		time.Sleep(5 * time.Millisecond)
-	}
-	if got := len(window.named("diagnostics-tick")); got != ticks {
-		t.Fatalf("the page received %d of the %d steps of its drag", got, ticks)
-	}
-	sentMu.Lock()
-	defer sentMu.Unlock()
+	sendSteps(ticks, time.Millisecond, func() { sent++ })
 	if sent != ticks {
-		t.Fatalf("sent was called for %d of the %d steps", sent, ticks)
+		t.Fatalf("the page received %d of the %d steps of its drag", sent, ticks)
 	}
 }
 

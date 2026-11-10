@@ -156,8 +156,10 @@ static atomic_bool wakePending;
 static void wakeWriter(void) {
     atomic_thread_fence(memory_order_seq_cst);
     if (atomic_load_explicit(&wakePending, memory_order_relaxed)) return;
-    if (atomic_exchange_explicit(&wakePending, true, memory_order_relaxed)) return;
-    int descriptor = atomic_load_explicit(&wakeWrite, memory_order_relaxed);
+    // The exchange and the load are sequentially consistent with the store and the load of sp_event_wake_fd, so a record
+    // stored while the pipe opens finds the descriptor or is found by the open.
+    if (atomic_exchange_explicit(&wakePending, true, memory_order_seq_cst)) return;
+    int descriptor = atomic_load_explicit(&wakeWrite, memory_order_seq_cst);
     if (descriptor < 0) return;
     // A full pipe already wakes the writer, so a refused byte loses nothing.
     const uint8_t byte = 0;
@@ -174,8 +176,15 @@ int sp_event_wake_fd(void) {
             fcntl(ends[index], F_SETFL, O_NONBLOCK);
             fcntl(ends[index], F_SETFD, FD_CLOEXEC);
         }
-        atomic_store_explicit(&wakeWrite, ends[1], memory_order_release);
+        atomic_store_explicit(&wakeWrite, ends[1], memory_order_seq_cst);
         reader = ends[0];
+        // A record that a producer stored before the pipe existed set wakePending and found no descriptor, so the pipe opens
+        // readable for it (docs/spec/logging.md#writers). A producer that reads the descriptor after the store may write too;
+        // a second byte only wakes the writer once more.
+        if (atomic_load_explicit(&wakePending, memory_order_seq_cst)) {
+            const uint8_t byte = 0;
+            (void)write(ends[1], &byte, 1);
+        }
     });
     return reader;
 }

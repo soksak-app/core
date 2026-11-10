@@ -16,9 +16,14 @@ import (
 func DiagnosticFunctions() abi.DiagnosticFunctions {
 	return abi.DiagnosticFunctions{
 		CountPageObjects: func(a0 unsafe.Pointer, a1 bool, a2 uintptr) { C.countPageObjects(a0, C.bool(a1), C.uintptr_t(a2)) },
-		CountWhen: func(a0 *abi.SpWindowObjects, a1 float64, a2 uintptr) {
-			C.countWhen((*C.sp_window_objects)(unsafe.Pointer(a0)), C.double(a1), C.uintptr_t(a2))
+		CountWhen: func(a0 *abi.SpWindowObjects, a1 uintptr) {
+			C.countWhen((*C.sp_window_objects)(unsafe.Pointer(a0)), C.uintptr_t(a1))
 		},
+		EndCaptureWait:          func(a0 uint64, a1 *byte) { C.endCaptureWait(C.uint64_t(a0), (*C.char)(unsafe.Pointer(a1))) },
+		EndCountWait:            func(a0 uintptr) { C.endCountWait(C.uintptr_t(a0)) },
+		EndExitWait:             func(a0 uintptr) { C.endExitWait(C.uintptr_t(a0)) },
+		EndInputReferenceWait:   func(a0 uintptr, a1 *byte) { C.endInputReferenceWait(C.uintptr_t(a0), (*C.char)(unsafe.Pointer(a1))) },
+		EndInputSourceSelection: func(a0 uintptr, a1 *byte) { C.endInputSourceSelection(C.uintptr_t(a0), (*C.char)(unsafe.Pointer(a1))) },
 		InputReference: func(a0 uintptr, a1 *byte, a2 *byte, a3 uintptr) {
 			C.inputReference(C.uintptr_t(a0), (*C.char)(unsafe.Pointer(a1)), (*C.char)(unsafe.Pointer(a2)), C.uintptr_t(a3))
 		},
@@ -35,17 +40,9 @@ func DiagnosticFunctions() abi.DiagnosticFunctions {
 		MainSpCaptureHasStream:     func() bool { return bool(C.main_sp_capture_has_stream()) },
 		MainSpCaptureLimited:       func() bool { return bool(C.main_sp_capture_limited()) },
 		MainSpCaptureLongestGap:    func() float64 { return float64(C.main_sp_capture_longest_gap()) },
-		MainSpCaptureOpen: func(a0 int64, a1 bool, a2 **byte) bool {
-			return bool(C.main_sp_capture_open(C.long(a0), C.bool(a1), (**C.char)(unsafe.Pointer(a2))))
-		},
 		MainSpCaptureStart: func(a0 *byte, a1 bool, a2 **byte) bool {
 			return bool(C.main_sp_capture_start((*C.char)(unsafe.Pointer(a0)), C.bool(a1), (**C.char)(unsafe.Pointer(a2))))
 		},
-		MainSpCaptureStill: func(a0 *int64, a1 int32, a2 *byte, a3 **byte) bool {
-			return bool(C.main_sp_capture_still((*C.long)(unsafe.Pointer(a0)), C.int(a1), (*C.char)(unsafe.Pointer(a2)), (**C.char)(unsafe.Pointer(a3))))
-		},
-		MainSpCaptureStop: func(a0 float64) int32 { return int32(C.main_sp_capture_stop(C.double(a0))) },
-		MainSpCaptureWait: func() int32 { return int32(C.main_sp_capture_wait()) },
 		MainSpDocumentDrawCovered: func(a0 uintptr, a1 bool) bool {
 			return bool(C.main_sp_document_draw_covered(C.uintptr_t(a0), C.bool(a1)))
 		},
@@ -59,6 +56,16 @@ func DiagnosticFunctions() abi.DiagnosticFunctions {
 		MainSurfaceLayoutTraceStop: func(a0 *float64, a1 uint64) uint64 {
 			return uint64(C.main_surfaceLayoutTraceStop((*C.double)(unsafe.Pointer(a0)), C.size_t(a1)))
 		},
+		ScheduleCaptureOpen: func(a0 int64, a1 bool, a2 uint64, a3 uintptr) {
+			C.scheduleCaptureOpen(C.long(a0), C.bool(a1), C.uint64_t(a2), C.uintptr_t(a3))
+		},
+		ScheduleCaptureStill: func(a0 *int64, a1 int32, a2 *byte, a3 uint64, a4 uintptr) {
+			C.scheduleCaptureStill((*C.long)(unsafe.Pointer(a0)), C.int(a1), (*C.char)(unsafe.Pointer(a2)), C.uint64_t(a3), C.uintptr_t(a4))
+		},
+		ScheduleCaptureStop: func(a0 float64, a1 uint64, a2 uintptr) {
+			C.scheduleCaptureStop(C.double(a0), C.uint64_t(a1), C.uintptr_t(a2))
+		},
+		ScheduleCaptureWait: func(a0 uint64, a1 uintptr) { C.scheduleCaptureWait(C.uint64_t(a0), C.uintptr_t(a1)) },
 		ScheduleDocumentFrameIdentityFreeze: func(a0 uint64, a1 uintptr) bool {
 			return bool(C.scheduleDocumentFrameIdentityFreeze(C.uint64_t(a0), C.uintptr_t(a1)))
 		},
@@ -70,7 +77,7 @@ func DiagnosticFunctions() abi.DiagnosticFunctions {
 		},
 		SpCaptureClock: func() float64 { return float64(C.sp_capture_clock()) },
 		SpCaptureError: func() *byte { return (*byte)(unsafe.Pointer(C.sp_capture_error())) },
-		WhenExited:     func(a0 int32, a1 float64, a2 uintptr) { C.whenExited(C.int32_t(a0), C.double(a1), C.uintptr_t(a2)) },
+		WhenExited:     func(a0 int32, a1 uintptr) { C.whenExited(C.int32_t(a0), C.uintptr_t(a1)) },
 		WindowNumbers: func(a0 uintptr, a1 *int64, a2 int32) int32 {
 			return int32(C.windowNumbers(C.uintptr_t(a0), (*C.long)(unsafe.Pointer(a1)), C.int(a2)))
 		},

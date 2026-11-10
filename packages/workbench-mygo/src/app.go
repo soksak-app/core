@@ -307,6 +307,8 @@ func (s *Shell) event(name string, data []any) {
 		}
 	case "exposure-registered":
 		s.surfaceRegistered(data)
+	case "diagnostics-surface-released":
+		s.surfaceReleased(data)
 	case "view-call":
 		s.viewCall(data)
 	case "view-reply":

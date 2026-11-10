@@ -5,15 +5,21 @@ use std::ffi::{CStr, CString, c_char, c_int, c_void};
 use crate::platform::{Handle, LayoutRecord};
 
 unsafe extern "C" {
-    fn sp_capture_open(window_number: isize, display: bool, error: *mut *mut c_char) -> bool;
+    fn sp_capture_open(
+        window_number: isize,
+        display: bool,
+        token: u64,
+        error: *mut *mut c_char,
+    ) -> bool;
     fn sp_capture_start(
         directory: *const c_char,
         frame_identity: bool,
         error: *mut *mut c_char,
     ) -> bool;
     fn sp_capture_error() -> *const c_char;
-    fn sp_capture_wait() -> c_int;
-    fn sp_capture_stop(after: f64) -> c_int;
+    fn sp_capture_wait(token: u64) -> c_int;
+    fn sp_capture_stop(after: f64, token: u64) -> c_int;
+    fn sp_capture_end_wait(token: u64, reason: *const c_char);
     fn sp_capture_has_stream() -> bool;
     fn sp_document_frame_identity_start(
         document: *mut c_void,
@@ -38,6 +44,7 @@ unsafe extern "C" {
         window_numbers: *const isize,
         count: c_int,
         path: *const c_char,
+        token: u64,
         error: *mut *mut c_char,
     ) -> bool;
     fn sp_notifications_delivered(
@@ -248,9 +255,9 @@ fn call_result(operation: &str, success: bool, error: *mut c_char) -> Result<(),
     Ok(())
 }
 
-pub fn open(window_number: isize, display: bool) -> Result<(), String> {
+pub fn open(window_number: isize, display: bool, token: u64) -> Result<(), String> {
     let mut error = std::ptr::null_mut();
-    let prepared = unsafe { sp_capture_open(window_number, display, &mut error) };
+    let prepared = unsafe { sp_capture_open(window_number, display, token, &mut error) };
     call_result("capture open failed", prepared, error)
 }
 
@@ -265,8 +272,8 @@ pub fn start(directory: &str, frame_identity: bool) -> Result<(), String> {
 
 /// Records until the presentation time after (ms, the call time when 0), ends the record and returns the number of
 /// recorded frames.
-pub fn stop(after: f64) -> Result<i32, String> {
-    let frames = unsafe { sp_capture_stop(after) };
+pub fn stop(after: f64, token: u64) -> Result<i32, String> {
+    let frames = unsafe { sp_capture_stop(after, token) };
     let error = unsafe { CStr::from_ptr(sp_capture_error()) };
     if error.to_bytes().is_empty() {
         Ok(frames)
@@ -295,9 +302,21 @@ pub fn clock() -> f64 {
     unsafe { sp_capture_clock() }
 }
 
-/// Waits for the first frame and returns whether it was recorded.
-pub fn wait() -> Result<bool, String> {
-    if unsafe { sp_capture_wait() != 0 } {
+/// Ends the wait of the capture call of token with reason. A reason that holds a NUL character ends it without its text.
+pub fn end_wait(token: u64, reason: &str) {
+    // default: a reason that holds a NUL character ends the wait without its text, as the native end names "its wait ended".
+    let text = CString::new(reason).ok();
+    unsafe {
+        sp_capture_end_wait(
+            token,
+            text.as_ref().map_or(std::ptr::null(), |text| text.as_ptr()),
+        )
+    };
+}
+
+/// Waits for the first frame and the completion of the stream start and returns whether the frame was recorded.
+pub fn wait(token: u64) -> Result<bool, String> {
+    if unsafe { sp_capture_wait(token) != 0 } {
         Ok(true)
     } else {
         Err(last_error("capture wait failed"))
@@ -306,7 +325,7 @@ pub fn wait() -> Result<bool, String> {
 
 /// Takes one still image of a window without giving it focus and writes it as PNG to path: the window is the first of
 /// `window_numbers`, and its child windows, the rest, stand in their places over it.
-pub fn still(window_numbers: &[isize], path: &str) -> Result<(), String> {
+pub fn still(window_numbers: &[isize], path: &str, token: u64) -> Result<(), String> {
     let target =
         CString::new(path).map_err(|_| "still capture failed: path contains NUL".to_owned())?;
     if window_numbers.is_empty() {
@@ -315,7 +334,14 @@ pub fn still(window_numbers: &[isize], path: &str) -> Result<(), String> {
     let count = c_int::try_from(window_numbers.len())
         .map_err(|_| "still capture failed: too many windows".to_owned())?;
     let mut error = std::ptr::null_mut();
-    let written =
-        unsafe { sp_capture_still(window_numbers.as_ptr(), count, target.as_ptr(), &mut error) };
+    let written = unsafe {
+        sp_capture_still(
+            window_numbers.as_ptr(),
+            count,
+            target.as_ptr(),
+            token,
+            &mut error,
+        )
+    };
     call_result("still capture failed", written, error)
 }

@@ -10,7 +10,12 @@ import (
 
 type DiagnosticFunctions struct {
 	CountPageObjects                    func(unsafe.Pointer, bool, uintptr)
-	CountWhen                           func(*SpWindowObjects, float64, uintptr)
+	CountWhen                           func(*SpWindowObjects, uintptr)
+	EndCaptureWait                      func(uint64, *byte)
+	EndCountWait                        func(uintptr)
+	EndExitWait                         func(uintptr)
+	EndInputReferenceWait               func(uintptr, *byte)
+	EndInputSourceSelection             func(uintptr, *byte)
 	InputReference                      func(uintptr, *byte, *byte, uintptr)
 	InputSourceIdentifierRole           func(*byte) *byte
 	InputSourceRoleIdentifier           func(*byte) *byte
@@ -19,11 +24,7 @@ type DiagnosticFunctions struct {
 	MainSpCaptureHasStream              func() bool
 	MainSpCaptureLimited                func() bool
 	MainSpCaptureLongestGap             func() float64
-	MainSpCaptureOpen                   func(int64, bool, **byte) bool
 	MainSpCaptureStart                  func(*byte, bool, **byte) bool
-	MainSpCaptureStill                  func(*int64, int32, *byte, **byte) bool
-	MainSpCaptureStop                   func(float64) int32
-	MainSpCaptureWait                   func() int32
 	MainSpDocumentDrawCovered           func(uintptr, bool) bool
 	MainSpDocumentViewportMarker        func(unsafe.Pointer, bool, *uint8, *float64, **byte) bool
 	MainSpInputSourceCurrent            func() *byte
@@ -31,12 +32,16 @@ type DiagnosticFunctions struct {
 	MainSurfaceLayoutTraceRequested     func() uint64
 	MainSurfaceLayoutTraceStart         func()
 	MainSurfaceLayoutTraceStop          func(*float64, uint64) uint64
+	ScheduleCaptureOpen                 func(int64, bool, uint64, uintptr)
+	ScheduleCaptureStill                func(*int64, int32, *byte, uint64, uintptr)
+	ScheduleCaptureStop                 func(float64, uint64, uintptr)
+	ScheduleCaptureWait                 func(uint64, uintptr)
 	ScheduleDocumentFrameIdentityFreeze func(uint64, uintptr) bool
 	ScheduleDocumentFrameIdentityRemove func(uint64, uintptr) bool
 	ScheduleDocumentFrameIdentityStart  func(unsafe.Pointer, uint64, uintptr) bool
 	SpCaptureClock                      func() float64
 	SpCaptureError                      func() *byte
-	WhenExited                          func(int32, float64, uintptr)
+	WhenExited                          func(int32, uintptr)
 	WindowNumbers                       func(uintptr, *int64, int32) int32
 }
 
@@ -46,6 +51,21 @@ func (functions DiagnosticFunctions) Validate() error {
 	}
 	if functions.CountWhen == nil {
 		return fmt.Errorf("native API function is missing: countWhen")
+	}
+	if functions.EndCaptureWait == nil {
+		return fmt.Errorf("native API function is missing: endCaptureWait")
+	}
+	if functions.EndCountWait == nil {
+		return fmt.Errorf("native API function is missing: endCountWait")
+	}
+	if functions.EndExitWait == nil {
+		return fmt.Errorf("native API function is missing: endExitWait")
+	}
+	if functions.EndInputReferenceWait == nil {
+		return fmt.Errorf("native API function is missing: endInputReferenceWait")
+	}
+	if functions.EndInputSourceSelection == nil {
+		return fmt.Errorf("native API function is missing: endInputSourceSelection")
 	}
 	if functions.InputReference == nil {
 		return fmt.Errorf("native API function is missing: inputReference")
@@ -71,20 +91,8 @@ func (functions DiagnosticFunctions) Validate() error {
 	if functions.MainSpCaptureLongestGap == nil {
 		return fmt.Errorf("native API function is missing: main_sp_capture_longest_gap")
 	}
-	if functions.MainSpCaptureOpen == nil {
-		return fmt.Errorf("native API function is missing: main_sp_capture_open")
-	}
 	if functions.MainSpCaptureStart == nil {
 		return fmt.Errorf("native API function is missing: main_sp_capture_start")
-	}
-	if functions.MainSpCaptureStill == nil {
-		return fmt.Errorf("native API function is missing: main_sp_capture_still")
-	}
-	if functions.MainSpCaptureStop == nil {
-		return fmt.Errorf("native API function is missing: main_sp_capture_stop")
-	}
-	if functions.MainSpCaptureWait == nil {
-		return fmt.Errorf("native API function is missing: main_sp_capture_wait")
 	}
 	if functions.MainSpDocumentDrawCovered == nil {
 		return fmt.Errorf("native API function is missing: main_sp_document_draw_covered")
@@ -106,6 +114,18 @@ func (functions DiagnosticFunctions) Validate() error {
 	}
 	if functions.MainSurfaceLayoutTraceStop == nil {
 		return fmt.Errorf("native API function is missing: main_surfaceLayoutTraceStop")
+	}
+	if functions.ScheduleCaptureOpen == nil {
+		return fmt.Errorf("native API function is missing: scheduleCaptureOpen")
+	}
+	if functions.ScheduleCaptureStill == nil {
+		return fmt.Errorf("native API function is missing: scheduleCaptureStill")
+	}
+	if functions.ScheduleCaptureStop == nil {
+		return fmt.Errorf("native API function is missing: scheduleCaptureStop")
+	}
+	if functions.ScheduleCaptureWait == nil {
+		return fmt.Errorf("native API function is missing: scheduleCaptureWait")
 	}
 	if functions.ScheduleDocumentFrameIdentityFreeze == nil {
 		return fmt.Errorf("native API function is missing: scheduleDocumentFrameIdentityFreeze")

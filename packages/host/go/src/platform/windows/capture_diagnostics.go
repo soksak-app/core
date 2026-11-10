@@ -14,21 +14,28 @@ func (implementation) WindowNumbers(window platform.Window) ([]int, error) {
 }
 
 // CaptureStill writes one picture of the web view of the window to path as PNG. Call it outside the UI thread. WindowNumbers
-// returns the window alone here, so the first number is the whole list.
-func (implementation) CaptureStill(windowNumbers []int, path string) error {
+// returns the window alone here, so the first number is the whole list. No limit ends its wait; CaptureEndWait ends it.
+func (implementation) CaptureStill(windowNumbers []int, path string, token uint64) error {
 	if len(windowNumbers) == 0 {
 		return errors.New("still capture needs the number of a window")
 	}
-	return captureStill(uintptr(windowNumbers[0]), path)
+	return captureStill(uintptr(windowNumbers[0]), path, token)
 }
 
-func (implementation) CaptureOpen(int, bool) error { return unsupported("window recording") }
+func (implementation) CaptureOpen(int, bool, uint64) error { return unsupported("window recording") }
 
 func (implementation) CaptureStart(string, bool) error { return unsupported("window recording") }
 
-func (implementation) CaptureWait() (bool, error) { return false, unsupported("window recording") }
+func (implementation) CaptureWait(uint64) (bool, error) {
+	return false, unsupported("window recording")
+}
 
-func (implementation) CaptureStop(float64) (int, error) { return 0, unsupported("window recording") }
+func (implementation) CaptureStop(float64, uint64) (int, error) {
+	return 0, unsupported("window recording")
+}
+
+// CaptureEndWait ends the wait of the still capture of token, the one operation of this platform that waits.
+func (implementation) CaptureEndWait(token uint64, reason string) { endStill(token, reason) }
 
 func (implementation) CaptureHasStream() (bool, error) { return false, unsupported("window recording") }
 

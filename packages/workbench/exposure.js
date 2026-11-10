@@ -647,13 +647,16 @@ export const registry = createRegistry(host
 
 /* The function that sends the exposure reply of a surface. Only the diagnostic module of a diagnostic build installs it, to intercept the reply of the surface. */
 let replyGate = null;
+let replyHoldsEnd = null;
 
 /**
  * Sends the exposure reply of a surface through fn(surface, send). send() sends the reply to the host and returns the response, and fn
- * returns that result. null removes the installed function.
+ * returns that result. endHolds() ends every hold of fn, so the replies it holds are sent; whenRepliesSent calls it, because a reload of
+ * the page ends the holds of the page (docs/spec/endpoint.md, diagnostics.surface.hold). null removes the installed functions.
  */
-export function gateSurfaceReplies(fn) {
+export function gateSurfaceReplies(fn, endHolds = null) {
   replyGate = fn;
+  replyHoldsEnd = fn === null ? null : endHolds;
 }
 
 /** Sends one exposure reply of surface through the installed gate. A reply without a surface is the reply of the main page and is sent at once. */
@@ -680,8 +683,10 @@ function requestAnswered() {
   for (const resolve of waiters) resolve();
 }
 
-/** Resolves when the page has sent the reply of every exposure request that it has received. */
+/** Resolves when the page has sent the reply of every exposure request that it has received. A reply that a diagnostic hold keeps is sent first. */
 export function whenRepliesSent() {
+  // default: a page that keeps no diagnostic reply hold has no hold to end.
+  replyHoldsEnd?.();
   return unanswered === 0 ? Promise.resolve() : new Promise((resolve) => answeredWaiters.push(resolve));
 }
 

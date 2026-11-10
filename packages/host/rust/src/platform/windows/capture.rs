@@ -3,8 +3,7 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::mpsc;
-use std::time::Duration;
+use std::sync::{LazyLock, mpsc};
 
 use ::windows::Win32::System::Com::StructuredStorage::CreateStreamOnHGlobal;
 use ::windows::Win32::System::Com::{IStream, STREAM_SEEK_END, STREAM_SEEK_SET};
@@ -14,13 +13,21 @@ use webview2_com::CapturePreviewCompletedHandler;
 use webview2_com::Microsoft::Web::WebView2::Win32::COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT_PNG;
 
 use super::ui_thread::{error, on_ui_thread, post};
-use super::webview::{after, view_of};
+use super::webview::view_of;
 use crate::framework::Window;
 use crate::platform::Handle;
-use crate::platform::devtools_input::{capture_refusal, capture_wait, check_still};
+use crate::platform::devtools_input::{
+    CaptureEnds, capture_end_failure, capture_refusal, check_still,
+};
 
-/// Limits a capture, whose completion is not promised ([`capture_wait`]).
-const CAPTURE_WAIT: Duration = Duration::from_secs(10);
+/// The ends of the still captures that wait. CapturePreview is reported never to complete in a covered window, so no limit ends
+/// the wait, and the end of its request does.
+static STILL_ENDS: LazyLock<CaptureEnds> = LazyLock::new(CaptureEnds::default);
+
+/// Ends the wait of the still capture of token with reason.
+pub fn end_still(token: u64, reason: &str) {
+    STILL_ENDS.end(token, reason);
+}
 
 /// The window number of a window is its handle: a web view is no window of its own here.
 pub fn window_numbers(window: &Window) -> Result<Vec<isize>, String> {
@@ -30,7 +37,7 @@ pub fn window_numbers(window: &Window) -> Result<Vec<isize>, String> {
 
 /// Writes one picture of the web view of the window to path as PNG. The wait runs on the caller's thread and the completion on the UI
 /// thread, so a call on the UI thread would wait for itself.
-pub fn capture_still(window_number: isize, path: &str) -> Result<(), String> {
+pub fn capture_still(window_number: isize, path: &str, token: u64) -> Result<(), String> {
     if on_ui_thread() {
         return Err(
             "capture: a capture waits for the UI thread, and it was called on that thread"
@@ -38,7 +45,13 @@ pub fn capture_still(window_number: isize, path: &str) -> Result<(), String> {
         );
     }
     let (ended, wait) = mpsc::channel();
-    post(Box::new(move || {
+    // The receiver takes the first of the completion and the end, and what comes later finds no request.
+    let end = ended.clone();
+    STILL_ENDS.wait(
+        token,
+        Box::new(move |reason| answer_capture(&end, Err(capture_end_failure(&reason)))),
+    );
+    let posted = post(Box::new(move || {
         let done = {
             let ended = ended.clone();
             Box::new(move |picture| answer_capture(&ended, picture))
@@ -46,9 +59,12 @@ pub fn capture_still(window_number: isize, path: &str) -> Result<(), String> {
         if let Err(failure) = start_capture(window_number as Handle, done) {
             answer_capture(&ended, Err(failure));
         }
-    }))
-    .map_err(|e| error("capture", e))?;
-    let data = wait.recv().map_err(|e| error("capture", e))??;
+    }));
+    let received = posted
+        .map_err(|e| error("capture", e))
+        .and_then(|()| wait.recv().map_err(|e| error("capture", e)));
+    STILL_ENDS.forget(token);
+    let data = received??;
     check_still(&data)?;
     std::fs::write(path, data).map_err(|e| error("capture", e))
 }
@@ -77,16 +93,15 @@ fn start_capture(
     let stream = unsafe { CreateStreamOnHGlobal(Default::default(), true) }
         .map_err(|e| error("capture: stream", e))?;
     let read = stream.clone();
-    let finish = capture_wait(
-        &after(),
-        CAPTURE_WAIT,
-        Box::new(move |result| done(result.and_then(|()| stream_bytes(&read)))),
-    );
-    let finish = Rc::new(RefCell::new(Some(finish)));
+    let finish = Rc::new(RefCell::new(Some(done)));
     let completed = finish.clone();
     let handler = CapturePreviewCompletedHandler::create(Box::new(move |result| {
-        if let Some(finish) = completed.borrow_mut().take() {
-            finish(result.map_err(|e| error("capture: CapturePreview", e)));
+        if let Some(done) = completed.borrow_mut().take() {
+            done(
+                result
+                    .map_err(|e| error("capture: CapturePreview", e))
+                    .and_then(|()| stream_bytes(&read)),
+            );
         }
         Ok(())
     }));
@@ -98,9 +113,9 @@ fn start_capture(
         )
     };
     if let Err(failure) = started
-        && let Some(finish) = finish.borrow_mut().take()
+        && let Some(done) = finish.borrow_mut().take()
     {
-        finish(Err(error("capture: CapturePreview", failure)));
+        done(Err(error("capture: CapturePreview", failure)));
     }
     Ok(())
 }

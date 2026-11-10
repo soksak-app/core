@@ -10,14 +10,17 @@ bool scheduleDocumentFrameIdentityFreeze(uint64_t generation, uintptr_t context)
 bool scheduleDocumentFrameIdentityRemove(uint64_t generation, uintptr_t context);
 void listDeliveredNotifications(void);
 int windowNumbers(uintptr_t nsWindow, long* out, int max);
-bool main_sp_capture_open(long windowNumber, bool display, char **error);
 bool main_sp_capture_start(const char *directory, bool frameIdentity, char **error);
-int main_sp_capture_stop(double after);
 bool main_sp_capture_has_stream(void);
-int main_sp_capture_wait(void);
+// Each answers context with one capture_answered callback on the worker; the call waits on a thread of its own.
+void scheduleCaptureOpen(long windowNumber, bool display, uint64_t token, uintptr_t context);
+void scheduleCaptureWait(uint64_t token, uintptr_t context);
+void scheduleCaptureStop(double after, uint64_t token, uintptr_t context);
+void scheduleCaptureStill(const long *windowNumbers, int count, const char *path, uint64_t token, uintptr_t context);
+// Ends the wait of the capture call of token from any thread.
+void endCaptureWait(uint64_t token, const char *reason);
 bool main_sp_capture_limited(void);
 double main_sp_capture_longest_gap(void);
-bool main_sp_capture_still(const long *windowNumbers, int count, const char *path, char **error);
 void main_surfaceLayoutTraceStart(void);
 size_t main_surfaceLayoutTraceStop(double *out, size_t capacity);
 uint64_t main_surfaceLayoutTraceRequested(void);

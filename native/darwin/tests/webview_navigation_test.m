@@ -18,17 +18,15 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
+// Runs the run loop until done holds; each turn waits for a source of the run loop. what names the wait in the record of a
+// run that the runner ends.
 static void until(BOOL (^done)(void), NSString *what) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
+    while (!done()) {
         @autoreleasepool {
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:NSDate.distantFuture];
         }
     }
-    if (!done()) {
-        fprintf(stderr, "FAIL: %s within 10 seconds\n", what.UTF8String);
-        exit(1);
-    }
+    fprintf(stdout, "reached: %s\n", what.UTF8String);
 }
 
 // Stands in for the navigation delegate of the framework. Allows every navigation and counts the notifications it
@@ -68,7 +66,7 @@ static void exited(void *context, bool value) {
 static BOOL processEnds(pid_t pid) {
     SPExited state = {0};
     SPExited *answer = &state;
-    sp_process_when_exited(pid, 5, exited, answer);
+    sp_process_when_exited(pid, exited, answer);
     until(^BOOL { return answer->calls > 0; }, @"the process exit answer arrives");
     return state.exited;
 }

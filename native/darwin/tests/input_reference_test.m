@@ -78,7 +78,7 @@ static BOOL pumpUntil(BOOL (^done)(void), NSDate *deadline) {
 static BOOL selectAndAwaitSource(NSString *source, NSDate *deadline) {
     __block BOOL answered = NO;
     __block NSString *failure = nil;
-    sp_input_source_select_and_await(source.UTF8String, ^(const char *error) {
+    sp_input_source_select_and_await(source.UTF8String, NULL, ^(const char *error) {
         answered = YES;
         failure = error ? [NSString stringWithUTF8String:error] : nil;
     });
@@ -260,29 +260,20 @@ int main(int argc, const char *argv[]) {
     [reference(other) setString:@"other"];
     check([request(window, "read", NULL).value[@"document"] isEqual:@""] &&
         [request(other, "read", NULL).value[@"document"] isEqual:@"other"], @"separate windows own independent reference documents");
-    __block SPReferenceReply *timed = nil;
-    NSArray<NSDictionary *> *timeoutEvents = capturedEvents(^{
-        timed = request(other, "wait", "never");
-        NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:6];
-        while (!timed.count && deadline.timeIntervalSinceNow > 0)
-            [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:deadline];
-    });
-    check(timed.count == 1 && [timed.failure containsString:@"within 5 seconds"], @"an unmet document fails within the declared wait bound");
-    NSArray<NSDictionary *> *timeoutRegistrations = [timeoutEvents filteredArrayUsingPredicate:
-        [NSPredicate predicateWithFormat:@"name == 'native.observe.registered' AND fields.source == 'input.reference.timeout'"]];
-    NSArray<NSDictionary *> *timeoutDeliveries = [timeoutEvents filteredArrayUsingPredicate:
-        [NSPredicate predicateWithFormat:@"name == 'native.observe.delivered' AND fields.source == 'input.reference.timeout'"]];
-    NSDictionary *timeoutRegistration = timeoutRegistrations.count == 1 ? timeoutRegistrations[0][@"fields"] : @{};
-    // Five earlier waits registered the same source; this controlled phase registers it a sixth time.
-    check(timeoutRegistrations.count == 1 && [timeoutRegistration[@"kind"] isEqual:@"timer"]
-        && [timeoutRegistration[@"target"] isEqual:@"input reference document wait"]
-        && [timeoutRegistration[@"mode"] isEqual:@"record"] && [timeoutRegistration[@"registrations"] intValue] == 6
-        && timeoutDeliveries.count == 1 && [timeoutDeliveries[0][@"fields"][@"count"] intValue] == 1
-        && [timeoutEvents indexOfObject:timeoutRegistrations[0]] < [timeoutEvents indexOfObject:timeoutDeliveries[0]],
-        [NSString stringWithFormat:@"the wait timer registration and delivery are recorded: %@", timeoutEvents]);
+    // No limit ends a wait: the document never comes, and the end of the request ends the wait with that end.
+    SPReferenceReply *timed = request(other, "wait", "never");
+    drain();
+    check(timed.count == 0, @"an unmet document keeps its wait without a limit");
+    sp_input_reference_end(other, "the endpoint connection of the request closed");
+    check(timed.count == 1 && [timed.failure hasPrefix:
+        @"input reference did not reach the expected document before the endpoint connection of the request closed: "]
+        && [timed.failure containsString:@"other"],
+        [NSString stringWithFormat:@"the end of the request fails the unmet wait with its end and the state: %@", timed.failure]);
+    sp_input_reference_end(other, "the window closed");
+    check(timed.count == 1, @"a second end finds no wait");
     [reference(other) setString:@"never"];
     drain();
-    check(timed.count == 1, @"a timed-out wait never completes a second time");
+    check(timed.count == 1, @"an ended wait never completes a second time");
     request(other, "close", NULL);
     [other close];
     [other release];

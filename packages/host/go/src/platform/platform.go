@@ -123,9 +123,12 @@ type Input struct {
 }
 
 // InputReference is supplied only by diagnostic platform builds. It creates an ordinary text view for comparing native keyboard input.
-// Call it on the main thread. Completion runs once there, within five seconds for wait and immediately for other actions.
+// Call it on the main thread. Completion runs once there: for wait and wait-document when the document is reached, the reference or
+// its window closes or EndInputReferenceWait ends the wait, and at once for other actions. No limit ends a wait.
 type InputReference interface {
 	InputReference(window Window, action string, document *string, done func(json.RawMessage, error))
+	// EndInputReferenceWait ends the pending wait of the reference of window, naming reason in its failure. Call it on the main thread.
+	EndInputReferenceWait(window Window, reason string)
 }
 
 // DocumentFrameIdentityCapture manages the diagnostic identity marker in one live view root.
@@ -143,13 +146,14 @@ type DocumentFrameIdentityCapture interface {
 type InputSources interface {
 	// InputSource returns the role of the currently selected keyboard input source, "" for an input source without a role, and its platform identifier.
 	InputSource() (role string, source string, err error)
-	// SelectInputSource selects the input source of role and calls adopted after the active key-view context has adopted it, or reports an error within
-	// 2 seconds. A role without an input source on the platform reports an error. With no active text client, it completes after global selection.
-	// Call it on the main thread; adopted runs on the main thread.
-	SelectInputSource(role string, adopted func(error))
-	// RestoreInputSource selects the input source whose platform identifier is source, a value that InputSource returned, with the adoption of
-	// SelectInputSource.
-	RestoreInputSource(source string, adopted func(error))
+	// SelectInputSource selects the input source of role and calls adopted after the active key-view context has adopted it. No limit ends the
+	// wait: end ends a selection that has not completed, and adopted then reports the held source and reason. A role without an input source on
+	// the platform reports an error. With no active text client, it completes after global selection. Call it and end on the main thread;
+	// adopted runs on the main thread.
+	SelectInputSource(role string, adopted func(error)) (end func(reason string))
+	// RestoreInputSource selects the input source whose platform identifier is source, a value that InputSource returned, with the adoption and
+	// the end of SelectInputSource.
+	RestoreInputSource(source string, adopted func(error)) (end func(reason string))
 }
 
 // WindowObjects is the number of live objects, among the objects that the common library attached to windows and web views, whose lifetime shows the release of the window and the web view.
@@ -242,18 +246,20 @@ func ParseProcessID(raw json.RawMessage) (int32, error) {
 // ProcessExitWaiter is the operation that waits for the exit of a process. Only the platform implementation of a diagnostic build (tag diagnostics) provides it, and
 // diagnostic code uses it by checking the value of Current() against this interface.
 type ProcessExitWaiter interface {
-	// WhenProcessExited gives done true when the process pid ends and false when it does not end within seconds. A process that
-	// no longer exists has ended. Call it on the UI thread, and done is also called on the UI thread.
-	WhenProcessExited(pid int32, seconds float64, done func(exited bool))
+	// WhenProcessExited gives done true when the process pid ends. A process that no longer exists has ended. No limit ends
+	// the wait: end ends a wait that has not answered, and done then gets false; end after the answer does nothing. Call it on
+	// the UI thread, and done is also called on the UI thread.
+	WhenProcessExited(pid int32, done func(exited bool)) (end func())
 }
 
 // WindowObjectCounter is the operation that counts WindowObjects. Only the platform implementation of a diagnostic build (tag diagnostics) provides it, and
 // diagnostic code uses it by checking the value of Current() against this interface.
 type WindowObjectCounter interface {
 	// WindowObjectsWhen gives done the count and true when the count becomes equal to expected after the application handled one event and drained the autorelease pool of that event loop iteration.
-	// When it does not become equal within seconds, it gives the count at that time and false. When expected is
-	// nil, it gives the count after the event and true. Call it on the UI thread, and done is also called on the UI thread.
-	WindowObjectsWhen(expected *WindowObjects, seconds float64, done func(counts WindowObjects, reached bool))
+	// When expected is nil, it gives the count after the event and true. No limit ends the wait: end ends a wait that has
+	// not answered, and done then gets the count at that time and false; end after the answer does nothing. Call it on the UI
+	// thread, and done is also called on the UI thread.
+	WindowObjectsWhen(expected *WindowObjects, done func(counts WindowObjects, reached bool)) (end func())
 }
 
 // PageObjectCounter is the operation that counts the elements and documents of a web view. Only the platform implementation of a diagnostic build (tag diagnostics) provides it, and
@@ -267,19 +273,23 @@ type PageObjectCounter interface {
 
 // Capturer is the window recording operation. Only the platform implementation of a diagnostic build (tag diagnostics) provides it, and
 // diagnostic code uses it by checking the value of Current() against this interface.
+//
+// Every operation that waits for the recording system or for a frame takes token, a number that the caller gives no earlier
+// call and that is larger than the token of every earlier call. No limit ends such a wait: it ends when its event comes or when
+// CaptureEndWait ends the wait of its token, and an ended wait fails with `<what did not come> before <reason>`.
 type Capturer interface {
 	// WindowNumbers returns the window server numbers of the window and its child windows. The number of the window itself comes first.
 	WindowNumbers(window Window) ([]int, error)
 	// CaptureOpen makes the window with the window server number windowNumber the recording target. With display, it records the windows of this app on the display
 	// that holds the window.
-	CaptureOpen(windowNumber int, display bool) error
+	CaptureOpen(windowNumber int, display bool, token uint64) error
 	// CaptureStart starts the frame recording in directory.
 	CaptureStart(directory string, frameIdentity bool) error
-	// CaptureWait returns whether the first frame was recorded.
-	CaptureWait() (bool, error)
+	// CaptureWait returns whether the first frame was recorded and the stream start completed.
+	CaptureWait(token uint64) (bool, error)
 	// CaptureStop ends the recording and returns the number of recorded frames.
 	// after is the last display time (ms, on the same clock as the display time) to include in the recording, and 0 means the time of the call.
-	CaptureStop(after float64) (int, error)
+	CaptureStop(after float64, token uint64) (int, error)
 	// CaptureHasStream reports whether the native capture module still owns its current stream and writer transaction.
 	// It does not report whether the operating system's asynchronous stop callback has completed.
 	CaptureHasStream() (bool, error)
@@ -302,7 +312,11 @@ type Capturer interface {
 	// CaptureStill takes one picture of a window without giving it focus and writes it to path as PNG. windowNumbers are those
 	// that WindowNumbers returns: the window first, then its child windows, which the picture shows in their places over it.
 	// It is observation material.
-	CaptureStill(windowNumbers []int, path string) error
+	CaptureStill(windowNumbers []int, path string, token uint64) error
+	// CaptureEndWait ends the wait of the operation of token with reason, from any thread; the waiting operation does not hold
+	// the UI thread. An end that comes before the operation waits ends it when it waits; an end for an operation that returned
+	// changes nothing.
+	CaptureEndWait(token uint64, reason string)
 }
 
 // CoreRootResolver returns the file at urlPath of the core root of a view of plugin (docs/spec/plugin-processes.md, rule 4)

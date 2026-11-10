@@ -1315,6 +1315,9 @@ pub(crate) fn rewatch(window: &Window) {
 /// When the window closes, ends the requests sent to the documents of the window and removes the state record of the
 /// window.
 pub(crate) fn window_closed(window: &Window) {
+    // A diagnostic hold of the window ends with it (docs/spec/endpoint.md).
+    #[cfg(feature = "diagnostics")]
+    crate::diagnostics::end_window_holds(window.label());
     let state = window.state::<Exposure>();
     let main = window.label().to_string();
     let surfaces = format!("surface-{main}-");
@@ -2899,9 +2902,9 @@ impl Host {
                 exposure_list(&params, || self.page(window, method, page_params, TIMEOUT))
             }
             #[cfg(feature = "diagnostics")]
-            _ if method.starts_with("diagnostics.") => {
-                raw(&crate::diagnostics::call(self, window, method, params)?)
-            }
+            _ if method.starts_with("diagnostics.") => raw(&crate::diagnostics::call(
+                self, window, method, params, reply,
+            )?),
             _ => {
                 let name = params
                     .get("name")

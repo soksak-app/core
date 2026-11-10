@@ -16,11 +16,8 @@ func TestAModalHoldEndsWithItsWindow(t *testing.T) {
 		holdModalContent(s)
 		close(waited)
 	}()
-	answered := make(chan struct{})
-	go func() {
-		_ = call(t, e, nil, "diagnostics.modal.held", `{"window":"window-a"}`)
-		close(answered)
-	}()
+	answered := make(chan error, 1)
+	go func() { answered <- call(t, e, nil, "diagnostics.modal.held", `{"window":"window-a"}`) }()
 	// The close of a window ends each diagnostic hold of the window before its views close.
 	if diagnosticWindowClosed == nil {
 		t.Fatal("a diagnostic build does not end the holds of a window that closes")
@@ -29,7 +26,7 @@ func TestAModalHoldEndsWithItsWindow(t *testing.T) {
 	if !ended(waited) {
 		t.Fatal("the held modal content answer was not sent when its window closed")
 	}
-	if !ended(answered) {
-		t.Fatal("diagnostics.modal.held did not answer when the window of the hold closed")
+	if err := <-answered; err != nil {
+		t.Fatalf("diagnostics.modal.held answered %v when the window of the hold closed", err)
 	}
 }

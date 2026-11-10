@@ -533,6 +533,9 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 			return true
 		}
 		RecordWindowEvent(s.name, "closed")
+		if diagnosticWindowClosed != nil {
+			diagnosticWindowClosed(s)
+		}
 		s.close()
 		h.relay.Abandon(func(t relayTarget) bool { return t.owner == s })
 		h.notifyWorkspace()

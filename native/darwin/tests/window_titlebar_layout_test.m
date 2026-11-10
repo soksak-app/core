@@ -241,18 +241,18 @@ int main(void) { @autoreleasepool {
     if (!created) { [window close]; return 1; }
     recordingDirectory = [[NSString stringWithUTF8String:directory] copy];
     char *operationError = NULL;
-    BOOL opened = sp_capture_open(window.windowNumber, false, &operationError);
+    BOOL opened = sp_capture_open(window.windowNumber, false, 0, &operationError);
     BOOL started = NO;
     if (opened) { free(operationError); operationError = NULL; started = sp_capture_start(directory, false, &operationError); }
     check(started, [NSString stringWithFormat:@"the title bar recording starts (%s)", operationError == NULL ? "" : operationError]);
     free(operationError);
     if (started) {
-        check(sp_capture_wait() > 0, @"the title bar recording contains its initial frame");
+        check(sp_capture_wait(0) > 0, @"the title bar recording contains its initial frame");
         // The heights are the first rows for frame font scales 1 and 2. Raises then lowers.
         SPChange changes[2];
         changes[0] = change(window, 201, 80);
         changes[1] = change(window, 202, 40);
-        int count = sp_capture_stop(CACurrentMediaTime() * 1000);
+        int count = sp_capture_stop(CACurrentMediaTime() * 1000, 0);
         const char *recordingError = sp_capture_error();
         check(recordingError[0] == 0 && !sp_capture_limited(), [NSString stringWithFormat:
             @"the title bar recording ends without error or truncation (%s)", recordingError[0] ? recordingError : "none"]);

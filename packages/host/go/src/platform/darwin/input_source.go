@@ -31,37 +31,48 @@ func (implementation) InputSource() (string, string, error) {
 }
 
 // SelectInputSource selects the input source of role and waits for active key-view context adoption. Call it in a main-thread step.
-func (implementation) SelectInputSource(role string, adopted func(error)) {
+func (implementation) SelectInputSource(role string, adopted func(error)) (end func(reason string)) {
 	if adopted == nil {
 		panic("input source selection requires an adoption callback")
 	}
 	if strings.IndexByte(role, 0) >= 0 {
 		adopted(errors.New("input source role contains NUL"))
-		return
+		return func(string) {}
 	}
 	wanted := native.CString(role)
 	defer native.Free(unsafe.Pointer(wanted))
 	identifier := diagnosticNative.InputSourceRoleIdentifier(wanted)
 	if identifier == nil {
 		adopted(fmt.Errorf("the input source role %q has no input source on macOS", role))
-		return
+		return func(string) {}
 	}
-	diagnosticNative.InputSourceSelectAndAwait(identifier, uintptr(handles.NewHandle(adopted)))
+	return selectAndAwait(identifier, adopted)
+}
+
+// selectAndAwait selects the input source identifier and returns the end of its wait.
+func selectAndAwait(identifier *byte, adopted func(error)) (end func(reason string)) {
+	handle := uintptr(handles.NewHandle(adopted))
+	diagnosticNative.InputSourceSelectAndAwait(identifier, handle)
+	return func(reason string) {
+		text := native.CString(reason)
+		defer native.Free(unsafe.Pointer(text))
+		diagnosticNative.EndInputSourceSelection(handle, text)
+	}
 }
 
 // RestoreInputSource selects the input source with identifier source and waits for active key-view context adoption. Call it in a
 // main-thread step.
-func (implementation) RestoreInputSource(source string, adopted func(error)) {
+func (implementation) RestoreInputSource(source string, adopted func(error)) (end func(reason string)) {
 	if adopted == nil {
 		panic("input source selection requires an adoption callback")
 	}
 	if strings.IndexByte(source, 0) >= 0 {
 		adopted(errors.New("input source identifier contains NUL"))
-		return
+		return func(string) {}
 	}
 	wanted := native.CString(source)
 	defer native.Free(unsafe.Pointer(wanted))
-	diagnosticNative.InputSourceSelectAndAwait(wanted, uintptr(handles.NewHandle(adopted)))
+	return selectAndAwait(wanted, adopted)
 }
 
 func goHost_native_input_source_adopted(value uintptr, failure *byte) {

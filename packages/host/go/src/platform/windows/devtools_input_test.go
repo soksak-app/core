@@ -396,33 +396,54 @@ func TestACaptureOfAViewThatDoesNotDrawIsRefused(t *testing.T) {
 	}
 }
 
-// A capture of a covered window may never complete. The wait names that state, and a late completion answers nothing.
+// A capture of a covered window may never complete, and no limit ends its wait. The end of its request ends it with a failure that
+// names that end and a covered window, and a late completion answers nothing.
 // contract: platform.windows.capture.incomplete-capture-ends-its-wait
 func TestACaptureThatDoesNotCompleteEndsItsWait(t *testing.T) {
-	f := &fakeProtocol{}
 	var got []error
-	finish := captureWait(f.after, time.Second, func(err error) { got = append(got, err) })
-	f.timers[0]()
-	if len(got) != 1 || got[0] == nil || !strings.Contains(got[0].Error(), "covered") {
-		t.Fatalf("got %v", got)
+	answer, end := captureWait(func(_ []byte, err error) { got = append(got, err) })
+	var ends captureEnds
+	forget := ends.wait(7, end)
+	ends.end(8, "the window closed")
+	if len(got) != 0 {
+		t.Fatalf("the end of another capture ended this one: %v", got)
 	}
-	finish(nil)
+	ends.end(7, "the endpoint connection of the request closed")
+	want := "capture: CapturePreview did not complete before the endpoint connection of the request closed, and the web view reports that it draws; the window may be covered"
+	if len(got) != 1 || got[0] == nil || got[0].Error() != want {
+		t.Fatalf("got %v, want %q", got, want)
+	}
+	answer([]byte("late"), nil)
+	forget()
 	if len(got) != 1 {
 		t.Fatalf("a late completion answered again: %v", got)
 	}
 }
 
-// contract: platform.windows.capture.completed-capture-answers-once
-func TestACompletedCaptureAnswersOnce(t *testing.T) {
-	f := &fakeProtocol{}
+// An end that comes before its capture waits ends the capture when it waits, and the capture that returns forgets it.
+// contract: platform.windows.capture.incomplete-capture-ends-its-wait
+func TestAnEndBeforeTheCaptureWaitsEndsIt(t *testing.T) {
+	var ends captureEnds
+	ends.end(3, "the page of the window ended")
 	var got []error
-	finish := captureWait(f.after, time.Second, func(err error) { got = append(got, err) })
-	finish(nil)
-	if len(got) != 1 || got[0] != nil {
+	_, end := captureWait(func(_ []byte, err error) { got = append(got, err) })
+	ends.wait(3, end)()
+	if len(got) != 1 || got[0] == nil || !strings.Contains(got[0].Error(), "before the page of the window ended") {
 		t.Fatalf("got %v", got)
 	}
-	if f.timers[0] != nil {
-		t.Fatal("the wait of a completed capture goes on")
+	if len(ends.early) != 0 || len(ends.waiting) != 0 {
+		t.Fatalf("the returned capture left its ends: %v %v", ends.early, ends.waiting)
+	}
+}
+
+// contract: platform.windows.capture.completed-capture-answers-once
+func TestACompletedCaptureAnswersOnce(t *testing.T) {
+	var got []error
+	answer, end := captureWait(func(_ []byte, err error) { got = append(got, err) })
+	answer([]byte("picture"), nil)
+	end("the endpoint connection of the request closed")
+	if len(got) != 1 || got[0] != nil {
+		t.Fatalf("got %v", got)
 	}
 }
 

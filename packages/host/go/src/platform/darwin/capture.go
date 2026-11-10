@@ -18,15 +18,7 @@ import (
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
-func captureError(operation string) error {
-	message := native.GoString(diagnosticNative.SpCaptureError())
-	if message == "" {
-		return fmt.Errorf("capture %s failed without a native reason", operation)
-	}
-	return fmt.Errorf("capture %s: %s", operation, message)
-}
-
-// Reads and releases the prepare, start and stop capture errors that the caller owns.
+// Reads and releases the start capture error that the caller owns.
 func captureCallError(operation string, success bool, nativeError *byte) error {
 	if nativeError != nil {
 		defer native.Free(unsafe.Pointer(nativeError))
@@ -48,10 +40,45 @@ func (implementation) WindowNumbers(window platform.Window) ([]int, error) {
 	return out, nil
 }
 
-func (implementation) CaptureOpen(windowNumber int, display bool) error {
-	var nativeError *byte
-	prepared := bool(diagnosticNative.MainSpCaptureOpen(int64(windowNumber), bool(display), &nativeError))
-	return captureCallError("open", prepared, nativeError)
+// captureAnswer is the answer of a capture call that waits: its result and its failure, which the native code owns.
+type captureAnswer struct {
+	result  int64
+	failure string
+	failed  bool
+}
+
+// awaitCaptureAnswer schedules a capture call that waits with a new context and waits on the calling goroutine for its one
+// capture_answered callback. The call waits on a native thread of its own, so the main thread and the worker go on.
+func awaitCaptureAnswer(schedule func(context uintptr)) captureAnswer {
+	answered := make(chan captureAnswer, 1)
+	handle := handles.NewHandle(func(answer captureAnswer) { answered <- answer })
+	schedule(uintptr(handle))
+	return <-answered
+}
+
+func goHost_capture_answered(context uintptr, result int64, failure *byte) {
+	handle := handles.Handle(context)
+	done := handle.Value().(func(captureAnswer))
+	handle.Delete()
+	done(captureAnswer{result: result, failure: native.GoString(failure), failed: failure != nil})
+}
+
+// captureAnswerError is the error of the answer of an open or a still.
+func captureAnswerError(operation string, answer captureAnswer) error {
+	if answer.failed {
+		return fmt.Errorf("capture %s: %s", operation, answer.failure)
+	}
+	if answer.result == 0 {
+		return fmt.Errorf("capture %s failed without a native reason", operation)
+	}
+	return nil
+}
+
+func (implementation) CaptureOpen(windowNumber int, display bool, token uint64) error {
+	answer := awaitCaptureAnswer(func(context uintptr) {
+		diagnosticNative.ScheduleCaptureOpen(int64(windowNumber), bool(display), token, context)
+	})
+	return captureAnswerError("open", answer)
 }
 
 func (implementation) CaptureStart(directory string, frameIdentity bool) error {
@@ -65,12 +92,12 @@ func (implementation) CaptureStart(directory string, frameIdentity bool) error {
 	return captureCallError("start", started, nativeError)
 }
 
-func (implementation) CaptureStop(after float64) (int, error) {
-	frames := int(diagnosticNative.MainSpCaptureStop(float64(after)))
-	if err := captureErrorIfPresent("stop"); err != nil {
-		return frames, err
+func (implementation) CaptureStop(after float64, token uint64) (int, error) {
+	answer := awaitCaptureAnswer(func(context uintptr) { diagnosticNative.ScheduleCaptureStop(float64(after), token, context) })
+	if answer.failed {
+		return int(answer.result), fmt.Errorf("capture stop: %s", answer.failure)
 	}
-	return frames, nil
+	return int(answer.result), nil
 }
 
 // CaptureHasStream reports whether the capture module still owns its current stream and writer transaction.
@@ -78,19 +105,22 @@ func (implementation) CaptureHasStream() (bool, error) {
 	return bool(diagnosticNative.MainSpCaptureHasStream()), nil
 }
 
-func captureErrorIfPresent(operation string) error {
-	message := native.GoString(diagnosticNative.SpCaptureError())
-	if message == "" {
-		return nil
-	}
-	return fmt.Errorf("capture %s: %s", operation, message)
-}
-
-func (implementation) CaptureWait() (bool, error) {
-	if diagnosticNative.MainSpCaptureWait() != 0 {
+func (implementation) CaptureWait(token uint64) (bool, error) {
+	answer := awaitCaptureAnswer(func(context uintptr) { diagnosticNative.ScheduleCaptureWait(token, context) })
+	if answer.result != 0 {
 		return true, nil
 	}
-	return false, captureError("wait")
+	if !answer.failed {
+		return false, errors.New("capture wait failed without a native reason")
+	}
+	return false, fmt.Errorf("capture wait: %s", answer.failure)
+}
+
+// CaptureEndWait ends the wait of the capture call of token from any thread.
+func (implementation) CaptureEndWait(token uint64, reason string) {
+	text := native.CString(reason)
+	defer native.Free(unsafe.Pointer(text))
+	diagnosticNative.EndCaptureWait(token, text)
 }
 
 func (implementation) CaptureLimited() bool { return bool(diagnosticNative.MainSpCaptureLimited()) }
@@ -161,7 +191,7 @@ func layoutRecords(values []float64, count int) ([]platform.LayoutRecord, error)
 	return records, nil
 }
 
-func (implementation) CaptureStill(windowNumbers []int, path string) error {
+func (implementation) CaptureStill(windowNumbers []int, path string, token uint64) error {
 	if strings.IndexByte(path, 0) >= 0 {
 		return errors.New("still capture: path contains NUL")
 	}
@@ -174,9 +204,10 @@ func (implementation) CaptureStill(windowNumbers []int, path string) error {
 	}
 	target := native.CString(path)
 	defer native.Free(unsafe.Pointer(target))
-	var nativeError *byte
-	written := bool(diagnosticNative.MainSpCaptureStill(&numbers[0], int32(len(numbers)), target, &nativeError))
-	return captureCallError("still", written, nativeError)
+	answer := awaitCaptureAnswer(func(context uintptr) {
+		diagnosticNative.ScheduleCaptureStill(&numbers[0], int32(len(numbers)), target, token, context)
+	})
+	return captureAnswerError("still", answer)
 }
 func (implementation) StartDocumentFrameIdentity(document unsafe.Pointer, generation uint64, done func(json.RawMessage, error)) error {
 	if done == nil {

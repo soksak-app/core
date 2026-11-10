@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 	"unsafe"
@@ -37,13 +38,13 @@ func TestCaptureStopLayoutFailurePreservesStartedFolder(t *testing.T) {
 }
 
 // contract: diagnostics.capture-document-identity.callback-ends-the-wait
-func TestTheFrameIdentityWaitEndsByItsCallbackAfterThePageTimeout(t *testing.T) {
+func TestTheFrameIdentityWaitEndsByItsCallback(t *testing.T) {
 	t.Parallel()
 	s := &Surfaces{invoke: func(work func()) { work() }}
 	want := json.RawMessage(`{"generation":7}`)
 	reply, err := awaitDocumentFrameIdentity(s, func(done func(json.RawMessage, error)) error {
-		// The library answers once on every path; the answer comes later than any limit of a page reply.
-		time.AfterFunc(pageTimeout+500*time.Millisecond, func() { done(want, nil) })
+		// The library answers once on every path, from another routine after the wait began; the wait ends by that answer.
+		go done(want, nil)
 		return nil
 	})
 	if err != nil || string(reply) != string(want) {
@@ -433,10 +434,19 @@ func TestCaptureStartWaitsForPriorIdentityRemoval(t *testing.T) {
 	traceStarted := make(chan struct{})
 	stopStarted := make(chan struct{})
 	results := make(chan error, 2)
+	// order records the entries in the order they ran: a stop that entered while the start held the lifecycle comes first.
+	var orderMu sync.Mutex
+	var order []string
+	enter := func(name string) {
+		orderMu.Lock()
+		order = append(order, name)
+		orderMu.Unlock()
+	}
 	go func() {
 		results <- withDocumentFrameIdentityLifecycle(func() error {
 			close(recordingStarted)
 			<-allowTrace
+			enter("trace")
 			close(traceStarted)
 			return nil
 		})
@@ -444,33 +454,21 @@ func TestCaptureStartWaitsForPriorIdentityRemoval(t *testing.T) {
 	<-recordingStarted
 	go func() {
 		results <- withDocumentFrameIdentityLifecycle(func() error {
+			enter("stop")
 			close(stopStarted)
 			return nil
 		})
 	}()
-	select {
-	case <-stopStarted:
-		close(allowTrace)
-		<-results
-		<-results
-		t.Fatal("stop entered while new capture trace initialization was pending")
-	case <-time.After(20 * time.Millisecond):
-	}
 	close(allowTrace)
-	select {
-	case <-traceStarted:
-	case <-time.After(time.Second):
-		t.Fatal("capture trace initialization remained blocked")
-	}
-	select {
-	case <-stopStarted:
-	case <-time.After(time.Second):
-		t.Fatal("stop remained blocked after capture trace initialization")
-	}
+	<-traceStarted
+	<-stopStarted
 	for range 2 {
 		if err := <-results; err != nil {
 			t.Fatalf("capture lifecycle operation: %v", err)
 		}
+	}
+	if !reflect.DeepEqual(order, []string{"trace", "stop"}) {
+		t.Fatalf("the lifecycle ran %v, want the trace initialization of the start before the stop", order)
 	}
 }
 

@@ -11,7 +11,7 @@ static bool startWithDirectory(const char *directory, bool frameIdentity, char *
     return started;
 }
 static int stopWithTruncatedFrame(double after) {
-    int count = sp_capture_stop(after);
+    int count = sp_capture_stop(after, 0);
     if (count > 0) {
         NSString *file = [recordingDirectory stringByAppendingPathComponent:@"frame-0001.bgra"];
         faultApplied = truncate(file.UTF8String, 3 * sizeof(uint32_t)) == 0;

@@ -30,15 +30,11 @@ static BOOL completionTokenDeallocated = NO;
 @property BOOL selectSucceeds;
 @property BOOL notifyInsideSelect;
 @property BOOL updateContextInsideSelect;
-@property BOOL failTimeoutSchedule;
 @property BOOL observerRetired;
-@property BOOL timeoutRetired;
 @property NSUInteger selections;
 @property NSUInteger notifications;
 @property(copy) void (^changed)(void);
-@property(copy) void (^timeoutBlock)(void);
 - (void)deliverSelectionNotification;
-- (void)fireTimeout;
 @end
 
 @implementation SPControlledInputSourceDriver
@@ -71,21 +67,12 @@ static BOOL completionTokenDeallocated = NO;
 - (void)removeSelectionObserver:(id)observer {
     if (observer) { self.observerRetired = YES; self.changed = nil; }
 }
-- (id)scheduleSelectionTimeout:(void (^)(void))timeout {
-    if (self.failTimeoutSchedule) return nil;
-    self.timeoutBlock = timeout;
-    return @"timer";
-}
-- (void)cancelSelectionTimeout:(id)timer {
-    if (timer) { self.timeoutRetired = YES; self.timeoutBlock = nil; }
-}
 - (void)deliverSelectionNotification {
     self.notifications++;
     if (self.changed) self.changed();
 }
-- (void)fireTimeout { if (self.timeoutBlock) self.timeoutBlock(); }
 - (void)dealloc {
-    [_global release]; [_contextSource release]; [_changed release]; [_timeoutBlock release];
+    [_global release]; [_contextSource release]; [_changed release];
     [super dealloc];
 }
 @end
@@ -136,7 +123,7 @@ int main(void) { @autoreleasepool {
     check(current != NULL, @"the current global keyboard source can be read");
     __block NSUInteger noClientCalls = 0;
     __block NSString *noClientError = nil;
-    sp_input_source_select_and_await(current, ^(const char *error) {
+    sp_input_source_select_and_await(current, NULL, ^(const char *error) {
         noClientCalls++;
         noClientError = error ? @(error) : nil;
     });
@@ -150,7 +137,7 @@ int main(void) { @autoreleasepool {
         @"a text input client without an input context is not an active text client");
     __block NSUInteger contextlessCalls = 0;
     __block NSString *contextlessError = nil;
-    sp_input_source_select_and_await_with_driver(current, sp_input_source_live_driver(nil, contextless, noCurrentContext),
+    sp_input_source_select_and_await_with_driver(current, NULL, sp_input_source_live_driver(nil, contextless, noCurrentContext),
         ^(const char *error) {
             contextlessCalls++;
             contextlessError = error ? @(error) : nil;
@@ -164,7 +151,7 @@ int main(void) { @autoreleasepool {
         @"a text input client in an application without a current input context is not an active text client");
     __block NSUInteger inactiveCalls = 0;
     __block NSString *inactiveError = nil;
-    sp_input_source_select_and_await_with_driver(current, sp_input_source_live_driver(nil, withContext, noCurrentContext),
+    sp_input_source_select_and_await_with_driver(current, NULL, sp_input_source_live_driver(nil, withContext, noCurrentContext),
         ^(const char *error) {
             inactiveCalls++;
             inactiveError = error ? @(error) : nil;
@@ -176,7 +163,7 @@ int main(void) { @autoreleasepool {
         @"a text input client with an input context is an active text client while the application has a current context");
     __block NSUInteger foreignCalls = 0;
     __block NSString *foreignError = nil;
-    sp_input_source_select_and_await_with_driver(current,
+    sp_input_source_select_and_await_with_driver(current, NULL,
         sp_input_source_live_driver(nil, withContext, ^NSTextInputContext *{ return otherContext; }),
         ^(const char *error) {
             foreignCalls++;
@@ -196,21 +183,21 @@ int main(void) { @autoreleasepool {
     __block NSUInteger transitionCalls = 0;
     __block NSString *transitionError = nil;
     __block BOOL retiredBeforeCallback = NO;
-    sp_input_source_select_and_await_with_driver("com.apple.inputmethod.Korean.2SetKorean", driver,
+    sp_input_source_select_and_await_with_driver("com.apple.inputmethod.Korean.2SetKorean", NULL, driver,
         ^(const char *error) {
             transitionCalls++;
             transitionError = error ? @(error) : nil;
-            retiredBeforeCallback = driver.observerRetired && driver.timeoutRetired;
+            retiredBeforeCallback = driver.observerRetired;
         });
     check(transitionCalls == 0,
         @"an active context that reports the new property before its queued notification is not reported ready early");
     check(driver.selections == 1 && driver.changed != nil,
         @"a changed active context observes adoption before global source selection");
     [driver deliverSelectionNotification];
-    check(transitionCalls == 1 && transitionError == nil && driver.observerRetired && driver.timeoutRetired,
-        [NSString stringWithFormat:@"the active transition completes once after notification and retires its observer and timeout (calls %lu, error %@)",
+    check(transitionCalls == 1 && transitionError == nil && driver.observerRetired,
+        [NSString stringWithFormat:@"the active transition completes once after notification and retires its observer (calls %lu, error %@)",
             (unsigned long)transitionCalls, transitionError]);
-    check(retiredBeforeCallback, @"the observer and timeout retire before the completion callback runs");
+    check(retiredBeforeCallback, @"the observer retires before the completion callback runs");
     [driver deliverSelectionNotification];
     check(transitionCalls == 1, @"a late source notification cannot complete the request twice");
 
@@ -224,13 +211,13 @@ int main(void) { @autoreleasepool {
     inlineFailure.selectSucceeds = NO;
     __block NSUInteger failedCalls = 0;
     __block NSString *failedReason = nil;
-    sp_input_source_select_and_await_with_driver("com.apple.inputmethod.Korean.2SetKorean", inlineFailure,
+    sp_input_source_select_and_await_with_driver("com.apple.inputmethod.Korean.2SetKorean", NULL, inlineFailure,
         ^(const char *error) { failedCalls++; failedReason = error ? @(error) : nil; });
     check(failedCalls == 1 && [failedReason isEqual:@"controlled selection failure"]
         && inlineFailure.notifications == 1,
         @"a notification delivered inside a failed selection cannot make it succeed");
-    check(inlineFailure.observerRetired && inlineFailure.timeoutRetired,
-        @"a failed selection retires its observer and timeout before completion");
+    check(inlineFailure.observerRetired,
+        @"a failed selection retires its observer before completion");
 
     SPControlledInputSourceDriver *same = [[[SPControlledInputSourceDriver alloc] init] autorelease];
     same.global = @"com.apple.inputmethod.Korean.2SetKorean";
@@ -239,7 +226,7 @@ int main(void) { @autoreleasepool {
     same.currentContext = YES;
     same.selectSucceeds = YES;
     __block NSUInteger sameCalls = 0;
-    sp_input_source_select_and_await_with_driver("com.apple.inputmethod.Korean.2SetKorean", same,
+    sp_input_source_select_and_await_with_driver("com.apple.inputmethod.Korean.2SetKorean", NULL, same,
         ^(const char *error) { sameCalls++; check(error == NULL, @"an already-selected source has no error"); });
     check(sameCalls == 1 && same.selections == 0,
         @"matching global and active-context sources complete as an idempotent no-op");
@@ -251,13 +238,13 @@ int main(void) { @autoreleasepool {
     globalMismatch.currentContext = YES;
     globalMismatch.selectSucceeds = YES;
     __block NSUInteger mismatchSourceCalls = 0;
-    sp_input_source_select_and_await_with_driver("com.apple.inputmethod.Korean.2SetKorean", globalMismatch,
+    sp_input_source_select_and_await_with_driver("com.apple.inputmethod.Korean.2SetKorean", NULL, globalMismatch,
         ^(const char *error) { mismatchSourceCalls++; check(error == NULL, @"a global-only change has no error"); });
     check(mismatchSourceCalls == 0 && globalMismatch.selections == 1 && globalMismatch.changed != nil
         && !globalMismatch.observerRetired,
         @"a global-source transition observes the active context before selecting even when its property already matches");
     [globalMismatch deliverSelectionNotification];
-    check(mismatchSourceCalls == 1 && globalMismatch.observerRetired && globalMismatch.timeoutRetired,
+    check(mismatchSourceCalls == 1 && globalMismatch.observerRetired,
         @"a global-source transition completes only after its source-change notification");
 
     SPControlledInputSourceDriver *restore = [[[SPControlledInputSourceDriver alloc] init] autorelease];
@@ -265,7 +252,7 @@ int main(void) { @autoreleasepool {
     restore.activeClient = NO;
     restore.selectSucceeds = YES;
     __block NSUInteger restoreCalls = 0;
-    sp_input_source_select_and_await_with_driver("com.apple.inputmethod.Korean.2SetKorean", restore,
+    sp_input_source_select_and_await_with_driver("com.apple.inputmethod.Korean.2SetKorean", NULL, restore,
         ^(const char *error) { restoreCalls++; check(error == NULL, @"global restoration without a text client succeeds"); });
     check(restoreCalls == 1 && restore.selections == 1,
         @"restoration without a text client selects globally and completes without a context notification");
@@ -278,7 +265,7 @@ int main(void) { @autoreleasepool {
     mismatch.selectSucceeds = YES;
     __block NSUInteger mismatchCalls = 0;
     __block NSString *mismatchReason = nil;
-    sp_input_source_select_and_await_with_driver("com.apple.inputmethod.Korean.2SetKorean", mismatch,
+    sp_input_source_select_and_await_with_driver("com.apple.inputmethod.Korean.2SetKorean", NULL, mismatch,
         ^(const char *error) { mismatchCalls++; mismatchReason = error ? @(error) : nil; });
     check(mismatchCalls == 1 && [mismatchReason containsString:@"contextIsCurrent=0"]
         && [mismatchReason containsString:@"capturedContext=0x3(NSTextInputContext)"]
@@ -286,36 +273,28 @@ int main(void) { @autoreleasepool {
         && mismatch.selections == 0,
         @"a stale active context rejection identifies captured and current text-context facts");
 
-    SPControlledInputSourceDriver *timedOut = [[[SPControlledInputSourceDriver alloc] init] autorelease];
-    timedOut.global = @"com.apple.keylayout.ABC";
-    timedOut.contextSource = timedOut.global;
-    timedOut.activeClient = YES;
-    timedOut.currentContext = YES;
-    timedOut.selectSucceeds = YES;
-    __block NSUInteger timeoutCalls = 0;
-    __block NSString *timeoutReason = nil;
-    sp_input_source_select_and_await_with_driver("com.apple.inputmethod.Korean.2SetKorean", timedOut,
-        ^(const char *error) { timeoutCalls++; timeoutReason = error ? @(error) : nil; });
-    [timedOut fireTimeout];
-    [timedOut deliverSelectionNotification];
-    check(timeoutCalls == 1 && [timeoutReason containsString:@"after 2 s"]
-        && timedOut.observerRetired && timedOut.timeoutRetired,
-        @"timeout reports the adoption failure once and retires both pending callbacks");
-
-    SPControlledInputSourceDriver *missingTimer = [[[SPControlledInputSourceDriver alloc] init] autorelease];
-    missingTimer.global = @"com.apple.keylayout.ABC";
-    missingTimer.contextSource = missingTimer.global;
-    missingTimer.activeClient = YES;
-    missingTimer.currentContext = YES;
-    missingTimer.selectSucceeds = YES;
-    missingTimer.failTimeoutSchedule = YES;
-    __block NSUInteger timerFailureCalls = 0;
-    __block NSString *timerFailureReason = nil;
-    sp_input_source_select_and_await_with_driver("com.apple.inputmethod.Korean.2SetKorean", missingTimer,
-        ^(const char *error) { timerFailureCalls++; timerFailureReason = error ? @(error) : nil; });
-    check(timerFailureCalls == 1 && [timerFailureReason isEqual:@"the input source adoption timeout could not be scheduled"]
-        && missingTimer.observerRetired && missingTimer.selections == 0,
-        @"failure to schedule the adoption timeout fails the request and removes its observer");
+    SPControlledInputSourceDriver *ended = [[[SPControlledInputSourceDriver alloc] init] autorelease];
+    ended.global = @"com.apple.keylayout.ABC";
+    ended.contextSource = ended.global;
+    ended.activeClient = YES;
+    ended.currentContext = YES;
+    ended.selectSucceeds = YES;
+    __block NSUInteger endCalls = 0;
+    __block NSString *endReason = nil;
+    static char endKey, otherKey;
+    sp_input_source_select_and_await_with_driver("com.apple.inputmethod.Korean.2SetKorean", &endKey, ended,
+        ^(const char *error) { endCalls++; endReason = error ? [@(error) retain] : nil; });
+    sp_input_source_selection_end(&otherKey, "the window closed");
+    check(endCalls == 0, @"the end of another key leaves the selection waiting");
+    sp_input_source_selection_end(&endKey, "the endpoint connection of the request closed");
+    [ended deliverSelectionNotification];
+    sp_input_source_selection_end(&endKey, "the window closed");
+    check(endCalls == 1 && [endReason isEqual:@"the key view's text input context holds com.apple.keylayout.ABC, "
+            @"not com.apple.inputmethod.Korean.2SetKorean, before the endpoint connection of the request closed"]
+        && ended.observerRetired,
+        [NSString stringWithFormat:@"the end of its key reports the held source and the end once and retires the observer: %@",
+            endReason]);
+    [endReason release];
 
     SPControlledInputSourceDriver *retained = [[SPControlledInputSourceDriver alloc] init];
     retained.global = @"com.apple.keylayout.ABC";
@@ -329,7 +308,7 @@ int main(void) { @autoreleasepool {
     completionTokenDeallocated = NO;
     SPCompletionLifetimeToken *token = [[SPCompletionLifetimeToken alloc] init];
     @autoreleasepool {
-        sp_input_source_select_and_await_with_driver("com.apple.inputmethod.Korean.2SetKorean", retained,
+        sp_input_source_select_and_await_with_driver("com.apple.inputmethod.Korean.2SetKorean", NULL, retained,
             ^(const char *error) {
                 check([token isAlive], @"the copied completion block remains alive while it runs");
                 retainedCalls++;
@@ -340,7 +319,7 @@ int main(void) { @autoreleasepool {
     check(retainedCalls == 0 && retained.changed != nil,
         @"a pending selection remains alive after its caller's autorelease pool drains");
     [retained deliverSelectionNotification];
-    check(retainedCalls == 1 && retainedError == nil && retained.observerRetired && retained.timeoutRetired,
+    check(retainedCalls == 1 && retainedError == nil && retained.observerRetired,
         @"a pending selection completes after its caller's autorelease pool drains");
     [retained release];
     return failures == 0 ? 0 : 1;

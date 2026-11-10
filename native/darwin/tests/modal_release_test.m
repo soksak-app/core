@@ -16,32 +16,30 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-// Runs the run loop until the condition holds. A load does not need application events, and handling them would activate the
-// application.
+// Runs the run loop until the condition holds; each turn waits for a source of the run loop. A load does not need application
+// events, and handling them would activate the application. what names the wait in the record of a run that the runner ends.
 static void until(NSString *what, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
+    while (!done()) {
         @autoreleasepool {
-            [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+            [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:NSDate.distantFuture];
         }
     }
-    if (!done()) { fprintf(stderr, "FAIL: %s within 10 seconds\n", what.UTF8String); exit(1); }
+    fprintf(stdout, "reached: %s\n", what.UTF8String);
 }
 
 // Handles the application-defined events until the condition holds. The count request of sp_window_objects_when is answered
 // through the queued application-defined event.
 static void untilEventHandled(NSString *what, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
+    while (!done()) {
         @autoreleasepool {
             // Only the application-defined event is dequeued; the system activation event stays queued, so the
             // application keeps its inactive state.
-            NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskApplicationDefined untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]
+            NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskApplicationDefined untilDate:NSDate.distantFuture
                 inMode:NSDefaultRunLoopMode dequeue:YES];
             if (event) [NSApp sendEvent:event];
         }
     }
-    if (!done()) { fprintf(stderr, "FAIL: %s within 10 seconds\n", what.UTF8String); exit(1); }
+    fprintf(stdout, "reached: %s\n", what.UTF8String);
 }
 
 // The message handler of the modal. It is the handler that the host registers under the name "soksak".
@@ -174,7 +172,7 @@ int main(void) { @autoreleasepool {
 
     // The count is answered after the run loop handles the events that release the autoreleased objects of the close.
     __block SPCountAnswer answer = {0};
-    sp_window_objects_when(&before, 5, countAnswered, &answer);
+    sp_window_objects_when(&before, countAnswered, &answer);
     untilEventHandled(@"the count was not answered", ^BOOL { return answer.answered; });
     check(answer.reached && answer.counts.inputRegistrations == before.inputRegistrations,
         [NSString stringWithFormat:@"the closed modal releases its input registration (%ld, expected %ld)",

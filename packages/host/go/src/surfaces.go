@@ -1589,6 +1589,9 @@ func (s *Surfaces) FocusSurface(req FocusRequest) error {
 // mainPageEnded gives the keys of the window that waited for the decision of its workbench, which ended with its page or its
 // process (docs/spec/native-surfaces.md#keyboard-of-a-surface). It does not wait for the UI thread.
 func (s *Surfaces) mainPageEnded() {
+	if diagnosticPageEnded != nil {
+		diagnosticPageEnded(s)
+	}
 	if s.window == nil {
 		return
 	}

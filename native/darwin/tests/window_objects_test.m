@@ -46,10 +46,9 @@ static void counted(void *context, const sp_window_objects *counts, bool reached
 
 // Handles events one by one until done is called. Uses one autorelease pool per event.
 static void handleEventsUntilCounted(SPCounted *state) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:15];
-    while (state->calls == 0 && deadline.timeIntervalSinceNow > 0) {
+    while (state->calls == 0) {
         @autoreleasepool {
-            NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:deadline inMode:NSDefaultRunLoopMode dequeue:YES];
+            NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:NSDate.distantFuture inMode:NSDefaultRunLoopMode dequeue:YES];
             if (event) [NSApp sendEvent:event];
         }
     }
@@ -111,15 +110,15 @@ int main(void) { @autoreleasepool {
         sp_window_objects pending = sp_window_objects_count();
         check(pending.windowCompositions == expected.windowCompositions, [NSString stringWithFormat:
             @"an autoreleased window keeps its composition until its event iteration ends (%@)", describe(pending)]);
-        sp_window_objects_when(&baseline, 10, counted, &state);
+        sp_window_objects_when(&baseline, counted, &state);
         NSEvent *event;
         do {
-            event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:10]
+            event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:NSDate.distantFuture
                 inMode:NSDefaultRunLoopMode dequeue:YES];
-            if (!event) break;
+            if (!event) continue;
             [NSApp sendEvent:event];
-        } while (event.type != NSEventTypeApplicationDefined || event.subtype == 0);
-        check(event != nil, @"the posted event is delivered within 10 seconds");
+        } while (event == nil || event.type != NSEventTypeApplicationDefined || event.subtype == 0);
+        check(event != nil, @"the posted event is delivered");
         check(state.calls == 0, @"the counts are not read in the iteration that handles the posted event");
     }
     handleEventsUntilCounted(&state);
@@ -130,7 +129,7 @@ int main(void) { @autoreleasepool {
         describe(baseline), state.reached, describe(state.counts)]);
 
     SPCounted now = {0};
-    sp_window_objects_when(NULL, 10, counted, &now);
+    sp_window_objects_when(NULL, counted, &now);
     handleEventsUntilCounted(&now);
     check(now.calls == 1 && now.reached && same(now.counts, baseline), [NSString stringWithFormat:
         @"without expected counts the counts after the posted event are given (calls %d, reached %d, counts %@)",
@@ -138,11 +137,15 @@ int main(void) { @autoreleasepool {
 
     SPCounted missed = {0};
     sp_window_objects unreachable = {baseline.windowCompositions + 1, baseline.surfaceHosts, baseline.inputRegistrations};
-    sp_window_objects_when(&unreachable, 0.2, counted, &missed);
-    handleEventsUntilCounted(&missed);
+    sp_window_objects_when(&unreachable, counted, &missed);
+    // The count does not change, so no event answers the wait; only its end does, with the count of that time.
+    check(missed.calls == 0, @"counts that do not reach the expected counts leave the wait open");
+    sp_window_objects_end(&missed);
     check(missed.calls == 1 && !missed.reached && same(missed.counts, baseline), [NSString stringWithFormat:
-        @"counts that do not reach the expected counts within the bound are given as not reached (calls %d, reached %d, counts %@)",
+        @"the end of a wait that did not reach the expected counts gives the current counts as not reached (calls %d, reached %d, counts %@)",
         missed.calls, missed.reached, describe(missed.counts)]);
+    sp_window_objects_end(&missed);
+    check(missed.calls == 1, @"the end of a wait that answered already gives nothing");
     check(!NSApp.isActive, @"application stays inactive");
     return failures ? 1 : 0;
 }}

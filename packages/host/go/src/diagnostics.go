@@ -22,6 +22,7 @@ import (
 	"runtime"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -63,6 +64,8 @@ func init() {
 	debugCaptures = debugCaptureWindows
 	diagnosticMethods["diagnostics.notifications"] = diagnosticNotifications
 	holdModalContent = modalHolds.wait
+	diagnosticWindowClosed = endWindowHolds
+	diagnosticPageEnded = func(s *Surfaces) { endNativeWaits(s, waitEndPage) }
 	diagnosticMethods["diagnostics.page.collect"] = onMainPage(diagnosticPageCollect)
 	diagnosticMethods["diagnostics.native.objects"] = diagnosticNativeObjects
 	diagnosticMethods["diagnostics.native.window-color-space"] = diagnosticNativeWindowColorSpace
@@ -76,7 +79,7 @@ func init() {
 	diagnosticMethods["diagnostics.page.calls"] = onMainPage(diagnosticPageMethod("diagnostics.page.calls"))
 	diagnosticMethods["diagnostics.document.viewport-marker"] = diagnosticDocumentViewportMarker
 	diagnosticMethods["diagnostics.host.events"] = onMainPage(diagnosticHostEvents)
-	diagnosticMethods["diagnostics.surface.hold"] = diagnosticPageMethod("diagnostics.surface.hold")
+	diagnosticMethods["diagnostics.surface.hold"] = diagnosticSurfaceHold
 	diagnosticMethods["diagnostics.surface.held"] = diagnosticPageMethod("diagnostics.surface.held")
 	diagnosticMethods["diagnostics.layout.fail"] = diagnosticPageMethod("diagnostics.layout.fail")
 	diagnosticSubscriptions["diagnostics.transcript"] = transcriptTopic
@@ -168,6 +171,81 @@ const logTopic = "#diagnostics.log"
 
 // frameStep is the length of one step of a drag. The page counts the steps with the same value.
 const frameStep = 16 * time.Millisecond
+
+// The ends of a native wait for an event that may not come (docs/spec/endpoint.md): no limit ends it.
+const (
+	waitEndConnection = "the endpoint connection of the request closed"
+	waitEndWindow     = "the window closed"
+	waitEndPage       = "the page of the window ended"
+)
+
+// nativeWait is a native wait of a window that has not answered. ended takes the first end that the connection of its request,
+// its window or its page gives it.
+type nativeWait struct {
+	once  sync.Once
+	ended func(reason string)
+}
+
+func (w *nativeWait) end(reason string) { w.once.Do(func() { w.ended(reason) }) }
+
+// nativeWaits holds the native waits of each window that have not answered.
+var nativeWaits = struct {
+	mu      sync.Mutex
+	windows map[*Surfaces]map[*nativeWait]struct{}
+}{windows: map[*Surfaces]map[*nativeWait]struct{}{}}
+
+// registerNativeWait keeps w among the waits of window s until remove.
+func registerNativeWait(s *Surfaces, w *nativeWait) (remove func()) {
+	nativeWaits.mu.Lock()
+	if nativeWaits.windows[s] == nil {
+		nativeWaits.windows[s] = map[*nativeWait]struct{}{}
+	}
+	nativeWaits.windows[s][w] = struct{}{}
+	nativeWaits.mu.Unlock()
+	return func() {
+		nativeWaits.mu.Lock()
+		delete(nativeWaits.windows[s], w)
+		nativeWaits.mu.Unlock()
+	}
+}
+
+// endNativeWaits ends the native waits of window s that have not answered, naming reason.
+func endNativeWaits(s *Surfaces, reason string) {
+	nativeWaits.mu.Lock()
+	waits := nativeWaits.windows[s]
+	delete(nativeWaits.windows, s)
+	nativeWaits.mu.Unlock()
+	for w := range waits {
+		w.end(reason)
+	}
+}
+
+// awaitNative starts a native wait of window s on the UI thread and returns its answer. The wait ends by its answer or by the
+// first of the close of the endpoint connection c of the request, the close of the window and the end of its page; end then
+// makes the library answer, given the reason of that end, and the reason is returned with the answer. An answer that came
+// first has no reason.
+func awaitNative[T any](s *Surfaces, c *endpointConn, start func(answer func(T)) (end func(reason string))) (T, string) {
+	answers := make(chan T, 1)
+	ended := make(chan string, 1)
+	defer registerNativeWait(s, &nativeWait{ended: func(reason string) { ended <- reason }})()
+	var end func(reason string)
+	mainThreadStep(func() { end = start(func(v T) { answers <- v }) })
+	var connection <-chan struct{}
+	if c != nil {
+		connection = c.done
+	}
+	var reason string
+	select {
+	case v := <-answers:
+		return v, ""
+	case <-connection:
+		reason = waitEndConnection
+	case reason = <-ended:
+	}
+	// The library answers an ended wait before end returns, and a wait that answered already keeps its answer.
+	mainThreadStep(func() { end(reason) })
+	return <-answers, reason
+}
 
 // diagnosticHost returns the host of the endpoint.
 func diagnosticHost(e *Endpoint, params json.RawMessage) (*Host, *Surfaces, error) {
@@ -461,20 +539,62 @@ type documentFrameIdentityResult struct {
 	err   error
 }
 
-// platformCapture is the window recording operation of the platform. after is the last display time to include in the recording when it stops.
+// platformCapture is the window recording operation of the platform. after is the last display time to include in the recording
+// when it stops. window and connection are the window and the endpoint connection of the request, whose ends end the waits of
+// the operations.
 type platformCapture struct {
 	platform.Capturer
-	after float64
+	after      float64
+	window     *Surfaces
+	connection *endpointConn
+}
+
+// captureTokens gives each capture operation that waits a new, larger token.
+var captureTokens atomic.Uint64
+
+// awaitCapture runs the capture operation call with a new token. No limit ends its wait: the first of the close of the endpoint
+// connection of the request, the close of the window and the end of its page ends it through CaptureEndWait, from the thread
+// of that end. The operation waits off the UI thread, so the close and the page end reach the UI thread while it waits. The
+// operation then fails with the reason of that end.
+func awaitCapture[T any](c platformCapture, call func(token uint64) T) T {
+	token := captureTokens.Add(1)
+	w := &nativeWait{ended: func(reason string) { c.CaptureEndWait(token, reason) }}
+	if c.window != nil {
+		defer registerNativeWait(c.window, w)()
+	}
+	if c.connection != nil {
+		defer c.connection.onClose(func() { w.end(waitEndConnection) })()
+	}
+	return call(token)
 }
 
 func (c platformCapture) Open(target CaptureTarget) error {
-	return c.CaptureOpen(target.Window, target.Display)
+	return awaitCapture(c, func(token uint64) error { return c.CaptureOpen(target.Window, target.Display, token) })
 }
 func (c platformCapture) Start(directory string, frameIdentity bool) error {
 	return c.CaptureStart(directory, frameIdentity)
 }
-func (c platformCapture) Wait() (bool, error)      { return c.CaptureWait() }
-func (c platformCapture) Stop() (int, error)       { return c.CaptureStop(c.after) }
+
+// captureAnswer is the answer of a capture operation that returns a value and an error.
+type captureAnswer[T any] struct {
+	value T
+	err   error
+}
+
+func (c platformCapture) Wait() (bool, error) {
+	answer := awaitCapture(c, func(token uint64) captureAnswer[bool] {
+		ok, err := c.CaptureWait(token)
+		return captureAnswer[bool]{ok, err}
+	})
+	return answer.value, answer.err
+}
+func (c platformCapture) Stop() (int, error) {
+	answer := awaitCapture(c, func(token uint64) captureAnswer[int] {
+		frames, err := c.CaptureStop(c.after, token)
+		return captureAnswer[int]{frames, err}
+	})
+	return answer.value, answer.err
+}
 func (c platformCapture) HasStream() (bool, error) { return c.CaptureHasStream() }
 
 func (c platformCapture) Limited() bool { return c.CaptureLimited() }
@@ -503,13 +623,14 @@ func captureStopPayload(c captureStatus, directory string, count int, records []
 	return payload
 }
 
-// recorder returns the recording device of this platform.
-func recorder() (platformCapture, error) {
+// recorder returns the recording device of this platform for a request on connection c about window s, whose ends end the
+// waits of the device.
+func recorder(s *Surfaces, c *endpointConn) (platformCapture, error) {
 	capturer, ok := system.(platform.Capturer)
 	if !ok {
 		return platformCapture{}, errors.New("window capture is not implemented on this platform")
 	}
-	return platformCapture{Capturer: capturer}, nil
+	return platformCapture{Capturer: capturer, window: s, connection: c}, nil
 }
 
 // diagnosticDrag requests a drag from the page and sends the time of each step, or with native delivers it as native
@@ -518,7 +639,7 @@ func recorder() (platformCapture, error) {
 // The page finds the boundary and applies the input at each step. When the window is not in front, the browser
 // slows the clock of the document, so the host sends the time of each step as a diagnostics-tick event. When the page finishes the drag and
 // replies, the host waits until the last layout is displayed and then replies.
-func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
+func diagnosticDrag(e *Endpoint, c *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	h, s, err := diagnosticHost(e, params)
 	if err != nil {
 		return nil, err
@@ -560,11 +681,11 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *Rep
 	if captureOptions.capture {
 		err = withDocumentFrameIdentityLifecycle(func() error {
 			var startErr error
-			frames, startErr = startCapture(h, s, false, captureOptions.frameIdentity, false)
+			frames, startErr = startCapture(h, s, c, false, captureOptions.frameIdentity, false)
 			if startErr != nil {
 				return startErr
 			}
-			capture, captureErr := recorder()
+			capture, captureErr := recorder(s, c)
 			if captureErr != nil {
 				return captureErr
 			}
@@ -605,7 +726,7 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *Rep
 		if !captureOptions.capture {
 			return nil
 		}
-		capture, err := recorder()
+		capture, err := recorder(s, c)
 		if err != nil {
 			return err
 		}
@@ -617,7 +738,7 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *Rep
 	if err != nil {
 		// When the requester does not receive the frame folder, the recording stops and the folder is deleted.
 		if captureOptions.capture {
-			if capture, captureErr := recorder(); captureErr == nil {
+			if capture, captureErr := recorder(s, c); captureErr == nil {
 				if abortErr := recording.Abort(capture); abortErr != nil {
 					err = fmt.Errorf("%w; abort capture: %v", err, abortErr)
 				}
@@ -640,27 +761,29 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *Rep
 // pageDrag requests the drag of plan from the page and sends the time of each of its ticks steps as a diagnostics-tick
 // event, calling sent at each. It answers the result of the page after the last layout is displayed.
 func pageDrag(h *Host, s *Surfaces, plan dragPlan, ticks int, sent func()) (map[string]any, error) {
-	stop := make(chan struct{})
-	// The tick starts after the request is sent so that the first tick arrives after the page received the drag request.
+	// The tick starts after the request is sent so that the first tick arrives after the page received the drag request. Every step
+	// is sent, also after the request ended, so the page that runs the gesture receives each of its steps (docs/spec/endpoint.md).
 	reply := h.relay.Request(relayTarget{owner: s}, time.Duration(ticks)*frameStep+pageTimeout, func(id uint64) error {
 		s.window.Emit("exposure-request", map[string]any{"id": id, "method": "diagnostics.drag", "params": plan})
 		routine.Go("diagnostics-ticks", func() {
-			tick := time.NewTicker(frameStep)
-			defer tick.Stop()
-			for left := ticks; left > 0; left-- {
-				select {
-				case <-tick.C:
-					sent()
-					s.window.Emit("diagnostics-tick")
-				case <-stop:
-					return
-				}
-			}
+			sendSteps(ticks, frameStep, func() {
+				sent()
+				s.window.Emit("diagnostics-tick")
+			})
 		})
 		return nil
 	})
-	close(stop)
 	return dragResult(h, s, reply)
+}
+
+// sendSteps calls step ticks times, one frame apart; nothing but the last step ends it.
+func sendSteps(ticks int, frame time.Duration, step func()) {
+	tick := time.NewTicker(frame)
+	defer tick.Stop()
+	for left := ticks; left > 0; left-- {
+		<-tick.C
+		step()
+	}
 }
 
 // dragStepCallback is the callback through which a step of a native drag reaches the view of a window.
@@ -669,11 +792,13 @@ const dragStepCallback = "mouseDragged:"
 // workbenchDrag runs deliver, which delivers the drag of plan as native input, on a window without a main page. ask reaches the
 // workbench, which records the position of the boundary from diagnostics.drag to diagnostics.drag.end, and listen gives the steps of
 // the main thread. The reply of deliver gains boundary and handled, the milliseconds from the entry of each step to the return of
-// its callback. The record ends after a failed delivery too, so a next drag can start.
+// its callback. The record ends after a failed delivery and after a failed diagnostics.drag too, so a next drag can start.
 func workbenchDrag(plan dragPlan, ask func(method string, params any) (json.RawMessage, error), listen func(func(StepRecord)) func(),
 	deliver func() (map[string]any, error)) (map[string]any, error) {
 	if _, err := ask("diagnostics.drag", map[string]any{"axis": plan.Axis, "line": plan.Line}); err != nil {
-		return nil, err
+		// The workbench may have started its record before the request failed, so the record ends here too.
+		_, endErr := ask("diagnostics.drag.end", nil)
+		return nil, errors.Join(err, endErr)
 	}
 	handled := []float64{}
 	end := listen(func(step StepRecord) {
@@ -811,8 +936,8 @@ func dragPresented(h *Host, s *Surfaces) error {
 
 // startCapture starts the recording of window s in a new folder under the configuration directory and waits for the first frame.
 // With display, it records the windows of this application on the display that holds the window.
-func startCapture(h *Host, s *Surfaces, display bool, frameIdentity, documentIdentityAllowed bool) (string, error) {
-	capture, err := recorder()
+func startCapture(h *Host, s *Surfaces, c *endpointConn, display bool, frameIdentity, documentIdentityAllowed bool) (string, error) {
+	capture, err := recorder(s, c)
 	if err != nil {
 		return "", err
 	}
@@ -834,12 +959,12 @@ func startCapture(h *Host, s *Surfaces, display bool, frameIdentity, documentIde
 
 // diagnosticCaptureStill takes one picture of a window without giving it focus, writes it to <config-dir>/captures/still-*/window.png, and returns
 // the path. It is observation material for visual checks during development, and the requester deletes that directory after checking.
-func diagnosticCaptureStill(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
+func diagnosticCaptureStill(e *Endpoint, c *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	h, s, err := diagnosticHost(e, params)
 	if err != nil {
 		return nil, err
 	}
-	path, err := captureStill(h, s)
+	path, err := captureStill(h, s, c)
 	if err != nil {
 		return nil, err
 	}
@@ -847,9 +972,9 @@ func diagnosticCaptureStill(e *Endpoint, _ *endpointConn, params json.RawMessage
 }
 
 // captureStill writes a still PNG of the window of s into a private folder under <config-dir>/logs/captures and
-// returns its path.
-func captureStill(h *Host, s *Surfaces) (string, error) {
-	capture, err := recorder()
+// returns its path. The end of connection c, when there is one, of the window or of its page ends the wait for the picture.
+func captureStill(h *Host, s *Surfaces, c *endpointConn) (string, error) {
+	capture, err := recorder(s, c)
 	if err != nil {
 		return "", err
 	}
@@ -872,7 +997,7 @@ func captureStill(h *Host, s *Surfaces) (string, error) {
 	}
 	path := filepath.Join(directory, "window.png")
 	// The child windows of an open modal or settings window stand over the window, so the picture holds them too.
-	if err := capture.CaptureStill(numbers, path); err != nil {
+	if err := awaitCapture(capture, func(token uint64) error { return capture.CaptureStill(numbers, path, token) }); err != nil {
 		return "", err
 	}
 	return path, nil
@@ -888,7 +1013,7 @@ func debugCaptureWindows(h *Host) ([]string, error) {
 	h.mu.Unlock()
 	paths := []string{}
 	for _, s := range windows {
-		path, err := captureStill(h, s)
+		path, err := captureStill(h, s, nil)
 		if err != nil {
 			return paths, fmt.Errorf("window %s: %w", s.name, err)
 		}
@@ -898,7 +1023,7 @@ func debugCaptureWindows(h *Host) ([]string, error) {
 }
 
 // diagnosticCaptureStart starts the window recording and returns the frame folder.
-func diagnosticCaptureStart(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
+func diagnosticCaptureStart(e *Endpoint, c *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	h, s, err := diagnosticHost(e, params)
 	if err != nil {
 		return nil, err
@@ -907,14 +1032,14 @@ func diagnosticCaptureStart(e *Endpoint, _ *endpointConn, params json.RawMessage
 	if err != nil {
 		return nil, err
 	}
-	capture, err := recorder()
+	capture, err := recorder(s, c)
 	if err != nil {
 		return nil, err
 	}
 	var directory string
 	err = withDocumentFrameIdentityLifecycle(func() error {
 		var startErr error
-		directory, startErr = startCapture(h, s, p.Display, p.FrameIdentity, true)
+		directory, startErr = startCapture(h, s, c, p.Display, p.FrameIdentity, true)
 		if startErr != nil {
 			return startErr
 		}
@@ -981,14 +1106,10 @@ func diagnosticCaptureDocumentIdentityStart(e *Endpoint, _ *endpointConn, params
 		recording.ClearFrameIdentitySource(request.Surface, request.Generation)
 		return nil, dispatchErr
 	}
-	var nativeReply json.RawMessage
-	select {
-	case result := <-pending:
-		pendingDocumentFrameIdentityStart = nil
-		nativeReply, err = result.reply, result.err
-	case <-time.After(pageTimeout):
-		return nil, errors.New("document frame identity start did not complete within the diagnostic timeout; its generation remains selected for capture cleanup")
-	}
+	// The library answers the start once on every path, the end of the document included, so the host waits without a limit of its own.
+	result := <-pending
+	pendingDocumentFrameIdentityStart = nil
+	nativeReply, err := result.reply, result.err
 	if err != nil {
 		return nil, err
 	}
@@ -1095,7 +1216,7 @@ func parseCaptureStartOptions(params json.RawMessage) (captureStartOptions, erro
 
 // diagnosticCaptureStop records up to the display time of after, ends the recording, and returns the frame folder and the number of
 // frames.
-func diagnosticCaptureStop(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
+func diagnosticCaptureStop(e *Endpoint, c *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	_, s, err := diagnosticHost(e, params)
 	if err != nil {
 		return nil, err
@@ -1106,7 +1227,7 @@ func diagnosticCaptureStop(e *Endpoint, _ *endpointConn, params json.RawMessage,
 	if err := decode(params, &p); err != nil {
 		return nil, err
 	}
-	capture, err := recorder()
+	capture, err := recorder(s, c)
 	if err != nil {
 		return nil, err
 	}
@@ -1121,13 +1242,9 @@ func diagnosticCaptureStop(e *Endpoint, _ *endpointConn, params json.RawMessage,
 	frameIdentity, source := recording.FrameIdentityState()
 	var priorStartErr error
 	if pendingDocumentFrameIdentityStart != nil {
-		select {
-		case result := <-pendingDocumentFrameIdentityStart:
-			pendingDocumentFrameIdentityStart = nil
-			priorStartErr = result.err
-		case <-time.After(pageTimeout):
-			priorStartErr = errors.New("document frame identity start is still pending at capture stop")
-		}
+		result := <-pendingDocumentFrameIdentityStart
+		pendingDocumentFrameIdentityStart = nil
+		priorStartErr = result.err
 	}
 	identity, hasIdentity := system.(platform.DocumentFrameIdentityCapture)
 	var directory string
@@ -1291,20 +1408,9 @@ func awaitDocumentFrameIdentity(s *Surfaces, schedule func(func(json.RawMessage,
 		}
 		return nil, scheduleErr
 	}
-	select {
-	case result := <-done:
-		return result.reply, result.err
-	case <-time.After(pageTimeout):
-		callbackMu.Lock()
-		if callbackCompleted {
-			result := <-done
-			callbackMu.Unlock()
-			return result.reply, result.err
-		}
-		waitAbandoned = true
-		callbackMu.Unlock()
-		return nil, errors.New("document frame identity native operation did not complete within the diagnostic timeout")
-	}
+	// The library answers once on every path, so the wait ends by the callback and by no limit of the host.
+	result := <-done
+	return result.reply, result.err
 }
 
 func documentFrameIdentityIssuedSlots(raw json.RawMessage, generation uint64) (uint64, error) {
@@ -1418,7 +1524,7 @@ func parseInputReference(params json.RawMessage) (string, *string, error) {
 	return action, document, nil
 }
 
-func diagnosticInputReference(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
+func diagnosticInputReference(e *Endpoint, c *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	action, document, err := parseInputReference(params)
 	if err != nil {
 		return nil, err
@@ -1435,13 +1541,13 @@ func diagnosticInputReference(e *Endpoint, _ *endpointConn, params json.RawMessa
 		value   json.RawMessage
 		failure error
 	}
-	answer := make(chan result, 1)
-	mainThreadStep(func() {
-		reference.InputReference(s.window.NativeWindow(), action, document, func(value json.RawMessage, failure error) {
-			answer <- result{value, failure}
-		})
+	// A wait ends by its document, by the close of the reference or its window, or by the connection or the page of the request.
+	window := s.window.NativeWindow()
+	// silent: the library answers an ended wait with the failure that names its end, so the reply carries the reason.
+	reply, _ := awaitNative(s, c, func(done func(result)) func(string) {
+		reference.InputReference(window, action, document, func(value json.RawMessage, failure error) { done(result{value, failure}) })
+		return func(reason string) { reference.EndInputReferenceWait(window, reason) }
 	})
-	reply := <-answer
 	return reply.value, reply.failure
 }
 
@@ -1487,19 +1593,18 @@ func parseInputSource(params json.RawMessage) (inputSourceRequest, error) {
 }
 
 // answerInputSource performs request through the input source operations of the platform, each in a main-thread step that step
-// runs, and replies {current, source}: the role of the selected input source, null for an input source without a role, and its
-// platform identifier.
-func answerInputSource(sources platform.InputSources, request inputSourceRequest, step func(func())) (any, error) {
+// runs, waits for a selection through await, and replies {current, source}: the role of the selected input source, null for an
+// input source without a role, and its platform identifier.
+func answerInputSource(sources platform.InputSources, request inputSourceRequest, step func(func()),
+	await func(start func(adopted func(error)) (end func(reason string))) error) (any, error) {
 	if request.Select != "" || request.Restore != "" {
-		adopted := make(chan error, 1)
-		step(func() {
+		err := await(func(adopted func(error)) func(string) {
 			if request.Select != "" {
-				sources.SelectInputSource(request.Select, func(failure error) { adopted <- failure })
-			} else {
-				sources.RestoreInputSource(request.Restore, func(failure error) { adopted <- failure })
+				return sources.SelectInputSource(request.Select, adopted)
 			}
+			return sources.RestoreInputSource(request.Restore, adopted)
 		})
-		if err := <-adopted; err != nil {
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -1518,8 +1623,9 @@ func answerInputSource(sources platform.InputSources, request inputSourceRequest
 
 // diagnosticInputSource selects the input source of a role when select is given, or the input source that restore names, and
 // returns the role and the platform identifier of the currently selected keyboard input source.
-func diagnosticInputSource(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
-	if _, err := e.window(params); err != nil {
+func diagnosticInputSource(e *Endpoint, c *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
+	_, s, err := diagnosticHost(e, params)
+	if err != nil {
 		return nil, err
 	}
 	request, err := parseInputSource(params)
@@ -1530,7 +1636,12 @@ func diagnosticInputSource(e *Endpoint, _ *endpointConn, params json.RawMessage,
 	if !ok {
 		return nil, errors.New("keyboard input sources are not implemented on this platform")
 	}
-	return answerInputSource(sources, request, mainThreadStep)
+	// A selection ends by its adoption or by the connection, the window or the page of the request.
+	return answerInputSource(sources, request, mainThreadStep, func(start func(func(error)) func(string)) error {
+		// silent: the library answers an ended selection with the failure that names its end, so the failure carries the reason.
+		failure, _ := awaitNative(s, c, start)
+		return failure
+	})
 }
 
 // transcriptTopic reads the diagnostics.log subscription and direction of the connection from the params of diagnostics.transcript.
@@ -1559,6 +1670,28 @@ type modalHold struct {
 	// held closes when the first reply is held.
 	held chan struct{}
 	once sync.Once
+	// forget takes back the end of the hold by the connection that turned it on; it is called under the lock of the set.
+	forget func()
+}
+
+// end ends the hold of window s when it is still hold: the held answers are sent and diagnostics.modal.held answers. The caller
+// holds set.mu.
+func (set *modalHoldSet) end(s *Surfaces, hold *modalHold) {
+	if set.windows[s] != hold {
+		return
+	}
+	close(hold.release)
+	delete(set.windows, s)
+	hold.forget()
+}
+
+// windowClosed ends the hold of window s when the window closes.
+func (set *modalHoldSet) windowClosed(s *Surfaces) {
+	set.mu.Lock()
+	defer set.mu.Unlock()
+	if hold := set.windows[s]; hold != nil {
+		set.end(s, hold)
+	}
 }
 
 // modalHoldSet holds the modal content reply per window. A check creates the order in which a modal document receives its first content later than the following
@@ -1583,8 +1716,9 @@ func (set *modalHoldSet) wait(s *Surfaces) {
 }
 
 // diagnosticModalHold starts holding the modal content reply of the window when on is set; otherwise it sends the held reply
-// and stops holding.
-func diagnosticModalHold(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
+// and stops holding. A hold also ends when its window closes or when the endpoint connection c that turned it on closes
+// (docs/spec/endpoint.md).
+func diagnosticModalHold(e *Endpoint, c *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	_, s, err := diagnosticHost(e, params)
 	if err != nil {
 		return nil, err
@@ -1599,16 +1733,87 @@ func diagnosticModalHold(e *Endpoint, _ *endpointConn, params json.RawMessage, _
 		return nil, rpcError(codeInvalidParams, "on is required")
 	}
 	modalHolds.mu.Lock()
-	defer modalHolds.mu.Unlock()
 	hold := modalHolds.windows[s]
+	started := *p.On && hold == nil
 	switch {
-	case *p.On && hold == nil:
-		modalHolds.windows[s] = &modalHold{release: make(chan struct{}), held: make(chan struct{})}
+	case started:
+		hold = &modalHold{release: make(chan struct{}), held: make(chan struct{}), forget: func() {}}
+		modalHolds.windows[s] = hold
 	case !*p.On && hold != nil:
-		close(hold.release)
-		delete(modalHolds.windows, s)
+		modalHolds.end(s, hold)
+	}
+	modalHolds.mu.Unlock()
+	if started && c != nil {
+		// The end runs in the close of c, before the close returns, or here when c closed already.
+		forget := c.onClose(func() {
+			modalHolds.mu.Lock()
+			modalHolds.end(s, hold)
+			modalHolds.mu.Unlock()
+		})
+		modalHolds.mu.Lock()
+		if modalHolds.windows[s] == hold {
+			hold.forget = forget
+		} else {
+			forget()
+		}
+		modalHolds.mu.Unlock()
 	}
 	return nil, nil
+}
+
+// surfaceHolds is the endpoint connection that asked for the latest reply hold of each surface of each window.
+var surfaceHolds = struct {
+	mu    sync.Mutex
+	conns map[*Surfaces]map[string]*endpointConn
+}{conns: map[*Surfaces]map[string]*endpointConn{}}
+
+// diagnosticSurfaceHold asks the main page to hold the replies of a surface. When the endpoint connection c that asked closes,
+// the host sends diagnostics-surface-released {surface} to the window, unless a later hold of that surface was asked
+// (docs/spec/endpoint.md).
+func diagnosticSurfaceHold(e *Endpoint, c *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
+	h, s, err := diagnosticHost(e, params)
+	if err != nil {
+		return nil, err
+	}
+	reply, err := h.ask(s, "diagnostics.surface.hold", params, pageTimeout)
+	if err != nil || c == nil {
+		return reply, err
+	}
+	var p struct {
+		Surface string `json:"surface"`
+	}
+	if err := decode(params, &p); err != nil {
+		return nil, err
+	}
+	surfaceHolds.mu.Lock()
+	if surfaceHolds.conns[s] == nil {
+		surfaceHolds.conns[s] = map[string]*endpointConn{}
+	}
+	surfaceHolds.conns[s][p.Surface] = c
+	surfaceHolds.mu.Unlock()
+	// The release runs in the close of c, before the close returns.
+	c.onClose(func() {
+		surfaceHolds.mu.Lock()
+		latest := surfaceHolds.conns[s][p.Surface] == c
+		if latest {
+			delete(surfaceHolds.conns[s], p.Surface)
+		}
+		surfaceHolds.mu.Unlock()
+		if latest {
+			s.window.Emit("diagnostics-surface-released", map[string]any{"surface": p.Surface})
+		}
+	})
+	return reply, nil
+}
+
+// endWindowHolds ends the diagnostic holds of window s when it closes: its modal content hold ends and its surface holds
+// are forgotten, since the page that held them ends with the window.
+func endWindowHolds(s *Surfaces) {
+	endNativeWaits(s, waitEndWindow)
+	modalHolds.windowClosed(s)
+	surfaceHolds.mu.Lock()
+	delete(surfaceHolds.conns, s)
+	surfaceHolds.mu.Unlock()
 }
 
 // diagnosticModalHeld replies when the window has held one modal content reply.
@@ -1617,22 +1822,19 @@ func diagnosticNotifications(e *Endpoint, _ *endpointConn, params json.RawMessag
 	if _, _, err := diagnosticHost(e, params); err != nil {
 		return nil, err
 	}
-	capture, err := recorder()
+	capture, err := recorder(nil, nil)
 	if err != nil {
 		return nil, err
 	}
 	answer := make(chan string, 1)
 	mainThreadStep(func() { capture.DeliveredNotifications(func(list string) { answer <- list }) })
-	select {
-	case list := <-answer:
-		var delivered []map[string]string
-		if err := json.Unmarshal([]byte(list), &delivered); err != nil {
-			return nil, fmt.Errorf("delivered notifications %q: %w", list, err)
-		}
-		return delivered, nil
-	case <-time.After(pageTimeout):
-		return nil, rpcError(codeTimeout, "the notification center did not list delivered notifications within %s", pageTimeout)
+	// The library answers once on every path, so the host waits for the list without a limit of its own.
+	list := <-answer
+	var delivered []map[string]string
+	if err := json.Unmarshal([]byte(list), &delivered); err != nil {
+		return nil, fmt.Errorf("delivered notifications %q: %w", list, err)
 	}
+	return delivered, nil
 }
 
 func diagnosticModalHeld(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
@@ -1698,8 +1900,9 @@ func diagnosticHostEvents(e *Endpoint, _ *endpointConn, params json.RawMessage, 
 // The objects of a closed window are released when the autorelease pool of the event loop iteration that closed the window is drained, and the pool is drained when the application
 // handles an event. A window check inserts one event so that it can measure the release of a closed window without user input, and counts after it.
 // AppKit keeps a window that was on the screen until its close animation ends, so with equal the method replies when the count becomes equal to equal.
-func diagnosticNativeObjects(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
-	if _, _, err := diagnosticHost(e, params); err != nil {
+func diagnosticNativeObjects(e *Endpoint, c *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
+	_, s, err := diagnosticHost(e, params)
+	if err != nil {
 		return nil, err
 	}
 	var p struct {
@@ -1724,22 +1927,23 @@ func diagnosticNativeObjects(e *Endpoint, _ *endpointConn, params json.RawMessag
 		counts  platform.WindowObjects
 		reached bool
 	}
-	answers := make(chan answer, 1)
-	mainThreadStep(func() {
-		counter.WindowObjectsWhen(expected, pageTimeout.Seconds(), func(counts platform.WindowObjects, reached bool) {
-			answers <- answer{counts, reached}
-		})
+	a, reason := awaitNative(s, c, func(done func(answer)) func(string) {
+		end := counter.WindowObjectsWhen(expected, func(counts platform.WindowObjects, reached bool) { done(answer{counts, reached}) })
+		return func(string) { end() }
 	})
-	// The library replies within pageTimeout after it handles the event, so the wait is doubled to include the event handling time.
-	select {
-	case a := <-answers:
-		if !a.reached {
-			return nil, rpcError(codeTimeout, "window object counts did not reach %s within %s; they are %s", expected, pageTimeout, a.counts)
-		}
-		return a.counts.Payload(), nil
-	case <-time.After(2 * pageTimeout):
-		return nil, rpcError(codeTimeout, "the application did not handle an event within %s", pageTimeout)
+	return nativeObjectsAnswer(expected, a.counts, a.reached, reason)
+}
+
+// nativeObjectsAnswer is the reply of diagnostics.native.objects to the answer of the library and the reason of the end of a
+// wait that did not reach its counts.
+func nativeObjectsAnswer(expected *platform.WindowObjects, counts platform.WindowObjects, reached bool, reason string) (any, error) {
+	switch {
+	case !reached && expected == nil:
+		return nil, rpcError(codeTimeout, "the window object counts ended before the application handled an event: %s", reason)
+	case !reached:
+		return nil, rpcError(codeTimeout, "window object counts did not reach %s before %s; they are %s", expected, reason, counts)
 	}
+	return counts.Payload(), nil
 }
 
 type nativeWindowColorSpaceFacts struct {
@@ -1835,19 +2039,15 @@ func (b hostBackend) ObjectCounts(window string) (ObjectCounts, error) {
 	}
 	var counts ObjectCounts
 	var failure error
-	timeout := time.After(pageTimeout)
+	// The library answers each count once on every path, so the host waits for each answer without a limit of its own.
 	for i := 0; i < pages; i++ {
-		select {
-		case answer := <-answers:
-			if answer.err != nil {
-				failure = errors.Join(failure, answer.err)
-			} else if answer.main {
-				counts.Page = &answer.counts
-			} else {
-				counts.Documents = append(counts.Documents, DocumentObjects{Key: answer.key, Counts: answer.counts})
-			}
-		case <-timeout:
-			return ObjectCounts{}, rpcError(codeTimeout, "the page did not answer the object counts within %s", pageTimeout)
+		answer := <-answers
+		if answer.err != nil {
+			failure = errors.Join(failure, answer.err)
+		} else if answer.main {
+			counts.Page = &answer.counts
+		} else {
+			counts.Documents = append(counts.Documents, DocumentObjects{Key: answer.key, Counts: answer.counts})
 		}
 	}
 	if failure != nil {
@@ -1977,8 +2177,9 @@ func diagnosticMemoryPressure(e *Endpoint, _ *endpointConn, params json.RawMessa
 
 // diagnosticProcessExit replies when the process pid ends. A window check waits for the WebContent process of a closed window to end through
 // the exit notification of the kernel.
-func diagnosticProcessExit(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
-	if _, _, err := diagnosticHost(e, params); err != nil {
+func diagnosticProcessExit(e *Endpoint, c *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
+	_, s, err := diagnosticHost(e, params)
+	if err != nil {
 		return nil, err
 	}
 	var p struct {
@@ -1995,18 +2196,21 @@ func diagnosticProcessExit(e *Endpoint, _ *endpointConn, params json.RawMessage,
 	if !ok {
 		return nil, errors.New("process exit waits are not implemented on this platform")
 	}
-	answers := make(chan bool, 1)
-	mainThreadStep(func() {
-		waiter.WhenProcessExited(pid, pageTimeout.Seconds(), func(exited bool) { answers <- exited })
+	exited, reason := awaitNative(s, c, func(done func(bool)) func(string) {
+		end := waiter.WhenProcessExited(pid, done)
+		return func(string) { end() }
 	})
-	// The library replies within pageTimeout, so the wait is doubled to include the time for the main thread to send the reply.
-	select {
-	case exited := <-answers:
-		if !exited {
-			return nil, rpcError(codeTimeout, "process %d did not exit within %s", pid, pageTimeout)
-		}
+	return processExitAnswer(pid, exited, reason)
+}
+
+// processExitAnswer is the reply of diagnostics.process.exit to the answer of the library and the reason of the end of a wait
+// that did not see the exit. A wait that the library could not register answers without a reason.
+func processExitAnswer(pid int32, exited bool, reason string) (any, error) {
+	switch {
+	case exited:
 		return nil, nil
-	case <-time.After(2 * pageTimeout):
-		return nil, rpcError(codeTimeout, "the application did not answer within %s", 2*pageTimeout)
+	case reason == "":
+		return nil, fmt.Errorf("process %d exit wait could not be registered", pid)
 	}
+	return nil, rpcError(codeTimeout, "process %d did not exit before %s", pid, reason)
 }

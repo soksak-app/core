@@ -6,16 +6,18 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"time"
 	"unsafe"
 )
 
-// captureTimeout limits a capture, whose completion is not promised (captureWait).
-const captureTimeout = 10 * time.Second
+// stillEnds holds the ends of the still captures that wait (captureWait).
+var stillEnds captureEnds
+
+// endStill ends the wait of the still capture of token with reason.
+func endStill(token uint64, reason string) { stillEnds.end(token, reason) }
 
 // captureStill writes one picture of the web view of the window to path as PNG, through CapturePreview. It needs no prompt, no foreground
 // and no real input. The wait runs on the caller's thread, and the completion on the UI thread, so a call on the UI thread would wait for itself.
-func captureStill(window uintptr, path string) error {
+func captureStill(window uintptr, path string, token uint64) error {
 	if onUIThread() {
 		return errors.New("capture: a capture waits for the UI thread, and it was called on that thread")
 	}
@@ -24,9 +26,11 @@ func captureStill(window uintptr, path string) error {
 		err  error
 	}
 	ended := make(chan picture, 1)
+	answer, end := captureWait(func(data []byte, err error) { ended <- picture{data, err} })
+	defer stillEnds.wait(token, end)()
 	if err := post(func() {
-		if err := startCapture(window, func(data []byte, err error) { ended <- picture{data, err} }); err != nil {
-			ended <- picture{nil, err}
+		if err := startCapture(window, answer); err != nil {
+			answer(nil, err)
 		}
 	}); err != nil {
 		return fmt.Errorf("capture: %w", err)
@@ -41,7 +45,7 @@ func captureStill(window uintptr, path string) error {
 	return os.WriteFile(path, got.data, 0o600)
 }
 
-// startCapture starts CapturePreview on the UI thread. It returns why it did not start, and otherwise done receives the end once.
+// startCapture starts CapturePreview on the UI thread. It returns why it did not start, and otherwise done receives its completion.
 func startCapture(window uintptr, done func([]byte, error)) error {
 	view, err := webviewOf(window)
 	if err != nil {
@@ -63,27 +67,19 @@ func startCapture(window uintptr, done func([]byte, error)) error {
 	if result, _, _ := procCreateStreamOnHGlobal.Call(0, 1, uintptr(unsafe.Pointer(&stream))); failedResult(result) {
 		return resultError("capture: stream", result)
 	}
-	finish := captureWait(afterOnUIThread, captureTimeout, func(err error) {
-		if err != nil {
-			done(nil, err)
-			return
-		}
-		data, err := streamBytes(stream)
-		done(data, err)
-	})
 	handler := newHandler(handlerVtables().plain, func(result, _ uintptr) {
 		defer comCall(stream, slotRelease)
 		if failedResult(result) {
-			finish(resultError("capture: CapturePreview", result))
+			done(nil, resultError("capture: CapturePreview", result))
 			return
 		}
-		finish(nil)
+		done(streamBytes(stream))
 	})
 	defer comCall(handler, slotRelease)
 	// COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT_PNG is 0.
 	if result := comCall(view.core, webviewCapturePreview, 0, stream, handler); failedResult(result) {
 		comCall(stream, slotRelease)
-		finish(resultError("capture: CapturePreview", result))
+		done(nil, resultError("capture: CapturePreview", result))
 	}
 	return nil
 }

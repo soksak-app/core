@@ -14,7 +14,9 @@ func goHost_process_exit_answered(handle uintptr, exited bool) {
 	done(bool(exited))
 }
 
-// WhenProcessExited replies to done when the process pid ends or seconds pass. Call it in a main-thread step.
-func (implementation) WhenProcessExited(pid int32, seconds float64, done func(bool)) {
-	diagnosticNative.WhenExited(int32(pid), float64(seconds), uintptr(handles.NewHandle(done)))
+// WhenProcessExited replies to done when the process pid ends or end ends the wait. Call it in a main-thread step.
+func (implementation) WhenProcessExited(pid int32, done func(bool)) (end func()) {
+	handle := uintptr(handles.NewHandle(done))
+	diagnosticNative.WhenExited(int32(pid), handle)
+	return func() { diagnosticNative.EndExitWait(handle) }
 }

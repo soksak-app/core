@@ -3,18 +3,26 @@
 // An 80-byte header with the LZ4B marker, the uint32 compressed byte count, and the uint32 pixel CRC-32 follows,
 // and a single LZ4 RAW block restores the intact BGRA pixels and row padding. The earlier raw format is rejected.
 #include <stdbool.h>
+#include <stdint.h>
 // If display is true, the windows of this application are recorded from the display that holds the window. When the
 // window moves to another Space (full screen), the window recording stops and the display recording continues to
 // record that Space.
 // The error of open/start is a required output pointer. Success sets NULL and failure sets a UTF-8 string that the
 // caller releases with free(). A request during an active recording is rejected and does not change the recording
 // state or error.
-bool sp_capture_open(long windowNumber, bool display, char **error);
+// Every call that waits for ScreenCaptureKit or for a frame takes token, a number that the caller gives no earlier call and that
+// is larger than the token of every earlier call. No limit ends such a wait: it ends when its event comes or when
+// sp_capture_end_wait ends the wait of its token, and an ended wait fails with `<what did not come> before <reason>`.
+bool sp_capture_open(long windowNumber, bool display, uint64_t token, char **error);
 // Starts a recording in directory. frame_identity is an opt-in diagnostic request and fails explicitly until the
 // capture identity session is installed. false preserves the ordinary recorded-frame path.
 bool sp_capture_start(const char *directory, bool frame_identity, char **error);
 const char *sp_capture_error(void);
-int sp_capture_wait(void);
+// Waits for the first frame and for the completion of the stream start of the recording, and returns 1 once both came.
+int sp_capture_wait(uint64_t token);
+// Ends the wait of the call of token with reason, from any thread: the call fails with its error `... before <reason>`. An
+// end that comes before the call of token waits ends that call when it waits; an end for a call that returned changes nothing.
+void sp_capture_end_wait(uint64_t token, const char *reason);
 // Whether a native stream is currently owned by the capture module. False means no current stream; it does not
 // establish that an earlier ScreenCaptureKit stop callback completed successfully.
 bool sp_capture_has_stream(void);
@@ -25,9 +33,10 @@ bool sp_capture_has_stream(void);
 // If the write queue capacity is exhausted, the recording fails. Stopping keeps both the earlier recording error and
 // the
 // stop error in sp_capture_error, so success is not judged by the returned frame count alone.
-// A start timeout keeps its existing error and wait bound. A successful late start owns exactly one deferred
-// native stop; failed starts request none. Deferred cleanup cannot change a replacement recording or finalized artifacts.
-int sp_capture_stop(double after);
+// A start completion that has not come when the wait of token ends is an error of the stop. A successful late start owns
+// exactly one deferred native stop; failed starts request none. Deferred cleanup cannot change a replacement recording or
+// finalized artifacts.
+int sp_capture_stop(double after, uint64_t token);
 // Returns true if the last recording exhausted its callback evidence capacity.
 bool sp_capture_limited(void);
 // The longest display interval (ms) between consecutive completed frames of the last stopped recording. An interval
@@ -42,7 +51,7 @@ double sp_capture_clock(void);
 // failure it returns false and stores an error string owned by the caller in error. On success error is NULL, and the
 // caller releases the error string with free(). It is independent of recording errors, and the error output pointer is
 // required.
-bool sp_capture_still(const long *windowNumbers, int count, const char *path, char **error);
+bool sp_capture_still(const long *windowNumbers, int count, const char *path, uint64_t token, char **error);
 
 // Injects a capture failure on the calling thread for lifecycle cleanup tests.
 void sp_capture_test_report_error(const char *message);

@@ -92,7 +92,7 @@ int main(void) { @autoreleasepool {
         if (mkdtemp(template) == NULL) { check(NO, [NSString stringWithFormat:@"cycle %d creates a capture directory", cycle]); break; }
         NSString *directory = [NSString stringWithUTF8String:template];
         char *operationError = NULL;
-        bool opened = sp_capture_open(window.windowNumber, false, &operationError);
+        bool opened = sp_capture_open(window.windowNumber, false, 0, &operationError);
         check(opened, [NSString stringWithFormat:@"cycle %d opens the window for recording (%s)", cycle,
             operationError == NULL ? "" : operationError]);
         free(operationError); operationError = NULL;
@@ -102,9 +102,9 @@ int main(void) { @autoreleasepool {
             operationError == NULL ? "" : operationError]);
         free(operationError);
         if (recording) {
-            int first = sp_capture_wait();
+            int first = sp_capture_wait(0);
             check(first == 1, [NSString stringWithFormat:@"cycle %d produces a first frame (%s)", cycle, sp_capture_error()]);
-            int frames = sp_capture_stop(0);
+            int frames = sp_capture_stop(0, 0);
             // The error string is shared state, so use the same copy for the verdict and the report.
             const char *stopError = sp_capture_error();
             NSString *stopText = stopError == NULL ? nil : [NSString stringWithUTF8String:stopError];

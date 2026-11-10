@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -337,22 +338,68 @@ func captureRefusal(minimized, shown, visible bool) error {
 	return nil
 }
 
-// captureWait limits the wait for CapturePreview, whose behavior in a covered window no document states. It returns the function that
-// receives the completion. done runs once: with the completion, or with the failure of the wait, and a later completion answers nothing.
-func captureWait(after func(time.Duration, func()) func(), wait time.Duration, done func(error)) func(error) {
-	ended := false
-	cancel := after(wait, func() {
-		if !ended {
-			ended = true
-			done(fmt.Errorf("capture: CapturePreview did not complete within %s, and the web view reports that it draws; the window may be covered", wait))
+// captureWait is the wait for CapturePreview, whose behavior in a covered window no document states, so no limit ends it. It returns
+// answer, which receives the completion, and end, which ends the wait with the reason of the end of its request. done runs once, on
+// the thread of the first of them: with the completion, or with a failure that names the end and a covered window, and what comes
+// later answers nothing.
+func captureWait(done func([]byte, error)) (answer func([]byte, error), end func(reason string)) {
+	var once sync.Once
+	answer = func(data []byte, err error) { once.Do(func() { done(data, err) }) }
+	end = func(reason string) {
+		answer(nil, fmt.Errorf("capture: CapturePreview did not complete before %s, and the web view reports that it draws; the window may be covered", reason))
+	}
+	return answer, end
+}
+
+// captureEnds holds the end of each still capture that waits, by its token, and the reason of each end that came before its capture
+// waited. The host gives each capture a new, larger token, so a capture that returns forgets the ends of its token and of every
+// earlier one.
+type captureEnds struct {
+	mu      sync.Mutex
+	waiting map[uint64]func(reason string)
+	early   map[uint64]string
+}
+
+// wait keeps end as the end of the capture of token until the returned forget, and ends it at once with an end that came before.
+func (c *captureEnds) wait(token uint64, end func(reason string)) (forget func()) {
+	c.mu.Lock()
+	reason, ended := c.early[token]
+	if !ended {
+		if c.waiting == nil {
+			c.waiting = map[uint64]func(string){}
 		}
-	})
-	return func(err error) {
-		cancel()
-		if !ended {
-			ended = true
-			done(err)
+		c.waiting[token] = end
+	}
+	c.mu.Unlock()
+	if ended {
+		end(reason)
+	}
+	return func() {
+		c.mu.Lock()
+		delete(c.waiting, token)
+		for early := range c.early {
+			if early <= token {
+				delete(c.early, early)
+			}
 		}
+		c.mu.Unlock()
+	}
+}
+
+// end ends the capture of token with reason, or keeps reason for a capture of token that has not waited yet.
+func (c *captureEnds) end(token uint64, reason string) {
+	c.mu.Lock()
+	end := c.waiting[token]
+	delete(c.waiting, token)
+	if end == nil {
+		if c.early == nil {
+			c.early = map[uint64]string{}
+		}
+		c.early[token] = reason
+	}
+	c.mu.Unlock()
+	if end != nil {
+		end(reason)
 	}
 }
 

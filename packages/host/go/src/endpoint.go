@@ -771,6 +771,34 @@ type endpointConn struct {
 	// reason is the reason of the first close, which a frame that is not sent afterwards names.
 	reasonMu sync.Mutex
 	reason   string
+	// ends are the callbacks that run when the connection closes, by their number; closed is set by the close. Both are
+	// protected by reasonMu.
+	ends    map[uint64]func()
+	endNext uint64
+	closed  bool
+}
+
+// onClose runs end when the connection closes, before close returns, or at once when it is already closed. remove takes end
+// back, so a request that ended without the close leaves nothing behind.
+func (c *endpointConn) onClose(end func()) (remove func()) {
+	c.reasonMu.Lock()
+	if c.closed {
+		c.reasonMu.Unlock()
+		end()
+		return func() {}
+	}
+	if c.ends == nil {
+		c.ends = map[uint64]func(){}
+	}
+	c.endNext++
+	number := c.endNext
+	c.ends[number] = end
+	c.reasonMu.Unlock()
+	return func() {
+		c.reasonMu.Lock()
+		delete(c.ends, number)
+		c.reasonMu.Unlock()
+	}
 }
 
 // close closes the connection. It records the reason reason of the first closer before it closes the socket, and later calls do nothing.
@@ -778,9 +806,15 @@ func (c *endpointConn) close(reason string) {
 	c.once.Do(func() {
 		c.reasonMu.Lock()
 		c.reason = reason
+		c.closed = true
+		ends := c.ends
+		c.ends = nil
 		c.reasonMu.Unlock()
 		LogInfo("endpoint", "connection closed: "+reason)
 		close(c.done)
+		for _, end := range ends {
+			end()
+		}
 		if err := c.conn.Close(); err != nil {
 			LogError("endpoint connection close", err)
 		}

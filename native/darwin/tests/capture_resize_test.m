@@ -100,18 +100,18 @@ int main(void) { @autoreleasepool {
         NSString *directory = [NSString stringWithUTF8String:template];
         *directoryOut = directory;
         char *operationError = NULL;
-        bool opened = sp_capture_open(window.windowNumber, false, &operationError);
+        bool opened = sp_capture_open(window.windowNumber, false, 0, &operationError);
         check(opened, [NSString stringWithFormat:@"%@: the window opens for recording (%s)", label, operationError ?: ""]);
         free(operationError); operationError = NULL;
         bool recording = opened && sp_capture_start(directory.fileSystemRepresentation, false, &operationError);
         check(recording, [NSString stringWithFormat:@"%@: recording starts (%s)", label, operationError ?: ""]);
         free(operationError);
         if (!recording) return 0;
-        check(sp_capture_wait() == 1, [NSString stringWithFormat:@"%@: a first frame arrives (%s)", label, sp_capture_error()]);
+        check(sp_capture_wait(0) == 1, [NSString stringWithFormat:@"%@: a first frame arrives (%s)", label, sp_capture_error()]);
         resizeRequestedAtMilliseconds = CACurrentMediaTime() * 1000;
         change();
         [window display];
-        int frames = sp_capture_stop(presentedAfterChange());
+        int frames = sp_capture_stop(presentedAfterChange(), 0);
         NSString *stopError = [NSString stringWithUTF8String:sp_capture_error()];
         NSData *displayLinkData = [NSData dataWithContentsOfFile:
             [directory stringByAppendingPathComponent:@"display-link.json"]];

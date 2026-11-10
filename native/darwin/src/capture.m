@@ -18,6 +18,7 @@
 #import "event_ring.h"
 #import <ImageIO/ImageIO.h>
 #include <math.h>
+#include <pthread.h>
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
 #import <objc/runtime.h>
 #include <compression.h>
@@ -1423,7 +1424,69 @@ static void followWindowSize(size_t width, size_t height, size_t needWidth, size
     }
 }
 
-bool sp_capture_open(long windowNumber, bool display, char **errorOut) {
+// The ends of the capture waits. The host ends the wait of a call by the token of that call (sp_capture_end_wait), from any
+// thread, because each call waits on the thread that made it. The reason of each ended token is kept until its call returns;
+// the host gives every call a new, larger token, so the return of a call forgets the ends of its token and of every earlier
+// token, and an end that comes after its call returned changes no later call. Calls of several tokens can wait at once, so
+// each token keeps the semaphore that its call awaits.
+static pthread_mutex_t captureEndLock = PTHREAD_MUTEX_INITIALIZER;
+static NSMutableDictionary<NSNumber *, NSString *> *captureEnds;
+static NSMutableDictionary<NSNumber *, NSValue *> *captureAwaited;
+
+// Waits on signal until it is raised or until sp_capture_end_wait ends the wait of token. A raised signal is taken before an
+// end, so a wait whose event already came is not ended. It returns nil for a raised signal and `<missing> before <reason>` for
+// an ended wait. The end raises signal once, which this wait takes back.
+static NSString *awaitCaptureSignal(dispatch_semaphore_t signal, uint64_t token, NSString *missing) {
+    if (dispatch_semaphore_wait(signal, DISPATCH_TIME_NOW) == 0) return nil;
+    pthread_mutex_lock(&captureEndLock);
+    NSString *ended = [[captureEnds[@(token)] retain] autorelease];
+    if (!ended) {
+        if (!captureAwaited) captureAwaited = [[NSMutableDictionary alloc] init];
+        captureAwaited[@(token)] = [NSValue valueWithPointer:signal];
+    }
+    pthread_mutex_unlock(&captureEndLock);
+    if (!ended) {
+        dispatch_semaphore_wait(signal, DISPATCH_TIME_FOREVER);
+        pthread_mutex_lock(&captureEndLock);
+        [captureAwaited removeObjectForKey:@(token)];
+        ended = [[captureEnds[@(token)] retain] autorelease];
+        pthread_mutex_unlock(&captureEndLock);
+    }
+    if (!ended) return nil;
+    NSString *message = [NSString stringWithFormat:@"%@ before %@", missing, ended];
+    sp_log_error("capture wait", message.UTF8String);
+    return message;
+}
+
+// Waits as awaitCaptureSignal does for a wait of the recording, whose end is an error of the recording.
+static bool awaitRecordingSignal(dispatch_semaphore_t signal, uint64_t token, NSString *missing) {
+    NSString *ended = awaitCaptureSignal(signal, token, missing);
+    if (ended) setCaptureError(ended);
+    return ended == nil;
+}
+
+// Forgets the ends of token and of every earlier token when the call of token returns.
+static void forgetCaptureEnd(uint64_t token) {
+    pthread_mutex_lock(&captureEndLock);
+    for (NSNumber *ended in captureEnds.allKeys) {
+        if (ended.unsignedLongLongValue <= token) [captureEnds removeObjectForKey:ended];
+    }
+    pthread_mutex_unlock(&captureEndLock);
+}
+
+void sp_capture_end_wait(uint64_t token, const char *reason) {
+    @autoreleasepool {
+        NSString *end = reason ? [NSString stringWithUTF8String:reason] : nil;
+        pthread_mutex_lock(&captureEndLock);
+        if (!captureEnds) captureEnds = [[NSMutableDictionary alloc] init];
+        captureEnds[@(token)] = end ?: @"its wait ended";
+        dispatch_semaphore_t awaited = (dispatch_semaphore_t)captureAwaited[@(token)].pointerValue;
+        if (awaited) dispatch_semaphore_signal(awaited);
+        pthread_mutex_unlock(&captureEndLock);
+    }
+}
+
+bool sp_capture_open(long windowNumber, bool display, uint64_t token, char **errorOut) {
     if (errorOut == NULL) {
         sp_log_error("capture open", "an error output is required");
         return false;
@@ -1482,10 +1545,11 @@ bool sp_capture_open(long windowNumber, bool display, char **errorOut) {
         [result completeWithFilter:nil configuration:nil error:
             [NSString stringWithFormat:@"window %ld not found", windowNumber]];
     }];
-    long wait = dispatch_semaphore_wait(result.answered, dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC));
-    if (wait != 0) {
+    NSString *ended = awaitCaptureSignal(result.answered, token, @"the shareable content query did not answer");
+    forgetCaptureEnd(token);
+    if (ended) {
         [result release];
-        return captureOperationFailure(errorOut, @"shareable content query timed out after 10000ms");
+        return captureOperationFailure(errorOut, ended);
     }
     if (result.error != nil) {
         captureOperationFailure(errorOut, result.error);
@@ -1667,33 +1731,27 @@ bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut
     return true;
 }
 
-// Waits until the stream start request completes. The awaited signal is raised again so that later calls also pass.
-static bool waitCaptureStart(int64_t milliseconds) {
+// Waits until the stream start request completes or the wait of token ends. The awaited signal is raised again so that later
+// calls also pass.
+static bool waitCaptureStart(uint64_t token) {
     if (captureStartDone == NULL) {
         setCaptureError(@"capture start was not requested");
         return false;
     }
-    if (dispatch_semaphore_wait(captureStartDone,
-        dispatch_time(DISPATCH_TIME_NOW, milliseconds * NSEC_PER_MSEC)) != 0) {
-        setCaptureError([NSString stringWithFormat:@"capture start did not complete within %lldms", milliseconds]);
-        return false;
-    }
+    if (!awaitRecordingSignal(captureStartDone, token, @"capture start did not complete")) return false;
     dispatch_semaphore_signal(captureStartDone);
     return true;
 }
 
-int sp_capture_wait(void) {
+int sp_capture_wait(uint64_t token) {
     if (captureStream == nil) {
         setCaptureError(@"capture is not running");
         return 0;
     }
-    if (dispatch_semaphore_wait(captureFirstFrame,
-        dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC)) != 0) {
-        setCaptureError(@"no capture frame arrived within 10000ms");
-        return 0;
-    }
     // The first frame can arrive before the start completes. The recording has started only when the start finishes.
-    if (!waitCaptureStart(10000)) return 0;
+    bool started = awaitRecordingSignal(captureFirstFrame, token, @"no capture frame arrived") && waitCaptureStart(token);
+    forgetCaptureEnd(token);
+    if (!started) return 0;
     return hasCaptureError() ? 0 : 1;
 }
 
@@ -1726,7 +1784,7 @@ static void registerCaptureStopBoundary(SPCapture *sink, SPCaptureAttempt *attem
 // The stop reply arrives on another queue, and frames already handed over are recorded in the meantime.
 // Reading the count before that reports fewer than the actual number, and if the process exits then,
 // the last file remains truncated.
-int sp_capture_stop(double after) {
+int sp_capture_stop(double after, uint64_t token) {
     if (captureStream == nil) {
         setCaptureError(@"capture is not running");
         return 0;
@@ -1738,8 +1796,8 @@ int sp_capture_stop(double after) {
         return 0;
     }
     // Stops after a callback delivers a display time at or beyond the later of the call time and requested
-    // presentation time. A pending size change must finish first. If no qualifying callback arrives within the
-    // existing one-second wait, the stop reports an explicit error.
+    // presentation time. A pending size change must finish first. The wait has no limit: when sp_capture_end_wait ends it
+    // before a qualifying callback, the stop reports an explicit error and still stops.
     mach_timebase_info_data_t base;
     mach_timebase_info(&base);
     uint64_t now = mach_absolute_time();
@@ -1749,34 +1807,28 @@ int sp_capture_stop(double after) {
     dispatch_sync(captureQueue, ^{
         registerCaptureStopBoundary(captureSink, attempt, after, until, captureRawClock(), caughtUp);
     });
-    if (dispatch_semaphore_wait(caughtUp, dispatch_time(until, NSEC_PER_SEC)) != 0) {
-        NSString *message = captureResizing
-            ? @"no frame at the window's device-pixel size arrived within 1000ms after the requested display time"
-            : @"no frame arrived within 1000ms after the requested display time";
-        setCaptureError(message);
-        sp_log_error("capture stop", message.UTF8String);
-    }
+    awaitRecordingSignal(caughtUp, token, captureResizing
+        ? @"no frame at the window's device-pixel size arrived at the requested display time"
+        : @"no frame arrived at the requested display time");
     dispatch_sync(captureQueue, ^{
         captureCaughtUp = NULL;
         captureStopAfter = 0;
-        // The boundary has been observed (or timed out). Seal intake at this sample-queue fence before
+        // The boundary has been observed (or its wait ended). Seal intake at this sample-queue fence before
         // waiting for start completion or asking ScreenCaptureKit to stop the stream.
         closeCaptureSampleIntake(stream);
     });
     dispatch_release(caughtUp);
     @synchronized (attempt) { attempt.stopRequested = YES; }
-    // A late start callback owns stop cleanup after the existing bound expires. The one-shot owner claim also
-    // resolves a completion that races the timeout without issuing two stop requests.
-    bool started = waitCaptureStart(5000);
+    // A start completion that has not come when the wait of token ends passes the stop cleanup to the late start callback. The
+    // one-shot owner claim resolves a start completion that races this stop without issuing two stop requests.
+    bool started = waitCaptureStart(token);
     bool stopIssued = requestCaptureStopAfterStart(stream, attempt);
     BOOL stopIssuedOrAlready = stopIssued;
     @synchronized (attempt) { stopIssuedOrAlready = stopIssuedOrAlready || attempt.stopRequestIssued; }
     if (started && stopIssuedOrAlready) {
-        if (dispatch_semaphore_wait(attempt.stopCompleted,
-            dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) != 0) {
-            setCaptureError(@"capture stop did not complete within 5000ms");
-        }
+        awaitRecordingSignal(attempt.stopCompleted, token, @"capture stop did not complete");
     }
+    forgetCaptureEnd(token);
     // Source manifest finalization closes source intake and drains the shared writer queue.
     finalizeCaptureArtifacts(captureSink);
     @synchronized([SPCapture class]) { captureStream = nil; }
@@ -1828,7 +1880,7 @@ double sp_capture_longest_gap(void) {
 - (void)complete:(bool)written error:(NSString *)error {
     self.written = written;
     self.error = error;
-    // An error that arrives after the caller returned because of a timeout is also reported to the log.
+    // An error that arrives after the caller returned because its wait ended is also reported to the log.
     if (error != nil) sp_log_error("still capture", error.UTF8String);
     dispatch_semaphore_signal(self.answered);
 }
@@ -1840,7 +1892,7 @@ double sp_capture_longest_gap(void) {
 @end
 
 
-bool sp_capture_still(const long *windowNumbers, int count, const char *path, char **errorOut) {
+bool sp_capture_still(const long *windowNumbers, int count, const char *path, uint64_t token, char **errorOut) {
     if (errorOut == NULL) {
         sp_log_error("still capture", "an error output is required");
         return false;
@@ -1901,13 +1953,10 @@ bool sp_capture_still(const long *windowNumbers, int count, const char *path, ch
             [result complete:written error:written ? nil : [NSString stringWithFormat:@"cannot write %@", url.path]];
         }];
     }];
-    long wait = dispatch_semaphore_wait(result.answered, dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC));
-    if (wait != 0) {
-        [result release];
-        return captureOperationFailure(errorOut, @"still capture timed out after 10000ms");
-    }
-    bool written = result.written;
-    if (!written) captureOperationFailure(errorOut, result.error);
+    NSString *ended = awaitCaptureSignal(result.answered, token, @"still capture did not answer");
+    forgetCaptureEnd(token);
+    bool written = ended == nil && result.written;
+    if (!written) captureOperationFailure(errorOut, ended ?: result.error);
     [result release];
     return written;
 }

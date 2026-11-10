@@ -429,36 +429,72 @@ fn a_capture_of_a_view_that_does_not_draw_is_refused() {
     }
 }
 
-type CaptureAnswers = Rc<RefCell<Vec<Result<(), String>>>>;
+/// The answers that the ends of a test capture gave.
+type CaptureAnswers = std::sync::Arc<std::sync::Mutex<Vec<String>>>;
 
-fn capture_done() -> (CaptureAnswers, Complete) {
-    let got: CaptureAnswers = Rc::default();
+fn capture_end() -> (CaptureAnswers, CaptureEnd) {
+    let got: CaptureAnswers = CaptureAnswers::default();
     let held = got.clone();
-    (got, Box::new(move |result| held.borrow_mut().push(result)))
+    (
+        got,
+        Box::new(move |reason| held.lock().unwrap().push(capture_end_failure(&reason))),
+    )
 }
 
 // contract: platform.windows.capture.incomplete-capture-ends-its-wait
 #[test]
 fn a_capture_that_does_not_complete_ends_its_wait() {
-    let fake = Rc::new(Fake::default());
-    let (got, done) = capture_done();
-    let finish = capture_wait(&fake.after(), WAIT, done);
-    fake.fire(0);
-    let answered = got.borrow()[0].clone().unwrap_err();
-    assert!(answered.contains("covered"), "{answered}");
-    finish(Ok(()));
-    assert_eq!(got.borrow().len(), 1);
+    let ends = CaptureEnds::default();
+    let (got, end) = capture_end();
+    ends.wait(7, end);
+    ends.end(8, "the window closed");
+    assert!(
+        got.lock().unwrap().is_empty(),
+        "the end of another capture ended this one"
+    );
+    ends.end(7, "the endpoint connection of the request closed");
+    assert_eq!(
+        *got.lock().unwrap(),
+        [
+            "capture: CapturePreview did not complete before the endpoint connection of the request closed, and the web view reports that it draws; the window may be covered"
+        ]
+    );
+    ends.end(7, "the window closed");
+    ends.forget(7);
+    assert_eq!(got.lock().unwrap().len(), 1, "a second end answered again");
+}
+
+// contract: platform.windows.capture.incomplete-capture-ends-its-wait
+#[test]
+fn an_end_before_the_capture_waits_ends_it() {
+    let ends = CaptureEnds::default();
+    ends.end(3, "the page of the window ended");
+    let (got, end) = capture_end();
+    ends.wait(3, end);
+    assert!(
+        got.lock().unwrap()[0].contains("before the page of the window ended"),
+        "{:?}",
+        got.lock().unwrap()
+    );
+    ends.end(2, "the window closed");
+    ends.forget(3);
+    let state = ends.state();
+    assert!(
+        state.early.is_empty() && state.waiting.is_empty(),
+        "the returned capture left its ends"
+    );
 }
 
 // contract: platform.windows.capture.completed-capture-answers-once
 #[test]
 fn a_completed_capture_answers_once() {
-    let fake = Rc::new(Fake::default());
-    let (got, done) = capture_done();
-    let finish = capture_wait(&fake.after(), WAIT, done);
-    finish(Ok(()));
-    assert_eq!(*got.borrow(), [Ok(())]);
-    assert!(fake.timers.borrow()[0].is_none());
+    let ends = CaptureEnds::default();
+    let (got, end) = capture_end();
+    ends.wait(5, end);
+    // The capture completed and returned, so its end is forgotten and a later end of its request answers nothing.
+    ends.forget(5);
+    ends.end(5, "the endpoint connection of the request closed");
+    assert!(got.lock().unwrap().is_empty(), "{:?}", got.lock().unwrap());
 }
 
 // contract: platform.windows.capture.still-must-be-an-image

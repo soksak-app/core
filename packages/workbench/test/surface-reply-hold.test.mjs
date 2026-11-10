@@ -99,10 +99,9 @@ test("a released surface sends its held replies in order and writes the line of 
   await settle();
   assert.deepEqual(sent, [], "a reply was sent while the surface was held");
   const released = hold.released("tab-a");
-  assert.deepEqual(sent, ["reply 1"], "the release did not send the first held reply first");
+  assert.deepEqual(sent, ["reply 1", "reply 2"], "the release did not send the held replies in the order held");
   first.finish().resolve("one");
   await settle();
-  assert.deepEqual(sent, ["reply 1", "reply 2"]);
   assert.deepEqual(lines, [], "the line was written before the host answered every reply");
   second.finish().resolve("two");
   await released;

@@ -165,19 +165,86 @@ struct ReplyState {
     callbacks: Vec<ReplyCallback>,
 }
 
+/// The end of one endpoint connection: a request that opened a diagnostic hold registers the end of the hold here, and the
+/// close of the connection runs it (docs/spec/endpoint.md, diagnostic builds).
+#[derive(Clone)]
+pub struct ConnectionEnd(Arc<Mutex<ConnectionEndState>>);
+
+type ConnectionEndCallback = Box<dyn FnOnce() + Send + 'static>;
+
+#[derive(Default)]
+struct ConnectionEndState {
+    closed: bool,
+    callbacks: Vec<ConnectionEndCallback>,
+}
+
+impl ConnectionEnd {
+    /// The end of a connection that is open.
+    pub fn open() -> Self {
+        Self(Arc::new(Mutex::new(ConnectionEndState::default())))
+    }
+
+    /// Closes the connection: each registered callback runs once, outside the lock. A later close does nothing.
+    pub fn close(&self) {
+        let callbacks = {
+            // default: a lock that a panicking thread poisoned still holds the callbacks of the end, which the close takes
+            // once; the panic hook records the panic.
+            let mut state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+            state.closed = true;
+            std::mem::take(&mut state.callbacks)
+        };
+        for callback in callbacks {
+            callback();
+        }
+    }
+
+    /// Runs callback when the connection closes, or at once when it is already closed.
+    pub fn on_close(&self, callback: impl FnOnce() + Send + 'static) {
+        {
+            // default: a lock that a panicking thread poisoned still holds the callbacks of the end, which the
+            // registration extends; the panic hook records the panic.
+            let mut state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+            if !state.closed {
+                state.callbacks.push(Box::new(callback));
+                return;
+            }
+        }
+        callback();
+    }
+
+    /// Whether other is the end of the same connection.
+    pub fn is(&self, other: &ConnectionEnd) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+
 /// Owned context for work that must follow this request's response attempt.
 /// Cloning or dropping the context does not complete the response.
 #[derive(Clone)]
-pub struct ReplyScope(Arc<Mutex<ReplyState>>);
+pub struct ReplyScope(Arc<Mutex<ReplyState>>, Option<ConnectionEnd>);
 
 impl ReplyScope {
     pub(crate) fn pending() -> (Self, ReplyCompletion) {
-        let scope = Self(Arc::new(Mutex::new(ReplyState::default())));
+        Self::pending_with(None)
+    }
+
+    /// A pending reply of a request of the connection whose end is connection.
+    pub(crate) fn pending_on(connection: ConnectionEnd) -> (Self, ReplyCompletion) {
+        Self::pending_with(Some(connection))
+    }
+
+    fn pending_with(connection: Option<ConnectionEnd>) -> (Self, ReplyCompletion) {
+        let scope = Self(Arc::new(Mutex::new(ReplyState::default())), connection);
         let completion = ReplyCompletion {
             scope: scope.clone(),
             finished: false,
         };
         (scope, completion)
+    }
+
+    /// The end of the connection of the request, which an internal request does not have.
+    pub fn connection(&self) -> Option<&ConnectionEnd> {
+        self.1.as_ref()
     }
 
     /// Runs once after response completion, outside the scope and connection writer locks.
@@ -1227,6 +1294,7 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
             },
         );
     let mut reason = String::from("peer closed");
+    let end = ConnectionEnd::open();
     loop {
         let body = match read_body(&mut connection) {
             Ok(Some(body)) => body,
@@ -1252,7 +1320,7 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
             reason = format!("method {:?} is not declared", request.method);
             break;
         }
-        let (reply, completion) = ReplyScope::pending();
+        let (reply, completion) = ReplyScope::pending_on(end.clone());
         let answer = Answer {
             writer: writer.clone(),
             id: request.id,
@@ -1290,6 +1358,8 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
         log_error("endpoint connection close", error);
     }
     forget(&shared, peer);
+    // The diagnostic holds that the requests of this connection opened end with it.
+    end.close();
 }
 
 /// The methods that change the subscriptions of a connection.

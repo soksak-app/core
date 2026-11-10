@@ -4,8 +4,6 @@
 #import "support/records.h"
 #import "event_ring.h"
 #import <objc/runtime.h>
-#include <signal.h>
-#include <unistd.h>
 
 static int failures;
 static NSMutableArray *starts;
@@ -16,10 +14,6 @@ static const int8_t captureTracePolicy[SP_CLASS_COUNT] = {SP_EVENT_DEBUG, SP_EVE
 static void check(BOOL condition, NSString *message) {
     fprintf(stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
-}
-static void expired(int signalNumber) {
-    const char message[] = "FAIL: capture callback test exceeded 25000ms\n";
-    write(STDERR_FILENO, message, sizeof message - 1); _exit(1);
 }
 static void holdStart(id stream, SEL selector, void (^reply)(NSError *)) {
     [starts addObject:[[reply copy] autorelease]];
@@ -118,7 +112,6 @@ static void discard(void) {
     if (captureQueue != NULL) { dispatch_release(captureQueue); captureQueue = NULL; }
 }
 int main(void) { @autoreleasepool {
-    signal(SIGALRM, expired); alarm(25);
     check(sp_event_set_policy(captureTracePolicy), @"the test enables the bounded capture lifecycle trace");
     SPCaptureAttempt *maxTickAttempt = [[SPCaptureAttempt alloc] init];
     maxTickAttempt.session = @"capture-uint64-boundary";
@@ -243,7 +236,7 @@ int main(void) { @autoreleasepool {
     check(created, created ? @"the callback directory is created" :
         [NSString stringWithFormat:@"the callback directory creation failed: %s", strerror(errno)]);
     char *error = NULL;
-    BOOL opened = sp_capture_open(window.windowNumber, false, &error);
+    BOOL opened = sp_capture_open(window.windowNumber, false, 0, &error);
     check(opened && error == NULL, [NSString stringWithFormat:@"the real inactive fixture prepares its target (%s)", error]);
     free(error);
     Method method = class_getInstanceMethod([SCStream class], @selector(startCaptureWithCompletionHandler:));
@@ -285,14 +278,14 @@ int main(void) { @autoreleasepool {
                         // instead of the current start that was held.
                         dispatch_semaphore_signal(captureStartDone);
                         dispatch_semaphore_signal(captureFirstFrame);
-                        check(sp_capture_wait() == 1, @"late start cannot invalidate healthy first-frame readiness");
+                        check(sp_capture_wait(0) == 1, @"late start cannot invalidate healthy first-frame readiness");
                     }
                     [captureSink stream:old didStopWithError:fault(@"fixture late delegate failure")];
                     check(strcmp(sp_capture_error(), failed ? "fixture current recording error" : "") == 0,
                         @"late delegate preserves the exact current recording error");
                     if (!failed) {
                         dispatch_semaphore_signal(captureFirstFrame);
-                        check(sp_capture_wait() == 1, @"late delegate cannot invalidate healthy first-frame readiness");
+                        check(sp_capture_wait(0) == 1, @"late delegate cannot invalidate healthy first-frame readiness");
                     }
                 });
                 NSDictionary *oldCompletion = lifecycleEvent(oldCallbackEvents, @"start-completion", oldSession);
@@ -349,7 +342,7 @@ int main(void) { @autoreleasepool {
                     (!failed || strstr(sp_capture_error(),"fixture current recording error") != NULL),
                     @"current delegate failure retains every earlier current-recording error");
                 dispatch_semaphore_signal(captureFirstFrame);
-                check(sp_capture_wait() == 0, @"a current-stream error still rejects first-frame readiness");
+                check(sp_capture_wait(0) == 0, @"a current-stream error still rejects first-frame readiness");
             }
             discard(); [old release]; [starts removeAllObjects];
             fprintf(stderr,"END: delayed callback with %s current recording (%.1fms)\n",
@@ -392,18 +385,21 @@ int main(void) { @autoreleasepool {
         }
         discard();
         method_setImplementation(method, (IMP)holdStart);
-        NSArray *timeoutStartEvents = capturedEvents(^{ check(start(directory),
+        NSArray *endedStartEvents = capturedEvents(^{ check(start(directory),
             @"the no-first-sample attempt starts"); });
-        NSDictionary *timeoutRequest = lifecycleEvent(timeoutStartEvents, @"start-request", nil);
-        NSString *timeoutSession = timeoutRequest[@"fields"][@"session"];
+        NSDictionary *endedRequest = lifecycleEvent(endedStartEvents, @"start-request", nil);
+        NSString *endedSession = endedRequest[@"fields"][@"session"];
         check([[NSFileManager defaultManager] createDirectoryAtPath:[NSString stringWithUTF8String:path]
             withIntermediateDirectories:YES attributes:nil error:NULL], @"the failed-attempt folder exists before wait");
         __block int waited = -1;
-        NSArray *failureEvents = capturedEvents(^{ waited = sp_capture_wait(); });
+        // No first sample comes; the end, given before the wait, ends it.
+        sp_capture_end_wait(1, "the fixture ended the wait");
+        NSArray *failureEvents = capturedEvents(^{ waited = sp_capture_wait(1); });
         check(lifecycleMachTickFieldsMatchSchema(failureEvents),
             @"failure lifecycle Mach-tick fields are strings or null");
-        check(waited == 0, @"a missing first frame follows the normal capture-wait failure path");
-        NSDictionary *failed = lifecycleEvent(failureEvents, @"failed", timeoutSession);
+        check(waited == 0 && strstr(sp_capture_error(), "no capture frame arrived before the fixture ended the wait") != NULL,
+            [NSString stringWithFormat:@"a missing first frame follows the normal capture-wait failure path (%s)", sp_capture_error()]);
+        NSDictionary *failed = lifecycleEvent(failureEvents, @"failed", endedSession);
         check(failed != nil && failed[@"fields"][@"stopAfterMilliseconds"] == [NSNull null]
             && failed[@"fields"][@"stopTargetMachTicks"] == [NSNull null]
             && failed[@"fields"][@"stopRegistrationMachTicks"] == [NSNull null]
@@ -417,7 +413,7 @@ int main(void) { @autoreleasepool {
         for (NSDictionary *event in failureEvents) {
             if ([event[@"name"] isEqual:@"native.capture.lifecycle"]
                 && [event[@"fields"][@"phase"] isEqual:@"failed"]
-                && [event[@"fields"][@"session"] isEqual:timeoutSession]) failureCount++;
+                && [event[@"fields"][@"session"] isEqual:endedSession]) failureCount++;
         }
         id factsObserved = failed[@"fields"][@"factsObservedMachTicks"];
         BOOL validFacts = factsObserved == [NSNull null]
@@ -443,10 +439,10 @@ int main(void) { @autoreleasepool {
             && failureCount == 1 && validFacts,
             [NSString stringWithFormat:@"the failure summary is in the process event sink before wait returns to folder cleanup "
                 @"(valid=%d session=%@ requestSession=%@ count=%lu facts=%@ event=%@)", failureSummaryValid,
-                failed[@"fields"][@"session"], timeoutSession, (unsigned long)failureCount, factsObserved, failed]);
+                failed[@"fields"][@"session"], endedSession, (unsigned long)failureCount, factsObserved, failed]);
         setCaptureError(@"fixture cleanup secondary error");
         NSArray *laterErrors = capturedEvents(^{ });
-        check(lifecycleEvent(laterErrors, @"failed", timeoutSession) == nil,
+        check(lifecycleEvent(laterErrors, @"failed", endedSession) == nil,
             @"cleanup errors do not emit a second failure summary for the same attempt");
         NSError *removeError = nil;
         check([[NSFileManager defaultManager] removeItemAtPath:[NSString stringWithUTF8String:path] error:&removeError],
@@ -482,7 +478,7 @@ int main(void) { @autoreleasepool {
             stopRequests = 0;
             stopRequestedBeforeStartCompletion = NO;
             stopReplyError = nil;
-            sp_capture_stop(0);
+            sp_capture_stop(0, 0);
             check(stopRequests == 0 && !stopRequestedBeforeStartCompletion,
                 @"a failed start completion does not receive a stop request");
             check(strstr(sp_capture_error(), "fixture controlled start failure") != NULL,
@@ -503,16 +499,15 @@ int main(void) { @autoreleasepool {
             stopRequests = 0;
             stopRequestedBeforeStartCompletion = NO;
             stopReplyError = nil;
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 50 * NSEC_PER_MSEC),
-                dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
+            dispatch_async(dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
                     if (starts.count == 1) {
                         void (^complete)(NSError *) = starts[0];
                         complete(nil);
                     }
                 });
-            sp_capture_stop(0);
+            sp_capture_stop(0, 0);
             check(onTimeRequest != nil && stopRequests == 1 && !stopRequestedBeforeStartCompletion,
-                @"a start completing inside the existing bound receives exactly one later stop request");
+                @"a start completing while the stop waits receives exactly one later stop request");
 
             [starts removeAllObjects];
             NSArray *pendingEvents = capturedEvents(^{ check(start(directory),
@@ -527,15 +522,14 @@ int main(void) { @autoreleasepool {
             stopRequests = 0;
             stopRequestedBeforeStartCompletion = NO;
             stopReplyError = nil;
-            CFTimeInterval stopBegan = CACurrentMediaTime();
-            capturedEvents(^{ sp_capture_stop(0); });
-            double stopElapsed = CACurrentMediaTime() - stopBegan;
+            // The start never completes while the stop waits; the end, given before the stop waits, ends that wait.
+            sp_capture_end_wait(2, "the fixture ended the stop");
+            capturedEvents(^{ sp_capture_stop(0, 2); });
             check(stopRequests == 0 && !stopRequestedBeforeStartCompletion,
-                @"a start timeout does not call stop before start completion");
-            check(stopElapsed >= 4.9 && stopElapsed < 6.0
-                && strstr(sp_capture_error(), "capture start did not complete within 5000ms") != NULL,
-                @"a pending start preserves its 5000ms timeout and returns within the existing bound");
-            check(captureStream == nil, @"the timed-out stream is retired before its delayed completion");
+                @"an ended start wait does not call stop before start completion");
+            check(strstr(sp_capture_error(), "capture start did not complete before the fixture ended the stop") != NULL,
+                [NSString stringWithFormat:@"a pending start reports the end of its wait (%s)", sp_capture_error()]);
+            check(captureStream == nil, @"the stream whose start wait ended is retired before its delayed completion");
             NSError *snapshotError = nil;
             NSDictionary *beforeLateCompletion = artifactSnapshot(directory, &snapshotError);
             check(beforeLateCompletion != nil, [NSString stringWithFormat:@"the finalized artifact snapshot is readable (%@)", snapshotError]);
@@ -550,9 +544,9 @@ int main(void) { @autoreleasepool {
             });
             check(stopRequests == 1 && !stopRequestedBeforeStartCompletion,
                 @"a successful late start requests exactly one stop after completion");
-            check(strstr(sp_capture_error(), "capture start did not complete within 5000ms") != NULL
+            check(strstr(sp_capture_error(), "capture start did not complete before the fixture ended the stop") != NULL
                 && strstr(sp_capture_error(), "fixture late cleanup stop failure") == NULL,
-                @"late cleanup preserves the primary start-timeout error and replacement recording state");
+                @"late cleanup preserves the primary start-wait error and replacement recording state");
             BOOL lateStopReported = NO;
             for (NSDictionary *event in lateCompletionEvents) {
                 if (![event[@"name"] isEqual:@"native.record.error"]) continue;
@@ -595,5 +589,5 @@ int main(void) { @autoreleasepool {
     }
     fprintf(stderr,"%s: native delayed stream callback isolation (%d failed assertions, %.1fms)\n",
         failures ? "FAIL" : "PASS",failures,(CACurrentMediaTime()-began)*1000);
-    alarm(0); return failures ? 1 : 0;
+    return failures ? 1 : 0;
 }}

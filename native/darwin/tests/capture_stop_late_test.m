@@ -1,5 +1,5 @@
-// Checks that a stop completion that arrives after the real 5000 ms limit changes neither the error nor the result of the next recording, and that the error is reported
-// to the diagnostic output instead of being dropped. The fixture holds the stop completion and delivers it late.
+// Checks that a stop completion that arrives after the end of the stop wait changes neither the error nor the result of the next
+// recording, and that the error is reported to the diagnostic output instead of being dropped. The fixture holds the stop completion and delivers it late.
 #import "../src/capture.m"
 #import "support/records.h"
 #include <errno.h>
@@ -41,9 +41,11 @@ int main(void) { @autoreleasepool {
     attempt.startCompletionSeen = YES;
     objc_setAssociatedObject(held, &captureAttemptAssociationKey, attempt, OBJC_ASSOCIATION_RETAIN);
     clearCaptureError();
-    sp_capture_stop(0);
-    check(strstr(sp_capture_error(), "did not complete within 5000ms") != NULL,
-        @"the stop that outlives its deadline reports its timeout");
+    // The end comes before the stop waits, so the waits for the boundary and for the held completion end without a race.
+    sp_capture_end_wait(1, "the fixture ended the stop");
+    sp_capture_stop(0, 1);
+    check(strstr(sp_capture_error(), "capture stop did not complete before the fixture ended the stop") != NULL,
+        [NSString stringWithFormat:@"the stop whose wait ended reports that end (%s)", sp_capture_error()]);
     check(held.completion != nil, @"the fixture holds the stop completion");
 
     // The next recording is in progress without an error.

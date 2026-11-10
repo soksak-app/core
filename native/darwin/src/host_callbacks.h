@@ -58,7 +58,8 @@
     X(V, void, delivered_notifications, (uintptr_t context, char *json), (context, json)) \
     X(V, void, document_frame_identity_done, (uintptr_t context, char *reply, char *failure), (context, reply, failure)) \
     X(V, void, input_reference_reply, (uintptr_t context, char *value, char *failure), (context, value, failure)) \
-    X(V, void, process_exit_answered, (uintptr_t context, bool exited), (context, exited))
+    X(V, void, process_exit_answered, (uintptr_t context, bool exited), (context, exited)) \
+    X(V, void, capture_answered, (uintptr_t context, long result, char *failure), (context, result, failure))
 
 typedef struct {
 #define SP_HOST_CALLBACK_FIELD(mode, result, name, parameters, arguments) result (*name) parameters;

@@ -652,20 +652,24 @@ impl Platform for Darwin {
     }
 
     #[cfg(feature = "diagnostics")]
-    fn capture_open(&self, window_number: isize, display: bool) -> Result<(), String> {
-        capture::open(window_number, display)
+    fn capture_open(&self, window_number: isize, display: bool, token: u64) -> Result<(), String> {
+        capture::open(window_number, display, token)
     }
     #[cfg(feature = "diagnostics")]
     fn capture_start(&self, directory: &str, frame_identity: bool) -> Result<(), String> {
         capture::start(directory, frame_identity)
     }
     #[cfg(feature = "diagnostics")]
-    fn capture_wait(&self) -> Result<bool, String> {
-        capture::wait()
+    fn capture_wait(&self, token: u64) -> Result<bool, String> {
+        capture::wait(token)
     }
     #[cfg(feature = "diagnostics")]
-    fn capture_stop(&self, after: f64) -> Result<i32, String> {
-        capture::stop(after)
+    fn capture_stop(&self, after: f64, token: u64) -> Result<i32, String> {
+        capture::stop(after, token)
+    }
+
+    fn capture_end_wait(&self, token: u64, reason: &str) {
+        capture::end_wait(token, reason);
     }
     #[cfg(feature = "diagnostics")]
     fn capture_has_stream(&self) -> Result<bool, String> {
@@ -709,8 +713,13 @@ impl Platform for Darwin {
         Ok(capture::clock())
     }
     #[cfg(feature = "diagnostics")]
-    fn capture_still(&self, window_numbers: &[isize], path: &str) -> Result<(), String> {
-        capture::still(window_numbers, path)
+    fn capture_still(
+        &self,
+        window_numbers: &[isize],
+        path: &str,
+        token: u64,
+    ) -> Result<(), String> {
+        capture::still(window_numbers, path, token)
     }
     #[cfg(feature = "diagnostics")]
     fn delivered_notifications(&self, done: Box<dyn FnOnce(String) + Send>) -> Result<(), String> {
@@ -721,11 +730,9 @@ impl Platform for Darwin {
     fn window_objects_when(
         &self,
         expected: Option<super::WindowObjects>,
-        seconds: f64,
         done: Box<dyn FnOnce(super::WindowObjects, bool) + Send>,
-    ) -> Result<(), String> {
-        window_objects::when(expected, seconds, done);
-        Ok(())
+    ) -> Result<super::WaitEnd, String> {
+        Ok(window_objects::when(expected, done))
     }
 
     #[cfg(feature = "diagnostics")]
@@ -742,11 +749,9 @@ impl Platform for Darwin {
     fn when_process_exited(
         &self,
         pid: i32,
-        seconds: f64,
         done: Box<dyn FnOnce(bool) + Send>,
-    ) -> Result<(), String> {
-        process_exit::when_exited(pid, seconds, done);
-        Ok(())
+    ) -> Result<super::WaitEnd, String> {
+        Ok(process_exit::when_exited(pid, done))
     }
     #[cfg(feature = "diagnostics")]
     fn layout_trace_start(&self) -> Result<(), String> {
@@ -768,15 +773,27 @@ impl Platform for Darwin {
         input_reference::call(window, action, document, done);
     }
     #[cfg(feature = "diagnostics")]
+    fn end_input_reference_wait(&self, window: Handle, reason: &str) {
+        input_reference::end(window, reason);
+    }
+    #[cfg(feature = "diagnostics")]
     fn input_source(&self) -> Result<(Option<String>, String), String> {
         input_source::current()
     }
     #[cfg(feature = "diagnostics")]
-    fn select_input_source(&self, role: &str, adopted: Box<dyn Fn(Result<(), String>)>) {
+    fn select_input_source(
+        &self,
+        role: &str,
+        adopted: Box<dyn Fn(Result<(), String>)>,
+    ) -> super::InputSourceEnd {
         input_source::select(role, adopted)
     }
     #[cfg(feature = "diagnostics")]
-    fn restore_input_source(&self, source: &str, adopted: Box<dyn Fn(Result<(), String>)>) {
+    fn restore_input_source(
+        &self,
+        source: &str,
+        adopted: Box<dyn Fn(Result<(), String>)>,
+    ) -> super::InputSourceEnd {
         input_source::restore(source, adopted)
     }
 

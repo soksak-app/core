@@ -22,22 +22,13 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
+// Runs the run loop until done holds; each turn waits for a source of the run loop. what names the wait in the record of a
+// run that the runner ends.
 static void until(NSString *what, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+    while (!done()) {
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:NSDate.distantFuture];
     }
-    if (!done()) { fprintf(stderr, "FAIL: %s within 10 seconds\n", what.UTF8String); exit(1); }
-}
-
-// Turns the run loop until done() or for at most 10 seconds and returns done(), so a reply that never comes is a failed
-// check and the cleanup after it still runs.
-static BOOL settles(BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
-    return done();
+    fprintf(stdout, "reached: %s\n", what.UTF8String);
 }
 
 static NSDictionary *latest;
@@ -219,12 +210,9 @@ int main(void) { @autoreleasepool {
         controlFrameIdentityPresentation((WKWebView *)view);
         BOOL identityScheduled = sp_document_frame_identity_start(view, 41, frameIdentityReply, NULL);
         check(identityScheduled, @"the current visible plugin root accepts the diagnostic QR producer");
-        NSDate *presentationDeadline = [NSDate dateWithTimeIntervalSinceNow:10];
-        while (frameIdentityReplyCount == 0 && !frameIdentityPresentationCallbackArrived
-            && presentationDeadline.timeIntervalSinceNow > 0) {
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
-                beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-        }
+        until(@"the target root WebKit presentation callback or a start reply", ^BOOL {
+            return frameIdentityReplyCount != 0 || frameIdentityPresentationCallbackArrived;
+        });
         check(frameIdentityPresentationRequests == 1 && frameIdentityPresentationCallbackArrived,
             [NSString stringWithFormat:@"the start waits for the target root WebKit presentation callback before replying (requests=%lu callback=%d reply=%d)",
                 (unsigned long)frameIdentityPresentationRequests, frameIdentityPresentationCallbackArrived,
@@ -328,8 +316,8 @@ int main(void) { @autoreleasepool {
         until(@"WebKit reaches the held target update before the navigation",
             ^BOOL { return frameIdentityPresentationCallbackArrived; });
         runPage(view);
-        BOOL navigatedStartAnswered = settles(^BOOL { return cancelledFrameIdentityStartReplies == 1; });
-        check(navigatedStartAnswered
+        until(@"the start that the navigation ended answers", ^BOOL { return cancelledFrameIdentityStartReplies != 0; });
+        check(cancelledFrameIdentityStartReplies == 1
             && [cancelledFrameIdentityStartError isEqualToString:@"the plugin root document navigated during frame identity capture"],
             [NSString stringWithFormat:@"a navigation that the document commits fails the start that has not answered, got %lu %@",
                 (unsigned long)cancelledFrameIdentityStartReplies, cancelledFrameIdentityStartError ?: @"(no reply)"]);
@@ -384,8 +372,8 @@ int main(void) { @autoreleasepool {
         until(@"WebKit reaches the held target update before the process end",
             ^BOOL { return frameIdentityPresentationCallbackArrived; });
         [(WKWebView *)view _killWebContentProcessAndResetState];
-        BOOL endedStartAnswered = settles(^BOOL { return cancelledFrameIdentityStartReplies == 1; });
-        check(endedStartAnswered
+        until(@"the start that the process end ended answers", ^BOOL { return cancelledFrameIdentityStartReplies != 0; });
+        check(cancelledFrameIdentityStartReplies == 1
             && [cancelledFrameIdentityStartError isEqualToString:@"the web content process of the plugin root document ended during frame identity capture"],
             [NSString stringWithFormat:@"the end of the WebContent process fails the start that has not answered, got %lu %@",
                 (unsigned long)cancelledFrameIdentityStartReplies, cancelledFrameIdentityStartError ?: @"(no reply)"]);

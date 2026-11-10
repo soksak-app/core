@@ -298,7 +298,7 @@ $(BUILD)/capture_cleanup_test: src/capture.m
 
 $(BUILD)/capture_preparation_test: src/capture.m
 
-$(BUILD)/capture_pressure_test: src/capture.m
+$(BUILD)/capture_pressure_test: src/capture.m src/host_api_capture.m
 
 $(BUILD)/capture_storage_test: src/capture.m
 

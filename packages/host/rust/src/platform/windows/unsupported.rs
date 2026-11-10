@@ -455,18 +455,16 @@ pub fn count_page_objects(
 #[cfg(feature = "diagnostics")]
 pub fn window_objects_when(
     _expected: Option<super::super::WindowObjects>,
-    _seconds: f64,
     _done: Box<dyn FnOnce(super::super::WindowObjects, bool) + Send>,
-) -> Result<(), String> {
+) -> Result<super::super::WaitEnd, String> {
     missing("window object counts")
 }
 
 #[cfg(feature = "diagnostics")]
 pub fn when_process_exited(
     _pid: i32,
-    _seconds: f64,
     _done: Box<dyn FnOnce(bool) + Send>,
-) -> Result<(), String> {
+) -> Result<super::super::WaitEnd, String> {
     missing("process exit waits")
 }
 

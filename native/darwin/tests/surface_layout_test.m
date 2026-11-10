@@ -415,13 +415,13 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration) {
     if (!created) { sp_surface_close(surface); [window close]; [window release]; return; }
     compositionDirectory = [[NSString stringWithUTF8String:directory] copy];
     char *operationError = NULL;
-    BOOL opened = sp_capture_open(window.windowNumber, false, &operationError);
+    BOOL opened = sp_capture_open(window.windowNumber, false, 0, &operationError);
     BOOL started = NO;
     if (opened) { free(operationError); operationError = NULL; started = sp_capture_start(directory, false, &operationError); }
     check(started, [NSString stringWithFormat:@"the composition recording starts (%s)", operationError == NULL ? "" : operationError]);
     free(operationError);
     if (started) {
-        check(sp_capture_wait() > 0, @"the composition recording contains its initial frame");
+        check(sp_capture_wait(0) > 0, @"the composition recording contains its initial frame");
         surfaceLayoutTraceStart();
         surfaceLayoutBegin(window, 107, ^(int allowed) { check(allowed, @"the composition transaction starts"); });
         webviewSetFrame(surface, 40, 40, 250, 120);
@@ -447,7 +447,7 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration) {
             check(error == NULL, @"the final composition fixture is presented"); shown = at;
         });
         until(^BOOL { return shown != 0; });
-        int count = sp_capture_stop(shown);
+        int count = sp_capture_stop(shown, 0);
         check(count >= 2 && !sp_capture_limited(), @"the composition recording includes initial and final frames without truncation");
         double timeline[SURFACE_LAYOUT_TRACE_STAGES] = {0};
         check(surfaceLayoutTraceStop(timeline, 1) == 1, @"the composition recording contains its transaction timeline");
@@ -558,13 +558,13 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
     }
     compositionDirectory = [[NSString stringWithUTF8String:directory] copy];
     char *operationError = NULL;
-    BOOL opened = sp_capture_open(window.windowNumber, false, &operationError);
+    BOOL opened = sp_capture_open(window.windowNumber, false, 0, &operationError);
     BOOL started = NO;
     if (opened) { free(operationError); operationError = NULL; started = sp_capture_start(directory, false, &operationError); }
     check(started, [NSString stringWithFormat:@"the first-show recording starts (%s)", operationError == NULL ? "" : operationError]);
     free(operationError);
     if (started) {
-        check(sp_capture_wait() > 0, @"the hidden-root recording contains its initial frame");
+        check(sp_capture_wait(0) > 0, @"the hidden-root recording contains its initial frame");
         surfaceLayoutTraceStart();
         __block BOOL prepared = NO;
         surfaceLayoutBegin(window, 108, ^(int allowed) { prepared = allowed != 0; });
@@ -589,7 +589,7 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
             @"root presentation while the app-DOM barrier is pending keeps the existing keyboard owner");
         NSString *pendingStillPath = [[NSString stringWithUTF8String:directory] stringByAppendingPathComponent:@"pending.png"];
         char *stillError = NULL;
-        BOOL stillCaptured = sp_capture_still((long[]){window.windowNumber}, 1, pendingStillPath.fileSystemRepresentation, &stillError);
+        BOOL stillCaptured = sp_capture_still((long[]){window.windowNumber}, 1, pendingStillPath.fileSystemRepresentation, 0, &stillError);
         check(stillCaptured, [NSString stringWithFormat:@"the pending first-show window is captured (%s)",
             stillError == NULL ? "no error" : stillError]);
         free(stillError);
@@ -606,7 +606,7 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
             check(error == NULL, @"the first-show marker is displayed after commit"); shown = at;
         });
         until(^BOOL { return shown != 0; });
-        int count = sp_capture_stop(shown);
+        int count = sp_capture_stop(shown, 0);
         const char *captureError = sp_capture_error();
         check(count >= 2 && !sp_capture_limited() && captureError[0] == '\0',
             [NSString stringWithFormat:@"the first-show recording completes without dropped frames or errors "
