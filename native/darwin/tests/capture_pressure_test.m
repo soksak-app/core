@@ -408,9 +408,12 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"stop reports the stream completion error alongside earlier failures (%@)", stopError]);
 
     // ScreenCaptureKit ends a stream with an error. The stream ends before any callback meets the stop boundary, so no
-    // later callback follows and the stop ends by that end.
-    reset([directory stringByAppendingPathComponent:@"missing"], 1);
+    // later callback follows and the stop ends by that end. The stop above wrote the source manifest of its recording, which
+    // created the folder missing, so this write fails in a folder that no stop created.
+    reset([directory stringByAppendingPathComponent:@"missing-at-stream-end"], 1);
     [captureSink write:frame]; dispatch_sync(captureWriter, ^{});
+    check(strstr(sp_capture_error(), "not written") != NULL,
+        @"the controlled file-write failure before the stream end is observable before stop");
     captureStream = (SCStream *)[CaptureStopFixture new];
     captureQueue = dispatch_queue_create("capture.test.samples", DISPATCH_QUEUE_SERIAL);
     SPCaptureAttempt *endedAttempt = [SPCaptureAttempt new];

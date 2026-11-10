@@ -2,6 +2,7 @@
 // obsolete target objects. Then ends the preparation wait before its completion and checks that the call returns that end and
 // that the completion that arrives afterwards leaves the following recording state and object ownership unchanged.
 #import "../src/capture.m"
+#import "support/event_wait.h"
 #import <objc/runtime.h>
 
 static int failures;
@@ -48,6 +49,10 @@ int main(void) { @autoreleasepool {
     window.releasedWhenClosed = NO;
     window.animationBehavior = NSWindowAnimationBehaviorNone;
     [window orderFrontRegardless];
+    // A preparation sizes the recording from the bounds that the window server reports for the window, and the window server
+    // has them once it put the window on screen, which the occlusion state reports.
+    eventWait(@"the window server shows the fixture window",
+        ^BOOL { return (window.occlusionState & NSWindowOcclusionStateVisible) != 0; });
     __block SCShareableContent *content = nil;
     __block NSError *queryError = nil;
     dispatch_semaphore_t ready = dispatch_semaphore_create(0);
