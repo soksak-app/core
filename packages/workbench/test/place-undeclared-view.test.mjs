@@ -9,7 +9,7 @@ import { JSDOM } from "jsdom";
 const view = (id, x = 0) => ({ id, plugin: "probe", dim: false, visible: true,
   surface: { pluginId: "probe", composition: { kind: "view", page: "ui/page.html" } }, applied: { x, y: 0, w: 3, h: 4 } });
 
-async function placement(t, states, read = () => {}) {
+async function placement(t, states, read = () => {}, synced = () => {}) {
   const dom = new JSDOM('<div id="plane"></div>');
   globalThis.document = dom.window.document;
   const holds = [];
@@ -40,6 +40,7 @@ async function placement(t, states, read = () => {}) {
       if (name === "setTheme") return null;
       if (name === "syncSurfaces") {
         syncs.push(request.surfaces.map(({ id }) => id));
+        synced(syncs.at(-1));
         return { ticket: syncs.length, chrome: { controls: { x: 13, y: 13, w: 54, h: 14 }, row: request.titlebar },
           placements: request.surfaces.map(({ id, x, y, w, h }) => ({ id, visible: true, scale: 2, x, y, w, h })) };
       }
@@ -77,23 +78,27 @@ test("a view that does not declare leaves its place empty and the other views an
 });
 
 test("a placement that starts while a declaration is in flight waits for its answer and places the view", async (t) => {
-  let answer;
-  const declaring = new Promise((resolve) => { answer = resolve; });
-  const states = new Map([["declaring-view", { state: "declaring", answered: declaring }]]);
-  // The declaration answers after the placement has read it in flight; the requests sent at that answer show whether it waited.
-  let atAnswer = null;
-  const { surfaces, holds, syncs } = await placement(t, states, (id, state) => {
-    if (state.state !== "declaring" || atAnswer) return;
-    atAnswer = new Promise((resolve) => setImmediate(() => {
-      const sent = syncs.length;
+  // The host answer of the declaration is a gate that the test holds. The placement sends no host request before that answer, so the
+  // event that shows it waits is its subscription to the answer; the gate opens at that subscription, and the order of the answer
+  // and the request that reaches the host shows whether the placement waited.
+  const order = [];
+  let open;
+  const gate = new Promise((resolve) => { open = resolve; });
+  const subscribe = gate.then.bind(gate);
+  let waited = false;
+  gate.then = (...handlers) => {
+    if (!waited) {
+      waited = true;
+      order.push("answer");
       states.set("declaring-view", { state: "declared" });
-      answer();
-      resolve(sent);
-    }));
-  });
+      open();
+    }
+    return subscribe(...handlers);
+  };
+  const states = new Map([["declaring-view", { state: "declaring", answered: gate }]]);
+  const { surfaces, holds, syncs } = await placement(t, states, () => {}, (ids) => order.push(`sync:${ids.join(",")}`));
   const placed = await surfaces.place({ surfaces: [view("declaring-view")], settled: true, drawn: true, titlebar: 40 });
-  assert.ok(atAnswer, "the placement did not read the declaration in flight");
-  assert.equal(await atAnswer, 0, "the placement sent its request before the declaration answered");
+  assert.deepEqual(order, ["answer", "sync:declaring-view"], "the placement sent its request before the declaration answered");
   assert.deepEqual(syncs, [["declaring-view"]]);
   assert.deepEqual(placed.deferred, []);
   assert.deepEqual(holds.flatMap(({ ids }) => ids), [], "the placement held a declaration that was already in flight");
