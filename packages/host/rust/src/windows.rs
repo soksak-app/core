@@ -1852,5 +1852,9 @@ pub(crate) fn window_controls(window: &Window) -> Result<Rect, String> {
 mod records_test;
 
 #[cfg(test)]
+#[path = "windows_ends_test.rs"]
+mod ends_test;
+
+#[cfg(test)]
 #[path = "../tests/project_data_order/project_data_order_test.rs"]
 mod project_data_order_test;

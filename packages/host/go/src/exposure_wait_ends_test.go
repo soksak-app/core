@@ -224,3 +224,28 @@ func TestAReloadEndsAtTheCloseOfItsWindowOrTheEndOfItsPageProcess(t *testing.T) 
 		})
 	}
 }
+
+// A reload that begins after the end of the page process of its window is not ended by that end: the reload starts a new page,
+// which is how that window recovers, so it waits for the ready of that page and ends at a later end of the window.
+// contract: reload.ends-by-ready-close-or-process-end
+func TestAReloadAfterTheEndOfItsPageProcessStartsTheNewPage(t *testing.T) {
+	savedFramework := framework
+	framework = stepFramework{}
+	t.Cleanup(func() { framework = savedFramework })
+	window := &reloadingWindow{started: make(chan struct{})}
+	s := &Surfaces{host: &Host{relay: NewRelay[relayTarget]()}, window: window}
+	s.pageProcessEnded()
+	result := make(chan error, 1)
+	go func() { result <- s.reloadPage() }()
+	<-window.started
+	select {
+	case err := <-result:
+		t.Fatalf("the end of the page process before the reload ended the reload: %v", err)
+	default:
+	}
+	s.endWindow()
+	rpc := expectRPCCode(t, result, codeNoWindow, "the reload")
+	if want := ReloadEndText("the window closed", "none"); rpc.Message != want {
+		t.Fatalf("the reload failed with %q, want %q", rpc.Message, want)
+	}
+}
