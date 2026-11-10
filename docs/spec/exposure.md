@@ -304,7 +304,7 @@ Two pointers therefore press and drag at once in one window when their presses g
 
 ### Virtual key window
 
-In an application that is not really active, `input.key` and a `move` of `input.pointer` make their window the virtual key window on macOS. It answers as the key and main window inside the application, and the application answers as active, so WebKit updates hover and page focus. The system key window and the front application do not change. The rules:
+In an application that is not really active, `input.key` and a `move` of `input.pointer` make their window the virtual key window on macOS. It answers as the key and main window inside the application, and the application answers as active, so WebKit updates hover and page focus. The system key window does not change, and the application does not take the front: it never becomes the frontmost application, and the system does not hold it as active. Which application is in front otherwise belongs to the other processes, so no check judges it. The rules:
 
 - A process has at most one. Input to another window moves it there.
 - AppKit can hold a key window in an application that is not active, such as a window that a host shows while another window is the virtual key window; `host.window` then reports `key` true and `active` false. Input of that window is input of an application that is not active: a `move` makes it the virtual key window, and a press goes directly to the view.

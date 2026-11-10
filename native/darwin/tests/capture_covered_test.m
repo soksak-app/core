@@ -231,7 +231,6 @@ int main(void) { @autoreleasepool {
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
     observeSystemPaths();
-    pid_t front = NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier;
     NSString *directory = temporaryFolder(@"soksak-capture-covered-");
 
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(160, 160, kWidth, kHeight)
@@ -396,7 +395,9 @@ int main(void) { @autoreleasepool {
     startFailure = nil;
 
     check(!NSApp.isActive, @"the capture does not activate the application");
-    check(NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier == front, @"the front application does not change");
+    // Which other application is in front belongs to the other processes, so the check judges only this process.
+    check(NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier != getpid()
+        && !NSRunningApplication.currentApplication.isActive, @"the capture does not bring the application to the front");
     [cover close];
     [window removeChildWindow:child];
     [child close];
