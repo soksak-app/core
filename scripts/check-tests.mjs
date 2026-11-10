@@ -6631,14 +6631,14 @@ const FEATURE_LINKS = [
   {
     id: "F17",
     implementation: [
-      { file: "packages/host/go/src/sidecars.go", symbol: "the service did not print its endpoint within" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "serviceEndpointLine(cmd, stdout, c.stopSignal)" },
       { file: "packages/host/rust/src/sidecars.rs", symbol: "the service did not print its endpoint within" },
     ],
     tests: [
-      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentStartFailsWhenTheServicePrintsNoEndpoint" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestAStopEndsAStartWhoseServicePrintsNoEndpoint" },
       { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_start_fails_when_the_service_prints_no_endpoint" },
     ],
-    expected: "A persistent service that prints no endpoint fails the start after the ready limit, and the host ends it, whenever the service starts.",
+    expected: "A persistent service that prints no endpoint keeps its start waiting until a stop, which ends and reaps it and fails the start, whenever the service starts.",
     levels: ["unit"],
   },
   {
@@ -8997,11 +8997,11 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/host/go/tests/sidecars_test.go", id: "TestSlowSidecarDoesNotBlockOtherSends" },
-      { file: "packages/host/go/tests/sidecars_test.go", id: "TestStopForcedKill" },
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestAStopTerminatesASidecarThatIgnoresItsInput" },
       { file: "packages/host/rust/tests/sidecars_test.rs", id: "slow_sidecar_does_not_block_other_sends" },
       { file: "packages/host/rust/tests/sidecars_test.rs", id: "stop_forced_kill" },
     ],
-    expected: "A sidecar that does not read its input fills its channel and is killed after the stop deadline on any machine.",
+    expected: "A sidecar that does not read its input fills its channel and ends at the terminate signal of the stop on any machine.",
     levels: ["unit"],
   },
   {
@@ -10333,13 +10333,6 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/tests/test_mark_test.rs", id: "a_test_mark_is_stored_when_lifecycle_is_off" },
     ],
     expected: "Both hosts store and flush host.test.start and host.test.end at info under lifecycle=error and lifecycle=off, return their event positions, and still gate ordinary lifecycle/info records.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-40-1",
-    implementation: [{ file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) processPersistent" }],
-    tests: [{ file: "packages/host/go/src/sidecar_reply_test.go", id: "TestAZeroHelloTimeoutIsRefusedBeforeAServiceStarts" }],
-    expected: "The Wails persistent-service start refuses a zero HelloTimeout before starting a service, and its owning test calls the current processPersistent function signature and checks that error.",
     levels: ["unit"],
   },
   {
