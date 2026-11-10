@@ -348,14 +348,14 @@ static void notifyScale(NSView *view) {
     return domHit(self.webview, self, point);
 }
 - (void)setFrameSize:(NSSize)size {
-    [CATransaction begin];
+    surfaceTransactionBegin();
     [CATransaction setDisableActions:YES];
     [super setFrameSize:size];
     self.nativePlane.frame = self.bounds;
     if (self.webview && self.webview.superview == self) self.webview.frame = self.bounds;
     notifyScale(self.nativePlane);
     [self applyOverlayMask];
-    [CATransaction commit];
+    surfaceTransactionCommit();
 }
 @end
 
@@ -395,12 +395,12 @@ static void notifyScale(NSView *view) {
     return nil;
 }
 - (void)setFrameSize:(NSSize)size {
-    [CATransaction begin];
+    surfaceTransactionBegin();
     [CATransaction setDisableActions:YES];
     [super setFrameSize:size];
     // NSView geometry is expressed in AppKit points. The backing scale belongs to the raster size and not to frame or bounds coordinates.
     self.bounds = NSMakeRect(0, 0, size.width, size.height);
-    [CATransaction commit];
+    surfaceTransactionCommit();
 }
 // A web view of a surface host passes cursorUpdate: up its superviews to this container, and the view that holds the
 // container decides by its hit test which view the pointer is over.
@@ -864,7 +864,7 @@ void webviewSetFrame(void *handle, double x, double y, double width, double heig
         normalizeCoordinateBounds((SPSurfaceCoordinates *)placedView.superview);
     }
     NSRect placed = [placedView.superview convertRect:frame fromView:window.contentView];
-    [CATransaction begin];
+    surfaceTransactionBegin();
     [CATransaction setDisableActions:YES];
     placedView.frame = placed;
     // Setting the host frame directly does not guarantee that setFrameSize: is called. The native plane and the surface web view are placed
@@ -877,7 +877,7 @@ void webviewSetFrame(void *handle, double x, double y, double width, double heig
         // again after the host and the plane are settled. Otherwise the image region keeps the earlier scale and size until the next resize.
         notifyScale(host.nativePlane);
     }
-    [CATransaction commit];
+    surfaceTransactionCommit();
 }
 
 void webviewGetFrame(void *handle, double *out) {
