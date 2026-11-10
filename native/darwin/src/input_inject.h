@@ -11,7 +11,7 @@ typedef enum {
     SP_INPUT_DELIVERED = 0,
     SP_INPUT_REJECTED = 1, // the window, coordinates, phase, or thread is invalid
     SP_INPUT_INACTIVE = 2, // a move or key while the application is really active and the window is not its key window (WebKit does not update hover for this move), or a key sent to a window that is not the key window of the active application
-    SP_INPUT_UNRECEIVED = 3, // the document did not receive the press or release within the timeout, or the scroll target did not render within the timeout
+    SP_INPUT_UNRECEIVED = 3, // an event ended the wait before the document received the press or release, or before the scroll target or the web views presented
     SP_INPUT_BUTTON_HELD = 4, // AppKit reports a pressed mouse button, so the synthetic press or release was not delivered
     SP_INPUT_PRESS_OPEN = 5, // a press of that button of the pointer is still open, so the press was not delivered
     SP_INPUT_POINTER_HELD = 6, // an open press of another pointer would share the state that the input changes, so it was not delivered
@@ -83,21 +83,25 @@ typedef void (*sp_input_done)(void *context, sp_input_result result, const sp_in
 // has received the event. When an input field has focus, WebKit first passes mouse events to the input method
 // asynchronously, so a press and a release delivered back to back can be reordered in the document. A scroll is
 // delivered after the web view at the coordinates has rendered its current state; a wheel event received before the
-// scroll tree of a new document is rendered does not move the document. When no receipt or rendering occurs within
-// timeoutSeconds, the result is SP_INPUT_UNRECEIVED. clicks is the click count of a press or a release, as in
-// sp_input_pointer_clicks. pointer is the name of the pointer; a name that is NULL or not of the form of
+// scroll tree of a new document is rendered does not move the document. No wait has a limit (docs/spec/exposure.md#methods): a
+// press or a release ends at its receipt, at the end of the handling by WebKit without the receipt, at the end of the input
+// registration of its web view, at the close of its window, at the report that its web process stopped answering, and on the
+// path of the input method at the next press or key event of the application; a scroll and a move that waits for the virtual key
+// window end at their presentation or at the same ends of their web views. Each end without the event answers SP_INPUT_UNRECEIVED,
+// and a scroll into a window that is minimized or not shown answers it in its turn. clicks is the click count of a press or a
+// release, as in sp_input_pointer_clicks. pointer is the name of the pointer; a name that is NULL or not of the form of
 // SP_INPUT_POINTER_NAME_MAX is rejected. done is called once on the main thread. Call this function on the main thread.
 void sp_input_pointer_then(void *window, const char *pointer, double x, double y, int phase, int button, double deltaX,
-    double deltaY, int clicks, double timeoutSeconds, sp_input_done done, void *context);
+    double deltaY, int clicks, sp_input_done done, void *context);
 
 // Result of sp_input_activate. A failure identifies the stage at which activation stopped.
 typedef enum {
     SP_ACTIVATE_DONE = 0,
     SP_ACTIVATE_REJECTED = 1, // there is no window, or the caller is not on the main thread
-    SP_ACTIVATE_REFUSED = 2,  // the application did not become active within the timeout
-    SP_ACTIVATE_NOT_KEY = 3,  // the application is active, but the window did not become the key window within the timeout
-    SP_ACTIVATE_PENDING = 4,  // the web view of the window did not send its activity state to the web process within the timeout
-    SP_ACTIVATE_LOST = 5,     // after the web view sent its activity state, the application is inactive or the window is not the key window
+    SP_ACTIVATE_REFUSED = 2,  // the application did not become active before an event ended the step
+    SP_ACTIVATE_NOT_KEY = 3,  // the application is active, but the window did not become the key window or cannot become it
+    SP_ACTIVATE_PENDING = 4,  // the web views of the window did not send their activity state before an event ended the step
+    SP_ACTIVATE_LOST = 5,     // the application or the window lost activation before or after the web views sent their activity state
 } sp_activate_result;
 
 // When the result is not SP_ACTIVATE_DONE, frontmost is the name of the frontmost application at that time (bundle
@@ -105,14 +109,19 @@ typedef enum {
 typedef void (*sp_activate_done)(void *context, sp_activate_result result, const char *frontmost);
 
 // Activates the application and makes the window the key window. After the window is the key window and every web view
-// in the window has sent its activity state to the web process, done is called with SP_ACTIVATE_DONE. When this does
-// not finish within timeoutSeconds, done is called with the stage at which it stopped. done is called once on the main
+// in the window has sent its activity state to the web process, done is called with SP_ACTIVATE_DONE. No step has a limit
+// (docs/spec/exposure.md#methods). macOS answers a granted request with a notification and a refused one with no event, so the
+// activation step and the key window step end at their notification, at the next press or key event that the application receives
+// or at the close of the window, and the key window step also when another window becomes key. The web view step ends when every
+// web view reported, when the application or the window loses activation (SP_ACTIVATE_LOST), and at the close of the window, the end
+// of the input registration of a web view or the report that its process stopped answering (SP_ACTIVATE_PENDING). A window that
+// cannot become the key window or is minimized is refused in its turn with SP_ACTIVATE_NOT_KEY. done is called once on the main
 // thread. Call this function on the main thread.
-void sp_input_activate(void *window, double timeoutSeconds, sp_activate_done done, void *context);
+void sp_input_activate(void *window, sp_activate_done done, void *context);
 
 // Activates the application and the window, waits until only the web view at the coordinates reflects the active state, and calls done.
 // When the coordinates are on a native surface, only the window activation completes, without waiting for a web view.
-void sp_input_activate_at(void *window, double x, double y, double timeoutSeconds, sp_activate_done done, void *context);
+void sp_input_activate_at(void *window, double x, double y, sp_activate_done done, void *context);
 
 // key is a key name (Enter, Tab, Escape, Backspace, ArrowLeft, and so on) or one character. text is the string to
 // type; when it is NULL, key is used. modifiers is a bit sum: 1 Shift, 2 Control, 4 Option, 8 Command. down true is a

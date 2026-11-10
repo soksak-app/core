@@ -226,24 +226,21 @@ func keyCall(name, text string, modifiers uint, down bool) (devToolsCall, platfo
 // focusEmulation makes a page count as active. Its :focus needs that, and a window behind others is not active.
 var focusEmulation = newCall("Emulation.setFocusEmulationEnabled", map[string]any{"enabled": true})
 
-// errInputTimedOut is the answer of a call that did not complete within its wait.
-var errInputTimedOut = errors.New("the web view did not complete the input")
+// errWebviewEnded is the answer of a call whose web view ended before the call completed: the page did not receive its input.
+var errWebviewEnded = errors.New("the web view ended before the input completed")
 
 // queuedCall is a call of an inputQueue with its answer, which is nil for an input that answered when it was queued.
 type queuedCall struct {
-	call     devToolsCall
-	wait     time.Duration
-	answer   func(error)
-	answered bool
+	call   devToolsCall
+	answer func(error)
 }
 
 // inputQueue sends the calls of one web view. The protocol may process calls out of order, so a call starts when the one before it
-// completed. Use it on the UI thread: send completes there, and after runs its task there.
+// completed. A call ends by its completion or by the end of the web view, and nothing else ends it. Use it on the UI thread: send
+// completes there.
 type inputQueue struct {
 	// send starts a call, and complete runs when it ends. An error means that complete does not run.
 	send func(call devToolsCall, complete func(error)) error
-	// after runs task after a wait, unless the returned function cancels it.
-	after func(wait time.Duration, task func()) (cancel func())
 
 	waiting []*queuedCall
 	current *queuedCall
@@ -251,60 +248,49 @@ type inputQueue struct {
 	failed error
 	// focused is whether the focus emulation was asked for.
 	focused bool
+	// ended is the end of the web view, after which no call is sent.
+	ended error
 }
 
-// push queues a call, and answer receives its end. The returned error is why the input was not queued: the failure of an earlier call
-// with no answer, or a call that has not completed, after which the order of the calls is not known.
-func (q *inputQueue) push(call devToolsCall, wait time.Duration, answer func(error)) error {
+// push queues a call, and answer receives its end. The returned error is why the input was not queued: the end of the web view, or the
+// failure of an earlier call with no answer.
+func (q *inputQueue) push(call devToolsCall, answer func(error)) error {
+	if q.ended != nil {
+		return q.ended
+	}
 	if failed := q.failed; failed != nil {
 		q.failed = nil
 		return failed
 	}
-	if q.current != nil && q.current.answered {
-		return fmt.Errorf("the input call %s before this one did not complete", q.current.call.method)
-	}
 	if !q.focused {
 		q.focused = true
-		q.waiting = append(q.waiting, &queuedCall{call: focusEmulation, wait: wait})
+		q.waiting = append(q.waiting, &queuedCall{call: focusEmulation})
 	}
-	q.waiting = append(q.waiting, &queuedCall{call: call, wait: wait, answer: answer})
+	q.waiting = append(q.waiting, &queuedCall{call: call, answer: answer})
 	q.next()
 	return nil
 }
 
 // next starts the first waiting call, unless a call has not completed.
 func (q *inputQueue) next() {
-	for q.current == nil && len(q.waiting) > 0 {
+	for q.ended == nil && q.current == nil && len(q.waiting) > 0 {
 		entry := q.waiting[0]
 		q.waiting = q.waiting[1:]
 		q.current = entry
-		cancel := q.after(entry.wait, func() { q.timedOut(entry) })
-		err := q.send(entry.call, func(err error) {
-			cancel()
-			q.completed(entry, err)
-		})
-		if err != nil {
-			cancel()
+		if err := q.send(entry.call, func(err error) { q.completed(entry, err) }); err != nil {
 			q.completed(entry, err)
 		}
 	}
 }
 
-// timedOut ends the wait of a call. Later calls wait for its completion, because they must not pass it.
-func (q *inputQueue) timedOut(entry *queuedCall) {
-	entry.answered = true
-	if entry.answer != nil {
-		entry.answer(errInputTimedOut)
-	}
-}
-
-// completed ends a call and starts the next one. A call that timed out has answered.
+// completed ends a call and starts the next one. The completion of a call that the end of the web view answered answers nothing.
 func (q *inputQueue) completed(entry *queuedCall, err error) {
+	if q.current != entry {
+		return
+	}
 	q.current = nil
 	switch {
-	case entry.answered:
 	case entry.answer != nil:
-		entry.answered = true
 		entry.answer(err)
 	case err != nil:
 		q.failed = fmt.Errorf("%s: %w", entry.call.method, err)
@@ -312,12 +298,33 @@ func (q *inputQueue) completed(entry *queuedCall, err error) {
 	q.next()
 }
 
+// pageEnded ends the calls of a page that ended: its open call and its waiting calls answer errWebviewEnded, and their late completions
+// answer nothing. The next page gets the focus emulation again.
+func (q *inputQueue) pageEnded() {
+	open := q.waiting
+	if q.current != nil {
+		open = append([]*queuedCall{q.current}, open...)
+	}
+	q.current, q.waiting, q.focused = nil, nil, false
+	for _, entry := range open {
+		if entry.answer != nil {
+			entry.answer(errWebviewEnded)
+		}
+	}
+}
+
+// end ends the web view of the queue: its calls end as at the end of a page, and a later input fails at once.
+func (q *inputQueue) end() {
+	q.ended = errWebviewEnded
+	q.pageEnded()
+}
+
 // pointerResult is the result of a pointer input from the answer of its call.
 func pointerResult(err error) platform.PointerResult {
 	switch {
 	case err == nil:
 		return platform.PointerDelivered
-	case errors.Is(err, errInputTimedOut):
+	case errors.Is(err, errWebviewEnded):
 		return platform.PointerUnreceived
 	}
 	return platform.PointerRejected

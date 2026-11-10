@@ -633,14 +633,15 @@ type Platform interface {
 	// InjectPointer delivers a pointer input of the named pointer at the content area coordinates (x, y) of the window and returns the result.
 	// phase is 0 for move, 1 for press, 2 for drag, 3 for release and 4 for scroll, and button is 0 for left and 1 for right.
 	// Each pointer holds its own open presses (docs/spec/exposure.md#named-pointers).
-	// For a press and a release, it calls done on the UI thread after the document at the coordinates received the event or receive seconds passed.
+	// For a press and a release, it calls done on the UI thread after the document at the coordinates received the event, or with
+	// PointerUnreceived at the event that ended the wait without the receipt; no wait has a limit (docs/spec/exposure.md#methods).
 	// For other phases, it calls done immediately after delivery. held is the state of the rejection when the result is PointerButtonHeld
 	// or PointerHeld.
-	InjectPointer(window Window, pointer string, x, y float64, phase, button int, deltaX, deltaY float64, clicks int, receive float64, done func(result PointerResult, held ButtonHeld)) error
+	InjectPointer(window Window, pointer string, x, y float64, phase, button int, deltaX, deltaY float64, clicks int, done func(result PointerResult, held ButtonHeld)) error
 	// ActivateWindow activates the application and the window. It calls done(nil) on the UI thread after only the web view at the coordinates received the active state,
-	// or calls done with an error that names the stage where it stopped when it does not finish within timeout seconds.
+	// or calls done with an error that names the stage where it stopped at the event that ended that stage; no stage has a limit.
 	// When the coordinates are a native surface, it does not wait for the web view state.
-	ActivateWindow(window Window, x, y, timeout float64, done func(error)) error
+	ActivateWindow(window Window, x, y float64, done func(error)) error
 	// InjectKey delivers a key input to the window and returns whether it delivered it. modifiers is the bit sum of 1 Shift, 2 Control,
 	// 4 Option and 8 Command.
 	InjectKey(window Window, key, text string, modifiers uint, down bool) (PointerResult, error)

@@ -11,8 +11,6 @@ use block2::RcBlock;
 use objc2::msg_send;
 use objc2::runtime::{AnyClass, AnyObject, Bool};
 
-use std::time::Duration;
-
 use super::super::{
     ButtonHeld, Delivery, Frame, FrontmostApplication, Handle, Hit, Key, Pointer, PointerHeld,
 };
@@ -29,7 +27,6 @@ unsafe extern "C" {
         delta_x: f64,
         delta_y: f64,
         clicks: i32,
-        receive: f64,
         done: extern "C" fn(*mut c_void, i32, *const SpInputHeld),
         context: *mut c_void,
     );
@@ -37,7 +34,6 @@ unsafe extern "C" {
         window: *mut c_void,
         x: f64,
         y: f64,
-        timeout: f64,
         done: extern "C" fn(*mut c_void, i32, *const c_char),
         context: *mut c_void,
     );
@@ -133,8 +129,8 @@ fn button_held(held: &SpInputHeld) -> ButtonHeld {
 }
 
 /// Delivers pointer input to the window and reports the result with done. A press and a release are reported after the
-/// document received them. Call it on the main thread.
-pub fn pointer(window: Handle, pointer: Pointer, receive: Duration, done: Delivered) {
+/// document received them, or as unreceived at the event that ended the wait without the receipt. Call it on the main thread.
+pub fn pointer(window: Handle, pointer: Pointer, done: Delivered) {
     // exposure::pointer accepts only names of a-z, 0-9 and -, so the name holds no NUL.
     let name = CString::new(pointer.pointer).expect("a pointer name holds no NUL");
     let context = Box::into_raw(Box::new(done)) as *mut c_void;
@@ -149,7 +145,6 @@ pub fn pointer(window: Handle, pointer: Pointer, receive: Duration, done: Delive
             pointer.delta_x,
             pointer.delta_y,
             pointer.clicks,
-            receive.as_secs_f64(),
             delivered,
             context,
         )
@@ -165,14 +160,9 @@ const SP_ACTIVATE_NOT_KEY: i32 = 3;
 const SP_ACTIVATE_PENDING: i32 = 4;
 const SP_ACTIVATE_LOST: i32 = 5;
 
-struct Activation {
-    timeout: Duration,
-    done: Activated,
-}
-
 extern "C" fn activated(context: *mut c_void, result: i32, frontmost: *const c_char) {
     // context is the value that activate passed with Box::into_raw, and the library calls done once.
-    let activation = unsafe { Box::from_raw(context as *mut Activation) };
+    let done = unsafe { Box::from_raw(context as *mut Activated) };
     let frontmost = if frontmost.is_null() {
         "unknown".to_string()
     } else {
@@ -180,46 +170,34 @@ extern "C" fn activated(context: *mut c_void, result: i32, frontmost: *const c_c
             .to_string_lossy()
             .into_owned()
     };
-    (activation.done)(activation_result(
-        result,
-        activation.timeout.as_secs_f64(),
-        &frontmost,
-    ));
+    done(activation_result(result, &frontmost));
 }
 
 /// Converts the activation result into an error that states the stopped stage and the frontmost application.
-fn activation_result(result: i32, timeout: f64, frontmost: &str) -> Result<(), String> {
+fn activation_result(result: i32, frontmost: &str) -> Result<(), String> {
     match result {
         SP_ACTIVATE_DONE => Ok(()),
         SP_ACTIVATE_REFUSED => Err(format!(
-            "the system did not activate the application within {timeout}s; the frontmost application is {frontmost}"
+            "the system did not activate the application; the frontmost application is {frontmost}"
         )),
         SP_ACTIVATE_NOT_KEY => Err(format!(
-            "the application is active but the window did not become key within {timeout}s; the frontmost application is {frontmost}"
+            "the window did not become key; the frontmost application is {frontmost}"
         )),
         SP_ACTIVATE_PENDING => Err(format!(
-            "the window's webviews did not apply the active state within {timeout}s"
+            "the webviews did not apply the active state; the frontmost application is {frontmost}"
         )),
         SP_ACTIVATE_LOST => Err(format!(
-            "the window lost activation before its webviews applied it; the frontmost application is {frontmost}"
+            "the window lost activation before the webviews applied the active state; the frontmost application is {frontmost}"
         )),
         _ => Err("the window cannot be activated".to_string()),
     }
 }
 
-/// Activates the application, makes the window the key window and then calls done. Call it on the main thread.
-pub fn activate(window: Handle, x: f64, y: f64, timeout: Duration, done: Activated) {
-    let context = Box::into_raw(Box::new(Activation { timeout, done })) as *mut c_void;
-    unsafe {
-        sp_input_activate_at(
-            window as *mut c_void,
-            x,
-            y,
-            timeout.as_secs_f64(),
-            activated,
-            context,
-        )
-    }
+/// Activates the application, makes the window the key window and then calls done at the event that ends the activation. Call it on the
+/// main thread.
+pub fn activate(window: Handle, x: f64, y: f64, done: Activated) {
+    let context = Box::into_raw(Box::new(done)) as *mut c_void;
+    unsafe { sp_input_activate_at(window as *mut c_void, x, y, activated, context) }
 }
 
 /// Delivers key input to the window and returns whether it was delivered. Call it on the main thread. A key name or a

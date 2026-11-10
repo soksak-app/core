@@ -34,12 +34,6 @@ pub use crate::platform::{ButtonHeld, Delivery, FrontmostApplication, Key, Point
 /// The time within which a document must respond.
 pub const TIMEOUT: Duration = Duration::from_secs(10);
 
-/// The time to wait for the application activation.
-const ACTIVATION: Duration = Duration::from_secs(5);
-
-/// The time that the press and release of input.pointer wait for the document to receive them.
-const RECEIPT: Duration = Duration::from_secs(2);
-
 /// The entries that the host declares. The format is the same as exposes of plugin.json, and each kind is in name
 /// order.
 fn host_declarations() -> Value {
@@ -2714,7 +2708,6 @@ impl Host {
                     handle,
                     pointer.x,
                     pointer.y,
-                    ACTIVATION,
                     Box::new(move |result| {
                         match tx.send(result) {
                             Ok(()) => {}
@@ -2730,7 +2723,7 @@ impl Host {
                 )
             })
             .map_err(native_failure(window.label(), NO_INPUT))?;
-            // The library calls done with the stopped stage after ACTIVATION elapsed, so the result always arrives.
+            // The library calls done with the stopped stage at the event that ended it, so the result always arrives.
             rx.recv()
                 .map_err(|e| e.to_string())
                 .and_then(|result| result)
@@ -2753,7 +2746,6 @@ impl Host {
                     platform.input_pointer(
                         handle,
                         pointer,
-                        RECEIPT,
                         Box::new(move |delivery| {
                             if tx.send(delivery).is_err() {
                                 crate::application_log::log_info(
@@ -2767,7 +2759,7 @@ impl Host {
             )
         })
         .map_err(native_failure(window.label(), NO_INPUT))?;
-        // The library calls done with Unreceived after RECEIPT elapsed, so the result always arrives.
+        // The library calls done with Unreceived at the event that ended the wait without the receipt, so the result always arrives.
         match rx
             .recv()
             .map_err(|e| Failure::new(NO_INPUT, e.to_string()))?
@@ -2791,10 +2783,7 @@ impl Host {
             )),
             Delivery::Unreceived => Err(Failure::new(
                 TIMED_OUT,
-                format!(
-                    "the document did not receive the input within {} ms",
-                    RECEIPT.as_millis()
-                ),
+                "the document did not receive the input",
             )),
             Delivery::ButtonHeld(held) => {
                 Err(Failure::new(BUTTON_HELD, button_held_message(&held)))

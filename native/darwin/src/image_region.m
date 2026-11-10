@@ -322,7 +322,7 @@ static void spEnsurePressOriginMonitor(void) {
                     } else {
                         bool active = false, key = false;
                         sp_input_press_origin_state(window, button, &active, &key);
-                        webviewInputReceive(webView, @"pointerup", 1.0, ^(BOOL received) {
+                        webviewInputReceiveThenDrain(webView, @"pointerup", ^(BOOL received) {
                             if (!received) {
                                 NSString *text = [NSString stringWithFormat:
                                     @"the paired pointer release was not received before press-origin cleanup: button %d, "

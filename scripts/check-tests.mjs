@@ -5544,15 +5544,15 @@ const FEATURE_LINKS = [
   {
     id: "F239-100",
     implementation: [
-      { file: "native/darwin/src/input_inject.m", symbol: "- (NSArray<NSString *> *)finishAtTimeout" },
-      { file: "native/darwin/src/input_inject.m", symbol: "NSString *sp_input_activity_timeout_message" },
+      { file: "native/darwin/src/input_inject.m", symbol: "- (NSArray<NSString *> *)finish" },
+      { file: "native/darwin/src/input_inject.m", symbol: "NSString *sp_input_activity_end_message" },
     ],
     tests: [
       { file: "native/darwin/tests/input_inject_test.m", id: "duplicate completion for one webview does not complete another pending webview" },
-      { file: "native/darwin/tests/input_inject_test.m", id: "timeout identifies only the unresolved webview" },
-      { file: "native/darwin/tests/input_inject_test.m", id: "a timed out wait registers no WebKit activity callbacks when its queued block runs late" },
-      { file: "native/darwin/tests/input_inject_test.m", id: "timeout before callback registration reports its exact stage" },
-      { file: "native/darwin/tests/input_inject_test.m", id: "registered timeout reports only actual unresolved identifiers" },
+      { file: "native/darwin/tests/input_inject_test.m", id: "the end of the step identifies only the unresolved webview" },
+      { file: "native/darwin/tests/input_inject_test.m", id: "an ended wait registers no WebKit activity callbacks when its queued block runs late" },
+      { file: "native/darwin/tests/input_inject_test.m", id: "an end before callback registration reports its exact stage and its event" },
+      { file: "native/darwin/tests/input_inject_test.m", id: "a registered end reports only actual unresolved identifiers and its event" },
       { file: "native/darwin/tests/view_focus_test.m", id: "the test output preserves captured activation errors from each source (%@)" },
     ],
     expected: "Activation waits identify only unresolved visible webviews, report whether callback registration started, reject late enrollment after timeout, and preserve emitted errors in the owner test output without retaining webviews.",
@@ -7508,7 +7508,7 @@ const FEATURE_LINKS = [
   {
     id: "F145.3",
     implementation: [
-      { file: "native/darwin/src/webview_input.m", symbol: "endAtLimit" },
+      { file: "native/darwin/src/webview_input.m", symbol: "endWithout" },
     ],
     tests: [
       { file: "native/darwin/tests/webview_input_receipts_test.m", id: "the next input is recorded as the end of the wait" },
@@ -11920,7 +11920,7 @@ const FEATURE_LINKS = [
       { file: "e2e/window-show-behind.mjs", symbol: "export async function firstWindowPlace(" },
       { file: "packages/host/mygo/src/frontend.go", symbol: "func (f *Frontend) windowClosed() {" },
       { file: "packages/host/go/src/surfaces.go", symbol: "func (s *Surfaces) syncSurfaces(req SyncRequest) (PreparedSurfaces, error) {" },
-      { file: "native/darwin/src/webview_input.m", symbol: "static void endAtLimit(WKWebView *view, SPInputReceipts *handler, SPInputWait *wait, NSTimeInterval timeout) {" },
+      { file: "native/darwin/src/webview_input.m", symbol: "static void endWithout(SPInputWait *wait, NSString *reason) {" },
       { file: "native/darwin/src/input_inject.m", symbol: "static void logUnreceived(NSWindow *window, WKWebView *target, NSView *reached, NSString *type, double x, double y) {" },
       { file: "packages/workbench-mygo/src/surfaces.go", symbol: "defer s.cancelOpened()" },
       { file: "packages/host/go/src/surfaces.go", symbol: "func (s *Surfaces) cancelOpenedLayout(ticket uint64, failure error) error {" },

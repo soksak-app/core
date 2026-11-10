@@ -104,7 +104,7 @@ var (
 )
 
 type NativeFunctions struct {
-	ActivateWindowAt                      func(uintptr, float64, float64, float64, uintptr)
+	ActivateWindowAt                      func(uintptr, float64, float64, uintptr)
 	Calloc                                func(uint64, uint64) unsafe.Pointer
 	CoreRootSet                           func(uintptr)
 	DocumentAddScript                     func(unsafe.Pointer, *byte)
@@ -121,7 +121,7 @@ type NativeFunctions struct {
 	Free                                  func(unsafe.Pointer)
 	HostProcessFootprint                  func(int32, *uint64, *int32, *uint32, *uint32, *int32, *int64) int32
 	ImageCreate                           func(unsafe.Pointer, *byte, uintptr, uintptr) unsafe.Pointer
-	InjectPointer                         func(uintptr, *byte, float64, float64, int32, int32, float64, float64, int32, float64, uintptr)
+	InjectPointer                         func(uintptr, *byte, float64, float64, int32, int32, float64, float64, int32, uintptr)
 	InstallDockMenu                       func() bool
 	InstallMainThread                     func(uintptr, uintptr)
 	InstallQuitRequest                    func() bool

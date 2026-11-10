@@ -1,7 +1,7 @@
 //! What a WebView2 receives for pointer and key input, and the order of its calls. It holds no COM call, so it also runs where
 //! WebView2 does not exist.
 
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
 use std::sync::LazyLock;
@@ -269,16 +269,19 @@ pub(crate) fn focus_emulation() -> Call {
 /// How a call of a queue ended without success.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum InputFailure {
-    /// The call did not complete within its wait.
-    TimedOut,
+    /// The page or the web view ended before the call completed, so the page did not receive its input.
+    WebviewEnded,
     Failed(String),
 }
+
+/// The text of [`InputFailure::WebviewEnded`].
+pub(crate) const WEBVIEW_ENDED: &str = "the web view ended before the input completed";
 
 /// The result of a pointer input from the answer of its call.
 pub(crate) fn pointer_delivery(result: &Result<(), InputFailure>) -> Delivery {
     match result {
         Ok(()) => Delivery::Delivered,
-        Err(InputFailure::TimedOut) => Delivery::Unreceived,
+        Err(InputFailure::WebviewEnded) => Delivery::Unreceived,
         Err(InputFailure::Failed(_)) => Delivery::Rejected,
     }
 }
@@ -299,11 +302,8 @@ pub(crate) trait Transport {
 
 struct Entry {
     call: Call,
-    wait: Duration,
     /// None for an input that answered when it was queued.
     answer: RefCell<Option<Answer>>,
-    has_answer: bool,
-    answered: Cell<bool>,
 }
 
 #[derive(Default)]
@@ -314,66 +314,50 @@ struct QueueState {
     failed: Option<String>,
     /// Whether the focus emulation was asked for.
     focused: bool,
+    /// Whether the web view ended, after which no call is sent.
+    ended: bool,
 }
 
 struct QueueInner {
     transport: Box<dyn Transport>,
-    after: After,
     state: RefCell<QueueState>,
 }
 
-/// Sends the calls of one web view. The protocol may process calls out of order, so a call starts when the one before it completed. Use it
-/// on the UI thread: a completion and a wait end there.
+/// Sends the calls of one web view. The protocol may process calls out of order, so a call starts when the one before it completed. A call
+/// ends by its completion or by the end of its page or its web view, and nothing else ends it. Use it on the UI thread: a completion ends
+/// there.
 #[derive(Clone)]
 pub(crate) struct InputQueue(Rc<QueueInner>);
 
 impl InputQueue {
-    pub(crate) fn new(transport: Box<dyn Transport>, after: After) -> Self {
+    pub(crate) fn new(transport: Box<dyn Transport>) -> Self {
         Self(Rc::new(QueueInner {
             transport,
-            after,
             state: RefCell::default(),
         }))
     }
 
-    /// Queues a call, and answer receives its end. The error is why the input was not queued: the failure of an earlier call with no answer,
-    /// or a call that has not completed, after which the order of the calls is not known.
-    pub(crate) fn push(
-        &self,
-        call: Call,
-        wait: Duration,
-        answer: Option<Answer>,
-    ) -> Result<(), String> {
+    /// Queues a call, and answer receives its end. The error is why the input was not queued: the end of the web view, or the failure of an
+    /// earlier call with no answer.
+    pub(crate) fn push(&self, call: Call, answer: Option<Answer>) -> Result<(), String> {
         {
             let mut state = self.0.state.borrow_mut();
+            if state.ended {
+                return Err(WEBVIEW_ENDED.to_string());
+            }
             if let Some(failed) = state.failed.take() {
                 return Err(failed);
-            }
-            if let Some(current) = &state.current
-                && current.answered.get()
-            {
-                return Err(format!(
-                    "the input call {} before this one did not complete",
-                    current.call.method
-                ));
             }
             if !state.focused {
                 state.focused = true;
                 state.waiting.push_back(Rc::new(Entry {
                     call: focus_emulation(),
-                    wait,
                     answer: RefCell::new(None),
-                    has_answer: false,
-                    answered: Cell::new(false),
                 }));
             }
-            let has_answer = answer.is_some();
             state.waiting.push_back(Rc::new(Entry {
                 call,
-                wait,
                 answer: RefCell::new(answer),
-                has_answer,
-                answered: Cell::new(false),
             }));
         }
         Self::next(&self.0);
@@ -385,7 +369,7 @@ impl InputQueue {
         loop {
             let entry = {
                 let mut state = inner.state.borrow_mut();
-                if state.current.is_some() {
+                if state.ended || state.current.is_some() {
                     return;
                 }
                 let Some(entry) = state.waiting.pop_front() else {
@@ -394,53 +378,61 @@ impl InputQueue {
                 state.current = Some(entry.clone());
                 entry
             };
-            let timed = entry.clone();
-            let cancel: Rc<RefCell<Option<Cancel>>> = Rc::new(RefCell::new(Some((inner.after)(
-                entry.wait,
-                Box::new(move || Self::timed_out(&timed)),
-            ))));
             let complete = {
-                let (inner, entry, cancel) = (inner.clone(), entry.clone(), cancel.clone());
-                Box::new(move |result: Result<(), String>| {
-                    if let Some(cancel) = cancel.borrow_mut().take() {
-                        cancel();
-                    }
-                    Self::completed(&inner, &entry, result);
-                })
+                let (inner, entry) = (inner.clone(), entry.clone());
+                Box::new(move |result: Result<(), String>| Self::completed(&inner, &entry, result))
             };
             if let Err(error) = inner.transport.send(&entry.call, complete) {
-                if let Some(cancel) = cancel.borrow_mut().take() {
-                    cancel();
-                }
                 Self::completed(inner, &entry, Err(error));
             }
         }
     }
 
-    /// Ends the wait of a call. Later calls wait for its completion, because they must not pass it.
-    fn timed_out(entry: &Rc<Entry>) {
-        entry.answered.set(true);
+    /// Ends a call and starts the next one. The completion of a call that the end of its page or its web view answered answers nothing.
+    fn completed(inner: &Rc<QueueInner>, entry: &Rc<Entry>, result: Result<(), String>) {
+        {
+            let mut state = inner.state.borrow_mut();
+            if !state
+                .current
+                .as_ref()
+                .is_some_and(|current| Rc::ptr_eq(current, entry))
+            {
+                return;
+            }
+            state.current = None;
+        }
         let answer = entry.answer.borrow_mut().take();
-        if let Some(answer) = answer {
-            answer(Err(InputFailure::TimedOut));
+        match (answer, result) {
+            (Some(answer), result) => answer(result.map_err(InputFailure::Failed)),
+            (None, Err(error)) => {
+                inner.state.borrow_mut().failed = Some(format!("{}: {error}", entry.call.method))
+            }
+            (None, Ok(())) => {}
+        }
+        Self::next(inner);
+    }
+
+    /// Ends the calls of a page that ended: its open call and its waiting calls answer [`InputFailure::WebviewEnded`], and their late
+    /// completions answer nothing. The next page gets the focus emulation again.
+    pub(crate) fn page_ended(&self) {
+        let open: Vec<Rc<Entry>> = {
+            let mut state = self.0.state.borrow_mut();
+            state.focused = false;
+            let current = state.current.take();
+            current.into_iter().chain(state.waiting.drain(..)).collect()
+        };
+        for entry in open {
+            let answer = entry.answer.borrow_mut().take();
+            if let Some(answer) = answer {
+                answer(Err(InputFailure::WebviewEnded));
+            }
         }
     }
 
-    /// Ends a call and starts the next one. A call that timed out has answered.
-    fn completed(inner: &Rc<QueueInner>, entry: &Rc<Entry>, result: Result<(), String>) {
-        inner.state.borrow_mut().current = None;
-        if !entry.answered.get() {
-            if entry.has_answer {
-                entry.answered.set(true);
-                let answer = entry.answer.borrow_mut().take();
-                if let Some(answer) = answer {
-                    answer(result.map_err(InputFailure::Failed));
-                }
-            } else if let Err(error) = result {
-                inner.state.borrow_mut().failed = Some(format!("{}: {error}", entry.call.method));
-            }
-        }
-        Self::next(inner);
+    /// Ends the web view of the queue: its calls end as at the end of a page, and a later input fails at once.
+    pub(crate) fn end(&self) {
+        self.0.state.borrow_mut().ended = true;
+        self.page_ended();
     }
 }
 

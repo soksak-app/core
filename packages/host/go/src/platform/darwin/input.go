@@ -37,7 +37,7 @@ func (implementation) WatchInput(window platform.Window, input platform.Input) (
 }
 
 // InjectPointer delivers input with sp_input_pointer_then of native/darwin. It does not activate the application.
-func (implementation) InjectPointer(window platform.Window, pointer string, x, y float64, phase, button int, deltaX, deltaY float64, clicks int, receive float64, done func(platform.PointerResult, platform.ButtonHeld)) error {
+func (implementation) InjectPointer(window platform.Window, pointer string, x, y float64, phase, button int, deltaX, deltaY float64, clicks int, done func(platform.PointerResult, platform.ButtonHeld)) error {
 	pointerSequence.Lock()
 	var once sync.Once
 	serialized := func(result platform.PointerResult, held platform.ButtonHeld) {
@@ -47,7 +47,7 @@ func (implementation) InjectPointer(window platform.Window, pointer string, x, y
 		})
 	}
 	native.InjectPointer(uintptr(window), native.CString(pointer), float64(x), float64(y), int32(phase), int32(button), float64(deltaX), float64(deltaY), int32(clicks),
-		float64(receive), uintptr(handles.NewHandle(serialized)))
+		uintptr(handles.NewHandle(serialized)))
 	return nil
 }
 
@@ -100,43 +100,39 @@ func pointerHeld(held *abi.SpInputHeld) platform.ButtonHeld {
 	return platform.ButtonHeld{Pointer: native.GoString(held.Pointer), Reason: native.GoString(held.Reason)}
 }
 
-type activation struct {
-	timeout float64
-	done    func(error)
-}
-
 func goHost_input_activated(context uintptr, result int32, frontmost *byte) {
 	handle := handles.Handle(uintptr(context))
-	a := handle.Value().(activation)
+	done := handle.Value().(func(error))
 	handle.Delete()
 	name := "unknown"
 	if frontmost != nil {
 		name = native.GoString(frontmost)
 	}
-	a.done(activationResult(int32(result), a.timeout, name))
+	done(activationResult(int32(result), name))
 }
 
-// activationResult converts the result of sp_input_activate to an error that names the stage where it stopped and the frontmost application.
-func activationResult(result int32, timeout float64, frontmost string) error {
+// activationResult converts the result of sp_input_activate to an error that names the stage where it stopped and the frontmost application
+// (docs/spec/exposure.md#methods).
+func activationResult(result int32, frontmost string) error {
 	switch result {
 	case abi.SP_ACTIVATE_DONE:
 		return nil
 	case abi.SP_ACTIVATE_REFUSED:
-		return fmt.Errorf("the system did not activate the application within %gs; the frontmost application is %s", timeout, frontmost)
+		return fmt.Errorf("the system did not activate the application; the frontmost application is %s", frontmost)
 	case abi.SP_ACTIVATE_NOT_KEY:
-		return fmt.Errorf("the application is active but the window did not become key within %gs; the frontmost application is %s", timeout, frontmost)
+		return fmt.Errorf("the window did not become key; the frontmost application is %s", frontmost)
 	case abi.SP_ACTIVATE_PENDING:
-		return fmt.Errorf("the window's webviews did not apply the active state within %gs", timeout)
+		return fmt.Errorf("the webviews did not apply the active state; the frontmost application is %s", frontmost)
 	case abi.SP_ACTIVATE_LOST:
-		return fmt.Errorf("the window lost activation before its webviews applied it; the frontmost application is %s", frontmost)
+		return fmt.Errorf("the window lost activation before the webviews applied the active state; the frontmost application is %s", frontmost)
 	default:
 		return errors.New("the window cannot be activated")
 	}
 }
 
 // ActivateWindow makes the window the key window with sp_input_activate of native/darwin.
-func (implementation) ActivateWindow(window platform.Window, x, y, timeout float64, done func(error)) error {
-	native.ActivateWindowAt(uintptr(window), float64(x), float64(y), float64(timeout), uintptr(handles.NewHandle(activation{timeout, done})))
+func (implementation) ActivateWindow(window platform.Window, x, y float64, done func(error)) error {
+	native.ActivateWindowAt(uintptr(window), float64(x), float64(y), uintptr(handles.NewHandle(done)))
 	return nil
 }
 

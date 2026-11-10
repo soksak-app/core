@@ -39,7 +39,7 @@ func SetWebview(window platform.Window, core, controller unsafe.Pointer, ended f
 		return err
 	}
 	view := &nativeWebview{window: uintptr(window), core: uintptr(core), controller: uintptr(controller)}
-	view.queue = inputQueue{send: view.callDevTools, after: afterOnUIThread}
+	view.queue = inputQueue{send: view.callDevTools}
 	comCall(view.core, slotAddRef)
 	comCall(view.controller, slotAddRef)
 	if err := view.watchProcessFailures(ended); err != nil {
@@ -67,7 +67,9 @@ func EndWebview(window platform.Window) {
 	}
 }
 
+// release ends the input of the web view and lets it go.
 func (v *nativeWebview) release() {
+	v.queue.end()
 	if v.failed != 0 {
 		comCall(v.core, webviewRemoveProcessFailed, uintptr(v.failedToken))
 		comCall(v.failed, slotRelease)
@@ -76,7 +78,8 @@ func (v *nativeWebview) release() {
 	comCall(v.core, slotRelease)
 }
 
-// watchProcessFailures subscribes to the process failures of the web view, which WebView2 raises on the UI thread.
+// watchProcessFailures subscribes to the process failures of the web view, which WebView2 raises on the UI thread. The end of its page
+// ends its input calls, which that page no longer receives.
 func (v *nativeWebview) watchProcessFailures(ended func()) error {
 	window := v.window
 	handler := newHandler(handlerVtables().valued, func(_, args uintptr) {
@@ -87,6 +90,7 @@ func (v *nativeWebview) watchProcessFailures(ended func()) error {
 		}
 		switch processFailureOf(kind) {
 		case pageEnded:
+			v.queue.pageEnded()
 			ended()
 		case pageStays:
 			fmt.Fprintf(os.Stderr, "web view process: window %#x: process failure %d\n", window, kind)
