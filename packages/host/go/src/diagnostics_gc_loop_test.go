@@ -7,7 +7,6 @@ import (
 	"runtime/metrics"
 	"sync/atomic"
 	"testing"
-	"time"
 )
 
 func runGCLoop(t *testing.T, params string) error {
@@ -50,11 +49,7 @@ func TestTheCollectionLoopForcesCollectionsWhileItIsOn(t *testing.T) {
 		}
 	})
 	for range 2 {
-		select {
-		case <-collected:
-		case <-time.After(30 * time.Second):
-			t.Fatal("the loop returned from no collection within 30 s; the test stalled")
-		}
+		<-collected
 	}
 	if got := forcedCollections(); got < before+2 {
 		t.Fatalf("the forced collections rose from %d to %d after two collections of the loop, want 2 more", before, got)
@@ -63,8 +58,10 @@ func TestTheCollectionLoopForcesCollectionsWhileItIsOn(t *testing.T) {
 
 // contract: diagnostics.gc-loop.collects-until-stopped
 func TestTheCollectionLoopAnswersItsStopAfterTheHeldCollectionReturned(t *testing.T) {
-	previous := collectGarbage
-	t.Cleanup(func() { collectGarbage = previous })
+	previous, previousWaits := collectGarbage, gcLoopStopWaits
+	t.Cleanup(func() { collectGarbage, gcLoopStopWaits = previous, previousWaits })
+	waiting := make(chan struct{})
+	gcLoopStopWaits = func() { close(waiting) }
 	var calls atomic.Int64
 	var returned atomic.Bool
 	entered, release := make(chan struct{}, 1), make(chan struct{})
@@ -89,22 +86,32 @@ func TestTheCollectionLoopAnswersItsStopAfterTheHeldCollectionReturned(t *testin
 		close(release)
 		t.Fatalf("%d collections started while one was held, want 1", got)
 	}
-	// The held collection returns only after the stop was asked, so a stop that answered without waiting for it finds it held.
+	// The held collection returns only after the stop began to wait for the loop, so a stop that answers before that event
+	// answered while the collection was held, and one that neither waits nor answers stops at the limit of the runner.
 	type answer struct {
 		afterCollection bool
 		calls           int64
 	}
-	asking := make(chan struct{})
 	stopped := make(chan answer, 1)
 	go func() {
 		method := diagnosticMethods["diagnostics.gc.loop"]
-		close(asking)
 		if _, err := method(nil, nil, json.RawMessage(`{"on":false}`), nil); err != nil {
 			t.Error(err)
 		}
 		stopped <- answer{returned.Load(), calls.Load()}
 	}()
-	<-asking
+	select {
+	case <-waiting:
+	case <-stopped:
+		close(release)
+		t.Fatal("the stop answered while a collection was held")
+	}
+	select {
+	case <-stopped:
+		close(release)
+		t.Fatal("the stop answered while a collection was held")
+	default:
+	}
 	close(release)
 	got := <-stopped
 	if !got.afterCollection {

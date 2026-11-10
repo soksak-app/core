@@ -8,7 +8,6 @@ import (
 	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
-	"github.com/soksak-app/core/packages/host/go/tests/support"
 )
 
 // neverWaits is the run loop of a main thread that always handles an event.
@@ -68,13 +67,8 @@ func (s *steppedTime) wait(beat time.Duration) {
 // requirePark requires that the watch parks next at place: "beat" for the wait of a beat and "awake" for the wait of the run loop.
 func (s *steppedTime) requirePark(t *testing.T, place string) {
 	t.Helper()
-	select {
-	case got := <-s.parked:
-		if got != place {
-			t.Fatalf("the watch parked at %s, want %s", got, place)
-		}
-	case <-time.After(support.Stall):
-		t.Fatalf("the watch did not park within %v; the test stalled", support.Stall)
+	if got := <-s.parked; got != place {
+		t.Fatalf("the watch parked at %s, want %s", got, place)
 	}
 }
 
@@ -386,11 +380,7 @@ func (r *stallRecords) require(t *testing.T, want string) {
 func (r *stallRecords) await(t *testing.T, want string) {
 	t.Helper()
 	for r.joined() != want {
-		select {
-		case <-r.added:
-		case <-time.After(support.Stall):
-			t.Fatalf("events %q, want %q; the test stalled", r.joined(), want)
-		}
+		<-r.added
 	}
 }
 
@@ -504,6 +494,7 @@ func TestStoppingTheWatchWaitsForTheRunningSample(t *testing.T) {
 	records := newStallRecords()
 	started := make(chan struct{})
 	release := make(chan struct{})
+	waiting := make(chan struct{})
 	var samples atomic.Int32
 	var ended atomic.Bool
 	stop := host.StartStallWatch(host.StallWatchOptions{
@@ -517,37 +508,35 @@ func TestStoppingTheWatchWaitsForTheRunningSample(t *testing.T) {
 			ended.Store(true)
 			return nil
 		},
-		Folder:   t.TempDir(),
-		EmitHost: records.emit,
-		Clock:    clock.clock,
-		Wait:     clock.wait,
+		Folder:    t.TempDir(),
+		EmitHost:  records.emit,
+		Clock:     clock.clock,
+		Wait:      clock.wait,
+		StopWaits: func() { close(waiting) },
 	})
 	clock.requirePark(t, "beat")
 	clock.beats(t, 4)
-	select {
-	case <-started:
-	case <-time.After(support.Stall):
-		close(release)
-		stop()
-		t.Fatalf("no sample of the stall started within %v; the test stalled", support.Stall)
-	}
-	// The sample ends only after the stop was called, so a stop that returned without waiting for it finds it running.
-	calling := make(chan struct{})
-	returned := make(chan bool)
+	<-started
+	// The sample ends only after the stop began to wait for it, so a stop that returns before that event returned while the
+	// sample ran, and one that neither waits nor returns stops at the limit of the runner.
+	returned := make(chan bool, 1)
 	go func() {
-		close(calling)
 		stop()
 		returned <- ended.Load()
 	}()
-	<-calling
-	close(release)
 	select {
-	case endedFirst := <-returned:
-		if !endedFirst {
-			t.Fatal("the stop of the watch returned while the sample of the threads still ran")
-		}
-	case <-time.After(support.Stall):
-		t.Fatalf("the stop of the watch did not return within %v of the end of the sample; the test stalled", support.Stall)
+	case <-waiting:
+	case <-returned:
+		t.Fatal("the stop of the watch returned while the sample of the threads still ran")
+	}
+	select {
+	case <-returned:
+		t.Fatal("the stop of the watch returned while the sample of the threads still ran")
+	default:
+	}
+	close(release)
+	if endedFirst := <-returned; !endedFirst {
+		t.Fatal("the stop of the watch returned while the sample of the threads still ran")
 	}
 	if got := records.joined(); got != "host.stall,host.stall.sampled" {
 		t.Fatalf("events %q when the stop returned, want the stall and its sample", got)

@@ -259,6 +259,7 @@ fn a_blocked_main_thread_is_recorded_with_its_stacks_and_its_end() {
         emit_host: records.emit(),
         clock: Some(time.clock()),
         wait: Some(time.wait()),
+        stop_waits: None,
     });
     // The first heartbeat and two beats are answered. The main thread is held from 500 ms, and the fourth beat after that is
     // 1000 ms late; the sample of that stall ends before the next beat.
@@ -313,6 +314,7 @@ fn first_stall(extra: Duration) -> serde_json::Value {
         emit_host: records.emit(),
         clock: Some(time.clock()),
         wait: Some(time.wait()),
+        stop_waits: None,
     });
     time.require_park("beat");
     let mut late = extra;
@@ -365,6 +367,7 @@ fn a_sample_of_the_threads_does_not_stop_the_watch() {
         emit_host: records.emit(),
         clock: Some(time.clock()),
         wait: Some(time.wait()),
+        stop_waits: None,
     });
     // Holds the main thread for four beats, which is a stall, and answers again on the next beat, which ends it.
     let stall_and_end = |want: &[&str]| {
@@ -425,6 +428,7 @@ fn a_run_loop_that_waits_takes_no_heartbeat() {
         emit_host: records.emit(),
         clock: Some(time.clock()),
         wait: Some(time.wait()),
+        stop_waits: None,
     });
 
     // The run loop waits from the start of the watch, and the watch parks in that wait before it sends anything.
@@ -483,6 +487,7 @@ fn a_stall_that_ends_in_a_wait_is_resumed_and_its_sample_ends() {
         emit_host: records.emit(),
         clock: Some(time.clock()),
         wait: Some(time.wait()),
+        stop_waits: None,
     });
     time.require_park("awake");
     run_loop.wake(true);
@@ -519,6 +524,7 @@ fn stopping_the_watch_waits_for_the_running_sample() {
     let ended = Arc::new(AtomicBool::new(false));
     let counted = Arc::clone(&samples);
     let finished = Arc::clone(&ended);
+    let (waits, waiting) = mpsc::channel::<()>();
     let stop = start_stall_watch(StallWatchOptions {
         heartbeat: {
             let clock = time.clock();
@@ -540,26 +546,38 @@ fn stopping_the_watch_waits_for_the_running_sample() {
         emit_host: records.emit(),
         clock: Some(time.clock()),
         wait: Some(time.wait()),
+        stop_waits: Some(Box::new(move || waits.send(()).unwrap())),
     });
     time.require_park("beat");
     time.beats(4);
     starts.recv().expect("no sample of the stall started");
-    // The sample ends only after the stop was called, so a stop that returned without waiting for it finds it running.
-    let (calling, called) = mpsc::channel::<()>();
-    let (returned, returns) = mpsc::channel::<bool>();
+    // The sample ends only after the stop began to wait for it, so a stop that returns before that event returned while the
+    // sample ran, and one that neither waits nor returns stops at the limit of the runner.
+    let (events, event) = mpsc::channel::<Option<bool>>();
+    let returned = events.clone();
     let stopped = Arc::clone(&ended);
     std::thread::spawn(move || {
-        calling.send(()).unwrap();
         stop();
-        returned.send(stopped.load(Ordering::SeqCst)).unwrap();
+        returned.send(Some(stopped.load(Ordering::SeqCst))).unwrap();
     });
-    called.recv().unwrap();
-    release.send(()).unwrap();
-    let ended_first = returns
-        .recv()
-        .expect("the stop of the watch did not return after the end of the sample");
+    std::thread::spawn(move || {
+        if waiting.recv().is_ok() {
+            events.send(None).unwrap();
+        }
+    });
+    assert_eq!(
+        event.recv().unwrap(),
+        None,
+        "the stop of the watch returned while the sample of the threads still ran"
+    );
     assert!(
-        ended_first,
+        event.try_recv().is_err(),
+        "the stop of the watch returned while the sample of the threads still ran"
+    );
+    release.send(()).unwrap();
+    assert_eq!(
+        event.recv().unwrap(),
+        Some(true),
         "the stop of the watch returned while the sample of the threads still ran"
     );
     assert_eq!(records.names(), ["host.stall", "host.stall.sampled"]);
