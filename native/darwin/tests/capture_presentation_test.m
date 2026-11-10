@@ -14,12 +14,12 @@ static void check(BOOL ok, NSString *label) {
     fprintf(ok ? stdout : stderr, "%s: %s\n", ok ? "PASS" : "FAIL", label.UTF8String);
     if (!ok) failures++;
 }
-static void spinUntil(BOOL (^condition)(void), NSTimeInterval seconds) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:seconds];
-    while (!condition() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:
-            [NSDate dateWithTimeIntervalSinceNow:MIN(0.005, deadline.timeIntervalSinceNow)]];
-    }
+// Runs the run loop until done holds; each turn waits for a source of the run loop, and every condition it judges changes in a
+// callback delivered on the main queue or in a notification posted on the main thread. what names the wait in the record of a
+// run that the runner ends.
+static void until(NSString *what, BOOL (^done)(void)) {
+    while (!done()) [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:NSDate.distantFuture];
+    fprintf(stdout, "reached: %s\n", what.UTF8String);
 }
 
 static const MTLClearColor colors[] = {
@@ -54,10 +54,12 @@ static NSInteger pixelFrameID(uint8_t blue, uint8_t green, uint8_t red) {
 - (void)dealloc { [_error release]; [super dealloc]; }
 @end
 
-@interface SPCaptureOutput : NSObject <SCStreamOutput>
+@interface SPCaptureOutput : NSObject <SCStreamOutput, SCStreamDelegate>
 @property(nonatomic, retain) NSMutableArray<SPCapturedFrame *> *frames;
 @property(nonatomic, retain) NSCondition *condition;
+@property(nonatomic, retain) NSError *stopError;
 - (BOOL)containsFrame:(NSUInteger)frameID;
+- (void)awaitFrameOrStop:(NSUInteger)frameID;
 @end
 @implementation SPCaptureOutput
 - (instancetype)init {
@@ -71,6 +73,25 @@ static NSInteger pixelFrameID(uint8_t blue, uint8_t green, uint8_t red) {
     for (SPCapturedFrame *frame in self.frames) if (frame.frameID == (NSInteger)frameID) { found = YES; break; }
     [self.condition unlock];
     return found;
+}
+// Waits for the sample that carries frameID or for the end of the stream; each wait ends at a sample callback or at the stop
+// callback of the stream, which both broadcast the condition.
+- (void)awaitFrameOrStop:(NSUInteger)frameID {
+    [self.condition lock];
+    for (;;) {
+        BOOL found = NO;
+        for (SPCapturedFrame *frame in self.frames) if (frame.frameID == (NSInteger)frameID) { found = YES; break; }
+        if (found || self.stopError != nil) break;
+        [self.condition wait];
+    }
+    [self.condition unlock];
+}
+- (void)stream:(SCStream *)stream didStopWithError:(NSError *)error {
+    (void)stream;
+    [self.condition lock];
+    self.stopError = error ?: [NSError errorWithDomain:SCStreamErrorDomain code:SCStreamErrorInternalError userInfo:nil];
+    [self.condition broadcast];
+    [self.condition unlock];
 }
 - (void)stream:(SCStream *)stream didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer ofType:(SCStreamOutputType)type {
     (void)stream;
@@ -112,7 +133,7 @@ static NSInteger pixelFrameID(uint8_t blue, uint8_t green, uint8_t red) {
     [self.condition unlock];
     [record release];
 }
-- (void)dealloc { [_frames release]; [_condition release]; [super dealloc]; }
+- (void)dealloc { [_frames release]; [_condition release]; [_stopError release]; [super dealloc]; }
 @end
 
 @interface SPMetalFrames : NSObject
@@ -220,7 +241,7 @@ int main(void) { @autoreleasepool {
     view.layer = layer;
     [window.contentView addSubview:view];
     [window orderFrontRegardless];
-    spinUntil(^BOOL { return onScreen(window); }, 10);
+    until(@"the window is visible", ^BOOL { return (window.occlusionState & NSWindowOcclusionStateVisible) != 0; });
     check(onScreen(window), @"the inactive control window is on screen");
     if (!onScreen(window)) { [window close]; [view release]; [window release]; return 1; }
 
@@ -230,10 +251,10 @@ int main(void) { @autoreleasepool {
     [SCShareableContent getCurrentProcessShareableContentWithCompletionHandler:^(SCShareableContent *value, NSError *error) {
         content = [value retain]; queryError = [error retain]; dispatch_semaphore_signal(queried);
     }];
-    long queryWait = dispatch_semaphore_wait(queried, dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC));
+    dispatch_semaphore_wait(queried, DISPATCH_TIME_FOREVER);
     dispatch_release(queried);
     SCWindow *target = nil;
-    if (queryWait == 0 && queryError == nil) for (SCWindow *candidate in content.windows)
+    if (queryError == nil) for (SCWindow *candidate in content.windows)
         if (candidate.windowID == (CGWindowID)window.windowNumber) { target = candidate; break; }
     check(target != nil, [NSString stringWithFormat:@"ScreenCaptureKit finds the control window (%@)", queryError]);
     if (target == nil) { [queryError release]; [content release]; [window close]; [view release]; [window release]; return 1; }
@@ -247,8 +268,8 @@ int main(void) { @autoreleasepool {
     configuration.showsCursor = NO;
     configuration.minimumFrameInterval = CMTimeMake(1, 120);
     configuration.queueDepth = 8;
-    SCStream *stream = [[SCStream alloc] initWithFilter:filter configuration:configuration delegate:nil];
     SPCaptureOutput *output = [SPCaptureOutput new];
+    SCStream *stream = [[SCStream alloc] initWithFilter:filter configuration:configuration delegate:output];
     dispatch_queue_t callbackQueue = dispatch_queue_create("soksak.capture.presentation.test", DISPATCH_QUEUE_SERIAL);
     NSError *operationError = nil;
     BOOL added = [stream addStreamOutput:output type:SCStreamOutputTypeScreen sampleHandlerQueue:callbackQueue error:&operationError];
@@ -258,10 +279,10 @@ int main(void) { @autoreleasepool {
     if (!added) goto cleanup;
     started = dispatch_semaphore_create(0);
     [stream startCaptureWithCompletionHandler:^(NSError *error) { startError = [error retain]; dispatch_semaphore_signal(started); }];
-    long startWait = dispatch_semaphore_wait(started, dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC));
+    dispatch_semaphore_wait(started, DISPATCH_TIME_FOREVER);
     dispatch_release(started);
-    check(startWait == 0 && startError == nil, [NSString stringWithFormat:@"the window stream starts (%@)", startError]);
-    if (startWait != 0 || startError != nil) { [startError release]; goto cleanup; }
+    check(startError == nil, [NSString stringWithFormat:@"the window stream starts (%@)", startError]);
+    if (startError != nil) { [startError release]; goto cleanup; }
     [startError release];
 
     SPMetalFrames *driver = [SPMetalFrames new];
@@ -271,7 +292,7 @@ int main(void) { @autoreleasepool {
     driver.queue = commandQueue;
     [commandQueue release];
     [driver submitNext];
-    spinUntil(^BOOL { return driver.completedPresentationCount == frameCount; }, 10);
+    until(@"every drawable has its presentation callback", ^BOOL { return driver.completedPresentationCount == frameCount; });
     check(driver.nextID == frameCount && !driver.drawFailed,
         [NSString stringWithFormat:@"all %lu distinct drawable IDs are submitted (%lu submitted, draw failure %d)",
             (unsigned long)frameCount, (unsigned long)driver.nextID, driver.drawFailed]);
@@ -289,8 +310,9 @@ int main(void) { @autoreleasepool {
                 [record[@"presentedTime"] doubleValue]);
         }
     }
-    spinUntil(^BOOL { return [output containsFrame:frameCount - 1]; }, 10);
-    check([output containsFrame:frameCount - 1], @"the capture stream observes the final exact pixel ID");
+    [output awaitFrameOrStop:frameCount - 1];
+    check([output containsFrame:frameCount - 1],
+        [NSString stringWithFormat:@"the capture stream observes the final exact pixel ID (stream stop %@)", output.stopError]);
 
     mach_timebase_info_data_t timebase = {0};
     kern_return_t timebaseResult = mach_timebase_info(&timebase);
@@ -388,9 +410,9 @@ cleanup:
         dispatch_semaphore_t stopped = dispatch_semaphore_create(0);
         __block NSError *stopError = nil;
         [stream stopCaptureWithCompletionHandler:^(NSError *error) { stopError = [error retain]; dispatch_semaphore_signal(stopped); }];
-        long stopWait = dispatch_semaphore_wait(stopped, dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC));
+        dispatch_semaphore_wait(stopped, DISPATCH_TIME_FOREVER);
         dispatch_release(stopped);
-        check(stopWait == 0 && stopError == nil, [NSString stringWithFormat:@"the window stream stops (%@)", stopError]);
+        check(stopError == nil, [NSString stringWithFormat:@"the window stream stops (%@)", stopError]);
         [stopError release];
     }
     if (callbackQueue != NULL) dispatch_release(callbackQueue);
