@@ -688,7 +688,8 @@ export const surfaces = native ? {
           if (undeclaredViews.has(id)) waitingDeclaration.add(id);
           else waitingDeclaration.delete(id);
         }
-        const deferredViews = viewRecords.map(({ id }) => id).filter((id) => unmountedViews.has(id) || undeclaredViews.has(id));
+        const isDeferred = (id) => unmountedViews.has(id) || undeclaredViews.has(id);
+        const deferredViews = viewRecords.map(({ id }) => id).filter(isDeferred);
         const deferredIds = new Set(deferredViews);
         const requestedSurfaces = surfaces.filter(({ id }) => !deferredIds.has(id));
 
@@ -1024,6 +1025,7 @@ export const overlay = native ? {
       }).then(undefined, (reason) => {
         if (showing !== show) return;
         this.hide();
+        // default: hide() closed the modal, so an owner without a layer of its own to close passes no refused.
         refused?.(reason);
       });
     },
