@@ -192,18 +192,19 @@ static NSDictionary<NSString *, NSDate *> *entries(NSString *path) {
     return found;
 }
 
-// A child prints its folder and then the processes of its document, and returns from main with its store open, or with its
-// document also open.
+// A child prints its folder as the line `folder <path>` and the processes of its document as the line `writers <WebContent>
+// <network> <GPU>`, and returns from main with its store open, or with its document also open. Its checks and waits print their
+// own lines on the same output, so the parent finds the two lines by their names.
 static int child(BOOL leaveOpen) {
     void *surface = prepareSurface();
     nw_listener_t listener = serve();
     NSString *temporary = temporaryFolder(@"soksak-document-store-end-child-");
-    printf("%s\n", temporary.fileSystemRepresentation);
+    printf("folder %s\n", temporary.fileSystemRepresentation);
     fflush(stdout);
     @autoreleasepool {
         Writers writers = {0};
         void *document = loadPage(surface, listener, [temporary stringByAppendingPathComponent:@"store"], &writers);
-        printf("%d %d %d\n", writers.content, writers.network, writers.gpu);
+        printf("writers %d %d %d\n", writers.content, writers.network, writers.gpu);
         fflush(stdout);
         if (!leaveOpen) sp_document_close(document);
     }
@@ -227,11 +228,14 @@ static void runChild(const char *self, NSString *mode, int *status, NSString **f
     [task waitUntilExit];
     *status = task.terminationStatus;
     NSString *printed = [[[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding] autorelease];
-    NSArray<NSString *> *lines = [printed componentsSeparatedByString:@"\n"];
-    *folder = lines.firstObject;
-    NSArray<NSString *> *pids = lines.count > 1 ? [lines[1] componentsSeparatedByString:@" "] : @[];
-    *writers = pids.count == 3 ? (Writers){ .content = pids[0].intValue, .network = pids[1].intValue, .gpu = pids[2].intValue }
-        : (Writers){0};
+    *folder = nil;
+    *writers = (Writers){0};
+    for (NSString *line in [printed componentsSeparatedByString:@"\n"]) {
+        if ([line hasPrefix:@"folder "]) *folder = [line substringFromIndex:@"folder ".length];
+        NSArray<NSString *> *pids = [line hasPrefix:@"writers "]
+            ? [[line substringFromIndex:@"writers ".length] componentsSeparatedByString:@" "] : nil;
+        if (pids.count == 3) *writers = (Writers){ .content = pids[0].intValue, .network = pids[1].intValue, .gpu = pids[2].intValue };
+    }
     *message = [[[NSString alloc] initWithData:errorData encoding:NSUTF8StringEncoding] autorelease];
 }
 
