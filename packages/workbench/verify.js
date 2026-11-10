@@ -200,9 +200,10 @@ export function verify(controls = null) {
   const predicted = (id) => onPlane.get(id).dataset.nativeSurface !== "view";
   // The ids of a list, so a failure names the surfaces that it counts.
   const named = (ids) => (ids.length ? ` [${ids.join(", ")}]` : "");
-  // default: a comparison measures the difference of the drawn and the declared rectangle as they are.
-  const compare = (surfaces, onlyPredicted = false, placed = () => true, apart = maxDelta) => {
-    const told = new Set(surfaces.map((s) => s.id));
+  // default: a comparison measures the difference of the drawn and the declared rectangle as they are, against a record that
+  // deferred no surface.
+  const compare = (surfaces, onlyPredicted = false, placed = () => true, apart = maxDelta, deferred = []) => {
+    const told = new Set([...surfaces.map((s) => s.id), ...deferred]);
     let worst = 0;
     // The surface that is off the most and its two places. A failure states the measured values with which the cause can be found.
     let at = "";
@@ -250,9 +251,13 @@ export function verify(controls = null) {
     // A declaration has a place when it is visible or has an area (native-surfaces.md: a slot with zero width or zero height is
     // submitted as invisible and has no presented area).
     const hasPlace = (s) => s.visible !== false || (s.declared.w > 0 && s.declared.h > 0);
-    const { worst, at, dim, gone, missed, goneIds, missedIds } = compare(record.surfaces, false, hasPlace);
+    // A view that the placement deferred is in the commit as deferred: its place stays empty until its declaration lays the page
+    // out again, so its drawn slot has no place to compare.
+    const deferred = record.deferred.filter((id) => onPlane.has(id));
+    const { worst, at, dim, gone, missed, goneIds, missedIds } = compare(record.surfaces, false, hasPlace, undefined, record.deferred);
     add("V7a element − declared == 0", gone === 0 && missed === 0 && worst < 0.5 && dim === 0,
         `최대 ${worst.toFixed(2)}px · 커밋에 없는 표면 ${missed}${missedIds} · 사라진 표면 ${gone}${goneIds} · ` +
+        `미룬 표면 ${deferred.length}${named(deferred)} · ` +
         `흐림이 다른 표면 ${dim} · 0이 아니면 커밋이 뒤처진 것 (seq ${record.seq}, ` +
         // default: when no layout has been seated yet, it is written as none.
         `seated ${seated()?.seq ?? "none"}, pending ${pendingPlacement})${at}`);

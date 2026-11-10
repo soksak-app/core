@@ -25,7 +25,7 @@ test("a failed V7c names the surface and both of its rectangles", async (t) => {
   const declared = { x: 0, y: 34, w: 400, h: 240 };
   card.style.setProperty("--pt", "36px");
   const bands = { top: 6, bottom: 0, left: 0, right: 0 };
-  const guess = { seq: 12, surfaces: [{ id: "probe", dim: false, declared, applied: declared, bands, grid: 1 }] };
+  const guess = { seq: 12, deferred: [], surfaces: [{ id: "probe", dim: false, declared, applied: declared, bands, grid: 1 }] };
   t.mock.module("../compositor.js", { exports: { ahead: () => guess, latest: () => guess, placementPending: () => false, seated: () => null } });
   t.mock.module("../plane.js", { exports: {
     currentGrid: () => grid, dropBands: () => ({ headerPx: 32, footerPx: 22 }), plane, presentedCardRect: () => undefined,
