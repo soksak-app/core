@@ -13,12 +13,13 @@ import (
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
-// neverAnswered is a host call that answers only when the test ends.
+// neverAnswered is a host call that answers only when the test ends. It waits at a gate of the test, so drain does not wait for
+// it: a call that still runs holds drain however long it takes.
 func neverAnswered(t *testing.T) workbench.HostCall {
-	never := make(chan struct{})
-	t.Cleanup(func() { close(never) })
+	never := newGate()
+	t.Cleanup(never.open)
 	return func(context.Context, json.RawMessage) (any, error) {
-		<-never
+		never.wait()
 		return nil, nil
 	}
 }
