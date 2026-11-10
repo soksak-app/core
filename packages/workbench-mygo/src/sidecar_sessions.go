@@ -134,14 +134,22 @@ func (s *Shell) storedSurfaceKept() (func(id string) bool, error) {
 // retainSessions makes the persistent sidecar services close the sessions of surfaces that no layout holds. A layout that does not
 // read sends nothing: a partial list would close the sessions of the tabs it leaves out.
 func (s *Shell) retainSessions() {
+	s.retainSessionsThen(func() {})
+}
+
+// retainSessionsThen retains as retainSessions does and runs done after the host answered the retain, or after the failure that
+// ended it was reported.
+func (s *Shell) retainSessionsThen(done func()) {
 	surfaces, err := s.layoutSurfaces()
 	if err != nil {
 		s.fail(err)
+		done()
 		return
 	}
 	s.calls.CallInOrder("sidecar retain", "sidecarsRetain", map[string]any{"surfaces": surfaces}, func(_ any, err error) {
 		if err != nil {
 			s.fail(err)
 		}
+		done()
 	})
 }

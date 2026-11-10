@@ -90,6 +90,40 @@ func TestARemovedProjectRetainsAfterThePlacementWithoutItsViews(t *testing.T) {
 	equal(t, retained(t, stored), [][]string{{}})
 }
 
+// A removal ends after the retain that ends the sessions of the removed project answered, as projects.close of the page awaits the
+// read that retains, so a request after the answer of the removal or of diagnostics.fixture finds those sessions ended.
+func TestARemovalAnswersAfterTheRetainOfTheSessionsOfTheRemovedProject(t *testing.T) {
+	stored := &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"))}}
+	f := newTabShell(t, stored)
+	f.open(t)
+	hold := newGate()
+	stored.mu.Lock()
+	stored.retains, stored.holdRetains = nil, hold
+	stored.mu.Unlock()
+	answered := false
+	f.shell.Registry().RunLater("core.library.remove", json.RawMessage(`{"id":"prj-a"}`), func(_ any, err error) {
+		if err != nil {
+			t.Errorf("core.library.remove failed: %v", err)
+		}
+		answered = true
+	})
+	f.settle()
+	stored.mu.Lock()
+	asked := len(stored.retains)
+	stored.mu.Unlock()
+	if asked == 0 {
+		t.Fatal("the removal asked for no retain")
+	}
+	if answered {
+		t.Fatal("core.library.remove answered before the host answered the retain of the sessions of the removed project")
+	}
+	hold.open()
+	f.settle()
+	if !answered {
+		t.Fatal("core.library.remove did not answer after the retain answered")
+	}
+}
+
 func TestTheSectionsOfTheShownProjectAreRetained(t *testing.T) {
 	stored := &storedHost{installed: sidebarsInstalled, projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"), tab("tab-bbbbbb", "notes"))}}
 	f := newShell(t, stored)

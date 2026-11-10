@@ -332,8 +332,9 @@ func (s *Shell) compareData(value any) error {
 	if len(removed) > 0 && listed[s.active] {
 		s.keep()
 	}
+	// A removal by another window is told by this read, which no request of this window waits for.
 	for _, id := range removed {
-		s.dropProject(id)
+		s.dropProject(id, func() {})
 	}
 	s.takeOpen(snapshot.Open)
 	s.options.Invalidate()
