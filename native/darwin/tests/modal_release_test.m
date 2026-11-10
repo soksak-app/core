@@ -24,7 +24,7 @@ static void until(NSString *what, BOOL (^done)(void)) {
 }
 
 // Handles the application-defined events until the condition holds. The count request of sp_window_objects_when is answered
-// through the queued application-defined event.
+// through the queued application-defined event, and the answer posts the event that ends the wait (wakeEventWait).
 static void untilEventHandled(NSString *what, BOOL (^done)(void)) {
     fprintf(stderr, "WAIT %s\n", what.UTF8String);
     while (!done()) {
@@ -65,11 +65,21 @@ static void untilEventHandled(NSString *what, BOOL (^done)(void)) {
 // The state of the count request.
 typedef struct { BOOL answered; BOOL reached; sp_window_objects counts; } SPCountAnswer;
 
+// The library answers a count in a main queue block, which ends no event wait of the run loop, so the answer posts an
+// application-defined event of this subtype: the event wait returns it, and the loop judges the answer at that event.
+static const short kAnsweredSubtype = 0x5341;
+
+static void wakeEventWait(void) {
+    [NSApp postEvent:[NSEvent otherEventWithType:NSEventTypeApplicationDefined location:NSZeroPoint modifierFlags:0 timestamp:0
+        windowNumber:0 context:nil subtype:kAnsweredSubtype data1:0 data2:0] atStart:NO];
+}
+
 static void countAnswered(void *context, const sp_window_objects *counts, bool reached) {
     SPCountAnswer *answer = context;
     answer->answered = YES;
     answer->reached = reached;
     answer->counts = *counts;
+    wakeEventWait();
 }
 
 // Manual reference counting cannot use __weak, so the check uses the weak reference slot of the runtime. The slot

@@ -222,25 +222,31 @@ int main(void) { @autoreleasepool {
             pageRows.firstObject[@"process"], pageRows.lastObject[@"process"], pageProcess]);
     // A WebContent process that held a page of the application and holds none is reported without a page while it lives, ending
     // because the pool of the check keeps no process cache, and is no longer reported once it has exited.
-    WKWebView *closing = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 100, 100)];
-    [window.contentView addSubview:closing];
-    __block BOOL closingLoaded = NO;
-    [closing loadHTMLString:@"<p>closing</p>" baseURL:nil];
-    [closing evaluateJavaScript:@"1" completionHandler:^(id result, NSError *error) { (void)result; (void)error; closingLoaded = YES; }];
-    sp_run_until("the closing page answers its script", ^BOOL { return closingLoaded; });
-    pid_t closingProcess = [[closing valueForKey:@"_webProcessIdentifier"] intValue];
-    NSDictionary *withPage = parse(sp_window_facts(window, sp_window_composition(window)));
-    check(closingProcess > 0 && closingProcess != pageProcess
-            && [withPage[@"pagelessProcesses"] isKindOfClass:NSArray.class] && [withPage[@"pagelessProcesses"] count] == 0,
-        [NSString stringWithFormat:@"a process that holds a page is not reported without one: %d, %@", closingProcess,
-            withPage[@"pagelessProcesses"]]);
+    // The closing web view lives in a pool of its own: the reading of the facts while it is in the window autoreleases the list of
+    // the views of the window, which holds it, so its page and with it its process end only when that pool is emptied.
+    pid_t closingProcess = 0;
     __block BOOL closingExited = NO;
-    dispatch_source_t exitSource = dispatch_source_create(DISPATCH_SOURCE_TYPE_PROC, (uintptr_t)closingProcess, DISPATCH_PROC_EXIT,
-        dispatch_get_main_queue());
-    dispatch_source_set_event_handler(exitSource, ^{ closingExited = YES; });
-    dispatch_resume(exitSource);
-    [closing removeFromSuperview];
-    [closing release];
+    dispatch_source_t exitSource = NULL;
+    @autoreleasepool {
+        WKWebView *closing = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 100, 100)];
+        [window.contentView addSubview:closing];
+        __block BOOL closingLoaded = NO;
+        [closing loadHTMLString:@"<p>closing</p>" baseURL:nil];
+        [closing evaluateJavaScript:@"1" completionHandler:^(id result, NSError *error) { (void)result; (void)error; closingLoaded = YES; }];
+        sp_run_until("the closing page answers its script", ^BOOL { return closingLoaded; });
+        closingProcess = [[closing valueForKey:@"_webProcessIdentifier"] intValue];
+        NSDictionary *withPage = parse(sp_window_facts(window, sp_window_composition(window)));
+        check(closingProcess > 0 && closingProcess != pageProcess
+                && [withPage[@"pagelessProcesses"] isKindOfClass:NSArray.class] && [withPage[@"pagelessProcesses"] count] == 0,
+            [NSString stringWithFormat:@"a process that holds a page is not reported without one: %d, %@", closingProcess,
+                withPage[@"pagelessProcesses"]]);
+        exitSource = dispatch_source_create(DISPATCH_SOURCE_TYPE_PROC, (uintptr_t)closingProcess, DISPATCH_PROC_EXIT,
+            dispatch_get_main_queue());
+        dispatch_source_set_event_handler(exitSource, ^{ closingExited = YES; });
+        dispatch_resume(exitSource);
+        [closing removeFromSuperview];
+        [closing release];
+    }
     NSDictionary *withoutPage = parse(sp_window_facts(window, sp_window_composition(window)));
     NSArray *pageless = withoutPage[@"pagelessProcesses"];
     // The process may have exited before this reading, which then reports nothing for it.

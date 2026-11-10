@@ -37,16 +37,26 @@ typedef struct {
     sp_window_objects counts;
 } SPCounted;
 
+// The library answers a count in a main queue block, which ends no event wait of the run loop, so the answer posts an
+// application-defined event of this subtype: the event wait returns it, and the loop judges the answer at that event.
+static const short kAnsweredSubtype = 0x5341;
+
+static void wakeEventWait(void) {
+    [NSApp postEvent:[NSEvent otherEventWithType:NSEventTypeApplicationDefined location:NSZeroPoint modifierFlags:0 timestamp:0
+        windowNumber:0 context:nil subtype:kAnsweredSubtype data1:0 data2:0] atStart:NO];
+}
+
 static void counted(void *context, const sp_window_objects *counts, bool reached) {
     SPCounted *state = context;
     state->calls++;
     state->mainThread = NSThread.isMainThread;
     state->reached = reached;
     state->counts = *counts;
+    wakeEventWait();
 }
 
 // Handles events one by one until done is called. Uses one autorelease pool per event. A waiting count queues a drain event
-// before each sleep of the run loop, so each event wait ends.
+// before each sleep of the run loop, so each event wait ends, and the answer posts the event that ends the last one.
 static void handleEventsUntilCounted(const char *what, SPCounted *state) {
     fprintf(stderr, "WAIT %s\n", what);
     while (state->calls == 0) {
