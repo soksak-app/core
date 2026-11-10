@@ -55,6 +55,10 @@ static pthread_t sampler_thread;
 static _Atomic int sampler_running;
 static _Atomic int sampler_phase = -1;
 static _Atomic uint64_t sampler_samples[SAMPLER_PHASES];
+// The count of samples that sp_host_test_sampler_await_samples waits for in each phase, 0 for none, and the semaphore that the
+// sample which reaches it signals.
+static _Atomic uint64_t sampler_awaited[SAMPLER_PHASES];
+static dispatch_semaphore_t sampler_sampled;
 static _Atomic uint64_t sampler_outside[SAMPLER_PHASES];
 static _Atomic uintptr_t sampler_first_outside[SAMPLER_PHASES];
 static _Atomic uint64_t sampler_failures;
@@ -100,7 +104,8 @@ static void *sampler_loop(void *unused) {
                 if (read != KERN_SUCCESS) {
                     sampler_fail(read);
                 } else {
-                    atomic_fetch_add(&sampler_samples[phase], 1);
+                    uint64_t taken = atomic_fetch_add(&sampler_samples[phase], 1) + 1;
+                    if (taken == atomic_load(&sampler_awaited[phase])) dispatch_semaphore_signal(sampler_sampled);
                     if (sp < sampler_low || sp > sampler_high) {
                         if (atomic_fetch_add(&sampler_outside[phase], 1) == 0) atomic_store(&sampler_first_outside[phase], sp);
                     }
@@ -125,6 +130,7 @@ int sp_host_test_sampler_capture_main(void) {
 int sp_host_test_sampler_start(void) {
     pthread_t main = sampler_main;
     if (main == NULL) return -1;
+    if (sampler_sampled == NULL) sampler_sampled = dispatch_semaphore_create(0);
     sampler_port = pthread_mach_thread_np(main);
     sampler_high = (uintptr_t)pthread_get_stackaddr_np(main);
     sampler_low = sampler_high - (uintptr_t)pthread_get_stacksize_np(main);
@@ -142,6 +148,13 @@ int sp_host_test_sampler_stop(void) {
 
 void sp_host_test_sampler_set_phase(int phase) { atomic_store(&sampler_phase, phase); }
 uint64_t sp_host_test_sampler_phase_samples(int phase) { return atomic_load(&sampler_samples[phase]); }
+
+void sp_host_test_sampler_await_samples(int phase, uint64_t count) {
+    atomic_store(&sampler_awaited[phase], count);
+    // A sample that reached the count before the store above is seen here; one after it signals.
+    while (atomic_load(&sampler_samples[phase]) < count) dispatch_semaphore_wait(sampler_sampled, DISPATCH_TIME_FOREVER);
+    atomic_store(&sampler_awaited[phase], 0);
+}
 uint64_t sp_host_test_sampler_phase_outside(int phase) { return atomic_load(&sampler_outside[phase]); }
 uintptr_t sp_host_test_sampler_phase_first_outside(int phase) { return atomic_load(&sampler_first_outside[phase]); }
 uint64_t sp_host_test_sampler_failure_count(void) { return atomic_load(&sampler_failures); }

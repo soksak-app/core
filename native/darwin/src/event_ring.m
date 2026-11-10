@@ -232,20 +232,36 @@ static bool anyGated(void) {
     return false;
 }
 
+typedef void (*gated_schedule)(uint64_t wait_ns, void (*wake)(void));
+// The schedule of the wake of a count that a check sets, or none for the timer (sp_event_test_set_gated_schedule).
+static _Atomic(gated_schedule) gatedSchedule;
+
+// The end of the wait of a count.
+static void gatedWake(void) {
+    atomic_store_explicit(&gatedWakeSet, false, memory_order_relaxed);
+    if (anyGated()) wakeWriter();
+}
+
 // Sets one wake of the writer after the wait of a count, unless one is set. No drain clears it: a wake that finds no count left
 // writes nothing to the pipe.
 static void wakeWriterForCount(void) {
     if (atomic_load_explicit(&gatedWakeSet, memory_order_relaxed)) return;
     if (atomic_exchange_explicit(&gatedWakeSet, true, memory_order_relaxed)) return;
-    dispatch_time_t when = dispatch_time(DISPATCH_TIME_NOW, (int64_t)atomic_load_explicit(&gatedWaitNs, memory_order_relaxed));
-    dispatch_after(when, dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
-        atomic_store_explicit(&gatedWakeSet, false, memory_order_relaxed);
-        if (anyGated()) wakeWriter();
-    });
+    uint64_t wait = atomic_load_explicit(&gatedWaitNs, memory_order_relaxed);
+    gated_schedule schedule = atomic_load_explicit(&gatedSchedule, memory_order_acquire);
+    if (schedule) {
+        schedule(wait, gatedWake);
+        return;
+    }
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)wait), dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{ gatedWake(); });
 }
 
 void sp_event_set_gated_wait_ms(uint32_t milliseconds) {
     atomic_store_explicit(&gatedWaitNs, (uint64_t)milliseconds * NSEC_PER_MSEC, memory_order_relaxed);
+}
+
+void sp_event_test_set_gated_schedule(void (*schedule)(uint64_t wait_ns, void (*wake)(void))) {
+    atomic_store_explicit(&gatedSchedule, schedule, memory_order_release);
 }
 
 
@@ -362,12 +378,20 @@ bool sp_cid_new(char *buffer, size_t capacity) {
 static const uint64_t GATED_REPORT_NS = 1000000000ull;
 // The time of the earlier report; zero before the first report, which the first drain makes.
 static _Atomic uint64_t gatedReportedAt;
+typedef uint64_t (*report_clock)(void);
+// The clock of the report that a check sets, or none for the monotonic clock (sp_event_test_set_report_clock).
+static _Atomic(report_clock) reportClock;
+
+void sp_event_test_set_report_clock(uint64_t (*now)(void)) {
+    atomic_store_explicit(&reportClock, now, memory_order_release);
+}
 
 // Stores the count of each closed gate as the event `native.log.gated`, so the number of the events that were not built is
 // exact. It reports at the first drain and then when a second has passed since the earlier report: the drain runs at each
 // batch interval of the writer, and a report each time stored more events than a narrow policy removed.
 static void reportGated(void) {
-    uint64_t now = sp_mono_ns();
+    report_clock readNow = atomic_load_explicit(&reportClock, memory_order_acquire);
+    uint64_t now = readNow ? readNow() : sp_mono_ns();
     uint64_t earlier = atomic_load_explicit(&gatedReportedAt, memory_order_relaxed);
     if (earlier != 0 && now - earlier < GATED_REPORT_NS) return;
     // Only a drain that reports a count is a report; the writer is the one caller of the drain.

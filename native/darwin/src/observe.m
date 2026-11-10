@@ -26,8 +26,17 @@ static os_unfair_lock tableLock = OS_UNFAIR_LOCK_INIT;
 // At most one summary of a counted source is stored in this interval.
 static const uint64_t summaryIntervalNs = 1000000000u;
 
+typedef uint64_t (*summary_clock)(void);
+// The clock of the summaries that a check sets, or none for the monotonic clock (sp_observe_test_set_clock).
+static _Atomic(summary_clock) summaryClock;
+
 static uint64_t monotonicNs(void) {
-    return clock_gettime_nsec_np(CLOCK_MONOTONIC);
+    summary_clock readNow = atomic_load_explicit(&summaryClock, memory_order_acquire);
+    return readNow ? readNow() : clock_gettime_nsec_np(CLOCK_MONOTONIC);
+}
+
+void sp_observe_test_set_clock(uint64_t (*now)(void)) {
+    atomic_store_explicit(&summaryClock, now, memory_order_release);
 }
 
 static bool validSource(const char *source) {

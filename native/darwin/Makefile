@@ -630,7 +630,7 @@ $(HOST_TEST_PKGCONFIG): pkgconfig-current Makefile | $(BUILD)
 	  'Libs: -L$(HOST_TEST_BUILD) -lhost_test $(HOST_TEST_FRAMEWORKS) $(MINIMUM)' > $@.next
 	@if cmp -s $@.next $@; then rm $@.next; else mv $@.next $@; fi
 
-$(BUILD)/host_test_api_test: tests/host_test_api_test.m $(HOST_TEST_LIBRARY) tests/support/host_test_api.h Makefile | $(BUILD)
+$(BUILD)/host_test_api_test: tests/host_test_api_test.m $(HOST_TEST_LIBRARY) tests/support/host_test_api.h tests/support/run_until.h Makefile | $(BUILD)
 	@clang $(CFLAGS) -I$(CURDIR)/tests $< $(HOST_TEST_LIBRARY) $(HOST_TEST_FRAMEWORKS) -o $@
 
 test-host-test: build-host-test $(BUILD)/host_test_api_test

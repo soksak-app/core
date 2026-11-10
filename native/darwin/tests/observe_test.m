@@ -25,6 +25,13 @@ static NSArray<NSDictionary *> *named(NSArray<NSDictionary *> *events, NSString 
 
 static NSNotificationName const probe = @"ObserveTestProbe";
 
+// The clock of the summaries of the counted sources and of the report of the gate (docs/spec/logging.md#policy): the check sets
+// it, so the second of each rule passes when the check moves it, without a sleep. It starts above zero, because zero is the time
+// of no earlier report.
+static const uint64_t oneSecond = 1000000000ull;
+static uint64_t testNow = 1000000000ull;
+static uint64_t testClock(void) { return testNow; }
+
 // A target of the selector and key-value registrations.
 @interface Probe : NSObject
 @property(nonatomic, assign) int value;
@@ -46,6 +53,8 @@ static NSNotificationName const probe = @"ObserveTestProbe";
 @end
 
 int main(void) { @autoreleasepool {
+    sp_observe_test_set_clock(testClock);
+    sp_event_test_set_report_clock(testClock);
     // The records that this test reads include events below the level error, which the default policy refuses (docs/spec/logging.md#policy):
     // the policy that stores every level is set here, and the default policy is tested in event_ring_test.
     const int8_t allLevels[SP_CLASS_COUNT] = {SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE};
@@ -89,29 +98,29 @@ int main(void) { @autoreleasepool {
     NSArray<NSDictionary *> *counted = capturedEvents(^{
         for (int index = 0; index < 5000; index++) [center postNotificationName:@"ObserveTestFast" object:nil];
         sp_observe_flush();
-        flushedAt = clock_gettime_nsec_np(CLOCK_MONOTONIC);
+        flushedAt = testNow;
     });
     NSArray *summaries = named(counted, @"native.observe.counted");
     long sum = 0;
     for (NSDictionary *summary in summaries) sum += [summary[@"fields"][@"count"] longValue];
     check(fast == 5000 && sp_observe_count("test.counted") == 5000, @"5000 deliveries run the handler 5000 times and are counted exactly");
-    check(sum == 5000 && summaries.count >= 1 && summaries.count < 50 && [summaries.lastObject[@"fields"][@"total"] longValue] == 5000,
-        [NSString stringWithFormat:@"%lu summaries add up to 5000 and the last holds the total", (unsigned long)summaries.count]);
+    check(sum == 5000 && summaries.count == 1 && [summaries.lastObject[@"fields"][@"total"] longValue] == 5000,
+        [NSString stringWithFormat:@"5000 deliveries within a second of the registration are one summary, at the flush, that holds the total (%lu summaries)", (unsigned long)summaries.count]);
     check(named(counted, @"native.observe.delivered").count == 0, @"a counted source stores no event for each delivery");
     check([summaries[0][@"level"] intValue] == 3, @"a summary is at the level debug");
 
     // A closed gate leaves the summary due: the deliveries wait in the count, so the gate counts no refused event and the writer has no
     // reason to wake for a turn of the main run loop (docs/spec/logging.md#entrances). The summary of a counted source and the report
-    // of the gate are each due one second after the earlier one (observe.m, event_ring.m), a rule of time that no event marks, so
-    // each pause of 1.1 s below makes the next summary or report due; the drain at the end of the capture is the event at which
-    // a gated report would be stored.
+    // of the gate are each due one second after the earlier one (observe.m, event_ring.m), a rule of time that the check sets through
+    // their clock, so each second that the check passes below makes the next summary or report due; the drain at the end of the
+    // capture is the event at which a gated report would be stored.
     const int8_t noFrames[SP_CLASS_COUNT] = {SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, -1};
     check(sp_event_set_policy(noFrames), @"the policy refuses the class frame");
     NSArray<NSDictionary *> *closed = capturedEvents(^{
-        usleep(1100000);
+        testNow += oneSecond;
         [center postNotificationName:@"ObserveTestFast" object:nil];
         sp_observe_flush();
-        usleep(1100000);
+        testNow += oneSecond;
     });
     NSPredicate *gatedFrames = [NSPredicate predicateWithBlock:^BOOL(NSDictionary *event, id bindings) {
         return [event[@"fields"][@"class"] isEqual:@"frame"];
@@ -122,14 +131,14 @@ int main(void) { @autoreleasepool {
     check(sp_event_set_policy(allLevels), @"the policy stores the class frame again");
     __block uint64_t postedAt = 0;
     NSArray<NSDictionary *> *opened = capturedEvents(^{
-        usleep(1100000);
-        postedAt = clock_gettime_nsec_np(CLOCK_MONOTONIC);
+        testNow += oneSecond;
+        postedAt = testNow;
         [center postNotificationName:@"ObserveTestFast" object:nil];
     });
     NSArray *resumed = named(opened, @"native.observe.counted");
     // The summary spans from the earlier summary, the flush before the closed gate, to the delivery after it opened.
     check(resumed.count == 1 && [resumed[0][@"fields"][@"count"] longValue] == 2 && [resumed[0][@"fields"][@"total"] longValue] == 5002 &&
-            [resumed[0][@"fields"][@"micros"] unsignedLongLongValue] >= (postedAt - flushedAt) / 1000u,
+            [resumed[0][@"fields"][@"micros"] unsignedLongLongValue] == (postedAt - flushedAt) / 1000u,
         [NSString stringWithFormat:@"the first summary after the gate opens holds the deliveries since the earlier summary: %@", resumed]);
 
     // A selector and a key path count their deliveries through sp_observe_delivered.
@@ -224,8 +233,8 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"a stored source counts two deliveries exactly and stores only its registration: %@", own]);
 
     // A closed gate keeps the deliveries of a counted source for a later summary, so the summary it refuses loses nothing: the gate
-    // counts no refused event, and a source that keeps delivering at rest stores no event a second. Each pause of 1.1 s makes the
-    // summary of the source and the report of the gate due, as above.
+    // counts no refused event, and a source that keeps delivering at rest stores no event a second. Each second that the check
+    // passes makes the summary of the source and the report of the gate due, as above.
     int8_t frameClosed[SP_CLASS_COUNT];
     memcpy(frameClosed, allLevels, sizeof frameClosed);
     frameClosed[SP_CLASS_FRAME] = SP_EVENT_INFO;
@@ -233,9 +242,9 @@ int main(void) { @autoreleasepool {
     check(sp_event_set_policy(frameClosed), @"the policy refuses the summaries of the counted sources");
     NSArray<NSDictionary *> *closedDeliveries = capturedEvents(^{
         [center postNotificationName:@"ObserveTestClosed" object:nil];
-        usleep(1100 * 1000);
+        testNow += oneSecond;
         [center postNotificationName:@"ObserveTestClosed" object:nil];
-        usleep(1100 * 1000);
+        testNow += oneSecond;
     });
     NSArray *closedCounts = [named(closedDeliveries, @"native.log.gated") filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"fields.class == 'frame'"]];
     check(closedCounts.count == 0 && named(closedDeliveries, @"native.observe.counted").count == 0,

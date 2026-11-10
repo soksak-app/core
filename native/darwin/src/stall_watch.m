@@ -19,6 +19,9 @@ static _Atomic uint64_t heartbeatsSentInWait;
 static _Atomic uint64_t heartbeatsAnswered;
 // Set by sp_stall_set_send_in_next_wait_for_test until the next sp_stall_await_awake that finds the run loop waiting.
 static atomic_bool sendInNextWait;
+typedef void (*blocked_hook)(void);
+// The hook of sp_stall_set_blocked_hook_for_test, or none.
+static _Atomic(blocked_hook) blockedHook;
 
 static void wakeBlockedThreads(void) {
     for (uint32_t count = atomic_exchange(&blockedThreads, 0); count > 0; count--) dispatch_semaphore_signal(runLoopWoke);
@@ -80,10 +83,16 @@ void sp_stall_await_awake(void) {
     }
     while (atomic_load(&runLoopWaits)) {
         atomic_fetch_add(&blockedThreads, 1);
+        blocked_hook hook = atomic_load_explicit(&blockedHook, memory_order_acquire);
+        if (hook) hook();
         // A wake between the check above and the addition did not count this thread, so it signals for itself.
         if (!atomic_load(&runLoopWaits)) wakeBlockedThreads();
         dispatch_semaphore_wait(runLoopWoke, DISPATCH_TIME_FOREVER);
     }
+}
+
+void sp_stall_set_blocked_hook_for_test(void (*blocked)(void)) {
+    atomic_store_explicit(&blockedHook, blocked, memory_order_release);
 }
 
 void sp_stall_counts(uint64_t *sent, uint64_t *sent_in_wait, uint64_t *answered) {

@@ -42,6 +42,11 @@ static dispatch_semaphore_t waitStarted;
 
 static void awaitSignal(dispatch_semaphore_t semaphore) { dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER); }
 
+// watchBlocked is signaled each time the watch is counted as blocked in sp_stall_await_awake, before it blocks: no event of the
+// system tells that a thread blocks, so the watch calls the hook of the check (docs/spec/logging.md, stalls).
+static dispatch_semaphore_t watchBlocked;
+static void signalWatchBlocked(void) { dispatch_semaphore_signal(watchBlocked); }
+
 int main(void) { @autoreleasepool {
     CFRunLoopTimerRef far = CFRunLoopTimerCreateWithHandler(NULL, CFAbsoluteTimeGetCurrent() + 3600, 0, 0, 0, ^(CFRunLoopTimerRef t) {});
     CFRunLoopAddTimer(CFRunLoopGetMain(), far, kCFRunLoopCommonModes);
@@ -80,21 +85,21 @@ int main(void) { @autoreleasepool {
             (unsigned long long)(sentAfter - sentBefore), (unsigned long long)(sentInWaitAfter - sentInWaitBefore)]);
 
     // A watch blocks for as long as the run loop waits, and it returns while the run loop handles an event, which holds until it
-    // does. No event tells that the watch is blocked inside sp_stall_await_awake, so the sender of the event pauses 1.2 s after the
-    // call of the watch to send it after the watch blocked. After the wait the wake is the reference, so a heartbeat reads an
-    // answer at or after the send and not the start of the wait.
+    // does. The sender of the event sends it once the hook of the watch said that the watch is blocked, so only that event can end
+    // the block. After the wait the wake is the reference, so a heartbeat reads an answer at or after the send and not the start
+    // of the wait.
     __block _Atomic uint64_t awaitStarted = 0;
     __block _Atomic uint64_t sentAt = 0;
     __block _Atomic long heldUntilAwake = -1;
     __block uint64_t afterWakeNow = 0, afterWakeAnswered = 0;
     __block _Atomic uint64_t returnedAt = 0;
-    dispatch_semaphore_t awaiting = dispatch_semaphore_create(0);
+    watchBlocked = dispatch_semaphore_create(0);
+    sp_stall_set_blocked_hook_for_test(signalWatchBlocked);
     dispatch_semaphore_t watchReturned = dispatch_semaphore_create(0);
     atomic_store(&waitArmed, 1);
     onWorker(^{
         awaitSignal(waitStarted);
         atomic_store(&awaitStarted, sp_mono_ns());
-        dispatch_semaphore_signal(awaiting);
         sp_stall_await_awake();
         atomic_store(&returnedAt, sp_mono_ns());
         sp_stall_heartbeat(&afterWakeNow, &afterWakeAnswered);
@@ -102,14 +107,14 @@ int main(void) { @autoreleasepool {
         stopMain();
     });
     onWorker(^{
-        awaitSignal(awaiting);
-        usleep(1200000);
+        awaitSignal(watchBlocked);
         atomic_store(&sentAt, sp_mono_ns());
         sendToMain(^{
             atomic_store(&heldUntilAwake, dispatch_semaphore_wait(watchReturned, DISPATCH_TIME_FOREVER));
         });
     });
     check(runUntilStopped(), @"the wait of the watch ends with the stop of the run");
+    sp_stall_set_blocked_hook_for_test(NULL);
     check(atomic_load(&heldUntilAwake) == 0, @"the watch returns while the run loop handles an event");
     check(atomic_load(&sentAt) != 0 && atomic_load(&returnedAt) >= atomic_load(&sentAt),
         [NSString stringWithFormat:@"the watch blocks for the %.1f ms of the wait", milliseconds(atomic_load(&returnedAt) - atomic_load(&awaitStarted))]);
