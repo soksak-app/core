@@ -581,6 +581,18 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F734",
+    implementation: [
+      { file: "e2e/projects.test.mjs", symbol: "const projectMode = await control(child, \"core.settings-modal.set\", \"mode\");" },
+      { file: "e2e/projects.test.mjs", symbol: "await press(child, \"core.settings-modal.set\", \"sidebarWidth\", String(globalWidth));" },
+    ],
+    tests: [
+      { file: "e2e/projects.test.mjs", id: "project windows persist files, inherit settings, and isolate native state" },
+    ],
+    expected: "In the common tab of a project window the check finds that the control of a setting that the project overrides shows the project value, writes the project scope and has the mark applied:<setting>, and it judges a common write by a setting that the project does not override, which the other project applies and the project file does not gain.",
+    levels: ["application"],
+  },
+  {
     id: "F732",
     implementation: [
       { file: "native/darwin/src/window_facts.m", symbol: "static BOOL lives(pid_t process) {" },
