@@ -447,7 +447,7 @@ export async function openDebug() {
   const rect = cardRect();
   if (native) {
     card.style.visibility = "hidden";
-    overlay.show(card, rect, answer);
+    overlay.show(card, rect, answer, () => closeDebug());
   } else {
     standIn(true, rect);
   }

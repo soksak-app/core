@@ -56,6 +56,8 @@ commands:
   status NAME [window] [--surface S] [--watch]
   element rect|click|input|dispatch NAME [window] [--surface S] [--index N] [--value V] [--event JSON]
   input pointer [window] [--pointer NAME] --x X --y Y --phase move|down|drag|up|scroll [--button left|right] [--delta-x N] [--delta-y N] [--clicks N] [--activate]
+  input gesture [window] [--pointer NAME] [--button left|right] [--clicks N] --points X,Y[;X,Y]...
+                            sends down at the first point, a drag to each later point and up at the last on one connection
   input key [window] --key K --phase down|up [--text T] [--modifiers shift,control,option,command]
   debug query [--channel C] [--level L] [--class C] [--layer L] [--event E] [--event-prefix P] [--surface S] [--session S] [--cid C] [--run R] [--text T] [--from T] [--to T] [--order asc|desc] [--limit N] [--after CURSOR]
                             prints one page of the events of the event files that pass the filter
@@ -121,6 +123,7 @@ const OPTIONS: &[&str] = &[
     "platform",
     "button",
     "pointer",
+    "points",
     "delta-x",
     "clicks",
     "delta-y",
@@ -267,10 +270,18 @@ fn compact(fields: Vec<(&str, Option<Value>)>) -> Map<String, Value> {
         .collect()
 }
 
+/// How a planned request runs: one request, a watch of a status, or the steps of a gesture, each a request of
+/// `method` with its params, on one connection.
+pub(crate) enum Mode {
+    Once,
+    Watch,
+    Gesture(Vec<Map<String, Value>>),
+}
+
 pub(crate) struct Request {
     method: &'static str,
     params: Option<Map<String, Value>>,
-    watch: bool,
+    mode: Mode,
     /// The field of the result object to print. When None, the whole result is printed.
     field: Option<&'static str>,
 }
@@ -285,19 +296,19 @@ fn plan(
         "windows" => Ok(Request {
             method: "windows.list",
             params: None,
-            watch: false,
+            mode: Mode::Once,
             field: None,
         }),
         "commands" => Ok(Request {
             method: "exposure.list",
             params: Some(compact(vec![("window", text(window()?))])),
-            watch: false,
+            mode: Mode::Once,
             field: Some("commands"),
         }),
         "exposures" => Ok(Request {
             method: "exposure.list",
             params: Some(compact(vec![("window", text(window()?))])),
-            watch: false,
+            mode: Mode::Once,
             field: None,
         }),
         // Only the diagnostic build has the capture request (diagnostics.rs). The sok of a regular build has no diagnostic methods.
@@ -318,7 +329,7 @@ fn plan(
                     ("name", text(name)),
                     ("surface", a.optional("surface")),
                 ])),
-                watch,
+                mode: if watch { Mode::Watch } else { Mode::Once },
                 field: None,
             })
         }
@@ -337,7 +348,7 @@ fn plan(
                 "rect" => Ok(Request {
                     method: "element.rect",
                     params: Some(compact(base)),
-                    watch: false,
+                    mode: Mode::Once,
                     field: None,
                 }),
                 "click" => {
@@ -345,7 +356,7 @@ fn plan(
                     Ok(Request {
                         method: "element.act",
                         params: Some(compact(base)),
-                        watch: false,
+                        mode: Mode::Once,
                         field: None,
                     })
                 }
@@ -356,7 +367,7 @@ fn plan(
                     Ok(Request {
                         method: "element.act",
                         params: Some(compact(base)),
-                        watch: false,
+                        mode: Mode::Once,
                         field: None,
                     })
                 }
@@ -372,7 +383,7 @@ fn plan(
                     Ok(Request {
                         method: "element.act",
                         params: Some(compact(base)),
-                        watch: false,
+                        mode: Mode::Once,
                         field: None,
                     })
                 }
@@ -414,10 +425,11 @@ fn plan(
                             ("clicks", clicks),
                             ("activate", activate),
                         ])),
-                        watch: false,
+                        mode: Mode::Once,
                         field: None,
                     })
                 }
+                "gesture" => gesture(a, window()?),
                 "key" => {
                     let key = a.required("key")?;
                     let phase = a.required("phase")?;
@@ -439,7 +451,7 @@ fn plan(
                             ("text", a.optional("text")),
                             ("modifiers", modifiers),
                         ])),
-                        watch: false,
+                        mode: Mode::Once,
                         field: None,
                     })
                 }
@@ -448,6 +460,61 @@ fn plan(
         }
         _ => Err(usage!("unknown command: {command}")),
     }
+}
+
+/// Plans `input gesture`: `down` at the first point of `--points`, a `drag` to each later point and `up` at the last point,
+/// each an `input.pointer` request of the same pointer and button (docs/spec/cli.md).
+fn gesture(a: &Arguments, window: String) -> Result<Request, Error> {
+    if let Some(button) = a.values.get("button")
+        && button != "left"
+        && button != "right"
+    {
+        return Err(usage!("--button must be left or right"));
+    }
+    let clicks = a.number("clicks")?;
+    let points = points(&a.required("points")?)?;
+    let last = points.len() - 1;
+    let step = |phase: &str, (x, y): (f64, f64), clicks: Option<Value>| {
+        compact(vec![
+            ("window", Some(Value::String(window.clone()))),
+            ("pointer", a.optional("pointer")),
+            ("x", Some(number_value(x))),
+            ("y", Some(number_value(y))),
+            ("phase", Some(Value::String(phase.into()))),
+            ("button", a.optional("button")),
+            ("clicks", clicks),
+        ])
+    };
+    let mut steps = vec![step("down", points[0], clicks.clone())];
+    for point in &points[1..] {
+        steps.push(step("drag", *point, None));
+    }
+    steps.push(step("up", points[last], clicks));
+    Ok(Request {
+        method: "input.pointer",
+        params: None,
+        mode: Mode::Gesture(steps),
+        field: None,
+    })
+}
+
+/// Reads the points of `--points`: `x,y` pairs separated by `;`, at least one.
+fn points(text: &str) -> Result<Vec<(f64, f64)>, Error> {
+    let wrong = || usage!("--points must be x,y pairs separated by ;");
+    let coordinate = |text: &str| -> Result<f64, Error> {
+        let text = text.trim();
+        text.parse::<f64>()
+            // default: text that is not a finite number becomes the usage error.
+            .ok()
+            .filter(|value| value.is_finite() && !text.is_empty())
+            .ok_or_else(wrong)
+    };
+    text.split(';')
+        .map(|pair| {
+            let (x, y) = pair.split_once(',').ok_or_else(wrong)?;
+            Ok((coordinate(x)?, coordinate(y)?))
+        })
+        .collect()
 }
 
 fn no_notify(_: &str, _: &RawValue) -> Result<(), String> {
@@ -605,38 +672,32 @@ fn compact_line(raw: &str) -> Result<String, String> {
     Ok(out)
 }
 
-/// Prints the status value and each later change on its own line. On SIGINT or SIGTERM it closes the connection and ends successfully.
+/// Prints the status value and each later change on its own line. `status.ended` of the watch ends it with the error
+/// `status <name> ended: <reason>`. On SIGINT or SIGTERM the routine of the signal closes the connection, stores the command with
+/// the result of the close and ends the process, also while this thread waits in a write to its standard output.
 fn watch(
     client: &mut Client,
     params: Map<String, Value>,
     stdout: &mut dyn Write,
 ) -> Result<(), Error> {
     let stopped = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    // The thread that received the interrupt signal sends the result of closing the connection. When closing fails, watch ends with that error.
-    let (closed_tx, closed_rx) = std::sync::mpsc::sync_channel::<Result<(), String>>(1);
     {
         let close = client.closer()?;
         let flag = stopped.clone();
         platform::current()?.on_interrupt(Box::new(move || {
             flag.store(true, std::sync::atomic::Ordering::SeqCst);
-            if let Err(unsent) = closed_tx.send(close()) {
-                // When watch has already ended and nothing can receive the result, the close failure is written to standard error.
-                if let Err(error) = unsent.0 {
-                    eprintln!("sok: {error}");
-                }
-            }
+            crate::routine::interrupted(close());
         }))?;
     }
     let finish = |error: Error| -> Result<(), Error> {
-        if !stopped.load(std::sync::atomic::Ordering::SeqCst) {
-            return Err(error);
+        if stopped.load(std::sync::atomic::Ordering::SeqCst) {
+            // The close of the routine of the signal ended this read, and that routine ends the process with the result
+            // of the close.
+            loop {
+                std::thread::park();
+            }
         }
-        match closed_rx.recv() {
-            Ok(closed) => closed.map_err(Error::Failed),
-            Err(_) => Err(Error::Failed(
-                "the interrupt handler ended before it closed the connection".into(),
-            )),
-        }
+        Err(error)
     };
     let surface = params.get("surface").cloned();
     let window = params.get("window").cloned();
@@ -649,23 +710,32 @@ fn watch(
             .map_err(|error| error.to_string())
     };
     let mut notify = |method: &str, raw: &RawValue| -> Result<(), String> {
-        if method != "status.changed" {
+        if method != "status.changed" && method != "status.ended" {
             return Ok(());
         }
-        let changed: Value = serde_json::from_str(raw.get())
-            .map_err(|error| format!("status.changed has unexpected params: {error}"))?;
+        let notice: Value = serde_json::from_str(raw.get())
+            .map_err(|error| format!("{method} has unexpected params: {error}"))?;
         // default: a notification without a surface is a page status, and its surface is none (None).
-        let changed_surface = changed
+        let notice_surface = notice
             .get("surface")
             .filter(|value| !value.is_null())
             .cloned();
-        if changed.get("window") != window.as_ref()
-            || changed.get("name") != name.as_ref()
-            || changed_surface != surface
+        if notice.get("window") != window.as_ref()
+            || notice.get("name") != name.as_ref()
+            || notice_surface != surface
         {
             return Ok(());
         }
-        print(&changed["value"].to_string())
+        if method == "status.ended" {
+            // default: the name was sent as a string and a reason that is not one is printed as its JSON.
+            let shown = name.as_ref().and_then(Value::as_str).unwrap_or_default();
+            let reason = match &notice["reason"] {
+                Value::String(reason) => reason.clone(),
+                other => other.to_string(),
+            };
+            return Err(format!("status {shown} ended: {reason}"));
+        }
+        print(&notice["value"].to_string())
     };
     if let Err(failure) = client.request(
         "status.watch",
@@ -684,7 +754,9 @@ fn watch(
         Ok(value) => value,
         Err(failure) => return finish(failure.into()),
     };
-    print(&value)?;
+    if let Err(error) = print(&value) {
+        return finish(Error::Failed(error));
+    }
     let reason = client.listen(&mut notify);
     finish(Error::Failed(reason))
 }
@@ -844,8 +916,26 @@ mod process_wait_tests;
 
 /// Sends the planned request and prints the result.
 fn send(client: &mut Client, request: Request, stdout: &mut dyn Write) -> Result<(), Error> {
-    if request.watch {
-        return watch(client, request.params.expect("status has params"), stdout);
+    match request.mode {
+        Mode::Once => {}
+        Mode::Watch => {
+            return watch(client, request.params.expect("status has params"), stdout);
+        }
+        Mode::Gesture(steps) => {
+            // The steps share the connection, so a step that fails leaves its press to the close of the connection, which
+            // releases it (docs/spec/exposure.md#methods).
+            for (index, step) in steps.into_iter().enumerate() {
+                if let Err(failure) =
+                    client.request(request.method, Some(Value::Object(step)), &mut no_notify)
+                {
+                    return Err(Error::Failed(format!(
+                        "gesture step {}: {failure}",
+                        index + 1
+                    )));
+                }
+            }
+            return Ok(());
+        }
     }
     let mut result = client.request(
         request.method,

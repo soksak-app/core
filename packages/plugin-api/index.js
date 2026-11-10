@@ -1617,6 +1617,7 @@ export function exposureEntries(declared, { place = () => null, inert = () => fa
   function stop(entry) {
     entry.watching = false;
     entry.changed = null;
+    entry.first = null;
     // The next watch sends the value it reads, also when that value equals the last value of this watch.
     entry.text = undefined;
     const stopper = entry.stop;
@@ -1670,7 +1671,7 @@ export function exposureEntries(declared, { place = () => null, inert = () => fa
       if (typeof read !== "function" || typeof subscribe !== "function") {
         throw new Error(`status ${name} requires read and subscribe functions`);
       }
-      statuses.set(name, { name, read, subscribe, watching: false, stop: null, changed: null, text: undefined, value: null, version: 0 });
+      statuses.set(name, { name, read, subscribe, watching: false, stop: null, changed: null, first: null, text: undefined, value: null, version: 0 });
     },
 
     command(name, run) {
@@ -1719,14 +1720,28 @@ export function exposureEntries(declared, { place = () => null, inert = () => fa
         const entry = status(name);
         entry.changed = changed;
         if (entry.watching) {
-          // A watch whose first value is still being read sends it when the read ends.
-          if (entry.version > 0) changed(name, entry.value, entry.version);
+          // A watch while the first read runs answers when that read ends, with its outcome; the read sends the value with the
+          // changed of the latest watch (docs/spec/exposure.md#relay).
+          if (entry.first) {
+            await entry.first;
+            return null;
+          }
+          changed(name, entry.value, entry.version);
           return null;
         }
         entry.watching = true;
         const listen = (value) => update(entry, value);
         entry.stop = entry.subscribe(listen);
-        listen(await entry.read());
+        const first = Promise.resolve().then(() => entry.read()).then(listen);
+        entry.first = first;
+        try {
+          await first;
+        } catch (error) {
+          // A failed first read ends the watch in the turn of the failure, so the next watch reads again and sends its value.
+          if (entry.first === first) stop(entry);
+          throw error;
+        }
+        if (entry.first === first) entry.first = null;
         return null;
       }
       if (method === "status.unwatch") {

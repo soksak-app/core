@@ -17,12 +17,9 @@ void webviewInputRoutePointer(NSEvent *event);
 // has no receipt record and receives done(YES) immediately. Call it in the same main thread turn
 // that delivers the event.
 void webviewInputReceive(WKWebView *view, NSString *type, NSTimeInterval timeout, void (^done)(BOOL received));
-// Registers before the event, then completes after its trusted document receipt and WebKit's pending mouse work.
-void webviewInputReceiveThenDrain(WKWebView *view, NSString *type, NSTimeInterval timeout, void (^done)(BOOL received));
-
-// Registers the receipt wait before sending, then completes after the sent event is observed.
-// Without the pending-mouse completion API on the registered view, done(NO) runs without sending; a
-// missing receipt also gives done(NO).
+// Registers the receipt wait, lets the pending mouse work of WebKit end, sends, and completes at the receipt of the sent event,
+// without waiting for the pending mouse work that follows it. Without the pending-mouse completion API on the registered view,
+// done(NO) runs without sending; a missing receipt also gives done(NO).
 void webviewInputSendThen(WKWebView *view, NSString *type, NSTimeInterval timeout,
     BOOL (^send)(void), void (^done)(BOOL received));
 

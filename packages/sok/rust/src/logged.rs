@@ -13,7 +13,7 @@ use crate::event_bounds::cut_text;
 use crate::event_log::{EventLog, Level, Options as WriterOptions};
 use crate::log_policy::apply_tool_policy;
 use crate::replay::set_run_log;
-use crate::routine::{PANIC_STATUS, Panic, guard, set_recorder};
+use crate::routine::{PANIC_STATUS, Panic, guard, set_interrupt_recorder, set_recorder};
 use crate::{Error, Options, command, config_dir_of};
 
 /// How long a run waits for the writer to put its last events on disk.
@@ -212,6 +212,15 @@ pub fn logged(
             }
         })));
     }
+    {
+        let record = record.clone();
+        set_interrupt_recorder(Some(Arc::new(move |status: i32, text: &str| {
+            record.finish(status, text);
+            if let Err(error) = record.log.flush(FLUSH_DEADLINE) {
+                eprintln!("sok: event log: {error}");
+            }
+        })));
+    }
     let mut captured = FirstLine {
         stream: stderr,
         text: Vec::new(),
@@ -219,6 +228,7 @@ pub fn logged(
     };
     let outcome = guard(|| command(args, stdout, &mut captured, options));
     set_recorder(None);
+    set_interrupt_recorder(None);
     let mut status = match outcome {
         Ok(status) => status,
         Err(panic) => {

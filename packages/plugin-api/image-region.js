@@ -12,12 +12,14 @@ export const IMAGE_NAME = /^[a-z0-9][a-z0-9-]{0,63}$/;
 export function attachImage(port, element, name, sidecar, options = {}) {
   if (!IMAGE_NAME.test(name)) throw new Error(`invalid image name ${JSON.stringify(name)}`);
   // A failure that does not return to a caller (a placement during observation, an event with no handler) is reported as an error with this function.
-  const { report } = options;
+  const { report, input } = options;
   if (typeof report !== "function") throw new TypeError(`image ${name} requires a report for its failures`);
+  if (input !== undefined && typeof input !== "function") throw new TypeError(`image ${name} input must be a function`);
   const listeners = new Map();
-  // The input transactions before the first input handler, in order. A region takes the first responder as soon as it shows, which
-  // can come before the module of the surface registers its handler, and input of the user is not lost
-  // (docs/spec/native-surfaces.md#image-regions).
+  // The input handler given at the creation receives each input event in its dispatch, from the attachment. Without it, the input
+  // transactions before the first input handler wait in order: a region takes the first responder as soon as it shows, which can come
+  // before the module of the surface registers its handler, and input of the user is not lost (docs/spec/native-surfaces.md#image-regions).
+  // That form is the one of the installed terminal plugin and goes when it gives input at the creation.
   let heldInput = [];
   let detached = false;
   let chain = port.attach(name, sidecar);
@@ -40,6 +42,10 @@ export function attachImage(port, element, name, sidecar, options = {}) {
       report(`image ${name}: event has no type: ${JSON.stringify(event)}`);
       return;
     }
+    if (eventType === "input" && input) {
+      input(event);
+      return;
+    }
     const handlers = listeners.get(eventType);
     if (eventType === "input" && (!handlers || heldInput.length > 0)) {
       heldInput.push(event);
@@ -56,6 +62,7 @@ export function attachImage(port, element, name, sidecar, options = {}) {
     name,
     _ready: chain,
     on(type, fn) {
+      if (type === "input" && input) throw new Error(`image ${name}: the input handler is the input of composition.create`);
       if (!listeners.has(type)) listeners.set(type, new Set());
       listeners.get(type).add(fn);
       // The registration ends first, so the module finishes its setup before its handler runs.

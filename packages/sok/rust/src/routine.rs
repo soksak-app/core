@@ -35,6 +35,42 @@ pub fn set_recorder(recorder: Option<Recorder>) {
     *RECORDER.lock().unwrap_or_else(PoisonError::into_inner) = recorder;
 }
 
+/// Stores the command with its exit status and error text when a signal ends the run; `logged` installs it for the run.
+type InterruptRecorder = Arc<dyn Fn(i32, &str) + Send + Sync>;
+
+static INTERRUPT_RECORDER: Mutex<Option<InterruptRecorder>> = Mutex::new(None);
+
+/// Installs the recorder of a run that a signal ends, or removes it with `None`.
+pub fn set_interrupt_recorder(recorder: Option<InterruptRecorder>) {
+    *INTERRUPT_RECORDER
+        .lock()
+        // default: the lock guards only the recorder, and a panic of another thread must not stop its replacement.
+        .unwrap_or_else(PoisonError::into_inner) = recorder;
+}
+
+/// Ends the run that a signal interrupted, on the routine of the signal, with the result of the close of its connection: the
+/// exit status is 0, or 1 with the error of the close written to the standard error. The command is stored with that result
+/// before the process ends, so the end does not wait for the thread of the command, which can wait in a write to its
+/// standard output (docs/spec/cli.md).
+pub fn interrupted(closed: Result<(), String>) -> ! {
+    let (status, text) = match closed {
+        Ok(()) => (0, String::new()),
+        Err(error) => (1, format!("sok: {error}")),
+    };
+    if !text.is_empty() {
+        eprintln!("{text}");
+    }
+    let recorder = INTERRUPT_RECORDER
+        .lock()
+        // default: the lock guards only the recorder, and a panic of another thread must not stop this record.
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone();
+    if let Some(record) = recorder {
+        record(status, &text);
+    }
+    std::process::exit(status);
+}
+
 thread_local! {
     /// Whether an entrance recovers the panics of this thread, so the hook keeps them for the entrance.
     static GUARDED: Cell<bool> = const { Cell::new(false) };

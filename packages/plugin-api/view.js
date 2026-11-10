@@ -421,7 +421,15 @@ export function createViewBridge({ handler, report }) {
       return;
     }
     if (message.event === "exposure-request" && surfaceDocumentEntry(message.data?.params?.name)) {
-      if (!onCoreExposure) throw new Error(`view ${plugin} has no core document exposure handler`);
+      // Each forwarded request gets its answer, so a request without the handler is answered with the refusal
+      // (docs/spec/plugin-processes.md, rule 4).
+      if (!onCoreExposure) {
+        const { id, params } = message.data;
+        const refusal = { code: UNREGISTERED_COMMAND, message: `view ${plugin} has no core document exposure handler for ${params.name}` };
+        exposure.reply(id, { error: refusal }).catch((error) =>
+          report({ where: "core surface entries", text: `exposure reply ${id}`, error }));
+        return;
+      }
       onCoreExposure(message.data);
       return;
     }
@@ -517,9 +525,9 @@ export function createViewBridge({ handler, report }) {
      * Creates the composition of the declared regions and overlays of the view from elements of the view document, as
      * createSurfaceComposition does for a page. The insets are measured against the viewport of the view, which is the view frame.
      */
-    async create({ regions = {}, overlays = {} } = {}) {
+    async create({ regions = {}, overlays = {}, input } = {}) {
       const declaration = await calls.request("composition.declaration", null);
-      return createSurfaceCompositionController(port, declaration, { regions, overlays }, window);
+      return createSurfaceCompositionController(port, declaration, { regions, overlays, input }, window);
     },
   };
   // Only a surface document, which has window.sokSurface, owns these entries.

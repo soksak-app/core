@@ -244,6 +244,10 @@ type Endpoint struct {
 	// that topic exists. queueMu protects it.
 	queueMu sync.Mutex
 	queues  map[topic][]func()
+	// presses are the open presses that delivered downs of the connections opened (endpoint_presses.go). pressMu protects them
+	// and the pressesReleased mark of each connection.
+	pressMu sync.Mutex
+	presses map[pressKey]*openPress
 }
 
 // LockOwner is the owner that process.lock holds: the process identifier and the boot identifier of its host run
@@ -591,6 +595,11 @@ func (e *Endpoint) StatusChanged(window, name, surface string, value any) {
 // NotifyWatchers announces the new value of the status name, which is not bound to a window, for each window to the connections that watch it without specifying a surface.
 // The notifications enter the send queue of each connection in the order of the calls and do not block the caller.
 func (e *Endpoint) NotifyWatchers(name string, value any) {
+	// The release of a press of a closed connection that 1007 refused waits for this change (endpoint_presses.go). The caller
+	// announces in its lock and must not block, so the release runs in its own routine.
+	if name == "host.buttons" {
+		routine.Go("endpoint-release", func() { e.buttonsChanged(value) })
+	}
 	e.mu.Lock()
 	windows := make([]string, 0)
 	for t, count := range e.counts {
@@ -771,6 +780,8 @@ type endpointConn struct {
 	// reason is the reason of the first close, which a frame that is not sent afterwards names.
 	reasonMu sync.Mutex
 	reason   string
+	// pressesReleased is set when the close of the connection released its presses; Endpoint.pressMu protects it.
+	pressesReleased bool
 }
 
 // close closes the connection. It records the reason reason of the first closer before it closes the socket, and later calls do nothing.
@@ -1026,6 +1037,8 @@ func (e *Endpoint) drain(t topic) {
 // the release to the page. When no one closed the connection first, reason is the reason for closing.
 func (e *Endpoint) drop(c *endpointConn, reason string) {
 	c.close(reason)
+	// The close releases the presses that the connection owns, in its turn (docs/spec/exposure.md#methods).
+	e.releasePresses(c)
 	e.mu.Lock()
 	delete(e.conns, c)
 	held := make([]topic, 0, len(c.topics))
@@ -1333,7 +1346,7 @@ func elementRequest(method string) endpointMethod {
 
 var pointerPhases = map[string]bool{"move": true, "down": true, "drag": true, "up": true, "scroll": true}
 
-func inputPointer(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
+func inputPointer(e *Endpoint, c *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	window, err := e.window(params)
 	if err != nil {
 		return nil, err
@@ -1392,8 +1405,13 @@ func inputPointer(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *Reply
 		}
 		clicks = *p.Clicks
 	}
-	return nil, e.backend.Pointer(window, PointerInput{Pointer: pointer, X: *p.X, Y: *p.Y, Phase: p.Phase, Button: button,
-		DeltaX: p.DeltaX, DeltaY: p.DeltaY, Activate: p.Activate, Clicks: clicks})
+	input := PointerInput{Pointer: pointer, X: *p.X, Y: *p.Y, Phase: p.Phase, Button: button, DeltaX: p.DeltaX, DeltaY: p.DeltaY,
+		Activate: p.Activate, Clicks: clicks}
+	if err := e.backend.Pointer(window, input); err != nil {
+		return nil, err
+	}
+	e.pointerDelivered(c, window, input)
+	return nil, nil
 }
 
 // modifierBits are the modifiers names of input.key and the bits of the native input.

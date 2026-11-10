@@ -93,6 +93,7 @@ fn shared(service: Pages) -> Arc<Shared> {
         service: Arc::new(service),
         peers: Mutex::new(HashMap::new()),
         lines: Mutex::new(HashMap::new()),
+        presses: Mutex::new(Presses::default()),
         next: AtomicU64::new(1),
         orders: AtomicU64::new(1),
         stopping: AtomicBool::new(false),

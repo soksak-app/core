@@ -5,7 +5,8 @@
 // window message listener, and it keeps each host message (a message event whose source is the window and that carries
 // sok: 1) until a listener attaches. The one global is window.sokView, whose attach is the only way to read host messages.
 // A message that fails a check is reported through the handler as an error and passed to no listener. A message past the
-// queue limit is reported and dropped; the host ends the view process on that report.
+// queue limit is reported and dropped; the host ends the view process on that report. Each message is passed in its own call:
+// one whose listener throws is reported, and the next message is still passed.
 (() => {
   const QUEUE_LIMIT = 256;
   const MARKER = 1;
@@ -19,9 +20,19 @@
     handler.postMessage({ event: "view.error", plugin, reason: `${reason} for ${plugin}` });
   };
 
+  // Passes one message to the listener; a throw is reported through the handler and ends only this message. The reason is the
+  // message of the thrown error, also of an error of another realm, which is no instance of the Error of this one.
+  const pass = (next, message) => {
+    try {
+      next(message);
+    } catch (error) {
+      refuse(`message failed: ${typeof error?.message === "string" ? error.message : String(error)}`);
+    }
+  };
+
   const deliver = (message) => {
     if (listener) {
-      listener(message);
+      pass(listener, message);
       return;
     }
     if (queue.length >= QUEUE_LIMIT) {
@@ -77,7 +88,7 @@
       if (typeof next !== "function") throw new TypeError("attach requires a listener function");
       if (listener) throw new Error(`view channel for ${plugin} already has a message listener`);
       listener = next;
-      while (queue.length > 0 && listener === next) next(queue.shift());
+      while (queue.length > 0 && listener === next) pass(next, queue.shift());
     },
   });
 })();

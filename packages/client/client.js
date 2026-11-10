@@ -138,8 +138,9 @@ class Client {
         done = true;
         clearTimeout(timer);
         off();
+        offEnded();
         offClose();
-        this.#release(key, target).then(() => {
+        this.#release(key, target, entry).then(() => {
           if (error) reject(error);
           else resolve(value);
         }, (releaseError) => {
@@ -168,6 +169,14 @@ class Client {
       const off = this.on("status.changed", (params) => {
         if (params?.window === window && params?.name === name && params?.surface === surface) check(params.value);
       });
+      // The host ends the watch when its producer ends and removes it without an unwatch (docs/spec/exposure.md); #receive
+      // removed the entry of the key already, so finish releases nothing.
+      const offEnded = this.on("status.ended", (params) => {
+        if (params?.window !== window || params?.name !== name || params?.surface !== surface) return;
+        const error = new Error(`status ${name} ended: ${params.reason}`);
+        error.code = "ENDED";
+        finish(error);
+      });
       const offClose = this.#onClose((error) => finish(error));
       if (timeout !== Infinity) {
         timer = setTimeout(() => {
@@ -177,7 +186,8 @@ class Client {
           finish(error);
         }, timeout);
       }
-      this.#acquire(key, target)
+      const entry = this.#acquire(key, target);
+      entry.ready
         .then(() => (done ? undefined : this.request("status.get", target)))
         .then((value) => {
           if (!done) check(value);
@@ -231,19 +241,20 @@ class Client {
     const entry = this.#watches.get(key);
     if (entry) {
       entry.count += 1;
-      return entry.ready;
+      return entry;
     }
     const created = { count: 1, ready: this.#subscribe(key, () => this.request("status.watch", target)) };
     this.#watches.set(key, created);
     created.ready.catch(() => {
       if (this.#watches.get(key) === created) this.#watches.delete(key);
     });
-    return created.ready;
+    return created;
   }
 
-  #release(key, target) {
-    const entry = this.#watches.get(key);
-    if (!entry) return Promise.resolve();
+  // Releases one use of entry. An entry that is no longer the watch of its key ended at the host already: its failure removed
+  // it, or status.ended did, and a later watch of the key holds a new entry that this use does not count in.
+  #release(key, target, entry) {
+    if (this.#watches.get(key) !== entry) return Promise.resolve();
     entry.count -= 1;
     if (entry.count > 0) return Promise.resolve();
     this.#watches.delete(key);
@@ -272,6 +283,10 @@ class Client {
       return;
     }
     if (typeof message?.method === "string") {
+      if (message.method === "status.ended") {
+        const { window, name, surface } = message.params ?? {};
+        this.#watches.delete(JSON.stringify([window, name, surface ?? null]));
+      }
       // default: a notification without a registered listener has nowhere to be delivered.
       for (const fn of [...(this.#listeners.get(message.method) ?? [])]) fn(message.params);
     }
