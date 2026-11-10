@@ -124,6 +124,17 @@ func startViewSession() (*viewSession, error) {
 		return nil, err
 	}
 	cleanup = func() { os.RemoveAll(config) }
+	// The host of the session runs in this process, so it makes its socket folder in the temporary folder of the process.
+	endTemporary, err := support.HostTemporary()
+	if err != nil {
+		return nil, err
+	}
+	cleanup = func() {
+		os.RemoveAll(config)
+		if err := endTemporary(); err != nil {
+			fmt.Fprintln(os.Stderr, "the temporary folder of the host remains:", err)
+		}
+	}
 	folder := filepath.Join(config, "plugins", "probe", "0.2.0")
 	files := map[string]string{
 		filepath.Join(config, "plugins", "installed.json"): `{"format": 3, "plugins": {"probe": {"version": "0.2.0", "path": "plugins/probe/0.2.0",

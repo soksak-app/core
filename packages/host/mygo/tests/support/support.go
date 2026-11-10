@@ -213,7 +213,7 @@ func Logged(config string) string {
 // at most 103 bytes (docs/spec/host-contract.md, endpoint.socket.path-over-limit).
 func ChildTemporary(t *testing.T) string {
 	t.Helper()
-	folder, err := os.MkdirTemp("", "ct")
+	folder, err := hostTemporary()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,3 +224,30 @@ func ChildTemporary(t *testing.T) string {
 	})
 	return "TMPDIR=" + folder
 }
+
+// HostTemporary gives a host that a test starts in its own process the short temporary folder that ChildTemporary gives a child
+// application: it sets TMPDIR of the process to a new folder, so the host makes its socket folder `soksak` there. The returned end
+// sets TMPDIR back and removes the folder; the process calls it after the host ended.
+func HostTemporary() (end func() error, err error) {
+	folder, err := hostTemporary()
+	if err != nil {
+		return nil, err
+	}
+	previous, set := os.LookupEnv("TMPDIR")
+	if err := os.Setenv("TMPDIR", folder); err != nil {
+		os.RemoveAll(folder)
+		return nil, err
+	}
+	return func() error {
+		if set {
+			os.Setenv("TMPDIR", previous)
+		} else {
+			os.Unsetenv("TMPDIR")
+		}
+		return os.RemoveAll(folder)
+	}, nil
+}
+
+// hostTemporary creates the short temporary folder of a host that a test starts. The name is short because a socket path holds at
+// most 103 bytes.
+func hostTemporary() (string, error) { return os.MkdirTemp("", "ct") }
