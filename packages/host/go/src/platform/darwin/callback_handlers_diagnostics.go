@@ -14,5 +14,6 @@ func diagnosticCallbackHandlers() abi.DiagnosticCallbacks {
 		DocumentFrameIdentityDone: goHost_document_frame_identity_done,
 		InputReferenceReply:       goHost_input_reference_reply,
 		ProcessExitAnswered:       goHost_process_exit_answered,
+		CaptureAnswered:           goHost_capture_answered,
 	}
 }

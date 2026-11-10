@@ -23,10 +23,10 @@ func goHost_window_objects_counted(handle uintptr, compositions, hosts, registra
 	}, bool(reached))
 }
 
-// WindowObjectsWhen gives done the count at the time when the count becomes equal to expected after the application handled one event, or when seconds pass.
-// Call it in a main-thread step.
-func (implementation) WindowObjectsWhen(expected *platform.WindowObjects, seconds float64,
-	done func(platform.WindowObjects, bool)) {
+// WindowObjectsWhen gives done the count at the time when the count becomes equal to expected after the application handled one event, or when end ends
+// the wait. Call it in a main-thread step.
+func (implementation) WindowObjectsWhen(expected *platform.WindowObjects,
+	done func(platform.WindowObjects, bool)) (end func()) {
 	var wanted *abi.SpWindowObjects
 	if expected != nil {
 		wanted = &abi.SpWindowObjects{
@@ -35,5 +35,7 @@ func (implementation) WindowObjectsWhen(expected *platform.WindowObjects, second
 			InputRegistrations: int64(expected.InputRegistrations),
 		}
 	}
-	diagnosticNative.CountWhen(wanted, float64(seconds), uintptr(handles.NewHandle(done)))
+	handle := uintptr(handles.NewHandle(done))
+	diagnosticNative.CountWhen(wanted, handle)
+	return func() { diagnosticNative.EndCountWait(handle) }
 }

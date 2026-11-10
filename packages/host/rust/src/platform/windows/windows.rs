@@ -515,7 +515,7 @@ impl Platform for Windows {
     }
 
     #[cfg(feature = "diagnostics")]
-    fn capture_open(&self, window_number: isize, display: bool) -> Result<(), String> {
+    fn capture_open(&self, window_number: isize, display: bool, _token: u64) -> Result<(), String> {
         unsupported::capture_open(window_number, display)
     }
     #[cfg(feature = "diagnostics")]
@@ -523,11 +523,11 @@ impl Platform for Windows {
         unsupported::capture_start(directory, frame_identity)
     }
     #[cfg(feature = "diagnostics")]
-    fn capture_wait(&self) -> Result<bool, String> {
+    fn capture_wait(&self, _token: u64) -> Result<bool, String> {
         unsupported::capture_wait()
     }
     #[cfg(feature = "diagnostics")]
-    fn capture_stop(&self, after: f64) -> Result<i32, String> {
+    fn capture_stop(&self, after: f64, _token: u64) -> Result<i32, String> {
         unsupported::capture_stop(after)
     }
     #[cfg(feature = "diagnostics")]
@@ -535,8 +535,8 @@ impl Platform for Windows {
         unsupported::capture_has_stream()
     }
     #[cfg(feature = "diagnostics")]
-    // This platform records no window, so no capture wait runs.
-    fn capture_end_waits(&self) {}
+    // This platform records no window, and its still capture ends by its own limit, so no capture wait waits for an end.
+    fn capture_end_wait(&self, _token: u64, _reason: &str) {}
     #[cfg(feature = "diagnostics")]
     fn document_frame_identity_start(
         &self,
@@ -575,7 +575,13 @@ impl Platform for Windows {
         unsupported::capture_clock()
     }
     #[cfg(feature = "diagnostics")]
-    fn capture_still(&self, window_numbers: &[isize], path: &str) -> Result<(), String> {
+    // Its still capture keeps its own limit, so it takes no token.
+    fn capture_still(
+        &self,
+        window_numbers: &[isize],
+        path: &str,
+        _token: u64,
+    ) -> Result<(), String> {
         // `window_numbers` holds the window alone here, so its first number is the whole list.
         let window_number = *window_numbers
             .first()
@@ -590,10 +596,9 @@ impl Platform for Windows {
     fn window_objects_when(
         &self,
         expected: Option<super::WindowObjects>,
-        seconds: f64,
         done: Box<dyn FnOnce(super::WindowObjects, bool) + Send>,
-    ) -> Result<(), String> {
-        unsupported::window_objects_when(expected, seconds, done)
+    ) -> Result<super::WaitEnd, String> {
+        unsupported::window_objects_when(expected, done)
     }
 
     #[cfg(feature = "diagnostics")]
@@ -609,10 +614,9 @@ impl Platform for Windows {
     fn when_process_exited(
         &self,
         pid: i32,
-        seconds: f64,
         done: Box<dyn FnOnce(bool) + Send>,
-    ) -> Result<(), String> {
-        unsupported::when_process_exited(pid, seconds, done)
+    ) -> Result<super::WaitEnd, String> {
+        unsupported::when_process_exited(pid, done)
     }
     #[cfg(feature = "diagnostics")]
     fn layout_trace_start(&self) -> Result<(), String> {
@@ -633,16 +637,28 @@ impl Platform for Windows {
         done(unsupported::input_reference());
     }
     #[cfg(feature = "diagnostics")]
+    fn end_input_reference_wait(&self, _window: Handle, _reason: &str) {}
+    #[cfg(feature = "diagnostics")]
     fn input_source(&self) -> Result<(Option<String>, String), String> {
         unsupported::input_source()
     }
     #[cfg(feature = "diagnostics")]
-    fn select_input_source(&self, _role: &str, adopted: Box<dyn Fn(Result<(), String>)>) {
-        adopted(unsupported::change_input_source())
+    fn select_input_source(
+        &self,
+        _role: &str,
+        adopted: Box<dyn Fn(Result<(), String>)>,
+    ) -> super::InputSourceEnd {
+        adopted(unsupported::change_input_source());
+        Box::new(|_| {})
     }
     #[cfg(feature = "diagnostics")]
-    fn restore_input_source(&self, _source: &str, adopted: Box<dyn Fn(Result<(), String>)>) {
-        adopted(unsupported::change_input_source())
+    fn restore_input_source(
+        &self,
+        _source: &str,
+        adopted: Box<dyn Fn(Result<(), String>)>,
+    ) -> super::InputSourceEnd {
+        adopted(unsupported::change_input_source());
+        Box::new(|_| {})
     }
 
     fn on_termination(&self, quit: Box<dyn Fn(i32, i32) + Send>) -> Result<(), String> {

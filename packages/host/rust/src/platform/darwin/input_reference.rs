@@ -13,6 +13,7 @@ unsafe extern "C" {
         done: unsafe extern "C" fn(*mut c_void, *const c_char, *const c_char),
         context: *mut c_void,
     );
+    fn sp_input_reference_end(window: *mut c_void, reason: *const c_char);
 }
 unsafe extern "C" fn replied(context: *mut c_void, value: *const c_char, failure: *const c_char) {
     let done = unsafe { Box::from_raw(context as *mut Completion) };
@@ -58,4 +59,11 @@ pub fn call(window: Handle, action: &str, document: Option<&str>, done: Completi
             Box::into_raw(Box::new(done)) as *mut c_void,
         )
     };
+}
+
+/// Ends the pending wait of the reference of window, naming reason in its failure. Call it on the main thread.
+pub fn end(window: Handle, reason: &str) {
+    // default: a reason holds no NUL; one that does is named up to its first NUL, a text that CString takes without an error.
+    let reason = CString::new(reason.split('\0').next().unwrap_or_default()).unwrap_or_default();
+    unsafe { sp_input_reference_end(window as *mut c_void, reason.as_ptr()) };
 }

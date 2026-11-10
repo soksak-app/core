@@ -86,7 +86,7 @@ static void directly(void (^work)(void)) { work(); }
 int main(void) { @autoreleasepool {
 #define COUNT(mode, result, name, parameters, arguments) +1
     enum { baseCount = 0 SP_HOST_CALLBACKS(COUNT), diagnosticCount = 0 SP_HOST_DIAGNOSTIC_CALLBACKS(COUNT) };
-    check(baseCount == 37 && diagnosticCount == 7, "the native ABI declares 37 base and 7 diagnostic callbacks");
+    check(baseCount == 37 && diagnosticCount == 8, "the native ABI declares 37 base and 8 diagnostic callbacks");
     hostInstallMainThread(directly, directly);
     checkMissing("surface_pressed", ^{ hostRunOnWorker(^{ sp_host_callback_surface_pressed(0, NULL); }); });
     sp_host_callbacks callbacks = {0};

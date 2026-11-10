@@ -68,11 +68,13 @@ registry.method("diagnostics.page.calls", async ({ count }) => {
 });
 
 // The reply of a held surface is sent after the host reports that it removed the surface (docs/spec/endpoint.md). That reply arrives after the request has ended.
+// The hold also ends when the endpoint connection that asked for it closes (diagnostics-surface-released) and before a reload of the page.
 const replyHold = createSurfaceReplyHold(log);
-gateSurfaceReplies(replyHold.gate);
+gateSurfaceReplies(replyHold.gate, replyHold.endAll);
 host?.on("exposure-registered", (event) => {
   if (event?.closed) return replyHold.closed(event.surface);
 });
+host?.on("diagnostics-surface-released", (event) => replyHold.released(event?.surface));
 
 registry.method("diagnostics.surface.hold", ({ surface }) => {
   if (typeof surface === "string" && surface && !mountedSurface(surface)) throw new Error(`surface ${surface} is not mounted`);

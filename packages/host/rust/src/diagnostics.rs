@@ -11,7 +11,7 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -63,31 +63,105 @@ fn with_document_frame_identity_lifecycle<T>(
     operation()
 }
 
-/// The window recording operation of the platform. The second value is the last presentation time (ms) to include in
-/// the record when it stops.
-struct PlatformCapture(&'static dyn platform::Platform, f64);
+/// The window recording operation of the platform. `after` is the last presentation time (ms) to include in the record
+/// when it stops; `window` and `connection` are the label of the window and the end of the endpoint connection of the
+/// request, whose ends end the waits of the operations.
+struct PlatformCapture {
+    platform: &'static dyn platform::Platform,
+    after: f64,
+    window: String,
+    connection: crate::endpoint::ConnectionEnd,
+}
 
 impl Capture for PlatformCapture {
     fn open(&self, target: Target) -> Result<(), String> {
-        self.0.capture_open(target.window, target.display)
+        self.await_capture(|token| {
+            self.platform
+                .capture_open(target.window, target.display, token)
+        })
     }
     fn start(&self, directory: &Path, frame_identity: bool) -> Result<(), String> {
-        self.0
+        self.platform
             .capture_start(&directory.to_string_lossy(), frame_identity)
     }
     fn wait(&self) -> Result<bool, String> {
-        self.0.capture_wait()
+        self.await_capture(|token| self.platform.capture_wait(token))
     }
     fn stop(&self) -> Result<i32, String> {
-        self.0.capture_stop(self.1)
+        self.await_capture(|token| self.platform.capture_stop(self.after, token))
     }
     fn has_stream(&self) -> Result<bool, String> {
-        self.0.capture_has_stream()
+        self.platform.capture_has_stream()
     }
 }
 
-fn recorder() -> Result<PlatformCapture, Failure> {
-    Ok(PlatformCapture(platform::current().map_err(internal)?, 0.0))
+/// Gives each capture operation that waits a new, larger token.
+static CAPTURE_TOKENS: AtomicU64 = AtomicU64::new(0);
+
+impl PlatformCapture {
+    /// Runs the capture operation call with a new token, whose wait `capture_end_wait` of the platform ends.
+    fn await_capture<T>(&self, call: impl FnOnce(u64) -> T) -> T {
+        let platform = self.platform;
+        await_capture(
+            &self.window,
+            &self.connection,
+            move |token, reason| platform.capture_end_wait(token, reason),
+            call,
+        )
+    }
+}
+
+/// Runs the capture operation call with a new token. No limit ends its wait: the first of the close of connection, the
+/// close of window and the end of its page ends it through `end_wait`, given the token and the reason of that end, and the
+/// operation then fails with that reason. `end_wait` runs once at most, and not after the operation returned.
+fn await_capture<T>(
+    window: &str,
+    connection: &crate::endpoint::ConnectionEnd,
+    end_wait: impl Fn(u64, &'static str) + Send + Sync + 'static,
+    call: impl FnOnce(u64) -> T,
+) -> T {
+    let token = CAPTURE_TOKENS.fetch_add(1, Ordering::Relaxed) + 1;
+    let id = NATIVE_WAIT_IDS.fetch_add(1, Ordering::Relaxed);
+    let pending = Arc::new(AtomicBool::new(true));
+    let end = {
+        let pending = pending.clone();
+        let end_wait = Arc::new(end_wait);
+        move |reason: &'static str| {
+            if pending.swap(false, Ordering::AcqRel) {
+                end_wait(token, reason);
+            }
+        }
+    };
+    native_waits()
+        .get_or_insert_with(HashMap::new)
+        .entry(window.to_string())
+        .or_default()
+        .insert(id, Box::new(end.clone()));
+    // The watch ends when the operation returns, so the close of the connection ends no later wait.
+    let connection_watch = connection.watch(move || end(WAIT_END_CONNECTION));
+    let value = call(token);
+    drop(connection_watch);
+    pending.store(false, Ordering::Release);
+    if let Some(waits) = native_waits()
+        .get_or_insert_with(HashMap::new)
+        .get_mut(window)
+    {
+        waits.remove(&id);
+    }
+    value
+}
+
+/// The recording device of the platform for a request on connection about window.
+fn recorder(
+    window: &Window,
+    connection: &crate::endpoint::ConnectionEnd,
+) -> Result<PlatformCapture, Failure> {
+    Ok(PlatformCapture {
+        platform: platform::current().map_err(internal)?,
+        after: 0.0,
+        window: window.label().to_string(),
+        connection: connection.clone(),
+    })
 }
 
 /// The number that distinguishes the names of capture directories.
@@ -114,37 +188,29 @@ pub(crate) fn call(
     params: Map<String, Value>,
     reply: Option<&crate::endpoint::ReplyScope>,
 ) -> Result<Value, Failure> {
-    // The waits of a recording for a frame end when the connection of the request ends, because no answer reaches a closed
-    // connection (docs/spec/endpoint.md).
-    let _connection = match method {
-        "diagnostics.drag" | "diagnostics.capture.start" | "diagnostics.capture.stop" => reply
-            .and_then(|reply| {
-                // default: without a platform no capture wait runs, and the method reports the platform failure itself.
-                let platform = platform::current().ok()?;
-                Some(
-                    reply
-                        .connection_end()
-                        .watch(move || platform.capture_end_waits()),
-                )
-            }),
-        _ => None,
-    };
+    // The waits of the request and the holds that it opens end with the connection of the request, because no answer
+    // reaches a closed connection (docs/spec/endpoint.md).
+    let connection = reply
+        .map(crate::endpoint::ReplyScope::connection_end)
+        // default: a hold that an internal request opens has no connection to end it; it ends with its own end or its window.
+        .unwrap_or_else(crate::endpoint::ConnectionEnd::open);
     match method {
         "diagnostics.fixture" => fixture(host, window, params),
-        "diagnostics.drag" => drag(host, window, params),
+        "diagnostics.drag" => drag(host, window, params, &connection),
         "diagnostics.document.viewport-marker" => document_viewport_marker(window, &params),
         "diagnostics.capture.start" => {
             let options = parse_capture_start_options(&params)?;
             let display = options.display;
             let frames = with_document_frame_identity_lifecycle(|| {
-                let frames = capture_start(window, display, options.frame_identity, true)?;
+                let frames =
+                    capture_start(window, &connection, display, options.frame_identity, true)?;
                 let traced = (|| -> Result<(), Failure> {
                     let platform = platform::current().map_err(internal)?;
                     on_main(window, move || platform.layout_trace_start()).map_err(internal)
                 })();
                 if let Err(error) = traced {
-                    if let Err(cleanup) =
-                        recorder().and_then(|capture| RECORDING.abort(&capture).map_err(internal))
+                    if let Err(cleanup) = recorder(window, &connection)
+                        .and_then(|capture| RECORDING.abort(&capture).map_err(internal))
                     {
                         return Err(internal(format!(
                             "{}; abort capture: {}",
@@ -168,13 +234,32 @@ pub(crate) fn call(
                     .filter(|after| *after >= 0.0)
                     .ok_or_else(|| Failure::params("after must be a non-negative number"))?,
             };
-            capture_stop(window, after)
+            capture_stop(window, &connection, after)
         }
         // Diagnostic methods that the main page handles. The exposure reply of a surface must be caught before it
         // leaves the page, because otherwise it arrives after the request ended, so the page also handles the catching
         // of surface replies (docs/spec/endpoint.md).
+        "diagnostics.surface.hold" => {
+            let surface = params
+                .get("surface")
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            let held = exposure::parsed(&host.page(window, method, params, TIMEOUT)?)?;
+            // The page refuses a surface that is not a nonempty string, so a hold that it accepted names its surface.
+            if let Some(surface) = surface {
+                let released = window.clone();
+                let name = surface.clone();
+                remember_surface_hold(window.label(), &surface, &connection, move || {
+                    if let Err(error) =
+                        released.emit("diagnostics-surface-released", json!({ "surface": name }))
+                    {
+                        log_error("diagnostics-surface-released", error);
+                    }
+                });
+            }
+            Ok(held)
+        }
         "diagnostics.transcript"
-        | "diagnostics.surface.hold"
         | "diagnostics.surface.held"
         | "diagnostics.layout.fail"
         | "diagnostics.page.request"
@@ -185,12 +270,12 @@ pub(crate) fn call(
             let Some(on) = params.get("on").and_then(Value::as_bool) else {
                 return Err(Failure::params("on must be a boolean"));
             };
-            modal_hold(window.label(), on);
+            modal_hold(window.label(), on, &connection);
             Ok(Value::Null)
         }
         "diagnostics.modal.held" => modal_held(window.label()),
-        "diagnostics.input.source" => input_source(window, params),
-        "diagnostics.input.reference" => input_reference(window, &params),
+        "diagnostics.input.source" => input_source(window, params, &connection),
+        "diagnostics.input.reference" => input_reference(window, &params, &connection),
         "diagnostics.log.flush" => crate::event_record::flush_records(TIMEOUT)
             .map(|()| Value::Null)
             .map_err(|error| Failure::new(crate::endpoint::HANDLER_FAILED, error)),
@@ -207,14 +292,14 @@ pub(crate) fn call(
                 .map(|(boot, seq)| json!({"boot": boot, "seq": seq}))
                 .map_err(|error| Failure::new(crate::endpoint::HANDLER_FAILED, error))
         }
-        "diagnostics.capture.still" => capture_still(window),
+        "diagnostics.capture.still" => capture_still(window, &connection),
         "diagnostics.notifications" => delivered_notifications(window),
         "diagnostics.page.collect" => page_collect(window),
         "diagnostics.host.events" => host_events(window, &params),
-        "diagnostics.native.objects" => native_objects(window, &params),
+        "diagnostics.native.objects" => native_objects(window, &params, &connection),
         "diagnostics.native.window-color-space" => native_window_color_space(window),
         "diagnostics.objects" => crate::object_counts::objects_reply(host, window.label()),
-        "diagnostics.process.exit" => process_exit(window, &params),
+        "diagnostics.process.exit" => process_exit(window, &params, &connection),
         "diagnostics.memory.pressure" => {
             let level = crate::memory_pressure::parse_level(params.get("level"))
                 .map_err(Failure::params)?;
@@ -551,20 +636,14 @@ fn receive_pending_document_frame_identity_start_from(
     let Some(receiver) = pending.as_ref() else {
         return Ok(None);
     };
-    match receiver.recv_timeout(TIMEOUT) {
-        Ok(Ok(reply)) => {
-            pending.take();
-            Ok(Some(reply))
-        }
-        Ok(Err(error)) => {
-            pending.take();
-            Err(error)
-        }
-        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(
-            "document frame identity start did not complete within the diagnostic timeout; its generation remains selected for capture cleanup".into(),
-        ),
-        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-            pending.take();
+    // The library answers the start once on every path, the end of the document included, so the host waits without a
+    // limit of its own.
+    let result = receiver.recv();
+    pending.take();
+    match result {
+        Ok(Ok(reply)) => Ok(Some(reply)),
+        Ok(Err(error)) => Err(error),
+        Err(std::sync::mpsc::RecvError) => {
             Err("document frame identity start callback ended before replying".into())
         }
     }
@@ -740,12 +819,10 @@ fn objects(window: &Window) -> Result<ObjectCounts, Failure> {
     let mut documents = Vec::new();
     let mut failures = Vec::new();
     for _ in 0..pages {
-        let (key, counts) = rx.recv_timeout(TIMEOUT).map_err(|_| {
-            Failure::new(
-                crate::endpoint::TIMED_OUT,
-                format!("the page did not answer the object counts within {TIMEOUT:?}"),
-            )
-        })?;
+        // The library answers each count once on every path, so the host waits without a limit of its own.
+        let (key, counts) = rx
+            .recv()
+            .map_err(|_| internal("the object counts ended before they answered"))?;
         match (key, counts) {
             (None, Ok(counts)) => page = counts,
             (Some(key), Ok(counts)) => documents.push((key, counts)),
@@ -790,46 +867,211 @@ fn objects(window: &Window) -> Result<ObjectCounts, Failure> {
 /// one event and counts after it, so that it measures the release of a closed window without user input. AppKit keeps a
 /// window that was on the screen until its close animation ends, so when equal is given, the method answers when the
 /// count equals equal.
-fn native_objects(window: &Window, params: &Map<String, Value>) -> Result<Value, Failure> {
+fn native_objects(
+    window: &Window,
+    params: &Map<String, Value>,
+    connection: &crate::endpoint::ConnectionEnd,
+) -> Result<Value, Failure> {
     let expected = params
         .get("equal")
         .map(platform::WindowObjects::from_equal)
         .transpose()
         .map_err(Failure::params)?;
-    let (tx, rx) = std::sync::mpsc::channel();
-    on_main(window, move || {
-        platform::current()?.window_objects_when(
+    let ((counts, reached), end) = await_native(window, connection, move |done| {
+        let end = platform::current()?.window_objects_when(
             expected,
-            TIMEOUT.as_secs_f64(),
-            Box::new(move |counts, reached| {
-                if tx.send((counts, reached)).is_err() {
-                    crate::application_log::log_info(
-                        "diagnostics",
-                        "window object counts arrived after their request ended",
-                    );
-                }
-            }),
-        )
-    })
-    .map_err(internal)?;
-    // The library answers within TIMEOUT after it handles the event, so twice that time is awaited to include the event
-    // handling time.
-    let (counts, reached) = rx.recv_timeout(2 * TIMEOUT).map_err(|_| {
-        Failure::new(
-            crate::endpoint::TIMED_OUT,
-            format!("the application did not handle an event within {TIMEOUT:?}"),
-        )
+            Box::new(move |counts, reached| done((counts, reached))),
+        )?;
+        Ok(Box::new(move |_| end()) as NativeEnd)
     })?;
-    if !reached {
-        let expected = expected.expect("only expected counts can be unreached");
-        return Err(Failure::new(
+    // default: a wait that its event answered has no end, which the answer names as no reason.
+    native_objects_answer(expected, counts, reached, end.unwrap_or_default())
+}
+
+/// The answer of diagnostics.native.objects to the counts that the library gave and the end of a wait that did not reach
+/// them. Counts that the library did not reach without expected counts mean that the wait ended before the application
+/// handled an event.
+fn native_objects_answer(
+    expected: Option<platform::WindowObjects>,
+    counts: platform::WindowObjects,
+    reached: bool,
+    end: &str,
+) -> Result<Value, Failure> {
+    match (reached, expected) {
+        (true, _) => Ok(counts.payload()),
+        (false, None) => Err(Failure::new(
             crate::endpoint::TIMED_OUT,
             format!(
-                "window object counts did not reach {expected} within {TIMEOUT:?}; they are {counts}"
+                "the window object counts ended before the application handled an event: {end}"
             ),
-        ));
+        )),
+        (false, Some(expected)) => Err(Failure::new(
+            crate::endpoint::TIMED_OUT,
+            format!(
+                "window object counts did not reach {expected} before {end}; they are {counts}"
+            ),
+        )),
     }
-    Ok(counts.payload())
+}
+
+/// The ends of a native wait for an event that may not come (docs/spec/endpoint.md); no limit ends it.
+pub(crate) const WAIT_END_CONNECTION: &str = "the endpoint connection of the request closed";
+pub(crate) const WAIT_END_WINDOW: &str = "the window closed";
+pub(crate) const WAIT_END_PAGE: &str = "the page of the window ended";
+
+/// Ends a native wait that has not answered, given the reason of its end; the library then answers it. It runs on the main
+/// thread.
+type NativeEnd = Box<dyn FnOnce(&'static str) + Send>;
+
+/// What a native wait receives: the answer of the library or an end.
+enum NativeEvent<T> {
+    Answer(T),
+    End(&'static str),
+}
+
+/// The end of each native wait of each window that has not answered, by window and wait.
+type NativeWaits = HashMap<String, HashMap<u64, Box<dyn Fn(&'static str) + Send>>>;
+
+static NATIVE_WAITS: Mutex<Option<NativeWaits>> = Mutex::new(None);
+static NATIVE_WAIT_IDS: AtomicU64 = AtomicU64::new(1);
+
+fn native_waits() -> MutexGuard<'static, Option<NativeWaits>> {
+    // default: a lock that a panicking thread poisoned still holds the native waits, which the caller amends; the panic
+    // hook records the panic.
+    NATIVE_WAITS.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// Ends the native waits of window that have not answered, naming end.
+pub(crate) fn end_native_waits(window: &str, end: &'static str) {
+    let waits = native_waits()
+        .get_or_insert_with(HashMap::new)
+        .remove(window);
+    for wait in waits.into_iter().flat_map(HashMap::into_values) {
+        wait(end);
+    }
+}
+
+/// Starts a native wait of window on the main thread and returns its answer. The wait ends by its answer or by the first
+/// of the close of connection, the close of the window and the end of its page; the end that start returned then makes
+/// the library answer, and the reason of that end is returned with the answer. An answer that came first has no reason.
+fn await_native<T: Send + 'static>(
+    window: &Window,
+    connection: &crate::endpoint::ConnectionEnd,
+    start: impl FnOnce(Box<dyn FnOnce(T) + Send>) -> Result<NativeEnd, String> + Send + 'static,
+) -> Result<(T, Option<&'static str>), Failure> {
+    native_wait(
+        window.label(),
+        connection,
+        |work| {
+            on_main(window, move || {
+                work();
+                Ok(())
+            })
+        },
+        start,
+    )
+}
+
+/// The wait of await_native for the window with label, where main runs work on the main thread and returns after it ran.
+fn native_wait<T: Send + 'static>(
+    label: &str,
+    connection: &crate::endpoint::ConnectionEnd,
+    main: impl Fn(Box<dyn FnOnce() + Send>) -> Result<(), String>,
+    start: impl FnOnce(Box<dyn FnOnce(T) + Send>) -> Result<NativeEnd, String> + Send + 'static,
+) -> Result<(T, Option<&'static str>), Failure> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let label = label.to_string();
+    let id = NATIVE_WAIT_IDS.fetch_add(1, Ordering::Relaxed);
+    // The ends reach the wait while it waits; forget takes the sender away before the receiver goes, so an end that comes
+    // later finds nothing to end.
+    let ends = Arc::new(Mutex::new(Some(tx.clone())));
+    let send_end = {
+        let ends = ends.clone();
+        move |end: &'static str| {
+            // default: a lock that a panicking thread poisoned still holds the sender of the wait, which the end uses;
+            // the panic hook records the panic.
+            if let Some(sender) = ends.lock().unwrap_or_else(PoisonError::into_inner).as_ref()
+                && sender.send(NativeEvent::End(end)).is_err()
+            {
+                log_error(
+                    "diagnostics",
+                    "a native wait lost its receiver before it ended",
+                );
+            }
+        }
+    };
+    native_waits()
+        .get_or_insert_with(HashMap::new)
+        .entry(label.clone())
+        .or_default()
+        .insert(id, Box::new(send_end.clone()));
+    // The watch ends when the wait returns, so the close of the connection ends no later wait.
+    let _connection_watch = connection.watch(move || send_end(WAIT_END_CONNECTION));
+    let forget = || {
+        // default: a lock that a panicking thread poisoned still holds the sender of the wait, which the end takes; the
+        // panic hook records the panic.
+        ends.lock().unwrap_or_else(PoisonError::into_inner).take();
+        if let Some(waits) = native_waits()
+            .get_or_insert_with(HashMap::new)
+            .get_mut(&label)
+        {
+            waits.remove(&id);
+        }
+    };
+    let answer = tx;
+    let (started_tx, started_rx) = std::sync::mpsc::channel();
+    let started = main(Box::new(move || {
+        let end = start(Box::new(move |value| {
+            // The receiver waits for the answer, unless the wait failed before it.
+            if answer.send(NativeEvent::Answer(value)).is_err() {
+                crate::application_log::log_info(
+                    "diagnostics",
+                    "a native answer arrived after its request ended",
+                );
+            }
+        }));
+        // main returns after the work ran, so the receiver takes the end.
+        if started_tx.send(end).is_err() {
+            log_error(
+                "diagnostics",
+                "a native wait started after its request ended",
+            );
+        }
+    }))
+    .and_then(|()| {
+        started_rx
+            .recv()
+            .map_err(|_| "the native wait did not start".to_string())?
+    });
+    let mut end = match started {
+        Ok(end) => Some(end),
+        Err(error) => {
+            forget();
+            return Err(internal(error));
+        }
+    };
+    let mut reason = None;
+    let value = loop {
+        match rx.recv() {
+            Ok(NativeEvent::Answer(value)) => break value,
+            Ok(NativeEvent::End(ended)) => {
+                if let Some(end) = end.take() {
+                    reason = Some(ended);
+                    // The library answers an ended wait before end returns, and a wait that answered keeps its answer.
+                    if let Err(error) = main(Box::new(move || end(ended))) {
+                        forget();
+                        return Err(internal(error));
+                    }
+                }
+            }
+            Err(_) => {
+                forget();
+                return Err(internal("the native wait ended without an answer"));
+            }
+        }
+    };
+    forget();
+    Ok((value, reason))
 }
 
 fn native_window_color_space(window: &Window) -> Result<Value, Failure> {
@@ -843,45 +1085,41 @@ fn native_window_color_space(window: &Window) -> Result<Value, Failure> {
 
 /// Answers when the process pid ends. A window check awaits the end of the WebContent process of a closed window with
 /// the exit notification of the kernel.
-fn process_exit(window: &Window, params: &Map<String, Value>) -> Result<Value, Failure> {
+fn process_exit(
+    window: &Window,
+    params: &Map<String, Value>,
+    connection: &crate::endpoint::ConnectionEnd,
+) -> Result<Value, Failure> {
     let pid = platform::parse_process_id(params.get("pid")).map_err(Failure::params)?;
-    let (tx, rx) = std::sync::mpsc::channel();
-    on_main(window, move || {
-        platform::current()?.when_process_exited(
-            pid,
-            TIMEOUT.as_secs_f64(),
-            Box::new(move |exited| {
-                if tx.send(exited).is_err() {
-                    crate::application_log::log_info(
-                        "diagnostics",
-                        "process exit answer arrived after its request ended",
-                    );
-                }
-            }),
-        )
-    })
-    .map_err(internal)?;
-    // The library answers within TIMEOUT, so twice that time is awaited to include the time for the main thread to send
-    // the answer.
-    let exited = rx.recv_timeout(2 * TIMEOUT).map_err(|_| {
-        Failure::new(
-            crate::endpoint::TIMED_OUT,
-            format!("the application did not answer within {:?}", 2 * TIMEOUT),
-        )
+    let (exited, end) = await_native(window, connection, move |done| {
+        let end = platform::current()?.when_process_exited(pid, done)?;
+        Ok(Box::new(move |_| end()) as NativeEnd)
     })?;
-    if !exited {
-        return Err(Failure::new(
+    process_exit_answer(pid, exited, end)
+}
+
+/// The answer of diagnostics.process.exit to the answer of the library and the end of a wait that did not see the exit.
+/// A wait that the library could not register answers without an end.
+fn process_exit_answer(pid: i32, exited: bool, end: Option<&str>) -> Result<Value, Failure> {
+    match (exited, end) {
+        (true, _) => Ok(Value::Null),
+        (false, None) => Err(internal(format!(
+            "process {pid} exit wait could not be registered"
+        ))),
+        (false, Some(end)) => Err(Failure::new(
             crate::endpoint::TIMED_OUT,
-            format!("process {pid} did not exit within {TIMEOUT:?}"),
-        ));
+            format!("process {pid} did not exit before {end}"),
+        )),
     }
-    Ok(Value::Null)
 }
 
 /// Takes one still image of the window without giving it focus, writes it to `<config-dir>/captures/still-*/window.png`
 /// and returns the path. It is observation material that a person checks visually during development, and the requester
 /// deletes the directory after checking.
-fn capture_still(window: &Window) -> Result<Value, Failure> {
+fn capture_still(
+    window: &Window,
+    connection: &crate::endpoint::ConnectionEnd,
+) -> Result<Value, Failure> {
     let platform = platform::current().map_err(internal)?;
     let held = window.clone();
     let numbers = on_main(window, move || platform.window_numbers(&held)).map_err(internal)?;
@@ -904,9 +1142,10 @@ fn capture_still(window: &Window) -> Result<Value, Failure> {
         ));
     platform.private_directory(&directory).map_err(internal)?;
     let path = directory.join("window.png");
-    platform
+    let recorder = recorder(window, connection)?;
+    recorder
         // The child windows of an open modal or settings window stand over the window, so the image holds them too.
-        .capture_still(&numbers, &path.to_string_lossy())
+        .await_capture(|token| platform.capture_still(&numbers, &path.to_string_lossy(), token))
         .map_err(internal)?;
     Ok(json!({"path": path.to_string_lossy()}))
 }
@@ -915,7 +1154,8 @@ fn capture_still(window: &Window) -> Result<Value, Failure> {
 pub(crate) fn capture_windows(app: &crate::framework::AppHandle) -> Result<Vec<String>, String> {
     let mut paths = Vec::new();
     for (label, window) in app.windows() {
-        let value = capture_still(&window)
+        // The debug view has no endpoint connection; the window and its page end the wait.
+        let value = capture_still(&window, &crate::endpoint::ConnectionEnd::open())
             .map_err(|failure| format!("window {label}: {}", failure.message))?;
         let path = value["path"].as_str().ok_or_else(|| {
             format!("window {label}: the still capture answered {value} without a path")
@@ -958,34 +1198,32 @@ fn parse_input_reference(params: &Map<String, Value>) -> Result<(String, Option<
     Ok((action.into(), Some(document.into())))
 }
 
-fn input_reference(window: &Window, params: &Map<String, Value>) -> Result<Value, Failure> {
+/// Acts on the input reference of window. A wait ends by its document, by the close of the reference or its window, or by the
+/// connection or the page of the request, whose end the failure names.
+fn input_reference(
+    window: &Window,
+    params: &Map<String, Value>,
+    connection: &crate::endpoint::ConnectionEnd,
+) -> Result<Value, Failure> {
     let (action, document) = parse_input_reference(params)?;
     let platform = platform::current().map_err(internal)?;
     let native = platform.window_handle(window).map_err(internal)?;
-    let (tx, rx) = std::sync::mpsc::channel();
-    on_main(window, move || {
+    let (result, _) = await_native(window, connection, move |done| {
+        let done = std::cell::Cell::new(Some(done));
         platform.input_reference(
             native,
             &action,
             document.as_deref(),
             Box::new(move |result| {
-                if let Err(unsent) = tx.send(result) {
-                    log_error(
-                        "input reference",
-                        format!(
-                            "the reference answered after its reply ended: {:?}",
-                            unsent.0
-                        ),
-                    );
+                // The library calls the completion once.
+                if let Some(done) = done.take() {
+                    done(result);
                 }
             }),
         );
-        Ok(())
-    })
-    .map_err(internal)?;
-    rx.recv()
-        .map_err(|_| internal("input reference ended without an answer"))?
-        .map_err(internal)
+        Ok(Box::new(move |reason| platform.end_input_reference_wait(native, reason)) as NativeEnd)
+    })?;
+    result.map_err(internal)
 }
 
 /// The input source roles that `select` of `diagnostics.input.source` takes (docs/spec/endpoint.md). The platform maps each role to
@@ -1040,33 +1278,36 @@ fn answer_input_source(
     Ok(json!({"current": role, "source": source}))
 }
 
-fn input_source(window: &Window, params: Map<String, Value>) -> Result<Value, Failure> {
+fn input_source(
+    window: &Window,
+    params: Map<String, Value>,
+    connection: &crate::endpoint::ConnectionEnd,
+) -> Result<Value, Failure> {
     let change = parse_input_source(&params)?;
     let platform = platform::current().map_err(internal)?;
     answer_input_source(
         change,
         |change| {
-            // The selection callback runs on the main thread after the active text context adopts the source.
-            let (adopted, held) = std::sync::mpsc::channel();
-            on_main(window, move || {
-                let done: Box<dyn Fn(Result<(), String>)> = Box::new(move |result| {
-                    if let Err(unsent) = adopted.send(result) {
-                        log_error(
-                            "input source",
-                            format!("selection completed after its reply ended: {:?}", unsent.0),
-                        );
+            // The selection ends on the main thread when the active text context adopts the source, or by the connection,
+            // the window or the page of the request, whose end the failure names.
+            let (result, _) = await_native(window, connection, move |done| {
+                let done = std::cell::Cell::new(Some(done));
+                let adopted: Box<dyn Fn(Result<(), String>)> = Box::new(move |result| {
+                    // The library calls the adoption once.
+                    if let Some(done) = done.take() {
+                        done(result);
                     }
                 });
-                match change {
-                    InputSourceChange::Select(role) => platform.select_input_source(&role, done),
+                let end = match change {
+                    InputSourceChange::Select(role) => platform.select_input_source(&role, adopted),
                     InputSourceChange::Restore(source) => {
-                        platform.restore_input_source(&source, done)
+                        platform.restore_input_source(&source, adopted)
                     }
-                }
-                Ok(())
-            })?;
-            held.recv()
-                .map_err(|_| "input source selection ended without an answer".to_string())?
+                };
+                Ok(Box::new(move |reason| end(reason)) as NativeEnd)
+            })
+            .map_err(|failure| failure.message)?;
+            result
         },
         || on_main(window, move || platform.input_source()),
     )
@@ -1289,7 +1530,12 @@ fn drag_boundary(
     }
 }
 
-fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<Value, Failure> {
+fn drag(
+    host: &Host,
+    window: &Window,
+    mut params: Map<String, Value>,
+    connection: &crate::endpoint::ConnectionEnd,
+) -> Result<Value, Failure> {
     if !matches!(params.get("axis").and_then(Value::as_str), Some("x" | "y")) {
         return Err(Failure::params("axis must be x or y"));
     }
@@ -1325,7 +1571,13 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
 
     let frames = if capture_options.capture {
         Some(with_document_frame_identity_lifecycle(|| {
-            let frames = capture_start(window, false, capture_options.frame_identity, false)?;
+            let frames = capture_start(
+                window,
+                connection,
+                false,
+                capture_options.frame_identity,
+                false,
+            )?;
             let platform = platform::current().map_err(internal)?;
             on_main(window, move || platform.layout_trace_start()).map_err(internal)?;
             Ok::<_, Failure>(frames)
@@ -1468,8 +1720,8 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
     // When the requester cannot receive the frame folder, the recording is stopped and the folder is deleted.
     if let Err(error) = finished {
         if frames.is_some() {
-            let cleanup =
-                recorder().and_then(|capture| RECORDING.abort(&capture).map_err(internal));
+            let cleanup = recorder(window, connection)
+                .and_then(|capture| RECORDING.abort(&capture).map_err(internal));
             if let Err(cleanup) = cleanup {
                 return Err(internal(format!(
                     "{}; abort capture: {}",
@@ -1501,12 +1753,7 @@ fn tick(
     sent: std::sync::Arc<std::sync::Mutex<Vec<f64>>>,
 ) {
     crate::routine::spawn_named("diagnostics-ticks", move || {
-        let began = Instant::now();
-        for step in 1..=steps {
-            let due = FRAME * step as u32;
-            if let Some(left) = due.checked_sub(began.elapsed()) {
-                std::thread::sleep(left);
-            }
+        send_steps(steps, FRAME, || {
             if let Some(platform) = clock {
                 match (platform.capture_clock(), sent.lock()) {
                     (Ok(now), Ok(mut ticks)) => ticks.push(now),
@@ -1514,18 +1761,38 @@ fn tick(
                     (_, Err(error)) => log_error("drag tick clock", error),
                 }
             }
-            if let Err(error) = window.emit("diagnostics-tick", ()) {
-                log_error("diagnostics-tick", error);
-                return;
+            match window.emit("diagnostics-tick", ()) {
+                Ok(()) => true,
+                Err(error) => {
+                    log_error("diagnostics-tick", error);
+                    false
+                }
             }
-        }
+        });
     });
+}
+
+/// Runs step steps times, each at its multiple of frame from the start. Every step runs, also after the request of the drag
+/// ended, so the page that runs the gesture receives each of its steps (docs/spec/endpoint.md); only a step that returns
+/// false, a window that can no longer receive, ends the run.
+fn send_steps(steps: u64, frame: Duration, mut step: impl FnMut() -> bool) {
+    let began = Instant::now();
+    for index in 1..=steps {
+        let due = frame * index as u32;
+        if let Some(left) = due.checked_sub(began.elapsed()) {
+            std::thread::sleep(left);
+        }
+        if !step() {
+            return;
+        }
+    }
 }
 
 /// Starts the window record and returns the record directory. When display is set, it records the windows of this
 /// application on the display that holds the window.
 fn capture_start(
     window: &Window,
+    connection: &crate::endpoint::ConnectionEnd,
     display: bool,
     frame_identity: bool,
     document_identity_allowed: bool,
@@ -1549,7 +1816,7 @@ fn capture_start(
             "{stamp}-{}",
             CAPTURES.fetch_add(1, Ordering::Relaxed)
         ));
-    let recorder = recorder()?;
+    let recorder = recorder(window, connection)?;
     RECORDING
         .start_with_document_identity(
             &recorder,
@@ -1560,7 +1827,7 @@ fn capture_start(
             &directory,
             frame_identity,
             document_identity_allowed,
-            &|path| recorder.0.private_directory(path),
+            &|path| recorder.platform.private_directory(path),
         )
         .map_err(internal)?;
     Ok(directory)
@@ -1568,11 +1835,18 @@ fn capture_start(
 
 /// Records until the presentation time after, ends the record in progress and returns the directory and the number of
 /// frames.
-fn capture_stop(window: &Window, after: f64) -> Result<Value, Failure> {
-    let recorder = PlatformCapture(recorder()?.0, after);
+fn capture_stop(
+    window: &Window,
+    connection: &crate::endpoint::ConnectionEnd,
+    after: f64,
+) -> Result<Value, Failure> {
+    let recorder = PlatformCapture {
+        after,
+        ..recorder(window, connection)?
+    };
     let _guard = lifecycle_lock(&DOCUMENT_FRAME_IDENTITY).map_err(internal)?;
     let (frame_identity, source) = RECORDING.frame_identity_state();
-    let platform = recorder.0;
+    let platform = recorder.platform;
     let prior_start_error =
         pending_document_frame_identity_start(&PENDING_DOCUMENT_FRAME_IDENTITY_START)
             .err()
@@ -1624,10 +1898,10 @@ fn capture_stop(window: &Window, after: f64) -> Result<Value, Failure> {
     let (directory, count, frame_identity) =
         finished.ok_or_else(|| internal("capture stop completed without a recording result"))?;
     let mut result = finish_capture_stop(&directory, count, frame_identity, || {
-        let platform = recorder.0;
+        let platform = recorder.platform;
         let layouts = on_main(window, move || platform.layout_trace_stop()).map_err(internal)?;
-        let limited = recorder.0.capture_limited().map_err(internal)?;
-        let gap = recorder.0.capture_longest_gap().map_err(internal)?;
+        let limited = recorder.platform.capture_limited().map_err(internal)?;
+        let gap = recorder.platform.capture_longest_gap().map_err(internal)?;
         Ok((layouts, limited, gap))
     })?;
     if let Some(issued_slots) = issued_slots {
@@ -1719,13 +1993,12 @@ fn await_document_frame_identity(
             }
         }))
     });
-    await_document_frame_identity_schedule_result(scheduled, receiver, TIMEOUT)
+    await_document_frame_identity_schedule_result(scheduled, receiver)
 }
 
 fn await_document_frame_identity_schedule_result(
     scheduled: Result<(), String>,
     receiver: std::sync::mpsc::Receiver<Result<String, String>>,
-    timeout: Duration,
 ) -> Result<String, String> {
     if let Err(schedule_error) = scheduled {
         return match receiver.try_recv() {
@@ -1738,22 +2011,18 @@ fn await_document_frame_identity_schedule_result(
             ) => Err(schedule_error),
         };
     }
-    await_document_frame_identity_reply(receiver, timeout)
+    await_document_frame_identity_reply(receiver)
 }
 
+/// Waits for the document frame identity callback, which the library gives once on every path: the wait ends by that
+/// callback and by no limit of the host.
 fn await_document_frame_identity_reply(
     receiver: std::sync::mpsc::Receiver<Result<String, String>>,
-    timeout: Duration,
 ) -> Result<String, String> {
-    match receiver.recv_timeout(timeout) {
-        Ok(result) => result,
-        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(format!(
-            "document frame identity callback timed out after {timeout:?}"
-        )),
-        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-            Err("document frame identity callback ended before replying".into())
-        }
-    }
+    receiver
+        .recv()
+        // default: a callback that is released without replying fails the wait with this reason.
+        .unwrap_or_else(|_| Err("document frame identity callback ended before replying".into()))
 }
 
 fn document_frame_identity_issued_slots(reply: &str, generation: u64) -> Result<u64, Failure> {
@@ -1837,19 +2106,107 @@ pub(crate) fn hold_modal_content(window: &str) {
 }
 
 /// When on is set, starts to hold the modal content replies of the window; otherwise sends the held replies and stops
-/// holding.
-fn modal_hold(window: &str, on: bool) {
-    // default: a lock that a panicking thread poisoned still holds the held modal replies, which the call amends; the
-    // panic hook records the panic.
-    let mut holds = MODAL_HOLDS.lock().unwrap_or_else(PoisonError::into_inner);
-    let holds = holds.get_or_insert_with(HashMap::new);
-    if on {
-        holds.entry(window.to_string()).or_default();
-    } else if let Some(hold) = holds.remove(window) {
+/// holding. A hold also ends when its window closes or when the endpoint connection that turned it on closes
+/// (docs/spec/endpoint.md).
+fn modal_hold(window: &str, on: bool, connection: &crate::endpoint::ConnectionEnd) {
+    if !on {
+        end_modal_hold(window, None);
+        return;
+    }
+    let hold = {
+        // default: a lock that a panicking thread poisoned still holds the held modal replies, which the call amends; the
+        // panic hook records the panic.
+        let mut holds = MODAL_HOLDS.lock().unwrap_or_else(PoisonError::into_inner);
+        let holds = holds.get_or_insert_with(HashMap::new);
+        if holds.contains_key(window) {
+            return;
+        }
+        let hold = Arc::new(ModalHold::default());
+        holds.insert(window.to_string(), hold.clone());
+        hold
+    };
+    let window = window.to_string();
+    connection.on_close(move || end_modal_hold(&window, Some(&hold)));
+}
+
+/// Ends the modal content hold of window, or only the hold only when it is still the hold of window: the held replies are
+/// sent and diagnostics.modal.held answers.
+fn end_modal_hold(window: &str, only: Option<&Arc<ModalHold>>) {
+    let hold = {
+        // default: a lock that a panicking thread poisoned still holds the held modal replies, which the end amends; the
+        // panic hook records the panic.
+        let mut holds = MODAL_HOLDS.lock().unwrap_or_else(PoisonError::into_inner);
+        let Some(holds) = holds.as_mut() else {
+            return;
+        };
+        match (holds.get(window), only) {
+            (Some(current), Some(only)) if !Arc::ptr_eq(current, only) => return,
+            (None, _) => return,
+            _ => {}
+        }
+        holds.remove(window)
+    };
+    if let Some(hold) = hold {
         // default: a lock that a panicking thread poisoned still holds the held reply count, which the release amends;
         // the panic hook records the panic.
         hold.state.lock().unwrap_or_else(PoisonError::into_inner).0 = true;
         hold.changed.notify_all();
+    }
+}
+
+/// The connection that asked for the latest reply hold of each surface, by window and surface.
+type SurfaceHolds = HashMap<(String, String), crate::endpoint::ConnectionEnd>;
+
+static SURFACE_HOLDS: Mutex<Option<SurfaceHolds>> = Mutex::new(None);
+
+/// Remembers that connection asked for the reply hold of surface in window. When connection closes, release runs unless a
+/// later hold of the surface took it or the window closed (docs/spec/endpoint.md).
+fn remember_surface_hold(
+    window: &str,
+    surface: &str,
+    connection: &crate::endpoint::ConnectionEnd,
+    release: impl FnOnce() + Send + 'static,
+) {
+    let key = (window.to_string(), surface.to_string());
+    SURFACE_HOLDS
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the surface holds, which the call amends; the panic
+        // hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .get_or_insert_with(HashMap::new)
+        .insert(key.clone(), connection.clone());
+    let asked = connection.clone();
+    connection.on_close(move || {
+        let latest = {
+            // default: a lock that a panicking thread poisoned still holds the surface holds, which the release amends;
+            // the panic hook records the panic.
+            let mut holds = SURFACE_HOLDS.lock().unwrap_or_else(PoisonError::into_inner);
+            let holds = holds.get_or_insert_with(HashMap::new);
+            let latest = holds.get(&key).is_some_and(|current| current.is(&asked));
+            if latest {
+                holds.remove(&key);
+            }
+            latest
+        };
+        if latest {
+            release();
+        }
+    });
+}
+
+/// Ends the diagnostic holds of window when it closes: its modal content hold ends, and its surface holds are forgotten,
+/// since the page that held them ends with the window.
+pub(crate) fn end_window_holds(window: &str) {
+    end_native_waits(window, WAIT_END_WINDOW);
+    end_modal_hold(window, None);
+    if let Some(holds) = SURFACE_HOLDS
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the surface holds, which the close amends; the panic
+        // hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .as_mut()
+    {
+        holds.retain(|(held, _), _| held != window);
     }
 }
 
@@ -1867,14 +2224,10 @@ fn delivered_notifications(window: &Window) -> Result<Value, Failure> {
         }))
     })
     .map_err(internal)?;
-    let list = rx.recv_timeout(TIMEOUT).map_err(|_| {
-        Failure::new(
-            crate::endpoint::TIMED_OUT,
-            format!(
-                "the notification center did not list delivered notifications within {TIMEOUT:?}"
-            ),
-        )
-    })?;
+    // The library answers once on every path, so the host waits for the list without a limit of its own.
+    let list = rx
+        .recv()
+        .map_err(|_| internal("the delivered notifications ended before they answered"))?;
     serde_json::from_str(&list)
         .map_err(|error| internal(format!("delivered notifications {list:?}: {error}")))
 }

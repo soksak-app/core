@@ -2,6 +2,8 @@
 // The stream output size is fixed at start; if it is not followed, the enlarged window is recorded scaled down.
 // Does not activate the application.
 #import "../src/capture.m"
+#import "support/run_until.h"
+#import "support/temporary_folder.h"
 
 static int failures;
 static double resizeRequestedAtMilliseconds;
@@ -22,12 +24,9 @@ static void check(BOOL condition, NSString *message) {
 }
 @end
 
-static void spin(NSTimeInterval seconds) {
-    NSDate *until = [NSDate dateWithTimeIntervalSinceNow:seconds];
-    while (until.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:
-            [NSDate dateWithTimeIntervalSinceNow:MIN(0.01, until.timeIntervalSinceNow)]];
-    }
+// Runs the run loop until done holds (support/run_until.h).
+static void until(NSString *what, BOOL (^done)(void)) {
+    sp_run_until(what.UTF8String, done);
 }
 
 int main(void) { @autoreleasepool {
@@ -47,11 +46,10 @@ int main(void) { @autoreleasepool {
             (CGWindowID)window.windowNumber) autorelease];
         return info.count == 1 && [info[0][(id)kCGWindowIsOnscreen] boolValue];
     };
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!onScreen() && deadline.timeIntervalSinceNow > 0) spin(0.01);
+    // Does not change the window until the window server has composited its first frame, when its occlusion state becomes
+    // visible (same as capture_cycles_test).
+    until(@"the window is visible", ^BOOL { return (window.occlusionState & NSWindowOcclusionStateVisible) != 0; });
     check(onScreen(), @"the window server shows the capture window");
-    // Does not change the window until the first composited frame is stable (same as capture_cycles_test).
-    spin(3);
     double scale = window.backingScaleFactor;
 
     // A changed window is committed at the next screen update and presented at the update after that. Returns the target
@@ -60,10 +58,8 @@ int main(void) { @autoreleasepool {
         SPPresentation *presentation = [[SPPresentation new] autorelease];
         CADisplayLink *link = [window.contentView displayLinkWithTarget:presentation selector:@selector(tick:)];
         [link addToRunLoop:NSRunLoop.currentRunLoop forMode:NSDefaultRunLoopMode];
-        NSDate *presented = [NSDate dateWithTimeIntervalSinceNow:10];
-        while (presentation.ticks < 2 && presented.timeIntervalSinceNow > 0) spin(0.005);
+        until(@"the second display link callback", ^BOOL { return presentation.ticks >= 2; });
         [link invalidate];
-        check(presentation.ticks >= 2, [NSString stringWithFormat:@"the display link reports the next presentation (%d ticks)", presentation.ticks]);
         return presentation.target;
     };
     // Checks that the index-th (from 1) frame of a recording holds the window size points in device pixels. Frame numbers continue
@@ -95,23 +91,21 @@ int main(void) { @autoreleasepool {
     };
     // Runs change while recording the window and stops after its presentation. Returns the frame count and leaves the directory in directory.
     int (^record)(NSString *, void (^)(void), NSString **) = ^int(NSString *label, void (^change)(void), NSString **directoryOut) {
-        char template[] = "/tmp/soksak-capture-resize-XXXXXX";
-        if (mkdtemp(template) == NULL) { check(NO, [NSString stringWithFormat:@"%@: the capture directory is created", label]); return 0; }
-        NSString *directory = [NSString stringWithUTF8String:template];
+        NSString *directory = temporaryFolder(@"soksak-capture-resize-");
         *directoryOut = directory;
         char *operationError = NULL;
-        bool opened = sp_capture_open(window.windowNumber, false, &operationError);
+        bool opened = sp_capture_open(window.windowNumber, false, 0, &operationError);
         check(opened, [NSString stringWithFormat:@"%@: the window opens for recording (%s)", label, operationError ?: ""]);
         free(operationError); operationError = NULL;
         bool recording = opened && sp_capture_start(directory.fileSystemRepresentation, false, &operationError);
         check(recording, [NSString stringWithFormat:@"%@: recording starts (%s)", label, operationError ?: ""]);
         free(operationError);
         if (!recording) return 0;
-        check(sp_capture_wait() == 1, [NSString stringWithFormat:@"%@: a first frame arrives (%s)", label, sp_capture_error()]);
+        check(sp_capture_wait(0) == 1, [NSString stringWithFormat:@"%@: a first frame arrives (%s)", label, sp_capture_error()]);
         resizeRequestedAtMilliseconds = CACurrentMediaTime() * 1000;
         change();
         [window display];
-        int frames = sp_capture_stop(presentedAfterChange());
+        int frames = sp_capture_stop(presentedAfterChange(), 0);
         NSString *stopError = [NSString stringWithUTF8String:sp_capture_error()];
         NSData *displayLinkData = [NSData dataWithContentsOfFile:
             [directory stringByAppendingPathComponent:@"display-link.json"]];
@@ -127,16 +121,6 @@ int main(void) { @autoreleasepool {
             [NSString stringWithFormat:@"%@: recording stops without error (frames %d, error %@)", label, frames, stopError]);
         return frames;
     };
-    void (^remove)(NSString *) = ^(NSString *directory) {
-        if (failures != 0 && directory != nil) {
-            fprintf(stderr, "RETAIN capture evidence: %s\n", directory.UTF8String);
-            return;
-        }
-        NSError *removal = nil;
-        check(directory == nil || [[NSFileManager defaultManager] removeItemAtPath:directory error:&removal],
-            [NSString stringWithFormat:@"capture files are removed (%@)", removal]);
-    };
-
     // When the window grows during a recording, the last frame after the presentation of the grown window holds the grown window in device pixels.
     NSString *directory = nil;
     int frames = record(@"growing", ^{
@@ -144,7 +128,7 @@ int main(void) { @autoreleasepool {
         window.backgroundColor = NSColor.blueColor;
     }, &directory);
     if (frames > 0) frameIs(directory, frames, NSMakeSize(320, 160), @"growing");
-    remove(directory);
+    NSString *growingDirectory = directory;
 
     // A new recording of a window shrunk outside a recording has the shrunk window size from the first frame. It does not inherit the output size changed by the previous recording.
     [window setFrame:NSMakeRect(80, 80, 200, 100) display:YES];
@@ -155,7 +139,6 @@ int main(void) { @autoreleasepool {
         frameIs(directory, 1, NSMakeSize(200, 100), @"after shrinking");
         frameIs(directory, frames, NSMakeSize(200, 100), @"after shrinking");
     }
-    remove(directory);
     [captureSink startDisplayLinkObservationForWindowNumber:window.windowNumber];
     check(captureSink.displayLink != nil, @"a visible test window creates an AppKit display link for asynchronous teardown");
     SPCapture *asyncStopSink = [captureSink retain];
@@ -163,12 +146,16 @@ int main(void) { @autoreleasepool {
         [asyncStopSink stopDisplayLinkObservation];
         [asyncStopSink release];
     });
-    NSDate *invalidationDeadline = [NSDate dateWithTimeIntervalSinceNow:2];
-    while (!captureSink.displayLinkInvalidated && invalidationDeadline.timeIntervalSinceNow > 0) spin(0.005);
+    until(@"the display link invalidation on the main queue", ^BOOL { return captureSink.displayLinkInvalidated; });
     check(captureSink.displayLink == nil && captureSink.displayLinkStopped && captureSink.displayLinkInvalidated,
         @"background capture stop completes main-run-loop display-link invalidation without blocking the window thread");
     check(!NSApp.isActive, @"recording does not activate the application");
     [window close];
+    // The frames, the callback statuses and the display link trace of both recordings are the evidence of a failure.
+    if (failures) {
+        if (growingDirectory) keepTemporaryFolder(growingDirectory);
+        if (directory) keepTemporaryFolder(directory);
+    }
     fprintf(stderr, "%s: native capture follows a growing window (%.1fms)\n", failures ? "FAIL" : "PASS",
         (CACurrentMediaTime() - began) * 1000);
     return failures ? 1 : 0;

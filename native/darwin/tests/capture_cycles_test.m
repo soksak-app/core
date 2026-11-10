@@ -3,7 +3,9 @@
 // only one cycle cannot create. It does not change the actual API results and records the start, stop, and
 // delegate callbacks. It does not activate the application.
 #import "../src/capture.m"
+#import "support/temporary_folder.h"
 #import <objc/runtime.h>
+#import "support/run_until.h"
 
 static const int CYCLES = 24;
 static IMP originalStart, originalStop, originalDelegate;
@@ -70,29 +72,26 @@ int main(void) { @autoreleasepool {
             (CGWindowID)window.windowNumber) autorelease];
         return info.count == 1 && [info[0][(id)kCGWindowIsOnscreen] boolValue];
     };
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!onScreen() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
+    // As in the acceptance check, do not change the window until the window server has composited its first frame: its
+    // occlusion state becomes visible then, in a notification on the main thread.
+    sp_run_until("the window is visible", ^BOOL { return (window.occlusionState & NSWindowOcclusionStateVisible) != 0; });
     check(onScreen(), @"the window server shows the capture window");
-    // As in the acceptance check, do not change the window until the first composited frame is stable.
-    NSDate *settled = [NSDate dateWithTimeIntervalSinceNow:3];
-    while (settled.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:
-            [NSDate dateWithTimeIntervalSinceNow:MIN(0.01, settled.timeIntervalSinceNow)]];
-    }
 
     NSArray<NSColor *> *colors = @[NSColor.redColor, NSColor.blueColor, NSColor.greenColor];
     int completed = 0;
+    NSString *folder = temporaryFolder(@"soksak-capture-cycles-");
     for (int cycle = 1; cycle <= CYCLES && failures == 0; cycle++) {
         // As in the window check, change the window content each cycle.
         window.backgroundColor = colors[cycle % colors.count];
         [window display];
-        char template[] = "/tmp/soksak-capture-cycles-XXXXXX";
-        if (mkdtemp(template) == NULL) { check(NO, [NSString stringWithFormat:@"cycle %d creates a capture directory", cycle]); break; }
-        NSString *directory = [NSString stringWithUTF8String:template];
+        NSString *directory = [folder stringByAppendingPathComponent:[NSString stringWithFormat:@"cycle-%d", cycle]];
+        NSError *createError = nil;
+        if (![[NSFileManager defaultManager] createDirectoryAtPath:directory withIntermediateDirectories:NO attributes:nil error:&createError]) {
+            check(NO, [NSString stringWithFormat:@"cycle %d creates a capture directory (%@)", cycle, createError]);
+            break;
+        }
         char *operationError = NULL;
-        bool opened = sp_capture_open(window.windowNumber, false, &operationError);
+        bool opened = sp_capture_open(window.windowNumber, false, 0, &operationError);
         check(opened, [NSString stringWithFormat:@"cycle %d opens the window for recording (%s)", cycle,
             operationError == NULL ? "" : operationError]);
         free(operationError); operationError = NULL;
@@ -102,9 +101,9 @@ int main(void) { @autoreleasepool {
             operationError == NULL ? "" : operationError]);
         free(operationError);
         if (recording) {
-            int first = sp_capture_wait();
+            int first = sp_capture_wait(0);
             check(first == 1, [NSString stringWithFormat:@"cycle %d produces a first frame (%s)", cycle, sp_capture_error()]);
-            int frames = sp_capture_stop(0);
+            int frames = sp_capture_stop(0, 0);
             // The error string is shared state, so use the same copy for the verdict and the report.
             const char *stopError = sp_capture_error();
             NSString *stopText = stopError == NULL ? nil : [NSString stringWithUTF8String:stopError];

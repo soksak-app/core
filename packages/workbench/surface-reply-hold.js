@@ -15,7 +15,7 @@ export function createSurfaceReplyHold(log) {
     if (typeof surface !== "string" || !surface) throw new Error(`${method} requires surface`);
   };
 
-  return {
+  const replyHold = {
     /** Starts holding the replies of surface. */
     hold(surface) {
       required("diagnostics.surface.hold", surface);
@@ -47,15 +47,32 @@ export function createSurfaceReplyHold(log) {
      * responded to every reply. A failure of a response goes to the side that sent that reply.
      */
     closed(surface) {
-      const hold = holds.get(surface);
-      if (!hold) return Promise.resolve();
-      holds.delete(surface);
-      for (const waiter of hold.waiters.splice(0)) {
-        waiter.reject(new Error(`surface "${surface}" closed before it held an exposure reply`));
-      }
-      const sent = hold.sends.map((send) => send());
-      return Promise.allSettled(sent).then(() =>
-        log(`held exposure replies of surface "${surface}" were sent after the surface closed (${sent.length})`));
+      return end(surface, `surface "${surface}" closed before it held an exposure reply`, "were sent after the surface closed");
+    },
+
+    /**
+     * The hold of surface ended before the host removed the surface: the endpoint connection that asked for it closed (the host event
+     * diagnostics-surface-released). It sends the held replies as closed does.
+     */
+    released(surface) {
+      return end(surface, `the hold of surface "${surface}" ended before it held an exposure reply`, "were sent after their hold ended");
+    },
+
+    /** The page ends: every hold ends as released ends it, so a reload of the page loses no held reply. */
+    endAll() {
+      return Promise.all([...holds.keys()].map((surface) => replyHold.released(surface))).then(() => undefined);
     },
   };
+  return replyHold;
+
+  /* Ends the hold of surface: each waiter of held fails with refusal, the held replies are sent in order, and the line `held exposure replies of surface
+     "<surface>" <ended> (<count>)` is written after the host answered each. */
+  function end(surface, refusal, ended) {
+    const hold = holds.get(surface);
+    if (!hold) return Promise.resolve();
+    holds.delete(surface);
+    for (const waiter of hold.waiters.splice(0)) waiter.reject(new Error(refusal));
+    const sent = hold.sends.map((send) => send());
+    return Promise.allSettled(sent).then(() => log(`held exposure replies of surface "${surface}" ${ended} (${sent.length})`));
+  }
 }

@@ -19,7 +19,7 @@ mygo application과 그 Go 의존성은 `CGO_ENABLED=0`으로 빌드되어야 �
 
 Go callback 소유자는 마지막 native 사용이 끝나 소유자가 해제할 때까지 0이 아닌 정수 token으로 값을 유지한다. 0과 해제된 token은 무효이며, 이중 해제와 무효 token 조회는 panic으로 거부한다. token은 Go pointer가 아니며 해제 뒤 재사용하지 않는다. callback package는 `CGO_ENABLED=0`으로 build되고 실행된다. handle 연산만 사용해도 `runtime/cgo.Handle`은 cgo runtime symbol을 링크하므로, `sync.Map`과 atomic token 할당을 사용한다.
 
-공유 native header `native/darwin/src/host_callbacks.h`는 기본 callback 37개와 진단 callback 7개의 native-to-host ABI를 선언한다. 각 profile은 해당 작업 시작 전에 한 번 등록한다. native library는 완전한 table을 복사하며 누락이나 교체를 거부한다. 함수 주소는 process 종료까지 유효하다. native code는 Go export를 링크하는 대신 등록된 `sp_host_callback_*`와 `sp_host_diagnostic_callback_*` 진입점을 참조하며, 각 호출은 여전히 `hostRunOnWorker`나 `ON_WORKER`를 거친다. profile 등록 전 callback을 호출하면 진입점 이름을 남기고 abort한다. `make create-host-callbacks`는 clang을 통해 header에서 cgo 등록을 생성하고, `make check-host-callbacks`는 오래된 binding을 거부하며 native build의 선행 조건이다. 진단 등록은 Go의 `diagnostics` build tag에서만 선택된다. native library의 구성은 하나이며, 기본과 진단의 함수와 callback을 모두 담는다. `diagnostics` build option이 없는 host build는 진단 callback을 등록하지 않고 진단 함수를 부르지 않는다.
+공유 native header `native/darwin/src/host_callbacks.h`는 기본 callback 37개와 진단 callback 8개의 native-to-host ABI를 선언한다. 각 profile은 해당 작업 시작 전에 한 번 등록한다. native library는 완전한 table을 복사하며 누락이나 교체를 거부한다. 함수 주소는 process 종료까지 유효하다. native code는 Go export를 링크하는 대신 등록된 `sp_host_callback_*`와 `sp_host_diagnostic_callback_*` 진입점을 참조하며, 각 호출은 여전히 `hostRunOnWorker`나 `ON_WORKER`를 거친다. profile 등록 전 callback을 호출하면 진입점 이름을 남기고 abort한다. `make create-host-callbacks`는 clang을 통해 header에서 cgo 등록을 생성하고, `make check-host-callbacks`는 오래된 binding을 거부하며 native build의 선행 조건이다. 진단 등록은 Go의 `diagnostics` build tag에서만 선택된다. native library의 구성은 하나이며, 기본과 진단의 함수와 callback을 모두 담는다. `diagnostics` build option이 없는 host build는 진단 callback을 등록하지 않고 진단 함수를 부르지 않는다.
 
 mygo adapter의 cgo 없는 callback binding은 같은 header에서 `src/platform/darwin/nativecallback`으로 생성한다. Darwin LP64 scalar의 정확한 폭과 native pointer 간접 참조를 유지하며 지원하지 않는 선언은 거부한다. callback 주소 할당 전 필수 함수 전부를 확인한다. `Bind`는 시작 시 profile마다 한 번 호출하며 반환 table을 재사용하고 함수 주소는 process 종료까지 유지한다. `make test-host-callbacks`는 격리된 native ABI fixture를 컴파일하고 callback 43개와 native table 크기·offset을 확인하는 cgo 없는 소유 test를 실행한다. 이 ABI test는 main-thread worker 통합이나 drag frame 성능의 근거가 아니다.
 
@@ -225,7 +225,7 @@ macOS에서 정지 캡처와 녹화는 세 host 모두 ScreenCaptureKit으로 �
 
 녹화 대상 준비·시작은 이미 활성 녹화가 있으면 대상·프레임 계수·녹화 오류 변경 전에 거부한다. 각 open/start 호출은 필수 출력 포인터로 별도의 호출자 소유 UTF-8 오류를 반환한다(성공은 NULL, 실패는 free()로 해제). 거부된 중첩 작업은 정상 녹화 준비를 무효화하거나 이전 녹화 실패를 지울 수 없다.
 
-대상 준비는 자기 조회가 10000ms 제한 안에 성공 완료했을 때만 필터·설정을 게시한다. 시간 초과된 조회는 자기 콜백 상태만 보존하고 늦은 실패는 보고하며 늦은 성공은 이후 대상을 덮어쓸 수 없다. 준비는 쓰지 않는 객체를 유지하지 않고 비활성 이전 대상/설정 소유를 해제한다. 준비 오류는 호출별 출력으로 반환하며 녹화 오류를 바꾸지 않는다. 성공한 준비를 게시하기 전에 녹화가 활성화되면 게시를 거부하고 활성 녹화를 유지한다.
+대상 준비는 자기 조회가 그 대기가 끝나기 전에 성공 완료했을 때만 필터·설정을 게시한다. 그 대기는 어떤 제한으로도 끝나지 않고 그 요청의 끝으로 끝난다([endpoint](endpoint.ko.md)). 대기가 끝난 조회는 자기 콜백 상태만 보존하고 늦은 실패는 보고하며 늦은 성공은 이후 대상을 덮어쓸 수 없다. 준비는 쓰지 않는 객체를 유지하지 않고 비활성 이전 대상/설정 소유를 해제한다. 준비 오류는 호출별 출력으로 반환하며 녹화 오류를 바꾸지 않는다. 성공한 준비를 게시하기 전에 녹화가 활성화되면 게시를 거부하고 활성 녹화를 유지한다.
 
 실패한 프레임 파일 열기·쓰기·닫기·커밋은 각 작업·프레임 경로·저장한 시스템 오류를 보고한다. 부분 파일 삭제 실패는 원래 실패를 대체하지 않고 추가 녹화 오류로 보고한다. 쓰기 실패 뒤에도 닫기를 시도하고 닫기 실패를 따로 보고한다. 쓰기가 파일 열기에 성공한 경우에만 삭제를 시도하며 열기 실패로 기존 경로를 삭제하지 않는다. 실패한 프레임은 기록 수를 증가시키거나 첫 프레임 준비를 알리지 않는다.
 

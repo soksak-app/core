@@ -1659,6 +1659,9 @@ func (h *Host) endReloads(s *Surfaces, err error) {
 // process (docs/spec/native-surfaces.md#keyboard-of-a-surface), and cancels every layout transaction of the window, because the
 // page that holds their tickets ended (docs/spec/native-surfaces.md#layout-transaction). It does not wait for the UI thread.
 func (s *Surfaces) mainPageEnded() {
+	if diagnosticPageEnded != nil {
+		diagnosticPageEnded(s)
+	}
 	if s.window == nil {
 		return
 	}

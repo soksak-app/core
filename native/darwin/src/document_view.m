@@ -372,7 +372,7 @@ void sp_document_frame_identity_after_target_update(void *document, void (^compl
 static void frameIdentityStartFailed(SPDocumentFrameIdentity *identity, NSString *reason);
 static void frameIdentityStartReply(SPDocumentFrameIdentity *identity, NSString *json, NSString *error);
 static void frameIdentityFailSession(SPDocumentFrameIdentity *identity, NSString *reason);
-static void frameIdentityClose(SPDocumentView *view);
+static void frameIdentityEnd(SPDocumentView *view, NSString *reason);
 
 @interface SPDocumentView : WKWebView <WKNavigationDelegate, WKUIDelegate>
 @property sp_document_changed changed;
@@ -1137,6 +1137,7 @@ static void sendBody(id<WKURLSchemeTask> task, NSData *data) {
 // the script of the new document asks for its streams again when it is installed.
 // A main frame commit, a reload included, replaces every frame document, so every form flag is cleared.
 - (void)webView:(WKWebView *)view didCommitNavigation:(WKNavigation *)navigation {
+    frameIdentityEnd(self, @"the plugin root document navigated during frame identity capture");
     if (self.pluginRootView) self.viewDocumentCommitted = YES;
     self.committedURL = view.URL;
     [self.formFrames removeAllObjects];
@@ -1209,6 +1210,7 @@ static void sendBody(id<WKURLSchemeTask> task, NSData *data) {
 // owns the region through the document state.
 - (void)webViewWebContentProcessDidTerminate:(WKWebView *)view {
     sp_log_error("document view", [NSString stringWithFormat:@"web content process terminated: %@", self.URL.absoluteString].UTF8String);
+    frameIdentityEnd(self, @"the web content process of the plugin root document ended during frame identity capture");
     self.navigation = nil;
     self.committedURL = nil;
     self.failure = @"the web content process ended";
@@ -2222,10 +2224,12 @@ bool sp_document_frame_identity_remove(uint64_t generation, sp_document_frame_id
     return true;
 }
 
-static void frameIdentityClose(SPDocumentView *view) {
+// Ends the frame identity of view when its document ends: by the close, by a navigation that the document commits or by the
+// end of its WebContent process (docs/spec/diagnostics.md). A start that has not answered fails with reason, a started
+// identity is invalidated, so its freeze fails, and its removal answers that the generation is removed.
+static void frameIdentityEnd(SPDocumentView *view, NSString *reason) {
     SPDocumentFrameIdentity *identity = view.frameIdentity;
     if (!identity) return;
-    NSString *reason = @"the plugin root document closed during frame identity capture";
     identity->invalidated = YES;
     frameIdentityFailSession(identity, reason);
     frameIdentityStartReply(identity, nil, reason);
@@ -2339,7 +2343,7 @@ void sp_document_close(void *handle) {
     SPDocumentView *view = (SPDocumentView *)handle;
     // A view out of its window never presents, so its close ends each join of it in this turn.
     surfaceLayoutViewClosed(view);
-    frameIdentityClose(view);
+    frameIdentityEnd(view, @"the plugin root document closed during frame identity capture");
     [view restoreViewportMarker];
     // The web content process of the view lives as long as AppKit keeps the view, so the keyboard leaves it at the close.
     sp_view_give_up_keyboard(view);

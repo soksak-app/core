@@ -71,6 +71,23 @@ func (s *Shell) preferredSurfaces() []string {
 	return order
 }
 
+// surfaceReleased receives the event diagnostics-surface-released: the endpoint connection that asked for the reply hold of the
+// surface closed, so the hold ends (docs/spec/endpoint.md).
+func (s *Shell) surfaceReleased(data []any) {
+	if len(data) != 1 {
+		s.fail(fmt.Errorf("diagnostics: the event diagnostics-surface-released carries %d values, want one", len(data)))
+		return
+	}
+	event, err := decode[struct {
+		Surface string `json:"surface"`
+	}](data[0])
+	if err != nil {
+		s.fail(fmt.Errorf("diagnostics: %w", err))
+		return
+	}
+	s.replyHold.Released(event.Surface)
+}
+
 // surfaceRegistered receives the event exposure-registered.
 func (s *Shell) surfaceRegistered(data []any) {
 	if len(data) != 1 {

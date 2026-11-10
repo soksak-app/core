@@ -51,8 +51,9 @@ func writeFrame(conn net.Conn, body []byte) {
 
 func startEndpoint(t *testing.T, respond func(method string, params map[string]any) answer) *fakeEndpoint {
 	t.Helper()
-	// A Unix socket path is limited to 104 bytes, so it is placed in a short temporary folder.
-	socketDir, err := os.MkdirTemp("/tmp", "sok")
+	// A Unix socket path is limited to 104 bytes. The test runner gives the process a short TMPDIR under /tmp, so the
+	// socket folder lies there.
+	socketDir, err := os.MkdirTemp("", "sok")
 	if err != nil {
 		t.Fatal(err)
 	}

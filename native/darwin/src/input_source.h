@@ -15,8 +15,6 @@
 - (BOOL)selectGlobalSource:(NSString *)identifier error:(NSString **)error;
 - (id)observeSelection:(void (^)(void))changed;
 - (void)removeSelectionObserver:(id)observer;
-- (id)scheduleSelectionTimeout:(void (^)(void))timeout;
-- (void)cancelSelectionTimeout:(id)timer;
 @end
 
 // The input source roles of diagnostics.input.source (docs/spec/endpoint.md): `latin` types Latin letters without composition,
@@ -35,8 +33,13 @@ char *sp_input_source_current(void);
 
 // Selects the enabled input source and calls adopted once on the main thread. A key-view text client completes only after
 // its context reports the source following the selection notification. With no active text client, completion follows the
-// global selection. A client whose context is not the current context of the application fails explicitly. Call it on the main thread.
-void sp_input_source_select_and_await(const char *identifier, void (^adopted)(const char *error));
+// global selection. A client whose context is not the current context of the application fails explicitly. No limit ends the
+// wait: sp_input_source_selection_end ends the pending selection of key, and a NULL key has no end. Call it on the main thread.
+void sp_input_source_select_and_await(const char *identifier, const void *key, void (^adopted)(const char *error));
+
+// Ends the pending selection of key, if any: adopted gets `the key view's text input context holds <source>, not <identifier>,
+// before <reason>`. Call it on the main thread.
+void sp_input_source_selection_end(const void *key, const char *reason);
 
 // Returns the live selection driver for `responder` in `window`, which reads the current input context of the application
 // from `current` (NSTextInputContext.currentInputContext for the live selection). The responder is an active text client only
@@ -45,6 +48,6 @@ void sp_input_source_select_and_await(const char *identifier, void (^adopted)(co
 id<SPInputSourceSelectionDriver> sp_input_source_live_driver(NSWindow *window, id responder,
     NSTextInputContext *(^current)(void));
 
-// Runs the production selection coordinator with controlled source, notification, and timeout operations for its owner test.
-void sp_input_source_select_and_await_with_driver(const char *identifier, id<SPInputSourceSelectionDriver> driver,
-    void (^adopted)(const char *error));
+// Runs the production selection coordinator with controlled source and notification operations for its owner test.
+void sp_input_source_select_and_await_with_driver(const char *identifier, const void *key,
+    id<SPInputSourceSelectionDriver> driver, void (^adopted)(const char *error));

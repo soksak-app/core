@@ -13,6 +13,7 @@ extern void goHost_delivered_notifications(uintptr_t arg0, char * arg1);
 extern void goHost_document_frame_identity_done(uintptr_t arg0, char * arg1, char * arg2);
 extern void goHost_input_reference_reply(uintptr_t arg0, char * arg1, char * arg2);
 extern void goHost_process_exit_answered(uintptr_t arg0, _Bool arg1);
+extern void goHost_capture_answered(uintptr_t arg0, long arg1, char * arg2);
 */
 import "C"
 
@@ -56,6 +57,9 @@ func InstallDiagnosticCallbacks(callbacks abi.DiagnosticCallbacks) error {
 	if callbacks.ProcessExitAnswered == nil {
 		return fmt.Errorf("native callback is missing: process_exit_answered")
 	}
+	if callbacks.CaptureAnswered == nil {
+		return fmt.Errorf("native callback is missing: capture_answered")
+	}
 	var native C.sp_host_diagnostic_callbacks
 	native.native_input_source_adopted = (*[0]byte)(C.goHost_native_input_source_adopted)
 	native.window_objects_counted = (*[0]byte)(C.goHost_window_objects_counted)
@@ -64,6 +68,7 @@ func InstallDiagnosticCallbacks(callbacks abi.DiagnosticCallbacks) error {
 	native.document_frame_identity_done = (*[0]byte)(C.goHost_document_frame_identity_done)
 	native.input_reference_reply = (*[0]byte)(C.goHost_input_reference_reply)
 	native.process_exit_answered = (*[0]byte)(C.goHost_process_exit_answered)
+	native.capture_answered = (*[0]byte)(C.goHost_capture_answered)
 	if failure := C.sp_host_diagnostic_callbacks_install(&native); failure != nil {
 		return fmt.Errorf("native callback registration: %s", C.GoString(failure))
 	}
@@ -105,4 +110,9 @@ func goHost_input_reference_reply(arg0 C.uintptr_t, arg1 *C.char, arg2 *C.char) 
 //export goHost_process_exit_answered
 func goHost_process_exit_answered(arg0 C.uintptr_t, arg1 C.bool) {
 	diagnosticHandlers.ProcessExitAnswered(uintptr(arg0), bool(arg1))
+}
+
+//export goHost_capture_answered
+func goHost_capture_answered(arg0 C.uintptr_t, arg1 C.long, arg2 *C.char) {
+	diagnosticHandlers.CaptureAnswered(uintptr(arg0), int64(arg1), (*byte)(unsafe.Pointer(arg2)))
 }

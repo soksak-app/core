@@ -3,6 +3,8 @@
 #import "../src/capture.m"
 #import "../src/capture_frame_identity.h"
 #import "support/records.h"
+#import "support/run_until.h"
+#import "support/temporary_folder.h"
 #import <CommonCrypto/CommonDigest.h>
 #import "event_ring.h"
 #include <sys/stat.h>
@@ -51,14 +53,13 @@ static dispatch_semaphore_t displayLinkClockReadResume;
 static kern_return_t delayedFailedDisplayLinkTimebase(mach_timebase_info_data_t *timebase) {
     (void)timebase;
     dispatch_semaphore_signal(displayLinkClockReadEntered);
-    dispatch_semaphore_wait(displayLinkClockReadResume, dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC));
+    dispatch_semaphore_wait(displayLinkClockReadResume, DISPATCH_TIME_FOREVER);
     return KERN_FAILURE;
 }
 static void pauseDisplayLinkInstallationAfterWindowLookup(NSWindow *window) {
     __atomic_store_n(&displayLinkWindowLookupFound, window != nil ? 1 : 0, __ATOMIC_RELAXED);
     dispatch_semaphore_signal(displayLinkWindowLookupReached);
-    displayLinkWindowLookupHookWaitResult = (int)dispatch_semaphore_wait(displayLinkWindowLookupResume,
-        dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC));
+    displayLinkWindowLookupHookWaitResult = (int)dispatch_semaphore_wait(displayLinkWindowLookupResume, DISPATCH_TIME_FOREVER);
 }
 @interface SPDisplayWindowReleaseProbe : NSWindow
 @end
@@ -178,9 +179,7 @@ int main(void) { @autoreleasepool {
         && [firstDifference[@"actualBGRA"] isEqual:@[@5, @6, @7, @8]],
         @"the callback record preserves the bounded exact pixel mismatch details");
     [NSApplication sharedApplication];
-    char path[] = "/tmp/soksak-capture-metadata-XXXXXX";
-    if (mkdtemp(path) == NULL) { check(NO, @"the fixture directory is created"); return 1; }
-    directory = [NSString stringWithUTF8String:path];
+    directory = temporaryFolder(@"soksak-capture-metadata-");
     captureWriter = dispatch_queue_create("capture.test.metadata", DISPATCH_QUEUE_SERIAL);
     capturePending = dispatch_semaphore_create(kCapturePending);
     captureFirstFrame = dispatch_semaphore_create(0);
@@ -754,12 +753,8 @@ int main(void) { @autoreleasepool {
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         [windowReleaseFixture stopDisplayLinkObservation];
     });
-    NSDate *windowReleaseDeadline = [NSDate dateWithTimeIntervalSinceNow:2];
-    while (!windowReleaseFixture.displayLinkInvalidated
-        && windowReleaseDeadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:
-            [NSDate dateWithTimeIntervalSinceNow:MIN(0.01, windowReleaseDeadline.timeIntervalSinceNow)]];
-    }
+    // The background stop queues the release of the window on the main queue, which sets displayLinkInvalidated.
+    sp_run_until("the window release on the main queue", ^BOOL { return windowReleaseFixture.displayLinkInvalidated; });
     trackDisplayWindowReleases = 0;
     check(windowReleaseFixture.displayLinkInvalidated
         && __atomic_load_n(&displayWindowLastReleaseThread, __ATOMIC_RELAXED) == 1,
@@ -777,16 +772,12 @@ int main(void) { @autoreleasepool {
         [queuedInvalidationFixture stopDisplayLinkObservation];
         dispatch_semaphore_signal(stopReturned);
     });
-    long stopWait = dispatch_semaphore_wait(stopReturned, dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC));
-    check(stopWait == 0, @"the linked background stop returns after queuing main-thread invalidation");
+    // The linked background stop returns after it queues the invalidation on the main queue, which this thread holds.
+    dispatch_semaphore_wait(stopReturned, DISPATCH_TIME_FOREVER);
     [queuedInvalidationFixture stopDisplayLinkObservation];
     check(!queuedInvalidationFixture.displayLinkInvalidated && queuedLink.invalidationCount == 0,
         @"a second resource-free stop does not complete or duplicate a queued invalidation");
-    NSDate *queuedInvalidationDeadline = [NSDate dateWithTimeIntervalSinceNow:2];
-    while (!queuedInvalidationFixture.displayLinkInvalidated && queuedInvalidationDeadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:
-            [NSDate dateWithTimeIntervalSinceNow:MIN(0.01, queuedInvalidationDeadline.timeIntervalSinceNow)]];
-    }
+    sp_run_until("the queued invalidation on the main queue", ^BOOL { return queuedInvalidationFixture.displayLinkInvalidated; });
     check(queuedInvalidationFixture.displayLinkInvalidated && queuedLink.invalidationCount == 1,
         @"the original queued invalidation completes once on the main run loop");
     [queuedLink release];
@@ -804,18 +795,18 @@ int main(void) { @autoreleasepool {
     captureDisplayLinkAfterWindowLookup = pauseDisplayLinkInstallationAfterWindowLookup;
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         [lookupRaceFixture startDisplayLinkObservationForWindowNumber:lookupWindow.windowNumber];
-        long lookupWait = dispatch_semaphore_wait(displayLinkWindowLookupReached,
-            dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC));
-        if (lookupWait == 0) [lookupRaceFixture stopDisplayLinkObservation];
-        __atomic_store_n(&displayLinkLookupRaceStopReturned, lookupWait == 0 ? 1 : 2, __ATOMIC_RELAXED);
+        // The installer on the main queue holds the main thread in the window lookup until the stop returns.
+        dispatch_semaphore_wait(displayLinkWindowLookupReached, DISPATCH_TIME_FOREVER);
+        [lookupRaceFixture stopDisplayLinkObservation];
         dispatch_semaphore_signal(displayLinkWindowLookupResume);
+        // Queued after the installer, so the main thread judges the race after the installer has returned.
+        dispatch_async(dispatch_get_main_queue(), ^{
+            __atomic_store_n(&displayLinkLookupRaceStopReturned, 1, __ATOMIC_RELAXED);
+        });
     });
-    NSDate *lookupRaceDeadline = [NSDate dateWithTimeIntervalSinceNow:3];
-    while (__atomic_load_n(&displayLinkLookupRaceStopReturned, __ATOMIC_RELAXED) == 0
-        && lookupRaceDeadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:
-            [NSDate dateWithTimeIntervalSinceNow:MIN(0.01, lookupRaceDeadline.timeIntervalSinceNow)]];
-    }
+    sp_run_until("the window lookup race returns", ^BOOL {
+        return __atomic_load_n(&displayLinkLookupRaceStopReturned, __ATOMIC_RELAXED) != 0;
+    });
     captureDisplayLinkAfterWindowLookup = NULL;
     check(__atomic_load_n(&displayLinkLookupRaceStopReturned, __ATOMIC_RELAXED) == 1
         && displayLinkWindowLookupHookWaitResult == 0
@@ -840,15 +831,12 @@ int main(void) { @autoreleasepool {
         [lateFailureFixture displayLinkDidRefresh:nil];
         dispatch_semaphore_signal(lateCallbackFinished);
     });
-    long callbackEntered = dispatch_semaphore_wait(displayLinkClockReadEntered,
-        dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC));
+    dispatch_semaphore_wait(displayLinkClockReadEntered, DISPATCH_TIME_FOREVER);
     [lateFailureFixture stopDisplayLinkObservation];
     dispatch_semaphore_signal(displayLinkClockReadResume);
-    long callbackFinished = dispatch_semaphore_wait(lateCallbackFinished,
-        dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC));
+    dispatch_semaphore_wait(lateCallbackFinished, DISPATCH_TIME_FOREVER);
     captureReadTimebase = originalDisplayLinkTimebaseReader;
-    check(callbackEntered == 0 && callbackFinished == 0
-        && [lateFailureFixture.displayLinkState isEqual:@"unavailable"]
+    check([lateFailureFixture.displayLinkState isEqual:@"unavailable"]
         && lateFailureFixture.omittedDisplayLinkObservations == 0
         && [NSString stringWithUTF8String:sp_capture_error()].length == 0,
         @"a callback clock failure completing after stop cannot taint the next capture");
@@ -1405,9 +1393,6 @@ int main(void) { @autoreleasepool {
     [previousStream release];
     [currentStream release];
 
-    NSError *removal = nil;
-    check([[NSFileManager defaultManager] removeItemAtPath:directory error:&removal],
-        [NSString stringWithFormat:@"fixture files are removed (%@)", removal]);
     fprintf(stderr, "%s: native capture frame metadata validation (%.1fms)\n", failures ? "FAIL" : "PASS",
         (CACurrentMediaTime() - began) * 1000);
     return failures ? 1 : 0;

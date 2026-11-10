@@ -3,6 +3,8 @@
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
 #import <CommonCrypto/CommonDigest.h>
+#include <errno.h>
+#include <signal.h>
 #import "window_facts.h"
 #import "input_virtual.h"
 #import "observe.h"
@@ -102,6 +104,52 @@ static void collectWebViews(NSView *view, NSMutableArray<WKWebView *> *found) {
     // A parent is drawn before its children, and among the subviews of one parent a later one is drawn above.
     if ([view isKindOfClass:WKWebView.class]) [found addObject:(WKWebView *)view];
     for (NSView *child in view.subviews) collectWebViews(child, found);
+}
+
+// The WebContent processes that a reading of the window facts saw hold a page of the application. A process stays here while it
+// lives after its last page is gone, so a reading reports it as a process without a page until it ends.
+static NSMutableSet<NSNumber *> *pageProcesses;
+
+// The WebContent processes that hold a page of a web view in a window of the application now.
+static NSMutableSet<NSNumber *> *processesWithPages(void) {
+    NSMutableSet<NSNumber *> *found = [NSMutableSet set];
+    for (NSWindow *each in NSApp.windows) {
+        NSMutableArray<WKWebView *> *views = [NSMutableArray array];
+        if (each.contentView) collectWebViews(each.contentView, views);
+        for (WKWebView *view in views) {
+            pid_t process = view._webProcessIdentifier;
+            if (process > 0) [found addObject:@(process)];
+        }
+    }
+    return found;
+}
+
+// The rows {pid, ending} of the WebContent processes that held a page of the application and hold none now, while they live, in
+// the order of their pid. ending is true when the process pool keeps no process cache (_processCacheCapacity 0): WebKit then ends
+// a process whose last page is gone, so its exit is an event that the close of its pages makes. When the pool has a cache, a
+// process without a page may stay in it, and ending is false.
+static NSArray *pagelessProcesses(WKWebView *any) {
+    NSMutableSet<NSNumber *> *current = processesWithPages();
+    if (!pageProcesses) pageProcesses = [[NSMutableSet alloc] init];
+    // A window without a web view reads the pool of a new configuration, which WebKit gives the one pool of the application. The
+    // deprecation notice of WKProcessPool means that creating several pools has no effect; the cache capacity exists only in this class.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    WKProcessPool *pool = any ? any.configuration.processPool : [[[WKWebViewConfiguration alloc] init] autorelease].processPool;
+#pragma clang diagnostic pop
+    // A pool that does not answer the capacity may keep a process, so no process of it is reported ending.
+    BOOL cache = !pool || ![pool respondsToSelector:@selector(_processCacheCapacity)] || pool._processCacheCapacity > 0;
+    NSMutableArray *rows = [NSMutableArray array];
+    for (NSNumber *process in [pageProcesses.allObjects sortedArrayUsingSelector:@selector(compare:)]) {
+        if ([current containsObject:process]) continue;
+        if (kill(process.intValue, 0) != 0 && errno == ESRCH) {
+            [pageProcesses removeObject:process];
+            continue;
+        }
+        [rows addObject:@{ @"pid": process, @"ending": @(!cache) }];
+    }
+    [pageProcesses unionSet:current];
+    return rows;
 }
 
 static void collectSurfaces(NSWindow *window, NSView *view, NSMutableArray *found) {
@@ -216,6 +264,7 @@ char *sp_window_facts(void *handle, void *surfaceView) {
         @"controls": controls,
         @"webviews": webviews,
         @"nativeSurfaces": surfaces,
+        @"pagelessProcesses": pagelessProcesses(mainWebview(window) ?: views.firstObject),
         @"appDomWebviews": @(views.count - documents),
         @"documentWebviews": @(documents),
     });

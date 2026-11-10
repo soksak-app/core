@@ -133,13 +133,13 @@ fn capture_stop_continues_cleanup_after_freeze_failure_without_issued_count() {
 
 // contract: diagnostics.capture-document-identity.stop-drains-late-start-before-cleanup
 #[test]
-fn capture_stop_does_not_credit_a_timed_out_start_count() {
+fn capture_stop_does_not_credit_an_unconfirmed_start_count() {
     let source = ("surface-a".to_string(), 7);
     let phases = RefCell::new(Vec::new());
     let (issued, removed, error) = document_identity_stop_sequence(
         true,
         Some(&source),
-        Some("start callback timed out".into()),
+        Some("the start callback failed".into()),
         |_| {
             phases.borrow_mut().push("freeze");
             Ok(r#"{"generation":7,"atlasSlots":300,"issuedSlots":2}"#.into())
@@ -320,9 +320,7 @@ fn capture_start_waits_for_prior_identity_removal() {
         })
         .expect("capture start could not acquire the frame identity lifecycle");
     });
-    wait_recording_started
-        .recv_timeout(Duration::from_secs(1))
-        .unwrap();
+    wait_recording_started.recv().unwrap();
     let stop = std::thread::spawn(move || {
         super::with_document_frame_identity_lifecycle(|| {
             stop_started.send(()).unwrap();
@@ -335,32 +333,35 @@ fn capture_start_waits_for_prior_identity_removal() {
         "stop entered while new capture trace initialization was pending"
     );
     allow_trace.send(()).unwrap();
-    wait_trace_started
-        .recv_timeout(Duration::from_secs(1))
-        .unwrap();
-    wait_stop_started
-        .recv_timeout(Duration::from_secs(1))
-        .unwrap();
+    wait_trace_started.recv().unwrap();
+    wait_stop_started.recv().unwrap();
     start.join().unwrap();
     stop.join().unwrap();
 }
 
-// contract: diagnostics.capture-stop.bounds-identity-callback-wait
+// contract: diagnostics.capture-document-identity.callback-ends-the-wait
 #[test]
-fn document_frame_identity_callback_wait_is_bounded() {
+fn document_frame_identity_callback_ends_the_wait() {
     let (sender, receiver) = mpsc::channel();
-    let callback = std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_millis(25));
-        sender.send(Ok("late reply".to_string()))
-    });
-    let result = super::await_document_frame_identity_reply(receiver, Duration::from_millis(1));
+    // The library answers once on every path, from another thread and after the wait began; the wait ends by that answer.
+    let callback = std::thread::spawn(move || sender.send(Ok("late reply".to_string())));
+    let result = super::await_document_frame_identity_reply(receiver);
+    assert_eq!(result.as_deref(), Ok("late reply"));
     assert!(
-        matches!(&result, Err(error) if error.contains("timed out")),
-        "late identity callback result = {result:?}"
+        callback.join().unwrap().is_ok(),
+        "the callback found no receiver"
     );
+}
+
+// contract: diagnostics.capture-document-identity.callback-ends-the-wait
+#[test]
+fn a_document_frame_identity_callback_that_is_dropped_ends_the_wait() {
+    let (sender, receiver) = mpsc::channel::<Result<String, String>>();
+    drop(sender);
+    let result = super::await_document_frame_identity_reply(receiver);
     assert!(
-        callback.join().unwrap().is_err(),
-        "late callback send unexpectedly found a receiver"
+        matches!(&result, Err(error) if error.contains("ended before replying")),
+        "{result:?}"
     );
 }
 
@@ -375,7 +376,6 @@ fn document_frame_identity_preserves_synchronous_callback_error_when_scheduling_
     let result = super::await_document_frame_identity_schedule_result(
         Err("native operation was not scheduled".into()),
         receiver,
-        Duration::from_millis(1),
     );
     let Err(error) = result else {
         panic!("schedule and callback failures were accepted as success: {result:?}");
@@ -393,11 +393,7 @@ fn document_frame_identity_preserves_synchronous_success_reply() {
     let (sender, receiver) = mpsc::channel();
     sender.send(Ok("native reply".to_string())).unwrap();
 
-    let result = super::await_document_frame_identity_schedule_result(
-        Ok(()),
-        receiver,
-        Duration::from_millis(1),
-    );
+    let result = super::await_document_frame_identity_schedule_result(Ok(()), receiver);
     assert_eq!(result.as_deref(), Ok("native reply"));
 }
 
@@ -747,5 +743,437 @@ fn a_recorded_drag_stops_its_layout_trace_after_the_last_placement_is_presented(
         *order.borrow(),
         ["settle", "stop"],
         "the trace stops also when the drag fails"
+    );
+}
+
+/// Receives the one message of receiver that the end of a hold sends; the end is the event that the test waits for.
+fn settles<T>(receiver: &mpsc::Receiver<T>) -> Option<T> {
+    receiver.recv().ok()
+}
+
+/// Runs hold_modal_content for window on a thread and sends () when it returns.
+fn held_modal_content(window: &'static str) -> mpsc::Receiver<()> {
+    let (sender, receiver) = mpsc::channel();
+    std::thread::spawn(move || {
+        hold_modal_content(window);
+        sender
+            .send(())
+            .expect("the test dropped the receiver of the held modal content");
+    });
+    receiver
+}
+
+/// Runs modal_held for window on a thread and sends its answer.
+fn modal_held_answer(window: &'static str) -> mpsc::Receiver<Result<Value, Failure>> {
+    let (sender, receiver) = mpsc::channel();
+    std::thread::spawn(move || {
+        sender
+            .send(modal_held(window))
+            .expect("the test dropped the receiver of diagnostics.modal.held");
+    });
+    receiver
+}
+
+// contract: diagnostics.modal-hold.ends-with-window-or-connection
+#[test]
+fn a_modal_hold_ends_with_the_connection_that_turned_it_on() {
+    let window = "modal-hold-connection";
+    let connection = crate::endpoint::ConnectionEnd::open();
+    modal_hold(window, true, &connection);
+    let held = held_modal_content(window);
+    let answered = modal_held_answer(window);
+    connection.close();
+    assert!(
+        settles(&held).is_some(),
+        "the held modal content answer was not sent when the connection of the hold closed"
+    );
+    assert!(
+        settles(&answered).is_some_and(|answer| answer.is_ok()),
+        "diagnostics.modal.held did not answer at the end of the hold by its connection"
+    );
+    assert!(
+        settles(&held_modal_content(window)).is_some(),
+        "a modal content answer after the end of the hold was held"
+    );
+}
+
+// contract: diagnostics.modal-hold.ends-with-window-or-connection
+#[test]
+fn the_close_of_another_connection_keeps_the_modal_hold() {
+    let window = "modal-hold-other-connection";
+    let holder = crate::endpoint::ConnectionEnd::open();
+    let other = crate::endpoint::ConnectionEnd::open();
+    modal_hold(window, true, &holder);
+    let held = held_modal_content(window);
+    other.close();
+    // The close runs the ends of its connection before it returns, so the hold is still there or it is not.
+    assert!(
+        super::modal_hold_of(window).is_some(),
+        "the close of a connection that did not turn the hold on ended the hold"
+    );
+    modal_hold(window, false, &other);
+    assert!(
+        settles(&held).is_some(),
+        "turning the hold off did not send the held answer"
+    );
+    holder.close();
+}
+
+// contract: diagnostics.modal-hold.ends-with-window-or-connection
+#[test]
+fn a_modal_hold_ends_with_its_window() {
+    let window = "modal-hold-window";
+    let connection = crate::endpoint::ConnectionEnd::open();
+    modal_hold(window, true, &connection);
+    let held = held_modal_content(window);
+    let answered = modal_held_answer(window);
+    end_window_holds(window);
+    assert!(
+        settles(&held).is_some(),
+        "the held modal content answer was not sent when its window closed"
+    );
+    assert!(
+        settles(&answered).is_some_and(|answer| answer.is_ok()),
+        "diagnostics.modal.held did not answer when the window of the hold closed"
+    );
+    connection.close();
+}
+
+/// Remembers a hold of surface in window by connection whose release sends the surface to the returned receiver.
+fn surface_hold(
+    window: &str,
+    surface: &'static str,
+    connection: &crate::endpoint::ConnectionEnd,
+) -> mpsc::Receiver<&'static str> {
+    let (sender, receiver) = mpsc::channel();
+    remember_surface_hold(window, surface, connection, move || {
+        sender
+            .send(surface)
+            .expect("the test dropped the receiver of the release");
+    });
+    receiver
+}
+
+// contract: diagnostics.surface-hold.released-at-connection-close
+#[test]
+fn the_close_of_the_connection_of_a_surface_hold_releases_the_surface() {
+    let connection = crate::endpoint::ConnectionEnd::open();
+    let released = surface_hold("surface-hold-close", "tab-1", &connection);
+    assert!(
+        released.try_recv().is_err(),
+        "the surface was released while its connection was open"
+    );
+    connection.close();
+    assert_eq!(settles(&released), Some("tab-1"));
+    connection.close();
+    assert!(
+        released.try_recv().is_err(),
+        "the surface was released twice"
+    );
+}
+
+// contract: diagnostics.surface-hold.released-at-connection-close
+#[test]
+fn a_later_hold_of_the_surface_keeps_it_at_the_close_of_the_earlier_connection() {
+    let earlier = crate::endpoint::ConnectionEnd::open();
+    let later = crate::endpoint::ConnectionEnd::open();
+    let first = surface_hold("surface-hold-later", "tab-1", &earlier);
+    let second = surface_hold("surface-hold-later", "tab-1", &later);
+    earlier.close();
+    // The close runs the release of its connection before it returns.
+    assert!(
+        first.try_recv().is_err(),
+        "the close of the earlier connection released a surface that a later hold took"
+    );
+    later.close();
+    assert_eq!(settles(&second), Some("tab-1"));
+}
+
+// contract: diagnostics.surface-hold.released-at-connection-close
+#[test]
+fn a_surface_hold_of_a_closed_connection_is_released_at_once() {
+    let connection = crate::endpoint::ConnectionEnd::open();
+    connection.close();
+    let released = surface_hold("surface-hold-closed", "tab-1", &connection);
+    assert_eq!(settles(&released), Some("tab-1"));
+}
+
+// contract: diagnostics.native-wait.ends-by-its-event-or-its-end
+#[test]
+fn unreached_window_objects_answer_the_end_of_their_wait() {
+    let counts = platform::WindowObjects {
+        window_compositions: 1,
+        surface_hosts: 2,
+        input_registrations: 3,
+    };
+    let answer = native_objects_answer(None, counts, false, super::WAIT_END_WINDOW);
+    let Err(failure) = answer else {
+        panic!("unreached counts without expected counts were answered as {answer:?}");
+    };
+    assert_eq!(
+        failure.message,
+        "the window object counts ended before the application handled an event: the window closed"
+    );
+    assert!(native_objects_answer(None, counts, true, "").is_ok());
+    let expected = platform::WindowObjects::default();
+    let Err(unreached) =
+        native_objects_answer(Some(expected), counts, false, super::WAIT_END_CONNECTION)
+    else {
+        panic!("unreached expected counts were answered");
+    };
+    assert_eq!(unreached.code, crate::endpoint::TIMED_OUT);
+    assert_eq!(
+        unreached.message,
+        format!(
+            "window object counts did not reach {expected} before the endpoint connection of the request closed; they are {counts}"
+        )
+    );
+}
+
+// contract: diagnostics.native-wait.ends-by-its-event-or-its-end
+#[test]
+fn a_process_exit_answer_names_the_end_of_its_wait() {
+    assert_eq!(
+        super::process_exit_answer(7, true, None).ok(),
+        Some(Value::Null)
+    );
+    let Err(ended) = super::process_exit_answer(7, false, Some(super::WAIT_END_PAGE)) else {
+        panic!("an ended wait was answered as an exit");
+    };
+    assert_eq!(ended.code, crate::endpoint::TIMED_OUT);
+    assert_eq!(
+        ended.message,
+        "process 7 did not exit before the page of the window ended"
+    );
+    let Err(unregistered) = super::process_exit_answer(7, false, None) else {
+        panic!("a wait that could not be registered was answered as an exit");
+    };
+    assert_eq!(
+        unregistered.message,
+        "process 7 exit wait could not be registered"
+    );
+}
+
+/// A native wait of the test: start registers the answer and sends () on started; its end answers false, once.
+type TestAnswer = Arc<Mutex<Option<Box<dyn FnOnce(bool) + Send>>>>;
+
+fn test_native_wait(
+    label: &'static str,
+    connection: &crate::endpoint::ConnectionEnd,
+) -> (
+    mpsc::Receiver<()>,
+    TestAnswer,
+    std::thread::JoinHandle<Result<(bool, Option<&'static str>), Failure>>,
+) {
+    let (started, on_started) = mpsc::channel();
+    let answer: TestAnswer = Arc::new(Mutex::new(None));
+    let slot = answer.clone();
+    let connection = connection.clone();
+    let wait = std::thread::spawn(move || {
+        super::native_wait(
+            label,
+            &connection,
+            |work| {
+                work();
+                Ok(())
+            },
+            move |done| {
+                *slot.lock().unwrap() = Some(done);
+                let ended = slot.clone();
+                started.send(()).unwrap();
+                Ok(Box::new(move |_| {
+                    if let Some(done) = ended.lock().unwrap().take() {
+                        done(false);
+                    }
+                }) as super::NativeEnd)
+            },
+        )
+    });
+    (on_started, answer, wait)
+}
+
+// contract: diagnostics.native-wait.ends-by-its-event-or-its-end
+#[test]
+fn a_native_wait_ends_by_its_answer_without_an_end() {
+    let connection = crate::endpoint::ConnectionEnd::open();
+    let (started, answer, wait) = test_native_wait("native-wait-answer", &connection);
+    started.recv().unwrap();
+    (answer.lock().unwrap().take().unwrap())(true);
+    assert_eq!(wait.join().unwrap().unwrap(), (true, None));
+    // An end after the answer finds no wait.
+    connection.close();
+    super::end_native_waits("native-wait-answer", super::WAIT_END_WINDOW);
+}
+
+// contract: diagnostics.native-wait.ends-by-its-event-or-its-end
+#[test]
+fn a_native_wait_ends_with_the_connection_of_its_request() {
+    let connection = crate::endpoint::ConnectionEnd::open();
+    let (started, _answer, wait) = test_native_wait("native-wait-connection", &connection);
+    started.recv().unwrap();
+    connection.close();
+    assert_eq!(
+        wait.join().unwrap().unwrap(),
+        (false, Some(super::WAIT_END_CONNECTION))
+    );
+}
+
+// contract: diagnostics.native-wait.ends-by-its-event-or-its-end
+#[test]
+fn a_native_wait_ends_with_its_window_and_its_page() {
+    for (label, end) in [
+        ("native-wait-window", super::WAIT_END_WINDOW),
+        ("native-wait-page", super::WAIT_END_PAGE),
+    ] {
+        let connection = crate::endpoint::ConnectionEnd::open();
+        let (started, _answer, wait) = test_native_wait(label, &connection);
+        started.recv().unwrap();
+        if end == super::WAIT_END_WINDOW {
+            end_window_holds(label);
+        } else {
+            super::end_native_waits(label, end);
+        }
+        assert_eq!(wait.join().unwrap().unwrap(), (false, Some(end)));
+        connection.close();
+    }
+}
+
+// contract: diagnostics.native-wait.ends-by-its-event-or-its-end
+#[test]
+fn a_native_wait_of_another_window_keeps_waiting() {
+    let connection = crate::endpoint::ConnectionEnd::open();
+    let (started, answer, wait) = test_native_wait("native-wait-kept", &connection);
+    started.recv().unwrap();
+    // An end that reached the wait would be in its queue before the answer, since the end is sent before it returns.
+    super::end_native_waits("native-wait-other", super::WAIT_END_WINDOW);
+    (answer.lock().unwrap().take().unwrap())(true);
+    assert_eq!(wait.join().unwrap().unwrap(), (true, None));
+    connection.close();
+}
+
+/// Runs a capture operation of window on connection on a thread: the operation sends its token on started and waits
+/// until the end of the test gives it the reason of the end of that token, which it returns.
+fn test_capture_wait(
+    label: &'static str,
+    connection: &crate::endpoint::ConnectionEnd,
+) -> (mpsc::Receiver<u64>, std::thread::JoinHandle<&'static str>) {
+    let (started, on_started) = mpsc::channel();
+    let connection = connection.clone();
+    let wait = std::thread::spawn(move || {
+        let (ended, on_ended) = mpsc::channel::<(u64, &'static str)>();
+        let ended = Mutex::new(ended);
+        super::await_capture(
+            label,
+            &connection,
+            move |token, reason| {
+                ended
+                    .lock()
+                    .unwrap()
+                    .send((token, reason))
+                    .expect("the capture operation receives its end");
+            },
+            move |token| {
+                started.send(token).unwrap();
+                let (ended_token, reason) = on_ended.recv().unwrap();
+                assert_eq!(
+                    ended_token, token,
+                    "the end names the token of the operation"
+                );
+                reason
+            },
+        )
+    });
+    (on_started, wait)
+}
+
+// contract: diagnostics.native-wait.ends-by-its-event-or-its-end
+#[test]
+fn a_capture_wait_ends_with_the_connection_of_its_request() {
+    let connection = crate::endpoint::ConnectionEnd::open();
+    let (started, wait) = test_capture_wait("capture-wait-connection", &connection);
+    started.recv().unwrap();
+    connection.close();
+    assert_eq!(wait.join().unwrap(), super::WAIT_END_CONNECTION);
+}
+
+// contract: diagnostics.native-wait.ends-by-its-event-or-its-end
+#[test]
+fn a_capture_wait_ends_with_its_window_and_its_page() {
+    for (label, end) in [
+        ("capture-wait-window", super::WAIT_END_WINDOW),
+        ("capture-wait-page", super::WAIT_END_PAGE),
+    ] {
+        let connection = crate::endpoint::ConnectionEnd::open();
+        let (started, wait) = test_capture_wait(label, &connection);
+        started.recv().unwrap();
+        if end == super::WAIT_END_WINDOW {
+            end_window_holds(label);
+        } else {
+            super::end_native_waits(label, end);
+        }
+        assert_eq!(wait.join().unwrap(), end);
+        // The close after the end ends nothing more: the end runs once.
+        connection.close();
+    }
+}
+
+// contract: diagnostics.native-wait.ends-by-its-event-or-its-end
+#[test]
+fn an_answered_capture_operation_takes_back_its_ends() {
+    let connection = crate::endpoint::ConnectionEnd::open();
+    let ends = Arc::new(Mutex::new(Vec::new()));
+    let recorded = ends.clone();
+    let mut answered = 0;
+    let value = super::await_capture(
+        "capture-wait-answered",
+        &connection,
+        move |token, reason| recorded.lock().unwrap().push((token, reason)),
+        |token| {
+            answered = token;
+            "answered"
+        },
+    );
+    assert_eq!(value, "answered");
+    // The connection runs its ends in its close and the window in end_native_waits, so an end left behind is recorded
+    // when they return.
+    connection.close();
+    super::end_native_waits("capture-wait-answered", super::WAIT_END_WINDOW);
+    assert!(
+        ends.lock().unwrap().is_empty(),
+        "the operation that answered was ended after it returned: {:?}",
+        ends.lock().unwrap()
+    );
+    let later = super::await_capture(
+        "capture-wait-answered",
+        &crate::endpoint::ConnectionEnd::open(),
+        |_, _| {},
+        |token| token,
+    );
+    assert!(
+        later > answered,
+        "the later operation has the token {later}, not larger than {answered}"
+    );
+}
+
+// contract: diagnostics.drag.page-receives-every-step
+#[test]
+fn a_page_drag_sends_every_step() {
+    let mut sent = 0;
+    send_steps(8, Duration::from_millis(1), || {
+        sent += 1;
+        true
+    });
+    assert_eq!(
+        sent, 8,
+        "the page received {sent} of the 8 steps of its drag"
+    );
+    let mut after_failure = 0;
+    send_steps(8, Duration::from_millis(1), || {
+        after_failure += 1;
+        false
+    });
+    assert_eq!(
+        after_failure, 1,
+        "a step that the window refused did not end the run"
     );
 }

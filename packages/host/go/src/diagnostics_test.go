@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 	"unsafe"
@@ -36,18 +37,33 @@ func TestCaptureStopLayoutFailurePreservesStartedFolder(t *testing.T) {
 	}
 }
 
-// contract: diagnostics.capture-stop.bounds-identity-callback-wait
+// contract: diagnostics.capture-document-identity.callback-ends-the-wait
+func TestTheFrameIdentityWaitEndsByItsCallback(t *testing.T) {
+	t.Parallel()
+	s := &Surfaces{invoke: func(work func()) { work() }}
+	want := json.RawMessage(`{"generation":7}`)
+	reply, err := awaitDocumentFrameIdentity(s, func(done func(json.RawMessage, error)) error {
+		// The library answers once on every path, from another routine after the wait began; the wait ends by that answer.
+		go done(want, nil)
+		return nil
+	})
+	if err != nil || string(reply) != string(want) {
+		t.Fatalf("awaitDocumentFrameIdentity = %s, %v; want the reply of the callback %s", reply, err, want)
+	}
+}
+
 // contract: diagnostics.capture-document-identity.reports-late-callback-errors
-func TestAwaitDocumentFrameIdentityReportsLateErrorAfterTimeout(t *testing.T) {
+func TestAwaitDocumentFrameIdentityReportsALateErrorAfterAFailedSchedule(t *testing.T) {
 	isolateTraceRecords(t)
 	s := &Surfaces{invoke: func(work func()) { work() }}
 	var callback func(json.RawMessage, error)
+	scheduleErr := errors.New("native operation was not scheduled")
 	reply, err := awaitDocumentFrameIdentity(s, func(done func(json.RawMessage, error)) error {
 		callback = done
-		return nil
+		return scheduleErr
 	})
-	if err == nil || !strings.Contains(err.Error(), "did not complete within the diagnostic timeout") || reply != nil {
-		t.Fatalf("awaitDocumentFrameIdentity = %s, %v; want explicit timeout and no source result", reply, err)
+	if !errors.Is(err, scheduleErr) || reply != nil {
+		t.Fatalf("awaitDocumentFrameIdentity = %s, %v; want the schedule failure and no source result", reply, err)
 	}
 	if callback == nil {
 		t.Fatal("native callback was not registered")
@@ -418,10 +434,19 @@ func TestCaptureStartWaitsForPriorIdentityRemoval(t *testing.T) {
 	traceStarted := make(chan struct{})
 	stopStarted := make(chan struct{})
 	results := make(chan error, 2)
+	// order records the entries in the order they ran: a stop that entered while the start held the lifecycle comes first.
+	var orderMu sync.Mutex
+	var order []string
+	enter := func(name string) {
+		orderMu.Lock()
+		order = append(order, name)
+		orderMu.Unlock()
+	}
 	go func() {
 		results <- withDocumentFrameIdentityLifecycle(func() error {
 			close(recordingStarted)
 			<-allowTrace
+			enter("trace")
 			close(traceStarted)
 			return nil
 		})
@@ -429,33 +454,21 @@ func TestCaptureStartWaitsForPriorIdentityRemoval(t *testing.T) {
 	<-recordingStarted
 	go func() {
 		results <- withDocumentFrameIdentityLifecycle(func() error {
+			enter("stop")
 			close(stopStarted)
 			return nil
 		})
 	}()
-	select {
-	case <-stopStarted:
-		close(allowTrace)
-		<-results
-		<-results
-		t.Fatal("stop entered while new capture trace initialization was pending")
-	case <-time.After(20 * time.Millisecond):
-	}
 	close(allowTrace)
-	select {
-	case <-traceStarted:
-	case <-time.After(time.Second):
-		t.Fatal("capture trace initialization remained blocked")
-	}
-	select {
-	case <-stopStarted:
-	case <-time.After(time.Second):
-		t.Fatal("stop remained blocked after capture trace initialization")
-	}
+	<-traceStarted
+	<-stopStarted
 	for range 2 {
 		if err := <-results; err != nil {
 			t.Fatalf("capture lifecycle operation: %v", err)
 		}
+	}
+	if !reflect.DeepEqual(order, []string{"trace", "stop"}) {
+		t.Fatalf("the lifecycle ran %v, want the trace initialization of the start before the stop", order)
 	}
 }
 
@@ -518,7 +531,7 @@ func TestCaptureStopDrainsPendingStartWithoutCreditingItsUnconfirmedCount(t *tes
 	issued, removed, err := documentIdentityStopSequence(
 		true,
 		source,
-		errors.New("start callback timed out"),
+		errors.New("the start callback failed"),
 		func(uint64) (json.RawMessage, error) {
 			phases = append(phases, "freeze")
 			return json.RawMessage(`{"generation":7,"atlasSlots":300,"issuedSlots":2}`), nil
@@ -1008,18 +1021,20 @@ func TestRecordedDragStopsItsLayoutTraceAfterTheLastLayoutIsPresented(t *testing
 
 // contract: diagnostics.capture-wait.ends-with-the-connection
 func TestTheEndOfTheConnectionEndsTheCaptureWaitsOnlyWhileItsRequestRuns(t *testing.T) {
-	conn := &endpointConn{out: make(chan endpointFrame, 4), done: make(chan struct{})}
-	ended := make(chan struct{})
-	stop := watchConnectionEnd(conn, func() { close(ended) })
-	close(conn.done)
-	<-ended
-	stop()
+	conn := endpointConnection(t)
+	ended := 0
+	remove := conn.onClose(func() { ended++ })
+	conn.close("the requester closed")
+	remove()
+	if ended != 1 {
+		t.Fatalf("the end of the connection while its request runs ended %d waits, want 1", ended)
+	}
 
-	returnedConn := &endpointConn{out: make(chan endpointFrame, 4), done: make(chan struct{})}
+	returnedConn := endpointConnection(t)
 	lateEnds := 0
-	stopReturned := watchConnectionEnd(returnedConn, func() { lateEnds++ })
-	stopReturned()
-	close(returnedConn.done)
+	removeReturned := returnedConn.onClose(func() { lateEnds++ })
+	removeReturned()
+	returnedConn.close("the requester closed")
 	if lateEnds != 0 {
 		t.Fatalf("the end of the connection after the request returned ended %d waits", lateEnds)
 	}

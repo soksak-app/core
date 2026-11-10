@@ -1,5 +1,6 @@
 #import "../src/image_capture_match.h"
 #import "../src/capture_frame_identity.h"
+#import "support/temporary_folder.h"
 #import <ImageIO/ImageIO.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -55,11 +56,10 @@ static NSData *bgraPixelsForImage(CGImageRef image) {
 }
 
 static void frameIdentityDocumentChecks(void) {
-    char directoryTemplate[] = "/tmp/soksak-document-frame-identity-XXXXXX";
-    char *directory = mkdtemp(directoryTemplate);
+    const char *directory = temporaryFolder(@"soksak-document-frame-identity-").fileSystemRepresentation;
     dispatch_queue_t writer = dispatch_queue_create("test.document-frame-identity.writer", DISPATCH_QUEUE_SERIAL);
-    check(directory != NULL && writer != NULL, @"the document frame identity matcher fixture allocates its capture resources");
-    if (!directory || !writer) return;
+    check(writer != NULL, @"the document frame identity matcher fixture allocates its capture resources");
+    if (!writer) return;
     sp_image_capture_match_begin(directory, writer);
     char *error = NULL;
     BOOL session = sp_image_capture_match_identity_session_begin(&error) && error == NULL;
@@ -152,19 +152,14 @@ static void frameIdentityDocumentChecks(void) {
         && [document[@"incompleteSamples"] unsignedIntegerValue] == 0,
         @"the manifest distinguishes generated atlas capacity, actually issued slots, decoded rows, and incomplete samples");
     sp_image_capture_match_end();
-    NSError *removeError = nil;
-    check([[NSFileManager defaultManager] removeItemAtPath:[NSString stringWithUTF8String:directory]
-        error:&removeError], [NSString stringWithFormat:@"the document QR matcher fixture is removed (%@)",
-            removeError.localizedDescription ?: @"no removal error"]);
     dispatch_release(writer);
 }
 
 static void staleDocumentFrameIdentitySessionChecks(void) {
-    char directoryTemplate[] = "/tmp/soksak-document-frame-identity-session-XXXXXX";
-    char *directory = mkdtemp(directoryTemplate);
+    const char *directory = temporaryFolder(@"soksak-document-frame-identity-session-").fileSystemRepresentation;
     dispatch_queue_t writer = dispatch_queue_create("test.document-frame-identity-session.writer", DISPATCH_QUEUE_SERIAL);
-    check(directory != NULL && writer != NULL, @"the document identity session fixture allocates capture resources");
-    if (!directory || !writer) return;
+    check(writer != NULL, @"the document identity session fixture allocates capture resources");
+    if (!writer) return;
     sp_image_capture_match_begin(directory, writer);
     char *error = NULL;
     BOOL oldStarted = sp_image_capture_match_identity_session_begin(&error) && error == NULL;
@@ -212,10 +207,6 @@ static void staleDocumentFrameIdentitySessionChecks(void) {
     free(error);
     [currentPayloads release]; [currentNonce release]; [oldNonce release];
     sp_image_capture_match_end();
-    NSError *removeError = nil;
-    check([[NSFileManager defaultManager] removeItemAtPath:[NSString stringWithUTF8String:directory]
-        error:&removeError], [NSString stringWithFormat:@"the document identity session fixture is removed (%@)",
-            removeError.localizedDescription ?: @"no removal error"]);
     dispatch_release(writer);
 }
 
@@ -334,8 +325,7 @@ static void frameIdentitySessionChecks(void) {
 }
 
 static void frameIdentityArtifactChecks(void) {
-    char directoryTemplate[] = "/tmp/soksak-frame-identity-artifact-XXXXXX";
-    char *directory = mkdtemp(directoryTemplate);
+    const char *directory = temporaryFolder(@"soksak-frame-identity-artifact-").fileSystemRepresentation;
     dispatch_queue_t writer = dispatch_queue_create("test.frame-identity.artifact", DISPATCH_QUEUE_SERIAL);
     const uint8_t regionToken[16] = { 9, 8, 7, 6, 5, 4, 3, 2, 1 };
     const size_t width = 256, height = 256, stride = width * 4;
@@ -344,7 +334,6 @@ static void frameIdentityArtifactChecks(void) {
     CGRect roi = CGRectMake((CGFloat)(width - 192), 0, 192, 192);
     sp_image_capture_identity sourceIdentity = { 19, 23, 29 };
     char *identityError = NULL;
-    check(directory != NULL, @"the tagged artifact fixture creates its capture directory");
     sp_image_capture_match_begin(directory, writer);
     check(sp_image_capture_match_identity_session_begin(&identityError) && identityError == NULL,
         @"the tagged artifact fixture starts an identity session");
@@ -418,14 +407,10 @@ static void frameIdentityArtifactChecks(void) {
     if (taggedImage) CGImageRelease(taggedImage);
     if (colorSpace) CGColorSpaceRelease(colorSpace);
     dispatch_release(writer);
-    NSError *removeError = nil;
-    check([[NSFileManager defaultManager] removeItemAtPath:[NSString stringWithUTF8String:directory]
-        error:&removeError], [NSString stringWithFormat:@"the tagged artifact fixture is removed (%@)", removeError]);
 }
 
 static void frameIdentityCropByteBoundChecks(void) {
-    char directoryTemplate[] = "/tmp/soksak-frame-identity-crop-cap-XXXXXX";
-    char *directory = mkdtemp(directoryTemplate);
+    const char *directory = temporaryFolder(@"soksak-frame-identity-crop-cap-").fileSystemRepresentation;
     dispatch_queue_t writer = dispatch_queue_create("test.frame-identity.crop-cap", DISPATCH_QUEUE_SERIAL);
     const size_t roiSide = 192, sourceStride = roiSide * 4;
     NSMutableData *sourcePixels = [NSMutableData dataWithLength:sourceStride * roiSide];
@@ -436,9 +421,9 @@ static void frameIdentityCropByteBoundChecks(void) {
     const size_t frameWidth = columns * roiSide, frameHeight = 21 * roiSide, frameStride = frameWidth * 4;
     NSMutableData *samplePixels = [NSMutableData dataWithLength:frameStride * frameHeight];
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    check(directory != NULL && writer != NULL && colorSpace != NULL,
+    check(writer != NULL && colorSpace != NULL,
         @"the compact crop byte-bound fixture allocates its matcher resources");
-    if (!directory || !writer || !colorSpace) return;
+    if (!writer || !colorSpace) return;
     sp_image_capture_match_begin(directory, writer);
     char *error = NULL;
     BOOL started = sp_image_capture_match_identity_session_begin(&error);
@@ -473,14 +458,10 @@ static void frameIdentityCropByteBoundChecks(void) {
     sp_image_capture_match_end();
     CGColorSpaceRelease(colorSpace);
     dispatch_release(writer);
-    NSError *removeError = nil;
-    check([[NSFileManager defaultManager] removeItemAtPath:[NSString stringWithUTF8String:directory]
-        error:&removeError], [NSString stringWithFormat:@"the crop byte-bound fixture is removed (%@)", removeError]);
 }
 
 static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
-    char directoryTemplate[] = "/tmp/soksak-frame-identity-queue-XXXXXX";
-    char *directory = mkdtemp(directoryTemplate);
+    const char *directory = temporaryFolder(@"soksak-frame-identity-queue-").fileSystemRepresentation;
     dispatch_queue_t writer = dispatch_queue_create("test.frame-identity.queue-artifact", DISPATCH_QUEUE_SERIAL);
     dispatch_queue_t sampleQueue = dispatch_queue_create("test.frame-identity.sample", DISPATCH_QUEUE_SERIAL);
     const uint8_t regionToken[16] = { 7, 2, 4, 6, 8 };
@@ -491,7 +472,6 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
     const CGRect sourceBounds = CGRectMake(0, 0, 128, 128);
     const CGRect roi = CGRectMake(width - 192, 0, 192, 192);
     char *error = NULL;
-    check(directory != NULL, @"the callback queue fixture creates its artifact directory");
     sp_image_capture_match_begin(directory, writer);
     check(sp_image_capture_match_identity_session_begin(&error) && error == NULL,
         @"the callback queue fixture starts an identity session");
@@ -533,9 +513,8 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
             1, 1000, &firstError);
         dispatch_semaphore_signal(firstReturned);
     });
-    long gateWait = dispatch_semaphore_wait(identityDecodeGateEntered,
-        dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
-    check(gateWait == 0, @"the first sample reaches the controlled QR decoder boundary");
+    // The first sample reaches the controlled QR decoder boundary.
+    dispatch_semaphore_wait(identityDecodeGateEntered, DISPATCH_TIME_FOREVER);
     dispatch_async(sampleQueue, ^{
         secondEnqueued = sp_image_capture_match_identity_enqueue_frame(taggedPixels.bytes, width, height,
             stride, colorSpace, CGRectMake(0, 0, 128, 128), CGRectMake(0, 0, 128, 128), 1, 2,
@@ -543,24 +522,24 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
         dispatch_semaphore_signal(secondReturned);
     });
     long secondBeforeRelease = dispatch_semaphore_wait(secondReturned, DISPATCH_TIME_NOW);
-    long firstWait = dispatch_semaphore_wait(firstReturned, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
-    long secondWait = secondBeforeRelease == 0 ? 0 : dispatch_semaphore_wait(secondReturned,
-        dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
-    check(firstWait == 0 && firstEnqueued && firstError == NULL,
+    dispatch_semaphore_wait(firstReturned, DISPATCH_TIME_FOREVER);
+    // The later sample callback returns while the earlier QR decode remains blocked; a callback that waited for that
+    // decode would hold this wait until the runner ends the run.
+    if (secondBeforeRelease != 0) dispatch_semaphore_wait(secondReturned, DISPATCH_TIME_FOREVER);
+    check(firstEnqueued && firstError == NULL,
         @"the blocked first frame was admitted without changing its decode input");
     memset(mutableFirstSample.mutableBytes, 0, mutableFirstSample.length);
     dispatch_semaphore_t writerProgress = dispatch_semaphore_create(0);
     dispatch_async(writer, ^{ dispatch_semaphore_signal(writerProgress); });
-    long writerProgressWait = dispatch_semaphore_wait(writerProgress,
-        dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
-    check(writerProgressWait == 0,
-        @"the capture artifact writer remains available while QR decoding is blocked");
+    // The capture artifact writer remains available while QR decoding is blocked.
+    dispatch_semaphore_wait(writerProgress, DISPATCH_TIME_FOREVER);
     dispatch_release(writerProgress);
-    check(secondWait == 0 && secondEnqueued && secondError == NULL,
+    check(secondEnqueued && secondError == NULL,
         @"the later sample callback returns while the earlier QR decode remains blocked");
-    long secondDecodeBeforeRelease = dispatch_semaphore_wait(identityDecodeSecondEntered,
-        dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC));
-    check(secondDecodeBeforeRelease == 0,
+    // The first decode is released only after this wait, so a second decode that waited for it would hold this wait until the
+    // runner ends the run.
+    dispatch_semaphore_wait(identityDecodeSecondEntered, DISPATCH_TIME_FOREVER);
+    check(atomic_load(&identityDecodeHookCount) >= 2,
         @"the second QR decode starts before the blocked first decode is released");
     BOOL acceptedThroughLimit = YES;
     for (uint64_t frame = 3; frame <= 16; frame++) {
@@ -602,13 +581,13 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
         sp_image_capture_match_identity_session_end();
         dispatch_semaphore_signal(sessionEndReturned);
     });
-    dispatch_semaphore_wait(sessionEndStarted, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
+    dispatch_semaphore_wait(sessionEndStarted, DISPATCH_TIME_FOREVER);
     long sessionEndBeforeDecode = dispatch_semaphore_wait(sessionEndReturned, DISPATCH_TIME_NOW);
     check(sessionEndBeforeDecode != 0,
         @"ending an identity session waits for its blocked decoder work to finish");
     dispatch_semaphore_signal(identityDecodeGateRelease);
-    long sessionEndWait = dispatch_semaphore_wait(sessionEndReturned, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
-    check(sessionEndWait == 0 && !sp_image_capture_match_identity_session_active(),
+    dispatch_semaphore_wait(sessionEndReturned, DISPATCH_TIME_FOREVER);
+    check(!sp_image_capture_match_identity_session_active(),
         @"session end drains accepted decoder and artifact writes before releasing session state");
     dispatch_release(sessionEndStarted); dispatch_release(sessionEndReturned); dispatch_release(sessionEndQueue);
     NSString *decodedPath = [[NSString stringWithUTF8String:directory]
@@ -710,9 +689,6 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
     if (colorSpace) CGColorSpaceRelease(colorSpace);
     sp_image_capture_match_end();
     dispatch_release(sampleQueue); dispatch_release(writer);
-    NSError *removeError = nil;
-    check([[NSFileManager defaultManager] removeItemAtPath:[NSString stringWithUTF8String:directory]
-        error:&removeError], [NSString stringWithFormat:@"the callback queue fixture is removed (%@)", removeError]);
 }
 
 static NSArray<NSNumber *> *identityDecodedFrameNumbers(NSString *path) {
@@ -737,13 +713,12 @@ static BOOL identityFramesAreOrdered(NSArray<NSNumber *> *frames, NSUInteger exp
 }
 
 static void frameIdentityCommitDoesNotWaitForArtifactWriter(void) {
-    char directoryTemplate[] = "/tmp/soksak-frame-identity-commit-XXXXXX";
-    char *directory = mkdtemp(directoryTemplate);
-    NSString *directoryPath = directory ? [NSString stringWithUTF8String:directory] : nil;
+    const char *directory = temporaryFolder(@"soksak-frame-identity-commit-").fileSystemRepresentation;
+    NSString *directoryPath = [NSString stringWithUTF8String:directory];
     NSString *identityDirectory = [directoryPath stringByAppendingPathComponent:@"frame-identities"];
     NSString *decodedPath = [identityDirectory stringByAppendingPathComponent:@"decoded-frames.jsonl"];
     NSError *directoryError = nil;
-    BOOL prepared = directoryPath && [[NSFileManager defaultManager] createDirectoryAtPath:identityDirectory
+    BOOL prepared = [[NSFileManager defaultManager] createDirectoryAtPath:identityDirectory
         withIntermediateDirectories:YES attributes:nil error:&directoryError];
     int decodedFD = prepared ? open(decodedPath.fileSystemRepresentation, O_CREAT | O_RDWR, 0600) : -1;
     dispatch_queue_t writer = dispatch_queue_create("test.frame-identity.blocked-artifacts", DISPATCH_QUEUE_SERIAL);
@@ -788,10 +763,10 @@ static void frameIdentityCommitDoesNotWaitForArtifactWriter(void) {
         dispatch_semaphore_signal(writerEntered);
         dispatch_semaphore_wait(writerRelease, DISPATCH_TIME_FOREVER);
     });
-    long writerWait = dispatch_semaphore_wait(writerEntered, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
-    check(writerWait == 0, @"the controlled artifact writer is held before identity rows are enqueued");
+    // The controlled artifact writer is held before identity rows are enqueued.
+    dispatch_semaphore_wait(writerEntered, DISPATCH_TIME_FOREVER);
 
-    BOOL admittedEight = sessionStarted && colorSpace != NULL && writerWait == 0 && rowsSource != NULL;
+    BOOL admittedEight = sessionStarted && colorSpace != NULL && rowsSource != NULL;
     for (uint64_t frame = 1; frame <= 8 && admittedEight; frame++) {
         error = NULL;
         BOOL accepted = sp_image_capture_match_identity_enqueue_frame(sample, 4, 4, 16, colorSpace,
@@ -800,10 +775,10 @@ static void frameIdentityCommitDoesNotWaitForArtifactWriter(void) {
         free(error); error = NULL;
     }
     check(admittedEight, @"eight ordered identity rows are admitted while artifact output is blocked");
-    long rowsWait = rowsSource && admittedEight
-        ? dispatch_semaphore_wait(rowsReady, dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC)) : -1;
+    // The file watcher signals when the eighth row is written while the writer is still held.
+    if (rowsSource && admittedEight) dispatch_semaphore_wait(rowsReady, DISPATCH_TIME_FOREVER);
     NSArray<NSNumber *> *blockedWriterFrames = identityDecodedFrameNumbers(decodedPath);
-    BOOL committedWhileBlocked = rowsWait == 0 && identityFramesAreOrdered(blockedWriterFrames, 8);
+    BOOL committedWhileBlocked = rowsSource && admittedEight && identityFramesAreOrdered(blockedWriterFrames, 8);
     check(committedWhileBlocked,
         @"eight decoded JSONL rows commit in order while the shared raw/source artifact writer remains blocked");
 
@@ -815,16 +790,12 @@ static void frameIdentityCommitDoesNotWaitForArtifactWriter(void) {
     sp_image_capture_match_end();
     if (rowsSource) {
         dispatch_source_cancel(rowsSource);
-        dispatch_semaphore_wait(sourceCancelled, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
+        dispatch_semaphore_wait(sourceCancelled, DISPATCH_TIME_FOREVER);
         dispatch_release(rowsSource);
     }
     if (colorSpace) CGColorSpaceRelease(colorSpace);
     dispatch_release(writerEntered); dispatch_release(writerRelease); dispatch_release(rowsReady);
     dispatch_release(sourceCancelled); dispatch_release(writer);
-    NSError *removeError = nil;
-    check(directoryPath && [[NSFileManager defaultManager] removeItemAtPath:directoryPath error:&removeError],
-        [NSString stringWithFormat:@"the ordered-commit fixture removes its files (%@)",
-            removeError.localizedDescription ?: @"no removal error"]);
 }
 
 static void frameIdentityRetentionEvictionChecks(void) {
