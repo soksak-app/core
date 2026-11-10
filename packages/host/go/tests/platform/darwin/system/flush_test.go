@@ -9,15 +9,56 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
 )
 
-// closedSurfaces are the surfaces that the flush scenario closes while the queue is full. The writer can take lines out of the
-// queue just after the queue was full, until the pipe of the sidecar holds what it can (at most five lines of the scenario), so a
-// close can find room (TestACloseThatFindsRoomWritesNoBufferedRecord). More closes than those lines include a close that waits.
+// closedSurfaces are the surfaces that the flush scenario closes while the queue is full. The scenario fills the queue with bodies
+// only (fillWithBodies), so the writer can take lines out of it only until the pipe of the sidecar holds what it can (at most five
+// lines of the scenario), and a close can find room (TestACloseThatFindsRoomWritesNoBufferedRecord). More closes than those lines
+// include a close that waits.
 var closedSurfaces = []string{"s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9"}
+
+// sendUntilFull sends big on s1 until the queue refuses it.
+func sendUntilFull(t *testing.T, sidecars *host.Sidecars, owner host.SidecarOwner, big json.RawMessage) {
+	t.Helper()
+	for i := 0; i < 4000; i++ {
+		if err := sidecars.Send(owner, support.EchoSidecar, "s1", big); err != nil {
+			if !strings.Contains(err.Error(), "is not keeping up") {
+				t.Fatal(err)
+			}
+			return
+		}
+	}
+	t.Fatal("the queue never filled")
+}
+
+// fillWithBodies fills the queue of the sidecar, which reads nothing yet, with 20 KB bodies only. The lines sent before the bodies
+// are small, so the pipe of the sidecar takes them all: a queue filled before the writer takes them out frees their places
+// afterwards. The writer writes the lines in order, so once it writes a body every earlier line has left the queue, and the queue
+// filled again after that holds only bodies.
+func fillWithBodies(t *testing.T, sidecars *host.Sidecars, owner host.SidecarOwner) {
+	t.Helper()
+	big := json.RawMessage(`{"data":"` + strings.Repeat("x", 20*1024) + `"}`)
+	sendUntilFull(t, sidecars, owner, big)
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		writing, err := sidecars.Writing(support.EchoSidecar)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if writing >= len(big) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the writer did not start a body within 10 s")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	sendUntilFull(t, sidecars, owner, big)
+}
 
 // TestEveryPendingReplyIsFlushedAfterTheQueueDrains verifies that, when the write queue is full, all
 // buffered replies and closes are written in the correct order after the queue is emptied.
@@ -47,19 +88,7 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 		}
 	}
 	// Fills the queue and the pipe buffer.
-	big := json.RawMessage(`{"data":"` + strings.Repeat("x", 20*1024) + `"}`)
-	full := false
-	for i := 0; i < 4000 && !full; i++ {
-		if err := sidecars.Send(owner, support.EchoSidecar, "s1", big); err != nil {
-			if !strings.Contains(err.Error(), "is not keeping up") {
-				t.Fatal(err)
-			}
-			full = true
-		}
-	}
-	if !full {
-		t.Fatal("the queue never filled")
-	}
+	fillWithBodies(t, sidecars, owner)
 	// Three returns and two closes with different surfaces and names in the full state.
 	for i, name := range []string{"a", "b", "c"} {
 		bodyMap := host.AfterPresent(true, "", name, 1, 1, i+1)

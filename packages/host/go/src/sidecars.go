@@ -2056,8 +2056,15 @@ func (c *Sidecars) write(process *sidecar) {
 			}
 		}
 
-		// 2. When the queue is empty, writes all held messages.
-		if !c.writePending(process) {
+		// 2. When the queue is empty, writes all held messages, or first the line that entered the queue since.
+		line, queued, held, ended := process.afterQueue()
+		if queued {
+			if !c.writeLine(process, line) {
+				return
+			}
+			continue
+		}
+		if !c.writeLines(process, held) || ended {
 			return
 		}
 
@@ -2090,7 +2097,14 @@ func (c *Sidecars) writePersistent(process *sidecar) {
 				drained = true
 			}
 		}
-		if !c.writePersistentPending(process) {
+		line, queued, held, ended := process.afterQueue()
+		if queued {
+			if !c.writePersistentLine(process, line) {
+				return
+			}
+			continue
+		}
+		if !c.writePersistentLines(process, held) || ended {
 			return
 		}
 		line, ok := <-process.outbox
@@ -2119,14 +2133,13 @@ func (c *Sidecars) writePersistentLine(process *sidecar, line queuedLine) bool {
 
 func (c *Sidecars) writePersistentPending(process *sidecar) bool {
 	process.muClosed.Lock()
-	replies, closes := process.pendingReplies.take(), process.pendingCloses.take()
+	held := process.takeHeld()
 	process.muClosed.Unlock()
-	for _, line := range replies {
-		if !c.writePersistentLine(process, line) {
-			return false
-		}
-	}
-	for _, line := range closes {
+	return c.writePersistentLines(process, held)
+}
+
+func (c *Sidecars) writePersistentLines(process *sidecar, lines []queuedLine) bool {
+	for _, line := range lines {
 		if !c.writePersistentLine(process, line) {
 			return false
 		}
@@ -2146,17 +2159,42 @@ func (c *Sidecars) writeLine(process *sidecar, line queuedLine) bool {
 	return true
 }
 
-// writePending takes the held messages at once and writes the returns first and the closes last.
+// writePending takes the held messages at once and writes the returns first and the closes last. A writer calls it when its
+// outbox closed; while the outbox is open, afterQueue takes the held messages.
 func (c *Sidecars) writePending(process *sidecar) bool {
 	process.muClosed.Lock()
-	replies, closes := process.pendingReplies.take(), process.pendingCloses.take()
+	held := process.takeHeld()
 	process.muClosed.Unlock()
-	for _, line := range replies {
-		if !c.writeLine(process, line) {
-			return false
+	return c.writeLines(process, held)
+}
+
+// takeHeld takes the held messages in the order of writing, the returns first and the closes last. It is called with
+// muClosed held.
+func (s *sidecar) takeHeld() []queuedLine {
+	return append(s.pendingReplies.take(), s.pendingCloses.take()...)
+}
+
+// afterQueue is what a writer writes after it found its outbox empty. It takes the held messages only while the outbox holds
+// no line, under muClosed. A sender queues a line or holds a message under c.mu, and holds it under muClosed too, so every
+// line queued before a held message is either written or still in the outbox when the writer takes the message: a line still
+// in the outbox comes back with queued true and goes out first, and the held messages go out after every line queued before
+// them. ended reports that the outbox closed, so the held messages are the last lines of the writer.
+func (s *sidecar) afterQueue() (line queuedLine, queued bool, held []queuedLine, ended bool) {
+	s.muClosed.Lock()
+	defer s.muClosed.Unlock()
+	select {
+	case next, ok := <-s.outbox:
+		if ok {
+			return next, true, nil, false
 		}
+		return queuedLine{}, false, s.takeHeld(), true
+	default:
+		return queuedLine{}, false, s.takeHeld(), false
 	}
-	for _, line := range closes {
+}
+
+func (c *Sidecars) writeLines(process *sidecar, lines []queuedLine) bool {
+	for _, line := range lines {
 		if !c.writeLine(process, line) {
 			return false
 		}
