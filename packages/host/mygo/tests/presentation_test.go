@@ -265,7 +265,7 @@ func TestE2EARecordingHoldsTheRequestAndThePresentationOfTheFrameOfATransaction(
 	if err := presentation(t, window); err != nil {
 		t.Fatal(err)
 	}
-	var records [][5]float64
+	var records []platform.LayoutRecord
 	mygo.RunOnMain(func() { records, err = capture.LayoutTraceStop() })
 	if err != nil {
 		t.Fatal(err)
@@ -274,12 +274,14 @@ func TestE2EARecordingHoldsTheRequestAndThePresentationOfTheFrameOfATransaction(
 		t.Fatalf("the recording holds %d transactions, want one: %v", len(records), records)
 	}
 	record := records[0]
-	ticket, begun, presented, committed, requested := record[0], record[1], record[2], record[3], record[4]
-	if ticket != 9 {
-		t.Fatalf("the record has the ticket %v, want 9", ticket)
+	if record.Ticket != 9 {
+		t.Fatalf("the record has the ticket %v, want 9", record.Ticket)
 	}
-	if !(begun <= requested && requested <= presented && presented <= committed) {
-		t.Fatalf("begun %v, requested %v, presented %v, committed %v are not in this order", begun, requested, presented, committed)
+	if !(record.Begun <= record.Requested && record.Requested <= record.Presented && record.Presented <= record.Committed) {
+		t.Fatalf("begun %v, requested %v, presented %v, committed %v are not in this order", record.Begun, record.Requested, record.Presented, record.Committed)
+	}
+	if record.CommitPath != "present" {
+		t.Fatalf("the record names the commit path %q, want the presentation of the host", record.CommitPath)
 	}
 }
 

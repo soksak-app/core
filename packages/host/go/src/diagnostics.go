@@ -484,7 +484,7 @@ type captureStatus interface {
 	LongestGap() float64
 }
 
-func captureStopPayload(c captureStatus, directory string, count int, records [][5]float64, frameIdentity bool) map[string]any {
+func captureStopPayload(c captureStatus, directory string, count int, records []platform.LayoutRecord, frameIdentity bool) map[string]any {
 	payload := map[string]any{
 		"frames":         directory,
 		"callbackStatus": filepath.Join(directory, "callback-status.jsonl"),
@@ -609,7 +609,7 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *Rep
 		if err != nil {
 			return err
 		}
-		var records [][5]float64
+		var records []platform.LayoutRecord
 		mainThreadStep(func() { records, err = capture.LayoutTraceStop() })
 		layouts = layoutTrace(records)
 		return err
@@ -753,8 +753,9 @@ func nativeDragPresented(h *Host, s *Surfaces, plan dragPlan, from point, sent f
 	return result, nil
 }
 
-// layoutTrace converts the layout transaction record to {ticket, begun, presented, committed}. A stage that did not happen is null.
-func layoutTrace(records [][5]float64) []map[string]any {
+// layoutTrace converts the layout transaction records to {ticket, begun, requested, presented, committed, commitPath,
+// openAtCommit}. A value that did not happen is null.
+func layoutTrace(records []platform.LayoutRecord) []map[string]any {
 	layouts := make([]map[string]any, 0, len(records))
 	stage := func(value float64) any {
 		if math.IsNaN(value) {
@@ -763,8 +764,13 @@ func layoutTrace(records [][5]float64) []map[string]any {
 		return value
 	}
 	for _, record := range records {
+		var commitPath any
+		if record.CommitPath != "" {
+			commitPath = record.CommitPath
+		}
 		layouts = append(layouts, map[string]any{
-			"ticket": uint64(record[0]), "begun": stage(record[1]), "requested": stage(record[4]), "presented": stage(record[2]), "committed": stage(record[3]),
+			"ticket": record.Ticket, "begun": stage(record.Begun), "requested": stage(record.Requested), "presented": stage(record.Presented),
+			"committed": stage(record.Committed), "commitPath": commitPath, "openAtCommit": stage(record.OpenAtCommit),
 		})
 	}
 	return layouts
@@ -1155,7 +1161,7 @@ func diagnosticCaptureStop(e *Endpoint, _ *endpointConn, params json.RawMessage,
 	if source != nil && removed {
 		recording.ClearFrameIdentitySource(source.surface, source.generation)
 	}
-	var records [][5]float64
+	var records []platform.LayoutRecord
 	var layoutErr error
 	mainThreadStep(func() { records, layoutErr = capture.LayoutTraceStop() })
 	if stopErr != nil {
@@ -1164,7 +1170,7 @@ func diagnosticCaptureStop(e *Endpoint, _ *endpointConn, params json.RawMessage,
 	if layoutErr != nil {
 		return nil, layoutErr
 	}
-	payload, err := finishCaptureStop(captureStatusAdapter{capture}, directory, count, stoppedWithIdentity, func() ([][5]float64, error) { return records, nil })
+	payload, err := finishCaptureStop(captureStatusAdapter{capture}, directory, count, stoppedWithIdentity, func() ([]platform.LayoutRecord, error) { return records, nil })
 	if err != nil {
 		return nil, err
 	}
@@ -1313,7 +1319,7 @@ func documentFrameIdentityIssuedSlots(raw json.RawMessage, generation uint64) (u
 	return *reply.IssuedSlots, nil
 }
 
-func finishCaptureStop(c captureStatus, directory string, count int, frameIdentity bool, layoutTrace func() ([][5]float64, error)) (any, error) {
+func finishCaptureStop(c captureStatus, directory string, count int, frameIdentity bool, layoutTrace func() ([]platform.LayoutRecord, error)) (any, error) {
 	records, err := layoutTrace()
 	if err != nil {
 		return nil, err

@@ -40,7 +40,7 @@ func (implementation) CaptureClock() float64 { return 0 }
 
 func (implementation) LayoutTraceStart() {}
 
-func (implementation) LayoutTraceStop() ([][5]float64, error) {
+func (implementation) LayoutTraceStop() ([]platform.LayoutRecord, error) {
 	return nil, unsupported("layout trace")
 }
 
