@@ -886,6 +886,17 @@ function requireHostDocumentRows(host) {
   return host.documents;
 }
 
+/** The `pagelessProcesses` rows `{pid, ending}` of a `host.window` reply; a host whose platform does not report them is refused. */
+function requirePagelessProcessRows(host) {
+  assert.ok(Array.isArray(host?.pagelessProcesses),
+    "host.window does not report the processes without a page, so the reclaim cannot tell an ending process from a kept one");
+  for (const row of host.pagelessProcesses) {
+    assert.ok(Number.isSafeInteger(row?.pid) && row.pid > 0 && typeof row.ending === "boolean",
+      `host.window has an invalid process without a page ${JSON.stringify(row)}`);
+  }
+  return host.pagelessProcesses;
+}
+
 /** Runs the three initial-only process-group reclamation samples for opened view surfaces. */
 export async function collectViewReclaimMeasurements(t, s, descriptor, views, evidence = { events: [], recordings: [] }) {
   assert.ok(Array.isArray(views) && views.length > 0, "reclaim requires opened view evidence");
@@ -948,9 +959,11 @@ export async function collectViewLifecycleMeasurements(t, s, descriptor) {
 
 /**
  * Closes every view in a shared process group and preserves live/dead PID rows. The close is part of the measurement, so it ends
- * with the close requests and the exit events of the processes that they closed: once `host.window` no longer lists a
- * document of the closed views, its value names the processes that still hold a page of the application, which are read live
- * with their footprint, and only each other process, whose pages the closes ended, is awaited until it exits.
+ * with the close requests and the exit events that they make: once `host.window` no longer lists a document of the closed views,
+ * its value is the reading of the processes. A process that still holds a page (`documents`) or that its `pagelessProcesses`
+ * row reports without `ending`, which the cache of WebKit may keep, is read live with its footprint and recorded with where it
+ * remained (`remained` `page` or `no page`); only a process that host.window reports `ending` is awaited until it exits. A
+ * process that host.window lists in neither has exited.
  */
 export async function closeViewGroup(t, s, { placement, surfaces, beforeProcesses, closedViews,
   measureFootprint = physicalFootprintBytes }) {
@@ -979,12 +992,17 @@ export async function closeViewGroup(t, s, { placement, surfaces, beforeProcesse
     (value) => !requireHostDocumentRows(value).some((row) => closedSurfaces.has(row.surface)),
     `host.window still lists a document of the closed views ${surfaces.join(", ")}`);
   const held = new Set(requireHostDocumentRows(closed).filter((row) => row.process > 0).map((row) => row.process));
+  const pageless = new Map(requirePagelessProcessRows(closed).map((row) => [row.pid, row.ending]));
   const afterProcesses = await Promise.all(beforeProcesses.map(async ({ pid }) => {
     if (held.has(pid)) {
       t.diagnostic(`view process ${pid} still holds a page after its views closed`);
-      return { pid, footprintBytes: await measureFootprint(pid) };
+      return { pid, footprintBytes: await measureFootprint(pid), remained: "page" };
     }
-    await s.request("diagnostics.process.exit", { pid });
+    if (pageless.get(pid) === false) {
+      t.diagnostic(`view process ${pid} remained without a page after its views closed`);
+      return { pid, footprintBytes: await measureFootprint(pid), remained: "no page" };
+    }
+    if (pageless.get(pid) === true) await s.request("diagnostics.process.exit", { pid });
     return { pid, footprintBytes: 0 };
   }));
   const ended = await monotonicTimeMs(s);

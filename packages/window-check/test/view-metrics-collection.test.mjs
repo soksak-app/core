@@ -851,7 +851,11 @@ test("view process-group close records observed history and every original PID",
     },
     async run(method, params) { calls.push([method, params]); return { closed: true }; },
     async until(name, predicate) {
-      if (name === "host.window") { const value = { documents: [] }; assert.ok(predicate(value)); return value; }
+      if (name === "host.window") {
+        const value = { documents: [], pagelessProcesses: [{ pid: 4101, ending: true }] };
+        assert.ok(predicate(value));
+        return value;
+      }
       assert.equal(name, "core.surfaces"); assert.ok(predicate([])); return [];
     },
   };
@@ -866,12 +870,15 @@ test("view process-group close records observed history and every original PID",
   }), /root session history/);
 });
 
-test("the reclaim close reads a process that still holds a page and awaits the exit of the processes it closed", { timeout: 5000 }, async () => {
+test("the reclaim close reads the processes that remain and awaits only the exit of the processes that host.window reports ending", { timeout: 5000 }, async () => {
   const calls = [];
   let clock = 1_000_000_000;
-  const before = { documents: [{ surface: "view-1", document: "", process: 4101 }, { surface: "view-1", document: "doc-1", process: 4102 }] };
-  // After the close, host.window first still lists the closed view, then lists the process 4102 for a page of another surface.
-  const after = [before, { documents: [{ surface: "other", document: "", process: 4102 }] }];
+  const before = { documents: [{ surface: "view-1", document: "", process: 4101 }, { surface: "view-1", document: "doc-1", process: 4102 },
+    { surface: "view-1", document: "doc-2", process: 4103 }, { surface: "view-1", document: "doc-3", process: 4104 }] };
+  // After the close, host.window first still lists the closed view. Then 4101 is ending, 4102 holds a page of another surface,
+  // 4103 remains without a page and 4104 has exited.
+  const after = [before, { documents: [{ surface: "other", document: "", process: 4102 }],
+    pagelessProcesses: [{ pid: 4101, ending: true }, { pid: 4103, ending: false }] }];
   const s = {
     async get(name) { assert.equal(name, "host.window"); return before; },
     async request(method, params) {
@@ -889,18 +896,38 @@ test("the reclaim close reads a process that still holds a page and awaits the e
       return value;
     },
   };
-  const beforeProcesses = [{ pid: 4101, footprintBytes: 1_000_000 }, { pid: 4102, footprintBytes: 2_000_000 }];
-  const closedViews = [{ surface: "view-1", rootHistoryEntries: 1, documents: [{ document: "doc-1", historyEntries: 1 }] }];
+  const beforeProcesses = [4101, 4102, 4103, 4104].map((pid) => ({ pid, footprintBytes: 1_000_000 }));
+  const closedViews = [{ surface: "view-1", rootHistoryEntries: 1, documents: ["doc-1", "doc-2", "doc-3"]
+    .map((document) => ({ document, historyEntries: 1 })) }];
   const measured = [];
   const result = await closeViewGroup({ diagnostic() {} }, s, { placement: TAB_PLACEMENT, surfaces: ["view-1"], beforeProcesses,
     closedViews, measureFootprint: (pid) => { measured.push(pid); return 3_000_000; } });
-  assert.deepEqual(result.afterProcesses, [{ pid: 4101, footprintBytes: 0 }, { pid: 4102, footprintBytes: 3_000_000 }]);
+  assert.deepEqual(result.afterProcesses, [{ pid: 4101, footprintBytes: 0 },
+    { pid: 4102, footprintBytes: 3_000_000, remained: "page" }, { pid: 4103, footprintBytes: 3_000_000, remained: "no page" },
+    { pid: 4104, footprintBytes: 0 }]);
   assert.equal(result.engineCacheHeld, true);
-  assert.deepEqual(measured, [4102], "the process that holds a page was not read at the time of the measurement");
-  assert.ok(!calls.includes("exit 4102"), "the close awaited the exit of a process that still holds a page");
+  assert.deepEqual(measured.sort(), [4102, 4103], "the processes that remained were not read at the time of the measurement");
+  assert.deepEqual(calls.filter((call) => call.startsWith("exit ")), ["exit 4101"],
+    "the close awaited the exit of a process that host.window did not report ending");
   assert.ok(calls.indexOf("core.tab.close") < calls.indexOf("host.window without the closed views")
     && calls.indexOf("host.window without the closed views") < calls.indexOf("exit 4101"),
     `the exit wait did not follow the close and its host.window reading: ${calls}`);
+});
+
+test("the reclaim close refuses a host.window that does not report the processes without a page", { timeout: 5000 }, async () => {
+  const s = {
+    async get() { return { documents: [{ surface: "view-1", document: "", process: 4101 }] }; },
+    async request() { return { mono_ns: "1000000000" }; },
+    async run() { return { closed: true }; },
+    async until(name, predicate) {
+      const value = name === "host.window" ? { documents: [], pagelessProcesses: null } : [];
+      assert.ok(predicate(value));
+      return value;
+    },
+  };
+  await assert.rejects(closeViewGroup({ diagnostic() {} }, s, { placement: TAB_PLACEMENT, surfaces: ["view-1"],
+    beforeProcesses: [{ pid: 4101, footprintBytes: 1 }], closedViews: [{ surface: "view-1", rootHistoryEntries: 1, documents: [] }] }),
+  /does not report the processes without a page/);
 });
 
 test("the end of a reclaim exit wait fails the close with its reason", { timeout: 5000 }, async () => {
@@ -912,7 +939,7 @@ test("the end of a reclaim exit wait fails the close with its reason", { timeout
     },
     async run() { return { closed: true }; },
     async until(name, predicate) {
-      const value = name === "host.window" ? { documents: [] } : [];
+      const value = name === "host.window" ? { documents: [], pagelessProcesses: [{ pid: 4101, ending: true }] } : [];
       assert.ok(predicate(value));
       return value;
     },

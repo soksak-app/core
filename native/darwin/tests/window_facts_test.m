@@ -7,6 +7,7 @@
 #import "input_virtual.h"
 #import <CommonCrypto/CommonDigest.h>
 #import <objc/runtime.h>
+#include <signal.h>
 
 // Distinct responders make a global/current-window menu dispatch observable.
 @interface MenuWindowResponder : NSView
@@ -230,6 +231,39 @@ int main(void) { @autoreleasepool {
             && [pageRows[1][@"process"] intValue] == [[top valueForKey:@"_webProcessIdentifier"] intValue],
         [NSString stringWithFormat:@"each web view row reports its WebContent process: %@, %@ for %d",
             pageRows.firstObject[@"process"], pageRows.lastObject[@"process"], pageProcess]);
+    // A WebContent process that held a page of the application and holds none is reported without a page while it lives, ending
+    // because the pool of the check keeps no process cache, and is no longer reported once it has exited.
+    WKWebView *closing = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 100, 100)];
+    [window.contentView addSubview:closing];
+    __block BOOL closingLoaded = NO;
+    [closing loadHTMLString:@"<p>closing</p>" baseURL:nil];
+    [closing evaluateJavaScript:@"1" completionHandler:^(id result, NSError *error) { (void)result; (void)error; closingLoaded = YES; }];
+    while (!closingLoaded) [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate distantFuture]];
+    pid_t closingProcess = [[closing valueForKey:@"_webProcessIdentifier"] intValue];
+    NSDictionary *withPage = parse(sp_window_facts(window, sp_window_composition(window)));
+    check(closingProcess > 0 && closingProcess != pageProcess
+            && [withPage[@"pagelessProcesses"] isKindOfClass:NSArray.class] && [withPage[@"pagelessProcesses"] count] == 0,
+        [NSString stringWithFormat:@"a process that holds a page is not reported without one: %d, %@", closingProcess,
+            withPage[@"pagelessProcesses"]]);
+    __block BOOL closingExited = NO;
+    dispatch_source_t exitSource = dispatch_source_create(DISPATCH_SOURCE_TYPE_PROC, (uintptr_t)closingProcess, DISPATCH_PROC_EXIT,
+        dispatch_get_main_queue());
+    dispatch_source_set_event_handler(exitSource, ^{ closingExited = YES; });
+    dispatch_resume(exitSource);
+    [closing removeFromSuperview];
+    [closing release];
+    NSDictionary *withoutPage = parse(sp_window_facts(window, sp_window_composition(window)));
+    NSArray *pageless = withoutPage[@"pagelessProcesses"];
+    // The process may have exited before this reading, which then reports nothing for it.
+    check(closingExited || kill(closingProcess, 0) != 0
+            || (pageless.count == 1 && [pageless[0][@"pid"] intValue] == closingProcess && [pageless[0][@"ending"] boolValue]),
+        [NSString stringWithFormat:@"the process whose page closed is reported without a page and ending: %@", pageless]);
+    while (!closingExited) [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate distantFuture]];
+    dispatch_source_cancel(exitSource);
+    dispatch_release(exitSource);
+    NSDictionary *afterExit = parse(sp_window_facts(window, sp_window_composition(window)));
+    check([afterExit[@"pagelessProcesses"] count] == 0,
+        [NSString stringWithFormat:@"a process without a page that exited is no longer reported: %@", afterExit[@"pagelessProcesses"]]);
     check(![facts[@"active"] boolValue] && ![facts[@"key"] boolValue], @"an inactive window is reported as not key and not active");
     check([facts[@"children"] integerValue] == 0, @"no child windows");
     check([facts[@"controls"] count] == 3, @"three window buttons are reported");

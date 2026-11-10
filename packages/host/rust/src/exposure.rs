@@ -95,7 +95,7 @@ fn host_declarations() -> Value {
                     "installed": {"type": ["string", "null"]}, "sessions": {"type": "integer"}}}}}},
         }, {
             "name": "host.window",
-            "description": "Window frame and system pointer location in screen coordinates, content size, backing scale, the maximum refresh rate of its screen (null when the window is on no screen), maximized, key and application active state, whether other windows cover the whole window, child window count, the WebContent process of the app page (0 before it starts), whether the application is quitting, window buttons, webview frames, native surfaces, document regions, image regions with the number of frames that the host marked presented for each, the open native modal, and the frames and command buffers of the workbench and whether it settled after its last frame, null on a host whose workbench WebKit draws.",
+            "description": "Window frame and system pointer location in screen coordinates, content size, backing scale, the maximum refresh rate of its screen (null when the window is on no screen), maximized, key and application active state, whether other windows cover the whole window, child window count, the WebContent process of the app page (0 before it starts), the WebContent processes that held a page of the application and hold none while they live, with whether WebKit ends each (null on a platform that does not report them), whether the application is quitting, window buttons, webview frames, native surfaces, document regions, image regions with the number of frames that the host marked presented for each, the open native modal, and the frames and command buffers of the workbench and whether it settled after its last frame, null on a host whose workbench WebKit draws.",
             "schema": {"type": "object", "properties": {
                 "frame": rect,
                 "pointer": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}}},
@@ -113,6 +113,9 @@ fn host_declarations() -> Value {
                 }},
                 "occluded": {"type": "boolean"},
                 "children": {"type": "integer"},
+                "pagelessProcesses": {"type": ["array", "null"], "items": {"type": "object",
+                    "required": ["pid", "ending"],
+                    "properties": {"pid": {"type": "integer"}, "ending": {"type": "boolean"}}}},
                 "controls": {"type": "array", "items": rect},
                 "webviews": {"type": "array", "items": {"type": "object", "properties": {
                     "frame": rect, "main": {"type": "boolean"}, "document": {"type": "boolean"},
@@ -2013,6 +2016,26 @@ fn window_frame_counters() -> serde_json::Map<String, Value> {
 }
 
 // Native evidence is mandatory; retain the object and decimal string exactly.
+/// The WebContent processes without a page of the window facts, `[{pid, ending}]`, or null when the facts of the platform do not
+/// report them; a member of another shape is refused.
+fn window_pageless_processes(facts: &Value) -> Result<Value, String> {
+    let Some(rows) = facts.get("pagelessProcesses") else {
+        return Ok(Value::Null);
+    };
+    let list = rows
+        .as_array()
+        .ok_or("window facts have a pagelessProcesses that is not an array")?;
+    for row in list {
+        let pid = row["pid"].as_i64().filter(|pid| *pid > 0);
+        if pid.is_none() || !row["ending"].is_boolean() {
+            return Err(format!(
+                "window facts have an invalid pageless process {row}"
+            ));
+        }
+    }
+    Ok(rows.clone())
+}
+
 fn window_activation_observation(facts: &Value) -> Result<Value, String> {
     let observation = facts
         .get("activationObservation")
@@ -2145,6 +2168,7 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
         class, owner, container, main, &named, &documents, modal_view,
     );
     let activation_observation = window_activation_observation(&facts).map_err(internal)?;
+    let pageless_processes = window_pageless_processes(&facts).map_err(internal)?;
     let mut status = json!({
         "activationObservation": activation_observation,
         "responder": responder,
@@ -2160,6 +2184,7 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
         "occluded": facts["occluded"],
         "children": facts["children"],
         "pageProcess": facts["pageProcess"],
+        "pagelessProcesses": pageless_processes,
         "quitting": window.state::<crate::windows::Windows>().quit.active(),
         "appDomWebviews": app_dom_webviews,
         "documentWebviews": document_webviews,
@@ -2957,3 +2982,7 @@ mod reply_tests {
 #[cfg(test)]
 #[path = "window_activation_observation_test.rs"]
 mod activation_observation_tests;
+
+#[cfg(test)]
+#[path = "window_pageless_processes_test.rs"]
+mod pageless_processes_tests;
