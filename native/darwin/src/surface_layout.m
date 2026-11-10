@@ -7,6 +7,7 @@
 #import "observe.h"
 #import "window_controls.h"
 #import "window_facts.h"
+#import "window_reveal.h"
 #import "private/webkit.h"
 
 @interface SPLayoutRequest : NSObject
@@ -635,8 +636,12 @@ static void settle(NSWindow *window, surfaceLayoutPresent present, void (^done)(
         }
         afterModalsPresented(window, ^{
             // When a new transaction opened while waiting for presentation, the wait starts again from the settlement of that transaction.
-            if (layoutOpen(window)) settle(window, again, finish);
-            else afterNextFrame(window.screen, finish);
+            if (layoutOpen(window)) {
+                settle(window, again, finish);
+            } else {
+                // A window that waits for its reveal shows nothing, so the screen that shows its state is the frame after the reveal.
+                sp_window_after_reveal(window, ^{ afterNextFrame(window.screen, finish); });
+            }
             [window release];
         });
     });
