@@ -241,7 +241,7 @@ for (const app of Object.values(APPS)) {
     await press(child, "core.settings-modal.scope", "pick:scope:common");
     await control(child, "core.settings-modal.set", "projectOpening", () => true,
       "Global tab did not display the common-only setting");
-    // In the Global tab a setting that the project overrides shows the project value with the mark 프로젝트 값 and writes the
+    // In the Global tab a setting that the project overrides shows the project value with its project mark (core.settings-modal.applied) and writes the
     // project scope; every other setting shows and writes the common value (docs/spec/settings.md#scope-of-a-control).
     const projectMode = await control(child, "core.settings-modal.set", "mode");
     assert.deepEqual({ value: projectMode.value, scope: projectMode.command.params.scope }, { value: "light", scope: "project" },
