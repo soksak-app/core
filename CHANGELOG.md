@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F721: An order row of the mygo workbench shows the name of its value beside its ▲ and ▼, and the first row shows 사이드바 순서, as the page draws them.
 - F722: The rail groups and `core.rail` of the mygo workbench read the plugin sets of the four window sides in their order, as the page does.
 - F723: The tooltip of a card tool is its name from `cardTools` of workbench.json (탭 추가, 세로로 나누기, 가로로 나누기, 카드 전체 화면, 카드 배치 복원, 카드 닫기) in both workbenches, a refusal states its reason without a dash, and the ⋯ menu takes the names uncut.
 - F717: A Go host takes the identifier of its configuration folder from the application name of its framework adapter, so the mygo application uses `app.soksak.mygo` and no longer the folder of the Wails application.

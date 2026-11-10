@@ -68,6 +68,11 @@ test("every setting form is drawn with its one control", async (t) => {
       "order:sidebarOrder:2:up", "order:sidebarOrder:2:down", "order:sidebarOrder:3:up"]);
     assert.deepEqual(order[0].command, { name: "core.settings.change", params: { key: "sidebarOrder", value: ["right", "left", "top", "bottom"], scope: "common" } });
     assert.deepEqual(order[5].command.params.value, ["left", "right", "bottom", "top"]);
+    // Each order row shows the name of its value before its buttons, and the first row shows the name of the setting.
+    const orderRows = [...document.querySelectorAll(".set-row")].filter((item) => item.querySelector('[data-expose="core.settings-modal.order"]'));
+    assert.deepEqual(orderRows.map((item) => item.querySelector(".set-row__name").textContent), ["사이드바 순서", "", "", ""]);
+    assert.deepEqual(orderRows.map((item) => item.querySelector(".set-row__name").nextElementSibling.firstChild.textContent),
+      ["왼쪽", "오른쪽", "위", "아래"]);
     const group = [...document.querySelectorAll(".set-group")].find((item) => item.textContent.includes("사이드바 순서"));
     assert.ok(group?.textContent.includes("한 변에는 고정 사이드바가 하나 있고"), "the sidebar group does not state one fixed sidebar per side");
     assert.ok(!group.textContent.includes("독립된 열"), "the sidebar group still states independent columns");

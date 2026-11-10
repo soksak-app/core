@@ -110,6 +110,8 @@ type settingsRow struct {
 	controls    []*SettingsControl
 	// list says that the controls stand in the flow of a line, one after the other (.set-list).
 	list bool
+	// value is the name of the value of an order row, which stands before its buttons.
+	value string
 }
 
 // settingsGroup is a group of rows with its name and its one-line text.
@@ -1430,7 +1432,8 @@ func (s *Shell) orderRows(b *settingsBuilder, key, label string, names map[strin
 	rows := []settingsRow{}
 	for index, item := range now {
 		name, _ := item.(string) // silent: the settings store checks that the value is an order of its values.
-		row := settingsRow{description: names[name], list: true}
+		// The row shows the name of its value before its buttons, and the first row the name of the setting, as orderRows of the page.
+		row := settingsRow{value: names[name]}
 		if index == 0 {
 			row.name = label
 		}

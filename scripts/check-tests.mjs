@@ -524,6 +524,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F721",
+    implementation: [
+      { file: "packages/workbench-mygo/src/settings_draw.go", symbol: "ui.Text(c, row.value).NoWrap().FontSize(s.textControl()).TextColor(s.palette.Fg)" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/settings_modal_test.go", id: "TestAnOrderRowShowsTheNameOfItsValueAndTheFirstRowTheNameOfTheSetting" },
+      { file: "packages/workbench/test/settings-controls.test.mjs", id: "every setting form is drawn with its one control" },
+    ],
+    expected: "Each order row shows the name of its value beside its buttons and the first row the name of the setting, in both workbenches, and the tests read the drawn names.",
+    levels: ["unit"],
+  },
+  {
     id: "F717",
     implementation: [
       { file: "packages/sok/go/src/identity.go", symbol: "func IdentityOf(application string) (string, error) {" },
