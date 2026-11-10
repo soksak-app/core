@@ -3,6 +3,7 @@
 // only one cycle cannot create. It does not change the actual API results and records the start, stop, and
 // delegate callbacks. It does not activate the application.
 #import "../src/capture.m"
+#import "support/temporary_folder.h"
 #import <objc/runtime.h>
 
 static const int CYCLES = 24;
@@ -84,13 +85,17 @@ int main(void) { @autoreleasepool {
 
     NSArray<NSColor *> *colors = @[NSColor.redColor, NSColor.blueColor, NSColor.greenColor];
     int completed = 0;
+    NSString *folder = temporaryFolder(@"soksak-capture-cycles-");
     for (int cycle = 1; cycle <= CYCLES && failures == 0; cycle++) {
         // As in the window check, change the window content each cycle.
         window.backgroundColor = colors[cycle % colors.count];
         [window display];
-        char template[] = "/tmp/soksak-capture-cycles-XXXXXX";
-        if (mkdtemp(template) == NULL) { check(NO, [NSString stringWithFormat:@"cycle %d creates a capture directory", cycle]); break; }
-        NSString *directory = [NSString stringWithUTF8String:template];
+        NSString *directory = [folder stringByAppendingPathComponent:[NSString stringWithFormat:@"cycle-%d", cycle]];
+        NSError *createError = nil;
+        if (![[NSFileManager defaultManager] createDirectoryAtPath:directory withIntermediateDirectories:NO attributes:nil error:&createError]) {
+            check(NO, [NSString stringWithFormat:@"cycle %d creates a capture directory (%@)", cycle, createError]);
+            break;
+        }
         char *operationError = NULL;
         bool opened = sp_capture_open(window.windowNumber, false, &operationError);
         check(opened, [NSString stringWithFormat:@"cycle %d opens the window for recording (%s)", cycle,

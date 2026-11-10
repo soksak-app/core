@@ -3,7 +3,7 @@
 
 use std::io::{Read, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use serde_json::{Value, json};
@@ -82,8 +82,9 @@ fn serve(mut stream: UnixStream, requests: Arc<Mutex<Vec<Value>>>, respond: Resp
 }
 
 fn start(respond: impl Fn(&str, &Value) -> Answer + Send + Sync + 'static) -> Fake {
-    // A Unix socket path is limited to 104 bytes, so the socket lives in a short temporary folder.
-    let socket = Folder::new_in(Path::new("/tmp"), "socket");
+    // A Unix socket path is limited to 104 bytes. The test runner gives the process a short TMPDIR under /tmp, so the
+    // socket folder lies there.
+    let socket = Folder::new("socket");
     let address = socket.path().join("e.sock");
     let listener = UnixListener::bind(&address).expect("listen");
     let config_dir = Folder::new("sok");

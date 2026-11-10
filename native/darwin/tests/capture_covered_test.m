@@ -14,6 +14,7 @@
 #include <unistd.h>
 #import "capture.h"
 #import "window_facts.h"
+#import "support/temporary_folder.h"
 
 @interface WKWebView (Presentation)
 - (void)_doAfterNextPresentationUpdate:(void (^)(void))update;
@@ -231,9 +232,7 @@ int main(void) { @autoreleasepool {
     [NSApp finishLaunching];
     observeSystemPaths();
     pid_t front = NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier;
-    char template[] = "/tmp/soksak-capture-covered-XXXXXX";
-    check(mkdtemp(template) != NULL, @"a private capture directory is created");
-    NSString *directory = [NSString stringWithUTF8String:template];
+    NSString *directory = temporaryFolder(@"soksak-capture-covered-");
 
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(160, 160, kWidth, kHeight)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
@@ -404,8 +403,6 @@ int main(void) { @autoreleasepool {
     [window close];
     CFRelease(surface);
     CFRelease(changedSurface);
-    if (failures == 0) [NSFileManager.defaultManager removeItemAtPath:directory error:NULL];
-    else fprintf(stderr, "the images of the failed run stay in %s\n", directory.UTF8String);
     free(first.bytes); free(back.bytes); free(covered.bytes); free(changed.bytes);
     if (failures == 0) fprintf(stderr, "PASS: covered window capture\n");
     return failures == 0 ? 0 : 1;

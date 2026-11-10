@@ -2,6 +2,7 @@
 // The stream output size is fixed at start; if it is not followed, the enlarged window is recorded scaled down.
 // Does not activate the application.
 #import "../src/capture.m"
+#import "support/temporary_folder.h"
 
 static int failures;
 static double resizeRequestedAtMilliseconds;
@@ -95,9 +96,7 @@ int main(void) { @autoreleasepool {
     };
     // Runs change while recording the window and stops after its presentation. Returns the frame count and leaves the directory in directory.
     int (^record)(NSString *, void (^)(void), NSString **) = ^int(NSString *label, void (^change)(void), NSString **directoryOut) {
-        char template[] = "/tmp/soksak-capture-resize-XXXXXX";
-        if (mkdtemp(template) == NULL) { check(NO, [NSString stringWithFormat:@"%@: the capture directory is created", label]); return 0; }
-        NSString *directory = [NSString stringWithUTF8String:template];
+        NSString *directory = temporaryFolder(@"soksak-capture-resize-");
         *directoryOut = directory;
         char *operationError = NULL;
         bool opened = sp_capture_open(window.windowNumber, false, &operationError);
@@ -127,16 +126,6 @@ int main(void) { @autoreleasepool {
             [NSString stringWithFormat:@"%@: recording stops without error (frames %d, error %@)", label, frames, stopError]);
         return frames;
     };
-    void (^remove)(NSString *) = ^(NSString *directory) {
-        if (failures != 0 && directory != nil) {
-            fprintf(stderr, "RETAIN capture evidence: %s\n", directory.UTF8String);
-            return;
-        }
-        NSError *removal = nil;
-        check(directory == nil || [[NSFileManager defaultManager] removeItemAtPath:directory error:&removal],
-            [NSString stringWithFormat:@"capture files are removed (%@)", removal]);
-    };
-
     // When the window grows during a recording, the last frame after the presentation of the grown window holds the grown window in device pixels.
     NSString *directory = nil;
     int frames = record(@"growing", ^{
@@ -144,7 +133,6 @@ int main(void) { @autoreleasepool {
         window.backgroundColor = NSColor.blueColor;
     }, &directory);
     if (frames > 0) frameIs(directory, frames, NSMakeSize(320, 160), @"growing");
-    remove(directory);
 
     // A new recording of a window shrunk outside a recording has the shrunk window size from the first frame. It does not inherit the output size changed by the previous recording.
     [window setFrame:NSMakeRect(80, 80, 200, 100) display:YES];
@@ -155,7 +143,6 @@ int main(void) { @autoreleasepool {
         frameIs(directory, 1, NSMakeSize(200, 100), @"after shrinking");
         frameIs(directory, frames, NSMakeSize(200, 100), @"after shrinking");
     }
-    remove(directory);
     [captureSink startDisplayLinkObservationForWindowNumber:window.windowNumber];
     check(captureSink.displayLink != nil, @"a visible test window creates an AppKit display link for asynchronous teardown");
     SPCapture *asyncStopSink = [captureSink retain];

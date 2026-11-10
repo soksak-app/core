@@ -3,6 +3,7 @@
 #import "../src/capture.m"
 #import "../src/capture_frame_identity.h"
 #import "support/records.h"
+#import "support/temporary_folder.h"
 #import <CommonCrypto/CommonDigest.h>
 #import "event_ring.h"
 #include <sys/stat.h>
@@ -178,9 +179,7 @@ int main(void) { @autoreleasepool {
         && [firstDifference[@"actualBGRA"] isEqual:@[@5, @6, @7, @8]],
         @"the callback record preserves the bounded exact pixel mismatch details");
     [NSApplication sharedApplication];
-    char path[] = "/tmp/soksak-capture-metadata-XXXXXX";
-    if (mkdtemp(path) == NULL) { check(NO, @"the fixture directory is created"); return 1; }
-    directory = [NSString stringWithUTF8String:path];
+    directory = temporaryFolder(@"soksak-capture-metadata-");
     captureWriter = dispatch_queue_create("capture.test.metadata", DISPATCH_QUEUE_SERIAL);
     capturePending = dispatch_semaphore_create(kCapturePending);
     captureFirstFrame = dispatch_semaphore_create(0);
@@ -1405,9 +1404,6 @@ int main(void) { @autoreleasepool {
     [previousStream release];
     [currentStream release];
 
-    NSError *removal = nil;
-    check([[NSFileManager defaultManager] removeItemAtPath:directory error:&removal],
-        [NSString stringWithFormat:@"fixture files are removed (%@)", removal]);
     fprintf(stderr, "%s: native capture frame metadata validation (%.1fms)\n", failures ? "FAIL" : "PASS",
         (CACurrentMediaTime() - began) * 1000);
     return failures ? 1 : 0;

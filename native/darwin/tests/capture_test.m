@@ -9,6 +9,7 @@
 #import "webview_geometry.h"
 #import "window_facts.h"
 #import "support/surface_view.h"
+#import "support/temporary_folder.h"
 #import "support/capture_frame.m"
 
 static int failures;
@@ -70,8 +71,7 @@ int main(void) { @autoreleasepool {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     [NSApp finishLaunching];
-    char directory[] = "/tmp/soksak-capture-test-XXXXXX";
-    check(mkdtemp(directory) != NULL, @"a private capture directory is created");
+    const char *directory = temporaryFolder(@"soksak-capture-test-").fileSystemRepresentation;
     checkCaptureBoundary(directory);
     char *operationError = NULL;
     // Still capture: captures a window that is not activated as PNG. It is observation data; the content is checked by size and color.
@@ -340,9 +340,6 @@ int main(void) { @autoreleasepool {
     }
     [window close];
     [window release];
-    NSError *removeError = nil;
-    check([[NSFileManager defaultManager] removeItemAtPath:[NSString stringWithUTF8String:directory] error:&removeError],
-        [NSString stringWithFormat:@"the capture directory and its recordings are removed (%@)", removeError]);
     fprintf(stderr, "%s: native capture acceptance (%.1fms)\n", failures ? "FAIL" : "PASS",
         (CACurrentMediaTime() - began) * 1000);
     return failures ? 1 : 0;

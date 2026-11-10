@@ -1,5 +1,6 @@
 // Verifies source artifact writes can finish while the capture frame writer is held.
 #import "../src/capture.m"
+#import "support/temporary_folder.h"
 #include <signal.h>
 #include <unistd.h>
 
@@ -21,11 +22,7 @@ int main(void) { @autoreleasepool {
     signal(SIGALRM, expired);
     alarm(15);
     fprintf(stderr, "START: native capture source writer\n");
-    char directoryTemplate[] = "/tmp/soksak-capture-source-writer-XXXXXX";
-    BOOL directoryCreated = mkdtemp(directoryTemplate) != NULL;
-    check(directoryCreated, @"the source artifact directory is created");
-    if (!directoryCreated) return 1;
-    NSString *directoryPath = [[NSString alloc] initWithUTF8String:directoryTemplate];
+    NSString *directoryPath = [temporaryFolder(@"soksak-capture-source-writer-") retain];
 
     dispatch_semaphore_t writerStarted = dispatch_semaphore_create(0);
     dispatch_semaphore_t releaseWriter = dispatch_semaphore_create(0);
@@ -97,10 +94,6 @@ int main(void) { @autoreleasepool {
     dispatch_release(writerStarted);
     dispatch_release(releaseWriter);
     dispatch_release(manifestFinished);
-    NSError *cleanupError = nil;
-    BOOL removed = [[NSFileManager defaultManager] removeItemAtPath:
-        directoryPath error:&cleanupError];
-    check(removed, [NSString stringWithFormat:@"the temporary source artifact directory is removed (%@)", cleanupError]);
     [directoryPath release];
     fprintf(stderr, "END: native capture source writer (%d failures)\n", failures);
     return failures == 0 ? 0 : 1;

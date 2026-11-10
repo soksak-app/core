@@ -12349,6 +12349,16 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F725",
+    implementation: [
+      { file: "scripts/check-tests.mjs", symbol: "export function auditFixedTemporaryPaths(files, readSource" },
+      { file: "native/darwin/tests/support/temporary_folder.m", symbol: "NSString *temporaryFolder(NSString *prefix) {" },
+    ],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "a test source creates its temporary folders and files in TMPDIR, not under a fixed temporary path" }],
+    expected: "A test source creates each temporary folder and file in TMPDIR, which the test runner removes with the process folder, and the test inventory check refuses a mkdtemp or mkstemp template under /tmp, /private/tmp or /var/folders and a creation call whose folder is such a path.",
+    levels: ["unit"],
+  },
+  {
     id: "F316",
     implementation: [{ file: ".github/workflows/repeat.yml", symbol: "workflow_dispatch:" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "repeat.yml starts on a dispatch and runs only the tracked repeat targets" }],
@@ -14129,6 +14139,46 @@ export function auditJoinedFailures(files, readSource = (file) => readFileSync(`
   return errors;
 }
 
+/** A source of a test, a check or a fixture: the inventory counts it as a test. */
+function isTestSource(file) {
+  return /(^|\/)(test|tests|benches)\//.test(file) || /(^|\/)e2e\//.test(file) || /[._]test\.(mjs|js|cjs|ts|go|rs|m|mm)$/.test(file);
+}
+
+/** The fixed temporary roots, which lie outside the TMPDIR that the test runner gives each process. */
+const FIXED_TEMPORARY = String.raw`(?:/private)?/tmp|/var/folders`;
+const FIXED_TEMPORARY_PATHS = [
+  { expression: new RegExp(String.raw`["'\`](?:${FIXED_TEMPORARY})/[^"'\`\n]*XXXXXX`, "g"), name: "a temporary template under a fixed path" },
+  {
+    expression: new RegExp(String.raw`\b(?:MkdirTemp|CreateTemp|mkdtempSync|mkdtemp|mkstemps?|tempdir_in|tempfile_in|new_in)\s*\(\s*(?:[\w.:]+\(\s*)?["'\`](?:${FIXED_TEMPORARY})[/"'\`]`, "g"),
+    name: "a temporary entry created under a fixed path",
+  },
+];
+
+/**
+ * Reject a fixed temporary path for a folder or a file that a test source creates: the test runner removes the TMPDIR of a
+ * process and fails a process that left an entry there, and make check-temp-files sees only TMPDIR, so neither sees a folder
+ * under a fixed path (docs/operations/examples.md#temporary-folders).
+ */
+export function auditFixedTemporaryPaths(files, readSource = (file) => readFileSync(`${ROOT}${file}`, "utf8")) {
+  const errors = [];
+  for (const file of [...new Set(files)].sort()) {
+    if (!sourceLanguages.has(extname(file)) || !isTestSource(file)) continue;
+    let source;
+    try { source = readSource(file); }
+    catch (error) {
+      errors.push(`${file}: temporary-path source cannot be read: ${error?.message ?? error}`);
+      continue;
+    }
+    for (const { expression, name } of FIXED_TEMPORARY_PATHS) {
+      for (const match of source.matchAll(expression)) {
+        const line = source.slice(0, match.index).split("\n").length;
+        errors.push(`${file}:${line}: ${name}; create it in TMPDIR, which the test runner removes`);
+      }
+    }
+  }
+  return errors;
+}
+
 /** Reject explicit Result/JoinHandle discards in the scoped Rust production lane. */
 export function auditRustFailurePropagation(files, readSource, scope) {
   const errors = [];
@@ -14235,8 +14285,7 @@ export function discoverInventory(files) {
     if (manifestNames.has(name)) manifests.push(file);
     const language = declarationNames.has(name) ? "declaration" : sourceLanguages.get(extname(file));
     if (!language) continue;
-    const isTest = /(^|\/)(test|tests|benches)\//.test(file) || /(^|\/)e2e\//.test(file) || /[._]test\.(mjs|js|cjs|ts|go|rs|m|mm)$/.test(file);
-    (isTest ? tests : implementations).push({ file, language });
+    (isTestSource(file) ? tests : implementations).push({ file, language });
   }
   return { implementations, tests, manifests, generated };
 }
@@ -14472,6 +14521,8 @@ export function auditInventory(files, matrix = MATRIX, readSource = (file) => re
   const rustFailureErrors = failureMatrix.lanes.find(({ language }) => language === "rust").errors;
   const nativeFailureErrors = failureMatrix.lanes.find(({ language }) => language === "objective-c").errors;
   const goFailureErrors = failureMatrix.lanes.find(({ language }) => language === "go").errors;
+  const temporaryPathErrors = auditFixedTemporaryPaths(files, readSource);
+  errors.push(...temporaryPathErrors);
 
   return {
     errors,
@@ -14485,6 +14536,7 @@ export function auditInventory(files, matrix = MATRIX, readSource = (file) => re
     rustFailureErrors,
     nativeFailureErrors,
     goFailureErrors,
+    temporaryPathErrors,
     failureMatrix,
     featureLinks: FEATURE_LINKS,
     requirementCoverage,

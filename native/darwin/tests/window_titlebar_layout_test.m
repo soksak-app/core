@@ -9,6 +9,7 @@
 #import "window_controls.h"
 #import "capture.h"
 #import "support/capture_frame.m"
+#import "support/temporary_folder.h"
 
 // The number of display refreshes to wait while the transaction is open and after the commit.
 static const int kRefreshes = 12;
@@ -18,16 +19,6 @@ static int failures = 0;
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
-}
-
-// Leaves no recording file even if the process is terminated by a callback timeout.
-static NSString *recordingDirectory;
-static void cleanupRecording(void) {
-    if (recordingDirectory == nil) return;
-    NSError *error = nil;
-    if (![[NSFileManager defaultManager] removeItemAtPath:recordingDirectory error:&error])
-        fprintf(stderr, "FAIL: title bar recording cleanup: %s\n", error.localizedDescription.UTF8String);
-    [recordingDirectory release]; recordingDirectory = nil;
 }
 
 static void until(BOOL (^done)(void)) {
@@ -224,7 +215,6 @@ static void judge(NSString *directory, int count, const SPChange *changes, int t
 }
 
 int main(void) { @autoreleasepool {
-    atexit(cleanupRecording);
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
@@ -235,11 +225,8 @@ int main(void) { @autoreleasepool {
     [window orderFrontRegardless];
     waitFrames(window.screen, kRefreshes);
 
-    char directory[] = "/tmp/soksak-titlebar-test-XXXXXX";
-    BOOL created = mkdtemp(directory) != NULL;
-    check(created, @"the title bar recording directory is created");
-    if (!created) { [window close]; return 1; }
-    recordingDirectory = [[NSString stringWithUTF8String:directory] copy];
+    NSString *recordingDirectory = temporaryFolder(@"soksak-titlebar-test-");
+    const char *directory = recordingDirectory.fileSystemRepresentation;
     char *operationError = NULL;
     BOOL opened = sp_capture_open(window.windowNumber, false, &operationError);
     BOOL started = NO;
@@ -260,7 +247,6 @@ int main(void) { @autoreleasepool {
         fprintf(stdout, "recording: %d frames, longest gap %.1fms\n", count, sp_capture_longest_gap());
         judge(recordingDirectory, count, changes, 2);
     }
-    cleanupRecording();
     [window close];
     return failures ? 1 : 0;
 }}

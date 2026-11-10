@@ -2,6 +2,7 @@
 // check error ownership.
 #import "../src/capture.m"
 #import "support/records.h"
+#import "support/temporary_folder.h"
 #import "event_ring.h"
 #import <objc/runtime.h>
 #include <signal.h>
@@ -237,11 +238,7 @@ int main(void) { @autoreleasepool {
     [linkFixture stopDisplayLinkObservation];
     [staleLink invalidate]; [staleLink release];
     [currentLink release]; [linkFixture release];
-    char path[] = "/tmp/soksak-capture-callback-XXXXXX";
-    BOOL created = mkdtemp(path) != NULL;
-    NSString *directory = created ? [NSString stringWithUTF8String:path] : @"";
-    check(created, created ? @"the callback directory is created" :
-        [NSString stringWithFormat:@"the callback directory creation failed: %s", strerror(errno)]);
+    NSString *directory = temporaryFolder(@"soksak-capture-callback-");
     char *error = NULL;
     BOOL opened = sp_capture_open(window.windowNumber, false, &error);
     check(opened && error == NULL, [NSString stringWithFormat:@"the real inactive fixture prepares its target (%s)", error]);
@@ -249,7 +246,7 @@ int main(void) { @autoreleasepool {
     Method method = class_getInstanceMethod([SCStream class], @selector(startCaptureWithCompletionHandler:));
     check(method != NULL, @"the controlled start completion boundary exists");
     starts = [NSMutableArray new];
-    if (created && opened && method != NULL) {
+    if (opened && method != NULL) {
         IMP original = method_setImplementation(method, (IMP)holdStart);
         for (int failed = 0; failed < 2; failed++) {
             CFTimeInterval phase = CACurrentMediaTime();
@@ -357,7 +354,7 @@ int main(void) { @autoreleasepool {
         }
         method_setImplementation(method, original);
     }
-    if (created && opened && method != NULL) {
+    if (opened && method != NULL) {
         IMP originalMethod = method_getImplementation(method);
         method_setImplementation(method, (IMP)inlineStart);
         NSArray *inlineEvents = capturedEvents(^{ check(start(directory),
@@ -475,7 +472,7 @@ int main(void) { @autoreleasepool {
         check(lifecycleEvent(laterErrors, @"failed", timeoutSession) == nil,
             @"cleanup errors do not emit a second failure summary for the same attempt");
         NSError *removeError = nil;
-        check([[NSFileManager defaultManager] removeItemAtPath:[NSString stringWithUTF8String:path] error:&removeError],
+        check([[NSFileManager defaultManager] removeItemAtPath:directory error:&removeError],
             [NSString stringWithFormat:@"the failed-attempt folder is removed after its lifecycle summary (%@)", removeError]);
         discard();
 
@@ -599,13 +596,6 @@ int main(void) { @autoreleasepool {
     [starts release]; starts = nil;
     [captureFilter release]; captureFilter = nil; [captureConfig release]; captureConfig = nil;
     [window close]; [window release];
-    if (created) {
-        NSError *cleanup = nil;
-        NSString *fixture = [NSString stringWithUTF8String:path];
-        check(![[NSFileManager defaultManager] fileExistsAtPath:fixture]
-            || [[NSFileManager defaultManager] removeItemAtPath:fixture error:&cleanup],
-            [NSString stringWithFormat:@"the callback fixture is removed (%@)",cleanup]);
-    }
     fprintf(stderr,"%s: native delayed stream callback isolation (%d failed assertions, %.1fms)\n",
         failures ? "FAIL" : "PASS",failures,(CACurrentMediaTime()-began)*1000);
     alarm(0); return failures ? 1 : 0;
