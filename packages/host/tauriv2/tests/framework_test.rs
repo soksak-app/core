@@ -62,7 +62,7 @@ fn the_start_document_answers_the_page_origin_of_tauri() {
         soksak_host::start::CORE,
         soksak_host::start::START_DOCUMENT_PATH,
         "main",
-        &mut |_| Ok(vec![]),
+        |_: &str| Ok(vec![]),
     );
     assert_eq!(
         response.headers()["Access-Control-Allow-Origin"],

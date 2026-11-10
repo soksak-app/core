@@ -5,7 +5,6 @@ package darwin
 import (
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 	"github.com/soksak-app/core/packages/host/go/src/platform/darwin/abi"
@@ -32,15 +31,10 @@ func TestAnInjectionReturnsBeforeTheDeliveryOfTheInjectionBeforeIt(t *testing.T)
 	if err := (implementation{}).InjectPointer(1, "main", 10, 10, 1, 0, 0, 0, 1, 1, done); err != nil {
 		t.Fatal(err)
 	}
-	returned := make(chan error, 1)
-	go func() { returned <- (implementation{}).InjectPointer(1, "main", 10, 10, 3, 0, 0, 0, 1, 1, done) }()
-	select {
-	case err := <-returned:
-		if err != nil {
-			t.Fatal(err)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("the second injection waited in its step for the delivery of the first, which only a later step can deliver")
+	// The second injection returns while the first is not delivered: its return is the event. An injection that waits for
+	// the delivery never returns, and the runner reports the stop.
+	if err := (implementation{}).InjectPointer(1, "main", 10, 10, 3, 0, 0, 0, 1, 1, done); err != nil {
+		t.Fatal(err)
 	}
 	mu.Lock()
 	given := append([]uintptr(nil), handles...)

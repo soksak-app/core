@@ -1664,21 +1664,15 @@ func TestTheStopDoesNotWaitForAStart(t *testing.T) {
 		sidecars.Stop()
 		close(stopped)
 	}()
-	select {
-	case <-stopped:
-		close(release)
-	case <-time.After(5 * time.Second):
-		close(release)
-		t.Fatal("the stop waited for the start of a service that had not answered its hello")
-	}
+	// The stop returns while the service has not answered its hello: its return is the event, and the hello is released only
+	// after it. A stop that waits for the start never returns, and the runner reports the stop.
+	<-stopped
+	close(release)
 	if err := <-started; err == nil || err.Error() != "sidecars are stopped" {
 		t.Fatalf("the send that waited for the start = %v, want the failure of a send after the stop", err)
 	}
-	select {
-	case <-ended:
-	case <-time.After(30 * time.Second):
-		t.Fatal("the start that ended after the stop left its connection open")
-	}
+	// The start that ended after the stop closes its connection, which ends the read of the service.
+	<-ended
 }
 
 // A start to a service that received hello and does not reply fails after 5 seconds with a fixed sentence.

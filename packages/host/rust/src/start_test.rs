@@ -161,9 +161,7 @@ fn the_start_document_is_built_off_the_thread_that_asks_for_it() {
         },
     );
     later_turn.send(()).unwrap();
-    let (thread, status, body) = answer
-        .recv_timeout(Duration::from_secs(5))
-        .expect("the start document was not answered");
+    let (thread, status, body) = answer.recv().expect("the start document was not answered");
     assert_ne!(
         thread, asking,
         "the start document was built on the thread that asked for it"

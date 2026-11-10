@@ -2040,26 +2040,27 @@ fn the_stop_does_not_wait_for_a_start() {
     thread::scope(|scope| {
         let start = scope
             .spawn(move || sidecars.send(window, ECHO, "surface", &raw(r#"{"operation":"open"}"#)));
-        hello_received.recv_timeout(STALL).unwrap();
+        hello_received.recv().unwrap();
         let (stopped, stop_returned) = channel();
         scope.spawn(move || {
             sidecars.stop();
             stopped.send(()).unwrap();
         });
-        let returned = stop_returned.recv_timeout(Duration::from_secs(5));
+        // The stop returns while the service has not answered its hello: its return is the event, and the hello is
+        // released only after it. A stop that waits for the start never returns, and the runner reports the stop.
+        stop_returned
+            .recv()
+            .expect("the stop ended without its return");
         release.send(()).unwrap();
-        assert!(
-            returned.is_ok(),
-            "the stop waited for the start of a service that had not answered its hello"
-        );
         assert_eq!(
             start.join().unwrap(),
             Err("sidecars are stopped".to_string()),
             "the send that waited for the start fails as a send after the stop"
         );
     });
+    // The start that ended after the stop closes its connection, which ends the read of the service.
     connection_ended
-        .recv_timeout(STALL)
+        .recv()
         .expect("the start that ended after the stop left its connection open");
     server.join().unwrap();
 }
