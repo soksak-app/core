@@ -2272,7 +2272,7 @@ const FEATURE_LINKS = [
       { file: "scripts/check-host-callbacks.mjs", symbol: "export function createHostCallbacks(" },
     ],
     tests: [
-      { file: "native/darwin/tests/host_callbacks_test.m", id: "the native ABI declares 36 base and 7 diagnostic callbacks" },
+      { file: "native/darwin/tests/host_callbacks_test.m", id: "the native ABI declares 37 base and 7 diagnostic callbacks" },
       { file: "native/darwin/tests/host_callbacks_test.m", id: "the native owner copies the table and preserves a signed callback result" },
       { file: "native/darwin/tests/host_callbacks_test.m", id: "the diagnostic owner copies its table and dispatches the registered callback" },
       { file: "native/darwin/tests/host_callbacks_test.m", id: "a rejected diagnostic replacement preserves its installed callback" },
@@ -2670,7 +2670,7 @@ const FEATURE_LINKS = [
     implementation: [{ file: "native/darwin/src/surface_layout.m", symbol: "surfaceLayoutHoldCall" }],
     tests: [
       { file: "native/darwin/tests/webview_geometry_test.m", id: "an injected press reaches the view before the injected key behind it" },
-      { file: "native/darwin/tests/webview_geometry_test.m", id: "a person's press reaches the view before the injected keys behind it" },
+      { file: "native/darwin/tests/webview_geometry_test.m", id: "a person's press reaches the view before the injected key after it" },
     ],
     expected: "Injected input waits in the one hold with the events of the window system and reaches the view in the order it arrived.",
     levels: ["unit"],
@@ -2679,20 +2679,19 @@ const FEATURE_LINKS = [
     id: "F593",
     implementation: [{ file: "native/darwin/src/surface_layout.m", symbol: "object_getClass([NSApplication sharedApplication])" }],
     tests: [
-      { file: "native/darwin/tests/webview_geometry_test.m", id: "an override of the application sees no input that waits" },
-      { file: "native/darwin/tests/webview_geometry_test.m", id: "held input comes back to the override once each and in order" },
+      { file: "native/darwin/tests/webview_geometry_test.m", id: "the press ends the hold and the override sees each event once and in order" },
     ],
-    expected: "No override of sendEvent: on the class of the application sees input that waits, and every later pointer and key event of the window comes back once and in order.",
+    expected: "The hold stands in front of an override of sendEvent: on the class of the application: the press that ends the hold reaches it first (F718-2), and every later pointer and key event of the window reaches it once and in order.",
     levels: ["unit"],
   },
   {
     id: "F589",
     implementation: [{ file: "native/darwin/src/surface_layout.m", symbol: "sendEventAfterLayout" }],
     tests: [
-      { file: "native/darwin/tests/webview_geometry_test.m", id: "every monitor sees a held press and release once each" },
-      { file: "native/darwin/tests/webview_geometry_test.m", id: "a release that waits past the receipt wait reports no lost release" },
+      { file: "native/darwin/tests/webview_geometry_test.m", id: "every monitor sees the press and its release once each" },
+      { file: "native/darwin/tests/webview_geometry_test.m", id: "no monitor sees a press or a release while the transaction it ended is open" },
     ],
-    expected: "No local monitor sees a press or a release that waits for a layout, each sees it once when it comes back, and a release that waits longer than its receipt wait reports nothing.",
+    expected: "A press ends the layout transaction of its window before any local monitor sees it (F718-2), so no monitor sees a press or a release while that transaction is open, and each sees them once.",
     levels: ["unit"],
   },
   {
