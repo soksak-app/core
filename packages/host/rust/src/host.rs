@@ -390,6 +390,7 @@ pub fn setup(app: &AppHandle, setup: Setup) -> Result<(), Box<dyn std::error::Er
         emit_host: Arc::new(event_record::emit_host),
         clock: None,
         wait: None,
+        stop_waits: None,
     });
     app.manage(StallWatchStop(std::sync::Mutex::new(Some(Box::new(
         stop_stall_watch,

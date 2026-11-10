@@ -37,10 +37,14 @@ pub type Emit = Arc<dyn Fn(Level, &str, serde_json::Value) + Send + Sync>;
 pub type Clock = Arc<dyn Fn() -> Duration + Send + Sync>;
 /// Waits one beat. A test gives a wait that advances its clock; the host gives none, and the watch sleeps.
 pub type Wait = Arc<dyn Fn(Duration) + Send + Sync>;
+/// Called by the stop when it begins to wait for a sample that runs, before it waits. A check releases the sample that it
+/// holds after this event, so a stop that returns before it finds the sample running; the host gives none.
+pub type StopWaits = Box<dyn FnOnce() + Send>;
 
 /// The parts of the watch: `heartbeat` and `await_awake` reach the watched thread, `sample` writes the stacks of the threads of the
 /// process into a file, `folder` is the logs folder and `emit_host` stores an event of the host. `clock` and `wait` are the
-/// seams of the time: None takes the monotonic clock and the thread sleep.
+/// seams of the time: None takes the monotonic clock and the thread sleep. `stop_waits` is the event of the stop that begins to
+/// wait for a running sample.
 pub struct StallWatchOptions {
     pub heartbeat: Heartbeat,
     pub await_awake: AwaitAwake,
@@ -49,6 +53,7 @@ pub struct StallWatchOptions {
     pub emit_host: Emit,
     pub clock: Option<Clock>,
     pub wait: Option<Wait>,
+    pub stop_waits: Option<StopWaits>,
 }
 
 /// The end of the watch: whether it stopped, and the thread of the sample that started last. The watch starts a sample only
@@ -62,7 +67,8 @@ struct Ending {
 /// Starts the watch and returns the function that stops it. The stop starts no sample after it and returns when the
 /// running sample ended and stored its `host.stall.sampled`, so the process of the sample does not outlive the host and the
 /// stall keeps its dump.
-pub fn start_stall_watch(options: StallWatchOptions) -> impl FnOnce() {
+pub fn start_stall_watch(mut options: StallWatchOptions) -> impl FnOnce() {
+    let stop_waits = options.stop_waits.take();
     // default: the host gives no clock, so the watch measures time with the monotonic clock from its start.
     let clock: Clock = options.clock.clone().unwrap_or_else(|| {
         let start = Instant::now();
@@ -177,10 +183,19 @@ pub fn start_stall_watch(options: StallWatchOptions) -> impl FnOnce() {
             stop.store(true, Ordering::Release);
             end.sample.take()
         };
-        if let Some(sample) = sample
-            && sample.join().is_err()
-        {
-            crate::application_log::log_error("stall watch", "the sample of the threads panicked");
+        if let Some(sample) = sample {
+            // A sample starts only under the lock of the end and before the stop, so a sample that ended now never runs again.
+            if !sample.is_finished()
+                && let Some(stop_waits) = stop_waits
+            {
+                stop_waits();
+            }
+            if sample.join().is_err() {
+                crate::application_log::log_error(
+                    "stall watch",
+                    "the sample of the threads panicked",
+                );
+            }
         }
     }
 }

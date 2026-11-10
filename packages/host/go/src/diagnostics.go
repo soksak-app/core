@@ -1950,6 +1950,11 @@ func diagnosticCPUProfile(e *Endpoint, _ *endpointConn, params json.RawMessage, 
 // collectGarbage is the collection of the loop of diagnostics.gc.loop.
 var collectGarbage = runtime.GC
 
+// gcLoopStopWaits is called by the stop of diagnostics.gc.loop when it begins to wait for the goroutine of the loop to return, before
+// it waits. A check releases the collection that it holds after this event, so a stop that answers before it finds the collection
+// held. nil calls nothing.
+var gcLoopStopWaits func()
+
 // gcLoop is the goroutine of diagnostics.gc.loop while it runs.
 var gcLoop struct {
 	mu   sync.Mutex
@@ -1988,6 +1993,9 @@ func diagnosticGCLoop(_ *Endpoint, _ *endpointConn, params json.RawMessage, _ *R
 		})
 	case !*p.On && gcLoop.stop != nil:
 		close(gcLoop.stop)
+		if gcLoopStopWaits != nil {
+			gcLoopStopWaits()
+		}
 		<-gcLoop.done
 		gcLoop.stop, gcLoop.done = nil, nil
 	}
