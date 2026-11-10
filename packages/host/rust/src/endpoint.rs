@@ -241,10 +241,6 @@ impl Drop for ConnectionWatch {
 pub struct ReplyScope(Arc<Mutex<ReplyState>>);
 
 impl ReplyScope {
-    pub(crate) fn pending() -> (Self, ReplyCompletion) {
-        Self::pending_on(ConnectionEnd::default())
-    }
-
     /// The scope of a request of the connection whose end is connection.
     pub(crate) fn pending_on(connection: ConnectionEnd) -> (Self, ReplyCompletion) {
         let scope = Self(Arc::new(Mutex::new(ReplyState {
@@ -260,10 +256,10 @@ impl ReplyScope {
 
     /// The end of the connection of this request.
     pub fn connection_end(&self) -> ConnectionEnd {
-        // default: a lock that a panicking thread poisoned still holds the state of the reply, from which the connection
-        // end is read; the panic hook records the panic.
         self.0
             .lock()
+            // default: a lock that a panicking thread poisoned still holds the state of the reply, from which the
+            // connection end is read; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner)
             .connection
             .clone()
