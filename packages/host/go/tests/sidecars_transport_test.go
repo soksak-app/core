@@ -2678,9 +2678,11 @@ func TestASecondQuitEndsTheConnectionOfAServiceThatTheQuitStopWaitsFor(t *testin
 	written := support.CaptureLog(t)
 	root := t.TempDir()
 	service := serveReplaceService(t, root, "0.0.7", "0.0.7")
-	// The service holds its answer to close-owner, so only the end of the connection ends the close of the stop.
+	// The service holds its answer to close-owner, so only the end of the connection ends the close of the stop. A held service
+	// reads nothing, so it sees the end of the connection only after the release of its answer.
 	service.hold = make(chan struct{})
-	defer close(service.hold)
+	release := sync.OnceFunc(func() { close(service.hold) })
+	defer release()
 	service.closeOwner = make(chan struct{}, 4)
 	service.firstEnded = make(chan struct{})
 	sidecars := replaceSidecars(t, root, service)
@@ -2705,6 +2707,9 @@ func TestASecondQuitEndsTheConnectionOfAServiceThatTheQuitStopWaitsFor(t *testin
 	}
 	// A second quit that ends no connection leaves the stop waiting, and the check stops at the limit of its runner.
 	<-ended
+	// The stop ended while the service still holds its answer. Released, the service answers and reads on: its connection ends
+	// only when the second quit ended it, so a connection that stays open leaves the check at the limit of its runner.
+	release()
 	<-service.firstEnded
 	if !sidecars.QuitStop(false, func() {}) {
 		t.Fatal("the quit stop refused the exit after the end of the connection")
