@@ -167,9 +167,9 @@ export async function startRasterProbe({ bridge, expose, document, view }) {
   // The open comes first: the region, the commands and the text size listener created below are the sources of every other request.
   await open();
 
-  const composition = await bridge.composition.create({ regions: { [REGION]: element }, overlays: {} });
-  const image = composition.region(REGION);
-  image.on("input", (event) => {
+  // The input handler of the region is given with the creation, so a focus report or a key that arrives while the region
+  // attaches reaches it in its dispatch (docs/spec/native-surfaces.md#image-regions).
+  const input = (event) => {
     // default: an input event that names no correlation identifier continues no input of the native layer.
     const cids = event.cids ?? [];
     const actions = event.actions ?? [];
@@ -184,7 +184,9 @@ export async function startRasterProbe({ bridge, expose, document, view }) {
       log: [...log, { sequence, cids, actions, preedit, errors, received: null, receivedCids: null, frame: null }].slice(-INPUT_LOG_LIMIT),
     }));
     send({ operation: "input", sequence, actions, preedit }, cids).catch((error) => report(`input: ${error.message}`));
-  });
+  };
+  const composition = await bridge.composition.create({ regions: { [REGION]: element }, overlays: {}, input: { [REGION]: input } });
+  const image = composition.region(REGION);
   image.on("focus", (event) => changeInput(() => ({ focused: event.focused === true })));
   image.on("compose", (event) => changeInput(() => ({ preedit: event })));
   const pointer = (event) => {

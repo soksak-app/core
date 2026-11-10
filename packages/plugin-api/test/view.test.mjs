@@ -738,6 +738,7 @@ test("composition.create of a view attaches its declared regions and places one 
   const composition = await bridge.composition.create({
     regions: { doc: view.document.getElementById("doc"), picture: view.document.getElementById("picture") },
     overlays: {},
+    input: { picture: () => {} },
   });
   const calls = posted.filter((message) => typeof message.command === "string").map(({ command, params }) => ({ command, params }));
   assert.deepEqual(calls, [

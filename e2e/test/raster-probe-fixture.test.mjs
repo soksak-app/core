@@ -98,7 +98,7 @@ test("the sidecar catalog composes with the core catalog and declares the lines 
 });
 
 /** A fake view bridge and exposure that record what the probe registers and sends. */
-function fakeView({ textSize = 1.25, held = null, textSizeAtOnce = false } = {}) {
+function fakeView({ textSize = 1.25, attaching = null, textSizeAtOnce = false } = {}) {
   const sent = [];
   // The order of the calls of the view: each request by its operation, the composition, the text size listener and each command.
   const order = [];
@@ -141,14 +141,19 @@ function fakeView({ textSize = 1.25, held = null, textSizeAtOnce = false } = {})
       error: (where, text) => errors.push(`${where}: ${text}`),
     },
     composition: {
-      create: async ({ regions }) => {
+      create: async ({ regions, input }) => {
         assert.deepEqual(Object.keys(regions), [REGION]);
+        // The creation gives the input handler of the image region, and an input event that arrives while the region attaches
+        // reaches it in its dispatch (docs/spec/native-surfaces.md#image-regions).
+        assert.deepEqual(Object.keys(input ?? {}), [REGION], "the creation gives the input handler of its image region");
+        assert.equal(typeof input[REGION], "function");
         order.push("composition");
+        imageHandlers.set("input", input[REGION]);
+        if (attaching !== null) input[REGION](attaching);
         return { region: () => ({
           on: (type, fn) => {
+            if (type === "input") throw new Error(`image ${REGION}: the input handler is the input of composition.create`);
             imageHandlers.set(type, fn);
-            // attachImage holds the input events of a region until its first input handler registers, then delivers them.
-            if (type === "input" && held !== null) fn(held);
           },
           focus: async () => sent.push({ focus: true }),
         }) };
@@ -197,10 +202,10 @@ test("the probe opens its session with its image and reports the view, the sessi
 });
 
 test("the view opens its session before any other request, as a view of a reloaded page must", { timeout: 1000 }, async () => {
-  // The region delivers a held focus transaction as soon as its input handler registers, and the text size listener is told the
-  // factor at once: neither request reaches the sidecar before the open, which a surface whose session ended would refuse.
+  // The region delivers a focus transaction while it attaches, to the input handler of the creation, and the text size listener is
+  // told the factor at once: neither request reaches the sidecar before the open, which a surface whose session ended would refuse.
   const focus = { type: "input", actions: [{ type: "focus", focused: true }], preedit: null, errors: [], cids: ["n.1"] };
-  const fake = fakeView({ held: focus, textSizeAtOnce: true });
+  const fake = fakeView({ attaching: focus, textSizeAtOnce: true });
   await startRasterProbe(fake);
   const sends = fake.order.filter((entry) => entry.startsWith("send "));
   assert.deepEqual(sends, ["send open", "send input", "send textSize"]);

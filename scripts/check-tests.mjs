@@ -318,6 +318,22 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F718-9",
+    implementation: [
+      { file: "packages/plugin-api/image-region.js", symbol: "requires an input handler" },
+      { file: "packages/plugin-api/surface-composition.js", symbol: "A creation without input gives no handler" },
+      { file: "e2e/fixtures/raster-probe/probe/ui/raster-probe.js", symbol: "input: { [REGION]: input }" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/image-region.test.mjs", id: "each input event reaches the input handler of the attachment in its dispatch" },
+      { file: "packages/plugin-api/test/image-region.test.mjs", id: "an image region requires its input handler and refuses a later input handler" },
+      { file: "packages/plugin-api/test/surface-composition.test.mjs", id: "a creation input that does not match the image regions fails before attachment" },
+      { file: "e2e/test/raster-probe-fixture.test.mjs", id: "the view opens its session before any other request, as a view of a reloaded page must" },
+    ],
+    expected: "The input of an image region has one form: the creation gives the handler of each declared image region, each input event reaches it in its dispatch, a creation without input over an image region fails before attachment, and on(\"input\") of a region is refused.",
+    levels: ["unit"],
+  },
+  {
     id: "F502-13-2",
     implementation: [
       { file: "packages/workbench/debug-ui.js", symbol: "captures = record.captures === undefined ? [] : [...record.captures];" },
