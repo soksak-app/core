@@ -13,7 +13,7 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
-use std::sync::mpsc::{RecvError, SyncSender, TryRecvError, TrySendError, sync_channel};
+use std::sync::mpsc::{Receiver, RecvError, SyncSender, TryRecvError, TrySendError, sync_channel};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError, RwLock};
 use std::time::{Duration, Instant};
 
@@ -755,28 +755,13 @@ fn write_pending_socket<O>(
     stream: &mut dyn PersistentStream,
     writing: &AtomicUsize,
 ) -> bool {
-    let (replies, closes) = {
-        // default: a lock that a panicking thread poisoned still holds the sidecar state, which the writer amends; the
-        // panic hook records the panic.
-        let mut state = state.lock().unwrap_or_else(PoisonError::into_inner);
-        (
-            state
-                .pending_replies
-                .remove(name)
-                .map(|mut held| held.take())
-                // default: a sidecar without held items has no returns and closes to write.
-                .unwrap_or_default(),
-            state
-                .pending_closes
-                .remove(name)
-                .map(|mut held| held.take())
-                // default: a sidecar without held items has no returns and closes to write.
-                .unwrap_or_default(),
-        )
-    };
-    replies
-        .iter()
-        .chain(closes.iter())
+    // default: a lock that a panicking thread poisoned still holds the sidecar state, which the writer amends; the panic
+    // hook records the panic.
+    let held = take_held(
+        &mut state.lock().unwrap_or_else(PoisonError::into_inner),
+        name,
+    );
+    held.iter()
         .all(|line| write_socket_line(stream, name, line, writing))
 }
 
@@ -878,37 +863,68 @@ fn record_write_wait(name: &str, line: &QueuedLine, started: Instant, ended: Ins
     );
 }
 
-/// Takes out the held items at once and writes the returns first and the closes last. The held items arise after the
-/// queue is full, so they go out after the queue.
+/// Takes out the held items at once and writes the returns first and the closes last. A writer calls it when its queue
+/// ended; while the queue is open, `after_queue` takes the held items.
 fn write_pending<O: Owner>(
     state: &Mutex<State<O>>,
     name: &str,
     stdin: &mut ChildStdin,
     writing: &AtomicUsize,
 ) -> bool {
-    let (replies, closes) = {
-        // default: a lock that a panicking thread poisoned still holds the sidecar state, which the writer amends; the
-        // panic hook records the panic.
-        let mut state = state.lock().unwrap_or_else(PoisonError::into_inner);
-        (
-            state
-                .pending_replies
-                .remove(name)
-                .map(|mut held| held.take())
-                // default: a sidecar without held items has no returns and closes to write.
-                .unwrap_or_default(),
-            state
-                .pending_closes
-                .remove(name)
-                .map(|mut held| held.take())
-                // default: a sidecar without held items has no returns and closes to write.
-                .unwrap_or_default(),
-        )
-    };
-    replies
-        .iter()
-        .chain(closes.iter())
+    // default: a lock that a panicking thread poisoned still holds the sidecar state, which the writer amends; the panic
+    // hook records the panic.
+    let held = take_held(
+        &mut state.lock().unwrap_or_else(PoisonError::into_inner),
+        name,
+    );
+    held.iter()
         .all(|line| write_line(stdin, name, line, writing))
+}
+
+/// The held items of `name` in the order of writing, the returns first and the closes last, taken out of the state.
+fn take_held<O>(state: &mut State<O>, name: &str) -> Vec<QueuedLine> {
+    let mut held = state
+        .pending_replies
+        .remove(name)
+        .map(|mut held| held.take())
+        // default: a sidecar without held items has no returns and closes to write.
+        .unwrap_or_default();
+    held.extend(
+        state
+            .pending_closes
+            .remove(name)
+            .map(|mut held| held.take())
+            // default: a sidecar without held items has no returns and closes to write.
+            .unwrap_or_default(),
+    );
+    held
+}
+
+/// What a writer writes after it found its queue empty.
+enum AfterQueue {
+    /// A line that entered the queue after the writer found it empty. It goes out before the held items.
+    Line(QueuedLine),
+    /// The held items, which go out before the writer waits for the queue.
+    Held(Vec<QueuedLine>),
+    /// The held items of a queue that ended. They are the last lines that the writer writes.
+    End(Vec<QueuedLine>),
+}
+
+/// Takes the held items of `name` only while its queue holds no line, under the state lock. A sender queues a line or
+/// holds an item under the same lock, so every line queued before a held item is either written or still in the queue
+/// when the writer takes the item: a line still in the queue comes back as `AfterQueue::Line` and goes out first, and the
+/// held items go out after every line queued before them.
+fn after_queue<O>(state: &Mutex<State<O>>, name: &str, queue: &Receiver<Outgoing>) -> AfterQueue {
+    // default: a lock that a panicking thread poisoned still holds the sidecar state, which the writer amends; the panic
+    // hook records the panic.
+    let mut state = state.lock().unwrap_or_else(PoisonError::into_inner);
+    match queue.try_recv() {
+        Ok(Outgoing::Line(line)) => AfterQueue::Line(line),
+        Ok(Outgoing::Close) | Err(TryRecvError::Disconnected) => {
+            AfterQueue::End(take_held(&mut state, name))
+        }
+        Err(TryRecvError::Empty) => AfterQueue::Held(take_held(&mut state, name)),
+    }
 }
 
 /// The time to wait for the service to answer retain. It includes the time it takes to close the sessions.
@@ -2909,8 +2925,29 @@ impl<O: Owner> Core<O> {
                         Err(TryRecvError::Empty) => break,
                     }
                 }
-                if !write_pending(&state_clone, &write_name, &mut stdin, &write_writing) {
-                    return;
+                match after_queue(&state_clone, &write_name, &rx) {
+                    AfterQueue::Line(line) => {
+                        if !write_line(&mut stdin, &write_name, &line, &write_writing) {
+                            return;
+                        }
+                        continue;
+                    }
+                    AfterQueue::Held(held) => {
+                        if !held
+                            .iter()
+                            .all(|line| write_line(&mut stdin, &write_name, line, &write_writing))
+                        {
+                            return;
+                        }
+                    }
+                    AfterQueue::End(held) => {
+                        for line in &held {
+                            if !write_line(&mut stdin, &write_name, line, &write_writing) {
+                                break;
+                            }
+                        }
+                        return;
+                    }
                 }
                 match rx.recv() {
                     Ok(Outgoing::Line(line)) => {
@@ -3219,8 +3256,32 @@ impl<O: Owner> Core<O> {
                         Err(TryRecvError::Empty) => break,
                     }
                 }
-                if !write_pending_socket(&write_state, &write_name, &mut *writer, &write_writing) {
-                    return;
+                match after_queue(&write_state, &write_name, &rx) {
+                    AfterQueue::Line(line) => {
+                        if !write_socket_line(&mut *writer, &write_name, &line, &write_writing) {
+                            return;
+                        }
+                        continue;
+                    }
+                    AfterQueue::Held(held) => {
+                        if !held.iter().all(|line| {
+                            write_socket_line(&mut *writer, &write_name, line, &write_writing)
+                        }) {
+                            return;
+                        }
+                    }
+                    AfterQueue::End(held) => {
+                        if !held.iter().all(|line| {
+                            write_socket_line(&mut *writer, &write_name, line, &write_writing)
+                        }) {
+                            log_error(
+                                &format!("sidecar {write_name}"),
+                                "the pending lines were not written before close",
+                            );
+                        }
+                        shut_down_writer(&write_name, &mut *writer);
+                        return;
+                    }
                 }
                 match rx.recv() {
                     Ok(Outgoing::Line(line)) => {
