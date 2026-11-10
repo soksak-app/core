@@ -581,6 +581,18 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F731",
+    implementation: [
+      { file: "packages/host/rust/tests/producer_bounds_test.rs", symbol: "let _log = records::start_writer(config.path());" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/producer_bounds_test.rs", id: "an_unwatch_is_not_refused_by_the_bound_and_ends_the_subscription_in_its_queue" },
+      { file: "packages/host/rust/tests/producer_bounds_test.rs", id: "the_subscription_changes_of_a_topic_hold_at_most_256_and_the_rest_is_refused_and_counted" },
+    ],
+    expected: "A test of the host records that refuses a subscription change stores its drop with a writer of its own, so the writer of a later test stores only the drops of its own test.",
+    levels: ["unit"],
+  },
+  {
     id: "F727",
     implementation: [
       { file: "native/darwin/tests/input_virtual_test.m", symbol: "static BOOL stayedBehind(void) {" },

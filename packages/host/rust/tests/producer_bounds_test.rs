@@ -302,6 +302,9 @@ fn change(connection: &mut Connection, id: u64, method: &str) {
 fn an_unwatch_is_not_refused_by_the_bound_and_ends_the_subscription_in_its_queue() {
     let _serial = serial();
     let config = folder::Folder::new();
+    // The refused watch records a drop. Without a writer the drop stays in the start buffer of the process, and the writer of
+    // a later test of this file stores it with its own events, so this test stores it with a writer of its own.
+    let _log = records::start_writer(config.path());
     let (endpoint, open_gate, calls) = gated_endpoint(&config, "test-unwatch-bound");
     let mut connection = endpoint_client::connect(endpoint.address());
     change(&mut connection, 1, "status.watch");
@@ -336,6 +339,7 @@ fn an_unwatch_is_not_refused_by_the_bound_and_ends_the_subscription_in_its_queue
         "the page calls after the first watch"
     );
     endpoint.stop();
+    use_host_event_log(None);
 }
 
 /// An unwatch enters the queue of its topic only when the last change of its connection for the topic is a watch. While the
