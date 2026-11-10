@@ -36,18 +36,33 @@ func TestCaptureStopLayoutFailurePreservesStartedFolder(t *testing.T) {
 	}
 }
 
-// contract: diagnostics.capture-stop.bounds-identity-callback-wait
+// contract: diagnostics.capture-document-identity.callback-ends-the-wait
+func TestTheFrameIdentityWaitEndsByItsCallbackAfterThePageTimeout(t *testing.T) {
+	t.Parallel()
+	s := &Surfaces{invoke: func(work func()) { work() }}
+	want := json.RawMessage(`{"generation":7}`)
+	reply, err := awaitDocumentFrameIdentity(s, func(done func(json.RawMessage, error)) error {
+		// The library answers once on every path; the answer comes later than any limit of a page reply.
+		time.AfterFunc(pageTimeout+500*time.Millisecond, func() { done(want, nil) })
+		return nil
+	})
+	if err != nil || string(reply) != string(want) {
+		t.Fatalf("awaitDocumentFrameIdentity = %s, %v; want the reply of the callback %s", reply, err, want)
+	}
+}
+
 // contract: diagnostics.capture-document-identity.reports-late-callback-errors
-func TestAwaitDocumentFrameIdentityReportsLateErrorAfterTimeout(t *testing.T) {
+func TestAwaitDocumentFrameIdentityReportsALateErrorAfterAFailedSchedule(t *testing.T) {
 	isolateTraceRecords(t)
 	s := &Surfaces{invoke: func(work func()) { work() }}
 	var callback func(json.RawMessage, error)
+	scheduleErr := errors.New("native operation was not scheduled")
 	reply, err := awaitDocumentFrameIdentity(s, func(done func(json.RawMessage, error)) error {
 		callback = done
-		return nil
+		return scheduleErr
 	})
-	if err == nil || !strings.Contains(err.Error(), "did not complete within the diagnostic timeout") || reply != nil {
-		t.Fatalf("awaitDocumentFrameIdentity = %s, %v; want explicit timeout and no source result", reply, err)
+	if !errors.Is(err, scheduleErr) || reply != nil {
+		t.Fatalf("awaitDocumentFrameIdentity = %s, %v; want the schedule failure and no source result", reply, err)
 	}
 	if callback == nil {
 		t.Fatal("native callback was not registered")
@@ -518,7 +533,7 @@ func TestCaptureStopDrainsPendingStartWithoutCreditingItsUnconfirmedCount(t *tes
 	issued, removed, err := documentIdentityStopSequence(
 		true,
 		source,
-		errors.New("start callback timed out"),
+		errors.New("the start callback failed"),
 		func(uint64) (json.RawMessage, error) {
 			phases = append(phases, "freeze")
 			return json.RawMessage(`{"generation":7,"atlasSlots":300,"issuedSlots":2}`), nil

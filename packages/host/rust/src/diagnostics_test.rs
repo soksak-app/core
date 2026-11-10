@@ -133,13 +133,13 @@ fn capture_stop_continues_cleanup_after_freeze_failure_without_issued_count() {
 
 // contract: diagnostics.capture-document-identity.stop-drains-late-start-before-cleanup
 #[test]
-fn capture_stop_does_not_credit_a_timed_out_start_count() {
+fn capture_stop_does_not_credit_an_unconfirmed_start_count() {
     let source = ("surface-a".to_string(), 7);
     let phases = RefCell::new(Vec::new());
     let (issued, removed, error) = document_identity_stop_sequence(
         true,
         Some(&source),
-        Some("start callback timed out".into()),
+        Some("the start callback failed".into()),
         |_| {
             phases.borrow_mut().push("freeze");
             Ok(r#"{"generation":7,"atlasSlots":300,"issuedSlots":2}"#.into())
@@ -261,22 +261,18 @@ fn recording_selects_one_document_identity_source() {
     recording
         .select_frame_identity_source("surface-a", 7)
         .unwrap();
-    assert!(
-        recording
-            .select_frame_identity_source("surface-b", 8)
-            .is_err()
-    );
+    assert!(recording
+        .select_frame_identity_source("surface-b", 8)
+        .is_err());
     assert_eq!(
         recording.frame_identity_state(),
         (true, Some(("surface-a".into(), 7)))
     );
     assert!(recording.clear_frame_identity_source("surface-a", 7));
     assert_eq!(recording.frame_identity_state(), (false, None));
-    assert!(
-        recording
-            .select_frame_identity_source("surface-b", 8)
-            .is_err()
-    );
+    assert!(recording
+        .select_frame_identity_source("surface-b", 8)
+        .is_err());
 }
 
 // contract: diagnostics.capture-document-identity.start-requires-explicit-capture-endpoint
@@ -297,11 +293,9 @@ fn recording_rejects_document_source_for_drag_owned_identity_capture() {
             &|path| std::fs::create_dir_all(path).map_err(|error| error.to_string()),
         )
         .unwrap();
-    assert!(
-        recording
-            .select_frame_identity_source("surface-a", 7)
-            .is_err()
-    );
+    assert!(recording
+        .select_frame_identity_source("surface-a", 7)
+        .is_err());
 }
 
 // contract: diagnostics.capture-start.waits-for-prior-identity-removal
@@ -345,22 +339,32 @@ fn capture_start_waits_for_prior_identity_removal() {
     stop.join().unwrap();
 }
 
-// contract: diagnostics.capture-stop.bounds-identity-callback-wait
+// contract: diagnostics.capture-document-identity.callback-ends-the-wait
 #[test]
-fn document_frame_identity_callback_wait_is_bounded() {
+fn document_frame_identity_callback_ends_the_wait() {
     let (sender, receiver) = mpsc::channel();
+    // The library answers once on every path; the answer comes later than any limit of a page reply.
     let callback = std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_millis(25));
+        std::thread::sleep(TIMEOUT + Duration::from_millis(500));
         sender.send(Ok("late reply".to_string()))
     });
-    let result = super::await_document_frame_identity_reply(receiver, Duration::from_millis(1));
+    let result = super::await_document_frame_identity_reply(receiver);
+    assert_eq!(result.as_deref(), Ok("late reply"));
     assert!(
-        matches!(&result, Err(error) if error.contains("timed out")),
-        "late identity callback result = {result:?}"
+        callback.join().unwrap().is_ok(),
+        "the callback found no receiver"
     );
+}
+
+// contract: diagnostics.capture-document-identity.callback-ends-the-wait
+#[test]
+fn a_document_frame_identity_callback_that_is_dropped_ends_the_wait() {
+    let (sender, receiver) = mpsc::channel::<Result<String, String>>();
+    drop(sender);
+    let result = super::await_document_frame_identity_reply(receiver);
     assert!(
-        callback.join().unwrap().is_err(),
-        "late callback send unexpectedly found a receiver"
+        matches!(&result, Err(error) if error.contains("ended before replying")),
+        "{result:?}"
     );
 }
 
@@ -375,7 +379,6 @@ fn document_frame_identity_preserves_synchronous_callback_error_when_scheduling_
     let result = super::await_document_frame_identity_schedule_result(
         Err("native operation was not scheduled".into()),
         receiver,
-        Duration::from_millis(1),
     );
     let Err(error) = result else {
         panic!("schedule and callback failures were accepted as success: {result:?}");
@@ -393,11 +396,7 @@ fn document_frame_identity_preserves_synchronous_success_reply() {
     let (sender, receiver) = mpsc::channel();
     sender.send(Ok("native reply".to_string())).unwrap();
 
-    let result = super::await_document_frame_identity_schedule_result(
-        Ok(()),
-        receiver,
-        Duration::from_millis(1),
-    );
+    let result = super::await_document_frame_identity_schedule_result(Ok(()), receiver);
     assert_eq!(result.as_deref(), Ok("native reply"));
 }
 
@@ -748,4 +747,167 @@ fn a_recorded_drag_stops_its_layout_trace_after_the_last_placement_is_presented(
         ["settle", "stop"],
         "the trace stops also when the drag fails"
     );
+}
+
+/// Receives one message of receiver, or None when none comes within two seconds: the bound of the observation of the test,
+/// not of the code, so a hold that never ends fails the check instead of stopping the run.
+fn settles<T>(receiver: &mpsc::Receiver<T>) -> Option<T> {
+    receiver.recv_timeout(Duration::from_secs(2)).ok()
+}
+
+/// Runs hold_modal_content for window on a thread and sends () when it returns.
+fn held_modal_content(window: &'static str) -> mpsc::Receiver<()> {
+    let (sender, receiver) = mpsc::channel();
+    std::thread::spawn(move || {
+        hold_modal_content(window);
+        let _ = sender.send(());
+    });
+    receiver
+}
+
+/// Runs modal_held for window on a thread and sends its answer.
+fn modal_held_answer(window: &'static str) -> mpsc::Receiver<Result<Value, Failure>> {
+    let (sender, receiver) = mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = sender.send(modal_held(window));
+    });
+    receiver
+}
+
+// contract: diagnostics.modal-hold.ends-with-window-or-connection
+#[test]
+fn a_modal_hold_ends_with_the_connection_that_turned_it_on() {
+    let window = "modal-hold-connection";
+    let connection = crate::endpoint::ConnectionEnd::open();
+    modal_hold(window, true, &connection);
+    let held = held_modal_content(window);
+    let answered = modal_held_answer(window);
+    connection.close();
+    assert!(
+        settles(&held).is_some(),
+        "the held modal content answer was not sent when the connection of the hold closed"
+    );
+    assert!(
+        settles(&answered).is_some_and(|answer| answer.is_ok()),
+        "diagnostics.modal.held did not answer at the end of the hold by its connection"
+    );
+    assert!(
+        settles(&held_modal_content(window)).is_some(),
+        "a modal content answer after the end of the hold was held"
+    );
+}
+
+// contract: diagnostics.modal-hold.ends-with-window-or-connection
+#[test]
+fn the_close_of_another_connection_keeps_the_modal_hold() {
+    let window = "modal-hold-other-connection";
+    let holder = crate::endpoint::ConnectionEnd::open();
+    let other = crate::endpoint::ConnectionEnd::open();
+    modal_hold(window, true, &holder);
+    let held = held_modal_content(window);
+    other.close();
+    assert!(
+        held.recv_timeout(Duration::from_millis(100)).is_err(),
+        "the close of a connection that did not turn the hold on sent the held answer"
+    );
+    modal_hold(window, false, &other);
+    assert!(
+        settles(&held).is_some(),
+        "turning the hold off did not send the held answer"
+    );
+    holder.close();
+}
+
+// contract: diagnostics.modal-hold.ends-with-window-or-connection
+#[test]
+fn a_modal_hold_ends_with_its_window() {
+    let window = "modal-hold-window";
+    let connection = crate::endpoint::ConnectionEnd::open();
+    modal_hold(window, true, &connection);
+    let held = held_modal_content(window);
+    let answered = modal_held_answer(window);
+    end_window_holds(window);
+    assert!(
+        settles(&held).is_some(),
+        "the held modal content answer was not sent when its window closed"
+    );
+    assert!(
+        settles(&answered).is_some_and(|answer| answer.is_ok()),
+        "diagnostics.modal.held did not answer when the window of the hold closed"
+    );
+    connection.close();
+}
+
+/// Remembers a hold of surface in window by connection whose release sends the surface to the returned receiver.
+fn surface_hold(
+    window: &str,
+    surface: &'static str,
+    connection: &crate::endpoint::ConnectionEnd,
+) -> mpsc::Receiver<&'static str> {
+    let (sender, receiver) = mpsc::channel();
+    remember_surface_hold(window, surface, connection, move || {
+        let _ = sender.send(surface);
+    });
+    receiver
+}
+
+// contract: diagnostics.surface-hold.released-at-connection-close
+#[test]
+fn the_close_of_the_connection_of_a_surface_hold_releases_the_surface() {
+    let connection = crate::endpoint::ConnectionEnd::open();
+    let released = surface_hold("surface-hold-close", "tab-1", &connection);
+    assert!(
+        released.try_recv().is_err(),
+        "the surface was released while its connection was open"
+    );
+    connection.close();
+    assert_eq!(settles(&released), Some("tab-1"));
+    assert!(
+        released.recv_timeout(Duration::from_millis(50)).is_err(),
+        "the surface was released twice"
+    );
+}
+
+// contract: diagnostics.surface-hold.released-at-connection-close
+#[test]
+fn a_later_hold_of_the_surface_keeps_it_at_the_close_of_the_earlier_connection() {
+    let earlier = crate::endpoint::ConnectionEnd::open();
+    let later = crate::endpoint::ConnectionEnd::open();
+    let first = surface_hold("surface-hold-later", "tab-1", &earlier);
+    let second = surface_hold("surface-hold-later", "tab-1", &later);
+    earlier.close();
+    assert!(
+        first.recv_timeout(Duration::from_millis(100)).is_err(),
+        "the close of the earlier connection released a surface that a later hold took"
+    );
+    later.close();
+    assert_eq!(settles(&second), Some("tab-1"));
+}
+
+// contract: diagnostics.surface-hold.released-at-connection-close
+#[test]
+fn a_surface_hold_of_a_closed_connection_is_released_at_once() {
+    let connection = crate::endpoint::ConnectionEnd::open();
+    connection.close();
+    let released = surface_hold("surface-hold-closed", "tab-1", &connection);
+    assert_eq!(settles(&released), Some("tab-1"));
+}
+
+#[test]
+fn unreached_window_objects_without_expected_counts_are_a_failure() {
+    let counts = platform::WindowObjects::default();
+    let answer = native_objects_answer(None, counts, false);
+    let Err(failure) = answer else {
+        panic!("unreached counts without expected counts were answered as {answer:?}");
+    };
+    assert!(
+        failure.message.contains("did not handle an event"),
+        "{}",
+        failure.message
+    );
+    assert!(native_objects_answer(None, counts, true).is_ok());
+    let Err(unreached) = native_objects_answer(Some(counts), counts, false) else {
+        panic!("unreached expected counts were answered");
+    };
+    assert_eq!(unreached.code, crate::endpoint::TIMED_OUT);
 }

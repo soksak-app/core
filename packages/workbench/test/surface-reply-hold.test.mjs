@@ -87,3 +87,60 @@ test("hold rejects an invalid surface and a second hold of the same surface", ()
   hold.hold("tab-a");
   assert.throws(() => hold.hold("tab-a"), /^Error: exposure replies of surface "tab-a" are already held$/);
 });
+
+test("a released surface sends its held replies in order and writes the line of the ended hold", async () => {
+  const lines = [];
+  const hold = createSurfaceReplyHold((line) => { lines.push(line); return Promise.resolve(); });
+  const sent = [];
+  hold.hold("tab-a");
+  const first = fakeSend("reply 1", sent);
+  const second = fakeSend("reply 2", sent);
+  const answers = [hold.gate("tab-a", first.send), hold.gate("tab-a", second.send)];
+  await settle();
+  assert.deepEqual(sent, [], "a reply was sent while the surface was held");
+  const released = hold.released("tab-a");
+  assert.deepEqual(sent, ["reply 1"], "the release did not send the first held reply first");
+  first.finish().resolve("one");
+  await settle();
+  assert.deepEqual(sent, ["reply 1", "reply 2"]);
+  assert.deepEqual(lines, [], "the line was written before the host answered every reply");
+  second.finish().resolve("two");
+  await released;
+  assert.deepEqual(await Promise.all(answers), ["one", "two"]);
+  assert.deepEqual(lines, ['held exposure replies of surface "tab-a" were sent after their hold ended (2)']);
+  await hold.gate("tab-a", () => { sent.push("after"); return Promise.resolve(); });
+  assert.deepEqual(sent, ["reply 1", "reply 2", "after"], "a reply after the release was held");
+  hold.hold("tab-a");
+});
+
+test("a release fails a waiting held and leaves a surface without a hold alone", async () => {
+  const lines = [];
+  const hold = createSurfaceReplyHold((line) => { lines.push(line); return Promise.resolve(); });
+  assert.equal(await hold.released("tab-a"), undefined, "a release of a surface without a hold did something");
+  hold.hold("tab-a");
+  const waiting = hold.held("tab-a");
+  await hold.released("tab-a");
+  await assert.rejects(waiting, /^Error: the hold of surface "tab-a" ended before it held an exposure reply$/);
+  assert.deepEqual(lines, ['held exposure replies of surface "tab-a" were sent after their hold ended (0)']);
+});
+
+test("the end of the page ends every hold before the reload", async () => {
+  const lines = [];
+  const hold = createSurfaceReplyHold((line) => { lines.push(line); return Promise.resolve(); });
+  const sent = [];
+  hold.hold("tab-a");
+  hold.hold("tab-b");
+  const replies = [
+    hold.gate("tab-a", () => { sent.push("a"); return Promise.resolve(); }),
+    hold.gate("tab-b", () => { sent.push("b"); return Promise.resolve(); }),
+  ];
+  await hold.endAll();
+  await Promise.all(replies);
+  assert.deepEqual(sent, ["a", "b"]);
+  assert.deepEqual(lines.sort(), [
+    'held exposure replies of surface "tab-a" were sent after their hold ended (1)',
+    'held exposure replies of surface "tab-b" were sent after their hold ended (1)',
+  ]);
+  await hold.gate("tab-a", () => { sent.push("later"); return Promise.resolve(); });
+  assert.deepEqual(sent, ["a", "b", "later"], "a hold remained after the end of the page");
+});

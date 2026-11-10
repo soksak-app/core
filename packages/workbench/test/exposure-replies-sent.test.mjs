@@ -78,3 +78,36 @@ test("the reply of a surface request without a view mark or surface port passes 
     gateSurfaceReplies(null);
   }
 });
+
+test("whenRepliesSent ends the diagnostic holds of surface replies, so a reload sends the held reply", async () => {
+  const { gateSurfaceReplies } = await import("../exposure.js");
+  const { createSurfaceReplyHold } = await import("../surface-reply-hold.js");
+  registry.declare("core", { status: [], element: [], commands: [{
+    name: "core.fixture.held", description: "Answers into a hold.",
+    params: { type: "object", properties: {} }, result: { type: "string" },
+  }] });
+  registry.command("core.fixture.held", () => "held");
+  await connectExposure({ settled: async () => {}, report: () => {} });
+  const lines = [];
+  const hold = createSurfaceReplyHold((line) => { lines.push(line); return Promise.resolve(); });
+  gateSurfaceReplies(hold.gate, hold.endAll);
+  try {
+    hold.hold("fixture-held");
+    calls.length = 0;
+    handlers.get("exposure-request")({ id: 41, surface: "fixture-held", method: "command.run", params: { name: "core.fixture.held", params: {} } });
+    await hold.held("fixture-held");
+    assert.deepEqual(calls.filter(([name]) => name === "exposureReply"), [], "the held reply was sent before the reload");
+    // The bound is the observation of the test: a reload that waits for a held reply fails the check instead of stopping the run.
+    let observation;
+    const sent = await Promise.race([
+      whenRepliesSent().then(() => true),
+      new Promise((resolve) => { observation = setTimeout(() => resolve(false), 2000); }),
+    ]);
+    clearTimeout(observation);
+    assert.equal(sent, true, "whenRepliesSent waited for the reply that the hold kept");
+    assert.deepEqual(calls.filter(([name]) => name === "exposureReply"), [["exposureReply", { id: 41, result: "held" }]]);
+    assert.deepEqual(lines, ['held exposure replies of surface "fixture-held" were sent after their hold ended (1)']);
+  } finally {
+    gateSurfaceReplies(null);
+  }
+});

@@ -2,6 +2,8 @@
 // from the core root resolver of the application and imports the files that the resolver serves, each with the header
 // Access-Control-Allow-Origin of its plugin; a refused path fails with no such header; and a document region receives no
 // core root grant, so its requests to soksak://core fail without calling the resolver.
+// The diagnostic frame identity of a plugin root ends with the close, the navigation and the WebContent process of its
+// document (docs/spec/diagnostics.md).
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "support/temporary_folder.h"
@@ -26,6 +28,16 @@ static void until(NSString *what, BOOL (^done)(void)) {
         [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
     }
     if (!done()) { fprintf(stderr, "FAIL: %s within 10 seconds\n", what.UTF8String); exit(1); }
+}
+
+// Turns the run loop until done() or for at most 10 seconds and returns done(), so a reply that never comes is a failed
+// check and the cleanup after it still runs.
+static BOOL settles(BOOL (^done)(void)) {
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
+    while (!done() && deadline.timeIntervalSinceNow > 0) {
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+    }
+    return done();
 }
 
 static NSDictionary *latest;
@@ -298,6 +310,92 @@ int main(void) { @autoreleasepool {
         releaseControlledFrameIdentityPresentation();
         check(cancelledFrameIdentityStartReplies == 1,
             @"the late target update callback cannot reply again after generation removal");
+        sp_image_capture_match_end();
+        clearFrameIdentityReply();
+
+        // A navigation that the document commits ends the identity as the close does (docs/spec/diagnostics.md): a start
+        // that has not answered fails with its reason, and its removal still answers.
+        sp_image_capture_match_begin(NULL, NULL);
+        identitySessionError = NULL;
+        identitySession = sp_image_capture_match_identity_session_begin(&identitySessionError);
+        check(identitySession && identitySessionError == NULL, @"the navigation case begins its identity session");
+        free(identitySessionError);
+        cancelledFrameIdentityStartReplies = 0;
+        [cancelledFrameIdentityStartError release]; cancelledFrameIdentityStartError = nil;
+        controlFrameIdentityPresentation((WKWebView *)view);
+        check(sp_document_frame_identity_start(view, 44, cancelledFrameIdentityStartReply, NULL),
+            @"the navigation case starts a diagnostic QR producer");
+        until(@"WebKit reaches the held target update before the navigation",
+            ^BOOL { return frameIdentityPresentationCallbackArrived; });
+        runPage(view);
+        BOOL navigatedStartAnswered = settles(^BOOL { return cancelledFrameIdentityStartReplies == 1; });
+        check(navigatedStartAnswered
+            && [cancelledFrameIdentityStartError isEqualToString:@"the plugin root document navigated during frame identity capture"],
+            [NSString stringWithFormat:@"a navigation that the document commits fails the start that has not answered, got %lu %@",
+                (unsigned long)cancelledFrameIdentityStartReplies, cancelledFrameIdentityStartError ?: @"(no reply)"]);
+        clearFrameIdentityReply();
+        check(sp_document_frame_identity_remove(44, frameIdentityReply, NULL), @"the navigated generation accepts its removal");
+        until(@"the removal of the navigated generation answers", ^BOOL { return frameIdentityReplyCount == 1; });
+        check(frameIdentityReplyError == nil && [frameIdentityReplyJSON containsString:@"\"removed\":true"],
+            [NSString stringWithFormat:@"the removal of a navigated generation answers that it is removed: %@ %@",
+                frameIdentityReplyJSON ?: @"", frameIdentityReplyError ?: @""]);
+        releaseControlledFrameIdentityPresentation();
+        check(cancelledFrameIdentityStartReplies <= 1, @"the late target update of a navigated generation does not answer again");
+        sp_image_capture_match_end();
+        clearFrameIdentityReply();
+
+        // A started identity is invalidated by the navigation: its freeze fails as an inactive generation and its removal answers.
+        sp_image_capture_match_begin(NULL, NULL);
+        identitySessionError = NULL;
+        identitySession = sp_image_capture_match_identity_session_begin(&identitySessionError);
+        check(identitySession && identitySessionError == NULL, @"the started navigation case begins its identity session");
+        free(identitySessionError);
+        check(sp_document_frame_identity_start(view, 45, frameIdentityReply, NULL),
+            @"the started navigation case starts a diagnostic QR producer");
+        until(@"the started navigation case reports its first QR draw", ^BOOL { return frameIdentityReplyCount == 1; });
+        check(frameIdentityReplyError == nil, [NSString stringWithFormat:@"the identity 45 starts: %@", frameIdentityReplyError ?: @""]);
+        runPage(view);
+        clearFrameIdentityReply();
+        check(sp_document_frame_identity_freeze(45, frameIdentityReply, NULL), @"the freeze after the navigation schedules");
+        until(@"the freeze after the navigation answers", ^BOOL { return frameIdentityReplyCount == 1; });
+        check([frameIdentityReplyError isEqualToString:@"the document frame identity generation is not active"],
+            [NSString stringWithFormat:@"a navigation invalidates the started identity, so its freeze fails as inactive, got %@ %@",
+                frameIdentityReplyJSON ?: @"", frameIdentityReplyError ?: @""]);
+        clearFrameIdentityReply();
+        check(sp_document_frame_identity_remove(45, frameIdentityReply, NULL), @"the invalidated generation accepts its removal");
+        until(@"the removal of the invalidated generation answers", ^BOOL { return frameIdentityReplyCount == 1; });
+        check(frameIdentityReplyError == nil && [frameIdentityReplyJSON containsString:@"\"removed\":true"],
+            [NSString stringWithFormat:@"the removal of a generation that a navigation invalidated answers: %@ %@",
+                frameIdentityReplyJSON ?: @"", frameIdentityReplyError ?: @""]);
+        sp_image_capture_match_end();
+        clearFrameIdentityReply();
+
+        // The end of the WebContent process of the document ends the identity: a start that has not answered fails with its reason.
+        sp_image_capture_match_begin(NULL, NULL);
+        identitySessionError = NULL;
+        identitySession = sp_image_capture_match_identity_session_begin(&identitySessionError);
+        check(identitySession && identitySessionError == NULL, @"the process end case begins its identity session");
+        free(identitySessionError);
+        cancelledFrameIdentityStartReplies = 0;
+        [cancelledFrameIdentityStartError release]; cancelledFrameIdentityStartError = nil;
+        controlFrameIdentityPresentation((WKWebView *)view);
+        check(sp_document_frame_identity_start(view, 46, cancelledFrameIdentityStartReply, NULL),
+            @"the process end case starts a diagnostic QR producer");
+        until(@"WebKit reaches the held target update before the process end",
+            ^BOOL { return frameIdentityPresentationCallbackArrived; });
+        [(WKWebView *)view _killWebContentProcessAndResetState];
+        BOOL endedStartAnswered = settles(^BOOL { return cancelledFrameIdentityStartReplies == 1; });
+        check(endedStartAnswered
+            && [cancelledFrameIdentityStartError isEqualToString:@"the web content process of the plugin root document ended during frame identity capture"],
+            [NSString stringWithFormat:@"the end of the WebContent process fails the start that has not answered, got %lu %@",
+                (unsigned long)cancelledFrameIdentityStartReplies, cancelledFrameIdentityStartError ?: @"(no reply)"]);
+        clearFrameIdentityReply();
+        check(sp_document_frame_identity_remove(46, frameIdentityReply, NULL), @"the generation of the ended process accepts its removal");
+        until(@"the removal of the generation of the ended process answers", ^BOOL { return frameIdentityReplyCount == 1; });
+        check(frameIdentityReplyError == nil && [frameIdentityReplyJSON containsString:@"\"removed\":true"],
+            [NSString stringWithFormat:@"the removal of the generation of an ended process answers that it is removed: %@ %@",
+                frameIdentityReplyJSON ?: @"", frameIdentityReplyError ?: @""]);
+        releaseControlledFrameIdentityPresentation();
         sp_image_capture_match_end();
         clearFrameIdentityReply();
         sp_document_close(view);
