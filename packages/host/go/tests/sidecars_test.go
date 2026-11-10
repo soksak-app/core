@@ -665,13 +665,15 @@ func TestCloseReachesOnlyTheSidecarThatHoldsTheSurface(t *testing.T) {
 	if err := sidecars.Send(owner, second, "s2", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	// The echo of each sidecar is the event that it ignores the terminate signal of the stop, so it records every line.
-	echoed := map[string]bool{}
+	// The echo of each sidecar is the event that it ignores the terminate signal of the stop, so it records every line. The two
+	// sidecars answer in either order, so the check takes both events and requires the echo of the open of each.
+	echoes := map[string]string{}
 	for range 2 {
-		echoed[owner.Next(t).Sidecar] = true
+		event := owner.Next(t)
+		echoes[event.Sidecar] = event.Surface + " " + string(event.Body)
 	}
-	if !echoed[support.EchoSidecar] || !echoed[second] {
-		t.Fatalf("the echoes came from %v", echoed)
+	if want := map[string]string{support.EchoSidecar: `s1 {"operation":"open"}`, second: `s2 {"operation":"open"}`}; !reflect.DeepEqual(echoes, want) {
+		t.Fatalf("the echoes are %v, want %v", echoes, want)
 	}
 	sidecars.Close("s1")
 	sidecars.Stop()

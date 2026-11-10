@@ -58,6 +58,8 @@ type fakeImageOwner struct {
 	mu     sync.Mutex
 	events []host.SidecarMessage
 	seen   chan struct{}
+	// taken is the index in events of the event that the next call of next returns.
+	taken int
 }
 
 func newFakeImageOwner(root string) *fakeImageOwner {
@@ -75,12 +77,15 @@ func (o *fakeImageOwner) DeliverSidecarMessage(message host.SidecarMessage) {
 	o.seen <- struct{}{}
 }
 
+// next waits for the next sidecar event and returns it in the order of delivery, as FakeOwner.Next does.
 func (o *fakeImageOwner) next(t *testing.T) host.SidecarMessage {
 	t.Helper()
 	<-o.seen
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	return o.events[len(o.events)-1]
+	event := o.events[o.taken]
+	o.taken++
+	return event
 }
 
 // echoSidecarsForImages creates a channel that declares a fake sidecar that outputs the lines it received as they are.
