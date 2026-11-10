@@ -296,7 +296,6 @@ fn a_page_start_returns_the_failures_of_the_ends_it_clears() {
 mod presentation_queue {
     use super::super::present_on_ui;
     use std::sync::{Arc, Mutex, mpsc};
-    use std::time::Duration;
 
     // contract: images.presentation.runs-after-framework-event
     #[test]
@@ -316,7 +315,8 @@ mod presentation_queue {
                 |work| enqueue.send(work).map_err(|error| error.to_string()),
             )
         });
-        let callback = queued.recv_timeout(Duration::from_secs(2));
+        // The worker either queues the commit or ends, which drops the queue, so the receive ends by one of those events.
+        let callback = queued.recv();
         drop(event);
         if let Ok(callback) = callback {
             callback();
