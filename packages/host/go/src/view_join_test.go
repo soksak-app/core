@@ -528,7 +528,7 @@ func TestSynchronousPresentationJoinCallbackPrecedesNativeJoinResult(t *testing.
 }
 
 // A joined view that has neither presented nor ended when a press or key event ends the hold ends its wait with the reason input:
-// the native join ended by itself, so the host abandons no native join, and no wait ends by time
+// the native join ended by itself, so the host abandons no native join; the platform has no delayed step, so no wait ends by time
 // (docs/spec/native-surfaces.md#layout-transaction).
 // contract: view.presentation-wait.ends-at-input
 func TestAJoinedViewThatDoesNotPresentEndsItsWaitAtInput(t *testing.T) {
@@ -542,9 +542,6 @@ func TestAJoinedViewThatDoesNotPresentEndsItsWaitAtInput(t *testing.T) {
 	}
 	if len(fake.joins) != 1 {
 		t.Fatalf("the shown view joined %d times, want 1", len(fake.joins))
-	}
-	if len(fake.delayed) != 0 {
-		t.Fatalf("the join queued %d delayed steps %#v, want none: no wait ends by time", len(fake.delayed), fake.delayed)
 	}
 	fake.joins[0].ended("input")
 	if s.presentation.waits(placement.ID) {

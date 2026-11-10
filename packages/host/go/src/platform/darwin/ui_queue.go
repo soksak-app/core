@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"strings"
-	"time"
 
 	handles "github.com/soksak-app/core/packages/host/go/src/callback"
 )
@@ -33,15 +32,6 @@ func (implementation) RequireMainThread() error {
 func (implementation) EnqueueUI(work func()) error {
 	handle := handles.NewHandle(work)
 	native.UiEnqueue(uintptr(handle))
-	return nil
-}
-
-func (implementation) EnqueueUIAfter(delay time.Duration, work func()) error {
-	if delay < 0 {
-		return fmt.Errorf("UI queue delay %s is negative", delay)
-	}
-	handle := handles.NewHandle(work)
-	native.UiEnqueueAfter(uint64(delay.Nanoseconds()), uintptr(handle))
 	return nil
 }
 

@@ -289,7 +289,6 @@ func Functions() abi.NativeFunctions {
 			return uintptr(C.surfaceWatchMouse(C.uintptr_t(a0), C.uintptr_t(a1)))
 		},
 		UiEnqueue:      func(a0 uintptr) { C.uiEnqueue(C.uintptr_t(a0)) },
-		UiEnqueueAfter: func(a0 uint64, a1 uintptr) { C.uiEnqueueAfter(C.uint64_t(a0), C.uintptr_t(a1)) },
 		WatchButtons:   func() bool { return bool(C.watchButtons()) },
 		WindowFileDrop: func(a0 unsafe.Pointer, a1 uintptr) bool { return bool(C.windowFileDrop(a0, C.uintptr_t(a1))) },
 	}
