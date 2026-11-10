@@ -458,6 +458,7 @@ struct RoomWait<'a> {
 /// the close done or running by another caller waits for it and returns `Ok(false)`, and the caller that does it
 /// returns `Ok(true)`. A failed close is not done, so the next caller tries again. Without room the close fails on a
 /// full queue, and with room it waits for room in the queue.
+#[allow(clippy::too_many_arguments)]
 fn close_persistent_owner(
     outbox: &SyncSender<Outgoing>,
     close_waiters: &ReplyWaiters,
@@ -1101,7 +1102,7 @@ enum WriterEnd {
 }
 
 fn write_all(lines: &[QueuedLine], write: &mut impl FnMut(&QueuedLine) -> bool) -> bool {
-    lines.iter().all(|line| write(line))
+    lines.iter().all(write)
 }
 
 /// Writes the line of the queue after the held items that the host accepted before it.

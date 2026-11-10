@@ -6,7 +6,6 @@ mod folder;
 // switch and no flag reaches a service. The writer of the records and the switch belong to the process, so the checks that
 // store events run in a child process that nothing else writes in.
 use std::process::{Command, Stdio};
-use std::time::Duration;
 
 use serde_json::json;
 use soksak_host::event_log::Level;

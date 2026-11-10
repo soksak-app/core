@@ -976,14 +976,13 @@ fn a_process_exit_answer_names_the_end_of_its_wait() {
 /// A native wait of the test: start registers the answer and sends () on started; its end answers false, once.
 type TestAnswer = Arc<Mutex<Option<Box<dyn FnOnce(bool) + Send>>>>;
 
+/// The thread of a native wait of the test, which returns the result of the wait.
+type TestWait = std::thread::JoinHandle<Result<(bool, Option<&'static str>), Failure>>;
+
 fn test_native_wait(
     label: &'static str,
     connection: &crate::endpoint::ConnectionEnd,
-) -> (
-    mpsc::Receiver<()>,
-    TestAnswer,
-    std::thread::JoinHandle<Result<(bool, Option<&'static str>), Failure>>,
-) {
+) -> (mpsc::Receiver<()>, TestAnswer, TestWait) {
     let (started, on_started) = mpsc::channel();
     let answer: TestAnswer = Arc::new(Mutex::new(None));
     let slot = answer.clone();

@@ -30,6 +30,9 @@ pub(crate) enum ReloadEnd {
     NotStarted(String),
 }
 
+/// A reload that waits for the next page of its window: the number of the reload and the sender of its end.
+pub(crate) type Readied = (u64, mpsc::Sender<Result<(), ReloadEnd>>);
+
 /// The state of one window.
 #[derive(Default)]
 pub struct WindowData {
@@ -54,7 +57,7 @@ pub struct WindowData {
     pub closing: AtomicBool,
     /// The reloads that wait for the next page: the ready of the page sends `Ok`, and the close of the window, the end of
     /// its page process and a start of the new page that fails send the end of the reload.
-    pub(crate) readied: Mutex<Vec<mpsc::Sender<Result<(), ReloadEnd>>>>,
+    pub(crate) readied: Mutex<Vec<Readied>>,
     /// The ends of the window and of its main page process, which end the requests that wait in the window.
     pub(crate) ends: WindowEnds,
     /// Set when the window asked its page with `project-close-request` and the page has answered neither `windowClose` nor
@@ -1637,7 +1640,7 @@ pub(crate) fn end_reloads(data: &WindowData, result: Result<(), ReloadEnd>) {
             // hook records the panic.
             .unwrap_or_else(PoisonError::into_inner),
     );
-    for ready in readied {
+    for (_, ready) in readied {
         if ready.send(result.clone()).is_err() {
             crate::application_log::log_info(
                 "window",
