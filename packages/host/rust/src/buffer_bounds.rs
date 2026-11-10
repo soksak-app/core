@@ -23,9 +23,9 @@ pub(crate) struct PendingLines {
 pub(crate) static HELD_LINES: AtomicUsize = AtomicUsize::new(0);
 
 impl PendingLines {
-    /// Appends `line` and raises `HELD_LINES` by one. When the bound refuses it, the list stays as it was and the result is
-    /// the bound that was reached, as `<n> messages` or `<n> bytes`.
-    pub(crate) fn add(&mut self, line: Vec<u8>) -> Result<(), String> {
+    /// Appends `line`, held at the moment `queued`, and raises `HELD_LINES` by one. When the bound refuses it, the list stays
+    /// as it was and the result is the bound that was reached, as `<n> messages` or `<n> bytes`.
+    pub(crate) fn add(&mut self, line: Vec<u8>, queued: std::time::Instant) -> Result<(), String> {
         if self.lines.len() >= PENDING_MESSAGES {
             return Err(format!("{PENDING_MESSAGES} messages"));
         }
@@ -34,7 +34,7 @@ impl PendingLines {
         }
         self.bytes += line.len();
         HELD_LINES.fetch_add(1, Ordering::SeqCst);
-        self.lines.push(QueuedLine::new(line));
+        self.lines.push(QueuedLine::new(line, queued));
         Ok(())
     }
 

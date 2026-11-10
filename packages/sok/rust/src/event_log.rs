@@ -170,6 +170,21 @@ pub struct Rouser {
     counts_held: Arc<AtomicBool>,
     /// How long such a count waits, in nanoseconds.
     count_wait: Arc<AtomicU64>,
+    /// The least time between two reports of the counts of the gate, in nanoseconds.
+    report_interval: Arc<AtomicU64>,
+    /// The observer of the sleeps of the writer and the sleep that the writer is in.
+    sleep_watch: Arc<Mutex<SleepWatch>>,
+}
+
+/// The observer that the writer calls each time it sleeps, with whether it holds a count of the gate for its report.
+type SleepObserver = Box<dyn Fn(bool) + Send>;
+
+/// The observer of the sleeps of the writer and the sleep that it is in: `Some(count_held)` while it sleeps, so an observer set
+/// while the writer sleeps hears of that sleep.
+#[derive(Default)]
+struct SleepWatch {
+    observer: Option<SleepObserver>,
+    sleeping: Option<bool>,
 }
 
 impl Rouser {
@@ -191,6 +206,30 @@ impl Rouser {
         if self.asleep.load(Ordering::SeqCst) && self.asleep.swap(false, Ordering::SeqCst) {
             self.wake();
         }
+    }
+
+    /// Records that the writer sleeps and tells the observer.
+    fn slept(&self, count_held: bool) {
+        // default: a lock that a panicking thread poisoned still holds the observer of the sleeps, which the writer calls;
+        // the panic hook records the panic.
+        let mut watch = self
+            .sleep_watch
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        watch.sleeping = Some(count_held);
+        if let Some(observer) = &watch.observer {
+            observer(count_held);
+        }
+    }
+
+    /// Records that the writer runs an interval.
+    fn awake(&self) {
+        // default: a lock that a panicking thread poisoned still holds the sleep of the writer, which the writer ends; the
+        // panic hook records the panic.
+        self.sleep_watch
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .sleeping = None;
     }
 
     /// Wakes a writer that sleeps for the first count of the gate that it does not know of. The writer does not write for
@@ -513,6 +552,24 @@ impl EventLog {
         *self.on_write.lock().unwrap_or_else(PoisonError::into_inner) = Some(observer);
     }
 
+    /// Sets the observer that the writer calls each time it sleeps: it wrote everything, and only an event, a wake of its source, a
+    /// loss, a request or the report of a count of the gate that it holds (the argument) wakes it. A writer that sleeps when the
+    /// observer is set calls it at once. It runs on the thread of the writer or of the caller, so it must not wait. A check of what
+    /// a writer that sleeps does not do starts from this event.
+    pub fn set_on_sleep(&self, observer: SleepObserver) {
+        // default: a lock that a panicking thread poisoned still holds the observer of the sleeps, which the call replaces;
+        // the panic hook records the panic.
+        let mut watch = self
+            .rouser
+            .sleep_watch
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        if let Some(count_held) = watch.sleeping {
+            observer(count_held);
+        }
+        watch.observer = Some(observer);
+    }
+
     /// Creates the folder (mode 0700) and the file (mode 0600, created new), writes `log.open` and starts the writer thread.
     pub fn start(options: Options) -> Result<EventLog, String> {
         if options.pull.is_some() && options.wake.is_none() {
@@ -556,6 +613,8 @@ impl EventLog {
             asleep: Arc::clone(&asleep),
             counts_held: Arc::new(AtomicBool::new(false)),
             count_wait: Arc::new(AtomicU64::new(GATED_WAIT.as_nanos() as u64)),
+            report_interval: Arc::new(AtomicU64::new(GATED_REPORT_INTERVAL.as_nanos() as u64)),
+            sleep_watch: Arc::new(Mutex::new(SleepWatch::default())),
         };
         let gate = Arc::new(Gate::new(rouser.clone()));
         let writer = {
@@ -688,6 +747,14 @@ impl EventLog {
         self.rouser
             .count_wait
             .store(wait.as_nanos() as u64, Ordering::SeqCst);
+    }
+
+    /// Sets the least time between two reports of the counts of the gate. A writer starts with `GATED_REPORT_INTERVAL`; a check
+    /// sets the bound as its input instead of waiting for it to pass.
+    pub fn set_gated_report_interval(&self, interval: Duration) {
+        self.rouser
+            .report_interval
+            .store(interval.as_nanos() as u64, Ordering::SeqCst);
     }
 
     /// The main file of this writer (error, warn and info).
@@ -1540,7 +1607,9 @@ fn write_loop(
     let mut gated_at = Instant::now();
     let mut report_gated = |out: &mut Output, force: bool| {
         if !force {
-            if gated_at.elapsed() < GATED_REPORT_INTERVAL {
+            if gated_at.elapsed()
+                < Duration::from_nanos(rouser.report_interval.load(Ordering::SeqCst))
+            {
                 return;
             }
             // A report goes with a batch of other events, or alone when the count that the writer held has waited its time.
@@ -1615,8 +1684,10 @@ fn write_loop(
             rouser.counts_held.store(true, Ordering::SeqCst);
             holding.set(true);
             let wait = Duration::from_nanos(rouser.count_wait.load(Ordering::SeqCst));
+            rouser.slept(true);
             return Some((since + wait).max(Instant::now() + interval));
         }
+        rouser.slept(false);
         None
     };
     // A flush or a stop that a write found queued behind the events.
@@ -1629,6 +1700,7 @@ fn write_loop(
             if holding.replace(false) {
                 rouser.asleep.store(false, Ordering::SeqCst);
                 rouser.counts_held.store(false, Ordering::SeqCst);
+                rouser.awake();
             }
             out.wrote = false;
             queued = drain(&mut out, false);
@@ -1680,6 +1752,7 @@ fn write_loop(
         if due.is_none() || holding.replace(false) {
             rouser.counts_held.store(false, Ordering::SeqCst);
             rouser.asleep.store(false, Ordering::SeqCst);
+            rouser.awake();
             due = Some(Instant::now() + interval);
             queued = drain(&mut out, false);
         }

@@ -1072,7 +1072,7 @@ impl Images {
     fn wait_raster_snapshot_observed(
         &self,
         timeout: Duration,
-        waiting: impl FnOnce(),
+        waiting: impl FnMut(),
     ) -> Result<(), String> {
         self.wait_observed(
             timeout,
@@ -1081,11 +1081,12 @@ impl Images {
         )
     }
 
-    /// Signals the first pending check under the owner lock so tests can order the next frame before wakeup.
+    /// Calls `waiting` under the owner lock each time the wait finds the presentation incomplete and blocks, so a test orders
+    /// the next frame after the wait checked the state and knows when the wait checked the frame that it gave.
     fn wait_current_observed(
         &self,
         timeout: Duration,
-        waiting: impl FnOnce(),
+        waiting: impl FnMut(),
     ) -> Result<(), String> {
         self.wait_observed(timeout, waiting, Self::current_presented_locked)
     }
@@ -1093,10 +1094,9 @@ impl Images {
     fn wait_observed(
         &self,
         timeout: Duration,
-        waiting: impl FnOnce(),
+        mut waiting: impl FnMut(),
         complete: fn(&Inner) -> bool,
     ) -> Result<(), String> {
-        let mut waiting = Some(waiting);
         let deadline = Instant::now() + timeout;
         let mut inner = self.lock();
         loop {
@@ -1113,9 +1113,7 @@ impl Images {
             let Some(remaining) = deadline.checked_duration_since(Instant::now()) else {
                 return Err("presentationTimeout".to_string());
             };
-            if let Some(waiting) = waiting.take() {
-                waiting();
-            }
+            waiting();
             let (next, result) = self
                 .shared
                 .changed

@@ -385,9 +385,9 @@ func parseDragNative(params json.RawMessage) (bool, error) {
 // the window has presented its current layout; it runs before each press, because a press goes where the last frame
 // drew. A failed input after a press releases the button at the last point, so no press stays open in the window. The
 // reply is {from, steps, took, asked, pressWaits}: took is the time from the first press to the last release without the
-// waits before the presses, on the clock of the host, asked the time that the steps ask, and pressWaits the wait before
+// waits before the presses, on clock, the clock of the host, asked the time that the steps ask, and pressWaits the wait before
 // each press, all in milliseconds.
-func nativeDrag(plan dragPlan, from point, deliver func(PointerInput) error, step func(), presented func() error) (map[string]any, error) {
+func nativeDrag(plan dragPlan, from point, clock func() time.Duration, deliver func(PointerInput) error, step func(), presented func() error) (map[string]any, error) {
 	per := plan.steps()
 	at := func(fraction float64) point {
 		return point{X: from.X + plan.DX*fraction, Y: from.Y + plan.DY*fraction}
@@ -395,15 +395,15 @@ func nativeDrag(plan dragPlan, from point, deliver func(PointerInput) error, ste
 	input := func(phase string, p point) PointerInput {
 		return PointerInput{Pointer: mainPointer, X: p.X, Y: p.Y, Phase: phase, Button: "left", Clicks: 1}
 	}
-	began := time.Now()
+	began := clock()
 	var waited time.Duration
 	pressWaits := make([]int64, 0, plan.Times)
 	for turn := 0; turn < plan.Times; turn++ {
-		waiting := time.Now()
+		waiting := clock()
 		if err := presented(); err != nil {
 			return nil, fmt.Errorf("native drag wait before the press of round trip %d: %w", turn+1, err)
 		}
-		wait := time.Since(waiting)
+		wait := clock() - waiting
 		waited += wait
 		pressWaits = append(pressWaits, wait.Milliseconds())
 		if err := deliver(input("down", from)); err != nil {
@@ -430,7 +430,7 @@ func nativeDrag(plan dragPlan, from point, deliver func(PointerInput) error, ste
 		}
 	}
 	steps := plan.Times * 2 * per
-	return map[string]any{"from": from, "steps": steps, "took": (time.Since(began) - waited).Milliseconds(),
+	return map[string]any{"from": from, "steps": steps, "took": (clock() - began - waited).Milliseconds(),
 		"asked": steps * int(frameStep/time.Millisecond), "pressWaits": pressWaits}, nil
 }
 
@@ -764,7 +764,9 @@ func nativeDragPresented(h *Host, s *Surfaces, plan dragPlan, from point, sent f
 	backend := hostBackend{h: h}
 	tick := time.NewTicker(frameStep)
 	defer tick.Stop()
-	result, err := nativeDrag(plan, from, func(input PointerInput) error { return backend.Pointer(s.name, input) },
+	start := time.Now()
+	clock := func() time.Duration { return time.Since(start) }
+	result, err := nativeDrag(plan, from, clock, func(input PointerInput) error { return backend.Pointer(s.name, input) },
 		func() {
 			<-tick.C
 			sent()
@@ -1174,7 +1176,7 @@ func diagnosticCaptureStop(e *Endpoint, conn *endpointConn, params json.RawMessa
 			if !hasIdentity {
 				return nil, errors.New("document frame identity is not implemented on this platform")
 			}
-			return awaitDocumentFrameIdentity(s, func(done func(json.RawMessage, error)) error {
+			return awaitDocumentFrameIdentity(s, pageTimeout, func(done func(json.RawMessage, error)) error {
 				return identity.FreezeDocumentFrameIdentity(generation, done)
 			})
 		},
@@ -1187,7 +1189,7 @@ func diagnosticCaptureStop(e *Endpoint, conn *endpointConn, params json.RawMessa
 			if !hasIdentity {
 				return nil, errors.New("document frame identity is not implemented on this platform")
 			}
-			return awaitDocumentFrameIdentity(s, func(done func(json.RawMessage, error)) error {
+			return awaitDocumentFrameIdentity(s, pageTimeout, func(done func(json.RawMessage, error)) error {
 				return identity.RemoveDocumentFrameIdentity(generation, done)
 			})
 		})
@@ -1274,7 +1276,9 @@ func documentFrameIdentityRemoved(raw json.RawMessage, generation uint64) error 
 	return nil
 }
 
-func awaitDocumentFrameIdentity(s *Surfaces, schedule func(func(json.RawMessage, error)) error) (json.RawMessage, error) {
+// awaitDocumentFrameIdentity schedules a document frame identity operation on the UI thread and waits for its callback at
+// most limit, the page timeout of the host; a check passes the limit as its input.
+func awaitDocumentFrameIdentity(s *Surfaces, limit time.Duration, schedule func(func(json.RawMessage, error)) error) (json.RawMessage, error) {
 	if s.invoke == nil {
 		return nil, errors.New("document frame identity has no UI-thread dispatcher")
 	}
@@ -1330,7 +1334,7 @@ func awaitDocumentFrameIdentity(s *Surfaces, schedule func(func(json.RawMessage,
 	select {
 	case result := <-done:
 		return result.reply, result.err
-	case <-time.After(pageTimeout):
+	case <-time.After(limit):
 		callbackMu.Lock()
 		if callbackCompleted {
 			result := <-done

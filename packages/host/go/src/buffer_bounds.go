@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sort"
 	"sync/atomic"
+	"time"
 )
 
 // pendingLines is a list of messages that wait for a full write queue. It holds at most PendingMessages messages and
@@ -16,10 +17,10 @@ type pendingLines struct {
 	bytes int
 }
 
-// add appends line and raises held by one. When the bound refuses it, add keeps the list and held as they were and returns the
+// add appends line, queued at the moment at, and raises held by one. When the bound refuses it, add keeps the list and held as they were and returns the
 // bound that was reached, as `<n> messages` or `<n> bytes`; it returns "" when the line was appended. held is raised before
 // the line is ordered, so a writer that sees a line ordered after it finds held above zero.
-func (p *pendingLines) add(line []byte, held *atomic.Int64) string {
+func (p *pendingLines) add(line []byte, at time.Time, held *atomic.Int64) string {
 	switch {
 	case len(p.lines) >= PendingMessages:
 		return fmt.Sprintf("%d messages", PendingMessages)
@@ -27,7 +28,7 @@ func (p *pendingLines) add(line []byte, held *atomic.Int64) string {
 		return fmt.Sprintf("%d bytes", PendingBytes)
 	}
 	held.Add(1)
-	p.lines = append(p.lines, queue(line))
+	p.lines = append(p.lines, queue(line, at))
 	p.bytes += len(line)
 	return ""
 }

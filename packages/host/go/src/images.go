@@ -709,7 +709,8 @@ func (i *Images) waitRasterSnapshotObserved(timeout time.Duration, waiting func(
 	return i.waitObserved(timeout, waiting, i.currentRasterSnapshotInstalledLocked)
 }
 
-// waitCurrentObserved signals the first pending check under the owner lock so tests can order the next frame before wakeup.
+// waitCurrentObserved calls waiting under the owner lock each time the wait finds the presentation incomplete and blocks, so a test
+// orders the next frame after the wait checked the state and knows when the wait checked the frame that it gave.
 func (i *Images) waitCurrentObserved(timeout time.Duration, waiting func()) error {
 	return i.waitObserved(timeout, waiting, i.currentPresentedLocked)
 }
@@ -732,7 +733,6 @@ func (i *Images) waitObserved(timeout time.Duration, waiting func(), complete fu
 		changed := i.changed
 		if waiting != nil {
 			waiting()
-			waiting = nil
 		}
 		i.mu.Unlock()
 

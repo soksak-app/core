@@ -214,12 +214,14 @@ type EventLog struct {
 	asleep atomic.Bool
 	// countsHeld says that a writer that sleeps knows of a count and has its time set, so a further count wakes nothing;
 	// countWait is how long such a count waits, in nanoseconds.
-	countsHeld   atomic.Bool
-	countWait    atomic.Int64
-	queuedEvents atomic.Int64
-	queuedBytes  atomic.Int64
-	queueEvents  int64
-	queueBytes   int64
+	countsHeld atomic.Bool
+	countWait  atomic.Int64
+	// reportInterval is the least time between two reports of the counts of the gate, in nanoseconds.
+	reportInterval atomic.Int64
+	queuedEvents   atomic.Int64
+	queuedBytes    atomic.Int64
+	queueEvents    int64
+	queueBytes     int64
 	// lost counts what the queue and the producers refused, for each channel and reason; depth is the largest number of queued
 	// events at a refusal of the queue, for each channel.
 	lost  [ChannelCount][LossReasonCount]struct{ events, bytes atomic.Uint64 }
@@ -239,6 +241,12 @@ type EventLog struct {
 	done        chan struct{}
 	closeOnce   sync.Once
 	onWrite     atomic.Pointer[func(path string, size int64)]
+	// sleepWatch guards onSleep and the sleep that the writer is in, so an observer set while the writer sleeps hears of that
+	// sleep.
+	sleepWatch sync.Mutex
+	onSleep    func(countHeld bool)
+	sleeping   bool
+	sleepHeld  bool
 	// pluginClasses holds the classes that the catalogs of the installed plugins declare (docs/spec/logging.md#plugin-catalogs).
 	// AddPluginCatalogs replaces the map under pluginClassesAdding, so classify reads it without a lock.
 	pluginClasses       atomic.Pointer[map[string]Class]
@@ -294,6 +302,36 @@ func (l *EventLog) SetOnWrite(observer func(path string, size int64)) {
 	l.onWrite.Store(&observer)
 }
 
+// SetOnSleep sets the observer that the writer calls each time it sleeps: it wrote everything, and only an event, a wake of its
+// source, a loss, a request or the report of a count of the gate that it holds (countHeld) wakes it. A writer that sleeps when
+// the observer is set calls it at once. It runs on the goroutine of the writer or of the caller, so it must not wait. A check of
+// what a writer that sleeps does not do starts from this event.
+func (l *EventLog) SetOnSleep(observer func(countHeld bool)) {
+	l.sleepWatch.Lock()
+	defer l.sleepWatch.Unlock()
+	l.onSleep = observer
+	if l.sleeping && observer != nil {
+		observer(l.sleepHeld)
+	}
+}
+
+// slept records that the writer sleeps and tells the observer.
+func (l *EventLog) slept(countHeld bool) {
+	l.sleepWatch.Lock()
+	defer l.sleepWatch.Unlock()
+	l.sleeping, l.sleepHeld = true, countHeld
+	if l.onSleep != nil {
+		l.onSleep(countHeld)
+	}
+}
+
+// awake records that the writer runs an interval.
+func (l *EventLog) awake() {
+	l.sleepWatch.Lock()
+	defer l.sleepWatch.Unlock()
+	l.sleeping = false
+}
+
 // StartEventLog creates the folder (mode 0700) and the main file (mode 0600, created new), writes log.open and starts the writer.
 // The debug file is created with its first event.
 func StartEventLog(options EventLogOptions) (*EventLog, error) {
@@ -346,6 +384,7 @@ func StartEventLog(options EventLogOptions) (*EventLog, error) {
 		done:        make(chan struct{}),
 	}
 	log.countWait.Store(int64(gatedWait))
+	log.reportInterval.Store(int64(gatedReportInterval))
 	open := log.writerEvent(LevelInfo, "log.open", fields)
 	options.Spawn("event-log-writer", func() { log.write(file, options.BatchInterval, open) })
 	return log, nil
@@ -662,6 +701,12 @@ func (l *EventLog) rouseForCount() {
 
 // SetGatedWait sets how long a count of the gate waits for an event when the writer sleeps. A log starts with gatedWait.
 func (l *EventLog) SetGatedWait(wait time.Duration) { l.countWait.Store(int64(wait)) }
+
+// SetGatedReportInterval sets the least time between two reports of the counts of the gate. A log starts with
+// gatedReportInterval; a check sets the bound as its input instead of waiting for it to pass.
+func (l *EventLog) SetGatedReportInterval(interval time.Duration) {
+	l.reportInterval.Store(int64(interval))
+}
 
 // lossCounted reports whether a count of a loss, of any channel and reason, waits for the writer.
 func (l *EventLog) lossCounted() bool {
@@ -1024,7 +1069,7 @@ func (l *EventLog) write(main *os.File, interval time.Duration, open *pendingEve
 	var heldSince time.Time
 	reportGated := func(force bool) {
 		if !force {
-			if time.Since(gatedAt) < gatedReportInterval {
+			if time.Since(gatedAt) < time.Duration(l.reportInterval.Load()) {
 				return
 			}
 			due := !heldSince.IsZero() && time.Since(heldSince) >= time.Duration(l.countWait.Load())
@@ -1101,6 +1146,7 @@ func (l *EventLog) write(main *os.File, interval time.Duration, open *pendingEve
 	begin := func() {
 		holding = false
 		l.countsHeld.Store(false)
+		l.awake()
 		timer.Reset(interval)
 		ended = timer.C
 	}
@@ -1125,6 +1171,7 @@ func (l *EventLog) write(main *os.File, interval time.Duration, open *pendingEve
 			ended = timer.C
 			holding = true
 		}
+		l.slept(holding)
 	}
 	// wakeUp takes what woke a writer that slept and reports whether a request that it met ends the writer.
 	wakeUp := func() bool {

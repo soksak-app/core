@@ -41,9 +41,30 @@ pub struct LogNotices {
     worker: Mutex<Option<JoinHandle<()>>>,
 }
 
+/// The end of the wait between two notices: the interval of the host, or the function of a check that returns when the next notice may be
+/// published.
+enum Spacing {
+    Interval(Duration),
+    By(Box<dyn Fn() + Send>),
+}
+
 impl LogNotices {
     /// Starts the thread that publishes the notices: it calls `emit` with each notice and then waits for `interval` before the next one.
     pub fn start(interval: Duration, emit: impl Fn(LogNotice) + Send + 'static) -> LogNotices {
+        LogNotices::with_spacing(Spacing::Interval(interval), emit)
+    }
+
+    /// Starts the thread that publishes the notices with `space` in place of the interval: after each notice the thread calls `space`,
+    /// which returns when the next notice may be published. A check sets the end of the interval with it, so the bound on the rate is an
+    /// input of the check and not a time that the check waits for. `stop` waits until `space` returned.
+    pub fn spaced_by(
+        space: impl Fn() + Send + 'static,
+        emit: impl Fn(LogNotice) + Send + 'static,
+    ) -> LogNotices {
+        LogNotices::with_spacing(Spacing::By(Box::new(space)), emit)
+    }
+
+    fn with_spacing(spacing: Spacing, emit: impl Fn(LogNotice) + Send + 'static) -> LogNotices {
         let shared = Arc::new((
             Mutex::new(State {
                 path: String::new(),
@@ -84,6 +105,13 @@ impl LogNotices {
                         state.value.clone()
                     };
                     emit(notice);
+                    let interval = match &spacing {
+                        Spacing::Interval(interval) => *interval,
+                        Spacing::By(space) => {
+                            space();
+                            continue;
+                        }
+                    };
                     let (lock, wake) = &*worker_shared;
                     let deadline = Instant::now() + interval;
                     // default: a lock that a panicking thread poisoned still holds the latest notice, which the thread
