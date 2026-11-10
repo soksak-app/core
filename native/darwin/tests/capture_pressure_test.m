@@ -285,8 +285,11 @@ int main(void) { @autoreleasepool {
     [captureAttempt release]; captureAttempt = [stopAttempt retain];
     objc_setAssociatedObject(captureStream, &captureAttemptAssociationKey, stopAttempt, OBJC_ASSOCIATION_RETAIN);
     [stopAttempt release];
-    // The stream ends before any callback meets the stop boundary, so no later callback follows and the stop ends by that end.
-    [captureSink stream:captureStream didStopWithError:nil];
+    // ScreenCaptureKit ends a stream with an error. The stream ends before any callback meets the stop boundary, so no
+    // later callback follows and the stop ends by that end.
+    [captureSink stream:captureStream didStopWithError:
+        [NSError errorWithDomain:@"capture.test" code:4
+            userInfo:@{NSLocalizedDescriptionKey: @"fixture stream end failure"}]];
     sp_capture_stop(0);
     check(!sp_capture_has_stream(), @"a stop error retires the current native stream");
     NSString *stopError = [NSString stringWithUTF8String:sp_capture_error()] ?: @"";
@@ -294,6 +297,8 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"stop preserves the earlier recording write error (%@)", stopError]);
     check([stopError containsString:@"the stream ended before a frame arrived"],
         [NSString stringWithFormat:@"stop reports a stream that ended before its boundary (%@)", stopError]);
+    check([stopError containsString:@"fixture stream end failure"],
+        [NSString stringWithFormat:@"stop preserves the error that ended the stream (%@)", stopError]);
     check([stopError containsString:@"fixture stop failure"],
         [NSString stringWithFormat:@"stop reports the stream completion error alongside earlier failures (%@)", stopError]);
     CFRelease(frame);
