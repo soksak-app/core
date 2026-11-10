@@ -16,13 +16,6 @@ static void until(BOOL (^condition)(void)) {
         [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
     if (!condition()) { fprintf(stderr, "FAIL: receipt fixture timed out\n"); exit(1); }
 }
-// Runs the main loop until the condition holds or the interval ends, for a completion that must not depend on a later step.
-static void within(NSTimeInterval interval, BOOL (^condition)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:interval];
-    while (!condition() && deadline.timeIntervalSinceNow > 0)
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-}
-
 // Runs the main queue until a marker block that it enqueues now has run: the point at which a check sees what the turns
 // before it decided, with no time in the check.
 static void runMarker(void) {
@@ -133,18 +126,20 @@ int main(void) { @autoreleasepool {
         check(view.drains == 1, @"pending work drains before send"); postReceipt(view); return SPInputSendDelivered;
     }, ^(BOOL value) { received=value; completed++; });
     until(^BOOL { return completed > 0; });
-    check(received && completed == 1 && view.drains == 1,
-        [NSString stringWithFormat:@"a receipt completes the input without a drain after it (drains %lu)", (unsigned long)view.drains]);
+    // The drain after the send watches for a handling without the receipt; the receipt still answers first.
+    check(received && completed == 1 && view.drains == 2,
+        [NSString stringWithFormat:@"a receipt completes the input before the drain after the send (drains %lu)", (unsigned long)view.drains]);
     // A down returns at its receipt also while WebKit still holds mouse work that the receipt does not wait for.
     completed=0; received=NO; view.drains=0; view.held=nil;
-    webviewInputSendThen(view, @"pointerdown", 1, ^BOOL { view.hold=YES; postReceipt(view); return YES; },
+    webviewInputSendThen(view, @"pointerdown", ^SPInputSend { view.hold=YES; postReceipt(view); return SPInputSendDelivered; },
         ^(BOOL value) { received=value; completed++; });
-    within(1, ^BOOL { return completed > 0; });
-    check(received && completed == 1 && view.held == nil,
-        [NSString stringWithFormat:@"a down returns at its receipt while WebKit holds pending mouse work (completed %lu)",
-            (unsigned long)completed]);
-    if (view.held) view.held();
-    within(1, ^BOOL { return completed > 0; });
+    until(^BOOL { return completed > 0; });
+    check(received && completed == 1 && view.held != nil,
+        [NSString stringWithFormat:@"a down returns at its receipt while WebKit holds pending mouse work (completed %lu, held %d)",
+            (unsigned long)completed, view.held != nil]);
+    if (view.held) { void (^held)(void) = view.held; view.held = nil; held(); }
+    runMarker();
+    check(completed == 1, @"the end of the held mouse work after the receipt completes nothing again");
     view.hold=NO; view.held=nil;
     // The press of a key window is awaited twice, by the sender and by the monitor of the press origin. One receipt answers both.
     completed=0; received=NO;

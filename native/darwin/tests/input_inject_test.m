@@ -80,19 +80,19 @@ static void checkActivityWaitAggregation(void) {
 
     callbacks = [NSMutableArray array];
     completionCount = 0;
-    SPInputActivityWait *timeout = activityWait(identifiers, &completionCount);
-    [timeout startWithRegistration:^(NSUInteger index, NSString *identifier, sp_input_activity_member_completion completion) {
+    SPInputActivityWait *ended = activityWait(identifiers, &completionCount);
+    [ended startWithRegistration:^(NSUInteger index, NSString *identifier, sp_input_activity_member_completion completion) {
         (void)identifier;
         while (callbacks.count <= index) [callbacks addObject:[NSNull null]];
         callbacks[index] = [[completion copy] autorelease];
     }];
     ((sp_input_activity_member_completion)callbacks[0])();
-    NSArray<NSString *> *unresolved = [timeout finishAtTimeout];
+    NSArray<NSString *> *unresolved = [ended finish];
     check([unresolved isEqual:@[identifiers[1]]],
-        [NSString stringWithFormat:@"timeout identifies only the unresolved webview (%@)", unresolved]);
+        [NSString stringWithFormat:@"the end of the step identifies only the unresolved webview (%@)", unresolved]);
     ((sp_input_activity_member_completion)callbacks[1])();
-    check(completionCount == 0 && [timeout unresolvedIdentifiers].count == 0,
-        @"a late webview completion cannot finish a timed out aggregate");
+    check(completionCount == 0 && [ended unresolvedIdentifiers].count == 0,
+        @"a late webview completion cannot finish an ended aggregate");
 }
 
 static void checkActivityWaitDelayedRegistration(void) {
@@ -103,11 +103,11 @@ static void checkActivityWaitDelayedRegistration(void) {
     @autoreleasepool {
         SPInputActivityWait *wait = [[SPInputActivityWait alloc]
             initWithIdentifiers:identifiers completion:^{ completionCount++; }];
-        NSArray<NSString *> *timedOut = [wait finishAtTimeout];
+        NSArray<NSString *> *finished = [wait finish];
         BOOL adopted = [wait installIfActivationPending:NO store:^(SPInputActivityWait *value) {
             installed = [value retain];
         }];
-        check([timedOut isEqual:identifiers], @"timeout captures the member before delayed registration");
+        check([finished isEqual:identifiers], @"the end of the step captures the member before delayed registration");
         check(!adopted && installed == nil,
             @"a completed activation does not retain a wait installed by a delayed main-queue block");
         [wait startWithRegistration:^(NSUInteger index, NSString *identifier,
@@ -118,24 +118,24 @@ static void checkActivityWaitDelayedRegistration(void) {
             registrationCount++;
         }];
         check(registrationCount == 0,
-            @"a timed out wait registers no WebKit activity callbacks when its queued block runs late");
+            @"an ended wait registers no WebKit activity callbacks when its queued block runs late");
         [wait release];
     }
     [installed release];
-    check(completionCount == 0, @"a delayed registration cannot invoke completion after timeout");
+    check(completionCount == 0, @"a delayed registration cannot invoke completion after the end of the step");
 }
 
-static void checkActivityWaitRegistrationTimeout(void) {
-    NSString *beforeActivation = sp_input_activity_timeout_message(NO, NO, nil);
-    check(beforeActivation == nil, @"a timeout before app and key activation does not report a webview-stage error");
-    NSString *registrationPending = sp_input_activity_timeout_message(YES, NO, nil);
-    check([registrationPending isEqualToString:@"webview activity-state registration pending at timeout"],
-        [NSString stringWithFormat:@"timeout before callback registration reports its exact stage (%@)", registrationPending]);
-    NSString *unresolved = sp_input_activity_timeout_message(YES, YES,
-        @[@"view=document registrationIndex=1"]);
+static void checkActivityWaitRegistrationEnd(void) {
+    NSString *beforeActivation = sp_input_activity_end_message(NO, NO, nil, @"the window closed");
+    check(beforeActivation == nil, @"an end before app and key activation does not report a webview-stage error");
+    NSString *registrationPending = sp_input_activity_end_message(YES, NO, nil, @"the window closed");
+    check([registrationPending isEqualToString:@"webview activity-state registration pending when the window closed"],
+        [NSString stringWithFormat:@"an end before callback registration reports its exact stage and its event (%@)", registrationPending]);
+    NSString *unresolved = sp_input_activity_end_message(YES, YES,
+        @[@"view=document registrationIndex=1"], @"the window closed");
     check([unresolved containsString:@"view=document registrationIndex=1"]
-        && ![unresolved containsString:@"registrationIndex=0"],
-        [NSString stringWithFormat:@"registered timeout reports only actual unresolved identifiers (%@)", unresolved]);
+        && ![unresolved containsString:@"registrationIndex=0"] && [unresolved containsString:@"when the window closed"],
+        [NSString stringWithFormat:@"a registered end reports only actual unresolved identifiers and its event (%@)", unresolved]);
 }
 
 /// Whether one line of records holds every part.
@@ -192,12 +192,11 @@ static void received(void *context, sp_input_result result, const sp_input_held 
     receipt->done = YES;
 }
 
-typedef struct { BOOL done; sp_input_result result; NSTimeInterval started; NSTimeInterval took; } SPTimed;
+typedef struct { BOOL done; sp_input_result result; } SPAnswer;
 
-static void timed(void *context, sp_input_result result, const sp_input_held *held) {
-    SPTimed *state = context;
+static void answered(void *context, sp_input_result result, const sp_input_held *held) {
+    SPAnswer *state = context;
     state->result = result;
-    state->took = [NSDate timeIntervalSinceReferenceDate] - state->started;
     state->done = YES;
 }
 
@@ -260,21 +259,19 @@ static void checkReceipts(void) {
     check(up.result == SP_INPUT_DELIVERED && up.seen == 2,
         [NSString stringWithFormat:@"a release completes after the document received it (%d, %lu events)", up.result, (unsigned long)up.seen]);
 
-    // A busy document receives the press after it finishes, so the completion is also after that.
+    // A busy document receives the press after it finishes, so the completion is also after that: at the completion the
+    // document already holds the press.
     [view evaluateJavaScript:@"{const end=Date.now()+1000; while(Date.now()<end){}} null" completionHandler:nil];
-    SPTimed late = {NO, SP_INPUT_REJECTED, [NSDate timeIntervalSinceReferenceDate], 0};
-    SPTimed *lateState = &late;
-    sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 50, 50, 1, 0, 0, 0, 1, timed, lateState);
-    until(^BOOL { return lateState->done; });
-    check(late.result == SP_INPUT_DELIVERED && late.took >= 0.9,
-        [NSString stringWithFormat:@"a press completes only after a busy document is free to receive it (%d after %.3fs)", late.result, late.took]);
+    SPReceipt late = pointerThen(window, view, 50, 50, 1);
+    check(late.result == SP_INPUT_DELIVERED && late.seen == 3,
+        [NSString stringWithFormat:@"a press completes only after a busy document received it (%d, %lu events)", late.result, (unsigned long)late.seen]);
     pointerThen(window, view, 50, 50, 3);
 
     // A scroll into a window that is not shown is refused in its turn, because that window presents nothing until it shows.
     [window orderOut:nil];
-    SPTimed hiddenScroll = {NO, SP_INPUT_DELIVERED, [NSDate timeIntervalSinceReferenceDate], 0};
-    SPTimed *hiddenScrollState = &hiddenScroll;
-    sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 50, 50, 4, 0, 0, 40, 1, timed, hiddenScrollState);
+    SPAnswer hiddenScroll = {NO, SP_INPUT_DELIVERED};
+    SPAnswer *hiddenScrollState = &hiddenScroll;
+    sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 50, 50, 4, 0, 0, 40, 1, answered, hiddenScrollState);
     runMarker();
     check(hiddenScroll.done && hiddenScroll.result == SP_INPUT_UNRECEIVED,
         [NSString stringWithFormat:@"a scroll into a window that is not shown is refused in its turn (done %d, %d)",
@@ -285,11 +282,11 @@ static void checkReceipts(void) {
     // received. The window closes once the press has reached the web view, while the document is still busy. The record names, at the level error, the web view whose receipt it awaited and the view the press reached, so
     // a press that reached another page is told from a page that did not answer.
     [view evaluateJavaScript:@"{const end=Date.now()+2500; while(Date.now()<end){}} null" completionHandler:nil];
-    SPTimed busy = {NO, SP_INPUT_DELIVERED, [NSDate timeIntervalSinceReferenceDate], 0};
-    SPTimed *busyState = &busy;
+    SPAnswer busy = {NO, SP_INPUT_DELIVERED};
+    SPAnswer *busyState = &busy;
     NSString *unreceived = capturedRecords(^{
         NSUInteger pressed = view.presses;
-        sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 50, 50, 1, 0, 0, 0, 1, timed, busyState);
+        sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 50, 50, 1, 0, 0, 0, 1, answered, busyState);
         until(^BOOL { return view.presses > pressed || busyState->done; });
         check(!busyState->done, @"a press into a busy document waits for its receipt");
         [window close];
@@ -742,7 +739,7 @@ int main(void) { @autoreleasepool {
     checkKeyOfInactiveApplicationArrives();
     checkActivityWaitAggregation();
     checkActivityWaitDelayedRegistration();
-    checkActivityWaitRegistrationTimeout();
+    checkActivityWaitRegistrationEnd();
     checkPointerTargetAcrossViews();
     checkMoveReachesEveryOwner();
     check(pressedButtonsImplementation() != appKitButtons, @"a delivered press shows its button to WebKit");

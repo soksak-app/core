@@ -88,9 +88,9 @@ static void checkHiddenSurfaceRegion(void) {
     runEvents(0.6);
     __block int down = 0, up = 0;
     NSString *records = capturedRecords(^{
-        sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 150, 175, 1, 0, 0, 0, 1, 1.5, pressDone, &down);
+        sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 150, 175, 1, 0, 0, 0, 1, pressDone, &down);
         runEvents(0.3);
-        sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 150, 175, 3, 0, 0, 0, 1, 1.5, pressDone, &up);
+        sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 150, 175, 3, 0, 0, 0, 1, pressDone, &up);
         runEvents(1.4);
     });
     check(down == SP_INPUT_DELIVERED + 1 && up == SP_INPUT_DELIVERED + 1, [NSString stringWithFormat:@"the press and the release reach their page (%d, %d)", down, up]);

@@ -232,7 +232,7 @@ int main(int argc, const char **argv) { @autoreleasepool {
     [window orderFront:nil];
     for (WKWebView *view in views) until(^BOOL { return [evaluate(view, @"Boolean(window.probe)") boolValue]; });
     __block SPActivation activation = {NO, SP_ACTIVATE_DONE, ""};
-    sp_input_activate(window, 5, activated, &activation);
+    sp_input_activate(window, activated, &activation);
     until(^BOOL { return activation.done; });
     require(activation.result == SP_ACTIVATE_DONE, [NSString stringWithFormat:
         @"the window did not become the key window of the active application (%d, frontmost %s)",

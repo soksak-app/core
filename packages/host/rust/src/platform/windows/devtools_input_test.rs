@@ -221,7 +221,7 @@ fn a_key_that_is_no_name_and_no_character_is_not_sent() {
     }
 }
 
-/// Holds the calls of a queue, which end when the test completes them, and the waits of a queue.
+/// Holds the calls of a queue, which end when the test completes them, and the waits of a capture.
 #[derive(Default)]
 struct Fake {
     methods: RefCell<Vec<&'static str>>,
@@ -267,6 +267,7 @@ impl Transport for FakeTransport {
     }
 }
 
+/// The wait of a capture.
 const WAIT: Duration = Duration::from_secs(1);
 const FOCUS: &str = "Emulation.setFocusEmulationEnabled";
 
@@ -279,11 +280,7 @@ fn call(method: &'static str) -> Call {
 
 fn queue() -> (InputQueue, Rc<Fake>) {
     let fake = Rc::new(Fake::default());
-    let after = fake.after();
-    (
-        InputQueue::new(Box::new(FakeTransport(fake.clone())), after),
-        fake,
-    )
+    (InputQueue::new(Box::new(FakeTransport(fake.clone()))), fake)
 }
 
 /// A queue whose focus emulation already completed, so that the next call is the first one of the fake after its index 0.
@@ -310,8 +307,8 @@ fn answers() -> (Answers, impl Fn() -> Answer) {
 fn a_queue_sends_one_call_at_a_time() {
     let (queue, fake) = queue();
     let (got, answer) = answers();
-    queue.push(call("a"), WAIT, Some(answer())).unwrap();
-    queue.push(call("b"), WAIT, Some(answer())).unwrap();
+    queue.push(call("a"), Some(answer())).unwrap();
+    queue.push(call("b"), Some(answer())).unwrap();
     assert_eq!(*fake.methods.borrow(), [FOCUS]);
     fake.complete(0, Ok(()));
     assert_eq!(*fake.methods.borrow(), [FOCUS, "a"]);
@@ -325,14 +322,14 @@ fn a_queue_sends_one_call_at_a_time() {
 #[test]
 fn a_queue_emulates_the_focus_before_its_first_input_only() {
     let (queue, fake) = queue();
-    queue.push(call("a"), WAIT, None).unwrap();
+    queue.push(call("a"), None).unwrap();
     assert_eq!(
         serde_json::from_str::<Value>(&fake.params.borrow()[0]).unwrap(),
         json!({"enabled": true})
     );
     fake.complete(0, Ok(()));
     fake.complete(1, Ok(()));
-    queue.push(call("b"), WAIT, None).unwrap();
+    queue.push(call("b"), None).unwrap();
     assert_eq!(*fake.methods.borrow(), [FOCUS, "a", "b"]);
 }
 
@@ -341,7 +338,7 @@ fn a_queue_emulates_the_focus_before_its_first_input_only() {
 fn a_call_that_fails_answers_its_failure() {
     let (queue, fake) = focused_queue();
     let (got, answer) = answers();
-    queue.push(call("a"), WAIT, Some(answer())).unwrap();
+    queue.push(call("a"), Some(answer())).unwrap();
     fake.complete(0, Err("refused".to_string()));
     assert_eq!(
         *got.borrow(),
@@ -353,11 +350,11 @@ fn a_call_that_fails_answers_its_failure() {
 #[test]
 fn the_failure_of_a_call_with_no_answer_goes_to_the_next_input() {
     let (queue, fake) = focused_queue();
-    queue.push(call("a"), WAIT, None).unwrap();
+    queue.push(call("a"), None).unwrap();
     fake.complete(0, Err("refused".to_string()));
-    let failure = queue.push(call("b"), WAIT, None).unwrap_err();
+    let failure = queue.push(call("b"), None).unwrap_err();
     assert!(failure.contains("refused"), "{failure}");
-    queue.push(call("c"), WAIT, None).unwrap();
+    queue.push(call("c"), None).unwrap();
 }
 
 // contract: platform.windows.input.call-that-cannot-start-answers-and-next-runs
@@ -366,39 +363,52 @@ fn a_call_that_cannot_start_answers_its_failure_and_the_next_one_runs() {
     let (queue, fake) = focused_queue();
     let (got, answer) = answers();
     *fake.refuse.borrow_mut() = Some("no call".to_string());
-    queue.push(call("a"), WAIT, Some(answer())).unwrap();
+    queue.push(call("a"), Some(answer())).unwrap();
     assert_eq!(
         *got.borrow(),
         [Err(InputFailure::Failed("no call".to_string()))]
     );
     *fake.refuse.borrow_mut() = None;
-    queue.push(call("b"), WAIT, None).unwrap();
+    queue.push(call("b"), None).unwrap();
     assert_eq!(*fake.methods.borrow(), ["b"]);
 }
 
-// contract: platform.windows.input.incomplete-call-ends-wait-and-stops-queue
+// contract: platform.windows.input.page-end-ends-its-calls
 #[test]
-fn a_call_that_does_not_complete_ends_its_wait_and_stops_the_queue() {
-    let (queue, fake) = focused_queue();
+fn the_end_of_a_page_ends_its_calls() {
+    let (queue, fake) = queue();
     let (got, answer) = answers();
-    queue.push(call("a"), WAIT, Some(answer())).unwrap();
-    fake.fire(0);
-    assert_eq!(*got.borrow(), [Err(InputFailure::TimedOut)]);
-    let failure = queue.push(call("b"), WAIT, None).unwrap_err();
-    assert!(failure.contains("did not complete"), "{failure}");
+    queue.push(call("a"), Some(answer())).unwrap();
+    queue.push(call("b"), Some(answer())).unwrap();
+    queue.page_ended();
+    assert_eq!(
+        *got.borrow(),
+        [
+            Err(InputFailure::WebviewEnded),
+            Err(InputFailure::WebviewEnded)
+        ]
+    );
     fake.complete(0, Ok(()));
-    assert_eq!(got.borrow().len(), 1);
-    queue.push(call("c"), WAIT, None).unwrap();
-    assert_eq!(*fake.methods.borrow(), ["a", "c"]);
+    assert_eq!(got.borrow().len(), 2);
+    queue.push(call("c"), None).unwrap();
+    assert_eq!(*fake.methods.borrow(), [FOCUS, FOCUS]);
+    fake.complete(1, Ok(()));
+    assert_eq!(*fake.methods.borrow(), [FOCUS, FOCUS, "c"]);
 }
 
-// contract: platform.windows.input.completed-call-ends-its-wait
+// contract: platform.windows.input.webview-end-ends-its-calls
 #[test]
-fn a_completed_call_ends_its_wait() {
+fn the_end_of_a_web_view_ends_its_calls() {
     let (queue, fake) = focused_queue();
-    queue.push(call("a"), WAIT, None).unwrap();
+    let (got, answer) = answers();
+    queue.push(call("a"), Some(answer())).unwrap();
+    queue.end();
+    assert_eq!(*got.borrow(), [Err(InputFailure::WebviewEnded)]);
+    let failure = queue.push(call("b"), None).unwrap_err();
+    assert_eq!(failure, WEBVIEW_ENDED);
     fake.complete(0, Ok(()));
-    assert!(fake.timers.borrow()[0].is_none());
+    assert_eq!(got.borrow().len(), 1);
+    assert_eq!(*fake.methods.borrow(), ["a"]);
 }
 
 // contract: platform.windows.input.call-answer-becomes-pointer-result
@@ -406,7 +416,7 @@ fn a_completed_call_ends_its_wait() {
 fn an_answer_of_a_call_becomes_the_pointer_result() {
     assert_eq!(pointer_delivery(&Ok(())), Delivery::Delivered);
     assert_eq!(
-        pointer_delivery(&Err(InputFailure::TimedOut)),
+        pointer_delivery(&Err(InputFailure::WebviewEnded)),
         Delivery::Unreceived
     );
     assert_eq!(
