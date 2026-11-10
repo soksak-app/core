@@ -6,7 +6,6 @@ import (
 	"reflect"
 	"sync"
 	"testing"
-	"time"
 
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
@@ -52,13 +51,10 @@ func TestQueuedRetiredViewSidecarSendNeverReachesHostHandlerAfterReplacement(t *
 			"command": "runtime.sidecar.send", "params": map[string]any{"sidecar": "@scope/sidecar-probe", "id": surface, "body": map[string]string{"operation": operation}, "cids": []string{}}}})
 	}
 	send(1, 1, "blocking")
-	select {
-	case got := <-entered:
-		if got != "blocking" {
-			t.Fatalf("wrong first handler: %q", got)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("fixture did not enter the first real ordered host handler")
+	// The first ordered host handler enters and then waits for the gate, which only the test opens.
+	f.pending.until(t, func() bool { return len(entered) > 0 })
+	if got := <-entered; got != "blocking" {
+		t.Fatalf("wrong first handler: %q", got)
 	}
 	send(1, 2, "retired-A")
 	f.shell.Event("view-process-ended", []any{map[string]any{"surface": surface, "generation": uint64(1)}})

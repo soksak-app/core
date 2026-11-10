@@ -10,7 +10,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
@@ -174,12 +173,20 @@ func TestCallsOfOneOrderRunOneAfterTheOther(t *testing.T) {
 	queue.run()
 }
 
+// works keeps a host call working for many turns of the scheduler without waiting for anything, so drain sees it run; it measures
+// no time.
+func works() {
+	for range 10000 {
+		runtime.Gosched()
+	}
+}
+
 // A host call that still runs holds drain, however late its answer comes: a later step of it is part of the steps.
 func TestDrainWaitsForAHostCallThatRuns(t *testing.T) {
 	queue := make(steps, 8)
 	calls := workbench.NewCalls(map[string]workbench.HostCall{
 		"slow": func(context.Context, json.RawMessage) (any, error) {
-			time.Sleep(50 * time.Millisecond)
+			works()
 			return "done", nil
 		},
 	}, queue.post)
@@ -219,7 +226,7 @@ func TestDrainFollowsTheCallsOfAnAnswer(t *testing.T) {
 	queue := make(steps, 8)
 	calls := workbench.NewCalls(map[string]workbench.HostCall{
 		"next": func(context.Context, json.RawMessage) (any, error) {
-			time.Sleep(20 * time.Millisecond)
+			works()
 			return nil, nil
 		},
 	}, queue.post)
