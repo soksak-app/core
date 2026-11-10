@@ -1,6 +1,8 @@
 //! Tests of the transport, the frames, the JSON-RPC handling and the watch list of the local endpoint. A fake service
 //! replaces the window and the page.
 
+#[path = "support/child.rs"]
+mod child;
 #[path = "support/folder.rs"]
 mod folder;
 
@@ -1214,12 +1216,7 @@ fn the_endpoint_records_why_a_connection_closes() {
         .stdin(std::process::Stdio::null())
         .output()
         .unwrap();
-    assert!(
-        output.status.success(),
-        "child ended with {:?}: {}",
-        output.status,
-        String::from_utf8_lossy(&output.stderr)
-    );
+    child::require_success(&output, config.path());
     let log = records::text_of(&records::read_events(&records::event_log_path(
         config.path(),
     )));
@@ -1337,15 +1334,7 @@ fn a_reply_to_a_connection_that_the_peer_closed_is_recorded_as_not_sent() {
         .stdin(std::process::Stdio::null())
         .output()
         .unwrap();
-    assert!(
-        output.status.success(),
-        "child ended with {:?}: {}",
-        output.status,
-        // The child sends its standard error to the event log, so the log holds its failure.
-        records::text_of(&records::read_events(&records::event_log_path(
-            config.path()
-        )))
-    );
+    child::require_success(&output, config.path());
 }
 
 const TIMEOUT_CHILD: &str = "SOKSAK_ENDPOINT_TIMEOUT_CHILD";
@@ -1386,12 +1375,7 @@ fn the_endpoint_records_a_timeout_of_a_request() {
         .stdin(std::process::Stdio::null())
         .output()
         .unwrap();
-    assert!(
-        output.status.success(),
-        "child ended with {:?}: {}",
-        output.status,
-        String::from_utf8_lossy(&output.stdout)
-    );
+    child::require_success(&output, config.path());
     let log = records::text_of(&records::read_events(&records::event_log_path(
         config.path(),
     )));
@@ -1480,12 +1464,7 @@ fn the_endpoint_records_an_accept_error() {
         .stdin(std::process::Stdio::null())
         .output()
         .unwrap();
-    assert!(
-        output.status.success(),
-        "child ended with {:?}: {}",
-        output.status,
-        String::from_utf8_lossy(&output.stderr)
-    );
+    child::require_success(&output, config.path());
 }
 
 /// A service whose request ends the endpoint after its response: the end of a quit that has no ready window to close.

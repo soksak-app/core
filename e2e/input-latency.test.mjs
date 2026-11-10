@@ -60,7 +60,7 @@ for (const app of Object.values(APPS)) {
             // The B3 values are those of the configurations with the trace off and the default gate, which apply the settings of
             // B3_SETTINGS and assert them.
             const b3 = !trace && gate === undefined;
-            await fresh(s, b3 ? fixtureSettings(B3_SETTINGS["input-latency"]) : { performanceTrace: trace, log: gate });
+            await fresh(s, b3 ? fixtureSettings(B3_SETTINGS["input-latency"]) : { performanceTrace: trace, log: gate, measure: true });
             if (b3) {
               const conditions = await b3Conditions(s, B3_SETTINGS["input-latency"]);
               run.conditions ??= conditions;

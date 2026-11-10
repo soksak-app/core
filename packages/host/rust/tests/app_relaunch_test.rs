@@ -4,6 +4,8 @@
 use std::path::PathBuf;
 use std::process::Command;
 
+#[path = "support/child.rs"]
+mod child;
 #[path = "support/folder.rs"]
 mod folder;
 #[path = "support/records.rs"]
@@ -97,11 +99,7 @@ fn the_detached_relaunch_command_is_recorded_when_it_starts() {
         .env("SOKSAK_RELAUNCH_CHILD", config.path())
         .output()
         .unwrap();
-    assert!(
-        output.status.success(),
-        "the child check failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    child::require_success(&output, config.path());
     // The boot of the child names the file, so the folder is searched for the only standard error file.
     let files: Vec<PathBuf> = std::fs::read_dir(config.path().join("logs"))
         .unwrap()

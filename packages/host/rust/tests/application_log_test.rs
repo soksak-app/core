@@ -1,6 +1,8 @@
 //! Application log tests (docs/spec/hosts.md#application-log). Replacing the standard error affects the whole process,
 //! so it is checked in a child process.
 
+#[path = "support/child.rs"]
+mod child;
 #[path = "support/folder.rs"]
 mod folder;
 
@@ -116,13 +118,7 @@ fn start_standard_error_writes_the_start_line_and_takes_the_standard_error_of_th
         .stdin(Stdio::null())
         .output()
         .unwrap();
-    assert!(
-        output.status.success(),
-        "child ended with {:?}, output {:?}, error output {:?}",
-        output.status,
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
+    child::require_success(&output, config.path());
     // The raw standard error of the process and its children is in the stderr file of the run, beside the event log.
     assert_eq!(
         records::standard_error_text(config.path()),
@@ -171,13 +167,7 @@ fn log_error_writes_an_error_event_to_the_event_log() {
         .stdin(Stdio::null())
         .output()
         .unwrap();
-    assert!(
-        output.status.success(),
-        "child ended with {:?}, output {:?}, error output {:?}",
-        output.status,
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
+    child::require_success(&output, config.path());
     // The activity observers that the writer installs store native events of their own; these checks concern the host.
     let events: Vec<_> = records::read_events(&records::event_log_path(config.path()))
         .into_iter()
@@ -235,13 +225,7 @@ fn log_info_writes_an_info_event_to_the_event_log() {
         .stdin(Stdio::null())
         .output()
         .unwrap();
-    assert!(
-        output.status.success(),
-        "child ended with {:?}, output {:?}, error output {:?}",
-        output.status,
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
+    child::require_success(&output, config.path());
     // The activity observers that the writer installs store native events of their own; these checks concern the host.
     let events: Vec<_> = records::read_events(&records::event_log_path(config.path()))
         .into_iter()

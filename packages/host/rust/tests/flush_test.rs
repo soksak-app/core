@@ -3,6 +3,8 @@
 //! These tests verify that the buffering mechanism works when the write queue is full. The write thread correctly
 //! flushes the buffered messages before it blocks in recv().
 
+#[path = "support/child.rs"]
+mod child;
 #[path = "support/folder.rs"]
 mod folder;
 
@@ -94,9 +96,10 @@ fn every_pending_reply_is_flushed_after_the_queue_drains() {
 const FLUSH_LOG_CHILD: &str = "SOKSAK_FLUSH_LOG_CHILD";
 
 // A close that waits for the full queue is recorded with its surface.
-// The surfaces that the flush scenario closes while the queue is full. The writer can take lines out of the queue just after
-// the queue was full, until the pipe of the sidecar holds what it can (at most five lines of the scenario), so a close can find
-// room (a_close_that_finds_room_writes_no_buffered_record). More closes than those lines include a close that waits.
+// The surfaces that the flush scenario closes while the queue is full. The scenario fills the queue with bodies only
+// (fill_with_bodies), so the writer can take lines out of it only until the pipe of the sidecar holds what it can (at most
+// five lines of the scenario), and a close can find room (a_close_that_finds_room_writes_no_buffered_record). More closes than
+// those lines include a close that waits.
 const CLOSED: [&str; 8] = ["s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9"];
 
 // contract: sidecars.close.buffered-close-is-recorded
@@ -122,13 +125,7 @@ fn a_buffered_close_is_recorded() {
         .stdin(std::process::Stdio::null())
         .output()
         .unwrap();
-    assert!(
-        output.status.success(),
-        "child ended with {:?}, output {:?}, error output {:?}",
-        output.status,
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
+    child::require_success(&output, config.path());
     let log = records::text_of(&records::read_events(&records::event_log_path(
         config.path(),
     )));
@@ -165,13 +162,7 @@ fn a_close_that_finds_room_writes_no_buffered_record() {
         .stdin(std::process::Stdio::null())
         .output()
         .unwrap();
-    assert!(
-        output.status.success(),
-        "child ended with {:?}, output {:?}, error output {:?}",
-        output.status,
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
+    child::require_success(&output, config.path());
     let log = records::text_of(&records::read_events(&records::event_log_path(
         config.path(),
     )));
@@ -292,6 +283,36 @@ fn received_lines(lines: &[&str]) -> String {
     format!("{} lines: [{}]", lines.len(), parts.join(", "))
 }
 
+/// Sends 20 KB bodies on s1 until the queue refuses one, and returns the count of the bodies that it accepted.
+fn send_until_full(sidecars: &Sidecars<FakeOwner>, owner: &FakeOwner, big: &RawValue) -> usize {
+    for queued in 0..4000 {
+        if let Err(error) = sidecars.send(owner, ECHO, "s1", big) {
+            assert!(error.contains("is not keeping up"), "{error}");
+            return queued;
+        }
+    }
+    panic!("the queue never filled");
+}
+
+/// Fills the queue of the sidecar, which reads nothing yet, with bodies only, and returns the count of the bodies that it
+/// accepted. The lines sent before the bodies are small, so the pipe of the sidecar takes them all: a queue filled before the
+/// writer takes them out frees their places afterwards. The writer writes the lines in order, so once it writes a body every
+/// earlier line has left the queue, and the queue filled again after that holds only bodies.
+fn fill_with_bodies(sidecars: &Sidecars<FakeOwner>, owner: &FakeOwner) -> usize {
+    let big = raw(&format!(r#"{{"data":"{}"}}"#, "x".repeat(20 * 1024)));
+    let mut queued = send_until_full(sidecars, owner, &big);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while sidecars.writing(ECHO).unwrap() < big.get().len() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the writer did not start a body within 10 s"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    queued += send_until_full(sidecars, owner, &big);
+    queued
+}
+
 /// The scenario of the queue that fills, the replies and closes that wait for it, and the drain.
 fn every_pending_reply_scenario() {
     let directory = folder::Folder::new();
@@ -330,19 +351,7 @@ fn every_pending_reply_scenario() {
         sidecars.send(&owner, ECHO, s, &raw(r#"{}"#)).unwrap();
     }
 
-    // Put a large message in the queue to fill the queue.
-    let big = raw(&format!(r#"{{"data":"{}"}}"#, "x".repeat(20 * 1024)));
-    let mut full = false;
-    let mut queued = 0;
-    for _i in 0..4000 {
-        if let Err(error) = sidecars.send(&owner, ECHO, "s1", &big) {
-            assert!(error.contains("is not keeping up"), "{error}");
-            full = true;
-            break;
-        }
-        queued += 1;
-    }
-    assert!(full, "the queue never filled");
+    let queued = fill_with_bodies(&sidecars, &owner);
 
     // Send a response when the queue is full.
     for (i, name) in ["a", "b", "c"].iter().enumerate() {

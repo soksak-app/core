@@ -43,8 +43,9 @@ test("the B3 value of the split load is the growth of the host RSS in KB, the ke
 
 test("the split load sets the performance trace off and the log policy of B3_SETTINGS itself, so SOKSAK_PERFORMANCE_TRACE does not reach it", { timeout: 5000 }, () => {
   assert.ok(Object.hasOwn(STRESS_FIXTURE, "performanceTrace"), "the fixture of the stress leaves the performance trace to fresh");
-  assert.deepEqual(STRESS_FIXTURE, { performanceTrace: false, log: { call: "debug" }, reads: ["host.endpoint.call"] });
-  assert.deepEqual(fixtureSettings(B3_SETTINGS["split-load"]), { performanceTrace: STRESS_FIXTURE.performanceTrace, log: STRESS_FIXTURE.log });
+  assert.deepEqual(STRESS_FIXTURE, { performanceTrace: false, log: { call: "debug" }, measure: true, reads: ["host.endpoint.call"] });
+  assert.deepEqual(fixtureSettings(B3_SETTINGS["split-load"]),
+    { performanceTrace: STRESS_FIXTURE.performanceTrace, log: STRESS_FIXTURE.log, measure: STRESS_FIXTURE.measure });
 });
 
 test("the host process is found by its configuration folder in every build profile", () => {
