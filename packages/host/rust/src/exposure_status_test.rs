@@ -56,11 +56,16 @@ fn waiting(relay: &Relay) -> usize {
 fn abandon_answers_the_waiting_request_of_a_poisoned_lock() {
     let relay = Relay::default();
     let (tx, rx) = mpsc::channel();
-    relay
-        .pending
-        .lock()
-        .unwrap()
-        .insert(1, ("main".to_string(), tx));
+    relay.pending.lock().unwrap().insert(
+        1,
+        (
+            Held {
+                target: "main".to_string(),
+                origin: None,
+            },
+            tx,
+        ),
+    );
     poison(&relay.pending);
     relay.abandon("main");
     let answered = matches!(
@@ -83,11 +88,16 @@ fn abandon_answers_the_waiting_request_of_a_poisoned_lock() {
 fn forget_removes_the_request_of_a_poisoned_lock() {
     let relay = Relay::default();
     let (tx, _rx) = mpsc::channel();
-    relay
-        .pending
-        .lock()
-        .unwrap()
-        .insert(1, ("main".to_string(), tx));
+    relay.pending.lock().unwrap().insert(
+        1,
+        (
+            Held {
+                target: "main".to_string(),
+                origin: None,
+            },
+            tx,
+        ),
+    );
     poison(&relay.pending);
     relay.forget(1);
     assert_eq!(waiting(&relay), 0, "forget kept the request that ended");
@@ -128,11 +138,16 @@ fn a_poisoned_pending_lock_still_answers_a_request() {
 fn the_pending_count_is_read_when_the_pending_lock_is_poisoned() {
     let relay = Relay::default();
     let (tx, _rx) = mpsc::channel();
-    relay
-        .pending
-        .lock()
-        .unwrap()
-        .insert(1, ("main".to_string(), tx));
+    relay.pending.lock().unwrap().insert(
+        1,
+        (
+            Held {
+                target: "main".to_string(),
+                origin: None,
+            },
+            tx,
+        ),
+    );
     poison(&relay.pending);
     assert_eq!(
         relay.pending_count("main"),

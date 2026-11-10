@@ -11,10 +11,11 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
+// until runs the run loop until done holds. It has no limit: each wait ends by a notification or a callback of the window,
+// and a wait that never ends is reported by the limit of the native test runner.
 static void until(BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:20];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+    while (!done()) {
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate distantFuture]];
     }
 }
 
@@ -47,9 +48,11 @@ int main(void) { @autoreleasepool {
     [window makeKeyAndOrderFront:nil];
     [NSApp activateIgnoringOtherApps:YES];
 
+    // Each wait ends by the answer of its request, whatever the answer is, and the check then reads the answer.
+    __block BOOL enterAnswered = NO;
     __block BOOL entered = NO;
-    check(sp_window_fullscreen(window, true, ^(int result, const char *message) { entered = result == SP_FULLSCREEN_DONE; }), @"the window accepts a full screen request");
-    until(^BOOL { return entered; });
+    check(sp_window_fullscreen(window, true, ^(int result, const char *message) { enterAnswered = YES; entered = result == SP_FULLSCREEN_DONE; }), @"the window accepts a full screen request");
+    until(^BOOL { return enterAnswered; });
     check(entered && fullscreen(window), @"entering full screen answers after the transition");
 
     // A request that arrives during the transition. macOS ignores -toggleFullScreen: at that moment, so it must be
@@ -57,14 +60,16 @@ int main(void) { @autoreleasepool {
     __block int answers = 0;
     __block BOOL back = NO;
     sp_window_fullscreen(window, false, ^(int result, const char *message) { answers++; });
-    sp_window_fullscreen(window, true, ^(int result, const char *message) { answers++; back = result == SP_FULLSCREEN_DONE; });
-    until(^BOOL { return back; });
+    __block BOOL backAnswered = NO;
+    sp_window_fullscreen(window, true, ^(int result, const char *message) { answers++; backAnswered = YES; back = result == SP_FULLSCREEN_DONE; });
+    until(^BOOL { return backAnswered; });
     check(back && fullscreen(window), @"a request during the transition is applied after it");
     check(answers == 2, [NSString stringWithFormat:@"every request is answered (%d of 2)", answers]);
 
+    __block BOOL doneAnswered = NO;
     __block BOOL done = NO;
-    sp_window_fullscreen(window, false, ^(int result, const char *message) { done = result == SP_FULLSCREEN_DONE; });
-    until(^BOOL { return done; });
+    sp_window_fullscreen(window, false, ^(int result, const char *message) { doneAnswered = YES; done = result == SP_FULLSCREEN_DONE; });
+    until(^BOOL { return doneAnswered; });
     check(done && !fullscreen(window), @"leaving full screen answers after the transition");
 
     __block BOOL already = NO;
@@ -91,6 +96,12 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"the refusal names its cause (got %@)", refusal]);
 
     // A started transition that fails is reported to the delegate of the window, and that failure answers the request once.
+    // The check reports the failure itself while the transition that the request started still runs, so it waits for the end
+    // of that transition, the did-enter notification, before its next request: a request during a transition that the
+    // window no longer counts would be one that macOS ignores.
+    __block BOOL transitionEnded = NO;
+    id enteredObserver = [NSNotificationCenter.defaultCenter addObserverForName:NSWindowDidEnterFullScreenNotification
+        object:window queue:nil usingBlock:^(NSNotification *notification) { transitionEnded = YES; }];
     __block int failedAnswers = 0;
     __block int failed = 0;
     __block NSString *failure = nil;
@@ -106,11 +117,13 @@ int main(void) { @autoreleasepool {
     check(failedAnswers == 1 && failed == 1 && [failure isEqualToString:@"macOS failed the full screen transition"],
         [NSString stringWithFormat:@"the failure of a started transition answers once (%d answers, %d failures, %@)",
             failedAnswers, failed, failure]);
-    until(^BOOL { return fullscreen(window); });
+    until(^BOOL { return transitionEnded; });
+    [NSNotificationCenter.defaultCenter removeObserver:enteredObserver];
+    __block BOOL leftAnswered = NO;
     __block BOOL left = NO;
-    sp_window_fullscreen(window, false, ^(int result, const char *message) { left = result == SP_FULLSCREEN_DONE; });
-    until(^BOOL { return left; });
-    check(failedAnswers == 1 && !fullscreen(window), @"the end of the transition after its failure answers nothing again");
+    sp_window_fullscreen(window, false, ^(int result, const char *message) { leftAnswered = YES; left = result == SP_FULLSCREEN_DONE; });
+    until(^BOOL { return leftAnswered; });
+    check(left && failedAnswers == 1 && !fullscreen(window), @"the end of the transition after its failure answers nothing again");
 
     // A window that closes during a transition answers its request with the close.
     __block int closed = 0;

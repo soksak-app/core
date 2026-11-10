@@ -127,8 +127,13 @@ func TestACommandRunOfAnEndedConnectionEnds(t *testing.T) {
 }
 
 // forwardFixture returns the host of askFixture whose main page also calls the host: the window is the frontend of its calls,
-// and the window shows the surface "tab".
-func forwardFixture() (*Host, *Surfaces, *askWindow, context.Context) {
+// and the window shows the surface "tab". A forward sends its request in a step of the main thread, so the framework of the
+// test runs each step at once.
+func forwardFixture(t *testing.T) (*Host, *Surfaces, *askWindow, context.Context) {
+	t.Helper()
+	saved := framework
+	framework = stepFramework{}
+	t.Cleanup(func() { framework = saved })
 	h, s, window := askFixture()
 	h.windows[window.ID()] = s
 	s.views = map[string]*nativeWebview{"tab": {owner: s}}
@@ -202,7 +207,7 @@ func expectLateForwardReplyObserved(t *testing.T, h *Host, s *Surfaces, forwarde
 // contract: exposure.relay.forward-lives-while-its-origin-is-open
 func TestTheEndOfTheConnectionOfItsOriginEndsAForward(t *testing.T) {
 	isolateTraceRecords(t)
-	h, s, window, page := forwardFixture()
+	h, s, window, page := forwardFixture(t)
 	connection, end := context.WithCancel(context.Background())
 	answer := pageCommandRun(connection, h)
 	origin := <-window.requests
@@ -221,7 +226,7 @@ func TestTheEndOfTheConnectionOfItsOriginEndsAForward(t *testing.T) {
 // contract: exposure.relay.forward-lives-while-its-origin-is-open
 func TestTheAnswerOfItsOriginEndsAWaitingForward(t *testing.T) {
 	isolateTraceRecords(t)
-	h, s, window, page := forwardFixture()
+	h, s, window, page := forwardFixture(t)
 	answer := pageCommandRun(context.Background(), h)
 	origin := <-window.requests
 	reply := forward(page, h, forwardOf(origin))
@@ -241,7 +246,7 @@ func TestTheAnswerOfItsOriginEndsAWaitingForward(t *testing.T) {
 // contract: exposure.relay.forward-lives-while-its-origin-is-open
 func TestTheEndOfItsOriginWith1003EndsAWaitingForward(t *testing.T) {
 	isolateTraceRecords(t)
-	h, s, window, page := forwardFixture()
+	h, s, window, page := forwardFixture(t)
 	answer := pageCommandRun(context.Background(), h)
 	origin := <-window.requests
 	reply := forward(page, h, forwardOf(origin))
@@ -259,7 +264,7 @@ func TestTheEndOfItsOriginWith1003EndsAWaitingForward(t *testing.T) {
 // waiting, checked once the command.run of that connection ended, and the reply of the surface ends it with that reply.
 // contract: exposure.relay.forward-lives-while-its-origin-is-open
 func TestAForwardWithoutOriginIsNotEndedByAConnectionEnd(t *testing.T) {
-	h, s, window, page := forwardFixture()
+	h, s, window, page := forwardFixture(t)
 	connection, end := context.WithCancel(context.Background())
 	answer := pageCommandRun(connection, h)
 	<-window.requests
@@ -280,7 +285,7 @@ func TestAForwardWithoutOriginIsNotEndedByAConnectionEnd(t *testing.T) {
 // checked once the command.run of the ended connection ended.
 // contract: exposure.relay.forward-lives-while-its-origin-is-open
 func TestTheEndOfAConnectionLeavesTheForwardsOfAnotherOrigin(t *testing.T) {
-	h, s, window, page := forwardFixture()
+	h, s, window, page := forwardFixture(t)
 	ending, end := context.WithCancel(context.Background())
 	endedAnswer := pageCommandRun(ending, h)
 	<-window.requests
@@ -306,7 +311,7 @@ func TestTheEndOfAConnectionLeavesTheForwardsOfAnotherOrigin(t *testing.T) {
 // before it waits.
 // contract: exposure.relay.forward-lives-while-its-origin-is-open
 func TestAForwardWhoseOriginIsNotOpenIsRefusedWithoutBeingSent(t *testing.T) {
-	h, _, window, page := forwardFixture()
+	h, _, window, page := forwardFixture(t)
 	connection, end := context.WithCancel(context.Background())
 	answer := pageCommandRun(connection, h)
 	ended := <-window.requests
