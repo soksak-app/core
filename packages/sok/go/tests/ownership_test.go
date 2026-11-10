@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"syscall"
 	"testing"
 
 	sok "github.com/soksak-app/core/packages/sok/go/src"
@@ -67,7 +66,7 @@ func TestAPluginCommandRefusesWhileAnotherProcessOwnsTheConfiguration(t *testing
 		t.Fatal(err)
 	}
 	defer owner.Close()
-	if err := syscall.Flock(int(owner.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := holdLock(owner); err != nil {
 		t.Fatal(err)
 	}
 	code, _, stderr := run("plugin", "disable", "probe", "--config-dir", config)
