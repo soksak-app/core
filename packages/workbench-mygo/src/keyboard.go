@@ -94,8 +94,9 @@ func (s *Shell) focusCard(card string) {
 // one such change. A run that asked for no frame, or that failed, answers at once. A placement or a keyboard call that fails has
 // shown its failure in its own line, and the command answers with the result of its run (docs/spec/exposure.md#registration). A run
 // that wrote settings first waits until the host wrote them (afterSettingsWrites).
-// Each command answers once: a second answer of the same run is ignored.
-func (s *Shell) followCommand(answer func(value any, err error)) func(value any, err error) {
+// Each command answers once: a second answer of the same run is a defect of the command, which the workbench shows and does not pass
+// on (docs/spec/exposure.md#registration).
+func (s *Shell) followCommand(name string, answer func(value any, err error)) func(value any, err error) {
 	requests, writes := s.frameRequests.Load(), s.settingsIssued
 	s.commands++
 	number := s.commands
@@ -111,6 +112,7 @@ func (s *Shell) followCommand(answer func(value any, err error)) func(value any,
 	once := false
 	return func(value any, err error) {
 		if once {
+			s.fail(fmt.Errorf("command %s answered a second time", name))
 			return
 		}
 		once = true

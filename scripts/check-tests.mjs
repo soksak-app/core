@@ -551,6 +551,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/host-calls.js", symbol: "const error = new Error(`host call ${name}: the page is reloading`);" },
       { file: "packages/workbench-mygo/src/events.go", symbol: "func (e *Events) endFlushes() {" },
       { file: "packages/workbench-mygo/src/keyboard.go", symbol: "func (s *Shell) afterCommands(mark int, run func()) {" },
+      { file: "packages/workbench-mygo/src/keyboard.go", symbol: "func (s *Shell) followCommand(name string, answer func(value any, err error)) func(value any, err error) {" },
       { file: "packages/workbench-mygo/src/requests.go", symbol: "func (q *Requests) Answered(mark int, then func()) {" },
     ],
     tests: [
@@ -564,6 +565,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/memory-placement-start.test.mjs", id: "every wait of the page start after the memory readiness exists can reject that readiness" },
       { file: "packages/workbench-mygo/tests/page_end_test.go", id: "TestAFlushEndsWhileEventsKeepComing" },
       { file: "packages/workbench-mygo/tests/page_end_test.go", id: "TestTheCloseOfAWindowWaitsForNoCommandThatStartsAfterIt" },
+      { file: "packages/workbench-mygo/tests/page_end_test.go", id: "TestEachCommandOfAnOpenedFolderAnswersOnce" },
       { file: "packages/workbench-mygo/tests/page_end_test.go", id: "TestAPluginApplyStartsAgainWithoutARequestDeliveredAfterIt" },
       { file: "packages/workbench-mygo/tests/page_end_test.go", id: "TestARuntimeImageDetachKeepsTheSeatOfItsSurface" },
     ],
