@@ -305,12 +305,11 @@ func (s *Session) Open() error {
 		return err
 	}
 	// The end of a layout transaction ends the waits inside the presentation request of its window
-	// (docs/spec/native-surfaces.md#layout-transaction).
-	mainThreadStep(func() {
-		if err := system.WatchLayoutEnds(host.layoutEnded); err != nil {
-			LogError("surface layout", err)
-		}
-	})
+	// (docs/spec/native-surfaces.md#layout-transaction). Open runs before the framework runs, so it takes no step of the main
+	// thread: the watch takes its lock, and the native observer registers on the main thread by itself.
+	if err := system.WatchLayoutEnds(host.layoutEnded); err != nil {
+		LogError("surface layout", err)
+	}
 	s.main = host.newWindow("main", "/")
 	return nil
 }
