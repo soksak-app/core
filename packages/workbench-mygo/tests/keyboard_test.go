@@ -167,8 +167,8 @@ func TestTheKeyboardCallFollowsThePlacementOfTheSurface(t *testing.T) {
 	}
 }
 
-// A press on a tab whose surface the host already holds sends the keyboard call ahead of the placement that shows it, so
-// the host gives the keyboard at the release of the press, before a key that follows the release
+// A press on a tab whose surface the host already holds gives it the keyboard without waiting for a placement, also while one
+// runs, so the host gives the keyboard at the release of the press, before a key that follows the release
 // (docs/spec/native-surfaces.md#keyboard-of-a-surface).
 func TestAPressOnAHeldTabSendsTheKeyboardBeforeItsPlacement(t *testing.T) {
 	f, stored := surfaceShell(t)
@@ -178,12 +178,19 @@ func TestAPressOnAHeldTabSendsTheKeyboardBeforeItsPlacement(t *testing.T) {
 	tabs := keyboardAddTab(t, f, cards[0])
 	f.settle()
 	held := tabs[cards[0]][len(tabs[cards[0]])-2]
-	stored.order, stored.keyboard = nil, nil
-	f.click("core.card.tab", held)
+	gate := gatedPlacement(t, f, stored)
+	node, ok := exposedNode(f.tester.ElementTree(), "core.card.tab", held)
+	if !ok {
+		close(gate)
+		t.Fatalf("the workbench shows no tab %s", held)
+	}
+	f.tester.ClickAt(node.Bounds.X+node.Bounds.W/2, node.Bounds.Y+node.Bounds.H/2)
+	f.pending.drain(t)
+	keyboard, _ := stored.keyboardCalls()
+	close(gate)
 	f.settle()
-	calls := strings.Join(stored.order, " ")
-	if !strings.HasPrefix(calls, "surfaceFocus syncSurfaces") {
-		t.Fatalf("the calls of the press are %s", calls)
+	if len(keyboard) == 0 || keyboard[len(keyboard)-1] == nil || *keyboard[len(keyboard)-1] != held {
+		t.Fatalf("while a placement ran the press on %s sent the keyboard calls %v", held, describeTargets(keyboard))
 	}
 	got, ok := stored.keyboardTarget()
 	if !ok || got == nil || *got != held {
@@ -191,8 +198,8 @@ func TestAPressOnAHeldTabSendsTheKeyboardBeforeItsPlacement(t *testing.T) {
 	}
 }
 
-// The host holds the input of the window from the release of a press on the workbench until a decided call, so every press of
-// the workbench, on any element, is answered by one decided call (docs/spec/exposure.md#the-keyboard-follows-the-focus-ring).
+// The keys of the window wait from the release of a press on the workbench for a decided call, so every press of the workbench, on
+// any element, is answered by one decided call (docs/spec/exposure.md#the-keyboard-follows-the-focus-ring).
 func TestEveryPressOfTheWorkbenchEndsWithOneDecidedCall(t *testing.T) {
 	presses := []struct{ name, item string }{
 		{"core.card.tab", ""}, {"core.card.header", ""}, {"core.card", ""}, {"core.divider", ""}, {"core.chrome.bar", ""},
@@ -460,9 +467,9 @@ func TestATabDrawnDuringAPlacementTakesTheKeyboardAfterItsOwnPlacement(t *testin
 	}
 }
 
-// keyboardHoldPlacement starts a placement whose presentSurfaces waits until the returned channel closes, so the window draws and
+// gatedPlacement starts a placement whose presentSurfaces waits until the returned channel closes, so the window draws and
 // takes input while the placement runs.
-func keyboardHoldPlacement(t *testing.T, f *shellFixture, stored *surfaceHost) chan struct{} {
+func gatedPlacement(t *testing.T, f *shellFixture, stored *surfaceHost) chan struct{} {
 	t.Helper()
 	gate := make(chan struct{})
 	stored.orderMu.Lock()
@@ -478,7 +485,8 @@ func keyboardHoldPlacement(t *testing.T, f *shellFixture, stored *surfaceHost) c
 	return gate
 }
 
-// keyboardRelease presses and releases the element name and runs the steps that follow, without a frame of their own.
+// keyboardRelease presses and releases the element name, which draws the pass that the release asks for, and runs the steps that
+// follow it.
 func keyboardRelease(t *testing.T, f *shellFixture, name string) {
 	t.Helper()
 	node, ok := exposedNode(f.tester.ElementTree(), name, "")
@@ -496,12 +504,12 @@ func (h *surfaceHost) keyboardCalls() ([]*string, []bool) {
 	return slices.Clone(h.keyboard), slices.Clone(h.decided)
 }
 
-// A release while a placement runs answers in its turn: its decided call reaches the host before the placement answers
-// (docs/spec/native-surfaces.md#keyboard-of-a-surface).
+// A release while a placement runs is answered by the pass that it asks for: its decided call reaches the host before the placement
+// answers (docs/spec/native-surfaces.md#keyboard-of-a-surface).
 func TestAReleaseDuringAPlacementSendsItsDecisionAtOnce(t *testing.T) {
 	f, stored := surfaceShell(t)
 	_, active := keyboardRing(t, f)
-	gate := keyboardHoldPlacement(t, f, stored)
+	gate := gatedPlacement(t, f, stored)
 	keyboardRelease(t, f, "core.chrome.bar")
 	keyboard, decided := stored.keyboardCalls()
 	close(gate)
@@ -511,13 +519,13 @@ func TestAReleaseDuringAPlacementSendsItsDecisionAtOnce(t *testing.T) {
 	}
 }
 
-// A release while the ring is on a surface that the host does not hold yet decides for the workbench in its turn, and the
-// placement that gives the host the surface moves the keyboard to it without decided (docs/spec/native-surfaces.md#keyboard-of-a-surface).
+// A release while the ring is on a surface that the host does not hold yet decides for the workbench in the pass that it asks for,
+// and the placement that gives the host the surface moves the keyboard to it without decided (docs/spec/native-surfaces.md#keyboard-of-a-surface).
 func TestAReleaseOnASurfaceThatTheHostDoesNotHoldDecidesForTheWorkbench(t *testing.T) {
 	f, stored := surfaceShell(t)
 	cards, _ := keyboardCards(t, f)
 	f.run("core.card.focus", map[string]string{"card": cards[0]})
-	gate := keyboardHoldPlacement(t, f, stored)
+	gate := gatedPlacement(t, f, stored)
 	raw, err := json.Marshal(map[string]string{"card": cards[0], "plugin": "textprobe"})
 	if err != nil {
 		t.Fatal(err)

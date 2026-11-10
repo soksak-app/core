@@ -95,7 +95,7 @@ type surfaceHost struct {
 	// tabs gives the shell its tab ports.
 	tabs func(*workbench.Shell) workbench.TabPorts
 	// keyboard holds the argument of each surfaceFocus, decided whether each carried decided, and order the host calls of a
-	// placement in their order.
+	// placement and the keyboard calls without decided in their order; a decided call answers a release and is judged by decided.
 	keyboard []*string
 	decided  []bool
 	order    []string
@@ -198,7 +198,9 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 		h.keyboard = append(h.keyboard, request.Surface)
 		h.decided = append(h.decided, request.Decided)
 		h.orderMu.Unlock()
-		h.called("surfaceFocus")
+		if !request.Decided {
+			h.called("surfaceFocus")
+		}
 		return nil, nil
 	}
 	table["compositionDeclare"] = func(_ context.Context, argument json.RawMessage) (any, error) {
