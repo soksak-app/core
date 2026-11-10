@@ -81,6 +81,13 @@ bool sp_event_gate(uint8_t eventClass, uint8_t level);
 // Sets how long a count of the gate waits for a drain before it wakes the writer. Safe from any thread.
 void sp_event_set_gated_wait_ms(uint32_t milliseconds);
 
+// The rules of time of the gate as inputs of a check (docs/spec/logging.md#policy), set before the gate counts.
+// sp_event_test_set_report_clock sets the clock that the report of the counts reads for its second; NULL sets the monotonic clock
+// of the records again. sp_event_test_set_gated_schedule sets the function that schedules the wake of a count after its wait in
+// place of a timer: it receives the wait and the wake, and it runs the wake when the wait has ended; NULL sets the timer again.
+void sp_event_test_set_report_clock(uint64_t (*now)(void));
+void sp_event_test_set_gated_schedule(void (*schedule)(uint64_t wait_ns, void (*wake)(void)));
+
 // Sets the boot identifier of the run, which the host chose for its event files: letters, digits, '-' and '_' (at most 64
 // bytes). The correlation identifiers of this process are `<boot>.<n>`. Returns false, and keeps the earlier identifier, for
 // a missing, empty or longer identifier or one with another character.

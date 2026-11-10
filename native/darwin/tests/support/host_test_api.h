@@ -30,6 +30,8 @@ int sp_host_test_sampler_start(void);
 int sp_host_test_sampler_stop(void);
 void sp_host_test_sampler_set_phase(int phase);
 uint64_t sp_host_test_sampler_phase_samples(int phase);
+// Blocks until the running sampler took count samples of phase; the sample that reaches the count wakes it.
+void sp_host_test_sampler_await_samples(int phase, uint64_t count);
 uint64_t sp_host_test_sampler_phase_outside(int phase);
 uintptr_t sp_host_test_sampler_phase_first_outside(int phase);
 uint64_t sp_host_test_sampler_failure_count(void);

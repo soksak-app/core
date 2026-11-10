@@ -27,6 +27,7 @@
 #import <Cocoa/Cocoa.h>
 #endif
 #include <stdbool.h>
+#include <stdint.h>
 
 typedef enum { SP_OBSERVE_RECORD = 0, SP_OBSERVE_COUNT = 1, SP_OBSERVE_STORED = 2 } sp_observe_mode;
 
@@ -94,3 +95,7 @@ unsigned long long sp_observe_count(const char *source);
 
 // Stores the summary of every source of the mode SP_OBSERVE_COUNT that has deliveries after its last summary.
 void sp_observe_flush(void);
+
+// The second between two summaries as an input of a check (docs/spec/logging.md#policy): sets the clock that the summaries of the
+// sources of the mode SP_OBSERVE_COUNT read, before the first registration of such a source; NULL sets the monotonic clock again.
+void sp_observe_test_set_clock(uint64_t (*now)(void));
