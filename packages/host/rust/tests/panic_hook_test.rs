@@ -11,11 +11,10 @@ use std::time::{Duration, Instant};
 #[path = "support/records.rs"]
 mod records;
 
-use soksak_host::application_log::{
-    install_panic_hook, install_panic_hook_with_writer_deadline, start_standard_error,
-};
+use soksak_host::application_log::{install_panic_hook, start_standard_error};
 use soksak_host::event_log::{self, Options};
 use soksak_host::event_record::use_host_event_log;
+use soksak_host::routine::notify_start_ended;
 
 const CHILD: &str = "SOKSAK_PANIC_HOOK_CHILD";
 
@@ -175,34 +174,48 @@ const NO_WRITER_CHILD: &str = "SOKSAK_PANIC_NO_WRITER_CHILD";
 // contract: log.panic.without-writer-is-written-to-the-standard-error
 #[test]
 fn a_panic_that_no_writer_stores_is_written_to_the_standard_error_in_full() {
-    if std::env::var_os(NO_WRITER_CHILD).is_some() {
-        // The writer never opens in this process; the thread that ends the process gives up after the short deadline.
-        install_panic_hook_with_writer_deadline(Duration::from_millis(100));
+    if let Some(order) = std::env::var_os(NO_WRITER_CHILD) {
+        // No writer opens in this process. The start of the host ends without attaching one, before or after the panic, and
+        // that end ends the wait of the thread that ends the process.
+        install_panic_hook();
+        if order == "start-ended-first" {
+            notify_start_ended();
+        }
         let ended = std::panic::catch_unwind(|| panic!("the lock directory cannot be read"));
         assert!(ended.is_err());
-        // The writer never opens, so the process ends by the bounded wait; reaching the end of the wait is the failure.
-        std::thread::sleep(Duration::from_secs(10));
-        std::process::exit(4);
+        if order == "panic-first" {
+            notify_start_ended();
+        }
+        // The thread that ends the process ends it; reaching the end of the wait is the failure.
+        loop {
+            std::thread::park();
+        }
     }
-    let output = Command::new(std::env::current_exe().unwrap())
-        .args([
-            "--exact",
-            "a_panic_that_no_writer_stores_is_written_to_the_standard_error_in_full",
-            "--nocapture",
-            "--test-threads=1",
-        ])
-        .env(NO_WRITER_CHILD, "1")
-        .stdin(Stdio::null())
-        .output()
-        .unwrap();
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert_eq!(output.status.code(), Some(101), "stderr {stderr:?}");
-    assert!(
-        // The record names the writer deadline that the child set as its input.
-        stderr.contains("no writer opened within 100ms")
-            && stderr.contains("host.panic name=")
-            && stderr.contains("text=")
-            && stderr.contains("the lock directory cannot be read"),
-        "the standard error does not hold the record of the panic: {stderr:?}"
-    );
+    for order in ["panic-first", "start-ended-first"] {
+        let output = Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "a_panic_that_no_writer_stores_is_written_to_the_standard_error_in_full",
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env(NO_WRITER_CHILD, order)
+            .stdin(Stdio::null())
+            .output()
+            .unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(
+            output.status.code(),
+            Some(101),
+            "{order}: stderr {stderr:?}"
+        );
+        assert!(
+            stderr.contains(
+                "the record of the panic is not stored: the start of the host ended without a writer"
+            ) && stderr.contains("host.panic name=")
+                && stderr.contains("text=")
+                && stderr.contains("the lock directory cannot be read"),
+            "{order}: the standard error does not hold the record of the panic: {stderr:?}"
+        );
+    }
 }

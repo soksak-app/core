@@ -4,6 +4,7 @@ package host_test
 
 import (
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -120,25 +121,48 @@ const routineNoWriterChild = "SOKSAK_ROUTINE_NO_WRITER_CHILD"
 
 // contract: log.panic.without-writer-is-written-to-the-standard-error
 func TestAPanicThatNoWriterStoresIsWrittenToTheStandardErrorInFull(t *testing.T) {
-	if os.Getenv(routineNoWriterChild) != "" {
-		// No writer opens in this process; the entrance ends the process after the short writer deadline.
-		host.PanicWriterDeadline = 100 * time.Millisecond
-		// Reaching the end of the wait is the failure.
+	if order := os.Getenv(routineNoWriterChild); order != "" {
+		// No writer opens in this process. The start of the host ends without attaching one, before or after the panic waits
+		// for the writer, and that end ends the wait.
+		if order == "start-ended-first" {
+			host.NotifyStartEnded()
+		}
+		record, handed := routine.Record, make(chan struct{})
+		routine.Record = func(name, text, stack string) {
+			close(handed)
+			record(name, text, stack)
+		}
 		routine.Go("probe", func() { panic("the lock directory cannot be read") })
-		time.Sleep(10 * time.Second)
+		<-handed
+		if order == "panic-first" {
+			host.NotifyStartEnded()
+		}
+		// The entrance ends the process; the read blocks in a system call until then, so the runtime reports no deadlock.
+		// Reaching its end is the failure.
+		io.ReadAll(os.Stdin)
 		os.Exit(4)
 	}
-	command := exec.Command(os.Args[0], "-test.run=^TestAPanicThatNoWriterStoresIsWrittenToTheStandardErrorInFull$")
-	command.Env = append(os.Environ(), routineNoWriterChild+"=1")
-	output, err := command.CombinedOutput()
-	var ended *exec.ExitError
-	if !errors.As(err, &ended) || ended.ExitCode() != 2 {
-		t.Fatalf("child ended with %v, output %q", err, output)
-	}
-	stderr := string(output)
-	// The record names the writer deadline that the child set as its input.
-	if !strings.Contains(stderr, "no writer opened within 100ms") || !strings.Contains(stderr, "host.panic name=probe") ||
-		!strings.Contains(stderr, "text=") || !strings.Contains(stderr, "the lock directory cannot be read") {
-		t.Fatalf("the standard error does not hold the record of the panic: %q", stderr)
+	for _, order := range []string{"panic-first", "start-ended-first"} {
+		t.Run(order, func(t *testing.T) {
+			command := exec.Command(os.Args[0], "-test.run=^TestAPanicThatNoWriterStoresIsWrittenToTheStandardErrorInFull$")
+			command.Env = append(os.Environ(), routineNoWriterChild+"="+order)
+			// The parent holds the standard input of the child open until the child ended.
+			stdin, err := command.StdinPipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer stdin.Close()
+			output, err := command.CombinedOutput()
+			var ended *exec.ExitError
+			if !errors.As(err, &ended) || ended.ExitCode() != 2 {
+				t.Fatalf("child ended with %v, output %q", err, output)
+			}
+			stderr := string(output)
+			if !strings.Contains(stderr, "the record of the panic is not stored: the start of the host ended without a writer") ||
+				!strings.Contains(stderr, "host.panic name=probe") || !strings.Contains(stderr, "text=") ||
+				!strings.Contains(stderr, "the lock directory cannot be read") {
+				t.Fatalf("the standard error does not hold the record of the panic: %q", stderr)
+			}
+		})
 	}
 }
