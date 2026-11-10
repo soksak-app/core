@@ -224,6 +224,24 @@ func childFIFO(t *testing.T, directory, name string) string {
 	return path
 }
 
+// holdFIFO makes the FIFO DIR/<name> and holds its write end until the check ends. A fixture process that reads it ends at
+// the end of the check, also when the check is killed, because the kernel then closes the write end.
+func holdFIFO(t *testing.T, directory, name string) *os.File {
+	t.Helper()
+	path := childFIFO(t, directory, name)
+	// A read-write open does not wait for a reader, and the check holds the only writer.
+	hold, err := os.OpenFile(path, os.O_RDWR, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := hold.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	return hold
+}
+
 // childPID reads the process id that a script writes to the FIFO path; the read ends when the script closes its write.
 func childPID(t *testing.T, path string) int {
 	t.Helper()
@@ -285,7 +303,8 @@ func nextFailure(t *testing.T, owner *support.FakeOwner) support.SidecarFailure 
 // running sidecar and ends its process group (docs/spec/sidecars.md#declaration-and-startup).
 // contract: sidecars.end.is-the-process-exit
 func TestASidecarThatExitsFailsWhileItsChildKeepsTheOutput(t *testing.T) {
-	sidecars, directory := support.ScriptSidecars(t, "#!/bin/sh\necho $$ > DIR/pid\nsleep 3600 &\necho $! > DIR/child\nread request\nexit 3\n")
+	sidecars, directory := support.ScriptSidecars(t, "#!/bin/sh\necho $$ > DIR/pid\ncat DIR/hold &\necho $! > DIR/child\nread request\nexit 3\n")
+	holdFIFO(t, directory, "hold")
 	fifo := childFIFO(t, directory, "child")
 	owner := support.NewFakeOwner("/projects/a")
 	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
@@ -306,8 +325,9 @@ func TestASidecarThatExitsFailsWhileItsChildKeepsTheOutput(t *testing.T) {
 // contract: sidecars.end.is-the-process-exit
 func TestASidecarThatExitsFailsWhileAProcessOutsideItsGroupKeepsTheOutput(t *testing.T) {
 	sidecars, directory := support.ScriptSidecars(t, "#!/bin/sh\necho $$ > DIR/pid\n"+
-		"/usr/bin/perl -MPOSIX -e 'exit if fork; POSIX::setsid(); open(my $f, \">\", \"DIR/child\"); print $f $$; close $f; sleep 3600'\n"+
+		"/usr/bin/perl -MPOSIX -e 'exit if fork; POSIX::setsid(); open(my $f, \">\", \"DIR/child\"); print $f $$; close $f; open(my $h, \"<\", \"DIR/hold\"); my $line = <$h>'\n"+
 		"read request\nexit 3\n")
+	holdFIFO(t, directory, "hold")
 	fifo := childFIFO(t, directory, "child")
 	owner := support.NewFakeOwner("/projects/a")
 	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
@@ -325,7 +345,8 @@ func TestASidecarThatExitsFailsWhileAProcessOutsideItsGroupKeepsTheOutput(t *tes
 // open (docs/spec/sidecars.md#declaration-and-startup).
 // contract: sidecars.end.is-the-process-exit
 func TestAStopEndsBySidecarExitWhileItsChildKeepsTheOutput(t *testing.T) {
-	sidecars, directory := support.ScriptSidecars(t, "#!/bin/sh\necho $$ > DIR/pid\nsleep 3600 &\necho $! > DIR/child\nexec cat >/dev/null\n")
+	sidecars, directory := support.ScriptSidecars(t, "#!/bin/sh\necho $$ > DIR/pid\ncat DIR/hold &\necho $! > DIR/child\nexec cat >/dev/null\n")
+	holdFIFO(t, directory, "hold")
 	fifo := childFIFO(t, directory, "child")
 	owner := support.NewFakeOwner("/projects/a")
 	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
@@ -345,7 +366,7 @@ func TestAStopEndsBySidecarExitWhileItsChildKeepsTheOutput(t *testing.T) {
 func TestAStopOutsideTheQuitReturnsBeforeTheExit(t *testing.T) {
 	sidecars, directory := support.ScriptSidecars(t, "#!/bin/sh\ntrap '' TERM\necho $$ > DIR/started\nread request\nread gate < DIR/gate\nexit 3\n")
 	started := childFIFO(t, directory, "started")
-	gate := childFIFO(t, directory, "gate")
+	gate := holdFIFO(t, directory, "gate")
 	owner := support.NewFakeOwner("/projects/a")
 	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
@@ -359,7 +380,7 @@ func TestAStopOutsideTheQuitReturnsBeforeTheExit(t *testing.T) {
 	if err := syscall.Kill(pid, 0); err != nil {
 		t.Fatalf("the declaration returned after the stopping sidecar %d ended: %v", pid, err)
 	}
-	if err := os.WriteFile(gate, []byte("open\n"), 0o600); err != nil {
+	if _, err := gate.WriteString("open\n"); err != nil {
 		t.Fatal(err)
 	}
 	requireGone(t, pid)

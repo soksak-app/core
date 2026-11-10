@@ -1610,6 +1610,25 @@ func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 	sidecars.Stop()
 }
 
+// holdPipe makes the FIFO path and holds its write end until the check ends. A fixture process that reads it ends at the end
+// of the check, also when the check is killed, because the kernel then closes the write end.
+func holdPipe(t *testing.T, path string) {
+	t.Helper()
+	if err := syscall.Mkfifo(path, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// A read-write open does not wait for a reader, and the check holds the only writer.
+	hold, err := os.OpenFile(path, os.O_RDWR, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := hold.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+}
+
 // unansweredHelloService serves one connection whose hello it reads and does not answer: it signals read after the hello and
 // closes the connection when end closes.
 func unansweredHelloService(t *testing.T, root string) (read, end chan struct{}) {
@@ -1696,7 +1715,9 @@ func TestAStopEndsAStartWhoseServicePrintsNoEndpoint(t *testing.T) {
 	if err := syscall.Mkfifo(started, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	script := "#!/bin/sh\necho $$ > " + started + "\nexec sleep 600\n"
+	hold := filepath.Join(folder, "hold")
+	holdPipe(t, hold)
+	script := "#!/bin/sh\necho $$ > " + started + "\nexec cat " + hold + "\n"
 	if err := os.WriteFile(filepath.Join(folder, "service"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}

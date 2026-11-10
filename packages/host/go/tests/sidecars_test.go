@@ -589,8 +589,10 @@ func TestStopReportsExitStatus(t *testing.T) {
 // contract: sidecars.stop.terminates-the-process-group
 func TestAStopTerminatesASidecarThatIgnoresItsInput(t *testing.T) {
 	written := support.CaptureLog(t)
-	// The sidecar does not read stdin, so it keeps running after stdin EOF.
-	sidecars, _ := support.ScriptSidecars(t, "#!/bin/sh\nexec sleep 600\n")
+	// The sidecar does not read stdin, so it keeps running after stdin EOF; it reads the pipe that the check holds, so it ends
+	// with the check also when the check is killed.
+	sidecars, directory := support.ScriptSidecars(t, "#!/bin/sh\nexec cat DIR/hold\n")
+	holdPipe(t, filepath.Join(directory, "hold"))
 	owner := support.NewFakeOwner("/projects/test")
 	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
 		t.Fatalf("send: %v", err)

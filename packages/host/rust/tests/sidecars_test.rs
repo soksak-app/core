@@ -2592,6 +2592,18 @@ fn child_fifo(directory: &Path, name: &str) -> std::path::PathBuf {
     path
 }
 
+/// Makes the FIFO DIR/name and holds its write end while the returned file lives. A fixture process that reads it ends at the
+/// end of the check, also when the check is killed, because the kernel then closes the write end.
+fn hold_fifo(directory: &Path, name: &str) -> std::fs::File {
+    let path = child_fifo(directory, name);
+    // A read-write open does not wait for a reader, and the check holds the only writer.
+    std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)
+        .unwrap()
+}
+
 /// The process id that a script writes to the FIFO path; the read ends when the script closes its write.
 fn child_pid(path: &Path) -> i32 {
     let text = std::fs::read_to_string(path).unwrap();
@@ -2655,8 +2667,9 @@ fn require_gone(pid: i32) {
 #[test]
 fn a_sidecar_that_exits_fails_while_its_child_keeps_the_output() {
     let (sidecars, directory) = script_sidecars(
-        "#!/bin/sh\necho $$ > DIR/pid\nsleep 3600 &\necho $! > DIR/child\nread request\nexit 3\n",
+        "#!/bin/sh\necho $$ > DIR/pid\ncat DIR/hold &\necho $! > DIR/child\nread request\nexit 3\n",
     );
+    let _hold = hold_fifo(directory.path(), "hold");
     let fifo = child_fifo(directory.path(), "child");
     let (window, _events, failures) = failing_owner("a", "/projects/a");
     sidecars
@@ -2681,8 +2694,9 @@ fn a_sidecar_that_exits_fails_while_its_child_keeps_the_output() {
 #[test]
 fn a_sidecar_that_exits_fails_while_a_process_outside_its_group_keeps_the_output() {
     let (sidecars, directory) = script_sidecars(
-        "#!/bin/sh\necho $$ > DIR/pid\n/usr/bin/perl -MPOSIX -e 'exit if fork; POSIX::setsid(); open(my $f, \">\", \"DIR/child\"); print $f $$; close $f; sleep 3600'\nread request\nexit 3\n",
+        "#!/bin/sh\necho $$ > DIR/pid\n/usr/bin/perl -MPOSIX -e 'exit if fork; POSIX::setsid(); open(my $f, \">\", \"DIR/child\"); print $f $$; close $f; open(my $h, \"<\", \"DIR/hold\"); my $line = <$h>'\nread request\nexit 3\n",
     );
+    let _hold = hold_fifo(directory.path(), "hold");
     let fifo = child_fifo(directory.path(), "child");
     let (window, _events, failures) = failing_owner("a", "/projects/a");
     sidecars
@@ -2705,8 +2719,9 @@ fn a_sidecar_that_exits_fails_while_a_process_outside_its_group_keeps_the_output
 #[test]
 fn a_stop_ends_by_the_sidecar_exit_and_ends_its_process_group() {
     let (sidecars, directory) = script_sidecars(
-        "#!/bin/sh\necho $$ > DIR/pid\nsleep 3600 &\necho $! > DIR/child\nexec cat >/dev/null\n",
+        "#!/bin/sh\necho $$ > DIR/pid\ncat DIR/hold &\necho $! > DIR/child\nexec cat >/dev/null\n",
     );
+    let _hold = hold_fifo(directory.path(), "hold");
     let fifo = child_fifo(directory.path(), "child");
     let (window, _events) = owner("a", "/projects/a");
     sidecars
