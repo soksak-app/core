@@ -617,7 +617,7 @@ fn invalid_json_closes_connection() {
 | `sidecars.protocol.reply-with-cids-is-recorded` | 줄이 `cids`를 밝히거나 body가 `error` member를 가진 객체인 sidecar의 메시지는 event `host.sidecar.reply`이다. `name`, `surface`, body 크기 `bytes`, `ok`(`error`이면 false), 줄의 `cids`, 그 첫 번째 요청을 host가 기억하면 `micros`, 오류이면 `error` `-32603: <text>`(문자열 오류는 그 글, 다른 값은 JSON 글)를 level `warn`(오류가 없는 reply는 `info`)으로 가진다. 둘 다 없는 메시지는 이 event를 저장하지 않는다. | all |
 | `sidecars.protocol.failure-fails-the-pending-requests` | sidecar의 실패는 기다리는 요청이 있는 surface마다 level `warn`에 `ok: false`, `bytes: 0`, `error` `-32603: <reason>`(page가 받는 이유)과 그 요청들의 `cids`를 가진 event `host.sidecar.reply`를 저장한다. | all |
 | `log.input.region-event-with-cids-is-recorded` | JSON에 `cids`가 있는 image region event는 그 `cids`, region의 `surface`와 `name`, event의 `type`을 가진 level `info`의 event `host.input.relay`가 된다. `cids`가 없는 region event는 `host.input.relay`를 저장하지 않는다. | all |
-| `sidecars.stderr.lines-are-written-as-records` | 표준 입출력 사이드카의 표준 오류 각 줄과 줄바꿈 없이 끝난 마지막 글은 기록 `<time> info sidecar <name>: <line>`으로 쓴다. | all |
+| `sidecars.stderr.lines-are-written-as-records` | 표준 입출력 사이드카의 표준 오류 각 줄과 줄바꿈 없이 끝난 마지막 글은 기록 `<time> info sidecar <name>: <line>`으로 사이드카의 중지가 끝나기 전에 쓴다. | all |
 | `log.panic.records-an-event` | 진입점(`routine.Go`, `spawn_named`)으로 시작한 goroutine이나 스레드가 panic하면 프로세스가 0이 아닌 상태(Go는 2, Rust는 101)로 끝나기 전에 받은 `name`, panic 값 `text`, `stack`을 담은 `error` 수준 event `host.panic` 하나와, 그 뒤에 그 상태를 `code`로 담은 원인 `exit`의 `log.closed`를 저장한다. | all |
 | `log.panic.does-not-wait-for-the-writer` | panic hook은 writer가 멈춰 있어도 writer를 기다리지 않고 panic한 스레드에 돌아오며, writer가 풀리면 event가 저장되고 프로세스가 끝난다. | tauriv2 only: goroutine의 panic은 진입점이 recover하며 hook이 없다 |
 | `log.panic.before-writer-is-stored-when-the-writer-opens` | writer가 붙기 전의 host panic은 시작 buffer에 남고, writer가 붙으면 event가 저장되고 저장 뒤 프로세스가 상태로 끝난다. 5초 안에 붙은 writer가 없으면 프로세스는 상태로 끝나고 record와 stack이 표준 오류에 남는다. | all |
@@ -1258,7 +1258,7 @@ fn invalid_json_closes_connection() {
 | `log.policy.endpoint-call-is-gated` | 정책이 저장하지 않는 endpoint 요청은 event를 만들지 않고 `log.gated`로 센다. | all |
 | `log.policy.counts-each-second` | writer는 닫힌 gate의 정확한 수(`log.gated`)를 이전 보고 뒤 1초가 지났을 때, flush할 때, 멈출 때 보고한다. 여러 batch 간격에 걸친 1초 미만의 거부된 event는 `log.gated`를 저장하지 않고, flush는 그 정확한 합을 저장한다. | all |
 | `log.policy.producer-builds-nothing-for-a-closed-gate` | 인자를 직렬화하는 host의 생산자는 class와 level의 gate가 닫혀 있으면 field를 만들지 않는다. | all |
-| `log.policy.closed-gate-costs-a-branch` | 닫힌 gate의 질문은 열린 gate의 enqueue보다 훨씬 싸고 넉넉한 한도 안에 머물며, 수치를 출력한다. | all |
+| `log.policy.closed-gate-costs-a-branch` | 닫힌 gate의 질문은 할당하지 않고 열린 gate의 enqueue는 할당하며, 둘의 시간은 출력하되 어떤 한도로도 판정하지 않는다. | all |
 | `log.retention.removes-the-oldest-runs-over-the-bound` | `logs/`의 실행들의 파일이 상한을 넘으면 writer는 실행을 통째로, 가장 새로운 파일이 가장 오래된 실행부터 지우고, 파일을 지우는 각 회차는 `files`, `bytes`, `runs`, `from_us`, `to_us`, `remaining`, `bound`를 담은 `log.pruned` 하나다. | all |
 | `log.retention.keeps-a-pinned-run-and-the-current-run` | writer의 실행과 `<role>-<boot>.keep` 파일이 있는 실행은 지우지 않으며, 파일이 상한을 넘은 채로 두는 회차는 level `warn`의 `log.pruned`를 저장한다. | all |
 | `log.retention.stores-nothing-under-the-bound` | 상한 안의 파일은 지우지 않고 event도 저장하지 않는다. | all |

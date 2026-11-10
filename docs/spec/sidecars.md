@@ -87,7 +87,7 @@ While the host stops its sidecars, the end of output is not a failure. Any other
 
 ## Log
 
-A sidecar writes a line of its standard error as a text record `<time> <level> <layer> <where>: <text>` ([diagnostics](diagnostics.md#forms)) with the layer `sidecar` and its own name as `<where>`. A sidecar that the host starts with standard input and output may write any text: the host reads each line of its standard error and writes it as a record of level `info`. A persistent service opens no pipe to the host, so it writes the form itself, and its file `logs/<executable-name>.log` holds only records of that form.
+A sidecar writes a line of its standard error as a text record `<time> <level> <layer> <where>: <text>` ([diagnostics](diagnostics.md#forms)) with the layer `sidecar` and its own name as `<where>`. A sidecar that the host starts with standard input and output may write any text: the host reads each line of its standard error and writes it as a record of level `info`. The host writes the last of those records before the exit record of the sidecar, so a stop of the sidecar ends after it. A persistent service opens no pipe to the host, so it writes the form itself, and its file `logs/<executable-name>.log` holds only records of that form.
 
 The host starts every sidecar with the argument `--log-dir <config-dir>/logs`, the folder of its event files, whether the sidecar uses standard input and output or is a persistent service (which also receives `--service-dir`). A sidecar that adopts the [event contract](logging.md#files) writes its event file `<role>-<boot>.jsonl` in that folder; a sidecar started without the argument writes no event file. A host created without a configuration directory has no such folder and passes no argument.
 

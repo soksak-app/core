@@ -87,7 +87,7 @@ Host는 state mutation을 직렬화하는 동안 각 immutable `host.sidecars` �
 
 ## 로그
 
-사이드카는 표준 오류의 한 줄을 글 기록 `<time> <level> <layer> <where>: <text>`([진단](diagnostics.ko.md#형태))로 쓰며 layer는 `sidecar`, `<where>`는 자기 이름이다. 호스트가 표준 입출력으로 시작한 사이드카는 아무 글이나 써도 되고, 호스트가 표준 오류의 각 줄을 읽어 level `info`의 기록으로 쓴다. 영속 서비스는 호스트로 파이프를 열지 않으므로 형식을 스스로 쓰며, 파일 `logs/<실행 파일 이름>.log`에는 그 형식의 기록만 있다.
+사이드카는 표준 오류의 한 줄을 글 기록 `<time> <level> <layer> <where>: <text>`([진단](diagnostics.ko.md#형태))로 쓰며 layer는 `sidecar`, `<where>`는 자기 이름이다. 호스트가 표준 입출력으로 시작한 사이드카는 아무 글이나 써도 되고, 호스트가 표준 오류의 각 줄을 읽어 level `info`의 기록으로 쓴다. 호스트는 그 기록의 마지막을 사이드카의 종료 기록보다 먼저 쓰므로, 사이드카의 중지는 그 뒤에 끝난다. 영속 서비스는 호스트로 파이프를 열지 않으므로 형식을 스스로 쓰며, 파일 `logs/<실행 파일 이름>.log`에는 그 형식의 기록만 있다.
 
 호스트는 표준 입출력 sidecar든 지속 서비스(`--service-dir`도 받는다)든 모든 sidecar를 인자 `--log-dir <config-dir>/logs`(event 파일의 폴더)와 함께 시작한다. [event 계약](logging.ko.md#파일)을 따르는 sidecar는 그 폴더에 event 파일 `<role>-<boot>.jsonl`을 쓰고, 인자 없이 시작된 sidecar는 event 파일을 쓰지 않는다. 설정 디렉터리 없이 만든 호스트에는 그 폴더가 없으므로 인자를 넘기지 않는다.
 
