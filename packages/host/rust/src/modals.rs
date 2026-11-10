@@ -590,11 +590,11 @@ pub fn wait_for_paint(window: &Window, timeout: std::time::Duration) -> bool {
         let Some(remaining) = deadline.checked_duration_since(std::time::Instant::now()) else {
             return true;
         };
-        // default: a panicking wait leaves the modal record held; the panic hook records the panic and the next lock
-        // takes the record through its poison recovery.
         held = state
             .paint_changed
             .wait_timeout(held, remaining)
+            // default: a panicking wait leaves the modal record held; the panic hook records the panic and the next
+            // lock takes the record through its poison recovery.
             .unwrap_or_else(PoisonError::into_inner)
             .0;
     }

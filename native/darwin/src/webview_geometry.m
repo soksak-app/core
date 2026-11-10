@@ -768,6 +768,7 @@ static BOOL modalKeepsKeyboard(NSWindow *window, NSView *closing) {
     if (![first isKindOfClass:NSView.class] || ((NSView *)first).window != window) return NO;
     NSView *page = (NSView *)first;
     while (page && ![page isKindOfClass:WKWebView.class]) page = page.superview;
+    // silent: a first responder outside a web view, in the main web view or in a surface is in no modal, which is the answer.
     if (!page || page == (NSView *)sp_window_main_webview(window) || surfaceHost(page)) return NO;
     return !(closing && [page isDescendantOf:closing]);
 }

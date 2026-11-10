@@ -755,9 +755,9 @@ fn write_pending_socket<O>(
     stream: &mut dyn PersistentStream,
     writing: &AtomicUsize,
 ) -> bool {
-    // default: a lock that a panicking thread poisoned still holds the sidecar state, which the writer amends; the panic
-    // hook records the panic.
     let held = take_held(
+        // default: a lock that a panicking thread poisoned still holds the sidecar state, which the writer amends; the
+        // panic hook records the panic.
         &mut state.lock().unwrap_or_else(PoisonError::into_inner),
         name,
     );
@@ -871,9 +871,9 @@ fn write_pending<O: Owner>(
     stdin: &mut ChildStdin,
     writing: &AtomicUsize,
 ) -> bool {
-    // default: a lock that a panicking thread poisoned still holds the sidecar state, which the writer amends; the panic
-    // hook records the panic.
     let held = take_held(
+        // default: a lock that a panicking thread poisoned still holds the sidecar state, which the writer amends; the
+        // panic hook records the panic.
         &mut state.lock().unwrap_or_else(PoisonError::into_inner),
         name,
     );
