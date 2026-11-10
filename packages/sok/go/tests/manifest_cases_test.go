@@ -56,7 +56,7 @@ func indexForRelease(t *testing.T, path, sum string) string {
 	return filepath.Join(dir, "index.json")
 }
 
-// contract: install.manifest.replays-manifest-cases
+// contract: install.manifest.replays-manifest-cases, exposure.command.declaration-refuses-a-time-limit
 func TestPluginInstallReplaysTheManifestCases(t *testing.T) {
 	for _, c := range manifestCases(t) {
 		t.Run(c.ID, func(t *testing.T) {
