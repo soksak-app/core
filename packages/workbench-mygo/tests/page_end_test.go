@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -23,7 +24,9 @@ func neverAnswered(t *testing.T) workbench.HostCall {
 }
 
 // A flush waits for the events queued before it and not for an event stream that never goes quiet: a closed gate counts an event in
-// every step, and the flush still ends after the batch that carries what was queued (docs/spec/logging.md#operation-chains).
+// every step, and the flush still ends after the batch that carries what was queued (docs/spec/logging.md#operation-chains). The
+// replies of the host arrive from other goroutines between the steps, so the test runs steps until the flush ends or the time of
+// the test passes, not a count of steps that the steps of the gate could fill before any reply arrived.
 func TestAFlushEndsWhileEventsKeepComing(t *testing.T) {
 	f := newWriter(t, nil)
 	f.events.Info("place: gated")
@@ -35,7 +38,8 @@ func TestAFlushEndsWhileEventsKeepComing(t *testing.T) {
 		f.queue.post(tick)
 	}
 	f.queue.post(tick)
-	for step := 0; step < 2000 && !flushed; step++ {
+	limit := time.Now().Add(5 * time.Second)
+	for !flushed && time.Now().Before(limit) {
 		f.queue.run()
 	}
 	if !flushed {
@@ -44,24 +48,29 @@ func TestAFlushEndsWhileEventsKeepComing(t *testing.T) {
 }
 
 // The close of a window waits for the commands that ran when it was decided and for none that starts later
-// (docs/spec/exposure.md#registration).
+// (docs/spec/exposure.md#registration). The window shows its project from its start, so no command ran before the close, and the
+// close saves a new geometry of the window first, which waits until the test releases it.
 func TestTheCloseOfAWindowWaitsForNoCommandThatStartsAfterIt(t *testing.T) {
-	stored := &storedHost{common: map[string]any{"projectOpening": "windows"}, extra: map[string]workbench.HostCall{"filePlace": neverAnswered(t)}}
-	f := newShell(t, stored)
-	f.openFolder("/work/alpha")
-	// The window shows the project, so the close saves a new geometry of the window first, and that save waits until the test
-	// releases it.
+	stored := &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"))},
+		extra: map[string]workbench.HostCall{"filePlace": neverAnswered(t)}}
+	app, window, queue, _ := fixtureApp(t, stored)
+	window.address = "/?project=prj-a"
+	tester := ui.NewTester(app.Build(window), 1200, 800)
+	app.Shown(window)
+	window.settle(t, queue, tester)
 	stored.geometry = map[string]any{"x": 10, "y": 20, "width": 900, "height": 700}
 	release := make(chan struct{})
 	stored.holdWorkspace = release
-	f.shell.Event("project-close-request", nil)
-	f.pending.drain(t)
+	app.Emit(window, "project-close-request")
+	queue.drain(t)
 	if stored.called("windowClose") {
 		t.Fatal("the close did not wait for the save of the geometry")
 	}
-	f.shell.Registry().RunLater("core.file.place", json.RawMessage(`{"name":"a.txt"}`), func(any, error) {})
+	app.Emit(window, "exposure-request", map[string]any{"id": 9, "method": "command.run",
+		"params": map[string]any{"name": "core.file.place", "params": map[string]any{"name": "a.txt"}}})
+	queue.drain(t)
 	close(release)
-	f.pending.drain(t)
+	queue.drain(t)
 	if !stored.called("windowClose") {
 		t.Fatalf("the close waited for a command that started after it; the calls are %v", stored.calls)
 	}
