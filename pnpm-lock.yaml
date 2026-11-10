@@ -19,7 +19,7 @@ overrides:
   '@parcel/watcher-win32-x64': '-'
 
 patchedDependencies:
-  '@parcel/watcher@2.6.0': 03499279e045cacc152cc2ba8eeed5d4f24d45d2a1e04edcac9532d217e46a47
+  '@parcel/watcher@2.6.0': 6ef848fc6cd89af1a4cb952b3d3829cd7e856f2344b017f38afd5917e6187b9a
   '@soksak/kit@0.0.14': e8de6923f59e902ebc8c9de2741026cb32ace0b697ff9cd959bfa41629bb4e3b
 
 importers:
@@ -157,7 +157,7 @@ importers:
     dependencies:
       '@parcel/watcher':
         specifier: 2.6.0
-        version: 2.6.0(patch_hash=03499279e045cacc152cc2ba8eeed5d4f24d45d2a1e04edcac9532d217e46a47)
+        version: 2.6.0(patch_hash=6ef848fc6cd89af1a4cb952b3d3829cd7e856f2344b017f38afd5917e6187b9a)
       '@soksak/client':
         specifier: workspace:*
         version: link:../client
@@ -599,7 +599,7 @@ snapshots:
 
   '@exodus/bytes@1.15.1': {}
 
-  '@parcel/watcher@2.6.0(patch_hash=03499279e045cacc152cc2ba8eeed5d4f24d45d2a1e04edcac9532d217e46a47)':
+  '@parcel/watcher@2.6.0(patch_hash=6ef848fc6cd89af1a4cb952b3d3829cd7e856f2344b017f38afd5917e6187b9a)':
     dependencies:
       detect-libc: 2.1.2
       is-glob: 4.0.3

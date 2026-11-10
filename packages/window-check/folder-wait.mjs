@@ -20,6 +20,11 @@
 // and both threads used the maps of the backends and the watchers without a lock, so a watch that ends while the next ones
 // start left its stream open until no stream started; the patch keeps a backend in the map while a runner holds it and locks
 // both maps (test/platform/darwin/system/folder-wait-overlap.test.mjs).
+// The callback of a stream whose root was removed stopped and released that stream on the run loop thread without the lock of
+// the backend, while the end of the watch stopped it on a libuv worker thread, so one of them used a released stream and the
+// process ended by SIGBUS, SIGSEGV or SIGTRAP; the patch leaves the stream to the end of the watch, and the two threads read
+// and replace the state of a watch with the atomic operations of shared_ptr
+// (test/platform/darwin/system/folder-wait-root-removal.test.mjs).
 import { subscribe } from "@parcel/watcher";
 
 // FSEvents marks a batch after events were lost, and the FSEvents backend of @parcel/watcher passes that to the callback as

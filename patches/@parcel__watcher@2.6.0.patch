@@ -1,5 +1,5 @@
 diff --git a/package.json b/package.json
-index dbdfab2..124128f 100644
+index dbdfab2d65b65c10a2ad68a7c1f1a30627fccb75..124128fd7db75f8325a4145bc98587a5a4209c67 100644
 --- a/package.json
 +++ b/package.json
 @@ -32,7 +32,7 @@
@@ -12,7 +12,7 @@ index dbdfab2..124128f 100644
    },
    "engines": {
 diff --git a/src/Backend.cc b/src/Backend.cc
-index 09a53d5..4ca307a 100644
+index 09a53d54b06a048a2066da9db07d7c10c89e3b81..4ca307adfdc7f9de9c326ee71d47cca1e9d6b5ca 100644
 --- a/src/Backend.cc
 +++ b/src/Backend.cc
 @@ -19,8 +19,17 @@
@@ -96,7 +96,7 @@ index 09a53d5..4ca307a 100644
    removeShared(this);
  }
 diff --git a/src/Backend.hh b/src/Backend.hh
-index d673bd1..e43e8be 100644
+index d673bd1a19a7f6115245a8223bf3b15462ed1de2..e43e8bea5bab4828dd81f1e85fa401299a3ee870 100644
 --- a/src/Backend.hh
 +++ b/src/Backend.hh
 @@ -23,12 +23,15 @@ public:
@@ -116,7 +116,7 @@ index d673bd1..e43e8be 100644
  
    void handleError(std::exception &err);
 diff --git a/src/Watcher.cc b/src/Watcher.cc
-index a58ff37..09556ce 100644
+index a58ff3722d0d4a85dbef822f7cd4a078cb4278ff..09556ce2afb8c8f72e050da396eb9628300ad7b4 100644
 --- a/src/Watcher.cc
 +++ b/src/Watcher.cc
 @@ -1,4 +1,5 @@
@@ -169,7 +169,7 @@ index a58ff37..09556ce 100644
      // to avoid a deadlock: the debouncer thread itself will require
      // our lock from its thread when calling into `triggerCallbacks`
 diff --git a/src/binding.cc b/src/binding.cc
-index 057b61b..64013f6 100644
+index 057b61b83385793a2f13c7adc8c2e983bef67538..64013f62a2fef4d2f519217dca893574bc139fa2 100644
 --- a/src/binding.cc
 +++ b/src/binding.cc
 @@ -79,7 +79,7 @@ public:
@@ -230,16 +230,73 @@ index 057b61b..64013f6 100644
    WatcherRef watcher;
    std::shared_ptr<Backend> backend;
 diff --git a/src/macos/FSEventsBackend.cc b/src/macos/FSEventsBackend.cc
-index cfda962..d7a4609 100644
+index cfda9625fc7d9beb00a0014d87333bf97c130c84..687f868f11453a34ee9cd23f1fcade00a3b27750 100644
 --- a/src/macos/FSEventsBackend.cc
 +++ b/src/macos/FSEventsBackend.cc
-@@ -246,6 +246,13 @@ void FSEventsBackend::startStream(WatcherRef watcher, FSEventStreamEventId id) {
+@@ -3,6 +3,7 @@
+ #include <string>
+ #include <fstream>
+ #include <unordered_set>
++#include <memory>
+ #include "../Event.hh"
+ #include "../Backend.hh"
+ #include "./FSEventsBackend.hh"
+@@ -38,11 +39,17 @@ bool pathExists(char *path) {
+   return res;
+ }
+ 
++// The stream of a watch is stopped and released only by the thread that ends the watch, Backend::unwatch or getEventsSince on
++// a libuv worker thread with the mutex of the backend. FSEventsCallback runs on the run loop thread and may run while that
++// thread stops the stream, so the state of a watch is read and replaced with the atomic operations of shared_ptr, and the
++// callback keeps the state that it read alive while it runs.
+ class State: public WatcherState {
+ public:
+   FSEventStreamRef stream;
+   std::shared_ptr<DirTree> tree;
+   uint64_t since;
++  // The root of the watch was removed: the callback reports no later event. Only the run loop thread reads and writes it.
++  bool rootRemoved = false;
+ };
+ 
+ void FSEventsCallback(
+@@ -57,12 +64,12 @@ void FSEventsCallback(
+   std::shared_ptr<Watcher>& watcher = *static_cast<std::shared_ptr<Watcher> *>(clientCallBackInfo);
+ 
+   EventList& list = watcher->mEvents;
+-  if (watcher->state == nullptr) {
++  auto stateGuard = std::atomic_load(&watcher->state);
++  auto* state = static_cast<State*>(stateGuard.get());
++  if (state == nullptr || state->rootRemoved) {
+       return;
+   }
+ 
+-  auto stateGuard = watcher->state;
+-  auto* state = static_cast<State*>(stateGuard.get());
+   uint64_t since = state->since;
+   bool deletedRoot = false;
+ 
+@@ -185,10 +192,11 @@ void FSEventsCallback(
+     watcher->notify();
+   }
+ 
+-  // Stop watching if the root directory was deleted.
++  // Stop watching if the root directory was deleted. The stream stays until the watch ends, which stops and releases it: a
++  // stop here, on the run loop thread without the mutex of the backend, released the stream while the end of the watch on a
++  // libuv worker thread stopped it too (test/platform/darwin/system/folder-wait-root-removal.test.mjs).
+   if (deletedRoot) {
+-    stopStream((FSEventStreamRef)streamRef, CFRunLoopGetCurrent());
+-    watcher->state = nullptr;
++    state->rootRemoved = true;
+   }
+ }
+ 
+@@ -246,6 +254,13 @@ void FSEventsBackend::startStream(WatcherRef watcher, FSEventStreamEventId id) {
  
    FSEventStreamSetExclusionPaths(stream, exclusions);
  
 +  // FSEventsCallback can run on the run loop thread as soon as the stream is scheduled, before FSEventStreamStart
 +  // returns, and it uses the tree of the state, so the state is complete before the stream is scheduled.
-+  auto stateGuard = watcher->state;
++  auto stateGuard = std::atomic_load(&watcher->state);
 +  State* s = static_cast<State*>(stateGuard.get());
 +  s->tree = std::make_shared<DirTree>(watcher->mDir);
 +  s->stream = stream;
@@ -247,7 +304,7 @@ index cfda962..d7a4609 100644
    FSEventStreamScheduleWithRunLoop(stream, mRunLoop, kCFRunLoopDefaultMode);
    bool started = FSEventStreamStart(stream);
  
-@@ -256,11 +263,6 @@ void FSEventsBackend::startStream(WatcherRef watcher, FSEventStreamEventId id) {
+@@ -256,11 +271,6 @@ void FSEventsBackend::startStream(WatcherRef watcher, FSEventStreamEventId id) {
      FSEventStreamRelease(stream);
      throw WatcherError("Error starting FSEvents stream", watcher);
    }
@@ -259,3 +316,38 @@ index cfda962..d7a4609 100644
  }
  
  void FSEventsBackend::start() {
+@@ -310,29 +320,29 @@ void FSEventsBackend::getEventsSince(WatcherRef watcher, std::string *snapshotPa
+ 
+   auto s = std::make_shared<State>();
+   s->since = since;
+-  watcher->state = s;
++  std::atomic_store(&watcher->state, std::static_pointer_cast<WatcherState>(s));
+ 
+   startStream(watcher, id);
+   watcher->wait();
+   stopStream(s->stream, mRunLoop);
+ 
+-  watcher->state = nullptr;
++  std::atomic_store(&watcher->state, std::shared_ptr<WatcherState>());
+ }
+ 
+ // This function is called by Backend::watch which takes a lock on mMutex
+ void FSEventsBackend::subscribe(WatcherRef watcher) {
+   auto s = std::make_shared<State>();
+   s->since = 0;
+-  watcher->state = s;
++  std::atomic_store(&watcher->state, std::static_pointer_cast<WatcherState>(s));
+   startStream(watcher, kFSEventStreamEventIdSinceNow);
+ }
+ 
+ // This function is called by Backend::unwatch which takes a lock on mMutex
+ void FSEventsBackend::unsubscribe(WatcherRef watcher) {
+-  auto stateGuard = watcher->state;
++  auto stateGuard = std::atomic_load(&watcher->state);
+   State* s = static_cast<State*>(stateGuard.get());
+   if (s != nullptr) {
+     stopStream(s->stream, mRunLoop);
+-    watcher->state = nullptr;
++    std::atomic_store(&watcher->state, std::shared_ptr<WatcherState>());
+   }
+ }
