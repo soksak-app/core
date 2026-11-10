@@ -187,8 +187,8 @@ impl ConnectionEnd {
     /// after a run of it: an end of waits that ran late would end the waits of a later request. A watch takes no lock of
     /// this connection.
     fn end(&self) {
-        // default: a lock that a panicking thread poisoned still holds the watches of the connection, which the end takes
-        // once; the panic hook records the panic.
+        // default: a lock that a panicking thread poisoned still holds the watches of the connection, which the end
+        // takes once; the panic hook records the panic.
         let mut state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
         state.ended = true;
         for (_, on_end) in std::mem::take(&mut state.watches) {
@@ -263,8 +263,8 @@ impl ReplyScope {
 
     /// The end of the connection of this request.
     pub fn connection_end(&self) -> ConnectionEnd {
-        // default: a lock that a panicking thread poisoned still holds the state of the reply, from which the connection
-        // end is read; the panic hook records the panic.
+        // default: a lock that a panicking thread poisoned still holds the state of the reply, from which the
+        // connection end is read; the panic hook records the panic.
         self.0
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
@@ -303,8 +303,8 @@ impl ReplyScope {
     /// Registration after completion runs immediately with the retained transport outcome.
     pub fn after_response(&self, callback: impl FnOnce(ReplyOutcome) + Send + 'static) {
         let outcome = {
-            // default: a lock that a panicking thread poisoned still holds the outcome and callbacks of the reply, which
-            // the registration reads or extends; the panic hook records the panic.
+            // default: a lock that a panicking thread poisoned still holds the outcome and callbacks of the reply,
+            // which the registration reads or extends; the panic hook records the panic.
             let mut state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
             match &state.outcome {
                 Some(outcome) => outcome.clone(),
@@ -332,8 +332,8 @@ impl ReplyCompletion {
         self.finished = true;
         let watches;
         let callbacks = {
-            // default: a lock that a panicking thread poisoned still holds the callbacks of the reply, which the completion
-            // takes once; the panic hook records the panic.
+            // default: a lock that a panicking thread poisoned still holds the callbacks of the reply, which the
+            // completion takes once; the panic hook records the panic.
             let mut state = self.scope.0.lock().unwrap_or_else(PoisonError::into_inner);
             state.outcome = Some(outcome.clone());
             // The work that the end of the connection would end is over with the response.
@@ -504,8 +504,8 @@ impl Answer {
             return;
         };
         let written = {
-            // default: a lock that a panicking thread poisoned still holds the connection of the client, which the reply
-            // is written to; the panic hook records the panic.
+            // default: a lock that a panicking thread poisoned still holds the connection of the client, which the
+            // reply is written to; the panic hook records the panic.
             let mut writer = self.writer.lock().unwrap_or_else(PoisonError::into_inner);
             match outcome {
                 Ok(result) => write_to_peer(
@@ -688,11 +688,11 @@ impl Notifier {
         };
         let mut notices = Vec::new();
         {
-            // default: a lock that a panicking thread poisoned still holds the peers and the lines, which the end of the
-            // watches updates together; the panic hook records the panic.
+            // default: a lock that a panicking thread poisoned still holds the peers and the lines, which the end of
+            // the watches updates together; the panic hook records the panic.
             let mut peers = self.0.peers.lock().unwrap_or_else(PoisonError::into_inner);
-            // default: a lock that a panicking thread poisoned still holds the lines, which the end orders with the peers;
-            // the panic hook records the panic.
+            // default: a lock that a panicking thread poisoned still holds the lines, which the end orders with the
+            // peers; the panic hook records the panic.
             let mut lines = self.0.lines.lock().unwrap_or_else(PoisonError::into_inner);
             for state in peers.values_mut() {
                 let mut watches: Vec<Watch> = state
@@ -741,8 +741,8 @@ impl Notifier {
         let reason = reason.to_string();
         crate::routine::spawn_named("endpoint-ended", move || {
             for (writer, watches) in notices {
-                // default: a lock that a panicking thread poisoned still holds the connection, which is written as before;
-                // the panic hook records the panic.
+                // default: a lock that a panicking thread poisoned still holds the connection, which is written as
+                // before; the panic hook records the panic.
                 let mut writer = writer.lock().unwrap_or_else(PoisonError::into_inner);
                 for watch in watches {
                     let message = Notification {
@@ -776,8 +776,8 @@ impl Notifier {
             .0
             .peers
             .lock()
-            // default: a lock that a panicking thread poisoned still holds the peers and their watches, which are only read; the
-            // panic hook records the panic.
+            // default: a lock that a panicking thread poisoned still holds the peers and their watches, which are only
+            // read; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner)
             .values()
             .flat_map(|peer| peer.watches.iter())
@@ -856,16 +856,16 @@ impl Notifier {
             .0
             .peers
             .lock()
-            // default: a lock that a panicking thread poisoned still holds the peers, which are only read to select the writers; the
-            // panic hook records the panic.
+            // default: a lock that a panicking thread poisoned still holds the peers, which are only read to select the
+            // writers; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner)
             .values()
             .filter(|peer| wanted(peer))
             .map(|peer| peer.writer.clone())
             .collect();
         for writer in writers {
-            // default: a lock that a panicking thread poisoned still holds the connection, which is written as before; the panic
-            // hook records the panic.
+            // default: a lock that a panicking thread poisoned still holds the connection, which is written as before;
+            // the panic hook records the panic.
             let mut writer = writer.lock().unwrap_or_else(PoisonError::into_inner);
             match write_to_peer(&mut *writer, message) {
                 Ok(()) => {}
@@ -893,7 +893,8 @@ fn accept_connection(
 ) -> Result<Box<dyn crate::platform::Connection>, String> {
     let address = PathBuf::from(listener.address());
     let fault = {
-        // default: a lock that a panicking thread poisoned still holds the accept faults, which only a test sets; the panic hook records the panic.
+        // default: a lock that a panicking thread poisoned still holds the accept faults, which only a test sets; the
+        // panic hook records the panic.
         let mut faults = ACCEPT_FAULTS.lock().unwrap_or_else(PoisonError::into_inner);
         faults
             .iter()
@@ -910,7 +911,8 @@ fn accept_connection(
 pub fn fail_accept_for_test(directory: &Path, error: &str) {
     ACCEPT_FAULTS
         .lock()
-        // default: a lock that a panicking thread poisoned still holds the accept faults, which only a test sets; the panic hook records the panic.
+        // default: a lock that a panicking thread poisoned still holds the accept faults, which only a test sets; the
+        // panic hook records the panic.
         .unwrap_or_else(PoisonError::into_inner)
         .push((directory.to_path_buf(), error.to_string()));
 }
@@ -1246,12 +1248,12 @@ impl Endpoint {
             .shared
             .peers
             .lock()
-            // default: a lock that a panicking thread poisoned still holds the connections, and each one is closed; the panic hook
-            // records the panic.
+            // default: a lock that a panicking thread poisoned still holds the connections, and each one is closed; the
+            // panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner);
         for peer in peers.values() {
-            // default: a lock that a panicking thread poisoned still holds the connection, which is closed as before; the panic
-            // hook records the panic.
+            // default: a lock that a panicking thread poisoned still holds the connection, which is closed as before;
+            // the panic hook records the panic.
             let writer = peer.writer.lock().unwrap_or_else(PoisonError::into_inner);
             if let Err(error) = writer.close() {
                 log_error("endpoint connection close", error);
@@ -1485,8 +1487,8 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
     shared
         .peers
         .lock()
-        // default: a lock that a panicking thread poisoned still holds the peers, and the new connection is registered in them; the
-        // panic hook records the panic.
+        // default: a lock that a panicking thread poisoned still holds the peers, and the new connection is registered
+        // in them; the panic hook records the panic.
         .unwrap_or_else(PoisonError::into_inner)
         .insert(
             peer,
@@ -1656,11 +1658,11 @@ fn change(
     size: usize,
 ) {
     let (start, refused, unchanged) = {
-        // default: a lock that a panicking thread poisoned still holds the peers and the lines, which the change updates in
-        // order; the panic hook records the panic.
+        // default: a lock that a panicking thread poisoned still holds the peers and the lines, which the change
+        // updates in order; the panic hook records the panic.
         let mut peers = shared.peers.lock().unwrap_or_else(PoisonError::into_inner);
-        // default: a lock that a panicking thread poisoned still holds the lines, which the change orders with the peers; the
-        // panic hook records the panic.
+        // default: a lock that a panicking thread poisoned still holds the lines, which the change orders with the
+        // peers; the panic hook records the panic.
         let mut lines = shared.lines.lock().unwrap_or_else(PoisonError::into_inner);
         let waiting = lines.get(&topic).map_or(0, |line| line.changes.len());
         // A change is applied to the peer at once, so what the peer holds is its last change, queued or held.
@@ -1716,8 +1718,8 @@ fn change(
 fn drain(shared: &Shared, topic: Topic) {
     loop {
         let (next, page) = {
-            // default: a lock that a panicking thread poisoned still holds the queued changes, which are taken in order; the
-            // panic hook records the panic.
+            // default: a lock that a panicking thread poisoned still holds the queued changes, which are taken in
+            // order; the panic hook records the panic.
             let mut lines = shared.lines.lock().unwrap_or_else(PoisonError::into_inner);
             let Some(line) = lines.get_mut(&topic) else {
                 return;
@@ -1750,8 +1752,8 @@ fn drain(shared: &Shared, topic: Topic) {
                 Ok(result) => (Ok(result), true),
                 Err(failure) => {
                     // If this connection did not change this target again after that, the start is reverted.
-                    // default: a lock that a panicking thread poisoned still holds the peers, which are updated to revert the start;
-                    // the panic hook records the panic.
+                    // default: a lock that a panicking thread poisoned still holds the peers, which are updated to
+                    // revert the start; the panic hook records the panic.
                     let mut peers = shared.peers.lock().unwrap_or_else(PoisonError::into_inner);
                     if let Some(state) = peers.get_mut(&next.peer)
                         && state.changes.get(&topic) == Some(&next.order)
@@ -1770,8 +1772,8 @@ fn drain(shared: &Shared, topic: Topic) {
         } else {
             (raw(&Value::Null), page)
         };
-        // default: a lock that a panicking thread poisoned still holds the lines, and the page state of the target is updated in
-        // them; the panic hook records the panic.
+        // default: a lock that a panicking thread poisoned still holds the lines, and the page state of the target is
+        // updated in them; the panic hook records the panic.
         let mut lines = shared.lines.lock().unwrap_or_else(PoisonError::into_inner);
         if let Some(line) = lines.get_mut(&topic) {
             line.page = following;
@@ -1860,8 +1862,8 @@ fn transcribed(shared: &Shared, window: &str) -> bool {
 /// Ends the subscriptions of a closed connection with the last change in the order received. A target that has no
 /// remaining subscriber is asked to stop in the page.
 fn forget(shared: &Arc<Shared>, peer: u64) {
-    // default: a lock that a panicking thread poisoned still holds the peers, which are only read to end the subscriptions of the
-    // connection; the panic hook records the panic.
+    // default: a lock that a panicking thread poisoned still holds the peers, which are only read to end the
+    // subscriptions of the connection; the panic hook records the panic.
     let peers = shared.peers.lock().unwrap_or_else(PoisonError::into_inner);
     let topics: Vec<Topic> = match peers.get(&peer) {
         Some(state) => {
@@ -1879,17 +1881,17 @@ fn forget(shared: &Arc<Shared>, peer: u64) {
     shared
         .peers
         .lock()
-        // default: a lock that a panicking thread poisoned still holds the peers, and the connection that ended is removed from them;
-        // the panic hook records the panic.
+        // default: a lock that a panicking thread poisoned still holds the peers, and the connection that ended is
+        // removed from them; the panic hook records the panic.
         .unwrap_or_else(PoisonError::into_inner)
         .remove(&peer);
     // The connection is gone from the peers, so a `down` of it that is delivered after this releases its press itself.
     let owned: Vec<(PressKey, Press)> = {
-        // default: a lock that a panicking thread poisoned still holds the presses, and the presses of the connection are
-        // taken from them; the panic hook records the panic.
         let mut presses = shared
             .presses
             .lock()
+            // default: a lock that a panicking thread poisoned still holds the presses, and the presses of the
+            // connection are taken from them; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner);
         let mut keys: Vec<PressKey> = presses
             .open
@@ -1934,15 +1936,15 @@ fn delivered(shared: &Shared, peer: u64, window: String, input: &crate::platform
                 clicks: input.clicks,
             };
             {
-                // default: a lock that a panicking thread poisoned still holds the peers, which are only read; the panic
-                // hook records the panic.
+                // default: a lock that a panicking thread poisoned still holds the peers, which are only read; the
+                // panic hook records the panic.
                 let peers = shared.peers.lock().unwrap_or_else(PoisonError::into_inner);
                 if peers.contains_key(&peer) {
-                    // default: a lock that a panicking thread poisoned still holds the presses, which take the new press;
-                    // the panic hook records the panic.
                     let mut presses = shared
                         .presses
                         .lock()
+                        // default: a lock that a panicking thread poisoned still holds the presses, which take the new
+                        // press; the panic hook records the panic.
                         .unwrap_or_else(PoisonError::into_inner);
                     // A release that waits for an earlier press of this pointer and button found that press ended, since a
                     // new press of them was delivered.
@@ -1955,11 +1957,11 @@ fn delivered(shared: &Shared, peer: u64, window: String, input: &crate::platform
             release(shared, key, press);
         }
         2 => {
-            // default: a lock that a panicking thread poisoned still holds the presses, whose point the drag moves; the
-            // panic hook records the panic.
             let mut presses = shared
                 .presses
                 .lock()
+                // default: a lock that a panicking thread poisoned still holds the presses, whose point the drag moves;
+                // the panic hook records the panic.
                 .unwrap_or_else(PoisonError::into_inner);
             if let Some(press) = presses.open.get_mut(&key) {
                 press.x = input.x;
@@ -1968,11 +1970,11 @@ fn delivered(shared: &Shared, peer: u64, window: String, input: &crate::platform
         }
         3 => {
             {
-                // default: a lock that a panicking thread poisoned still holds the presses, which the release ends; the
-                // panic hook records the panic.
                 let mut presses = shared
                     .presses
                     .lock()
+                    // default: a lock that a panicking thread poisoned still holds the presses, which the release ends;
+                    // the panic hook records the panic.
                     .unwrap_or_else(PoisonError::into_inner);
                 presses.open.remove(&key);
                 // A release that waits for this press finds it ended.
@@ -2008,11 +2010,11 @@ fn release(shared: &Shared, key: PressKey, press: Press) {
     );
     params.insert("clicks".into(), json!(press.clicks));
     loop {
-        // default: a lock that a panicking thread poisoned still holds the presses, whose lift counts are only read; the
-        // panic hook records the panic.
         let before = shared
             .presses
             .lock()
+            // default: a lock that a panicking thread poisoned still holds the presses, whose lift counts are only
+            // read; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner)
             .lifts;
         let failure = match shared
@@ -2038,11 +2040,11 @@ fn release(shared: &Shared, key: PressKey, press: Press) {
             return;
         }
         {
-            // default: a lock that a panicking thread poisoned still holds the presses, which keep the release that waits;
-            // the panic hook records the panic.
             let mut presses = shared
                 .presses
                 .lock()
+                // default: a lock that a panicking thread poisoned still holds the presses, which keep the release that
+                // waits; the panic hook records the panic.
                 .unwrap_or_else(PoisonError::into_inner);
             let index = lift_index(failure.code);
             // The event that lifts the refusal came while the release was refused, so the release goes again now.
@@ -2075,11 +2077,11 @@ fn release(shared: &Shared, key: PressKey, press: Press) {
 /// Delivers again the releases that wait for the event that lifts the refusal code.
 fn release_waiting(shared: &Shared, code: i64) {
     let lifted: Vec<Release> = {
-        // default: a lock that a panicking thread poisoned still holds the presses, whose waiting releases are taken; the
-        // panic hook records the panic.
         let mut presses = shared
             .presses
             .lock()
+            // default: a lock that a panicking thread poisoned still holds the presses, whose waiting releases are
+            // taken; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner);
         presses.lifts[lift_index(code)] += 1;
         let (lifted, kept) = std::mem::take(&mut presses.waiting)

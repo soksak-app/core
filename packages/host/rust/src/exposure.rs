@@ -563,9 +563,9 @@ impl Relay {
             self.forget(id);
             return Err(Failure::new(MISSING_DOCUMENT, error));
         }
-        // default: when the side that would send the reply is gone, the document is closed, so the request answers with
-        // that error.
         rx.recv()
+            // default: when the side that would send the reply is gone, the document is closed, so the request answers
+            // with that error.
             .unwrap_or_else(|_| Err(Failure::new(MISSING_DOCUMENT, format!("{target} closed"))))
     }
 
@@ -641,8 +641,8 @@ impl Relay {
         let other = self
             .pending
             .lock()
-            // default: a lock that a panicking thread poisoned still holds the waiting requests, which this read only inspects; the panic
-            // hook records the panic.
+            // default: a lock that a panicking thread poisoned still holds the waiting requests, which this read only
+            // inspects; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner)
             .get(&id)
             .is_some_and(|(held, _)| held.target != from);
@@ -652,8 +652,8 @@ impl Relay {
         let ended = self
             .ended
             .lock()
-            // default: a lock that a panicking thread poisoned still holds the ended requests, which this read only inspects; the panic
-            // hook records the panic.
+            // default: a lock that a panicking thread poisoned still holds the ended requests, which this read only
+            // inspects; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner)
             .iter()
             .any(|(held, target)| *held == id && target == from);
@@ -666,8 +666,8 @@ impl Relay {
     /// Removes the ended request id of document from and returns the observation of its late reply, or None when the relay did
     /// not end such a request.
     fn take_ended(&self, id: u64, from: &str) -> Option<String> {
-        // default: a lock that a panicking thread poisoned still holds the ended requests, which this read removes an entry from; the
-        // panic hook records the panic.
+        // default: a lock that a panicking thread poisoned still holds the ended requests, which this read removes an
+        // entry from; the panic hook records the panic.
         let mut ended = self.ended.lock().unwrap_or_else(PoisonError::into_inner);
         let index = ended
             .iter()
@@ -695,12 +695,14 @@ impl Relay {
     /// id that no request holds changes nothing.
     pub fn end(&self, id: u64) {
         let gone = {
-            // default: a lock that a panicking thread poisoned still holds the waiting requests, and the ended one is taken
-            // from them; the panic hook records the panic.
+            // default: a lock that a panicking thread poisoned still holds the waiting requests, and the ended one is
+            // taken from them; the panic hook records the panic.
             let mut pending = self.pending.lock().unwrap_or_else(PoisonError::into_inner);
             pending
                 .remove(&id)
                 .map(|waiting| vec![(id, waiting)])
+                // default: a request that its answer already ended waits no more, so the end of its connection ends
+                // nothing.
                 .unwrap_or_default()
         };
         self.end_taken(gone, |_| {
@@ -724,8 +726,8 @@ impl Relay {
 
     /// Takes the waiting requests for which matches is true.
     fn take_pending(&self, matches: impl Fn(&Held) -> bool) -> Vec<(u64, Waiting)> {
-        // default: a lock that a panicking thread poisoned still holds the waiting requests, and each one that ends must be
-        // answered so that its caller does not wait; the panic hook records the panic.
+        // default: a lock that a panicking thread poisoned still holds the waiting requests, and each one that ends
+        // must be answered so that its caller does not wait; the panic hook records the panic.
         let mut pending = self.pending.lock().unwrap_or_else(PoisonError::into_inner);
         let ids: Vec<u64> = pending
             .iter()
@@ -744,8 +746,8 @@ impl Relay {
             return;
         }
         {
-            // default: a lock that a panicking thread poisoned still holds the ended requests, which this record appends to; the
-            // panic hook records the panic.
+            // default: a lock that a panicking thread poisoned still holds the ended requests, which this record
+            // appends to; the panic hook records the panic.
             let mut ended = self.ended.lock().unwrap_or_else(PoisonError::into_inner);
             for (id, (held, _)) in &gone {
                 if ended.len() == ENDED_LIMIT {
@@ -780,8 +782,8 @@ impl Relay {
     fn forget(&self, id: u64) {
         self.pending
             .lock()
-            // default: a lock that a panicking thread poisoned still holds the waiting requests, and the request that ended is
-            // removed from them; the panic hook records the panic.
+            // default: a lock that a panicking thread poisoned still holds the waiting requests, and the request that
+            // ended is removed from them; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner)
             .remove(&id);
     }
@@ -1139,8 +1141,8 @@ pub fn register(webview: &Webview, request: Register) -> Result<(), String> {
         let mut registrations = data
             .registrations
             .lock()
-            // default: a lock that a panicking thread poisoned still holds the registrations, which this call amends; the
-            // panic hook records the panic.
+            // default: a lock that a panicking thread poisoned still holds the registrations, which this call amends;
+            // the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner);
         if !registrations.contains(&entry) {
             registrations.push(entry);
@@ -1163,8 +1165,8 @@ pub(crate) fn replay_registrations(window: &Window) {
     let registrations = data
         .registrations
         .lock()
-        // default: a lock that a panicking thread poisoned still holds the registrations, which are only copied; the panic hook
-        // records the panic.
+        // default: a lock that a panicking thread poisoned still holds the registrations, which are only copied; the
+        // panic hook records the panic.
         .unwrap_or_else(PoisonError::into_inner)
         .clone();
     for (surface, kind, name) in registrations {
@@ -1294,8 +1296,8 @@ pub(crate) fn window_closed(window: &Window) {
     state
         .reported
         .lock()
-        // default: a lock that a panicking thread poisoned still holds the record of the values sent, and the record of the closed
-        // window is removed from it; the panic hook records the panic.
+        // default: a lock that a panicking thread poisoned still holds the record of the values sent, and the record of
+        // the closed window is removed from it; the panic hook records the panic.
         .unwrap_or_else(PoisonError::into_inner)
         .remove(&main);
 }
@@ -1385,7 +1387,8 @@ pub(crate) fn watch_buttons(app: &AppHandle) -> Result<(), String> {
     let send = Mutex::new(send);
     app.manage(crate::buttons::Buttons::new(move |value| {
         let sender = send.lock();
-        // default: a lock that a panicking thread poisoned still holds the sender, which has no state a panic can leave inconsistent; the panic hook records the panic.
+        // default: a lock that a panicking thread poisoned still holds the sender, which has no state a panic can leave
+        // inconsistent; the panic hook records the panic.
         let sender = sender.unwrap_or_else(PoisonError::into_inner);
         let sent = sender.send(value).map_err(|error| error.to_string());
         if let Err(error) = sent {
@@ -1483,8 +1486,8 @@ fn send_window_status(window: &Window) {
         let mut reported = state
             .reported
             .lock()
-            // default: a lock that a panicking thread poisoned still holds the record of the values sent, which decides whether
-            // the value is sent; the panic hook records the panic.
+            // default: a lock that a panicking thread poisoned still holds the record of the values sent, which decides
+            // whether the value is sent; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner);
         // The watch is read under the lock of the record. A watch that ends before this read clears the record after
         // this decision, so the next watch receives the next value.
@@ -1528,12 +1531,12 @@ impl<T: Send + 'static> LatestWork<T> {
             loop {
                 let asked = {
                     let (lock, wake) = &*worker;
-                    // default: a lock that a panicking thread poisoned still holds the requests, which the thread takes; the
-                    // panic hook records the panic.
+                    // default: a lock that a panicking thread poisoned still holds the requests, which the thread
+                    // takes; the panic hook records the panic.
                     let mut requests = lock.lock().unwrap_or_else(PoisonError::into_inner);
                     while requests.asked.is_empty() && !requests.stopped {
-                        // default: a wait that a poisoned lock ends still returns the guard of the requests, which the thread
-                        // takes; the panic hook records the panic.
+                        // default: a wait that a poisoned lock ends still returns the guard of the requests, which the
+                        // thread takes; the panic hook records the panic.
                         requests = wake.wait(requests).unwrap_or_else(PoisonError::into_inner);
                     }
                     if requests.stopped {
@@ -1551,8 +1554,8 @@ impl<T: Send + 'static> LatestWork<T> {
 
     pub(crate) fn ask(&self, key: &str, value: T) {
         let (lock, wake) = &*self.shared;
-        // default: a lock that a panicking thread poisoned still holds the requests, and this one is added to them; the panic
-        // hook records the panic.
+        // default: a lock that a panicking thread poisoned still holds the requests, and this one is added to them; the
+        // panic hook records the panic.
         let mut requests = lock.lock().unwrap_or_else(PoisonError::into_inner);
         requests.asked.insert(key.to_string(), value);
         wake.notify_one();
@@ -1562,8 +1565,8 @@ impl<T: Send + 'static> LatestWork<T> {
 impl<T> Drop for LatestWork<T> {
     fn drop(&mut self) {
         let (lock, wake) = &*self.shared;
-        // default: a lock that a panicking thread poisoned still holds the requests, and only the stop is set; the panic hook
-        // records the panic.
+        // default: a lock that a panicking thread poisoned still holds the requests, and only the stop is set; the
+        // panic hook records the panic.
         lock.lock().unwrap_or_else(PoisonError::into_inner).stopped = true;
         wake.notify_one();
     }
@@ -1626,8 +1629,8 @@ pub(crate) fn window_unwatched(app: &AppHandle, window: &str) {
     let mut reported = exposure
         .reported
         .lock()
-        // default: a lock that a panicking thread poisoned still holds the record of the value sent last for the window,
-        // which this call removes; the panic hook records the panic.
+        // default: a lock that a panicking thread poisoned still holds the record of the value sent last for the
+        // window, which this call removes; the panic hook records the panic.
         .unwrap_or_else(PoisonError::into_inner);
     forget_window_notify(&mut reported, window);
 }
@@ -2556,7 +2559,8 @@ impl Host {
     fn menu_language(&self) -> Result<String, Failure> {
         let state = self.0.state::<crate::menu::MenuLanguage>();
         let language = state.0.lock();
-        // default: a lock that a panicking thread poisoned still holds the menu language, which is only read; the panic hook records the panic.
+        // default: a lock that a panicking thread poisoned still holds the menu language, which is only read; the panic
+        // hook records the panic.
         let language = language.unwrap_or_else(PoisonError::into_inner);
         Ok(language.clone())
     }
