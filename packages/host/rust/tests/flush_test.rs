@@ -96,10 +96,9 @@ fn every_pending_reply_is_flushed_after_the_queue_drains() {
 const FLUSH_LOG_CHILD: &str = "SOKSAK_FLUSH_LOG_CHILD";
 
 // A close that waits for the full queue is recorded with its surface.
-// The surfaces that the flush scenario closes while the queue is full. The scenario fills the queue with bodies only
-// (fill_with_bodies), so the writer can take lines out of it only until the pipe of the sidecar holds what it can (at most
-// five lines of the scenario), and a close can find room (a_close_that_finds_room_writes_no_buffered_record). More closes than
-// those lines include a close that waits.
+// The surfaces that the flush scenario closes while the queue is full. The writer can take lines out of the queue just after
+// the queue was full, until the pipe of the sidecar holds what it can (at most five lines of the scenario), so a close can find
+// room (a_close_that_finds_room_writes_no_buffered_record). More closes than those lines include a close that waits.
 const CLOSED: [&str; 8] = ["s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9"];
 
 // contract: sidecars.close.buffered-close-is-recorded
@@ -170,6 +169,141 @@ fn a_close_that_finds_room_writes_no_buffered_record() {
     assert!(!log.contains(&refused), "{refused:?} in {log}");
 }
 
+// contract: flush.buffer.written-in-the-order-of-sending
+#[test]
+fn a_reply_held_for_the_queue_is_written_before_a_later_line() {
+    if let Some(config) = std::env::var_os(FLUSH_LOG_CHILD) {
+        soksak_host::application_log::start_standard_error(Path::new(&config), "com.soksak.test")
+            .unwrap();
+        let writer = records::start_writer(Path::new(&config));
+        held_before_later_scenario();
+        writer.flush(std::time::Duration::from_secs(5)).unwrap();
+        return;
+    }
+    let config = folder::Folder::new();
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "a_reply_held_for_the_queue_is_written_before_a_later_line",
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .env(FLUSH_LOG_CHILD, config.path())
+        .stdin(std::process::Stdio::null())
+        .output()
+        .unwrap();
+    child::require_success(&output, config.path());
+    let log = records::text_of(&records::read_events(&records::event_log_path(
+        config.path(),
+    )));
+    let buffered = format!(" info host sidecar {ECHO}: response queue full, buffering ");
+    assert!(
+        log.contains(&buffered),
+        "the reply did not wait for the full queue: {log}"
+    );
+    let held = format!(" info host sidecar {ECHO}: close s1: outbox full, buffered");
+    assert!(!log.contains(&held), "the close found no room: {log}");
+}
+
+/// Makes each FIFO of `paths`.
+fn make_fifos(paths: &[&Path]) {
+    for path in paths {
+        let output = std::process::Command::new("mkfifo")
+            .arg(path)
+            .output()
+            .expect("mkfifo failed");
+        assert!(
+            output.status.success(),
+            "mkfifo failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+/// Reads the FIFO at `path` until its writer closes it, so it ends by that event.
+fn read_fifo(path: &Path) {
+    std::fs::read(path).expect("read the FIFO");
+}
+
+/// Writes one line to the FIFO at `path`, which ends a `read _ < path` of the sidecar.
+fn write_fifo(path: &Path) {
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(path)
+        .and_then(|mut file| file.write_all(b"go\n"))
+        .expect("release the fixture");
+}
+
+// A reply held for the full queue reaches the sidecar before a close that the queue accepts after it. The sidecar reads one
+// byte of a line larger than its pipe, so the writer is inside that line while the bodies fill the queue and the reply waits.
+// Then the sidecar reads that line, the next one and one byte of the third: the writer has taken two lines out of the queue,
+// so the close finds room while the queue still holds bodies.
+fn held_before_later_scenario() {
+    let directory = folder::Folder::new();
+    let taken = directory.path().join("taken");
+    let room = directory.path().join("room");
+    let release = directory.path().join("go");
+    make_fifos(&[&taken, &room, &release]);
+    let received = directory.path().join("received");
+    let (received_text, taken_text, room_text, release_text) = (
+        received.display().to_string(),
+        taken.display().to_string(),
+        room.display().to_string(),
+        release.display().to_string(),
+    );
+    // The sidecar writes on its way out, so it ignores the terminate signal of the stop and ends with its input.
+    let script = format!(
+        "#!/bin/sh\ntrap '' TERM\n\
+         dd bs=1 count=1 of={received_text} 2>/dev/null\necho > {taken_text}\nread _ < {release_text}\n\
+         IFS= read -r line; printf '%s\\n' \"$line\" >> {received_text}\n\
+         IFS= read -r line; printf '%s\\n' \"$line\" >> {received_text}\n\
+         dd bs=1 count=1 2>/dev/null >> {received_text}\necho > {room_text}\nread _ < {release_text}\n\
+         exec cat >> {received_text}\n"
+    );
+    let echo_program = directory.path().join("echo");
+    std::fs::write(&echo_program, script).unwrap();
+    std::fs::set_permissions(&echo_program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let sidecars = create(
+        &files(r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#),
+        directory.path(),
+    )
+    .unwrap();
+    let (owner, _events) = owner("a", "/p");
+    // A line larger than any pipe of the sidecar keeps the writer inside it.
+    let huge = raw(&format!(r#"{{"data":"{}"}}"#, "y".repeat(512 * 1024)));
+    sidecars.send(&owner, ECHO, "s1", &huge).unwrap();
+    read_fifo(&taken);
+    let big = raw(&format!(r#"{{"data":"{}"}}"#, "x".repeat(20 * 1024)));
+    send_until_full(&sidecars, &owner, &big);
+    let reply = RawValue::from_string(
+        serde_json::json!({"image": {"consumed": {"generation": 1, "name": "a", "raster": 1, "sequence": 1}}})
+            .to_string(),
+    )
+    .unwrap();
+    sidecars.send_response(ECHO, "s1", "a", &reply).unwrap();
+    write_fifo(&release);
+    read_fifo(&room);
+    sidecars.retain(&owner, &|s| s != "s1").expect("retain");
+    write_fifo(&release);
+    sidecars.stop();
+    let data = std::fs::read_to_string(&received).unwrap();
+    let replied = data
+        .find(r#""name":"a""#)
+        .expect("the reply did not arrive");
+    let closed = data
+        .find(r#""surface":"s1","root":"/p","closed":true"#)
+        .expect("the close did not arrive");
+    let last = data.rfind(r#""data":""#).expect("no body arrived");
+    assert!(
+        replied > last,
+        "the reply arrived before a body that the queue accepted before it"
+    );
+    assert!(
+        closed > replied,
+        "the close arrived before the reply that was held before it"
+    );
+}
+
 // Fills the queue and lets the sidecar read after that. The receipts of the sidecar show that the writer has taken lines
 // out of the queue, so the close finds room, as a close does when the writer takes a line just after the queue was full.
 fn close_with_room_scenario() {
@@ -215,9 +349,8 @@ fn close_with_room_scenario() {
     drop(fifo_file);
     let mut receipts = 0;
     while receipts < RECEIPTS {
-        let message = events
-            .recv_timeout(std::time::Duration::from_secs(30))
-            .expect("the fixture acknowledges its lines");
+        // A fixture that does not acknowledge its lines stops the check at the limit of its runner.
+        let message = events.recv().expect("the fixture acknowledges its lines");
         let body: Value = serde_json::from_str(message.body.get()).unwrap();
         if body == Value::String("received".to_string()) {
             receipts += 1;
@@ -294,25 +427,6 @@ fn send_until_full(sidecars: &Sidecars<FakeOwner>, owner: &FakeOwner, big: &RawV
     panic!("the queue never filled");
 }
 
-/// Fills the queue of the sidecar, which reads nothing yet, with bodies only, and returns the count of the bodies that it
-/// accepted. The lines sent before the bodies are small, so the pipe of the sidecar takes them all: a queue filled before the
-/// writer takes them out frees their places afterwards. The writer writes the lines in order, so once it writes a body every
-/// earlier line has left the queue, and the queue filled again after that holds only bodies.
-fn fill_with_bodies(sidecars: &Sidecars<FakeOwner>, owner: &FakeOwner) -> usize {
-    let big = raw(&format!(r#"{{"data":"{}"}}"#, "x".repeat(20 * 1024)));
-    let mut queued = send_until_full(sidecars, owner, &big);
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    while sidecars.writing(ECHO).unwrap() < big.get().len() {
-        assert!(
-            std::time::Instant::now() < deadline,
-            "the writer did not start a body within 10 s"
-        );
-        std::thread::sleep(std::time::Duration::from_millis(1));
-    }
-    queued += send_until_full(sidecars, owner, &big);
-    queued
-}
-
 /// The scenario of the queue that fills, the replies and closes that wait for it, and the drain.
 fn every_pending_reply_scenario() {
     let directory = folder::Folder::new();
@@ -351,7 +465,8 @@ fn every_pending_reply_scenario() {
         sidecars.send(&owner, ECHO, s, &raw(r#"{}"#)).unwrap();
     }
 
-    let queued = fill_with_bodies(&sidecars, &owner);
+    let big = raw(&format!(r#"{{"data":"{}"}}"#, "x".repeat(20 * 1024)));
+    let queued = send_until_full(&sidecars, &owner, &big);
 
     // Send a response when the queue is full.
     for (i, name) in ["a", "b", "c"].iter().enumerate() {
@@ -408,7 +523,6 @@ fn every_pending_reply_scenario() {
     let data = finish_drain_scenario(
         || sidecars.stop(),
         || {
-            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
             let mut missing: Vec<String> = [
                 r#""name":"a""#,
                 r#""name":"b""#,
@@ -424,13 +538,10 @@ fn every_pending_reply_scenario() {
             )
             .collect();
             loop {
-                let message = events
-                    .recv_timeout(deadline.saturating_duration_since(std::time::Instant::now()))
-                    .map_err(|error| {
-                        format!(
-                            "the drain fixture did not acknowledge every reply and close: {error}"
-                        )
-                    })?;
+                // A fixture that does not acknowledge every line stops the check at the limit of its runner.
+                let message = events.recv().map_err(|error| {
+                    format!("the drain fixture did not acknowledge every reply and close: {error}")
+                })?;
                 let body: Value = serde_json::from_str(message.body.get())
                     .map_err(|error| format!("invalid drain fixture receipt: {error}"))?;
                 if body.get("event").and_then(Value::as_str) == Some("connection") {
