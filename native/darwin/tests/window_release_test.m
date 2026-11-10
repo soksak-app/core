@@ -58,37 +58,18 @@ static void track(const char *name, id object) {
 }
 
 // The event loop of AppKit drains an autorelease pool at the end of each of its turns. The wait for the release runs the run
-// loop itself, so these observers drain a pool for each run of the run loop: a pool opens when the run loop is entered and
-// drains when it exits, and an object that a source autoreleased in that run is released before the wait judges again.
-enum { kPoolDepth = 64 };
-static NSAutoreleasePool *turnPools[kPoolDepth];
-static int turnDepth;
-
-static void drainEachTurn(CFRunLoopObserverRef *entry, CFRunLoopObserverRef *leave) {
-    *entry = CFRunLoopObserverCreateWithHandler(kCFAllocatorDefault, kCFRunLoopEntry, true, LONG_MIN,
-        ^(CFRunLoopObserverRef observer, CFRunLoopActivity activity) {
-            (void)observer;
-            (void)activity;
-            if (turnDepth < kPoolDepth) turnPools[turnDepth] = [[NSAutoreleasePool alloc] init];
-            turnDepth++;
-        });
-    *leave = CFRunLoopObserverCreateWithHandler(kCFAllocatorDefault, kCFRunLoopExit, true, LONG_MAX,
-        ^(CFRunLoopObserverRef observer, CFRunLoopActivity activity) {
-            (void)observer;
-            (void)activity;
-            if (turnDepth == 0) return;
-            turnDepth--;
-            if (turnDepth < kPoolDepth) [turnPools[turnDepth] drain];
-        });
-    CFRunLoopAddObserver(CFRunLoopGetMain(), *entry, kCFRunLoopCommonModes);
-    CFRunLoopAddObserver(CFRunLoopGetMain(), *leave, kCFRunLoopCommonModes);
-}
-
-static void endDrain(CFRunLoopObserverRef entry, CFRunLoopObserverRef leave) {
-    CFRunLoopRemoveObserver(CFRunLoopGetMain(), entry, kCFRunLoopCommonModes);
-    CFRunLoopRemoveObserver(CFRunLoopGetMain(), leave, kCFRunLoopCommonModes);
-    CFRelease(entry);
-    CFRelease(leave);
+// loop itself, so it keeps a pool of its own at the level of the wait and drains it each time it judges: an object that a source
+// autoreleased is released before the wait judges again. The pool is pushed and drained only at the level of the wait, never by
+// an observer inside a run of the run loop: a pool that an entry observer pushed in a run of `nextEventMatchingMask:` was already
+// popped beneath it when the exit observer drained it, and the runtime ends the process on such a pool.
+static void waitTurns(NSString *what, BOOL (^done)(void)) {
+    __block NSAutoreleasePool *turn = [[NSAutoreleasePool alloc] init];
+    eventWait(what, ^BOOL {
+        [turn drain];
+        turn = [[NSAutoreleasePool alloc] init];
+        return done();
+    });
+    [turn drain];
 }
 
 // objc_loadWeak extends the lifetime by putting the object in the autorelease pool, so the check drains the pool
@@ -238,10 +219,7 @@ int main(void) { @autoreleasepool {
         [window close];
         [window release];
     }
-    CFRunLoopObserverRef poolEntry, poolExit;
-    drainEachTurn(&poolEntry, &poolExit);
-    eventWait(@"the closed window and its native objects are released", ^BOOL { return allReleased(); });
-    endDrain(poolEntry, poolExit);
+    waitTurns(@"the closed window and its native objects are released", ^BOOL { return allReleased(); });
     check([releasedReceivers isEqualToArray:@[@"first", @"second"]],
         [NSString stringWithFormat:@"the closed window releases its file drop receiver once (released %@)", releasedReceivers]);
     for (int i = 0; i < trackedCount; i++) {
