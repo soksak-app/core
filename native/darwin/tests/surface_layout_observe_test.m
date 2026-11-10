@@ -277,7 +277,8 @@ static void checkHeldInputEnds(void) {
     runQueue();
     check(first == 1 && second == 1,
         [NSString stringWithFormat:@"each held call runs once when the queue discards its turn (%d, %d)", first, second]);
-    check(!surfaceLayoutHoldCall(window, false, 0, 0, ^{ later++; }) && later == 1,
+    // A call that is not held is the caller's to run now, so the hold runs none of it.
+    check(!surfaceLayoutHoldCall(window, false, 0, 0, ^{ later++; }) && later == 0,
         @"the window takes input at once after its held input came back");
     surfaceLayoutCancel(window);
     [window close];
@@ -290,6 +291,8 @@ static void checkHeldInputEnds(void) {
 @end
 @implementation SPPressView
 - (void)mouseDown:(NSEvent *)event { self.presses++; }
+// The window of the check is not key, so the press reaches the view only when its first press counts.
+- (BOOL)acceptsFirstMouse:(NSEvent *)event { return YES; }
 @end
 
 // A joined peer that never presents holds the commit until the next press of the user: the press ends the hold at once, the
@@ -322,6 +325,58 @@ static void checkPressEndsHold(void) {
     check(target.presses == 1, [NSString stringWithFormat:@"the press reaches its view (%d)", target.presses]);
     stalled.held = nil;
     surfaceLayoutAbandonView(window, stalled);
+    surfaceLayoutCancel(window);
+    [window close];
+    [window release];
+}
+
+// The actions of the user reach every subscriber through one device at the level of the application: each press and each key
+// event that reaches -[NSApplication sendEvent:], a synthetic one and a modifier change included, is told once before any monitor
+// sees it, a drag is not told, and an event that the hold kept is not told again when it comes back
+// (docs/spec/native-surfaces.md#layout-transaction).
+static void checkActionsAreToldOnce(void) {
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(100, 700, 200, 100) styleMask:NSWindowStyleMaskBorderless
+        backing:NSBackingStoreBuffered defer:NO];
+    window.releasedWhenClosed = NO;
+    SPGateView *gate = [[[SPGateView alloc] initWithFrame:window.contentView.bounds] autorelease];
+    [window.contentView addSubview:gate];
+    static NSMutableArray<NSNumber *> *told;
+    static BOOL subscribed;
+    if (!told) told = [[NSMutableArray alloc] init];
+    [told removeAllObjects];
+    if (!subscribed) {
+        subscribed = YES;
+        surfaceInputActionObserve(^(NSEvent *event) { [told addObject:@(event.type)]; });
+    }
+    NSMutableArray<NSNumber *> *toldAtMonitor = [NSMutableArray array];
+    id monitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown | NSEventMaskLeftMouseDragged | NSEventMaskKeyDown
+        | NSEventMaskFlagsChanged handler:^NSEvent *(NSEvent *event) { [toldAtMonitor addObject:@(told.count)]; return nil; }];
+    NSPoint inside = NSMakePoint(50, 50);
+    [NSApp sendEvent:[NSEvent mouseEventWithType:NSEventTypeLeftMouseDragged location:inside modifierFlags:0 timestamp:0
+        windowNumber:window.windowNumber context:nil eventNumber:1 clickCount:1 pressure:1]];
+    [NSApp sendEvent:[NSEvent keyEventWithType:NSEventTypeFlagsChanged location:NSZeroPoint modifierFlags:NSEventModifierFlagShift
+        timestamp:0 windowNumber:window.windowNumber context:nil characters:@"" charactersIgnoringModifiers:@"" isARepeat:NO
+        keyCode:56]];
+    [NSApp sendEvent:[NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:0 timestamp:0
+        windowNumber:window.windowNumber context:nil characters:@"a" charactersIgnoringModifiers:@"a" isARepeat:NO keyCode:0]];
+    [NSApp sendEvent:[NSEvent mouseEventWithType:NSEventTypeLeftMouseDown location:inside modifierFlags:0 timestamp:0
+        windowNumber:window.windowNumber context:nil eventNumber:2 clickCount:1 pressure:1]];
+    NSArray *want = @[@(NSEventTypeFlagsChanged), @(NSEventTypeKeyDown), @(NSEventTypeLeftMouseDown)];
+    check([told isEqualToArray:want], [NSString stringWithFormat:@"a modifier change, a key and a press are told, a drag is not (%@)", told]);
+    check([toldAtMonitor isEqualToArray:@[@0, @1, @2, @3]],
+        [NSString stringWithFormat:@"each action is told before the monitors see it (%@)", toldAtMonitor]);
+    [told removeAllObjects];
+    __block int held = 0;
+    surfaceLayoutBegin(window, 71, ^(int allowed) {});
+    check(surfaceLayoutHoldCall(window, true, inside.x, inside.y, ^{ held++; }), @"a press without a target waits for the transaction");
+    [NSApp sendEvent:[NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:0 timestamp:0
+        windowNumber:window.windowNumber context:nil characters:@"b" charactersIgnoringModifiers:@"b" isARepeat:NO keyCode:11]];
+    check(!surfaceLayoutIsPreparing(window), @"the key ends the hold of the window");
+    runQueue();
+    check(held == 1, [NSString stringWithFormat:@"the held press runs once after the hold ended (%d)", held]);
+    check([told isEqualToArray:@[@(NSEventTypeKeyDown)]],
+        [NSString stringWithFormat:@"the kept key is told once, also after it came back (%@)", told]);
+    [NSEvent removeMonitor:monitor];
     surfaceLayoutCancel(window);
     [window close];
     [window release];
@@ -382,6 +437,8 @@ int main(void) { @autoreleasepool {
     checkHeldInputEnds();
     resetOwners();
     checkPressEndsHold();
+    resetOwners();
+    checkActionsAreToldOnce();
     [third release];
     [first release];
     [second release];

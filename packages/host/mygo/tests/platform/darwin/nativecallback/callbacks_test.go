@@ -205,7 +205,7 @@ func TestNativeCallbacksPreserveTheDeclaredABI(t *testing.T) {
 
 	wantOrder := []string{
 		"NativeCommitted", "NativeTerminated", "NativeMessage", "FileDropped", "FileDropReleased", "ImageReleased", "ImageChanged",
-		"NativeStartPageReady", "NativeLayoutReady", "NativePresentationDone", "NativeSettledPresent", "NativeSettledPresentEnded",
+		"NativeStartPageReady", "NativeLayoutReady", "NativePresentationDone", "NativeJoinEnded", "NativeSettledPresent", "NativeSettledPresentEnded",
 		"NativeLayoutStarted", "NativeLayoutEnded", "NativeSettledDone", "NotificationEvent", "QuitRequest", "NativeUiRun",
 		"NativeResponderChanged", "NativeFullscreenDone", "SurfaceHit", "SurfacePoint", "InputDelivered", "InputActivated",
 		"DocumentChanged", "DocumentMessage", "ViewMessage", "ViewEnded", "ViewResponsiveness", "DocumentStream", "CoreRootServe",

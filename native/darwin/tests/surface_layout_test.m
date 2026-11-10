@@ -81,6 +81,15 @@ static void waitFrames(NSScreen *screen, int count) {
     until(^BOOL { return frames.left == 0; });
 }
 
+// Runs the run loop until the next presentation of view that comes after every earlier presentation request of view. A check that
+// a callback did not come is made after this marker, so no check of this file decides by time
+// (docs/spec/native-surfaces.md#layout-transaction).
+static void untilMarker(WKWebView *view) {
+    __block BOOL marked = NO;
+    surfaceLayoutAfterPresentation(view, ^{ marked = YES; });
+    until(^BOOL { return marked; });
+}
+
 // A display that finishes while the layout transaction of the window is open does not end the wait. If a newer
 // request extends the transaction that an earlier request opened, the commit of the earlier request fails, and the
 // wait ends after the newer request commits.
@@ -94,7 +103,8 @@ static void checkSettledWaitsForLayout(NSWindow *window, WKWebView *main) {
     });
     surfaceLayoutBegin(window, 102, ^(int allowed) {});
     check(!surfaceLayoutCommit(window, 101), @"an older request does not commit an extended layout transaction");
-    waitFrames(window.screen, 5);
+    untilMarker(main);
+    check(settledAt == 0, @"a presentation inside the open layout transaction does not end the settled wait");
     check(surfaceLayoutCommit(window, 102), @"the newest request commits the layout transaction");
     int committedAt = ++order;
     until(^BOOL { return settledAt != 0; });
@@ -318,7 +328,7 @@ static void checkViewJoin(WKWebViewConfiguration *configuration) {
     check(otherStarted, @"a transaction of another window starts while the commit waits for a joined view");
     check(surfaceLayoutAbandonView(window, view), @"the abandon ends the view wait");
     check(!surfaceLayoutAbandonView(window, view), @"a second abandon of the view has no join to end");
-    waitFrames(window.screen, 3);
+    untilMarker(view);
     check(presented == 1, @"a presentation after the abandon is not reported");
     check(surfaceLayoutCommit(&otherOwner, 304), @"the transaction after the abandon commits");
 
@@ -349,7 +359,7 @@ static void checkViewJoin(WKWebViewConfiguration *configuration) {
     surfaceLayoutCancelTicket(window, 309);
     check(surfaceLayoutViewJoinCount(window) == 0, @"canceling the exact open ticket releases its joined wait");
     check(surfaceLayoutCommit(&otherOwner, 310), @"the owner after the canceled active ticket commits");
-    waitFrames(window.screen, 3);
+    untilMarker(view);
     check(canceledJoinPresented == 0, @"the canceled active ticket does not report a later presentation");
 
     // The check leaves no transaction of its owners behind for the next check, whatever its outcome.
@@ -599,7 +609,7 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
         __block BOOL appDOMPresented = NO;
         surfaceLayoutAfterPresentation(main, ^{ appDOMPresented = YES; });
         until(^BOOL { return rootPresented && appDOMPresented; });
-        waitFrames(window.screen, 3);
+        untilMarker(main);
         check(appDOMBarrierPending && surfaceLayoutIsPreparing(window),
             @"the controlled app-DOM barrier remains pending after both presentation callbacks");
         check(window.firstResponder == main,

@@ -18,6 +18,7 @@ type Callbacks struct {
 	NativeStartPageReady      func(uintptr, *byte)
 	NativeLayoutReady         func(uintptr, bool)
 	NativePresentationDone    func(uintptr)
+	NativeJoinEnded           func(uintptr, *byte)
 	NativeSettledPresent      func(uintptr, unsafe.Pointer)
 	NativeSettledPresentEnded func(uintptr)
 	NativeLayoutStarted       func(uintptr)
@@ -47,4 +48,4 @@ type Callbacks struct {
 }
 
 // CallbackTable holds process-lifetime function addresses in the native header's field order.
-type CallbackTable [36]uintptr
+type CallbackTable [37]uintptr

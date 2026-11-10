@@ -16,6 +16,7 @@ extern void goHost_image_changed(uintptr_t arg0, char * arg1);
 extern void goHost_native_start_page_ready(uintptr_t arg0, char * arg1);
 extern void goHost_native_layout_ready(uintptr_t arg0, _Bool arg1);
 extern void goHost_native_presentation_done(uintptr_t arg0);
+extern void goHost_native_join_ended(uintptr_t arg0, char * arg1);
 extern void goHost_native_settled_present(uintptr_t arg0, void * arg1);
 extern void goHost_native_settled_present_ended(uintptr_t arg0);
 extern void goHost_native_layout_started(uintptr_t arg0);
@@ -93,6 +94,9 @@ func InstallCallbacks(callbacks abi.Callbacks) error {
 	}
 	if callbacks.NativePresentationDone == nil {
 		return fmt.Errorf("native callback is missing: native_presentation_done")
+	}
+	if callbacks.NativeJoinEnded == nil {
+		return fmt.Errorf("native callback is missing: native_join_ended")
 	}
 	if callbacks.NativeSettledPresent == nil {
 		return fmt.Errorf("native callback is missing: native_settled_present")
@@ -183,6 +187,7 @@ func InstallCallbacks(callbacks abi.Callbacks) error {
 	native.native_start_page_ready = (*[0]byte)(C.goHost_native_start_page_ready)
 	native.native_layout_ready = (*[0]byte)(C.goHost_native_layout_ready)
 	native.native_presentation_done = (*[0]byte)(C.goHost_native_presentation_done)
+	native.native_join_ended = (*[0]byte)(C.goHost_native_join_ended)
 	native.native_settled_present = (*[0]byte)(C.goHost_native_settled_present)
 	native.native_settled_present_ended = (*[0]byte)(C.goHost_native_settled_present_ended)
 	native.native_layout_started = (*[0]byte)(C.goHost_native_layout_started)
@@ -265,6 +270,11 @@ func goHost_native_layout_ready(arg0 C.uintptr_t, arg1 C.bool) {
 //export goHost_native_presentation_done
 func goHost_native_presentation_done(arg0 C.uintptr_t) {
 	callbackHandlers.NativePresentationDone(uintptr(arg0))
+}
+
+//export goHost_native_join_ended
+func goHost_native_join_ended(arg0 C.uintptr_t, arg1 *C.char) {
+	callbackHandlers.NativeJoinEnded(uintptr(arg0), (*byte)(unsafe.Pointer(arg1)))
 }
 
 //export goHost_native_settled_present

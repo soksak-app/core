@@ -23,6 +23,7 @@
     X(V, void, native_start_page_ready, (uintptr_t context, char *failure), (context, failure)) \
     X(V, void, native_layout_ready, (uintptr_t context, bool allowed), (context, allowed)) \
     X(V, void, native_presentation_done, (uintptr_t context), (context)) \
+    X(V, void, native_join_ended, (uintptr_t context, char *reason), (context, reason)) \
     X(V, void, native_settled_present, (uintptr_t context, void *presented), (context, presented)) \
     X(V, void, native_settled_present_ended, (uintptr_t context), (context)) \
     X(V, void, native_layout_started, (uintptr_t window), (window)) \
