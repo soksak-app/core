@@ -3,8 +3,8 @@
 #![allow(dead_code)]
 
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{Receiver, RecvTimeoutError, channel};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::sync::mpsc::{Receiver, channel};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
 
@@ -56,22 +56,17 @@ impl CrashReports {
         }
     }
 
-    /// Waits until the system wrote the crash report of the process pid and removes it. The wait ends after limit when no
-    /// report arrives, so the failure names the missing report.
-    pub fn remove(&self, pid: u32, limit: Duration) {
-        let deadline = Instant::now() + limit;
+    /// Waits until the system wrote the crash report of the process pid and removes it. A report that never arrives leaves
+    /// the wait to the limit of the runner of the check.
+    pub fn remove(&self, pid: u32) {
         loop {
-            let left = deadline.saturating_duration_since(Instant::now());
-            let event = match self.events.recv_timeout(left) {
+            let event = match self.events.recv() {
                 Ok(Ok(event)) => event,
                 Ok(Err(error)) => panic!("crash report watch of {:?}: {error}", self.directory),
-                Err(RecvTimeoutError::Timeout) => panic!(
-                    "the system wrote no crash report of process {pid} in {:?} within {limit:?}",
+                Err(_) => panic!(
+                    "crash report watch of {:?} ended before the report of process {pid}",
                     self.directory
                 ),
-                Err(RecvTimeoutError::Disconnected) => {
-                    panic!("crash report watch of {:?} ended", self.directory)
-                }
             };
             for path in event.paths {
                 // The system writes a report into a hidden file and renames it to `<application>-<time>.ips`, so only a name

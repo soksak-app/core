@@ -125,7 +125,7 @@ fn refuse_while_held(log: &EventLog, hold: &Hold, first: u64) -> (u64, u64) {
         &json!({"reason": "the writer is held"})
     ));
     hold.entered
-        .recv_timeout(Duration::from_secs(5))
+        .recv()
         .expect("the writer did not write the error");
     let (mut accepted, mut refused) = (0, 0);
     for index in first..first + 20 {
@@ -244,27 +244,25 @@ fn an_error_is_written_without_waiting_for_the_batch_interval() {
     opts.batch_interval = Duration::from_secs(30);
     let log = event_log::start(opts).unwrap();
     records::store_every_level(&log);
+    let (wrote, writes) = std::sync::mpsc::channel();
+    log.set_on_write(Box::new(move |_, _| {
+        wrote.send(()).unwrap();
+    }));
     assert!(log.emit(
         Level::Error,
         "host.test.failure",
         &json!({"reason": "disk"})
     ));
     let path = log.path().to_path_buf();
-    // The file is the only place where the write shows; no event source announces it, so the test reads it in short
-    // steps until a deadline.
-    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    // The interval of 30 seconds ends in no test, so a write that stores the error was not the write of an interval.
     loop {
+        writes.recv().expect("the error was not written");
         if read(&path)
             .iter()
             .any(|e| e["event"] == "host.test.failure")
         {
             break;
         }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "the error was not written within 5 seconds"
-        );
-        std::thread::sleep(Duration::from_millis(5));
     }
     log.flush(Duration::from_secs(5)).unwrap();
 }
@@ -671,9 +669,7 @@ fn the_writer_announces_each_write_to_its_observer() {
     }));
     assert!(log.emit(Level::Info, "host.test.event", &json!({"index": 1})));
     log.flush(Duration::from_secs(5)).unwrap();
-    let (path, size) = receiver
-        .recv_timeout(Duration::from_secs(5))
-        .expect("the write was not announced");
+    let (path, size) = receiver.recv().expect("the write was not announced");
     assert_eq!(path.file_name().unwrap(), "host-b1.jsonl");
     assert_eq!(size, std::fs::metadata(&path).unwrap().len());
 }
@@ -690,19 +686,19 @@ fn a_steady_stream_of_events_is_written_at_each_batch_interval() {
     opts.batch_interval = Duration::from_millis(50);
     let log = event_log::start(opts).unwrap();
     records::store_every_level(&log);
-    let path = log.path().to_path_buf();
-    let started = std::time::Instant::now();
-    let mut index = 0;
-    while started.elapsed() < Duration::from_millis(400) {
+    let (wrote, writes) = std::sync::mpsc::channel();
+    log.set_on_write(Box::new(move |_, _| {
+        wrote.send(()).unwrap();
+    }));
+    // The first event is written at once, by a writer that slept or at the end of its interval; the second write comes while
+    // the stream still runs. The pause between two events only keeps the stream steady and decides nothing. A writer that
+    // waits for a quiet interval does not write again while the stream runs, and the check stops at the limit of its runner.
+    let (mut index, mut written) = (0, 0);
+    while written < 2 {
         assert!(log.emit(Level::Info, "host.test.event", &json!({"index": index})));
         index += 1;
+        written += writes.try_iter().count();
         std::thread::sleep(Duration::from_millis(5));
     }
-    // Every event older than one interval and the margin of a loaded machine must be on disk while the stream runs.
-    let written = fs::read_to_string(&path).unwrap().lines().count();
-    assert!(
-        written > 1,
-        "after 400 ms of events every 5 ms ({index} emitted) the file holds {written} line(s); the writer waits for a quiet interval"
-    );
     log.flush(Duration::from_secs(5)).unwrap();
 }

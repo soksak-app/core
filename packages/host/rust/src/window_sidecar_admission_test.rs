@@ -36,7 +36,7 @@ fn window_sidecar_admission_cannot_enter_a_view_mounted_during_process_start() {
             &[],
         )
     });
-    let hello = received.recv_timeout(std::time::Duration::from_secs(5));
+    let hello = received.recv();
     let entered = hello
         .as_ref()
         .is_ok_and(|message| message["operation"] == "hello");
@@ -99,7 +99,7 @@ fn window_sidecar_admission_cannot_revive_after_mounted_view_retires() {
             &[],
         )
     });
-    let hello = received.recv_timeout(std::time::Duration::from_secs(5));
+    let hello = received.recv();
     let entered = hello
         .as_ref()
         .is_ok_and(|message| message["operation"] == "hello");
@@ -167,7 +167,7 @@ fn background_startup_keeps_authority_when_an_unrelated_surface_mounts() {
             &[],
         )
     });
-    let hello = received.recv_timeout(std::time::Duration::from_secs(5));
+    let hello = received.recv();
     let entered = hello
         .as_ref()
         .is_ok_and(|message| message["operation"] == "hello");

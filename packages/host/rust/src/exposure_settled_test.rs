@@ -102,8 +102,9 @@ fn the_presented_window_waits_for_the_placement_that_its_workbench_holds() {
         answer_tx.send((displayed, order.into_inner())).unwrap();
     });
     asked.recv().unwrap();
+    // The window answers after the ask returns, and the order of its steps shows that it settled after the placement.
     assert!(
-        answer.recv_timeout(Duration::from_millis(50)).is_err(),
+        answer.try_recv().is_err(),
         "the window answered while its workbench held a placement"
     );
     commit.send(()).unwrap();

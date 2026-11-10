@@ -51,7 +51,6 @@ use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError, mpsc};
 use std::thread;
-use std::time::Duration;
 
 use super::{
     Running, SurfaceComposition, SurfaceDispatchMode, abandon_waits_then_cancel_layout,
@@ -513,14 +512,14 @@ fn root_view_join_is_registered_before_dom_presentation_wait() {
         }
     });
     let first = phase_rx
-        .recv_timeout(Duration::from_secs(1))
+        .recv()
         .expect("layout did not register its first presentation stage");
     dom_release.send(()).unwrap();
     let mut phases = vec![first];
     while phases.last() != Some(&"commit") {
         phases.push(
             phase_rx
-                .recv_timeout(Duration::from_secs(1))
+                .recv()
                 .expect("layout did not finish its presentation stages"),
         );
     }
@@ -1148,25 +1147,29 @@ fn the_layout_commits_after_the_presentation_notice_of_the_frontend() {
     let window = application().window_of(frontend.clone());
     let (ready_tx, ready_rx) = mpsc::channel();
     let (commit_tx, commit_rx) = mpsc::channel();
+    // The wait for the notice returns only after the notice calls back, and the layout commits when the presentation returns.
+    let noticed = Arc::new(AtomicBool::new(false));
+    let awaited = Arc::clone(&noticed);
     let worker = thread::spawn(move || {
         commit_tx
             .send(complete_layout_presentation(
                 || ask_presentation_notice(&window, 7, ready_tx),
-                || await_presentation_notice(&ready_rx),
+                || {
+                    let answer = await_presentation_notice(&ready_rx);
+                    awaited.store(true, Ordering::SeqCst);
+                    answer
+                },
                 || Ok(()),
                 || Ok("prepared"),
             ))
             .unwrap();
     });
     let notice = frontend.notice();
-    assert!(
-        commit_rx.recv_timeout(Duration::from_millis(50)).is_err(),
-        "the layout reached its commit before the presentation notice"
-    );
     notice(Ok(()));
-    assert_eq!(
-        commit_rx.recv_timeout(Duration::from_secs(5)).unwrap(),
-        Ok("prepared")
+    assert_eq!(commit_rx.recv().unwrap(), Ok("prepared"));
+    assert!(
+        noticed.load(Ordering::SeqCst),
+        "the layout reached its commit before the wait for the presentation notice returned"
     );
     worker.join().unwrap();
 }

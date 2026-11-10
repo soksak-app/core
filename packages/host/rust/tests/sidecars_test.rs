@@ -20,9 +20,8 @@ use soksak_host::sidecars::{
     read_message_line,
 };
 
-/// The upper limit that ends a stalled check. Success is decided by the received event and the ended process and not by
-/// this time. Even on a heavily loaded machine, the answer and the end of the sidecar come within this time.
-const STALL: Duration = Duration::from_secs(120);
+/// The limit that a flush of the event writer takes as its argument; the answer of the writer ends each flush.
+const FLUSH_LIMIT: Duration = Duration::from_secs(120);
 
 /// The writer of the records is process-wide, so the tests that attach it run one at a time.
 static SERIAL: Mutex<()> = Mutex::new(());
@@ -878,9 +877,8 @@ fn the_standard_error_of_a_sidecar_is_written_as_records() {
                 .unwrap();
             let event = events.recv().expect("no echo event; the test stalled");
             assert_eq!(event.surface, "s1");
+            // The stop ends after the last record of the standard error.
             sidecars.stop();
-            // The reader of the standard error ends with the process; let it write its last record.
-            std::thread::sleep(Duration::from_millis(200));
         });
         return;
     };
@@ -940,7 +938,7 @@ fn the_relay_records_every_message_with_its_whole_body() {
     sidecars.stop();
     // Turning the trace off joins the sampler, so no process that it started outlives the check.
     soksak_host::performance::command(serde_json::json!({"action": "off"})).unwrap();
-    writer.flush(STALL).unwrap();
+    writer.flush(FLUSH_LIMIT).unwrap();
     let records_of_the_run = records::read_events(writer.path());
     soksak_host::event_record::use_host_event_log(None);
     assert!(
@@ -1791,7 +1789,7 @@ fn a_dropped_sidecar_message_is_recorded() {
         // The message of s1 follows the discarded one, so the record of s2 is written when it arrives.
         let event = events.recv().expect("no sidecar event; the test stalled");
         assert_eq!(event.surface, "s1");
-        writer.flush(STALL).unwrap();
+        writer.flush(FLUSH_LIMIT).unwrap();
         // The sidecar ends at its stop, which ends by that exit; a stop that does not end stops at the limit of the
         // runner.
         sidecars.stop();
@@ -2293,7 +2291,7 @@ fn standard_io_sidecar_first_answer_after_spawn_is_recorded() {
     sidecars.stop();
     // Turning the trace off joins the sampler, so no process that it started outlives the check.
     soksak_host::performance::command(serde_json::json!({"action": "off"})).unwrap();
-    writer.flush(STALL).unwrap();
+    writer.flush(FLUSH_LIMIT).unwrap();
     let records_of_the_run = records::read_events(writer.path());
     soksak_host::event_record::use_host_event_log(None);
     assert!(

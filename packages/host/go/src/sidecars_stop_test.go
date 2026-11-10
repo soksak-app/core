@@ -5,6 +5,7 @@ import (
 	"net"
 	"os/exec"
 	"testing"
+	"time"
 )
 
 // A stop sends close-owner without waiting for room in the queue of the service: a full queue fails the close at once and ends the
@@ -23,7 +24,7 @@ func TestAStopOfAPersistentServiceWaitsForNoRoomInItsQueue(t *testing.T) {
 	})
 	process := &sidecar{name: "fixture-service", persistent: true, conn: local, outbox: make(chan queuedLine, 1),
 		closeWaiters: map[string]chan error{}}
-	process.outbox <- queue([]byte("{}\n"))
+	process.outbox <- queue([]byte("{}\n"), time.Now())
 	// A close that waits for room in the full queue does not return, and the check stops at the limit of its runner.
 	if err := c.closePersistentOwner(process, context.Background(), false); err == nil {
 		t.Fatal("the close of a service whose queue is full succeeded")

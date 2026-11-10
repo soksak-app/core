@@ -20,11 +20,15 @@ use super::{
 fn a_close_of_a_persistent_owner_waits_for_no_room_in_its_queue() {
     let (outbox, _queue) = sync_channel::<Outgoing>(1);
     outbox
-        .try_send(Outgoing::Line(QueuedLine::new(b"{}\n".to_vec())))
+        .try_send(Outgoing::Line(QueuedLine::new(
+            b"{}\n".to_vec(),
+            std::time::Instant::now(),
+        )))
         .unwrap();
     let close_waiters: ReplyWaiters = Arc::new(Mutex::new(HashMap::new()));
     let shutdown_waiters: ReplyWaiters = Arc::new(Mutex::new(HashMap::new()));
     let connected = AtomicBool::new(true);
+    let clock: super::Clock = Arc::new(std::time::Instant::now);
     // A close that waits for room in the full queue does not return, and the check stops at the limit of its runner.
     let result = send_close_owner_and_shutdown(
         &outbox,
@@ -33,6 +37,7 @@ fn a_close_of_a_persistent_owner_waits_for_no_room_in_its_queue() {
         &connected,
         "fixture",
         None,
+        &clock,
     );
     assert!(
         result.is_err(),

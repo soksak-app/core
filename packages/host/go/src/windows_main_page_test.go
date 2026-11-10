@@ -107,10 +107,11 @@ func TestAWindowThatIsGoneReadsNoStateOnAChange(t *testing.T) {
 	for _, listener := range window.listeners[WindowMove] {
 		listener()
 	}
+	// A change reads the window on screen in a step of the main thread, which ran before the listener returned.
 	select {
 	case <-fake.read:
 		t.Fatal("a change of a window that is gone read its state and reported an error")
-	case <-time.After(100 * time.Millisecond):
+	default:
 	}
 }
 
@@ -215,10 +216,12 @@ func TestAChangeOfTheBackingScaleRefreshesTheRastersOfTheWindow(t *testing.T) {
 	for _, listener := range window.listeners[WindowMove] {
 		listener()
 	}
+	// A move reads the window in a step of the main thread, which ran before the listener returned, and starts no refresh of
+	// the rasters.
 	select {
 	case <-fake.placed:
 		t.Fatal("a move refreshed the rasters")
-	case <-time.After(100 * time.Millisecond):
+	default:
 	}
 	if len(window.listeners[WindowScaleChanged]) == 0 {
 		t.Fatal("the window does not listen to a change of the backing scale")

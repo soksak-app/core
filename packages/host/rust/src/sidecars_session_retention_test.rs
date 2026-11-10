@@ -673,7 +673,10 @@ pub(crate) fn mounted_full_project_wire<O: Owner>(
             assert!(
                 process
                     .outbox
-                    .try_send(Outgoing::Line(super::QueuedLine::new(b"{}\n".to_vec())))
+                    .try_send(Outgoing::Line(super::QueuedLine::new(
+                        b"{}\n".to_vec(),
+                        std::time::Instant::now()
+                    )))
                     .is_ok()
             );
         }

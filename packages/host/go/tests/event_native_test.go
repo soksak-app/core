@@ -108,20 +108,34 @@ func stores(t *testing.T, log *host.EventLog, name string) bool {
 	return false
 }
 
-// waitFor waits for what the writer does at once.
-func waitFor(t *testing.T, log *host.EventLog, name string) {
+// wakingLog is a writer with a ring, the channel that wakes it and the events of its sleeps and its writes.
+type wakingLog struct {
+	*host.EventLog
+	wake chan struct{}
+	// sleeps receives each sleep of the writer; writes receives each batch it wrote.
+	sleeps chan bool
+	writes chan struct{}
+}
+
+// waitFor waits for the writes of the writer until one of them stored the event. It takes the write that stored it, so a count
+// of the writes that follow starts after it.
+func (w *wakingLog) waitFor(t *testing.T, name string) {
 	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
-	for !stores(t, log, name) {
-		if time.Now().After(deadline) {
+	for {
+		select {
+		case <-w.writes:
+		case <-time.After(5 * time.Second):
 			t.Fatalf("%s was not stored at once", name)
 		}
-		time.Sleep(2 * time.Millisecond)
+		if stores(t, w.EventLog, name) {
+			return
+		}
 	}
 }
 
-// startWaking starts a writer with the ring and returns the channel that wakes it, once it took what its start left.
-func startWaking(t *testing.T, ring *fakeRing, interval time.Duration) (*host.EventLog, chan struct{}) {
+// startWaking starts a writer with the ring and returns it once it took what its start left and slept. Only an event, a wake,
+// a loss, a request or the report of a held count wakes a writer that sleeps, so what follows is what the test does.
+func startWaking(t *testing.T, ring *fakeRing, interval time.Duration) *wakingLog {
 	t.Helper()
 	options := support.EventLogOptions(t.TempDir())
 	options.BatchInterval = interval
@@ -133,8 +147,34 @@ func startWaking(t *testing.T, ring *fakeRing, interval time.Duration) (*host.Ev
 	if err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, log, "log.open")
-	return log, wake
+	t.Cleanup(log.Close)
+	w := &wakingLog{EventLog: log, wake: wake, sleeps: make(chan bool, 64), writes: make(chan struct{}, 64)}
+	log.SetOnSleep(func(countHeld bool) {
+		select {
+		case w.sleeps <- countHeld:
+		default:
+			t.Error("the test did not take the sleeps of the writer")
+		}
+	})
+	w.slept(t)
+	log.SetOnWrite(func(string, int64) {
+		select {
+		case w.writes <- struct{}{}:
+		default:
+			t.Error("the test did not take the writes of the writer")
+		}
+	})
+	return w
+}
+
+// slept waits for the next sleep of the writer.
+func (w *wakingLog) slept(t *testing.T) {
+	t.Helper()
+	select {
+	case <-w.sleeps:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the writer did not sleep")
+	}
 }
 
 // contract: log.native.stores-pulled-records-in-the-layer-native
@@ -238,59 +278,69 @@ func TestAPulledNativeRecordOfADeclaredEventStoresTheCatalogClassAndAnUndeclared
 // contract: log.native.wake-stores-a-record-at-once
 func TestAWakeOfTheRingStoresItsRecordAtOnce(t *testing.T) {
 	ring := &fakeRing{}
-	log, wake := startWaking(t, ring, noInterval)
+	log := startWaking(t, ring, noInterval)
 	ring.mu.Lock()
 	ring.bytes = nativeRecord(1_791_000_000_000_001, 5_000_000_001, 2, "", "native.test.late", `{}`)
 	ring.mu.Unlock()
-	wake <- struct{}{}
-	waitFor(t, log, "native.test.late")
+	log.wake <- struct{}{}
+	log.waitFor(t, "native.test.late")
 }
 
 // contract: log.native.close-stores-the-ring
 func TestCloseStoresTheRecordsOfTheRingWithoutAWake(t *testing.T) {
 	ring := &fakeRing{}
-	log, _ := startWaking(t, ring, noInterval)
+	log := startWaking(t, ring, noInterval)
 	ring.mu.Lock()
 	ring.bytes = nativeRecord(1_791_000_000_000_001, 5_000_000_001, 2, "", "native.test.late", `{}`)
 	ring.mu.Unlock()
 	log.Close()
-	if !stores(t, log, "native.test.late") {
+	if !stores(t, log.EventLog, "native.test.late") {
 		t.Fatal("Close did not store the record of the ring")
 	}
 }
 
+// The start takes the ring once and sleeps, and a wake takes it at once and at the end of the interval it starts, after which
+// the writer sleeps again.
 // contract: log.writer.sleeps-with-nothing-to-write
 func TestAWriterWithNothingToWriteDoesNotPull(t *testing.T) {
 	ring := &fakeRing{}
-	_, _ = startWaking(t, ring, 5*time.Millisecond)
-	time.Sleep(30 * time.Millisecond)
-	ring.mu.Lock()
-	from := ring.drainCalled
-	ring.mu.Unlock()
-	time.Sleep(100 * time.Millisecond)
-	ring.mu.Lock()
-	defer ring.mu.Unlock()
-	if woke := ring.drainCalled - from; woke != 0 {
-		t.Fatalf("the writer pulled %d times in 100 ms with nothing to write", woke)
+	log := startWaking(t, ring, 5*time.Millisecond)
+	drains := func() int {
+		ring.mu.Lock()
+		defer ring.mu.Unlock()
+		return ring.drainCalled
+	}
+	if pulled := drains(); pulled != 1 {
+		t.Fatalf("the writer pulled %d times before it slept, want the one of its start", pulled)
+	}
+	log.wake <- struct{}{}
+	log.slept(t)
+	if pulled := drains() - 1; pulled != 2 {
+		t.Fatalf("the writer pulled %d times after one wake, want at once and at the end of the interval", pulled)
 	}
 }
 
+// The close is the one write after the first event, and the writer writes before the close returns.
 // contract: log.writer.stores-the-first-event-at-once
 func TestAWriterThatSleptStoresTheFirstEventAtOnceAndGathersTheNext(t *testing.T) {
-	log, _ := startWaking(t, &fakeRing{}, noInterval)
+	log := startWaking(t, &fakeRing{}, noInterval)
 	if !log.Emit(host.LevelInfo, "host.test.first", map[string]any{}) {
 		t.Fatal("the first event was refused")
 	}
-	waitFor(t, log, "host.test.first")
-	if !log.Emit(host.LevelInfo, "host.test.second", map[string]any{}) {
-		t.Fatal("the second event was refused")
+	log.waitFor(t, "host.test.first")
+	if len(log.writes) != 0 {
+		t.Fatal("the first event was written twice")
 	}
-	time.Sleep(50 * time.Millisecond)
-	if stores(t, log, "host.test.second") {
-		t.Fatal("the second event of an interval was written alone")
+	for _, name := range []string{"host.test.second", "host.test.third"} {
+		if !log.Emit(host.LevelInfo, name, map[string]any{}) {
+			t.Fatalf("%s was refused", name)
+		}
 	}
 	log.Close()
-	if !stores(t, log, "host.test.second") {
+	if writes := len(log.writes); writes != 1 {
+		t.Fatalf("the writer made %d writes for the two events of an interval and the close, want the one of the close", writes)
+	}
+	if !stores(t, log.EventLog, "host.test.second") || !stores(t, log.EventLog, "host.test.third") {
 		t.Fatal("Close did not store the batch")
 	}
 }

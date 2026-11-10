@@ -187,10 +187,12 @@ func TestReloadAskedOfAPageEndsTheRequestsToItsSurfaces(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("the request to a surface of the reloading page is still waiting")
 	}
-	select {
-	case reply := <-theirs:
-		t.Fatalf("the request to a surface of another window ended: %+v", reply)
-	default:
+	// The reload ends the requests that it ends before it returns, so the relay still holds the request of the other window.
+	other.host.relay.mu.Lock()
+	held := len(other.host.relay.waiting)
+	other.host.relay.mu.Unlock()
+	if held != 1 {
+		t.Fatalf("the relay holds %d requests after the reload, want the request to a surface of another window", held)
 	}
 	other.host.relay.Abandon(func(relayTarget) bool { return true })
 	<-theirs
@@ -249,18 +251,21 @@ func TestABurstOfWindowChangesIsOneMoreReadingAfterTheLastChange(t *testing.T) {
 		mu.Unlock()
 		reads.ask("window-status", read)
 	}
-	close(release)
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		mu.Lock()
-		last := seen[len(seen)-1]
-		mu.Unlock()
-		if last == 100 {
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
+	// The first reading ends, and the changes of the burst begin one further reading.
+	release <- struct{}{}
+	select {
+	case <-began:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the reading after the burst did not begin")
 	}
-	time.Sleep(100 * time.Millisecond)
+	// While that reading is held no change waits, so it is the last reading: none begins after it until a new change.
+	reads.mu.Lock()
+	running, again := reads.running, reads.again
+	reads.mu.Unlock()
+	close(release)
+	if !running || again {
+		t.Fatalf("during the reading after the burst: running %v, another reading asked %v", running, again)
+	}
 	mu.Lock()
 	defer mu.Unlock()
 	if len(seen) != 2 || seen[0] != 0 || seen[1] != 100 {

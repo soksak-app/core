@@ -325,13 +325,10 @@ func TestRelayLateReplyStatesItsDelay(t *testing.T) {
 // contract: exposure.relay.send-failure-1003
 func TestRelaySendFailureIsReportedWithoutWaiting(t *testing.T) {
 	relay := host.NewRelay[string]()
-	started := time.Now()
-	got := relay.Request("main", relayWait, func(uint64) error { return errors.New("webview is gone") })
+	// The request has no time limit, so a failed send that waited for a reply would never return.
+	got := relay.Request("main", 0, func(uint64) error { return errors.New("webview is gone") })
 	if got.Error == nil || got.Error.Code != 1003 {
 		t.Fatalf("reply %+v, want 1003", got)
-	}
-	if elapsed := time.Since(started); elapsed >= relayWait {
-		t.Fatalf("the failed send waited %s", elapsed)
 	}
 }
 

@@ -395,8 +395,8 @@ func TestSlowSidecarDoesNotBlockOtherSends(t *testing.T) {
 
 	directory := t.TempDir()
 
-	// The slow sidecar: it does not read stdin, so the pipe fills and Stop kills it after the deadline. A program that reads stdin, such as cat,
-	// reads at a speed that depends on the load, so whether the channel fills is not determined.
+	// The slow sidecar: it does not read stdin, so the pipe fills, and the terminate signal of the stop ends it. A program that reads stdin,
+	// such as cat, reads at a speed that depends on the load, so whether the channel fills is not determined.
 	slowScript := "#!/bin/sh\nexec sleep 600\n"
 	if err := os.WriteFile(filepath.Join(directory, "slow"), []byte(slowScript), 0o755); err != nil {
 		t.Fatal(err)
@@ -459,15 +459,14 @@ func TestSlowSidecarDoesNotBlockOtherSends(t *testing.T) {
 	sidecars.Stop()
 }
 
-// TestStopGracefulShutdown verifies that, when the sidecar actually reads stdin, Stop() ends
-// normally by stdin EOF. The measurement starts after the sidecar received the echo of Send, and it checks that the sidecar ends immediately without
-// waiting until the deadline (1 second).
+// TestStopGracefulShutdown verifies that, when the sidecar actually reads stdin, Stop() ends by the exit of the sidecar at stdin EOF.
 // contract: sidecars.stop.graceful-on-stdin-eof
 func TestStopGracefulShutdown(t *testing.T) {
 	directory := t.TempDir()
 
-	// The sidecar: echoes the lines it received as they are and ends normally at stdin EOF.
-	gracefulScript := "#!/bin/sh\nwhile read line; do echo \"$line\"; done\nexit 0\n"
+	// The sidecar: echoes the lines it received as they are and ends normally at stdin EOF. It ignores the terminate signal of the stop, so
+	// it ends by its input.
+	gracefulScript := "#!/bin/sh\ntrap '' TERM\nwhile read line; do echo \"$line\"; done\nexit 0\n"
 	if err := os.WriteFile(filepath.Join(directory, "graceful"), []byte(gracefulScript), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -486,7 +485,6 @@ func TestStopGracefulShutdown(t *testing.T) {
 	}
 
 	// Checks that the sidecar is actually reading stdin: waits for the echo event.
-	// This keeps the start time of the shell process out of the measurement.
 	if event := owner.Next(t); event.Sidecar != support.EchoSidecar || event.Surface != "s1" {
 		t.Fatalf("echo event = %+v", event)
 	}
@@ -1223,6 +1221,7 @@ func TestTheSamplerNamesARunningSidecarUntilItEnds(t *testing.T) {
 		return count
 	}
 	// The sampler stores a first sample of the host when it starts; wait for it so that it does not run among the samples below.
+	// The sampler gives no event for that sample, so the check polls the stored records for it.
 	for deadline := time.Now().Add(5 * time.Second); samples(false) == 0; {
 		if time.Now().After(deadline) {
 			t.Fatal("the sampler stored no sample of the host")

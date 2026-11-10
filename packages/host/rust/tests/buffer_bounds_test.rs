@@ -12,7 +12,7 @@ use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde_json::Value;
 use serde_json::value::RawValue;
@@ -83,6 +83,15 @@ struct Blocked {
 
 impl Blocked {
     fn new(root: &str, surfaces: usize) -> (Blocked, FakeOwner) {
+        Blocked::clocked(root, surfaces, Instant::now)
+    }
+
+    /// A blocked sidecar whose sidecars read the clock `clock`.
+    fn clocked(
+        root: &str,
+        surfaces: usize,
+        clock: impl Fn() -> Instant + Send + Sync + 'static,
+    ) -> (Blocked, FakeOwner) {
         let directory = folder::Folder::new();
         let fifo = directory.path().join("go");
         let made = std::process::Command::new("mkfifo")
@@ -108,7 +117,9 @@ impl Blocked {
             version: "0.0.1".to_string(),
             dependents: Vec::new(),
         }];
-        let sidecars = Sidecars::new(&declarations, directory.path().to_path_buf()).unwrap();
+        let sidecars = Sidecars::new(&declarations, directory.path().to_path_buf())
+            .unwrap()
+            .with_clock(clock);
         let owner = FakeOwner { root: root.into() };
         for index in 1..=surfaces {
             sidecars
@@ -120,17 +131,7 @@ impl Blocked {
         // so the fixture waits on the state of the writer.
         let blocker = raw(&format!(r#"{{"data":"{}"}}"#, "b".repeat(2 << 20)));
         sidecars.send(&owner, ECHO, "s1", &blocker).unwrap();
-        let mut wait = 0;
-        loop {
-            let writing = sidecars.writing(ECHO).unwrap();
-            if writing > 64 << 10 {
-                break;
-            }
-            assert!(
-                wait < 10_000,
-                "the writer did not start a line over 64 KiB within 10 s (writing {writing})"
-            );
-            wait += 1;
+        while sidecars.writing(ECHO).unwrap() <= 64 << 10 {
             std::thread::sleep(Duration::from_millis(1));
         }
         let big = raw(&format!(r#"{{"data":"{}"}}"#, "x".repeat(20 * 1024)));
@@ -415,9 +416,17 @@ fn a_line_that_waits_in_the_write_queue_of_a_sidecar_is_recorded() {
     let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
     let config = folder::Folder::new();
     let log = roomy_writer(config.path());
-    let (mut blocked, _owner) = Blocked::new("/p", 1);
-    // The sidecar reads nothing, so the queued lines wait at least this long before the release lets the writer go on.
-    std::thread::sleep(Duration::from_millis(1100));
+    // The clock of the sidecars moves only when the check moves it: the writer is inside the write of the blocker and the
+    // lines behind it are queued, the clock moves by one second, and the release lets the writer go on.
+    let base = Instant::now();
+    let moved = Arc::new(Mutex::new(Duration::ZERO));
+    let clock_moved = Arc::clone(&moved);
+    let (mut blocked, _owner) = Blocked::clocked("/p", 1, move || {
+        base + *clock_moved
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+    });
+    *moved.lock().unwrap_or_else(|poison| poison.into_inner()) = Duration::from_secs(1);
     blocked.release();
     let waits = write_waits(&log, config.path());
     let mut queued = 0;
@@ -460,7 +469,11 @@ fn a_line_that_is_written_at_once_stores_no_write_wait() {
         version: "0.0.1".to_string(),
         dependents: Vec::new(),
     }];
-    let sidecars = Sidecars::new(&declarations, directory.path().to_path_buf()).unwrap();
+    // The clock of the sidecars does not move, so each line is written at once by the clock that the write waits read.
+    let still = Instant::now();
+    let sidecars = Sidecars::new(&declarations, directory.path().to_path_buf())
+        .unwrap()
+        .with_clock(move || still);
     let owner = FakeOwner { root: "/p".into() };
     for _ in 0..10 {
         sidecars.send(&owner, ECHO, "s1", &raw("{}")).unwrap();

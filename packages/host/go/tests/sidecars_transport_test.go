@@ -1549,7 +1549,7 @@ func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 		close(helloSeen)
 		<-release
 		_, _ = io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n")
-		// The service answers close-owner and shutdown, so that Stop ends without its deadline.
+		// The service answers close-owner and shutdown, and the answers end the close of the stop.
 		for {
 			line, err := reader.ReadBytes('\n')
 			if err != nil {
@@ -2172,13 +2172,14 @@ func serveReplaceService(t *testing.T, root, oldVersion, installedVersion string
 			_ = remaining.Kill()
 		}
 		// The host waits for its own child (cmd.Wait in the sidecar exit path), so this test does not reap the pid: a reap here could take
-		// that child. A killed child is reaped by the host; a zombie that remains is already ended, and ps reports its state as Z.
-		deadline := time.Now().Add(time.Second)
-		for installedProcessRunning(pid) && time.Now().Before(deadline) {
-			time.Sleep(10 * time.Millisecond)
-		}
-		if installedProcessRunning(pid) {
-			t.Errorf("installed service process %d outlived the test", pid)
+		// that child. A killed child is reaped by the host; a zombie that remains is already ended, and ps reports its state as Z. The
+		// end of a process that is not a child of the test gives the test no event, so the cleanup polls its state until the kill ended
+		// it; the bound only ends a cleanup that hangs.
+		for started := time.Now(); installedProcessRunning(pid); time.Sleep(10 * time.Millisecond) {
+			if time.Since(started) > support.Stall {
+				t.Errorf("installed service process %d outlived the test", pid)
+				return
+			}
 		}
 	})
 	service := &replaceService{listener: listener, second: make(chan struct{}), process: process, folder: folder}
@@ -2242,7 +2243,9 @@ func serveReplaceService(t *testing.T, root, oldVersion, installedVersion string
 						return
 					}
 					if operation == "shutdown" {
-						// The process of the service ends after the answer, as that of a real service does.
+						// The process of the service ends after the answer, as that of a real service does. endsAfter delays that end so that
+						// a host that does not wait for it starts the installed service first: the order of the two ends decides the check, and
+						// a host that waits for the end passes at any delay.
 						service.ended.Add(1)
 						time.AfterFunc(service.endsAfter, func() {
 							defer service.ended.Done()

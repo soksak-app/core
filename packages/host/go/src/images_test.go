@@ -388,42 +388,53 @@ func TestPendingNewerFrameIsRequiredAfterTheWaitBegins(t *testing.T) {
 	images.mu.Lock()
 	images.states[key].LastSequence = 1
 	images.mu.Unlock()
-	began := time.Now()
-	timeout := 500 * time.Millisecond
-	started := make(chan struct{})
+	// The limit of the wait only ends a check that hangs: the frames that the check gives decide the end of the wait.
+	blocked := make(chan struct{}, 4)
 	done := make(chan error, 1)
-	go func() { done <- images.waitCurrentObserved(timeout, func() { close(started) }) }()
+	go func() { done <- images.waitCurrentObserved(time.Minute, func() { blocked <- struct{}{} }) }()
 	select {
-	case <-started:
-	case <-time.After(2 * time.Second):
+	case <-blocked:
+	case <-time.After(5 * time.Second):
 		t.Fatal("image wait did not begin")
 	}
-	// Hold the owner lock across presentation and the next arrival so the waiter wakes after both.
+	// The first frame is presented while the second is accepted, and the wait checks that state and blocks again.
 	images.mu.Lock()
 	state := images.states[key]
 	state.PresentedRaster = config.Raster
 	state.PresentedSequence = 1
 	state.LastSequence = 2
 	images.changedLocked()
-	elapsed := time.Since(began)
 	images.mu.Unlock()
-	var outcome error
 	select {
-	case outcome = <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("image wait did not end")
+	case <-blocked:
+	case outcome := <-done:
+		t.Fatalf("the wait ended with %v when the earlier frame was presented", outcome)
+	case <-time.After(5 * time.Second):
+		t.Fatal("image wait did not check the presented frame")
 	}
-	if elapsed >= timeout {
-		t.Fatalf("controlled arrival missed the active wait deadline: %v", elapsed)
-	}
-	if outcome == nil || outcome.Error() != "presentationTimeout" {
-		t.Fatalf("pending newer frame did not remain required: %v", outcome)
+	select {
+	case outcome := <-done:
+		t.Fatalf("the wait ended with %v while the newer frame was pending", outcome)
+	default:
 	}
 	if images.CurrentPresented() {
 		t.Fatal("instantaneous status omitted the pending newer frame")
 	}
 	if images.WaitCurrent(0) {
 		t.Fatal("new wait omitted the already accepted second frame")
+	}
+	// The presentation of the newer frame ends the wait.
+	images.mu.Lock()
+	state.PresentedSequence = 2
+	images.changedLocked()
+	images.mu.Unlock()
+	select {
+	case outcome := <-done:
+		if outcome != nil {
+			t.Fatalf("the presented newer frame ended the wait with %v", outcome)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("image wait did not end")
 	}
 }
 

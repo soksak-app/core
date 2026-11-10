@@ -18,8 +18,9 @@ import (
 )
 
 // blockedSidecar starts a sidecar that reads nothing until the returned function releases it, fills its write queue, and
-// returns the sidecars with the registered surfaces s1 to s<surfaces>. The owner has the project root `root`.
-func blockedSidecar(t *testing.T, root string, surfaces int) (*host.Sidecars, func()) {
+// returns the sidecars with the registered surfaces s1 to s<surfaces>. The owner has the project root `root`. now is the clock
+// of the sidecars, or nil for the clock of the host.
+func blockedSidecar(t *testing.T, root string, surfaces int, now func() time.Time) (*host.Sidecars, func()) {
 	t.Helper()
 	directory := t.TempDir()
 	fifo := filepath.Join(directory, "go")
@@ -35,6 +36,7 @@ func blockedSidecar(t *testing.T, root string, surfaces int) (*host.Sidecars, fu
 	if err != nil {
 		t.Fatal(err)
 	}
+	sidecars.Now = now
 	owner := support.NewFakeOwner(root)
 	for i := 1; i <= surfaces; i++ {
 		if err := sidecars.Send(owner, support.EchoSidecar, fmt.Sprintf("s%d", i), json.RawMessage(`{}`)); err != nil {
@@ -99,7 +101,7 @@ func response(name string, padding int) json.RawMessage {
 // contract: buffers.sidecar-replies.bounded-by-messages
 func TestThePendingRepliesOfASidecarHoldAtMostOneThousandAndTwentyFourMessages(t *testing.T) {
 	log := support.UseRoomyEventLog(t)
-	sidecars, release := blockedSidecar(t, "/p", 1)
+	sidecars, release := blockedSidecar(t, "/p", 1, nil)
 	var refused []string
 	for i := 0; i < 1024+10; i++ {
 		if err := sidecars.SendResponse(support.EchoSidecar, "s1", "a", response("a", 0)); err != nil {
@@ -125,7 +127,7 @@ func TestThePendingRepliesOfASidecarHoldAtMostOneThousandAndTwentyFourMessages(t
 // contract: buffers.sidecar-replies.bounded-by-bytes
 func TestThePendingRepliesOfASidecarHoldAtMostFourMebibytes(t *testing.T) {
 	log := support.UseRoomyEventLog(t)
-	sidecars, release := blockedSidecar(t, "/p", 1)
+	sidecars, release := blockedSidecar(t, "/p", 1, nil)
 	var refused []string
 	for i := 0; i < 4; i++ {
 		if err := sidecars.SendResponse(support.EchoSidecar, "s1", "a", response("a", 3<<19)); err != nil {
@@ -147,7 +149,7 @@ func TestAPendingCloseBeyondTheBoundIsDroppedAndTheSurfaceIsNotWaitedFor(t *test
 	log := support.UseRoomyEventLog(t)
 	// A long project root makes each close message large, so the bound in bytes is reached with few surfaces.
 	root := "/" + strings.Repeat("r", 200<<10)
-	sidecars, release := blockedSidecar(t, root, 30)
+	sidecars, release := blockedSidecar(t, root, 30, nil)
 	for i := 1; i <= 30; i++ {
 		sidecars.Close(fmt.Sprintf("s%d", i))
 	}
@@ -170,9 +172,19 @@ func TestAPendingCloseBeyondTheBoundIsDroppedAndTheSurfaceIsNotWaitedFor(t *test
 // contract: sidecars.write.wait-is-recorded
 func TestALineThatWaitsInTheWriteQueueOfASidecarIsRecorded(t *testing.T) {
 	log := support.UseRoomyEventLog(t)
-	_, release := blockedSidecar(t, "/p", 1)
-	// The sidecar reads nothing, so the queued lines wait at least this long before the release lets the writer go on.
-	time.Sleep(1100 * time.Millisecond)
+	// The clock of the sidecars moves only when the check moves it: the writer is inside the write of the blocker and the lines
+	// behind it are queued, the clock moves by one second, and the release lets the writer go on.
+	var mu sync.Mutex
+	at := time.Unix(1, 0)
+	now := func() time.Time {
+		mu.Lock()
+		defer mu.Unlock()
+		return at
+	}
+	_, release := blockedSidecar(t, "/p", 1, now)
+	mu.Lock()
+	at = at.Add(time.Second)
+	mu.Unlock()
 	release()
 	waits := support.WriteWaits(t, log)
 	queued, blocked := 0, 0

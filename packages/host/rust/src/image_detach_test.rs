@@ -507,8 +507,8 @@ fn a_timed_out_detach_is_recorded_once_and_a_late_acknowledgement_ends_it() {
     .unwrap();
     let request = pending_request(&fixture.sidecars, "region-timeout");
     assert_eq!(
-        waits[0].timed_out.recv_timeout(Duration::from_secs(5)),
-        Err(std::sync::mpsc::RecvTimeoutError::Disconnected),
+        waits[0].timed_out.recv(),
+        Err(std::sync::mpsc::RecvError),
         "the wait recorded no timeout"
     );
     assert!(
@@ -640,10 +640,7 @@ fn the_end_of_the_supplier_connection_ends_its_pending_detach_with_its_error() {
             targets[0].generation
         )))
     );
-    let failure = fixture
-        .failures
-        .recv_timeout(Duration::from_secs(5))
-        .unwrap();
+    let failure = fixture.failures.recv().unwrap();
     assert_eq!(
         (failure.sidecar.as_str(), failure.surface.as_str()),
         ("@fixture/sidecar-one", "surface-a")
@@ -671,10 +668,7 @@ fn a_supplier_acknowledgement_is_consumed_by_the_host_and_ends_the_detach() {
     join(waits);
 
     assert_eq!(ended_events.try_recv().unwrap(), ended(None));
-    let event = fixture
-        .messages
-        .recv_timeout(Duration::from_secs(2))
-        .unwrap();
+    let event = fixture.messages.recv().unwrap();
     let message = serde_json::from_str::<serde_json::Value>(event.body.get()).unwrap();
     assert_eq!(
         message,

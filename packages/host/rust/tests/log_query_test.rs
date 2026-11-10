@@ -296,13 +296,14 @@ fn the_index_covers_each_batch_the_writer_wrote() {
     });
     log.set_on_write(observe);
     for index in 0..80 {
-        // The queue holds 64 events, so the writer is given time between the bursts.
-        while !log.emit(
-            Level::Info,
-            "host.x.y",
-            &json!({"n": index, "text": "x".repeat(120)}),
-        ) {
-            std::thread::sleep(Duration::from_millis(5));
+        let fields = json!({"n": index, "text": "x".repeat(120)});
+        // The queue holds 64 events: a refused event waits for a flush, after whose answer the writer has taken the queue.
+        if !log.emit(Level::Info, "host.x.y", &fields) {
+            log.flush(Duration::from_secs(5)).unwrap();
+            assert!(
+                log.emit(Level::Info, "host.x.y", &fields),
+                "the event {index} was refused by a queue that the flush emptied"
+            );
         }
     }
     log.flush(Duration::from_secs(5)).unwrap();
@@ -313,7 +314,7 @@ fn the_index_covers_each_batch_the_writer_wrote() {
             break;
         }
         let result = updates
-            .recv_timeout(Duration::from_secs(10))
+            .recv()
             .expect("no update of the index followed the writes");
         assert!(result.is_ok(), "an update of the index failed: {result:?}");
     }
@@ -435,9 +436,7 @@ fn a_file_that_rotation_or_retention_removed_is_not_a_failure_of_the_index() {
     // between the notice and the update.
     observe(&logs.path().join("aaa-gone-b1.jsonl"), 0);
     observe(&real, 0);
-    let (path, result) = updates
-        .recv_timeout(Duration::from_secs(10))
-        .expect("no update of the index was reported");
+    let (path, result) = updates.recv().expect("no update of the index was reported");
     assert_eq!(
         (
             path.file_name().unwrap().to_str().unwrap(),

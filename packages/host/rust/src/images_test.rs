@@ -296,7 +296,6 @@ fn a_page_start_returns_the_failures_of_the_ends_it_clears() {
 mod presentation_queue {
     use super::super::{PRESENTS_REFUSED, Presents, present_on_ui};
     use std::sync::{Arc, Mutex, mpsc};
-    use std::time::Duration;
 
     // contract: images.presentation.runs-after-framework-event
     #[test]
@@ -317,7 +316,8 @@ mod presentation_queue {
                 &Presents::default(),
             )
         });
-        let callback = queued.recv_timeout(Duration::from_secs(2));
+        // The present enqueues its work, or its sender ends with the present.
+        let callback = queued.recv();
         drop(event);
         if let Ok(callback) = callback {
             callback();
@@ -435,36 +435,34 @@ mod wait_boundary {
             .get_mut(&key)
             .expect("image state")
             .last_sequence = 1;
-        let began = Instant::now();
-        let timeout = Duration::from_millis(500);
+        // The limit of the wait only ends a check that hangs: the frames that the check gives decide the end of the wait.
         let waiter = images.clone();
-        let (started, waiting) = mpsc::sync_channel(1);
+        let (blocked, blocks) = mpsc::channel();
+        let (done, outcome) = mpsc::channel();
         let worker = std::thread::spawn(move || {
-            waiter.wait_current_observed(timeout, || {
-                started.send(()).expect("signal initialized wait")
-            })
+            let result = waiter.wait_current_observed(Duration::from_secs(60), || {
+                // default: the check stopped receiving the blocks when it failed, and the wait goes on.
+                if blocked.send(()).is_err() {}
+            });
+            done.send(result)
+                .expect("the check receives the end of the wait");
         });
-        waiting
-            .recv_timeout(Duration::from_secs(2))
-            .expect("wait begins");
-        let arrival_elapsed = {
+        blocks.recv().expect("wait begins");
+        // The first frame is presented while the second is accepted, and the wait checks that state and blocks again.
+        {
             let mut inner = images.lock();
             let state = inner.states.get_mut(&key).expect("image state");
             state.presented_raster = config.raster;
             state.presented_sequence = 1;
             state.last_sequence = 2;
             images.changed();
-            began.elapsed()
-        };
-        let result = worker.join().expect("join image wait");
+        }
+        blocks
+            .recv()
+            .expect("the wait checks the presented frame and blocks again");
         assert!(
-            arrival_elapsed < timeout,
-            "controlled arrival missed the active wait deadline: {arrival_elapsed:?}"
-        );
-        assert_eq!(
-            result,
-            Err("presentationTimeout".into()),
-            "the newer accepted frame remains pending after the earlier frame completed"
+            outcome.try_recv().is_err(),
+            "the wait ended while the newer accepted frame was pending"
         );
         assert!(
             !images.current_presented(),
@@ -475,6 +473,22 @@ mod wait_boundary {
             Err("presentationTimeout".into()),
             "a new wait must require the already accepted second frame"
         );
+        // The presentation of the newer frame ends the wait.
+        {
+            let mut inner = images.lock();
+            inner
+                .states
+                .get_mut(&key)
+                .expect("image state")
+                .presented_sequence = 2;
+            images.changed();
+        }
+        assert_eq!(
+            outcome.recv().expect("the wait ends"),
+            Ok(()),
+            "the presented newer frame ends the wait"
+        );
+        worker.join().expect("join image wait");
     }
 
     #[test]

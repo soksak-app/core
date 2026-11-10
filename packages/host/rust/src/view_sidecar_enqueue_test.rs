@@ -34,7 +34,7 @@ fn mounted_sidecar_enqueue_cannot_create_session_after_its_generation_retires() 
     });
     // The REAL service has read hello, but has not answered it. Therefore the
     // host send passed its first source check and is inside process startup.
-    let hello = received.recv_timeout(std::time::Duration::from_secs(5));
+    let hello = received.recv();
     let admitted = hello
         .as_ref()
         .is_ok_and(|message| message["operation"] == "hello");

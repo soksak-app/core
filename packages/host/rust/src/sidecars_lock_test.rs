@@ -221,6 +221,7 @@ fn poisoned_reply_waiter_locks_still_close_the_owner_of_a_service() {
             sender.send(Ok(())).unwrap();
         }
     });
+    let clock: super::Clock = Arc::new(Instant::now);
     let closed = close_persistent_owner(
         &outbox,
         &close_waiters,
@@ -229,6 +230,7 @@ fn poisoned_reply_waiter_locks_still_close_the_owner_of_a_service() {
         &owner_closed,
         "test",
         None,
+        &clock,
     );
     service.join().unwrap();
     assert!(
@@ -243,6 +245,7 @@ fn poisoned_reply_waiter_locks_still_close_the_owner_of_a_service() {
         &owner_closed,
         "test",
         None,
+        &clock,
     );
     assert!(
         matches!(again, Ok(false)),

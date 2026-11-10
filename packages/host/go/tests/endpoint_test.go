@@ -1349,13 +1349,7 @@ func TestEndpointRecordsAReadErrorInsideAFrame(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = conn.Close()
-	deadline := time.Now().Add(5 * time.Second)
-	for !strings.Contains(written(), "connection closed: connection closed inside a frame body") {
-		if time.Now().After(deadline) {
-			t.Fatalf("no close record for the frame that ended early:\n%s", written())
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	waitForLog(t, written, "connection closed: connection closed inside a frame body")
 }
 
 // waitForLog reads the log until it holds text. The records are written by the connection goroutines, and no event reports

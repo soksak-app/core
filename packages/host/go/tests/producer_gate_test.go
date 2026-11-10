@@ -5,6 +5,7 @@ package host_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -77,7 +78,7 @@ func TestAnEndpointRequestThatThePolicyDoesNotStoreIsCounted(t *testing.T) {
 }
 
 // contract: log.policy.closed-gate-costs-a-branch
-func TestAClosedGateCostsFarLessThanAnOpenOneAndStaysUnderALimit(t *testing.T) {
+func TestAClosedGateAllocatesNothingAndItsTimesArePrinted(t *testing.T) {
 	options := support.EventLogOptions(t.TempDir())
 	options.QueueEvents = 1 << 16
 	options.QueueBytes = 1 << 26
@@ -90,27 +91,36 @@ func TestAClosedGateCostsFarLessThanAnOpenOneAndStaysUnderALimit(t *testing.T) {
 	fields := func() map[string]any {
 		return map[string]any{"name": "echo", "args": "[{\"a\":1}]", "micros": 1, "ok": true, "truncated": false}
 	}
-	open := time.Now()
-	for index := 0; index < rounds; index++ {
-		log.Emit(host.LevelDebug, "host.binding.call", fields())
-	}
-	openEach := time.Since(open) / rounds
-	narrowCalls(t, log, "warn")
-	closed := time.Now()
-	for index := 0; index < rounds; index++ {
+	enqueue := func() { log.Emit(host.LevelDebug, "host.binding.call", fields()) }
+	question := func() {
 		if log.Gate(host.ClassCall, host.LevelDebug) {
 			t.Fatal("the gate is open")
 		}
 	}
-	closedEach := time.Since(closed) / rounds
-	t.Logf("an enqueue with the gate open: %v; the question of a closed gate: %v (%d rounds)", openEach, closedEach, rounds)
-	// The limits are generous: the closed gate is a branch and an atomic add, so it is at most a few nanoseconds on a quiet machine,
-	// and a machine under load runs it up to 100 times slower (the numbers on a quiet machine are recorded under F160.17).
-	if closedEach > 25*time.Microsecond {
-		t.Fatalf("a closed gate costs %v for each question, over the limit of 25 µs", closedEach)
+	// An enqueue with the gate open builds the fields and the owned event; the question of a closed gate is a branch and an
+	// atomic add, which allocate nothing.
+	enqueued := testing.AllocsPerRun(100, enqueue)
+	open := time.Now()
+	for index := 0; index < rounds; index++ {
+		enqueue()
 	}
-	if closedEach*4 >= openEach {
-		t.Fatalf("a closed gate costs %v and an open enqueue %v: the closed gate is not far cheaper", closedEach, openEach)
+	openEach := time.Since(open) / rounds
+	narrowCalls(t, log, "warn")
+	asked := testing.AllocsPerRun(100, question)
+	closed := time.Now()
+	for index := 0; index < rounds; index++ {
+		question()
+	}
+	closedEach := time.Since(closed) / rounds
+	// The times are a measurement, which the check prints and does not judge (the numbers on a quiet machine are recorded
+	// under F160.17).
+	t.Logf("an enqueue with the gate open: %v and %.0f allocations; the question of a closed gate: %v and %.0f allocations (%d rounds)",
+		openEach, enqueued, closedEach, asked, rounds)
+	if asked != 0 {
+		t.Fatalf("the question of a closed gate allocated %.0f times", asked)
+	}
+	if enqueued == 0 {
+		t.Fatal("an enqueue with the gate open allocated nothing, so the allocations tell nothing of the closed gate")
 	}
 }
 
@@ -153,14 +163,26 @@ func TestTheCountsOfAClosedGateAreReportedEachSecondAndAtAFlush(t *testing.T) {
 	}
 	support.StoreEveryLevel(t, log)
 	narrowCalls(t, log, "warn")
+	// The least time between two reports is an input of the check: an hour, so every batch below comes before it, whatever
+	// time the batches take.
+	log.SetGatedReportInterval(time.Hour)
+	slept := make(chan struct{}, 1)
+	log.SetOnSleep(func(bool) {
+		select {
+		case slept <- struct{}{}:
+		default:
+		}
+	})
 	fields := map[string]any{"name": "echo", "args": "[]", "micros": 1, "ok": true, "truncated": false}
-	started := time.Now()
 	emitted := 0
-	// 400 ms of refused events cross 20 batch intervals and no second.
-	for time.Since(started) < 400*time.Millisecond {
+	// Each round refuses an event and stores a marker, and the round ends when the writer wrote the marker and slept, so the
+	// refused events cross 20 written batches.
+	for round := 0; round < 20; round++ {
 		log.Emit(host.LevelDebug, "host.binding.call", fields)
 		emitted++
-		time.Sleep(5 * time.Millisecond)
+		marker := fmt.Sprintf("marker-%d", round)
+		log.Emit(host.LevelWarn, "host.binding.call", map[string]any{"name": marker, "args": "[]", "micros": 1, "ok": false, "truncated": false})
+		awaitMarker(t, log, slept, marker)
 	}
 	reports := 0
 	for _, event := range readEventLog(t, log.Path()) {
@@ -169,9 +191,27 @@ func TestTheCountsOfAClosedGateAreReportedEachSecondAndAtAFlush(t *testing.T) {
 		}
 	}
 	if reports != 0 {
-		t.Fatalf("%d log.gated events within 400 ms; the counts are reported each second", reports)
+		t.Fatalf("%d log.gated events before the least time between two reports passed", reports)
 	}
 	if counts := gatedCounts(t, log); counts["call/debug"] != float64(emitted) {
 		t.Fatalf("counts %v after a flush, want call/debug %d", counts, emitted)
+	}
+}
+
+// awaitMarker returns when a writer that slept has written the event whose name field is marker: the writer sleeps only when it
+// wrote everything that was queued.
+func awaitMarker(t *testing.T, log *host.EventLog, slept <-chan struct{}, marker string) {
+	t.Helper()
+	for {
+		select {
+		case <-slept:
+		case <-time.After(support.Stall):
+			t.Fatalf("the writer did not sleep after the marker %s within %v; the test stalled", marker, support.Stall)
+		}
+		for _, event := range readEventLog(t, log.Path()) {
+			if fields, _ := event["fields"].(map[string]any); fields["name"] == marker {
+				return
+			}
+		}
 	}
 }

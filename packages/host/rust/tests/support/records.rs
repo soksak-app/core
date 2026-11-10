@@ -43,24 +43,27 @@ pub fn read_events(path: &Path) -> Vec<Value> {
     events
 }
 
-/// Waits until the sampler of the performance trace has stored its first sample of the host, so that the sampler thread
-/// does not run among the samples that a test takes itself.
+/// Makes the time between two samples of the sampler an hour and returns when the sampler of the performance trace has
+/// stored its first sample of the host, so that the sampler thread does not run among the samples that a test takes itself.
+/// The flush puts that sample into the event log of the configuration folder.
 pub fn wait_for_first_sample(config: &Path, log: &EventLog) {
-    let deadline = std::time::Instant::now() + Duration::from_secs(5);
-    loop {
-        log.flush(Duration::from_secs(5)).unwrap();
-        if read_events(&event_log_path(config))
+    soksak_host::performance::set_sampler_interval(Duration::from_secs(3600));
+    let (sampled, first) = std::sync::mpsc::sync_channel::<()>(1);
+    soksak_host::performance::set_on_sample(Some(Box::new(move || {
+        // A full channel already tells of a sample, and a check that ended hears none.
+        sampled.try_send(()).ok();
+    })));
+    first
+        .recv()
+        .expect("the sampler stored no sample of the host");
+    soksak_host::performance::set_on_sample(None);
+    log.flush(Duration::from_secs(5)).unwrap();
+    assert!(
+        read_events(&event_log_path(config))
             .iter()
-            .any(|event| event["event"] == "host.sampler.memory")
-        {
-            return;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "the sampler stored no sample of the host"
-        );
-        std::thread::sleep(Duration::from_millis(10));
-    }
+            .any(|event| event["event"] == "host.sampler.memory"),
+        "the event log holds no sample of the host after the sampler stored one"
+    );
 }
 
 /// The only host event log under the logs folder of a configuration folder.

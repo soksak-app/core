@@ -21,49 +21,63 @@ func nextNotice(t *testing.T, notices <-chan host.LogNotice) host.LogNotice {
 }
 
 // contract: debug.follow.coalesces-writes-into-a-notice
+//
+// The check ends each interval itself: the publisher enters the spacing after a notice and stays in it until the check lets it out, so
+// the announcements made while it is in the spacing are the ones that the bound on the rate folds into the next notice.
 func TestLogNoticesAreBoundedInRateAndCountWhatTheyCoalesce(t *testing.T) {
-	const interval = 150 * time.Millisecond
-	release := make(chan struct{})
+	spaced := make(chan struct{}, 8)
+	ends := make(chan struct{})
 	published := make(chan host.LogNotice, 64)
-	stamps := make(chan time.Time, 64)
-	notices := host.NewLogNotices(interval, func(notice host.LogNotice) {
-		<-release
-		stamps <- time.Now()
-		published <- notice
-	})
+	notices := host.NewLogNoticesSpacedBy(func() {
+		spaced <- struct{}{}
+		<-ends
+	}, func(notice host.LogNotice) { published <- notice })
 	defer notices.Stop()
+	defer close(ends)
 	if value := notices.Value(); value != (host.LogNotice{}) {
 		t.Fatalf("the value before a notice is %+v", value)
 	}
-	started := time.Now()
-	for size := int64(1); size <= 50; size++ {
+	notices.Observe("logs/host-b1.jsonl", 1)
+	if first := nextNotice(t, published); first != (host.LogNotice{Path: "logs/host-b1.jsonl", Size: 1, Notices: 1}) {
+		t.Fatalf("the first notice is %+v", first)
+	}
+	enterSpacing(t, spaced)
+	// The publisher is in the spacing, so every announcement returns without waiting for it, and none is published before the interval
+	// ends.
+	for size := int64(2); size <= 50; size++ {
 		notices.Observe("logs/host-b1.jsonl", size)
 	}
-	if elapsed := time.Since(started); elapsed > time.Second {
-		t.Fatalf("the writer waited %v for the notices", elapsed)
+	select {
+	case early := <-published:
+		t.Fatalf("the notice %+v was published before the interval ended", early)
+	default:
 	}
-	close(release)
-	var last host.LogNotice
-	var times []time.Time
-	for last.Size != 50 {
-		last = nextNotice(t, published)
-		times = append(times, <-stamps)
+	ends <- struct{}{}
+	last := nextNotice(t, published)
+	if last != (host.LogNotice{Path: "logs/host-b1.jsonl", Size: 50, Notices: 2, Coalesced: 48}) {
+		t.Fatalf("the notice after the interval is %+v, want the latest write with the 48 announcements before it coalesced", last)
 	}
-	if last.Path != "logs/host-b1.jsonl" || last.Notices+last.Coalesced != 50 || last.Notices != int64(len(times)) {
-		t.Fatalf("the last notice is %+v after %d notices, want the latest write with 50 announcements counted as published or coalesced", last, len(times))
-	}
-	for i := 1; i < len(times); i++ {
-		if gap := times[i].Sub(times[i-1]); gap < interval {
-			t.Fatalf("notice %d came %v after the one before, under the bound of %v", i, gap, interval)
-		}
-	}
+	enterSpacing(t, spaced)
 	if value := notices.Value(); value != last {
 		t.Fatalf("the value is %+v, the last notice %+v", value, last)
 	}
+	// No notice follows the latest write: after the interval, a new announcement is the next notice, and no announcement was folded
+	// into it.
+	ends <- struct{}{}
+	notices.Observe("logs/host-b1.jsonl", 51)
+	if next := nextNotice(t, published); next != (host.LogNotice{Path: "logs/host-b1.jsonl", Size: 51, Notices: 3, Coalesced: 48}) {
+		t.Fatalf("the notice after the latest write is %+v, want only the new announcement", next)
+	}
+	enterSpacing(t, spaced)
+}
+
+// enterSpacing waits until the publisher entered the spacing after a notice.
+func enterSpacing(t *testing.T, spaced <-chan struct{}) {
+	t.Helper()
 	select {
-	case extra := <-published:
-		t.Fatalf("a notice %+v follows the latest write", extra)
-	case <-time.After(2 * interval):
+	case <-spaced:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the publisher did not enter the spacing after a notice")
 	}
 }
 
@@ -73,11 +87,7 @@ func TestAnUpdateOfTheIndexAnnouncesOnlyWhenALineAnnouncesAChange(t *testing.T) 
 	notices := host.NewLogNotices(time.Millisecond, func(notice host.LogNotice) { published <- notice })
 	defer notices.Stop()
 	notices.ObserveUpdate(sok.IndexUpdate{File: "logs/host-b1.jsonl", Changed: true, Lines: 3, Announcing: 0, Size: 300})
-	select {
-	case notice := <-published:
-		t.Fatalf("an update whose lines are all log reads announced %+v", notice)
-	case <-time.After(300 * time.Millisecond):
-	}
+	// An announcement of the first update would be a notice before the one of the second update or would be counted as coalesced in it.
 	notices.ObserveUpdate(sok.IndexUpdate{File: "logs/host-b1.jsonl", Changed: true, Lines: 3, Announcing: 1, Size: 400})
 	if notice := nextNotice(t, published); notice.Path != "logs/host-b1.jsonl" || notice.Size != 400 || notice.Notices != 1 || notice.Coalesced != 0 {
 		t.Fatalf("the notice of an update with an announcing line is %+v", notice)
@@ -104,9 +114,9 @@ func TestAQueryThatIndexesLinesAnnouncesThemOnce(t *testing.T) {
 	if _, _, err := host.QueryEventLogs(config, []byte(`{"channel":"all"}`)); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case extra := <-published:
-		t.Fatalf("a query of a current index announced %+v for %s", extra, path)
-	case <-time.After(300 * time.Millisecond):
+	// An announcement of the second query would be a notice before the one that follows or would be counted as coalesced in it.
+	notices.Observe("logs/after.jsonl", 1)
+	if next := nextNotice(t, published); next.Path != "logs/after.jsonl" || next.Notices != 2 || next.Coalesced != 0 {
+		t.Fatalf("a query of a current index announced a change for %s: the next notice is %+v", path, next)
 	}
 }

@@ -69,7 +69,7 @@ fn a_flush_that_a_flush_finds_behind_it_is_answered() {
     log.flush(DEADLINE).unwrap();
 
     second
-        .recv_timeout(DEADLINE)
+        .recv()
         .expect("the flush behind the flush is answered");
     log.close();
 }
@@ -84,7 +84,7 @@ fn a_flush_that_a_stop_finds_behind_it_is_answered() {
     log.close();
 
     second
-        .recv_timeout(DEADLINE)
+        .recv()
         .expect("the flush behind the stop is answered");
     let stored = std::fs::read_to_string(log.path()).unwrap();
     assert!(

@@ -98,7 +98,7 @@ func askPage(t *testing.T, h *Host, s *Surfaces, window *pageEndWindow) <-chan e
 	return reply
 }
 
-// wantClosedDocument checks that reply ended within a short time with the code of a closed document.
+// wantClosedDocument waits for reply to end with the code of a closed document. The bound only ends a check that hangs.
 func wantClosedDocument(t *testing.T, reply <-chan error, what string) {
 	t.Helper()
 	select {

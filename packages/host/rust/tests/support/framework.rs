@@ -5,7 +5,6 @@ use std::ffi::c_void;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex, PoisonError};
-use std::time::Duration;
 
 use crate::framework::{
     AppHandle, BlockingBody, BlockingTask, Error, Framework, Frontend, LogicalPosition,
@@ -174,7 +173,7 @@ impl FixtureFrontend {
         self.asked
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
-            .recv_timeout(Duration::from_secs(5))
+            .recv()
             .expect("the library asks for the presentation notice of the Frontend")
     }
 }

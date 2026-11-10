@@ -191,15 +191,26 @@ func traceOn(t *testing.T) {
 	}
 }
 
-// waitForFirstSample returns when the event log holds the first sample of the host that the sampler stored after the switch turned on.
-func waitForFirstSample(t *testing.T, config string, log *host.EventLog) {
+// waitForFirstSample makes the time between two samples of the sampler an hour and returns when the sampler that the switch
+// started stored its first sample, so no sample of the sampler runs among the samples that the check takes.
+func waitForFirstSample(t *testing.T) {
 	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
-	for len(traceFields(t, config, log, "host.sampler.memory")) == 0 {
-		if time.Now().After(deadline) {
-			t.Fatal("the sampler stored no sample within 10 s of the switch")
+	host.PerformanceSetSamplerInterval(time.Hour)
+	sampled := make(chan struct{}, 1)
+	t.Cleanup(func() {
+		host.PerformanceOnSample(nil)
+		host.PerformanceSetSamplerInterval(0)
+	})
+	host.PerformanceOnSample(func() {
+		select {
+		case sampled <- struct{}{}:
+		default:
 		}
-		time.Sleep(5 * time.Millisecond)
+	})
+	select {
+	case <-sampled:
+	case <-time.After(support.Stall):
+		t.Fatalf("the sampler stored no sample within %v of the switch; the test stalled", support.Stall)
 	}
 }
 
@@ -210,7 +221,7 @@ func TestTheSamplerReadsEveryRegisteredProcess(t *testing.T) {
 	traceOn(t)
 	// The sampler that the switch started stores its first sample at once; the check starts after it, so that a sample that began
 	// before the removal below cannot be stored after it.
-	waitForFirstSample(t, config, log)
+	waitForFirstSample(t)
 	child := exec.Command("sleep", "30")
 	if err := child.Start(); err != nil {
 		t.Fatal(err)
@@ -296,7 +307,7 @@ func TestTheSamplerReadsTheProcessesOfEveryWindow(t *testing.T) {
 	log := support.StartWriter(t, config)
 	traceOn(t)
 	// The sampler that the switch started stores its first sample at once; the check starts after it.
-	waitForFirstSample(t, config, log)
+	waitForFirstSample(t)
 	page := exec.Command("sleep", "30")
 	document := exec.Command("sleep", "30")
 	for _, child := range []*exec.Cmd{page, document} {
@@ -379,7 +390,7 @@ func TestTheSamplerDividesTheFootprintOfEachProcess(t *testing.T) {
 	config := t.TempDir()
 	log := support.StartWriter(t, config)
 	traceOn(t)
-	waitForFirstSample(t, config, log)
+	waitForFirstSample(t)
 	page := exec.Command("sleep", "30")
 	if err := page.Start(); err != nil {
 		t.Fatal(err)

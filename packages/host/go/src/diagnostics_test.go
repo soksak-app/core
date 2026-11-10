@@ -42,7 +42,8 @@ func TestAwaitDocumentFrameIdentityReportsLateErrorAfterTimeout(t *testing.T) {
 	isolateTraceRecords(t)
 	s := &Surfaces{invoke: func(work func()) { work() }}
 	var callback func(json.RawMessage, error)
-	reply, err := awaitDocumentFrameIdentity(s, func(done func(json.RawMessage, error)) error {
+	// The callback is not called before the limit, which the check sets as its input.
+	reply, err := awaitDocumentFrameIdentity(s, time.Millisecond, func(done func(json.RawMessage, error)) error {
 		callback = done
 		return nil
 	})
@@ -67,7 +68,7 @@ func TestAwaitDocumentFrameIdentityReportsLateErrorAfterTimeout(t *testing.T) {
 func TestAwaitDocumentFrameIdentitySynchronousCallbackReturnsResult(t *testing.T) {
 	s := &Surfaces{invoke: func(work func()) { work() }}
 	want := json.RawMessage(`{"generation":7}`)
-	reply, err := awaitDocumentFrameIdentity(s, func(done func(json.RawMessage, error)) error {
+	reply, err := awaitDocumentFrameIdentity(s, pageTimeout, func(done func(json.RawMessage, error)) error {
 		done(want, nil)
 		return nil
 	})
@@ -81,7 +82,7 @@ func TestAwaitDocumentFrameIdentityReportsDuplicateCallback(t *testing.T) {
 	isolateTraceRecords(t)
 	s := &Surfaces{invoke: func(work func()) { work() }}
 	var first error
-	reply, err := awaitDocumentFrameIdentity(s, func(done func(json.RawMessage, error)) error {
+	reply, err := awaitDocumentFrameIdentity(s, pageTimeout, func(done func(json.RawMessage, error)) error {
 		done(json.RawMessage(`{"generation":7}`), nil)
 		first = errors.New("identity callback completion invoked more than once")
 		done(nil, first)
@@ -103,7 +104,7 @@ func TestAwaitDocumentFrameIdentityPreservesCallbackErrorWhenScheduleFails(t *te
 	scheduleErr := errors.New("identity operation was not scheduled")
 	callbackErr := errors.New("identity callback failed")
 	s := &Surfaces{invoke: func(work func()) { work() }}
-	_, err := awaitDocumentFrameIdentity(s, func(done func(json.RawMessage, error)) error {
+	_, err := awaitDocumentFrameIdentity(s, pageTimeout, func(done func(json.RawMessage, error)) error {
 		done(nil, callbackErr)
 		return scheduleErr
 	})
@@ -416,7 +417,7 @@ func TestCaptureStartWaitsForPriorIdentityRemoval(t *testing.T) {
 	recordingStarted := make(chan struct{})
 	allowTrace := make(chan struct{})
 	traceStarted := make(chan struct{})
-	stopStarted := make(chan struct{})
+	stopEntered := make(chan bool, 1)
 	results := make(chan error, 2)
 	go func() {
 		results <- withDocumentFrameIdentityLifecycle(func() error {
@@ -427,30 +428,27 @@ func TestCaptureStartWaitsForPriorIdentityRemoval(t *testing.T) {
 		})
 	}()
 	<-recordingStarted
+	// While the capture start holds the lifecycle, no other operation can enter it.
+	if documentFrameIdentityMu.TryLock() {
+		documentFrameIdentityMu.Unlock()
+		close(allowTrace)
+		t.Fatal("the lifecycle was free while new capture trace initialization was pending")
+	}
+	// The stop enters after the start returned, which is after its trace initialization.
 	go func() {
 		results <- withDocumentFrameIdentityLifecycle(func() error {
-			close(stopStarted)
+			select {
+			case <-traceStarted:
+				stopEntered <- true
+			default:
+				stopEntered <- false
+			}
 			return nil
 		})
 	}()
-	select {
-	case <-stopStarted:
-		close(allowTrace)
-		<-results
-		<-results
-		t.Fatal("stop entered while new capture trace initialization was pending")
-	case <-time.After(20 * time.Millisecond):
-	}
 	close(allowTrace)
-	select {
-	case <-traceStarted:
-	case <-time.After(time.Second):
-		t.Fatal("capture trace initialization remained blocked")
-	}
-	select {
-	case <-stopStarted:
-	case <-time.After(time.Second):
-		t.Fatal("stop remained blocked after capture trace initialization")
+	if afterTrace := <-stopEntered; !afterTrace {
+		t.Fatal("stop entered while new capture trace initialization was pending")
 	}
 	for range 2 {
 		if err := <-results; err != nil {
@@ -846,6 +844,9 @@ func TestDiagnosticViewportMarkerPropagatesNativeFailure(t *testing.T) {
 	}
 }
 
+// stoppedClock is a clock of the host that does not move, for the native drags of a check whose waits take no time.
+func stoppedClock() time.Duration { return 0 }
+
 // contract: diagnostics.drag.native-delivers-pointer-gesture
 func TestNativeDragDeliversThePressTheStepsAndTheReleaseOfEachRoundTrip(t *testing.T) {
 	for _, test := range []struct {
@@ -867,7 +868,7 @@ func TestNativeDragDeliversThePressTheStepsAndTheReleaseOfEachRoundTrip(t *testi
 	from := point{X: 100, Y: 50}
 	var delivered []string
 	ticks := 0
-	result, err := nativeDrag(plan, from, func(input PointerInput) error {
+	result, err := nativeDrag(plan, from, stoppedClock, func(input PointerInput) error {
 		if input.Activate || input.Button != "left" {
 			t.Fatalf("native drag input %+v activates or uses another button than the primary one", input)
 		}
@@ -897,7 +898,7 @@ func TestNativeDragDeliversThePressTheStepsAndTheReleaseOfEachRoundTrip(t *testi
 
 	// A step that fails releases the press that is open, and the error names both.
 	delivered = nil
-	_, err = nativeDrag(dragPlan{Axis: "x", Line: 3, DX: 20, MS: 32, Times: 1}, from, func(input PointerInput) error {
+	_, err = nativeDrag(dragPlan{Axis: "x", Line: 3, DX: 20, MS: 32, Times: 1}, from, stoppedClock, func(input PointerInput) error {
 		delivered = append(delivered, input.Phase)
 		if input.Phase == "drag" {
 			return errors.New("the window did not accept the input")
@@ -914,16 +915,19 @@ func TestNativeDragDeliversThePressTheStepsAndTheReleaseOfEachRoundTrip(t *testi
 
 // contract: diagnostics.drag.native-delivers-pointer-gesture
 func TestANativeDragPressesOnlyAfterTheWindowPresentedItsLayout(t *testing.T) {
-	// The window answers late: each press must follow the answer, and took leaves the waits out.
+	// The window answers late on the clock of the check, which only the answers move: each press must follow the answer, and
+	// took leaves the waits out.
 	const late = 40 * time.Millisecond
+	var now time.Duration
+	clock := func() time.Duration { return now }
 	var events []string
 	answers := 0
-	result, err := nativeDrag(dragPlan{Axis: "x", Line: 3, DX: 20, MS: 32, Times: 3}, point{X: 100, Y: 50},
+	result, err := nativeDrag(dragPlan{Axis: "x", Line: 3, DX: 20, MS: 32, Times: 3}, point{X: 100, Y: 50}, clock,
 		func(input PointerInput) error {
 			events = append(events, input.Phase)
 			return nil
 		}, func() {}, func() error {
-			time.Sleep(late)
+			now += late
 			answers++
 			events = append(events, fmt.Sprintf("presented %d", answers))
 			return nil
@@ -943,17 +947,17 @@ func TestANativeDragPressesOnlyAfterTheWindowPresentedItsLayout(t *testing.T) {
 		t.Fatalf("native drag pressWaits %#v, want the wait before each of the 3 presses", result["pressWaits"])
 	}
 	for i, wait := range waits {
-		if wait < late.Milliseconds() {
-			t.Fatalf("native drag pressWaits[%d] = %d ms, want at least the %d ms the window took to answer", i, wait, late.Milliseconds())
+		if wait != late.Milliseconds() {
+			t.Fatalf("native drag pressWaits[%d] = %d ms, want the %d ms the window took to answer", i, wait, late.Milliseconds())
 		}
 	}
-	if took, ok := result["took"].(int64); !ok || took >= late.Milliseconds() {
-		t.Fatalf("native drag took %#v ms with steps that do not wait, want less than one wait of %d ms", result["took"], late.Milliseconds())
+	if took, ok := result["took"].(int64); !ok || took != 0 {
+		t.Fatalf("native drag took %#v ms with steps that do not wait, want 0 without the waits", result["took"])
 	}
 
 	// A wait that fails delivers no press.
 	events = nil
-	_, err = nativeDrag(dragPlan{Axis: "x", Line: 3, DX: 20, MS: 32, Times: 2}, point{X: 100, Y: 50},
+	_, err = nativeDrag(dragPlan{Axis: "x", Line: 3, DX: 20, MS: 32, Times: 2}, point{X: 100, Y: 50}, stoppedClock,
 		func(input PointerInput) error {
 			events = append(events, input.Phase)
 			return nil

@@ -308,39 +308,43 @@ fn recording_rejects_document_source_for_drag_owned_identity_capture() {
 #[test]
 fn capture_start_waits_for_prior_identity_removal() {
     let (recording_started, wait_recording_started) = mpsc::channel();
-    let (allow_trace, wait_for_trace) = mpsc::channel();
-    let (trace_started, wait_trace_started) = mpsc::channel();
-    let (stop_started, wait_stop_started) = mpsc::channel();
+    let (allow_trace, wait_for_trace) = mpsc::channel::<()>();
+    let (stop_entered, wait_stop_entered) = mpsc::channel();
+    let traced = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let tracing = std::sync::Arc::clone(&traced);
     let start = std::thread::spawn(move || {
         super::with_document_frame_identity_lifecycle(|| {
             recording_started.send(()).unwrap();
             wait_for_trace.recv().unwrap();
-            trace_started.send(()).unwrap();
+            tracing.store(true, std::sync::atomic::Ordering::SeqCst);
             Ok::<_, Failure>(())
         })
         .expect("capture start could not acquire the frame identity lifecycle");
     });
-    wait_recording_started
-        .recv_timeout(Duration::from_secs(1))
-        .unwrap();
+    wait_recording_started.recv().unwrap();
+    // While the capture start holds the lifecycle, no other operation can enter it.
+    assert!(
+        matches!(
+            DOCUMENT_FRAME_IDENTITY.try_lock(),
+            Err(std::sync::TryLockError::WouldBlock)
+        ),
+        "the lifecycle was free while new capture trace initialization was pending"
+    );
+    // The stop enters after the start returned, which is after its trace initialization.
     let stop = std::thread::spawn(move || {
         super::with_document_frame_identity_lifecycle(|| {
-            stop_started.send(()).unwrap();
+            stop_entered
+                .send(traced.load(std::sync::atomic::Ordering::SeqCst))
+                .unwrap();
             Ok::<_, Failure>(())
         })
         .expect("capture stop could not acquire the frame identity lifecycle");
     });
+    allow_trace.send(()).unwrap();
     assert!(
-        wait_stop_started.try_recv().is_err(),
+        wait_stop_entered.recv().unwrap(),
         "stop entered while new capture trace initialization was pending"
     );
-    allow_trace.send(()).unwrap();
-    wait_trace_started
-        .recv_timeout(Duration::from_secs(1))
-        .unwrap();
-    wait_stop_started
-        .recv_timeout(Duration::from_secs(1))
-        .unwrap();
     start.join().unwrap();
     stop.join().unwrap();
 }
@@ -349,11 +353,14 @@ fn capture_start_waits_for_prior_identity_removal() {
 #[test]
 fn document_frame_identity_callback_wait_is_bounded() {
     let (sender, receiver) = mpsc::channel();
+    let (returned, wait_returned) = mpsc::channel::<()>();
+    // The callback answers after the wait returned, so it is late for any limit; the limit is the input of the check.
     let callback = std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_millis(25));
+        wait_returned.recv().unwrap();
         sender.send(Ok("late reply".to_string()))
     });
     let result = super::await_document_frame_identity_reply(receiver, Duration::from_millis(1));
+    returned.send(()).unwrap();
     assert!(
         matches!(&result, Err(error) if error.contains("timed out")),
         "late identity callback result = {result:?}"
@@ -482,6 +489,11 @@ fn recording_rejects_start_while_document_identity_cleanup_is_incomplete() {
     );
 }
 
+/// A clock of the host that does not move, for the native drags of a check whose waits take no time.
+fn stopped_clock() -> Duration {
+    Duration::ZERO
+}
+
 // contract: diagnostics.drag.native-delivers-pointer-gesture
 #[test]
 fn native_drag_delivers_the_press_the_steps_and_the_release_of_each_round_trip() {
@@ -516,6 +528,7 @@ fn native_drag_delivers_the_press_the_steps_and_the_release_of_each_round_trip()
     let result = native_drag(
         &plan,
         (100.0, 50.0),
+        stopped_clock,
         |pointer| {
             assert!(
                 !pointer.activate && pointer.button == 0,
@@ -571,6 +584,7 @@ fn native_drag_delivers_the_press_the_steps_and_the_release_of_each_round_trip()
             times: 1,
         },
         (100.0, 50.0),
+        stopped_clock,
         |pointer| {
             phases.borrow_mut().push(pointer.phase);
             if pointer.phase == 2 {
@@ -592,8 +606,10 @@ fn native_drag_delivers_the_press_the_steps_and_the_release_of_each_round_trip()
 // contract: diagnostics.drag.native-delivers-pointer-gesture
 #[test]
 fn a_native_drag_presses_only_after_the_window_presented_its_layout() {
-    // The window answers late: each press must follow the answer, and took leaves the waits out.
+    // The window answers late on the clock of the check, which only the answers move: each press must follow the answer,
+    // and took leaves the waits out.
     let late = Duration::from_millis(40);
+    let now = Cell::new(Duration::ZERO);
     let events = RefCell::new(Vec::<String>::new());
     let answers = Cell::new(0);
     let plan = NativeDragPlan {
@@ -611,13 +627,14 @@ fn a_native_drag_presses_only_after_the_window_presented_its_layout() {
     let result = native_drag(
         &plan,
         (100.0, 50.0),
+        || now.get(),
         |pointer| {
             events.borrow_mut().push(phase(pointer));
             Ok(())
         },
         || {},
         || {
-            std::thread::sleep(late);
+            now.set(now.get() + late);
             answers.set(answers.get() + 1);
             events
                 .borrow_mut()
@@ -637,18 +654,16 @@ fn a_native_drag_presses_only_after_the_window_presented_its_layout() {
         .expect("pressWaits is an array");
     assert_eq!(waits.len(), 3, "the wait before each of the 3 presses");
     for (i, wait) in waits.iter().enumerate() {
-        assert!(
-            wait.as_u64()
-                .is_some_and(|wait| wait >= late.as_millis() as u64),
-            "pressWaits[{i}] = {wait}, want at least the {late:?} the window took to answer"
+        assert_eq!(
+            wait.as_u64(),
+            Some(late.as_millis() as u64),
+            "pressWaits[{i}], want the {late:?} the window took to answer"
         );
     }
-    assert!(
-        result["took"]
-            .as_u64()
-            .is_some_and(|took| took < late.as_millis() as u64),
-        "native drag took {} ms with steps that do not wait, want less than one wait of {late:?}",
-        result["took"]
+    assert_eq!(
+        result["took"].as_u64(),
+        Some(0),
+        "native drag took with steps that do not wait, want 0 without the waits"
     );
 
     // A wait that fails delivers no press.
@@ -661,6 +676,7 @@ fn a_native_drag_presses_only_after_the_window_presented_its_layout() {
             times: 2,
         },
         (100.0, 50.0),
+        stopped_clock,
         |pointer| {
             events.borrow_mut().push(phase(pointer));
             Ok(())

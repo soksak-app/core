@@ -216,6 +216,15 @@ fn sleeping() -> std::process::Child {
     Command::new("sleep").arg("60").spawn().expect("run sleep")
 }
 
+/// Reports whether the process pid still runs, as `kill -0` reports it.
+fn running(pid: u32) -> bool {
+    Command::new("kill")
+        .args(["-0", &pid.to_string()])
+        .status()
+        .unwrap()
+        .success()
+}
+
 // contract: app-update.replace.replaces-the-bundle-after-the-process-ended
 #[test]
 fn the_bundle_is_replaced_after_the_process_ended_and_the_application_starts() {
@@ -240,6 +249,11 @@ fn the_bundle_is_replaced_after_the_process_ended_and_the_application_starts() {
                     timeout: Duration::from_secs(30),
                 },
                 &|opened: &Path, arguments: &[String]| {
+                    // The application starts after the process ended and the bundle was replaced.
+                    assert!(
+                        !running(pid),
+                        "the application started before the process ended"
+                    );
                     assert_eq!(plist_text(opened), "new", "the started bundle");
                     started.lock().unwrap().push(format!(
                         "{} {}",
@@ -250,11 +264,8 @@ fn the_bundle_is_replaced_after_the_process_ended_and_the_application_starts() {
                 },
             )
         });
-        std::thread::sleep(Duration::from_millis(300));
-        assert!(
-            !handle.is_finished(),
-            "the replacement finished while the process ran"
-        );
+        // The start checks that the process ended; a process that keeps running leaves the target as it was
+        // (the_replacement_refuses_what_is_not_a_bundle_or_when_the_process_keeps_running).
         process.kill().unwrap();
         process.wait().unwrap();
         handle.join().unwrap()
@@ -376,6 +387,10 @@ fn the_relaunch_starts_the_same_bundle_in_the_background_after_the_process_ended
                     timeout: Duration::from_secs(30),
                 },
                 &|opened: &Path, arguments: &[String], activate: bool| {
+                    assert!(
+                        !running(pid),
+                        "the application started before the process ended"
+                    );
                     started.lock().unwrap().push(format!(
                         "{} {} activate={activate}",
                         opened.display(),
@@ -385,11 +400,8 @@ fn the_relaunch_starts_the_same_bundle_in_the_background_after_the_process_ended
                 },
             )
         });
-        std::thread::sleep(Duration::from_millis(300));
-        assert!(
-            !handle.is_finished(),
-            "the relaunch finished while the process ran"
-        );
+        // The start checks that the process ended; a process that keeps running starts nothing
+        // (the_relaunch_refuses_a_folder_that_is_not_a_bundle_and_a_process_that_keeps_running).
         process.kill().unwrap();
         process.wait().unwrap();
         handle.join().unwrap()

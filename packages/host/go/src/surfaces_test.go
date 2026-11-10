@@ -1521,6 +1521,8 @@ type layoutPlatform struct {
 	commits, cancels chan uint64
 	// clock counts the reads of the monotonic clock, so each read is later than the previous one.
 	clock atomic.Uint64
+	// noticed is set by a test before it calls the presentation notice, and early records a commit that ran before it.
+	noticed, early atomic.Bool
 }
 
 func (*layoutPlatform) EnqueueUI(task func()) error {
@@ -1531,6 +1533,9 @@ func (*layoutPlatform) EnqueueUI(task func()) error {
 func (p *layoutPlatform) MonotonicNanos() (uint64, error) { return p.clock.Add(1), nil }
 
 func (p *layoutPlatform) CommitLayout(_ platform.Window, ticket uint64) bool {
+	if !p.noticed.Load() {
+		p.early.Store(true)
+	}
 	p.commits <- ticket
 	return true
 }
@@ -1570,13 +1575,9 @@ func presentThroughFixture(t *testing.T, ticket uint64) (func(error), *layoutPla
 // contract: surface-layout.commits-after-the-presentation-notice
 func TestLayoutCommitsAfterThePresentationNoticeOfTheFrontend(t *testing.T) {
 	notice, fake, finished := presentThroughFixture(t, 7)
-	select {
-	case ticket := <-fake.commits:
-		t.Fatalf("the layout committed ticket %d before the presentation notice", ticket)
-	case err := <-finished:
-		t.Fatalf("the present ended before the presentation notice: %v", err)
-	case <-time.After(50 * time.Millisecond):
-	}
+	// The commit records whether it ran before the notice; a failed notice ends the present without a commit
+	// (TestAFailedPresentationNoticeCancelsTheLayout).
+	fake.noticed.Store(true)
 	notice(nil)
 	select {
 	case ticket := <-fake.commits:
@@ -1588,6 +1589,9 @@ func TestLayoutCommitsAfterThePresentationNoticeOfTheFrontend(t *testing.T) {
 	}
 	if err := <-finished; err != nil {
 		t.Fatalf("the present failed: %v", err)
+	}
+	if fake.early.Load() {
+		t.Fatal("the layout committed before the presentation notice")
 	}
 }
 
@@ -1635,6 +1639,8 @@ func TestAPresentationRecordsEachOfItsStagesInOrder(t *testing.T) {
 	}
 	want := []string{"present-prepare-ui", "present-dom-register-ui", "present-dom-callback", "present-raster-wait", "present-commit-ui"}
 	var records []map[string]any
+	// The callback and the commit write their records after they hand their result on, and no event reports those writes, so
+	// the buffer is read until it holds a record of every stage.
 	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(time.Millisecond) {
 		records = bufferedTraces(t, "host.frame.surface.dispatch")
 		if len(records) >= len(want) || time.Now().After(deadline) {
