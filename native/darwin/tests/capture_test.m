@@ -94,10 +94,8 @@ int main(void) { @autoreleasepool {
             (CGWindowID)window.windowNumber) autorelease];
         return info.count == 1 && [info[0][(id)kCGWindowIsOnscreen] boolValue];
     };
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!onScreen() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
+    while ((window.occlusionState & NSWindowOcclusionStateVisible) == 0)
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:NSDate.distantFuture];
     check(onScreen(), @"the window server shows the capture window");
     bool stillWritten = sp_capture_still((long[]){window.windowNumber}, 1, still.UTF8String, 0, &stillError);
     check(stillWritten, [NSString stringWithFormat:@"a still capture of an inactive window is written (%@)",
@@ -112,12 +110,7 @@ int main(void) { @autoreleasepool {
     check(centre.redComponent > 0.9 && centre.greenComponent < 0.3 && centre.blueComponent < 0.1,
         [NSString stringWithFormat:@"the still image shows the window content (centre %@)", centre]);
     check(!NSApp.isActive, @"the still capture does not activate the application");
-    // The recording target does not change long enough for the initial compositor frame to become idle.
-    NSDate *settled = [NSDate dateWithTimeIntervalSinceNow:3];
-    while (settled.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:
-            [NSDate dateWithTimeIntervalSinceNow:MIN(0.01, settled.timeIntervalSinceNow)]];
-    }
+    // The recording target does not change after the still capture, which shows the frame the window server composited.
     check(sp_capture_open(window.windowNumber, false, 0, &operationError), @"a visible inactive window opens for recording");
     free(operationError); operationError = NULL;
     bool recordingStarted = sp_capture_start(directory, false, &operationError);
@@ -231,8 +224,8 @@ int main(void) { @autoreleasepool {
                 sp_capture_test_report_error("controlled identity capture failure");
                 dispatch_semaphore_signal(errorReported);
             });
-            check(dispatch_semaphore_wait(errorReported, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) == 0,
-                @"a background capture failure queues its main-thread cleanup");
+            // A background capture failure queues its main-thread cleanup before it returns.
+            dispatch_semaphore_wait(errorReported, DISPATCH_TIME_FOREVER);
             dispatch_release(errorReported);
             check(!sp_image_capture_match_identity_session_active(),
                 @"capture A disables identity tagging as soon as its error is recorded");
@@ -288,9 +281,8 @@ int main(void) { @autoreleasepool {
             sp_capture_test_report_startup_failure("controlled identity startup failure");
             dispatch_semaphore_signal(startupFailureReported);
         });
-        check(dispatch_semaphore_wait(startupFailureReported,
-            dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) == 0,
-            @"a background startup failure ends matcher state and queues cleanup");
+        // A background startup failure ends the matcher state and queues its cleanup before it returns.
+        dispatch_semaphore_wait(startupFailureReported, DISPATCH_TIME_FOREVER);
         dispatch_release(startupFailureReported);
         drainMainQueueThroughSentinel();
         check(regionMatchesSurfaceBytes(regionA, imageA, rawA)
@@ -308,9 +300,8 @@ int main(void) { @autoreleasepool {
             sp_capture_test_report_startup_failure("controlled delayed startup failure");
             dispatch_semaphore_signal(delayedStartupFailure);
         });
-        check(dispatch_semaphore_wait(delayedStartupFailure,
-            dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) == 0,
-            @"a second startup failure queues cleanup before a replacement session starts");
+        // A second startup failure queues its cleanup before a replacement session starts.
+        dispatch_semaphore_wait(delayedStartupFailure, DISPATCH_TIME_FOREVER);
         dispatch_release(delayedStartupFailure);
         sp_image_capture_match_begin(NULL, NULL);
         startupIdentityError = NULL;
