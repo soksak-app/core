@@ -101,6 +101,7 @@ static NSMutableArray<SPInputWait *> *inputMethodWaits;
 // Removes wait from the waits of its view and stops what it observes. Returns NO when the wait has already ended.
 static BOOL takeWait(SPInputWait *wait) {
     SPInputReceipts *handler = wait.receipts;
+    // silent: a wait that another end already took answers NO, so only the first end answers it.
     if (!handler || ![handler.waits containsObject:wait]) return NO;
     [[wait retain] autorelease];
     [handler.waits removeObject:wait];
