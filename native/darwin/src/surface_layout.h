@@ -17,10 +17,22 @@ void surfaceLayoutCancel(void *owner);
 // Cancels only the queued or active request with this owner and ticket. Completed or superseded tickets are unaffected.
 void surfaceLayoutCancelTicket(void *owner, uint64_t ticket);
 // Diagnostics only. Starts recording, for each layout transaction, the times of the begin, the app DOM presentation check, the commit, and the presentation check request
-// (ms, the same mach clock as the recording frames). Clears the earlier recording.
+// (ms, the same mach clock as the recording frames), the path that committed it, and how many of the CATransaction pairs of this
+// code besides the layout transaction were open at its commit. Clears the earlier recording.
 void surfaceLayoutTraceStart(void);
-// Number of values in the record of one transaction: ticket, begun, presented, committed, requested.
-#define SURFACE_LAYOUT_TRACE_STAGES 5
+// Number of values in the record of one transaction: ticket, begun, presented, committed, requested, commit path, open at commit.
+#define SURFACE_LAYOUT_TRACE_STAGES 7
+// The commit path of a transaction in its record: the presentation of the host, the start transaction of a new page, the
+// presentation of the last joined view, the abandon of the last joined view, or a cancel.
+#define SURFACE_LAYOUT_COMMIT_PRESENT 1
+#define SURFACE_LAYOUT_COMMIT_START 2
+#define SURFACE_LAYOUT_COMMIT_VIEW_JOIN 3
+#define SURFACE_LAYOUT_COMMIT_VIEW_ABANDON 4
+#define SURFACE_LAYOUT_COMMIT_CANCEL 5
+// Every CATransaction pair of this code opens and closes through these, so the layout trace can say how many were open when a
+// layout transaction committed.
+void surfaceTransactionBegin(void);
+void surfaceTransactionCommit(void);
 // Stops recording and writes SURFACE_LAYOUT_TRACE_STAGES values per transaction to out, at most capacity values.
 // A stage that did not occur is NaN. Returns the total number of transactions. The caller treats exceeding capacity as an error.
 size_t surfaceLayoutTraceStop(double *out, size_t capacity);
