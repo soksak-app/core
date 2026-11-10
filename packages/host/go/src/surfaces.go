@@ -1502,7 +1502,7 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 			// Without waiting, a surface resize would show the previous raster while the region is enlarged
 			// (docs/spec/surface-composition.md).
 			return waitSurfaceRasters(win.Name(), &req.Ticket, s.refreshImageRasters, func() error {
-				err := s.images.WaitLayoutRasters(noWaitLimit, req.Settled)
+				err := s.images.WaitLayoutRasters(req.Settled)
 				if errors.Is(err, errLayoutWaitEnded) {
 					return nil
 				}

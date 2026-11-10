@@ -1809,13 +1809,17 @@ func (s *Surfaces) presented(ctx context.Context) (float64, error) {
 		// Instrument of the display barrier wait (V5-104).
 		barrierStarted := time.Now()
 		barrier := make(chan error, 1)
-		routine.Go("presented-raster", func() { barrier <- s.images.WaitCurrentError() })
+		// The end of the request closes stop, so the raster wait ends with the request that waited for it.
+		stop := make(chan struct{})
+		routine.Go("presented-raster", func() { barrier <- s.images.WaitCurrentError(stop) })
 		var barrierErr error
 		select {
 		case barrierErr = <-barrier:
 		case <-ends:
+			close(stop)
 			return 0, waitEndError(s.lastWaitEnd())
 		case <-ctx.Done():
+			close(stop)
 			return 0, connectionEnded()
 		}
 		PerformanceObserve("host", func() map[string]any {

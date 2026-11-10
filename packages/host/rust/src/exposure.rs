@@ -2283,6 +2283,7 @@ pub fn presented(
         reply.after_connection_end(move || {
             ended.store(true, Ordering::SeqCst);
             woken.overlay.wake_paint_waits();
+            woken.images.wake_waits();
         });
     }
     let ended = || {
@@ -2344,12 +2345,17 @@ pub fn presented(
     loop {
         // The trigger of the wait for the presentation barrier (V5-104).
         let barrier_started = std::time::Instant::now();
-        let barrier = data.images.wait_current();
+        let barrier = data.images.wait_current(&ended);
         crate::performance::observe("host", || {
             serde_json::json!({"event": "barrier", "wait_us": barrier_started.elapsed().as_micros() as u64,
                     "ok": barrier.is_ok()})
         });
         if let Err(reason) = barrier {
+            // The end of the window or of the request ends the raster wait with 1003, and a failure of a raster with its
+            // reason.
+            if let Some(end) = ended() {
+                return Err(Failure::new(MISSING_DOCUMENT, end));
+            }
             return Err(Failure::new(
                 HANDLER_FAILED,
                 format!("the current image raster failed to present: {reason}"),

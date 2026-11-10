@@ -13802,9 +13802,9 @@ const FEATURE_LINKS = [
     id: "F239-272",
     implementation: [
       { file: "packages/host/go/src/images.go", symbol: "func (i *Images) WaitLayoutRasters" },
-      { file: "packages/host/go/src/surfaces.go", symbol: "s.images.WaitLayoutRasters(noWaitLimit, req.Settled)" },
+      { file: "packages/host/go/src/surfaces.go", symbol: "s.images.WaitLayoutRasters(req.Settled)" },
       { file: "packages/host/rust/src/images.rs", symbol: "pub(crate) fn wait_layout_rasters" },
-      { file: "packages/host/rust/src/surfaces.rs", symbol: ".wait_layout_rasters(images::NO_WAIT_LIMIT, presentation_settled)" },
+      { file: "packages/host/rust/src/surfaces.rs", symbol: "images.wait_layout_rasters(presentation_settled)" },
     ],
     tests: [
       { file: "packages/host/go/src/images_test.go", id: "TestContinuousImageWaitUsesInstalledSnapshotAndBlocksAfterGenerationOrRasterChange" },

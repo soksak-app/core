@@ -119,6 +119,7 @@ impl WindowData {
     pub(crate) fn end_waits(&self, end: &str) {
         self.ends.record(end);
         self.overlay.wake_paint_waits();
+        self.images.wake_waits();
         crate::surfaces::end_settled_waits(&self.running);
         for ready in self
             .readied

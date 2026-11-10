@@ -2120,9 +2120,7 @@ pub async fn present(window: Window, request: PresentRequest) -> Result<Vec<Plac
                         surface_dispatch_timestamp,
                         record_surface_dispatch,
                         || crate::composition::refresh_image_rasters(&raster_window),
-                        || match images
-                            .wait_layout_rasters(images::NO_WAIT_LIMIT, presentation_settled)
-                        {
+                        || match images.wait_layout_rasters(presentation_settled) {
                             Err(reason) if reason == images::LAYOUT_WAIT_ENDED => Ok(()),
                             Err(reason) => Err(format!(
                                 "the current image raster failed to present: {reason}"
