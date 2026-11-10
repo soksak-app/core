@@ -88,7 +88,7 @@
       },
       {
         "name": "layoutprobe.section",
-        "description": "A section view of the probe: its section, sidebar and card, its size, the surface that core.sidebars reports for it, and the layoutprobe.view of that surface for the follow section.",
+        "description": "A section view of the probe: its section, sidebar and card, its size, whether its document overflows it, the surface that core.sidebars reports for it, and the layoutprobe.view of that surface for the follow section.",
         "schema": {
           "type": "object",
           "properties": {
@@ -97,6 +97,7 @@
             "card": { "type": ["string", "null"] },
             "width": { "type": "number" },
             "height": { "type": "number" },
+            "overflows": { "type": "boolean" },
             "follows": { "type": "boolean" },
             "surface": { "type": ["string", "null"] },
             "view": { "type": ["object", "null"] }

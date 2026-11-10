@@ -85,6 +85,19 @@ function readSurface(view, element) {
   };
 }
 
+/**
+ * The size of a section view and whether its document overflows it. A document that overflows its view scrolls, and under the classic
+ * scroller style of the system its view shows a scroll bar at its edge, so an empty point of the section body is empty only while
+ * its document does not overflow.
+ */
+function readSection(view) {
+  const root = view.document.documentElement;
+  return {
+    width: view.innerWidth, height: view.innerHeight,
+    overflows: root.scrollWidth > view.innerWidth || root.scrollHeight > view.innerHeight,
+  };
+}
+
 /** Starts the tab view: bridge is the view bridge, expose the exposure of the view, view the window of the page. */
 export async function startLayoutProbe({ bridge, expose, view }) {
   const { surface, params, origin, project } = view.sokSurface;
@@ -169,10 +182,9 @@ export async function startProbeSection({ bridge, expose, view }) {
   const { surface, section } = view.sokSurface;
   const follows = section.id === FOLLOW_SECTION;
   const state = createState({
-    id: section.id, sidebar: section.sidebar, card: section.card,
-    width: view.innerWidth, height: view.innerHeight, follows, surface: null, view: null,
+    id: section.id, sidebar: section.sidebar, card: section.card, ...readSection(view), follows, surface: null, view: null,
   });
-  view.addEventListener("resize", () => state.set({ width: view.innerWidth, height: view.innerHeight }));
+  view.addEventListener("resize", () => state.set(readSection(view)));
   // The status comes after the command, as in the tab view.
   await bridge.commands.register("layoutprobe.open", (params) => openFile(bridge, params));
   await expose.status("layoutprobe.section", state.read, state.subscribe);
