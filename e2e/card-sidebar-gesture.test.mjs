@@ -86,10 +86,10 @@ for (const app of Object.values(APPS)) {
           const initialPresentation = await s.presented();
           const poses = [{ phase: "initial", displayed: initialPresentation.displayed, size: 120, applied }];
           const recordingWindow = await s.get("host.window");
-          const { frames: directory } = await s.request("diagnostics.capture.start", {});
-          // The session removes the recording when the check passes and keeps it, with its callback status and display link,
-          // when the check fails.
-          s.trackRecording(directory);
+          // The session removes the recording when the check passes and keeps it, with its callback status, display link, stop
+          // reply and displayed states, when the check fails.
+          const recording = await s.record();
+          const directory = recording.frames;
           let down = false;
           let stopped;
           const elapsed = [];
@@ -161,9 +161,8 @@ for (const app of Object.values(APPS)) {
                 gestureErrors.push(error);
               }
               try {
-                stopped = await s.request("diagnostics.capture.stop", {
-                  after: displayed === undefined ? 0 : displayed + 100,
-                });
+                stopped = await recording.stop({ after: displayed === undefined ? 0 : displayed + 100 });
+                recording.keep("poses", poses);
               } catch (error) {
                 gestureErrors.push(error);
               }

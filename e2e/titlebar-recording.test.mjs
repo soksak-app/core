@@ -3,7 +3,6 @@
 // while this window reads again after another window changes the scale. The buttons and the first row are measured in the pixels of the frame
 // (titlebar-measurement.mjs). A value in the DOM does not tell the screen that the frame showed.
 import assert from "node:assert/strict";
-import { rmSync } from "node:fs";
 import test from "node:test";
 
 import { APPS, open, requireUncovered } from "@soksak/window-check/app.mjs";
@@ -34,22 +33,19 @@ async function recordable(s) {
 
 /**
  * Runs action(displayed) while the window is recorded. action returns, in order, the states { displayed, at } displayed during the recording (display time,
- * first-row height). It measures the buttons and the first row in each frame and deletes the recording folder.
+ * first-row height). It measures the buttons and the first row in each frame. The session removes the recording when the check passes and keeps it, with
+ * its stop reply and the displayed states, when the check fails, so a failure leaves its evidence.
  */
 async function record(s, buttons, action) {
   const { displayed } = await s.presented();
   const recording = await s.record();
-  try {
-    const poses = await action(displayed);
-    const stop = await recording.stop({ after: poses.at(-1).displayed + 100 });
-    assert.equal(stop.limited, false, "the recording reached its frame cap");
-    // Reads and measures one frame at a time. The whole recording is not held in memory.
-    const measured = frames(recording.frames).map((path, index) => ({ index, ...measureTitlebar(readFrame(path), buttons) }));
-    return { poses, stop, measured };
-  } finally {
-    // A failure to stop the recording is stopped by the session cleanup (Session.record).
-    rmSync(recording.frames, { recursive: true, force: true });
-  }
+  const poses = await action(displayed);
+  const stop = await recording.stop({ after: poses.at(-1).displayed + 100 });
+  recording.keep("poses", poses);
+  assert.equal(stop.limited, false, "the recording reached its frame cap");
+  // Reads and measures one frame at a time. The whole recording is not held in memory.
+  const measured = frames(recording.frames).map((path, index) => ({ index, ...measureTitlebar(readFrame(path), buttons) }));
+  return { poses, stop, measured };
 }
 
 /**
