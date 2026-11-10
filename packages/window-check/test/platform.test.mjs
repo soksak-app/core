@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { applicationBundle, applicationExecutables, extractApplication, listProcesses, PlatformOperationNotImplemented, quitKeys,
-  releasePlatform, waitForLockRelease } from "../platform.mjs";
+  releasePlatform, waitForLockRelease } from "../platform/platform.mjs";
 
 /** A recorder of the programs that an operation runs: each call answers the next of `outputs`. */
 function recorder(...outputs) {
@@ -69,5 +69,5 @@ test("an operation that the platform does not implement rejects with its name an
 
 test("the package ships the platform operations of the run", () => {
   const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
-  for (const file of ["platform.mjs", "platform/"]) assert.ok(pkg.files.includes(file), `package.json files lists ${file}`);
+  for (const file of ["platform/"]) assert.ok(pkg.files.includes(file), `package.json files lists ${file}`);
 });
