@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
-	"strings"
 	"testing"
 
 	_ "github.com/soksak-app/core/packages/sok/go/src/platform/darwin"
