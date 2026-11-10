@@ -616,6 +616,10 @@ func startedShell(t testing.TB, stored *storedHost) *shellFixture {
 func startedShellOf(t testing.TB, stored *storedHost, declared *workbench.Declarations) *shellFixture {
 	t.Helper()
 	f := &shellFixture{t: t, host: stored, pending: make(steps, 256)}
+	table := stored.table()
+	for name, call := range stored.extra {
+		table[name] = call
+	}
 	shell, err := workbench.NewShell(workbench.ShellOptions{
 		Now:       time.Now,
 		Detaching: func() []string { return nil },
@@ -626,7 +630,7 @@ func startedShellOf(t testing.TB, stored *storedHost, declared *workbench.Declar
 		// The fixture draws no native view element, so no frame of it has a surface host to move in a layout transaction.
 		OpenLayout:  func() (uint64, error) { return 0, nil },
 		Declared:    declared,
-		Calls:       workbench.NewCalls(stored.table(), f.pending.post),
+		Calls:       workbench.NewCalls(table, f.pending.post),
 		Environment: environment(t),
 		Installed:   []byte(stored.installedDocument()),
 		Invalidate:  func() { f.frames++ },
