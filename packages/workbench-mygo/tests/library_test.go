@@ -423,7 +423,7 @@ func TestTheLibraryKeepsItsSizeWhenTheFrameTextGrows(t *testing.T) {
 
 func TestTheLibraryHidesTheSidebarSwitches(t *testing.T) {
 	f, _, _ := libraryOfTwoProjects(t)
-	if f.has("core.chrome.left", "") || f.has("core.chrome.right", "") {
+	if f.has("core.chrome.left", "") || f.has("core.chrome.right", "") || f.has("core.chrome.top", "") || f.has("core.chrome.bottom", "") {
 		t.Fatal("the library shows the switches of the sidebars")
 	}
 	if !f.has("core.chrome.mode", "") || !f.has("core.chrome.settings", "") {
@@ -431,7 +431,7 @@ func TestTheLibraryHidesTheSidebarSwitches(t *testing.T) {
 	}
 	f.run("core.library.return", nil)
 	f.tester.Frame()
-	if !f.has("core.chrome.left", "") || !f.has("core.chrome.right", "") {
+	if !f.has("core.chrome.left", "") || !f.has("core.chrome.right", "") || !f.has("core.chrome.top", "") || !f.has("core.chrome.bottom", "") {
 		t.Fatal("the work screen has no switches of the sidebars")
 	}
 }

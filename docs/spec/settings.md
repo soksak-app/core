@@ -24,7 +24,7 @@ In the project scope a caption below the scope tabs, `core.settings-modal.folder
 
 `core.settings-modal.nav {section}` shows a section. The window keeps the section, the plugin search, the selected plugin, and the edited set while it is closed and reopened.
 
-A change redraws the window and keeps the scroll position of the shown content; showing another section, scope, plugin page or edited set starts at the top. The window reports the scroll position of the shown content as `scroll` (points from the top) in `core.settings-modal`; the position is negative while the content is pulled past its start, and a reported value that is not a number is refused.
+A change redraws the window and keeps the scroll position of the shown content; showing another section, scope, plugin page or edited set starts at the top. The window reports the scroll position of the shown content as `scroll` (points from the top) in `core.settings-modal`; the position is negative while the content is pulled past its start, and a reported value that is not a number is refused. The status also reports `card`, the rectangle of the window, and `pane`, the rectangle of the box that scrolls: the pane lies under the fixed head of the card and beside its section nav, and a control of the shown content is reachable by a press only inside it, because the head covers the content that the scroll clips.
 
 ### 일반
 
@@ -34,14 +34,14 @@ A change redraws the window and keeps the scroll position of the shown content; 
 | 테마 | theme swatches `theme`, 모드 `mode` |
 | 형태 | 통로 `gap`, 모서리 `radius`, 폰트 `font`, 글자 크기 `size` |
 | 위치 | 프로젝트 탭 위치 `projectTabs` |
-| 사이드바 | 왼쪽 사이드바 보이기 `left`, 오른쪽 사이드바 보이기 `right`, 왼쪽 사이드바 세트 and 오른쪽 사이드바 세트 (each a select of all sets and 사용 안 함, `core.settings.link {place, plugin: null, set}`) |
+| 사이드바 | 왼쪽 사이드바 보이기 `left`, 오른쪽 사이드바 보이기 `right`, 위 사이드바 보이기 `top`, 아래 사이드바 보이기 `bottom`; 왼쪽 사이드바 세트, 오른쪽 사이드바 세트, 위 사이드바 세트 and 아래 사이드바 세트 (each a select of all sets and 사용 안 함, `core.settings.link {place, plugin: null, set}`); 사이드바 순서 `sidebarOrder` |
 | 사이드바 크기 | the width settings of [layout values](#layout-values) |
 | 표시 | 포커스 표시 `focusInd`, 경계선 `fullRule`, 포커스 밖 흐리게 `dim` |
 | 언어 | 언어 `language` |
 | 메모리 (common scope only) | 메모리 절약 `memorySaver`, 숨긴 뒤 내리기까지 `memorySaverDelay` |
 | 진단 | 디버그 (a switch that runs `core.settings.debug {on}`) |
 
-Window choices select content for one fixed left sidebar and one fixed right sidebar. The focused active plugin overrides the general side choice without adding a column. Visibility switches affect the fixed side. Card sidebars remain inside their cards; the obsolete `cardSidebar` positioning setting is rejected. No plugin setting appears in 일반.
+Window choices select content for one fixed sidebar on each side, left, right, top and bottom. The focused active plugin overrides the general side choice in the same place without adding a sidebar. A visibility switch affects the fixed sidebar of its side, and 사이드바 순서 sets which sidebar takes the room of the plane first ([external window sidebars](external-sidebars.md#fixed-placement-and-persistence)). The group states this under its name: 한 변에는 고정 사이드바가 하나 있고, 포커스된 플러그인의 창 세트는 같은 자리의 내용을 바꾼다. 순서가 앞선 변의 사이드바가 먼저 공간을 차지한다. Card sidebars remain inside their cards; the obsolete `cardSidebar` positioning setting is rejected. No plugin setting appears in 일반.
 
 ### 진단
 
@@ -68,7 +68,7 @@ The page of a plugin replaces the search field and the list. It shows:
 - The plugin name, with the plugin id as its caption.
 - 설정: one row per setting the manifest declares, in manifest order, named with its `label` and followed by its `description` when it has one. Each row has the [control](#controls) of its form: an `enum` a select box, an `integer` a slider between its bounds, and a `string` or an `address` a text field. A plugin without settings shows "이 플러그인에는 설정이 없습니다."
 - 섹션: the names of the sections the plugin declares, as one line of text.
-- 사이드바: every plugin has window-left/window-right selectors. A plugin with a surface also has four internal card-side selectors. Every selector offers 사용 안 함 and all sets, and runs `core.settings.link {place, plugin, set}`.
+- 사이드바: every plugin has window-left, window-right, window-top and window-bottom selectors, under the statement that the set replaces the content of the fixed sidebar of that side while a tab of the plugin is the active tab of the focused card. A plugin with a surface also has four internal card-side selectors. Every selector offers 사용 안 함 and all sets, and runs `core.settings.link {place, plugin, set}`.
 
 ### 사이드바
 
@@ -99,20 +99,21 @@ The window draws every setting with one control of a fixed set, chosen by the fo
 
 | Form | Control | Command |
 |---|---|---|
-| A boolean (`left`, `right`, `dim`, `memorySaver`) | Switch: a checkbox drawn as a switch | `core.settings.change {key, value, scope}` |
+| A boolean (`left`, `right`, `top`, `bottom`, `dim`, `memorySaver`) | Switch: a checkbox drawn as a switch | `core.settings.change {key, value, scope}` |
 | A choice of listed values (`projectOpening`, `mode`, `font`, `projectTabs`, `focusInd`, `fullRule`, `language`, a plugin `enum`) | Select box with one option per value in the declared order | `core.settings.change {key, value, scope}` |
 | A theme of the catalog (`theme`) | Swatch grid with one swatch per theme, drawn with that theme's colors and shape | `core.settings.theme {name, scope}` |
 | A bounded integer (`gap`, `radius`, `size`, `memorySaverDelay`, the [layout values](#layout-values), a plugin `integer`) | Slider between the bounds, followed by the value and its unit | `core.settings.change {key, value, scope}` |
 | A string or an address (a plugin `string` or `address`) | One-line text field | `core.settings.change {key, value, scope}` |
 | A set reference (a link of [sidebar choices](#sidebar-choices)) | Select box of 사용 안 함 and every set | `core.settings.link {place, plugin, set, scope}` |
+| An order of listed values (`sidebarOrder`) | One row per value in the current order, named by the value, with ▲, absent on the first row, and ▼, absent on the last row; a button swaps its row with the row above or below | `core.settings.change {key, value, scope}` with the whole new list as `value` |
 
-The set editor uses the same controls: 이름 is a text field, 배치 a select box and each section row a select box. Buttons run actions (전역값 사용, 편집, 삭제, 새 세트, ▲ ▼ − +, 목록, 플러그인 관리) and are not setting controls; the scope tabs select the shown scope and are not a setting. A setting without a control in this table, such as `textSize`, `sets`, `diagnostics.performance` and `diagnostics.log`, is changed by its own command or the settings file.
+The set editor uses the same controls: 이름 is a text field, 배치 a select box and each section row a select box. Buttons run actions (전역값 사용, 편집, 삭제, 새 세트, the ▲ ▼ − + of a set row, 목록, 플러그인 관리) and are not setting controls; the ▲ ▼ of an order row are its control; the scope tabs select the shown scope and are not a setting. A setting without a control in this table, such as `textSize`, `sets`, `diagnostics.performance` and `diagnostics.log`, is changed by its own command or the settings file.
 
 The workbench defines this control set instead of rendering the window with the form library at `~/Projects/polyspec/crudui`. That library compiles a form template, binds a record that the application submits as a whole, and keeps row identity, an undo history, `name`-based controls and its own event binding (`connectForm`). The settings window applies each change at once through a declared command, every control names its command through the shared binder and carries an element name ([exposure](exposure.md)), and the host draws a copy of the card in which no listener runs ([native modals](native-modals.md)). The library's markup and binding meet none of these rules without a layer that rewrites its output, while the plugin setting declarations need only the forms of the table above, so adding the dependency is not justified.
 
 ## Values
 
-Each core setting accepts one form. Reading the settings files and every change check each value against it; a value of another form fails with `Invalid setting <key>: <value>` and the reason. A load reports the error and replaces nothing, and a change fails with -32602 (invalid params) and changes nothing. `core.settings.change` takes a value of the form of its setting, or the string of a control, which becomes the boolean or the number that the setting declares; it converts no other input, so a value of another type is refused. The controls of 일반 offer the same choices and ranges.
+Each core setting accepts one form. Reading the settings files and every change check each value against it; a value of another form fails with `Invalid setting <key>: <value>` and the reason. A load reports the error and replaces nothing, and a change fails with -32602 (invalid params) and changes nothing. `core.settings.change` takes a value of the form of its setting, or the string of a control, which becomes the boolean or the number that the setting declares; it converts no other input, so a value of another type is refused. A setting of a list form, such as `sidebarOrder`, takes the whole list as an array. The controls of 일반 offer the same choices and ranges.
 
 | Key | Form |
 |---|---|
@@ -124,7 +125,8 @@ Each core setting accepts one form. Reading the settings files and every change 
 | `size` | An integer from 10 to 18 (px) |
 | `textSize` | A [text size step](text-size.md) |
 | `projectTabs` | `top` or `left` |
-| `left`, `right`, `dim`, `diagnostics.performance` | A boolean |
+| `left`, `right`, `top`, `bottom`, `dim`, `diagnostics.performance` | A boolean; `left` and `right` default to `true`, `top` and `bottom` to `false` |
+| `sidebarOrder` | An array that holds each of `left`, `right`, `top` and `bottom` once, default `["left", "right", "top", "bottom"]`: the order in which the window sidebars take the room of the plane ([external window sidebars](external-sidebars.md#fixed-placement-and-persistence)); a repeated, missing or other value is refused with `Invalid setting sidebarOrder: <value> is not an order of "left", "right", "top", "bottom"` |
 | `diagnostics.log` | An object of the classes and their levels |
 | `focusInd` | `border` or `corner` |
 | `fullRule` | `under`, `over` or `none` |
@@ -142,7 +144,7 @@ Plugin settings take the form of their declaration ([plugins](plugins.md)).
 
 The settings files carry their form in the member `format` (format 1 is the current form; a file of another form, or without the member, is refused, [stored data formats](installation.md#stored-data-formats)). The member is the carrier of the stored form, not a setting: the workspace hides it from the snapshot and preserves it when it writes, and a settings key named `format` is refused like any other unknown key. The rest of this section holds for the settings of the file after the carrier.
 
-The settings files are read only in their current form, and the page does not convert them. A key that is not a declared setting, including the keys of earlier settings (`cardSidebar`, `rail`, `railWidth`, `sidebarFoldedWidth`, `latency`, `skew`), fails with `settings.json: unknown setting <key>` for the common settings and `<project root>/.soksak/settings.json: unknown setting <key>` for the settings of the project that the window opens. A `rail` link, a `left` or `right` link that names a plugin, and a link to a set that the scope does not hold fail the check of sets and links below. A failure replaces nothing and writes nothing.
+The settings files are read only in their current form, and the page does not convert them. A key that is not a declared setting, including the keys of earlier settings (`cardSidebar`, `rail`, `railWidth`, `sidebarFoldedWidth`, `latency`, `skew`), fails with `settings.json: unknown setting <key>` for the common settings and `<project root>/.soksak/settings.json: unknown setting <key>` for the settings of the project that the window opens. A `rail` link, a side link (`left`, `right`, `top` or `bottom`) that names a plugin, and a link to a set that the scope does not hold fail the check of sets and links below. A failure replaces nothing and writes nothing.
 
 ## Stored sets and links
 
@@ -165,11 +167,11 @@ An absent link explicitly selects `off`. Every selector rejects a current value 
 
 | Link | Meaning |
 |---|---|
-| `{place: "left" or "right", plugin: null, set}` | General content of the fixed window sidebar |
-| `{place: "window-left" or "window-right", plugin, set}` | Plugin content override of the fixed window sidebar |
+| `{place: "left", "right", "top" or "bottom", plugin: null, set}` | General content of the fixed window sidebar of that side |
+| `{place: "window-left", "window-right", "window-top" or "window-bottom", plugin, set}` | Plugin content override of the fixed window sidebar of that side |
 | `{place: "card-top", "card-bottom", "card-left", or "card-right", plugin, set}` | Default set for that internal side of the plugin's cards |
 
-Every `set` is a known set ID. Each place/plugin pair appears at most once. Reject plugin left/right links, null sets and rail links. Set IDs `off` and `inherit` are reserved. Fixed sidebar selection and override rail borders follow [external window sidebars](external-sidebars.md). The `left`/`right` switch hides its fixed sidebar without changing choices.
+Every `set` is a known set ID. Each place/plugin pair appears at most once. Reject plugin side links, null sets and rail links. Set IDs `off` and `inherit` are reserved. Fixed sidebar selection and override rail borders follow [external window sidebars](external-sidebars.md). The switch of a side hides its fixed sidebar without changing choices.
 
 `core.settings.link {place, plugin, set, scope}` accepts a set ID to store a link, or `off` to remove it. `inherit` fails with -32602 for every default link. The separate `core.card.sidebar.set` command still accepts `inherit` to remove a particular card's explicit override ([example model](example-model.md)).
 
@@ -181,13 +183,13 @@ The following values were constants in `plane.js` and `app.css`. They are core s
 |---|---|---|---|---|
 | `sidebarMinWidth` | 최소 폭 | 120 | 60–800 | Smallest width of an internal card sidebar |
 | `sidebarMaxWidth` | 최대 폭 | 480 | 60–800 | Largest width of an internal card sidebar |
-| `sidebarWidth` | 처음 폭 | 190 | 60–800 | Initial internal card-sidebar size and width of a new window sidebar without a saved width |
+| `sidebarWidth` | 처음 폭 | 190 | 60–800 | Initial internal card-sidebar size, and size on its axis of a window sidebar without a saved size: the width of a left or right sidebar, the height of a top or bottom sidebar |
 
 The three values share one range, 60 to 800 points, and their sliders use that range, so equal values sit at equal slider positions. The rows are named 최소 폭, 최대 폭, and 처음 폭 on one line under the group 사이드바 크기.
 
 A change that leaves `sidebarMinWidth` ≤ `sidebarWidth` ≤ `sidebarMaxWidth` false fails with -32602 (invalid params) and changes nothing. A stored card width outside the current range is drawn as stored until the grip changes it.
 
-The layout values that both workbenches read have one source, the chrome metrics of `workbench.json`: the card head `head-h` and foot `foot-h`, which also bound the drop zones, and the tab strip thresholds `tab-peek-w` and `tab-min-w`. A value written in the code of each workbench would be a second copy that drifts from the first. The left and right sidebar widths of a new space come from the `workspace.grid` cards of `environment.json`.
+The layout values that both workbenches read have one source, the chrome metrics of `workbench.json`: the card head `head-h` and foot `foot-h`, which also bound the drop zones, and the tab strip thresholds `tab-peek-w` and `tab-min-w`. A value written in the code of each workbench would be a second copy that drifts from the first. The window sidebar sizes of a new space come from the `workspace.grid` cards of `environment.json`.
 
 The lengths, ratios and durations of the workbench stylesheets (`app.css`, `library.css` and `overlay.html`) are the chrome metrics of `packages/workbench/workbench.json`. The workbench sets each of them as a custom property of the document root before the page draws, and the stylesheets read the custom properties; a stylesheet holds no literal length, ratio or duration. A media condition cannot read a custom property, so the workbench marks the document root with `data-library-narrow` while the window is at most `library-narrow-w` wide, and `library.css` narrows the library by that mark. The focus mark stands outside the body of the focused card on every side by `focus-mark-t`, the thickness of its stroke, so the stroke does not cover the surface.
 
@@ -218,10 +220,11 @@ The focus ring of such a control is the focus color of the system in the dark ap
 
 ## Acceptance
 
-- 일반 holds the sidebar appearance controls (`left`, `right`, both general links, the widths) and no plugin setting.
+- 일반 holds the sidebar appearance controls (`left`, `right`, `top`, `bottom`, the four general links, `sidebarOrder`, the widths) and no plugin setting.
 - Every setting of 일반, of a plugin page and of the set editor is drawn with the one control of its form in [controls](#controls); no choice is drawn as a row of buttons.
 - 사이드바 holds only the set list, 새 세트, and the editor. The editor has no control per registered section: its section controls are one select box and ▲ ▼ − per row, and one +.
 - The section rows choose, move, remove, and add sections through `core.settings.sets.row`; a repeated section is rejected.
 - 플러그인 shows a filtered list of the loaded plugins by name; a row opens the plugin page with its settings, sections, and sidebar choices, and 목록 returns to the list. The section shows no plugin description, version, sidecar or plugin operation; 플러그인 관리 closes the window and shows the plugin screen.
 - General, plugin-window and internal card choices remain independent through focus and tab changes. A disabled window column does not replace another plugin column.
-- The layout values change internal sidebar limits and initial size and new window-sidebar width.
+- The layout values change internal sidebar limits and initial size and the initial size of a window sidebar on its axis.
+- The order rows move a side up and down through `core.settings.change` with the whole order, and the window sidebars arrange in the new order.

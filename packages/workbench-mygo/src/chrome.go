@@ -71,12 +71,11 @@ func (s *Shell) drawChromeActs(c *ui.Context, browsing bool) {
 		s.chromeAct(c, "core.chrome.balance", "core.layout.balance", "카드 자동 정렬", "columns-3", false, nil)
 	}
 	if !browsing {
-		for _, side := range []struct{ key, name, title, icon string }{
-			{"left", "core.chrome.left", "좌측 사이드바 위치", "panel-left"},
-			{"right", "core.chrome.right", "우측 사이드바 위치", "panel-right"},
-		} {
-			on, _ := s.settings.Value(side.key).(bool) // silent: the settings store checks the type of the value.
-			s.chromeAct(c, side.name, "core.settings.set", side.title, side.icon, on, settingsPatchParam{map[string]any{side.key: !on}})
+		// The switch of each side shows or hides its window sidebar, in the order left, right, top, bottom
+		// (docs/spec/external-sidebars.md#window-controls).
+		for _, side := range layout.WindowSides {
+			on, _ := s.settings.Value(side).(bool) // silent: the settings store checks the type of the value.
+			s.chromeAct(c, "core.chrome."+side, "core.settings.set", sideNames[side]+" 사이드바 보이기", "panel-"+side, on, settingsPatchParam{map[string]any{side: !on}})
 		}
 	}
 	next, icon := "light", "sun"

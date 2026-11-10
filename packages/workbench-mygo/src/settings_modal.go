@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/ui"
+
+	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
 // The settings window of the mygo host (docs/spec/settings.md): native UI instead of the modal web view of the other hosts. A
@@ -415,9 +417,13 @@ func (s *Shell) buildGeneral(b *settingsBuilder) error {
 	if err != nil {
 		return err
 	}
-	rows := []settingsRow{s.row(b, "왼쪽 사이드바 보이기", s.toggle(b, "left")), s.row(b, "오른쪽 사이드바 보이기", s.toggle(b, "right"))}
-	for _, side := range [][2]string{{"left", "왼쪽 사이드바 세트"}, {"right", "오른쪽 사이드바 세트"}} {
-		row, err := s.linkChoice(b, side[1], side[0], "", sets, links)
+	// One fixed sidebar per side; the order sets which sidebar takes the room of the plane first (docs/spec/external-sidebars.md).
+	rows := []settingsRow{}
+	for _, side := range layout.WindowSides {
+		rows = append(rows, s.row(b, sideNames[side]+" 사이드바 보이기", s.toggle(b, side)))
+	}
+	for _, side := range layout.WindowSides {
+		row, err := s.linkChoice(b, sideNames[side]+" 사이드바 세트", side, "", sets, links)
 		if err != nil {
 			return err
 		}
@@ -426,10 +432,11 @@ func (s *Shell) buildGeneral(b *settingsBuilder) error {
 	if scope == "project" && s.settings.Overridden("links") {
 		rows = append(rows, settingsRow{controls: []*SettingsControl{b.resetButton("links", "전역 연결 사용")}})
 	}
-	b.group("사이드바", "표시 스위치는 해당 변의 모든 창 사이드바에 적용된다. 일반 세트와 플러그인 창 세트는 각각 독립된 열에 표시된다.", rows...)
+	rows = append(rows, s.orderRows(b, "sidebarOrder", "사이드바 순서", sideNames, scope)...)
+	b.group("사이드바", "한 변에는 고정 사이드바가 하나 있고, 포커스된 플러그인의 창 세트는 같은 자리의 내용을 바꾼다. 순서가 앞선 변의 사이드바가 먼저 공간을 차지한다.", rows...)
 
 	widths := catalog.Settings.LayoutRanges
-	b.group("사이드바 크기", "사이드바의 폭(pt). 처음 폭은 카드 안 사이드바와 새 창 사이드바 열이 여는 폭이며 최소 폭과 최대 폭 사이여야 한다.",
+	b.group("사이드바 크기", "사이드바의 폭(pt). 처음 폭은 카드 안 사이드바와 저장 크기가 없는 창 사이드바가 여는 크기(위·아래 사이드바는 높이)이며 최소 폭과 최대 폭 사이여야 한다.",
 		s.row(b, "최소 폭", s.slide(b, "sidebarMinWidth", widths["sidebarMinWidth"], "pt")),
 		s.row(b, "최대 폭", s.slide(b, "sidebarMaxWidth", widths["sidebarMaxWidth"], "pt")),
 		s.row(b, "처음 폭", s.slide(b, "sidebarWidth", widths["sidebarWidth"], "pt")))
@@ -568,11 +575,15 @@ func (s *Shell) buildPluginPage(b *settingsBuilder, plugin *LoadedPlugin) error 
 		}
 		return rows, nil
 	}
-	window, err := choices([][2]string{{"window-left", "창 왼쪽 사이드바"}, {"window-right", "창 오른쪽 사이드바"}})
+	sides := [][2]string{}
+	for _, side := range layout.WindowSides {
+		sides = append(sides, [2]string{"window-" + side, "창 " + sideNames[side] + " 사이드바"})
+	}
+	window, err := choices(sides)
 	if err != nil {
 		return err
 	}
-	b.group("창 사이드바", "포커스와 무관하게 창 가장자리에 표시한다.", window...)
+	b.group("창 사이드바", "이 플러그인의 탭이 포커스 카드의 활성 탭인 동안 그 변 고정 사이드바의 내용을 이 세트로 바꾼다.", window...)
 	if plugin.Surface {
 		card, err := choices([][2]string{{"card-left", "카드 왼쪽 사이드바"}, {"card-right", "카드 오른쪽 사이드바"}, {"card-top", "카드 상단 사이드바"}, {"card-bottom", "카드 하단 사이드바"}})
 		if err != nil {
@@ -734,6 +745,7 @@ type settingsModalStatus struct {
 	Editing  *string            `json:"editing"`
 	Scroll   float64            `json:"scroll"`
 	Card     map[string]float64 `json:"card"`
+	Pane     map[string]float64 `json:"pane"`
 }
 
 type settingsRowValue struct {
@@ -773,6 +785,16 @@ func (s *Shell) settingsStatus() (any, error) {
 	status.Editing = optional(w.editing)
 	x, y, width, height := s.settingsCard()
 	status.Card = map[string]float64{"x": x, "y": y, "w": width, "h": height}
+	// The pane is the box that scrolls, under the fixed head of the card and beside its section nav: a control is reachable only
+	// inside it (docs/spec/settings.md). The card draws its children inside its border, so the pane starts one border width in.
+	pane := s.readSettingsPane()
+	border := float64(2 * s.palette.BorderWidth)
+	status.Pane = map[string]float64{
+		"x": x + float64(s.palette.BorderWidth) + float64(pane.navW),
+		"y": y + float64(s.palette.BorderWidth) + float64(pane.headH),
+		"w": width - border - float64(pane.navW),
+		"h": height - border - float64(pane.headH),
+	}
 	return status, nil
 }
 
@@ -1397,4 +1419,33 @@ func (s *Shell) sendTraceSwitch() {
 		return
 	}
 	send()
+}
+
+// orderRows are the rows of an order of listed values (docs/spec/settings.md#controls): one row per value in the current order, named by
+// names, with ▲ (absent on the first row) and ▼ (absent on the last row). A button swaps its row with the row above or below and runs
+// core.settings.change with the whole new order.
+func (s *Shell) orderRows(b *settingsBuilder, key, label string, names map[string]string, scope string) []settingsRow {
+	now, _ := s.settings.Value(key).([]any) // silent: the settings store checks that the value is an order of its values.
+	rows := []settingsRow{}
+	for index, item := range now {
+		name, _ := item.(string) // silent: the settings store checks that the value is an order of its values.
+		row := settingsRow{description: names[name], list: true}
+		if index == 0 {
+			row.name = label
+		}
+		act := func(direction, mark string, other int) {
+			next := slices.Clone(now)
+			next[index], next[other] = next[other], next[index]
+			row.controls = append(row.controls, b.button(fmt.Sprintf("order:%s:%d:%s", key, index, direction), "core.settings-modal.order", mark,
+				"core.settings.change", map[string]any{"key": key, "value": next, "scope": scope}))
+		}
+		if index > 0 {
+			act("up", "▲", index-1)
+		}
+		if index < len(now)-1 {
+			act("down", "▼", index+1)
+		}
+		rows = append(rows, row)
+	}
+	return rows
 }

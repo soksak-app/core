@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"math"
 	"reflect"
 	"slices"
 	"strconv"
@@ -36,6 +37,9 @@ type modalStatus struct {
 	Card struct {
 		X, Y, W, H float64
 	} `json:"card"`
+	Pane struct {
+		X, Y, W, H float64
+	} `json:"pane"`
 	Controls []struct {
 		Name    string   `json:"name"`
 		Index   int      `json:"index"`
@@ -217,6 +221,27 @@ func TestTheGeneralSectionDrawsEachFormWithItsOneControl(t *testing.T) {
 		!slices.Contains(got, "sidebarWidth") || !slices.Contains(got, "memorySaverDelay") {
 		t.Fatalf("settings %q", got)
 	}
+	for _, want := range []string{"top", "bottom", "link:right:", "link:top:", "link:bottom:"} {
+		if !slices.Contains(status.keys("core.settings-modal.set"), want) {
+			t.Fatalf("no control %s", want)
+		}
+	}
+	// The order of the window sidebars: one row per side with ▲ (not on the first row) and ▼ (not on the last row), each running
+	// core.settings.change with the whole new order (docs/spec/settings.md#controls).
+	if got := status.keys("core.settings-modal.order"); !slices.Equal(got, []string{"order:sidebarOrder:0:down", "order:sidebarOrder:1:up",
+		"order:sidebarOrder:1:down", "order:sidebarOrder:2:up", "order:sidebarOrder:2:down", "order:sidebarOrder:3:up"}) {
+		t.Fatalf("order %q", got)
+	}
+	for _, control := range status.Controls {
+		if control.Name == "core.settings-modal.order" && *control.Key == "order:sidebarOrder:0:down" {
+			if got, _ := json.Marshal(control.Command); string(got) != `{"name":"core.settings.change","params":{"key":"sidebarOrder","scope":"common","value":["right","left","top","bottom"]}}` {
+				t.Fatalf("the first ▼ runs %s", got)
+			}
+		}
+	}
+	if !f.tester.HasText("한 변에는 고정 사이드바가 하나 있고, 포커스된 플러그인의 창 세트는 같은 자리의 내용을 바꾼다. 순서가 앞선 변의 사이드바가 먼저 공간을 차지한다.") {
+		t.Fatalf("the sidebar group does not state one fixed sidebar per side")
+	}
 	if got := len(status.keys("core.settings-modal.theme")); got != 10 {
 		t.Fatalf("%d theme swatches", got)
 	}
@@ -257,7 +282,8 @@ func TestASwitchAndASwatchRunTheirCommandAndTheChangeIsWritten(t *testing.T) {
 
 func TestASelectBoxASliderAndADebugSwitchChangeTheirSettings(t *testing.T) {
 	f := opened(t)
-	f.tester.SetSize(1200, 2400)
+	// The window is tall enough to show the whole general section, whose sidebar group holds the four sides and their order.
+	f.tester.SetSize(1200, 3200)
 	f.settle()
 	f.click("core.settings-modal.set", "mode")
 	if err := f.tester.Click("밝음"); err != nil {
@@ -426,7 +452,7 @@ func TestAPluginPageShowsItsSettingsSectionsAndSidebarChoices(t *testing.T) {
 		t.Fatalf("status %+v", status)
 	}
 	keys := status.keys("core.settings-modal.set")
-	for _, want := range []string{"acme.level", "acme.mode", "link:window-left:acme", "link:window-right:acme", "link:card-left:acme", "link:card-bottom:acme"} {
+	for _, want := range []string{"acme.level", "acme.mode", "link:window-left:acme", "link:window-right:acme", "link:window-top:acme", "link:window-bottom:acme", "link:card-left:acme", "link:card-bottom:acme"} {
 		if !slices.Contains(keys, want) {
 			t.Fatalf("no control %s in %q", want, keys)
 		}
@@ -1463,6 +1489,50 @@ func TestTheNameOfASettingsGroupIsBold(t *testing.T) {
 
 // TestScrollingTheSettingsCardRedrawsTheCardAlone checks that the wheel over the open card changes the pixels of the card,
 // not those of the blurred workbench below it, which nothing changed.
+// The status reports the pane that scrolls: the box under the fixed head of the card and beside its section nav, the only box a
+// control of the shown content is reachable in, because the head covers the content that the scroll clips (docs/spec/settings.md).
+func TestTheSettingsStatusReportsThePaneOfTheCard(t *testing.T) {
+	f := openedShell(t)
+	f.click("core.chrome.settings", "")
+	status := f.modal()
+	card, pane := status.Card, status.Pane
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	headH, ok := declared.Metric("set-card-head-h")
+	if !ok {
+		t.Fatal("no metric set-card-head-h")
+	}
+	navW, ok := declared.Metric("set-nav-w")
+	if !ok {
+		t.Fatal("no metric set-nav-w")
+	}
+	palette, err := declared.DefaultPalette()
+	if err != nil {
+		t.Fatal(err)
+	}
+	border := float64(2 * palette.BorderWidth)
+	near := func(have, want float64) bool { return math.Abs(have-want) <= 0.01 }
+	for _, check := range []struct {
+		name string
+		have float64
+		want float64
+	}{
+		{"the pane does not start at the nav", pane.X, card.X + float64(palette.BorderWidth) + navW},
+		{"the pane does not start under the head", pane.Y, card.Y + float64(palette.BorderWidth) + headH},
+		{"the pane is not as wide as the card beside the nav", pane.W, card.W - border - navW},
+		{"the pane is not as tall as the card under the head", pane.H, card.H - border - headH},
+	} {
+		if !near(check.have, check.want) {
+			t.Errorf("%s: pane %+v of card %+v is %.2f, want %.2f", check.name, pane, card, check.have, check.want)
+		}
+	}
+	if pane.X < card.X || pane.Y < card.Y || pane.X+pane.W > card.X+card.W || pane.Y+pane.H > card.Y+card.H {
+		t.Errorf("the pane %+v does not lie inside the card %+v", pane, card)
+	}
+}
+
 func TestScrollingTheSettingsCardRedrawsTheCardAlone(t *testing.T) {
 	f := openedShell(t)
 	f.click("core.chrome.settings", "")

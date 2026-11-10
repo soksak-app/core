@@ -20,6 +20,7 @@ import { icon } from "./icons.js";
 import { onGripDrag, showValue } from "./card.js";
 import { commandOf, delegate, mark, run } from "./commands.js";
 import { pluginUnits } from "./environment.js";
+import { SIDE_NAMES, WINDOW_SIDES } from "./window-sidebars.js";
 import { matchPlugins } from "./plugin-search.js";
 import { restoreScroll, scrollPositions } from "./scroll-keep.js";
 import { hasSection, section, sectionNames } from "./registry.js";
@@ -271,15 +272,15 @@ function drawGeneral() {
     row("프로젝트 탭 위치", choose("projectTabs", named("projectTabs", { top: "위", left: "왼쪽" }), value("projectTabs"))),
   ]));
 
-  body.append(group("사이드바", "표시 스위치는 해당 변의 모든 창 사이드바에 적용된다. 일반 세트와 플러그인 창 세트는 각각 독립된 열에 표시된다.", [
-    row("왼쪽 사이드바 보이기", toggle("left", value("left"))),
-    row("오른쪽 사이드바 보이기", toggle("right", value("right"))),
-    row("왼쪽 사이드바 세트", choose("link:left:", generalOptions(), choiceOf("left", null))),
-    row("오른쪽 사이드바 세트", choose("link:right:", generalOptions(), choiceOf("right", null))),
+  // One fixed sidebar per side; the order sets which sidebar takes the room of the plane first (docs/spec/external-sidebars.md).
+  body.append(group("사이드바", "한 변에는 고정 사이드바가 하나 있고, 포커스된 플러그인의 창 세트는 같은 자리의 내용을 바꾼다. 순서가 앞선 변의 사이드바가 먼저 공간을 차지한다.", [
+    ...WINDOW_SIDES.map((side) => row(`${SIDE_NAMES[side]} 사이드바 보이기`, toggle(side, value(side)))),
+    ...WINDOW_SIDES.map((side) => row(`${SIDE_NAMES[side]} 사이드바 세트`, choose(`link:${side}:`, generalOptions(), choiceOf(side, null)))),
     ...(scope === "project" && overridden("links") ? [row("", press("reset:links", "전역 연결 사용"))] : []),
+    ...orderRows("sidebarOrder", "사이드바 순서", SIDE_NAMES),
   ]));
 
-  body.append(group("사이드바 크기", "사이드바의 폭(pt). 처음 폭은 카드 안 사이드바와 새 창 사이드바 열이 여는 폭이며 최소 폭과 최대 폭 사이여야 한다.",
+  body.append(group("사이드바 크기", "사이드바의 폭(pt). 처음 폭은 카드 안 사이드바와 저장 크기가 없는 창 사이드바가 여는 크기(위·아래 사이드바는 높이)이며 최소 폭과 최대 폭 사이여야 한다.",
     Object.entries(LAYOUT_RANGES).map(([key, [min, max]]) => row(SIZE_LABELS[key], slide(key, min, max, value(key), "pt")))));
 
   body.append(group("표시", "배치는 그대로 두고 보이는 모습만 바꾼다.", [
@@ -323,6 +324,30 @@ function button(key, name, label, command, params, on = null) {
   if (on !== null) el.dataset.on = String(on);
   el.textContent = label;
   return el;
+}
+
+/**
+ * The rows of an order of listed values (docs/spec/settings.md#controls): one row per value in the current order, named by names, with ▲
+ * (absent on the first row) and ▼ (absent on the last row). A button swaps its row with the row above or below and runs
+ * core.settings.change with the whole new order.
+ */
+function orderRows(key, label, names) {
+  const now = value(key);
+  return now.map((item, index) => {
+    const acts = document.createElement("span");
+    acts.className = "set-seg";
+    const act = (direction, mark, other) => {
+      const next = [...now];
+      [next[index], next[other]] = [next[other], next[index]];
+      acts.append(button(`order:${key}:${index}:${direction}`, "core.settings-modal.order", mark, "core.settings.change", { key, value: next, scope }));
+    };
+    if (index > 0) act("up", "▲", index - 1);
+    if (index < now.length - 1) act("down", "▼", index + 1);
+    const line = document.createElement("span");
+    line.className = "set-seg";
+    line.append(names[item], acts);
+    return row(index === 0 ? label : "", line);
+  });
 }
 
 /** The set entries of the set select box. The value is the set id. */
@@ -413,10 +438,9 @@ function drawPluginPage(unit) {
   names.textContent = unit.sections.length ? sectionNames(unit.sections).join(", ") : "이 플러그인에는 섹션이 없습니다.";
   body.append(group("섹션", "이 플러그인이 사이드바에 제공하는 섹션.", [names]));
 
-  body.append(group("창 사이드바", "포커스와 무관하게 창 가장자리에 표시한다.", [
-    row("창 왼쪽 사이드바", choose(`link:window-left:${unit.id}`, generalOptions(), choiceOf("window-left", unit.id))),
-    row("창 오른쪽 사이드바", choose(`link:window-right:${unit.id}`, generalOptions(), choiceOf("window-right", unit.id))),
-  ]));
+  body.append(group("창 사이드바", "이 플러그인의 탭이 포커스 카드의 활성 탭인 동안 그 변 고정 사이드바의 내용을 이 세트로 바꾼다.",
+    WINDOW_SIDES.map((side) => row(`창 ${SIDE_NAMES[side]} 사이드바`,
+      choose(`link:window-${side}:${unit.id}`, generalOptions(), choiceOf(`window-${side}`, unit.id))))));
   if (unit.surface) body.append(group("카드 사이드바", "카드 내부의 네 변에 표시한다.", [
     ...[["left", "왼쪽"], ["right", "오른쪽"], ["top", "상단"], ["bottom", "하단"]].map(([side,label]) =>
       row(`카드 ${label} 사이드바`, choose(`link:card-${side}:${unit.id}`, generalOptions(), choiceOf(`card-${side}`,unit.id)))),
@@ -620,10 +644,12 @@ export function settingsModalState() {
     description: card.querySelector(`[data-describes="${CSS.escape(el.dataset.row)}"]`)?.textContent ?? null,
   }));
   const r = card.getBoundingClientRect();
+  // The pane is the box that scrolls, under the fixed head of the card: a control is reachable only inside it (docs/spec/settings.md).
+  const p = body.getBoundingClientRect();
   const listed = [...card.querySelectorAll("[data-listed]")].map((el) => el.dataset.listed);
   return { open: true, rows, query, listed, section: here, scope, plugin: here === "plugins" ? chosen : null, editing,
     scroll: native ? paneScroll : body.scrollTop,
-    card: { x: r.left, y: r.top, w: r.width, h: r.height }, controls };
+    card: { x: r.left, y: r.top, w: r.width, h: r.height }, pane: { x: p.left, y: p.top, w: p.width, h: p.height }, controls };
 }
 
 /** Changes the section of the modal. */

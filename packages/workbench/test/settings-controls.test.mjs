@@ -50,7 +50,7 @@ test("every setting form is drawn with its one control", async (t) => {
     assert.deepEqual(controlOf("fullRule").options, settings.CHOICES.fullRule);
     assert.equal(document.querySelectorAll('[data-key^="pick:"]:not([data-expose="core.settings-modal.scope"])').length, 0,
       "a choice is drawn as buttons");
-    for (const key of ["left", "right", "dim"]) assert.equal(controlOf(key).type, "checkbox", `${key} is not a switch`);
+    for (const key of ["left", "right", "top", "bottom", "dim"]) assert.equal(controlOf(key).type, "checkbox", `${key} is not a switch`);
     for (const key of ["gap", "radius", "size", "sidebarMinWidth", "sidebarMaxWidth", "sidebarWidth"]) {
       assert.equal(controlOf(key).type, "range", `${key} is not a slider`);
     }
@@ -60,6 +60,17 @@ test("every setting form is drawn with its one control", async (t) => {
     assert.deepEqual([controlOf("memorySaverDelay").type, delay.min, delay.max, delay.nextSibling.textContent],
       ["range", "5", "720", "120분"]);
     assert.equal(controlOf("link:left:").tag, "SELECT");
+    for (const side of ["right", "top", "bottom"]) assert.equal(controlOf(`link:${side}:`).tag, "SELECT", `${side} has no set select`);
+    // The order of the window sidebars: one row per side with ▲ (not on the first row) and ▼ (not on the last row), each running
+    // core.settings.change with the whole new order (docs/spec/settings.md#controls).
+    const order = ui.settingsModalState().controls.filter((item) => item.name === "core.settings-modal.order");
+    assert.deepEqual(order.map((item) => item.key), ["order:sidebarOrder:0:down", "order:sidebarOrder:1:up", "order:sidebarOrder:1:down",
+      "order:sidebarOrder:2:up", "order:sidebarOrder:2:down", "order:sidebarOrder:3:up"]);
+    assert.deepEqual(order[0].command, { name: "core.settings.change", params: { key: "sidebarOrder", value: ["right", "left", "top", "bottom"], scope: "common" } });
+    assert.deepEqual(order[5].command.params.value, ["left", "right", "bottom", "top"]);
+    const group = [...document.querySelectorAll(".set-group")].find((item) => item.textContent.includes("사이드바 순서"));
+    assert.ok(group?.textContent.includes("한 변에는 고정 사이드바가 하나 있고"), "the sidebar group does not state one fixed sidebar per side");
+    assert.ok(!group.textContent.includes("독립된 열"), "the sidebar group still states independent columns");
     assert.equal(document.querySelectorAll('[data-expose="core.settings-modal.theme"]').length, settings.THEMES.length);
 
     ui.showSection("plugins");
@@ -73,6 +84,8 @@ test("every setting form is drawn with its one control", async (t) => {
     for (const key of ["fixture.family", "fixture.home"]) {
       assert.ok(document.querySelector(`[data-set="${key}"]`).classList.contains("text-field"), `${key} does not fill its row`);
     }
+    for (const side of ["left", "right", "top", "bottom"]) assert.equal(controlOf(`link:window-${side}:fixture`).tag, "SELECT", `no window ${side} selector`);
+    assert.ok(!document.body.textContent.includes("포커스와 무관하게"), "the plugin page states that the window sets ignore the focus");
 
     ui.showSection("sidebars");
     ui.editSet("set-1");
@@ -81,6 +94,37 @@ test("every setting form is drawn with its one control", async (t) => {
       ["core.settings-modal.set", "list", ["list", "tabs"], { name: "core.settings.sets.update", params: { id: "set-1", scope: "common" } }]);
     assert.equal(document.querySelector('[data-set="layout:set-1"]').dataset.value, "layout");
     assert.ok(document.querySelector('[data-set="title:set-1"]').classList.contains("text-field"), "the set name does not fill its row");
+  } finally {
+    ui.closeSettings();
+    dom.window.close();
+  }
+});
+
+// The modal status reports the pane that scrolls beside the card: the head of the card covers the content that the scroll clips, so
+// a control is reachable only inside the pane (docs/spec/settings.md).
+test("the settings modal reports the pane that scrolls beside the card", async (t) => {
+  const dom = new JSDOM("<body><div id=plane></div></body>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  globalThis.window = dom.window;
+  globalThis.CSS = dom.window.CSS ?? { escape: (text) => text };
+  globalThis.addEventListener = dom.window.addEventListener.bind(dom.window);
+  t.mock.module("../compositor.js", { exports: {
+    ...await import("../compositor.js"), standIn: () => {},
+  } });
+  t.mock.module("../environment.js", { exports: { pluginUnits: () => [] } });
+  const ui = await import("../settings-ui.js?pane");
+  try {
+    ui.openSettings();
+    ui.showSection("general");
+    const card = document.getElementById("settings");
+    const pane = card.querySelector(".set-card__pane");
+    const boxes = new Map([[card, { left: 320, top: 72, width: 560, height: 540 }], [pane, { left: 468, top: 118, width: 404, height: 486 }]]);
+    for (const [el, box] of boxes) el.getBoundingClientRect = () => ({ ...box, right: box.left + box.width, bottom: box.top + box.height, x: box.left, y: box.top });
+    const { card: reportedCard, pane: reportedPane } = ui.settingsModalState();
+    assert.deepEqual(reportedCard, { x: 320, y: 72, w: 560, h: 540 }, "the card is not the rectangle of the settings card");
+    assert.deepEqual(reportedPane, { x: 468, y: 118, w: 404, h: 486 }, "the pane is not the rectangle of the scrolling box");
+    assert.ok(reportedPane.y > reportedCard.y && reportedPane.y + reportedPane.h < reportedCard.y + reportedCard.h,
+      "the pane does not lie under the head inside the card");
   } finally {
     ui.closeSettings();
     dom.window.close();

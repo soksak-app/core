@@ -1,3 +1,4 @@
+import { WINDOW_SIDES } from "@soksak/plugin-api";
 // Registry of plugins and sections.
 //
 // A plugin has two things, a `+` menu item and a surface, and it has no sidebar. The sidebar
@@ -71,8 +72,8 @@ export const keepsBackground = ({ plugin: id, kind }) => kind === "tab" && Boole
 /** Returns whether the plugin is registered. A stored layout may have been made in another environment. */
 export const hasPlugin = (id) => registeredPlugins.some((p) => p.id === id);
 
-/** Decides whether it is a fixed window sidebar card. Registration is validated at the environment and storage boundaries. */
-export const isPlace = (id) => id === "left" || id === "right";
+/** Decides whether it is a fixed window sidebar card, whose id is the side of the window. Registration is validated at the environment and storage boundaries. */
+export const isPlace = (id) => WINDOW_SIDES.includes(id);
 
 /** Looks up by id. Throws if the id is not registered. */
 export function section(id) {

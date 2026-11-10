@@ -123,7 +123,7 @@ func (s *Shell) storedSurfaceKept() (func(id string) bool, error) {
 			return false
 		}
 		sidebar := parts[1]
-		if sidebar == "left" || sidebar == "right" {
+		if layout.IsWindowSide(sidebar) {
 			return true
 		}
 		colon := strings.LastIndex(sidebar, ":")

@@ -55,6 +55,22 @@ for (const kase of stored.cases) {
   });
 }
 
+const { Soksak } = await import("soksak");
+const windowSidebars = await import("../window-sidebars.js");
+const arranges = read("window-sidebars.json");
+for (const kase of arranges.cases) {
+  test(`window sidebars: ${kase.name}`, () => {
+    const grid = new Soksak(structuredClone(kase.state), arranges.options);
+    const records = structuredClone(kase.records);
+    check(() => windowSidebars.arrangeWindowSidebars(grid, kase.order, kase.sides, records, kase.initial, (side) => kase.shown.includes(side)),
+      kase, "arrange");
+    if (Object.hasOwn(kase, "throws")) return;
+    const cards = grid.cards.map(({ id, c0, c1, r0, r1, fixed }) => ({ id, c0, c1, r0, r1, fixed })).sort((a, b) => (a.id < b.id ? -1 : 1));
+    assert.deepEqual(cards, kase.cards, "cards");
+    assert.deepEqual(records, kase.keeps, "records");
+  });
+}
+
 for (const kase of read("spaces.json").cases) {
   test(`spaces: ${kase.name}`, () => {
     const project = structuredClone(kase.project);

@@ -151,7 +151,7 @@
       },
       {
         "name": "core.sidebars",
-        "description": "The drawn sidebars in workbench order: the sidebar (`left` or `right` for a fixed window sidebar, `<card>:<side>` for an internal card sidebar), placement (`window` or `card`), its set, layout, horizontal or vertical orientation, selected tab or null, the card and active tab its sections receive (for a fixed window sidebar, the focused content card and its active tab while a plugin override applies, otherwise null), the overriding plugin and side of a fixed window sidebar or null, its rectangle, and each section's id, name, fold state, whether its tab text is clipped (always false in list layout), `surfaceId` (the section surface `<space>/<sidebar>/<section>`), `surface` (the surface that the section follows, as the sidebar reports it), its declared `height` (`fill` or pixels), `size` (the height that the person dragged the section to, or null), `mounted` (whether the section view is mounted), `phase` (the page status of the section view or null before its mount) and `error` (its mount error or null).",
+        "description": "The drawn sidebars in workbench order: the sidebar (`left`, `right`, `top` or `bottom` for the fixed window sidebar of that side, `<card>:<side>` for an internal card sidebar), placement (`window` or `card`), its set, layout, horizontal or vertical orientation (horizontal for a top or bottom window sidebar), selected tab or null, the card and active tab its sections receive (for a fixed window sidebar, the focused content card and its active tab while a plugin override applies, otherwise null), the overriding plugin and side of a fixed window sidebar or null, its rectangle, and each section's id, name, fold state, whether its tab text is clipped (always false in list layout), `surfaceId` (the section surface `<space>/<sidebar>/<section>`), `surface` (the surface that the section follows, as the sidebar reports it), its declared `height` (`fill` or pixels), `size` (the height that the person dragged the section to, or null), `mounted` (whether the section view is mounted), `phase` (the page status of the section view or null before its mount) and `error` (its mount error or null).",
         "schema": {
           "type": "array",
           "items": {
@@ -1930,7 +1930,7 @@
       },
       {
         "name": "core.rail",
-        "description": "The rail outline path in plane coordinates and the focus corner mark rectangle; null without a layout.",
+        "description": "The rail outline path in plane coordinates, the groups that each join a content card with the fixed window sidebars of any side that its plugin overrides, and the focus corner mark rectangle; null without a layout.",
         "schema": {
           "type": [
             "object",
@@ -2670,8 +2670,12 @@
               "enum": [
                 "left",
                 "right",
+                "top",
+                "bottom",
                 "window-left",
                 "window-right",
+                "window-top",
+                "window-bottom",
                 "card-left",
                 "card-right",
                 "card-top",
@@ -3995,11 +3999,19 @@
       },
       {
         "name": "core.chrome.left",
-        "description": "The left sidebar switch."
+        "description": "The switch of the left window sidebar, the first of the four side switches; it runs core.settings.set with the negated left setting and is pressed while that setting is true."
       },
       {
         "name": "core.chrome.right",
-        "description": "The right sidebar switch."
+        "description": "The switch of the right window sidebar, after the left one; it runs core.settings.set with the negated right setting and is pressed while that setting is true."
+      },
+      {
+        "name": "core.chrome.top",
+        "description": "The switch of the top window sidebar, after the right one; it runs core.settings.set with the negated top setting and is pressed while that setting is true."
+      },
+      {
+        "name": "core.chrome.bottom",
+        "description": "The switch of the bottom window sidebar, after the top one; it runs core.settings.set with the negated bottom setting and is pressed while that setting is true."
       },
       {
         "name": "core.chrome.mode",
@@ -4063,12 +4075,12 @@
       },
       {
         "name": "core.sidebar.status",
-        "description": "The status lines that end the fixed left and right window sidebars in workbench order.",
+        "description": "The status lines that end the fixed window sidebars of the sides left, right, top and bottom in workbench order.",
         "many": true
       },
       {
         "name": "core.sidebar.fold",
-        "description": "The fold controls at the end of the window sidebar status lines in workbench order; each turns its sidebar off with core.settings.set, and the window header control turns it on again.",
+        "description": "The fold controls at the end of the window sidebar status lines in workbench order; each turns its sidebar off with core.settings.set, and the window header control of its side turns it on again.",
         "many": true
       },
       {
@@ -4566,6 +4578,11 @@
       {
         "name": "core.settings-modal.row-act",
         "description": "The ▲, ▼, and − buttons of the set editor rows in workbench order.",
+        "many": true
+      },
+      {
+        "name": "core.settings-modal.order",
+        "description": "The ▲ and ▼ buttons of the order rows of a list setting (사이드바 순서) in workbench order; each runs core.settings.change with the whole new order.",
         "many": true
       },
       {

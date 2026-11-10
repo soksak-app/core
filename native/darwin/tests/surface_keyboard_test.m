@@ -1,15 +1,18 @@
 // The keyboard of a window follows the active surface of the card with the focus ring (docs/spec/native-surfaces.md#keyboard-of-a-surface).
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
+#import "host_api_webview.h"
 #import "image_region.h"
 #import "input_inject.h"
 #import "input_press_context.h"
 #import "event_ring.h"
 #import "support/records.h"
+#import "main_thread.h"
 #import "webview_geometry.h"
 #import "window_facts.h"
 
 static int failures;
+static void runDirectly(void (^work)(void)) { work(); }
 static void check(BOOL ok, const char *message) {
     fprintf(ok ? stdout : stderr, "%s: %s\n", ok ? "PASS" : "FAIL", message);
     if (!ok) failures++;
@@ -72,6 +75,7 @@ static void placeRegion(void *region) {
 }
 
 int main(void) { @autoreleasepool {
+    hostInstallMainThread(runDirectly, runDirectly);
     [NSApplication sharedApplication];
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 800, 500)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
@@ -466,6 +470,25 @@ int main(void) { @autoreleasepool {
     check([unheldModal isEqual:@"m"],
         [NSString stringWithFormat:@"a key after the release of a press on a modal web view reaches the region at once, got \"%@\"", unheldModal].UTF8String);
     [modal removeFromSuperview];
+    // A press on a child web view of the application that no surface holds, a modal document, holds nothing either: the document
+    // of the child answers no keyboard decision of the workbench, so the release of that press must not open the decision hold
+    // (webview_geometry.m pressOnWorkbench). Without this, every later input of the window waits for a decision that never comes.
+    [holdingMain loadHTMLString:@"<html></html>" baseURL:[NSURL URLWithString:@"http://localhost/"]];
+    runEvents(0.2);
+    void *child = nativeWebviewCreate((uintptr_t)holding, 77, "modal:test", "", 0, 0, 400, 500, false, false);
+    check(child != NULL, "the child web view of the modal is created");
+    if (child) {
+        NSString *modalKeys = regionKeys(^{
+            check(sp_input_pointer(holding, 200, 250, 1, 0, 0, 0) == SP_INPUT_DELIVERED, "a press on the modal child is delivered");
+            check(sp_input_pointer(holding, 200, 250, 3, 0, 0, 0) == SP_INPUT_DELIVERED, "its release is delivered");
+            [holding makeFirstResponder:(NSResponder *)heldRegion];
+            typeKeys(holding, "z");
+            runQueuedEvents();
+        });
+        check([modalKeys isEqual:@"z"], [NSString stringWithFormat:@"a key after the release of a press on a modal child reaches the region at once, got \"%@\"", modalKeys].UTF8String);
+        check(holding.firstResponder == (NSResponder *)heldRegion, "a press on the modal child leaves the keyboard where the test put it");
+        nativeWebviewClose(child);
+    }
     sp_window_focus_workbench(holding);
 
     // R1: the keys after the release of a press on the workbench wait for the decided call and reach its target in order.

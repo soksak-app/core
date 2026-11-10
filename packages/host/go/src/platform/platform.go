@@ -566,6 +566,9 @@ type Platform interface {
 	// presents. presented is called on the UI thread when the view presents. abandon ends the join without presentation and is
 	// nil when joined is false, which means that no transaction of ticket is open.
 	JoinView(window Window, ticket uint64, view unsafe.Pointer, presented func()) (abandon func() error, joined bool, err error)
+	// AfterViewPresentation calls presented on the worker after the view webview presented its next frame, and tells whether it
+	// started that wait. A view that closes before it presents calls nothing.
+	AfterViewPresentation(view unsafe.Pointer, presented func()) bool
 	// StartPageTitlebar sets the title bar of the window to height (pt) when a new page starts. For a visible window, it sets it inside the start
 	// transaction of ticket and commits it together with the first display of the new page (surfaceLayoutStartPage). It calls ready on the
 	// UI thread after setting it or after a failure. Call it on the UI thread.

@@ -817,13 +817,15 @@ const modalChanged = () => { for (const fn of modalListeners) fn(); };
 let modalFrame = null;
 
 /**
- * The place of an element of the open modal when the main document hides that modal, so that the element has no box of its own
- * (docs/spec/exposure.md): the rectangle that the modal document reported, with the frame of the modal as its document origin. It
- * is null for any other element, and refuses when the modal document reported no rectangle for the element.
+ * The place of an element of the open modal when a native modal draws the copy of it that the person sees
+ * (docs/spec/exposure.md): the rectangle that the modal document reported, with the frame of the modal as its document origin.
+ * The copy scrolls and redraws apart from the main document, so the rectangle of the main document would name a place the person
+ * does not see. The modal root itself keeps the rectangle of the main document, because the copy holds its children and no element
+ * of its name. It is null for any other element, and refuses when the modal document reported no rectangle for the element.
  */
 export function overlayElementRect(element) {
   const el = shown ? document.getElementById(shown) : null;
-  if (!el?.hidden || !el.contains(element)) return null;
+  if (!el || el === element || !el.contains(element)) return null;
   if (!modalDocument?.elements) throw new Error(`modal ${shown} has not reported its elements`);
   const name = element.dataset.expose;
   const index = [...el.querySelectorAll("[data-expose]")].filter((other) => other.dataset.expose === name).indexOf(element);

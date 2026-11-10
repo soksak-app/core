@@ -6,13 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 )
 
 // The stored layout of a space (docs/spec/projects.md#persistence): the check that the layout opens in the current environment, and
-// the width records of the fixed window sidebars. The stored form is JSON that the model reads member by member, so a member of
+// the size records of the fixed window sidebars. The stored form is JSON that the model reads member by member, so a member of
 // another kind is refused as the workbench refuses it.
 
 // PluginUnit is a loaded plugin as the stored layout check reads it: its id and whether it declares a surface.
@@ -21,10 +22,45 @@ type PluginUnit struct {
 	Surface bool   `json:"surface"`
 }
 
-// WindowSidebar is the width record of a fixed window sidebar.
+// WindowSidebar is the size record of a fixed window sidebar: the width of a left or right sidebar, the height of a top or bottom
+// sidebar (docs/spec/external-sidebars.md). The member of the other axis is zero and not written.
 type WindowSidebar struct {
-	Width float64 `json:"width"`
+	Width  float64 `json:"width,omitempty"`
+	Height float64 `json:"height,omitempty"`
 }
+
+// WindowSides are the sides of a window; each holds at most one fixed window sidebar, whose card id is the side.
+var WindowSides = []string{"left", "right", "top", "bottom"}
+
+// IsWindowSide is whether id names a side of the window, and so the fixed window sidebar of that side.
+func IsWindowSide(id string) bool { return slices.Contains(WindowSides, id) }
+
+// WindowAxis is the axis of the sidebar of a side: x for left and right, y for top and bottom.
+func WindowAxis(side string) Axis {
+	if side == "left" || side == "right" {
+		return "x"
+	}
+	return "y"
+}
+
+// SizeKey is the member of the saved size of the sidebar of a side: width for left and right, height for top and bottom.
+func SizeKey(side string) string {
+	if WindowAxis(side) == "x" {
+		return "width"
+	}
+	return "height"
+}
+
+// SidebarSize returns the record of size on the axis of side.
+func SidebarSize(side string, size float64) WindowSidebar {
+	if WindowAxis(side) == "x" {
+		return WindowSidebar{Width: size}
+	}
+	return WindowSidebar{Height: size}
+}
+
+// Size is the size of the record on its axis.
+func (r WindowSidebar) Size() float64 { return r.Width + r.Height }
 
 // jsonKind is the kind of a JSON value: '{', '[', '"', 'n' (null), 'b' (a boolean), '0' (a number), or 0 for no value.
 func jsonKind(raw json.RawMessage) byte {
@@ -140,7 +176,7 @@ func list(raw json.RawMessage) ([]json.RawMessage, bool) {
 }
 
 // isWindowSidebar is whether id names a fixed window sidebar.
-func isWindowSidebar(id string) bool { return id == "left" || id == "right" }
+func isWindowSidebar(id string) bool { return IsWindowSide(id) }
 
 // CheckStoredLayout is the reason the stored layout of a space cannot be opened with the loaded plugins units, or nil when it can.
 func CheckStoredLayout(layout json.RawMessage, units []PluginUnit) error {
@@ -245,8 +281,8 @@ func CheckStoredLayout(layout json.RawMessage, units []PluginUnit) error {
 	return nil
 }
 
-// RestoreWindowSidebars reads the width records of the fixed window sidebars: an object from a window sidebar id to {width}, with a
-// finite width above 0.
+// RestoreWindowSidebars reads the size records of the fixed window sidebars: an object from a window sidebar id to {width} for left
+// and right and {height} for top and bottom, with a finite size above 0. The record of the other axis is refused, not converted.
 func RestoreWindowSidebars(saved json.RawMessage) (map[string]WindowSidebar, error) {
 	records, ids, ok := object(saved)
 	if !ok {
@@ -257,21 +293,28 @@ func RestoreWindowSidebars(saved json.RawMessage) (map[string]WindowSidebar, err
 		if !isWindowSidebar(id) {
 			return nil, fmt.Errorf("unknown window sidebar %s", id)
 		}
+		size, other := SizeKey(id), "height"
+		if size == "height" {
+			other = "width"
+		}
 		record, keys, ok := object(records[id])
-		invalid := !ok || jsonKind(record["width"]) != '0'
+		if ok && len(keys) == 1 && keys[0] == other {
+			return nil, fmt.Errorf("window sidebar %s saves %s, not %s", id, size, other)
+		}
+		invalid := !ok || jsonKind(record[size]) != '0'
 		for _, key := range keys {
-			if key != "width" {
+			if key != size {
 				invalid = true
 			}
 		}
-		var width float64
+		var value float64
 		if !invalid {
-			invalid = json.Unmarshal(record["width"], &width) != nil || !finite(width) || width <= 0
+			invalid = json.Unmarshal(record[size], &value) != nil || !finite(value) || value <= 0
 		}
 		if invalid {
 			return nil, fmt.Errorf("invalid window sidebar %s", id)
 		}
-		out[id] = WindowSidebar{Width: width}
+		out[id] = SidebarSize(id, value)
 	}
 	return out, nil
 }

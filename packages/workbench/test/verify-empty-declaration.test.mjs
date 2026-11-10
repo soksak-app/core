@@ -26,7 +26,7 @@ async function v7a(t, slot, surface) {
     railOutline: () => ({ shape: { sharp: 0, corners: 0, loops: [] }, rects: [], groups: [] }), tabsOf: () => [],
   } });
   t.mock.module("../registry.js", { exports: { isPlace: () => false } });
-  t.mock.module("../settings.js", { exports: { cardRadius: () => 4 } });
+  t.mock.module("../settings.js", { exports: { cardRadius: () => 4, value: (key) => (key === "sidebarOrder" ? ["left", "right", "top", "bottom"] : undefined) } });
   const { verify } = await import(`../verify.js?empty-${Math.random()}`);
   return verify().find((row) => row.name.startsWith("V7a "));
 }

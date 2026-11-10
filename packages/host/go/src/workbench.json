@@ -374,6 +374,14 @@
       "projectTabs": "top",
       "left": true,
       "right": true,
+      "top": false,
+      "bottom": false,
+      "sidebarOrder": [
+        "left",
+        "right",
+        "top",
+        "bottom"
+      ],
       "dim": false,
       "focusInd": "border",
       "fullRule": "under",
@@ -455,10 +463,20 @@
     "switches": [
       "left",
       "right",
+      "top",
+      "bottom",
       "dim",
       "diagnostics.performance",
       "memorySaver"
     ],
+    "orders": {
+      "sidebarOrder": [
+        "left",
+        "right",
+        "top",
+        "bottom"
+      ]
+    },
     "commonOnly": [
       "projectOpening",
       "textSize",

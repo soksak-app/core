@@ -66,7 +66,9 @@ type SettingsCatalog struct {
 		Choices          map[string][]string   `json:"choices"`
 		TextSteps        []float64             `json:"textSteps"`
 		Switches         []string              `json:"switches"`
-		CommonOnly       []string              `json:"commonOnly"`
+		// Orders are the settings whose value is an order of their listed values, each once (docs/spec/settings.md#values).
+		Orders     map[string][]string `json:"orders"`
+		CommonOnly []string            `json:"commonOnly"`
 	} `json:"settings"`
 }
 
@@ -382,6 +384,20 @@ func (s *SettingsStore) BeginSave() { s.saving++ }
 // EndSave is the answer of a write.
 func (s *SettingsStore) EndSave() { s.saving-- }
 
+// isOrder is whether value is a list that holds each of values once.
+func isOrder(value any, values []string) bool {
+	items, ok := value.([]any)
+	if !ok || len(items) != len(values) {
+		return false
+	}
+	for _, want := range values {
+		if !slices.Contains(items, any(want)) {
+			return false
+		}
+	}
+	return true
+}
+
 func jsonText(value any) string {
 	text, err := json.Marshal(value)
 	if err != nil {
@@ -417,6 +433,13 @@ func (s *SettingsStore) validate(key string, value any) error {
 		if _, ok := value.(bool); !ok {
 			return fmt.Errorf("Invalid setting %s: %s is not a boolean", key, jsonText(value))
 		}
+	}
+	if values, ordered := catalog.Settings.Orders[key]; ordered && !isOrder(value, values) {
+		named := make([]string, len(values))
+		for i, item := range values {
+			named[i] = jsonText(item)
+		}
+		return fmt.Errorf("Invalid setting %s: %s is not an order of %s", key, jsonText(value), strings.Join(named, ", "))
 	}
 	if key == "diagnostics.log" {
 		if err := validateLogPolicy(value); err != nil {
@@ -585,7 +608,7 @@ func (s *SettingsStore) settingType(key string) (string, error) {
 	switch {
 	case slices.Contains(catalog.Settings.Switches, key):
 		return "boolean", nil
-	case key == "diagnostics.log" || key == "sets" || key == "links":
+	case key == "diagnostics.log" || key == "sets" || key == "links" || catalog.Settings.Orders[key] != nil:
 		return "object", nil
 	case ranged || key == "memorySaverDelay" || key == "textSize":
 		return "number", nil

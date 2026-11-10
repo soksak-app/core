@@ -50,7 +50,7 @@ test("window default mappings reject invalid shapes, unknown sides, and missing 
     [null, /window defaults must be an object/],
     [[], /window defaults must be an object/],
     ["left", /window defaults must be an object/],
-    [{ top: "info" }, /top/],
+    [{ middle: "info" }, /sidebar window: unknown field middle/],
     [{ left: "missing" }, /window left names unknown set missing/],
     [{ right: null }, /window right names unknown set null/],
     [{ left: "pane.info" }, /window left names unknown set pane.info/],
@@ -78,8 +78,27 @@ test("new window links require a plugin and a known set and reject duplicate cho
     [[{ ...link, set: null }], /window-left link requires a known set/],
     [[{ ...link, set: "missing" }], /known set/],
     [[link, { ...link }], /link window-left tree appears twice/],
-    [[{ ...link, place: "window-top" }], /requires a place/],
+    [[{ ...link, place: "window-middle" }], /requires a place \(left, right, top, bottom, window-left, window-right, window-top, window-bottom, card-left, card-right, card-top, card-bottom\)/],
   ]) assert.throws(() => validateSidebars(sidebars(links), "settings"), message);
+});
+
+test("every side of a window takes a general link and a plugin window link (docs/spec/external-sidebars.md)", () => {
+  for (const side of ["left", "right", "top", "bottom"]) {
+    assert.doesNotThrow(() => validateSidebars(sidebars([{ place: side, plugin: null, set: "set-1" },
+      { place: `window-${side}`, plugin: "tree", set: "set-1" }]), "settings"), side);
+    assert.throws(() => validateSidebars(sidebars([{ place: side, plugin: "tree", set: "set-1" }]), "settings"),
+      /a general window link requires plugin null/, side);
+  }
+});
+
+test("a window mapping declares the top and bottom sides", () => {
+  const all = manifests();
+  all[1].sidebars.window = { top: "tree", bottom: "tree" };
+  assert.equal(validateManifest(all[1]), all[1]);
+  assert.deepEqual(normalizeSidebarDefaults({}, all).links.filter((link) => link.plugin === "tree"), [
+    { place: "window-top", plugin: "tree", set: "tree.tree" },
+    { place: "window-bottom", plugin: "tree", set: "tree.tree" },
+  ]);
 });
 
 test("window references accept section-only plugins but card references still require surfaces", () => {

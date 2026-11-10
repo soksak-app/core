@@ -1,6 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {windowSidebar, windowSidebarCards, restoreWindowSidebars, reconcileWindowSidebars} from "../window-sidebars.js";
+import {windowSidebar, windowSidebarCards, restoreWindowSidebars, reconcileWindowSidebars, keepWindowSidebarWidths, windowOrientation, SIDE_NAMES} from "../window-sidebars.js";
+
+test("the sections of a top or bottom window sidebar lie horizontally, of a left or right one vertically (docs/spec/external-sidebars.md)", () => {
+  assert.deepEqual(["left", "right", "top", "bottom"].map(windowOrientation), ["vertical", "vertical", "horizontal", "horizontal"]);
+  assert.deepEqual(SIDE_NAMES, { left: "왼쪽", right: "오른쪽", top: "위", bottom: "아래" });
+});
+
+test("a top or bottom window sidebar keeps and starts with its height (docs/spec/external-sidebars.md)", () => {
+  const records = {};
+  reconcileWindowSidebars(records, [{ id: "left" }, { id: "top" }, { id: "bottom" }], 150);
+  assert.deepEqual(records, { left: { width: 150 }, top: { height: 150 }, bottom: { height: 150 } });
+  keepWindowSidebarWidths([{ id: "left", width: 210, height: 600 }, { id: "top", width: 900, height: 88 }, { id: "main", width: 400, height: 300 }], records);
+  assert.deepEqual(records, { left: { width: 210 }, top: { height: 88 }, bottom: { height: 150 } });
+});
 
 const units = [{id:"pane"},{id:"tree"}];
 for (const side of ["left", "right"]) {

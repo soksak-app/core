@@ -19,7 +19,7 @@ import { bindSidebarGrip } from "./sidebar-grip.js";
 import { targetCardInsets } from "./card-insets.js";
 import { CARD_TOOL_MENUS, createCardTools, updateCardTools } from "./card-tools.js";
 import { SIDEBAR_SIDES, deviceGridSize, presentSidebars, effectiveSidebar, resolveSidebarSet, setSidebar, sideName, sizeSidebar, spaceFoldText, toggleSidebar } from "./card-sidebars.js";
-import { arrangeWindowSidebars, keepWindowSidebarWidths, railSidebars, restoreWindowSidebars, standingLink, windowSidebarCards } from "./window-sidebars.js";
+import { arrangeWindowSidebars, SIDE_NAMES, FOLD_ICONS, keepWindowSidebarWidths, railSidebars, restoreWindowSidebars, sizeKey, standingLink, windowOrientation, windowSidebar, windowSidebarCards } from "./window-sidebars.js";
 import { environment, pluginUnits } from "./environment.js";
 import { checkStoredLayout, recordStoredOrigins } from "./stored-layout.js";
 import { checkTabParams, storedParamsProblem } from "./tab-params.js";
@@ -274,12 +274,12 @@ function updateCard(el, card, rect) {
       const owner = kind === null ? { card: null, surface: null }
         : { card: focusedId, surface: activeTab(grid.card(focusedId)).id };
       // The content of an ordinary sidebar has no card-surface link and no rail.
-      drawSet(holder, card.id, set, { ...owner, space: heldSpace, orientation: "vertical", window: true, plugin: kind, side });
+      drawSet(holder, card.id, set, { ...owner, space: heldSpace, orientation: windowOrientation(side), window: true, plugin: kind, side });
     } else {
       clearSet(holder);
       holder.replaceChildren();
     }
-    setText(statusText, `${side === "left" ? "왼쪽" : "오른쪽"} 창 사이드바${kind ? ` · ${kind}` : ""}`);
+    setText(statusText, `${SIDE_NAMES[side]} 창 사이드바${kind ? ` · ${kind}` : ""}`);
     // The fold button at the end of the status line turns this sidebar off. The button that turns it on again is in the window head (docs/spec/plugins.md#sections).
     let fold = status.querySelector(".sidebar-status__fold");
     if (!fold || fold.dataset.side !== side) {
@@ -289,9 +289,9 @@ function updateCard(el, card, rect) {
       fold.className = "sidebar-status__fold";
       fold.dataset.side = side;
       fold.dataset.expose = "core.sidebar.fold";
-      fold.title = `${side === "left" ? "왼쪽" : "오른쪽"} 창 사이드바 접기`;
+      fold.title = `${SIDE_NAMES[side]} 창 사이드바 접기`;
       fold.setAttribute("aria-label", fold.title);
-      fold.innerHTML = icon(side === "left" ? "chevron-left" : "chevron-right");
+      fold.innerHTML = icon(FOLD_ICONS[side]);
       bind(fold, "core.settings.set", { patch: { [side]: false } });
       status.appendChild(fold);
     }
@@ -1064,33 +1064,17 @@ function drawCardSidebars(el, card, rect) {
 }
 
 /**
- * Removes the fixed slot.
- *
- * `fixed` means that the layout neither moves nor closes that card, so it is released before removal.
- * `canClose` always returns false for a `fixed` card.
- */
-function dismiss(id) {
-  if (!grid.card(id)) return;
-  grid.setFixed(id, false);
-  if (!grid.close(id)) { grid.setFixed(id, true); throw new Error(`cannot remove window sidebar ${id}`); }   // If it could not be removed, the role stays as it was
-  // After a card is closed, nothing references the lines that card referenced. The library leaves such lines and leaves the time
-  // of their removal to the host. If they remain, an expanded card does not cross such a line and `standings` does not return
-  // it as a candidate, and when the sidebar opens again a new line is added, so lines accumulate in the same slot.
-  grid.tidy();
-}
-
-/**
- * Adds or removes the sidebar at the end of the plane. The left and the right behave the same, so they use the same
- * function.
+ * Arranges the window sidebars of the four sides in the order of sidebarOrder (arrangeWindowSidebars of window-sidebars.js).
  *
  * It uses `insertAt` and not `splitToward`. A split inherits the row range of the split card and occupies only one row,
- * but a sidebar must span the plane.
+ * but a sidebar must reach along its side as far as the order lets it.
  */
 function settle() {
   if (!grid) return;
   closePicker("settled");
-  arrangeWindowSidebars(grid, windowSidebarCards(pluginUnits(), value("links"), focusedPlugin()), windowSidebars,
-    value("sidebarWidth"), side => value(side), dismiss);
+  // The sides that have a choice hold a sidebar while their switch is on, arranged in the order (docs/spec/external-sidebars.md).
+  arrangeWindowSidebars(grid, value("sidebarOrder"), windowSidebarCards(pluginUnits(), value("links"), focusedPlugin()).map(item => item.id),
+    windowSidebars, value("sidebarWidth"), side => value(side));
   // default: when only place cards remain, there is no card to focus (null).
   if (!grid.card(focusedId)) focusOn(grid.cards.find((c) => !isPlace(c.id))?.id ?? null);
   keepCardScope((id) => grid.card(id));
@@ -1648,9 +1632,10 @@ export const fresh = () => ({
   state: initial(),
   focusedId: environment().workspace.focus,
   windowSidebars: Object.fromEntries(environment().workspace.grid.cards
-    .filter(card => card.id === "left" || card.id === "right")
-    // default: a fixed sidebar whose width the environment declaration omits starts with the width of the sidebarWidth setting.
-    .map(card => [card.id, { width: card.width ?? value("sidebarWidth") }])),
+    .filter(card => windowSidebar(card.id))
+    // default: a fixed sidebar whose size the environment declaration omits starts with the sidebarWidth setting on its axis:
+    // the width of a left or right sidebar, the height of a top or bottom sidebar (docs/spec/external-sidebars.md).
+    .map(card => [card.id, { [sizeKey(card.id)]: card[sizeKey(card.id)] ?? value("sidebarWidth") }])),
   named: 0,
   sidebars: {},
 });

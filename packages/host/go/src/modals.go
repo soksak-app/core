@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"time"
 )
 
 // OverlayRequest holds the values needed to render a [data-native-modal] element in another view.
@@ -60,6 +61,9 @@ type modal struct {
 	shown bool
 	// Tells whether the web view was shown and the keyboard focus was handed over. host.window reports this value.
 	visible bool
+	// painted tells whether the revealed web view presented its first frame on the screen. host.window.presented waits for it,
+	// so the time it reports is a time at which the modal is on the screen (docs/spec/exposure.md, host.window.presented).
+	painted bool
 	radius  float64
 	// view is the child WebView of this instance. It is created hidden and
 	// is closed when this instance is replaced or closed.
@@ -187,6 +191,7 @@ func (s *Surfaces) showModal(win Frontend, req OverlayRequest) (Rect, error) {
 	}
 	s.modal.view = view
 	s.mu.Unlock()
+	s.modalPaintChanged()
 	s.Emit("modal-content", ModalContentEvent{ID: req.ID, Instance: instance, Revision: 1,
 		Content: OverlayContent{Mode: req.Mode, Card: req.Card, Title: req.Title,
 			CSS: req.CSS, ClassName: req.ClassName, HTML: req.HTML, Border: req.Border}})
@@ -274,6 +279,7 @@ func (s *Surfaces) hideModal(id string, release bool) error {
 	if view != nil {
 		view.Close()
 	}
+	s.modalPaintChanged()
 	s.setBackground()
 	s.windowChanged()
 	return nil
@@ -294,6 +300,7 @@ func (s *Surfaces) discardOverlay() {
 	if view != nil {
 		view.Close()
 	}
+	s.modalPaintChanged()
 	s.setBackground()
 }
 
@@ -417,13 +424,63 @@ func (s *Surfaces) ModalReady(id string, instance uint64) error {
 		// The modal holds the keyboard, so the input that waited for it reaches it in its order.
 		s.endModalHold()
 	})
+	// The revealed view presents its first frame next; host.window.presented waits for that paint, so its time is a time at which
+	// the modal is on the screen. A view that closes before it presents calls nothing, and the wait of presented ends at its limit.
+	started := system.AfterViewPresentation(view.handle, func() { s.modalPainted(id, instance) })
 	s.mu.Lock()
 	if s.modal == live {
 		live.visible = true
+		if !started {
+			live.painted = true
+		}
 	}
 	s.mu.Unlock()
+	s.modalPaintChanged()
 	s.rendered(id)
 	return nil
+}
+
+// modalPainted records that the web view of the modal id and instance presented its frame.
+func (s *Surfaces) modalPainted(id string, instance uint64) {
+	s.mu.Lock()
+	if s.modal != nil && s.modal.id == id && s.modal.instance == instance {
+		s.modal.painted = true
+	}
+	s.mu.Unlock()
+	s.modalPaintChanged()
+}
+
+// modalPaintChanged wakes the waits of host.window.presented: the open modal, its reveal or its paint changed.
+func (s *Surfaces) modalPaintChanged() {
+	s.mu.Lock()
+	close(s.modalPaintChange)
+	s.modalPaintChange = make(chan struct{})
+	s.mu.Unlock()
+}
+
+// waitForModalPaint blocks until the open modal presented its first frame, another modal state change wakes the wait for a new
+// look, or no modal is open. A modal that is still loading holds the wait, because the screen that presented reports comes
+// after the paint of the modal it opens. It tells whether a modal is on the screen without its paint when the timeout ends.
+func (s *Surfaces) waitForModalPaint(timeout time.Duration) bool {
+	deadline := time.After(timeout)
+	for {
+		s.mu.Lock()
+		current := s.modal
+		var paint chan struct{}
+		waiting := current != nil && !current.painted
+		if waiting {
+			paint = s.modalPaintChange
+		}
+		s.mu.Unlock()
+		if !waiting {
+			return false
+		}
+		select {
+		case <-paint:
+		case <-deadline:
+			return true
+		}
+	}
 }
 
 // rendered reports that the modal document finished rendering. Only this notification can confirm whether the updated content reached that document,

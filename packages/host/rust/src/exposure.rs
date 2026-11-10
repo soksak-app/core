@@ -173,7 +173,7 @@ fn host_declarations() -> Value {
             {"name": "host.window.move", "description": "Moves the window frame origin to a point in screen coordinates.",
              "params": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}}},
              "result": nothing},
-            {"name": "host.window.presented", "description": "Resolves after the main page, visible application documents, and visible image regions have presented their current geometry and raster, with the display time of that frame.",
+            {"name": "host.window.presented", "description": "Resolves after the main page and the shown modal have presented their current geometry and every visible image region has presented its exact current raster, with the display time of that frame.",
              "params": empty, "result": {"type": "object", "properties": {"displayed": {"type": "number"}}}},
             {"name": "host.window.reload", "description": "Starts the workbench of the window again.",
              "params": empty, "result": nothing},
@@ -2328,6 +2328,19 @@ pub fn presented(window: &Window, timeout: Duration) -> Result<f64, Failure> {
         }
     };
 
+    // An open modal is on the screen at the time this reports only after its revealed webview presented its first
+    // frame, so the wait ends at the paint of the modal, at a change of the modal state, or at the limit (modals.rs).
+    // It runs before the settled wait, so the display time that the settled wait reports is at or after the paint of
+    // the modal.
+    let remaining = deadline
+        .checked_duration_since(Instant::now())
+        .unwrap_or(Duration::ZERO);
+    if crate::modals::wait_for_paint(window, remaining) {
+        return Err(Failure::new(
+            TIMED_OUT,
+            format!("the open modal did not present within {timeout:?}"),
+        ));
+    }
     wait_frame()?;
     loop {
         let Some(remaining) = deadline.checked_duration_since(Instant::now()) else {

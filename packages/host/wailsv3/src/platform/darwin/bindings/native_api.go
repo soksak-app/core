@@ -206,7 +206,10 @@ func Functions() abi.NativeFunctions {
 		ModalViewFocus:             func(a0 unsafe.Pointer, a1 int32) { C.modalViewFocus(a0, C.int(a1)) },
 		NativeFunctionPresentation: func(a0 uintptr) unsafe.Pointer { return C.nativeFunctionPresentation(C.uintptr_t(a0)) },
 		NativeLayoutObserve:        func() { C.nativeLayoutObserve() },
-		NativeWebviewBackground:    func(a0 unsafe.Pointer, a1 bool) { C.nativeWebviewBackground(a0, C.bool(a1)) },
+		NativeWebviewAfterPresentation: func(a0 unsafe.Pointer, a1 uintptr) bool {
+			return bool(C.nativeWebviewAfterPresentation(a0, C.uintptr_t(a1)))
+		},
+		NativeWebviewBackground: func(a0 unsafe.Pointer, a1 bool) { C.nativeWebviewBackground(a0, C.bool(a1)) },
 		NativeWebviewBounds: func(a0 unsafe.Pointer, a1 float64, a2 float64, a3 float64, a4 float64) {
 			C.nativeWebviewBounds(a0, C.double(a1), C.double(a2), C.double(a3), C.double(a4))
 		},

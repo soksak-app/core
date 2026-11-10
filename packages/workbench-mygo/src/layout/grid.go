@@ -76,6 +76,11 @@ type Grid struct {
 	snapAt    float64
 	snapMode  string
 	frames    frameRead
+	// dockToken is the plane state that the last dock of the window sidebars saw, and dockRefused is the arrangement of a dock it
+	// could not place (sidebars.go): a settle whose plane state differs docks again, so a sidebar reduced for lack of room takes its
+	// saved size when the room returns and a refused arrangement is not attempted again while the plane stands still.
+	dockToken   string
+	dockRefused []string
 }
 
 func finite(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) }

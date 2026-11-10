@@ -386,64 +386,257 @@ func SpaceFoldText(presented map[Side]PresentedSidebar) string {
 	return strings.Join(names, "·") + " 사이드바: 공간 부족으로 접힘"
 }
 
-// KeepWindowSidebarWidths copies the width drawn on the fixed sidebar cards of the plane into records.
+// KeepWindowSidebarWidths copies the size drawn on its axis of the fixed sidebar cards of the plane into records: the width of a left or
+// right card, the height of a top or bottom card.
 func KeepWindowSidebarWidths(g *Grid, records map[string]WindowSidebar) {
 	for _, card := range g.Cards() {
-		if isWindowSidebar(card.ID) && card.Width != nil {
-			records[card.ID] = WindowSidebar{Width: *card.Width}
+		if !isWindowSidebar(card.ID) {
+			continue
+		}
+		size := card.Width
+		if WindowAxis(card.ID) == "y" {
+			size = card.Height
+		}
+		if size != nil {
+			records[card.ID] = SidebarSize(card.ID, *size)
 		}
 	}
 }
 
-// ArrangeWindowSidebars matches the fixed sidebar columns to sides, the sides that have a sidebar, and to shown. It removes the
-// column of a side that is not shown, adds a missing column at the edge of its side with its stored width, and tells whether the
-// plane changed. A side without a record starts with initialWidth.
-func ArrangeWindowSidebars(g *Grid, sides []string, records map[string]WindowSidebar, initialWidth float64, shown func(side string) bool) (bool, error) {
+// planeToken is one string that changes when the plane changes: the count of the cards, the lines of both axes with their places,
+// and the size of the plane.
+func planeToken(g *Grid) string {
+	return fmt.Sprintf("%d|%v|%v|%vx%v", len(g.Cards()), g.Lines("x"), g.Lines("y"), g.Width(), g.Height())
+}
+
+// fittingSize is the largest size that an insertion at the boundary holds with every card above the layout's minimum, found by asking
+// the insertion itself: a refused insertion restores the plane, and an accepted one is undone by putting the recorded state back. It
+// returns 0 when no size holds.
+func fittingSize(g *Grid, axis Axis, line int, wanted float64) float64 {
+	restore := g.ToJSON()
+	low, high := 0.0, wanted
+	for high-low > 1 {
+		mid := (low + high) / 2
+		size := mid
+		if _, ok := g.InsertAt(axis, line, InsertInit{Size: &size}); ok {
+			low = mid
+			if err := g.Replace(restore); err != nil {
+				return 0
+			}
+		} else {
+			high = mid
+		}
+	}
+	return low
+}
+
+// ArrangedSides are the sides that hold a window sidebar, in the order: a side that has a choice (sides) and whose switch is on.
+func ArrangedSides(order, sides []string, shown func(side string) bool) []string {
+	arranged := []string{}
+	for _, side := range order {
+		if slices.Contains(sides, side) && shown(side) {
+			arranged = append(arranged, side)
+		}
+	}
+	return arranged
+}
+
+// ArrangedPlace is the place that the order gives the sidebar of a side, in grid lines: Line is the line of its side on Axis, and From
+// and To its range on the other axis.
+type ArrangedPlace struct {
+	Axis           Axis
+	Line, From, To int
+}
+
+// ArrangedPlaces is the place that the order gives the sidebar of each arranged side: the line of its side on its axis, and its range on
+// the other axis from the border or the inner line of the sidebar of an earlier side of that axis to the opposite border or the inner
+// line of such a sidebar (docs/spec/external-sidebars.md#fixed-placement-and-persistence). An earlier side whose sidebar is not on the
+// plane leaves the border.
+func ArrangedPlaces(g *Grid, arranged []string) map[string]ArrangedPlace {
+	last := map[Axis]int{"x": len(g.Lines("x")) - 1, "y": len(g.Lines("y")) - 1}
+	places := map[string]ArrangedPlace{}
+	for index, side := range arranged {
+		axis := WindowAxis(side)
+		cross, low, high := Axis("y"), "top", "bottom"
+		if axis == "y" {
+			cross, low, high = "x", "left", "right"
+		}
+		earlier := arranged[:index]
+		place := ArrangedPlace{Axis: axis, From: 0, To: last[cross]}
+		if side == "right" || side == "bottom" {
+			place.Line = last[axis]
+		}
+		if card, ok := g.Card(low); ok && slices.Contains(earlier, low) {
+			place.From = card.R1
+			if cross == "x" {
+				place.From = card.C1
+			}
+		}
+		if card, ok := g.Card(high); ok && slices.Contains(earlier, high) {
+			place.To = card.R0
+			if cross == "x" {
+				place.To = card.C0
+			}
+		}
+		places[side] = place
+	}
+	return places
+}
+
+// WindowSidebarsArranged is whether the window sidebars of g stand where the order places the arranged sides, and no other window sidebar is
+// on the plane.
+func WindowSidebarsArranged(g *Grid, arranged []string) bool {
+	present := 0
+	for _, card := range g.Cards() {
+		if isWindowSidebar(card.ID) {
+			present++
+			if !slices.Contains(arranged, card.ID) {
+				return false
+			}
+		}
+	}
+	if present != len(arranged) {
+		return false
+	}
+	places := ArrangedPlaces(g, arranged)
+	for _, side := range arranged {
+		card, _ := g.Card(side) // silent: every arranged side is present, counted above.
+		place := places[side]
+		own0, own1, cross0, cross1 := card.C0, card.C1, card.R0, card.R1
+		if place.Axis == "y" {
+			own0, own1, cross0, cross1 = card.R0, card.R1, card.C0, card.C1
+		}
+		atSide := own1 == place.Line
+		if side == "left" || side == "top" {
+			atSide = own0 == place.Line
+		}
+		if !card.Fixed || !atSide || cross0 != place.From || cross1 != place.To {
+			return false
+		}
+	}
+	return true
+}
+
+// ArrangeWindowSidebars arranges the window sidebars in the order (docs/spec/external-sidebars.md#fixed-placement-and-persistence). order
+// lists the four sides, sides are the sides that have a choice, and shown is the switch of a side. When the window sidebars of the plane
+// already stand where the order places them and the plane state is the one the last dock saw, nothing moves, so a change of focus or of
+// the override does not move a sidebar and a sidebar reduced for lack of room stays reduced. Otherwise every window sidebar is closed,
+// the lines that no card references are removed, and the arranged sides are inserted in the reverse of the order at the border line of
+// their side with their saved size and set fixed, so the first side reaches across the plane; the plane may not hold a saved size with
+// every card above the layout's minimum, so a sidebar stands at the largest size that an insertion holds while the record keeps the
+// saved size. A sidebar whose only filler is a fixed card while its slots hold another card cannot leave yet (R7 of
+// packages/soksak/docs/layout.md); it leaves after the others. A sidebar without a record starts with initialWidth on its axis. It tells
+// whether the plane changed.
+func ArrangeWindowSidebars(g *Grid, order, sides []string, records map[string]WindowSidebar, initialWidth float64, shown func(side string) bool) (bool, error) {
 	if !finite(initialWidth) || initialWidth <= 0 {
 		return false, errors.New("invalid initial window sidebar width")
 	}
-	KeepWindowSidebarWidths(g, records)
-	changed := false
+	arranged := ArrangedSides(order, sides, shown)
+	for _, side := range arranged {
+		if _, ok := records[side]; !ok {
+			records[side] = SidebarSize(side, initialWidth)
+		}
+	}
 	for _, card := range g.Cards() {
-		if !isWindowSidebar(card.ID) || (slices.Contains(sides, card.ID) && shown(card.ID)) {
-			continue
+		if _, ok := records[card.ID]; isWindowSidebar(card.ID) && !ok {
+			records[card.ID] = SidebarSize(card.ID, initialWidth)
 		}
-		if !g.SetFixed(card.ID, false) {
-			return changed, fmt.Errorf("cannot remove window sidebar %s", card.ID)
+	}
+	KeepWindowSidebarWidths(g, records)
+	// A dock that this plane state already refused is not attempted again, so a plane that holds no size for a sidebar keeps answering.
+	refused := g.dockToken == planeToken(g) && len(arranged) == len(g.dockRefused) && slices.Equal(arranged, g.dockRefused)
+	if WindowSidebarsArranged(g, arranged) || refused {
+		return false, nil
+	}
+	for {
+		left := []string{}
+		for _, card := range g.Cards() {
+			if isWindowSidebar(card.ID) {
+				left = append(left, card.ID)
+			}
 		}
-		if !g.Close(card.ID) {
-			g.SetFixed(card.ID, true)
-			return changed, fmt.Errorf("cannot remove window sidebar %s", card.ID)
+		if len(left) == 0 {
+			break
+		}
+		closed := false
+		// A sidebar that cannot leave yet waits until another window sidebar has left.
+		for _, id := range left {
+			g.SetFixed(id, false)
+			if g.Close(id) {
+				closed = true
+				break
+			}
+			g.SetFixed(id, true)
+		}
+		if !closed {
+			return true, fmt.Errorf("cannot remove window sidebars %s", strings.Join(left, ", "))
 		}
 		// A closed card leaves its lines, and a sidebar that opens again adds new ones, so the lines would pile up in one slot.
 		g.Tidy()
-		changed = true
 	}
-	for _, side := range sides {
-		if !shown(side) {
-			continue
-		}
-		if _, ok := g.Card(side); ok {
-			continue
-		}
-		record, ok := records[side]
-		if !ok {
-			record = WindowSidebar{Width: initialWidth}
-			records[side] = record
-		}
+	var unplaceable []string
+	for i := len(arranged) - 1; i >= 0; i-- {
+		side := arranged[i]
+		axis := WindowAxis(side)
 		line := 0
-		if side == "right" {
-			line = len(g.Lines("x")) - 1
+		if side == "right" || side == "bottom" {
+			line = len(g.Lines(axis)) - 1
 		}
-		if !g.CanInsertAt("x", line, "") {
-			return changed, fmt.Errorf("cannot place window sidebar %s", side)
+		if !g.CanInsertAt(axis, line, "") {
+			return true, fmt.Errorf("cannot place window sidebar %s", side)
 		}
-		id, width := side, record.Width
-		if _, ok := g.InsertAt("x", line, InsertInit{ID: &id, Size: &width}); !ok {
-			return changed, fmt.Errorf("cannot place window sidebar %s", side)
+		id, size := side, records[side].Size()
+		if _, ok := g.InsertAt(axis, line, InsertInit{ID: &id, Size: &size}); !ok {
+			// The plane does not hold the saved size with every card above the layout's minimum; the sidebar stands at the largest
+			// size that an insertion holds.
+			size = fittingSize(g, axis, line, size)
+			placed := size > 0
+			if placed {
+				if _, ok := g.InsertAt(axis, line, InsertInit{ID: &id, Size: &size}); !ok {
+					placed = false
+				}
+			}
+			if !placed {
+				// The plane holds no size for this sidebar, so the others still stand and the refusal names it.
+				unplaceable = append(unplaceable, side)
+				continue
+			}
 		}
 		g.SetFixed(side, true)
-		changed = true
 	}
-	return changed, nil
+	g.dockToken = planeToken(g)
+	g.dockRefused = nil
+	if len(unplaceable) > 0 {
+		g.dockRefused = arranged
+		return true, fmt.Errorf("cannot place window sidebars %s", strings.Join(unplaceable, ", "))
+	}
+	return true, nil
+}
+
+// WindowSidebarsPlaced is whether the window sidebars stand where the order places them (docs/spec/external-sidebars.md#verification):
+// each is fixed, stands at the border line of its side, reaches along the other axis between the sidebars of earlier sides of that
+// axis, and is drawn no larger on its axis than its saved size.
+func WindowSidebarsPlaced(g *Grid, order []string) bool {
+	present := map[string]bool{}
+	rects := g.Rects()
+	for _, card := range g.Cards() {
+		if !isWindowSidebar(card.ID) {
+			continue
+		}
+		present[card.ID] = true
+		saved, drawn := card.Width, rects[card.ID].W
+		if WindowAxis(card.ID) == "y" {
+			saved, drawn = card.Height, rects[card.ID].H
+		}
+		if saved != nil && drawn > *saved+.5 {
+			return false
+		}
+	}
+	arranged := []string{}
+	for _, side := range order {
+		if present[side] {
+			arranged = append(arranged, side)
+		}
+	}
+	return WindowSidebarsArranged(g, arranged)
 }

@@ -3,7 +3,7 @@
 //! The [data-native-modal] element of the page is drawn by a child webview inside the main window.
 
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Condvar, Mutex, PoisonError};
 
 use crate::framework::Color;
 use crate::framework::{LogicalPosition, LogicalSize, Webview, WebviewBuilder, WebviewUrl, Window};
@@ -67,6 +67,9 @@ struct Modal {
     at: Rect,
     /// Shows whether the webview is shown and passed the keyboard focus. host.window reports this value.
     visible: bool,
+    /// Shows whether the revealed webview presented its first frame on the screen. host.window.presented waits for it,
+    /// so the time it reports is a time at which the modal is on the screen.
+    painted: bool,
 }
 
 /// The modal webview inside the main window and the modal that the webview shows.
@@ -75,6 +78,9 @@ pub(crate) struct Overlay {
     pub view: Mutex<Option<Webview>>,
     open: Mutex<Option<Modal>>,
     next: AtomicU64,
+    /// Wakes the waits of host.window.presented for the first paint of the open modal at every change of the modal
+    /// state. The waits and the changes hold `open`.
+    paint_changed: Condvar,
 }
 
 impl Overlay {
@@ -99,7 +105,10 @@ impl Overlay {
     pub fn discard(&self) -> Result<(), String> {
         // default: a lock that a panicking thread poisoned still holds the modal record, which this call removes; the
         // panic hook records the panic.
-        *self.open.lock().unwrap_or_else(PoisonError::into_inner) = None;
+        let mut held = self.open.lock().unwrap_or_else(PoisonError::into_inner);
+        *held = None;
+        self.paint_changed.notify_all();
+        drop(held);
         let view = self
             .view
             .lock()
@@ -344,6 +353,7 @@ fn show_modal(window: &Window, state: &Overlay, request: OverlayRequest) -> Resu
         radius: request.radius,
         at,
         visible: false,
+        painted: false,
     });
     let built = window.add_child(
         WebviewBuilder::new(
@@ -376,6 +386,7 @@ fn show_modal(window: &Window, state: &Overlay, request: OverlayRequest) -> Resu
     // default: a lock that a panicking thread poisoned still holds the modal webview, which this call stores; the
     // panic hook records the panic.
     *state.view.lock().unwrap_or_else(PoisonError::into_inner) = Some(view.clone());
+    state.paint_changed.notify_all();
     if let Err(error) = view.navigate(target) {
         let close_error = view.close().err();
         // default: a lock that a panicking thread poisoned still holds the modal webview, which this removal clears;
@@ -525,6 +536,50 @@ fn mark_visible(overlay: &Overlay, id: &str, instance: u64) -> Result<(), String
     Ok(())
 }
 
+/// Records that the webview of the modal id and instance presented its frame, and wakes the waits of
+/// host.window.presented.
+fn mark_painted(window: &Window, id: &str, instance: u64) {
+    let Ok(context) = window_data(window) else { return };
+    let state = &context.overlay;
+    // default: a lock that a panicking thread poisoned still holds the modal record, which this call amends; the panic
+    // hook records the panic.
+    let mut held = state.open.lock().unwrap_or_else(PoisonError::into_inner);
+    if let Some(modal) = held
+        .as_mut()
+        .filter(|m| m.id == id && m.instance == instance)
+    {
+        modal.painted = true;
+    }
+    state.paint_changed.notify_all();
+}
+
+/// Blocks until the open modal presented its first frame, another modal state change wakes the wait for a new look, or
+/// no modal is open. A modal that is still loading holds the wait, because the screen that presented reports comes
+/// after the paint of the modal it opens. It tells whether a modal is on the screen without its paint when the timeout
+/// ends.
+pub fn wait_for_paint(window: &Window, timeout: std::time::Duration) -> bool {
+    let Ok(context) = window_data(window) else { return false };
+    let state = &context.overlay;
+    // default: a lock that a panicking thread poisoned still holds the modal record, which this call only reads; the
+    // panic hook records the panic.
+    let mut held = state.open.lock().unwrap_or_else(PoisonError::into_inner);
+    let deadline = std::time::Instant::now() + timeout;
+    while let Some(modal) = held.as_ref().filter(|m| !m.painted) {
+        let _ = modal;
+        let Some(remaining) = deadline.checked_duration_since(std::time::Instant::now()) else {
+            return true;
+        };
+        // default: a panicking wait leaves the modal record held; the panic hook records the panic and the next lock
+        // takes the record through its poison recovery.
+        held = state
+            .paint_changed
+            .wait_timeout(held, remaining)
+            .unwrap_or_else(PoisonError::into_inner)
+            .0;
+    }
+    false
+}
+
 /// Shows the modal webview when the document of this display has rendered. The webview is shown, focused and marked
 /// visible on the main thread before the request is answered, so a window status read after the answer reports the
 /// modal as visible. A request for a modal that is not open is stale: it changes nothing, answers ok and writes
@@ -569,7 +624,22 @@ pub fn ready(window: &Window, id: String, instance: u64) -> Result<(), String> {
         || exposure::with_view(&view, move |webview| platform.focus_webview(webview)),
         || modal_hold(window, false),
     )?;
+    // The revealed view presents its first frame next; host.window.presented waits for that paint, so its time is a
+    // time at which the modal is on the screen. A view that closes before it presents calls nothing, and the wait of
+    // presented ends at its limit.
+    let painted_window = window.clone();
+    let painted_id = id.clone();
+    let paint = move || mark_painted(&painted_window, &painted_id, instance);
+    let paint_started =
+        exposure::with_view(&view, move |webview| {
+            Ok(platform
+                .after_presentation(webview, Box::new(paint))
+                .is_ok())
+        });
     mark_visible(state, &id, instance)?;
+    if paint_started == Ok(false) {
+        mark_painted(window, &id, instance);
+    }
     if let Err(error) = emit_window(window, "modal-rendered", &id) {
         log_error("modal-rendered", error);
     }
@@ -591,6 +661,7 @@ pub fn hide(window: &Window, id: String) -> Result<(), String> {
             return Ok(());
         }
         *held = None;
+        state.paint_changed.notify_all();
     }
     // `discard` also clears the open record. It is not called while holding the same mutex. Otherwise the main thread
     // waits for its own lock and stops the handling of every endpoint request. A modal that closes before it took the

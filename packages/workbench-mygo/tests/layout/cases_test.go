@@ -462,6 +462,86 @@ func TestStoredCases(t *testing.T) {
 	}
 }
 
+// TestWindowSidebarCases arranges the fixed window sidebars of the cases in their order
+// (docs/spec/external-sidebars.md#fixed-placement-and-persistence).
+func TestWindowSidebarCases(t *testing.T) {
+	type spans struct {
+		ID     string `json:"id"`
+		C0, C1 int
+		R0, R1 int
+		Fixed  bool `json:"fixed"`
+	}
+	var file struct {
+		Description string         `json:"description"`
+		Options     layout.Options `json:"options"`
+		Cases       []struct {
+			Name    string                          `json:"name"`
+			State   layout.State                    `json:"state"`
+			Order   []string                        `json:"order"`
+			Sides   []string                        `json:"sides"`
+			Shown   []string                        `json:"shown"`
+			Records map[string]layout.WindowSidebar `json:"records"`
+			Initial float64                         `json:"initial"`
+			Returns *bool                           `json:"returns"`
+			Cards   []struct {
+				ID    string `json:"id"`
+				C0    int    `json:"c0"`
+				C1    int    `json:"c1"`
+				R0    int    `json:"r0"`
+				R1    int    `json:"r1"`
+				Fixed bool   `json:"fixed"`
+			} `json:"cards"`
+			Keeps  map[string]layout.WindowSidebar `json:"keeps"`
+			Throws *string                         `json:"throws"`
+		} `json:"cases"`
+	}
+	caseFile(t, "window-sidebars.json", &file)
+	for _, kase := range file.Cases {
+		t.Run(kase.Name, func(t *testing.T) {
+			state := kase.State
+			grid, err := layout.New(&state, file.Options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			changed, err := layout.ArrangeWindowSidebars(grid, kase.Order, kase.Sides, kase.Records, kase.Initial, func(side string) bool {
+				for _, shown := range kase.Shown {
+					if shown == side {
+						return true
+					}
+				}
+				return false
+			})
+			if kase.Throws != nil {
+				if err == nil || err.Error() != *kase.Throws {
+					t.Fatalf("arrange: throws %v, not %q", err, *kase.Throws)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("arrange: %v", err)
+			}
+			if kase.Returns == nil || changed != *kase.Returns {
+				t.Fatalf("arrange: returns %v", changed)
+			}
+			got := []spans{}
+			for _, card := range grid.Cards() {
+				got = append(got, spans{ID: card.ID, C0: card.C0, C1: card.C1, R0: card.R0, R1: card.R1, Fixed: card.Fixed})
+			}
+			sort.Slice(got, func(i, j int) bool { return got[i].ID < got[j].ID })
+			want := []spans{}
+			for _, card := range kase.Cards {
+				want = append(want, spans{ID: card.ID, C0: card.C0, C1: card.C1, R0: card.R0, R1: card.R1, Fixed: card.Fixed})
+			}
+			if fmt.Sprint(got) != fmt.Sprint(want) {
+				t.Fatalf("cards %v, not %v", got, want)
+			}
+			if fmt.Sprint(kase.Records) != fmt.Sprint(kase.Keeps) {
+				t.Fatalf("records %v, not %v", kase.Records, kase.Keeps)
+			}
+		})
+	}
+}
+
 func TestSpaceCases(t *testing.T) {
 	var file struct {
 		Description string `json:"description"`

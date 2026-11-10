@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+	"time"
 	"unsafe"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
@@ -47,6 +48,7 @@ type modalKeyboardPlatform struct {
 	platform.Platform
 	calls  []string
 	refuse bool
+	paint  func()
 }
 
 func (p *modalKeyboardPlatform) AlignRect(_ platform.Window, at platform.Rect) (platform.Rect, float64, error) {
@@ -71,6 +73,14 @@ func (p *modalKeyboardPlatform) FocusModal(_ unsafe.Pointer, take bool) {
 	p.calls = append(p.calls, fmt.Sprintf("focus %t", take))
 }
 
+// AfterViewPresentation records the start of the first-paint wait of the revealed modal and holds the callback, so a
+// test paints the modal when it chooses. paint holds the callback of the last wait.
+func (p *modalKeyboardPlatform) AfterViewPresentation(_ unsafe.Pointer, presented func()) bool {
+	p.calls = append(p.calls, "paint")
+	p.paint = presented
+	return true
+}
+
 // modalFrontend is the window of a modal keyboard test: it takes the events and the workbench calls of the host.
 type modalFrontend struct{ noticeFrontend }
 
@@ -83,7 +93,8 @@ func modalKeyboardSurfaces(t *testing.T, refuse bool) (*Surfaces, *modalKeyboard
 	savedSystem, savedFramework := system, framework
 	system, framework = fake, stepFramework{}
 	t.Cleanup(func() { system, framework = savedSystem, savedFramework })
-	s := &Surfaces{window: &modalFrontend{}, documents: NewDocuments(), images: NewImages(), invoke: func(task func()) { task() }}
+	s := &Surfaces{window: &modalFrontend{}, documents: NewDocuments(), images: NewImages(), modalPaintChange: make(chan struct{}),
+		invoke: func(task func()) { task() }}
 	return s, fake
 }
 
@@ -104,7 +115,7 @@ func TestTheInputWaitsFromTheShowOfAModalUntilItTakesTheKeyboard(t *testing.T) {
 	if err := s.ModalReady("picker", s.modal.instance); err != nil {
 		t.Fatalf("ModalReady: %v", err)
 	}
-	if want := []string{"hold", "focus true", "end"}; !reflect.DeepEqual(fake.calls, want) {
+	if want := []string{"hold", "focus true", "end", "paint"}; !reflect.DeepEqual(fake.calls, want) {
 		t.Fatalf("the ready modal made the calls %v, want %v: the input that waited reaches the modal after it took the keyboard", fake.calls, want)
 	}
 }
@@ -147,7 +158,49 @@ func TestAModalThatReplacesAnotherKeepsTheWaitUntilItTakesTheKeyboard(t *testing
 	if err := s.ModalReady("menu", s.modal.instance); err != nil {
 		t.Fatalf("ModalReady: %v", err)
 	}
-	if want := []string{"hold", "hold", "focus false", "focus true", "end"}; !reflect.DeepEqual(fake.calls, want) {
+	if want := []string{"hold", "hold", "focus false", "focus true", "end", "paint"}; !reflect.DeepEqual(fake.calls, want) {
 		t.Fatalf("the ready replacement made the calls %v, want %v", fake.calls, want)
+	}
+}
+
+// contract: host.window.presented waits for the first paint of the revealed modal (docs/spec/exposure.md, host.window.presented).
+func TestThePresentedWaitEndsAtThePaintOfTheShownModal(t *testing.T) {
+	s, fake := modalKeyboardSurfaces(t, false)
+	showPicker(t, s, "picker")
+	if err := s.ModalReady("picker", s.modal.instance); err != nil {
+		t.Fatalf("ModalReady: %v", err)
+	}
+	// The revealed modal holds its first paint back: the wait of presented stands.
+	ended := make(chan bool, 1)
+	go func() { ended <- s.waitForModalPaint(time.Second) }()
+	select {
+	case waiting := <-ended:
+		t.Fatalf("the wait of presented ended without the paint of the modal with %t", waiting)
+	case <-time.After(50 * time.Millisecond):
+	}
+	// The paint of the modal ends the wait.
+	fake.paint()
+	if waiting := <-ended; waiting {
+		t.Fatal("the wait of presented reported a modal without its paint")
+	}
+	// A modal that closes before its paint ends the wait of presented.
+	showPicker(t, s, "picker")
+	if err := s.ModalReady("picker", s.modal.instance); err != nil {
+		t.Fatalf("ModalReady of the second modal: %v", err)
+	}
+	go func() { ended <- s.waitForModalPaint(time.Second) }()
+	if err := s.OverlayHide("picker"); err != nil {
+		t.Fatalf("OverlayHide: %v", err)
+	}
+	if waiting := <-ended; waiting {
+		t.Fatal("the wait of presented reported a closed modal without its paint")
+	}
+	// A modal whose paint wait never starts reports its paint at once, and a modal that never presents ends the wait at the limit.
+	showPicker(t, s, "picker")
+	if err := s.OverlayHide("picker"); err != nil {
+		t.Fatalf("OverlayHide of the third modal: %v", err)
+	}
+	if waiting := s.waitForModalPaint(time.Second); waiting {
+		t.Fatal("the wait of presented reported no modal as a modal without its paint")
 	}
 }

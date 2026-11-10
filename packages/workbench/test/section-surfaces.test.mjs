@@ -22,11 +22,19 @@ test("a load keeps the entries of layout tabs and of the sections of a space of 
   assert.equal(kept("tab-gone"), false);
   assert.equal(kept("spc-aaaaaa/left/probe.tree"), true);
   assert.equal(kept("spc-bbbbbb/right/probe.dom"), true);
+  assert.equal(kept("spc-aaaaaa/top/probe.tree"), true, "the top window sidebar keeps its section");
+  assert.equal(kept("spc-bbbbbb/bottom/probe.dom"), true, "the bottom window sidebar keeps its section");
   assert.equal(kept("spc-aaaaaa/card-2:top/probe.marks"), true);
   assert.equal(kept("spc-bbbbbb/card-2:top/probe.marks"), false, "a card of another space does not keep the section");
   assert.equal(kept("spc-cccccc/left/probe.tree"), false, "a section of a removed space is dropped");
   assert.equal(kept("spc-aaaaaa/middle/probe.tree"), false, "a sidebar that is neither a window sidebar nor a card sidebar is dropped");
   assert.equal(kept("left/probe.tree"), false, "an id without a space is dropped");
+});
+
+test("a space holds the sections of the top and bottom window sidebars (docs/spec/external-sidebars.md)", () => {
+  const sets = [{ id: "wide", sections: ["alpha.tree"] }, { id: "plugin", sections: ["beta.list"] }];
+  const links = [{ place: "top", plugin: null, set: "wide" }, { place: "window-bottom", plugin: "beta", set: "plugin" }];
+  assert.deepEqual(spaceSectionSurfaces("spc", [], sets, links), ["spc/top/alpha.tree", "spc/bottom/beta.list"]);
 });
 
 test("a space holds the sections of the sets of its window sidebars and of the sides of its cards", () => {

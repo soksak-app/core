@@ -243,3 +243,152 @@ for (const app of Object.values(APPS))
       await expectContext("other card focus");
     },
   );
+
+// The four sides arrange in the order of sidebarOrder: the first side reaches across the plane (docs/spec/external-sidebars.md).
+for (const app of Object.values(APPS))
+  test(`${app.name}: the window sidebars of four sides arrange in their order`, { timeout: 90000 }, async (t) => {
+    const s = await open(t, app);
+    await fresh(s);
+    const { values } = await s.get("core.settings");
+    const set = values.sets[0]?.id;
+    assert.ok(set, "a sidebar set is required");
+    const links = values.links;
+    s.cleanup(() => s.run("core.settings.set", { patch: { top: false, bottom: false, sidebarOrder: ["left", "right", "top", "bottom"], links } }));
+    await s.run("core.settings.link", { place: "top", plugin: null, set });
+    await s.run("core.settings.link", { place: "bottom", plugin: null, set });
+    await s.run("core.settings.set", { patch: { top: true, bottom: true } });
+    const card = (grid, id) => grid.cards.find((item) => item.id === id);
+    const near = (a, b) => Math.abs(a - b) <= 1;
+    // The default order: left and right reach across the height, top and bottom stand between them.
+    const sides = await s.until("core.grid", (grid) => ["left", "right", "top", "bottom"].every((id) => card(grid, id)),
+      "the four window sidebars are not arranged");
+    const [left, right, top, bottom] = ["left", "right", "top", "bottom"].map((id) => card(sides, id));
+    assert.ok(near(left.h, sides.height) && near(right.h, sides.height), "left or right does not reach across the height");
+    assert.ok(near(top.x, left.x + left.w) || top.x > left.x + left.w, "top does not stand right of the left sidebar");
+    assert.ok(top.x + top.w <= right.x + 1 && bottom.x + bottom.w <= right.x + 1, "top or bottom reaches under the right sidebar");
+    assert.ok(await s.rect("core.chrome.top", 0) && await s.rect("core.chrome.bottom", 0), "the chrome has no top or bottom switch");
+    // Top first: the top sidebar reaches across the width and the left and right sidebars stand below it.
+    await s.run("core.settings.change", { key: "sidebarOrder", value: ["top", "left", "right", "bottom"] });
+    const first = await s.until("core.grid", (grid) => near(card(grid, "top").w, grid.width),
+      "the top sidebar does not reach across the width with top first");
+    assert.ok(card(first, "left").y >= card(first, "top").y + card(first, "top").h - 1, "the left sidebar does not stand below the top one");
+    // Hiding the first side arranges the others again, and the left sidebar reaches across the height.
+    await s.run("core.settings.set", { patch: { top: false } });
+    const hidden = await s.until("core.grid", (grid) => !card(grid, "top") && near(card(grid, "left").h, grid.height),
+      "hiding the first side left the left sidebar short");
+    assert.ok(card(hidden, "bottom"), "hiding the top sidebar closed the bottom one");
+  });
+
+// The sidebar settings of the section 일반 of the settings window keep the workbench answering (F714-13). Input: the order of the
+// window sidebars or the general sets of the sides change through the commands of the settings window. Expected: after each change
+// the workbench answers the next request, core.sidebars shows the window sidebars that the switches and the links give, and the
+// window sidebars stand where the order places them.
+for (const app of Object.values(APPS))
+  test(`${app.name}: the workbench answers after the sidebar settings of the settings window change`, { timeout: 120000 }, async (t) => {
+    const s = await open(t, app);
+    await fresh(s);
+    const { values, overridden } = await s.get("core.settings");
+    // The settings window shows the common scope of a project without overrides; a project value would hide a common change.
+    assert.deepEqual(overridden, [], "the fixture project overrides settings");
+    const sets = values.sets.map((set) => set.id);
+    assert.ok(sets.length >= 2, `two sidebar sets are required, the fixture has ${JSON.stringify(sets)}`);
+    const [first, second] = sets;
+    const initial = { links: values.links, sidebarOrder: values.sidebarOrder, left: values.left, right: values.right, top: values.top, bottom: values.bottom };
+    s.cleanup(() => s.run("core.settings.set", { patch: initial, scope: "common" }));
+    const sides = ["left", "right", "top", "bottom"];
+    // The window sidebars that the settings give: a side whose switch is on holds a sidebar when a link of the window chooses content
+    // for it, and the sidebar shows a set when the general link or the override of the focused plugin chooses one (docs/spec/external-sidebars.md).
+    async function answers(label) {
+      const settings = (await s.get("core.settings")).values;
+      const grid = await s.get("core.grid");
+      const focused = grid.cards.find((card) => card.focused);
+      const plugin = focused?.tabs.find((tab) => tab.id === focused.active)?.plugin ?? null;
+      const held = settings.sidebarOrder.filter((side) => settings[side] && settings.links.some((link) =>
+        link.place === side || link.place === `window-${side}`));
+      const expected = held.filter((side) => settings.links.some((link) =>
+        (link.place === side && link.plugin === null) || (link.place === `window-${side}` && link.plugin === plugin)));
+      const bars = await s.until("core.sidebars", (all) => {
+        const shown = all.filter((bar) => bar.placement === "window").map((bar) => bar.sidebar).sort();
+        return JSON.stringify(shown) === JSON.stringify([...expected].sort());
+      }, `${label}: core.sidebars does not show the window sidebars ${JSON.stringify(expected)}`);
+      const placed = (await s.until("core.grid", (now) => sides.every((side) => Boolean(now.cards.find((card) => card.id === side)) === held.includes(side)),
+        `${label}: the plane does not hold the window sidebars ${JSON.stringify(held)}`)).cards.filter((card) => sides.includes(card.id));
+      await s.presented();
+      assert.deepEqual((await s.get("core.verify")).rows.filter((row) => !row.ok), [], `${label}: a plane check fails`);
+      t.diagnostic(`${label}: sidebars ${bars.filter((bar) => bar.placement === "window").map((bar) => `${bar.sidebar}:${bar.set}`).join(", ")}; cards ${placed.map((card) => card.id).join(", ")}`);
+    }
+    await answers("fixture");
+    // The settings window stays open on its section 일반 while the controls change the settings, as a person uses it.
+    await s.run("core.settings.open");
+    s.cleanup(() => s.run("core.settings.close"));
+    const general = await s.until("core.settings-modal", (modal) => modal.open, "settings did not open");
+    const nav = general.controls.find((item) => item.name === "core.settings-modal.nav" && item.key === "nav:general");
+    await s.run(nav.command.name, nav.command.params);
+    await s.until("core.settings-modal", (modal) => modal.section === "general", "settings did not show 일반");
+    // Scrolls the settings window with the native wheel until the control stands inside the pane that scrolls, and returns the
+    // centre of the control in window coordinates. element.rect of a control of a native modal reports the rectangle of the copy
+    // that the person sees, so the scroll of the copy is already in it (docs/spec/exposure.md). The pane lies under the fixed head
+    // of the card, and the head covers the content that the scroll clips, so a control under the head takes no press.
+    async function reveal(label, name, index) {
+      for (;;) {
+        await s.presented();
+        // element.rect of a control of a native modal answers the report of the modal document, and the first report of a view
+        // races the frame that presents it, so the refused request is tried again after the next presented frame. A host that
+        // draws its modal itself answers element.rect at once and never refuses.
+        let rect;
+        for (;;) {
+          try {
+            rect = await s.rect(name, index);
+            break;
+          } catch (error) {
+            if (!/has not reported/.test(error.message)) throw error;
+            await s.presented();
+          }
+        }
+        const { pane, scroll } = await s.get("core.settings-modal");
+        const point = { x: (rect.document?.x ?? 0) + rect.x + rect.width / 2, y: (rect.document?.y ?? 0) + rect.y + rect.height / 2 };
+        if (point.y - rect.height / 2 >= pane.y && point.y + rect.height / 2 <= pane.y + pane.h) return point;
+        await s.pointer(pane.x + pane.w / 2, pane.y + pane.h / 2, "scroll", { deltaY: point.y - (pane.y + pane.h / 2) });
+        await s.until("core.settings-modal", (modal) => modal.scroll !== scroll,
+          `${label}: the settings window did not scroll from ${scroll} to ${name} ${index} at ${JSON.stringify(rect)} in the pane ${JSON.stringify(pane)}`);
+      }
+    }
+    // Changes a setting through a control of the settings window: a native click on a button or a switch, as a person presses it,
+    // or the command that a select points to with value as its input, because the menu of a select is a native menu outside the
+    // document. Then it waits until core.settings holds the change and checks that the workbench answers.
+    async function change(label, name, key, value, param, applied) {
+      const modal = await s.until("core.settings-modal", (state) => state.controls.some((item) => item.name === name && item.key === key),
+        `${label}: the settings control ${name} ${key} did not appear`);
+      const found = modal.controls.find((item) => item.name === name && item.key === key);
+      assert.ok(found.command, `${label}: ${name} ${key} has no command`);
+      let input = `the command ${found.command.name}`;
+      if (param === undefined) {
+        const point = await reveal(label, name, found.index);
+        await s.click(point.x, point.y);
+        input = `a click at ${JSON.stringify(point)} on ${name} ${found.index}`;
+      } else {
+        await s.run(found.command.name, { ...found.command.params, [param]: value });
+      }
+      await s.until("core.settings", (settings) => applied(settings.values), `${label}: core.settings does not hold the change after ${input}`);
+      await answers(label);
+    }
+    const order = "core.settings-modal.order";
+    const select = "core.settings-modal.set";
+    const linked = (place, set) => (values) => values.links.some((link) => link.place === place && link.plugin === null && link.set === set);
+    const ordered = (list) => (values) => JSON.stringify(values.sidebarOrder) === JSON.stringify(list);
+    // The order with top second: ▲ of the row of top in the order left, right, top, bottom.
+    await change("order left, top, right, bottom", order, "order:sidebarOrder:2:up", undefined, undefined, ordered(["left", "top", "right", "bottom"]));
+    await change("order left, right, top, bottom", order, "order:sidebarOrder:1:down", undefined, undefined, ordered(["left", "right", "top", "bottom"]));
+    // The general sets of the sides with the switches of top and bottom off.
+    await change("left general set", select, "link:left:", first, "set", linked("left", first));
+    await change("right general set", select, "link:right:", first, "set", linked("right", first));
+    await change("top general set", select, "link:top:", second, "set", linked("top", second));
+    await change("bottom general set", select, "link:bottom:", second, "set", linked("bottom", second));
+    // The switches of top and bottom on and off again with every side linked, and top first.
+    await change("top switch on", select, "top", undefined, undefined, (values) => values.top === true);
+    await change("bottom switch on", select, "bottom", undefined, undefined, (values) => values.bottom === true);
+    await change("order left, top, right, bottom with top shown", order, "order:sidebarOrder:2:up", undefined, undefined, ordered(["left", "top", "right", "bottom"]));
+    await change("order top, left, right, bottom", order, "order:sidebarOrder:1:up", undefined, undefined, ordered(["top", "left", "right", "bottom"]));
+    await change("top switch off", select, "top", undefined, undefined, (values) => values.top === false);
+    await change("bottom switch off", select, "bottom", undefined, undefined, (values) => values.bottom === false);
+  });

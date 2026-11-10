@@ -209,6 +209,7 @@ type NativeFunctions struct {
 	ModalViewFocus                        func(unsafe.Pointer, int32)
 	NativeFunctionPresentation            func(uintptr) unsafe.Pointer
 	NativeLayoutObserve                   func()
+	NativeWebviewAfterPresentation        func(unsafe.Pointer, uintptr) bool
 	NativeWebviewBackground               func(unsafe.Pointer, bool)
 	NativeWebviewBounds                   func(unsafe.Pointer, float64, float64, float64, float64)
 	NativeWebviewClose                    func(unsafe.Pointer)
@@ -602,6 +603,9 @@ func (functions NativeFunctions) Validate() error {
 	}
 	if functions.NativeLayoutObserve == nil {
 		return fmt.Errorf("native API function is missing: nativeLayoutObserve")
+	}
+	if functions.NativeWebviewAfterPresentation == nil {
+		return fmt.Errorf("native API function is missing: nativeWebviewAfterPresentation")
 	}
 	if functions.NativeWebviewBackground == nil {
 		return fmt.Errorf("native API function is missing: nativeWebviewBackground")

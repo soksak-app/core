@@ -305,7 +305,7 @@ func (s *Sidebars) set(id string) *SidebarSet {
 // Sides returns the sides that have a fixed sidebar: those that a link of the window chooses content for.
 func (s *Sidebars) Sides() []string {
 	sides := []string{}
-	for _, side := range []string{"left", "right"} {
+	for _, side := range layout.WindowSides {
 		if slices.ContainsFunc(s.links, func(link SidebarLink) bool { return link.Place == side || link.Place == "window-"+side }) {
 			sides = append(sides, side)
 		}
@@ -372,7 +372,14 @@ func (s *Sidebars) choice(sidebar string) *SidebarChoice {
 func (s *Sidebars) Begin() { s.drawn = nil }
 
 // Holds reports whether the card id is a fixed sidebar of the window.
-func (s *Sidebars) Holds(id string) bool { return id == "left" || id == "right" }
+func (s *Sidebars) Holds(id string) bool { return layout.IsWindowSide(id) }
+
+// sideNames are the names of the sides in the status line, the fold control and the chrome switch of a window sidebar.
+var sideNames = map[string]string{"left": "왼쪽", "right": "오른쪽", "top": "위", "bottom": "아래"}
+
+// foldPaths are the chevrons of the fold control of the sidebar of each side, pointing toward the side, as packages/workbench/icons.js
+// holds them.
+var foldPaths = map[string]string{"left": "m15 18-6-6 6-6", "right": "m9 18 6-6-6-6", "top": "m18 15-6-6-6 6", "bottom": "m6 9 6 6 6-6"}
 
 // Status returns the text of the status line of the fixed sidebar place: its side, and the plugin of the focused surface whose set
 // it shows. It records nothing, so a status read takes it without a build.
@@ -383,10 +390,7 @@ func (s *Sidebars) Status(place string, focused FocusedSurface) string {
 
 // windowSidebarStatus is the status line of the fixed sidebar place that shows the set of plugin, or an ordinary set without one.
 func windowSidebarStatus(place, plugin string) string {
-	status := "왼쪽 창 사이드바"
-	if place == "right" {
-		status = "오른쪽 창 사이드바"
-	}
+	status := sideNames[place] + " 창 사이드바"
 	if plugin != "" {
 		status += " · " + plugin
 	}
@@ -398,8 +402,13 @@ func (s *Sidebars) Frame(place, space string, focused FocusedSurface) (SidebarFr
 	if !s.Holds(place) {
 		return SidebarFrame{}, fmt.Errorf("unknown window sidebar %s", place)
 	}
+	// The sections of a top or bottom window sidebar lie horizontally, of a left or right one vertically (docs/spec/external-sidebars.md).
+	orientation := "vertical"
+	if layout.WindowAxis(place) == "y" {
+		orientation = "horizontal"
+	}
 	set, plugin := s.windowSet(place, focused)
-	frame := SidebarFrame{Sidebar: place, Space: space, Orientation: "vertical", Side: place, Status: windowSidebarStatus(place, plugin)}
+	frame := SidebarFrame{Sidebar: place, Space: space, Orientation: orientation, Side: place, Status: windowSidebarStatus(place, plugin)}
 	if set == nil {
 		return frame, nil
 	}
@@ -460,7 +469,7 @@ func (s *Sidebars) drawnMetrics() SidebarMetrics {
 // them, whichever plugin has the focus.
 func (s *Sidebars) windowSurfaces(space string, sets []SidebarSet, links []SidebarLink) []string {
 	var surfaces []string
-	for _, place := range []string{"left", "right"} {
+	for _, place := range layout.WindowSides {
 		seen := map[string]bool{}
 		for _, link := range links {
 			if (link.Place == place || link.Place == "window-"+place) && !seen[link.Set] {

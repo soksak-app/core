@@ -61,6 +61,18 @@ func (implementation) JoinView(window platform.Window, ticket uint64, view unsaf
 	return abandon, true, nil
 }
 
+// AfterViewPresentation calls presented after the view presented its next frame. The wait of the presentation callback runs in
+// its own main-thread step, so it can end after the modal that started it closed; the caller treats a call that never comes as
+// a wait that ended without a presentation.
+func (implementation) AfterViewPresentation(view unsafe.Pointer, presented func()) bool {
+	handle := handles.NewHandle(presented)
+	if !bool(native.NativeWebviewAfterPresentation(view, uintptr(handle))) {
+		handle.Delete()
+		return false
+	}
+	return true
+}
+
 func (implementation) StartPageTitlebar(window platform.Window, ticket uint64, height float64, ready func(error)) error {
 	handle := handles.NewHandle(ready)
 	native.NativeWindowStartPage(uintptr(window), uint64(ticket), float64(height), uintptr(handle))

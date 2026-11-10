@@ -11,6 +11,7 @@
 #import "window_fullscreen.h"
 #import "window_facts.h"
 #import "main_thread.h"
+#import "private/webkit.h"
 #include "host_callbacks.h"
 
 
@@ -265,6 +266,19 @@ bool nativeWindowAfterPresentation(uintptr_t handle, uintptr_t callback) {
 }
 bool nativeWindowJoinView(uintptr_t window, uint64_t ticket, void *view, uintptr_t callback) {
     return ON_MAIN(bool, nativeWindowJoinViewOnMain((void *)window, ticket, view, callback));
+}
+// Runs callback after the web view presented its next frame. The host waits for the first frame of a revealed modal web view
+// with it (docs/spec/exposure.md, host.window.presented).
+static bool nativeWebviewAfterPresentationOnMain(void *handle, uintptr_t callback) {
+    WKWebView *target = (WKWebView *)handle;
+    if (!target) return false;
+    [target _doAfterNextPresentationUpdate:^{
+        hostRunOnWorker(^{ sp_host_callback_native_presentation_done(callback); });
+    }];
+    return true;
+}
+bool nativeWebviewAfterPresentation(void *view, uintptr_t callback) {
+    return ON_MAIN(bool, nativeWebviewAfterPresentationOnMain(view, callback));
 }
 void *nativeWindowMainPresentation(uintptr_t handle) {
     return ON_MAIN(void *, nativeWindowMainPresentationOnMain((void *)handle));

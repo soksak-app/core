@@ -1188,7 +1188,7 @@ func checkSidebarDefaults(where string, manifest map[string]any, raw any) error 
 	for _, side := range []struct {
 		kind  string
 		sides []string
-	}{{"card", []string{"top", "bottom", "left", "right"}}, {"window", []string{"left", "right"}}} {
+	}{{"card", []string{"top", "bottom", "left", "right"}}, {"window", []string{"left", "right", "top", "bottom"}}} {
 		mapping, present := sidebars[side.kind]
 		if !present {
 			continue

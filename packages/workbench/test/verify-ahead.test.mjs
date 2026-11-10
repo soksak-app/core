@@ -32,7 +32,7 @@ test("a failed V7c names the surface and both of its rectangles", async (t) => {
     railOutline: () => ({ shape: { sharp: 0, corners: 0, loops: [] }, rects: [], groups: [] }), tabsOf: () => [],
   } });
   t.mock.module("../registry.js", { exports: { isPlace: () => false } });
-  t.mock.module("../settings.js", { exports: { cardRadius: () => 4 } });
+  t.mock.module("../settings.js", { exports: { cardRadius: () => 4, value: (key) => (key === "sidebarOrder" ? ["left", "right", "top", "bottom"] : undefined) } });
   const { verify } = await import("../verify.js");
   const row = verify().find((item) => item.name.startsWith("V7c "));
   assert.equal(row.ok, false);
@@ -59,7 +59,7 @@ async function verifyAhead(t, extra, guessed) {
     presentedCardRect: () => undefined, railOutline: () => ({ shape: { sharp: 0, corners: 0, loops: [] }, rects: [], groups: [] }), tabsOf: () => [],
   } });
   t.mock.module("../registry.js", { exports: { isPlace: () => false } });
-  t.mock.module("../settings.js", { exports: { cardRadius: () => 4 } });
+  t.mock.module("../settings.js", { exports: { cardRadius: () => 4, value: (key) => (key === "sidebarOrder" ? ["left", "right", "top", "bottom"] : undefined) } });
   const { verify } = await import(`../verify.js?ahead-${Math.random()}`);
   return verify().find((item) => item.name.startsWith("V7c "));
 }
@@ -96,7 +96,7 @@ test("a failed V7b names the surface and its declared and applied rectangles", a
     railOutline: () => ({ shape: { sharp: 0, corners: 0, loops: [] }, rects: [], groups: [] }), tabsOf: () => [],
   } });
   t.mock.module("../registry.js", { exports: { isPlace: () => false } });
-  t.mock.module("../settings.js", { exports: { cardRadius: () => 4 } });
+  t.mock.module("../settings.js", { exports: { cardRadius: () => 4, value: (key) => (key === "sidebarOrder" ? ["left", "right", "top", "bottom"] : undefined) } });
   const { verify } = await import("../verify.js?v7b");
   const row = verify().find((item) => item.name.startsWith("V7b "));
   assert.equal(row.ok, false);
@@ -122,7 +122,7 @@ test("V7b compares the applied rectangle with the declared rectangle fitted inwa
     railOutline: () => ({ shape: { sharp: 0, corners: 0, loops: [] }, rects: [], groups: [] }), tabsOf: () => [],
   } });
   t.mock.module("../registry.js", { exports: { isPlace: () => false } });
-  t.mock.module("../settings.js", { exports: { cardRadius: () => 4 } });
+  t.mock.module("../settings.js", { exports: { cardRadius: () => 4, value: (key) => (key === "sidebarOrder" ? ["left", "right", "top", "bottom"] : undefined) } });
   const { verify } = await import("../verify.js?v7b-fitted");
   const row = verify().find((item) => item.name.startsWith("V7b "));
   assert.equal(row.ok, true, row.note);

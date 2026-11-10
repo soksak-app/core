@@ -35,7 +35,7 @@ async function verifyThirds(t, declared, applied, seat = 3, laid = 3, slot = rec
     presentedCardRect: () => undefined, railOutline: () => ({ shape: { sharp: 0, corners: 0, loops: [] }, rects: [], groups: [] }), tabsOf: () => [],
   } });
   t.mock.module("../registry.js", { exports: { isPlace: () => false } });
-  t.mock.module("../settings.js", { exports: { cardRadius: () => 4 } });
+  t.mock.module("../settings.js", { exports: { cardRadius: () => 4, value: (key) => (key === "sidebarOrder" ? ["left", "right", "top", "bottom"] : undefined) } });
   const { verify } = await import(`../verify.js?thirds-${Math.random()}`);
   const rows = verify();
   return { v7c: rows.find((item) => item.name.startsWith("V7c ")), v7b: rows.find((item) => item.name.startsWith("V7b ")) };
