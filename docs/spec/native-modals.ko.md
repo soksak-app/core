@@ -27,7 +27,7 @@ mygo host는 modal web view를 만들지 않는다: 그 workbench의 modal은 na
 
 ## 키보드
 
-modal web view 는 그 문서가 렌더를 마쳤다고 알릴 때(`modalReady`) 창의 키보드를 받고, 그 전에는 받지 않는다. 숨은 web view 가 키보드를 가지면 사람이 볼 수 없는 곳이 키를 받기 때문이다. 그래서 modal 이 열리는 순간 사람이 누른 키는 뒤의 view 에 닿지 않고 modal 을 기다린다. modal 의 show 는 이전 modal 을 제거하고 web view 를 만들기 전에 창 input 의 modal hold 를 열고, hold 는 ready 요청이 modal 에 키보드를 준 뒤에 끝나므로 기다린 키는 순서대로 modal 에 닿는다. modal 이 키보드를 받기 전에 modal 이 닫히거나 show 가 실패하거나 main page 가 시작해도 hold 는 끝나고, 창이 닫히면 hold 가 담은 것은 버려진다. 시간은 hold 를 끝내지 않는다. modal 을 교체하는 show 는 교체한 modal 을 위해 hold 를 유지한다. modal hold 는 워크벤치의 결정을 기다리는 창 input 의 붙잡기와 같은 붙잡기다([surface 의 키보드](native-surfaces.ko.md#surface의-키보드)). 붙잡기는 둘 중 하나라도 기다리는 동안 서 있으므로, modal 을 연 press 뒤에 오는 decided 호출은 modal 이 로드되는 동안 input 을 돌려주지 않는다. modal 을 여는 core command 는 호스트가 그 show 에 응답한 뒤에 응답하므로, command 가 응답할 때 hold 는 열려 있다([exposure](exposure.ko.md#등록)).
+modal web view 는 그 문서가 렌더를 마쳤다고 알릴 때(`modalReady`) 창의 키보드를 받고, 그 전에는 받지 않는다. 숨은 web view 가 키보드를 가지면 사람이 볼 수 없는 곳이 키를 받기 때문이다. 그래서 modal 이 열리는 순간 사람이 누른 키는 뒤의 view 에 닿지 않고 modal 을 기다린다. modal 의 show 는 이전 modal 을 제거하고 web view 를 만들기 전에 창의 키 대기를 시작하고, ready 요청이 modal 에 키보드를 주면 기다린 키는 순서대로 modal 에 닿는다. 기다리는 것은 키뿐이고 pointer event 는 붙잡지 않으므로, scrim 이나 modal 위의 press 는 곧바로 닿는다. modal 이 닫히거나, show 가 실패하거나, 그 문서의 process 가 끝나거나, main page 가 시작하거나, 창이 닫혀도 대기는 끝나고, 창 닫힘은 키를 버린다. 시간은 대기를 끝내지 않는다. modal 을 교체하는 show 는 교체한 modal 을 위해 대기를 유지한다. modal 대기는 워크벤치의 결정을 기다리는 창의 키 대기와 같은 대기다([surface 의 키보드](native-surfaces.ko.md#surface의-키보드)). 둘 중 하나라도 기다리는 동안 키는 기다린다. modal 을 여는 core command 는 호스트가 그 show 에 응답한 뒤에 응답하므로, command 가 응답할 때 대기는 열려 있다([exposure](exposure.ko.md#등록)).
 
 ## 사용
 

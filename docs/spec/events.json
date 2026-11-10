@@ -4587,7 +4587,7 @@
         ]
       }
     },
-    "native.keyboard.hold_dropped": {
+    "native.keyboard.wait_dropped": {
       "layer": "native",
       "class": "input",
       "level": "warn",
@@ -4600,7 +4600,6 @@
           },
           "reason": {
             "enum": [
-              "full",
               "closed"
             ]
           }
