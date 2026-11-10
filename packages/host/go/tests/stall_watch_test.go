@@ -112,7 +112,7 @@ func TestABlockedMainThreadIsRecordedWithItsStacksAndItsEnd(t *testing.T) {
 	clock.beats(t, 2)
 	loop.wake(true)
 	clock.beats(t, 4)
-	records.require(t, "host.stall")
+	records.requireBeats(t, "host.stall")
 	records.await(t, "host.stall,host.stall.sampled")
 	// The main thread answers again, and the next beat at 1750 ms is the end of the stall.
 	loop.wake(false)
@@ -376,6 +376,23 @@ func (r *stallRecords) require(t *testing.T, want string) {
 	}
 }
 
+// requireBeats checks the records that the beats stored, after the watch parked, while the sample of the stall runs apart from
+// the beats and ends without a wait of its own: its host.stall.sampled comes before or after that park, so it is not one of them.
+func (r *stallRecords) requireBeats(t *testing.T, want string) {
+	t.Helper()
+	r.mu.Lock()
+	names := make([]string, 0, len(r.names))
+	for _, name := range r.names {
+		if name != "host.stall.sampled" {
+			names = append(names, name)
+		}
+	}
+	r.mu.Unlock()
+	if got := strings.Join(names, ","); got != want {
+		t.Fatalf("events that the beats stored %q, want %q", got, want)
+	}
+}
+
 // await waits for the records of a sample, which ends apart from the beats.
 func (r *stallRecords) await(t *testing.T, want string) {
 	t.Helper()
@@ -437,7 +454,7 @@ func TestARunLoopThatWaitsTakesNoHeartbeat(t *testing.T) {
 	loop.wake(true)
 	clock.requirePark(t, "beat")
 	clock.beats(t, 4)
-	records.require(t, "host.stall")
+	records.requireBeats(t, "host.stall")
 	records.await(t, "host.stall,host.stall.sampled")
 	records.mu.Lock()
 	defer records.mu.Unlock()

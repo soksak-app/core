@@ -149,6 +149,17 @@ impl Records {
         assert_eq!(self.names(), want, "the records of the watch");
     }
 
+    /// Checks the records that the beats stored, after the watch parked, while the sample of the stall runs apart from the beats
+    /// and ends without a wait of its own: its `host.stall.sampled` comes before or after that park, so it is not one of them.
+    fn require_beats(&self, want: &[&str]) {
+        let names: Vec<String> = self
+            .names()
+            .into_iter()
+            .filter(|name| name != "host.stall.sampled")
+            .collect();
+        assert_eq!(names, want, "the records that the beats stored");
+    }
+
     /// Waits for the records of a sample, which ends apart from the beats.
     fn wait_for(&self, want: &[&str]) {
         let (count, added) = &*self.added;
@@ -267,7 +278,7 @@ fn a_blocked_main_thread_is_recorded_with_its_stacks_and_its_end() {
     time.beats(2);
     run_loop.wake(true);
     time.beats(4);
-    records.require(&["host.stall"]);
+    records.require_beats(&["host.stall"]);
     records.wait_for(&["host.stall", "host.stall.sampled"]);
     // The main thread answers again, and the next beat at 1750 ms is the end of the stall.
     run_loop.wake(false);
@@ -462,7 +473,7 @@ fn a_run_loop_that_waits_takes_no_heartbeat() {
     run_loop.wake(true);
     time.require_park("beat");
     time.beats(4);
-    records.require(&["host.stall"]);
+    records.require_beats(&["host.stall"]);
     records.wait_for(&["host.stall", "host.stall.sampled"]);
     assert_eq!(records.fields(0)["late_ms"], 1000, "late_ms from the wake");
     assert_eq!(records.fields(0)["watch_late_ms"], 0);
