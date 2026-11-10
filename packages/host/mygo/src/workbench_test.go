@@ -66,7 +66,9 @@ func TestAWorkbenchWhoseStartFailsIsNotShown(t *testing.T) {
 func TestAStartWhoseWindowClosedEndsWithoutAFailure(t *testing.T) {
 	workbench := &startRecord{}
 	framework := NewFramework(workbench)
-	framework.start = func(*host.Host, host.Frontend, bool) error { return fmt.Errorf("workbench start: %w", host.ErrNoStartWindow) }
+	framework.start = func(*host.Host, host.Frontend, bool) error {
+		return fmt.Errorf("workbench start: %w", host.ErrNoStartWindow)
+	}
 	framework.host.Store(&host.Host{})
 	window := &Frontend{name: "main", framework: framework}
 	window.startHeld()

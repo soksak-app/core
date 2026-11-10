@@ -2,7 +2,7 @@
 // the key window, the first responder or the menu key equivalents. This module sends HID events with CGEventPost and so uses the same
 // path as the user. The terminal that runs the checks needs the Accessibility permission. The module uses the pointer and the keyboard of the user, so
 // run it only in a run that the user approved, in the real-input tier of the checks (`make test-app-real` in core,
-// `soksak-test-app --real` in a plugin repository).
+// `sok-test-app --real` in a plugin repository).
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";

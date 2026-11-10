@@ -135,7 +135,8 @@
     "docs/spec/cases/layout/",
     "docs/spec/cases/log-contract/query/",
     "docs/spec/cases/project-data/",
-    "docs/spec/events.json"
+    "docs/spec/events.json",
+    "docs/spec/example-model.md"
   ],
   "dependencies": {
     "@soksak/plugin-api": "workspace:*",

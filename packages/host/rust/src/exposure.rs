@@ -2344,6 +2344,7 @@ pub fn presented(window: &Window, timeout: Duration) -> Result<f64, Failure> {
     // the modal.
     let remaining = deadline
         .checked_duration_since(Instant::now())
+        // default: a deadline that passed leaves no time, so the wait reports an unpainted modal as late at once.
         .unwrap_or(Duration::ZERO);
     if crate::modals::wait_for_paint(window, remaining) {
         return Err(Failure::new(

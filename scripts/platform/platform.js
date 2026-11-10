@@ -17,6 +17,7 @@ export class PlatformOperationNotImplemented extends Error {
 const implementations = new Map([
   ['darwin', () => import('./darwin/darwin.mjs')],
   ['linux', () => import('./linux/linux.mjs')],
+  ['win32', () => import('./windows/windows.mjs')],
 ]);
 const releaseSystems = new Map([['darwin', 'darwin'], ['linux', 'linux'], ['win32', 'windows']]);
 const releaseArchitectures = new Set(['arm64', 'x64']);
@@ -39,6 +40,15 @@ export function releasePlatform({ platform = process.platform, arch = process.ar
 /** The registry key of the core release of `app` on the declared platform, `<platform>-<host>` (docs/spec/installation.md). */
 export function releaseKey(app, { platform = process.platform, arch = process.arch } = {}) {
   return `${releasePlatform({ platform, arch })}-${app}`;
+}
+
+/**
+ * The folder that holds the temporary folders of the processes of a test run (docs/operations/examples.md#temporary-folders). The
+ * host tests place unix sockets in their temporary folder, and a socket path holds at most 103 bytes
+ * (`endpoint.socket.path-over-limit` of docs/spec/host-contract.md), so the platform chooses a folder that leaves the sockets room.
+ */
+export async function processFolderRoot({ platform = process.platform } = {}) {
+  return (await implementation('processFolderRoot', platform))();
 }
 
 /** The path of the declared application artifact of `app` in the build output `folder` (for example `<target>/debug`). */

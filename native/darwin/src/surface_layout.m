@@ -219,6 +219,7 @@ static SPKeyWait *keyWait(void *owner) {
 static BOOL giveKeys(void *owner, SPKeyWait *wait, SPHeldInput *after) {
     [[wait retain] autorelease];
     [keyWaits removeObjectForKey:[NSValue valueWithPointer:owner]];
+    // silent: a wait without keys has nothing to return, so after was not sent with them and its caller sends it on.
     if (wait.keys.count == 0) return NO;
     NSMutableArray<SPHeldInput *> *pieces = [NSMutableArray arrayWithArray:wait.keys];
     if (after) [pieces addObject:after];
@@ -229,8 +230,10 @@ static BOOL giveKeys(void *owner, SPKeyWait *wait, SPHeldInput *after) {
 // Ends the wait of the decision of owner; the keys go when the modal does not wait either.
 static BOOL endDecision(void *owner, SPHeldInput *after) {
     SPKeyWait *wait = keyWait(owner);
+    // silent: an owner without a key wait has no decision to end, so the caller sends the press on itself.
     if (!wait) return NO;
     wait.decision = NO;
+    // silent: the modal still waits, so the keys keep waiting and the caller sends the press on itself.
     if (wait.modal) return NO;
     return giveKeys(owner, wait, after);
 }
@@ -239,6 +242,7 @@ static BOOL endDecision(void *owner, SPHeldInput *after) {
 // Returns whether the piece was taken; a piece that is not taken goes on now.
 static BOOL keyWaitTakes(void *owner, SPHeldInput *piece) {
     SPKeyWait *wait = keyWait(owner);
+    // silent: an owner without a key wait takes no piece, so the piece goes on now.
     if (!wait) return NO;
     if (piece.key) {
         if (!wait.keys) wait.keys = [NSMutableArray array];
@@ -264,10 +268,12 @@ static void runHeldTurn(long turn) {
 // The key wait of the window of event takes a key event or ends its decision at a press event.
 static BOOL keyWaitTakesEvent(NSEvent *event) {
     NSWindow *window = event.window;
+    // silent: an event without a window or of a window without a key wait is not taken, so it goes on now.
     if (!window || !keyWait(window)) return NO;
     NSEventType type = event.type;
     BOOL key = type == NSEventTypeKeyDown || type == NSEventTypeKeyUp || type == NSEventTypeFlagsChanged;
     BOOL press = type == NSEventTypeLeftMouseDown || type == NSEventTypeRightMouseDown || type == NSEventTypeOtherMouseDown;
+    // silent: an event that is neither a key nor a press is not taken by a key wait, so it goes on now.
     if (!key && !press) return NO;
     return keyWaitTakes(window, heldPiece(window, event, nil, key, press));
 }

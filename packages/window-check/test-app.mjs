@@ -1,6 +1,6 @@
 // The window-check run of a plugin repository against the published core application (docs/spec/plugins.md#window-checks-of-a-plugin):
-//   soksak-test-app [--app <host>] [--real] [--pack <command> | --index <index>] [--check-timeout <seconds>] [<file, folder or glob>...]
-// run from the root of the plugin repository (`pnpm exec soksak-test-app`). The core version is the version of this installed
+//   sok-test-app [--app <host>] [--real] [--pack <command> | --index <index>] [--check-timeout <seconds>] [<file, folder or glob>...]
+// run from the root of the plugin repository (`pnpm exec sok-test-app`). The core version is the version of this installed
 // @soksak/window-check, the core release that the plugin repository names. For each application of the run (`--app`, or requiredApps
 // of app.mjs, so SOKSAK_APP selects one) the run downloads the published application zip `soksak-<version>-darwin-arm64-<host>.zip`
 // into build/app-cache/<version>/ of the repository once and extracts its bundle there with ditto. Each run makes a new configuration
@@ -197,7 +197,7 @@ export function checkEnv(root, executables, index) {
 }
 
 /**
- * The options of `soksak-test-app`: `{ apps, pack, index, checkTimeout, real, checks }`; `checks` is undefined when no path is given.
+ * The options of `sok-test-app`: `{ apps, pack, index, checkTimeout, real, checks }`; `checks` is undefined when no path is given.
  * `index` is the path of the registry index that `--index` names as a file URL or a path, or undefined; with it `pack` is undefined.
  */
 export function parseTestAppOptions(argv, env = process.env) {
@@ -483,7 +483,7 @@ export function remainingProcesses(listing, paths, self = process.pid) {
 }
 
 /**
- * Runs the window checks of the plugin repository `root` (`soksak-test-app`). Resolves with the failures, each
+ * Runs the window checks of the plugin repository `root` (`sok-test-app`). Resolves with the failures, each
  * `<step>: <reason>`; an empty list is a passed run.
  */
 export async function testApp({ root, apps = requiredApps(process.env), pack = DEFAULT_PACK, index, real = false, checks,
@@ -551,7 +551,7 @@ export async function testApp({ root, apps = requiredApps(process.env), pack = D
   return failures;
 }
 
-/** Runs `soksak-test-app` with the arguments `argv` in the repository `root`; resolves with the exit status. */
+/** Runs `sok-test-app` with the arguments `argv` in the repository `root`; resolves with the exit status. */
 export async function testAppCommand(argv, { root = resolve(process.cwd()) } = {}) {
   const options = parseTestAppOptions(argv);
   const interrupt = new AbortController();

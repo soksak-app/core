@@ -346,6 +346,8 @@ static PENDING_QUIT: Mutex<Option<QuitSource>> = Mutex::new(None);
 
 /// Holds `source` for the exit request that the quit of the caller leads to.
 pub fn request_quit_source(source: QuitSource) {
+    // default: a lock that a panicking thread poisoned still holds an optional source, which this call replaces as a
+    // whole; the panic hook records the panic.
     *PENDING_QUIT.lock().unwrap_or_else(PoisonError::into_inner) = Some(source);
 }
 
@@ -386,8 +388,12 @@ pub fn quit_from_signal(
 pub fn emit_exit_request(event_type: impl FnOnce() -> i32) {
     let pending = PENDING_QUIT
         .lock()
+        // default: a lock that a panicking thread poisoned still holds an optional source, which this call takes as a
+        // whole; the panic hook records the panic.
         .unwrap_or_else(PoisonError::into_inner)
         .take();
+    // default: no pending source means that no part of the host asked for the quit, so it came from the menu or a key
+    // equivalent of the framework.
     let source = pending.unwrap_or_else(|| menu_quit_source(event_type()));
     emit_closed("exit-request", source);
 }

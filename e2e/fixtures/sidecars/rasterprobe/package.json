@@ -8,6 +8,6 @@
   "os": ["darwin"],
   "files": ["sidecar.json", "events.json", "bin"],
   "scripts": {
-    "build": "cargo build --release --locked && mkdir -p bin && cp target/release/rasterprobe-service bin/rasterprobe-service"
+    "build": "cargo build --release --locked && mkdir -p bin && cp target/release/sok-rasterprobe bin/sok-rasterprobe"
   }
 }

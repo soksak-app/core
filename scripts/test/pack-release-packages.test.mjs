@@ -58,13 +58,13 @@ test('the packed window check packages resolve from the core release and hold th
     }
     if (manifest.name !== '@soksak/window-check') continue;
     // A plugin repository runs its checks with the bin, the catalog of core, the start state and the start probe of the release.
-    for (const path of ['catalog.mjs', 'core-events.json', 'start.mjs', 'test-app.mjs', 'soksak-test-app.mjs',
+    for (const path of ['catalog.mjs', 'core-events.json', 'start.mjs', 'test-app.mjs', 'sok-test-app.mjs',
       'fixtures/start-probe/plugin.json', 'fixtures/start-probe/package.json', 'fixtures/start-probe/ui/page.html', 'fixtures/start-probe/ui/app.js']) {
       assert.ok(entries.has(`package/${path}`), `@soksak/window-check does not hold ${path}`);
     }
     assert.equal(execFileSync('tar', ['-xzOf', file, 'package/core-events.json'], { encoding: 'utf8' }),
       readFileSync(join(ROOT, 'docs/spec/events.json'), 'utf8'), 'the core catalog of @soksak/window-check differs from docs/spec/events.json');
-    assert.equal(manifest.bin['soksak-test-app'], './soksak-test-app.mjs');
+    assert.equal(manifest.bin['sok-test-app'], './sok-test-app.mjs');
     assert.ok(entries.has('package/catalog.mjs') && manifest.dependencies['@soksak/plugin-api'] === releaseUrl('@soksak/plugin-api', manifest.version),
       '@soksak/window-check names @soksak/plugin-api by its release address');
   }
