@@ -36,6 +36,15 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
+// The row of process in the rows of pagelessProcesses, or nil. Other processes without a page, such as the process that a page
+// left when it moved to another, are facts of their own, and the check judges only the process that it closes.
+static NSDictionary *rowOf(NSArray *rows, pid_t process) {
+    for (NSDictionary *row in rows) {
+        if ([row[@"pid"] intValue] == process) return row;
+    }
+    return nil;
+}
+
 static id parse(char *text) {
     if (!text) return nil;
     id value = [NSJSONSerialization JSONObjectWithData:[NSData dataWithBytes:text length:strlen(text)] options:0 error:nil];
@@ -237,7 +246,8 @@ int main(void) { @autoreleasepool {
         closingProcess = [[closing valueForKey:@"_webProcessIdentifier"] intValue];
         NSDictionary *withPage = parse(sp_window_facts(window, sp_window_composition(window)));
         check(closingProcess > 0 && closingProcess != pageProcess
-                && [withPage[@"pagelessProcesses"] isKindOfClass:NSArray.class] && [withPage[@"pagelessProcesses"] count] == 0,
+                && [withPage[@"pagelessProcesses"] isKindOfClass:NSArray.class]
+                && !rowOf(withPage[@"pagelessProcesses"], closingProcess) && !rowOf(withPage[@"pagelessProcesses"], pageProcess),
             [NSString stringWithFormat:@"a process that holds a page is not reported without one: %d, %@", closingProcess,
                 withPage[@"pagelessProcesses"]]);
         exitSource = dispatch_source_create(DISPATCH_SOURCE_TYPE_PROC, (uintptr_t)closingProcess, DISPATCH_PROC_EXIT,
@@ -248,18 +258,19 @@ int main(void) { @autoreleasepool {
         [closing release];
     }
     NSDictionary *withoutPage = parse(sp_window_facts(window, sp_window_composition(window)));
+    NSDictionary *closingRow = rowOf(withoutPage[@"pagelessProcesses"], closingProcess);
     NSArray *pageless = withoutPage[@"pagelessProcesses"];
     // The process may have exited before this reading, which then reports nothing for it.
     check(closingExited || kill(closingProcess, 0) != 0
-            || (pageless.count == 1 && [pageless[0][@"pid"] intValue] == closingProcess && [pageless[0][@"ending"] boolValue]
+            || (closingRow && [closingRow[@"ending"] boolValue]
                // The hosts read ending as a JSON boolean, so a number is a wrong fact.
-               && CFGetTypeID((CFTypeRef)pageless[0][@"ending"]) == CFBooleanGetTypeID()),
+               && CFGetTypeID((CFTypeRef)closingRow[@"ending"]) == CFBooleanGetTypeID()),
         [NSString stringWithFormat:@"the process whose page closed is reported without a page and ending: %@", pageless]);
     sp_run_until("the process of the closed page exits", ^BOOL { return closingExited; });
     dispatch_source_cancel(exitSource);
     dispatch_release(exitSource);
     NSDictionary *afterExit = parse(sp_window_facts(window, sp_window_composition(window)));
-    check([afterExit[@"pagelessProcesses"] count] == 0,
+    check([afterExit[@"pagelessProcesses"] isKindOfClass:NSArray.class] && !rowOf(afterExit[@"pagelessProcesses"], closingProcess),
         [NSString stringWithFormat:@"a process without a page that exited is no longer reported: %@", afterExit[@"pagelessProcesses"]]);
     check(![facts[@"active"] boolValue] && ![facts[@"key"] boolValue], @"an inactive window is reported as not key and not active");
     check([facts[@"children"] integerValue] == 0, @"no child windows");

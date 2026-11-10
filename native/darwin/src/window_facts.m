@@ -1,5 +1,6 @@
 // Reads the native values of the window state that the host publishes (host.window, host.screens, host.dock).
 #import <Cocoa/Cocoa.h>
+#import <sys/sysctl.h>
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
 #import <CommonCrypto/CommonDigest.h>
@@ -124,6 +125,19 @@ static NSMutableSet<NSNumber *> *processesWithPages(void) {
     return found;
 }
 
+// Whether process lives. A process that exits is marked exiting (P_WEXIT) before the system posts its exit and stays a zombie
+// until its parent reaps it, and kill answers both as a process, so the state of the process decides: an exiting process and a
+// zombie do not live.
+static BOOL lives(pid_t process) {
+    int name[] = { CTL_KERN, KERN_PROC, KERN_PROC_PID, process };
+    struct kinfo_proc info;
+    size_t size = sizeof info;
+    if (sysctl(name, 4, &info, &size, NULL, 0) != 0) return errno != ESRCH;
+    // A process that the table no longer holds answers no row.
+    if (size == 0) return NO;
+    return info.kp_proc.p_stat != SZOMB && !(info.kp_proc.p_flag & P_WEXIT);
+}
+
 // The rows {pid, ending} of the WebContent processes that held a page of the application and hold none now, while they live, in
 // the order of their pid. ending is true when the process pool keeps no process cache (_processCacheCapacity 0): WebKit then ends
 // a process whose last page is gone, so its exit is an event that the close of its pages makes. When the pool has a cache, a
@@ -142,7 +156,7 @@ static NSArray *pagelessProcesses(WKWebView *any) {
     NSMutableArray *rows = [NSMutableArray array];
     for (NSNumber *process in [pageProcesses.allObjects sortedArrayUsingSelector:@selector(compare:)]) {
         if ([current containsObject:process]) continue;
-        if (kill(process.intValue, 0) != 0 && errno == ESRCH) {
+        if (!lives(process.intValue)) {
             [pageProcesses removeObject:process];
             continue;
         }

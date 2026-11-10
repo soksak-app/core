@@ -581,6 +581,17 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F732",
+    implementation: [
+      { file: "native/darwin/src/window_facts.m", symbol: "static BOOL lives(pid_t process) {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/window_facts_test.m", id: "a process without a page that exited is no longer reported" },
+    ],
+    expected: "The window facts judge a WebContent process by its state, so a process that is exiting or a zombie is not reported as a process without a page, and the check judges the row of the process that it closes.",
+    levels: ["unit"],
+  },
+  {
     id: "F731",
     implementation: [
       { file: "packages/host/rust/tests/producer_bounds_test.rs", symbol: "let _log = records::start_writer(config.path());" },
