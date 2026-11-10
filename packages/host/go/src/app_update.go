@@ -247,6 +247,13 @@ func (h *Host) takeUpdate() *pendingStart {
 	return pending
 }
 
+// updatePending reports whether an update or a relaunch waits for the end of the quit, which detaches the persistent services.
+func (h *Host) updatePending() bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.update != nil
+}
+
 // cancelUpdate drops the pending update or relaunch when the quit that it began is cancelled.
 func (h *Host) cancelUpdate() {
 	h.mu.Lock()

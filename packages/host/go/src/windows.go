@@ -561,7 +561,13 @@ func quitEventType() int {
 	return current.QuitEventType()
 }
 
+// shouldQuit answers the quit request of the framework. A quit that no ready window holds begins the quit stop of the sidecars
+// and is refused until that stop ends; the host then asks for the quit again, which the ended stop accepts without a second
+// record, and a request while the stop runs is the second quit of the stop (docs/spec/hosts.md#process-lifecycle).
 func (h *Host) shouldQuit() bool {
+	if h.sidecars.QuitStopEnded() {
+		return true
+	}
 	RecordAppEvent("exit_requested")
 	EmitExitRequest(quitEventType)
 	h.mu.Lock()
@@ -585,7 +591,11 @@ func (h *Host) shouldQuit() bool {
 			s.window.Close()
 		}
 	}
-	return quitNow
+	if !quitNow {
+		return false
+	}
+	// An application update or a relaunch keeps the persistent services running for the application that starts next.
+	return h.sidecars.QuitStop(h.updatePending(), func() { routine.Go("quit", framework.Quit) })
 }
 
 // Chrome is the window values that the page uses to draw the first row. Controls is the region that the window buttons occupy and

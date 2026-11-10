@@ -522,6 +522,13 @@ impl ExitRequestApi {
 
 /// Handles an event of the run of the application.
 pub fn run_event(app: &AppHandle, event: RunEvent) {
+    // The quit request that the host makes at the end of the quit stop is accepted without a second record
+    // (docs/spec/hosts.md#process-lifecycle).
+    if matches!(event, RunEvent::ExitRequested { .. })
+        && app.state::<WindowSidecars>().quit_stop_ended()
+    {
+        return;
+    }
     match &event {
         RunEvent::Ready => app_events::record_app_event("started"),
         RunEvent::ExitRequested { .. } => {
@@ -575,6 +582,8 @@ pub fn run_event(app: &AppHandle, event: RunEvent) {
             pending.start();
             app.state::<WindowSidecars>().detach();
         } else {
+            // The exit request ended the quit stop before the event loop ended, so this stop finds no sidecar that runs
+            // then (docs/spec/hosts.md#process-lifecycle).
             app.state::<WindowSidecars>().stop();
         }
         exposure::stop(app);

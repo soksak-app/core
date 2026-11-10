@@ -1666,7 +1666,9 @@ pub fn window_close_kept(window: &Window) -> Result<(), String> {
 }
 
 /// Handles a termination request. When a ready window exists, it blocks the termination and sends a close request to
-/// each window.
+/// each window. A quit that no ready window holds begins the quit stop of the sidecars and is blocked until that stop
+/// ends; the host then asks for the quit again, which the ended stop accepts, and a request while the stop runs is the
+/// second quit of the stop (docs/spec/hosts.md#process-lifecycle).
 pub(crate) fn quit(app: &AppHandle, api: crate::ExitRequestApi) {
     let registry = app.state::<Windows>();
     let waiting: Vec<_> = registry
@@ -1681,6 +1683,22 @@ pub(crate) fn quit(app: &AppHandle, api: crate::ExitRequestApi) {
         .collect();
     // Every termination request begins the quit state, with or without a ready window (docs/spec/hosts.md#process-lifecycle).
     if registry.quit.begin_quit_request(waiting.len()) {
+        // An application update or a relaunch keeps the persistent services running for the application that starts
+        // next.
+        let detach = registry
+            .update
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the pending update, which is only read; the
+            // panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .is_some();
+        let again = app.clone();
+        if !app
+            .state::<crate::sidecars::WindowSidecars>()
+            .quit_stop(detach, move || again.quit())
+        {
+            api.prevent_exit();
+        }
         return;
     }
     api.prevent_exit();

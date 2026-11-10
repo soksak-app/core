@@ -705,6 +705,8 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/sidecars.rs", symbol: "fn end_transport(outbox: &SyncSender<Outgoing>, socket: &PersistentSocket, name: &str) {" },
       { file: "packages/host/go/src/sidecars.go", symbol: "func (p *imagePresents) refuse() {" },
       { file: "packages/host/rust/src/images.rs", symbol: "pub(crate) fn refuse(&self) {" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) QuitStop(detach bool, ended func()) bool {" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "pub fn quit_stop(&self, detach: bool, ended: impl FnOnce() + Send + 'static) -> bool {" },
     ],
     tests: [
       { file: "packages/host/go/src/project_removal_end_test.go", id: "TestARemovalRequestEndsWithTheEndOfTheOwnerPage" },

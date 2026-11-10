@@ -114,8 +114,13 @@ type sidecar struct {
 	// terminated is true once the stop sent the terminate signal to the process group: a line that the writer could not
 	// write after it is a line that the stop ended, not a failure.
 	terminated atomic.Bool
-	exited     chan struct{}
-	muClosed   sync.Mutex
+	// killed is true once a second quit sent the force-kill signal to the process group, so its exit is the quit itself.
+	killed atomic.Bool
+	// readEnded is true once the reader of a persistent connection failed the waiting closes at its end, so a later close
+	// registers no waiter that no answer ends. c.mu protects it.
+	readEnded bool
+	exited    chan struct{}
+	muClosed  sync.Mutex
 	// held is the number of the held returns and closes. A sender raises it before it orders a held message.
 	held          atomic.Int64
 	pendingCloses pendingLines // The pending closed messages, in the order of sending
@@ -205,6 +210,8 @@ type Sidecars struct {
 	stopped bool
 	// stopDetach is the detach of the stop, which a start that ends after the stop applies to its own process.
 	stopDetach bool
+	// quitStop is the stop that the quit runs before the application exits, nil before it begins.
+	quitStop *quitStop
 	// unannouncedLoss is a persistent sidecar whose connection was lost and whose owning surfaces have not been told yet (V5-106).
 	// The start that announces the loss consumes this record; the first start has no announcement.
 	unannouncedLoss map[string]bool
@@ -476,7 +483,7 @@ func (c *Sidecars) Declare(declarations []SidecarDeclaration) error {
 	if forgot || declarationChanged {
 		c.closingInvalidated()
 	}
-	c.stopProcesses(processes, false, false)
+	c.stopProcesses(processes, false, false, nil)
 	return nil
 }
 
@@ -1253,6 +1260,97 @@ func (c *Sidecars) Detach() { c.stop(true) }
 
 // stop stops the sidecars; with detach a persistent service only loses its connection.
 func (c *Sidecars) stop(detach bool) {
+	c.stopProcesses(c.stopRunning(detach), detach, true, nil)
+}
+
+// quitStop is the quit stop: the processes that it stops and whether it ended.
+type quitStop struct {
+	processes []*sidecar
+	ended     bool
+}
+
+// QuitStop is the stop of the sidecars that the quit runs before the application exits, and it answers whether the
+// application exits now (docs/spec/hosts.md#process-lifecycle). The first call begins the stop and answers true only when
+// nothing is left to wait for; otherwise ended runs on a goroutine of its own when the last process exited and the last close
+// of a persistent owner ended, and the caller asks for the quit again. A call while the stop runs is a second quit: it
+// force-kills the process group of each sidecar on standard input and output that has not exited and ends the connection of
+// each persistent service whose close runs, and answers false. A call after the end answers true.
+func (c *Sidecars) QuitStop(detach bool, ended func()) bool {
+	c.mu.Lock()
+	state := c.quitStop
+	if state != nil {
+		processes, done := state.processes, state.ended
+		c.mu.Unlock()
+		if done {
+			return true
+		}
+		c.killQuitStop(processes)
+		return false
+	}
+	state = &quitStop{}
+	c.quitStop = state
+	c.mu.Unlock()
+	processes := c.stopRunning(detach)
+	c.mu.Lock()
+	if len(processes) == 0 {
+		state.ended = true
+		c.mu.Unlock()
+		return true
+	}
+	state.processes = processes
+	c.mu.Unlock()
+	c.stopProcesses(processes, detach, true, func() {
+		c.mu.Lock()
+		state.ended = true
+		c.mu.Unlock()
+		ended()
+	})
+	return false
+}
+
+// QuitStopEnded reports whether the quit stop ended, after which the application exits.
+func (c *Sidecars) QuitStopEnded() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.quitStop != nil && c.quitStop.ended
+}
+
+// killQuitStop is the second quit: it force-kills the process group of each sidecar on standard input and output of the quit
+// stop that has not exited and ends the connection of each persistent service whose close has not ended, which ends the waits
+// of the stop (docs/spec/hosts.md#process-lifecycle).
+func (c *Sidecars) killQuitStop(processes []*sidecar) {
+	current, platformErr := platform.Current()
+	for _, process := range processes {
+		select {
+		case <-process.exited:
+			continue
+		default:
+		}
+		if process.persistent {
+			LogInfo("sidecar "+process.name, "the second quit ends the connection of the service")
+			// The reader ends at the end of the connection and fails the waiting close-owner or shutdown, which ends the
+			// close of the stop; that close then closes the transport.
+			if err := process.conn.Close(); err != nil {
+				LogError("sidecar "+process.name, fmt.Sprintf("second quit: %v", err))
+			}
+			continue
+		}
+		pid := process.cmd.Process.Pid
+		process.killed.Store(true)
+		LogInfo("sidecar "+process.name, fmt.Sprintf("the second quit kills process %d", pid))
+		if platformErr != nil {
+			LogError("sidecar "+process.name, fmt.Sprintf("second quit: %v", platformErr))
+			continue
+		}
+		if err := current.EndProcessGroup(pid); err != nil {
+			LogError("sidecar "+process.name, fmt.Sprintf("second quit: %v", err))
+		}
+	}
+}
+
+// stopRunning marks the sidecars stopped, ends the waits of the starts and removes the running sidecars from the running
+// list, and returns them for the stop of their processes.
+func (c *Sidecars) stopRunning(detach bool) []*sidecar {
 	// The stop refuses each image present that waits for the main thread, which may be the thread that runs this stop, so no
 	// read goroutine of a sidecar waits for it (docs/spec/sidecars.md#declaration-and-startup).
 	c.presents.refuse()
@@ -1285,7 +1383,7 @@ func (c *Sidecars) stop(detach bool) {
 	if changed {
 		c.closingInvalidated()
 	}
-	c.stopProcesses(processes, detach, true)
+	return processes
 }
 
 // detach removes a process that stops from the running list. A standard input and output sidecar ends, so its
@@ -1302,8 +1400,9 @@ func (c *Sidecars) detach(name string, process *sidecar) bool {
 // stopProcesses stops processes, which are out of the running list, by the stop rules (docs/spec/sidecars.md#declaration-and-startup):
 // each sidecar on standard input and output gets the end of its input and the terminate signal to its process group, and the
 // end of its stop is its exit. The stop of the quit waits for each exit and for the close of each persistent owner; any other
-// stop returns at once and leaves each wait to its own goroutine, which writes the exit when it comes.
-func (c *Sidecars) stopProcesses(processes []*sidecar, detach, quit bool) {
+// stop returns at once and leaves each wait to its own goroutine, which writes the exit when it comes. With ended the stop of the
+// quit returns at once too, and ended runs on a goroutine of its own after the last of those waits.
+func (c *Sidecars) stopProcesses(processes []*sidecar, detach, quit bool, ended func()) {
 	current, platformErr := platform.Current()
 	// Closes the channels of all sidecars to send an EOF signal.
 	// The write goroutine detects the closed channel and closes stdin.
@@ -1351,6 +1450,7 @@ func (c *Sidecars) stopProcesses(processes []*sidecar, detach, quit bool) {
 			// (docs/spec/sidecars.md#declaration-and-startup).
 			switch {
 			case p.violated:
+			case p.killed.Load():
 			case p.waitErr == nil && p.state.Success():
 			case p.waitErr == nil && platformErr == nil && current.ExitedByTermination(p.state):
 			default:
@@ -1358,7 +1458,13 @@ func (c *Sidecars) stopProcesses(processes []*sidecar, detach, quit bool) {
 			}
 		})
 	}
-	if quit {
+	switch {
+	case ended != nil:
+		routine.Go("sidecar-quit-stop", func() {
+			wg.Wait()
+			ended()
+		})
+	case quit:
 		wg.Wait()
 	}
 }
@@ -1548,9 +1654,10 @@ func (c *Sidecars) closeOwnerAndShutdown(process *sidecar, ctx context.Context, 
 		delete(process.closeWaiters, request)
 		c.mu.Unlock()
 	}()
-	c.mu.Lock()
-	process.closeWaiters[request] = waiter
-	c.mu.Unlock()
+	if !c.registerCloseWaiter(process, request, waiter) {
+		process.closeTransport()
+		return errServiceDisconnected
+	}
 	line, err := json.Marshal(map[string]string{"operation": "close-owner", "request": request})
 	if err != nil {
 		return err
@@ -1567,9 +1674,10 @@ func (c *Sidecars) closeOwnerAndShutdown(process *sidecar, ctx context.Context, 
 		}
 		shutdown := fmt.Sprintf("%d", atomic.AddUint64(&c.nextRequest, 1))
 		shutdownWaiter := make(chan error, 1)
-		c.mu.Lock()
-		process.closeWaiters[shutdown] = shutdownWaiter
-		c.mu.Unlock()
+		if !c.registerCloseWaiter(process, shutdown, shutdownWaiter) {
+			process.closeTransport()
+			return errServiceDisconnected
+		}
 		shutdownLine, marshalErr := json.Marshal(map[string]string{"operation": "shutdown", "request": shutdown})
 		if marshalErr != nil {
 			return marshalErr
@@ -1590,6 +1698,18 @@ func (c *Sidecars) closeOwnerAndShutdown(process *sidecar, ctx context.Context, 
 		process.closeTransport()
 		return ctx.Err()
 	}
+}
+
+// registerCloseWaiter registers waiter for the answer to request unless the reader of the connection already failed the
+// waiting closes at its end, which no later answer follows.
+func (c *Sidecars) registerCloseWaiter(process *sidecar, request string, waiter chan error) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if process.readEnded {
+		return false
+	}
+	process.closeWaiters[request] = waiter
+	return true
 }
 
 // queueClose queues the close-owner or shutdown line of operation. The stop waits for no room in the queue: a full queue ends the
@@ -1677,7 +1797,7 @@ func (c *Sidecars) processContext(ctx context.Context, name string, lost *reviva
 		detach := c.stopDetach
 		c.mu.Unlock()
 		process.begin()
-		c.stopProcesses([]*sidecar{process}, detach, true)
+		c.stopProcesses([]*sidecar{process}, detach, true, nil)
 		c.mu.Lock()
 		return nil, false, errors.New("sidecars are stopped")
 	}
@@ -2399,6 +2519,7 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 	if violation != "" {
 		end = "violation"
 	}
+	process.readEnded = true
 	waiters := make([]chan error, 0, len(process.closeWaiters))
 	for request, waiter := range process.closeWaiters {
 		delete(process.closeWaiters, request)
