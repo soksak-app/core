@@ -70,7 +70,9 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: every recorded frame keeps the window buttons centred in the first row while the frame factor steps from 1 to 3 and back`,
     { timeout: 120000 }, async (t) => {
       const s = await open(t, app);
-      await fresh(s);
+      // The performance trace records the layouts of the page and the surface dispatch of the host, so a missing first row names the
+      // stage that held it. This check judges which rows reach the screen, not how fast, so the trace changes no judged value.
+      await fresh(s, { performanceTrace: true });
       // The check windows overlap and can cover this one whole, and WebKit draws an occluded window less often.
       await uncoverFromCheckWindows(t, s);
       s.cleanup(() => setFrame(s, 1));

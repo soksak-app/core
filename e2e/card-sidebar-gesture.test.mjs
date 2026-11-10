@@ -35,7 +35,9 @@ for (const app of Object.values(APPS)) {
       console.info(`START ${app.name}: sidebar gesture`);
       const s = await open(t, app);
       t.diagnostic(`tested endpoint: ${JSON.stringify(s.client.endpoint)}`);
-      const { plugin } = await fresh(s);
+      // The performance trace records the layouts of the page and the surface dispatch of the host, so a missing state names the
+      // stage that held it. This check judges which states reach the screen, not how fast, so the trace changes no judged value.
+      const { plugin } = await fresh(s, { performanceTrace: true });
       // The check windows overlap and can cover this one whole; the measurement needs a window that is not occluded.
       await uncoverFromCheckWindows(t, s);
       await s.run("core.settings.theme", { name: "midnight", mode: "dark" });
