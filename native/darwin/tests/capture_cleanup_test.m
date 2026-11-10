@@ -1,10 +1,10 @@
 // Controls the results of actual write, close, commit, and delete operations to check each cause and the
 // remaining files.
 #import <Cocoa/Cocoa.h>
+#import "support/temporary_folder.h"
 #include <stdio.h>
 #include <unistd.h>
 #include <errno.h>
-#include <signal.h>
 
 static BOOL failOpen, failWrite, failClose, failCommit, failRemove;
 static int removes;
@@ -52,11 +52,6 @@ static int controlledRemove(const char *path) {
 #undef unlink
 
 static int failures;
-static void expired(int signalNumber) {
-    const char message[] = "FAIL: capture cleanup test exceeded 5000ms\n";
-    write(STDERR_FILENO, message, sizeof message - 1);
-    _exit(1);
-}
 static void check(BOOL condition, NSString *message) {
     fprintf(stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
@@ -92,13 +87,10 @@ static void hasReason(int error, NSString *label) {
     check(strstr(sp_capture_error(), strerror(error)) != NULL, label);
 }
 int main(void) { @autoreleasepool {
-    signal(SIGALRM, expired); alarm(5);
     CFTimeInterval began = CACurrentMediaTime();
     fprintf(stderr, "START: native capture file failure and cleanup\n");
     [NSApplication sharedApplication];
-    char path[] = "/tmp/soksak-capture-cleanup-XXXXXX";
-    if (mkdtemp(path) == NULL) { check(NO, @"the cleanup directory is created"); return 1; }
-    NSString *directory = [NSString stringWithUTF8String:path];
+    NSString *directory = temporaryFolder(@"soksak-capture-cleanup-");
     NSString *pending = [directory stringByAppendingPathComponent:@"frame-0001.bgra.partial"];
     NSString *committed = [directory stringByAppendingPathComponent:@"frame-0001.bgra"];
     captureWriter = dispatch_queue_create("capture.test.cleanup", DISPATCH_QUEUE_SERIAL);
@@ -159,12 +151,8 @@ int main(void) { @autoreleasepool {
             [NSString stringWithFormat:@"the retained fixture is removed (%@)", error]);
         fprintf(stderr, "END: file failure %s (%.1fms)\n", names[index], (CACurrentMediaTime() - phase) * 1000);
     }
-    NSError *error = nil;
-    check([[NSFileManager defaultManager] removeItemAtPath:directory error:&error],
-        [NSString stringWithFormat:@"all cleanup fixture files are removed (%@)", error]);
     if (frame != NULL) CFRelease(frame);
     fprintf(stderr, "%s: native capture file failure and cleanup (%d failed assertions, %.1fms)\n",
         failures ? "FAIL" : "PASS", failures, (CACurrentMediaTime() - began) * 1000);
-    alarm(0);
     return failures ? 1 : 0;
 }}

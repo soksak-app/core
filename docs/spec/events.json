@@ -5098,27 +5098,23 @@
       },
       "description": "The number of events of the class and the level that the gate of the native library refused since the earlier report."
     },
-    "native.process.exit_timeout": {
+    "native.process.exit_wait_ended": {
       "layer": "native",
       "class": "lifecycle",
-      "level": "warn",
+      "level": "info",
       "fields": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "pid": {
             "type": "number"
-          },
-          "seconds": {
-            "type": "number"
           }
         },
         "required": [
-          "pid",
-          "seconds"
+          "pid"
         ]
       },
-      "description": "A process did not end within the time that the caller waited for it."
+      "description": "A wait for the exit of a process ended before the process exited, by the end that its caller gave."
     },
     "native.webview.process_ended": {
       "layer": "native",

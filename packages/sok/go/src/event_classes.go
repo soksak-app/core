@@ -101,7 +101,7 @@ var eventClasses = map[string]Class{
 	"native.observe.delivered":               ClassInput,
 	"native.observe.failed":                  ClassLifecycle,
 	"native.observe.registered":              ClassLifecycle,
-	"native.process.exit_timeout":            ClassLifecycle,
+	"native.process.exit_wait_ended":         ClassLifecycle,
 	"native.surface.key_kept":                ClassInput,
 	"native.surface.keys_delivered":          ClassInput,
 	"native.surface.keys_dropped":            ClassInput,

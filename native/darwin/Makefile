@@ -298,7 +298,7 @@ $(BUILD)/capture_cleanup_test: src/capture.m
 
 $(BUILD)/capture_preparation_test: src/capture.m
 
-$(BUILD)/capture_pressure_test: src/capture.m
+$(BUILD)/capture_pressure_test: src/capture.m src/host_api_capture.m
 
 $(BUILD)/capture_storage_test: src/capture.m
 
@@ -308,17 +308,17 @@ $(BUILD)/capture_source_writer_test: src/capture.m
 
 $(BUILD)/capture_resize_test: src/capture.m
 
-$(BUILD)/capture_covered_test: tests/capture_covered_test.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h)
-	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Metal -framework Network $(MINIMUM) -o $@
+$(BUILD)/capture_covered_test: tests/capture_covered_test.m tests/support/temporary_folder.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h tests/support/*.h)
+	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m tests/support/temporary_folder.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Metal -framework Network $(MINIMUM) -o $@
 
 $(BUILD)/capture_presentation_test: tests/capture_presentation_test.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h)
 	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Metal -framework Network $(MINIMUM) -o $@
 
-$(BUILD)/image_region_capture_presentation_test: tests/image_region_capture_presentation_test.m tests/support/no_activation.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h tests/support/*.h)
-	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
+$(BUILD)/image_region_capture_presentation_test: tests/image_region_capture_presentation_test.m tests/support/no_activation.m tests/support/temporary_folder.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h tests/support/*.h)
+	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m tests/support/temporary_folder.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
 
-$(BUILD)/image_capture_match_test: tests/image_capture_match_test.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h)
-	@clang $(CFLAGS) -I$(CURDIR)/src $< tests/support/no_activation.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
+$(BUILD)/image_capture_match_test: tests/image_capture_match_test.m tests/support/temporary_folder.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h tests/support/*.h)
+	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m tests/support/temporary_folder.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
 
 $(BUILD)/capture_frame_identity_test: tests/capture_frame_identity_test.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h)
 	@clang $(CFLAGS) -I$(CURDIR)/src $< -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) $(MINIMUM) -o $@
@@ -339,6 +339,7 @@ NATIVE_TESTS = observe_test \
   application_log_fatal_test \
   event_ring_test \
   event_gate_wait_test \
+  event_wake_early_test \
   site_cost_test \
   surface_host_test \
   surface_keyboard_test \
@@ -472,6 +473,11 @@ comma := ,
 executables = $(foreach entry,$(1),$(firstword $(subst $(comma), ,$(entry))))
 NATIVE_TEST_EXECUTABLES := $(call executables,$(NATIVE_TESTS))
 NATIVE_TEST_RUNNER := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../scripts/native-tests.mjs)
+# A check keeps the temporary folders that hold the evidence of its failure (keepTemporaryFolder of tests/support/temporary_folder.h),
+# and its exit moves them into NATIVE_TEST_EVIDENCE, by default target/native-test-evidence of the repository, and not into the
+# temporary folder, which the test runner removes (docs/operations/examples.md#temporary-folders).
+NATIVE_TEST_EVIDENCE ?= $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../target/native-test-evidence)
+export NATIVE_TEST_EVIDENCE
 # The shared cases of the view page insertion, which the plugin-api test and the native tests run (docs/spec/plugin-processes.md, rule 4).
 VIEW_PAGE_CASES := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../packages/plugin-api/contract/view-page.json)
 

@@ -1,4 +1,4 @@
-// Checks that sp_process_when_exited distinguishes a process that exits, a process that has already exited, and a process that does not exit within the deadline.
+// Checks that sp_process_when_exited distinguishes a process that exits, a process that has already exited, and a wait that sp_process_exit_end ends.
 // It does not activate the application.
 #import <Cocoa/Cocoa.h>
 #import <spawn.h>
@@ -40,12 +40,11 @@ static pid_t spawnSleep(const char *seconds) {
     return pid;
 }
 
-// Runs the main run loop until done is called.
+// Runs the main run loop until done is called; each turn waits for a source of the run loop.
 static void runUntilAnswered(SPExited *state) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:15];
-    while (state->calls == 0 && deadline.timeIntervalSinceNow > 0) {
+    while (state->calls == 0) {
         @autoreleasepool {
-            [[NSRunLoop mainRunLoop] runMode:NSDefaultRunLoopMode beforeDate:deadline];
+            [[NSRunLoop mainRunLoop] runMode:NSDefaultRunLoopMode beforeDate:NSDate.distantFuture];
         }
     }
 }
@@ -61,15 +60,15 @@ int main(void) { @autoreleasepool {
     // Like a child that another process reaps, this test receives the exit only as a notification. Reaping is done after the reply.
     pid_t ending = spawnSleep("0.3");
     SPExited ended = {0};
-    sp_process_when_exited(ending, 10, answered, &ended);
+    sp_process_when_exited(ending, answered, &ended);
     runUntilAnswered(&ended);
     check(ended.calls == 1 && ended.mainThread && ended.exited, [NSString stringWithFormat:
-        @"a process that ends within the bound is reported as exited once on the main thread (calls %d, exited %d)",
+        @"a process that ends is reported as exited once on the main thread (calls %d, exited %d)",
         ended.calls, ended.exited]);
     if (ending) waitpid(ending, NULL, 0);
 
     SPExited gone = {0};
-    sp_process_when_exited(ending, 10, answered, &gone);
+    sp_process_when_exited(ending, answered, &gone);
     runUntilAnswered(&gone);
     check(gone.calls == 1 && gone.exited, [NSString stringWithFormat:
         @"a process that no longer exists is reported as exited (calls %d, exited %d)", gone.calls, gone.exited]);
@@ -77,27 +76,34 @@ int main(void) { @autoreleasepool {
     __block pid_t running = spawnSleep("30");
     __block SPExited missed = {0};
     NSArray<NSDictionary *> *waiting = capturedEvents(^{
-        sp_process_when_exited(running, 0.2, answered, &missed);
-        runUntilAnswered(&missed);
+        sp_process_when_exited(running, answered, &missed);
+        check(missed.calls == 0, @"a process that runs leaves its wait open");
+        // The wait has no limit: its end, which a host calls at the close of the connection or the window of the request, answers it.
+        sp_process_exit_end(&missed);
     });
     NSMutableArray<NSString *> *names = [NSMutableArray array];
     for (NSDictionary *event in waiting) [names addObject:event[@"name"]];
     NSUInteger registered = [names indexOfObject:@"native.observe.registered"];
-    NSUInteger timeout = [names indexOfObject:@"native.process.exit_timeout"];
-    check(registered != NSNotFound && timeout != NSNotFound && registered < timeout && [waiting[registered][@"fields"][@"source"] isEqual:@"process_exit"],
-        [NSString stringWithFormat:@"the wait is a registration event and the missed deadline follows it: %@", names]);
-    NSDictionary *late = timeout == NSNotFound ? @{} : waiting[timeout];
-    check([late[@"level"] intValue] == 1 && [late[@"fields"][@"pid"] intValue] == running && [late[@"fields"][@"seconds"] doubleValue] == 0.2,
-        [NSString stringWithFormat:@"the missed deadline is one event at the level warn with the pid and the seconds: %@", late]);
+    NSUInteger ended_ = [names indexOfObject:@"native.process.exit_wait_ended"];
+    check(registered != NSNotFound && ended_ != NSNotFound && registered < ended_ && [waiting[registered][@"fields"][@"source"] isEqual:@"process_exit"],
+        [NSString stringWithFormat:@"the wait is a registration event and its end follows it: %@", names]);
+    NSDictionary *end = ended_ == NSNotFound ? @{} : waiting[ended_];
+    check([end[@"fields"][@"pid"] intValue] == running,
+        [NSString stringWithFormat:@"the end of the wait is one event with the pid: %@", end]);
     check(missed.calls == 1 && !missed.exited, [NSString stringWithFormat:
-        @"a process that runs past the bound is reported as not exited (calls %d, exited %d)", missed.calls, missed.exited]);
+        @"an ended wait of a process that runs is reported as not exited at its end (calls %d, exited %d)", missed.calls, missed.exited]);
+    sp_process_exit_end(&missed);
+    check(missed.calls == 1, @"the end of a wait that answered already gives nothing");
     if (running) {
         kill(running, SIGTERM);
         waitpid(running, NULL, 0);
     }
-    // A process that exits after the deadline does not give the reply again.
-    [[NSRunLoop mainRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.2]];
+    // A process that exits after the end of its wait does not give the answer again.
+    SPExited after = {0};
+    sp_process_when_exited(running, answered, &after);
+    runUntilAnswered(&after);
     check(missed.calls == 1, [NSString stringWithFormat:@"the answer is given once (calls %d)", missed.calls]);
+    check(after.calls == 1 && after.exited, @"a wait of the ended process answers that it exited");
     check(!NSApp.isActive, @"application stays inactive");
     return failures ? 1 : 0;
 }}

@@ -23,18 +23,22 @@ sp_window_objects sp_window_objects_count(void);
 typedef void (*sp_window_objects_done)(void *context, const sp_window_objects *counts, bool reached);
 
 // Puts an application-defined event into the event queue and, when the count after the application handled
-// that event equals expected, gives that count and reached true to done. If the count does not equal expected
-// within seconds, gives the count at that time and reached false. When expected is NULL, gives the count
-// after the first queued event was handled, with reached true.
+// that event equals expected, gives that count and reached true to done. When expected is NULL, gives the count
+// after the first queued event was handled, with reached true. The wait has no limit: a count that does not reach
+// expected waits until sp_window_objects_end ends it.
 // AppKit empties the autorelease pool of an iteration when the iteration that handles one event ends, so an
 // object autoreleased while a window is closing stays until the next user input if there is no event. An
 // object autoreleased by an object that was released while the pool is emptied is released in the pool of
 // the next iteration, and AppKit retains a window that was on screen until its close animation ends. So
-// while a request waits, one event is queued before the main run loop sleeps each time, and the count is
-// compared after each such event is handled. Call it on the main thread; done is called once on the main
-// thread.
-void sp_window_objects_when(const sp_window_objects *expected, double seconds, sp_window_objects_done done,
-    void *context);
+// while a request waits, each change of the count queues one event, and the count is compared after each
+// such event is handled: a release that releases more objects drains again, and a count that no longer
+// changes queues nothing. Call it on the main thread; done is called once on the main thread.
+void sp_window_objects_when(const sp_window_objects *expected, sp_window_objects_done done, void *context);
+
+// Ends the wait that sp_window_objects_when registered with context and has not answered: done is called with the
+// current count and reached false before this returns. A wait that answered already is left alone. Call it on the
+// main thread.
+void sp_window_objects_end(void *context);
 
 #ifdef __OBJC__
 typedef enum {

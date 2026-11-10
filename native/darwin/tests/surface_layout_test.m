@@ -9,6 +9,7 @@
 #import "window_facts.h"
 #import "private/webkit.h"
 #import "support/surface_view.h"
+#import "support/temporary_folder.h"
 
 static const NSTimeInterval kBusy = 3;
 
@@ -17,16 +18,6 @@ static int failures = 0;
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
-}
-
-// Leaves no recording file even if the process is terminated by a callback timeout.
-static NSString *compositionDirectory;
-static void cleanupCompositionRecording(void) {
-    if (compositionDirectory == nil) return;
-    NSError *error = nil;
-    if (![[NSFileManager defaultManager] removeItemAtPath:compositionDirectory error:&error])
-        fprintf(stderr, "FAIL: composition recording cleanup: %s\n", error.localizedDescription.UTF8String);
-    [compositionDirectory release]; compositionDirectory = nil;
 }
 
 // Runs the main run loop until the awaited event has arrived. It has no time limit of its own: each call waits for an event that
@@ -436,19 +427,15 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration) {
         check(error == NULL, @"the initial composition fixture is presented"); shown = at;
     });
     until(^BOOL { return shown != 0; });
-    char directory[] = "/tmp/soksak-composition-test-XXXXXX";
-    BOOL created = mkdtemp(directory) != NULL;
-    check(created, @"the composition recording directory is created");
-    if (!created) { sp_surface_close(surface); [window close]; [window release]; return; }
-    compositionDirectory = [[NSString stringWithUTF8String:directory] copy];
+    const char *directory = temporaryFolder(@"soksak-composition-test-").fileSystemRepresentation;
     char *operationError = NULL;
-    BOOL opened = sp_capture_open(window.windowNumber, false, &operationError);
+    BOOL opened = sp_capture_open(window.windowNumber, false, 0, &operationError);
     BOOL started = NO;
     if (opened) { free(operationError); operationError = NULL; started = sp_capture_start(directory, false, &operationError); }
     check(started, [NSString stringWithFormat:@"the composition recording starts (%s)", operationError == NULL ? "" : operationError]);
     free(operationError);
     if (started) {
-        check(sp_capture_wait() > 0, @"the composition recording contains its initial frame");
+        check(sp_capture_wait(0) > 0, @"the composition recording contains its initial frame");
         surfaceLayoutTraceStart();
         surfaceLayoutBegin(window, 107, ^(int allowed) { check(allowed, @"the composition transaction starts"); });
         webviewSetFrame(surface, 40, 40, 250, 120);
@@ -474,8 +461,11 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration) {
             check(error == NULL, @"the final composition fixture is presented"); shown = at;
         });
         until(^BOOL { return shown != 0; });
-        int count = sp_capture_stop(shown);
-        check(count >= 2 && !sp_capture_limited(), @"the composition recording includes initial and final frames without truncation");
+        int count = sp_capture_stop(shown, 0);
+        const char *captureError = sp_capture_error();
+        check(count >= 2 && !sp_capture_limited() && captureError[0] == '\0', [NSString stringWithFormat:
+            @"the composition recording includes initial and final frames without truncation or errors "
+            "(%d frames, limited %d, stop after %.3f, error %s)", count, sp_capture_limited(), shown, captureError]);
         double timeline[SURFACE_LAYOUT_TRACE_STAGES] = {0};
         check(surfaceLayoutTraceStop(timeline, 1) == 1, @"the composition recording contains its transaction timeline");
         for (int index = 1; index <= count; index++) {
@@ -521,10 +511,6 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration) {
                     @"the final composition frame contains the moved border (x %.1f)", borderAt]);
         }
     }
-    NSError *cleanupError = nil;
-    check([[NSFileManager defaultManager] removeItemAtPath:[NSString stringWithUTF8String:directory] error:&cleanupError],
-        [NSString stringWithFormat:@"the composition recording is removed (%@)", cleanupError]);
-    if (cleanupError == nil) { [compositionDirectory release]; compositionDirectory = nil; }
     sp_surface_close(surface);
     [window close]; [window release];
 }
@@ -576,22 +562,15 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
         check(error == NULL, @"the first-show baseline is presented"); shown = at;
     });
     until(^BOOL { return shown != 0; });
-    char directory[] = "/tmp/soksak-first-show-test-XXXXXX";
-    BOOL created = mkdtemp(directory) != NULL;
-    check(created, @"the first-show recording directory is created");
-    if (!created) {
-        sp_surface_unplace_view(root); [root removeFromSuperview]; sp_surface_close(compositionSurface);
-        [window close]; [window release]; return;
-    }
-    compositionDirectory = [[NSString stringWithUTF8String:directory] copy];
+    const char *directory = temporaryFolder(@"soksak-first-show-test-").fileSystemRepresentation;
     char *operationError = NULL;
-    BOOL opened = sp_capture_open(window.windowNumber, false, &operationError);
+    BOOL opened = sp_capture_open(window.windowNumber, false, 0, &operationError);
     BOOL started = NO;
     if (opened) { free(operationError); operationError = NULL; started = sp_capture_start(directory, false, &operationError); }
     check(started, [NSString stringWithFormat:@"the first-show recording starts (%s)", operationError == NULL ? "" : operationError]);
     free(operationError);
     if (started) {
-        check(sp_capture_wait() > 0, @"the hidden-root recording contains its initial frame");
+        check(sp_capture_wait(0) > 0, @"the hidden-root recording contains its initial frame");
         surfaceLayoutTraceStart();
         __block BOOL prepared = NO;
         surfaceLayoutBegin(window, 108, ^(int allowed) { prepared = allowed != 0; });
@@ -616,7 +595,7 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
             @"root presentation while the app-DOM barrier is pending keeps the existing keyboard owner");
         NSString *pendingStillPath = [[NSString stringWithUTF8String:directory] stringByAppendingPathComponent:@"pending.png"];
         char *stillError = NULL;
-        BOOL stillCaptured = sp_capture_still((long[]){window.windowNumber}, 1, pendingStillPath.fileSystemRepresentation, &stillError);
+        BOOL stillCaptured = sp_capture_still((long[]){window.windowNumber}, 1, pendingStillPath.fileSystemRepresentation, 0, &stillError);
         check(stillCaptured, [NSString stringWithFormat:@"the pending first-show window is captured (%s)",
             stillError == NULL ? "no error" : stillError]);
         free(stillError);
@@ -633,7 +612,7 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
             check(error == NULL, @"the first-show marker is displayed after commit"); shown = at;
         });
         until(^BOOL { return shown != 0; });
-        int count = sp_capture_stop(shown);
+        int count = sp_capture_stop(shown, 0);
         const char *captureError = sp_capture_error();
         check(count >= 2 && !sp_capture_limited() && captureError[0] == '\0',
             [NSString stringWithFormat:@"the first-show recording completes without dropped frames or errors "
@@ -673,10 +652,6 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
         check(postcommitFrame && finalMarkerPresent,
             @"the final post-commit frame contains the first-show marker at its declared geometry");
     }
-    NSError *cleanupError = nil;
-    check([[NSFileManager defaultManager] removeItemAtPath:[NSString stringWithUTF8String:directory] error:&cleanupError],
-        [NSString stringWithFormat:@"the first-show recording is removed (%@)", cleanupError]);
-    if (cleanupError == nil) { [compositionDirectory release]; compositionDirectory = nil; }
     sp_surface_unplace_view(root);
     [root removeFromSuperview];
     sp_surface_close(compositionSurface);
@@ -718,7 +693,6 @@ static SPWait waitWhileBusy(WKWebView *main, WKWebView *busy, SPBusySignal *sign
 }
 
 int main(void) { @autoreleasepool {
-    atexit(cleanupCompositionRecording);
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];

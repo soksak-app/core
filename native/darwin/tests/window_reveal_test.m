@@ -66,7 +66,7 @@ int main(void) { @autoreleasepool {
     NSString *directory = temporaryFolder(@"soksak-window-reveal-");
     NSString *still = [directory stringByAppendingPathComponent:@"revealed.png"];
     char *captureError = NULL;
-    BOOL captured = sp_capture_still((long[]){window.windowNumber}, 1, still.fileSystemRepresentation, &captureError);
+    BOOL captured = sp_capture_still((long[]){window.windowNumber}, 1, still.fileSystemRepresentation, 0, &captureError);
     check(captured, [NSString stringWithFormat:@"the revealed window is captured (%s)", captureError ? captureError : "no error"]);
     free(captureError);
     if (captured) {

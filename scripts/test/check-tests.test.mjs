@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
-import { auditWorkbenchCases, auditCompletedFeatureLinks, auditJoinedFailures, auditExecutableLanguageCoverage, auditFailureMatrix, auditFeatureLinks, auditGoFailurePropagation, auditInventory, auditJsFailurePropagation, auditNativeFailurePropagation, auditOwnership, inventorySummary, auditRustFailurePropagation, discoverInventory, packageIndex, repositoryFiles, auditRequirementCoverage, readRequirementScope, requirementSummary } from "../check-tests.mjs";
+import { auditWorkbenchCases, auditCompletedFeatureLinks, auditFixedTemporaryPaths, auditJoinedFailures, auditExecutableLanguageCoverage, auditFailureMatrix, auditFeatureLinks, auditGoFailurePropagation, auditInventory, auditJsFailurePropagation, auditNativeFailurePropagation, auditOwnership, inventorySummary, auditRustFailurePropagation, discoverInventory, packageIndex, repositoryFiles, auditRequirementCoverage, readRequirementScope, requirementSummary } from "../check-tests.mjs";
 
 const files = repositoryFiles();
 
@@ -515,6 +515,33 @@ test("a window check joins several errors only through joinedFailure, so a failu
   ]);
   assert.ok(auditFailureMatrix(Object.keys(sources), (file) => sources[file]).errors
     .includes("js-ts: packages/window-check/app.mjs:1: new AggregateError drops the messages of its errors from the report; throw joinedFailure (packages/window-check/failure.mjs)"));
+});
+
+test("a test source creates its temporary folders and files in TMPDIR, not under a fixed temporary path", { timeout: 1000 }, () => {
+  // The fixed roots are joined at run time, so this source itself names none of them.
+  const [tmp, privateTmp, folders] = [["", "tmp"], ["", "private", "tmp"], ["", "var", "folders"]].map((parts) => parts.join("/"));
+  const sources = {
+    "native/darwin/tests/capture_test.m": `char directory[] = "${tmp}/soksak-capture-test-XXXXXX";\nmkdtemp(directory);`,
+    "native/darwin/tests/log_test.m": `char path[] = "${privateTmp}/log.XXXXXX";`,
+    "native/darwin/tests/kept_test.m": `NSString *folder = temporaryFolder(@"soksak-kept-");`,
+    "native/darwin/tests/support/temporary_folder.m": "if (mkdtemp(path) == NULL) {",
+    "native/darwin/tests/clipboard_test.m": `[NSURL fileURLWithPath:@"${tmp}/soksak-a"]`,
+    "packages/sok/go/tests/sok_test.go": `socketDir, err := os.MkdirTemp("${tmp}", "sok")`,
+    "packages/sok/go/tests/other_test.go": `socketDir, err := os.MkdirTemp("", "sok")`,
+    "packages/sok/rust/tests/sok_test.rs": `let socket = Folder::new_in(Path::new("${tmp}"), "socket");`,
+    "e2e/fixtures/sidecars/probe/src/server.rs": `let template = CString::new("${tmp}/probe.XXXXXX");`,
+    "e2e/test/run.test.mjs": `const directory = mkdtempSync(join("${folders}", "run-"));\nconst env = { SOKSAK_RUN_FOLDER: "${tmp}/run folder" };`,
+    "packages/other/src/index.mjs": `const directory = mkdtempSync("${tmp}/other-");`,
+  };
+  const refused = (file, name) => `${file}:1: ${name}; create it in TMPDIR, which the test runner removes`;
+  assert.deepEqual(auditFixedTemporaryPaths(Object.keys(sources), (file) => sources[file]), [
+    refused("e2e/fixtures/sidecars/probe/src/server.rs", "a temporary template under a fixed path"),
+    refused("e2e/test/run.test.mjs", "a temporary entry created under a fixed path"),
+    refused("native/darwin/tests/capture_test.m", "a temporary template under a fixed path"),
+    refused("native/darwin/tests/log_test.m", "a temporary template under a fixed path"),
+    refused("packages/sok/go/tests/sok_test.go", "a temporary entry created under a fixed path"),
+    refused("packages/sok/rust/tests/sok_test.rs", "a temporary entry created under a fixed path"),
+  ]);
 });
 
 test("Rust failure audit rejects ignored outcomes in the scoped production lane", { timeout: 1000 }, () => {

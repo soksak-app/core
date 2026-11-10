@@ -84,7 +84,7 @@ static void compareWaiters(void) {
 // released when its close animation ends, and when its content view is autoreleased this way, the objects
 // inside it are released after two events. No event reports an object left in the pool, so while a request
 // waits, one event is queued before the main run loop sleeps each time to empty the pool, and the count
-// is compared.
+// is compared. The wait has no limit: the count, or the end of its request (sp_window_objects_end), ends it.
 static void installDrain(void) {
     if (!waiters) waiters = [[NSMutableArray alloc] init];
     if (drainMonitor) return;
@@ -100,8 +100,7 @@ static void installDrain(void) {
     idleObserver = sp_observe_run_loop("window_objects.idle", SP_OBSERVE_COUNT, CFRunLoopGetMain(), kCFRunLoopBeforeWaiting, true, INT_MAX, ^{ postDrain(); });
 }
 
-void sp_window_objects_when(const sp_window_objects *expected, double seconds, sp_window_objects_done done,
-    void *context) {
+void sp_window_objects_when(const sp_window_objects *expected, sp_window_objects_done done, void *context) {
     NSCAssert(NSThread.isMainThread, @"sp_window_objects_when requires the main thread");
     SPObjectsWaiter *waiter = [[[SPObjectsWaiter alloc] init] autorelease];
     waiter->hasExpected = expected != NULL;
@@ -111,8 +110,11 @@ void sp_window_objects_when(const sp_window_objects *expected, double seconds, s
     installDrain();
     [waiters addObject:waiter];
     postDrain();
-    // No event reports a count that does not reach the expected value. The deadline only reports that failure.
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(seconds * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        if ([waiters indexOfObjectIdenticalTo:waiter] != NSNotFound) settle(waiter, false);
-    });
+}
+
+void sp_window_objects_end(void *context) {
+    NSCAssert(NSThread.isMainThread, @"sp_window_objects_end requires the main thread");
+    for (SPObjectsWaiter *waiter in [[waiters copy] autorelease]) {
+        if (waiter->context == context) settle(waiter, false);
+    }
 }

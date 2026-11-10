@@ -16,6 +16,7 @@
 #import "window_facts.h"
 #import "webview_input.h"
 #import "support/surface_view.h"
+#import "support/temporary_folder.h"
 
 /// An input context that takes every key and answers nothing, as the input method does for a key outside the key window
 /// of the active application after the application was active once.
@@ -508,10 +509,8 @@ int main(int argc, char **argv) { @autoreleasepool {
         unsigned char smallToken[16];
         IOSurfaceRef smallSurface = createColoredGlobalSurface((size_t)smallRaster[0],
             (size_t)smallRaster[1], smallToken);
-        char directoryTemplate[] = "/tmp/soksak-frame-identity-failure-XXXXXX";
-        char *identityDirectory = mkdtemp(directoryTemplate);
+        const char *identityDirectory = temporaryFolder(@"soksak-frame-identity-failure-").fileSystemRepresentation;
         dispatch_queue_t identityWriter = dispatch_queue_create("test.frame-identity.writer", DISPATCH_QUEUE_SERIAL);
-        check(identityDirectory != NULL, @"TEST 1A: the failed-tag artifact directory is created");
         sp_image_capture_match_begin(identityDirectory, identityWriter);
         identityError = NULL;
         check(sp_image_capture_match_identity_session_begin(&identityError) && identityError == NULL,
@@ -587,10 +586,9 @@ int main(int argc, char **argv) { @autoreleasepool {
         check(identityFailure != NULL && strstr(identityFailure, "ROI") != NULL,
             @"TEST 1A: the failed identity session preserves the explicit ROI error");
         free(identityFailure);
-        BOOL failureManifest = identityDirectory
-            && sp_image_capture_match_write_manifest(identityDirectory);
+        BOOL failureManifest = sp_image_capture_match_write_manifest(identityDirectory);
         check(!failureManifest, @"TEST 1A: finalizing an untaggable identity session reports failure");
-        NSString *failureManifestPath = [[NSString stringWithUTF8String:identityDirectory ?: ""]
+        NSString *failureManifestPath = [[NSString stringWithUTF8String:identityDirectory]
             stringByAppendingPathComponent:@"frame-identities/manifest.json"];
         NSDictionary *failureMetadata = [NSJSONSerialization JSONObjectWithData:
             [NSData dataWithContentsOfFile:failureManifestPath] options:0 error:NULL];
@@ -600,8 +598,6 @@ int main(int argc, char **argv) { @autoreleasepool {
         dispatch_release(identityWriter);
         sp_region_close(smallIdentityRegion);
         if (smallSurface) CFRelease(smallSurface);
-        if (identityDirectory) [[NSFileManager defaultManager] removeItemAtPath:
-            [NSString stringWithUTF8String:identityDirectory] error:NULL];
     }
 
     // TEST 2: nonce mismatch - false return and "forbidden" event

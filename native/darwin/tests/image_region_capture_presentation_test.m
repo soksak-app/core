@@ -6,8 +6,6 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
-#include <signal.h>
-#include <unistd.h>
 #import "support/layer_contents.h"
 #import "capture.h"
 #import "image_region.h"
@@ -16,6 +14,7 @@
 #import "webview_geometry.h"
 #import "window_facts.h"
 #import "support/surface_view.h"
+#import "support/temporary_folder.h"
 #import "support/capture_frame.m"
 
 static size_t sourceWidth = 96;
@@ -58,13 +57,6 @@ static NSData *tightSurfaceBytes(IOSurfaceRef surface) {
         (uint8_t *)IOSurfaceGetBaseAddress(surface) + y * IOSurfaceGetBytesPerRow(surface), sourceWidth * 4);
     IOSurfaceUnlock(surface, kIOSurfaceLockReadOnly, NULL);
     return data;
-}
-
-static void expired(int signalNumber) {
-    (void)signalNumber;
-    const char message[] = "FAIL: image-region presentation test exceeded 30000ms\n";
-    write(STDERR_FILENO, message, sizeof message - 1);
-    _exit(1);
 }
 
 static void spinUntil(BOOL (^condition)(void), NSTimeInterval timeout) {
@@ -183,13 +175,10 @@ static void runPresentationCase(BOOL tagged, BOOL lease) { @autoreleasepool {
     sourceWidth = tagged ? 320 : 96;
     sourceHeight = tagged ? 256 : 32;
     fprintf(stdout, "PRESENTATION_CASE tagged=%d lease=%d\n", tagged, lease);
-    signal(SIGALRM, expired); alarm(30);
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     [NSApp finishLaunching];
-    char directory[] = "/tmp/soksak-image-region-pixels-XXXXXX";
-    BOOL directoryReady = mkdtemp(directory) != NULL;
-    check(directoryReady, @"a private capture-artifact directory is created");
+    const char *directory = temporaryFolder(@"soksak-image-region-pixels-").fileSystemRepresentation;
 
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(120, 120, 240, 160)
         styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
@@ -261,13 +250,13 @@ static void runPresentationCase(BOOL tagged, BOOL lease) { @autoreleasepool {
         [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
             beforeDate:[NSDate dateWithTimeIntervalSinceNow:MIN(0.01, settled.timeIntervalSinceNow)]];
     char *captureError = NULL;
-    BOOL opened = directoryReady && sp_capture_open(window.windowNumber, false, &captureError);
+    BOOL opened = sp_capture_open(window.windowNumber, false, 0, &captureError);
     check(opened, [NSString stringWithFormat:@"the nonactivating window opens for recording (%s)", captureError ?: ""]);
     free(captureError); captureError = NULL;
     BOOL started = opened && sp_capture_start(directory, false, &captureError);
     check(started, [NSString stringWithFormat:@"the ordinary sRGB/BGRA capture starts (%s)", captureError ?: ""]);
     free(captureError); captureError = NULL;
-    int firstFrame = started ? sp_capture_wait() : 0;
+    int firstFrame = started ? sp_capture_wait(0) : 0;
     check(firstFrame == 1, [NSString stringWithFormat:@"a complete capture frame arrives (%s)", sp_capture_error()]);
     // Stop restores the supplier presentation. Retain the actually recorded
     // tagged layer bytes/profile before that lifecycle transition occurs.
@@ -275,7 +264,7 @@ static void runPresentationCase(BOOL tagged, BOOL lease) { @autoreleasepool {
     CGImageRef activeLayerImage = layerContentsImage(imageLayer);
     NSData *layerBytes = [tightImageBytes(activeLayerImage) copy];
     NSString *sourceICC = [colorSpaceICC_SHA256(activeLayerImage ? CGImageGetColorSpace(activeLayerImage) : NULL) copy];
-    int frameCount = started ? sp_capture_stop(0) : 0;
+    int frameCount = started ? sp_capture_stop(0, 0) : 0;
     check(started && frameCount > 0 && sp_capture_error() && strlen(sp_capture_error()) == 0,
         [NSString stringWithFormat:@"the capture artifact finalizes (%d, %s)", frameCount, sp_capture_error() ?: ""]);
     // Frame filenames continue across recordings in one native process. Join
@@ -414,7 +403,8 @@ static void runPresentationCase(BOOL tagged, BOOL lease) { @autoreleasepool {
     [page removeFromSuperview];
     if (surfaceHost) sp_surface_close(surfaceHost);
     [page release]; [main release]; [window close]; [content release]; [window release];
-    if (exact) [[NSFileManager defaultManager] removeItemAtPath:[NSString stringWithUTF8String:directory] error:NULL];
+    // The recorded frames and callback statuses of a crop that differs from the source are its evidence.
+    if (!exact) keepTemporaryFolder([NSString stringWithUTF8String:directory]);
 } }
 
 int main(int argc, const char **argv) {

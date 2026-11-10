@@ -85,6 +85,7 @@ lane("candidate identity", "js-ts", ["scripts/candidate-identity.mjs"], ["script
 lane("candidate acceptance gate", "js-ts", ["scripts/candidate-policy.mjs", "scripts/candidate-report.mjs", "scripts/candidate-acceptance.mjs"], ["scripts/test/candidate-acceptance.test.mjs"]),
 lane("release packages", "js-ts", ["scripts/pack-release-packages.mjs"], ["scripts/test/pack-release-packages.test.mjs"]),
 lane("candidate acceptance collection", "js-ts", ["scripts/acceptance-run.mjs"], ["scripts/test/acceptance-run.test.mjs"]),
+lane("candidate context", "js-ts", ["scripts/candidate-context.mjs"], ["scripts/test/candidate-context.test.mjs"]),
   lane("workspace version audit", "js-ts", ["scripts/check-versions.mjs"], ["scripts/test/versions.test.mjs", "scripts/test/entry-guards.test.mjs"]),
   lane("fallback and discarded error audit", "js-ts", ["scripts/check-fallbacks.mjs"], ["scripts/test/fallbacks.test.mjs"]),
   lane("native window ownership audit", "js-ts", ["scripts/check-native-windows.mjs"], ["scripts/test/native-windows.test.mjs"]),
@@ -146,7 +147,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("MCP client", "js-ts", ["packages/mcp/**/*.js"], ["packages/mcp/test/**/*.mjs"]),
   lane("mygo workbench layout", "go", ["packages/workbench-mygo/src/**/*.go"], ["packages/workbench-mygo/tests/**/*.go"]),
   // The C file is the fault injection library that test/folder-wait-stream-start.test.mjs compiles and loads into its child process.
-  lane("window check harness", "js-ts", ["packages/window-check/*.mjs"], ["packages/window-check/test/**/*.mjs", "packages/window-check/test/platform/darwin/*.c"], { testExtensions: new Set([".mjs", ".c"]), sharedTests: true }),
+  lane("window check harness", "js-ts", ["packages/window-check/*.mjs", "packages/window-check/platform/*.mjs"], ["packages/window-check/test/**/*.mjs", "packages/window-check/test/platform/darwin/*.c"], { testExtensions: new Set([".mjs", ".c"]), sharedTests: true }),
   // The start probe that @soksak/window-check ships for the checks of plugin repositories.
   lane("window check start probe declaration", "declaration", ["packages/window-check/fixtures/start-probe/plugin.json"], ["packages/window-check/test/start.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("window check start probe view", "js-ts", ["packages/window-check/fixtures/start-probe/ui/app.js"], ["packages/window-check/test/start.test.mjs"], { sharedTests: true }),
@@ -156,11 +157,11 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Tauri runtime", "js-ts", ["apps/tauriv2/runtime/**/*.js"], ["apps/tauriv2/test/**/*.mjs"], { sharedTests: true }),
   lane("Wails runtime", "js-ts", ["apps/wailsv3/runtime/**/*.js"], ["apps/wailsv3/test/**/*.mjs"], { sharedTests: true }),
 
-  lane("Rust language host library", "rust", ["packages/host/rust/src/**/*.rs", "packages/host/rust/build.rs"], ["packages/host/rust/tests/**/*.rs", "packages/host/rust/src/endpoint_response_test.rs", "packages/host/rust/src/quit_owner_test.rs", "packages/host/rust/src/windows_ends_test.rs", "packages/host/rust/src/sidecar_root_admission_test.rs", "packages/host/rust/src/view_sidecar_cids_test.rs", "packages/host/rust/src/view_sidecar_enqueue_test.rs", "packages/host/rust/src/view_sidecar_project_test.rs", "packages/host/rust/src/view_sidecar_send_test.rs", "packages/host/rust/src/window_sidecar_admission_test.rs", "packages/host/rust/src/exposure_menu_executor_test.rs", "packages/host/rust/src/exposure_settled_test.rs", "packages/host/rust/src/exposure_fullscreen_test.rs", "packages/host/rust/src/documents_test.rs", "packages/host/rust/src/windows_front_test.rs", "packages/host/rust/src/sidecars_route_test.rs", "packages/host/rust/src/document_post_test.rs", "packages/host/rust/src/images_test.rs", "packages/host/rust/src/images_relay_test.rs", "packages/host/rust/src/object_counts_test.rs", "packages/host/rust/src/composition_overlay_test.rs", "packages/host/rust/src/platform/darwin/webview_overlay_test.rs", "packages/host/rust/src/platform/darwin/capture_layout_test.rs", "packages/host/rust/src/platform/darwin/document_test.rs", "packages/host/rust/src/sidecar_reply_test.rs", "packages/host/rust/src/surfaces_test.rs", "packages/host/rust/src/modals_readiness_test.rs", "packages/host/rust/src/exposure_webviews_test.rs", "packages/host/rust/src/exposure_status_test.rs", "packages/host/rust/src/notifications_test.rs", "packages/host/rust/src/project_removal_test.rs", "packages/host/rust/src/endpoint_lock_test.rs", "packages/host/rust/src/windows_records_test.rs", "packages/host/rust/src/responder_test.rs", "packages/host/rust/src/sidecars_lock_test.rs", "packages/host/rust/src/sidecars_read_deadline_test.rs", "packages/host/rust/src/image_detach_test.rs", "packages/host/rust/src/start_test.rs", "packages/host/rust/src/performance_lock_test.rs", "packages/host/rust/src/workspace_lock_test.rs", "packages/host/rust/src/view_lifecycle_test.rs", "packages/host/rust/src/view_origin_test.rs", "packages/host/rust/src/view_responsiveness_test.rs", "packages/host/rust/src/view_theme_test.rs", "packages/host/rust/src/surface_close_test.rs", "packages/host/rust/src/presentation_end_test.rs", "packages/host/rust/src/view_start_test.rs", "packages/host/rust/src/log_policy_levels_test.rs", "packages/host/rust/src/view_call_peer_test.rs", "packages/host/rust/src/view_binary_test.rs", "packages/host/rust/src/presentation_wait_test.rs", "packages/host/rust/src/view_join_test.rs", "packages/host/rust/benches/**/*.rs", "packages/host/rust/tests/fixtures/**/*.json", "packages/host/rust/src/diagnostics_lock_test.rs", "packages/host/rust/src/diagnostics_input_reference_test.rs", "packages/host/rust/src/diagnostics_input_source_test.rs", "packages/host/rust/src/diagnostics_test.rs", "packages/host/rust/src/window_activation_observation_test.rs", "packages/host/rust/src/platform/darwin/input_reference_test.rs", "packages/host/rust/src/log_policy_watch_hook_lock_test.rs", "packages/host/rust/src/process_lock_hook_lock_test.rs", "packages/host/rust/src/assets_lock_test.rs", "packages/host/rust/src/deep_link_lock_test.rs", "packages/host/rust/src/log_query_lock_test.rs", "packages/host/rust/src/debug_follow_lock_test.rs", "packages/host/rust/src/source_origins_test.rs", "packages/host/rust/src/sidecar_routes_test.rs", "packages/host/rust/src/sidecars_session_retention_test.rs", "packages/host/rust/src/installed_reads_test.rs", "packages/host/rust/src/routine/async_runtime_test.rs", "packages/host/rust/src/platform/windows/devtools_input_test.rs", "packages/host/rust/src/platform/windows/show_test.rs", "packages/host/rust/src/platform/windows/mouse_watch_test.rs", "packages/host/rust/src/platform/windows/ui_queue_test.rs", "packages/host/rust/src/platform/windows/process_failure_test.rs"], { testExtensions: new Set([".rs", ".json"]) }),
+  lane("Rust language host library", "rust", ["packages/host/rust/src/**/*.rs", "packages/host/rust/build.rs"], ["packages/host/rust/tests/**/*.rs", "packages/host/rust/src/endpoint_response_test.rs", "packages/host/rust/src/quit_owner_test.rs", "packages/host/rust/src/sidecar_root_admission_test.rs", "packages/host/rust/src/view_sidecar_cids_test.rs", "packages/host/rust/src/view_sidecar_enqueue_test.rs", "packages/host/rust/src/view_sidecar_project_test.rs", "packages/host/rust/src/view_sidecar_send_test.rs", "packages/host/rust/src/window_sidecar_admission_test.rs", "packages/host/rust/src/exposure_menu_executor_test.rs", "packages/host/rust/src/exposure_settled_test.rs", "packages/host/rust/src/documents_test.rs", "packages/host/rust/src/windows_front_test.rs", "packages/host/rust/src/sidecars_route_test.rs", "packages/host/rust/src/document_post_test.rs", "packages/host/rust/src/images_test.rs", "packages/host/rust/src/images_relay_test.rs", "packages/host/rust/src/object_counts_test.rs", "packages/host/rust/src/composition_overlay_test.rs", "packages/host/rust/src/platform/darwin/webview_overlay_test.rs", "packages/host/rust/src/platform/darwin/capture_layout_test.rs", "packages/host/rust/src/platform/darwin/document_test.rs", "packages/host/rust/src/sidecar_reply_test.rs", "packages/host/rust/src/surfaces_test.rs", "packages/host/rust/src/modals_readiness_test.rs", "packages/host/rust/src/exposure_webviews_test.rs", "packages/host/rust/src/exposure_status_test.rs", "packages/host/rust/src/notifications_test.rs", "packages/host/rust/src/project_removal_test.rs", "packages/host/rust/src/endpoint_lock_test.rs", "packages/host/rust/src/windows_records_test.rs", "packages/host/rust/src/page_end_test.rs", "packages/host/rust/src/responder_test.rs", "packages/host/rust/src/sidecars_lock_test.rs", "packages/host/rust/src/sidecars_read_deadline_test.rs", "packages/host/rust/src/image_detach_test.rs", "packages/host/rust/src/start_test.rs", "packages/host/rust/src/performance_lock_test.rs", "packages/host/rust/src/workspace_lock_test.rs", "packages/host/rust/src/view_lifecycle_test.rs", "packages/host/rust/src/view_origin_test.rs", "packages/host/rust/src/view_responsiveness_test.rs", "packages/host/rust/src/view_theme_test.rs", "packages/host/rust/src/surface_close_test.rs", "packages/host/rust/src/presentation_end_test.rs", "packages/host/rust/src/view_start_test.rs", "packages/host/rust/src/log_policy_levels_test.rs", "packages/host/rust/src/view_call_peer_test.rs", "packages/host/rust/src/view_binary_test.rs", "packages/host/rust/src/presentation_wait_test.rs", "packages/host/rust/src/view_join_test.rs", "packages/host/rust/benches/**/*.rs", "packages/host/rust/tests/fixtures/**/*.json", "packages/host/rust/src/diagnostics_lock_test.rs", "packages/host/rust/src/diagnostics_input_reference_test.rs", "packages/host/rust/src/diagnostics_input_source_test.rs", "packages/host/rust/src/diagnostics_test.rs", "packages/host/rust/src/window_activation_observation_test.rs", "packages/host/rust/src/window_pageless_processes_test.rs", "packages/host/rust/src/platform/darwin/input_reference_test.rs", "packages/host/rust/src/log_policy_watch_hook_lock_test.rs", "packages/host/rust/src/process_lock_hook_lock_test.rs", "packages/host/rust/src/assets_lock_test.rs", "packages/host/rust/src/deep_link_lock_test.rs", "packages/host/rust/src/log_query_lock_test.rs", "packages/host/rust/src/debug_follow_lock_test.rs", "packages/host/rust/src/source_origins_test.rs", "packages/host/rust/src/sidecar_routes_test.rs", "packages/host/rust/src/sidecars_session_retention_test.rs", "packages/host/rust/src/installed_reads_test.rs", "packages/host/rust/src/routine/async_runtime_test.rs", "packages/host/rust/src/platform/windows/devtools_input_test.rs", "packages/host/rust/src/platform/windows/show_test.rs", "packages/host/rust/src/platform/windows/mouse_watch_test.rs", "packages/host/rust/src/platform/windows/ui_queue_test.rs", "packages/host/rust/src/platform/windows/process_failure_test.rs", "packages/host/rust/src/windows_ends_test.rs", "packages/host/rust/src/exposure_fullscreen_test.rs"], { testExtensions: new Set([".rs", ".json"]) }),
   lane("Tauri framework adapter", "rust", ["packages/host/tauriv2/src/**/*.rs"], ["packages/host/tauriv2/tests/**/*.rs", "packages/host/tauriv2/src/plugins_starter_test.rs"]),
   lane("Tauri application bootstrap", "rust", ["apps/tauriv2/src/main.rs", "apps/tauriv2/build.rs"], ["e2e/**/*.mjs", "e2e/platform/platform.js", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js", "e2e/fixtures/*/*/ui/*.html", "e2e/fixtures/sidecars/*/sidecar.json", "e2e/fixtures/sidecars/*/build.rs", "e2e/fixtures/sidecars/*/src/*.rs"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
 
-  lane("Go language host library", "go", ["packages/host/go/src/**/*.go"], ["packages/host/go/tests/**/*.go", "packages/host/go/src/endpoint_response_test.go", "packages/host/go/src/endpoint_presses_test.go", "packages/host/go/src/endpoint_ended_test.go", "packages/host/go/src/quit_owner_test.go", "packages/host/go/src/sidecar_root_admission_test.go", "packages/host/go/src/view_sidecar_cids_test.go", "packages/host/go/src/view_sidecar_enqueue_test.go", "packages/host/go/src/view_sidecar_project_test.go", "packages/host/go/src/view_sidecar_send_test.go", "packages/host/go/src/window_sidecar_admission_test.go", "packages/host/go/src/main_test.go", "packages/host/go/src/platform/darwin/main_test.go", "packages/host/go/src/platform/darwin/main_diagnostics_test.go", "packages/host/go/src/platform/darwin/native_startup_test.go", "packages/host/go/src/platform/darwin/abi/memory_test.go", "packages/host/go/tests/fixtures/**/*.json", "packages/host/go/src/platform/windows/devtools_input_test.go", "packages/host/go/src/platform/windows/mouse_watch_test.go", "packages/host/go/src/platform/windows/process_failure_test.go", "packages/host/go/src/platform/windows/show_test.go", "packages/host/go/src/platform/windows/ui_queue_test.go", "packages/host/go/src/step_records_test.go", "packages/host/go/src/diagnostics_gc_loop_test.go", "packages/host/go/src/diagnostics_cpu_profile_test.go", "packages/host/go/src/diagnostics_no_main_page_test.go", "packages/host/go/src/exposure_settled_test.go", "packages/host/go/src/modals_workbench_test.go", "packages/host/go/src/window_frames_test.go", "packages/host/go/src/window_page_process_test.go", "packages/host/go/src/window_activation_observation_test.go", "packages/host/go/src/event_log_wake_test.go", "packages/host/go/src/projects_test.go", "packages/host/go/src/windows_main_page_test.go", "packages/host/go/src/fatal_exit_test.go", "packages/host/go/src/surface_elements_test.go", "packages/host/go/src/open_layout_test.go", "packages/host/go/src/surface_created_bounds_test.go", "packages/host/go/src/document_post_test.go", "packages/host/go/src/images_relay_test.go", "packages/host/go/src/image_detach_test.go", "packages/host/go/src/responder_test.go", "packages/host/go/src/start_test.go", "packages/host/go/src/diagnostics_test.go", "packages/host/go/src/diagnostics_input_reference_test.go", "packages/host/go/src/diagnostics_input_source_test.go", "packages/host/go/src/diagnostics_clock_test.go", "packages/host/go/src/composition_overlay_test.go", "packages/host/go/src/platform/darwin/webview_overlay_test.go", "packages/host/go/src/platform/darwin/capture_layout_test.go", "packages/host/go/src/platform/darwin/document_test.go", "packages/host/go/src/platform/darwin/input_reference_test.go", "packages/host/go/src/exposure_status_test.go", "packages/host/go/src/exposure_wait_ends_test.go", "packages/host/go/src/exposure_request_ends_test.go", "packages/host/go/src/exposure_webviews_test.go", "packages/host/go/src/modals_readiness_test.go", "packages/host/go/src/object_counts_test.go", "packages/host/go/src/view_lifecycle_test.go", "packages/host/go/src/view_responsiveness_test.go", "packages/host/go/src/view_theme_test.go", "packages/host/go/src/view_start_test.go", "packages/host/go/src/log_policy_levels_test.go", "packages/host/go/src/view_call_peer_test.go", "packages/host/go/src/view_call_record_test.go", "packages/host/go/src/view_error_test.go", "packages/host/go/src/view_binary_test.go", "packages/host/go/src/documents_test.go", "packages/host/go/src/presentation_wait_test.go", "packages/host/go/src/view_join_test.go", "packages/host/go/src/sidecar_reply_test.go", "packages/host/go/src/surfaces_test.go", "packages/host/go/src/view_origin_test.go", "packages/host/go/src/source_origins_test.go", "packages/host/go/src/sidecar_routes_test.go", "packages/host/go/src/sidecars_session_retention_test.go", "packages/host/go/src/plugins_starter_test.go", "packages/host/go/src/page_end_test.go", "packages/host/go/src/platform/darwin/input_test.go", "packages/host/go/src/images_test.go", "packages/host/go/src/windows_front_test.go", "packages/host/go/src/windows_show_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
+  lane("Go language host library", "go", ["packages/host/go/src/**/*.go"], ["packages/host/go/tests/**/*.go", "packages/host/go/src/endpoint_response_test.go", "packages/host/go/src/endpoint_presses_test.go", "packages/host/go/src/endpoint_ended_test.go", "packages/host/go/src/quit_owner_test.go", "packages/host/go/src/sidecar_root_admission_test.go", "packages/host/go/src/view_sidecar_cids_test.go", "packages/host/go/src/view_sidecar_enqueue_test.go", "packages/host/go/src/view_sidecar_project_test.go", "packages/host/go/src/view_sidecar_send_test.go", "packages/host/go/src/window_sidecar_admission_test.go", "packages/host/go/src/main_test.go", "packages/host/go/src/platform/darwin/main_test.go", "packages/host/go/src/platform/darwin/main_diagnostics_test.go", "packages/host/go/src/platform/darwin/native_startup_test.go", "packages/host/go/src/platform/darwin/abi/memory_test.go", "packages/host/go/tests/fixtures/**/*.json", "packages/host/go/src/platform/windows/devtools_input_test.go", "packages/host/go/src/platform/windows/mouse_watch_test.go", "packages/host/go/src/platform/windows/process_failure_test.go", "packages/host/go/src/platform/windows/show_test.go", "packages/host/go/src/platform/windows/ui_queue_test.go", "packages/host/go/src/step_records_test.go", "packages/host/go/src/diagnostics_gc_loop_test.go", "packages/host/go/src/diagnostics_cpu_profile_test.go", "packages/host/go/src/diagnostics_no_main_page_test.go", "packages/host/go/src/exposure_settled_test.go", "packages/host/go/src/modals_workbench_test.go", "packages/host/go/src/window_frames_test.go", "packages/host/go/src/window_page_process_test.go", "packages/host/go/src/window_pageless_processes_test.go", "packages/host/go/src/window_activation_observation_test.go", "packages/host/go/src/event_log_wake_test.go", "packages/host/go/src/projects_test.go", "packages/host/go/src/windows_main_page_test.go", "packages/host/go/src/fatal_exit_test.go", "packages/host/go/src/surface_elements_test.go", "packages/host/go/src/open_layout_test.go", "packages/host/go/src/surface_created_bounds_test.go", "packages/host/go/src/document_post_test.go", "packages/host/go/src/images_relay_test.go", "packages/host/go/src/image_detach_test.go", "packages/host/go/src/responder_test.go", "packages/host/go/src/start_test.go", "packages/host/go/src/diagnostics_test.go", "packages/host/go/src/diagnostics_hold_end_test.go", "packages/host/go/src/diagnostics_hold_window_test.go", "packages/host/go/src/diagnostics_native_wait_test.go", "packages/host/go/src/diagnostics_input_reference_test.go", "packages/host/go/src/diagnostics_input_source_test.go", "packages/host/go/src/diagnostics_clock_test.go", "packages/host/go/src/composition_overlay_test.go", "packages/host/go/src/platform/darwin/webview_overlay_test.go", "packages/host/go/src/platform/darwin/capture_layout_test.go", "packages/host/go/src/platform/darwin/document_test.go", "packages/host/go/src/platform/darwin/input_reference_test.go", "packages/host/go/src/platform/darwin/input_test.go", "packages/host/go/src/page_end_test.go", "packages/host/go/src/exposure_status_test.go", "packages/host/go/src/exposure_webviews_test.go", "packages/host/go/src/modals_readiness_test.go", "packages/host/go/src/object_counts_test.go", "packages/host/go/src/view_lifecycle_test.go", "packages/host/go/src/view_responsiveness_test.go", "packages/host/go/src/view_theme_test.go", "packages/host/go/src/view_start_test.go", "packages/host/go/src/log_policy_levels_test.go", "packages/host/go/src/view_call_peer_test.go", "packages/host/go/src/view_call_record_test.go", "packages/host/go/src/view_error_test.go", "packages/host/go/src/view_binary_test.go", "packages/host/go/src/documents_test.go", "packages/host/go/src/presentation_wait_test.go", "packages/host/go/src/view_join_test.go", "packages/host/go/src/sidecar_reply_test.go", "packages/host/go/src/surfaces_test.go", "packages/host/go/src/view_origin_test.go", "packages/host/go/src/source_origins_test.go", "packages/host/go/src/sidecar_routes_test.go", "packages/host/go/src/sidecars_session_retention_test.go", "packages/host/go/src/plugins_starter_test.go", "packages/host/go/src/images_test.go", "packages/host/go/src/windows_front_test.go", "packages/host/go/src/windows_show_test.go", "packages/host/go/src/exposure_wait_ends_test.go", "packages/host/go/src/exposure_request_ends_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
   lane("Wails framework adapter", "go", ["packages/host/wailsv3/src/**/*.go"], ["packages/host/wailsv3/tests/**/*.go"], { sharedTests: true }),
   lane("mygo framework adapter", "go", ["packages/host/mygo/src/**/*.go"], ["packages/host/mygo/tests/**/*.go", "packages/host/mygo/src/frames_test.go", "packages/host/mygo/src/frontend_test.go", "packages/host/mygo/src/workbench_test.go"], { sharedTests: true }),
   lane("empty mygo window benchmark", "go", ["packages/host/mygo/benchmark/empty_window.go", "packages/host/mygo/benchmark/platform/darwin/main.go"], ["packages/host/mygo/benchmark/empty_window_test.go"], { sharedTests: true }),
@@ -223,7 +224,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Darwin UI queue", "objective-c", ["native/darwin/src/ui_queue.m"], ["native/darwin/tests/ui_queue_test.m"], { sharedTests: true }),
   lane("Darwin process exit", "objective-c", ["native/darwin/src/process_exit.m"], ["native/darwin/tests/process_exit_test.m"], { sharedTests: true }),
   lane("Darwin application log", "objective-c", ["native/darwin/src/application_log.m"], ["native/darwin/tests/application_log_test.m"], { sharedTests: true }),
-  lane("Darwin event ring", "objective-c", ["native/darwin/src/event_ring.m"], ["native/darwin/tests/event_ring_test.m", "native/darwin/tests/event_gate_wait_test.m"], { sharedTests: true }),
+  lane("Darwin event ring", "objective-c", ["native/darwin/src/event_ring.m"], ["native/darwin/tests/event_ring_test.m", "native/darwin/tests/event_gate_wait_test.m", "native/darwin/tests/event_wake_early_test.m"], { sharedTests: true }),
   lane("Darwin observe", "objective-c", ["native/darwin/src/observe.m"], ["native/darwin/tests/observe_test.m"], { sharedTests: true }),
   lane("Darwin mouse buttons", "objective-c", ["native/darwin/src/mouse_buttons.m"], ["native/darwin/tests/mouse_buttons_test.m"], { sharedTests: true }),
   lane("Darwin quit request", "objective-c", ["native/darwin/src/quit_request.m"], ["native/darwin/tests/quit_request_test.m"], { sharedTests: true }),
@@ -378,6 +379,30 @@ const FEATURE_LINKS = [
       { file: "scripts/test/workflows.test.mjs", id: "ci keeps language host checks independent and gates release on every required job" },
     ],
     expected: "A Linux job of CI installs the locked Node dependencies of every workspace project whose os field admits Linux and runs the Node tests of scripts/test, e2e/test and packages/window-check/test outside platform/darwin/system through make test-headless-owners; every system owner placed in platform/darwin/system runs in a macOS job, and the required gate fails unless it succeeds. make check-windows-rust compiles the Rust host library for x86_64-pc-windows-msvc in the default and the diagnostic build on a host that has the target and the MSVC tools, and fails by name when the target is not installed.",
+    levels: ["unit"],
+  },
+  {
+    id: "F696-10",
+    implementation: [
+      { file: "packages/window-check/platform.mjs", symbol: "export class PlatformOperationNotImplemented extends Error {" },
+      { file: "packages/window-check/platform.mjs", symbol: "export function releasePlatform({ platform = process.platform, arch = process.arch } = {}) {" },
+      { file: "packages/window-check/platform/darwin.mjs", symbol: "export async function listProcesses(run) {" },
+      { file: "packages/window-check/test-app.mjs", symbol: "export async function cachedBundle(cache, version, host, { platform = process.platform, arch = process.arch, signal, fetchImpl," },
+      { file: "packages/window-check/test-app.mjs", symbol: "async function quit(child, sok, configDir, by, root, platform) {" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/platform.test.mjs", id: "the release platform of the run is the system and the architecture of the computer that runs it" },
+      { file: "packages/window-check/test/platform.test.mjs", id: "on macOS the application of an extracted zip is its bundle, whose Contents/MacOS holds the application and sok" },
+      { file: "packages/window-check/test/platform.test.mjs", id: "on macOS the run extracts with ditto, waits for a lock with lockf and lists processes with ps" },
+      { file: "packages/window-check/test/platform.test.mjs", id: "an operation that the platform does not implement rejects with its name and runs nothing" },
+      { file: "packages/window-check/test/platform.test.mjs", id: "the package ships the platform operations of the run" },
+      { file: "packages/window-check/test/test-app.test.mjs", id: "the run uses the published application zip of the core release of this package for the platform that runs it" },
+      { file: "packages/window-check/test/test-app.test.mjs", id: "the bundle of an application is extracted by the platform operation of the platform that runs the run" },
+      { file: "packages/window-check/test/test-app.test.mjs", id: "on a platform that declares no application artifact the run fails by the operation before any download" },
+      { file: "packages/window-check/test/test-app.test.mjs", id: "the remaining processes are those whose command line names a path of the run, except this one" },
+      { file: "packages/window-check/test/test-app.test.mjs", id: "the run module names no macOS program, bundle layout or quit key of its own" },
+    ],
+    expected: "sok-test-app names the application zip by the release platform of the computer that runs it and takes the application, its executables, the extraction, the quit keys, the lock wait and the process list from the platform operations of @soksak/window-check. macOS implements them with the bundle soksak.app, ditto, Command+Q, lockf and ps; on Linux and Windows each operation rejects with PlatformOperationNotImplemented, runs no program, and the run fails before any download.",
     levels: ["unit"],
   },
   {
@@ -589,7 +614,11 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/page_end_test.go", id: "TestTheReloadRequestEndsTheRequestsToThePage" },
       { file: "packages/host/go/src/page_end_test.go", id: "TestAReloadEndsWithTheCloseOfItsWindow" },
       { file: "packages/host/go/src/page_end_test.go", id: "TestAReloadEndsWithAFailedStart" },
-      { file: "packages/host/rust/src/exposure_status_test.rs", id: "a_reload_asked_of_a_page_ends_the_requests_to_the_page" },
+      { file: "packages/host/rust/src/page_end_test.rs", id: "the_end_of_the_page_process_ends_the_requests_to_the_page" },
+      { file: "packages/host/rust/src/page_end_test.rs", id: "the_end_of_the_page_answers_the_close_question_that_it_left" },
+      { file: "packages/host/rust/src/page_end_test.rs", id: "the_reload_request_ends_the_requests_to_the_page" },
+      { file: "packages/host/rust/src/page_end_test.rs", id: "a_reload_ends_with_the_close_of_its_window" },
+      { file: "packages/host/rust/src/page_end_test.rs", id: "a_reload_ends_with_a_failed_start" },
       { file: "packages/workbench/test/host-calls.test.mjs", id: "settling waits for the calls already sent and refuses every later call at once" },
       { file: "packages/workbench/test/memory-placement-start.test.mjs", id: "every wait of the page start after the memory readiness exists can reject that readiness" },
       { file: "packages/workbench-mygo/tests/page_end_test.go", id: "TestAFlushEndsWhileEventsKeepComing" },
@@ -622,8 +651,8 @@ const FEATURE_LINKS = [
       { file: "native/darwin/src/input_inject.m", symbol: "startPointerRequests" },
       { file: "native/darwin/src/host_api_input.m", symbol: "sp_surface_is_host(view)" },
       { file: "native/darwin/src/capture.m", symbol: "endCaptureStream" },
-      { file: "native/darwin/src/capture.m", symbol: "void sp_capture_end_waits(void) {" },
-      { file: "packages/host/go/src/diagnostics.go", symbol: "func watchConnectionEnd(conn *endpointConn, onEnd func()) func() {" },
+      { file: "native/darwin/src/capture.m", symbol: "void sp_capture_end_wait(uint64_t token, const char *reason) {" },
+      { file: "packages/host/go/src/endpoint.go", symbol: "func (c *endpointConn) onClose(end func()) (remove func()) {" },
       { file: "packages/host/rust/src/endpoint.rs", symbol: "pub fn watch(&self, on_end: impl FnOnce() + Send + 'static) -> ConnectionWatch {" },
       { file: "packages/host/go/src/platform/darwin/input.go", symbol: "goHost_surface_pressed" },
       { file: "packages/host/go/src/sidecars.go", symbol: "c.stopDetach = detach" },
@@ -659,6 +688,91 @@ const FEATURE_LINKS = [
     ],
     expected: "The rail groups of the mygo workbench read the plugin sets of the four window sides in their order, so a top window sidebar set joins the rail and core.rail.",
     levels: ["unit"],
+  },
+  {
+    id: "F718-8",
+    implementation: [
+      { file: "native/darwin/src/document_view.m", symbol: "static void frameIdentityEnd(SPDocumentView *view, NSString *reason) {" },
+      { file: "native/darwin/src/event_ring.m", symbol: "if (atomic_load_explicit(&wakePending, memory_order_seq_cst)) {" },
+      { file: "packages/host/go/src/diagnostics.go", symbol: "func diagnosticSurfaceHold(e *Endpoint, c *endpointConn, params json.RawMessage, scope *ReplyScope) (any, error) {" },
+      { file: "packages/host/go/src/diagnostics.go", symbol: "func endWindowHolds(s *Surfaces) {" },
+      { file: "packages/host/rust/src/endpoint.rs", symbol: "pub struct ConnectionEnd(Arc<Mutex<ConnectionEndState>>);" },
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn remember_surface_hold(" },
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn native_objects_answer(" },
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn native_wait<T: Send + 'static>(" },
+      { file: "packages/host/go/src/diagnostics.go", symbol: "func awaitNative[T any](s *Surfaces, c *endpointConn, start func(answer func(T)) (end func(reason string))) (T, string) {" },
+      { file: "packages/host/go/src/diagnostics.go", symbol: "func awaitCapture[T any](c platformCapture, call func(token uint64) T) T {" },
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn await_capture<T>(" },
+      { file: "native/darwin/src/capture.m", symbol: "void sp_capture_end_wait(uint64_t token, const char *reason) {" },
+      { file: "native/darwin/src/host_api_capture.m", symbol: "void scheduleCaptureWait(uint64_t token, uintptr_t context) {" },
+      { file: "native/darwin/src/window_facts.m", symbol: "static NSArray *pagelessProcesses(WKWebView *any) {" },
+      { file: "packages/host/go/src/platform/darwin/capture.go", symbol: "func awaitCaptureAnswer(schedule func(context uintptr)) captureAnswer {" },
+      { file: "native/darwin/src/input_source.m", symbol: "void sp_input_source_selection_end(const void *key, const char *reason) {" },
+      { file: "native/darwin/src/input_reference.m", symbol: "void sp_input_reference_end(void *pointer, const char *reason) {" },
+      { file: "packages/host/go/src/endpoint.go", symbol: "func (c *endpointConn) onClose(end func()) (remove func()) {" },
+      { file: "native/darwin/src/process_exit.m", symbol: "void sp_process_exit_end(void *context) {" },
+      { file: "native/darwin/src/window_objects.m", symbol: "void sp_window_objects_end(void *context) {" },
+      { file: "packages/workbench/surface-reply-hold.js", symbol: "released(surface) {" },
+      { file: "packages/workbench-mygo/src/transcript.go", symbol: "func (h *SurfaceReplyHold) Released(surface string) {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/document_core_root_test.m", id: "a navigation that the document commits fails the start that has not answered" },
+      { file: "native/darwin/tests/document_core_root_test.m", id: "the end of the WebContent process fails the start that has not answered" },
+      { file: "native/darwin/tests/event_wake_early_test.m", id: "a pipe that opens while the ring holds a record is readable" },
+      { file: "packages/host/go/src/diagnostics_hold_end_test.go", id: "TestAModalHoldEndsWithTheConnectionThatTurnedItOn" },
+      { file: "packages/host/go/src/diagnostics_hold_end_test.go", id: "TestTheCloseOfTheConnectionOfASurfaceHoldReleasesTheSurface" },
+      { file: "packages/host/go/src/diagnostics_hold_end_test.go", id: "TestAPageDragSendsEveryStep" },
+      { file: "packages/host/go/src/diagnostics_hold_end_test.go", id: "TestAFailedDragRequestStillEndsTheWorkbenchRecord" },
+      { file: "packages/host/go/src/diagnostics_hold_window_test.go", id: "TestAModalHoldEndsWithItsWindow" },
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestTheFrameIdentityWaitEndsByItsCallback" },
+      { file: "packages/host/rust/src/diagnostics_test.rs", id: "a_modal_hold_ends_with_the_connection_that_turned_it_on" },
+      { file: "packages/host/rust/src/diagnostics_test.rs", id: "a_modal_hold_ends_with_its_window" },
+      { file: "packages/host/rust/src/diagnostics_test.rs", id: "the_close_of_the_connection_of_a_surface_hold_releases_the_surface" },
+      { file: "packages/host/rust/src/diagnostics_test.rs", id: "document_frame_identity_callback_ends_the_wait" },
+      { file: "packages/host/rust/src/diagnostics_test.rs", id: "unreached_window_objects_answer_the_end_of_their_wait" },
+      { file: "packages/host/rust/src/diagnostics_test.rs", id: "a_process_exit_answer_names_the_end_of_its_wait" },
+      { file: "packages/host/rust/src/diagnostics_test.rs", id: "a_native_wait_ends_with_the_connection_of_its_request" },
+      { file: "packages/host/rust/src/diagnostics_test.rs", id: "a_native_wait_ends_with_its_window_and_its_page" },
+      { file: "packages/host/rust/src/diagnostics_test.rs", id: "a_native_wait_of_another_window_keeps_waiting" },
+      { file: "packages/host/go/src/diagnostics_native_wait_test.go", id: "TestANativeWaitEndsWithTheConnectionOfItsRequest" },
+      { file: "packages/host/go/src/diagnostics_native_wait_test.go", id: "TestANativeWaitEndsWithItsWindowAndItsPage" },
+      { file: "packages/host/go/src/diagnostics_native_wait_test.go", id: "TestANativeWaitOfAnotherWindowKeepsWaiting" },
+      { file: "packages/host/go/src/diagnostics_native_wait_test.go", id: "TestUnreachedWindowObjectsAnswerTheEndOfTheirWait" },
+      { file: "packages/host/go/src/diagnostics_native_wait_test.go", id: "TestAProcessExitAnswerNamesTheEndOfItsWait" },
+      { file: "native/darwin/tests/process_exit_test.m", id: "native.process.exit_wait_ended" },
+      { file: "native/darwin/tests/capture_pressure_test.m", id: "an end from another thread ends the first-frame wait" },
+      { file: "native/darwin/tests/capture_pressure_test.m", id: "the end of a returned call does not end a later wait" },
+      { file: "native/darwin/tests/capture_pressure_test.m", id: "a frame that came before the end answers its wait" },
+      { file: "native/darwin/tests/capture_pressure_test.m", id: "the end of another call does not end this wait" },
+      { file: "native/darwin/tests/capture_pressure_test.m", id: "the main thread closes a window while a scheduled capture wait waits" },
+      { file: "native/darwin/tests/capture_pressure_test.m", id: "the close of the window ends the capture wait, which answers its context once" },
+      { file: "packages/window-check/test/view-metrics-collection.test.mjs", id: "the reclaim close reads the processes that remain and awaits only the exit of the processes that host.window reports ending" },
+      { file: "packages/window-check/test/view-metrics-collection.test.mjs", id: "the reclaim close refuses a host.window that does not report the processes without a page" },
+      { file: "native/darwin/tests/window_facts_test.m", id: "the process whose page closed is reported without a page and ending" },
+      { file: "native/darwin/tests/window_facts_test.m", id: "a process without a page that exited is no longer reported" },
+      { file: "packages/host/go/src/window_pageless_processes_test.go", id: "TestWindowReportsTheProcessesWithoutAPage" },
+      { file: "packages/host/rust/src/window_pageless_processes_test.rs", id: "host_window_reports_the_processes_without_a_page" },
+      { file: "packages/window-check/test/view-metrics-collection.test.mjs", id: "the end of a reclaim exit wait fails the close with its reason" },
+      { file: "native/darwin/tests/capture_preparation_test.m", id: "held preparation returns its owned end" },
+      { file: "native/darwin/tests/capture_stop_late_test.m", id: "the stop whose wait ended reports that end" },
+      { file: "native/darwin/tests/capture_callback_test.m", id: "a pending start reports the end of its wait" },
+      { file: "native/darwin/tests/input_source_test.m", id: "the end of another key leaves the selection waiting" },
+      { file: "native/darwin/tests/input_reference_test.m", id: "an unmet document keeps its wait without a limit" },
+      { file: "native/darwin/tests/input_reference_test.m", id: "the end of the request fails the unmet wait with its end and the state" },
+      { file: "packages/host/go/src/diagnostics_native_wait_test.go", id: "TestACaptureWaitEndsWithTheConnectionOfItsRequest" },
+      { file: "packages/host/go/src/diagnostics_native_wait_test.go", id: "TestACaptureWaitEndsWithItsWindowAndItsPage" },
+      { file: "packages/host/go/src/diagnostics_native_wait_test.go", id: "TestAnAnsweredCaptureOperationTakesBackItsEnds" },
+      { file: "packages/host/rust/src/diagnostics_test.rs", id: "a_capture_wait_ends_with_the_connection_of_its_request" },
+      { file: "packages/host/rust/src/diagnostics_test.rs", id: "a_capture_wait_ends_with_its_window_and_its_page" },
+      { file: "packages/host/rust/src/diagnostics_test.rs", id: "an_answered_capture_operation_takes_back_its_ends" },
+      { file: "packages/workbench/test/surface-reply-hold.test.mjs", id: "a released surface sends its held replies in order and writes the line of the ended hold" },
+      { file: "packages/workbench/test/exposure-replies-sent.test.mjs", id: "whenRepliesSent ends the diagnostic holds of surface replies, so a reload sends the held reply" },
+      { file: "packages/workbench/test/observe-surface-release.test.mjs", id: "the host event diagnostics-surface-released ends the hold of its surface" },
+      { file: "packages/workbench-mygo/tests/surface_release_test.go", id: "TestASurfaceReplyHoldSendsTheHeldRepliesAfterItsHoldEnded" },
+      { file: "packages/workbench-mygo/tests/surface_release_test.go", id: "TestTheEventDiagnosticsSurfaceReleasedEndsTheHoldOfTheSurface" },
+    ],
+    expected: "A diagnostic hold or recording ends with its own end, its window, its page or workbench, or the endpoint connection that opened it, and no limit ends it; the frame identity also ends with the navigation and the WebContent process of its document, the hosts wait for each native callback without a limit of their own, the waits of the native window objects, the process exit, the input source selection, the input reference and every capture operation, and the Windows still capture, end only by their event or the connection, window or page end that the request names, a page drag receives every step, a failed drag request ends the workbench record, and the wake pipe opens readable for a record that waited.",
+    levels: ["unit", "native"],
   },
   {
     id: "F719",
@@ -1529,6 +1643,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F724",
+    implementation: [
+      { file: "patches/@parcel__watcher@2.6.0.patch", symbol: "void Backend::release() {" },
+      { file: "patches/@parcel__watcher@2.6.0.patch", symbol: "static std::mutex& getSharedWatchersMutex() {" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/platform/darwin/system/folder-wait-overlap.test.mjs", id: "waits whose watches end while the next watches start leave no stream open and the process continues" },
+    ],
+    expected: "The end of a watch that overlaps the start of the next watches leaves no stream open, and the process that runs them ends by no signal.",
+    levels: ["unit"],
+  },
+  {
     id: "F560",
     implementation: [
       { file: "native/darwin/src/webview_input.m", symbol: "static void pointerLeft(WKWebView *view, NSEvent *event)" },
@@ -2368,7 +2494,7 @@ const FEATURE_LINKS = [
       { file: "scripts/check-host-callbacks.mjs", symbol: "export function createHostCallbacks(" },
     ],
     tests: [
-      { file: "native/darwin/tests/host_callbacks_test.m", id: "the native ABI declares 37 base and 7 diagnostic callbacks" },
+      { file: "native/darwin/tests/host_callbacks_test.m", id: "the native ABI declares 37 base and 8 diagnostic callbacks" },
       { file: "native/darwin/tests/host_callbacks_test.m", id: "the native owner copies the table and passes the owner and pointer arguments" },
       { file: "native/darwin/tests/host_callbacks_test.m", id: "the diagnostic owner copies its table and dispatches the registered callback" },
       { file: "native/darwin/tests/host_callbacks_test.m", id: "a rejected diagnostic replacement preserves its installed callback" },
@@ -4370,7 +4496,7 @@ const FEATURE_LINKS = [
     },
     {
       "file": "packages/host/rust/src/diagnostics_test.rs",
-      "id": "document_frame_identity_callback_wait_is_bounded"
+      "id": "document_frame_identity_callback_ends_the_wait"
     },
     {
       "file": "packages/host/rust/src/diagnostics_test.rs",
@@ -10742,8 +10868,8 @@ const FEATURE_LINKS = [
   {
     id: "F239-69",
     implementation: [{ file: "native/darwin/src/observe.m", symbol: "sp_observe_timer(" }],
-    tests: [{ file: "native/darwin/tests/input_reference_test.m", id: "the wait timer registration and delivery are recorded" }],
-    expected: "The input-reference timeout is registered and its timer delivery is recorded before the handler runs.",
+    tests: [{ file: "native/darwin/tests/observe_test.m", id: "a timer registration is recorded and its delivery is counted before its handler runs" }],
+    expected: "A native timer registers through observe.m: its registration is recorded and its delivery is counted before the handler runs.",
     levels: ["native"],
   },
   {
@@ -12373,6 +12499,21 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F725",
+    implementation: [
+      { file: "scripts/check-tests.mjs", symbol: "export function auditFixedTemporaryPaths(files, readSource" },
+      { file: "native/darwin/tests/support/temporary_folder.m", symbol: "NSString *temporaryFolder(NSString *prefix) {" },
+      { file: "native/darwin/tests/support/temporary_folder.m", symbol: "void keepTemporaryFolder(NSString *folder) {" },
+    ],
+    tests: [
+      { file: "scripts/test/check-tests.test.mjs", id: "a test source creates its temporary folders and files in TMPDIR, not under a fixed temporary path" },
+      { file: "native/darwin/tests/temporary_folder_test.m", id: "the exit moves a kept folder with its files into NATIVE_TEST_EVIDENCE and names it" },
+      { file: "native/darwin/tests/temporary_folder_test.m", id: "a process without NATIVE_TEST_EVIDENCE removes its kept folder and fails" },
+    ],
+    expected: "A test source creates each temporary folder and file in TMPDIR, which the test runner removes with the process folder, and the test inventory check refuses a mkdtemp or mkstemp template under /tmp, /private/tmp or /var/folders and a creation call whose folder is such a path. A native check keeps the folders of the evidence of its failure with keepTemporaryFolder, which moves them at exit into NATIVE_TEST_EVIDENCE, target/native-test-evidence by default, and a process without it removes the kept folder and fails.",
+    levels: ["unit", "native"],
+  },
+  {
     id: "F316",
     implementation: [{ file: ".github/workflows/repeat.yml", symbol: "workflow_dispatch:" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "repeat.yml starts on a dispatch and runs only the tracked repeat targets" }],
@@ -13150,7 +13291,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-150",
-    implementation: [{ file: "native/darwin/src/capture.m", symbol: "int sp_capture_stop(double after)" }],
+    implementation: [{ file: "native/darwin/src/capture.m", symbol: "int sp_capture_stop(double after, uint64_t token)" }],
     tests: [{ file: "native/darwin/tests/capture_stop_intake_test.m", id: "sample intake is closed before the asynchronous stream stop is requested" }],
     expected: "The stop boundary seals sample intake before asynchronous stream shutdown and retains late callback attribution.",
     levels: ["native"],
@@ -13610,9 +13751,8 @@ const FEATURE_LINKS = [
     implementation: [{ file: "native/darwin/tests/input_reference_test.m", symbol: "static void drain(void)" }],
     tests: [
       { file: "native/darwin/tests/input_reference_test.m", id: "text-storage changes complete the pending wait once" },
-      { file: "native/darwin/tests/input_reference_test.m", id: "the wait timer registration and delivery are recorded" },
     ],
-    expected: "The input-reference owner test pump dispatches queued AppKit events so main-queue document checks and timer observations complete within the existing drain interval.",
+    expected: "The input-reference owner test pump dispatches queued AppKit events so main-queue document checks complete before the drain returns.",
     levels: ["native"],
   },
   {
@@ -13804,11 +13944,11 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn await_document_frame_identity_schedule_result" },
     ],
     tests: [
-      { file: "packages/host/go/src/diagnostics_test.go", id: "TestAwaitDocumentFrameIdentityReportsLateErrorAfterTimeout" },
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestAwaitDocumentFrameIdentityReportsALateErrorAfterAFailedSchedule" },
       { file: "packages/host/go/src/diagnostics_test.go", id: "TestAwaitDocumentFrameIdentityPreservesCallbackErrorWhenScheduleFails" },
       { file: "packages/host/rust/src/diagnostics_test.rs", id: "document_frame_identity_preserves_synchronous_callback_error_when_scheduling_fails" },
     ],
-    expected: "Bounded identity waits report late callback errors and preserve a synchronous callback failure together with a scheduling failure.",
+    expected: "Identity waits report the late callback errors after a failed schedule and preserve a synchronous callback failure together with a scheduling failure.",
     levels: ["unit"],
   },
   {
@@ -14153,6 +14293,46 @@ export function auditJoinedFailures(files, readSource = (file) => readFileSync(`
   return errors;
 }
 
+/** A source of a test, a check or a fixture: the inventory counts it as a test. */
+function isTestSource(file) {
+  return /(^|\/)(test|tests|benches)\//.test(file) || /(^|\/)e2e\//.test(file) || /[._]test\.(mjs|js|cjs|ts|go|rs|m|mm)$/.test(file);
+}
+
+/** The fixed temporary roots, which lie outside the TMPDIR that the test runner gives each process. */
+const FIXED_TEMPORARY = String.raw`(?:/private)?/tmp|/var/folders`;
+const FIXED_TEMPORARY_PATHS = [
+  { expression: new RegExp(String.raw`["'\`](?:${FIXED_TEMPORARY})/[^"'\`\n]*XXXXXX`, "g"), name: "a temporary template under a fixed path" },
+  {
+    expression: new RegExp(String.raw`\b(?:MkdirTemp|CreateTemp|mkdtempSync|mkdtemp|mkstemps?|tempdir_in|tempfile_in|new_in)\s*\(\s*(?:[\w.:]+\(\s*)?["'\`](?:${FIXED_TEMPORARY})[/"'\`]`, "g"),
+    name: "a temporary entry created under a fixed path",
+  },
+];
+
+/**
+ * Reject a fixed temporary path for a folder or a file that a test source creates: the test runner removes the TMPDIR of a
+ * process and fails a process that left an entry there, and make check-temp-files sees only TMPDIR, so neither sees a folder
+ * under a fixed path (docs/operations/examples.md#temporary-folders).
+ */
+export function auditFixedTemporaryPaths(files, readSource = (file) => readFileSync(`${ROOT}${file}`, "utf8")) {
+  const errors = [];
+  for (const file of [...new Set(files)].sort()) {
+    if (!sourceLanguages.has(extname(file)) || !isTestSource(file)) continue;
+    let source;
+    try { source = readSource(file); }
+    catch (error) {
+      errors.push(`${file}: temporary-path source cannot be read: ${error?.message ?? error}`);
+      continue;
+    }
+    for (const { expression, name } of FIXED_TEMPORARY_PATHS) {
+      for (const match of source.matchAll(expression)) {
+        const line = source.slice(0, match.index).split("\n").length;
+        errors.push(`${file}:${line}: ${name}; create it in TMPDIR, which the test runner removes`);
+      }
+    }
+  }
+  return errors;
+}
+
 /** Reject explicit Result/JoinHandle discards in the scoped Rust production lane. */
 export function auditRustFailurePropagation(files, readSource, scope) {
   const errors = [];
@@ -14259,8 +14439,7 @@ export function discoverInventory(files) {
     if (manifestNames.has(name)) manifests.push(file);
     const language = declarationNames.has(name) ? "declaration" : sourceLanguages.get(extname(file));
     if (!language) continue;
-    const isTest = /(^|\/)(test|tests|benches)\//.test(file) || /(^|\/)e2e\//.test(file) || /[._]test\.(mjs|js|cjs|ts|go|rs|m|mm)$/.test(file);
-    (isTest ? tests : implementations).push({ file, language });
+    (isTestSource(file) ? tests : implementations).push({ file, language });
   }
   return { implementations, tests, manifests, generated };
 }
@@ -14496,6 +14675,8 @@ export function auditInventory(files, matrix = MATRIX, readSource = (file) => re
   const rustFailureErrors = failureMatrix.lanes.find(({ language }) => language === "rust").errors;
   const nativeFailureErrors = failureMatrix.lanes.find(({ language }) => language === "objective-c").errors;
   const goFailureErrors = failureMatrix.lanes.find(({ language }) => language === "go").errors;
+  const temporaryPathErrors = auditFixedTemporaryPaths(files, readSource);
+  errors.push(...temporaryPathErrors);
 
   return {
     errors,
@@ -14509,6 +14690,7 @@ export function auditInventory(files, matrix = MATRIX, readSource = (file) => re
     rustFailureErrors,
     nativeFailureErrors,
     goFailureErrors,
+    temporaryPathErrors,
     failureMatrix,
     featureLinks: FEATURE_LINKS,
     requirementCoverage,

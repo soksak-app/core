@@ -44,6 +44,8 @@
 - (size_t)_webProcessCount;
 - (size_t)_webProcessCountIgnoringPrewarmed;
 - (size_t)_webPageContentProcessCount;
+// WKProcessPoolPrivate.h: the number of WebContent processes that the pool keeps without a page; 0 when it keeps none.
+- (NSUInteger)_processCacheCapacity;
 // WKProcessPoolPrivate.h: the GPU process of the application, which is nil while it does not exist.
 + (_WKProcessInfo *)_gpuProcessInfo;
 @end

@@ -1,7 +1,7 @@
 // Verifies that the qualifying stop boundary seals sample intake before ScreenCaptureKit stop completes.
 #import "../src/capture.m"
 #import "support/records.h"
-#include <errno.h>
+#import "support/temporary_folder.h"
 #include <stdlib.h>
 
 static int failures;
@@ -52,23 +52,19 @@ static CMSampleBufferRef idleSample(void) {
 int main(void) { @autoreleasepool {
     CFTimeInterval began = CACurrentMediaTime();
     fprintf(stderr, "START: capture stop seals sample intake at the boundary\n");
-    char directoryPath[] = "/tmp/soksak-capture-stop-intake-XXXXXX";
-    BOOL directoryCreated = mkdtemp(directoryPath) != NULL;
-    check(directoryCreated, directoryCreated ? @"the stop-intake capture directory is created" :
-        [NSString stringWithFormat:@"the stop-intake capture directory cannot be created: %s", strerror(errno)]);
-    if (!directoryCreated) return 1;
+    NSString *directory = temporaryFolder(@"soksak-capture-stop-intake-");
 
     const int8_t policy[SP_CLASS_COUNT] = {SP_EVENT_DEBUG, SP_EVENT_ERROR, SP_EVENT_ERROR, SP_EVENT_ERROR, SP_EVENT_ERROR};
     check(sp_event_set_policy(policy), @"the test enables capture lifecycle events");
     captureSink = [[SPCapture alloc] init];
-    captureSink.directory = [NSString stringWithUTF8String:directoryPath];
+    captureSink.directory = directory;
     static int statuses[6];
     captureSink.statuses = statuses;
     captureWriter = dispatch_queue_create("capture.stop-intake.writer", DISPATCH_QUEUE_SERIAL);
     capturePending = dispatch_semaphore_create(kCapturePending);
     captureQueue = dispatch_queue_create("capture.stop-intake.samples", DISPATCH_QUEUE_SERIAL);
     captureStartDone = dispatch_semaphore_create(1);
-    sp_image_capture_match_begin(directoryPath, captureWriter);
+    sp_image_capture_match_begin(directory.fileSystemRepresentation, captureWriter);
     captureBefore = 0;
     captureAcceptingSamples = YES;
     captureResizing = NO;
@@ -95,7 +91,7 @@ int main(void) { @autoreleasepool {
     stopSample = idleSample();
     check(stopSample != NULL, @"the post-boundary idle sample fixture is created");
 
-    sp_capture_stop(0);
+    sp_capture_stop(0, 0);
     // sp_capture_stop releases the sample queue after draining the stop transaction.
     captureQueue = NULL;
 
@@ -124,9 +120,6 @@ int main(void) { @autoreleasepool {
     if (captureWriter != NULL) { dispatch_release(captureWriter); captureWriter = NULL; }
     [captureSink release];
     captureSink = nil;
-    NSError *removeError = nil;
-    check([[NSFileManager defaultManager] removeItemAtPath:[NSString stringWithUTF8String:directoryPath] error:&removeError],
-        [NSString stringWithFormat:@"the stop-intake capture directory is removed (%@)", removeError]);
     fprintf(stderr, "%s: capture stop sample intake (%.1fms)\n", failures ? "FAIL" : "PASS",
         (CACurrentMediaTime() - began) * 1000);
     return failures ? 1 : 0;

@@ -28,7 +28,6 @@ static void reply(sp_input_reference_done done, void *context, NSDictionary *val
 @property(assign) NSWindow *window;
 @property(retain) NSTextView *view;
 @property(copy) NSString *expected;
-@property(retain) NSTimer *timer;
 @property sp_input_reference_done completion;
 @property void *context;
 @property BOOL checkScheduled;
@@ -60,8 +59,6 @@ static void reply(sp_input_reference_done done, void *context, NSDictionary *val
     void *context = self.context;
     self.completion = NULL;
     self.context = NULL;
-    [self.timer invalidate];
-    self.timer = nil;
     self.expected = nil;
     reply(done, context, failure ? nil : [self snapshot], failure);
 }
@@ -116,8 +113,6 @@ static void reply(sp_input_reference_done done, void *context, NSDictionary *val
     [NSNotificationCenter.defaultCenter removeObserver:self];
     [_view removeFromSuperview];
     [_view release];
-    [_timer invalidate];
-    [_timer release];
     [_expected release];
     [super dealloc];
 }
@@ -181,15 +176,21 @@ void sp_input_reference(void *pointer, const char *action, const char *expected,
             reference.waitRequiresUnmarked = waitRequiresUnmarked;
             reference.completion = done;
             reference.context = context;
-            __block SPInputReference *timerReference = reference;
-            reference.timer = sp_observe_timer("input.reference.timeout", SP_OBSERVE_RECORD, 5, NO,
-                @"input reference document wait", ^(NSTimer *timer) {
-                [timerReference finish:[NSString stringWithFormat:@"input reference did not reach the expected document within 5 seconds: %@", [timerReference snapshot]]];
-            });
-            if (!reference.timer) [reference finish:@"input reference timeout registration failed"];
             [reference checkDocument];
         } @finally {
             [reference release];
         }
+    }
+}
+
+void sp_input_reference_end(void *pointer, const char *reason) {
+    @autoreleasepool {
+        NSCAssert(NSThread.isMainThread, @"sp_input_reference_end requires the main thread");
+        NSWindow *window = pointer;
+        SPInputReference *reference = window ? objc_getAssociatedObject(window, &referenceKey) : nil;
+        if (!reference.completion) return;
+        NSString *end = reason ? [NSString stringWithUTF8String:reason] : nil;
+        [reference finish:[NSString stringWithFormat:@"input reference did not reach the expected document before %@: %@",
+            end ?: @"its wait ended", [reference snapshot]]];
     }
 }

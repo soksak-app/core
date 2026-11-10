@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -7,7 +7,7 @@ import { pathToFileURL } from "node:url";
 
 import { APP_NAMES } from "../app.mjs";
 import { START_PROBE } from "../start.mjs";
-import { applicationZip, buildRegistry, bundleExecutables, cachedBundle, checkEnv, checkFiles, coreVersion, DEFAULT_PACK, download,
+import { applicationZip, buildRegistry, cachedBundle, checkEnv, checkFiles, coreVersion, DEFAULT_PACK, download,
   installRegistry, packArgv, packFileName, parseTestAppOptions, PUBLIC_INDEX, remainingProcesses, run, sidecarEntries, step } from "../test-app.mjs";
 
 const folder = (t, prefix = "window-check-test-app-") => {
@@ -26,12 +26,11 @@ const script = (path, body) => {
   return path;
 };
 
-test("the run uses the published application zip of the core release of this package", () => {
+test("the run uses the published application zip of the core release of this package for the platform that runs it", () => {
   assert.equal(coreVersion(), JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version);
-  assert.deepEqual(applicationZip("0.0.41", "mygo"), { name: "soksak-0.0.41-darwin-arm64-mygo.zip",
+  assert.deepEqual(applicationZip("0.0.41", "mygo", { platform: "darwin", arch: "arm64" }), { name: "soksak-0.0.41-darwin-arm64-mygo.zip",
     url: "https://github.com/soksak-app/core/releases/download/v0.0.41/soksak-0.0.41-darwin-arm64-mygo.zip" });
-  assert.deepEqual(bundleExecutables("/c/soksak.app", "tauriv2"),
-    { application: "/c/soksak.app/Contents/MacOS/sok-tauriv2", sok: "/c/soksak.app/Contents/MacOS/sok" });
+  assert.equal(applicationZip("0.0.41", "wailsv3", { platform: "linux", arch: "x64" }).name, "soksak-0.0.41-linux-x64-wailsv3.zip");
 });
 
 test("the options select the applications, the pack command, the checks and their time limit", () => {
@@ -74,11 +73,12 @@ test("the checks are the test files under e2e/ outside e2e/real/ and e2e/fixture
 });
 
 test("the checks get the configuration root, the run folder and the executable of each application", () => {
-  const all = new Map(APP_NAMES.map((host) => [host, bundleExecutables(`/c/${host}/soksak.app`, host)]));
+  const executables = (bundle, host) => ({ application: `${bundle}/Contents/MacOS/sok-${host}`, sok: `${bundle}/Contents/MacOS/sok` });
+  const all = new Map(APP_NAMES.map((host) => [host, executables(`/c/${host}/soksak.app`, host)]));
   assert.deepEqual(checkEnv("/root", all), { SOKSAK_CONFIG_ROOT: "/root", SOKSAK_RUN_FOLDER: "/root/run",
     SOKSAK_BINARY_WAILSV3: "/c/wailsv3/soksak.app/Contents/MacOS/sok-wailsv3", SOKSAK_BINARY_TAURIV2: "/c/tauriv2/soksak.app/Contents/MacOS/sok-tauriv2",
     SOKSAK_BINARY_MYGO: "/c/mygo/soksak.app/Contents/MacOS/sok-mygo" });
-  const one = new Map([["mygo", bundleExecutables("/c/soksak.app", "mygo")]]);
+  const one = new Map([["mygo", executables("/c/soksak.app", "mygo")]]);
   assert.equal(checkEnv("/root", one).SOKSAK_APP, "mygo");
   assert.equal(checkEnv("/root", one, "file:///root/registry/index.json").SOKSAK_REGISTRY_INDEX, "file:///root/registry/index.json");
 });
@@ -128,11 +128,36 @@ test("the bundle of an application is downloaded and extracted once into the cac
   const fetched = [];
   const extract = async (zip, into) => { mkdirSync(join(into, "soksak.app"), { recursive: true }); };
   const fetchImpl = async (url) => { fetched.push(url); return new Response("zip"); };
-  const bundle = await cachedBundle(cache, "0.0.41", "mygo", { fetchImpl, extract });
+  const darwin = { platform: "darwin", arch: "arm64" };
+  const bundle = await cachedBundle(cache, "0.0.41", "mygo", { ...darwin, fetchImpl, extract });
   assert.equal(bundle, join(cache, "0.0.41", "mygo", "soksak.app"));
-  assert.equal(await cachedBundle(cache, "0.0.41", "mygo", { fetchImpl, extract }), bundle);
-  assert.deepEqual(fetched, [applicationZip("0.0.41", "mygo").url]);
-  await assert.rejects(cachedBundle(cache, "0.0.41", "wailsv3", { fetchImpl, extract: async () => {} }), /soksak-0\.0\.41-darwin-arm64-wailsv3\.zip holds no soksak\.app/);
+  assert.equal(await cachedBundle(cache, "0.0.41", "mygo", { ...darwin, fetchImpl, extract }), bundle);
+  assert.deepEqual(fetched, [applicationZip("0.0.41", "mygo", darwin).url]);
+  await assert.rejects(cachedBundle(cache, "0.0.41", "wailsv3", { ...darwin, fetchImpl, extract: async () => {} }),
+    /soksak-0\.0\.41-darwin-arm64-wailsv3\.zip holds no soksak\.app/);
+});
+
+test("the bundle of an application is extracted by the platform operation of the platform that runs the run", async (t) => {
+  const cache = folder(t);
+  const ran = [];
+  const run = async (file, args) => {
+    ran.push([file, ...args]);
+    mkdirSync(join(args.at(-1), "soksak.app"), { recursive: true });
+    return "";
+  };
+  await cachedBundle(cache, "0.0.41", "mygo", { platform: "darwin", arch: "arm64", run, fetchImpl: async () => new Response("zip") });
+  assert.deepEqual(ran, [["ditto", "-x", "-k", join(cache, "0.0.41", "soksak-0.0.41-darwin-arm64-mygo.zip"), join(cache, "0.0.41", "mygo.partial")]]);
+});
+
+test("on a platform that declares no application artifact the run fails by the operation before any download", async (t) => {
+  for (const platform of ["linux", "win32"]) {
+    const cache = folder(t);
+    const fetched = [];
+    await assert.rejects(cachedBundle(cache, "0.0.41", "mygo", { platform, arch: "x64", fetchImpl: async (url) => { fetched.push(url); return new Response("zip"); },
+      run: async () => { throw new Error("the run ran a program"); } }), new RegExp(`^PlatformOperationNotImplemented: applicationBundle is not implemented on ${platform}$`));
+    assert.deepEqual(fetched, []);
+    assert.deepEqual(readdirSync(cache), []);
+  }
 });
 
 /** A plugin repository with one fixture plugin under e2e/fixtures; `manifest` changes the plugin.json of the repository. */
@@ -247,12 +272,20 @@ test("without --index the run installs every plugin of the check registry into e
 });
 
 test("the remaining processes are those whose command line names a path of the run, except this one", () => {
-  const listing = ` 10 /c/soksak.app/Contents/MacOS/sok-mygo --config-dir /root/x\n ${process.pid} node /root/x\n 11 /usr/bin/other\n`;
-  assert.deepEqual(remainingProcesses(listing, ["/root", "/c/soksak.app"]), ["10 /c/soksak.app/Contents/MacOS/sok-mygo --config-dir /root/x"]);
+  const processes = [{ pid: 10, command: "/c/soksak.app/Contents/MacOS/sok-mygo --config-dir /root/x" }, { pid: process.pid, command: "node /root/x" },
+    { pid: 11, command: "/usr/bin/other" }];
+  assert.deepEqual(remainingProcesses(processes, ["/root", "/c/soksak.app"]), ["10 /c/soksak.app/Contents/MacOS/sok-mygo --config-dir /root/x"]);
 });
 
 test("the run modules name no real plugin", () => {
-  for (const file of ["../test-app.mjs", "../sok-test-app.mjs", "../catalog.mjs"]) {
+  for (const file of ["../test-app.mjs", "../sok-test-app.mjs", "../catalog.mjs", "../platform.mjs", "../platform/darwin.mjs"]) {
     assert.doesNotMatch(readFileSync(new URL(file, import.meta.url), "utf8"), /["'](layoutprobe|terminal|term|browser|files|editor|hwp)["'.]/);
+  }
+});
+
+test("the run module names no macOS program, bundle layout or quit key of its own", () => {
+  const source = readFileSync(new URL("../test-app.mjs", import.meta.url), "utf8");
+  for (const word of [/"darwin-arm64"/, /"Contents"/, /"MacOS"/, /"ditto"/, /"lockf"/, /"ps"/, /"cmd\+q"/, /"command"\]/]) {
+    assert.doesNotMatch(source, word);
   }
 });

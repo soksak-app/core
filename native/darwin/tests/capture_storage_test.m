@@ -1,5 +1,6 @@
 // Measures the storage amount of the real sample write path and the cost of the lossless codec on the same pixels.
 #import "../src/capture.m"
+#import "support/temporary_folder.h"
 #include <compression.h>
 #include <zlib.h>
 
@@ -95,9 +96,7 @@ int main(void) { @autoreleasepool {
     CFTimeInterval began = CACurrentMediaTime();
     fprintf(stderr, "START: native capture lossless storage measurement\n");
     [NSApplication sharedApplication];
-    char path[] = "/tmp/soksak-capture-storage-XXXXXX";
-    if (mkdtemp(path) == NULL) { check(NO, @"the storage fixture directory is created"); return 1; }
-    NSString *directory = [NSString stringWithUTF8String:path];
+    NSString *directory = temporaryFolder(@"soksak-capture-storage-");
     captureWriter = dispatch_queue_create("capture.test.storage", DISPATCH_QUEUE_SERIAL);
     capturePending = dispatch_semaphore_create(kCapturePending);
     captureFirstFrame = dispatch_semaphore_create(0);
@@ -143,9 +142,6 @@ int main(void) { @autoreleasepool {
             @"the document fixture removes raw-pixel disk pressure without reducing resolution");
         CFRelease(frame);
     }
-    NSError *error = nil;
-    check([[NSFileManager defaultManager] removeItemAtPath:directory error:&error],
-        [NSString stringWithFormat:@"measurement files are removed (%@)", error]);
     fprintf(stderr, "%s: native capture lossless storage measurement (%.1fms)\n", failures ? "FAIL" : "PASS",
         (CACurrentMediaTime() - began) * 1000);
     return failures ? 1 : 0;

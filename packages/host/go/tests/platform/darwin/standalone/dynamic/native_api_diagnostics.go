@@ -32,6 +32,56 @@ func DiagnosticFunctions(library uintptr) (abi.DiagnosticFunctions, error) {
 		purego.RegisterFunc(&functions.CountWhen, address)
 	}
 	{
+		address, err := purego.Dlsym(library, "endCaptureWait")
+		if err != nil {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API endCaptureWait: %w", err)
+		}
+		if address == 0 {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API endCaptureWait: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.EndCaptureWait, address)
+	}
+	{
+		address, err := purego.Dlsym(library, "endCountWait")
+		if err != nil {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API endCountWait: %w", err)
+		}
+		if address == 0 {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API endCountWait: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.EndCountWait, address)
+	}
+	{
+		address, err := purego.Dlsym(library, "endExitWait")
+		if err != nil {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API endExitWait: %w", err)
+		}
+		if address == 0 {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API endExitWait: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.EndExitWait, address)
+	}
+	{
+		address, err := purego.Dlsym(library, "endInputReferenceWait")
+		if err != nil {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API endInputReferenceWait: %w", err)
+		}
+		if address == 0 {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API endInputReferenceWait: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.EndInputReferenceWait, address)
+	}
+	{
+		address, err := purego.Dlsym(library, "endInputSourceSelection")
+		if err != nil {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API endInputSourceSelection: %w", err)
+		}
+		if address == 0 {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API endInputSourceSelection: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.EndInputSourceSelection, address)
+	}
+	{
 		address, err := purego.Dlsym(library, "inputReference")
 		if err != nil {
 			return abi.DiagnosticFunctions{}, fmt.Errorf("native API inputReference: %w", err)
@@ -152,6 +202,46 @@ func DiagnosticFunctions(library uintptr) (abi.DiagnosticFunctions, error) {
 		purego.RegisterFunc(&functions.MainSurfaceLayoutTraceStop, address)
 	}
 	{
+		address, err := purego.Dlsym(library, "scheduleCaptureOpen")
+		if err != nil {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API scheduleCaptureOpen: %w", err)
+		}
+		if address == 0 {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API scheduleCaptureOpen: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.ScheduleCaptureOpen, address)
+	}
+	{
+		address, err := purego.Dlsym(library, "scheduleCaptureStill")
+		if err != nil {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API scheduleCaptureStill: %w", err)
+		}
+		if address == 0 {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API scheduleCaptureStill: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.ScheduleCaptureStill, address)
+	}
+	{
+		address, err := purego.Dlsym(library, "scheduleCaptureStop")
+		if err != nil {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API scheduleCaptureStop: %w", err)
+		}
+		if address == 0 {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API scheduleCaptureStop: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.ScheduleCaptureStop, address)
+	}
+	{
+		address, err := purego.Dlsym(library, "scheduleCaptureWait")
+		if err != nil {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API scheduleCaptureWait: %w", err)
+		}
+		if address == 0 {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API scheduleCaptureWait: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.ScheduleCaptureWait, address)
+	}
+	{
 		address, err := purego.Dlsym(library, "scheduleDocumentFrameIdentityFreeze")
 		if err != nil {
 			return abi.DiagnosticFunctions{}, fmt.Errorf("native API scheduleDocumentFrameIdentityFreeze: %w", err)
@@ -190,16 +280,6 @@ func DiagnosticFunctions(library uintptr) (abi.DiagnosticFunctions, error) {
 			return abi.DiagnosticFunctions{}, fmt.Errorf("native API sp_capture_clock: symbol has a null address")
 		}
 		purego.RegisterFunc(&functions.SpCaptureClock, address)
-	}
-	{
-		address, err := purego.Dlsym(library, "sp_capture_end_waits")
-		if err != nil {
-			return abi.DiagnosticFunctions{}, fmt.Errorf("native API sp_capture_end_waits: %w", err)
-		}
-		if address == 0 {
-			return abi.DiagnosticFunctions{}, fmt.Errorf("native API sp_capture_end_waits: symbol has a null address")
-		}
-		purego.RegisterFunc(&functions.SpCaptureEndWaits, address)
 	}
 	{
 		address, err := purego.Dlsym(library, "sp_capture_error")
@@ -242,16 +322,6 @@ func DiagnosticFunctions(library uintptr) (abi.DiagnosticFunctions, error) {
 		purego.RegisterFunc(&functions.SpCaptureLongestGap, address)
 	}
 	{
-		address, err := purego.Dlsym(library, "sp_capture_open")
-		if err != nil {
-			return abi.DiagnosticFunctions{}, fmt.Errorf("native API sp_capture_open: %w", err)
-		}
-		if address == 0 {
-			return abi.DiagnosticFunctions{}, fmt.Errorf("native API sp_capture_open: symbol has a null address")
-		}
-		purego.RegisterFunc(&functions.SpCaptureOpen, address)
-	}
-	{
 		address, err := purego.Dlsym(library, "sp_capture_start")
 		if err != nil {
 			return abi.DiagnosticFunctions{}, fmt.Errorf("native API sp_capture_start: %w", err)
@@ -260,36 +330,6 @@ func DiagnosticFunctions(library uintptr) (abi.DiagnosticFunctions, error) {
 			return abi.DiagnosticFunctions{}, fmt.Errorf("native API sp_capture_start: symbol has a null address")
 		}
 		purego.RegisterFunc(&functions.SpCaptureStart, address)
-	}
-	{
-		address, err := purego.Dlsym(library, "sp_capture_still")
-		if err != nil {
-			return abi.DiagnosticFunctions{}, fmt.Errorf("native API sp_capture_still: %w", err)
-		}
-		if address == 0 {
-			return abi.DiagnosticFunctions{}, fmt.Errorf("native API sp_capture_still: symbol has a null address")
-		}
-		purego.RegisterFunc(&functions.SpCaptureStill, address)
-	}
-	{
-		address, err := purego.Dlsym(library, "sp_capture_stop")
-		if err != nil {
-			return abi.DiagnosticFunctions{}, fmt.Errorf("native API sp_capture_stop: %w", err)
-		}
-		if address == 0 {
-			return abi.DiagnosticFunctions{}, fmt.Errorf("native API sp_capture_stop: symbol has a null address")
-		}
-		purego.RegisterFunc(&functions.SpCaptureStop, address)
-	}
-	{
-		address, err := purego.Dlsym(library, "sp_capture_wait")
-		if err != nil {
-			return abi.DiagnosticFunctions{}, fmt.Errorf("native API sp_capture_wait: %w", err)
-		}
-		if address == 0 {
-			return abi.DiagnosticFunctions{}, fmt.Errorf("native API sp_capture_wait: symbol has a null address")
-		}
-		purego.RegisterFunc(&functions.SpCaptureWait, address)
 	}
 	{
 		address, err := purego.Dlsym(library, "whenExited")

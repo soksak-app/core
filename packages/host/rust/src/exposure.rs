@@ -10,7 +10,6 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Condvar, Mutex, OnceLock, PoisonError};
-use std::time::Duration;
 
 use crate::framework::{AppHandle, Frontend, LogicalSize, Manager, Webview, Window};
 use serde::Deserialize;
@@ -30,9 +29,6 @@ use crate::surfaces::label_for;
 use crate::windows::{self, NativeFailure, WindowData, window_data, with_native_owner};
 
 pub use crate::platform::{ButtonHeld, Delivery, FrontmostApplication, Key, Pointer, PointerHeld};
-
-/// The time within which a document must respond.
-pub const TIMEOUT: Duration = Duration::from_secs(10);
 
 /// The entries that the host declares. The format is the same as exposes of plugin.json, and each kind is in name
 /// order.
@@ -89,7 +85,7 @@ fn host_declarations() -> Value {
                     "installed": {"type": ["string", "null"]}, "sessions": {"type": "integer"}}}}}},
         }, {
             "name": "host.window",
-            "description": "Window frame and system pointer location in screen coordinates, content size, backing scale, the maximum refresh rate of its screen (null when the window is on no screen), maximized, key and application active state, whether other windows cover the whole window, child window count, the WebContent process of the app page (0 before it starts), whether the application is quitting, window buttons, webview frames, native surfaces, document regions, image regions with the number of frames that the host marked presented for each, the open native modal, and the frames and command buffers of the workbench and whether it settled after its last frame, null on a host whose workbench WebKit draws.",
+            "description": "Window frame and system pointer location in screen coordinates, content size, backing scale, the maximum refresh rate of its screen (null when the window is on no screen), maximized, key and application active state, whether other windows cover the whole window, child window count, the WebContent process of the app page (0 before it starts), the WebContent processes that held a page of the application and hold none while they live, with whether WebKit ends each (null on a platform that does not report them), whether the application is quitting, window buttons, webview frames, native surfaces, document regions, image regions with the number of frames that the host marked presented for each, the open native modal, and the frames and command buffers of the workbench and whether it settled after its last frame, null on a host whose workbench WebKit draws.",
             "schema": {"type": "object", "properties": {
                 "frame": rect,
                 "pointer": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}}},
@@ -107,6 +103,9 @@ fn host_declarations() -> Value {
                 }},
                 "occluded": {"type": "boolean"},
                 "children": {"type": "integer"},
+                "pagelessProcesses": {"type": ["array", "null"], "items": {"type": "object",
+                    "required": ["pid", "ending"],
+                    "properties": {"pid": {"type": "integer"}, "ending": {"type": "boolean"}}}},
                 "controls": {"type": "array", "items": rect},
                 "webviews": {"type": "array", "items": {"type": "object", "properties": {
                     "frame": rect, "main": {"type": "boolean"}, "document": {"type": "boolean"},
@@ -992,7 +991,7 @@ fn request_surface_of(
 /// calls, and a call that waits for an answer of the page gets none, because the page sends no call after the reload
 /// request (docs/spec/native-host.md#page-reload). The requests end after the event, so a page that receives the failure
 /// already sends no report of it.
-fn ask_page_to_reload(
+pub(crate) fn ask_page_to_reload(
     relay: &Relay,
     reloading: &AtomicBool,
     main: &str,
@@ -1005,13 +1004,13 @@ fn ask_page_to_reload(
 
 /// Ends every request to the main page of the window main and to its surface documents with 1003, and refuses the later
 /// requests to those documents until the next page starts (docs/spec/hosts.md#process-lifecycle).
-fn end_page_requests(relay: &Relay, reloading: &AtomicBool, main: &str) {
+pub(crate) fn end_page_requests(relay: &Relay, reloading: &AtomicBool, main: &str) {
     reloading.store(true, Ordering::SeqCst);
     let surfaces = format!("surface-{main}-");
     relay.abandon_matching(|target| target == main || target.starts_with(&surfaces));
 }
 
-/// Ends the requests to the main page of the window and to its surface documents when the process of the page ended.
+/// Ends the requests to the main page of the window and to its surface documents (`end_page_requests`).
 pub(crate) fn page_ended(window: &Window, data: &WindowData) {
     end_page_requests(
         &window.state::<Exposure>().relay,
@@ -1289,6 +1288,9 @@ pub(crate) fn rewatch(window: &Window) {
 /// When the window closes, ends the watches and the requests sent to the documents of the window and removes the state
 /// record of the window.
 pub(crate) fn window_closed(window: &Window) {
+    // A diagnostic hold of the window ends with it (docs/spec/endpoint.md).
+    #[cfg(feature = "diagnostics")]
+    crate::diagnostics::end_window_holds(window.label());
     let state = window.state::<Exposure>();
     let main = window.label().to_string();
     // Every watch of the window ends with the window, which produced its values (docs/spec/exposure.md#methods).
@@ -1989,6 +1991,26 @@ fn window_frame_counters() -> serde_json::Map<String, Value> {
 }
 
 // Native evidence is mandatory; retain the object and decimal string exactly.
+/// The WebContent processes without a page of the window facts, `[{pid, ending}]`, or null when the facts of the platform do not
+/// report them; a member of another shape is refused.
+fn window_pageless_processes(facts: &Value) -> Result<Value, String> {
+    let Some(rows) = facts.get("pagelessProcesses") else {
+        return Ok(Value::Null);
+    };
+    let list = rows
+        .as_array()
+        .ok_or("window facts have a pagelessProcesses that is not an array")?;
+    for row in list {
+        let pid = row["pid"].as_i64().filter(|pid| *pid > 0);
+        if pid.is_none() || !row["ending"].is_boolean() {
+            return Err(format!(
+                "window facts have an invalid pageless process {row}"
+            ));
+        }
+    }
+    Ok(rows.clone())
+}
+
 fn window_activation_observation(facts: &Value) -> Result<Value, String> {
     let observation = facts
         .get("activationObservation")
@@ -2121,6 +2143,7 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
         class, owner, container, main, &named, &documents, modal_view,
     );
     let activation_observation = window_activation_observation(&facts).map_err(internal)?;
+    let pageless_processes = window_pageless_processes(&facts).map_err(internal)?;
     let mut status = json!({
         "activationObservation": activation_observation,
         "responder": responder,
@@ -2136,6 +2159,7 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
         "occluded": facts["occluded"],
         "children": facts["children"],
         "pageProcess": facts["pageProcess"],
+        "pagelessProcesses": pageless_processes,
         "quitting": window.state::<crate::windows::Windows>().quit.active(),
         "appDomWebviews": app_dom_webviews,
         "documentWebviews": document_webviews,
@@ -2171,63 +2195,93 @@ fn reload(
         flush.insert("params".into(), Value::Object(Map::new()));
         host.page(window, "command.run", flush, reply)?;
     }
-    let end = |end: &str| {
-        Failure::new(
-            MISSING_DOCUMENT,
-            crate::running_calls::reload_end_text(
-                end,
-                &crate::running_calls::RUNNING_CALLS.of(window.label(), std::time::Instant::now()),
-            ),
-        )
-    };
+    await_reload(
+        &data,
+        mark,
+        || {
+            if ready {
+                // A ready page reloads itself after all the calls it sent have received their answers. If the host reloaded
+                // it, the response being written at that moment would be lost (docs/spec/native-host.md#page-reload).
+                crate::windows::reload_ready_page(
+                    &window.state::<Exposure>().relay,
+                    &data,
+                    window.label(),
+                    || {
+                        crate::windows::emit_window(window, "page-reload", serde_json::json!({}))
+                            .map_err(|error| error.to_string())
+                    },
+                    || crate::surfaces::keys_page_ended(window),
+                    || crate::windows::close_window(window),
+                )
+                .map_err(internal)
+            } else {
+                let target = window.clone();
+                on_main(window, move || {
+                    target.start_workbench().map_err(|error| error.to_string())
+                })
+                .map_err(internal)
+            }
+        },
+        |end| {
+            Failure::new(
+                MISSING_DOCUMENT,
+                crate::running_calls::reload_end_text(
+                    end,
+                    &crate::running_calls::RUNNING_CALLS
+                        .of(window.label(), std::time::Instant::now()),
+                ),
+            )
+        },
+    )
+}
+
+/// Holds a reload of the window data until its new page reports ready: the reload takes its place among the reloads of the
+/// window before begin asks for the new page, so an end that comes in the turn of begin reaches it. The reload has no time
+/// limit: the ready of the page answers it, an end of the window after mark (`WindowData::end_waits`), the close of the window
+/// or the end of its page process, ends it with the failure that ended gives for the end, and a start of the new page that
+/// fails ends it with 1003 and its error (`end_reloads`).
+pub(crate) fn await_reload(
+    data: &WindowData,
+    mark: u64,
+    begin: impl FnOnce() -> Result<(), Failure>,
+    ended: impl Fn(&str) -> Failure,
+) -> Result<Value, Failure> {
     let (tx, rx) = mpsc::channel();
+    let wait = RELOAD_WAITS.fetch_add(1, Ordering::Relaxed);
     {
         // default: a lock that a panicking thread poisoned still holds the readiness senders, which this call fills;
         // the panic hook records the panic.
         let mut readied = data.readied.lock().unwrap_or_else(PoisonError::into_inner);
         // An end records itself before it drains the senders under this lock, so an end that came after the mark and
         // before this wait is read here, and the reload that it ended adds no wait that a later ready would answer.
-        if let Some(ended) = data.ends.since(mark) {
-            return Err(end(&ended));
+        if let Some(end) = data.ends.since(mark) {
+            return Err(ended(&end));
         }
-        readied.push(tx);
+        readied.push((wait, tx));
     }
-    if ready {
-        // A ready page reloads itself after all the calls it sent have received their answers. If the host reloaded it,
-        // the response being written at that moment would be lost (docs/spec/native-host.md#page-reload).
-        ask_page_to_reload(
-            &window.state::<Exposure>().relay,
-            &data.page_reloading,
-            window.label(),
-            || {
-                crate::windows::emit_window(window, "page-reload", serde_json::json!({}))
-                    .map_err(|error| error.to_string())
-            },
-        )
-        .map_err(internal)?;
-        // The event ended the page, so the rest that it owed ends in the same turn.
-        let data = window_data(window).map_err(internal)?;
-        crate::windows::page_left(window, &data).map_err(internal)?;
-    } else {
-        let target = window.clone();
-        on_main(window, move || {
-            target.start_workbench().map_err(|error| error.to_string())
-        })
-        .map_err(internal)?;
+    if let Err(failure) = begin() {
+        // The reload ended, so a later ready of the window answers no ended reload.
+        data.readied
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the reloads, from which this one is removed;
+            // the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .retain(|(held, _)| *held != wait);
+        return Err(failure);
     }
-    // The reload has no time limit: the ready page ends it, and so do the close of the window and the end of its page
-    // process (WindowData::end_waits), each with 1003 that names the end and the host calls that still run, and a start of
-    // the new page that fails, with 1003 and its error.
     match rx.recv() {
         Ok(Ok(())) => Ok(Value::Null),
-        Ok(Err(crate::windows::ReloadEnd::Ended(ended))) => Err(end(&ended)),
+        Ok(Err(crate::windows::ReloadEnd::Ended(end))) => Err(ended(&end)),
         Ok(Err(crate::windows::ReloadEnd::NotStarted(error))) => {
             Err(Failure::new(MISSING_DOCUMENT, error))
         }
         // default: the senders of the readiness go with the records of a closed window.
-        Err(_) => Err(end("the window closed")),
+        Err(_) => Err(ended("the window closed")),
     }
 }
+
+/// The number of the next reload, which names it among the reloads of its window.
+static RELOAD_WAITS: AtomicU64 = AtomicU64::new(0);
 
 /// Changes the window to full screen or back, and returns once with the native result: the end of the transition, a
 /// refusal with 1006, the close of the window with 1003 and the failure of a started transition with 1005, each with the
@@ -2971,3 +3025,7 @@ mod reply_tests {
 #[cfg(test)]
 #[path = "window_activation_observation_test.rs"]
 mod activation_observation_tests;
+
+#[cfg(test)]
+#[path = "window_pageless_processes_test.rs"]
+mod pageless_processes_tests;

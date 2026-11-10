@@ -798,6 +798,34 @@ type endpointConn struct {
 	// changes are the subscription changes of the connection that wait in the queue of each topic or run there, with the last of
 	// them. Endpoint.queueMu protects it.
 	changes map[topic]*topicChanges
+	// ends are the callbacks that run when the connection closes, by their number; closed is set by the close. Both are
+	// protected by reasonMu.
+	ends    map[uint64]func()
+	endNext uint64
+	closed  bool
+}
+
+// onClose runs end when the connection closes, before close returns, or at once when it is already closed. remove takes end
+// back, so a request that ended without the close leaves nothing behind.
+func (c *endpointConn) onClose(end func()) (remove func()) {
+	c.reasonMu.Lock()
+	if c.closed {
+		c.reasonMu.Unlock()
+		end()
+		return func() {}
+	}
+	if c.ends == nil {
+		c.ends = map[uint64]func(){}
+	}
+	c.endNext++
+	number := c.endNext
+	c.ends[number] = end
+	c.reasonMu.Unlock()
+	return func() {
+		c.reasonMu.Lock()
+		delete(c.ends, number)
+		c.reasonMu.Unlock()
+	}
 }
 
 // topicChanges are the subscription changes of one connection for one topic that are queued or running.
@@ -830,9 +858,15 @@ func (c *endpointConn) close(reason string) {
 	c.once.Do(func() {
 		c.reasonMu.Lock()
 		c.reason = reason
+		c.closed = true
+		ends := c.ends
+		c.ends = nil
 		c.reasonMu.Unlock()
 		LogInfo("endpoint", "connection closed: "+reason)
 		close(c.done)
+		for _, end := range ends {
+			end()
+		}
 		if err := c.conn.Close(); err != nil {
 			LogError("endpoint connection close", err)
 		}

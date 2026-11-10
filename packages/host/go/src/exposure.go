@@ -24,9 +24,6 @@ import (
 	"github.com/soksak-app/core/packages/host/go/src/routine"
 )
 
-// pageTimeout is the time to wait for a reply of a document.
-const pageTimeout = 10 * time.Second
-
 // hostEntry is one entry that the host declares.
 type hostEntry struct {
 	Description string
@@ -48,7 +45,7 @@ var presentedSchema = map[string]any{"type": "object", "properties": map[string]
 
 var hostStatus = map[string]hostEntry{
 	"host.window": {
-		Description: "Window frame and system pointer location in screen coordinates, content size, backing scale, the maximum refresh rate of its screen (null when the window is on no screen), maximized, key and application active state, whether other windows cover the whole window, child window count, the WebContent process of the app page (0 before it starts), whether the application is quitting, window buttons, webview frames, native surfaces, document regions, image regions with the number of frames that the host marked presented for each, the open native modal, and the frames and command buffers of the workbench and whether it settled after its last frame, null on a host whose workbench WebKit draws.",
+		Description: "Window frame and system pointer location in screen coordinates, content size, backing scale, the maximum refresh rate of its screen (null when the window is on no screen), maximized, key and application active state, whether other windows cover the whole window, child window count, the WebContent process of the app page (0 before it starts), the WebContent processes that held a page of the application and hold none while they live, with whether WebKit ends each (null on a platform that does not report them), whether the application is quitting, window buttons, webview frames, native surfaces, document regions, image regions with the number of frames that the host marked presented for each, the open native modal, and the frames and command buffers of the workbench and whether it settled after its last frame, null on a host whose workbench WebKit draws.",
 		Schema: map[string]any{"type": "object", "properties": map[string]any{
 			"frame":       rectSchema,
 			"pointer":     map[string]any{"type": "object", "properties": map[string]any{"x": map[string]any{"type": "number"}, "y": map[string]any{"type": "number"}}},
@@ -67,6 +64,10 @@ var hostStatus = map[string]hostEntry{
 			}},
 			"occluded": map[string]any{"type": "boolean"},
 			"children": map[string]any{"type": "integer"},
+			"pagelessProcesses": map[string]any{"type": []string{"array", "null"}, "items": map[string]any{"type": "object",
+				"required": []string{"pid", "ending"}, "properties": map[string]any{
+					"pid": map[string]any{"type": "integer"}, "ending": map[string]any{"type": "boolean"},
+				}}},
 			"controls": map[string]any{"type": "array", "items": rectSchema},
 			"webviews": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
 				"frame": rectSchema, "main": map[string]any{"type": "boolean"}, "document": map[string]any{"type": "boolean"},
@@ -1218,18 +1219,20 @@ type windowFacts struct {
 		Width  float64 `json:"width"`
 		Height float64 `json:"height"`
 	} `json:"content"`
-	Scale          float64              `json:"scale"`
-	RefreshRate    *int                 `json:"refreshRate"`
-	Zoomed         bool                 `json:"zoomed"`
-	Key            bool                 `json:"key"`
-	VirtualKey     bool                 `json:"virtualKey"`
-	Active         bool                 `json:"active"`
-	Occluded       bool                 `json:"occluded"`
-	Children       int                  `json:"children"`
-	PageProcess    int                  `json:"pageProcess"`
-	Controls       []WindowControl      `json:"controls"`
-	Webviews       []windowWebviewFacts `json:"webviews"`
-	NativeSurfaces []struct {
+	Scale       float64 `json:"scale"`
+	RefreshRate *int    `json:"refreshRate"`
+	Zoomed      bool    `json:"zoomed"`
+	Key         bool    `json:"key"`
+	VirtualKey  bool    `json:"virtualKey"`
+	Active      bool    `json:"active"`
+	Occluded    bool    `json:"occluded"`
+	Children    int     `json:"children"`
+	PageProcess int     `json:"pageProcess"`
+	// PagelessProcesses is null on a platform whose facts do not report the WebContent processes without a page.
+	PagelessProcesses []PagelessProcess    `json:"pagelessProcesses"`
+	Controls          []WindowControl      `json:"controls"`
+	Webviews          []windowWebviewFacts `json:"webviews"`
+	NativeSurfaces    []struct {
 		frame
 		View   uint64 `json:"view"`
 		Hidden bool   `json:"hidden"`
@@ -1277,6 +1280,29 @@ type WindowDocument struct {
 func windowDocument(key DocumentKey, order int, view windowWebviewFacts) WindowDocument {
 	return WindowDocument{Surface: key.Surface, Document: key.Name,
 		Frame: view.frame, Visible: !view.Hidden, Focused: view.Focused, Order: order, Process: view.Process, Blurred: view.Blurred}
+}
+
+// PagelessProcess is a WebContent process that held a page of the application and holds none, while it lives. Ending is true when
+// WebKit ends it because its process pool keeps no process cache, false when the cache may keep it.
+type PagelessProcess struct {
+	Pid    int  `json:"pid"`
+	Ending bool `json:"ending"`
+}
+
+// UnmarshalJSON reads a row of the native facts and refuses a row without a positive pid or without ending.
+func (p *PagelessProcess) UnmarshalJSON(text []byte) error {
+	var row struct {
+		Pid    *int  `json:"pid"`
+		Ending *bool `json:"ending"`
+	}
+	if err := json.Unmarshal(text, &row); err != nil {
+		return fmt.Errorf("window facts have an invalid pageless process %s: %w", text, err)
+	}
+	if row.Pid == nil || *row.Pid <= 0 || row.Ending == nil {
+		return fmt.Errorf("window facts have an invalid pageless process %s", text)
+	}
+	p.Pid, p.Ending = *row.Pid, *row.Ending
+	return nil
 }
 
 // WindowWebview is the frame of one web view in the window coordinate system.
@@ -1420,28 +1446,29 @@ type WindowFrameCounters struct {
 type WindowStatus struct {
 	ActivationObservation json.RawMessage `json:"activationObservation"`
 	WindowFrameCounters
-	Responder        WindowResponder  `json:"responder"`
-	Frame            frame            `json:"frame"`
-	Pointer          point            `json:"pointer"`
-	Content          frame            `json:"content"`
-	Scale            float64          `json:"scale"`
-	RefreshRate      *int             `json:"refreshRate"`
-	Maximized        bool             `json:"maximized"`
-	Key              bool             `json:"key"`
-	VirtualKey       bool             `json:"virtualKey"`
-	Active           bool             `json:"active"`
-	Occluded         bool             `json:"occluded"`
-	Children         int              `json:"children"`
-	PageProcess      *int             `json:"pageProcess"`
-	Quitting         bool             `json:"quitting"`
-	AppDomWebviews   int              `json:"appDomWebviews"`
-	DocumentWebviews int              `json:"documentWebviews"`
-	Controls         []WindowControl  `json:"controls"`
-	Webviews         []WindowWebview  `json:"webviews"`
-	Surfaces         []WindowSurface  `json:"surfaces"`
-	Documents        []WindowDocument `json:"documents"`
-	Regions          []WindowRegion   `json:"regions"`
-	Modal            *WindowModal     `json:"modal"`
+	Responder         WindowResponder   `json:"responder"`
+	Frame             frame             `json:"frame"`
+	Pointer           point             `json:"pointer"`
+	Content           frame             `json:"content"`
+	Scale             float64           `json:"scale"`
+	RefreshRate       *int              `json:"refreshRate"`
+	Maximized         bool              `json:"maximized"`
+	Key               bool              `json:"key"`
+	VirtualKey        bool              `json:"virtualKey"`
+	Active            bool              `json:"active"`
+	Occluded          bool              `json:"occluded"`
+	Children          int               `json:"children"`
+	PageProcess       *int              `json:"pageProcess"`
+	PagelessProcesses []PagelessProcess `json:"pagelessProcesses"`
+	Quitting          bool              `json:"quitting"`
+	AppDomWebviews    int               `json:"appDomWebviews"`
+	DocumentWebviews  int               `json:"documentWebviews"`
+	Controls          []WindowControl   `json:"controls"`
+	Webviews          []WindowWebview   `json:"webviews"`
+	Surfaces          []WindowSurface   `json:"surfaces"`
+	Documents         []WindowDocument  `json:"documents"`
+	Regions           []WindowRegion    `json:"regions"`
+	Modal             *WindowModal      `json:"modal"`
 }
 
 // viewNames reads, on the UI thread, the ids of the surface web views and the addresses of the modal web views.
@@ -1537,7 +1564,7 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 		Scale: facts.Scale, RefreshRate: facts.RefreshRate, Maximized: facts.Zoomed, Key: facts.Key, VirtualKey: facts.VirtualKey, Active: facts.Active, Occluded: facts.Occluded, Children: facts.Children,
 		Quitting: s.host.quit.Active(),
 		Controls: facts.Controls, Surfaces: []WindowSurface{}, Documents: []WindowDocument{}, Regions: regions,
-		Webviews: []WindowWebview{},
+		Webviews: []WindowWebview{}, PagelessProcesses: facts.PagelessProcesses,
 	}
 	if framework.MainPage() {
 		out.PageProcess = &facts.PageProcess

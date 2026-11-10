@@ -22,19 +22,28 @@ func (f *fakeInputSources) InputSource() (string, string, error) {
 	return "", f.current, nil
 }
 
-func (f *fakeInputSources) SelectInputSource(role string, adopted func(error)) {
+func (f *fakeInputSources) SelectInputSource(role string, adopted func(error)) func(string) {
 	f.calls = append(f.calls, "select "+role)
 	f.current = "source-" + role
 	adopted(nil)
+	return func(string) {}
 }
 
-func (f *fakeInputSources) RestoreInputSource(source string, adopted func(error)) {
+func (f *fakeInputSources) RestoreInputSource(source string, adopted func(error)) func(string) {
 	f.calls = append(f.calls, "restore "+source)
 	f.current = source
 	adopted(nil)
+	return func(string) {}
 }
 
 func runStep(task func()) { task() }
+
+// adoptAtOnce waits for a selection whose adoption the fake gives before start returns.
+func adoptAtOnce(start func(func(error)) func(string)) error {
+	adopted := make(chan error, 1)
+	start(func(failure error) { adopted <- failure })
+	return <-adopted
+}
 
 // contract: diagnostics.input-source.selects-a-role
 func TestInputSourceRefusesAStringThatIsNotARole(t *testing.T) {
@@ -63,7 +72,7 @@ func TestInputSourceRefusesAStringThatIsNotARole(t *testing.T) {
 // contract: diagnostics.input-source.selects-a-role
 func TestInputSourceSelectsTheRoleThroughThePlatform(t *testing.T) {
 	sources := &fakeInputSources{current: "person-source"}
-	read, err := answerInputSource(sources, inputSourceRequest{}, runStep)
+	read, err := answerInputSource(sources, inputSourceRequest{}, runStep, adoptAtOnce)
 	if err != nil || !reflect.DeepEqual(read, map[string]any{"current": nil, "source": "person-source"}) {
 		t.Fatalf("read = %v, %v", read, err)
 	}
@@ -72,7 +81,7 @@ func TestInputSourceSelectsTheRoleThroughThePlatform(t *testing.T) {
 		if err != nil || request != (inputSourceRequest{Select: role}) {
 			t.Fatalf("select %s parsed as %+v, %v", role, request, err)
 		}
-		reply, err := answerInputSource(sources, request, runStep)
+		reply, err := answerInputSource(sources, request, runStep, adoptAtOnce)
 		if err != nil || !reflect.DeepEqual(reply, map[string]any{"current": role, "source": "source-" + role}) {
 			t.Fatalf("select %s = %v, %v", role, reply, err)
 		}
@@ -81,7 +90,7 @@ func TestInputSourceSelectsTheRoleThroughThePlatform(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	restored, err := answerInputSource(sources, request, runStep)
+	restored, err := answerInputSource(sources, request, runStep, adoptAtOnce)
 	if err != nil || !reflect.DeepEqual(restored, map[string]any{"current": nil, "source": "person-source"}) {
 		t.Fatalf("restore = %v, %v", restored, err)
 	}

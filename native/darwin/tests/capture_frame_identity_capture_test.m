@@ -1,6 +1,7 @@
 // Checks that opt-in ScreenCaptureKit samples record a separate decoded identity result without changing raw frames.
 #import "../src/capture.m"
 #import "../src/capture_frame_identity.h"
+#import "support/temporary_folder.h"
 
 static int failures;
 static void check(BOOL condition, NSString *label) {
@@ -48,12 +49,7 @@ int main(void) { @autoreleasepool {
     CFTimeInterval began = CACurrentMediaTime();
     fprintf(stderr, "START: native capture frame identity recording\n");
     [NSApplication sharedApplication];
-    char path[] = "/tmp/soksak-frame-identity-capture-XXXXXX";
-    if (mkdtemp(path) == NULL) {
-        check(NO, @"the capture identity fixture directory is created");
-        return 1;
-    }
-    NSString *directory = [[NSString alloc] initWithUTF8String:path];
+    NSString *directory = temporaryFolder(@"soksak-frame-identity-capture-");
     captureWriter = dispatch_queue_create("capture.test.identity", DISPATCH_QUEUE_SERIAL);
     capturePending = dispatch_semaphore_create(kCapturePending);
     captureFirstFrame = dispatch_semaphore_create(0);
@@ -555,7 +551,6 @@ int main(void) { @autoreleasepool {
     sp_image_capture_match_end();
     [failedSink release]; [captureSink release]; captureSink = nil;
 
-    [directory release];
     if (capturePending) dispatch_release(capturePending); capturePending = NULL;
     if (captureFirstFrame) dispatch_release(captureFirstFrame); captureFirstFrame = NULL;
     if (captureWriter) dispatch_release(captureWriter); captureWriter = NULL;

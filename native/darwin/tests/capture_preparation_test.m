@@ -1,20 +1,8 @@
 // Delivers the real preparation completion late and checks that the caller waits for it, receives its result and releases the
-// obsolete target objects.
+// obsolete target objects. Then ends the preparation wait before its completion and checks that the call returns that end and
+// that the completion that arrives afterwards leaves the following recording state and object ownership unchanged.
 #import "../src/capture.m"
 #import <objc/runtime.h>
-#include <signal.h>
-#include <unistd.h>
-
-static volatile sig_atomic_t phaseIndex;
-static void expired(int signalNumber) {
-    const char provider[] = "FAIL: preparation test exceeded 35000ms during the real query\n";
-    const char failure[] = "FAIL: preparation test exceeded 35000ms during the late failure\n";
-    const char success[] = "FAIL: preparation test exceeded 35000ms during the late success\n";
-    if (phaseIndex == 0) write(STDERR_FILENO, provider, sizeof provider - 1);
-    else if (phaseIndex == 1) write(STDERR_FILENO, failure, sizeof failure - 1);
-    else write(STDERR_FILENO, success, sizeof success - 1);
-    _exit(1);
-}
 
 static int failures;
 static void check(BOOL condition, NSString *message) {
@@ -50,7 +38,6 @@ static void holdQuery(id receiver, SEL selector, void (^reply)(SCShareableConten
 }
 
 int main(void) { @autoreleasepool {
-    signal(SIGALRM, expired); alarm(35);
     CFTimeInterval began = CACurrentMediaTime();
     fprintf(stderr, "START: native preparation completion\n");
     [NSApplication sharedApplication];
@@ -81,7 +68,6 @@ int main(void) { @autoreleasepool {
     check(query != NULL, @"the controlled preparation query boundary exists");
     if (answered && queryError == nil && hasWindow && query != NULL) {
         for (int success = 0; success < 2; success++) {
-            phaseIndex = success ? 2 : 1;
             CFTimeInterval phase = CACurrentMediaTime();
             fprintf(stderr, "START: late preparation %s\n", success ? "success" : "failure");
             BOOL filterReleased = NO, configReleased = NO;
@@ -105,7 +91,7 @@ int main(void) { @autoreleasepool {
                 [reply release];
             });
             char *error = NULL;
-            BOOL opened = sp_capture_open(window.windowNumber, false, &error);
+            BOOL opened = sp_capture_open(window.windowNumber, false, 1 + 2 * success, &error);
             method_setImplementation(query, original);
             dispatch_release(queryHeld); queryHeld = NULL;
             if (success) {
@@ -127,17 +113,65 @@ int main(void) { @autoreleasepool {
             [captureConfig release]; captureConfig = nil;
             fprintf(stderr, "END: late preparation %s (%.1fms)\n",
                 success ? "success" : "failure", (CACurrentMediaTime() - phase) * 1000);
+
+            fprintf(stderr, "START: ended preparation %s\n", success ? "success" : "failure");
+            BOOL endedFilterReleased = NO, endedConfigReleased = NO;
+            obsoleteFilter = [PreparationOwnerFixture new];
+            obsoleteConfig = [PreparationOwnerFixture new];
+            obsoleteFilter.released = &endedFilterReleased; obsoleteConfig.released = &endedConfigReleased;
+            captureFilter = (SCContentFilter *)obsoleteFilter;
+            captureConfig = (SCStreamConfiguration *)obsoleteConfig;
+            original = method_setImplementation(query, (IMP)holdQuery);
+            error = NULL;
+            // The end comes before the call waits, so the held query is ended without a race.
+            uint64_t token = 2 + 2 * success;
+            sp_capture_end_wait(token, "the fixture ended the preparation");
+            opened = sp_capture_open(window.windowNumber, false, token, &error);
+            method_setImplementation(query, original);
+            check(!opened && error != NULL && strcmp(error,
+                "the shareable content query did not answer before the fixture ended the preparation") == 0,
+                [NSString stringWithFormat:@"held preparation returns its owned end (%s)", error]);
+            check(endedFilterReleased && endedConfigReleased,
+                @"an ended preparation releases both obsolete inactive target objects");
+            if (captureFilter == (SCContentFilter *)obsoleteFilter) captureFilter = nil;
+            if (captureConfig == (SCStreamConfiguration *)obsoleteConfig) captureConfig = nil;
+            if (!endedFilterReleased) [obsoleteFilter release];
+            if (!endedConfigReleased) [obsoleteConfig release];
+            SCContentFilter *laterFilter = (SCContentFilter *)[NSObject new];
+            SCStreamConfiguration *laterConfig = (SCStreamConfiguration *)[NSObject new];
+            captureFilter = laterFilter; captureConfig = laterConfig;
+            captureStream = (SCStream *)[NSObject new];
+            clearCaptureError(); setCaptureError(@"fixture later recording error");
+            check(heldReply != nil, @"the ended query retains its completion");
+            if (heldReply != nil) {
+                heldReply(success ? content : nil, success ? nil :
+                    [NSError errorWithDomain:@"capture.test" code:1
+                        userInfo:@{NSLocalizedDescriptionKey: @"fixture late preparation failure"}]);
+                [heldReply release]; heldReply = nil;
+            }
+            check(strcmp(sp_capture_error(), "fixture later recording error") == 0,
+                @"a late preparation completion preserves the exact later recording error");
+            check(captureFilter == laterFilter && captureConfig == laterConfig,
+                @"a late preparation completion preserves the later target and configuration");
+            check(error != NULL && strstr(error, "before the fixture ended the preparation") != NULL,
+                @"the returned preparation end remains caller-owned");
+            free(error);
+            if (captureFilter != laterFilter) [captureFilter release];
+            if (captureConfig != laterConfig) [captureConfig release];
+            captureFilter = nil; captureConfig = nil;
+            [laterFilter release]; [laterConfig release];
+            [captureStream release]; captureStream = nil;
+            fprintf(stderr, "END: ended preparation %s\n", success ? "success" : "failure");
         }
     }
     if (answered && queryError == nil && hasWindow && query != NULL) {
-        phaseIndex = 2;
         fprintf(stderr, "START: active recording before preparation publication\n");
         collisionContent = content;
         collisionFilter = (SCContentFilter *)[NSObject new];
         collisionConfig = (SCStreamConfiguration *)[NSObject new];
         IMP original = method_setImplementation(query, (IMP)holdQuery);
         char *error = NULL;
-        BOOL opened = sp_capture_open(window.windowNumber, false, &error);
+        BOOL opened = sp_capture_open(window.windowNumber, false, 0, &error);
         method_setImplementation(query, original);
         check(!opened && error != NULL && strstr(error, "active during preparation") != NULL,
             @"preparation rejects a recording activated before publication");
@@ -158,6 +192,5 @@ int main(void) { @autoreleasepool {
     [window close]; [window release];
     fprintf(stderr, "%s: native preparation completion (%.1fms)\n",
         failures ? "FAIL" : "PASS", (CACurrentMediaTime() - began) * 1000);
-    alarm(0);
     return failures ? 1 : 0;
 }}

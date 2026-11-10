@@ -56,6 +56,14 @@ mod show;
 #[path = "windows/ui_queue.rs"]
 mod ui_queue;
 
+#[cfg(feature = "diagnostics")]
+/// Ends a native wait that has not answered; the library then answers it. Call it on the main thread.
+pub type WaitEnd = Box<dyn FnOnce() + Send>;
+
+#[cfg(feature = "diagnostics")]
+/// Ends an input source selection that has not completed, naming the reason in its failure. Call it on the main thread.
+pub type InputSourceEnd = Box<dyn FnOnce(&str) + Send>;
+
 /// The number of live objects, among those that the shared library attached to windows and webviews, whose lifetime
 /// shows the release of the window and the webview. When a closed window and its webviews are released, the object
 /// count of that window decreases.
@@ -848,26 +856,30 @@ pub trait Platform: CoreRootHost + Send + Sync {
     fn input_key(&self, window: Handle, key: &Key) -> Result<Delivery, String>;
 
     // Capture
+    //
+    // Every capture operation that waits for the recording system or for a frame takes token, a number that the caller
+    // gives no earlier operation and that is larger than the token of every earlier one. No limit ends such a wait: it
+    // ends when its event comes or when `capture_end_wait` ends the wait of its token, and an ended wait fails with
+    // `<what did not come> before <reason>`.
 
     #[cfg(feature = "diagnostics")]
     /// Prepares the window with the window number as a capture target. When display is set, it captures the windows of
     /// this application on the display that holds the window.
-    fn capture_open(&self, window_number: isize, display: bool) -> Result<(), String>;
+    fn capture_open(&self, window_number: isize, display: bool, token: u64) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
     /// Starts to record frames in directory.
     fn capture_start(&self, directory: &str, frame_identity: bool) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
-    /// Waits for the first frame or for the end of the stream and returns whether the frame was recorded.
-    fn capture_wait(&self) -> Result<bool, String>;
-    #[cfg(feature = "diagnostics")]
-    /// Ends the waits of the current recording for a frame, because the request that waits ended: a waiting
-    /// capture_wait or the boundary wait of capture_stop returns, and the recording records an error. Any thread may
-    /// call it.
-    fn capture_end_waits(&self);
+    /// Waits for the first frame and the completion of the stream start and returns whether the frame was recorded.
+    fn capture_wait(&self, token: u64) -> Result<bool, String>;
     #[cfg(feature = "diagnostics")]
     /// Records until the presentation time after (ms, the call time when 0), ends the record and returns the number of
     /// recorded frames.
-    fn capture_stop(&self, after: f64) -> Result<i32, String>;
+    fn capture_stop(&self, after: f64, token: u64) -> Result<i32, String>;
+    #[cfg(feature = "diagnostics")]
+    /// Ends the wait of the capture operation of token with reason, from any thread. An end that comes before the
+    /// operation waits ends it when it waits; an end for an operation that returned changes nothing.
+    fn capture_end_wait(&self, token: u64, reason: &str);
     #[cfg(feature = "diagnostics")]
     /// Reports whether the native capture module still owns the current stream and writer transaction. This does not
     /// report whether the operating system's asynchronous stop callback has completed.
@@ -913,23 +925,23 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// Takes one still image of a window without giving it focus and writes it as PNG to path. `window_numbers` are those
     /// of `window_numbers`: the window first, then its child windows, which the image shows in their places over it.
     /// It is observation material.
-    fn capture_still(&self, window_numbers: &[isize], path: &str) -> Result<(), String>;
+    fn capture_still(&self, window_numbers: &[isize], path: &str, token: u64)
+    -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
     /// Gives done the notifications of this application that the notification center still shows as JSON [{identifier,
     /// title, body}]. Call it on the main thread, and done is called on the main thread too.
     fn delivered_notifications(&self, done: Box<dyn FnOnce(String) + Send>) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
     /// After the application handled one event and drained the autorelease pool of that event loop iteration, gives
-    /// done the count of library objects attached to windows and webviews and true when the count equals expected. If
-    /// the count does not equal expected within seconds, it gives the count at that time and false. When expected is
-    /// None, it gives the count after the event and true. Call it on the main thread, and done is called on the main
-    /// thread too.
+    /// done the count of library objects attached to windows and webviews and true when the count equals expected. When
+    /// expected is None, it gives the count after the event and true. No limit ends the wait: the returned end ends a wait
+    /// that has not answered, and done then gets the count at that time and false; end after the answer does nothing.
+    /// Call it and end on the main thread, and done is called on the main thread too.
     fn window_objects_when(
         &self,
         expected: Option<WindowObjects>,
-        seconds: f64,
         done: Box<dyn FnOnce(WindowObjects, bool) + Send>,
-    ) -> Result<(), String>;
+    ) -> Result<WaitEnd, String>;
     #[cfg(feature = "diagnostics")]
     /// Evaluates the element and document counts of the web view with the native handle view, in the page content world
     /// or, when document is true, in the content world of document regions. Gives done the counts, or the failure. Call
@@ -941,14 +953,14 @@ pub trait Platform: CoreRootHost + Send + Sync {
         done: crate::object_counts::PageCountDone,
     ) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
-    /// Gives done true when the process pid ends and false when it does not end within seconds. A process that no
-    /// longer exists has ended. Call it on the main thread, and done is called on the main thread too.
+    /// Gives done true when the process pid ends. A process that no longer exists has ended. No limit ends the wait: the
+    /// returned end ends a wait that has not answered, and done then gets false; end after the answer does nothing. Call
+    /// it and end on the main thread, and done is called on the main thread too.
     fn when_process_exited(
         &self,
         pid: i32,
-        seconds: f64,
         done: Box<dyn FnOnce(bool) + Send>,
-    ) -> Result<(), String>;
+    ) -> Result<WaitEnd, String>;
     #[cfg(feature = "diagnostics")]
     /// Starts to record the start, the app DOM presentation check and the commit times of each placement transaction.
     /// Call it on the main thread.
@@ -966,6 +978,9 @@ pub trait Platform: CoreRootHost + Send + Sync {
         document: Option<&str>,
         done: Box<dyn Fn(Result<Value, String>)>,
     );
+    #[cfg(feature = "diagnostics")]
+    /// Ends the pending wait of the input reference of window, naming reason in its failure. Call it on the main thread.
+    fn end_input_reference_wait(&self, window: Handle, reason: &str);
 
     // Input source
 
@@ -976,14 +991,23 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// platform identifier. Call it on the main thread.
     fn input_source(&self) -> Result<(Option<String>, String), String>;
     #[cfg(feature = "diagnostics")]
-    /// Selects the input source of role and calls adopted after the active key-view context has adopted it, or reports an
-    /// error within 2 seconds. A role without an input source on the platform reports an error. With no active text client,
-    /// it completes after global selection. Call it on the main thread.
-    fn select_input_source(&self, role: &str, adopted: Box<dyn Fn(Result<(), String>)>);
+    /// Selects the input source of role and calls adopted after the active key-view context has adopted it. No limit ends
+    /// the wait: the returned end ends a selection that has not completed, and adopted then reports the held source and the
+    /// reason. A role without an input source on the platform reports an error. With no active text client, it completes
+    /// after global selection. Call it and the end on the main thread.
+    fn select_input_source(
+        &self,
+        role: &str,
+        adopted: Box<dyn Fn(Result<(), String>)>,
+    ) -> InputSourceEnd;
     #[cfg(feature = "diagnostics")]
     /// Selects the input source whose platform identifier is source, a value that input_source returned, with the adoption
-    /// of select_input_source. Call it on the main thread.
-    fn restore_input_source(&self, source: &str, adopted: Box<dyn Fn(Result<(), String>)>);
+    /// and the end of select_input_source. Call it on the main thread.
+    fn restore_input_source(
+        &self,
+        source: &str,
+        adopted: Box<dyn Fn(Result<(), String>)>,
+    ) -> InputSourceEnd;
 
     // Termination request
 

@@ -2,10 +2,13 @@
 // from the core root resolver of the application and imports the files that the resolver serves, each with the header
 // Access-Control-Allow-Origin of its plugin; a refused path fails with no such header; and a document region receives no
 // core root grant, so its requests to soksak://core fail without calling the resolver.
+// The diagnostic frame identity of a plugin root ends with the close, the navigation and the WebContent process of its
+// document (docs/spec/diagnostics.md).
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "support/temporary_folder.h"
 #import "support/view_import_map.h"
+#import "support/run_until.h"
 #import "document_view.h"
 #import "webview_geometry.h"
 #import "window_facts.h"
@@ -20,12 +23,10 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
+// Runs the run loop until done holds (support/run_until.h), so a condition that a timer, an observer or a main queue block changes
+// ends the wait in the pass that changes it.
 static void until(NSString *what, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
-    if (!done()) { fprintf(stderr, "FAIL: %s within 10 seconds\n", what.UTF8String); exit(1); }
+    sp_run_until(what.UTF8String, done);
 }
 
 static NSDictionary *latest;
@@ -207,12 +208,9 @@ int main(void) { @autoreleasepool {
         controlFrameIdentityPresentation((WKWebView *)view);
         BOOL identityScheduled = sp_document_frame_identity_start(view, 41, frameIdentityReply, NULL);
         check(identityScheduled, @"the current visible plugin root accepts the diagnostic QR producer");
-        NSDate *presentationDeadline = [NSDate dateWithTimeIntervalSinceNow:10];
-        while (frameIdentityReplyCount == 0 && !frameIdentityPresentationCallbackArrived
-            && presentationDeadline.timeIntervalSinceNow > 0) {
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
-                beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-        }
+        until(@"the target root WebKit presentation callback or a start reply", ^BOOL {
+            return frameIdentityReplyCount != 0 || frameIdentityPresentationCallbackArrived;
+        });
         check(frameIdentityPresentationRequests == 1 && frameIdentityPresentationCallbackArrived,
             [NSString stringWithFormat:@"the start waits for the target root WebKit presentation callback before replying (requests=%lu callback=%d reply=%d)",
                 (unsigned long)frameIdentityPresentationRequests, frameIdentityPresentationCallbackArrived,
@@ -298,6 +296,92 @@ int main(void) { @autoreleasepool {
         releaseControlledFrameIdentityPresentation();
         check(cancelledFrameIdentityStartReplies == 1,
             @"the late target update callback cannot reply again after generation removal");
+        sp_image_capture_match_end();
+        clearFrameIdentityReply();
+
+        // A navigation that the document commits ends the identity as the close does (docs/spec/diagnostics.md): a start
+        // that has not answered fails with its reason, and its removal still answers.
+        sp_image_capture_match_begin(NULL, NULL);
+        identitySessionError = NULL;
+        identitySession = sp_image_capture_match_identity_session_begin(&identitySessionError);
+        check(identitySession && identitySessionError == NULL, @"the navigation case begins its identity session");
+        free(identitySessionError);
+        cancelledFrameIdentityStartReplies = 0;
+        [cancelledFrameIdentityStartError release]; cancelledFrameIdentityStartError = nil;
+        controlFrameIdentityPresentation((WKWebView *)view);
+        check(sp_document_frame_identity_start(view, 44, cancelledFrameIdentityStartReply, NULL),
+            @"the navigation case starts a diagnostic QR producer");
+        until(@"WebKit reaches the held target update before the navigation",
+            ^BOOL { return frameIdentityPresentationCallbackArrived; });
+        runPage(view);
+        until(@"the start that the navigation ended answers", ^BOOL { return cancelledFrameIdentityStartReplies != 0; });
+        check(cancelledFrameIdentityStartReplies == 1
+            && [cancelledFrameIdentityStartError isEqualToString:@"the plugin root document navigated during frame identity capture"],
+            [NSString stringWithFormat:@"a navigation that the document commits fails the start that has not answered, got %lu %@",
+                (unsigned long)cancelledFrameIdentityStartReplies, cancelledFrameIdentityStartError ?: @"(no reply)"]);
+        clearFrameIdentityReply();
+        check(sp_document_frame_identity_remove(44, frameIdentityReply, NULL), @"the navigated generation accepts its removal");
+        until(@"the removal of the navigated generation answers", ^BOOL { return frameIdentityReplyCount == 1; });
+        check(frameIdentityReplyError == nil && [frameIdentityReplyJSON containsString:@"\"removed\":true"],
+            [NSString stringWithFormat:@"the removal of a navigated generation answers that it is removed: %@ %@",
+                frameIdentityReplyJSON ?: @"", frameIdentityReplyError ?: @""]);
+        releaseControlledFrameIdentityPresentation();
+        check(cancelledFrameIdentityStartReplies <= 1, @"the late target update of a navigated generation does not answer again");
+        sp_image_capture_match_end();
+        clearFrameIdentityReply();
+
+        // A started identity is invalidated by the navigation: its freeze fails as an inactive generation and its removal answers.
+        sp_image_capture_match_begin(NULL, NULL);
+        identitySessionError = NULL;
+        identitySession = sp_image_capture_match_identity_session_begin(&identitySessionError);
+        check(identitySession && identitySessionError == NULL, @"the started navigation case begins its identity session");
+        free(identitySessionError);
+        check(sp_document_frame_identity_start(view, 45, frameIdentityReply, NULL),
+            @"the started navigation case starts a diagnostic QR producer");
+        until(@"the started navigation case reports its first QR draw", ^BOOL { return frameIdentityReplyCount == 1; });
+        check(frameIdentityReplyError == nil, [NSString stringWithFormat:@"the identity 45 starts: %@", frameIdentityReplyError ?: @""]);
+        runPage(view);
+        clearFrameIdentityReply();
+        check(sp_document_frame_identity_freeze(45, frameIdentityReply, NULL), @"the freeze after the navigation schedules");
+        until(@"the freeze after the navigation answers", ^BOOL { return frameIdentityReplyCount == 1; });
+        check([frameIdentityReplyError isEqualToString:@"the document frame identity generation is not active"],
+            [NSString stringWithFormat:@"a navigation invalidates the started identity, so its freeze fails as inactive, got %@ %@",
+                frameIdentityReplyJSON ?: @"", frameIdentityReplyError ?: @""]);
+        clearFrameIdentityReply();
+        check(sp_document_frame_identity_remove(45, frameIdentityReply, NULL), @"the invalidated generation accepts its removal");
+        until(@"the removal of the invalidated generation answers", ^BOOL { return frameIdentityReplyCount == 1; });
+        check(frameIdentityReplyError == nil && [frameIdentityReplyJSON containsString:@"\"removed\":true"],
+            [NSString stringWithFormat:@"the removal of a generation that a navigation invalidated answers: %@ %@",
+                frameIdentityReplyJSON ?: @"", frameIdentityReplyError ?: @""]);
+        sp_image_capture_match_end();
+        clearFrameIdentityReply();
+
+        // The end of the WebContent process of the document ends the identity: a start that has not answered fails with its reason.
+        sp_image_capture_match_begin(NULL, NULL);
+        identitySessionError = NULL;
+        identitySession = sp_image_capture_match_identity_session_begin(&identitySessionError);
+        check(identitySession && identitySessionError == NULL, @"the process end case begins its identity session");
+        free(identitySessionError);
+        cancelledFrameIdentityStartReplies = 0;
+        [cancelledFrameIdentityStartError release]; cancelledFrameIdentityStartError = nil;
+        controlFrameIdentityPresentation((WKWebView *)view);
+        check(sp_document_frame_identity_start(view, 46, cancelledFrameIdentityStartReply, NULL),
+            @"the process end case starts a diagnostic QR producer");
+        until(@"WebKit reaches the held target update before the process end",
+            ^BOOL { return frameIdentityPresentationCallbackArrived; });
+        [(WKWebView *)view _killWebContentProcessAndResetState];
+        until(@"the start that the process end ended answers", ^BOOL { return cancelledFrameIdentityStartReplies != 0; });
+        check(cancelledFrameIdentityStartReplies == 1
+            && [cancelledFrameIdentityStartError isEqualToString:@"the web content process of the plugin root document ended during frame identity capture"],
+            [NSString stringWithFormat:@"the end of the WebContent process fails the start that has not answered, got %lu %@",
+                (unsigned long)cancelledFrameIdentityStartReplies, cancelledFrameIdentityStartError ?: @"(no reply)"]);
+        clearFrameIdentityReply();
+        check(sp_document_frame_identity_remove(46, frameIdentityReply, NULL), @"the generation of the ended process accepts its removal");
+        until(@"the removal of the generation of the ended process answers", ^BOOL { return frameIdentityReplyCount == 1; });
+        check(frameIdentityReplyError == nil && [frameIdentityReplyJSON containsString:@"\"removed\":true"],
+            [NSString stringWithFormat:@"the removal of the generation of an ended process answers that it is removed: %@ %@",
+                frameIdentityReplyJSON ?: @"", frameIdentityReplyError ?: @""]);
+        releaseControlledFrameIdentityPresentation();
         sp_image_capture_match_end();
         clearFrameIdentityReply();
         sp_document_close(view);

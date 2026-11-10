@@ -13,7 +13,8 @@ type DiagnosticCallbacks struct {
 	DocumentFrameIdentityDone func(uintptr, *byte, *byte)
 	InputReferenceReply       func(uintptr, *byte, *byte)
 	ProcessExitAnswered       func(uintptr, bool)
+	CaptureAnswered           func(uintptr, int64, *byte)
 }
 
 // DiagnosticTable holds process-lifetime function addresses in the native header's field order.
-type DiagnosticTable [7]uintptr
+type DiagnosticTable [8]uintptr

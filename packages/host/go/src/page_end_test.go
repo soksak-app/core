@@ -49,10 +49,8 @@ func (w *pageEndWindow) end() {
 	}
 }
 
-// waitSent waits until the window received name and drops what it received before. The receipt ends the wait; the limit of the
-// test runner reports a window that never receives name.
-func (w *pageEndWindow) waitSent(t *testing.T, name string) {
-	t.Helper()
+// waitSent waits until the window received name, and drops what it received before.
+func (w *pageEndWindow) waitSent(name string) {
 	for got := range w.sent {
 		if got == name {
 			return
@@ -89,12 +87,11 @@ func askPage(t *testing.T, h *Host, s *Surfaces, window *pageEndWindow) <-chan e
 		_, err := h.ask(context.Background(), s, "command.run", map[string]any{"name": "core.probe", "params": map[string]any{}})
 		reply <- err
 	}()
-	window.waitSent(t, "exposure-request")
+	window.waitSent("exposure-request")
 	return reply
 }
 
-// wantClosedDocument checks that reply ended with the code of a closed document. The reply ends the wait; the limit of the test
-// runner reports a request that still waits for a page that ended.
+// wantClosedDocument checks that reply ended with the code of a closed document.
 func wantClosedDocument(t *testing.T, reply <-chan error, what string) {
 	t.Helper()
 	err := <-reply
@@ -128,7 +125,7 @@ func TestTheEndOfThePageAnswersTheCloseQuestionThatItLeft(t *testing.T) {
 	if !window.closing() {
 		t.Fatal("the close of a window whose page is ready did not ask the page")
 	}
-	window.waitSent(t, "project-close-request")
+	window.waitSent("project-close-request")
 	window.end()
 	if window.closeCount() != 1 {
 		t.Fatalf("the end of the page closed the window %d times, want once", window.closeCount())
@@ -158,7 +155,7 @@ func TestAReloadEndsWithTheCloseOfItsWindow(t *testing.T) {
 	h.mu.Unlock()
 	reloaded := make(chan error, 1)
 	go func() { reloaded <- s.reloadPage() }()
-	window.waitSent(t, "start")
+	window.waitSent("start")
 	if window.closing() {
 		t.Fatal("a window whose page is not ready kept its close")
 	}
@@ -183,7 +180,7 @@ func TestAReloadEndsWithAFailedStart(t *testing.T) {
 	s.reloadCloseImage = func(unsafe.Pointer) {}
 	reloaded := make(chan error, 1)
 	go func() { reloaded <- s.reloadPage() }()
-	window.waitSent(t, "start")
+	window.waitSent("start")
 	if _, err := h.startPage(window.ID()); err == nil {
 		t.Fatal("the start of the page did not fail")
 	}

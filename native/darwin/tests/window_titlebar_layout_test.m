@@ -9,6 +9,7 @@
 #import "window_controls.h"
 #import "capture.h"
 #import "support/capture_frame.m"
+#import "support/temporary_folder.h"
 
 // The number of display refreshes to wait while the transaction is open and after the commit.
 static const int kRefreshes = 12;
@@ -18,16 +19,6 @@ static int failures = 0;
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
-}
-
-// Leaves no recording file even if the process is terminated by a callback timeout.
-static NSString *recordingDirectory;
-static void cleanupRecording(void) {
-    if (recordingDirectory == nil) return;
-    NSError *error = nil;
-    if (![[NSFileManager defaultManager] removeItemAtPath:recordingDirectory error:&error])
-        fprintf(stderr, "FAIL: title bar recording cleanup: %s\n", error.localizedDescription.UTF8String);
-    [recordingDirectory release]; recordingDirectory = nil;
 }
 
 static void until(BOOL (^done)(void)) {
@@ -224,7 +215,6 @@ static void judge(NSString *directory, int count, const SPChange *changes, int t
 }
 
 int main(void) { @autoreleasepool {
-    atexit(cleanupRecording);
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
@@ -235,24 +225,21 @@ int main(void) { @autoreleasepool {
     [window orderFrontRegardless];
     waitFrames(window.screen, kRefreshes);
 
-    char directory[] = "/tmp/soksak-titlebar-test-XXXXXX";
-    BOOL created = mkdtemp(directory) != NULL;
-    check(created, @"the title bar recording directory is created");
-    if (!created) { [window close]; return 1; }
-    recordingDirectory = [[NSString stringWithUTF8String:directory] copy];
+    NSString *recordingDirectory = temporaryFolder(@"soksak-titlebar-test-");
+    const char *directory = recordingDirectory.fileSystemRepresentation;
     char *operationError = NULL;
-    BOOL opened = sp_capture_open(window.windowNumber, false, &operationError);
+    BOOL opened = sp_capture_open(window.windowNumber, false, 0, &operationError);
     BOOL started = NO;
     if (opened) { free(operationError); operationError = NULL; started = sp_capture_start(directory, false, &operationError); }
     check(started, [NSString stringWithFormat:@"the title bar recording starts (%s)", operationError == NULL ? "" : operationError]);
     free(operationError);
     if (started) {
-        check(sp_capture_wait() > 0, @"the title bar recording contains its initial frame");
+        check(sp_capture_wait(0) > 0, @"the title bar recording contains its initial frame");
         // The heights are the first rows for frame font scales 1 and 2. Raises then lowers.
         SPChange changes[2];
         changes[0] = change(window, 201, 80);
         changes[1] = change(window, 202, 40);
-        int count = sp_capture_stop(CACurrentMediaTime() * 1000);
+        int count = sp_capture_stop(CACurrentMediaTime() * 1000, 0);
         const char *recordingError = sp_capture_error();
         check(recordingError[0] == 0 && !sp_capture_limited(), [NSString stringWithFormat:
             @"the title bar recording ends without error or truncation (%s)", recordingError[0] ? recordingError : "none"]);
@@ -260,7 +247,6 @@ int main(void) { @autoreleasepool {
         fprintf(stdout, "recording: %d frames, longest gap %.1fms\n", count, sp_capture_longest_gap());
         judge(recordingDirectory, count, changes, 2);
     }
-    cleanupRecording();
     [window close];
     return failures ? 1 : 0;
 }}

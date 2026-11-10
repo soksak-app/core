@@ -88,7 +88,7 @@ const EXACT = new Map([
   ["native.observe.delivered", "input"],
   ["native.observe.failed", "lifecycle"],
   ["native.observe.registered", "lifecycle"],
-  ["native.process.exit_timeout", "lifecycle"],
+  ["native.process.exit_wait_ended", "lifecycle"],
   ["native.surface.key_kept", "input"],
   ["native.surface.keys_delivered", "input"],
   ["native.surface.keys_dropped", "input"],

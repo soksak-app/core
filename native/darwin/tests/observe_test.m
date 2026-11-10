@@ -239,6 +239,27 @@ int main(void) { @autoreleasepool {
     });
     check(owner.delegate == target && [named(delegate, @"native.observe.registered")[0][@"fields"][@"kind"] isEqual:@"delegate"], @"the delegate is the object that was given, and the registration is an event");
 
+    // A timer is recorded when it is registered, and its delivery is counted before its handler runs. The run loop runs until
+    // the handler ran, so the check waits for the delivery itself.
+    __block int fired = 0;
+    __block unsigned long long countAtHandler = 0;
+    NSArray<NSDictionary *> *timed = capturedEvents(^{
+        NSTimer *timer = sp_observe_timer("test.timer", SP_OBSERVE_RECORD, 0.001, NO, @"observe test timer", ^(NSTimer *t) {
+            countAtHandler = sp_observe_count("test.timer");
+            fired++;
+        });
+        check(timer != nil, @"a timer registration returns its timer");
+        while (timer != nil && fired == 0) [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:NSDate.distantFuture];
+    });
+    NSArray *timerRegistrations = named(timed, @"native.observe.registered");
+    NSArray *timerDeliveries = named(timed, @"native.observe.delivered");
+    check(fired == 1 && countAtHandler == 1 && timerRegistrations.count == 1
+        && [timerRegistrations[0][@"fields"][@"kind"] isEqual:@"timer"]
+        && [timerRegistrations[0][@"fields"][@"target"] isEqual:@"observe test timer"]
+        && timerDeliveries.count == 1 && [timerDeliveries[0][@"fields"][@"count"] intValue] == 1
+        && [timed indexOfObject:timerRegistrations[0]] < [timed indexOfObject:timerDeliveries[0]],
+        [NSString stringWithFormat:@"a timer registration is recorded and its delivery is counted before its handler runs: %@", timed]);
+
     // A refused registration is an error event; no registration stays silent.
     NSArray<NSDictionary *> *refused = capturedEvents(^{
         check(sp_observe_notification("test.refused", SP_OBSERVE_RECORD, probe, nil, nil, nil) == nil, @"a registration without a handler returns nil");

@@ -30,6 +30,9 @@ pub(crate) enum ReloadEnd {
     NotStarted(String),
 }
 
+/// A reload that waits for the next page of its window: the number of the reload and the sender of its end.
+pub(crate) type Readied = (u64, mpsc::Sender<Result<(), ReloadEnd>>);
+
 /// The state of one window.
 #[derive(Default)]
 pub struct WindowData {
@@ -54,7 +57,7 @@ pub struct WindowData {
     pub closing: AtomicBool,
     /// The reloads that wait for the next page: the ready of the page sends `Ok`, and the close of the window, the end of
     /// its page process and a start of the new page that fails send the end of the reload.
-    pub(crate) readied: Mutex<Vec<mpsc::Sender<Result<(), ReloadEnd>>>>,
+    pub(crate) readied: Mutex<Vec<Readied>>,
     /// The ends of the window and of its main page process, which end the requests that wait in the window.
     pub(crate) ends: WindowEnds,
     /// Set when the window asked its page with `project-close-request` and the page has answered neither `windowClose` nor
@@ -884,18 +887,11 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             closing_host.label(),
             if ready { "close_requested" } else { "closed" },
         );
-        if ready {
-            closing_context.close_asked.store(true, Ordering::SeqCst);
+        close_requested(&closing_context, ready, || {
             if let Err(error) = emit_window(&closing_host, "project-close-request", ()) {
                 log_error("project-close-request", error);
             }
-            return true;
-        }
-        // This is a close request that was not blocked. The window will soon disappear from the runtime, so it is
-        // removed from the list.
-        closing_context.closing.store(true, Ordering::Relaxed);
-        closing_context.documents.views().forget_all();
-        false
+        })
     });
     window.on_window_event(move |event| match event {
         WindowEvent::Destroyed => {
@@ -1564,7 +1560,7 @@ pub(crate) fn page_started(window: &Window) -> Result<(), String> {
             log_error("image detach", failure);
         }
         crate::exposure::page_reloaded(window, &data);
-        answer_close_question(window, &data)?;
+        answer_close_question(&data, || close_window(window))?;
         reload_surface_documents(window)?;
         crate::modals::discard(window, &data.overlay)?;
         Ok(())
@@ -1637,7 +1633,7 @@ pub(crate) fn end_reloads(data: &WindowData, result: Result<(), ReloadEnd>) {
             // hook records the panic.
             .unwrap_or_else(PoisonError::into_inner),
     );
-    for ready in readied {
+    for (_, ready) in readied {
         if ready.send(result.clone()).is_err() {
             crate::application_log::log_info(
                 "window",
@@ -1647,32 +1643,91 @@ pub(crate) fn end_reloads(data: &WindowData, result: Result<(), ReloadEnd>) {
     }
 }
 
+/// Answers a request to close the window: a window whose page is ready asks its page with ask (`project-close-request`) and
+/// stays open, and the page answers the question or its end does (`answer_close_question`). The close of a window whose page
+/// is not ready is not blocked, so the window soon disappears from the runtime and is removed from the list. Returns whether
+/// the window stays open.
+fn close_requested(data: &WindowData, ready: bool, ask: impl FnOnce()) -> bool {
+    if ready {
+        data.close_asked.store(true, Ordering::SeqCst);
+        ask();
+        return true;
+    }
+    data.closing.store(true, Ordering::Relaxed);
+    data.documents.views().forget_all();
+    false
+}
+
 /// Ends the generation of the main page of the window in the turn of the end of the process of its page
 /// (docs/spec/hosts.md#process-lifecycle): every request to the page and to its surface documents ends with 1003 and later
-/// requests to those documents are refused until the next page starts, and the rest that the page owed ends (`page_left`).
+/// requests to those documents are refused until the next page starts, and the rest that the page owed ends (`leave_page`).
 pub(crate) fn end_page(window: &Window) -> Result<(), String> {
     let data = window_data(window)?;
-    crate::exposure::page_ended(window, &data);
-    page_left(window, &data)
+    end_page_of(
+        &window.state::<crate::exposure::Exposure>().relay,
+        &data,
+        window.label(),
+        || crate::surfaces::keys_page_ended(window),
+        || close_window(window),
+    )
+}
+
+/// Ends the page of the window data whose main page is main, as `end_page` does: keys gives the keys that waited for the
+/// decision of its workbench, and close closes the window.
+fn end_page_of(
+    relay: &crate::exposure::Relay,
+    data: &WindowData,
+    main: &str,
+    keys: impl FnOnce() -> Result<(), String>,
+    close: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    crate::exposure::end_page_requests(relay, &data.page_reloading, main);
+    leave_page(data, keys, close)
+}
+
+/// Asks the ready page of the window data whose main page is main to reload with emit (`ask_page_to_reload`). The event ends
+/// the page, so the rest that it owed ends in the same turn (`leave_page`), as the end of the process of the page ends it.
+pub(crate) fn reload_ready_page(
+    relay: &crate::exposure::Relay,
+    data: &WindowData,
+    main: &str,
+    emit: impl FnOnce() -> Result<(), String>,
+    keys: impl FnOnce() -> Result<(), String>,
+    close: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    crate::exposure::ask_page_to_reload(relay, &data.page_reloading, main, emit)?;
+    leave_page(data, keys, close)
 }
 
 /// Ends what a page that ended owed besides its requests: the window is no longer ready, the keys that waited for the
-/// decision of its workbench go, and the close question that it left is answered (`answer_close_question`). An end that finds
-/// nothing owed changes nothing.
-pub(crate) fn page_left(window: &Window, data: &WindowData) -> Result<(), String> {
+/// decision of its workbench go (keys), and the close question that it left is answered (`answer_close_question`). An end
+/// that finds nothing owed changes nothing.
+fn leave_page(
+    data: &WindowData,
+    keys: impl FnOnce() -> Result<(), String>,
+    close: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
     data.ready.store(false, Ordering::Relaxed);
-    let keys = crate::surfaces::keys_page_ended(window);
-    answer_close_question(window, data)?;
+    let keys = keys();
+    answer_close_question(data, close)?;
     keys
 }
 
-/// Answers a close question that the window asked its page and that the page left unanswered: the window closes as a window
-/// whose page is not ready closes, because a page that ended keeps no tab, so a quit that asked the window continues.
-fn answer_close_question(window: &Window, data: &WindowData) -> Result<(), String> {
+/// Answers a close question that the window asked its page and that the page left unanswered: close closes the window as a
+/// window whose page is not ready closes, because a page that ended keeps no tab, so a quit that asked the window continues.
+fn answer_close_question(
+    data: &WindowData,
+    close: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
     if data.close_asked.swap(false, Ordering::SeqCst) {
-        window.close().map_err(|error| error.to_string())?;
+        close()?;
     }
     Ok(())
+}
+
+/// Closes window through the framework.
+pub(crate) fn close_window(window: &Window) -> Result<(), String> {
+    window.close().map_err(|error| error.to_string())
 }
 
 /// Closes a window.
@@ -1896,6 +1951,10 @@ mod records_test;
 #[cfg(test)]
 #[path = "windows_ends_test.rs"]
 mod ends_test;
+
+#[cfg(test)]
+#[path = "page_end_test.rs"]
+mod page_end_test;
 
 #[cfg(test)]
 #[path = "../tests/project_data_order/project_data_order_test.rs"]

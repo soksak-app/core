@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
-import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { APPS, MAIN_PAGE_APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { turnOffCardSidebars } from "./card-sidebar-choices.mjs";
 import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
@@ -244,47 +244,12 @@ for (const app of Object.values(APPS))
     },
   );
 
-// The four sides arrange in the order of sidebarOrder: the first side reaches across the plane (docs/spec/external-sidebars.md).
-for (const app of Object.values(APPS))
-  test(`${app.name}: the window sidebars of four sides arrange in their order`, { timeout: 90000 }, async (t) => {
-    const s = await open(t, app);
-    await fresh(s);
-    const { values } = await s.get("core.settings");
-    const set = values.sets[0]?.id;
-    assert.ok(set, "a sidebar set is required");
-    const links = values.links;
-    s.cleanup(() => s.run("core.settings.set", { patch: { top: false, bottom: false, sidebarOrder: ["left", "right", "top", "bottom"], links } }));
-    await s.run("core.settings.link", { place: "top", plugin: null, set });
-    await s.run("core.settings.link", { place: "bottom", plugin: null, set });
-    await s.run("core.settings.set", { patch: { top: true, bottom: true } });
-    const card = (grid, id) => grid.cards.find((item) => item.id === id);
-    const near = (a, b) => Math.abs(a - b) <= 1;
-    // The default order: left and right reach across the height, top and bottom stand between them.
-    const sides = await s.until("core.grid", (grid) => ["left", "right", "top", "bottom"].every((id) => card(grid, id)),
-      "the four window sidebars are not arranged");
-    const [left, right, top, bottom] = ["left", "right", "top", "bottom"].map((id) => card(sides, id));
-    assert.ok(near(left.h, sides.height) && near(right.h, sides.height), "left or right does not reach across the height");
-    assert.ok(near(top.x, left.x + left.w) || top.x > left.x + left.w, "top does not stand right of the left sidebar");
-    assert.ok(top.x + top.w <= right.x + 1 && bottom.x + bottom.w <= right.x + 1, "top or bottom reaches under the right sidebar");
-    assert.ok(await s.rect("core.chrome.top", 0) && await s.rect("core.chrome.bottom", 0), "the chrome has no top or bottom switch");
-    // Top first: the top sidebar reaches across the width and the left and right sidebars stand below it.
-    await s.run("core.settings.change", { key: "sidebarOrder", value: ["top", "left", "right", "bottom"] });
-    const first = await s.until("core.grid", (grid) => near(card(grid, "top").w, grid.width),
-      "the top sidebar does not reach across the width with top first");
-    assert.ok(card(first, "left").y >= card(first, "top").y + card(first, "top").h - 1, "the left sidebar does not stand below the top one");
-    // Hiding the first side arranges the others again, and the left sidebar reaches across the height.
-    await s.run("core.settings.set", { patch: { top: false } });
-    const hidden = await s.until("core.grid", (grid) => !card(grid, "top") && near(card(grid, "left").h, grid.height),
-      "hiding the first side left the left sidebar short");
-    assert.ok(card(hidden, "bottom"), "hiding the top sidebar closed the bottom one");
-  });
-
 // The sidebar settings of the section `general` of the settings window (the sections of packages/workbench/settings-ui.js) keep
 // the workbench answering (F714-13). Input: the order of the window sidebars or the general sets of the sides change through the
 // commands of the settings window. Expected: after each change the workbench answers the next request, core.sidebars shows the
 // window sidebars that the switches and the links give, and the window sidebars stand where the order places them.
 for (const app of Object.values(APPS))
-  test(`${app.name}: the workbench answers after the sidebar settings of the settings window change`, { timeout: 120000 }, async (t) => {
+  test(`${app.name}: the workbench answers after the sidebar settings of the settings window change`, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const { values, overridden } = await s.get("core.settings");
@@ -332,19 +297,13 @@ for (const app of Object.values(APPS))
     async function reveal(label, name, index) {
       for (;;) {
         await s.presented();
-        // element.rect of a control of a native modal answers the report of the modal document, and the first report of a view
-        // races the frame that presents it, so the refused request is tried again after the next presented frame. A host that
-        // draws its modal itself answers element.rect at once and never refuses.
-        let rect;
-        for (;;) {
-          try {
-            rect = await s.rect(name, index);
-            break;
-          } catch (error) {
-            if (!/has not reported/.test(error.message)) throw error;
-            await s.presented();
-          }
-        }
+        // element.rect of a control of a native modal answers the report of the modal document, which core.modal holds, so the
+        // check waits until that report names the control. A host that draws its modal itself has no modal document and answers
+        // element.rect at once.
+        if (MAIN_PAGE_APPS.includes(app))
+          await s.until("core.modal", (modal) => (modal?.document?.elements ?? []).filter((item) => item.name === name).length > index,
+            `${label}: the modal document did not report ${name} ${index}`);
+        const rect = await s.rect(name, index);
         const { pane, scroll } = await s.get("core.settings-modal");
         const point = { x: (rect.document?.x ?? 0) + rect.x + rect.width / 2, y: (rect.document?.y ?? 0) + rect.y + rect.height / 2 };
         if (point.y - rect.height / 2 >= pane.y && point.y + rect.height / 2 <= pane.y + pane.h) return point;

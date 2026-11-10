@@ -10,10 +10,11 @@
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
-#include <signal.h>
-#include <unistd.h>
 #import "capture.h"
 #import "window_facts.h"
+#import "private/webkit.h"
+#import "support/run_until.h"
+#import "support/temporary_folder.h"
 
 @interface WKWebView (Presentation)
 - (void)_doAfterNextPresentationUpdate:(void (^)(void))update;
@@ -26,21 +27,9 @@ static void check(BOOL condition, NSString *message) {
     fprintf(stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
 }
-static void expired(int signalNumber) {
-    const char message[] = "FAIL: covered capture test exceeded 90000ms\n";
-    write(STDERR_FILENO, message, sizeof message - 1);
-    _exit(1);
-}
-static BOOL pumpUntil(double seconds, BOOL (^done)(void)) {
-    NSDate *until = [NSDate dateWithTimeIntervalSinceNow:seconds];
-    while (!done() && until.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
-    return done();
-}
-static void settle(double seconds) {
-    NSDate *until = [NSDate dateWithTimeIntervalSinceNow:seconds];
-    pumpUntil(seconds + 1, ^BOOL { return until.timeIntervalSinceNow <= 0; });
+// Runs the run loop until done holds (support/run_until.h).
+static void until(NSString *what, BOOL (^done)(void)) {
+    sp_run_until(what.UTF8String, done);
 }
 
 // The system paths are observed, and one failure is injected at a time. The general content query is never forwarded:
@@ -49,6 +38,8 @@ static NSUInteger generalContentQueries;
 static NSUInteger stillRequests, stillRequestsWithCursor;
 static NSError *contentFailure, *stillFailure, *startFailure;
 static IMP realCurrentContent, realStill, realStart;
+// Set on the main queue after the injected start failure has answered the start request.
+static BOOL startFailureAnswered;
 
 static void observedGeneralContent(id self, SEL _cmd, void (^reply)(SCShareableContent *, NSError *)) {
     generalContentQueries++;
@@ -66,7 +57,11 @@ static void observedStill(id self, SEL _cmd, SCContentFilter *filter, SCStreamCo
     ((void (*)(id, SEL, id, id, id))realStill)(self, _cmd, filter, config, reply);
 }
 static void observedStart(id self, SEL _cmd, void (^reply)(NSError *)) {
-    if (startFailure != nil) { reply(startFailure); return; }
+    if (startFailure != nil) {
+        reply(startFailure);
+        dispatch_async(dispatch_get_main_queue(), ^{ startFailureAnswered = YES; });
+        return;
+    }
     ((void (*)(id, SEL, id))realStart)(self, _cmd, reply);
 }
 static void observeSystemPaths(void) {
@@ -83,6 +78,7 @@ static void observeSystemPaths(void) {
 }
 
 typedef struct { size_t width, height; uint8_t *bytes; } Image;
+static NSUInteger captures;
 
 static Image capture(NSWindow *window, NSString *directory, NSString *name) {
     NSString *path = [directory stringByAppendingPathComponent:[name stringByAppendingString:@".png"]];
@@ -92,7 +88,8 @@ static Image capture(NSWindow *window, NSString *directory, NSString *name) {
     for (NSWindow *child in window.childWindows) [listed addObject:@(child.windowNumber)];
     long numbers[listed.count];
     for (NSUInteger index = 0; index < listed.count; index++) numbers[index] = listed[index].longValue;
-    bool written = sp_capture_still(numbers, (int)listed.count, path.fileSystemRepresentation, &error);
+    bool written = sp_capture_still(numbers, (int)listed.count, path.fileSystemRepresentation, 0, &error);
+    captures++;
     check(written && error == NULL, [NSString stringWithFormat:@"the %@ capture has no error (%s)", name, error ?: ""]);
     free(error);
     Image image = {0, 0, NULL};
@@ -169,6 +166,8 @@ static void paintMetal(CAMetalLayer *layer, id<MTLCommandQueue> queue, uint8_t r
     [blit endEncoding];
     [command presentDrawable:drawable];
     [command commit];
+    // The window is behind other windows, and the compositor may not present a drawable of an occluded window, so the frame is
+    // judged by the completion of its commands; the web view presentation update that follows commits the window's layers.
     [command waitUntilCompleted];
     check(command.status == MTLCommandBufferStatusCompleted, @"the Metal frame completes");
 }
@@ -198,18 +197,21 @@ static void showSurface(CALayer *layer, IOSurfaceRef surface) {
 static void waitForPresentation(WKWebView *web) {
     __block BOOL presented = NO;
     [web _doAfterNextPresentationUpdate:^{ presented = YES; }];
-    check(pumpUntil(10, ^BOOL { return presented; }), @"the web view presents");
-    settle(0.5);
+    until(@"the web view presents", ^BOOL { return presented; });
 }
-static void evaluate(WKWebView *web, NSString *script) {
+static id evaluate(WKWebView *web, NSString *script) {
     __block BOOL done = NO;
     __block NSString *failure = nil;
+    __block id value = nil;
     [web evaluateJavaScript:script completionHandler:^(id result, NSError *error) {
         failure = [error.localizedDescription copy];
+        value = [result retain];
         done = YES;
     }];
-    check(pumpUntil(10, ^BOOL { return done; }) && failure == nil,
-        [NSString stringWithFormat:@"the page script runs (%@)", failure ?: @""]);
+    until(@"the page script answers", ^BOOL { return done; });
+    check(failure == nil, [NSString stringWithFormat:@"the page script runs (%@)", failure ?: @""]);
+    [failure release];
+    return [value autorelease];
 }
 // The system gives a failure a description of its own, in the language of the person, that names no code.
 static NSError *systemFailure(long code) {
@@ -223,16 +225,12 @@ static void expectError(char *error, NSString *what, long code) {
 }
 
 int main(void) { @autoreleasepool {
-    signal(SIGALRM, expired);
-    alarm(90);
     fprintf(stderr, "START: covered window capture\n");
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
     observeSystemPaths();
-    char template[] = "/tmp/soksak-capture-covered-XXXXXX";
-    check(mkdtemp(template) != NULL, @"a private capture directory is created");
-    NSString *directory = [NSString stringWithUTF8String:template];
+    NSString *directory = temporaryFolder(@"soksak-capture-covered-");
 
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(160, 160, kWidth, kHeight)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
@@ -255,11 +253,10 @@ int main(void) { @autoreleasepool {
         "const gl=document.getElementById('gl').getContext('webgl',{preserveDrawingBuffer:true});"
         "function paint(r,g,b){gl.clearColor(r,g,b,1);gl.clear(gl.COLOR_BUFFER_BIT)};paint(0.9,0.7,0.1);"
         "</script>" baseURL:nil];
-    pumpUntil(10, ^BOOL { return !web.isLoading; });
+    until(@"the page load ends", ^BOOL { return !web.isLoading; });
     loaded = !web.isLoading;
     check(loaded, @"the page loads behind other windows");
 
-    pumpUntil(5, ^BOOL { return window.backingScaleFactor > 0; });
     CGFloat scale = window.backingScaleFactor;
     NSView *metalView = [[NSView alloc] initWithFrame:content.bounds];
     CAMetalLayer *metal = [CAMetalLayer layer];
@@ -292,14 +289,23 @@ int main(void) { @autoreleasepool {
     child.animationBehavior = NSWindowAnimationBehaviorNone;
     child.backgroundColor = [NSColor colorWithSRGBRed:0x28 / 255.0 green:0xc8 / 255.0 blue:0x50 / 255.0 alpha:1];
     [window addChildWindow:child ordered:NSWindowAbove];
-    settle(1);
+    [child displayIfNeeded];
+    [CATransaction flush];
     waitForPresentation(web);
 
+    // The window controls of a window that has just appeared can still change: the state before the cover is the first
+    // capture that equals the capture before it.
     Image first = capture(window, directory, @"first");
-    settle(3);
-    // The window controls of a window that has just appeared can still change: the second capture is the state before the cover.
     Image back = capture(window, directory, @"back");
-    fprintf(stderr, "two captures before the cover: %s\n", differences(first, back, scale).UTF8String);
+    for (;;) {
+        fprintf(stderr, "two captures before the cover: %s\n", differences(first, back, scale).UTF8String);
+        BOOL same = first.bytes != NULL && back.bytes != NULL && first.width == back.width && first.height == back.height
+            && memcmp(first.bytes, back.bytes, first.width * first.height * 4) == 0;
+        if (same || first.bytes == NULL || back.bytes == NULL) break;
+        free(first.bytes);
+        first = back;
+        back = capture(window, directory, @"back");
+    }
     if (back.bytes != NULL) expectPixel(back, scale, 180, 280, 0x28c850, @"the child window");
 
     NSWindow *cover = [[NSWindow alloc] initWithContentRect:NSMakeRect(100, 100, kWidth + 160, kHeight + 160)
@@ -322,13 +328,16 @@ int main(void) { @autoreleasepool {
         }
         return coverIndex >= 0 && targetIndex > coverIndex && childIndex > coverIndex;
     };
-    BOOL coverOver = pumpUntil(10, coverIsOver);
+    // The order request returns after the window server has placed the cover.
+    BOOL coverOver = coverIsOver();
     check(coverOver && NSContainsRect(cover.frame, window.frame) && NSContainsRect(cover.frame, child.frame),
         [NSString stringWithFormat:@"the cover is over the whole window and its child (cover %ld, window %ld, child %ld)",
             (long)coverIndex, (long)targetIndex, (long)childIndex]);
     check((window.occlusionState & NSWindowOcclusionStateVisible) == 0, @"the window server reports the window as occluded");
-    // WebKit hides the document of an occluded window after a delay. It stays shown with the registered web view.
-    settle(3);
+    // WebKit hides the document of an occluded window after a delay, only while it detects the occlusion of the window. The
+    // registered web view does not detect it, so its document stays shown.
+    check(!web._windowOcclusionDetectionEnabled, @"the registered web view does not detect the occlusion of its window");
+    check([evaluate(web, @"document.visibilityState") isEqual:@"visible"], @"the document of the covered window stays visible");
 
     Image covered = capture(window, directory, @"covered");
     check(back.bytes != NULL && covered.bytes != NULL && back.width == covered.width && back.height == covered.height
@@ -353,7 +362,6 @@ int main(void) { @autoreleasepool {
     paintMetal(metal, queue, 0x90);
     IOSurfaceRef changedSurface = surfaceOf(144 * scale, 128 * scale, 0x40);
     showSurface(surfaceView.layer, changedSurface);
-    settle(0.5);
     waitForPresentation(web);
     Image changed = capture(window, directory, @"changed");
     if (changed.bytes != NULL) {
@@ -366,33 +374,34 @@ int main(void) { @autoreleasepool {
         check(pixelsOfColor(changed, 0xff00ff) == 0, @"no pixel of the cover is in the changed capture");
     }
     check(generalContentQueries == 0, @"the capture does not query the content that needs the screen recording permission");
-    check(stillRequests == 4 && stillRequestsWithCursor == 0,
-        [NSString stringWithFormat:@"the %lu captures ask for no cursor (%lu with one)", (unsigned long)stillRequests, (unsigned long)stillRequestsWithCursor]);
+    check(stillRequests == captures && stillRequestsWithCursor == 0,
+        [NSString stringWithFormat:@"the %lu captures ask for no cursor (%lu requests, %lu with one)", (unsigned long)captures,
+            (unsigned long)stillRequests, (unsigned long)stillRequestsWithCursor]);
 
     // A failure of the system keeps its code at each entry point.
     NSString *path = [directory stringByAppendingPathComponent:@"failed.png"];
     char *error = NULL;
     stillFailure = systemFailure(SCStreamErrorInternalError);
-    check(!sp_capture_still((long[]){window.windowNumber}, 1, path.fileSystemRepresentation, &error), @"a failed still capture reports failure");
+    check(!sp_capture_still((long[]){window.windowNumber}, 1, path.fileSystemRepresentation, 0, &error), @"a failed still capture reports failure");
     expectError(error, @"a failed still capture", SCStreamErrorInternalError);
     free(error); error = NULL;
     stillFailure = nil;
     contentFailure = systemFailure(SCStreamErrorNoWindowList);
-    check(!sp_capture_still((long[]){window.windowNumber}, 1, path.fileSystemRepresentation, &error), @"a failed content query reports failure");
+    check(!sp_capture_still((long[]){window.windowNumber}, 1, path.fileSystemRepresentation, 0, &error), @"a failed content query reports failure");
     expectError(error, @"the content query of a still capture", SCStreamErrorNoWindowList);
     free(error); error = NULL;
-    check(!sp_capture_open(window.windowNumber, false, &error), @"a failed content query fails a recording");
+    check(!sp_capture_open(window.windowNumber, false, 0, &error), @"a failed content query fails a recording");
     expectError(error, @"the content query of a recording", SCStreamErrorNoWindowList);
     free(error); error = NULL;
     contentFailure = nil;
     startFailure = systemFailure(SCStreamErrorFailedToStart);
-    check(sp_capture_open(window.windowNumber, false, &error), @"a recording opens the covered window");
+    check(sp_capture_open(window.windowNumber, false, 0, &error), @"a recording opens the covered window");
     free(error); error = NULL;
     check(sp_capture_start(directory.fileSystemRepresentation, false, &error), @"the start request of a recording is sent");
     free(error); error = NULL;
-    pumpUntil(5, ^BOOL { return strlen(sp_capture_error()) > 0; });
+    until(@"the injected start failure answers", ^BOOL { return startFailureAnswered; });
     expectError((char *)sp_capture_error(), @"a failed recording start", SCStreamErrorFailedToStart);
-    sp_capture_stop(0);
+    sp_capture_stop(0, 0);
     startFailure = nil;
 
     check(!NSApp.isActive, @"the capture does not activate the application");
@@ -405,9 +414,9 @@ int main(void) { @autoreleasepool {
     [window close];
     CFRelease(surface);
     CFRelease(changedSurface);
-    if (failures == 0) [NSFileManager.defaultManager removeItemAtPath:directory error:NULL];
-    else fprintf(stderr, "the images of the failed run stay in %s\n", directory.UTF8String);
     free(first.bytes); free(back.bytes); free(covered.bytes); free(changed.bytes);
+    // The images of a failed run are its evidence.
+    if (failures) keepTemporaryFolder(directory);
     if (failures == 0) fprintf(stderr, "PASS: covered window capture\n");
     return failures == 0 ? 0 : 1;
 } }

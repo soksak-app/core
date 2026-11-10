@@ -396,6 +396,14 @@ type RevisedContent struct {
 // holds the reply, it does not return until the reply is released. It is nil in other builds.
 var holdModalContent func(s *Surfaces)
 
+// diagnosticWindowClosed is called in a diagnostic build when window s closes, before its views close: it ends each
+// diagnostic hold of the window (docs/spec/endpoint.md). It is nil in other builds.
+var diagnosticWindowClosed func(s *Surfaces)
+
+// diagnosticPageEnded is called in a diagnostic build when the main page of window s ends with its process: it ends each
+// native wait of the window (docs/spec/endpoint.md). It is nil in other builds.
+var diagnosticPageEnded func(s *Surfaces)
+
 // ModalContent returns the content that a modal view requested after it loaded. For another modal, it returns empty content with number 0,
 // and the modal page discards it.
 func (s *Surfaces) ModalContent(id string, instance uint64) RevisedContent {
