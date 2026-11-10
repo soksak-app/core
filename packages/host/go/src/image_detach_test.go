@@ -90,12 +90,7 @@ func TestReloadSurfaceImagesRetainsOldDetachTargetThroughGenerationAdvance(t *te
 // sentImageDetachRequest reads the detach request that the supplier service received and returns its request id.
 func sentImageDetachRequest(t *testing.T, service *sidecar) string {
 	t.Helper()
-	var line queuedLine
-	select {
-	case line = <-service.outbox:
-	case <-time.After(5 * time.Second):
-		t.Fatalf("supplier %s received no image detach request", service.name)
-	}
+	line := <-service.outbox
 	var sent sidecarRequest
 	if err := json.Unmarshal(line.bytes, &sent); err != nil {
 		t.Fatalf("decode detach request: %v", err)
@@ -185,23 +180,30 @@ func imageDetachFixture(t *testing.T, names ...string) (*Surfaces, map[string]*s
 	return surfaces, services
 }
 
-// contract: images.detach.timeout-keeps-waiting
-func TestATimedOutImageDetachIsRecordedOnceAndALateAcknowledgementEndsIt(t *testing.T) {
+// A supplier that does not answer sends no event, so the detach waits for its acknowledgement, the end of the supplier
+// connection or the end of the surface session, with no limit and no record. The supplier received the detach request, the
+// event at which the test checks that the detach is pending without an end or a record; the acknowledgement then ends it.
+// contract: images.detach.ends-by-its-events
+func TestAnImageDetachHasNoLimitAndWritesNoRecordWhileItWaits(t *testing.T) {
 	isolateTraceRecords(t)
 	surfaces, services := imageDetachFixture(t, "fixture-sidecar")
 	c := surfaces.sidecars
-	c.imageDetachTimeout = 10 * time.Millisecond
 	ends := recordImageDetachEnds(surfaces)
 	target := imageDetachTarget{Surface: "surface-a", Name: "view", Sidecar: "fixture-sidecar", Generation: 7, Owner: surfaces}
 	if err := surfaces.beginImageDetaches([]imageDetachTarget{target}); err != nil {
 		t.Fatalf("begin image detach: %v", err)
 	}
 	request := sentImageDetachRequest(t, services["fixture-sidecar"])
-	want := fmt.Sprintf("image detach sidecar fixture-sidecar surface surface-a image view generation 7 request %s timed out", request)
-	entry := pendingImageDetachOf(t, surfaces, target)
-	waitClosed(t, entry.timedOut, "the image detach timeout")
+	select {
+	case data := <-ends:
+		t.Fatalf("a detach without its acknowledgement ended: %v", data)
+	default:
+	}
 	if err := surfaces.pendingImageDetachError("surface-a"); err == nil {
-		t.Fatal("the surface stopped waiting at the timeout")
+		t.Fatal("the surface stopped waiting for its detach")
+	}
+	if errors := bufferedTraces(t, "host.record.error"); len(errors) != 0 {
+		t.Fatalf("error records %v, want none while the detach waits", errors)
 	}
 	if err := surfaces.beginImageDetaches([]imageDetachTarget{target}); err != nil {
 		t.Fatalf("begin image detach on the next page start: %v", err)
@@ -212,17 +214,11 @@ func TestATimedOutImageDetachIsRecordedOnceAndALateAcknowledgementEndsIt(t *test
 	default:
 	}
 	acknowledgeImageDetach(t, c, surfaces, target, request, map[string]any{"ok": true, "result": "detached"})
-	select {
-	case data := <-ends:
-		if fmt.Sprint(data) != endedEvent("surface-a", nil) {
-			t.Fatalf("ended event data %v, want surface-a without error", data)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("a late acknowledgement sent no ended event")
+	if data := <-ends; fmt.Sprint(data) != endedEvent("surface-a", nil) {
+		t.Fatalf("ended event data %v, want surface-a without error", data)
 	}
-	errors := bufferedTraces(t, "host.record.error")
-	if len(errors) != 1 || errors[0]["where"] != "image detach" || errors[0]["text"] != want {
-		t.Fatalf("error records %v, want one timeout record %q", errors, want)
+	if errors := bufferedTraces(t, "host.record.error"); len(errors) != 0 {
+		t.Fatalf("error records %v, want none after the acknowledgement", errors)
 	}
 }
 
@@ -572,7 +568,6 @@ func TestAnUnacknowledgedImageDetachKeepsOnlyItsSurfacePending(t *testing.T) {
 	surfaces := sidecarSessionSurfaces(t)
 	c := surfaces.sidecars
 	c.stopped = false
-	c.imageDetachTimeout = 10 * time.Millisecond
 	service := &sidecar{name: "fixture-sidecar", persistent: true, outbox: make(chan queuedLine, 8),
 		closeWaiters: map[string]chan error{}, retained: map[string]int{}, surfaces: map[string]bool{}}
 	c.running["fixture-sidecar"] = service
@@ -589,9 +584,7 @@ func TestAnUnacknowledgedImageDetachKeepsOnlyItsSurfacePending(t *testing.T) {
 	if err := surfaces.windowSidecarSend(context.Background(), "fixture-sidecar", "surface-b", json.RawMessage(`{"open":{}}`), nil); err != nil {
 		t.Fatalf("send of another surface: %v", err)
 	}
-	savedFramework := framework
-	framework = stepFramework{}
-	t.Cleanup(func() { framework = savedFramework })
+	useStepFramework(t)
 	err = surfaces.attachCheckedImage(ImageKey{Surface: "surface-a", Name: "view"}, ImageRequest{Surface: "surface-a", Name: "view", Sidecar: "fixture-sidecar"})
 	if err == nil || !strings.HasPrefix(err.Error(), "image detach sidecar fixture-sidecar surface surface-a image view generation 7") ||
 		!strings.HasSuffix(err.Error(), "is pending") {

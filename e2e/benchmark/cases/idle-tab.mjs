@@ -7,7 +7,7 @@
 // is a fixture page without content, so the cost covers the tab and not the content of a site.
 import assert from "node:assert/strict";
 
-import { holdCovered, within } from "@soksak/window-check/app.mjs";
+import { holdCovered } from "@soksak/window-check/app.mjs";
 import { allRows, tailOf } from "@soksak/window-check/chains.mjs";
 import { fresh, START_PLUGIN } from "../../fixture.mjs";
 import { b3Conditions, fixtureSettings } from "./b3-run.mjs";
@@ -18,15 +18,14 @@ import { performanceGoalBound } from "./performance-goals.mjs";
 export const IDLE_TAB_BOUND_KB = performanceGoalBound("IDLE_TAB_BOUND_KB", "atMost");
 /** Two consecutive readings of the document process that differ by less than this are a settled footprint. */
 const SETTLED_KB = 1024;
-/** The upper bound of the wait for settled readings; the sampler reads every five seconds. */
-const SETTLE_LIMIT = 120_000;
 
 /** The plugin of the idle tab: the layout probe, whose view holds one document region and reports its document (layoutprobe.document). */
 const IDLE_TAB_PLUGIN = START_PLUGIN;
 
 /**
  * Waits on the notices of `host.log` until `pick` returns a value from the sampler readings stored after `since`, and returns it.
- * The sampler stores a reading every five seconds while the trace is on, so the readings arrive at that interval.
+ * The sampler stores a reading every five seconds while the trace is on, so the readings arrive at that interval. The wait has no
+ * time limit: the reading that `pick` accepts or the close of the connection ends it, and an error names the last readings.
  */
 async function readings(s, since, pick, label) {
   let last = "no reading was read";
@@ -41,9 +40,9 @@ async function readings(s, since, pick, label) {
     }
   };
   try {
-    return await within(search(), SETTLE_LIMIT, label);
+    return await search();
   } catch (error) {
-    error.message += `; ${last}`;
+    error.message = `${label}: ${error.message}; ${last}`;
     throw error;
   }
 }

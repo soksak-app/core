@@ -527,8 +527,10 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 		if place, text, reported := PageProcessEnded(s.name, h.quit.Active()); reported {
 			LogError(place, text)
 		}
-		// The workbench ended with the process of its page, so what the page owed ends now (endPage).
+		// The workbench ended with the process of its page, so what the page owed ends now (endPage), and so do the waits for
+		// that page: a reload that waits for its ready report and a presented wait.
 		h.endPage(s)
+		s.pageProcessEnded()
 	})
 	win.OnWindowEvent(WindowWorkbenchCommitted, func() {
 		RecordWindowEvent(s.name, "navigation_committed")
@@ -555,8 +557,9 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 		}
 		RecordWindowEvent(s.name, "closed")
 		s.close()
+		s.endWindow()
+		// endWindow ends a reload that waits for the new page, with the host calls that it waited for.
 		h.relay.Abandon(func(t relayTarget) bool { return t.owner == s })
-		h.endReloads(s, rpcError(codeNoWindow, "the window closed before the reloaded page reported ready"))
 		h.notifyWorkspace()
 		routine.Go("windows-changed", h.windowsChanged)
 		if quit {

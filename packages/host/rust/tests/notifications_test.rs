@@ -66,7 +66,7 @@ fn each_notification_event_and_failure_is_recorded() {
         ] {
             let _ = record_event(raw);
         }
-        writer.flush(std::time::Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         return;
     }
     let config = folder::Folder::new();

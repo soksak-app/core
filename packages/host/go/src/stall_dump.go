@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"time"
 )
 
 // ParseStallDump reads the parameters of `diagnostics.stall.dump`: the absolute path of an existing file. Anything outside the
@@ -34,6 +33,6 @@ func ParseStallDump(params json.RawMessage) (string, error) {
 
 // EmitStallDump stores the event `host.stall.dump`, waits until it is in the log, and returns the boot identifier of the log and
 // the seq of the line.
-func EmitStallDump(path string, deadline time.Duration) (string, uint64, error) {
-	return EmitHostPlaced(LevelWarn, "host.stall.dump", map[string]any{"path": path}, deadline)
+func EmitStallDump(path string) (string, uint64, error) {
+	return EmitHostPlaced(LevelWarn, "host.stall.dump", map[string]any{"path": path})
 }

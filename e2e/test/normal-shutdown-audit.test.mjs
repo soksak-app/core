@@ -397,79 +397,10 @@ test("service shutdown names an invalid service endpoint and rejects its PID", a
   }
 });
 
-test("service process wait reaps its observer after the outer deadline", async () => {
+test("service process wait takes no limit", async () => {
   const { runSokProcessWait } = await import("../normal-shutdown-runner.mjs");
-  let killSignals = 0;
-  const child = new EventEmitter();
-  let closed = false;
-  child.stdout = new PassThrough();
-  child.stderr = new PassThrough();
-  child.kill = () => {
-    killSignals += 1;
-    setImmediate(() => {
-      closed = true;
-      child.emit("close", null, "SIGTERM");
-    });
-  };
-  const configDir = mkdtempSync(join(tmpdir(), "normal-shutdown-sok-"));
-  const appDirectory = join(configDir, "MacOS");
-  mkdirSync(appDirectory, { recursive: true });
-  writeFileSync(join(appDirectory, "sok"), "", { mode: 0o755 });
-  try {
-    await assert.rejects(runSokProcessWait({
-      binary: join(appDirectory, "Host"),
-      configDir,
-      pid: 321,
-      timeoutMs: 1,
-      outerLimitMs: 10,
-      spawnChild: () => child,
-    }), /exceeded 10ms/);
-    assert.equal(killSignals, 1, "the observer receives termination at the outer deadline");
-    assert.equal(closed, true, "the runner waits for the child close event before rejecting");
-  } finally {
-    rmSync(configDir, { recursive: true, force: true });
-  }
-});
-
-test("service process wait reports the bounded cleanup timeout before SIGKILL and reap", { timeout: 2000 }, async () => {
-  const { runSokProcessWait } = await import("../normal-shutdown-runner.mjs");
-  const signals = [];
-  const child = new EventEmitter();
-  let reaped = false;
-  child.stdout = new PassThrough();
-  child.stderr = new PassThrough();
-  child.kill = (signal) => {
-    signals.push(signal);
-    if (signal === "SIGKILL") {
-      reaped = true;
-      child.emit("close", null, signal);
-    }
-  };
-  const configDir = mkdtempSync(join(tmpdir(), "normal-shutdown-sok-cleanup-timeout-"));
-  const appDirectory = join(configDir, "MacOS");
-  mkdirSync(appDirectory, { recursive: true });
-  writeFileSync(join(appDirectory, "sok"), "", { mode: 0o755 });
-  try {
-    await assert.rejects(runSokProcessWait({
-      binary: join(appDirectory, "Host"),
-      configDir,
-      pid: 321,
-      timeoutMs: 1,
-      outerLimitMs: 20,
-      cleanupLimitMs: 20,
-      spawnChild: () => child,
-    }), (error) => {
-      assert.ok(error instanceof AggregateError, `expected the wait and cleanup timeout causes, received ${error}`);
-      assert.match(error.errors[0].message, /exceeded 20ms for service PID 321/);
-      assert.match(error.errors[1].message, /cleanup wait exceeded 20ms after SIGTERM/);
-      assert.match(error.message, /SIGKILL sent and observer child reaped/);
-      return true;
-    });
-    assert.deepEqual(signals, ["SIGTERM", "SIGKILL"], "the observer receives SIGTERM, then SIGKILL after its bounded reap expires");
-    assert.equal(reaped, true, "the runner waits for observer close after SIGKILL");
-  } finally {
-    rmSync(configDir, { recursive: true, force: true });
-  }
+  await assert.rejects(runSokProcessWait({ binary: "/nonexistent/Host", configDir: "/nonexistent", pid: 321, timeoutMs: 700 }),
+    /^TypeError: runSokProcessWait takes no timeoutMs: the wait ends by the end of the process or of the CLI$/);
 });
 
 test("service process wait rejects malformed CLI output", async () => {
@@ -515,10 +446,9 @@ test("service process wait invokes the bundled CLI with the original PID", async
       binary: join(appDirectory, "Host"),
       configDir,
       pid: 321,
-      timeoutMs: 700,
       spawnChild: (command, args, options) => {
         assert.equal(command, join(appDirectory, "sok"));
-        assert.deepEqual(args, ["process", "wait", "321", "--timeout-ms", "700", "--config-dir", configDir]);
+        assert.deepEqual(args, ["process", "wait", "321", "--config-dir", configDir]);
         assert.deepEqual(options.stdio, ["ignore", "pipe", "pipe"]);
         setImmediate(() => {
           child.stdout.write('{"pid":321,"ended":true}\n');

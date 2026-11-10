@@ -181,13 +181,13 @@ func TestAPressOnAHeldTabSendsTheKeyboardBeforeItsPlacement(t *testing.T) {
 	gate := gatedPlacement(t, f, stored)
 	node, ok := exposedNode(f.tester.ElementTree(), "core.card.tab", held)
 	if !ok {
-		close(gate)
+		gate.open()
 		t.Fatalf("the workbench shows no tab %s", held)
 	}
 	f.tester.ClickAt(node.Bounds.X+node.Bounds.W/2, node.Bounds.Y+node.Bounds.H/2)
 	f.pending.drain(t)
 	keyboard, _ := stored.keyboardCalls()
-	close(gate)
+	gate.open()
 	f.settle()
 	if len(keyboard) == 0 || keyboard[len(keyboard)-1] == nil || *keyboard[len(keyboard)-1] != held {
 		t.Fatalf("while a placement ran the press on %s sent the keyboard calls %v", held, describeTargets(keyboard))
@@ -432,7 +432,7 @@ func TestATabDrawnDuringAPlacementTakesTheKeyboardAfterItsOwnPlacement(t *testin
 	f, stored := surfaceShell(t)
 	cards, _ := keyboardCards(t, f)
 	f.run("core.card.focus", map[string]string{"card": cards[0]})
-	gate := make(chan struct{})
+	gate := newGate()
 	stored.orderMu.Lock()
 	stored.presentGate = gate
 	stored.orderMu.Unlock()
@@ -458,7 +458,7 @@ func TestATabDrawnDuringAPlacementTakesTheKeyboardAfterItsOwnPlacement(t *testin
 	f.pending.drain(t)
 	f.tester.Frame()
 	f.pending.drain(t)
-	close(gate)
+	gate.open()
 	f.settle()
 	f.settle()
 	target, ok := stored.keyboardTarget()
@@ -467,11 +467,11 @@ func TestATabDrawnDuringAPlacementTakesTheKeyboardAfterItsOwnPlacement(t *testin
 	}
 }
 
-// gatedPlacement starts a placement whose presentSurfaces waits until the returned channel closes, so the window draws and
+// gatedPlacement starts a placement whose presentSurfaces waits until the returned gate opens, so the window draws and
 // takes input while the placement runs.
-func gatedPlacement(t *testing.T, f *shellFixture, stored *surfaceHost) chan struct{} {
+func gatedPlacement(t *testing.T, f *shellFixture, stored *surfaceHost) *gate {
 	t.Helper()
-	gate := make(chan struct{})
+	gate := newGate()
 	stored.orderMu.Lock()
 	stored.presentGate = gate
 	stored.orderMu.Unlock()
@@ -512,7 +512,7 @@ func TestAReleaseDuringAPlacementSendsItsDecisionAtOnce(t *testing.T) {
 	gate := gatedPlacement(t, f, stored)
 	keyboardRelease(t, f, "core.chrome.bar")
 	keyboard, decided := stored.keyboardCalls()
-	close(gate)
+	gate.open()
 	f.settle()
 	if len(decided) != 1 || !decided[0] || keyboard[0] == nil || *keyboard[0] != *active {
 		t.Fatalf("while the placement ran the release sent the keyboard calls %v decided %v, not one decided call to %s", describeTargets(keyboard), decided, *active)
@@ -544,10 +544,10 @@ func TestAReleaseOnASurfaceThatTheHostDoesNotHoldDecidesForTheWorkbench(t *testi
 	keyboardRelease(t, f, "core.chrome.bar")
 	keyboard, decided := stored.keyboardCalls()
 	if len(decided) != 1 || !decided[0] || keyboard[0] != nil {
-		close(gate)
+		gate.open()
 		t.Fatalf("the release on a surface that the host does not hold sent the keyboard calls %v decided %v, not one decided call to the workbench", describeTargets(keyboard), decided)
 	}
-	close(gate)
+	gate.open()
 	f.settle()
 	f.settle()
 	keyboard, decided = stored.keyboardCalls()

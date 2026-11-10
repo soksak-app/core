@@ -7,7 +7,6 @@ package host
 
 import (
 	"encoding/json"
-	"time"
 )
 
 // TestMark is the content of a `diagnostics.test.mark` request.
@@ -58,7 +57,7 @@ func ParseTestMark(params json.RawMessage) (TestMark, error) {
 
 // EmitTestMark stores the mark as the event `host.test.start` or `host.test.end`, waits until it is in the log, and returns the
 // boot identifier of the log and the seq of the line.
-func EmitTestMark(mark TestMark, deadline time.Duration) (string, uint64, error) {
+func EmitTestMark(mark TestMark) (string, uint64, error) {
 	fields := map[string]any{"name": mark.Name, "run": mark.Run}
 	event := "host.test.start"
 	if mark.Kind == "end" {
@@ -66,5 +65,5 @@ func EmitTestMark(mark TestMark, deadline time.Duration) (string, uint64, error)
 		fields["result"] = mark.Result
 	}
 	// events: host.test.start, host.test.end
-	return EmitHostPlaced(LevelInfo, event, fields, deadline)
+	return EmitHostPlaced(LevelInfo, event, fields)
 }

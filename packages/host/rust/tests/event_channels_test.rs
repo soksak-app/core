@@ -79,7 +79,7 @@ fn debug_and_trace_events_go_to_the_debug_file_and_the_others_to_the_main_file()
             "event {index} was refused"
         );
     }
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let main = read(log.path());
     let debug = read(&debug_path_of(&log));
     for file in [&main, &debug] {
@@ -118,7 +118,7 @@ fn each_file_rotates_on_its_own_and_rotation_never_removes_a_generation() {
         );
     }
     assert!(log.emit(Level::Info, "host.app.event", &json!({"kind": "info"})));
-    log.flush(Duration::from_secs(10)).unwrap();
+    log.flush().unwrap();
     let debug = debug_path_of(&log);
     let generation = |n: usize| PathBuf::from(format!("{}.{n}", debug.display()));
     let generations: Vec<PathBuf> = (1..)
@@ -187,7 +187,7 @@ fn a_loss_names_the_channel_of_the_refused_events() {
             && refused.get("debug").copied().unwrap_or(0) > 0,
         "the queue refused {refused:?}, so a channel is not covered"
     );
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let mut dropped: BTreeMap<String, u64> = BTreeMap::new();
     for event in read(log.path()) {
         if event["event"] != "log.dropped" {

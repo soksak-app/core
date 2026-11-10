@@ -2,11 +2,6 @@
 // search of one chain in the log of a running application through `log.query`.
 import assert from "node:assert/strict";
 
-import { within } from "./app.mjs";
-
-/** The upper bound of the wait for the events of one chain; the wait ends at the notice that shows them. */
-const CHAIN_LIMIT = 30_000;
-
 /** All rows of a query, page by page. */
 export async function allRows(s, query) {
   const rows = [];
@@ -26,8 +21,9 @@ export async function tailOf(s) {
 
 /**
  * Waits until the first event of the chain `name` that matches `fields` is in the log after `since` and every event that the
- * catalog declares for the chain carries its correlation identifier. The wait is on the notices of `host.log`; it ends with
- * the error that names the missing events when the limit passes. Returns the identifier and the events of the chain.
+ * catalog declares for the chain carries its correlation identifier. The wait is on the notices of `host.log` and has no time
+ * limit: the notice that shows the events or the close of the connection ends it, and an error names the missing events.
+ * Returns the identifier and the events of the chain.
  */
 export async function chainOf(s, chains, name, since, fields) {
   const [first, ...rest] = chains[name];
@@ -55,7 +51,7 @@ export async function chainOf(s, chains, name, since, fields) {
     }
   };
   try {
-    return await within(search(), CHAIN_LIMIT, `the chain ${name}`);
+    return await search();
   } catch (error) {
     error.message += `; ${last}`;
     throw error;

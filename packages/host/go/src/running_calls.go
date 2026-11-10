@@ -65,10 +65,10 @@ func (r *RunningCalls) Of(window string, now time.Time) string {
 	return strings.Join(names, ", ")
 }
 
-// ReloadTimeoutText is the error of a reload whose page did not report ready within timeout, with the running calls of its
-// window.
-func ReloadTimeoutText(timeout time.Duration, running string) string {
-	return fmt.Sprintf("the reloaded page did not report ready within %s; running host calls: %s", timeout, running)
+// ReloadEndText is the error of a reload whose wait ended by end (the window closed or the page process ended) before its page
+// reported ready, with the running calls of its window.
+func ReloadEndText(end, running string) string {
+	return fmt.Sprintf("%s before the reloaded page reported ready; running host calls: %s", end, running)
 }
 
 // runningCalls holds the host calls of every window of the process.

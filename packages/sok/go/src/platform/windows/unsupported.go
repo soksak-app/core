@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/soksak-app/core/packages/sok/go/src/platform"
 )
@@ -31,8 +30,8 @@ func (windows) BundleVersion(string) (string, error) {
 	return "", errors.New("application bundles are not implemented on windows")
 }
 
-func (windows) WaitProcessEnd(int, time.Duration) (bool, error) {
-	return false, errors.New("waiting for a process end is not implemented on windows")
+func (windows) WaitProcessEnd(int) error {
+	return errors.New("waiting for a process end is not implemented on windows")
 }
 
 func (windows) CopyBundle(string, string) error {

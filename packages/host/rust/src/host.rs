@@ -453,7 +453,11 @@ pub fn web_content_process_terminated(webview: &Webview) {
     // Only the main webview holds the subscriptions of document streams (docs/spec/native-surfaces.md#document-streams).
     // A window that the application did not register has no streams.
     let window = webview.window();
-    if webview.label() == window.label() && windows::window_data(&window).is_ok() {
+    if webview.label() == window.label()
+        && let Ok(data) = windows::window_data(&window)
+    {
+        // The requests that wait for the page end: a reload that waits for its ready page and a presented wait.
+        data.end_waits("the page process ended");
         log_failure("page process", documents::main_page_process_ended(&window));
         // The workbench ended with the process of its page, so what the page owed ends now.
         log_failure("page end", windows::end_page(&window));
@@ -470,6 +474,8 @@ pub fn web_content_process_terminated(webview: &Webview) {
             "modal key wait",
             crate::modals::modal_process_ended(&window),
         );
+    } else {
+        exposure::surface_process_ended(&window, webview.label());
     }
     if let Err(error) = webview.reload() {
         log_error(&place, format!("{}: reload: {error}", webview.label()));
@@ -618,11 +624,11 @@ pub fn run_event(app: &AppHandle, event: RunEvent) {
                 .unwrap_or_else(PoisonError::into_inner)
                 .take(),
         );
-        if let Err(error) = event_log::flush_event_log(
-            &app.state::<std::sync::Arc<event_log::EventLog>>(),
-            || platform::current()?.flush_native_observers(),
-            std::time::Duration::from_secs(2),
-        ) {
+        if let Err(error) =
+            event_log::flush_event_log(&app.state::<std::sync::Arc<event_log::EventLog>>(), || {
+                platform::current()?.flush_native_observers()
+            })
+        {
             log_error("event log flush", error);
         }
         // The save and cleanup are finished, so the termination request of the operating system that was

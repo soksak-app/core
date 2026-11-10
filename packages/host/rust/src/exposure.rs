@@ -10,7 +10,6 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Condvar, Mutex, OnceLock, PoisonError};
-use std::time::{Duration, Instant};
 
 use crate::framework::{AppHandle, Frontend, LogicalSize, Manager, Webview, Window};
 use serde::Deserialize;
@@ -30,15 +29,6 @@ use crate::surfaces::label_for;
 use crate::windows::{self, NativeFailure, WindowData, window_data, with_native_owner};
 
 pub use crate::platform::{ButtonHeld, Delivery, FrontmostApplication, Key, Pointer, PointerHeld};
-
-/// The time within which a document must respond.
-pub const TIMEOUT: Duration = Duration::from_secs(10);
-
-/// The time to wait for the application activation.
-const ACTIVATION: Duration = Duration::from_secs(5);
-
-/// The time that the press and release of input.pointer wait for the document to receive them.
-const RECEIPT: Duration = Duration::from_secs(2);
 
 /// The entries that the host declares. The format is the same as exposes of plugin.json, and each kind is in name
 /// order.
@@ -437,7 +427,13 @@ pub fn key(params: &Map<String, Value>) -> Result<Key, Failure> {
     })
 }
 
-type Waiting = (String, Sender<Result<Box<RawValue>, Failure>>);
+/// The document of a waiting request and the request whose handling forwarded it, if any.
+struct Held {
+    target: String,
+    origin: Option<u64>,
+}
+
+type Waiting = (Held, Sender<Result<Box<RawValue>, Failure>>);
 
 pub use crate::endpoint::raw;
 
@@ -456,39 +452,24 @@ struct Answer {
     error: Option<Value>,
 }
 
-/// The correspondence between the requests sent to documents and their responses.
+/// The correspondence between the requests sent to documents and their responses. A request has no time limit: it ends by
+/// the reply of its document, by the end of that document (1003), by the end of the endpoint connection that sent it, or,
+/// for a forward of a request that the main page handles, by the end of that origin request.
 #[derive(Default)]
 pub struct Relay {
     next: AtomicU64,
     pending: Mutex<HashMap<u64, Waiting>>,
-    /// The recent requests that timed out. To state the delay of a late reply in its error, up to EXPIRED_LIMIT of them are
-    /// kept and the oldest is discarded (docs/spec/exposure.md#errors).
-    expired: Mutex<std::collections::VecDeque<Expired>>,
-    /// The recent requests that their document ended before a reply: the id and the document. A reply to one of them comes
-    /// from a document that has ended, so it is an observation; up to ENDED_LIMIT of them are kept (docs/spec/exposure.md#errors).
+    /// The recent requests that ended without the reply of their document: the id and the document. A reply to one of them
+    /// comes after its request ended, so it is an observation; up to ENDED_LIMIT of them are kept (docs/spec/exposure.md#errors).
     ended: Mutex<std::collections::VecDeque<(u64, String)>>,
 }
-
-/// The number of timed-out requests that are kept for late replies.
-const EXPIRED_LIMIT: usize = 256;
 
 /// The number of ended requests that are kept, so that a reply to one of them is an observation.
 const ENDED_LIMIT: usize = 256;
 
-/// The plugin command that a request carries. A request without one writes no call event.
-#[derive(Clone)]
-pub struct RelayCall {
-    pub plugin: String,
-    pub command: String,
-}
-
-/// A request that timed out: its id, document, send time, time limit and the command it carries, if any.
-struct Expired {
-    id: u64,
-    target: String,
-    sent: Instant,
-    timeout: Duration,
-    call: Option<RelayCall>,
+/// The text of the end of a forward whose origin request is not open.
+fn origin_ended(origin: u64) -> String {
+    format!("the origin request {origin} has ended")
 }
 
 #[cfg(feature = "diagnostics")]
@@ -501,7 +482,7 @@ impl Relay {
             // the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner)
             .values()
-            .filter(|(waiting, _)| waiting == target)
+            .filter(|(held, _)| held.target == target)
             .count()
     }
 }
@@ -519,107 +500,71 @@ pub(crate) fn subscribers(window: &Window) -> usize {
 }
 
 impl Relay {
-    /// Sends the request id to the document target with send, and waits for the response of target for timeout. When
-    /// timeout is None, it waits for the response or the end of the document. When send fails, the document is treated
-    /// as absent.
+    /// Sends the request id to the document target with send, and waits for the response of target, the end of the
+    /// document or the end of the request. When send fails, the document is treated as absent.
     pub fn request(
         &self,
         target: &str,
-        timeout: Option<Duration>,
         send: impl FnOnce(u64) -> Result<(), String>,
     ) -> Result<Box<RawValue>, Failure> {
-        self.request_call(target, None, timeout, send)
+        self.wait(target, None, send)
     }
 
-    /// The same as request for a request that carries call. A time limit that passes writes the event `host.call.timeout`, and a
-    /// late reply to it writes `host.trace.call.late-reply`.
-    pub fn request_call(
+    /// The same as request for a forward of the request origin that the main page handles: the forward lives only while
+    /// its origin waits. Any end of the origin ends the forward with no result, and a forward whose origin is not open is
+    /// refused with 1003 without being sent.
+    pub fn request_of(
+        &self,
+        origin: u64,
+        target: &str,
+        send: impl FnOnce(u64) -> Result<(), String>,
+    ) -> Result<Box<RawValue>, Failure> {
+        self.wait(target, Some(origin), send)
+    }
+
+    fn wait(
         &self,
         target: &str,
-        call: Option<RelayCall>,
-        timeout: Option<Duration>,
+        origin: Option<u64>,
         send: impl FnOnce(u64) -> Result<(), String>,
     ) -> Result<Box<RawValue>, Failure> {
         let id = self.next.fetch_add(1, Ordering::Relaxed) + 1;
         let (tx, rx) = mpsc::channel();
-        self.pending
-            .lock()
-            // default: a lock that a panicking thread poisoned still holds the request, which this call registers; the
-            // panic hook records the panic.
-            .unwrap_or_else(PoisonError::into_inner)
-            .insert(id, (target.to_string(), tx));
-        let sent = std::time::Instant::now();
+        {
+            // default: a lock that a panicking thread poisoned still holds the requests, which this call checks and
+            // extends; the panic hook records the panic.
+            let mut pending = self.pending.lock().unwrap_or_else(PoisonError::into_inner);
+            // The check and the registration hold one lock, so an end of the origin either refuses the forward here or
+            // finds it registered and ends it.
+            if let Some(origin) = origin
+                && !pending.contains_key(&origin)
+            {
+                return Err(Failure::new(MISSING_DOCUMENT, origin_ended(origin)));
+            }
+            pending.insert(
+                id,
+                (
+                    Held {
+                        target: target.to_string(),
+                        origin,
+                    },
+                    tx,
+                ),
+            );
+        }
         if let Err(error) = send(id) {
             self.forget(id);
             return Err(Failure::new(MISSING_DOCUMENT, error));
         }
-        let Some(timeout) = timeout else {
+        rx.recv()
             // default: when the side that would send the reply is gone, the document is closed, so the request answers
             // with that error.
-            return rx.recv().unwrap_or_else(|_| {
-                Err(Failure::new(MISSING_DOCUMENT, format!("{target} closed")))
-            });
-        };
-        match rx.recv_timeout(timeout) {
-            Ok(outcome) => outcome,
-            Err(_) => {
-                let taken = self
-                    .pending
-                    .lock()
-                    // default: a lock that a panicking thread poisoned still holds the request, which the time limit
-                    // removes; the panic hook records the panic.
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .remove(&id)
-                    .is_none();
-                if taken {
-                    // If a reply took the request at the same time as the time limit, that reply is delivered next.
-                    return rx
-                        .recv()
-                        .map_err(|_| Failure::new(MISSING_DOCUMENT, format!("{target} closed")))?;
-                }
-                let mut expired = self
-                    .expired
-                    .lock()
-                    // default: a lock that a panicking thread poisoned still holds the expired requests, which the time
-                    // limit records; the panic hook records the panic.
-                    .unwrap_or_else(PoisonError::into_inner);
-                if expired.len() == EXPIRED_LIMIT {
-                    // The oldest entry is forgotten: a late reply to it has no matching request. The loss is counted.
-                    expired.pop_front();
-                    record_buffer_drop(
-                        "relay expired requests",
-                        0,
-                        &format!("{EXPIRED_LIMIT} requests"),
-                    );
-                }
-                if let Some(call) = &call {
-                    emit_host(
-                        Level::Error,
-                        "host.call.timeout",
-                        json!({"plugin": call.plugin, "command": call.command}),
-                    );
-                }
-                expired.push_back(Expired {
-                    id,
-                    target: target.to_string(),
-                    sent,
-                    timeout,
-                    call,
-                });
-                Err(Failure::new(
-                    TIMED_OUT,
-                    format!(
-                        "the document did not reply within {} ms",
-                        timeout.as_millis()
-                    ),
-                ))
-            }
-        }
+            .unwrap_or_else(|_| Err(Failure::new(MISSING_DOCUMENT, format!("{target} closed"))))
     }
 
-    /// Delivers the response `{id, result}` or `{id, error}` of the document from to the request that waits for it. It
-    /// returns true when delivered. The id of a request sent to another document is not delivered. result is delivered
-    /// as the received text, so the key order of the page value does not change.
+    /// Delivers the response `{id, result}` or `{id, error}` of the document from to the request that waits for it. The id
+    /// of a request sent to another document is not delivered. result is delivered as the received text, so the key order
+    /// of the page value does not change. The reply ends the request, so the forwards of it end too.
     pub fn reply(&self, from: &str, payload: &RawValue) -> Result<(), String> {
         let Answer { id, result, error } =
             serde_json::from_str::<Answer>(payload.get()).map_err(|error| error.to_string())?;
@@ -642,7 +587,10 @@ impl Relay {
             // default: a lock that a panicking thread poisoned still holds the request, which the reply removes; the
             // panic hook records the panic.
             let mut pending = self.pending.lock().unwrap_or_else(PoisonError::into_inner);
-            if pending.get(&id).is_some_and(|(target, _)| target == from) {
+            if pending
+                .get(&id)
+                .is_some_and(|(held, _)| held.target == from)
+            {
                 pending.remove(&id)
             } else {
                 None
@@ -658,7 +606,7 @@ impl Relay {
                 "host.trace.exposure.unmatched",
                 json!({"id": id, "held": self.held_state(id, from)}),
             );
-            return Err(self.unmatched(id, from)?);
+            return Err(format!("exposure reply {id} has no matching request"));
         };
         let outcome = match error {
             Some(error) if !error.is_null() => Err(Failure::new(
@@ -673,40 +621,32 @@ impl Relay {
             // default: the reply of a command that returned no value has no result, and its result is null.
             _ => result.map_or_else(|| raw(&Value::Null), Ok),
         };
-        tx.send(outcome)
-            .map_err(|_| format!("exposure reply {id} has no matching request"))
+        let delivered = tx
+            .send(outcome)
+            .map_err(|_| format!("exposure reply {id} has no matching request"));
+        self.end_forwards_of(&[id]);
+        delivered
     }
 
     /// Says where the relay keeps the id of a reply from document from that matches no waiting request: under another document,
-    /// as an expired or an ended request, or nowhere (host.trace.exposure.unmatched).
+    /// as an ended request, or nowhere (host.trace.exposure.unmatched).
     fn held_state(&self, id: u64, from: &str) -> &'static str {
         let other = self
             .pending
             .lock()
-            // default: a lock that a panicking thread poisoned still holds the waiting requests, which this read only inspects; the panic
-            // hook records the panic.
+            // default: a lock that a panicking thread poisoned still holds the waiting requests, which this read only
+            // inspects; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner)
             .get(&id)
-            .is_some_and(|(target, _)| target != from);
+            .is_some_and(|(held, _)| held.target != from);
         if other {
             return "other-target";
-        }
-        let expired = self
-            .expired
-            .lock()
-            // default: a lock that a panicking thread poisoned still holds the expired requests, which this read only inspects; the panic
-            // hook records the panic.
-            .unwrap_or_else(PoisonError::into_inner)
-            .iter()
-            .any(|held| held.id == id && held.target == from);
-        if expired {
-            return "expired";
         }
         let ended = self
             .ended
             .lock()
-            // default: a lock that a panicking thread poisoned still holds the ended requests, which this read only inspects; the panic
-            // hook records the panic.
+            // default: a lock that a panicking thread poisoned still holds the ended requests, which this read only
+            // inspects; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner)
             .iter()
             .any(|(held, target)| *held == id && target == from);
@@ -719,8 +659,8 @@ impl Relay {
     /// Removes the ended request id of document from and returns the observation of its late reply, or None when the relay did
     /// not end such a request.
     fn take_ended(&self, id: u64, from: &str) -> Option<String> {
-        // default: a lock that a panicking thread poisoned still holds the ended requests, which this read removes an entry from; the
-        // panic hook records the panic.
+        // default: a lock that a panicking thread poisoned still holds the ended requests, which this read removes an
+        // entry from; the panic hook records the panic.
         let mut ended = self.ended.lock().unwrap_or_else(PoisonError::into_inner);
         let index = ended
             .iter()
@@ -731,62 +671,78 @@ impl Relay {
         ))
     }
 
-    /// The error of a reply id that no request waits for. For a request that timed out, it states the delay after
-    /// sending and the time limit.
-    fn unmatched(&self, id: u64, from: &str) -> Result<String, String> {
-        // default: a lock that a panicking thread poisoned still holds the expired requests, which the reply reads; the
-        // panic hook records the panic.
-        let mut expired = self.expired.lock().unwrap_or_else(PoisonError::into_inner);
-        let Some(index) = expired
-            .iter()
-            .position(|held| held.id == id && held.target == from)
-        else {
-            return Ok(format!("exposure reply {id} has no matching request"));
-        };
-        let Expired {
-            sent,
-            timeout,
-            call,
-            ..
-        } = expired.remove(index).expect("the position is in the queue");
-        let delay = sent.elapsed().as_millis();
-        if let Some(call) = call {
-            emit_host(
-                Level::Debug,
-                "host.trace.call.late-reply",
-                json!({"plugin": call.plugin, "command": call.command, "delay": delay as u64}),
-            );
-        }
-        Ok(format!(
-            "exposure reply {id} arrived {delay} ms after it was sent; its request timed out after {} ms",
-            timeout.as_millis()
-        ))
-    }
-
     /// Ends every request sent to the document target with error 1003.
     pub fn abandon(&self, target: &str) {
         self.abandon_matching(|held| held == target);
     }
 
     fn abandon_matching(&self, closed: impl Fn(&str) -> bool) {
-        // default: a lock that a panicking thread poisoned still holds the waiting requests, and each one must be answered
-        // so that its caller does not wait; the panic hook records the panic.
+        let gone = self.take_pending(|held| closed(&held.target));
+        let ids: Vec<u64> = gone.iter().map(|(id, _)| *id).collect();
+        self.end_taken(gone, |(held, _)| format!("{} closed", held.target));
+        self.end_forwards_of(&ids);
+    }
+
+    /// Ends the request id on the host because the endpoint connection that sent it ended; the host answers nothing to
+    /// that connection. A later reply of its document is an observation, and the forwards of the request end with it. An
+    /// id that no request holds changes nothing.
+    pub fn end(&self, id: u64) {
+        let gone = {
+            // default: a lock that a panicking thread poisoned still holds the waiting requests, and the ended one is
+            // taken from them; the panic hook records the panic.
+            let mut pending = self.pending.lock().unwrap_or_else(PoisonError::into_inner);
+            pending
+                .remove(&id)
+                .map(|waiting| vec![(id, waiting)])
+                // default: a request that its answer already ended waits no more, so the end of its connection ends
+                // nothing.
+                .unwrap_or_default()
+        };
+        self.end_taken(gone, |_| {
+            format!("the endpoint connection of request {id} ended")
+        });
+        self.end_forwards_of(&[id]);
+    }
+
+    /// Ends each waiting forward whose origin is one of origins, with no result.
+    fn end_forwards_of(&self, origins: &[u64]) {
+        if origins.is_empty() {
+            return;
+        }
+        let gone =
+            self.take_pending(|held| held.origin.is_some_and(|origin| origins.contains(&origin)));
+        self.end_taken(gone, |(held, _)| {
+            // default: a forward that end_forwards_of took has an origin.
+            origin_ended(held.origin.unwrap_or_default())
+        });
+    }
+
+    /// Takes the waiting requests for which matches is true.
+    fn take_pending(&self, matches: impl Fn(&Held) -> bool) -> Vec<(u64, Waiting)> {
+        // default: a lock that a panicking thread poisoned still holds the waiting requests, and each one that ends
+        // must be answered so that its caller does not wait; the panic hook records the panic.
         let mut pending = self.pending.lock().unwrap_or_else(PoisonError::into_inner);
         let ids: Vec<u64> = pending
             .iter()
-            .filter(|(_, (target, _))| closed(target))
+            .filter(|(_, (held, _))| matches(held))
             .map(|(id, _)| *id)
             .collect();
-        let gone: Vec<(u64, Waiting)> = ids
-            .into_iter()
+        ids.into_iter()
             .filter_map(|id| pending.remove(&id).map(|waiting| (id, waiting)))
-            .collect();
-        drop(pending);
+            .collect()
+    }
+
+    /// Remembers the taken requests as ended, so that a later reply of their document is an observation, and ends each
+    /// with 1003 and the message of reason.
+    fn end_taken(&self, gone: Vec<(u64, Waiting)>, reason: impl Fn(&Waiting) -> String) {
+        if gone.is_empty() {
+            return;
+        }
         {
-            // default: a lock that a panicking thread poisoned still holds the ended requests, which this record appends to; the
-            // panic hook records the panic.
+            // default: a lock that a panicking thread poisoned still holds the ended requests, which this record
+            // appends to; the panic hook records the panic.
             let mut ended = self.ended.lock().unwrap_or_else(PoisonError::into_inner);
-            for (id, (target, _)) in &gone {
+            for (id, (held, _)) in &gone {
                 if ended.len() == ENDED_LIMIT {
                     ended.pop_front();
                     record_buffer_drop(
@@ -795,20 +751,22 @@ impl Relay {
                         &format!("{ENDED_LIMIT} requests"),
                     );
                 }
-                ended.push_back((*id, target.clone()));
+                ended.push_back((*id, held.target.clone()));
             }
         }
-        for (_, (target, tx)) in gone {
+        for (_, waiting) in gone {
+            let message = reason(&waiting);
+            let (held, tx) = waiting;
             if tx
-                .send(Err(Failure::new(
-                    MISSING_DOCUMENT,
-                    format!("{target} closed"),
-                )))
+                .send(Err(Failure::new(MISSING_DOCUMENT, message)))
                 .is_err()
             {
                 crate::application_log::log_info(
                     "exposure",
-                    format!("closed-document failure of {target} arrived after its request ended"),
+                    format!(
+                        "the end of a request to {} arrived after its request ended",
+                        held.target
+                    ),
                 );
             }
         }
@@ -817,8 +775,8 @@ impl Relay {
     fn forget(&self, id: u64) {
         self.pending
             .lock()
-            // default: a lock that a panicking thread poisoned still holds the waiting requests, and the request that ended is
-            // removed from them; the panic hook records the panic.
+            // default: a lock that a panicking thread poisoned still holds the waiting requests, and the request that
+            // ended is removed from them; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner)
             .remove(&id);
     }
@@ -988,36 +946,16 @@ pub fn changed(webview: &Webview, request: Changed) -> Result<(), String> {
     Ok(())
 }
 
+/// A request that the main page forwards to a surface page. origin is the id of the `exposure-request` that the main page
+/// handles when it forwards, and is absent for a forward that the main page starts itself. A forward has no time limit.
 #[derive(Deserialize)]
 pub struct Forward {
     surface: String,
     method: String,
     #[serde(default)]
     params: Value,
-    /// The time limit of this request (ms). It is 10 seconds when absent. The page passes the timeout of the
-    /// declaration.
     #[serde(default)]
-    timeout: Value,
-}
-
-/// The longest time limit that a forward request can specify (ms).
-const MAX_FORWARD_TIMEOUT: u64 = 600_000;
-
-/// Sets the time limit of a forward request: 10 s, or timeout, an integer in ms from 1 to 600000. Every forward request
-/// has a time limit, whatever its method, so a page that does not answer ends the request with 1005.
-pub fn forward_timeout(timeout: &Value) -> Result<Option<Duration>, Failure> {
-    if timeout.is_null() {
-        return Ok(Some(TIMEOUT));
-    }
-    let ms = timeout
-        .as_f64()
-        .filter(|ms| ms.fract() == 0.0 && *ms >= 1.0 && *ms <= MAX_FORWARD_TIMEOUT as f64)
-        .ok_or_else(|| {
-            Failure::params(format!(
-                "timeout must be an integer from 1 to {MAX_FORWARD_TIMEOUT} milliseconds"
-            ))
-        })?;
-    Ok(Some(Duration::from_millis(ms as u64)))
+    origin: Option<u64>,
 }
 
 /// Sends a request to the document of a surface and waits for its reply. A request of a page that the host asked to
@@ -1027,11 +965,20 @@ fn request_surface(
     relay: &Relay,
     reloading: &AtomicBool,
     label: &str,
-    call: Option<RelayCall>,
-    timeout: Option<Duration>,
     send: impl FnOnce(u64) -> Result<(), String>,
 ) -> Result<Box<RawValue>, Failure> {
-    relay.request_call(label, call, timeout, |id| {
+    request_surface_of(relay, reloading, label, None, send)
+}
+
+/// request_surface for a forward of the request origin, which lives only while its origin waits.
+fn request_surface_of(
+    relay: &Relay,
+    reloading: &AtomicBool,
+    label: &str,
+    origin: Option<u64>,
+    send: impl FnOnce(u64) -> Result<(), String>,
+) -> Result<Box<RawValue>, Failure> {
+    relay.wait(label, origin, |id| {
         if reloading.load(Ordering::SeqCst) {
             return Err("the page of the window is reloading".to_string());
         }
@@ -1083,30 +1030,12 @@ pub fn forward(webview: &Webview, request: Forward) -> Result<Box<RawValue>, Str
     let window = main_page(webview)?;
     let label = label_for(&window, &request.surface);
     let surface_exists = crate::surfaces::surface_handle(&window, &request.surface).is_ok();
-    // A surface that declared its composition has its plugin (surfaces.rs checks it), so the call names that plugin.
-    let call = window_data(&window)?
-        .surface_plugins
-        .lock()
-        // default: a lock that a panicking thread poisoned still holds the surface plugins, which are only read; the
-        // panic hook records the panic.
-        .unwrap_or_else(PoisonError::into_inner)
-        .get(&request.surface)
-        .map(|plugin| RelayCall {
-            plugin: plugin.clone(),
-            command: request.method.clone(),
-        });
-    let outcome = match forward_timeout(&request.timeout) {
-        Err(invalid) => Err(invalid),
-        Ok(_) if !surface_exists => Err(Failure::new(
-            MISSING_DOCUMENT,
-            format!("surface {} does not exist", request.surface),
-        )),
-        Ok(timeout) => request_surface(
+    let outcome = if surface_exists {
+        request_surface_of(
             &window.state::<Exposure>().relay,
             &window_data(&window)?.page_reloading,
             &label,
-            call,
-            timeout,
+            request.origin,
             |id| {
                 emit_host(
                     Level::Debug,
@@ -1120,7 +1049,12 @@ pub fn forward(webview: &Webview, request: Forward) -> Result<Box<RawValue>, Str
                     )
                     .map_err(|error| error.to_string())
             },
-        ),
+        )
+    } else {
+        Err(Failure::new(
+            MISSING_DOCUMENT,
+            format!("surface {} does not exist", request.surface),
+        ))
     };
     let text = match outcome {
         Ok(result) => format!(r#"{{"result":{}}}"#, result.get()),
@@ -1200,8 +1134,8 @@ pub fn register(webview: &Webview, request: Register) -> Result<(), String> {
         let mut registrations = data
             .registrations
             .lock()
-            // default: a lock that a panicking thread poisoned still holds the registrations, which this call amends; the
-            // panic hook records the panic.
+            // default: a lock that a panicking thread poisoned still holds the registrations, which this call amends;
+            // the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner);
         if !registrations.contains(&entry) {
             registrations.push(entry);
@@ -1224,8 +1158,8 @@ pub(crate) fn replay_registrations(window: &Window) {
     let registrations = data
         .registrations
         .lock()
-        // default: a lock that a panicking thread poisoned still holds the registrations, which are only copied; the panic hook
-        // records the panic.
+        // default: a lock that a panicking thread poisoned still holds the registrations, which are only copied; the
+        // panic hook records the panic.
         .unwrap_or_else(PoisonError::into_inner)
         .clone();
     for (surface, kind, name) in registrations {
@@ -1235,6 +1169,18 @@ pub(crate) fn replay_registrations(window: &Window) {
         ) {
             log_error("exposure-registered", error);
         }
+    }
+}
+
+/// Ends with 1003 the requests forwarded to the surface page of window whose WebContent process ended, because no reply
+/// comes from an ended process (docs/spec/exposure.md#methods). A webview that is not a surface of window ends nothing.
+pub(crate) fn surface_process_ended(window: &Window, webview: &str) {
+    end_surface_process_requests(&window.state::<Exposure>().relay, window.label(), webview);
+}
+
+fn end_surface_process_requests(relay: &Relay, window: &str, webview: &str) {
+    if webview.starts_with(&format!("surface-{window}-")) {
+        relay.abandon(webview);
     }
 }
 
@@ -1318,7 +1264,7 @@ pub(crate) fn rewatch(window: &Window) {
             if watch.name.starts_with("host.") {
                 continue;
             }
-            if let Err(error) = host.page(&window, "status.watch", watch.params(), TIMEOUT) {
+            if let Err(error) = host.page(&window, "status.watch", watch.params(), None) {
                 log(
                     &window,
                     &format!("rewatch {}: {}", watch.name, error.message),
@@ -1329,7 +1275,7 @@ pub(crate) fn rewatch(window: &Window) {
         if notifier.transcribed(window.label()) {
             let mut params = Map::new();
             params.insert("on".into(), Value::Bool(true));
-            if let Err(error) = host.page(&window, "diagnostics.transcript", params, TIMEOUT) {
+            if let Err(error) = host.page(&window, "diagnostics.transcript", params, None) {
                 log(
                     &window,
                     &format!("rewatch diagnostics.log: {}", error.message),
@@ -1358,8 +1304,8 @@ pub(crate) fn window_closed(window: &Window) {
     state
         .reported
         .lock()
-        // default: a lock that a panicking thread poisoned still holds the record of the values sent, and the record of the closed
-        // window is removed from it; the panic hook records the panic.
+        // default: a lock that a panicking thread poisoned still holds the record of the values sent, and the record of
+        // the closed window is removed from it; the panic hook records the panic.
         .unwrap_or_else(PoisonError::into_inner)
         .remove(&main);
 }
@@ -1449,7 +1395,8 @@ pub(crate) fn watch_buttons(app: &AppHandle) -> Result<(), String> {
     let send = Mutex::new(send);
     app.manage(crate::buttons::Buttons::new(move |value| {
         let sender = send.lock();
-        // default: a lock that a panicking thread poisoned still holds the sender, which has no state a panic can leave inconsistent; the panic hook records the panic.
+        // default: a lock that a panicking thread poisoned still holds the sender, which has no state a panic can leave
+        // inconsistent; the panic hook records the panic.
         let sender = sender.unwrap_or_else(PoisonError::into_inner);
         let sent = sender.send(value).map_err(|error| error.to_string());
         if let Err(error) = sent {
@@ -1547,8 +1494,8 @@ fn send_window_status(window: &Window) {
         let mut reported = state
             .reported
             .lock()
-            // default: a lock that a panicking thread poisoned still holds the record of the values sent, which decides whether
-            // the value is sent; the panic hook records the panic.
+            // default: a lock that a panicking thread poisoned still holds the record of the values sent, which decides
+            // whether the value is sent; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner);
         // The watch is read under the lock of the record. A watch that ends before this read clears the record after
         // this decision, so the next watch receives the next value.
@@ -1592,12 +1539,12 @@ impl<T: Send + 'static> LatestWork<T> {
             loop {
                 let asked = {
                     let (lock, wake) = &*worker;
-                    // default: a lock that a panicking thread poisoned still holds the requests, which the thread takes; the
-                    // panic hook records the panic.
+                    // default: a lock that a panicking thread poisoned still holds the requests, which the thread
+                    // takes; the panic hook records the panic.
                     let mut requests = lock.lock().unwrap_or_else(PoisonError::into_inner);
                     while requests.asked.is_empty() && !requests.stopped {
-                        // default: a wait that a poisoned lock ends still returns the guard of the requests, which the thread
-                        // takes; the panic hook records the panic.
+                        // default: a wait that a poisoned lock ends still returns the guard of the requests, which the
+                        // thread takes; the panic hook records the panic.
                         requests = wake.wait(requests).unwrap_or_else(PoisonError::into_inner);
                     }
                     if requests.stopped {
@@ -1615,8 +1562,8 @@ impl<T: Send + 'static> LatestWork<T> {
 
     pub(crate) fn ask(&self, key: &str, value: T) {
         let (lock, wake) = &*self.shared;
-        // default: a lock that a panicking thread poisoned still holds the requests, and this one is added to them; the panic
-        // hook records the panic.
+        // default: a lock that a panicking thread poisoned still holds the requests, and this one is added to them; the
+        // panic hook records the panic.
         let mut requests = lock.lock().unwrap_or_else(PoisonError::into_inner);
         requests.asked.insert(key.to_string(), value);
         wake.notify_one();
@@ -1626,8 +1573,8 @@ impl<T: Send + 'static> LatestWork<T> {
 impl<T> Drop for LatestWork<T> {
     fn drop(&mut self) {
         let (lock, wake) = &*self.shared;
-        // default: a lock that a panicking thread poisoned still holds the requests, and only the stop is set; the panic hook
-        // records the panic.
+        // default: a lock that a panicking thread poisoned still holds the requests, and only the stop is set; the
+        // panic hook records the panic.
         lock.lock().unwrap_or_else(PoisonError::into_inner).stopped = true;
         wake.notify_one();
     }
@@ -1690,8 +1637,8 @@ pub(crate) fn window_unwatched(app: &AppHandle, window: &str) {
     let mut reported = exposure
         .reported
         .lock()
-        // default: a lock that a panicking thread poisoned still holds the record of the value sent last for the window,
-        // which this call removes; the panic hook records the panic.
+        // default: a lock that a panicking thread poisoned still holds the record of the value sent last for the
+        // window, which this call removes; the panic hook records the panic.
         .unwrap_or_else(PoisonError::into_inner);
     forget_window_notify(&mut reported, window);
 }
@@ -2233,17 +2180,24 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
 /// ready page first finishes the pending save (docs/spec/projects.md#persistence). WebKit keeps the previous page on
 /// the screen until the new page first draws visible content, and the cleanup of the previous page is done by the start
 /// document request of the new page (docs/spec/native-host.md#page-start).
-fn reload(host: &Host, window: &Window) -> Result<Value, Failure> {
+fn reload(
+    host: &Host,
+    window: &Window,
+    reply: Option<&crate::endpoint::ReplyScope>,
+) -> Result<Value, Failure> {
     let data = window_data(window).map_err(internal)?;
+    // The ends of the window that come after this mark end the reload (WindowData::end_waits).
+    let mark = data.ends.mark();
     let ready = data.ready.load(Ordering::Relaxed);
     if ready {
         let mut flush = Map::new();
         flush.insert("name".into(), Value::from("core.projects.flush"));
         flush.insert("params".into(), Value::Object(Map::new()));
-        host.page(window, "command.run", flush, TIMEOUT)?;
+        host.page(window, "command.run", flush, reply)?;
     }
     await_reload(
         &data,
+        mark,
         || {
             if ready {
                 // A ready page reloads itself after all the calls it sent have received their answers. If the host reloaded
@@ -2268,11 +2222,11 @@ fn reload(host: &Host, window: &Window) -> Result<Value, Failure> {
                 .map_err(internal)
             }
         },
-        || {
+        |end| {
             Failure::new(
-                TIMED_OUT,
-                crate::running_calls::reload_timeout_text(
-                    TIMEOUT,
+                MISSING_DOCUMENT,
+                crate::running_calls::reload_end_text(
+                    end,
                     &crate::running_calls::RUNNING_CALLS
                         .of(window.label(), std::time::Instant::now()),
                 ),
@@ -2282,49 +2236,57 @@ fn reload(host: &Host, window: &Window) -> Result<Value, Failure> {
 }
 
 /// Holds a reload of the window data until its new page reports ready: the reload takes its place among the reloads of the
-/// window before begin asks for the new page, so an end that comes in the turn of begin reaches it. The ready of the page
-/// answers it, and the close of the window and a start of the new page that fails end it with 1003 (`end_reloads`).
+/// window before begin asks for the new page, so an end that comes in the turn of begin reaches it. The reload has no time
+/// limit: the ready of the page answers it, an end of the window after mark (`WindowData::end_waits`), the close of the window
+/// or the end of its page process, ends it with the failure that ended gives for the end, and a start of the new page that
+/// fails ends it with 1003 and its error (`end_reloads`).
 pub(crate) fn await_reload(
     data: &WindowData,
+    mark: u64,
     begin: impl FnOnce() -> Result<(), Failure>,
-    timed_out: impl FnOnce() -> Failure,
+    ended: impl Fn(&str) -> Failure,
 ) -> Result<Value, Failure> {
     let (tx, rx) = mpsc::channel();
     let wait = RELOAD_WAITS.fetch_add(1, Ordering::Relaxed);
-    data.readied
-        .lock()
+    {
         // default: a lock that a panicking thread poisoned still holds the readiness senders, which this call fills;
         // the panic hook records the panic.
-        .unwrap_or_else(PoisonError::into_inner)
-        .push((wait, tx));
-    // The reload ended, so a later ready of the window answers no ended reload.
-    let forget = || {
+        let mut readied = data.readied.lock().unwrap_or_else(PoisonError::into_inner);
+        // An end records itself before it drains the senders under this lock, so an end that came after the mark and
+        // before this wait is read here, and the reload that it ended adds no wait that a later ready would answer.
+        if let Some(end) = data.ends.since(mark) {
+            return Err(ended(&end));
+        }
+        readied.push((wait, tx));
+    }
+    if let Err(failure) = begin() {
+        // The reload ended, so a later ready of the window answers no ended reload.
         data.readied
             .lock()
             // default: a lock that a panicking thread poisoned still holds the reloads, from which this one is removed;
             // the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner)
             .retain(|(held, _)| *held != wait);
-    };
-    if let Err(failure) = begin() {
-        forget();
         return Err(failure);
     }
-    match rx.recv_timeout(TIMEOUT) {
+    match rx.recv() {
         Ok(Ok(())) => Ok(Value::Null),
-        Ok(Err(ended)) => Err(Failure::new(MISSING_DOCUMENT, ended)),
-        Err(_) => {
-            forget();
-            Err(timed_out())
+        Ok(Err(crate::windows::ReloadEnd::Ended(end))) => Err(ended(&end)),
+        Ok(Err(crate::windows::ReloadEnd::NotStarted(error))) => {
+            Err(Failure::new(MISSING_DOCUMENT, error))
         }
+        // default: the senders of the readiness go with the records of a closed window.
+        Err(_) => Err(ended("the window closed")),
     }
 }
 
-/// The number of the next reload wait, which a reload that ends removes by it.
+/// The number of the next reload, which names it among the reloads of its window.
 static RELOAD_WAITS: AtomicU64 = AtomicU64::new(0);
 
-/// Changes the window to full screen or back, and returns after the transition ends. macOS ignores a request during a
-/// transition, so the native code continues to handle it after that transition ends.
+/// Changes the window to full screen or back, and returns once with the native result: the end of the transition, a
+/// refusal with 1006, the close of the window with 1003 and the failure of a started transition with 1005, each with the
+/// native message. It has no time limit, because the native change answers every request by one of these events. macOS
+/// ignores a request during a transition, so the native code continues to handle it after that transition ends.
 fn fullscreen(window: &Window, on: bool) -> Result<Value, Failure> {
     let platform = platform::current().map_err(internal)?;
     let (tx, rx) = mpsc::channel();
@@ -2332,8 +2294,8 @@ fn fullscreen(window: &Window, on: bool) -> Result<Value, Failure> {
         platform.fullscreen(
             handle,
             on,
-            Box::new(move || {
-                if tx.send(()).is_err() {
+            Box::new(move |result, message| {
+                if tx.send((result, message)).is_err() {
                     crate::application_log::log_info(
                         "exposure",
                         "fullscreen completion arrived after its request ended",
@@ -2343,14 +2305,30 @@ fn fullscreen(window: &Window, on: bool) -> Result<Value, Failure> {
         )
     })
     .map_err(native_failure(window.label(), -32603))?;
-    match rx.recv_timeout(TIMEOUT) {
-        Ok(()) => Ok(Value::Null),
-        Err(_) => Err(Failure::new(
-            TIMED_OUT,
-            format!("the window did not change full screen within {TIMEOUT:?}"),
-        )),
+    match rx.recv() {
+        Ok((result, message)) => fullscreen_answer(result, message),
+        // default: the native side releases the answer of a window that it no longer owns.
+        Err(_) => Err(Failure::new(MISSING_DOCUMENT, "the window closed")),
     }
 }
+
+/// The answer of host.window.fullscreen for the native result of the change: a refusal is 1006, the close of the window
+/// is 1003 and the failure of a started transition is 1005, each with the native message.
+fn fullscreen_answer(
+    result: platform::FullscreenResult,
+    message: String,
+) -> Result<Value, Failure> {
+    match result {
+        platform::FullscreenResult::Done => Ok(Value::Null),
+        platform::FullscreenResult::Refused => Err(Failure::new(NOT_ACTIVE, message)),
+        platform::FullscreenResult::Closed => Err(Failure::new(MISSING_DOCUMENT, message)),
+        platform::FullscreenResult::Failed => Err(Failure::new(TIMED_OUT, message)),
+    }
+}
+
+#[cfg(test)]
+#[path = "exposure_fullscreen_test.rs"]
+mod fullscreen_tests;
 
 /// Asks the settled wait wait of the platform for the window of frontend, with the block of the settled presentation of
 /// frontend. Call it on the main thread.
@@ -2378,10 +2356,32 @@ fn settled_frame(
 
 /// Waits until the surface placement transaction and the current image raster of the window are settled and the main
 /// document and the visible app document present that placement, and returns the presentation time of that screen (ms,
-/// mach absolute time).
-pub fn presented(window: &Window, timeout: Duration) -> Result<f64, Failure> {
-    let deadline = Instant::now() + timeout;
+/// mach absolute time). The wait has no time limit: the close of the window, the end of its page process and the end of
+/// the endpoint connection of reply end it with 1003, and a presentation failure ends it with its reason.
+pub fn presented(
+    window: &Window,
+    reply: Option<&crate::endpoint::ReplyScope>,
+) -> Result<f64, Failure> {
     let data = window_data(window).map_err(internal)?;
+    // The ends of the window that come after this mark end the wait (WindowData::end_waits).
+    let mark = data.ends.mark();
+    let connection_ended = Arc::new(AtomicBool::new(false));
+    if let Some(reply) = reply {
+        let ended = Arc::clone(&connection_ended);
+        let woken = Arc::clone(&data);
+        reply.after_connection_end(move || {
+            ended.store(true, Ordering::SeqCst);
+            woken.overlay.wake_paint_waits();
+            woken.images.wake_waits();
+        });
+    }
+    let ended = || {
+        data.ends.since(mark).or_else(|| {
+            connection_ended
+                .load(Ordering::SeqCst)
+                .then(|| "the endpoint connection of the request ended".to_string())
+        })
+    };
     let wait_frame = || -> Result<f64, Failure> {
         let platform = platform::current().map_err(internal)?;
         let frontend = Arc::clone(window.frontend());
@@ -2405,65 +2405,45 @@ pub fn presented(window: &Window, timeout: Duration) -> Result<f64, Failure> {
             )
         })
         .map_err(internal)?;
-        let remaining = deadline
-            .checked_duration_since(Instant::now())
-            .ok_or_else(|| {
-                Failure::new(
-                    TIMED_OUT,
-                    format!("the window did not present within {timeout:?}"),
-                )
-            })?;
-        match rx.recv_timeout(remaining) {
+        match rx.recv() {
             Ok(outcome) => outcome.map_err(internal),
+            // default: the completion goes with the frontend of a closed window without an answer.
             Err(_) => Err(Failure::new(
-                TIMED_OUT,
-                format!("the window did not present within {timeout:?}"),
+                MISSING_DOCUMENT,
+                "the window closed before it presented",
             )),
         }
     };
 
     // An open modal is on the screen at the time this reports only after its revealed webview presented its first
-    // frame, so the wait ends at the paint of the modal, at a change of the modal state, or at the limit (modals.rs).
-    // It runs before the settled wait, so the display time that the settled wait reports is at or after the paint of
-    // the modal.
-    let remaining = deadline
-        .checked_duration_since(Instant::now())
-        // default: a deadline that passed leaves no time, so the wait reports an unpainted modal as late at once.
-        .unwrap_or(Duration::ZERO);
-    if crate::modals::wait_for_paint(window, remaining) {
+    // frame, so the wait ends at the paint of the modal, at a change of the modal state, at the end of the WebContent
+    // process of the modal or at the end of the request (modals.rs). It runs before the settled wait, so the display
+    // time that the settled wait reports is at or after the paint of the modal.
+    if let Err(reason) = data.overlay.wait_for_paint(&ended) {
+        let code = if ended().is_some() {
+            MISSING_DOCUMENT
+        } else {
+            HANDLER_FAILED
+        };
         return Err(Failure::new(
-            TIMED_OUT,
-            format!("the open modal did not present within {timeout:?}"),
+            code,
+            format!("the open modal did not present: {reason}"),
         ));
     }
     wait_frame()?;
     loop {
-        let Some(remaining) = deadline.checked_duration_since(Instant::now()) else {
-            return Err(Failure::new(
-                TIMED_OUT,
-                format!(
-                    "the current image raster did not present within {timeout:?}; pending {}",
-                    data.images.pending_rasters()
-                ),
-            ));
-        };
-        // The trigger of the wait for the presentation barrier (V5-104): when this wait times out, the screen is
-        // stopped.
+        // The trigger of the wait for the presentation barrier (V5-104).
         let barrier_started = std::time::Instant::now();
-        let barrier = data.images.wait_current(remaining);
+        let barrier = data.images.wait_current(&ended);
         crate::performance::observe("host", || {
             serde_json::json!({"event": "barrier", "wait_us": barrier_started.elapsed().as_micros() as u64,
                     "ok": barrier.is_ok()})
         });
         if let Err(reason) = barrier {
-            if reason == "presentationTimeout" {
-                return Err(Failure::new(
-                    TIMED_OUT,
-                    format!(
-                        "the current image raster did not present within {timeout:?}; pending {}",
-                        data.images.pending_rasters()
-                    ),
-                ));
+            // The end of the window or of the request ends the raster wait with 1003, and a failure of a raster with its
+            // reason.
+            if let Some(end) = ended() {
+                return Err(Failure::new(MISSING_DOCUMENT, end));
             }
             return Err(Failure::new(
                 HANDLER_FAILED,
@@ -2485,41 +2465,43 @@ pub(crate) const PLACEMENT_LAST: &str = "workbench.placement.last";
 /// Waits until the window presented its current layout and returns the presentation time of that screen. A placement
 /// that waits behind a running one is known only to the workbench of the window, so the wait asks the workbench for its
 /// last placement first; a workbench that has not started holds none. host.window.presented and diagnostics.drag wait
-/// with it.
-pub(crate) fn window_presented(host: &Host, window: &Window) -> Result<f64, Failure> {
+/// with it; reply is the endpoint request that asks it, whose connection end ends the wait.
+pub(crate) fn window_presented(
+    host: &Host,
+    window: &Window,
+    reply: Option<&crate::endpoint::ReplyScope>,
+) -> Result<f64, Failure> {
     let data = window_data(window).map_err(internal)?;
     last_placement_presented(
-        |limit| {
+        || {
             if !data.ready.load(Ordering::Relaxed) {
                 return Ok(());
             }
-            host.page(window, PLACEMENT_LAST, Map::new(), limit)
+            host.page(window, PLACEMENT_LAST, Map::new(), reply)
                 .map(|_| ())
         },
         || crate::surfaces::when_settled(&data.running).map_err(internal),
-        || presented(window, TIMEOUT),
-        TIMEOUT,
+        || presented(window, reply),
     )
 }
 
-/// Waits for placed, then for settled, the end of a continuous update, and then for presented. Each wait of the window
-/// ends at limit, so a workbench that does not answer fails the wait.
+/// Waits for placed, then for settled, the end of a continuous update, and then for presented. No wait has a time limit:
+/// each ends by its own event, and the close of the window ends the wait for settled with 1003.
 pub(crate) fn last_placement_presented(
-    placed: impl FnOnce(Duration) -> Result<(), Failure>,
+    placed: impl FnOnce() -> Result<(), Failure>,
     settled: impl FnOnce() -> Result<mpsc::Receiver<()>, Failure>,
     presented: impl FnOnce() -> Result<f64, Failure>,
-    limit: Duration,
 ) -> Result<f64, Failure> {
-    placed(limit).map_err(|failure| {
+    placed().map_err(|failure| {
         Failure::new(
             failure.code,
             format!("the last placement of the window: {}", failure.message),
         )
     })?;
-    if settled()?.recv_timeout(limit).is_err() {
+    if settled()?.recv().is_err() {
         return Err(Failure::new(
-            TIMED_OUT,
-            format!("the continuous update of the window did not end within {limit:?}"),
+            MISSING_DOCUMENT,
+            "the window closed before its continuous update ended",
         ));
     }
     presented()
@@ -2584,48 +2566,52 @@ fn hit(window: &Window, x: f64, y: f64) -> Result<Value, Failure> {
 pub(crate) struct Host(pub AppHandle);
 
 impl Host {
-    /// Sends a request to the main page of the window and waits for the response.
+    /// Sends a request to the main page of the window and waits for the response. reply is the context of the endpoint
+    /// request that asks it, whose connection end ends the page request; a request of the host itself has none.
     pub(crate) fn page(
         &self,
         window: &Window,
         method: &str,
         params: Map<String, Value>,
-        timeout: Duration,
+        reply: Option<&crate::endpoint::ReplyScope>,
     ) -> Result<Box<RawValue>, Failure> {
-        self.page_then(window, method, params, Some(timeout), || {})
+        self.page_then(window, method, params, reply, || {})
     }
 
-    /// The same as page, and calls sent after the request is sent and before it waits for the response. When timeout is
-    /// None, it waits for the answer or the end of the page. A page that is not ready cannot receive the request, so
-    /// 1003 is returned. The readiness is checked after the request is registered, so a request of a page that was
-    /// reloaded in between is rejected here or ends with abandon.
+    /// The same as page, and calls sent after the request is sent and before it waits for the response. The request has no
+    /// time limit: it waits for the answer, the end of the page or the end of the endpoint connection of reply. A page that
+    /// is not ready cannot receive the request, so 1003 is returned. The readiness is checked after the request is
+    /// registered, so a request of a page that was reloaded in between is rejected here or ends with abandon.
     pub(crate) fn page_then(
         &self,
         window: &Window,
         method: &str,
         params: Map<String, Value>,
-        timeout: Option<Duration>,
+        reply: Option<&crate::endpoint::ReplyScope>,
         sent: impl FnOnce(),
     ) -> Result<Box<RawValue>, Failure> {
         let label = window.label().to_string();
         root_view_on_main(window).map_err(|error| Failure::new(MISSING_DOCUMENT, error))?;
         let data = window_data(window).map_err(|e| Failure::new(MISSING_DOCUMENT, e))?;
-        self.0
-            .state::<Exposure>()
-            .relay
-            .request(&label, timeout, |id| {
-                if !data.ready.load(Ordering::Relaxed) {
-                    return Err("the main page is not ready".to_string());
-                }
-                window
-                    .emit(
-                        "exposure-request",
-                        json!({"id": id, "method": method, "params": params}),
-                    )
-                    .map_err(|error| error.to_string())?;
-                sent();
-                Ok(())
-            })
+        self.0.state::<Exposure>().relay.request(&label, |id| {
+            if !data.ready.load(Ordering::Relaxed) {
+                return Err("the main page is not ready".to_string());
+            }
+            window
+                .emit(
+                    "exposure-request",
+                    json!({"id": id, "method": method, "params": params}),
+                )
+                .map_err(|error| error.to_string())?;
+            // The end of the connection of the endpoint request ends the page request; a connection that already ended
+            // ends it here, in the turn of the send.
+            if let Some(reply) = reply {
+                let app = self.0.clone();
+                reply.after_connection_end(move || app.state::<Exposure>().relay.end(id));
+            }
+            sent();
+            Ok(())
+        })
     }
 
     /// The current menu language that host.menu reports. It is the same value as the state that decides whether the
@@ -2633,7 +2619,8 @@ impl Host {
     fn menu_language(&self) -> Result<String, Failure> {
         let state = self.0.state::<crate::menu::MenuLanguage>();
         let language = state.0.lock();
-        // default: a lock that a panicking thread poisoned still holds the menu language, which is only read; the panic hook records the panic.
+        // default: a lock that a panicking thread poisoned still holds the menu language, which is only read; the panic
+        // hook records the panic.
         let language = language.unwrap_or_else(PoisonError::into_inner);
         Ok(language.clone())
     }
@@ -2726,10 +2713,9 @@ impl Host {
                 }
                 done(window.set_size(LogicalSize::new(width, height)))
             })(),
-            "host.window.reload" => reload(self, window),
-            "host.window.presented" => {
-                window_presented(self, window).map(|displayed| json!({"displayed": displayed}))
-            }
+            "host.window.reload" => reload(self, window, reply),
+            "host.window.presented" => window_presented(self, window, reply)
+                .map(|displayed| json!({"displayed": displayed})),
             "host.window.move" => (|| {
                 let x = number(arguments, "x")?;
                 let y = number(arguments, "y")?;
@@ -2818,7 +2804,6 @@ impl Host {
                     handle,
                     pointer.x,
                     pointer.y,
-                    ACTIVATION,
                     Box::new(move |result| {
                         match tx.send(result) {
                             Ok(()) => {}
@@ -2834,7 +2819,7 @@ impl Host {
                 )
             })
             .map_err(native_failure(window.label(), NO_INPUT))?;
-            // The library calls done with the stopped stage after ACTIVATION elapsed, so the result always arrives.
+            // The library calls done with the stopped stage at the event that ended it, so the result always arrives.
             rx.recv()
                 .map_err(|e| e.to_string())
                 .and_then(|result| result)
@@ -2857,7 +2842,6 @@ impl Host {
                     platform.input_pointer(
                         handle,
                         pointer,
-                        RECEIPT,
                         Box::new(move |delivery| {
                             if tx.send(delivery).is_err() {
                                 crate::application_log::log_info(
@@ -2871,7 +2855,7 @@ impl Host {
             )
         })
         .map_err(native_failure(window.label(), NO_INPUT))?;
-        // The library calls done with Unreceived after RECEIPT elapsed, so the result always arrives.
+        // The library calls done with Unreceived at the event that ended the wait without the receipt, so the result always arrives.
         match rx
             .recv()
             .map_err(|e| Failure::new(NO_INPUT, e.to_string()))?
@@ -2895,10 +2879,7 @@ impl Host {
             )),
             Delivery::Unreceived => Err(Failure::new(
                 TIMED_OUT,
-                format!(
-                    "the document did not receive the input within {} ms",
-                    RECEIPT.as_millis()
-                ),
+                "the document did not receive the input",
             )),
             Delivery::ButtonHeld(held) => {
                 Err(Failure::new(BUTTON_HELD, button_held_message(&held)))
@@ -2991,7 +2972,7 @@ impl Host {
             "input.key" => raw(&self.input_key(window, key(&params)?)?),
             "exposure.list" => {
                 let page_params = params.clone();
-                exposure_list(&params, || self.page(window, method, page_params, TIMEOUT))
+                exposure_list(&params, || self.page(window, method, page_params, reply))
             }
             #[cfg(feature = "diagnostics")]
             _ if method.starts_with("diagnostics.") => raw(&crate::diagnostics::call(
@@ -3008,14 +2989,9 @@ impl Host {
                 if name == "host" || name.starts_with("host.") {
                     return raw(&self.host_entry(window, method, &name, &params, reply)?);
                 }
-                // The main page ends a command forwarded to a surface within the time limit of its declaration, so
-                // command.run has no limit.
-                let timeout = if method == "command.run" {
-                    None
-                } else {
-                    Some(TIMEOUT)
-                };
-                self.page_then(window, method, params, timeout, || {})
+                // A page request has no time limit: it ends by the answer of the page, the end of the page or the end
+                // of the endpoint connection of the request.
+                self.page(window, method, params, reply)
             }
         }
     }

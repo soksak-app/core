@@ -27,7 +27,10 @@ impl Platform for Darwin {
         Darwin::connect(address)
     }
 
-    fn on_interrupt(&self, interrupted: Box<dyn FnOnce() + Send>) -> Result<(), String> {
+    fn on_interrupt(
+        &self,
+        interrupted: Box<dyn FnOnce(&'static str) + Send>,
+    ) -> Result<(), String> {
         Darwin::on_interrupt(interrupted)
     }
 
@@ -180,9 +183,9 @@ impl Platform for Darwin {
     }
 
     /// Waits with the kernel notification of the end of a process, so no timer asks whether it ended.
-    fn wait_process_end(&self, pid: i32, timeout: std::time::Duration) -> Result<bool, String> {
+    fn wait_process_end(&self, pid: i32) -> Result<(), String> {
         if pid <= 0 {
-            return Ok(true);
+            return Ok(());
         }
         let failed = |error: std::io::Error| format!("cannot wait for process {pid}: {error}");
         // SAFETY: kqueue takes no arguments and returns a descriptor that this function closes.
@@ -198,35 +201,28 @@ impl Platform for Darwin {
             data: 0,
             udata: std::ptr::null_mut(),
         };
-        let limit = libc::timespec {
-            tv_sec: timeout.as_secs() as libc::time_t,
-            tv_nsec: timeout.subsec_nanos() as libc::c_long,
-        };
         // SAFETY: an all-zero kevent is a valid value that kevent overwrites.
         let mut event: libc::kevent = unsafe { std::mem::zeroed() };
         let result = loop {
-            // SAFETY: the change and the event are live values and the counts are 1.
-            let count = unsafe { libc::kevent(queue, &change, 1, &mut event, 1, &limit) };
+            // SAFETY: the change and the event are live values and the counts are 1; a null timeout waits for the event.
+            let count = unsafe { libc::kevent(queue, &change, 1, &mut event, 1, std::ptr::null()) };
             if count < 0 {
                 let error = std::io::Error::last_os_error();
                 match error.raw_os_error() {
                     Some(libc::EINTR) => continue,
-                    Some(libc::ESRCH) => break Ok(true),
+                    Some(libc::ESRCH) => break Ok(()),
                     _ => break Err(failed(error)),
                 }
-            }
-            if count == 0 {
-                break Ok(false);
             }
             if event.flags & libc::EV_ERROR != 0 {
                 let code = event.data as i32;
                 break if code == libc::ESRCH {
-                    Ok(true)
+                    Ok(())
                 } else {
                     Err(failed(std::io::Error::from_raw_os_error(code)))
                 };
             }
-            break Ok(true);
+            break Ok(());
         };
         // SAFETY: queue is the descriptor that kqueue returned above.
         if unsafe { libc::close(queue) } < 0 {

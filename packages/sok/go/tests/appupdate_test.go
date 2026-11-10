@@ -16,8 +16,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
-	"time"
 
 	"github.com/soksak-app/core/packages/sok/go/src"
 	"github.com/soksak-app/core/packages/sok/go/src/platform"
@@ -174,15 +174,32 @@ func fakeBundle(t *testing.T, parent, name, text string) string {
 	return bundle
 }
 
-// endingProcess starts a process and returns its pid and a function that ends it.
+// endingProcess starts a process that ends when its standard input closes, and returns its pid and a function that
+// closes that input and receives the end of the process. The process has no end of its own in time, so its end is the
+// event of the test.
 func endingProcess(t *testing.T) (int, func()) {
 	t.Helper()
-	command := exec.Command("sleep", "60")
+	command := exec.Command("cat")
+	input, err := command.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := command.Start(); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { command.Process.Kill(); command.Wait() })
-	return command.Process.Pid, func() { command.Process.Kill(); command.Wait() }
+	var once sync.Once
+	end := func() {
+		once.Do(func() {
+			if err := input.Close(); err != nil {
+				t.Errorf("close the input of the process: %v", err)
+			}
+			if err := command.Wait(); err != nil {
+				t.Errorf("the process ended with %v", err)
+			}
+		})
+	}
+	t.Cleanup(end)
+	return command.Process.Pid, end
 }
 
 // contract: app-update.replace.replaces-the-bundle-after-the-process-ended
@@ -207,13 +224,8 @@ func TestTheBundleIsReplacedAfterTheProcessEndedAndTheApplicationStarts(t *testi
 	}
 	done := make(chan error, 1)
 	go func() {
-		done <- sok.ReplaceApp(sok.ReplaceOptions{PID: pid, Bundle: staged, Target: target, Arguments: []string{"--config-dir", "/config"}, Timeout: 30 * time.Second}, open)
+		done <- sok.ReplaceApp(sok.ReplaceOptions{PID: pid, Bundle: staged, Target: target, Arguments: []string{"--config-dir", "/config"}}, open)
 	}()
-	select {
-	case err := <-done:
-		t.Fatalf("the replacement finished while the process ran: %v", err)
-	case <-time.After(300 * time.Millisecond):
-	}
 	end()
 	if err := <-done; err != nil {
 		t.Fatal(err)
@@ -245,7 +257,7 @@ func TestTheEarlierBundleStartsAgainWhenTheNewOneFailsToStart(t *testing.T) {
 		}
 		return nil
 	}
-	err := sok.ReplaceApp(sok.ReplaceOptions{PID: pid, Bundle: staged, Target: target, Timeout: 30 * time.Second}, open)
+	err := sok.ReplaceApp(sok.ReplaceOptions{PID: pid, Bundle: staged, Target: target}, open)
 	if err == nil || !strings.Contains(err.Error(), "the application cannot start") {
 		t.Fatalf("the error is %v", err)
 	}
@@ -259,36 +271,58 @@ func TestTheEarlierBundleStartsAgainWhenTheNewOneFailsToStart(t *testing.T) {
 }
 
 // contract: app-update.replace.refuses-before-it-changes-anything
-func TestTheReplacementRefusesWhatIsNotABundleOrWhenTheProcessKeepsRunning(t *testing.T) {
+func TestTheReplacementRefusesWhatIsNotABundle(t *testing.T) {
 	requireBundles(t)
 	parent := t.TempDir()
 	staged := fakeBundle(t, parent, "staged.app", "new")
 	pid, end := endingProcess(t)
+	defer end()
 	open := func(string, []string) error { t.Fatal("the application started"); return nil }
 	notBundle := filepath.Join(parent, "plain")
 	if err := os.MkdirAll(notBundle, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	target := fakeBundle(t, parent, "a.app", "old")
 	for name, options := range map[string]sok.ReplaceOptions{
-		"a target that is not a bundle": {PID: pid, Bundle: staged, Target: notBundle, Timeout: time.Second},
-		"a missing bundle":              {PID: pid, Bundle: filepath.Join(parent, "none.app"), Target: fakeBundle(t, parent, "a.app", "old"), Timeout: time.Second},
-		"the same bundle":               {PID: pid, Bundle: staged, Target: staged, Timeout: time.Second},
+		"a target that is not a bundle": {PID: pid, Bundle: staged, Target: notBundle},
+		"a missing bundle":              {PID: pid, Bundle: filepath.Join(parent, "none.app"), Target: target},
+		"the same bundle":               {PID: pid, Bundle: staged, Target: staged},
 	} {
+		// The refusal comes before the wait for the running process, so it answers while that process runs.
 		if err := sok.ReplaceApp(options, open); err == nil {
 			t.Fatalf("%s was accepted", name)
 		}
-	}
-	// A process that keeps running past the timeout leaves the target as it was.
-	target := fakeBundle(t, parent, "b.app", "old")
-	err := sok.ReplaceApp(sok.ReplaceOptions{PID: pid, Bundle: staged, Target: target, Timeout: 200 * time.Millisecond}, open)
-	if err == nil || !strings.Contains(err.Error(), "did not end within") {
-		t.Fatalf("the process kept running: %v", err)
 	}
 	data, _ := os.ReadFile(filepath.Join(target, "Contents", "Info.plist"))
 	if string(data) != "old" {
 		t.Fatalf("the target holds %q", data)
 	}
+}
+
+// The update waits for the exit event of the process and has no limit of its own: the test ends the process it controls, and
+// the replacement then starts the application after the exit. The exit is order-insensitive, so an exit before the wait
+// began ends it the same way.
+// contract: app-update.replace.refuses-before-it-changes-anything
+func TestTheReplacementWaitsForTheExitWithoutALimit(t *testing.T) {
+	requireBundles(t)
+	parent := t.TempDir()
+	target := fakeBundle(t, parent, "soksak.app", "old")
+	staged := fakeBundle(t, filepath.Join(parent, "updates", "0.0.9"), "soksak.app", "new")
+	pid, end := endingProcess(t)
+	open := func(string, []string) error {
+		if err := exec.Command("kill", "-0", strconv.Itoa(pid)).Run(); err == nil {
+			t.Error("the application started before the process ended")
+		}
+		return nil
+	}
+	done := make(chan error, 1)
+	go func() {
+		done <- sok.ReplaceApp(sok.ReplaceOptions{PID: pid, Bundle: staged, Target: target}, open)
+	}()
 	end()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
 }
 
 // contract: app-relaunch.starts-the-same-bundle-in-the-background-after-the-process-ended
@@ -306,13 +340,8 @@ func TestTheRelaunchStartsTheSameBundleInTheBackgroundAfterTheProcessEnded(t *te
 	}
 	done := make(chan error, 1)
 	go func() {
-		done <- sok.RelaunchApp(sok.RelaunchOptions{PID: pid, Target: target, Arguments: []string{"--config-dir", "/config"}, Timeout: 30 * time.Second}, open)
+		done <- sok.RelaunchApp(sok.RelaunchOptions{PID: pid, Target: target, Arguments: []string{"--config-dir", "/config"}}, open)
 	}()
-	select {
-	case err := <-done:
-		t.Fatalf("the relaunch finished while the process ran: %v", err)
-	case <-time.After(300 * time.Millisecond):
-	}
 	end()
 	if err := <-done; err != nil {
 		t.Fatal(err)
@@ -326,24 +355,98 @@ func TestTheRelaunchStartsTheSameBundleInTheBackgroundAfterTheProcessEnded(t *te
 	}
 }
 
-// contract: app-relaunch.refuses-a-folder-that-is-not-a-bundle-and-a-process-that-keeps-running
-func TestTheRelaunchRefusesAFolderThatIsNotABundleAndAProcessThatKeepsRunning(t *testing.T) {
+// contract: app-relaunch.refuses-a-folder-that-is-not-a-bundle-and-waits-for-the-exit
+func TestTheRelaunchRefusesAFolderThatIsNotABundleAndWaitsForTheExit(t *testing.T) {
 	requireBundles(t)
 	parent := t.TempDir()
 	pid, end := endingProcess(t)
-	defer end()
-	open := func(string, []string, bool) error { t.Fatal("the application started"); return nil }
 	plain := filepath.Join(parent, "plain")
 	if err := os.MkdirAll(plain, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	err := sok.RelaunchApp(sok.RelaunchOptions{PID: pid, Target: plain, Timeout: time.Second}, open)
+	refuse := func(string, []string, bool) error { t.Fatal("the application started"); return nil }
+	err := sok.RelaunchApp(sok.RelaunchOptions{PID: pid, Target: plain}, refuse)
 	if err == nil || err.Error() != "application relaunch: the target "+plain+" is not an application bundle" {
 		t.Fatalf("the error is %v", err)
 	}
 	target := fakeBundle(t, parent, "soksak.app", "same")
-	err = sok.RelaunchApp(sok.RelaunchOptions{PID: pid, Target: target, Timeout: 200 * time.Millisecond}, open)
-	if err == nil || err.Error() != fmt.Sprintf("application relaunch: process %d did not end within 200ms", pid) {
-		t.Fatalf("the error is %v", err)
+	// The test ends the process it controls; the relaunch then starts the bundle after the exit.
+	open := func(string, []string, bool) error {
+		if err := exec.Command("kill", "-0", strconv.Itoa(pid)).Run(); err == nil {
+			t.Error("the application started before the process ended")
+		}
+		return nil
+	}
+	done := make(chan error, 1)
+	go func() {
+		done <- sok.RelaunchApp(sok.RelaunchOptions{PID: pid, Target: target}, open)
+	}()
+	end()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
+
+// beganPlatform is a platform whose process wait signals that it began and then waits until the test releases it.
+func beganPlatform(t *testing.T) (began, release chan struct{}) {
+	t.Helper()
+	previous, err := platform.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	began, release = make(chan struct{}), make(chan struct{})
+	platform.Register(processWaitPlatform{Platform: previous, wait: func(int) error {
+		close(began)
+		<-release
+		return nil
+	}})
+	t.Cleanup(func() { platform.Register(previous) })
+	return began, release
+}
+
+// The update and the relaunch give the platform wait only the PID, so they take no time limit. When the wait began the
+// operation has not ended; the test checks that at that point, then ends the wait, and the operation then starts the
+// application.
+// contract: app-update.replace.refuses-before-it-changes-anything
+// contract: app-relaunch.refuses-a-folder-that-is-not-a-bundle-and-waits-for-the-exit
+func TestTheUpdateAndTheRelaunchWaitForTheEndOfTheWaitOfThePlatform(t *testing.T) {
+	requireBundles(t)
+	for _, operation := range []string{"update", "relaunch"} {
+		t.Run(operation, func(t *testing.T) {
+			parent := t.TempDir()
+			target := fakeBundle(t, parent, "soksak.app", "old")
+			staged := fakeBundle(t, filepath.Join(parent, "updates", "0.0.9"), "soksak.app", "new")
+			began, release := beganPlatform(t)
+			var waitEnded bool
+			done := make(chan error, 1)
+			go func() {
+				if operation == "update" {
+					done <- sok.ReplaceApp(sok.ReplaceOptions{PID: 1234, Bundle: staged, Target: target}, func(string, []string) error {
+						if !waitEnded {
+							t.Error("the application started before the wait ended")
+						}
+						return nil
+					})
+					return
+				}
+				done <- sok.RelaunchApp(sok.RelaunchOptions{PID: 1234, Target: target}, func(string, []string, bool) error {
+					if !waitEnded {
+						t.Error("the application started before the wait ended")
+					}
+					return nil
+				})
+			}()
+			<-began
+			select {
+			case err := <-done:
+				t.Fatalf("the %s ended before the wait of the platform ended: %v", operation, err)
+			default:
+			}
+			waitEnded = true
+			close(release)
+			if err := <-done; err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }

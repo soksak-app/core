@@ -102,7 +102,8 @@ test("while a surface has not presented, the presentation of another render leav
   assert.equal(document.getElementById("applicationError"), null, "the surface presented and the banner kept the failure");
 });
 
-test("a wait for the surfaces that times out asks again and leaves the failure until they present", async () => {
+// A wait that ends without the presentation asks nothing again by itself: the next presented render asks again.
+test("a wait for the surfaces that fails leaves the failure, and the next presented render asks again and withdraws it", async () => {
   let asked = 0;
   const state = { fail: true, presented: () => (++asked === 1 ? Promise.reject(new Error(TIMEOUT)) : Promise.resolve()) };
   const page = layoutWith(state);
@@ -113,7 +114,9 @@ test("a wait for the surfaces that times out asks again and leaves the failure u
   page.clearFailure();
   await settle();
   assert.match(document.getElementById("applicationError")?.textContent ?? "", /did not present/);
-  await new Promise((resolve) => setTimeout(resolve, 1100));
+  assert.equal(asked, 1, "a failed wait asked the surfaces again before the next presented render");
+  page.clearFailure();
+  await settle();
   assert.equal(asked, 2);
   assert.equal(document.getElementById("applicationError"), null);
 });

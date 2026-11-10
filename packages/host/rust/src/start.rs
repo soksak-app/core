@@ -210,7 +210,9 @@ pub(crate) fn start_waited_page(
     {
         crate::windows::end_reloads(
             &data,
-            Err(format!("the reloaded page did not start: {reason}")),
+            Err(crate::windows::ReloadEnd::NotStarted(format!(
+                "the reloaded page did not start: {reason}"
+            ))),
         );
     }
     started

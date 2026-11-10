@@ -8,7 +8,6 @@ import (
 	"runtime"
 	"runtime/debug"
 	"strings"
-	"time"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
@@ -104,7 +103,7 @@ func fatalError(where string, text any) {
 	LogError(where, text)
 	// The process ends here without its shutdown, so the record of its end names the exit code.
 	EmitClosed("exit", map[string]any{"code": 1})
-	if err := FlushRecords(2 * time.Second); err != nil {
+	if err := FlushRecords(); err != nil {
 		fmt.Fprintf(os.Stderr, "event writer: the record of the failure is not stored: %v\n", err)
 	}
 	os.Exit(1)

@@ -10,7 +10,6 @@ import (
 	"sort"
 	"strings"
 	"testing"
-	"time"
 	"unsafe"
 )
 
@@ -29,7 +28,7 @@ func TestViewCallAndReplyAreRecordedAtDebugWithTheirIdentifier(t *testing.T) {
 		if err := s.ViewMessage("probe-surface", `{"message":{"sok":1,"reply":7,"result":{"ok":true}}}`); err != nil {
 			t.Fatalf("view reply: %v", err)
 		}
-		if err := log.Flush(5 * time.Second); err != nil {
+		if err := log.Flush(); err != nil {
 			t.Fatal(err)
 		}
 		return
@@ -147,7 +146,7 @@ func TestViewRuntimeLogClockRepliesWithoutWorkbenchRelay(t *testing.T) {
 		}
 		fake.posted = nil
 		events = nil
-		if err := log.Flush(5 * time.Second); err != nil {
+		if err := log.Flush(); err != nil {
 			t.Fatalf("flush before runtime.log clock: %v", err)
 		}
 		clockRecordCount := len(viewRecordEvents(t, config))
@@ -169,7 +168,7 @@ func TestViewRuntimeLogClockRepliesWithoutWorkbenchRelay(t *testing.T) {
 		if !ok || reply["id"] != float64(7) || result["ts_us"] == nil || result["mono_ns"] == nil {
 			t.Fatalf("runtime.log clock native reply: %v, want id 7 and host clocks", reply)
 		}
-		if err := log.Flush(5 * time.Second); err != nil {
+		if err := log.Flush(); err != nil {
 			t.Fatalf("flush after runtime.log clock: %v", err)
 		}
 		clockRecords := viewRecordEvents(t, config)
@@ -192,7 +191,7 @@ func TestViewRuntimeLogClockRepliesWithoutWorkbenchRelay(t *testing.T) {
 		if len(events) != 0 {
 			t.Fatalf("runtime.log batch reached the workbench: %+v, want no relayed event", events)
 		}
-		if err := log.Flush(5 * time.Second); err != nil {
+		if err := log.Flush(); err != nil {
 			t.Fatal(err)
 		}
 		stored := viewRecordEvents(t, config)
@@ -231,7 +230,7 @@ func TestViewRuntimeLogClockRepliesWithoutWorkbenchRelay(t *testing.T) {
 		if !strings.Contains(failure["error"].(map[string]any)["message"].(string), `event "plugin.other.foreign"`) {
 			t.Fatalf("foreign batch native error: %v, want the offending event name", failure)
 		}
-		if err := log.Flush(5 * time.Second); err != nil {
+		if err := log.Flush(); err != nil {
 			t.Fatal(err)
 		}
 		afterRecords := viewRecordEvents(t, config)
@@ -269,7 +268,7 @@ func TestViewRuntimeLogClockRepliesWithoutWorkbenchRelay(t *testing.T) {
 			if !ok || failure["id"] != float64(id) || failure["error"].(map[string]any)["code"] != float64(viewLogFailureCode) {
 				t.Fatalf("invalid runtime.log request %d reply: %v, want same id and error code %d", index, failure, viewLogFailureCode)
 			}
-			if err := log.Flush(5 * time.Second); err != nil {
+			if err := log.Flush(); err != nil {
 				t.Fatal(err)
 			}
 			if got := len(viewRecordEvents(t, config)); got != beforeRecords {
@@ -321,7 +320,7 @@ func TestViewRuntimeLogSurfaceKeepsPluginFieldsWithinPageBound(t *testing.T) {
 			map[string]any{"ts_us": 1234569, "mono_ns": 1234569890, "page": "doc-1", "level": "info", "event": "plugin.probe.near-limit", "fields": fields},
 		}}
 		s.viewRuntimeLogForTest(t, fake, &events, 31, batch)
-		if err := log.Flush(5 * time.Second); err != nil {
+		if err := log.Flush(); err != nil {
 			t.Fatal(err)
 		}
 		for _, event := range viewRecordEvents(t, config) {
@@ -419,7 +418,7 @@ func TestViewRuntimeLogReplyDoesNotReachANavigatedDocument(t *testing.T) {
 		if len(fake.posted) != 0 {
 			t.Fatalf("old-document runtime.log replies: %v, want no post to the replacement document", fake.posted)
 		}
-		if err := log.Flush(5 * time.Second); err != nil {
+		if err := log.Flush(); err != nil {
 			t.Fatal(err)
 		}
 		found := false
@@ -458,7 +457,7 @@ func TestViewRuntimeLogNativeReplyPostFailureIsReported(t *testing.T) {
 		}
 		s.viewReceived("probe-surface", handle, "probe", viewGeneration(s, "probe-surface"),
 			`{"message":{"sok":1,"id":18,"command":"runtime.log","params":{"action":"clock"}}}`)
-		if err := log.Flush(5 * time.Second); err != nil {
+		if err := log.Flush(); err != nil {
 			t.Fatal(err)
 		}
 		for _, event := range viewRecordEvents(t, config) {
@@ -489,13 +488,13 @@ func TestRetiredViewRuntimeLogDoesNotWriteThroughReplacement(t *testing.T) {
 			t.Fatal(err)
 		}
 		retired, oldGeneration := retireAndReplaceView(t, s, fake)
-		if err := log.Flush(5 * time.Second); err != nil {
+		if err := log.Flush(); err != nil {
 			t.Fatal(err)
 		}
 		before := len(viewRecordEvents(t, config))
 		s.viewReceived("probe-surface", retired, "probe", oldGeneration,
 			`{"message":{"sok":1,"id":19,"command":"runtime.log","params":{"action":"batch","events":[{"ts_us":1234569,"mono_ns":1234569890,"page":"doc-1","level":"info","event":"plugin.probe.retired","fields":{}}]}}}`)
-		if err := log.Flush(5 * time.Second); err != nil {
+		if err := log.Flush(); err != nil {
 			t.Fatal(err)
 		}
 		after := viewRecordEvents(t, config)

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 	"unsafe"
 )
 
@@ -219,6 +218,40 @@ func TestOlderInFlightPresentationDoesNotClearANewerFrameFailure(t *testing.T) {
 	}
 }
 
+// errRasterPending is the decision of layoutWait on a raster wait that found a raster pending.
+var errRasterPending = errors.New("a raster is pending")
+
+// layoutWait decides the layout raster wait on the current images without time: the wait answers at once when its rasters are
+// complete or failed, and a wait that reports a pending check is ended by the end of the layout transaction, as a press or a
+// cancel ends it, and decides errRasterPending.
+func layoutWait(t *testing.T, images *Images, settled bool) error {
+	t.Helper()
+	type step struct {
+		pending bool
+		err     error
+	}
+	steps := make(chan step, 8)
+	go func() {
+		err := images.waitLayoutRastersObserved(settled, func() { steps <- step{pending: true} })
+		steps <- step{err: err}
+	}()
+	first := <-steps
+	if !first.pending {
+		return first.err
+	}
+	images.EndWaits()
+	for next := range steps {
+		if next.pending {
+			continue
+		}
+		if !errors.Is(next.err, errLayoutWaitEnded) {
+			t.Fatalf("the pending raster wait ended with %v, want the end of its layout", next.err)
+		}
+		break
+	}
+	return errRasterPending
+}
+
 // contract: images.wait.continuous-raster-snapshot, images.wait.newer-sequence-rearms-wait
 func TestContinuousImageWaitUsesInstalledSnapshotAndBlocksAfterGenerationOrRasterChange(t *testing.T) {
 	images := NewImages()
@@ -242,11 +275,11 @@ func TestContinuousImageWaitUsesInstalledSnapshotAndBlocksAfterGenerationOrRaste
 			t.Fatal("initial raster snapshot was not recorded")
 		}
 	}
-	if err := images.WaitLayoutRasters(0, false); err != nil {
+	if err := layoutWait(t, images, false); err != nil {
 		t.Fatalf("continuous wait rejected the installed raster snapshot after a newer same-raster sequence was accepted: %v", err)
 	}
-	if err := images.WaitLayoutRasters(0, true); err == nil || err.Error() != "presentationTimeout" {
-		t.Fatalf("settled wait returned %v, want presentationTimeout while the newest sequence is pending", err)
+	if err := layoutWait(t, images, true); !errors.Is(err, errRasterPending) {
+		t.Fatalf("settled wait returned %v, want a pending raster while the newest sequence is pending", err)
 	}
 	frame, ok := images.PresentedFrame(key)
 	if !ok || frame.Generation != config.Generation || frame.Raster != config.Raster || frame.Sequence != 1 {
@@ -268,13 +301,13 @@ func TestContinuousImageWaitUsesInstalledSnapshotAndBlocksAfterGenerationOrRaste
 	if images.MarkPresented(key, oldGeneration, config.Raster, 1) {
 		t.Fatal("the previous-generation acknowledgment was accepted")
 	}
-	if err := images.waitRasterSnapshotObserved(0, nil); err == nil || err.Error() != "presentationTimeout" {
-		t.Fatalf("unpresented new-generation sequence returned %v, want presentationTimeout", err)
+	if err := layoutWait(t, images, false); !errors.Is(err, errRasterPending) {
+		t.Fatalf("unpresented new-generation sequence returned %v, want a pending raster", err)
 	}
 	if !images.MarkPresented(key, newGeneration, newConfig.Raster, 1) {
 		t.Fatal("new-generation raster snapshot was not recorded")
 	}
-	if err := images.waitRasterSnapshotObserved(0, nil); err != nil {
+	if err := layoutWait(t, images, false); err != nil {
 		t.Fatalf("new-generation raster snapshot did not complete the continuous wait: %v", err)
 	}
 
@@ -282,19 +315,19 @@ func TestContinuousImageWaitUsesInstalledSnapshotAndBlocksAfterGenerationOrRaste
 	if err != nil || rasterConfig == nil || rasterConfig.Raster == newConfig.Raster {
 		t.Fatalf("configure changed raster: %+v, %v", rasterConfig, err)
 	}
-	if err := images.waitRasterSnapshotObserved(0, nil); err == nil || err.Error() != "presentationTimeout" {
-		t.Fatalf("unpresented changed raster returned %v, want presentationTimeout", err)
+	if err := layoutWait(t, images, false); !errors.Is(err, errRasterPending) {
+		t.Fatalf("unpresented changed raster returned %v, want a pending raster", err)
 	}
 	if reason := images.AuthorizeFrame(key, "sidecar", rasterConfig.Generation, rasterConfig.Raster, 801, 600, 2, 1); reason != "" {
 		t.Fatalf("authorize changed-raster sequence 1: %s", reason)
 	}
-	if err := images.waitRasterSnapshotObserved(0, nil); err == nil || err.Error() != "presentationTimeout" {
-		t.Fatalf("accepted but unpresented changed raster returned %v, want presentationTimeout", err)
+	if err := layoutWait(t, images, false); !errors.Is(err, errRasterPending) {
+		t.Fatalf("accepted but unpresented changed raster returned %v, want a pending raster", err)
 	}
 	if !images.MarkPresented(key, rasterConfig.Generation, rasterConfig.Raster, 1) {
 		t.Fatal("changed-raster snapshot was not recorded")
 	}
-	if err := images.waitRasterSnapshotObserved(0, nil); err != nil {
+	if err := layoutWait(t, images, false); err != nil {
 		t.Fatalf("changed-raster snapshot did not complete the continuous wait: %v", err)
 	}
 }
@@ -343,11 +376,11 @@ func TestContinuousImageWaitIgnoresHiddenRegionsAndFailsOnPresentationError(t *t
 	if _, err := images.ConfigureRaster(key, 800, 600, 2, false); err != nil {
 		t.Fatalf("configure hidden image: %v", err)
 	}
-	if err := images.waitRasterSnapshotObserved(0, nil); err != nil {
+	if err := layoutWait(t, images, false); err != nil {
 		t.Fatalf("hidden image blocked continuous wait: %v", err)
 	}
 	images.SetSurfaceVisible(key.Surface, false)
-	if err := images.waitRasterSnapshotObserved(0, nil); err != nil {
+	if err := layoutWait(t, images, false); err != nil {
 		t.Fatalf("hidden surface blocked continuous wait: %v", err)
 	}
 
@@ -366,12 +399,14 @@ func TestContinuousImageWaitIgnoresHiddenRegionsAndFailsOnPresentationError(t *t
 		t.Fatalf("authorize visible frame: %s", reason)
 	}
 	images.MarkPresentationFailed(visibleKey, config.Generation, config.Raster, 1, "continuous presentation failed")
-	if err := images.waitRasterSnapshotObserved(0, nil); err == nil || err.Error() != "continuous presentation failed" {
+	if err := layoutWait(t, images, false); err == nil || err.Error() != "continuous presentation failed" {
 		t.Fatalf("presentation failure returned %v", err)
 	}
 }
 
-// contract: images.wait.newer-sequence-rearms-wait
+// The wait of the current raster has no time limit and checks again at each change of the images; it calls waiting at each
+// check that finds a raster pending, under the owner lock, which marks the points where the wait is still open.
+// contract: images.wait.newer-sequence-rearms-wait, images.wait.ends-by-its-events
 func TestPendingNewerFrameIsRequiredAfterTheWaitBegins(t *testing.T) {
 	images := NewImages()
 	key := ImageKey{Surface: "surface", Name: "view"}
@@ -389,42 +424,49 @@ func TestPendingNewerFrameIsRequiredAfterTheWaitBegins(t *testing.T) {
 	images.mu.Lock()
 	images.states[key].LastSequence = 1
 	images.mu.Unlock()
-	began := time.Now()
-	timeout := 500 * time.Millisecond
-	started := make(chan struct{})
+	checks := make(chan struct{}, 4)
 	done := make(chan error, 1)
-	go func() { done <- images.waitCurrentObserved(timeout, func() { close(started) }) }()
-	select {
-	case <-started:
-	case <-time.After(2 * time.Second):
-		t.Fatal("image wait did not begin")
+	wait := func() {
+		go func() { done <- images.waitCurrentObserved(nil, func() { checks <- struct{}{} }) }()
 	}
-	// Hold the owner lock across presentation and the next arrival so the waiter wakes after both.
-	images.mu.Lock()
-	state := images.states[key]
-	state.PresentedRaster = config.Raster
-	state.PresentedSequence = 1
-	state.LastSequence = 2
-	images.changedLocked()
-	elapsed := time.Since(began)
-	images.mu.Unlock()
-	var outcome error
-	select {
-	case outcome = <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("image wait did not end")
+	expectOpen := func(what string) {
+		t.Helper()
+		select {
+		case outcome := <-done:
+			t.Fatalf("%s ended with %v", what, outcome)
+		default:
+		}
 	}
-	if elapsed >= timeout {
-		t.Fatalf("controlled arrival missed the active wait deadline: %v", elapsed)
+	present := func(sequence, last int) {
+		images.mu.Lock()
+		state := images.states[key]
+		state.PresentedRaster = config.Raster
+		state.PresentedSequence = sequence
+		state.LastSequence = last
+		images.changedLocked()
+		images.mu.Unlock()
 	}
-	if outcome == nil || outcome.Error() != "presentationTimeout" {
-		t.Fatalf("pending newer frame did not remain required: %v", outcome)
-	}
+	wait()
+	<-checks
+	// Present the first frame and accept a newer one under one hold of the owner lock, so the wait checks after both.
+	present(1, 2)
+	<-checks
+	expectOpen("the wait of a pending newer frame")
 	if images.CurrentPresented() {
 		t.Fatal("instantaneous status omitted the pending newer frame")
 	}
-	if images.WaitCurrent(0) {
-		t.Fatal("new wait omitted the already accepted second frame")
+	present(2, 2)
+	if outcome := <-done; outcome != nil {
+		t.Fatalf("the wait ended with %v after the newer frame presented", outcome)
+	}
+	// A new wait requires a frame that was accepted before it began.
+	present(2, 3)
+	wait()
+	<-checks
+	expectOpen("a new wait of the already accepted frame")
+	present(3, 3)
+	if outcome := <-done; outcome != nil {
+		t.Fatalf("the new wait ended with %v after its frame presented", outcome)
 	}
 }
 
@@ -607,9 +649,9 @@ func TestTheEndOfASidecarEndsTheRasterWaitOfItsRegions(t *testing.T) {
 	images.mu.Lock()
 	images.states[key].LastSequence = 1
 	images.mu.Unlock()
-	started := make(chan struct{})
+	started := make(chan struct{}, 8)
 	done := make(chan error, 1)
-	go func() { done <- images.waitCurrentObserved(noWaitLimit, func() { close(started) }) }()
+	go func() { done <- images.waitCurrentObserved(nil, func() { started <- struct{}{} }) }()
 	<-started
 	if ended := images.InvalidateSidecar("sidecar"); ended != 1 {
 		t.Fatalf("the end of the sidecar invalidated %d regions, want 1", ended)
@@ -638,12 +680,50 @@ func TestTheEndOfTheLayoutEndsTheRasterWait(t *testing.T) {
 	images.mu.Lock()
 	images.states[key].LastSequence = 1
 	images.mu.Unlock()
-	started := make(chan struct{})
+	started := make(chan struct{}, 8)
 	done := make(chan error, 1)
-	go func() { done <- images.waitCurrentObserved(noWaitLimit, func() { close(started) }) }()
+	go func() { done <- images.waitLayoutRastersObserved(true, func() { started <- struct{}{} }) }()
 	<-started
 	images.EndWaits()
 	if err := <-done; !errors.Is(err, errLayoutWaitEnded) {
 		t.Fatalf("the raster wait ended with %v, want the end of the layout", err)
+	}
+}
+
+// The wait of host.window.presented for the current rasters ends by the end of its request, and the end of a layout transaction
+// does not end it: the wait checks again after that end and stays open (docs/spec/host-contract.md, images.wait.ends-by-its-events).
+// The end of the layout is sent after the first pending check and the stop after the second, so no check depends on time.
+// contract: images.wait.ends-by-its-events
+func TestTheEndOfItsRequestEndsTheWaitOfTheCurrentRasters(t *testing.T) {
+	images := NewImages()
+	key := ImageKey{Surface: "surface", Name: "view"}
+	var handle int
+	if err := images.Reserve(key, &ImageOwner{SidecarName: "sidecar", SidecarOwner: imageStatusTestOwner{}}); err != nil {
+		t.Fatal(err)
+	}
+	if !images.Set(key, unsafe.Pointer(&handle)) {
+		t.Fatal("image was not attached")
+	}
+	if config, err := images.ConfigureRaster(key, 800, 600, 2, true); err != nil || config == nil {
+		t.Fatalf("configure raster: %+v, %v", config, err)
+	}
+	images.mu.Lock()
+	images.states[key].LastSequence = 1
+	images.mu.Unlock()
+	checks := make(chan struct{}, 8)
+	stop := make(chan struct{})
+	done := make(chan error, 1)
+	go func() { done <- images.waitCurrentObserved(stop, func() { checks <- struct{}{} }) }()
+	<-checks
+	images.EndWaits()
+	<-checks
+	select {
+	case err := <-done:
+		t.Fatalf("the end of a layout transaction ended the wait of the current rasters with %v", err)
+	default:
+	}
+	close(stop)
+	if err := <-done; !errors.Is(err, errRasterWaitStopped) {
+		t.Fatalf("the wait of the current rasters ended with %v, want the end of its request", err)
 	}
 }

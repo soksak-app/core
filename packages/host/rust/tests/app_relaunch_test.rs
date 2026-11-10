@@ -85,7 +85,7 @@ fn the_detached_relaunch_command_is_recorded_when_it_starts() {
             )),
             "{error}"
         );
-        writer.flush(std::time::Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         std::fs::write(config.join("child-pid"), child.id().to_string()).unwrap();
         return;
     }

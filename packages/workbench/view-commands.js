@@ -1,9 +1,10 @@
 // The page side of the commands of a view (docs/spec/native-surfaces.md#view-surfaces). The page runs a command of a view for each
 // exposure request of the command: it sends {id, command, params} to the view as viewRequest, and the view answers with the reply
-// that the host delivers as view-reply. The call layer of plugin-api holds the open calls, their declared time limit and the late
-// replies, so the requests use the same rules as the calls of a plugin process (docs/spec/plugin-processes.md, rule 3).
+// that the host delivers as view-reply. The call layer of plugin-api holds the open calls and the late replies, so the requests
+// use the same rules as the calls of a plugin process (docs/spec/plugin-processes.md, rule 3): a command has no time limit, and
+// its reply, the close of its surface or the end of the view ends it.
 
-import { causeCids, createCalls, DEFAULT_CALL_TIMEOUT } from "@soksak/plugin-api";
+import { causeCids, createCalls } from "@soksak/plugin-api";
 
 /** The code of a command that failed: EXPOSURE_ERRORS.failed of plugin-api. */
 const FAILED_COMMAND = -32000;
@@ -13,17 +14,20 @@ const FAILED_COMMAND = -32000;
  *
  *     plugin      the plugin id of the view
  *     post        post(message): sends {id, command, params} to the view through viewRequest; rejects when the host refuses it
- *     timeoutOf   timeoutOf(name): the declared time limit of the command, or undefined when it declares none
- *     report      report(event): receives the timeouts and late replies of the calls, as createCalls reports them
+ *     report      report(event): receives the open calls, the peer losses and the late replies, as createCalls reports them
  *
  * Returns {run, receive, close}. run(name, params) resolves with the result of the view, or rejects with its error. receive(event)
  * takes a view-reply event {surface, plugin, id, result} or {surface, plugin, id, error}. close() ends every open call with surface-closed.
  * run(name, params, cids) carries the correlation identifiers of the cause of the request to the view, which passes them to the handler.
  */
-export function createViewCommands({ plugin, post, timeoutOf, report, generation = null }) {
-  if (typeof post !== "function" || typeof timeoutOf !== "function" || typeof report !== "function") {
-    throw new TypeError("createViewCommands requires the post, timeoutOf and report functions");
+export function createViewCommands({ plugin, post, report, generation = null, ...rest }) {
+  if (typeof post !== "function" || typeof report !== "function") {
+    throw new TypeError("createViewCommands requires the post and report functions");
   }
+  // A command of a view has no time limit, so the former member that gave one is refused by its name.
+  if (Object.hasOwn(rest, "timeoutOf")) throw new TypeError("createViewCommands takes no timeoutOf: a command of a view has no time limit");
+  const unknown = Object.keys(rest);
+  if (unknown.length) throw new TypeError(`createViewCommands has no option ${unknown.join(", ")}`);
   if (generation !== null && (!Number.isSafeInteger(generation) || generation < 1)) {
     throw new TypeError("createViewCommands requires a positive source generation when one is supplied");
   }
@@ -63,8 +67,7 @@ export function createViewCommands({ plugin, post, timeoutOf, report, generation
       } catch (error) {
         return Promise.reject(error);
       }
-      // default: a command that declares no time limit waits for the default time limit of the call layer (docs/spec/exposure.md).
-      return calls.request(name, params, { timeout: timeoutOf(name) ?? DEFAULT_CALL_TIMEOUT, cids: carried });
+      return calls.request(name, params, { cids: carried });
     },
     receive(event) {
       if (!deliver) throw new Error(`view command reply ${event.id} arrived after the surface closed`);

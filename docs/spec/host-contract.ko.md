@@ -283,6 +283,7 @@ fn invalid_json_closes_connection() {
 | `documents.binary.view-errors` | view가 없는 surface의 take나 put은 `surface "<surface>" has no view`로 실패하고 어떤 store도 바꾸지 않는다. | all |
 | `view.presentation-wait.ends` | view는 변경마다 한 번 presentation wait에 참여한다. presentation 없는 끝(process-ended, hidden, unresponsive, input, closed)은 wait를 한 번 끝내고 `host.trace.view.presentation-abandoned {surface, reason}`을 쓴다. presentation은 그 event 없이 wait를 끝낸다. end가 아닌 reason은 거부된다. | all |
 | `view.presentation-wait.ends-at-input` | 누름이나 key event가 hold를 끝낼 때 presentation도 끝도 없는 참여 view의 wait는 reason `input`으로 끝난다. native join은 hold와 함께 끝났으므로 host는 아무것도 중단하지 않고 `host.trace.view.presentation-abandoned {surface, reason: input}`을 쓰며, commit은 다른 peer가 표시한 것을 담는다. join이 presentation했거나 끝난 뒤의 입력은 그 join에 아무것도 바꾸지 않는다. 어떤 wait도 시간으로 끝나지 않는다. | all |
+| `view.presentation-wait.surface-close-ends-it` | surface 제거나 그 page의 새 문서로 surface의 document가 닫히면 그 turn에 그 view의 presentation wait가 reason `closed`로 끝난다. | all |
 | `view.presentation-wait.join-trace` | performance trace가 켜져 있으면 presentation join은 정확한 surface, generation, ticket을 담은 `host.trace.view.presentation-join`의 요청, native 결과, presentation, abandonment phase를 기록한다. 동기 callback은 native join 결과보다 먼저 기록되며 abandonment 뒤의 늦은 callback도 원래 join identity를 유지한다. | all |
 | `view.presentation-wait.cancel-clears-ticket` | 열린 layout ticket을 취소하면 view presentation wait와 pending 상태를 제거하고 정확한 ticket을 취소하기 전에 native join을 끝내며 presentation-abandoned event를 내보내지 않는다. 늦은 callback은 wait를 복원하지 못한다. | all |
 | `view.presentation-wait.presented-before-end` | presentation 완료가 native callback에서 일어나면, UI thread가 wait의 대기 중인 끝을 실행하기 전에 그 완료를 기록한다. 그 뒤에 실행되는 끝(hidden, process-ended, unresponsive)은 wait를 presented로 끝낸다. 그때 `host.trace.view.presentation-abandoned`를 쓰지 않고 native join도 중단하지 않으며, 뒤이은 presented 끝은 wait를 찾지 못한다. | all |
@@ -384,7 +385,7 @@ fn invalid_json_closes_connection() {
 | `endpoint.transport.non-jsonrpc-object-closes` | JSON-RPC 2.0 요청이 아닌 JSON 프레임은 응답 없이 연결을 닫는다. | all |
 | `endpoint.transport.undeclared-method-closes` | 선언되지 않은 메서드는 응답 없이 연결을 닫고 workbench에 아무것도 전달하지 않는다. | all |
 | `endpoint.transport.close-reason-is-recorded` | 닫히는 연결은 소켓을 닫기 전에 `info host endpoint: connection closed: <reason>`을 쓴다. reason은 한도를 넘은 frame, JSON-RPC 2.0 요청이 아닌 frame(본문 포함), 선언되지 않은 메서드, peer의 종료다. | all |
-| `endpoint.timeout.is-recorded` | 제한 시간 오류 1005로 끝나는 endpoint 요청은 client가 오류를 받기 전에 `error host endpoint timeout: <method>: <message>`를 쓴다. | all |
+| `endpoint.no-result.is-recorded` | 오류 1005로 끝나는 endpoint 요청은 client가 오류를 받기 전에 `error host endpoint no result: <method>: <message>`를 쓴다. | all |
 | `endpoint.diagnostics.methods-exist-only-in-diagnostic-builds` | 릴리스 빌드에서 diagnostics.transcript는 연결을 닫고 workbench에 닿지 않으며, 진단 빌드에서는 응답된다. | all |
 | `endpoint.rpc.round-trip-by-id` | 한 연결의 여러 요청은 각각 같은 id와 결과를 가진 JSON-RPC 2.0 응답을 받는다. | all |
 | `endpoint.rpc.page-params-omit-window` | workbench는 window 필드를 뺀 전달 매개변수를 받는다. | all |
@@ -446,6 +447,7 @@ fn invalid_json_closes_connection() {
 | `status.window.latest-value-last` | 읽는 동안 들어온 host.window 변경은 그 마지막 변경 뒤에 시작하는 읽기 하나로 합쳐지므로, 변경이 몰려도 읽기는 하나이고 새 값 뒤에 옛 값을 보내지 않는다. | all |
 | `status.window.latest-reads-run-on-one-thread` | 창들의 latest read는 유지되는 thread 하나에서 돈다. 각 창은 자기 latest read를 가지고, burst가 끝난 뒤의 요청은 그 thread를 쓴다. | tauriv2 only: Go의 읽기는 goroutine에서 돌므로 유지되는 thread가 필요 없다 |
 | `endpoint.watch.other-requests-not-blocked-by-pending-subscription` | workbench 구독 해제가 대기 중이어도 같은 연결의 다음 요청에 응답한다. | all |
+| `endpoint.watch.unwatch-enters-the-queue-only-after-a-watch` | `status.unwatch`는 그 연결의 topic에 대한 마지막 변경(보유 중이거나 queue에 있는)이 watch일 때만 topic의 queue에 들어간다. 다른 unwatch는 아무것도 바꾸지 않고 workbench에 아무것도 보내지 않으며 queue의 변경을 기다리지 않고 null로 답한다. | all |
 | `exposure-reply.payload.main-reply-unscoped` | surface가 없는 주 문서 응답 페이로드는 빈 surface로 해석된다. | all |
 | `exposure-reply.payload.scoped-reply-keeps-surface` | surface가 있는 응답 페이로드는 인코딩과 해석을 거쳐도 surface를 유지한다. | all |
 | `exposure-reply.target.main-and-surface-distinct` | surface가 없는 응답은 창의 주 문서를, surface가 있는 응답은 그 표면 문서를 대상으로 한다. | all |
@@ -461,24 +463,25 @@ fn invalid_json_closes_connection() {
 | `exposure.host-window.reads-during-surface-creation` | 네이티브 surface view는 생성하는 같은 단계에서 surface id로 이름이 붙으므로, window status 읽기는 surface id가 없는 네이티브 view를 만나지 않는다. | all |
 | `exposure.host-window.reads-during-surface-close` | 네이티브 surface view는 닫는 단계가 id를 잊을 때까지 surface id를 유지하므로, view가 열려 있는 동안 window status 읽기는 surface id가 없는 네이티브 view를 만나지 않는다. | all |
 | `exposure.host-window.unregistered-surface-named` | window status 읽기가 등록된 surface가 없는 네이티브 surface view를 만나면 `unregistered native surface <id>`로 실패하며, `<id>`는 window facts의 네이티브 view 주소이고 두 host의 글은 같다. | all |
-| `exposure.timeout.command-run-default-and-declared` | command.run은 기본 10초를 기다리고 선언된 timeout을 쓴다. | all |
-| `exposure.timeout.every-forward-bounded` | timeout이 없는 forward 요청은 method와 관계없이 10초를 기다리므로, 시간 제한이 없는 forward는 없다. | all |
-| `exposure.timeout.invalid-timeout-rejected` | 0, 600000 초과, 소수, 문자열, 음수인 command.run timeout은 -32602를 반환한다. | all |
+| `exposure.command.ends-by-reply-or-peer-end` | command.run에는 시간 제한이 없다. 그 답, 그것을 실행하는 문서의 끝, 그것을 보낸 endpoint 연결의 끝으로 끝난다. | all |
+| `exposure.relay.connection-end-ends-its-requests` | endpoint 연결의 끝은 호스트에서 그 연결의 요청을 각각 끝내고 호스트는 아무것도 답하지 않는다. 그 뒤 문서의 답은 끝난 요청의 관찰로 쓴다. | all |
+| `exposure.relay.forward-lives-while-its-origin-is-open` | `origin`이 있는 `exposureForward`는 그 origin 요청이 메인 페이지의 답, 1003, 또는 그 endpoint 연결의 끝으로 끝날 때 결과 없이 끝나고, 그 뒤의 답은 끝난 요청의 관찰로 쓴다. `origin`이 열린 요청을 가리키지 않는 전달은 표면에 보내지 않고 곧바로 1003 `the origin request <origin> has ended`로 거절한다. `origin`이 없는 전달은 어떤 연결의 끝으로도 끝나지 않는다. | all |
+| `exposure.command.declaration-refuses-a-time-limit` | `timeout`을 가진 명령 선언은 manifest 검사와 registry가 `<where>: timeout is not a member of a command declaration`로 거절한다. | all |
 | `exposure.relay.reply-resolves-request` | 대상 문서에서 온 같은 id의 응답은 그 결과로 요청을 완료한다. | all |
 | `exposure.relay.keeps-value-text` | workbench 응답은 workbench가 보낸 텍스트 그대로 중계되므로 값의 key 순서가 유지된다(`{"zeta":1,"alpha":{"b":2,"a":1}}`는 보낸 그대로다). | all |
 | `exposure.relay.missing-result-is-null` | result가 없는 응답은 null로 완료된다. | all |
 | `exposure.relay.error-reply-keeps-code-and-message` | 오류 응답은 같은 코드와 메시지로 요청을 실패시킨다. | all |
-| `exposure.relay.foreign-document-reply-ignored-timeout-1005` | 다른 문서의 응답은 무시되고, 요청은 1005로 시간 초과되며, 늦은 응답도 받지 않는다. | all |
-| `exposure.relay.late-reply-states-its-delay` | 시간이 초과된 요청은 `the document did not reply within <ms> ms`로 실패하고, 그 뒤에 온 답은 요청을 보낸 뒤의 지연과 제한 시간으로 실패하며, 요청이 없는 답은 `has no matching request`로 실패한다. | all |
-| `exposure.relay.timeout-writes-call-event` | 시간이 초과된 command는 `plugin`과 `command`를 가진 `host.call.timeout`을 쓰고, command가 아닌 요청은 call event를 쓰지 않는다. | all |
-| `exposure.relay.late-reply-writes-call-event` | 시간이 초과된 command의 늦은 답은 `plugin`, `command`와 보낸 뒤의 `delay`를 가진 `host.trace.call.late-reply`를 쓴다. | all |
+| `exposure.relay.foreign-document-reply-ignored` | 다른 문서의 답은 무시하고, 요청은 자기 문서의 답이나 상대의 끝을 계속 기다린다. | all |
 | `exposure.relay.send-failure-1003` | 문서로 보내기가 실패하면 요청은 즉시 1003으로 실패한다. | all |
 | `exposure.relay.closed-document-fails-pending-1003` | 문서를 닫으면 대기 중인 요청은 1003으로 실패한다. | all |
 | `exposure.relay.page-reload-ends-surface-requests` | 준비된 workbench에 reload 요청을 보낸 뒤 그 window의 surface document로 보낸 요청은 1003으로 끝나고, 새 workbench가 시작할 때까지 이후 요청은 1003으로 거부된다. 다른 window의 요청은 계속 기다린다. | all |
 | `exposure.settled-wait.presents-through-the-frontend` | settled wait는 `Frontend`의 settled presentation으로 내용을 화면에 올리고, `Frontend`가 만들지 못한 presentation은 platform의 settled wait 전에 그 오류로 wait를 끝내며, block의 실패도 wait를 끝낸다. | all |
-| `exposure.window-presented.waits-for-the-last-placement` | `host.window.presented`와 `diagnostics.drag`는 연속 갱신의 끝과 settled presentation을 기다리기 전에 창의 workbench에 `workbench.placement.last`, 곧 workbench가 만들었거나 들고 있는 마지막 placement를 묻는다. 진행 중인 placement 뒤에서 기다리는 placement는 workbench만 알기 때문이다. 시작하지 않은 workbench는 들고 있는 placement가 없다. 그 placement가 실패하거나 workbench가 시간 제한 안에 답하지 않으면 wait도 실패한다. | all |
+| `exposure.window-presented.waits-for-the-last-placement` | `host.window.presented`와 `diagnostics.drag`는 연속 갱신의 끝과 settled presentation을 기다리기 전에 창의 workbench에 `workbench.placement.last`, 곧 workbench가 만들었거나 들고 있는 마지막 placement를 묻는다. 진행 중인 placement 뒤에서 기다리는 placement는 workbench만 알기 때문이다. 시작하지 않은 workbench는 들고 있는 placement가 없다. 그 placement가 실패하거나 workbench가 답하기 전에 메인 페이지가 끝나면 wait도 실패한다. | all |
 | `exposure.relay.ended-reply-is-observed` | 문서가 1003으로 끝낸 요청에 대한 답은 받아들여 관측 `exposure reply <id> arrived after its request ended`로 쓴다. 릴레이가 보낸 적 없는 요청에 대한 답은 `exposure reply <id> has no matching request`로 실패한다. | all |
-| `exposure.relay.no-timeout-waits-until-close` | timeout이 없는 요청은 문서가 닫힐 때까지 기다린 뒤 1003으로 실패한다. | all |
+| `exposure.relay.waits-until-reply-or-close` | 전달된 요청에는 시간 제한이 없다. 그 답이나 그 문서의 닫기까지 기다리고, 닫히면 1003으로 실패한다. | all |
+| `exposure.relay.surface-process-end-ends-its-requests` | 표면 문서로 전달한 요청은 표면 페이지의 WebContent 프로세스가 끝나는 turn에 1003으로 끝나고, 그 뒤의 답은 아무것도 완료하지 않는다. | all |
+| `exposure.window-presented.ends-by-events` | `host.window.presented`에는 자기 한도가 없다. 표시 중인 modal의 첫 frame 기다림은 그 frame, modal의 숨김·닫힘·교체, 또는 그 WebContent 프로세스 끝으로 끝난다. 창 닫힘이나 메인 페이지 프로세스의 끝은 기다리는 요청을 1003으로 실패시키고, 요청을 보낸 endpoint 연결의 끝은 답 없이 요청을 끝낸다. | all |
+| `exposure.fullscreen.answers-once-by-its-event` | `host.window.fullscreen`은 한 번 답한다. 전환의 끝에서, 최소화되었거나 보이지 않거나 sheet를 보이거나 macOS가 전환을 시작하지 않는 창에는 곧바로 1006으로, 창 닫힘에는 1003으로, 뒤의 요청이 대신하면 1006으로, 시작한 전환의 `windowDidFailToEnterFullScreen:`이나 `windowDidFailToExitFullScreen:`에는 1005로 답한다. 요청에는 한도가 없다. | all |
 | `exposure.window.dropped-view-work-reports-no-view` | 실행되기 전에 파괴된 웹뷰로 보낸 작업은 수신 오류 대신 결과 없음이 되어, `host.window`가 닫히는 모달을 뷰 없이 보고한다. 실행되어 실패한 작업은 그 오류를 유지한다. | tauriv2 only: Tauri는 웹뷰 작업을 dispatch로 실행하며 웹뷰가 파괴되면 작업을 버리고, Wails는 모달 뷰를 자기 기록에서 읽는다 |
 | `exposure.window.region-reports-presented-frame` | 설정과 표시된 프레임 뒤 `host.window`는 영역의 `presented`에 그 프레임의 `generation`, `raster`, `sequence`를 보고한다. 래스터가 바뀐 뒤에는 새 래스터의 프레임이 표시되기 전까지 `presented`가 null이다. | all |
 | `exposure.window.region-reports-presented-frames` | `host.window`의 각 image region 항목은 `presentedFrames`를 보고한다. 이는 region이 attach된 뒤 host가 presented로 표시한 그 region의 frame 수다. 새 region에서는 0이고, host가 presented로 표시하는 frame마다 하나 늘며, host가 presented로 표시하지 않는 frame과 raster 변경에는 바뀌지 않고, 같은 이름으로 다시 attach된 region에서는 다시 0이다. | all |
@@ -647,7 +650,7 @@ fn invalid_json_closes_connection() {
 | `images.detach.ack-exact-owner` | request, supplier, surface, image name, generation이 일치하는 응답만 detach를 완료한다. 불일치 응답은 대기를 끝내지 않는다. | all |
 | `images.detach.malformed-ack-names-its-member` | member가 없거나 다른 type인 응답은 그 member를 밝히는, 두 호스트에서 같은 오류 text로 거부되고 그 pending detach는 계속 기다린다. | all |
 | `images.detach.refusal-ends-pending` | supplier 거부는 pending detach를 끝낸다. 그 surface의 `image-detach-ended` event는 supplier가 알리면 현재 generation을 담은 `... rejected: <reason>`을 담고, 여러 image의 실패는 이름의 byte 순서로 `; `로 이어지며, 호스트는 그 실패의 오류 기록을 쓰지 않는다. | all |
-| `images.detach.timeout-keeps-waiting` | 10초 안에 응답이 없는 detach는 `... timed out` 오류를 한 번 쓰고 계속 기다린다. reload는 pending image에 두 번째 detach를 보내지 않고, 늦은 응답은 detach를 끝내고 그 surface의 ended event를 보낸다. | all |
+| `images.detach.ends-by-its-events` | detach에는 한도가 없다. 그 응답, supplier 연결 종료, surface session 종료로 끝나며, 기다리는 동안 아무것도 기록하지 않는다. 기다리는 동안의 reload는 pending image에 두 번째 detach를 보내지 않는다. | all |
 | `images.detach.surface-ends-after-its-last-detach` | surface는 그 image detach가 모두 끝날 때까지 pending이고, 창 event `image-detach-ended {surface, error}`는 마지막 detach가 끝난 뒤에 온다. | all |
 | `images.reload.captures-old-image-owner` | Reload는 native 영역을 닫고 surface generation을 올리기 전에 각 이미지의 supplier와 현재 generation을 캡처한다. | all |
 | `images.reload.start-sends-detach-without-waiting` | reload는 native image를 닫은 뒤 캡처한 각 image의 detach를 보내고, 응답을 기다리지 않고 start document를 돌려준다. 각 image의 surface는 pending으로 남는다. | all |
@@ -691,9 +694,9 @@ fn invalid_json_closes_connection() {
 | `images.wait.reconfigure-clears-presented` | raster를 다시 구성하면 표시 상태를 지운다. | all |
 | `images.wait.hidden-image-does-not-block` | 숨긴 이미지는 표시 대기를 막지 않고, 다시 보이면 다시 막는다. | all |
 | `images.wait.hidden-surface-does-not-block` | 숨긴 표면은 표시 대기를 막지 않고, 다시 보이면 다시 막는다. | all |
-| `images.wait.sidecar-end-ends-wait` | sidecar 연결의 끝은 그 sidecar 이름으로 그 region들의 raster wait를 끝낸다. 끝난 연결의 raster는 오지 않기 때문이다. layout transaction의 끝은 window의 모든 raster wait를 끝낸다. layout 요청의 raster wait는 시간으로 끝나지 않는다. | all |
+| `images.wait.sidecar-end-ends-wait` | sidecar 연결의 끝은 그 sidecar 이름으로 그 region들의 raster wait를 끝낸다. 끝난 연결의 raster는 오지 않기 때문이다. window의 layout transaction의 끝은 그 안의 각 presentation 요청의 raster wait를 끝낸다. 어떤 raster wait도 시간으로 끝나지 않는다. | all |
 | `images.wait.ended-generation-does-not-block` | 표면 generation을 끝내면 표시 대기가 풀린다. | all |
-| `images.wait.timeout-writes-no-log-line` | 제한 시간에 이른 표시 대기는 호출자에게 `presentationTimeout`을 반환하고 애플리케이션 로그에 줄을 쓰지 않는다. 기다린 요청이 그 실패를 보고하기 때문이다. | all |
+| `images.wait.ends-by-its-events` | 현재 raster의 presentation 대기에는 시간 제한이 없다. 필요한 각 raster의 presentation, 그 영역이나 표면의 제거, 그 supplier 연결의 끝, 기다리는 요청의 끝으로 끝난다. 요청의 끝은 presentation 요청에서는 ticket의 cancel이나 layout transaction의 끝이고, `host.window.presented`에서는 창의 close, main page process의 끝, endpoint 연결의 끝이다. layout transaction의 끝은 `host.window.presented`의 대기를 끝내지 않는다. 그 요청은 다음 layout이 보이는 raster를 기다린다. 실패는 호출자에게 돌아가고 application log에 줄을 쓰지 않는다. 기다린 요청이 실패를 알리기 때문이다. | all |
 | `images.visibility.survives-first-document-navigation` | 첫 문서 이동 전에 숨긴 표면은 이동 뒤에도 숨겨진 상태를 유지한다. | all |
 | `images.visibility.hidden-surface-defers-configuration` | 숨긴 표면의 이미지를 구성하면 표면이 보일 때까지 구성을 반환하지 않는다. | all |
 | `images.visibility.shown-surface-reconfigures-its-raster` | 숨겼다가 다시 보인 표면은 같은 크기라도 새 raster revision을 설정하므로, 표시 장벽은 숨긴 동안의 frame을 기다리지 않는다. | all |
@@ -805,7 +808,7 @@ fn invalid_json_closes_connection() {
 | `buffers.sidecar-replies.bounded-by-messages` | sidecar의 보류 응답은 최대 1,024개이며, 다음 응답은 `sidecar <name>: the pending replies reached 1024 messages, so a reply of surface <surface> is dropped`로 거절되고 `host.buffer.dropped`(`buffer` `sidecar <name> pending replies`, `count` 1, `bytes`, `reason` `the buffer holds 1024 messages`)를 저장한다. | all |
 | `buffers.sidecar-replies.bounded-by-bytes` | sidecar의 보류 응답은 최대 4,194,304바이트이며, 이를 넘게 되는 응답은 `...reached 4194304 bytes...`로 거절되고 `reason`이 `the buffer holds 4194304 bytes`인 `host.buffer.dropped`를 저장한다. | all |
 | `buffers.sidecar-closes.bounded-and-forgotten` | sidecar의 보류 close는 최대 1,024개와 4,194,304바이트이며, 이를 넘는 close는 보내지 않고 `host.buffer.dropped`(`buffer` `sidecar <name> pending closes`)를 저장하며, 그 표면은 답을 기다리는 표면 목록에 없다. | all |
-| `buffers.relay-expired.bounded-and-counted` | relay는 만료된 요청을 최대 256개 기억하며, 가장 오래된 것을 잊을 때 `host.buffer.dropped`(`buffer` `relay expired requests`, `count` 1, `bytes` 0, `reason` `the buffer holds 256 requests`)를 저장하고, 그 요청의 늦은 응답에는 `exposure reply <id> has no matching request`로 답한다. | all |
+| `buffers.relay-ended.bounded-and-counted` | relay는 늦은 답을 관찰로 다루기 위해 문서의 답 없이 끝난 요청(닫힘, 페이지 끝, 연결 끝)을 최대 256개 기억하며, 가장 오래된 것을 잊을 때 `host.buffer.dropped`(`buffer` `relay ended requests`, `count` 1, `bytes` 0, `reason` `the buffer holds 256 requests`)를 저장하고, 그 요청의 늦은 응답에는 `exposure reply <id> has no matching request`로 답한다. | all |
 | `log.writer.event-over-size-bound-is-cut` | writer가 받을 때 fields 글이 1,048,576바이트를 넘는 event는 최대 4,096바이트의 `fields` `{"head": ...}`와 자르기 전 크기인 `truncated`로 저장하고, 상한 아래의 event에는 `truncated`가 없으며 `seq`는 연속이다. | all |
 | `sidecars.close.buffered-close-is-recorded` | 사이드카의 큐가 가득 차서 기다리는 closed 알림은 `info host sidecar <name>: close <surface>: outbox full, buffered`를 쓴다. | all |
 | `sidecars.close.room-has-no-buffered-record` | sidecar의 queue에 자리가 있는 closed notice는 바로 전송되고 `outbox full, buffered` 기록을 쓰지 않는다. writer는 찬 queue에서 언제든 한 줄을 꺼낼 수 있으므로, send를 거부한 queue에도 다음 close가 들어갈 자리가 생길 수 있다. | all |
@@ -1002,7 +1005,7 @@ fn invalid_json_closes_connection() {
 | `modal.region-under-a-dialog-starts-blurred` | Dialog가 열린 동안 만든 image region은 흐린 상태로 시작하고, dialog가 없는 동안 만든 것은 blur 없이 시작한다. | all |
 | `modal.workbench-dialog.new-workbench-ends-the-claim` | window에서 새 workbench가 시작되면 이전 workbench가 `setDialogBackground`로 알린 dialog가 끝난다. window에는 dialog가 없고, document web view와 image region은 blur를 잃으며, 그 뒤에 만든 image region은 blur 없이 시작한다. | wailsv3, mygo only: Go language host library는 workbench가 직접 그리는 dialog(host tree의 B2 행)를 modal web view와 별개의 claim으로 갖고, Rust language host library에는 modal web view만 있다(host tree의 H41 행) |
 | `modal.workbench-dialog.end-keeps-a-modal-dialog-background` | workbench가 `setDialogBackground`로 알린 dialog를 끝내도 `dialog` mode의 modal web view가 열려 있는 동안 window의 dialog와 image region의 blur는 남는다. | wailsv3, mygo only: Go language host library는 workbench가 직접 그리는 dialog(host tree의 B2 행)를 modal web view와 별개의 claim으로 갖고, Rust language host library에는 modal web view만 있다(host tree의 H41 행) |
-| `reload.timeout.names-running-calls` | 범위 안에 workbench가 준비를 알리지 않은 다시 읽기는 `the reloaded page did not report ready within <bound>; running host calls: <calls>`로 실패하며, `<calls>`는 그 window에서 돌아오지 않은 호출을 시작 순서로 각각 소수 한 자리의 `<name> <seconds>s`로 적거나 `none`이다. | all |
+| `reload.ends-by-ready-close-or-process-end` | 다시 읽기에는 한도가 없다. 새 workbench의 준비에서 완료하고, 그 준비 전의 창 닫힘이나 page process 끝은 1003 `the window closed before the reloaded page reported ready; running host calls: <calls>` 또는 `the page process ended before the reloaded page reported ready; running host calls: <calls>`로 실패시키며, `<calls>`는 그 window에서 돌아오지 않은 호출을 시작 순서로 각각 소수 한 자리의 `<name> <seconds>s`로 적거나 `none`이다. 다시 읽기 전에 온 page process의 끝은 다시 읽기를 끝내지 않는다. 다시 읽기는 새 page를 시작하는, 그 window의 회복이기 때문이다. | all |
 | `log.batch.requires-the-start` | 자신을 쓴 workbench의 start를 `start`에 이름하지 않은 workbench 배치의 event는 `start must name the start of the workbench that wrote the event`로, `page`를 이름한 event는 `page is not a member of an event of the workbench`로 거부된다. | all |
 | `debug.save-text.writes-the-text-to-the-destination` | 글 저장은 요청의 글을 줄바꿈과 ASCII가 아닌 글자를 그대로 둔 채 목적지에 쓴다. | all |
 | `debug.save-text.refuses-a-name-that-is-not-a-file-name-and-text-that-is-empty-or-too-large` | 빈 이름, `.`, `..`, `/`나 `\`를 가진 이름은 `debug: name "<name>" is not a file name`으로, 빈 글은 `debug: text is empty`로, 16 MiB를 넘는 글은 `debug: text is <n> bytes, over the limit of 16777216`으로 요청을 거절한다. | all |
@@ -1082,11 +1085,11 @@ fn invalid_json_closes_connection() {
 | `app-update.host.stages-only-the-candidate` | host는 지금 registry index의 후보인 버전만 준비하며, 다른 버전과 실행 중인 버전에는 `<version> is not the candidate of core <running>`으로 실패한다. | all |
 | `app-update.replace.replaces-the-bundle-after-the-process-ended` | `sok app update`는 커널 알림으로 프로세스의 끝을 기다리고, 새 번들을 target 옆에 복사하고, target을 옆으로 옮기고 복사본을 그 자리로 옮기고, `--` 뒤의 인자로 target을 시작한 뒤 이전 번들과 준비한 번들을 지우고 `{target}`을 출력한다. | all |
 | `app-update.replace.restores-the-bundle-when-the-start-fails` | 옮긴 뒤 시작이 실패하면 새 번들을 지우고 이전 번들을 되돌려 시작하며 시작의 메시지로 실패한다. | all |
-| `app-update.replace.refuses-before-it-changes-anything` | 응용 프로그램 번들이 아닌 target이나 bundle, 둘이 같은 폴더인 경우, 기한(60초) 뒤에도 실행 중인 프로세스는 target이 바뀌기 전에 실패한다. | all |
+| `app-update.replace.refuses-before-it-changes-anything` | 응용 프로그램 번들이 아닌 target이나 bundle, 둘이 같은 폴더인 경우는 target이 바뀌기 전에 실패한다. 운영체제가 프로세스의 종료를 알리므로 update는 그 종료 이벤트를 기다리며 한도가 없다. | all |
 | `app-update.apply.starts-sok-from-a-copy-and-checks-the-bundle` | 업데이트를 적용하면 실행 중인 번들의 `sok`을 `<config-dir>/updates/sok`에 복사하고 `sok app update --wait <pid> --bundle <bundle> --target <실행 중인 번들> [-- <인자>]`를 새 세션으로 준비한다. `updates/` 밖의 번들, `Info.plist`가 없는 폴더, 응용 프로그램 번들 밖의 애플리케이션은 거부한다. | all |
 | `app-update.apply.records-the-detached-command` | 분리 실행한 명령은 host의 표준 오류를 그대로 쓰므로 그 메시지는 실행의 표준 오류 파일에 있고, host는 명령을 시작할 때 명령의 `pid`와 `command` 줄을 가진 event `host.update.start`를 저장한다. 시작할 수 없는 명령은 그 명령을 이름으로 가리키는 오류다. | all |
 | `app-relaunch.starts-the-same-bundle-in-the-background-after-the-process-ended` | `sok app relaunch`는 kernel 알림으로 프로세스의 끝을 기다린 뒤, 바꾸지 않은 대상 번들을 `--` 뒤의 인자로 활성화하지 않고 시작하고 `{target}`을 출력한다. | all |
-| `app-relaunch.refuses-a-folder-that-is-not-a-bundle-and-a-process-that-keeps-running` | 애플리케이션 번들이 아닌 대상은 `application relaunch: the target <path> is not an application bundle`로, 제한 시간이 지나도 실행 중인 프로세스는 `application relaunch: process <pid> did not end within <timeout>`으로, 둘 다 아무것도 시작하기 전에 실패한다. | all |
+| `app-relaunch.refuses-a-folder-that-is-not-a-bundle-and-waits-for-the-exit` | 애플리케이션 번들이 아닌 대상은 아무것도 시작하기 전에 `application relaunch: the target <path> is not an application bundle`로 실패한다. relaunch는 프로세스의 종료 이벤트를 기다리며 한도가 없다. | all |
 | `app-relaunch.host.starts-sok-of-the-running-bundle` | `diagnostics.host.relaunch`는 실행 중인 번들의 `Contents/MacOS/sok`으로 `sok app relaunch --wait <pid> --target <실행 중인 번들> [-- <인자>]`를 host의 표준 오류와 함께 새 세션에서 준비한다. 애플리케이션 번들 밖의 애플리케이션은 `application relaunch: <executable> does not run from an application bundle`로 실패한다. | all |
 | `app-relaunch.host.records-the-detached-command` | host는 relaunch 명령을 시작할 때 명령의 `pid`와 `command` 줄을 가진 event `host.relaunch.start`를 저장한다. 시작할 수 없는 명령은 `application relaunch: start <program>: <reason>`으로 실패한다. | all |
 | `cli.plugin.install-extracts-and-records` | `sok registry use`는 검사한 index를 `file:` URL로 기록한다. `sok plugin install`은 plugin과 그 sidecar version을 mode와 함께 풀고, 푼 폴더마다 절대 `path`를 담아 `installed.json`을 쓰고, plugin 항목과 sidecar version을 출력하며, 되풀이하면 아무것도 바꾸지 않는다. | all |
@@ -1108,14 +1111,14 @@ fn invalid_json_closes_connection() {
 | `cli.plugin.starter-job-transitions-are-bound-to-snapshot` | 기록된 registry snapshot의 모든 plugin이 설치될 때까지 starter job은 pending으로 남는다. snapshot이 바뀌면 job을 완료하거나 변경할 수 없고, pending 및 completed 상태는 재시작 후에도 유지된다. | all |
 | `cli.plugin.action-runs-the-command` | Installer library는 `install`, `update`, `remove`, `enable`, `disable`을 같은 `sok plugin` 명령의 결과로 실행하고, 다른 action은 `unknown plugin action`으로 거부한다. | all |
 | `cli.file.errors-name-the-path-and-the-reason` | 실패한 파일 작업은 `<경로>: <이유>`로 보고하며, 이유는 소문자로 시작하는 운영체제 오류 문구다. 없는 registry index는 `<경로>: no such file or directory`, 읽을 수 없는 `installed.json`은 `<경로>: permission denied`를 보고한다 | all |
-| `cli.process-wait.rejects-invalid-pid-and-timeout` | process-wait 인수가 누락, 잘못됨, 중복되거나 알 수 없는 경우 exit 2로 끝나고 표준 출력을 쓰지 않으며 잘못된 인수를 명시하고 process-wait operation을 호출하지 않는다. | all |
+| `cli.process-wait.rejects-invalid-arguments` | `--timeout-ms`를 포함해 process-wait 인수가 누락, 잘못됨, 중복되거나 알 수 없는 경우 exit 2로 끝나고 표준 출력을 쓰지 않으며 잘못된 인수를 명시하고 process-wait operation을 호출하지 않는다. | all |
 | `cli.process-wait.requires-an-action` | 하위 command가 없는 `sok process`는 exit 2로 끝나며 process command에 action이 필요하다고 보고한다. | all |
-| `cli.process-wait.option-is-command-scoped` | `--timeout-ms` 옵션은 `sok process wait`에서 허용되고 다른 command의 파싱에는 영향을 주지 않는다. | all |
+| `cli.process-wait.takes-no-time-limit` | `sok process wait`에는 시간 제한이 없다. operation은 PID만 받고, 기다림은 process의 종료 event로 끝난다. | all |
 | `cli.process-wait.repeated-help-is-idempotent` | help flag를 반복해도 같은 process-wait 사용법을 성공적으로 출력한다. | all |
-| `cli.process-wait.timeout-is-an-error` | 요청한 timeout이 끝날 때까지 process가 남아 있으면 `sok process wait`는 exit 1로 끝나고 표준 출력을 쓰지 않으며 PID와 timeout을 보고한다. | all |
+| `cli.process-wait.signal-ends-the-wait` | process가 도는 동안 `sok`이 받은 SIGINT나 SIGTERM은 `sok process wait`를 exit 1로 끝내고 표준 출력을 쓰지 않으며 `process <pid> wait was interrupted by <signal>`을 보고하게 한다. | all |
 | `cli.process-wait.reports-pid-absent` | PID가 이미 없으면 `sok process wait`는 exit 0으로 끝나고 `{pid, ended: true}`를 출력한다. | all |
 | `cli.process-wait.platform-error-is-reported` | 운영체제의 process-wait operation이 실패하면 `sok process wait`는 exit 1로 끝나고 표준 출력을 쓰지 않으며 platform 오류를 보고한다. | all |
-| `cli.process-wait.registered-platform-receives-request` | Go `sok`의 등록된 process-wait 구현은 요청한 PID와 timeout을 받고 command는 그 결과를 직렬화한다. | wailsv3, mygo only: Go CLI는 변경 가능한 platform 등록 API를 제공한다 |
+| `cli.process-wait.registered-platform-receives-request` | Go `sok`의 등록된 process-wait 구현은 요청한 PID를 받고 command는 그 결과를 직렬화한다. | wailsv3, mygo only: Go CLI는 변경 가능한 platform 등록 API를 제공한다 |
 | `cli.debug.query-golden-lines` | `sok debug query`가 모든 사례에서 `docs/spec/cases/log-contract/query`의 golden page의 글 줄을 debug 화면과 같은 줄로 출력하고, 행이 page 뒤에 더 있으면 표준 오류에 `more: --after <cursor>`를 쓴다. | all |
 | `cli.debug.query-errors` | `sok debug query`는 event 파일이 event 구조를 어기면 파일과 줄 번호를 담은 오류로, `logs/` 폴더가 없으면 폴더를 담은 오류로 실패한다. | all |
 | `cli.debug.reports-a-rejected-file` | `sok debug query`는 다른 파일의 줄을 상태 0으로 출력하고, `sok debug query`와 `sok debug replay`는 schema 번호가 다른 파일마다 표준 오류에 `rejected: <error>`를 쓴다. | all |
@@ -1220,8 +1223,8 @@ fn invalid_json_closes_connection() {
 | `log.writer.error-wakes-the-writer` | level이 `error`인 event는 배치 간격을 기다리지 않고 기록된다. | all |
 | `log.writer.files-are-private` | 로그 폴더는 mode 0700, 로그 파일은 mode 0600이다. | all |
 | `log.writer.output-follows-the-contract` | writer의 파일은 자신의 event를 선언한 catalog에 대해 `@soksak/log-contract` 감사를 통과한다. | all |
-| `log.writer.flush-at-exit` | `flush`는 받아들인 모든 event가 디스크에 기록된 뒤 돌아오며, 기한이 지나면 그 기한을 밝히는 오류로 실패한다. | all |
-| `log.writer.flush-behind-a-flush-or-a-stop-is-answered` | writer가 다른 flush 요청이나 stop 뒤에서 찾은 flush 요청은 답을 받고 그 뒤의 event는 저장되며, 끝난 writer의 flush는 deadline이 아닌 오류로 바로 실패한다. | all |
+| `log.writer.flush-at-exit` | `flush`에는 시간 제한이 없다. 받아들인 모든 event가 디스크에 기록된 뒤 돌아오며, writer의 끝은 그것을 `the event writer ended before it answered the flush`로 실패시킨다. | all |
+| `log.writer.flush-behind-a-flush-or-a-stop-is-answered` | writer가 다른 flush 요청이나 stop 뒤에서 찾은 flush 요청은 답을 받고 그 뒤의 event는 저장되며, 끝난 writer의 flush는 writer의 끝으로 바로 실패한다. | all |
 | `log.writer.relays-events-with-their-layer-and-time` | host의 writer는 프로세스의 다른 계층이 중계한 event를 그 event의 `layer`, `ts_us`, `mono_ns`, `cids`와 writer의 `seq`로 저장하고, 계층으로 시작하지 않는 event 이름, 계약에 없는 계층, 0인 `mono_ns`, 유효하지 않은 식별자는 오류로 거부한다. | all |
 | `log.writer.names-the-writing-document` | 중계된 event는 자신을 쓴 문서를 layer `workbench`이면 `start`에, layer `page`이면 `page`에, layer `plugin`이면 둘 중 정확히 하나에 이름한다. writer는 이름한 member를 저장하고, member가 없는 event(`the event <name> of the layer <layer> names its writer in start`, `… in page or start`), layer `plugin`의 event에 두 member가 모두 있는 경우(`… names its writer in one of page and start, not both`), layer가 허용하지 않는 member(`the event <name> of the layer <layer> names page, which only an event of the layer page or plugin names`, `start`이면 `workbench or plugin`)를 거부한다. | all |
 | `log.writer.rotates-at-the-bound-and-keeps-generations` | writer는 파일을 `rotate_bytes`를 넘게 될 줄 앞에서 닫고, 닫은 파일을 하나도 지우지 않고 세대 `.1`부터 `.N`으로 보관하고, 새 파일을 `log.open`과 `log.rotated`로 시작하되 `seq`를 이어 가고, 모든 세대가 계약의 파일이다. | all |
@@ -1281,7 +1284,7 @@ fn invalid_json_closes_connection() {
 | `bounds.producer.fields-are-cut-while-serialized` | host event의 fields는 1,048,576바이트까지만 직렬화한다. 상한을 넘는 값은 `fields` `{"head": <첫 4,096바이트>}`와 상한을 막 넘은 `truncated`(직렬화가 멈출 때까지 쓴 바이트 수)로 저장하고, 상한에 들어가는 fields는 그 JSON으로 저장한다. | all |
 | `bounds.producer.record-text-is-cut` | host record의 `text`는 최대 8,192바이트, `where`는 최대 1,024바이트이며 각각 문자 경계에서 자르고, 둘 중 하나라도 잘렸으면 fields에 `truncated: true`가 있다. | all |
 | `bounds.start-buffer.holds-at-most-four-mebibytes` | record의 시작 buffer는 record 1,024개 외에 최대 4,194,304바이트를 담고, writer는 거절한 record와 그 바이트를 `log.dropped`로 센다. | all |
-| `bounds.endpoint.topic-changes-hold-at-most-256` | topic 하나의 구독 변경 256개가 workbench를 기다리면 다음 변경은 적용하지 않고, 오류 코드 `-32000`과 topic과 256을 말하는 메시지로 답하며, buffer `endpoint topic changes`와 이유 `the buffer holds 256 messages`를 가진 `host.buffer.dropped`로 저장한다. | all |
+| `bounds.endpoint.topic-changes-hold-at-most-256` | topic 하나의 구독 변경 256개가 workbench를 기다리면 `status.unwatch`가 아닌 다음 변경은 적용하지 않고, 오류 코드 `-32000`과 topic과 256을 말하는 메시지로 답하며, buffer `endpoint topic changes`와 이유 `the buffer holds 256 messages`를 가진 `host.buffer.dropped`로 저장한다. `status.unwatch`는 거절하지 않는다. 그 topic의 queue에서 기다리고 거기서 연결의 구독을 끝낸다. | all |
 | `bounds.endpoint.output-queue-holds-at-most-sixteen-mebibytes` | 연결의 출력 큐가 16,777,216바이트를 넘게 담게 하는 frame은 거절하고, buffer `endpoint output queue`와 이유 `the buffer holds 16777216 bytes`를 가진 `host.buffer.dropped`로 저장하며, 연결을 닫는다. | wailsv3, mygo only: Go host는 연결의 frame을 writer goroutine이 비우는 큐로 보내지만, Tauri host는 연결을 쥔 채 각 frame을 소켓에 쓴다 |
 | `log.record.flush-stores-the-records-written-so-far` | 기록 flush는 지금까지 쓴 기록이 event log에 들어갈 때까지 기다리고, 붙은 writer가 없으면 곧바로 돌아온다. | all |
 | `log.batch.stores-workbench-events-in-order` | workbench의 `log` 중계는 `batch` 요청의 event를 workbench가 준 `start`와 `ts_us`, writer의 `seq`로, 순서대로, 계층 `workbench`에 저장한다. | all |

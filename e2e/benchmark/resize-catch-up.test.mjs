@@ -37,7 +37,7 @@ for (const app of Object.values(APPS)) {
         const gestures = await uncapturedResizeGestures(s);
         recorded = await uncapturedResize({
           frameRecords: async () => {
-            await applyTrace((name, params) => s.run(name, params), FRAME_RECORDS, s.app.configDir);
+            await applyTrace((name, params) => s.run(name, params), FRAME_RECORDS, s.app.configDir, { ended: s.client.ended });
             const conditions = await b3Conditions(s, B3_SETTINGS["resize-catch-up"][FRAME_RECORDS]);
             if (run.state === FRAME_RECORDS) run.conditions = conditions;
           },

@@ -1,22 +1,30 @@
 //! Commands that wait for operating-system process events without connecting to an application endpoint.
 
 use std::io::Write;
-use std::time::Duration;
+use std::sync::mpsc;
 
 use serde_json::json;
-
-const WAIT_TIMEOUT_MAX_MS: u64 = 600_000;
 
 pub(crate) enum WaitError {
     Platform(String),
     Operation(String),
 }
 
+/// The wait for the end of a process: it receives the PID and returns when the operating system reports that the process
+/// ended. It takes no time limit; a signal that sok receives ends the command instead (docs/spec/cli.md).
+pub(crate) type Wait = dyn FnOnce(i32) -> Result<(), WaitError> + Send;
+
+/// The first of the events that end a process wait.
+enum WaitEnd {
+    Ended(Result<(), WaitError>),
+    Interrupted(&'static str),
+}
+
 /// Runs the process commands that do not connect to an application endpoint.
 pub(crate) fn run(
     args: &[String],
     stdout: &mut dyn Write,
-    wait_process_end: &mut dyn FnMut(i32, Duration) -> Result<bool, WaitError>,
+    wait_process_end: Box<Wait>,
 ) -> Result<(), crate::Error> {
     if args.len() == 1 && args[0] == "--help" {
         writeln!(stdout, "{}", crate::USAGE).map_err(|error| error.to_string())?;
@@ -37,9 +45,9 @@ pub(crate) fn run(
 fn run_wait(
     args: &[String],
     stdout: &mut dyn Write,
-    wait_process_end: &mut dyn FnMut(i32, Duration) -> Result<bool, WaitError>,
+    wait_process_end: Box<Wait>,
 ) -> Result<(), crate::Error> {
-    let parsed = crate::parse_scoped_arguments(args, &["help"], &["config-dir", "timeout-ms"])?;
+    let parsed = crate::parse_scoped_arguments(args, &["help"], &["config-dir"])?;
     if parsed.flag("help") {
         writeln!(stdout, "{}", crate::USAGE).map_err(|error| error.to_string())?;
         return Ok(());
@@ -67,34 +75,42 @@ fn run_wait(
             "pid must be an integer from 1 to 2147483647".into(),
         ));
     }
-    let timeout_text = parsed
-        .values
-        .get("timeout-ms")
-        .ok_or_else(|| crate::Error::Usage("--timeout-ms is required".into()))?;
-    if !decimal_digits(timeout_text) {
-        return Err(crate::Error::Usage(
-            "timeout must be an integer from 1 to 600000 milliseconds".into(),
-        ));
-    }
-    let timeout = timeout_text.parse::<u64>().map_err(|_| {
-        crate::Error::Usage("timeout must be an integer from 1 to 600000 milliseconds".into())
+    // The signals are watched before the wait starts, so a signal while the process runs always ends the wait. The wait runs
+    // on its own thread, and the first of its end and a signal ends the command; a wait that a signal ended is left to the
+    // end of the process of sok.
+    let (end_tx, end_rx) = mpsc::channel::<WaitEnd>();
+    let interrupted = end_tx.clone();
+    crate::platform::current()
+        .map_err(crate::Error::Failed)?
+        .on_interrupt(Box::new(move |signal| {
+            match interrupted.send(WaitEnd::Interrupted(signal)) {
+                // A command that already ended dropped the receiver, and the signal then ends nothing.
+                Ok(()) | Err(mpsc::SendError(_)) => {}
+            }
+        }))
+        .map_err(|error| crate::Error::Failed(format!("process wait: {error}")))?;
+    crate::routine::spawn_named("process-wait", move || {
+        match end_tx.send(WaitEnd::Ended(wait_process_end(pid as i32))) {
+            // A command that a signal ended dropped the receiver, and the end of the process then reports nothing.
+            Ok(()) | Err(mpsc::SendError(_)) => {}
+        }
+    });
+    let end = end_rx.recv().map_err(|_| {
+        crate::Error::Failed("process wait: the wait ended without a result".into())
     })?;
-    if !(1..=WAIT_TIMEOUT_MAX_MS).contains(&timeout) {
-        return Err(crate::Error::Usage(
-            "timeout must be an integer from 1 to 600000 milliseconds".into(),
-        ));
-    }
-
-    let ended = wait_process_end(pid as i32, Duration::from_millis(timeout)).map_err(|error| {
-        crate::Error::Failed(match error {
-            WaitError::Platform(message) => message,
-            WaitError::Operation(message) => format!("process wait: {message}"),
-        })
-    })?;
-    if !ended {
-        return Err(crate::Error::Failed(format!(
-            "process {pid} did not end within {timeout}ms"
-        )));
+    match end {
+        WaitEnd::Interrupted(signal) => {
+            return Err(crate::Error::Failed(format!(
+                "process {pid} wait was interrupted by {signal}"
+            )));
+        }
+        WaitEnd::Ended(Err(error)) => {
+            return Err(crate::Error::Failed(match error {
+                WaitError::Platform(message) => message,
+                WaitError::Operation(message) => format!("process wait: {message}"),
+            }));
+        }
+        WaitEnd::Ended(Ok(())) => {}
     }
     let output = serde_json::to_string_pretty(&json!({"pid": pid, "ended": true}))
         .map_err(|error| crate::Error::Failed(format!("process wait result: {error}")))?;

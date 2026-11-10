@@ -2712,7 +2712,7 @@ func TestPersistentConnectionsAreRecordedAsEvents(t *testing.T) {
 	// The sampler names the service while it is connected and not after the connection ended.
 	sampledService := func() int {
 		host.PerformanceSample()
-		if err := log.Flush(5 * time.Second); err != nil {
+		if err := log.Flush(); err != nil {
 			t.Fatal(err)
 		}
 		count := 0
@@ -2730,7 +2730,7 @@ func TestPersistentConnectionsAreRecordedAsEvents(t *testing.T) {
 	}
 	listener.Close()
 	<-serverDone
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var seen []string
@@ -2822,7 +2822,7 @@ func TestPersistentSpawnedServiceFirstAnswerAfterSpawnIsRecorded(t *testing.T) {
 	sidecars.Stop()
 	listener.Close()
 	<-served
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(filepath.Join(folder, "pid"))
@@ -3002,7 +3002,7 @@ func TestPersistentServiceEndStopsTheRestartsBeforeTheSpawn(t *testing.T) {
 	}
 
 	sidecars.Stop()
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())

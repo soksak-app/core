@@ -10,7 +10,6 @@ mod records;
 
 use std::fs;
 use std::sync::Mutex;
-use std::time::Duration;
 
 use serde_json::{Value, json};
 use soksak_host::event_record::use_host_event_log;
@@ -68,8 +67,8 @@ fn a_stall_dump_is_an_event_and_the_reply_names_its_position() {
     let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let config = folder::Folder::new();
     let log = records::start_writer(config.path());
-    let (boot, seq) = emit_stall_dump("/x/logs/stall-10-7.txt", Duration::from_secs(5)).unwrap();
-    log.flush(Duration::from_secs(5)).unwrap();
+    let (boot, seq) = emit_stall_dump("/x/logs/stall-10-7.txt").unwrap();
+    log.flush().unwrap();
     let events: Vec<Value> = records::read_events(log.path())
         .into_iter()
         .filter(|event| event["event"] == "host.stall.dump")

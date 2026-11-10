@@ -26,7 +26,7 @@ extern void goHost_notification_event(uintptr_t arg0, char * arg1);
 extern void goHost_quit_request(int arg0, char * arg1);
 extern void goHost_native_ui_run(uintptr_t arg0);
 extern void goHost_native_responder_changed(uintptr_t arg0);
-extern void goHost_native_fullscreen_done(uintptr_t arg0);
+extern void goHost_native_fullscreen_done(uintptr_t arg0, int arg1, char * arg2);
 extern void goHost_surface_pressed(uintptr_t arg0, void * arg1);
 extern void goHost_surface_point(uintptr_t arg0, int arg1, double arg2, double arg3);
 extern void goHost_input_delivered(uintptr_t arg0, int arg1, sp_input_held * arg2);
@@ -323,8 +323,8 @@ func goHost_native_responder_changed(arg0 C.uintptr_t) {
 }
 
 //export goHost_native_fullscreen_done
-func goHost_native_fullscreen_done(arg0 C.uintptr_t) {
-	callbackHandlers.NativeFullscreenDone(uintptr(arg0))
+func goHost_native_fullscreen_done(arg0 C.uintptr_t, arg1 C.int, arg2 *C.char) {
+	callbackHandlers.NativeFullscreenDone(uintptr(arg0), int32(arg1), (*byte)(unsafe.Pointer(arg2)))
 }
 
 //export goHost_surface_pressed

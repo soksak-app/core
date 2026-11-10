@@ -10,6 +10,10 @@ use super::Connection;
 #[path = "process.rs"]
 mod process;
 
+#[cfg(test)]
+#[path = "process_wait_signal_test.rs"]
+mod process_wait_signal_test;
+
 /// The Linux implementation.
 pub struct Linux;
 
@@ -47,15 +51,21 @@ impl Linux {
         Ok(Box::new(stream))
     }
 
-    pub(super) fn on_interrupt(interrupted: Box<dyn FnOnce() + Send>) -> Result<(), String> {
+    pub(super) fn on_interrupt(
+        interrupted: Box<dyn FnOnce(&'static str) + Send>,
+    ) -> Result<(), String> {
         let mut signals = signal_hook::iterator::Signals::new([
             signal_hook::consts::SIGINT,
             signal_hook::consts::SIGTERM,
         ])
         .map_err(|error| format!("cannot watch signals: {error}"))?;
         crate::routine::spawn_named("interrupt", move || {
-            if signals.forever().next().is_some() {
-                interrupted();
+            if let Some(signal) = signals.forever().next() {
+                interrupted(if signal == signal_hook::consts::SIGINT {
+                    "SIGINT"
+                } else {
+                    "SIGTERM"
+                });
             }
         });
         Ok(())

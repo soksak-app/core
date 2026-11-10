@@ -78,7 +78,7 @@ fn index_for_release(path: &Path, sum: &str) -> Folder {
     dir
 }
 
-// contract: install.manifest.replays-manifest-cases
+// contract: install.manifest.replays-manifest-cases, exposure.command.declaration-refuses-a-time-limit
 #[test]
 fn plugin_install_replays_the_manifest_cases() {
     let mut failures = Vec::new();

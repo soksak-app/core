@@ -10,7 +10,6 @@
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Condvar, Mutex};
-use std::time::{Duration, Instant};
 
 use crate::framework::{Manager, Webview};
 use base64::Engine;
@@ -127,9 +126,6 @@ struct Inner {
 
 /// The end of a raster wait by the end of the layout transaction that it belongs to.
 pub(crate) const LAYOUT_WAIT_ENDED: &str = "the layout transaction of the window ended";
-
-/// The time limit of a raster wait that ends only by its events (docs/spec/native-surfaces.md#layout-transaction).
-pub(crate) const NO_WAIT_LIMIT: Duration = Duration::MAX;
 
 impl Inner {
     /// Whether a region is drawing: it is attached and visible, its outer surface is visible and the window is neither
@@ -298,6 +294,7 @@ impl Images {
             // when the region is shown without a new layout.
             let configure = (drawing && !state.configured && state.width > 0).then(|| {
                 state.configured = true;
+                state.presentation_error = None;
                 Configure {
                     name: key.1.clone(),
                     generation: state.generation,
@@ -728,13 +725,21 @@ impl Images {
             .map(|(key, _)| key.clone())
             .collect();
         for key in keys {
+            // default: a region without a state has nothing to invalidate.
+            let waited = inner
+                .states
+                .get(&key)
+                .is_some_and(|state| state.raster != 0 && inner.drawing(&key, state));
             let Some(state) = inner.states.get_mut(&key) else {
                 continue;
             };
             state.configured = false;
             state.last_sequence = 0;
             state.presented_sequence = 0;
-            state.presentation_error = None;
+            // The raster of a lost connection that a wait waits for never presents, so that wait ends here with the
+            // supplier that ended; the configure of the new connection clears it.
+            state.presentation_error =
+                waited.then(|| format!("the supplier connection of {sidecar} ended"));
             // The service of the new connection has no drawing state either.
             state.drawing_sent = None;
             invalidated += 1;
@@ -804,6 +809,7 @@ impl Images {
         }
         let state = inner.states.get_mut(key).expect("the state was read above");
         state.configured = true;
+        state.presentation_error = None;
         Ok(Some(Configure {
             name: key.1.clone(),
             generation: state.generation,
@@ -1071,56 +1077,62 @@ impl Images {
             .is_some_and(|state| matches!(state.drawing_sent, Some((true, _))))
     }
 
-    /// Waits until all visible image regions present the current raster or the time limit ends.
-    pub fn wait_current(&self, timeout: Duration) -> Result<(), String> {
-        self.wait_current_observed(timeout, || {})
+    /// Waits until all visible image regions present the current raster. The wait has no time limit: the presentation, the
+    /// removal of a region or surface, a presentation failure and the end of the supplier connection of a region end it, and
+    /// so does the end of the request that waits, which `ended` names once it came and which wakes the wait with
+    /// [`Images::wake_waits`]. The end of a layout transaction does not end it.
+    pub fn wait_current(&self, ended: &dyn Fn() -> Option<String>) -> Result<(), String> {
+        self.wait_current_observed(ended, || {})
     }
 
-    /// Waits for the image completion boundary selected by the layout request. With [`NO_WAIT_LIMIT`] it ends only by the
-    /// presentation of each required raster, by a presentation failure, by the end of the connection of a sidecar of the regions,
-    /// or by the end of the layout transaction ([`LAYOUT_WAIT_ENDED`]).
-    pub(crate) fn wait_layout_rasters(
+    /// Wakes each raster wait, so a wait reads the end of its request.
+    pub(crate) fn wake_waits(&self) {
+        let _held = self.lock();
+        self.changed();
+    }
+
+    /// Waits for the image completion boundary selected by the layout request. It ends only by the presentation of each
+    /// required raster, by the removal of its region or surface, by a presentation failure, by the end of the connection of a
+    /// sidecar of the regions, or by the end of the layout transaction, which a cancel of its ticket or of its window ends
+    /// ([`LAYOUT_WAIT_ENDED`]) (docs/spec/native-surfaces.md#layout-transaction).
+    pub(crate) fn wait_layout_rasters(&self, settled: bool) -> Result<(), String> {
+        self.wait_layout_rasters_observed(settled, || {})
+    }
+
+    fn wait_layout_rasters_observed(
         &self,
-        timeout: Duration,
         settled: bool,
+        waiting: impl FnMut(),
     ) -> Result<(), String> {
-        if settled {
-            self.wait_current(timeout)
+        let complete: fn(&Inner) -> bool = if settled {
+            Self::current_presented_locked
         } else {
-            self.wait_raster_snapshot_observed(timeout, || {})
-        }
+            Self::current_raster_snapshot_installed_locked
+        };
+        self.wait_until(WaitEnd::Layout, waiting, complete)
     }
 
-    fn wait_raster_snapshot_observed(
+    fn wait_current_observed(
         &self,
-        timeout: Duration,
-        waiting: impl FnOnce(),
+        ended: &dyn Fn() -> Option<String>,
+        waiting: impl FnMut(),
     ) -> Result<(), String> {
-        self.wait_observed(
-            timeout,
+        self.wait_until(
+            WaitEnd::Request(ended),
             waiting,
-            Self::current_raster_snapshot_installed_locked,
+            Self::current_presented_locked,
         )
     }
 
-    /// Signals the first pending check under the owner lock so tests can order the next frame before wakeup.
-    fn wait_current_observed(
+    /// The wait of the image regions: it ends at complete, at a presentation failure, at the end of the connection of a
+    /// sidecar of the regions and at its own end. waiting runs at each pending check under the owner lock, so tests can
+    /// order the next change before the wakeup.
+    fn wait_until(
         &self,
-        timeout: Duration,
-        waiting: impl FnOnce(),
-    ) -> Result<(), String> {
-        self.wait_observed(timeout, waiting, Self::current_presented_locked)
-    }
-
-    fn wait_observed(
-        &self,
-        timeout: Duration,
-        waiting: impl FnOnce(),
+        end: WaitEnd<'_>,
+        mut waiting: impl FnMut(),
         complete: fn(&Inner) -> bool,
     ) -> Result<(), String> {
-        let mut waiting = Some(waiting);
-        // NO_WAIT_LIMIT overflows the clock, so that wait has no deadline.
-        let deadline = Instant::now().checked_add(timeout);
         let mut inner = self.lock();
         let (ends, sidecars) = (inner.wait_ends, inner.ended_sidecars);
         loop {
@@ -1130,8 +1142,16 @@ impl Images {
                     inner.ended_sidecar
                 ));
             }
-            if inner.wait_ends != ends {
-                return Err(LAYOUT_WAIT_ENDED.to_string());
+            match end {
+                WaitEnd::Layout if inner.wait_ends != ends => {
+                    return Err(LAYOUT_WAIT_ENDED.to_string());
+                }
+                WaitEnd::Request(ended) => {
+                    if let Some(reason) = ended() {
+                        return Err(reason);
+                    }
+                }
+                WaitEnd::Layout => {}
             }
             if let Some(error) = inner
                 .states
@@ -1143,41 +1163,27 @@ impl Images {
             if complete(&inner) {
                 return Ok(());
             }
-            let remaining = match deadline {
-                Some(deadline) => match deadline.checked_duration_since(Instant::now()) {
-                    Some(remaining) => Some(remaining),
-                    None => return Err("presentationTimeout".to_string()),
-                },
-                None => None,
-            };
-            if let Some(waiting) = waiting.take() {
-                waiting();
-            }
-            let Some(remaining) = remaining else {
-                inner = self
-                    .shared
-                    .changed
-                    .wait(inner)
-                    // default: a thread that stopped while holding the lock also changed the state only by one insert,
-                    // remove or read, so the state is consistent, and that stop was already reported as a panic report.
-                    .unwrap_or_else(|poisoned| poisoned.into_inner());
-                continue;
-            };
-            let (next, result) = self
+            waiting();
+            inner = self
                 .shared
                 .changed
-                .wait_timeout(inner, remaining)
+                .wait(inner)
                 // default: a thread that stopped while holding the lock also changed the state only by one insert,
                 // remove or read, so the state is consistent, and that stop was already reported as a panic report.
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
-            inner = next;
-            // The failure of the time limit answers that request with the regions that the caller waited for
-            // (docs/spec/hosts.md#application-log).
-            if result.timed_out() && !complete(&inner) {
-                return Err("presentationTimeout".to_string());
-            }
         }
     }
+}
+
+/// What ends a raster wait besides its presentation, a presentation failure and the end of the connection of a sidecar
+/// (docs/spec/host-contract.md, images.wait.ends-by-its-events).
+#[derive(Clone, Copy)]
+enum WaitEnd<'a> {
+    /// The end of the layout transaction that the wait of a presentation request belongs to.
+    Layout,
+    /// The end of the request that waits, the close of its window, the end of its main page process or the end of its
+    /// endpoint connection, with its text once it came.
+    Request(&'a dyn Fn() -> Option<String>),
 }
 
 /// Checks the webview of the calling surface caller and the requested surface, and returns the window.

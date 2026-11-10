@@ -108,7 +108,7 @@ fn start_standard_error_writes_the_start_line_and_takes_the_standard_error_of_th
             .status()
             .unwrap();
         assert!(status.success());
-        writer.flush(std::time::Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         return;
     }
     let config = folder::Folder::new();
@@ -152,7 +152,7 @@ fn log_error_writes_an_error_event_to_the_event_log() {
         }
         let log = records::start_writer(std::path::Path::new(&config));
         log_error("surface input", "the window has no content view");
-        log.flush(std::time::Duration::from_secs(5)).unwrap();
+        log.flush().unwrap();
         return;
     }
     let config = folder::Folder::new();
@@ -210,7 +210,7 @@ fn log_info_writes_an_info_event_to_the_event_log() {
         }
         let log = records::start_writer(std::path::Path::new(&config));
         soksak_host::application_log::log_info("webkit children", "pid 7: gone");
-        log.flush(std::time::Duration::from_secs(5)).unwrap();
+        log.flush().unwrap();
         return;
     }
     let config = folder::Folder::new();

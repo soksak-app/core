@@ -46,7 +46,7 @@ static void answered(void *context, sp_input_result result, const sp_input_held 
 static SPAnswer lastAnswer;
 static sp_input_result input(NSWindow *window, const char *pointer, double x, double y, int phase, int button) {
     lastAnswer = (SPAnswer){0};
-    sp_input_pointer_then(window, pointer, x, y, phase, button, 0, 0, 1, 2, answered, &lastAnswer);
+    sp_input_pointer_then(window, pointer, x, y, phase, button, 0, 0, 1, answered, &lastAnswer);
     until(^BOOL { return lastAnswer.done; });
     sp_input_result result = lastAnswer.done ? lastAnswer.result : (sp_input_result)-1;
     // Each answer is written, so a failing check shows the results that led to it.

@@ -27,7 +27,7 @@ test("a wait does not settle before the connection ends, and settles when it end
   fs.writeFileSync(file, "{}\n");
   const client = connection();
   let settled = false;
-  const waiting = untilShutdown(client, file, { from: Date.now(), limit: 5000 }).then((value) => {
+  const waiting = untilShutdown(client, file, { from: Date.now() }).then((value) => {
     settled = true;
     return value;
   });
@@ -45,14 +45,13 @@ test("a wait rejects with the file name when the file exists at the end of the c
   const file = join(dir, "endpoint.json");
   fs.writeFileSync(file, "{}\n");
   const client = connection();
-  const waiting = untilShutdown(client, file, { from: Date.now(), limit: 5000 });
+  const waiting = untilShutdown(client, file, { from: Date.now() });
   client.close(new Error("endpoint connection closed"));
   await assert.rejects(waiting, /exists \d+ms after the request; the host removes it before its process ends$/);
 });
 
-test("a wait rejects with the limit when the connection does not end", { timeout: 10000 }, async (t) => {
+test("a wait takes no limit", async (t) => {
   const dir = folder(t);
-  const client = connection();
-  await assert.rejects(untilShutdown(client, join(dir, "endpoint.json"), { from: Date.now(), limit: 100 }),
-    /^Error: endpoint connection did not end within 100ms$/);
+  await assert.rejects(untilShutdown(connection(), join(dir, "endpoint.json"), { from: Date.now(), limit: 100 }),
+    /^TypeError: untilShutdown takes \{ from \} and no limit/);
 });

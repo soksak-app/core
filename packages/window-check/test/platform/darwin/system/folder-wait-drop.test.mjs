@@ -49,12 +49,12 @@ for (const report of ["client", "kernel", "overflow"]) {
       { code: 0, signal: null, stdout: `cycles ${cycles}\n`, stderr: INJECTED });
   });
 
-  test(`the ${report} report of lost events ends a wait for one change before its deadline`, { timeout: 60000 }, async (t) => {
+  test(`the ${report} report of lost events ends a wait for one change`, { timeout: 60000 }, async (t) => {
     assert.deepEqual(await underReports(t, report, "kept", "folder-wait-single-change.mjs", []),
       { code: 0, signal: null, stdout: "changed\n", stderr: INJECTED });
   });
 
-  test(`the ${report} report in a batch that adds no event ends a wait before its deadline`, { timeout: 60000 }, async (t) => {
+  test(`the ${report} report in a batch that adds no event ends a wait`, { timeout: 60000 }, async (t) => {
     assert.deepEqual(await underReports(t, report, "lost", "folder-wait-report-only.mjs", []),
       { code: 0, signal: null, stdout: "changed\n", stderr: INJECTED });
   });

@@ -4901,7 +4901,7 @@
       ]
     },
     {
-      "id": "exposes.command-timeout-high",
+      "id": "exposes.command-timeout-refused",
       "manifest": {
         "id": "probe",
         "name": "Probe",
@@ -4925,87 +4925,13 @@
               "result": {
                 "type": "null"
               },
-              "timeout": 600001
+              "timeout": 10000
             }
           ]
         }
       },
       "accepted": false,
-      "error": "probe exposes probe.run: timeout must be an integer from 1 to 600000 milliseconds",
-      "packageFiles": [
-        "plugin.json",
-        "ui/page.html"
-      ]
-    },
-    {
-      "id": "exposes.command-timeout-zero",
-      "manifest": {
-        "id": "probe",
-        "name": "Probe",
-        "description": "Sample.",
-        "surface": {
-          "composition": {
-            "kind": "view",
-            "page": "ui/page.html"
-          }
-        },
-        "mark": "P",
-        "icon": "<svg></svg>",
-        "exposes": {
-          "commands": [
-            {
-              "name": "probe.run",
-              "description": "Runs.",
-              "params": {
-                "type": "object"
-              },
-              "result": {
-                "type": "null"
-              },
-              "timeout": 0
-            }
-          ]
-        }
-      },
-      "accepted": false,
-      "error": "probe exposes probe.run: timeout must be an integer from 1 to 600000 milliseconds",
-      "packageFiles": [
-        "plugin.json",
-        "ui/page.html"
-      ]
-    },
-    {
-      "id": "exposes.command-timeout-fraction",
-      "manifest": {
-        "id": "probe",
-        "name": "Probe",
-        "description": "Sample.",
-        "surface": {
-          "composition": {
-            "kind": "view",
-            "page": "ui/page.html"
-          }
-        },
-        "mark": "P",
-        "icon": "<svg></svg>",
-        "exposes": {
-          "commands": [
-            {
-              "name": "probe.run",
-              "description": "Runs.",
-              "params": {
-                "type": "object"
-              },
-              "result": {
-                "type": "null"
-              },
-              "timeout": 1.5
-            }
-          ]
-        }
-      },
-      "accepted": false,
-      "error": "probe exposes probe.run: timeout must be an integer from 1 to 600000 milliseconds",
+      "error": "probe exposes probe.run: timeout is not a member of a command declaration",
       "packageFiles": [
         "plugin.json",
         "ui/page.html"

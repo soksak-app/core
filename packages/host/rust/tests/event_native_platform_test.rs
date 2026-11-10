@@ -70,7 +70,7 @@ fn the_host_writer_starts_with_the_pull_of_the_platform() {
     let directory = folder::Folder::new();
     let log = event_log::start_host(directory.path()).unwrap();
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let text = std::fs::read_to_string(path).unwrap();
     let lines: Vec<&str> = text.lines().collect();
     assert!(lines[0].contains("\"event\":\"log.open\""), "{}", lines[0]);
@@ -90,20 +90,16 @@ fn the_shutdown_flushes_the_native_observers_before_the_writer_flush() {
     let directory = folder::Folder::new();
     let log = event_log::start_host(directory.path()).unwrap();
     let mut flushed = false;
-    let result = event_log::flush_event_log(
-        &log,
-        || {
-            flushed = true;
-            // The flush of the observers stores the tail of a counted source; the writer flush that follows writes it.
-            log.emit(
-                event_log::Level::Info,
-                "host.test.observer_tail",
-                &serde_json::json!({"count": 3}),
-            );
-            Ok(())
-        },
-        Duration::from_secs(5),
-    );
+    let result = event_log::flush_event_log(&log, || {
+        flushed = true;
+        // The flush of the observers stores the tail of a counted source; the writer flush that follows writes it.
+        log.emit(
+            event_log::Level::Info,
+            "host.test.observer_tail",
+            &serde_json::json!({"count": 3}),
+        );
+        Ok(())
+    });
     assert_eq!(result, Ok(()));
     assert!(flushed);
     let text = std::fs::read_to_string(log.path()).unwrap();
@@ -124,12 +120,8 @@ fn the_shutdown_reports_a_failed_observer_flush_and_still_flushes_the_writer() {
         "host.test.before_failure",
         &serde_json::json!({}),
     );
-    let error = event_log::flush_event_log(
-        &log,
-        || Err("refused by the platform".to_string()),
-        Duration::from_secs(5),
-    )
-    .unwrap_err();
+    let error = event_log::flush_event_log(&log, || Err("refused by the platform".to_string()))
+        .unwrap_err();
     assert!(
         error.contains("native observers") && error.contains("refused by the platform"),
         "{error}"

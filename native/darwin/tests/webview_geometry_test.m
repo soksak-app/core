@@ -273,7 +273,7 @@ static double scrollViewCenter(NSWindow *window, WKWebView *view) {
     [view _doAfterNextPresentationUpdate:^{ shown = YES; }];
     until(^BOOL { return shown; });
     __block sp_input_result result = SP_INPUT_REJECTED;
-    sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, x, y, 4, 0, 0, 120, 1, 5, scrollDone, &result);
+    sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, x, y, 4, 0, 0, 120, 1, scrollDone, &result);
     until(^BOOL { return result != SP_INPUT_REJECTED; });
     check(result == SP_INPUT_DELIVERED, @"a 120-point scroll into the view is delivered");
     return scrolledByView(view);
@@ -307,7 +307,7 @@ static double scrollBy(NSWindow *window, WKWebView *surface, BOOL posted) {
     until(^BOOL { return shown; });
     if (!posted) {
         __block sp_input_result result = SP_INPUT_REJECTED;
-        sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, x, y, 4, 0, 0, 120, 1, 5, scrollDone, &result);
+        sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, x, y, 4, 0, 0, 120, 1, scrollDone, &result);
         until(^BOOL { return result != SP_INPUT_REJECTED; });
         check(result == SP_INPUT_DELIVERED, @"a scroll into the surface is delivered");
         return scrolledByView(surface);
@@ -561,7 +561,7 @@ static void checkHitTesting(WKWebView *main) {
     double pressY = content.isFlipped ? pressInContent.y : content.bounds.size.height - pressInContent.y;
     surfaceLayoutBegin(main.window, 77002, ^(int allowed) {});
     sp_input_result pressResult = SP_INPUT_UNRECEIVED;
-    sp_input_pointer_then(main.window, SP_INPUT_POINTER_MAIN, pressInContent.x, pressY, 1, 0, 0, 0, 1, 5, pressDelivered, &pressResult);
+    sp_input_pointer_then(main.window, SP_INPUT_POINTER_MAIN, pressInContent.x, pressY, 1, 0, 0, 0, 1, pressDelivered, &pressResult);
     check(counter.presses == 0, @"an injected press does not reach the surface during its preparation");
     check(surfaceLayoutCommit(main.window, 77002), @"the layout of the injected press commits");
     pumpPresses(2, ^BOOL { return counter.presses == 1 && pressResult != SP_INPUT_UNRECEIVED; });
@@ -649,7 +649,7 @@ static void checkHitTesting(WKWebView *main) {
     surfaceLayoutBegin(main.window, 77007, ^(int allowed) {});
     inputOrder = [NSMutableArray array];
     sp_input_result heldPressResult = SP_INPUT_UNRECEIVED;
-    sp_input_pointer_then(main.window, SP_INPUT_POINTER_MAIN, pressInContent.x, pressY, 1, 0, 0, 0, 1, 5, pressDelivered, &heldPressResult);
+    sp_input_pointer_then(main.window, SP_INPUT_POINTER_MAIN, pressInContent.x, pressY, 1, 0, 0, 0, 1, pressDelivered, &heldPressResult);
     check(sp_input_key(main.window, "a", "a", 0, true) == SP_INPUT_DELIVERED, @"an injected key behind an injected press is taken");
     sp_input_key(main.window, "a", "a", 0, false);
     runQueue();

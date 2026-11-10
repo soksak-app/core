@@ -223,12 +223,12 @@ func StartHostLogPolicy(log *EventLog, applied func(source, detail string)) (sto
 // FlushEventLog ends the event log of a process that is shutting down: flushObservers stores the tail of the counted sources
 // of the native observers in the native ring, and the flush writes it with everything that is queued. A failed flush of the
 // observers does not skip the flush of the writer; the result names the failure of each.
-func FlushEventLog(log *EventLog, flushObservers func() error, deadline time.Duration) error {
+func FlushEventLog(log *EventLog, flushObservers func() error) error {
 	observers := flushObservers()
 	if observers != nil {
 		observers = fmt.Errorf("flush native observers: %w", observers)
 	}
-	return errors.Join(observers, log.Flush(deadline))
+	return errors.Join(observers, log.Flush())
 }
 
 // nativeWake turns the pipe of the native ring into the Wake of the writer. The goroutine sleeps in the runtime poller until

@@ -12,7 +12,7 @@ use objc2::runtime::AnyObject;
 use objc2::runtime::Bool;
 use serde_json::Value;
 
-use super::super::{Frame, Handle};
+use super::super::{Frame, FullscreenResult, Handle};
 
 /// Returns the NSWindow address of the window.
 pub fn handle(window: &Window) -> Result<Handle, String> {
@@ -69,12 +69,37 @@ pub fn controls(window: Handle) -> Frame {
     (rect[0], rect[1], rect[2], rect[3])
 }
 
-/// Changes the window to full screen or back, and calls done when the transition ends.
-pub fn fullscreen(window: Handle, on: bool, done: Box<dyn Fn()>) -> Result<(), String> {
+/// Changes the window to full screen or back, and calls done once with the result of the change and its native message
+/// (native/darwin/src/window_fullscreen.h).
+pub fn fullscreen(
+    window: Handle,
+    on: bool,
+    done: Box<dyn Fn(FullscreenResult, String)>,
+) -> Result<(), String> {
     unsafe extern "C" {
-        fn sp_window_fullscreen(window: *mut c_void, on: bool, done: &Block<dyn Fn()>) -> bool;
+        fn sp_window_fullscreen(
+            window: *mut c_void,
+            on: bool,
+            done: &Block<dyn Fn(i32, *const c_char)>,
+        ) -> bool;
     }
-    let done = RcBlock::new(done);
+    let done = RcBlock::new(move |result: i32, message: *const c_char| {
+        let message = if message.is_null() {
+            String::new()
+        } else {
+            // SAFETY: the message of a result is a static C string of the native side.
+            unsafe { CStr::from_ptr(message) }
+                .to_string_lossy()
+                .into_owned()
+        };
+        let result = match result {
+            0 => FullscreenResult::Done,
+            1 => FullscreenResult::Refused,
+            2 => FullscreenResult::Closed,
+            _ => FullscreenResult::Failed,
+        };
+        done(result, message);
+    });
     if unsafe { sp_window_fullscreen(window as *mut c_void, on, &done) } {
         Ok(())
     } else {

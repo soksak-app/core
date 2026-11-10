@@ -68,7 +68,7 @@ export function createViewChannel({ handler }) {
 }
 
 /**
- * Creates the report function of createViewBridge for a view page. An error report, a call that ended by a timeout and a peer that
+ * Creates the report function of createViewBridge for a view page. An error report and a peer that
  * was lost for another reason than a closed surface reach reportError, which the view page passes as its global error hook, so the
  * start script of the view writes them to the application log. The open-call counts are console debug records, and a call that
  * ended because its surface closed is a console info record.

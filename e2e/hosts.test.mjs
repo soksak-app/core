@@ -259,7 +259,7 @@ if (requiresAll(process.env)) test("every host serves the declared application m
       const view = value?.menus?.find((menu) => menu.title === "보기" || menu.title === "View");
       return view !== undefined && view.items.length >= declaredCounts[contract.menus.findIndex(([id]) => id === "view")]
         && view.items[view.items.length - 1].title.length > 0;
-    }, "the declared View menu items did not all arrive", { timeout: 5000 });
+    }, "the declared View menu items did not all arrive");
     const report = settled;
     assert.ok(typeof report?.language === "string" && columns.includes(report.language),
       `host.menu must report a declared language: ${JSON.stringify(report).slice(0, 200)}`);

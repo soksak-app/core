@@ -59,7 +59,7 @@ func startRetention(t *testing.T, logs string, bound int64) *host.EventLog {
 
 func prunedEvents(t *testing.T, log *host.EventLog) []map[string]any {
 	t.Helper()
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	// The event lies in the file at the path or in a generation that a later rotation closed.

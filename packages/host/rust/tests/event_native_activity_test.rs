@@ -6,7 +6,6 @@ mod folder;
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
-use std::time::Duration;
 
 use serde_json::Value;
 use soksak_host::event_log;
@@ -24,7 +23,7 @@ fn the_activity_observers_register_under_the_policy_of_the_host_start() {
     .unwrap();
     let log = Arc::new(event_log::start_host(directory.path()).unwrap());
     let _watch = event_log::start_host_log_policy(&log, None).unwrap();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let registered: BTreeSet<String> = std::fs::read_to_string(log.path())
         .unwrap()
         .lines()

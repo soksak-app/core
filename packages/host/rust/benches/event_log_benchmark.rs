@@ -80,5 +80,5 @@ fn main() {
         }
         summary(&format!("emit, {producers} producer(s) (lost {lost})"), all);
     }
-    log.flush(Duration::from_secs(30)).unwrap();
+    log.flush().unwrap();
 }

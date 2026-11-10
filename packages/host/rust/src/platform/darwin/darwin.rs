@@ -15,14 +15,12 @@ use crate::framework::PlatformWebview;
 use crate::framework::Window;
 use serde_json::Value;
 
-use std::time::Duration;
-
 #[cfg(feature = "diagnostics")]
 use super::DocumentViewportMarker;
 use super::{
-    CoreRootHost, CoreRootResolver, DOMOverlay, Delivery, DocumentOptions, Frame, Handle, Hit,
-    ImagePresentation, ImageReleased, Insets, Key, Listener, NativeEventWait, PersistentStream,
-    Platform, Pointer, ProcessFootprint, Raster, WindowOverlay,
+    CoreRootHost, CoreRootResolver, DOMOverlay, Delivery, DocumentOptions, Frame, FullscreenResult,
+    Handle, Hit, ImagePresentation, ImageReleased, Insets, Key, Listener, NativeEventWait,
+    PersistentStream, Platform, Pointer, ProcessFootprint, Raster, WindowOverlay,
 };
 
 #[cfg(feature = "diagnostics")]
@@ -180,7 +178,12 @@ impl Platform for Darwin {
         window::end_responder_observation(observation)
     }
 
-    fn fullscreen(&self, window: Handle, on: bool, done: Box<dyn Fn()>) -> Result<(), String> {
+    fn fullscreen(
+        &self,
+        window: Handle,
+        on: bool,
+        done: Box<dyn Fn(FullscreenResult, String)>,
+    ) -> Result<(), String> {
         window::fullscreen(window, on, done)
     }
     fn titlebar_height(&self, window: Handle) -> Result<f64, String> {
@@ -635,10 +638,9 @@ impl Platform for Darwin {
         &self,
         window: Handle,
         pointer: Pointer,
-        receive: Duration,
         done: Box<dyn FnOnce(Delivery) + Send>,
     ) -> Result<(), String> {
-        input::pointer(window, pointer, receive, done);
+        input::pointer(window, pointer, done);
         Ok(())
     }
     fn input_activate(
@@ -646,10 +648,9 @@ impl Platform for Darwin {
         window: Handle,
         x: f64,
         y: f64,
-        timeout: Duration,
         done: Box<dyn FnOnce(Result<(), String>) + Send>,
     ) -> Result<(), String> {
-        input::activate(window, x, y, timeout, done);
+        input::activate(window, x, y, done);
         Ok(())
     }
     fn input_key(&self, window: Handle, key: &Key) -> Result<Delivery, String> {

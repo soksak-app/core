@@ -66,7 +66,7 @@ fn a_poisoned_observer_lock_still_sets_and_calls_the_write_observer() {
         log.emit(Level::Info, "sok.probe.event", &json!({"n": 1})),
         "the event was refused"
     );
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let (path, size) = written
         .recv_timeout(Duration::from_secs(10))
         .expect("the observer was not called while its lock was poisoned");

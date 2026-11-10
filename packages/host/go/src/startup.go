@@ -7,7 +7,6 @@ package host
 import (
 	"fmt"
 	"os"
-	"time"
 )
 
 // ExitOnFailureWith writes the message of err through write and ends the process through exit with the status 1 when err is not
@@ -27,7 +26,7 @@ func ExitOnFailure(err error) {
 		fmt.Fprintln(os.Stderr, text)
 		LogError("startup", text)
 	}, func(status int) {
-		if flushErr := FlushRecords(2 * time.Second); flushErr != nil {
+		if flushErr := FlushRecords(); flushErr != nil {
 			fmt.Fprintf(os.Stderr, "event writer: the record of the startup failure was not stored: %v\n", flushErr)
 		}
 		os.Exit(status)

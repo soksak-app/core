@@ -42,10 +42,10 @@ test("ordinary call counts and closed-surface call ends stay out of the applicat
 
 test("unexpected transport loss reaches the injected global error hook", { timeout: 1000 }, () => {
   const h = fixture();
-  h.report({ kind: "timeout", plugin: "probe", command: "tab.state.read", timeout: 10000 });
+  h.report({ kind: "peer-lost", plugin: "probe", command: "tab.state.read", reason: "process-ended" });
 
   assert.equal(h.errors.length, 1);
-  assert.match(h.errors[0].message, /^view bridge timeout: /);
+  assert.match(h.errors[0].message, /^view bridge peer-lost: /);
   assert.match(h.errors[0].message, /tab\.state\.read/);
 });
 

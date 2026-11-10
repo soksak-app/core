@@ -206,7 +206,7 @@ func TestTheRegistryCommandAnswersAfterTheFrameThatShowsTheApplicationUpdate(t *
 	}
 	stored.appUpdate = map[string]any{"version": "1.0.0", "available": map[string]any{"version": "2.0.0",
 		"release": map[string]string{"url": appRelease, "sha256": strings.Repeat("0", 64)}}}
-	hold := make(chan struct{})
+	hold := newGate()
 	stored.holdAppUpdate = hold
 	answered := false
 	var found error
@@ -221,7 +221,7 @@ func TestTheRegistryCommandAnswersAfterTheFrameThatShowsTheApplicationUpdate(t *
 	if answered {
 		t.Fatalf("core.plugins.registry answered before the host answered the read of the application update (request after it: %v)", found)
 	}
-	close(hold)
+	hold.open()
 	f.settle()
 	if !answered {
 		t.Fatal("core.plugins.registry did not answer")

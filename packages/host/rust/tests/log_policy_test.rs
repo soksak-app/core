@@ -122,7 +122,7 @@ fn a_policy_file_names_every_class_with_a_level_and_nothing_else() {
 }
 
 fn gated_counts(log: &EventLog) -> BTreeMap<String, u64> {
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let mut counts = BTreeMap::new();
     for event in read(log.path()) {
         if event["event"] == "log.gated" {
@@ -201,7 +201,7 @@ fn a_policy_change_is_an_event_and_the_same_policy_is_not() {
     .unwrap();
     log.set_policy(narrow, "file");
     log.set_policy(narrow, "file");
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let changes: Vec<Value> = read(log.path())
         .into_iter()
         .filter(|event| event["event"] == "log.policy")
@@ -226,7 +226,7 @@ fn the_events_of_the_writer_itself_pass_a_gate_that_turns_the_lifecycle_off() {
         r#"{"schema":1,"classes":{"lifecycle":"off","input":"trace","call":"off","io":"trace","frame":"trace"}}"#,
     );
     log.gate(Class::Call, Level::Debug);
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let names: Vec<String> = read(log.path())
         .iter()
         .map(|event| event["event"].as_str().unwrap().to_string())
@@ -248,7 +248,7 @@ fn the_start_of_the_workbench_passes_a_gate_that_turns_the_lifecycle_off() {
     let start = json!({"ts_us": 1_791_000_000_000_001u64, "mono_ns": 5_000_000_001u64, "level": "info", "event": "workbench.start",
         "start": "1791948729050", "fields": {"started_at": 1_791_948_729_050u64, "url": "fixture://localhost"}});
     log_command(&log, json!({"action": "batch", "events": [start]})).unwrap();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let names: Vec<String> = read(log.path())
         .iter()
         .map(|event| event["event"].as_str().unwrap().to_string())
@@ -538,7 +538,7 @@ fn the_policy_that_a_page_change_writes_carries_the_cids_of_the_change() {
         .expect_err(name);
         assert!(error.contains("cids"), "{name}: {error}");
     }
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let policies: Vec<(Value, Value)> = read(log.path())
         .into_iter()
         .filter(|event| event["event"] == "log.policy")

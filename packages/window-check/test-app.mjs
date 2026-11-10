@@ -434,11 +434,13 @@ async function start(application, configDir, out, root) {
   child.once("error", (error) => ended.abort(new Error(`cannot start ${application}: ${error.message}`)));
   child.once("exit", (code, signal) => ended.abort(new Error(`${application} ended with ${describeEnd(code, signal)} before it wrote endpoint.json`)));
   const endpoint = join(configDir, "endpoint.json");
+  // The folder wait has no time limit; the run bounds its start step with its own limit, which it gives the wait as an abort.
+  const limit = AbortSignal.timeout(LIMITS.start);
   try {
-    await untilFolderState(configDir, () => (existsSync(endpoint) ? true : undefined), LIMITS.start,
-      () => new Error(`${application} wrote no endpoint.json in ${LIMITS.start / 1000}s`), ended.signal);
+    await untilFolderState(configDir, () => (existsSync(endpoint) ? true : undefined), { signal: AbortSignal.any([ended.signal, limit]) });
   } catch (error) {
     if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+    if (limit.aborted && !ended.signal.aborted) throw new Error(`${application} wrote no endpoint.json in ${LIMITS.start / 1000}s`);
     throw error;
   }
   return child;

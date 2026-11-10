@@ -75,9 +75,6 @@ const viewSurfaces = new Map();
  *   registrationChanged()   called after the registration of a surface changed
  *   unloaded(surface)       whether the memory saver unloaded the tab of the surface (docs/spec/plugins.md#memory-saver)
  */
-/** Time (ms) to wait for a reply when a command that this document answers declares no timeout. */
-const REPLY_TIMEOUT = 10_000;
-
 export function createRegistry({ call = null, report = null } = {}) {
   if (call && typeof report !== "function") throw new TypeError("a registry with a host call needs report(error)");
   const declared = new Map();
@@ -129,14 +126,13 @@ export function createRegistry({ call = null, report = null } = {}) {
   };
 
   /**
-   * Forwards a request to a surface. When the command declaration has a timeout, the host waits for that time.
+   * Forwards a request to a surface. The request has no time limit: the reply of the surface document or the end of its peer ends
+   * it. origin is the id of the exposure-request that this document handles when it forwards, so the host ends the forward with
+   * that request; a forward that this document starts itself has none (exposureForward in docs/spec/exposure.md).
    */
-  async function forward(surface, method, params) {
+  async function forward(surface, method, params, origin) {
     if (!call) throw new ExposureError(EXPOSURE_ERRORS.gone, `surface ${surface} has no host`);
-    const request = { id: ++forwards, surface, method, params };
-    const timeout = method === "command.run"
-      ? declared.get(declarationKey("command", params?.name))?.declaration.timeout : undefined;
-    if (timeout !== undefined) request.timeout = timeout;
+    const request = origin === undefined ? { id: ++forwards, surface, method, params } : { id: ++forwards, origin, surface, method, params };
     const reply = await call("exposureForward", request);
     if (reply.error) throw new ExposureError(reply.error.code, reply.error.message);
     if (method === "element.rect" && reply.result && viewSurfaces.has(surface)) {
@@ -195,25 +191,10 @@ export function createRegistry({ call = null, report = null } = {}) {
     else if (!delivered) trace("surface.change.dropped", { surface, name, version, reason: `older than version ${newest}` });
   }
 
-  /** Ends the watch of the surface when no other watch follows the same surface. */
-  async function release(watch, name) {
+  /** Ends the watch of the surface when no other watch follows the same surface. origin is that of forward. */
+  async function release(watch, name, origin) {
     const shared = [...following.values()].some((other) => other.surface === watch.surface && other.name === name);
-    if (!shared) await forward(watch.surface, "status.unwatch", { name });
-  }
-
-  /**
-   * A command that this document runs fails when it does not finish within the timeout of its declaration (10 seconds when there is none). For a command forwarded to a surface, the host applies the same time. For a core command, this limit applies only to the execution of the handler. The placement display after it is bounded by each wait of the display path with its own limit, so this limit does not intercept that specific failure.
-   */
-  function bounded(name, entry, run) {
-    // default: a command that declares no timeout finishes within 10 seconds (docs/spec/exposure.md).
-    const limit = entry?.declaration.timeout ?? REPLY_TIMEOUT;
-    let timer;
-    const expired = new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new ExposureError(EXPOSURE_ERRORS.failed, `command ${name} did not reply within ${limit}ms`)), limit);
-    });
-    // A synchronous exception of the handler must also become a rejection of this Promise so that the race ends and the timer is cleared. Otherwise the exception goes to the caller first, and the remaining timer makes a no-reply rejection after the limit that nobody receives.
-    const running = new Promise((resolve) => { resolve(run()); });
-    return Promise.race([running, expired]).finally(() => clearTimeout(timer));
+    if (!shared) await forward(watch.surface, "status.unwatch", { name }, origin);
   }
 
   // Every command request is the event `workbench.command` (docs/spec/logging.md#entrances), whether or not the
@@ -234,12 +215,13 @@ export function createRegistry({ call = null, report = null } = {}) {
     }
   }
 
-  function answer(method, params) {
+  /** Answers one request. origin is the id of the exposure-request that it answers, or undefined for a request of this document. */
+  function answer(method, params, origin) {
     return method === "command.run" && typeof params?.name === "string"
-      ? recorded(params.name, () => timed(params.name, () => dispatch(method, params))) : dispatch(method, params);
+      ? recorded(params.name, () => timed(params.name, () => dispatch(method, params, origin))) : dispatch(method, params, origin);
   }
 
-  async function dispatch(method, params) {
+  async function dispatch(method, params, origin) {
     // default: a request without parameters omits params.
     if (methods.has(method)) return methods.get(method)(params ?? {});
     if (method === "exposure.list") return list();
@@ -252,8 +234,8 @@ export function createRegistry({ call = null, report = null } = {}) {
     // no surface.
     const local = (entryName, value) => changed(entryName, value);
     if (page) {
-      const answering = () => page.entries.answer(method, params, local);
-      return method === "command.run" ? bounded(name, found, answering) : answering();
+      // A handler of a state module has no time limit: its reply or its error ends the command (docs/spec/exposure.md, command timeout).
+      return page.entries.answer(method, params, local);
     }
     if (!found || !surfaceName(name)) return core.answer(method, params, local);
     const requested = params.surface;
@@ -265,7 +247,7 @@ export function createRegistry({ call = null, report = null } = {}) {
         return null;
       }
       following.delete(key);
-      if (watch) await release(watch, name);
+      if (watch) await release(watch, name, origin);
       return null;
     }
     if (method === "status.watch" && following.has(key)) {
@@ -274,13 +256,13 @@ export function createRegistry({ call = null, report = null } = {}) {
     }
     const surface = pick(kind, name, requested);
     if (method === "element.act" && options.elementInert(null)) throw inertRefusal(name);
-    if (method !== "status.watch") return forward(surface, method, params);
+    if (method !== "status.watch") return forward(surface, method, params, origin);
     // The watch exists before the surface answers, because the surface sends the current value as it starts the watch. Each watch
     // receives from version 0, so a watch of a name that the surface already follows receives the current value again.
     const watch = { surface, requested, name, version: 0, external: true, local: new Set() };
     following.set(key, watch);
     try {
-      return await forward(surface, method, { name });
+      return await forward(surface, method, { name }, origin);
     } catch (error) {
       if (following.get(key) === watch) following.delete(key);
       throw error;
@@ -423,7 +405,8 @@ export function createRegistry({ call = null, report = null } = {}) {
     status: (name, read, subscribe) => core.status(name, read, subscribe),
     // The handler receives the context of the request, {cids} with the correlation identifiers of its cause when the request has them.
     command: (name, run) => core.command(name, async (params, context) => {
-      const result = await bounded(name, coreDeclared.get(declarationKey("command", name)), () => run(params, context));
+      // A core command has no time limit: its handler's reply or error ends it, and its layout presentation follows by its own events.
+      const result = await run(params, context);
       try {
         await options.settled();
       } catch (error) {
@@ -617,17 +600,15 @@ export function createRegistry({ call = null, report = null } = {}) {
     namesOf: surfaceNames,
 
     /** Answers one request. The result is {result} or {error: {code, message}}. */
-    handle: ({ method, params }) => replyPayload(async () => {
+    handle: ({ id, method, params }) => replyPayload(async () => {
       // Records the time of every core and plugin command in the performance trace (V5-104).
-      const result = await answer(method, params);
+      const result = await answer(method, params, id);
       // The core and the mounted plugins share the application document. An origin that a separate document specified is kept.
       if (method === "element.rect" && result && result.document === undefined) return { ...result, document: { x: 0, y: 0 } };
       return result;
     }),
 
     list,
-    /** The declared time limit of a command in milliseconds, or undefined when its declaration has none (docs/spec/exposure.md). */
-    commandTimeout: (name) => declared.get(declarationKey("command", name))?.declaration.timeout,
     surfaceDeclarations() {
       const listed = list();
       const onlySurface = (entry) => surfaceDocumentEntry(entry.name);

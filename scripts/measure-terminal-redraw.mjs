@@ -266,7 +266,7 @@ async function measureRedraw({ sok, configDir, plugin, rows, rate, interval, tra
     const windows = await client.request("windows.list");
     if (!Array.isArray(windows) || windows.length === 0) throw new Error(`${configDir} lists no window`);
     s.window = windows[0].window;
-    await applyTrace((name, params) => s.run(name, params), trace, configDir);
+    await applyTrace((name, params) => s.run(name, params), trace, configDir, { ended: s.client.ended });
     prepared = await prepareRedraw(s, plugin, root);
     const { s: w, tab } = prepared;
     const text = `node ${JSON.stringify(FIXTURE)} ${rate} ${interval + DRAW_MARGIN} ${rows}\n`;

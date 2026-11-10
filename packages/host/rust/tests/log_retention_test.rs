@@ -78,7 +78,7 @@ fn options(logs: &Path, bound: u64) -> Options {
 }
 
 fn pruned_events(log: &EventLog) -> Vec<Value> {
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     // The event lies in the file at the path or in a generation that a later rotation closed.
     let main = log.path().to_path_buf();
     let mut files = vec![main.clone()];
@@ -250,7 +250,7 @@ fn a_rotation_runs_the_retention_again() {
     let log = event_log::start(opts).unwrap();
     records::store_every_level(&log);
     // Finish startup records before the fixture appears so a startup rotation cannot prune a partially written earlier run.
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     // An earlier run appears after the start; the first rotation finds the files past the bound and removes it.
     run(
         &logs,

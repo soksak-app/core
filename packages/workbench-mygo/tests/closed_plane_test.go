@@ -7,7 +7,6 @@ import (
 	"runtime/debug"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -162,7 +161,7 @@ func TestATabTakesNoPressAfterItsProjectClosed(t *testing.T) {
 func saveOutlivesItsProject(t *testing.T, f *tabShell, name, params string) {
 	t.Helper()
 	f.viewCalled("tab-aaaaaa", "runtime.command.register", map[string]any{"name": "notes.save"})
-	f.host.holdForwards = make(chan struct{})
+	f.host.holdForwards = newGate()
 	f.run(t, name, params)
 	f.settle()
 	save, ok := exposedNode(f.tester.ElementTree(), "core.picker.item", "save")
@@ -188,7 +187,7 @@ func saveOutlivesItsProject(t *testing.T, f *tabShell, name, params string) {
 	if !closed {
 		t.Fatal("the project did not close")
 	}
-	close(f.host.holdForwards)
+	f.host.holdForwards.open()
 }
 
 // A save that succeeds after its project closed has nothing left to close and nothing to show.
@@ -219,11 +218,8 @@ func TestASaveThatFailsAfterItsProjectClosedIsShown(t *testing.T) {
 	f := modifiedShell(t)
 	f.host.failForwards = errors.New("the disk is full")
 	saveOutlivesItsProject(t, f, "core.tab.close", `{"tab":"tab-aaaaaa"}`)
-	var shown []string
-	for deadline := time.Now().Add(5 * time.Second); len(shown) == 0 && time.Now().Before(deadline); {
-		f.pending.drain(t)
-		shown = f.shownErrors()
-	}
+	f.pending.drain(t)
+	shown := f.shownErrors()
 	if len(shown) != 1 || !strings.Contains(shown[0], "저장하지 못했습니다 · notes.save: ") {
 		t.Fatalf("the shell showed %q", shown)
 	}

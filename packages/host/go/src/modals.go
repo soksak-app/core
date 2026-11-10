@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"time"
 )
 
 // OverlayRequest holds the values needed to render a [data-native-modal] element in another view.
@@ -64,7 +63,10 @@ type modal struct {
 	// painted tells whether the revealed web view presented its first frame on the screen. host.window.presented waits for it,
 	// so the time it reports is a time at which the modal is on the screen (docs/spec/exposure.md, host.window.presented).
 	painted bool
-	radius  float64
+	// ended tells whether the WebContent process of the document of the modal ended. That document presents no frame, so the
+	// first-frame wait of host.window.presented ends with a failure.
+	ended  bool
+	radius float64
 	// view is the child WebView of this instance. It is created hidden and
 	// is closed when this instance is replaced or closed.
 	view *nativeWebview
@@ -141,15 +143,25 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) (Rect, error) {
 	return at, nil
 }
 
-// modalTerminated ends the wait of the keys for the modal of the native web view viewID, whose WebContent process ended before
-// the modal took the keyboard (docs/spec/native-modals.md#keyboard). It runs outside the UI thread.
+// modalTerminated records that the WebContent process of the modal of the native web view viewID ended, which ends the first-frame
+// wait of the modal, and ends the wait of the keys for a modal that had not taken the keyboard (docs/spec/native-modals.md#keyboard).
+// It runs outside the UI thread.
 func (s *Surfaces) modalTerminated(viewID uint64) {
 	s.mu.Lock()
 	ended := s.modal != nil && s.modal.view != nil && s.modal.view.id == viewID
-	s.mu.Unlock()
+	holding := false
 	if ended {
+		s.modal.ended = true
+		holding = !s.modal.visible
+	}
+	s.mu.Unlock()
+	if !ended {
+		return
+	}
+	if holding {
 		mainThreadStep(s.endModalHold)
 	}
+	s.modalPaintChanged()
 }
 
 // endModalHold ends the wait of the keys of the window for its modal. It runs on the main thread.
@@ -444,7 +456,8 @@ func (s *Surfaces) ModalReady(id string, instance uint64) error {
 		s.endModalHold()
 	})
 	// The revealed view presents its first frame next; host.window.presented waits for that paint, so its time is a time at which
-	// the modal is on the screen. A view that closes before it presents calls nothing, and the wait of presented ends at its limit.
+	// the modal is on the screen. A view that closes before it presents calls nothing; its close or the end of its process ends the
+	// wait of presented.
 	started := system.AfterViewPresentation(view.handle, func() { s.modalPainted(id, instance) })
 	s.mu.Lock()
 	if s.modal == live {
@@ -477,27 +490,40 @@ func (s *Surfaces) modalPaintChanged() {
 	s.mu.Unlock()
 }
 
-// waitForModalPaint blocks until the open modal presented its first frame, another modal state change wakes the wait for a new
-// look, or no modal is open. A modal that is still loading holds the wait, because the screen that presented reports comes
-// after the paint of the modal it opens. It tells whether a modal is on the screen without its paint when the timeout ends.
-func (s *Surfaces) waitForModalPaint(timeout time.Duration) bool {
-	deadline := time.After(timeout)
+// waitForModalPaint blocks until the open modal presented its first frame or no modal is open, and wakes at each change of the
+// modal state for a new look. A modal that is still loading holds the wait, because the screen that presented reports comes after
+// the paint of the modal it opens. It has no time limit: the end of the process of the modal document ends it with a failure, the
+// close of the window and the end of its page process end it with 1003, and the end of ctx ends it with an error. Each end is
+// recorded before the wake, so an end before the wait reads the state ends it the same way.
+func (s *Surfaces) waitForModalPaint(ctx context.Context) error {
+	ends, ended := s.waitEnd()
+	if ended != "" {
+		return waitEndError(ended)
+	}
 	for {
 		s.mu.Lock()
 		current := s.modal
 		var paint chan struct{}
 		waiting := current != nil && !current.painted
+		failed := waiting && current.ended
+		var id string
 		if waiting {
 			paint = s.modalPaintChange
+			id = current.id
 		}
 		s.mu.Unlock()
 		if !waiting {
-			return false
+			return nil
+		}
+		if failed {
+			return rpcError(codeHandler, "the document of the modal %s ended before it presented its first frame", id)
 		}
 		select {
 		case <-paint:
-		case <-deadline:
-			return true
+		case <-ends:
+			return waitEndError(s.lastWaitEnd())
+		case <-ctx.Done():
+			return connectionEnded()
 		}
 	}
 }

@@ -202,7 +202,7 @@ func TestTheFlushOfTheProjectsAnswersWhenTheStoreHoldsThem(t *testing.T) {
 	stored := &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"))}}
 	f := newTabShell(t, stored)
 	f.open(t)
-	release := make(chan struct{})
+	release := newGate()
 	stored.holdWorkspace = release
 	f.shell.Registry().RunLater("core.space.add", json.RawMessage(`{}`), func(any, error) {})
 	answered := false
@@ -216,7 +216,7 @@ func TestTheFlushOfTheProjectsAnswersWhenTheStoreHoldsThem(t *testing.T) {
 	if answered {
 		t.Fatal("the flush answered before the store took the pending write")
 	}
-	close(release)
+	release.open()
 	f.settle()
 	if !answered {
 		t.Fatal("the flush did not answer after the pending write")

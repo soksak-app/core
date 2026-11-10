@@ -1,6 +1,7 @@
 package host
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"sync"
@@ -83,7 +84,7 @@ func askPage(t *testing.T, h *Host, s *Surfaces, window *pageEndWindow) <-chan e
 	t.Helper()
 	reply := make(chan error, 1)
 	go func() {
-		_, err := h.ask(s, "command.run", map[string]any{"name": "core.probe", "params": map[string]any{}}, 0)
+		_, err := h.ask(context.Background(), s, "command.run", map[string]any{"name": "core.probe", "params": map[string]any{}})
 		reply <- err
 	}()
 	window.waitSent("exposure-request")

@@ -12,6 +12,12 @@ import (
 	"github.com/soksak-app/core/packages/host/go/src/routine"
 )
 
+// Running receives +1 when the workbench starts a goroutine of its own, a host call or a reload, and -1 when that goroutine ends,
+// after it posted the step that answers it. Each count runs on the goroutine that changes it: the +1 before the goroutine starts,
+// the -1 as its last work. The tests of the workbench count the goroutines that can still post a step by it; the default
+// counts nothing.
+var Running = func(delta int) {}
+
 // HostCall runs one handler of the host with its argument as JSON.
 type HostCall func(ctx context.Context, argument json.RawMessage) (any, error)
 
@@ -305,7 +311,9 @@ func (c *Calls) start(ctx context.Context, name string, argument any, cids []str
 	if ctx == nil {
 		ctx = c.ctx
 	}
+	Running(1)
 	routine.Go("host-call", func() {
+		defer Running(-1)
 		if c.ended.Load() || ctx.Err() != nil {
 			finished()
 			return

@@ -1,6 +1,7 @@
 package host_test
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -58,7 +59,7 @@ func (b *fakeBackend) Windows() []host.WindowEntry {
 
 func (b *fakeBackend) HasWindow(window string) bool { return window == "main" }
 
-func (b *fakeBackend) PageRequest(window, method string, params json.RawMessage) (json.RawMessage, error) {
+func (b *fakeBackend) PageRequest(_ context.Context, window, method string, params json.RawMessage) (json.RawMessage, error) {
 	b.mu.Lock()
 	b.requests = append(b.requests, method)
 	b.bodies = append(b.bodies, string(params))
@@ -883,6 +884,48 @@ func TestSubscriptionChangesKeepArrivalOrder(t *testing.T) {
 	}
 }
 
+// An unwatch enters the queue of its topic only when the last change of its connection for the topic is a watch. While the
+// page holds the first watch of connection A, the second unwatch of A, whose last change is the queued unwatch, and the unwatch
+// of connection B, which never watched, change nothing: each is answered null before the page answers, so neither waited in
+// the queue. After the page answers, the watch and the first unwatch of A succeed and the page received one status.unwatch.
+// contract: endpoint.watch.unwatch-enters-the-queue-only-after-a-watch
+func TestAnUnwatchAfterNoWatchChangesNothingAndIsAnsweredWithoutTheQueue(t *testing.T) {
+	backend := newFakeBackend()
+	backend.held = make(chan struct{})
+	backend.holdMethod = "status.watch"
+	backend.entered = make(chan struct{}, 1)
+	_, address, _ := serve(t, backend)
+	a, b := dial(t, address), dial(t, address)
+	watch := map[string]any{"window": "main", "name": "core.layout"}
+	request := func(conn net.Conn, id int, method string) {
+		send(t, conn, map[string]any{"jsonrpc": "2.0", "id": id, "method": method, "params": watch})
+	}
+	request(a, 1, "status.watch")
+	<-backend.entered
+	request(a, 2, "status.unwatch")
+	request(a, 3, "status.unwatch")
+	request(b, 1, "status.unwatch")
+	for _, unanswered := range []struct {
+		conn net.Conn
+		name string
+		id   int
+	}{{a, "the second unwatch of A", 3}, {b, "the unwatch of B", 1}} {
+		got := receiveInTurn(t, unanswered.conn)
+		if got.ID == nil || *got.ID != unanswered.id || got.Error != nil || string(got.Result) != "null" {
+			t.Fatalf("%s answered %+v while the page holds the watch, want null", unanswered.name, got)
+		}
+	}
+	close(backend.held)
+	for _, id := range []int{1, 2} {
+		if got := receiveInTurn(t, a); got.ID == nil || *got.ID != id || got.Error != nil {
+			t.Fatalf("reply %+v, want the success of request %d of A", got, id)
+		}
+	}
+	if got := len(backend.unwatched); got != 1 {
+		t.Fatalf("the page received %d status.unwatch, want 1", got)
+	}
+}
+
 // contract: endpoint.watch.other-requests-not-blocked-by-pending-subscription
 func TestPendingSubscriptionDoesNotBlockOtherRequests(t *testing.T) {
 	backend := newFakeBackend()
@@ -1473,20 +1516,63 @@ func TestEndpointRecordsAnAcceptError(t *testing.T) {
 	}
 }
 
-// A request that ends with a timeout error writes the method and the reason to the application log before the client
-// receives the error.
-// contract: endpoint.timeout.is-recorded
-func TestEndpointRecordsATimeoutOfARequest(t *testing.T) {
+// A request that ends without its result, the error 1005, writes the method and the reason to the application log before
+// the client receives the error.
+// contract: endpoint.no-result.is-recorded
+func TestEndpointRecordsARequestThatEndedWithoutItsResult(t *testing.T) {
 	written := support.CaptureLog(t)
 	backend := newFakeBackend()
-	backend.failures = map[string]error{"status.get": &host.RPCError{Code: 1005, Message: "the document did not reply within 10000 ms"}}
+	backend.failures = map[string]error{"status.get": &host.RPCError{Code: 1005, Message: "the document did not receive the input"}}
 	_, address, _ := serve(t, backend)
 	conn := dial(t, address)
 	got := call(t, conn, 1, "status.get", map[string]any{"window": "main", "name": "core.layout"})
 	if got.Error == nil || got.Error.Code != 1005 {
 		t.Fatalf("status.get answered %+v", got)
 	}
-	if want := " error host endpoint timeout: status.get: the document did not reply within 10000 ms"; !strings.Contains(written(), want) {
-		t.Fatalf("the log has no %q:\n%s", want, written())
+	log := written()
+	if want := " error host endpoint no result: status.get: the document did not receive the input"; !strings.Contains(log, want) {
+		t.Fatalf("the log has no %q:\n%s", want, log)
 	}
+	if strings.Contains(log, "endpoint timeout") {
+		t.Fatalf("the log names a timeout:\n%s", log)
+	}
+}
+
+// connectionEndBackend is a fakeBackend whose page holds each command.run until the request ends on the host: entered
+// receives the context of the request when the page received it, and ended receives a signal when that context ended.
+type connectionEndBackend struct {
+	*fakeBackend
+	entered chan context.Context
+	ended   chan struct{}
+}
+
+func (b connectionEndBackend) PageRequest(ctx context.Context, window, method string, params json.RawMessage) (json.RawMessage, error) {
+	if method != "command.run" {
+		return b.fakeBackend.PageRequest(ctx, window, method, params)
+	}
+	b.entered <- ctx
+	<-ctx.Done()
+	b.ended <- struct{}{}
+	return nil, ctx.Err()
+}
+
+// The end of the endpoint connection that sent a request ends the request on the host: the page request of a command.run
+// that its page holds ends when the client closes the connection, with no time limit before it.
+// contract: exposure.command.ends-by-reply-or-peer-end, exposure.relay.connection-end-ends-its-requests
+func TestTheEndOfTheEndpointConnectionEndsItsPageRequests(t *testing.T) {
+	backend := connectionEndBackend{fakeBackend: newFakeBackend(), entered: make(chan context.Context, 1), ended: make(chan struct{}, 1)}
+	_, address, _ := serve(t, backend)
+	conn := dial(t, address)
+	send(t, conn, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "command.run",
+		"params": map[string]any{"window": "main", "name": "probe.run", "params": map[string]any{}}})
+	ctx := <-backend.entered
+	select {
+	case <-ctx.Done():
+		t.Fatalf("the request ended while its connection is open: %v", ctx.Err())
+	default:
+	}
+	if err := conn.Close(); err != nil {
+		t.Fatal(err)
+	}
+	<-backend.ended
 }

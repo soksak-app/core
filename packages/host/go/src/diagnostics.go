@@ -13,6 +13,7 @@ package host
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -288,12 +289,12 @@ func onlyWith(subject string, method endpointMethod) endpointMethod {
 // before it leaves the page so that it arrives after the request ends, so the page handles diagnostics.surface.hold and diagnostics.surface.held
 // (docs/spec/endpoint.md).
 func diagnosticPageMethod(method string) endpointMethod {
-	return func(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
+	return func(e *Endpoint, _ *endpointConn, params json.RawMessage, reply *ReplyScope) (any, error) {
 		h, s, err := diagnosticHost(e, params)
 		if err != nil {
 			return nil, err
 		}
-		return h.ask(s, method, params, pageTimeout)
+		return h.ask(reply.Context(), s, method, params)
 	}
 }
 
@@ -349,7 +350,7 @@ func diagnosticWindowDrawCovered(e *Endpoint, _ *endpointConn, params json.RawMe
 
 // diagnosticFixture creates <config-dir>/test-project as an empty folder configuration and makes the page close other
 // projects, reset the common settings to their defaults, and open that project with a new layout.
-func diagnosticFixture(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
+func diagnosticFixture(e *Endpoint, _ *endpointConn, params json.RawMessage, reply *ReplyScope) (any, error) {
 	h, s, err := diagnosticHost(e, params)
 	if err != nil {
 		return nil, err
@@ -390,7 +391,7 @@ func diagnosticFixture(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *
 		}
 		page["debugEntries"] = request.DebugEntries
 	}
-	return h.ask(s, "diagnostics.fixture", page, pageTimeout)
+	return h.ask(reply.Context(), s, "diagnostics.fixture", page)
 }
 
 // dragPlan is a drag that goes to a boundary and back. Each iteration is a round trip, so the boundary returns to its place.
@@ -639,7 +640,8 @@ func recorder(s *Surfaces, c *endpointConn) (platformCapture, error) {
 // The page finds the boundary and applies the input at each step. When the window is not in front, the browser
 // slows the clock of the document, so the host sends the time of each step as a diagnostics-tick event. When the page finishes the drag and
 // replies, the host waits until the last layout is displayed and then replies.
-func diagnosticDrag(e *Endpoint, c *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
+func diagnosticDrag(e *Endpoint, c *endpointConn, params json.RawMessage, reply *ReplyScope) (any, error) {
+	ctx := reply.Context()
 	h, s, err := diagnosticHost(e, params)
 	if err != nil {
 		return nil, err
@@ -670,7 +672,7 @@ func diagnosticDrag(e *Endpoint, c *endpointConn, params json.RawMessage, _ *Rep
 	// With native, the page answers the point of the boundary, and the host delivers the drag as native input there.
 	var from point
 	if native {
-		from, err = presentedBoundary(s.presented, func() (point, error) { return dragBoundary(h, s, plan) })
+		from, err = presentedBoundary(func() (float64, error) { return s.presented(ctx) }, func() (point, error) { return dragBoundary(ctx, h, s, plan) })
 		if err != nil {
 			return nil, err
 		}
@@ -713,12 +715,12 @@ func diagnosticDrag(e *Endpoint, c *endpointConn, params json.RawMessage, _ *Rep
 		switch {
 		case !framework.MainPage():
 			return workbenchDrag(plan, func(method string, params any) (json.RawMessage, error) {
-				return h.ask(s, method, params, pageTimeout)
-			}, h.steps.listen, func() (map[string]any, error) { return nativeDragPresented(h, s, plan, from, stepped) })
+				return h.ask(ctx, s, method, params)
+			}, h.steps.listen, func() (map[string]any, error) { return nativeDragPresented(ctx, h, s, plan, from, stepped) })
 		case native:
-			return nativeDragPresented(h, s, plan, from, stepped)
+			return nativeDragPresented(ctx, h, s, plan, from, stepped)
 		default:
-			return pageDrag(h, s, plan, ticks, stepped)
+			return pageDrag(ctx, h, s, plan, ticks, stepped)
 		}
 	}
 	var layouts []map[string]any
@@ -759,11 +761,11 @@ func diagnosticDrag(e *Endpoint, c *endpointConn, params json.RawMessage, _ *Rep
 }
 
 // pageDrag requests the drag of plan from the page and sends the time of each of its ticks steps as a diagnostics-tick
-// event, calling sent at each. It answers the result of the page after the last layout is displayed.
-func pageDrag(h *Host, s *Surfaces, plan dragPlan, ticks int, sent func()) (map[string]any, error) {
+// event, calling sent at each. It answers the result of the page after the last layout is displayed. The end of ctx ends the request.
+func pageDrag(ctx context.Context, h *Host, s *Surfaces, plan dragPlan, ticks int, sent func()) (map[string]any, error) {
 	// The tick starts after the request is sent so that the first tick arrives after the page received the drag request. Every step
 	// is sent, also after the request ended, so the page that runs the gesture receives each of its steps (docs/spec/endpoint.md).
-	reply := h.relay.Request(relayTarget{owner: s}, time.Duration(ticks)*frameStep+pageTimeout, func(id uint64) error {
+	reply := h.relay.request(ctx, relayTarget{owner: s}, 0, func(id uint64) error {
 		s.window.Emit("exposure-request", map[string]any{"id": id, "method": "diagnostics.drag", "params": plan})
 		routine.Go("diagnostics-ticks", func() {
 			sendSteps(ticks, frameStep, func() {
@@ -773,7 +775,7 @@ func pageDrag(h *Host, s *Surfaces, plan dragPlan, ticks int, sent func()) (map[
 		})
 		return nil
 	})
-	return dragResult(h, s, reply)
+	return dragResult(ctx, h, s, reply)
 }
 
 // sendSteps calls step ticks times, one frame apart; nothing but the last step ends it.
@@ -836,8 +838,8 @@ func presentedBoundary(presented func() (float64, error), boundary func() (point
 }
 
 // dragBoundary asks the page for the point of the boundary of plan in window content coordinates.
-func dragBoundary(h *Host, s *Surfaces, plan dragPlan) (point, error) {
-	raw, err := h.ask(s, "diagnostics.drag.boundary", map[string]any{"axis": plan.Axis, "line": plan.Line}, pageTimeout)
+func dragBoundary(ctx context.Context, h *Host, s *Surfaces, plan dragPlan) (point, error) {
+	raw, err := h.ask(ctx, s, "diagnostics.drag.boundary", map[string]any{"axis": plan.Axis, "line": plan.Line})
 	if err != nil {
 		return point{}, err
 	}
@@ -851,7 +853,7 @@ func dragBoundary(h *Host, s *Surfaces, plan dragPlan) (point, error) {
 // nativeDragPresented delivers the drag of plan from from as native input through the delivery of input.pointer, which
 // does not activate the window or the application, at the host time of each step, calling sent at each step, and
 // answers after the last release when the last layout is displayed.
-func nativeDragPresented(h *Host, s *Surfaces, plan dragPlan, from point, sent func()) (map[string]any, error) {
+func nativeDragPresented(ctx context.Context, h *Host, s *Surfaces, plan dragPlan, from point, sent func()) (map[string]any, error) {
 	backend := hostBackend{h: h}
 	tick := time.NewTicker(frameStep)
 	defer tick.Stop()
@@ -860,7 +862,7 @@ func nativeDragPresented(h *Host, s *Surfaces, plan dragPlan, from point, sent f
 			<-tick.C
 			sent()
 		}, func() error {
-			_, err := s.presented()
+			_, err := s.presented(ctx)
 			// The steps of the round trip are timed from its press, not from before the wait.
 			tick.Reset(frameStep)
 			select {
@@ -872,7 +874,7 @@ func nativeDragPresented(h *Host, s *Surfaces, plan dragPlan, from point, sent f
 	if err != nil {
 		return nil, err
 	}
-	if err := dragPresented(h, s); err != nil {
+	if err := dragPresented(ctx, h, s); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -909,11 +911,11 @@ func stopAfterSettled[T any](settle func() (T, error), stop func() error) (T, er
 }
 
 // dragResult checks the drag reply of the page, waits until the last layout is displayed, and returns the result.
-func dragResult(h *Host, s *Surfaces, reply ExposureResult) (map[string]any, error) {
+func dragResult(ctx context.Context, h *Host, s *Surfaces, reply ExposureResult) (map[string]any, error) {
 	if reply.Error != nil {
 		return nil, reply.Error
 	}
-	if err := dragPresented(h, s); err != nil {
+	if err := dragPresented(ctx, h, s); err != nil {
 		return nil, err
 	}
 	result := map[string]any{}
@@ -926,8 +928,8 @@ func dragResult(h *Host, s *Surfaces, reply ExposureResult) (map[string]any, err
 }
 
 // dragPresented waits until the last layout of a drag is displayed (windowPresented).
-func dragPresented(h *Host, s *Surfaces) error {
-	if _, err := windowPresented(h, s); err != nil {
+func dragPresented(ctx context.Context, h *Host, s *Surfaces) error {
+	if _, err := windowPresented(ctx, h, s); err != nil {
 		return err
 	}
 	s.note("diagnostics: drag presented")
@@ -1443,7 +1445,7 @@ func diagnosticLogFlush(e *Endpoint, _ *endpointConn, params json.RawMessage, _ 
 	if _, err := e.window(params); err != nil {
 		return nil, err
 	}
-	return nil, FlushRecords(10 * time.Second)
+	return nil, FlushRecords()
 }
 
 // diagnosticHostRelaunch quits the application as host.quit does and starts it again with the same executable and
@@ -1478,7 +1480,7 @@ func diagnosticTestMark(e *Endpoint, _ *endpointConn, params json.RawMessage, _ 
 	if err != nil {
 		return nil, err
 	}
-	boot, seq, err := EmitTestMark(mark, 10*time.Second)
+	boot, seq, err := EmitTestMark(mark)
 	if err != nil {
 		return nil, err
 	}
@@ -1494,7 +1496,7 @@ func diagnosticStallDump(e *Endpoint, _ *endpointConn, params json.RawMessage, _
 	if err != nil {
 		return nil, err
 	}
-	boot, seq, err := EmitStallDump(path, 10*time.Second)
+	boot, seq, err := EmitStallDump(path)
 	if err != nil {
 		return nil, err
 	}
@@ -1770,12 +1772,12 @@ var surfaceHolds = struct {
 // diagnosticSurfaceHold asks the main page to hold the replies of a surface. When the endpoint connection c that asked closes,
 // the host sends diagnostics-surface-released {surface} to the window, unless a later hold of that surface was asked
 // (docs/spec/endpoint.md).
-func diagnosticSurfaceHold(e *Endpoint, c *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
+func diagnosticSurfaceHold(e *Endpoint, c *endpointConn, params json.RawMessage, scope *ReplyScope) (any, error) {
 	h, s, err := diagnosticHost(e, params)
 	if err != nil {
 		return nil, err
 	}
-	reply, err := h.ask(s, "diagnostics.surface.hold", params, pageTimeout)
+	reply, err := h.ask(scope.Context(), s, "diagnostics.surface.hold", params)
 	if err != nil || c == nil {
 		return reply, err
 	}

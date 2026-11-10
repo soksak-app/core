@@ -51,18 +51,35 @@ static void activated(void *context, sp_activate_result result, const char *fron
     state->done = YES;
 }
 
-static SPActivation activate(NSWindow *window, double timeout) {
+static SPActivation activate(NSWindow *window) {
     __block SPActivation state = {NO, SP_ACTIVATE_DONE, ""};
-    sp_input_activate(window, timeout, activated, &state);
+    sp_input_activate(window, activated, &state);
     until(^BOOL { return state.done; });
     return state;
 }
 
+// Runs the main queue until a marker block that it enqueues now has run: the point at which a check sees what the turns
+// before it decided, with no time in the check.
+static void runMarker(void) {
+    __block BOOL ran = NO;
+    dispatch_async(dispatch_get_main_queue(), ^{ ran = YES; });
+    until(^BOOL { return ran; });
+}
+
+// A modifier change that the application receives: a key event, which ends a step that macOS refuses without an event.
+static void applicationKeyEvent(void) {
+    NSEvent *event = [NSEvent keyEventWithType:NSEventTypeFlagsChanged location:NSZeroPoint modifierFlags:0 timestamp:0
+        windowNumber:0 context:nil characters:@"" charactersIgnoringModifiers:@"" isARepeat:NO keyCode:56];
+    [NSApp sendEvent:event];
+}
+
 // A web view that does not report that the active state transmission has finished.
 @interface SPStalledWebView : WKWebView
+// Set when the activation asks the web view to report its active state: the webview step has begun.
+@property(nonatomic) BOOL asked;
 @end
 @implementation SPStalledWebView
-- (void)_doAfterActivityStateUpdate:(void (^)(void))completionHandler {}
+- (void)_doAfterActivityStateUpdate:(void (^)(void))completionHandler { self.asked = YES; }
 @end
 
 // A web view for which another window becomes the key window while it waits for the active state transmission.
@@ -94,28 +111,44 @@ static NSWindow *makeWindow(Class type, NSView *content) {
 
 // Creates conditions to check that the stage at which activation stopped is reported in the result.
 static void checkFailures(void) {
-    check(activate(nil, 1).result == SP_ACTIVATE_REJECTED, @"activating without a window is rejected");
+    check(activate(nil).result == SP_ACTIVATE_REJECTED, @"activating without a window is rejected");
 
-    // The system does not activate an application whose activation is prohibited.
+    // The system does not activate an application whose activation is prohibited, and it sends no event for that refusal: the
+    // request has no limit and ends at the next press or key event that the application receives.
     NSWindow *refused = makeWindow(NSWindow.class, nil);
-    SPActivation state = activate(refused, 1);
+    __block SPActivation state = {NO, SP_ACTIVATE_DONE, ""};
+    sp_input_activate(refused, activated, &state);
+    runMarker();
+    check(!state.done, [NSString stringWithFormat:@"a refused activation waits for an event (answered %d)", state.result]);
+    applicationKeyEvent();
+    until(^BOOL { return state.done; });
     check(state.result == SP_ACTIVATE_REFUSED && state.frontmost[0] != 0 && !NSApp.isActive,
-        [NSString stringWithFormat:@"a refused activation reports the frontmost application (%d, %s)", state.result, state.frontmost]);
+        [NSString stringWithFormat:@"the next key event ends a refused activation with the frontmost application (%d, %s)",
+            state.result, state.frontmost]);
     [refused close];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
 
     SPStalledWebView *stalled = [[[SPStalledWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)] autorelease];
     NSWindow *pending = makeWindow(NSWindow.class, stalled);
-    state = activate(pending, 1);
-    check(state.result == SP_ACTIVATE_PENDING,
-        [NSString stringWithFormat:@"a webview that does not apply the active state reports pending (%d)", state.result]);
+    // The webview step has no limit: a webview that does not report its active state keeps the request waiting until an event
+    // ends it, here the close of the window.
+    __block SPActivation waiting = {NO, SP_ACTIVATE_DONE, ""};
+    sp_input_activate(pending, activated, &waiting);
+    until(^BOOL { return stalled.asked || waiting.done; });
+    runMarker();
+    check(stalled.asked && !waiting.done,
+        [NSString stringWithFormat:@"the webview step of an activation waits for an event (answered %d)", waiting.result]);
+    [pending close];
+    until(^BOOL { return waiting.done; });
+    check(waiting.result == SP_ACTIVATE_PENDING,
+        [NSString stringWithFormat:@"the close of the window ends the webview step with pending (%d)", waiting.result]);
 
     // A hidden document view is not an input target. While a visible window is being activated, it must not hold an explicit
     // activation request.
     SPStalledWebView *hiddenStalled = [[[SPStalledWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)] autorelease];
     hiddenStalled.hidden = YES;
     NSWindow *hiddenWindow = makeWindow(NSWindow.class, hiddenStalled);
-    state = activate(hiddenWindow, 1);
+    state = activate(hiddenWindow);
     check(state.result == SP_ACTIVATE_DONE,
         [NSString stringWithFormat:@"a hidden webview does not block activation (%d)", state.result]);
 
@@ -127,18 +160,22 @@ static void checkFailures(void) {
     [yielding loadHTMLString:@"<!doctype html><script>window.probe = true</script>" baseURL:nil];
     until(^BOOL { return [evaluate(yielding, @"Boolean(window.probe)") boolValue]; });
     NSWindow *lost = makeWindow(NSWindow.class, yielding);
-    state = activate(lost, 5);
+    state = activate(lost);
     check(state.result == SP_ACTIVATE_LOST && other.isKeyWindow,
         [NSString stringWithFormat:@"a window that loses key status before the state is applied reports lost (%d)", state.result]);
 
     // Activates a window that cannot become the key window while the application is active.
-    state = activate(other, 5);
+    state = activate(other);
     check(state.result == SP_ACTIVATE_DONE,
         [NSString stringWithFormat:@"an ordinary window activates (%d, frontmost %s)", state.result, state.frontmost]);
+    // A window that cannot become key is refused in its turn: no notification would come for it.
     NSWindow *unkeyable = makeWindow(SPUnkeyableWindow.class, nil);
-    state = activate(unkeyable, 1);
-    check(state.result == SP_ACTIVATE_NOT_KEY && NSApp.isActive,
-        [NSString stringWithFormat:@"an active application whose window cannot become key reports not key (%d)", state.result]);
+    state = (SPActivation){NO, SP_ACTIVATE_DONE, ""};
+    sp_input_activate(unkeyable, activated, &state);
+    runMarker();
+    check(state.done && state.result == SP_ACTIVATE_NOT_KEY && NSApp.isActive,
+        [NSString stringWithFormat:@"an active application whose window cannot become key reports not key in its turn (done %d, %d)",
+            state.done, state.result]);
 
     for (NSWindow *window in @[pending, hiddenWindow, other, lost, unkeyable]) [window close];
 }
@@ -169,7 +206,7 @@ int main(void) { @autoreleasepool {
     [window orderFront:nil];
     until(^BOOL { return [evaluate(view, @"Boolean(window.probe)") boolValue]; });
 
-    SPActivation state = activate(window, 5);
+    SPActivation state = activate(window);
     check(state.result == SP_ACTIVATE_DONE,
         [NSString stringWithFormat:@"activation completes (%d, frontmost %s)", state.result, state.frontmost]);
     check(NSApp.isActive && window.isKeyWindow, @"the application is active and the window is key");

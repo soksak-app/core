@@ -35,14 +35,14 @@ test("service shutdown preparation waits for surface and session notifications",
     },
   };
 
-  const prepared = prepareRasterSession(client, (connection, method, params) => connection.request(method, params), { startupLimit: 15_000 });
+  const prepared = prepareRasterSession(client, (connection, method, params) => connection.request(method, params));
   const outcome = prepared.then((value) => ({ value }), (error) => ({ error }));
   const first = await Promise.race([watchEntered[0].promise.then(() => "watch"), outcome.then(() => "finished")]);
   assert.equal(first, "watch", "preparation finished without waiting for a status notification");
   assert.equal(tabAdded, true, "the surface watch started before the raster probe tab was added");
   assert.equal(watches[0].window, "main");
   assert.equal(watches[0].name, "core.surfaces");
-  assert.equal(watches[0].options.timeout, 15_000);
+  assert.equal(watches[0].options, undefined, "the surface watch has no time limit");
   assert.equal(watches[0].predicate([{ plugin: RASTER, visible: false, surface: "tab-raster" }]), false);
   assert.equal(watches[0].predicate([{ plugin: RASTER, visible: true, surface: "tab-other" }]), false);
   const visible = [{ plugin: RASTER, visible: true, surface: "tab-raster" }];
@@ -54,8 +54,7 @@ test("service shutdown preparation waits for surface and session notifications",
   assert.equal(second, "watch", "preparation polled session readiness instead of waiting for its notification");
   assert.equal(watches[1].window, "main");
   assert.equal(watches[1].name, "rasterprobe.session");
-  assert.equal(watches[1].options.surface, "tab-raster");
-  assert.equal(watches[1].options.timeout, 15_000);
+  assert.deepEqual(watches[1].options, { surface: "tab-raster" }, "the session watch has no time limit");
   assert.equal(watches[1].predicate({ session: null, connected: false, failure: null, error: null }), false);
   assert.equal(watches[1].predicate({ session: "session-1", connected: false, failure: "closed", error: null }), false);
   assert.equal(watches[1].predicate({ session: "session-1", connected: true, failure: null, error: "open failed" }), false);

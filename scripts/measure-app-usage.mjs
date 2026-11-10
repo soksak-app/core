@@ -91,8 +91,6 @@ const COVER_MARGIN = 60;
 const FAULT_RESIZE = 40;
 /** The text of the layout fault that diagnostics.layout.fail causes (docs/spec/endpoint.md). */
 const LAYOUT_FAULT = "diagnostic layout fault";
-/** The wait for the error line of the layout fault in the application log. */
-const FAULT_LINE_LIMIT = 30000;
 /** The HID moves of the pointer step across the window. */
 const POINTER_MOVES = 60;
 /** The plugins of the tabs of S1. */
@@ -1117,7 +1115,7 @@ async function measureOptions(options) {
       s.window = windows[0].window;
       sessions.push({ configDir, client, s, windows: windows.map(({ window }) => window) });
     }
-    const traceOf = ({ s, configDir }) => () => applyTrace((name, params) => s.run(name, params), trace, configDir);
+    const traceOf = ({ s, configDir }) => () => applyTrace((name, params) => s.run(name, params), trace, configDir, { ended: s.client.ended });
     let context = null;
     if (state !== null) {
       const [{ configDir, client, s }] = sessions;
@@ -1140,8 +1138,8 @@ async function measureOptions(options) {
           return root;
         },
         logPosition: () => currentEventOffsets(configDir),
-        untilFaultLine: (position) => untilEventLine(configDir, position, (line) => faultErrorCount([line]) === 1, FAULT_LINE_LIMIT,
-          { catalog, records: ["host.record.error", "workbench.record.error"] }),
+        untilFaultLine: (position) => untilEventLine(configDir, position, (line) => faultErrorCount([line]) === 1,
+          { catalog, records: ["host.record.error", "workbench.record.error"], ended: client.ended }),
         remainingWebKit: async () => {
           const remaining = [];
           for (const { role, pid } of (await applicationRows({ configDir })).filter(({ attribution }) => attribution === "launchd domain")) {
@@ -1195,7 +1193,7 @@ async function measureOptions(options) {
       const pointer = await measurePointer({
         s,
         measure: ({ span }) => measure({ span, settleAfter: true }),
-        frameRecords: () => applyTrace((name, params) => s.run(name, params), FRAME_RECORDS, configDir),
+        frameRecords: () => applyTrace((name, params) => s.run(name, params), FRAME_RECORDS, configDir, { ended: s.client.ended }),
         restore: traceOf(sessions[0]),
         tail: () => logTail(client),
         records: async (since) => {

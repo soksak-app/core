@@ -12,7 +12,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/soksak-app/core/packages/sok/go/src/platform"
 )
@@ -129,8 +128,6 @@ type ReplaceOptions struct {
 	Bundle, Target string
 	// Arguments are the arguments of the application that starts again.
 	Arguments []string
-	// Timeout is how long ReplaceApp waits for the end of the process.
-	Timeout time.Duration
 }
 
 // isBundle reports whether the folder holds an application bundle, which has an Info.plist.
@@ -156,12 +153,9 @@ func ReplaceApp(options ReplaceOptions, open func(bundle string, arguments []str
 	if err != nil {
 		return err
 	}
-	ended, err := current.WaitProcessEnd(options.PID, options.Timeout)
-	if err != nil {
+	// The wait has no limit: the operating system reports the exit of the process.
+	if err := current.WaitProcessEnd(options.PID); err != nil {
 		return fmt.Errorf("application update: %w", err)
-	}
-	if !ended {
-		return fmt.Errorf("application update: process %d did not end within %s", options.PID, options.Timeout)
 	}
 	next, previous := options.Target+".new", options.Target+".previous"
 	for _, stale := range []string{next, previous} {
@@ -196,8 +190,6 @@ type RelaunchOptions struct {
 	Target string
 	// Arguments are the arguments of the application that starts again.
 	Arguments []string
-	// Timeout is how long RelaunchApp waits for the end of the process.
-	Timeout time.Duration
 }
 
 // RelaunchApp starts the application bundle Target again with its arguments after the process PID has ended
@@ -211,12 +203,9 @@ func RelaunchApp(options RelaunchOptions, open func(bundle string, arguments []s
 	if err != nil {
 		return err
 	}
-	ended, err := current.WaitProcessEnd(options.PID, options.Timeout)
-	if err != nil {
+	// The wait has no limit: the operating system reports the exit of the process.
+	if err := current.WaitProcessEnd(options.PID); err != nil {
 		return fmt.Errorf("application relaunch: %w", err)
-	}
-	if !ended {
-		return fmt.Errorf("application relaunch: process %d did not end within %s", options.PID, options.Timeout)
 	}
 	if err := open(options.Target, options.Arguments, false); err != nil {
 		return fmt.Errorf("application relaunch: start the bundle: %w", err)
@@ -266,13 +255,13 @@ func runApp(args []string, stdout io.Writer) error {
 		return err
 	}
 	if relaunch {
-		if err := RelaunchApp(RelaunchOptions{PID: pid, Target: target, Arguments: arguments, Timeout: time.Minute}, current.OpenApplication); err != nil {
+		if err := RelaunchApp(RelaunchOptions{PID: pid, Target: target, Arguments: arguments}, current.OpenApplication); err != nil {
 			return err
 		}
 		return printJSON(stdout, map[string]string{"target": target})
 	}
 	open := func(bundle string, arguments []string) error { return current.OpenApplication(bundle, arguments, true) }
-	if err := ReplaceApp(ReplaceOptions{PID: pid, Bundle: bundle, Target: target, Arguments: arguments, Timeout: time.Minute}, open); err != nil {
+	if err := ReplaceApp(ReplaceOptions{PID: pid, Bundle: bundle, Target: target, Arguments: arguments}, open); err != nil {
 		return err
 	}
 	return printJSON(stdout, map[string]string{"target": target})

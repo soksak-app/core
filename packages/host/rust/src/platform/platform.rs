@@ -7,7 +7,6 @@
 use std::fs::Metadata;
 use std::io::{Read, Write};
 use std::path::Path;
-use std::time::Duration;
 
 use serde_json::Value;
 
@@ -237,6 +236,20 @@ pub struct FrontmostApplication {
     pub pid: i32,
 }
 
+/// How a full screen change ended. The values are those of native/darwin/src/window_fullscreen.h.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FullscreenResult {
+    /// The transition ended in the asked state, or the window was already in it.
+    Done,
+    /// The window is minimized, not shown or showing a sheet, macOS did not start the transition, or a later request
+    /// replaced the request.
+    Refused,
+    /// The window closed during the transition.
+    Closed,
+    /// macOS failed a started transition.
+    Failed,
+}
+
 /// The result of delivering pointer input.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Delivery {
@@ -445,9 +458,14 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// (docs/spec/hosts.md#launch-activation). Call it on the main thread.
     fn show_window(&self, window: Handle) -> Result<(), String>;
     fn set_main_appearance(&self, view: &PlatformWebview, dark: bool) -> Result<(), String>;
-    /// Changes the window to full screen or back, and calls done when the transition ends. A request that arrives
-    /// during a transition is handled after that transition ends.
-    fn fullscreen(&self, window: Handle, on: bool, done: Box<dyn Fn()>) -> Result<(), String>;
+    /// Changes the window to full screen or back, and calls done once on the UI thread with the result of the change and
+    /// its native message. A request that arrives during a transition is handled after that transition ends.
+    fn fullscreen(
+        &self,
+        window: Handle,
+        on: bool,
+        done: Box<dyn Fn(FullscreenResult, String)>,
+    ) -> Result<(), String>;
     /// Calls changed on the UI thread with whether the window is on screen whenever the occlusion state of the window changes. The observation ends with the
     /// window.
     fn observe_occlusion(&self, window: Handle, changed: Box<dyn Fn(bool)>) -> Result<(), String>;
@@ -816,23 +834,22 @@ pub trait Platform: CoreRootHost + Send + Sync {
     fn unwatch_input(&self, monitor: Handle) -> Result<(), String>;
     /// Delivers pointer input to the window and returns the result. activate is not used. Call it on the main thread.
     /// For a press and a release, done is called on the main thread after the document at the coordinates received the
-    /// event or after receive elapsed. For the other phases it is called as soon as the input is delivered.
+    /// event, or with Delivery::Unreceived at the event that ended the wait without the receipt; no wait has a limit
+    /// (docs/spec/exposure.md#methods). For the other phases it is called as soon as the input is delivered.
     fn input_pointer(
         &self,
         window: Handle,
         pointer: Pointer,
-        receive: Duration,
         done: Box<dyn FnOnce(Delivery) + Send>,
     ) -> Result<(), String>;
     /// Activates the application and makes the window the key window. On the main thread it calls done(Ok) when the
-    /// webview of the window reflects the active state, and done(Err) that states the stopped stage when it does not
-    /// finish within timeout. Call it on the main thread.
+    /// webview of the window reflects the active state, and done(Err) that states the stopped stage at the event that
+    /// ended that stage; no stage has a limit. Call it on the main thread.
     fn input_activate(
         &self,
         window: Handle,
         x: f64,
         y: f64,
-        timeout: Duration,
         done: Box<dyn FnOnce(Result<(), String>) + Send>,
     ) -> Result<(), String>;
     /// Delivers key input to the window and returns whether it was delivered. Call it on the main thread.

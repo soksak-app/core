@@ -30,7 +30,6 @@ type lossRow struct {
 	Plugin      string `json:"plugin"`
 	Abandoned   int    `json:"abandoned"`
 	LateReplies int    `json:"lateReplies"`
-	Timeouts    int    `json:"timeouts"`
 	PeerLost    int    `json:"peerLost"`
 }
 

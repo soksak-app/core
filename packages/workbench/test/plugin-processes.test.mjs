@@ -29,7 +29,7 @@ test("each plugin process status is registered and publishes its empty initial v
 test("the reports of call layers fill the open-call and loss statuses, and each change is announced", async (t) => {
   const { createCalls } = await import("@soksak/plugin-api");
   const { callReporter, losses, openCalls, onPluginProcessChange } = await import("../plugin-processes.js");
-  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  t.mock.timers.enable({ apis: ["Date"] });
   let announced = 0;
   const stop = onPluginProcessChange(() => { announced += 1; });
   const layer = () => createCalls({
@@ -40,27 +40,48 @@ test("the reports of call layers fill the open-call and loss statuses, and each 
   });
   const started = Date.now();
   const first = layer();
-  const timedOut = first.request("probe.run", {}, { timeout: 1000 });
-  const rejected = assert.rejects(timedOut, { code: -32000 });
+  const controller = new AbortController();
+  const cancelled = first.request("probe.run", {}, { signal: controller.signal });
+  const cancelRejected = assert.rejects(cancelled, { reason: "cancelled" });
   const second = layer();
   const read = second.request("probe.read");
   const readRejected = assert.rejects(read, { reason: "process-ended" });
   assert.deepEqual(openCalls(), [{ plugin: "probe", count: 2, oldestStartedAt: started }]);
-  t.mock.timers.tick(1000);
-  await rejected;
-  assert.deepEqual(losses(), [{ plugin: "probe", abandoned: 0, lateReplies: 0, timeouts: 1, peerLost: 0 }]);
+  controller.abort();
+  await cancelRejected;
+  assert.deepEqual(openCalls(), [{ plugin: "probe", count: 1, oldestStartedAt: started }]);
   second.peerLost("process-ended");
   await readRejected;
   assert.deepEqual(openCalls(), []);
-  assert.deepEqual(losses()[0], { plugin: "probe", abandoned: 0, lateReplies: 0, timeouts: 1, peerLost: 0 });
+  assert.deepEqual(losses(), [], "a cancel or the end of a process counted a loss");
   const closed = layer();
   const surfaceClosed = closed.request("probe.run");
   const surfaceRejected = assert.rejects(surfaceClosed, { reason: "surface-closed" });
   closed.peerLost("surface-closed");
   await surfaceRejected;
-  assert.equal(losses()[0].peerLost, 1);
+  assert.deepEqual(losses(), [{ plugin: "probe", abandoned: 0, lateReplies: 0, peerLost: 1 }]);
   assert.ok(announced > 0);
   stop();
+});
+
+test("the losses of a plugin count no timeout, and a report of the kind timeout is refused", async () => {
+  const { callReporter, losses } = await import("../plugin-processes.js");
+  const report = callReporter("timeout-probe");
+  assert.throws(() => report({ kind: "timeout", plugin: "timeout-probe", command: "timeout-probe.run", timeout: 1000 }),
+    { name: "TypeError", message: "unknown call report kind timeout" });
+  report({ kind: "late-reply", plugin: "timeout-probe", command: "timeout-probe.run", delay: 3 });
+  assert.deepEqual(losses().find((entry) => entry.plugin === "timeout-probe"),
+    { plugin: "timeout-probe", abandoned: 0, lateReplies: 1, peerLost: 0 });
+});
+
+test("the event catalog has no call timeout or late reply event, and keeps the other call events of plugin processes", async () => {
+  const { classOf } = await import("../event-classes.js");
+  const catalog = JSON.parse(readFileSync(new URL("../../../docs/spec/events.json", import.meta.url), "utf8"));
+  assert.equal(classOf("host.call.timeout"), undefined, "event-classes.js gives host.call.timeout a class");
+  assert.equal(Object.hasOwn(catalog.events, "host.call.timeout"), false, "docs/spec/events.json declares host.call.timeout");
+  assert.equal(classOf("host.call.peer-lost"), "call");
+  assert.equal(classOf("host.trace.call.late-reply"), undefined, "event-classes.js gives host.trace.call.late-reply a class");
+  assert.equal(Object.hasOwn(catalog.events, "host.trace.call.late-reply"), false, "docs/spec/events.json declares host.trace.call.late-reply");
 });
 
 // contract: view.responsiveness.relay
@@ -68,7 +89,7 @@ test("a view whose presentation wait ends without presentation counts losses.aba
   const { losses, presentationAbandoned } = await import("../plugin-processes.js");
   presentationAbandoned("abandon-probe");
   presentationAbandoned("abandon-probe");
-  assert.deepEqual(losses().find((entry) => entry.plugin === "abandon-probe"), { plugin: "abandon-probe", abandoned: 2, lateReplies: 0, timeouts: 0, peerLost: 0 }, "each notice counts one abandoned presentation of the plugin");;
+  assert.deepEqual(losses().find((entry) => entry.plugin === "abandon-probe"), { plugin: "abandon-probe", abandoned: 2, lateReplies: 0, peerLost: 0 }, "each notice counts one abandoned presentation of the plugin");
 });
 
 test("a view responsiveness notice is the state of its surface until the surface is disposed", async () => {

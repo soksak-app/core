@@ -11,14 +11,13 @@ use serde_json::{Map, Value};
 use crate::install::RANGE_SEPARATOR;
 
 /// The limits that the reader names (PLUGIN_DESCRIPTION_MAX, SETTING_LABEL_MAX, SETTING_DESCRIPTION_MAX, ADDRESS_MAX,
-/// SET_TITLE_MAX, the menu title limit and COMMAND_TIMEOUT_MAX).
+/// SET_TITLE_MAX and the menu title limit).
 const PLUGIN_DESCRIPTION_MAX: usize = 200;
 const SETTING_LABEL_MAX: usize = 40;
 const SETTING_DESCRIPTION_MAX: usize = 200;
 const ADDRESS_MAX: usize = 2048;
 const SET_TITLE_MAX: usize = 40;
 const MENU_TITLE_MAX: usize = 40;
-const COMMAND_TIMEOUT_MAX: f64 = 600000.0;
 
 /// The members that plugin.json may hold (validateManifest).
 const TOP_LEVEL_KEYS: [&str; 17] = [
@@ -387,7 +386,7 @@ fn value_text(value: &Value) -> String {
 
 /// Checks the exposes declaration of the plugin `owner` (validateExposes of the reader): the kinds status, commands and
 /// element, and for each entry a name `<owner>.<name>`, a description, the schemas of its fields, an object params schema
-/// of a command, a boolean many of an element entry and a timeout of a command. A name is declared once per kind.
+/// of a command and a boolean many of an element entry; a command has no timeout. A name is declared once per kind.
 fn check_exposes(owner: &str, exposes: &Value) -> Result<(), String> {
     let at = format!("{owner} exposes");
     let declared = exposes
@@ -422,13 +421,17 @@ fn check_exposes(owner: &str, exposes: &Value) -> Result<(), String> {
                 return Err(format!("{at}: duplicate {kind} {name}"));
             }
             let at_entry = format!("{at} {name}");
+            // A command ends by its reply or by the end of its peer (docs/spec/exposure.md, command timeout), so the former
+            // member is refused by its own name.
+            if kind == "commands" && entry.get("timeout").is_some() {
+                return Err(format!(
+                    "{at_entry}: timeout is not a member of a command declaration"
+                ));
+            }
             let mut allowed = vec!["name", "description"];
             allowed.extend_from_slice(fields);
             if kind == "element" {
                 allowed.push("many");
-            }
-            if kind == "commands" {
-                allowed.push("timeout");
             }
             only(&at_entry, entry, &allowed)?;
             if !is_text(entry.get("description")) {
@@ -451,13 +454,6 @@ fn check_exposes(owner: &str, exposes: &Value) -> Result<(), String> {
             }
             if entry.get("many").is_some_and(|raw| !raw.is_boolean()) {
                 return Err(format!("{at_entry}: many must be a boolean"));
-            }
-            if entry.get("timeout").is_some_and(|raw| {
-                !integer_value(Some(raw)).is_some_and(|f| (1.0..=COMMAND_TIMEOUT_MAX).contains(&f))
-            }) {
-                return Err(format!(
-                    "{at_entry}: timeout must be an integer from 1 to 600000 milliseconds"
-                ));
             }
         }
     }

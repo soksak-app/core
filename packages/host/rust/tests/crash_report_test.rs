@@ -10,7 +10,6 @@ mod records;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use serde_json::Value;
 use soksak_host::crash_report::{CRASH_REPORT_LIMIT, announce_crash_reports};
@@ -34,7 +33,7 @@ fn write_report(directory: &Path, name: &str, application: &str, pid: u64, stamp
 
 /// The events `host.crash.found` that the writer stored.
 fn found(log: &EventLog) -> Vec<Value> {
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     records::read_events(log.path())
         .into_iter()
         .filter(|event| event["event"] == "host.crash.found")

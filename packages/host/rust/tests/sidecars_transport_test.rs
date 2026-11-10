@@ -3442,7 +3442,7 @@ fn persistent_connections_are_recorded_as_events() {
         soksak_host::performance::sample();
         service.join().unwrap();
         soksak_host::performance::command(serde_json::json!({"action": "off"})).unwrap();
-        writer.flush(Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         return;
     }
     let config = folder::Folder::new();
@@ -3552,7 +3552,7 @@ fn persistent_spawned_service_first_answer_after_spawn_is_recorded() {
         sidecars.stop();
         service.join().unwrap();
         soksak_host::performance::command(serde_json::json!({"action": "off"})).unwrap();
-        writer.flush(Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         let pid: i64 = std::fs::read_to_string(&pid_path)
             .unwrap()
             .trim()
@@ -3776,7 +3776,7 @@ fn a_persistent_service_end_stops_the_restarts_before_the_spawn() {
             "the send after the reset spawned the service"
         );
         sidecars.stop();
-        writer.flush(Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         return;
     }
     let config = folder::Folder::new();

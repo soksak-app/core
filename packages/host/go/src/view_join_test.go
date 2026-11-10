@@ -713,3 +713,34 @@ func TestCancelSurfacesWithoutAWindowIsRefused(t *testing.T) {
 		t.Fatalf("CancelSurfaces without a window = %v, want %v", err, errNoWindow)
 	}
 }
+
+// contract: view.presentation-wait.surface-close-ends-it
+func TestTheCloseOfTheDocumentsOfASurfaceEndsThePresentationWaitOfItsView(t *testing.T) {
+	isolateTraceRecords(t)
+	s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
+	s.views = map[string]*nativeWebview{"probe-surface": {}}
+	events := recordWindowEvents(s)
+	if err := s.joinShownViews(platform.Window(1), 7, []Placement{{ID: "probe-surface", Visible: true}}); err != nil {
+		t.Fatalf("join: %v", err)
+	}
+	if len(fake.joins) != 1 {
+		t.Fatalf("the shown view joined %d transactions, want 1", len(fake.joins))
+	}
+	s.closeSurfaceDocuments("probe-surface")
+	if s.presentation.waits("probe-surface") {
+		t.Fatal("the close of the documents of the surface left its view waiting for its presentation")
+	}
+	if fake.joins[0].abandons != 1 {
+		t.Fatalf("the close abandoned the native join %d times, want 1", fake.joins[0].abandons)
+	}
+	var reasons []any
+	for _, event := range *events {
+		if event.name == "view-presentation-abandoned" {
+			data, _ := event.data.(map[string]any)
+			reasons = append(reasons, data["reason"])
+		}
+	}
+	if len(reasons) != 1 || reasons[0] != "closed" {
+		t.Fatalf("the close sent the abandon reasons %v, want [closed]", reasons)
+	}
+}

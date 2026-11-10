@@ -46,7 +46,7 @@ func UseRoomyEventLog(t *testing.T) *host.EventLog {
 	host.UseHostEventLog(log)
 	t.Cleanup(func() {
 		host.UseHostEventLog(nil)
-		if err := log.Flush(5 * time.Second); err != nil {
+		if err := log.Flush(); err != nil {
 			t.Errorf("flush event log before closing: %v", err)
 		}
 		log.Close()
@@ -59,7 +59,7 @@ func UseRoomyEventLog(t *testing.T) *host.EventLog {
 func CaptureLog(t *testing.T) func() string {
 	log := UseEventLog(t)
 	return func() string {
-		if err := log.Flush(5 * time.Second); err != nil {
+		if err := log.Flush(); err != nil {
 			t.Fatal(err)
 		}
 		return TextOf(ReadEvents(t, log.Path()))
@@ -69,7 +69,7 @@ func CaptureLog(t *testing.T) func() string {
 // BufferDrops flushes the writer and returns the fields of the events `host.buffer.dropped`.
 func BufferDrops(t *testing.T, log *host.EventLog) []map[string]any {
 	t.Helper()
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var drops []map[string]any
@@ -87,7 +87,7 @@ func BufferDrops(t *testing.T, log *host.EventLog) []map[string]any {
 // WriteWaits flushes the writer and returns the fields of the events `host.sidecar.write_wait`.
 func WriteWaits(t *testing.T, log *host.EventLog) []map[string]any {
 	t.Helper()
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var waits []map[string]any

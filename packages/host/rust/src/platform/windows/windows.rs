@@ -16,9 +16,14 @@ use std::time::Duration;
 use super::DocumentViewportMarker;
 use super::{
     ClipboardValue, CoreRootHost, CoreRootResolver, DOMOverlay, Delivery, DocumentOptions, Frame,
-    Handle, Hit, ImagePresentation, ImageReleased, Insets, Key, Listener, NativeEventWait,
-    PersistentStream, Platform, Pointer, ProcessFootprint, Raster, WindowOverlay,
+    FullscreenResult, Handle, Hit, ImagePresentation, ImageReleased, Insets, Key, Listener,
+    NativeEventWait, PersistentStream, Platform, Pointer, ProcessFootprint, Raster, WindowOverlay,
 };
+
+/// The time that a press or a release waits for the web view to receive it, and the time that an activation waits for the
+/// foreground. They are time limits of the Windows host, which no Windows machine verifies (F584-6).
+const RECEIVE_WAIT: Duration = Duration::from_secs(2);
+const ACTIVATE_WAIT: Duration = Duration::from_secs(5);
 
 #[cfg(feature = "diagnostics")]
 #[path = "capture.rs"]
@@ -93,7 +98,12 @@ impl Platform for Windows {
         unsupported::end_responder_observation(observation)
     }
 
-    fn fullscreen(&self, window: Handle, on: bool, done: Box<dyn Fn()>) -> Result<(), String> {
+    fn fullscreen(
+        &self,
+        window: Handle,
+        on: bool,
+        done: Box<dyn Fn(FullscreenResult, String)>,
+    ) -> Result<(), String> {
         unsupported::fullscreen(window, on, done)
     }
     fn titlebar_height(&self, window: Handle) -> Result<f64, String> {
@@ -495,20 +505,18 @@ impl Platform for Windows {
         &self,
         window: Handle,
         pointer: Pointer,
-        receive: Duration,
         done: Box<dyn FnOnce(Delivery) + Send>,
     ) -> Result<(), String> {
-        input::pointer(window, pointer, receive, done)
+        input::pointer(window, pointer, RECEIVE_WAIT, done)
     }
     fn input_activate(
         &self,
         window: Handle,
         _x: f64,
         _y: f64,
-        timeout: Duration,
         done: Box<dyn FnOnce(Result<(), String>) + Send>,
     ) -> Result<(), String> {
-        input::activate(window, timeout, done)
+        input::activate(window, ACTIVATE_WAIT, done)
     }
     fn input_key(&self, window: Handle, key: &Key) -> Result<Delivery, String> {
         input::key(window, key)

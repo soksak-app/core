@@ -56,7 +56,7 @@ fn a_relayed_batch_is_stored_in_order_in_the_layer_workbench() {
     let request = json!({"action": "batch", "events": [event("workbench.test.first", 1), event("workbench.test.second", 2)]});
     log_command(&log, request).unwrap();
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let events = read(&path);
     assert_eq!(events.len(), 4, "{events:?}");
     assert_eq!(events[2]["event"], "workbench.test.first");
@@ -97,7 +97,7 @@ fn a_transcript_request_stores_the_cut_record_and_answers_the_whole_line() {
         assert_eq!(log_command(&log, request).unwrap_err(), message);
     }
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let stored: Vec<Value> = read(&path)
         .into_iter()
         .filter(|event| event["event"] == "workbench.record.info")
@@ -207,7 +207,7 @@ fn an_invalid_relayed_batch_writes_nothing_and_names_the_event() {
         );
     }
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     assert_eq!(read(&path).len(), 2, "an invalid batch wrote events");
 }
 
@@ -253,7 +253,7 @@ fn a_relayed_batch_stores_the_clock_and_the_cids_that_the_workbench_gave() {
     let request = json!({"action": "batch", "events": [with, event("workbench.test.plain", 2)]});
     log_command(&log, request).unwrap();
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let events = read(&path);
     assert_eq!(events.len(), 4, "{events:?}");
     assert_eq!(events[2]["mono_ns"], 5_000_000_001u64);
@@ -284,7 +284,7 @@ fn the_clock_request_answers_both_clocks_of_the_host_and_stores_no_event() {
             .is_empty()
     );
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     assert_eq!(read(&path).len(), 2, "a clock request stored an event");
 }
 
@@ -296,7 +296,7 @@ fn a_relayed_batch_stores_a_plugin_event_in_the_layer_plugin() {
     let request = json!({"action": "batch", "events": [event("plugin.fixture.input", 1), event("workbench.console.error", 2)]});
     log_command(&log, request).unwrap();
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let events = read(&path);
     assert_eq!(events.len(), 4, "{events:?}");
     assert_eq!(events[2]["layer"], "plugin");
@@ -330,7 +330,7 @@ fn a_view_batch_is_bound_to_its_ready_page_plugin_and_surface() {
         Value::Null
     );
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let events = read(&path);
     assert_eq!(events.len(), 4, "{events:?}");
     assert_eq!(events[2]["page"], "doc-1");
@@ -364,7 +364,7 @@ fn a_view_batch_rejects_a_foreign_source_without_writing_earlier_events() {
         "{error}"
     );
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     assert_eq!(read(&path).len(), 2, "a rejected view batch wrote records");
 }
 
@@ -391,7 +391,7 @@ fn a_view_batch_rejects_a_page_start_for_another_time_origin_without_partial_wri
         "{error}"
     );
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     assert_eq!(read(&path).len(), 2, "a rejected view batch wrote records");
 }
 
@@ -418,7 +418,7 @@ fn a_view_batch_rejects_an_empty_page_start_url_without_partial_write() {
         "{error}"
     );
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     assert_eq!(read(&path).len(), 2, "a rejected view batch wrote records");
 }
 
@@ -441,7 +441,7 @@ fn a_view_batch_refuses_a_plugin_surface_field_instead_of_trusting_it() {
     .unwrap_err();
     assert!(error.contains("cannot set its owning surface"), "{error}");
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     assert_eq!(read(&path).len(), 2, "a refused view batch wrote records");
 }
 
@@ -467,7 +467,7 @@ fn a_view_batch_rejects_an_event_with_another_plugin_prefix() {
         "{error}"
     );
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     assert_eq!(read(&path).len(), 2, "a rejected view batch wrote records");
 }
 
@@ -503,7 +503,7 @@ fn a_view_batch_keeps_injected_plugin_fields_within_the_page_bound() {
     )
     .unwrap();
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let events = read(&path);
     let stored_fields = &events[2]["fields"];
     let stored_size = serde_json::to_vec(stored_fields).unwrap().len();
@@ -555,7 +555,7 @@ fn a_view_log_rejects_unknown_clock_and_batch_request_fields() {
             1791948729050.5,
         );
         let path = log.path().to_path_buf();
-        log.flush(Duration::from_secs(5)).unwrap();
+        log.flush().unwrap();
         outcomes.push((result.err(), read(&path).len()));
     }
     let expected: Vec<_> = requests
@@ -606,6 +606,6 @@ fn a_view_clock_answers_without_accepting_policy_or_writing_records() {
         .contains("action must be batch or clock")
     );
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     assert_eq!(read(&path).len(), 2, "a view clock request wrote a record");
 }

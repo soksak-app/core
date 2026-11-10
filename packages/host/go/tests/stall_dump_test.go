@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
@@ -44,11 +43,11 @@ func TestAStallDumpNamesAnExistingFileByItsAbsolutePath(t *testing.T) {
 func TestAStallDumpIsAnEventAndTheReplyNamesItsPosition(t *testing.T) {
 	log := support.UseEventLog(t)
 	dump := filepath.Join(t.TempDir(), "stall-10-7.txt")
-	boot, seq, err := host.EmitStallDump(dump, 5*time.Second)
+	boot, seq, err := host.EmitStallDump(dump)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var found []map[string]any

@@ -11,7 +11,6 @@ import (
 	"sort"
 	"strings"
 	"testing"
-	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
@@ -60,7 +59,7 @@ func writeMixedEvents(t *testing.T) (string, map[host.Level]int) {
 			counts[event.level]++
 		}
 	}
-	if err := log.Flush(10 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	log.Close()

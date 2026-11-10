@@ -9,11 +9,11 @@ use support::run;
 #[test]
 fn process_wait_reports_unsupported_platform() {
     let pid = std::process::id().to_string();
-    let (code, stdout, stderr) = run(&["process", "wait", &pid, "--timeout-ms", "1"]);
+    let (code, stdout, stderr) = run(&["process", "wait", &pid]);
     assert_eq!(code, 1, "stdout={stdout:?} stderr={stderr:?}");
     assert!(stdout.is_empty(), "stdout={stdout:?}");
     assert!(
-        stderr.contains("waiting for a process end is not implemented on windows"),
+        stderr.contains("interrupt signals is not implemented on windows"),
         "{stderr}"
     );
 }

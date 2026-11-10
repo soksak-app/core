@@ -53,6 +53,7 @@ test("hidden view statuses notify through every inactive host session", { timeou
       const admitted = new Promise((resolve, reject) => { admit = resolve; rejectAdmission = reject; });
       let first = true;
       let commandIssued = false;
+      let ended = false;
       const outcome = session.client.watch(session.window, "rasterprobe.session", value => {
         if (first) {
           assert.notEqual(value.rows, count, "the initial session already holds the marked row count");
@@ -63,7 +64,11 @@ test("hidden view statuses notify through every inactive host session", { timeou
         if (value.rows !== count) return false;
         assert.equal(commandIssued, true, "the marked notification preceded the measured command");
         return true;
-      }, { surface, timeout: 20000 }).then(value => ({ value }), error => {
+      }, { surface }).then(value => {
+        ended = true;
+        return { value };
+      }, error => {
+        ended = true;
         rejectAdmission(error);
         return { error };
       });
@@ -92,8 +97,10 @@ test("hidden view statuses notify through every inactive host session", { timeou
       } catch (error) {
         failure = error;
       }
-      // The client owns unsubscription on completion, timeout and failure.
-      // Always await it, and retain both setup and watch failures if distinct.
+      // The client owns unsubscription on completion, failure and the close of the connection. A watch has no time limit, so a
+      // setup that failed while the watch is still open ends the check with that failure; the connection that the check closes
+      // at its end ends the watch. Otherwise retain both setup and watch failures if distinct.
+      if (failure && !ended) throw failure;
       const result = await outcome;
       if (failure && result.error && failure !== result.error) {
         throw joinedFailure("hidden status preparation and its watch both failed", [failure, result.error]);

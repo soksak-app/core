@@ -1038,6 +1038,8 @@ function dragTraceModeSession(t, { performanceTrace, logPolicy }) {
     values,
     session: {
       app: { configDir },
+      // The connection of the fixture stays open, so the policy wait ends only by the policy file.
+      client: { ended: new Promise(() => {}) },
       async get(name) {
         assert.equal(name, "core.settings");
         return { values: structuredClone(values) };

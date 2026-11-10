@@ -210,9 +210,15 @@ async function startApplication(item, children) {
   const ended = new AbortController();
   child.once('error', (error) => ended.abort(new Error(`cannot start ${item.argv[0]}: ${error.message}`)));
   exited(child).then((end) => ended.abort(new Error(`the application exited with ${describeExit(end)} before it wrote endpoint.json`)));
+  // The folder wait has no time limit; the run bounds its start step with its own limit, which it gives the wait as an abort.
+  const limit = AbortSignal.timeout(START_LIMIT_MS);
   try {
-    await untilFolderState(item.configDir, () => (existsSync(endpoint) ? true : undefined), START_LIMIT_MS,
-      () => new Error(`the application wrote no endpoint.json in ${START_LIMIT_MS / 1000}s`), ended.signal);
+    try {
+      await untilFolderState(item.configDir, () => (existsSync(endpoint) ? true : undefined), { signal: AbortSignal.any([ended.signal, limit]) });
+    } catch (error) {
+      if (limit.aborted && !ended.signal.aborted) throw new Error(`the application wrote no endpoint.json in ${START_LIMIT_MS / 1000}s`);
+      throw error;
+    }
   } catch (error) {
     // An application that did not start has no endpoint for a quit step: the start ends a process that still runs, and the quit
     // step of the application is skipped as for an application that was not started.

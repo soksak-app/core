@@ -41,7 +41,7 @@ func TestDebugAndTraceEventsGoToTheDebugFileAndTheOthersToTheMainFile(t *testing
 			t.Fatalf("event %d was refused", index)
 		}
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	main := readEventFile(t, log.Path())
@@ -95,7 +95,7 @@ func TestEachFileRotatesOnItsOwnAndRotationNeverRemovesAGeneration(t *testing.T)
 	if !log.Emit(host.LevelInfo, "host.app.event", map[string]any{"kind": "info"}) {
 		t.Fatal("the info event was refused")
 	}
-	if err := log.Flush(10 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	debug := debugPathOf(log)
@@ -160,7 +160,7 @@ func TestALossNamesTheChannelOfTheRefusedEvents(t *testing.T) {
 			refused[channel]++
 		}
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	dropped := map[string]int{}

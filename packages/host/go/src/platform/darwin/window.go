@@ -22,7 +22,7 @@ func (implementation) PrepareWindow(window platform.Window) error {
 	return nil
 }
 
-func (implementation) Fullscreen(window platform.Window, on bool, done func()) error {
+func (implementation) Fullscreen(window platform.Window, on bool, done func(platform.FullscreenResult, string)) error {
 	handle := handles.NewHandle(done)
 	if !bool(native.NativeWindowFullscreen(uintptr(window), bool(on), uintptr(handle))) {
 		handle.Delete()
@@ -57,11 +57,17 @@ func goHost_native_responder_changed(value uintptr) {
 	handles.Handle(value).Value().(func())()
 }
 
-func goHost_native_fullscreen_done(value uintptr) {
+// goHost_native_fullscreen_done answers a full screen request with its result (window_fullscreen.h, whose values are the
+// platform.FullscreenResult values) and its static message, nil for a finished transition.
+func goHost_native_fullscreen_done(value uintptr, result int32, message *byte) {
 	handle := handles.Handle(value)
-	done := handle.Value().(func())
+	done := handle.Value().(func(platform.FullscreenResult, string))
 	handle.Delete()
-	done()
+	text := ""
+	if message != nil {
+		text = native.GoString(message)
+	}
+	done(platform.FullscreenResult(result), text)
 }
 
 func (implementation) TitlebarHeight(window platform.Window) (float64, error) {

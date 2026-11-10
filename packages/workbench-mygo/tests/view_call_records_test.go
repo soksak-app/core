@@ -11,10 +11,10 @@ import (
 // A call that is in flight when its surface closes gets no reply: closing the surface ends its calls, so the canceled host call of
 // the call reaches neither the view nor the error display (docs/spec/native-surfaces.md#view-surfaces).
 func TestACallInFlightWhenItsSurfaceClosesGetsNoReply(t *testing.T) {
-	gate := make(chan struct{})
+	gate := newGate()
 	stored := &surfaceHost{}
 	stored.calls = map[string]workbench.HostCall{"exposureRegister": func(ctx context.Context, _ json.RawMessage) (any, error) {
-		<-gate
+		gate.wait()
 		return nil, ctx.Err()
 	}}
 	f := surfaceShellOn(t, installedDocument, stored)
@@ -27,7 +27,7 @@ func TestACallInFlightWhenItsSurfaceClosesGetsNoReply(t *testing.T) {
 	f.pending.drain(t)
 	replies := len(stored.replies)
 	f.click("core.card.close", card)
-	close(gate)
+	gate.open()
 	f.settle()
 	for _, reply := range stored.replies[replies:] {
 		if reply["surface"] == surface {

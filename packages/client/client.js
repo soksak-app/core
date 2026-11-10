@@ -121,35 +121,32 @@ class Client {
   /**
    * Watches a value with status.watch and resolves with the first value that satisfies the predicate.
    * It also checks the current value. The predicate returns true or false; any other answer rejects the watch with an error that names
-   * the status and the type of the answer. If the predicate is not satisfied within timeout (ms), it rejects with code "ETIMEDOUT".
+   * the status and the type of the answer. The watch has no time limit: the satisfying value, a failed answer of status.watch or
+   * status.get, an error of the predicate or the close of the connection ends it, in the turn of that event, and status.unwatch
+   * follows, so the caller does not wait for the answer of the unwatch (status.watch in docs/spec/exposure.md).
    * surface names the surface that a surface page registered under that name.
    */
-  watch(window, name, predicate, { timeout = 10000, surface } = {}) {
+  watch(window, name, predicate, options = {}) {
+    if (Object.hasOwn(options, "timeout")) {
+      return Promise.reject(new TypeError("watch takes no timeout: a watch ends by its value, a failed answer, an error of its predicate or the close of the connection"));
+    }
+    const { surface } = options;
     // default: surface is an optional option; without it the page status is watched, so the surface part of the key is null.
     const key = JSON.stringify([window, name, surface ?? null]);
     const target = surface === undefined ? { window, name } : { window, name, surface };
     return new Promise((resolve, reject) => {
       let done = false;
-      let timer;
-      let seen = false;
-      let last;
       const finish = (error, value) => {
         if (done) return;
         done = true;
-        clearTimeout(timer);
         off();
         offEnded();
         offClose();
-        this.#release(key, target, entry).then(() => {
-          if (error) reject(error);
-          else resolve(value);
-        }, (releaseError) => {
-          reject(error ? new AggregateError([error, releaseError], `status ${name} and its unwatch both failed`) : releaseError);
-        });
+        if (error) reject(error);
+        else resolve(value);
+        this.#release(key, target, entry);
       };
       const check = (value) => {
-        seen = true;
-        last = value;
         let ok;
         try {
           ok = predicate(value);
@@ -178,14 +175,6 @@ class Client {
         finish(error);
       });
       const offClose = this.#onClose((error) => finish(error));
-      if (timeout !== Infinity) {
-        timer = setTimeout(() => {
-          const error = new Error(`status ${name} did not satisfy the condition within ${timeout} ms; ` +
-            (seen ? `last value ${JSON.stringify(last)}` : "no value was received"));
-          error.code = "ETIMEDOUT";
-          finish(error);
-        }, timeout);
-      }
       const entry = this.#acquire(key, target);
       entry.ready
         .then(() => (done ? undefined : this.request("status.get", target)))
@@ -251,26 +240,28 @@ class Client {
     return created;
   }
 
-  // Releases one use of entry. An entry that is no longer the watch of its key ended at the host already: its failure removed
-  // it, or status.ended did, and a later watch of the key holds a new entry that this use does not count in.
+  /**
+   * Ends one use of entry. The last use sends status.unwatch after the subscription, in the order of the subscription requests of
+   * the target. A failed subscription is not unsubscribed. An entry that is no longer the watch of its key ended at the host
+   * already: its failure removed it, or status.ended did, and a later watch of the key holds a new entry that this use does not
+   * count in. The host ends the subscription of the connection before it asks the page, so a refusal of the unwatch, with any
+   * code, ends the watch as well (status.watch in docs/spec/exposure.md): it ends nothing else, the connection stays open, and
+   * the caller of the watch has its result already.
+   */
   #release(key, target, entry) {
-    if (this.#watches.get(key) !== entry) return Promise.resolve();
+    if (this.#watches.get(key) !== entry) return;
     entry.count -= 1;
-    if (entry.count > 0) return Promise.resolve();
+    if (entry.count > 0) return;
     this.#watches.delete(key);
-    if (this.#closed) return Promise.resolve();
-    // The subscription precedes this turn, so its result is already decided here. A failed subscription is not unsubscribed.
-    const released = this.#subscribe(key, () => entry.ready.then(() => this.request("status.unwatch", target), (error) => {
-      throw new Error(`status.unwatch skipped because status.watch failed: ${error.message}`);
-    }));
+    if (this.#closed) return;
+    const released = this.#subscribe(key, () => entry.ready.then(() => this.request("status.unwatch", target), () => null));
     released.then(undefined, (error) => {
-      // A reload of the page removes the watches of its document, and the host refuses their unwatch with 1003 (the document
-      // closed or the page is not ready). That ends the watch; the caller of the watch receives the refusal, and the
-      // connection stays open. Any other refusal leaves the host watch in an unknown state and fails the connection.
-      if (error instanceof EndpointError && error.code === 1003) return;
+      // A refusal of the host, with any code, ended the watch on the host, and the connection stays open.
+      if (error instanceof EndpointError) return;
+      // An unwatch that the close of the connection ended has nothing left to end: the close ended every watch.
+      if (this.#closed) return;
       this.#fail(new Error(`status.unwatch failed: ${error.message}`));
     });
-    return released;
   }
 
   #receive(message) {

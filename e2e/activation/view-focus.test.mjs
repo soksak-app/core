@@ -21,8 +21,6 @@ const REPEATED_VOWELS = "ㅏㅏㅏㅏ";
 const INPUT_RECORDS = ["native.record.info", "native.input.key_down", "native.input.report", "host.input.relay",
   "host.window.event", "host.trace.region", "host.trace.sidecar.send", "workbench.call", "workbench.log.clock",
   "host.trace.sidecar.receive", "host.sidecar.request", "sidecar.rasterprobe.request"];
-/** The longest time from a key to the input status that holds its document. */
-const STAGE_LIMIT = 10000;
 
 async function step(t, name, action) {
   const started = performance.now();
@@ -100,7 +98,7 @@ function regionDocument(input) {
  */
 async function assertDelivered(s, surface, baseline, name) {
   const input = await s.until("rasterprobe.input", (value) => value.log.length > 0 && value.log.every((entry) => entry.received !== null),
-    `${name}: the raster probe sidecar did not receive every input transaction`, { surface, timeout: STAGE_LIMIT });
+    `${name}: the raster probe sidecar did not receive every input transaction`, { surface });
   assert.equal(input.log.length, input.transactions - baseline, `${name}: the raster probe input log lost transactions`);
   assert.deepEqual(input.log.map((entry) => entry.sequence),
     Array.from({ length: input.log.length }, (_, index) => baseline + index + 1), `${name}: the input transactions are not contiguous`);
@@ -397,7 +395,7 @@ for (const app of Object.values(APPS)) {
       const current = await clickRegion(s, surface);
       await typeCommand(s, requests);
       const typed = await s.until("rasterprobe.input", (value) => regionDocument(value) === `${COMMAND}\n`,
-        "the image region did not receive the same native key sequence as its AppKit reference", { surface, timeout: STAGE_LIMIT });
+        "the image region did not receive the same native key sequence as its AppKit reference", { surface });
       assert.equal(typed.preedit?.text ?? "", "", "the image region must finish without preedit");
       const input = await assertDelivered(s, surface, baseline, "image region");
       assert.equal(typedText(input.log.flatMap((entry) => entry.actions)), `${COMMAND}\n`,
@@ -473,7 +471,7 @@ for (const app of Object.values(APPS)) {
               await s.press(key);
               const expected = referenceStages[index].document;
               const input = await s.until("rasterprobe.input", (value) => regionDocument(value) === expected,
-                `${app.name}: the image region did not hold the AppKit document after vowel ${index + 1}`, { surface, timeout: STAGE_LIMIT });
+                `${app.name}: the image region did not hold the AppKit document after vowel ${index + 1}`, { surface });
               const stage = { index: index + 1, key, reference: expected,
                 committed: typedText(input.log.flatMap((entry) => entry.actions)), preedit: input.preedit?.text ?? "" };
               stages.push(stage);
@@ -485,7 +483,7 @@ for (const app of Object.values(APPS)) {
             await s.press("Space");
             const committed = await s.until("rasterprobe.input", (value) => regionDocument(value) === `${REPEATED_VOWELS} ` &&
               (value.preedit?.text ?? "") === "",
-            `${app.name}: Space did not commit the four vowels in the image region`, { surface, timeout: STAGE_LIMIT });
+            `${app.name}: Space did not commit the four vowels in the image region`, { surface });
             const input = await assertDelivered(s, surface, baseline, `${app.name}: repeated vowels`);
             const actions = input.log.flatMap((entry) => entry.actions);
             const received = input.log.flatMap((entry) => entry.received.actions);

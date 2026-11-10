@@ -441,7 +441,6 @@ fn a_surface_ends_its_detaches_only_after_the_acknowledgement_of_each_of_its_ima
         &fixture.owner,
         &images,
         targets.clone(),
-        Duration::from_secs(60),
         ended_event,
     )
     .unwrap();
@@ -488,11 +487,11 @@ fn a_surface_ends_its_detaches_only_after_the_acknowledgement_of_each_of_its_ima
     fixture.sidecars.stop();
 }
 
-// contract: images.detach.timeout-keeps-waiting
+// contract: images.detach.ends-by-its-events
 #[test]
-fn a_timed_out_detach_is_recorded_once_and_a_late_acknowledgement_ends_it() {
+fn a_detach_has_no_limit_and_writes_no_record_while_it_waits() {
     let fixture = fixture(silent_supplier(), &["@fixture/sidecar-one"]);
-    let images = images_with(&[("@fixture/sidecar-one", "region-timeout")]);
+    let images = images_with(&[("@fixture/sidecar-one", "region-silent")]);
     let targets = images.begin_reload("surface-a");
     let (ended_event, ended_events) = ended_events();
 
@@ -501,41 +500,36 @@ fn a_timed_out_detach_is_recorded_once_and_a_late_acknowledgement_ends_it() {
         &fixture.owner,
         &images,
         targets.clone(),
-        Duration::from_millis(20),
         ended_event,
     )
     .unwrap();
-    let request = pending_request(&fixture.sidecars, "region-timeout");
-    assert_eq!(
-        waits[0].timed_out.recv_timeout(Duration::from_secs(5)),
-        Err(std::sync::mpsc::RecvTimeoutError::Disconnected),
-        "the wait recorded no timeout"
-    );
+    let request = pending_request(&fixture.sidecars, "region-silent");
     assert!(
         images.pending_detach_error("surface-a").is_err(),
-        "the surface stopped waiting at the timeout"
+        "the surface waits for the end of its detach"
     );
     assert!(
         images.begin_reload("surface-a").is_empty(),
         "a reload sends no second detach for a pending image"
+    );
+    assert!(
+        ended_events.try_recv().is_err(),
+        "a detach without its acknowledgement ended"
     );
 
     acknowledge(
         &fixture,
         "@fixture/sidecar-one",
         &request,
-        "region-timeout",
+        "region-silent",
         targets[0].generation,
         serde_json::json!({"ok": true, "result": "detached"}),
     );
     waits.pop().unwrap().thread.join().unwrap();
     assert_eq!(ended_events.try_recv().unwrap(), ended(None));
-    assert_eq!(
-        errors_naming(&request),
-        [format!(
-            "image detach: image detach sidecar @fixture/sidecar-one surface surface-a image region-timeout generation {} request {request} timed out",
-            targets[0].generation
-        )]
+    assert!(
+        errors_naming(&request).is_empty(),
+        "a detach wrote a record while it waited"
     );
     fixture.sidecars.stop();
 }
@@ -553,7 +547,6 @@ fn a_rejected_detach_ends_the_pending_detach_with_its_error_in_the_ended_event()
         &fixture.owner,
         &images,
         targets.clone(),
-        Duration::from_secs(60),
         ended_event,
     )
     .unwrap();
@@ -594,7 +587,6 @@ fn the_end_of_the_surface_session_ends_its_pending_detach_without_an_ended_event
         &fixture.owner,
         &images,
         targets,
-        Duration::from_secs(60),
         ended_event,
     )
     .unwrap();
@@ -625,7 +617,6 @@ fn the_end_of_the_supplier_connection_ends_its_pending_detach_with_its_error() {
         &fixture.owner,
         &images,
         targets.clone(),
-        Duration::from_secs(60),
         ended_event,
     )
     .unwrap();
@@ -664,7 +655,6 @@ fn a_supplier_acknowledgement_is_consumed_by_the_host_and_ends_the_detach() {
         &fixture.owner,
         &images,
         targets,
-        Duration::from_secs(60),
         ended_event,
     )
     .unwrap();
