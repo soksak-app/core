@@ -53,7 +53,7 @@ async function placement(t, states, read = () => {}) {
   return { surfaces, holds, syncs };
 }
 
-test("a view that does not declare leaves its place empty and the other views and the next layout are placed", { timeout: 5000 }, async (t) => {
+test("a view that does not declare leaves its place empty and the other views and the next layout are placed", async (t) => {
   const states = new Map([["declared-view", { state: "declared" }], ["silent-view", { state: "pending" }]]);
   const { surfaces, holds, syncs } = await placement(t, states);
   const first = await surfaces.place({ surfaces: [view("declared-view"), view("silent-view", 5)], settled: true, drawn: true, titlebar: 40 });
@@ -76,7 +76,7 @@ test("a view that does not declare leaves its place empty and the other views an
   assert.equal(surfaces.waitsForDeclaration("silent-view"), false);
 });
 
-test("a placement that starts while a declaration is in flight waits for its answer and places the view", { timeout: 5000 }, async (t) => {
+test("a placement that starts while a declaration is in flight waits for its answer and places the view", async (t) => {
   let answer;
   const declaring = new Promise((resolve) => { answer = resolve; });
   const states = new Map([["declaring-view", { state: "declaring", answered: declaring }]]);
