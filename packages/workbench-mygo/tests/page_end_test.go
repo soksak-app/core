@@ -5,8 +5,8 @@ package workbench_test
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -23,27 +23,43 @@ func neverAnswered(t *testing.T) workbench.HostCall {
 	}
 }
 
-// A flush waits for the events queued before it and not for an event stream that never goes quiet: a closed gate counts an event in
-// every step, and the flush still ends after the batch that carries what was queued (docs/spec/logging.md#operation-chains). The
-// replies of the host arrive from other goroutines between the steps, so the test runs steps until the flush ends or the time of
-// the test passes, not a count of steps that the steps of the gate could fill before any reply arrived.
+// A flush waits for the events queued before it and not for an event stream that never goes quiet: the closed gate counts an event
+// after every step, and each step is the reply of a host call, so the counts are due at the end of every batch, and the flush still
+// ends after the batch that carries what was queued (docs/spec/logging.md#operation-chains).
 func TestAFlushEndsWhileEventsKeepComing(t *testing.T) {
 	f := newWriter(t, nil)
 	f.events.Info("place: gated")
 	flushed := false
 	f.events.Flush(func() { flushed = true })
-	var tick func()
-	tick = func() {
-		f.events.Info("place: gated")
-		f.queue.post(tick)
-	}
-	f.queue.post(tick)
-	limit := time.Now().Add(5 * time.Second)
-	for !flushed && time.Now().Before(limit) {
+	for !flushed {
 		f.queue.run()
+		f.events.Info("place: gated")
 	}
-	if !flushed {
-		t.Fatal("the flush did not end while the gate counted an event in every step")
+}
+
+// Each command that opens a folder answers its caller once, and the window that shows the folder closes without a second answer
+// of any command (docs/spec/exposure.md#registration).
+func TestEachCommandOfAnOpenedFolderAnswersOnce(t *testing.T) {
+	stored := &storedHost{common: map[string]any{"projectOpening": "windows"}}
+	f := newShell(t, stored)
+	answers := map[string]int{}
+	run := func(name string, params any) {
+		raw, err := json.Marshal(params)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.shell.Registry().RunLater(name, raw, func(any, error) { answers[name]++ })
+		f.settle()
+	}
+	run("core.project.open", map[string]string{"root": "/work/alpha"})
+	stored.geometry = map[string]any{"x": 10, "y": 20, "width": 900, "height": 700}
+	f.shell.Event("project-close-request", nil)
+	f.settle()
+	if answers["core.project.open"] != 1 {
+		t.Fatalf("the commands answered %v times", answers)
+	}
+	if shown := shownError(t, f); strings.Contains(shown, "answered a second time") {
+		t.Fatalf("a command answered twice: %s", shown)
 	}
 }
 
