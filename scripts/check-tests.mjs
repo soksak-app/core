@@ -581,6 +581,17 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F736",
+    implementation: [
+      { file: "packages/workbench/compositor.js", symbol: "const layoutGrid = seated.values().next().value?.grid ?? null;" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/prediction-kept-section-grid.test.mjs", id: "a prediction names the grid of its layout for a kept section of a hidden window sidebar" },
+    ],
+    expected: "Each kept section of a hidden window sidebar in the prediction of a layout carries the device pixel grid of that layout, and a layout without a card seat is no prediction, so verify V7c judges every predicted surface on its grid.",
+    levels: ["unit"],
+  },
+  {
     id: "F732",
     implementation: [
       { file: "native/darwin/src/window_facts.m", symbol: "static BOOL lives(pid_t process) {" },

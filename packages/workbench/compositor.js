@@ -436,6 +436,10 @@ export function publishAhead(rects, seated, titlebar) {
   // The kept sections of a window sidebar that its switch hides stand in no card (docs/spec/plugins.md#sections). Their slots are
   // hidden in every layout, so the prediction measures the same hidden frame as the drawn commit, and they are no card seat.
   let unseated = 0;
+  // The device pixel scale that this layout was made on, which every card seat of seated carries (plane.js). Each surface of the
+  // prediction names it (verify V7c), a kept section as well.
+  // default: a layout without a card seat names no scale (null), so its record is no prediction.
+  const layoutGrid = seated.values().next().value?.grid ?? null;
   for (const slot of slots()) {
     const id = slot.dataset.nativeSurfaceId;
     const el = cardEl(slot);
@@ -448,6 +452,7 @@ export function publishAhead(rects, seated, titlebar) {
         plugin: slot.dataset.nativePlugin,
         dim: slot.dataset.nativeDim === "true",
         bands: null,
+        grid: layoutGrid,
         visible: false,
         surface: slotSurface(slot),
         frame: planeFrame(slot.getBoundingClientRect(), plane.getBoundingClientRect()),
@@ -518,7 +523,7 @@ export function publishAhead(rects, seated, titlebar) {
       } : { x: 0, y: 0, w: 0, h: 0 },
     });
   }
-  aheadComplete &&= seats.length - unseated === seated.size;
+  aheadComplete &&= seats.length - unseated === seated.size && (unseated === 0 || layoutGrid !== null);
   aheadSeq = ++seq;
   return deliver(aheadSeq, seats, titlebar);
 }
