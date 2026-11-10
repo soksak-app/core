@@ -349,14 +349,8 @@ func (s *Shell) runRegion(call viewCallEvent, answer viewAnswer) error {
 	case "image.text":
 		image("imageText", map[string]any{"text": fields.Text})
 	case "image.detach":
-		s.surfaces.detaching[call.Surface] = true
-		detached := answer
-		answer = func(value any, err error) {
-			if err == nil {
-				delete(s.surfaces.detaching, call.Surface)
-			}
-			detached(value, err)
-		}
+		// A detach that a view asks keeps the seat of its surface: the surface stands while the detach runs, and only the detaches
+		// that the start of the workbench names hold a surface out of the placement (docs/spec/native-surfaces.md#view-surfaces).
 		image("imageDetach", map[string]any{})
 	}
 	return nil

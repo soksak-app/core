@@ -1036,10 +1036,11 @@ fn request_surface(
     })
 }
 
-/// Sends the reload request to a ready page and ends the requests to its surface documents. Such a request would keep
-/// the page from reloading: the page waits for its reply, and the document needs answers from the page, which sends no
-/// call after the reload request (docs/spec/native-host.md#page-reload). The requests end after the event, so a page
-/// that receives the failure already sends no report of it.
+/// Sends the reload request to a ready page, which ends the page, and ends the requests to the page and to its surface
+/// documents (`end_page_requests`). Such a request would keep the page from reloading: the page waits for the replies of its
+/// calls, and a call that waits for an answer of the page gets none, because the page sends no call after the reload
+/// request (docs/spec/native-host.md#page-reload). The requests end after the event, so a page that receives the failure
+/// already sends no report of it.
 fn ask_page_to_reload(
     relay: &Relay,
     reloading: &AtomicBool,
@@ -1047,10 +1048,25 @@ fn ask_page_to_reload(
     emit: impl FnOnce() -> Result<(), String>,
 ) -> Result<(), String> {
     emit()?;
+    end_page_requests(relay, reloading, main);
+    Ok(())
+}
+
+/// Ends every request to the main page of the window main and to its surface documents with 1003, and refuses the later
+/// requests to those documents until the next page starts (docs/spec/hosts.md#process-lifecycle).
+fn end_page_requests(relay: &Relay, reloading: &AtomicBool, main: &str) {
     reloading.store(true, Ordering::SeqCst);
     let surfaces = format!("surface-{main}-");
-    relay.abandon_matching(|target| target.starts_with(&surfaces));
-    Ok(())
+    relay.abandon_matching(|target| target == main || target.starts_with(&surfaces));
+}
+
+/// Ends the requests to the main page of the window and to its surface documents when the process of the page ended.
+pub(crate) fn page_ended(window: &Window, data: &WindowData) {
+    end_page_requests(
+        &window.state::<Exposure>().relay,
+        &data.page_reloading,
+        window.label(),
+    );
 }
 
 /// Records that a new main page started, which accepts requests to surface documents again.
@@ -1273,8 +1289,10 @@ mod surface_closed_tests {
     }
 }
 
+/// Records that a new main page started: the requests of the page before it end (`page_ended`), and the window accepts
+/// requests to its surface documents again.
 pub(crate) fn page_reloaded(window: &Window, data: &WindowData) {
-    window.state::<Exposure>().relay.abandon(window.label());
+    page_ended(window, data);
     end_page_reload(&data.page_reloading);
     windows_changed(window.app_handle());
 }
@@ -2199,6 +2217,7 @@ fn reload(host: &Host, window: &Window) -> Result<Value, Failure> {
         host.page(window, "command.run", flush, TIMEOUT)?;
     }
     let (tx, rx) = mpsc::channel();
+    let wait = RELOAD_WAITS.fetch_add(1, Ordering::Relaxed);
     window_data(window)
         .map_err(internal)?
         .readied
@@ -2206,7 +2225,7 @@ fn reload(host: &Host, window: &Window) -> Result<Value, Failure> {
         // default: a lock that a panicking thread poisoned still holds the readiness senders, which this call fills;
         // the panic hook records the panic.
         .unwrap_or_else(PoisonError::into_inner)
-        .push(tx);
+        .push((wait, tx));
     if ready {
         // A ready page reloads itself after all the calls it sent have received their answers. If the host reloaded it,
         // the response being written at that moment would be lost (docs/spec/native-host.md#page-reload).
@@ -2220,6 +2239,9 @@ fn reload(host: &Host, window: &Window) -> Result<Value, Failure> {
             },
         )
         .map_err(internal)?;
+        // The event ended the page, so the rest that it owed ends in the same turn.
+        let data = window_data(window).map_err(internal)?;
+        crate::windows::page_left(window, &data).map_err(internal)?;
     } else {
         let target = window.clone();
         on_main(window, move || {
@@ -2228,16 +2250,32 @@ fn reload(host: &Host, window: &Window) -> Result<Value, Failure> {
         .map_err(internal)?;
     }
     match rx.recv_timeout(TIMEOUT) {
-        Ok(()) => Ok(Value::Null),
-        Err(_) => Err(Failure::new(
-            TIMED_OUT,
-            crate::running_calls::reload_timeout_text(
-                TIMEOUT,
-                &crate::running_calls::RUNNING_CALLS.of(window.label(), std::time::Instant::now()),
-            ),
-        )),
+        Ok(Ok(())) => Ok(Value::Null),
+        Ok(Err(ended)) => Err(Failure::new(MISSING_DOCUMENT, ended)),
+        Err(_) => {
+            // The reload ended, so a later ready of the window answers no ended reload.
+            if let Ok(data) = window_data(window) {
+                data.readied
+                    .lock()
+                    // default: a lock that a panicking thread poisoned still holds the reloads, from which this one is
+                    // removed; the panic hook records the panic.
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .retain(|(held, _)| *held != wait);
+            }
+            Err(Failure::new(
+                TIMED_OUT,
+                crate::running_calls::reload_timeout_text(
+                    TIMEOUT,
+                    &crate::running_calls::RUNNING_CALLS
+                        .of(window.label(), std::time::Instant::now()),
+                ),
+            ))
+        }
     }
 }
+
+/// The number of the next reload wait, which a reload that ends removes by it.
+static RELOAD_WAITS: AtomicU64 = AtomicU64::new(0);
 
 /// Changes the window to full screen or back, and returns after the transition ends. macOS ignores a request during a
 /// transition, so the native code continues to handle it after that transition ends.

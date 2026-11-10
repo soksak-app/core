@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -107,7 +108,10 @@ type Events struct {
 	scheduled  bool
 	sending    bool
 	anchor     *eventClock
-	flushes    []func()
+	// entered counts the events that entered the queue and left those that left it in a batch that ended; each flush waits until
+	// left reaches the count of its mark (Flush).
+	entered, left int
+	flushes       []eventFlush
 	// operations counts the operations that this start of the workbench began.
 	operations int
 	// tracing is the switch of the trace (docs/spec/performance-trace.md#the-switch): it is on only after the host acknowledged on,
@@ -115,6 +119,12 @@ type Events struct {
 	tracing     bool
 	tracedSince time.Time
 	ended       bool
+}
+
+// eventFlush is a flush that waits until the events queued up to its mark have left.
+type eventFlush struct {
+	until int
+	done  func()
 }
 
 // NewEvents returns the writer of one start of the workbench, whose gate stores only errors until the policy of the host arrives.
@@ -379,6 +389,7 @@ func (e *Events) emit(at time.Time, level sok.Level, event string, fields func()
 		cids = nil
 	}
 	e.queue = append(e.queue, queuedEvent{at: at, level: level, event: event, fields: stored, cids: cids, charge: charge})
+	e.entered++
 	e.queueBytes += charge
 	e.schedule()
 }
@@ -442,7 +453,7 @@ func (e *Events) awaitGated() {
 	e.options.After(gatedReportInterval-e.options.Now().Sub(e.gatedAt), func() {
 		e.options.Post(func() {
 			e.gatedTimer = false
-			e.send(false)
+			e.send()
 			e.awaitGated()
 		})
 	})
@@ -454,33 +465,51 @@ func (e *Events) schedule() {
 		return
 	}
 	e.scheduled = true
-	e.options.Post(func() { e.send(false) })
+	e.options.Post(func() { e.send() })
 }
 
-// Flush runs done when every queued event has left, and reports the counts of the gate at once. The close of a window calls it before
-// the host call that ends the window (docs/spec/logging.md#operation-chains).
+// Flush runs done when the batches that carry every event queued until now have ended, and reports the counts of the gate and the
+// losses at once: they enter the queue now, so they leave with those events. An event queued later does not delay done, so a flush
+// ends while events keep coming. The close of a window calls it before the host call that ends the window
+// (docs/spec/logging.md#operation-chains).
 func (e *Events) Flush(done func()) {
-	e.flushes = append(e.flushes, done)
-	e.send(true)
+	if e.ended {
+		return
+	}
+	own := e.ownRecords(true)
+	e.queue = append(e.queue, own...)
+	e.entered += len(own)
+	e.flushes = append(e.flushes, eventFlush{until: e.entered, done: done})
+	e.send()
+}
+
+// endFlushes runs each flush whose events have left.
+func (e *Events) endFlushes() {
+	due := 0
+	for due < len(e.flushes) && e.flushes[due].until <= e.left {
+		due++
+	}
+	ended := slices.Clone(e.flushes[:due])
+	e.flushes = e.flushes[due:]
+	for _, flush := range ended {
+		flush.done()
+	}
 }
 
 // send starts the batch of the queue, unless a batch is in flight. A batch carries at most eventBatchEvents queued events, and the
 // end of its call sends the rest.
-func (e *Events) send(force bool) {
+func (e *Events) send() {
 	e.scheduled = false
 	if e.sending || e.ended {
 		return
 	}
-	reportGated := len(e.gated) > 0 && (force || e.gatedDue())
+	e.endFlushes()
+	reportGated := e.gatedDue()
 	if len(e.queue) == 0 && len(e.lost) == 0 && !reportGated {
-		flushes := e.flushes
-		e.flushes = nil
-		for _, done := range flushes {
-			done()
-		}
 		return
 	}
 	count := min(len(e.queue), eventBatchEvents)
+	queued := count
 	events := append([]queuedEvent{}, e.queue[:count]...)
 	e.queue = e.queue[count:]
 	for _, event := range events {
@@ -490,20 +519,20 @@ func (e *Events) send(force bool) {
 	e.sending = true
 	e.anchored(func(err error) {
 		if err != nil {
-			e.batchEnded(len(events), err)
+			e.batchEnded(len(events), queued, err)
 			return
 		}
 		if !e.anchor.stated {
 			e.anchor.stated = true
 			statement, statementErr := e.clockStatement()
 			if statementErr != nil {
-				e.batchEnded(len(events), statementErr)
+				e.batchEnded(len(events), queued, statementErr)
 				return
 			}
 			events = append([]queuedEvent{statement}, events...)
 		}
 		e.options.Calls.Call("log", map[string]any{"action": "batch", "events": e.stamped(events)}, func(_ any, err error) {
-			e.batchEnded(len(events), err)
+			e.batchEnded(len(events), queued, err)
 		})
 	})
 }
@@ -541,13 +570,15 @@ func (e *Events) clockStatement() (queuedEvent, error) {
 	return queuedEvent{at: e.anchor.at, level: sok.LevelInfo, event: "workbench.log.clock", fields: stored}, err
 }
 
-// batchEnded runs at the end of a batch of count events and sends what waits.
-func (e *Events) batchEnded(count int, err error) {
+// batchEnded runs at the end of a batch of count events, queued of them from the queue, and sends what waits. The queued events
+// have left also when the batch failed, because no later batch carries them.
+func (e *Events) batchEnded(count, queued int, err error) {
 	e.sending = false
+	e.left += queued
 	if err != nil && !e.ended {
 		e.options.Report(fmt.Sprintf("event batch of %d events failed: %v", count, err))
 	}
-	e.send(len(e.flushes) > 0)
+	e.send()
 	e.awaitGated()
 }
 

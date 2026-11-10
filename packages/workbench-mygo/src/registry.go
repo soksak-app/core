@@ -83,8 +83,8 @@ type Registry struct {
 	surfaces surfaceTable
 	// recorder receives every command request that ended.
 	recorder func(name string, elapsed time.Duration, failure error)
-	// follow returns the answer of one command that starts now, which waits until the window shows what the command changed.
-	follow func(answer func(value any, err error)) func(value any, err error)
+	// follow returns the answer of one command name that starts now, which waits until the window shows what the command changed.
+	follow func(name string, answer func(value any, err error)) func(value any, err error)
 }
 
 // NewRegistry returns an empty registry of the names of declared.
@@ -176,7 +176,7 @@ func (r *Registry) run(name string, params json.RawMessage) (any, error) {
 // step for a command that answers later. The run is recorded when it ended.
 func (r *Registry) RunLater(name string, params json.RawMessage, answer func(value any, err error)) {
 	started, answered := time.Now(), answer
-	answer = r.followed(func(value any, err error) {
+	answer = r.followed(name, func(value any, err error) {
 		r.record(name, started, err)
 		answered(value, err)
 	})
@@ -238,8 +238,8 @@ func (r *Registry) Reply(method string, params json.RawMessage, changed Changed,
 			answered(result, err)
 		}
 	}
-	if _, command := commandOf(method, params); command {
-		answer = r.followed(answer)
+	if name, command := commandOf(method, params); command {
+		answer = r.followed(name, answer)
 	}
 	if r.replySurface(method, params, answer) {
 		return
@@ -290,16 +290,16 @@ func (r *Registry) Record(recorder func(name string, elapsed time.Duration, fail
 
 // Follow installs what holds the answer of each command that runs through RunLater or Reply until the window shows what the
 // command changed (docs/spec/exposure.md#registration).
-func (r *Registry) Follow(follow func(answer func(value any, err error)) func(value any, err error)) {
+func (r *Registry) Follow(follow func(name string, answer func(value any, err error)) func(value any, err error)) {
 	r.follow = follow
 }
 
-// followed is answer of a command that starts now.
-func (r *Registry) followed(answer func(value any, err error)) func(value any, err error) {
+// followed is answer of the command name that starts now.
+func (r *Registry) followed(name string, answer func(value any, err error)) func(value any, err error) {
 	if r.follow == nil {
 		return answer
 	}
-	return r.follow(answer)
+	return r.follow(name, answer)
 }
 
 // commandOf returns the name of the command of a request command.run.
