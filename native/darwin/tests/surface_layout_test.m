@@ -435,7 +435,10 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration) {
         });
         until(^BOOL { return shown != 0; });
         int count = sp_capture_stop(shown);
-        check(count >= 2 && !sp_capture_limited(), @"the composition recording includes initial and final frames without truncation");
+        const char *captureError = sp_capture_error();
+        check(count >= 2 && !sp_capture_limited() && captureError[0] == '\0', [NSString stringWithFormat:
+            @"the composition recording includes initial and final frames without truncation or errors "
+            "(%d frames, limited %d, stop after %.3f, error %s)", count, sp_capture_limited(), shown, captureError]);
         double timeline[SURFACE_LAYOUT_TRACE_STAGES] = {0};
         check(surfaceLayoutTraceStop(timeline, 1) == 1, @"the composition recording contains its transaction timeline");
         for (int index = 1; index <= count; index++) {
