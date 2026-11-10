@@ -14,7 +14,7 @@ function fakeClient(fail = () => null) {
   const requests = [];
   const watches = new Set();
   const messages = {
-    1005: "the document did not receive the input within 2000 ms",
+    1005: "the document did not receive the input",
     1007: "AppKit reports NSEvent.pressedMouseButtons mask 0x1 while com.apple.finder (pid 667) is frontmost",
   };
   const client = {

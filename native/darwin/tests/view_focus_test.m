@@ -451,7 +451,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         activationResult = SP_ACTIVATE_PENDING;
         activationFrontmost = nil;
         NSArray<NSDictionary *> *events = capturedEvents(^{
-            sp_input_activate(window, 5, activationReported, NULL);
+            sp_input_activate(window, activationReported, NULL);
             (void)waitFor(^BOOL { return activationDone; });
         });
         NSString *report = inputActivityErrorReport(events);

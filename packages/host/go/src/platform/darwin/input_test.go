@@ -17,7 +17,7 @@ func TestAnInjectionReturnsBeforeTheDeliveryOfTheInjectionBeforeIt(t *testing.T)
 	t.Cleanup(func() { native.InjectPointer = saved })
 	var mu sync.Mutex
 	var handles []uintptr
-	native.InjectPointer = func(_ uintptr, pointer *byte, _, _ float64, _, _ int32, _, _ float64, _ int32, _ float64, handle uintptr) {
+	native.InjectPointer = func(_ uintptr, pointer *byte, _, _ float64, _, _ int32, _, _ float64, _ int32, handle uintptr) {
 		mu.Lock()
 		defer mu.Unlock()
 		handles = append(handles, handle)
@@ -28,12 +28,12 @@ func TestAnInjectionReturnsBeforeTheDeliveryOfTheInjectionBeforeIt(t *testing.T)
 		defer mu.Unlock()
 		results = append(results, result)
 	}
-	if err := (implementation{}).InjectPointer(1, "main", 10, 10, 1, 0, 0, 0, 1, 1, done); err != nil {
+	if err := (implementation{}).InjectPointer(1, "main", 10, 10, 1, 0, 0, 0, 1, done); err != nil {
 		t.Fatal(err)
 	}
 	// The second injection returns while the first is not delivered: its return is the event. An injection that waits for
 	// the delivery never returns, and the runner reports the stop.
-	if err := (implementation{}).InjectPointer(1, "main", 10, 10, 3, 0, 0, 0, 1, 1, done); err != nil {
+	if err := (implementation{}).InjectPointer(1, "main", 10, 10, 3, 0, 0, 0, 1, done); err != nil {
 		t.Fatal(err)
 	}
 	mu.Lock()

@@ -3,6 +3,7 @@ package windows
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -167,7 +168,7 @@ func TestAKeyThatIsNoNameAndNoCharacterIsNotSent(t *testing.T) {
 	}
 }
 
-// fakeProtocol holds the calls of a queue, which end when the test completes them, and the waits of a queue.
+// fakeProtocol holds the calls of a queue, which end when the test completes them, and the waits of a capture.
 type fakeProtocol struct {
 	calls     []devToolsCall
 	completes []func(error)
@@ -200,7 +201,7 @@ func (f *fakeProtocol) methods() []string {
 
 func newFakeQueue() (*inputQueue, *fakeProtocol) {
 	f := &fakeProtocol{}
-	return &inputQueue{send: f.send, after: f.after}, f
+	return &inputQueue{send: f.send}, f
 }
 
 // The protocol may process calls out of order, so a call starts when the one before it completed.
@@ -209,7 +210,7 @@ func TestAQueueSendsOneCallAtATime(t *testing.T) {
 	q, f := newFakeQueue()
 	var ended []string
 	for _, method := range []string{"a", "b"} {
-		if err := q.push(devToolsCall{method: method}, time.Second, func(err error) {
+		if err := q.push(devToolsCall{method: method}, func(err error) {
 			if err != nil {
 				t.Error(err)
 			}
@@ -239,7 +240,7 @@ func TestAQueueSendsOneCallAtATime(t *testing.T) {
 // contract: platform.windows.input.queue-emulates-focus-before-first-input-only
 func TestAQueueEmulatesTheFocusBeforeItsFirstInputOnly(t *testing.T) {
 	q, f := newFakeQueue()
-	if err := q.push(devToolsCall{method: "a"}, time.Second, nil); err != nil {
+	if err := q.push(devToolsCall{method: "a"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := params(t, f.calls[0]); !reflect.DeepEqual(got, map[string]any{"enabled": true}) {
@@ -247,7 +248,7 @@ func TestAQueueEmulatesTheFocusBeforeItsFirstInputOnly(t *testing.T) {
 	}
 	f.completes[0](nil)
 	f.completes[1](nil)
-	if err := q.push(devToolsCall{method: "b"}, time.Second, nil); err != nil {
+	if err := q.push(devToolsCall{method: "b"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if want := []string{focusEmulation.method, "a", "b"}; !reflect.DeepEqual(f.methods(), want) {
@@ -260,7 +261,7 @@ func TestACallThatFailsAnswersItsFailure(t *testing.T) {
 	q, f := newFakeQueue()
 	failure := errors.New("the protocol refused")
 	var got error
-	if err := q.push(devToolsCall{method: "a"}, time.Second, func(err error) { got = err }); err != nil {
+	if err := q.push(devToolsCall{method: "a"}, func(err error) { got = err }); err != nil {
 		t.Fatal(err)
 	}
 	f.completes[0](nil)
@@ -275,15 +276,15 @@ func TestACallThatFailsAnswersItsFailure(t *testing.T) {
 func TestTheFailureOfACallWithNoAnswerGoesToTheNextInput(t *testing.T) {
 	q, f := newFakeQueue()
 	failure := errors.New("the protocol refused")
-	if err := q.push(devToolsCall{method: "a"}, time.Second, nil); err != nil {
+	if err := q.push(devToolsCall{method: "a"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	f.completes[0](nil)
 	f.completes[1](failure)
-	if err := q.push(devToolsCall{method: "b"}, time.Second, nil); !errors.Is(err, failure) {
+	if err := q.push(devToolsCall{method: "b"}, nil); !errors.Is(err, failure) {
 		t.Fatalf("got %v", err)
 	}
-	if err := q.push(devToolsCall{method: "c"}, time.Second, nil); err != nil {
+	if err := q.push(devToolsCall{method: "c"}, nil); err != nil {
 		t.Fatalf("the failure was reported once, then %v", err)
 	}
 }
@@ -295,14 +296,14 @@ func TestACallThatCannotStartAnswersItsFailureAndTheNextOneRuns(t *testing.T) {
 	failure := errors.New("no call")
 	f.refuse = failure
 	var got error
-	if err := q.push(devToolsCall{method: "a"}, time.Second, func(err error) { got = err }); err != nil {
+	if err := q.push(devToolsCall{method: "a"}, func(err error) { got = err }); err != nil {
 		t.Fatal(err)
 	}
 	if !errors.Is(got, failure) {
 		t.Fatalf("got %v", got)
 	}
 	f.refuse = nil
-	if err := q.push(devToolsCall{method: "b"}, time.Second, nil); err != nil {
+	if err := q.push(devToolsCall{method: "b"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if want := []string{"b"}; !reflect.DeepEqual(f.methods(), want) {
@@ -310,45 +311,93 @@ func TestACallThatCannotStartAnswersItsFailureAndTheNextOneRuns(t *testing.T) {
 	}
 }
 
-// A call may never complete, so its wait ends, and a later input fails at once because the order of the calls is lost.
-// contract: platform.windows.input.incomplete-call-ends-wait-and-stops-queue
-func TestACallThatDoesNotCompleteEndsItsWaitAndStopsTheQueue(t *testing.T) {
+// A call may never complete, and no limit ends its wait: a later input waits behind it and is sent after its completion.
+// contract: platform.windows.input.call-waits-for-its-completion
+func TestACallWaitsForItsCompletion(t *testing.T) {
 	q, f := newFakeQueue()
 	q.focused = true
 	var got []error
-	if err := q.push(devToolsCall{method: "a"}, time.Second, func(err error) { got = append(got, err) }); err != nil {
+	if err := q.push(devToolsCall{method: "a"}, func(err error) { got = append(got, err) }); err != nil {
 		t.Fatal(err)
 	}
-	f.timers[0]()
-	if len(got) != 1 || !errors.Is(got[0], errInputTimedOut) {
-		t.Fatalf("got %v", got)
+	if err := q.push(devToolsCall{method: "b"}, nil); err != nil {
+		t.Fatalf("the input after an open call answered %v", err)
 	}
-	err := q.push(devToolsCall{method: "b"}, time.Second, nil)
-	if err == nil || !strings.Contains(err.Error(), "did not complete") {
-		t.Fatalf("the next input answered %v", err)
+	if want := []string{"a"}; !reflect.DeepEqual(f.methods(), want) {
+		t.Fatalf("calls %v, want %v", f.methods(), want)
+	}
+	if len(got) != 0 {
+		t.Fatalf("an open call answered %v", got)
+	}
+	f.completes[0](nil)
+	if len(got) != 1 || got[0] != nil {
+		t.Fatalf("the completion answered %v", got)
+	}
+	if want := []string{"a", "b"}; !reflect.DeepEqual(f.methods(), want) {
+		t.Fatalf("calls %v, want %v", f.methods(), want)
+	}
+}
+
+// The end of the DevTools connection answers the open call and every waiting call with that end, a late completion answers nothing,
+// and the next input goes to the new connection with the focus emulation first.
+// contract: platform.windows.input.connection-end-answers-open-calls
+func TestTheEndOfTheConnectionAnswersTheOpenCalls(t *testing.T) {
+	q, f := newFakeQueue()
+	var got []error
+	answer := func(err error) { got = append(got, err) }
+	for _, method := range []string{"a", "b"} {
+		if err := q.push(devToolsCall{method: method}, answer); err != nil {
+			t.Fatal(err)
+		}
+	}
+	q.connectionEnded("the process of the page ended")
+	if len(got) != 2 {
+		t.Fatalf("the end answered %v", got)
+	}
+	for _, err := range got {
+		if err == nil || !strings.Contains(err.Error(), "the process of the page ended") {
+			t.Fatalf("the end answered %v", err)
+		}
+	}
+	f.completes[0](nil)
+	if len(got) != 2 {
+		t.Fatalf("a late completion answered again: %v", got)
+	}
+	if err := q.push(devToolsCall{method: "c"}, answer); err != nil {
+		t.Fatalf("the input after the end of the connection answered %v", err)
+	}
+	if want := []string{focusEmulation.method, focusEmulation.method}; !reflect.DeepEqual(f.methods(), want) {
+		t.Fatalf("calls %v, want %v", f.methods(), want)
+	}
+	f.completes[1](nil)
+	if want := []string{focusEmulation.method, focusEmulation.method, "c"}; !reflect.DeepEqual(f.methods(), want) {
+		t.Fatalf("calls %v, want %v", f.methods(), want)
+	}
+}
+
+// The end of the window answers the open call with that end and refuses every later input with it.
+// contract: platform.windows.input.window-end-ends-queue
+func TestTheEndOfTheWindowEndsTheQueue(t *testing.T) {
+	q, f := newFakeQueue()
+	q.focused = true
+	var got []error
+	if err := q.push(devToolsCall{method: "a"}, func(err error) { got = append(got, err) }); err != nil {
+		t.Fatal(err)
+	}
+	q.end("the window ended")
+	if len(got) != 1 || got[0] == nil || !strings.Contains(got[0].Error(), "the window ended") {
+		t.Fatalf("the end answered %v", got)
+	}
+	err := q.push(devToolsCall{method: "b"}, nil)
+	if err == nil || !strings.Contains(err.Error(), "the window ended") {
+		t.Fatalf("the input after the end answered %v", err)
 	}
 	f.completes[0](nil)
 	if len(got) != 1 {
 		t.Fatalf("a late completion answered again: %v", got)
 	}
-	if err := q.push(devToolsCall{method: "c"}, time.Second, nil); err != nil {
-		t.Fatalf("after the late completion %v", err)
-	}
-	if want := []string{"a", "c"}; !reflect.DeepEqual(f.methods(), want) {
+	if want := []string{"a"}; !reflect.DeepEqual(f.methods(), want) {
 		t.Fatalf("calls %v, want %v", f.methods(), want)
-	}
-}
-
-// contract: platform.windows.input.completed-call-ends-its-wait
-func TestACompletedCallEndsItsWait(t *testing.T) {
-	q, f := newFakeQueue()
-	q.focused = true
-	if err := q.push(devToolsCall{method: "a"}, time.Second, nil); err != nil {
-		t.Fatal(err)
-	}
-	f.completes[0](nil)
-	if f.timers[0] != nil {
-		t.Fatal("the wait of a completed call goes on")
 	}
 }
 
@@ -359,8 +408,8 @@ func TestAnAnswerOfACallBecomesThePointerResult(t *testing.T) {
 		want platform.PointerResult
 	}{
 		{nil, platform.PointerDelivered},
-		{errInputTimedOut, platform.PointerUnreceived},
 		{errors.New("refused"), platform.PointerRejected},
+		{fmt.Errorf("%w: the window ended", errInputEnded), platform.PointerUnreceived},
 	} {
 		if got := pointerResult(test.err); got != test.want {
 			t.Fatalf("%v gives %v, want %v", test.err, got, test.want)

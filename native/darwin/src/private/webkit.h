@@ -86,6 +86,9 @@ typedef NS_ENUM(NSInteger, SPProcessTerminationReason) {
 // WKWebViewPrivate.h
 - (void)_setOverrideDeviceScaleFactor:(double)scale;
 - (void)_doAfterNextPresentationUpdate:(void (^)(void))completion;
+// WKWebViewPrivate.h: whether the WebContent process of the view answers its responsiveness check. WebKit sends the key-value change
+// of this key when the process stops and resumes answering.
+@property (nonatomic, readonly) BOOL _webProcessIsResponsive;
 // WKWebViewPrivate.h: releases the previous document and its process that were kept paused for back and forward navigation.
 - (void)_clearBackForwardCache;
 // WKWebViewPrivate.h: whether a media element of the page plays audio that it can produce (playing, not muted, volume above

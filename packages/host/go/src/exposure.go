@@ -1001,12 +1001,6 @@ func (b hostBackend) HostCommand(window, name string, params json.RawMessage, re
 
 var pointerPhaseCodes = map[string]int{"move": 0, "down": 1, "drag": 2, "up": 3, "scroll": 4}
 
-// receiveTimeout is the time that the press and release of input.pointer wait for a document to receive them.
-const receiveTimeout = 2 * time.Second
-
-// activateTimeout is the time that the activate of input.pointer waits for activation.
-const activateTimeout = 5 * time.Second
-
 // errInactive is the error for the case in which the window is not the key window and the move could not be delivered.
 func errInactive() *RPCError { return rpcError(codeInactive, "the window is not active") }
 
@@ -1051,7 +1045,7 @@ func (b hostBackend) Pointer(window string, input PointerInput) error {
 			return err
 		}, func() error {
 			return system.InjectPointer(window, input.Pointer, input.X, input.Y, pointerPhaseCodes[input.Phase], button,
-				input.DeltaX, input.DeltaY, input.Clicks, receiveTimeout.Seconds(), func(result platform.PointerResult, held platform.ButtonHeld) {
+				input.DeltaX, input.DeltaY, input.Clicks, func(result platform.PointerResult, held platform.ButtonHeld) {
 					done <- delivery{result, held}
 				})
 		})
@@ -1066,7 +1060,7 @@ func (b hostBackend) Pointer(window string, input PointerInput) error {
 	case platform.PointerRejected:
 		return rpcError(codeInvalidParams, "the window did not accept the input")
 	case platform.PointerUnreceived:
-		return rpcError(codeTimeout, "the document did not receive the input within %s", receiveTimeout)
+		return rpcError(codeTimeout, "the document did not receive the input")
 	case platform.PointerButtonHeld:
 		return rpcError(codeButtonHeld, "%s", ButtonHeldMessage(got.held))
 	case platform.PointerPressOpen:
@@ -1106,7 +1100,7 @@ func PointerHeldMessage(held platform.ButtonHeld) string {
 func (s *Surfaces) activate(x, y float64) error {
 	done := make(chan error, 1)
 	err := s.useWindow(func(window platform.Window) error {
-		return system.ActivateWindow(window, x, y, activateTimeout.Seconds(), func(result error) { done <- result })
+		return system.ActivateWindow(window, x, y, func(result error) { done <- result })
 	})
 	if err != nil {
 		return nativeError(codeNoInput, err)

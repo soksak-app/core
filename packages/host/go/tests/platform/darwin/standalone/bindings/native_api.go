@@ -15,8 +15,8 @@ import (
 
 func Functions() abi.NativeFunctions {
 	return abi.NativeFunctions{
-		ActivateWindowAt: func(a0 uintptr, a1 float64, a2 float64, a3 float64, a4 uintptr) {
-			C.activateWindowAt(C.uintptr_t(a0), C.double(a1), C.double(a2), C.double(a3), C.uintptr_t(a4))
+		ActivateWindowAt: func(a0 uintptr, a1 float64, a2 float64, a3 uintptr) {
+			C.activateWindowAt(C.uintptr_t(a0), C.double(a1), C.double(a2), C.uintptr_t(a3))
 		},
 		Calloc:            func(a0 uint64, a1 uint64) unsafe.Pointer { return C.calloc(C.size_t(a0), C.size_t(a1)) },
 		CoreRootSet:       func(a0 uintptr) { C.coreRootSet(C.uintptr_t(a0)) },
@@ -44,8 +44,8 @@ func Functions() abi.NativeFunctions {
 		ImageCreate: func(a0 unsafe.Pointer, a1 *byte, a2 uintptr, a3 uintptr) unsafe.Pointer {
 			return C.imageCreate(a0, (*C.char)(unsafe.Pointer(a1)), C.uintptr_t(a2), C.uintptr_t(a3))
 		},
-		InjectPointer: func(a0 uintptr, a1 *byte, a2 float64, a3 float64, a4 int32, a5 int32, a6 float64, a7 float64, a8 int32, a9 float64, a10 uintptr) {
-			C.injectPointer(C.uintptr_t(a0), (*C.char)(unsafe.Pointer(a1)), C.double(a2), C.double(a3), C.int(a4), C.int(a5), C.double(a6), C.double(a7), C.int(a8), C.double(a9), C.uintptr_t(a10))
+		InjectPointer: func(a0 uintptr, a1 *byte, a2 float64, a3 float64, a4 int32, a5 int32, a6 float64, a7 float64, a8 int32, a9 uintptr) {
+			C.injectPointer(C.uintptr_t(a0), (*C.char)(unsafe.Pointer(a1)), C.double(a2), C.double(a3), C.int(a4), C.int(a5), C.double(a6), C.double(a7), C.int(a8), C.uintptr_t(a9))
 		},
 		InstallDockMenu:    func() bool { return bool(C.installDockMenu()) },
 		InstallMainThread:  func(a0 uintptr, a1 uintptr) { C.installMainThread(C.uintptr_t(a0), C.uintptr_t(a1)) },

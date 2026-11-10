@@ -7,7 +7,6 @@
 use std::fs::Metadata;
 use std::io::{Read, Write};
 use std::path::Path;
-use std::time::Duration;
 
 use serde_json::Value;
 
@@ -827,23 +826,22 @@ pub trait Platform: CoreRootHost + Send + Sync {
     fn unwatch_input(&self, monitor: Handle) -> Result<(), String>;
     /// Delivers pointer input to the window and returns the result. activate is not used. Call it on the main thread.
     /// For a press and a release, done is called on the main thread after the document at the coordinates received the
-    /// event or after receive elapsed. For the other phases it is called as soon as the input is delivered.
+    /// event, or with Delivery::Unreceived at the event that ended the wait without the receipt; no wait has a limit
+    /// (docs/spec/exposure.md#methods). For the other phases it is called as soon as the input is delivered.
     fn input_pointer(
         &self,
         window: Handle,
         pointer: Pointer,
-        receive: Duration,
         done: Box<dyn FnOnce(Delivery) + Send>,
     ) -> Result<(), String>;
     /// Activates the application and makes the window the key window. On the main thread it calls done(Ok) when the
-    /// webview of the window reflects the active state, and done(Err) that states the stopped stage when it does not
-    /// finish within timeout. Call it on the main thread.
+    /// webview of the window reflects the active state, and done(Err) that states the stopped stage at the event that
+    /// ended that stage; no stage has a limit. Call it on the main thread.
     fn input_activate(
         &self,
         window: Handle,
         x: f64,
         y: f64,
-        timeout: Duration,
         done: Box<dyn FnOnce(Result<(), String>) + Send>,
     ) -> Result<(), String>;
     /// Delivers key input to the window and returns whether it was delivered. Call it on the main thread.

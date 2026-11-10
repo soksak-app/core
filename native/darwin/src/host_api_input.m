@@ -14,8 +14,8 @@
 static void activated(void *context, sp_activate_result result, const char *frontmost) {
     hostRunOnWorker(^{ sp_host_callback_input_activated((uintptr_t)context, (int)result, (char *)frontmost); });
 }
-void activateWindowAt(uintptr_t window, double x, double y, double timeout, uintptr_t handle) {
-    hostRunOnMain(^{ sp_input_activate_at((void *)window, x, y, timeout, activated, (void *)handle); });
+void activateWindowAt(uintptr_t window, double x, double y, uintptr_t handle) {
+    hostRunOnMain(^{ sp_input_activate_at((void *)window, x, y, activated, (void *)handle); });
 }
 
 static void delivered(void *context, sp_input_result result, const sp_input_held *held) {
@@ -23,9 +23,9 @@ static void delivered(void *context, sp_input_result result, const sp_input_held
 }
 // pointer is a C string that the block frees after the delivery took it.
 void injectPointer(uintptr_t window, char *pointer, double x, double y, int phase, int button, double deltaX, double deltaY, int clicks,
-    double receive, uintptr_t handle) {
+    uintptr_t handle) {
     hostRunOnMain(^{
-        sp_input_pointer_then((void *)window, pointer, x, y, phase, button, deltaX, deltaY, clicks, receive, delivered, (void *)handle);
+        sp_input_pointer_then((void *)window, pointer, x, y, phase, button, deltaX, deltaY, clicks, delivered, (void *)handle);
         free(pointer);
     });
 }

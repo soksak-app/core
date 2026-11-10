@@ -10,8 +10,6 @@ use crate::framework::PlatformWebview;
 use crate::framework::Window;
 use serde_json::Value;
 
-use std::time::Duration;
-
 #[cfg(feature = "diagnostics")]
 use super::DocumentViewportMarker;
 use super::{
@@ -500,20 +498,18 @@ impl Platform for Windows {
         &self,
         window: Handle,
         pointer: Pointer,
-        receive: Duration,
         done: Box<dyn FnOnce(Delivery) + Send>,
     ) -> Result<(), String> {
-        input::pointer(window, pointer, receive, done)
+        input::pointer(window, pointer, done)
     }
     fn input_activate(
         &self,
         window: Handle,
         _x: f64,
         _y: f64,
-        timeout: Duration,
         done: Box<dyn FnOnce(Result<(), String>) + Send>,
     ) -> Result<(), String> {
-        input::activate(window, timeout, done)
+        input::activate(window, done)
     }
     fn input_key(&self, window: Handle, key: &Key) -> Result<Delivery, String> {
         input::key(window, key)
