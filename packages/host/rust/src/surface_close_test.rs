@@ -59,7 +59,10 @@ fn the_close_of_a_surface_ends_the_presentation_wait_of_its_view_with_the_reason
 
     let close = end_closed_surface(&data, &open, surface);
 
-    assert_eq!(close.abandoned, 1, "the close ends the one open wait of the view");
+    assert_eq!(
+        close.abandoned, 1,
+        "the close ends the one open wait of the view"
+    );
     assert!(
         !data.documents.presentation().waits(surface, generation, 41),
         "the wait of the view stays open after the close of its surface"
