@@ -19,7 +19,8 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: project-tab add control retains sampled contrast in every complete second-drag frame`,
     { timeout: 180000 }, async (t) => {
       const s = await open(t, app);
-      await fresh(s);
+      // The drags are measured under the default policy (prepareFloorDrag).
+      await fresh(s, { measure: true });
       const floor = await openFloorPage(s);
       // Keep the benchmark default policy throughout the measured drags.
       await prepareFloorDrag(t, s, floor, app.configDir);

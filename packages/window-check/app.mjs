@@ -1140,17 +1140,20 @@ const START = { width: 1200, height: 760 };
  * `{}` is the default policy, which stores only `error`. `reads` names the records below `error` that the check reads, declared
  * in `catalog`; a record that the declared policy does not store is an error before the preparation changes anything. The
  * performance trace stores its events in the class `call` at the level `debug`, so with `performanceTrace` the policy stores
- * that class at least at `debug`. Every check stores the class `lifecycle` at least at `info`, so a failed check keeps the open
- * and the close of each sidecar session. The preparation waits until the policy file of the configuration folder holds the policy.
+ * that class at least at `debug`. A check that does not measure stores the class `lifecycle` at least at `info`, so a failed check
+ * keeps the open and the close of each sidecar session; a check with `measure` runs under the policy that it declares, which is the
+ * default policy without `log`. The preparation waits until the policy file of the configuration folder holds the policy.
  */
-export async function prepareFixture(s, { settings = {}, performanceTrace = TRACE, log = {}, reads = [], catalog } = {}) {
+export async function prepareFixture(s, { settings = {}, performanceTrace = TRACE, log = {}, reads = [], catalog, measure = false } = {}) {
   if (Object.hasOwn(settings, "diagnostics.log")) {
     throw new Error("prepareFixture: the check declares its log policy with log, not with the setting diagnostics.log");
   }
   const traced = performanceTrace && !policyAllows(policyOfSetting(log), "call", "debug") ? { ...log, call: "debug" } : log;
   // A failed check keeps the lifecycle of its processes: a sidecar writes the open and the close of each session in the class
-  // lifecycle at the level info, and a session that a view lost leaves no other record of who closed it.
-  const kept = policyAllows(policyOfSetting(traced), "lifecycle", "info") ? traced : { ...traced, lifecycle: "info" };
+  // lifecycle at the level info, and a session that a view lost leaves no other record of who closed it. A check that measures
+  // runs under the policy that it declares, because the policy has one level per class for every writer and the stored events
+  // are part of the cost it measures.
+  const kept = measure || policyAllows(policyOfSetting(traced), "lifecycle", "info") ? traced : { ...traced, lifecycle: "info" };
   const policy = policyOfSetting(kept);
   requireStored(policy, catalog, reads, "the declaration of the check");
   // Remember the values before the preparation changes the settings. A person also uses the check application, so the

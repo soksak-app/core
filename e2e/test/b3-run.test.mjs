@@ -50,7 +50,7 @@ test("the conditions of a B3 run are host.window of its window, its diagnostics.
 
 test("the fixture of a benchmark takes the trace and the log policy of its settings", { timeout: 5000 }, () => {
   assert.deepEqual(fixtureSettings({ "diagnostics.performance": true, "diagnostics.log": { call: "debug", frame: "trace" } }),
-    { performanceTrace: true, log: { call: "debug", frame: "trace" } });
+    { performanceTrace: true, log: { call: "debug", frame: "trace" }, measure: true });
 });
 
 test("a benchmark of one state writes B3 output with SOKSAK_B3_OUT and refuses SOKSAK_B3_TRACE", { timeout: 5000 }, () => {

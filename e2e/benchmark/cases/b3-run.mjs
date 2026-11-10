@@ -18,9 +18,12 @@ const SESSIONS = new WeakMap();
 const OUT = "SOKSAK_B3_OUT";
 const TRACE = "SOKSAK_B3_TRACE";
 
-/** The fixture options (fresh of e2e/fixture.mjs) that apply the settings `settings` of a benchmark (B3_SETTINGS, traceSettings). */
+/**
+ * The fixture options (fresh of e2e/fixture.mjs) that apply the settings `settings` of a benchmark (B3_SETTINGS, traceSettings).
+ * A benchmark measures, so it runs under the policy of its settings as it is (`measure`, prepareFixture).
+ */
 export function fixtureSettings(settings) {
-  return { performanceTrace: settings["diagnostics.performance"], log: settings["diagnostics.log"] };
+  return { performanceTrace: settings["diagnostics.performance"], log: settings["diagnostics.log"], measure: true };
 }
 
 /**

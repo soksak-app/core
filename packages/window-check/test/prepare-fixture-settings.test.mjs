@@ -109,3 +109,14 @@ test("the preparation stores the class lifecycle at least at the level info what
   await prepareFixture(session, { log: { lifecycle: "debug" }, performanceTrace: false });
   assert.deepEqual(settings["diagnostics.log"], { lifecycle: "debug" }, "the preparation narrowed the lifecycle that the check declared");
 });
+
+// A measurement is valid only under the policy that it declares (docs/spec/hosts.md: G8 runs under the default policy), and the
+// policy has one level per class for every writer (docs/spec/logging.md#policy), so a measuring check gets no lifecycle at info.
+test("the preparation of a check that measures puts the declared policy in force as it is", async () => {
+  const settings = {};
+  const session = fixture(settings);
+  await prepareFixture(session, { measure: true, performanceTrace: false });
+  assert.deepEqual(settings["diagnostics.log"], {}, "a measuring check without a declaration does not run under the default policy");
+  await prepareFixture(session, { measure: true, log: { call: "debug" }, performanceTrace: true });
+  assert.deepEqual(settings["diagnostics.log"], { call: "debug" }, "a measuring check runs under another policy than it declared");
+});

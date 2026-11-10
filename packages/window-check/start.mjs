@@ -160,14 +160,15 @@ export async function startLayout(s, { startPlugin = START_PROBE, startEntries =
  * `addPluginTab: {plugin, ready}` a tab of `plugin` is then added to the focused card and the start state waits for
  * `ready(s, tab)`; the result holds what it resolves with as `pluginTab`. Without it no tab of the plugin under check exists.
  * `log` is the log policy that the check declares and `reads` the records below `error` that it reads (prepareFixture); with the
- * performance trace the registration timeline of a failed start is read too.
+ * performance trace the registration timeline of a failed start is read too. `measure` runs a check that measures under the policy
+ * that it declares (prepareFixture).
  */
 export async function fresh(s, { startPlugin = START_PROBE, startEntries = entriesOf(startPlugin), placeholderPlugin = startPlugin, addPluginTab,
-  performanceTrace = TRACE, settings = {}, log = {}, reads = [] } = {}) {
+  performanceTrace = TRACE, settings = {}, log = {}, reads = [], measure = false } = {}) {
   requirePlugin(startPlugin, "the start state names no plugin for its start tab");
   const traceOffsets = currentEventOffsets(s.app.configDir);
   const declared = performanceTrace ? [...reads, "workbench.trace.surface.registration"] : reads;
-  await prepareFixture(s, { settings, performanceTrace, log, reads: declared,
+  await prepareFixture(s, { settings, performanceTrace, log, reads: declared, measure,
     catalog: declared.length ? recordCatalog(s.app.configDir) : undefined });
   // A record that remains belongs to an earlier run whose restore failed.
   await restoreRegistry(s);
