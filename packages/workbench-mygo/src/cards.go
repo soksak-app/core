@@ -635,8 +635,9 @@ func faded(color ui.Color, share float32) ui.Color {
 }
 
 // drawSurfaceStatus draws the state of the surface of the active tab at the start of the status row of the card, as setSurfaceStatus of
-// packages/workbench/surface-status.js: a turning ring and 불러오는 중 while its view loads, a dot and the error through the error display
-// once its view stopped, which records `surface status <card> <tab>: 표면 오류 · <reason>` when it appears, and nothing once it is ready.
+// packages/workbench/surface-status.js: a turning ring and the loading text while its view loads, a dot and the error through the error
+// display once its view stopped, which records `surface status <card> <tab>: ` with the surface error text and its reason when it
+// appears, and nothing once it is ready.
 // A tab without a surface, the placeholder of a plugin that is not loaded, is ready.
 func (s *Shell) drawSurfaceStatus(c *ui.Context, card, tab string) {
 	where := "surface status " + card + " " + tab
