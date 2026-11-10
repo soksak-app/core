@@ -1614,6 +1614,7 @@ func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 // The stop waits for no start: a stop during the start of a service returns before the service answers its hello, the send that
 // waited for that start fails as a send after the stop, and the start that ends later closes the connection that it opened
 // (docs/spec/sidecars.md#declaration-and-startup).
+// contract: sidecars.stop.waits-for-no-start
 func TestTheStopDoesNotWaitForAStart(t *testing.T) {
 	root := t.TempDir()
 	socket := filepath.Join(support.SocketParent(t), "s.sock")
