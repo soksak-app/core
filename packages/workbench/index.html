@@ -281,6 +281,11 @@ setMountedTab((tabId) => {
 onMountedChange(settleLeftTabs);
 onTabReports(() => memorySaver.protectionsChanged());
 onMemoryPressure((report) => memorySaver.pressure(report));
+// A placement defers a view that has not declared its composition and leaves its place empty, so the declaration of that view
+// lays the page out again (docs/spec/native-surfaces.md#view-surfaces).
+onSurfaceMounted((tab, error) => {
+  if (!error && host.waitsForDeclaration(tab)) settle();
+});
 // The end of the mount of a restoring tab ends its restore; a region that refuses its session history fails it.
 onSurfaceMounted((tab, error) => {
   if (!memoryObserved || memorySaver.state(tab) !== "restoring") return;

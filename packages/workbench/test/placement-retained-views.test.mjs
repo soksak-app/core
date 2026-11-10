@@ -32,10 +32,10 @@ test("a host placement retains mounted dormant views and excludes cold dormant v
       assert.ok(slot.closest("[hidden]"), "a retained view was not mounted in the hidden slot");
       mounted.add(surface.surfaceId);
     },
-    waitSurfaceCompositionDeclared: async (id) => {
+    compositionState: (id) => {
       waited.push(id);
-      mountOrder.push(`wait:${id}`);
-      if (!mounted.has(id)) throw new Error(`surface ${id} is not mounted`);
+      mountOrder.push(`declaration:${id}`);
+      return mounted.has(id) ? { state: "declared" } : { state: "pending" };
     },
   } });
   const actualPerformance = await import("../performance.js");
@@ -101,11 +101,11 @@ test("a host placement retains mounted dormant views and excludes cold dormant v
     }, "the completed sync record did not identify the exact view set and mount attempts");
     assert.equal(Object.hasOwn(calls.find(({ name }) => name === "syncSurfaces").request.surfaces[2], "retainedTextSize"), false,
       "workbench-only retained text scale metadata crossed the host placement boundary");
-    assert.deepEqual(waited, ["visible-view", "retained-view", "cold-view"], "the host composition barrier did not wait for every requested view");
+    assert.deepEqual(waited, ["visible-view", "retained-view", "cold-view"], "the placement did not read the declaration of every requested view");
     assert.deepEqual(mountOrder.slice(0, 3), ["authorize:visible-view", "authorize:cold-view", "mount:cold-view"],
       "current and cold views did not start their listener setup before host sync");
-    assert.deepEqual(mountOrder.slice(-4), ["wait:visible-view", "wait:retained-view", "wait:cold-view", "syncSurfaces"],
-      "the host sync began before every requested view declared composition");
+    assert.deepEqual(mountOrder.slice(-4), ["declaration:visible-view", "declaration:retained-view", "declaration:cold-view", "syncSurfaces"],
+      "the host sync began before the placement read the declaration of every requested view");
     assert.deepEqual(answer.placements.map(({ id }) => id), ["visible-view"], "the host's dormant placement entered the compositor result");
     assert.deepEqual(answer.deferred, [], "a cold dormant view was reported as a host deferral");
 
@@ -164,7 +164,7 @@ test("a host placement retains mounted dormant views and excludes cold dormant v
     assert.deepEqual(sequence, [["retained-view"], ["retained-view"]],
       "the retained view was removed and reintroduced across the undrawn and drawn requests");
     assert.deepEqual(waited.slice(-2), ["retained-view", "retained-view"],
-      "both placements did not wait on the existing mount attempt");
+      "both placements did not read the declaration of the existing mount attempt");
     assert.deepEqual(traceEvents.filter(({ event }) => event === "surface.sync").slice(-2).map(({ fields }) => fields.views), [
       [{ surface: "retained-view", attempt: 2 }],
       [{ surface: "retained-view", attempt: 2 }],
@@ -195,7 +195,7 @@ test("surface sync traces its result only while the frame log gate is open", { t
     start: { origin: { directory: null }, declarations: emptySurfaceDeclarations } };
   t.mock.module("../surface-modules.js", { namedExports: {
     mountedSurface: () => { mountTraceLookups += 1; return { mountRegistration: { attempt: 7 } }; },
-    waitSurfaceCompositionDeclared: async () => {},
+    compositionState: () => ({ state: "declared" }),
   } });
   const actualPerformance = await import("../performance.js");
   t.mock.module("../performance.js", { exports: {
@@ -293,7 +293,7 @@ test("host placement sends start values until the host holds them and again afte
     start: { params: null, origin: { directory: null }, declarations: emptySurfaceDeclarations } };
   t.mock.module("../surface-modules.js", { namedExports: {
     mountedSurface: () => ({ mountRegistration: { attempt: 1 } }),
-    waitSurfaceCompositionDeclared: async () => {},
+    compositionState: () => ({ state: "declared" }),
   } });
   t.mock.module("@soksak/runtime", { namedExports: { windows: {}, host: {
     on: () => {},
@@ -349,8 +349,9 @@ test("host placement preserves call order across the lazy view-module import", {
   let mounted = { surfaceId: id, disposed: false };
   t.mock.module("../surface-modules.js", { namedExports: {
     mountedSurface: (surfaceId) => surfaceId === id ? mounted : null,
-    waitSurfaceCompositionDeclared: async (surfaceId) => {
+    compositionState: (surfaceId) => {
       assert.equal(surfaceId, id);
+      return { state: "declared" };
     },
   } });
   t.mock.module("@soksak/runtime", { namedExports: { windows: {}, host: {
@@ -418,9 +419,7 @@ test("an active view that is not in an undrawn record waits for its drawn commit
   const calls = [];
   t.mock.module("../surface-modules.js", { namedExports: {
     mountedSurface: (id) => mounted.has(id) ? { surfaceId: id, disposed: false } : null,
-    waitSurfaceCompositionDeclared: async (id) => {
-      if (!mounted.has(id)) throw new Error(`surface ${id} is not mounted`);
-    },
+    compositionState: (id) => mounted.has(id) ? { state: "declared" } : { state: "pending" },
   } });
   t.mock.module("@soksak/runtime", { namedExports: { host: {
     on: () => {},
@@ -483,9 +482,7 @@ test("an unloaded cold view is classified before a drawn host placement", async 
     mountedSurface: (id) => mounted.has(id) ? { surfaceId: id, disposed: false } : null,
     authorizeSurface: (id) => { mounted.add(id); },
     mountSurface: async (slot, surface) => { mounted.add(surface.surfaceId); },
-    waitSurfaceCompositionDeclared: async (id) => {
-      if (!mounted.has(id)) throw new Error(`surface ${id} is not mounted`);
-    },
+    compositionState: (id) => mounted.has(id) ? { state: "declared" } : { state: "pending" },
   } });
   t.mock.module("@soksak/runtime", { namedExports: { host: {
     on: () => {}, page: (path) => path,
@@ -596,9 +593,7 @@ test("a disabled memory saver mounts a cold hidden view at startup", async (t) =
     mountedSurface: (id) => mounted.has(id) ? { surfaceId: id, disposed: false } : null,
     authorizeSurface: (id) => { mounted.add(id); },
     mountSurface: async (slot, surface) => { mounted.add(surface.surfaceId); },
-    waitSurfaceCompositionDeclared: async (id) => {
-      if (!mounted.has(id)) throw new Error(`surface ${id} is not mounted`);
-    },
+    compositionState: (id) => mounted.has(id) ? { state: "declared" } : { state: "pending" },
   } });
   t.mock.module("@soksak/runtime", { namedExports: { host: {
     on: () => {}, page: (path) => path,
