@@ -50,7 +50,6 @@ var eventClasses = map[string]Class{
 	"host.stall.sampled":                     ClassLifecycle,
 	"host.test.end":                          ClassLifecycle,
 	"host.test.start":                        ClassLifecycle,
-	"host.trace.call.late-reply":             ClassCall,
 	"host.trace.exposure.reply":              ClassCall,
 	"host.trace.exposure.request":            ClassCall,
 	"host.trace.exposure.unmatched":          ClassCall,

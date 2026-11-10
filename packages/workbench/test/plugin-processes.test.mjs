@@ -74,13 +74,14 @@ test("the losses of a plugin count no timeout, and a report of the kind timeout 
     { plugin: "timeout-probe", abandoned: 0, lateReplies: 1, peerLost: 0 });
 });
 
-test("the event catalog has no call timeout event, and keeps the other call events of plugin processes", async () => {
+test("the event catalog has no call timeout or late reply event, and keeps the other call events of plugin processes", async () => {
   const { classOf } = await import("../event-classes.js");
   const catalog = JSON.parse(readFileSync(new URL("../../../docs/spec/events.json", import.meta.url), "utf8"));
   assert.equal(classOf("host.call.timeout"), undefined, "event-classes.js gives host.call.timeout a class");
   assert.equal(Object.hasOwn(catalog.events, "host.call.timeout"), false, "docs/spec/events.json declares host.call.timeout");
   assert.equal(classOf("host.call.peer-lost"), "call");
-  assert.equal(classOf("host.trace.call.late-reply"), "call");
+  assert.equal(classOf("host.trace.call.late-reply"), undefined, "event-classes.js gives host.trace.call.late-reply a class");
+  assert.equal(Object.hasOwn(catalog.events, "host.trace.call.late-reply"), false, "docs/spec/events.json declares host.trace.call.late-reply");
 });
 
 // contract: view.responsiveness.relay

@@ -102,7 +102,7 @@ benchmark는 모든 section view를 잰다. benchmark는 설치된 `plugin.json`
    - 호출에는 시간 제한이 없고, 명령은 그것을 선언하지 않는다([exposure](exposure.ko.md), 명령 `timeout`). 호출은 그 답, 그 cancel, 또는 상대의 끝으로 끝나며 timer로는 끝나지 않는다. 살아 있는 상대가 명령에 답하지 않으면 아무 event도 오지 않으므로 그 호출은 열린 채 남는다. `core.plugin.open-calls`가 열린 호출과 가장 오래된 호출의 시작을 알린다. `host.trace.view.unresponsive`는 WebKit의 응답성 검사에 답하지 않는 view 프로세스를 알리며, 명령 답이 아니므로 호출을 끝내지 않는다.
    - view는 메인 page의 요청에 자기 command로 답할 때 `{sok: 1, reply: id, result}` 또는 `{sok: 1, reply: id, error}`를 보내며, 호스트는 이를 `view-reply`로 전달한다([native surface](native-surfaces.ko.md#view-표면), view command). 메인 page는 그 응답으로 요청에 답한다. 요청은 그 응답이나 view의 끝(아래의 상대)으로 끝난다.
    - 상대가 사라지면 event로 호출을 끝낸다. 호출을 끝내는 상대는 view 프로세스의 종료, 표면 닫기, sidecar 종료, 창의 메인 page의 끝(다시 읽기, WebContent 프로세스의 끝, 창 닫기), 그리고 endpoint 요청에는 endpoint 연결의 끝이다. promise는 그 이유를 밝힌 오류로 거부한다. reason은 `process-ended`, `surface-closed`, `sidecar-ended` 중 하나다. `process-ended`는 view가 열어 둔 call(메인 page가 답하지 않은 call)을 끝내며 `host.call.peer-lost {plugin, command, reason}`을 쓰고, `surface-closed`는 event를 쓰지 않으며 `losses.peerLost`를 센다. sidecar 종료는 sidecar 실패 계약이 알린다. 응답을 기다리는 식별자 있는 요청마다 surface, sidecar, 식별자를 밝힌 `host.sidecar.reply` 오류가 쓰이고, sidecar에 보낸 각 surface는 `sidecar-failure`를 받는다. host가 멈추거나 떼어내면 기다리는 요청마다 같은 오류를 쓴다. sidecar 요청은 command를 갖지 않으므로 그 경우에 `host.call.peer-lost`는 쓰지 않는다. `host.trace.view.unresponsive`는 호출을 끝내지 않는다. 이 event는 규칙 6의 presentation wait와 view의 status에서만 쓴다. 호출은 그 답, 그 cancel, 이 상대들 가운데 하나로만 끝난다.
-   - 늦은 답은 cancel이나 endpoint 연결의 끝이 끝낸 호출에 온 답이다. 끝이 호출을 끝낸 상대는 답을 보내지 않는다. 늦은 답은 버린다. promise에 전달하지 않으며, 답을 보낸 문서에 오류를 보내지도 않는다. 호스트는 `host.trace.call.late-reply {plugin, command, delay}`를 쓰고 `losses.lateReplies`를 센다. host-contract case `exposure-reply.removed-surface-discarded`와 `exposure.relay.foreign-document-reply-ignored`가 이 동작을 명시한다.
+   - 늦은 답은 cancel이나 endpoint 연결의 끝이 끝낸 호출에 온 답이다. 끝이 호출을 끝낸 상대는 답을 보내지 않는다. 늦은 답은 버린다. promise에 전달하지 않으며, 답을 보낸 문서에 오류를 보내지도 않는다. 늦은 답은 `losses.lateReplies`를 세고, 호스트 relay에 닿은 답은 관측 `exposure reply <id> arrived after its request ended`로 쓴다([exposure](exposure.ko.md)). 어떤 한도도 그 호출을 끝내지 않았으므로 call event는 쓰지 않는다. host-contract case `exposure-reply.removed-surface-discarded`와 `exposure.relay.foreign-document-reply-ignored`가 이 동작을 명시한다.
    - 열린 호출 수와 가장 오래된 열린 호출의 시작 시각을 core status `core.plugin.open-calls {plugin, count, oldestStartedAt}`로 노출한다.
    - relay는 exposure의 제품 동작이다. 두 경로가 있다. 호스트는 surface page로 명령을 전달하고, 메인 페이지는 handler를 직접 실행한다. 두 경로 모두 같은 event로 호출을 끝낸다([exposure](exposure.ko.md), 명령 `timeout`과 relay 절).
    - 취소는 호출 envelope의 일부다. 호출은 `id`를 가지고, 응답은 같은 `id`로 결과나 오류를 담고, 취소는 `id`를 가진다. binary payload는 [binary 경로](#binary-경로)를 쓴다.
@@ -169,7 +169,6 @@ RPC protocol 번호는 0.0 계열에서 1이다.
 | event | class | level | field |
 |---|---|---|---|
 | `host.call.peer-lost` | call | error | `{plugin, command, reason}`: `process-ended`(view call). `surface-closed`는 event를 쓰지 않고 `losses.peerLost`를 센다. sidecar 종료는 sidecar 실패 계약이 알린다 |
-| `host.trace.call.late-reply` | call | debug | `{plugin, command, delay}`. 카운터 `losses.lateReplies` |
 | `host.trace.view.unresponsive` | call | debug | `{plugin, surface}`. 상태 `core.plugin.views.responsive` |
 | `host.trace.view.responsive` | call | debug | `{plugin, surface}`. 상태 `core.plugin.views.responsive` |
 | `host.trace.view.process-request` | call | debug | `{plugin, surface}` |

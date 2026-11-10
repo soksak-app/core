@@ -92,7 +92,6 @@ pub fn class_of(name: &str) -> Option<Class> {
         "host.stall.sampled" => Some(Class::Lifecycle),
         "host.test.end" => Some(Class::Lifecycle),
         "host.test.start" => Some(Class::Lifecycle),
-        "host.trace.call.late-reply" => Some(Class::Call),
         "host.trace.exposure.reply" => Some(Class::Call),
         "host.trace.exposure.request" => Some(Class::Call),
         "host.trace.exposure.unmatched" => Some(Class::Call),
