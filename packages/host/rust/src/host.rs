@@ -448,7 +448,10 @@ pub fn web_content_process_terminated(webview: &Webview) {
         log_failure("page process", documents::main_page_process_ended(&window));
         log_failure("key wait", crate::surfaces::keys_page_ended(&window));
     } else if crate::modals::is_modal_of(webview.label(), window.label()) {
-        log_failure("modal key wait", crate::modals::modal_process_ended(&window));
+        log_failure(
+            "modal key wait",
+            crate::modals::modal_process_ended(&window),
+        );
     }
     if let Err(error) = webview.reload() {
         log_error(&place, format!("{}: reload: {error}", webview.label()));
