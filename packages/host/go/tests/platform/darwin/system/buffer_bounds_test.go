@@ -27,7 +27,7 @@ func blockedSidecar(t *testing.T, root string, surfaces int) (*host.Sidecars, fu
 		t.Fatal(err)
 	}
 	received := filepath.Join(directory, "received")
-	script := "#!/bin/sh\nread _ < " + fifo + "\nexec cat > " + received + "\n"
+	script := "#!/bin/sh\ntrap '' TERM\nread _ < " + fifo + "\nexec cat > " + received + "\n"
 	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,6 @@ func blockedSidecar(t *testing.T, root string, surfaces int) (*host.Sidecars, fu
 	if err != nil {
 		t.Fatal(err)
 	}
-	sidecars.StopTimeout = support.Stall
 	owner := support.NewFakeOwner(root)
 	for i := 1; i <= surfaces; i++ {
 		if err := sidecars.Send(owner, support.EchoSidecar, fmt.Sprintf("s%d", i), json.RawMessage(`{}`)); err != nil {

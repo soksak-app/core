@@ -1,6 +1,7 @@
 package host_test
 
 import (
+	"errors"
 	"os/exec"
 	"testing"
 	"time"
@@ -56,6 +57,8 @@ func TestAServiceProcessOfAnotherUserExists(t *testing.T) {
 	}
 }
 
+// The wait for a service process ends by the exit of the process or by its stop, and by no time limit: the exit
+// answers ended, the stop answers not ended, and a process that does not exist has ended.
 // contract: sidecars-transport.endpoint.waits-for-the-end-of-a-service-process
 func TestTheWaitForTheEndOfAServiceProcess(t *testing.T) {
 	current, err := platform.Current()
@@ -66,11 +69,20 @@ func TestTheWaitForTheEndOfAServiceProcess(t *testing.T) {
 	if err := ending.Start(); err != nil {
 		t.Fatalf("start sleep failed: %v", err)
 	}
-	time.AfterFunc(150*time.Millisecond, func() { ending.Process.Kill() })
-	started := time.Now()
-	ended, err := current.WaitServiceProcessEnd(ending.Process.Pid, 10*time.Second)
-	if err != nil || !ended || time.Since(started) > 5*time.Second {
-		t.Fatalf("a process that ends within the timeout: ended %v after %v, %v", ended, time.Since(started), err)
+	waited := make(chan error, 1)
+	go func() {
+		ended, err := current.WaitServiceProcessEnd(ending.Process.Pid, nil)
+		if err == nil && !ended {
+			err = errors.New("the wait answered that the process did not end")
+		}
+		waited <- err
+	}()
+	// The kill is the event that ends the wait; a wait that does not end stops at the limit of the runner.
+	if err := ending.Process.Kill(); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-waited; err != nil {
+		t.Fatalf("a process that ends: %v", err)
 	}
 	ending.Wait()
 	running := exec.Command("sleep", "30")
@@ -78,10 +90,12 @@ func TestTheWaitForTheEndOfAServiceProcess(t *testing.T) {
 		t.Fatalf("start sleep failed: %v", err)
 	}
 	defer func() { running.Process.Kill(); running.Wait() }()
-	if ended, err := current.WaitServiceProcessEnd(running.Process.Pid, 200*time.Millisecond); err != nil || ended {
-		t.Fatalf("a process that keeps running: ended %v, %v", ended, err)
+	stop := make(chan struct{})
+	close(stop)
+	if ended, err := current.WaitServiceProcessEnd(running.Process.Pid, stop); err != nil || ended {
+		t.Fatalf("a process that keeps running until the stop: ended %v, %v", ended, err)
 	}
-	if ended, err := current.WaitServiceProcessEnd(ending.Process.Pid, time.Second); err != nil || !ended {
+	if ended, err := current.WaitServiceProcessEnd(ending.Process.Pid, nil); err != nil || !ended {
 		t.Fatalf("a process that does not exist: ended %v, %v", ended, err)
 	}
 }

@@ -100,7 +100,6 @@ func TestCloseDuringStopSendsNothing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sidecars.StopTimeout = support.Stall
 	owner := support.NewFakeOwner("/projects/test")
 	for _, surface := range []string{"s1", "s2"} {
 		if err := sidecars.Send(owner, support.EchoSidecar, surface, json.RawMessage(`{"test":"data"}`)); err != nil {
@@ -337,4 +336,49 @@ func TestAStopEndsBySidecarExitWhileItsChildKeepsTheOutput(t *testing.T) {
 	// A stop that waits for the end of the output does not return, and the check stops at the limit of its runner.
 	sidecars.Stop()
 	requireGone(t, child)
+}
+
+// A stop other than the quit returns before the process exits: a declaration that removes a running sidecar returns while the
+// sidecar, which ignores the terminate signal and holds its exit until the test opens its gate, still runs, and the host reaps it
+// at its exit (docs/spec/sidecars.md#declaration-and-startup).
+// contract: sidecars.stop.returns-at-once-outside-the-quit
+func TestAStopOutsideTheQuitReturnsBeforeTheExit(t *testing.T) {
+	sidecars, directory := support.ScriptSidecars(t, "#!/bin/sh\ntrap '' TERM\necho $$ > DIR/started\nread request\nread gate < DIR/gate\nexit 3\n")
+	started := childFIFO(t, directory, "started")
+	gate := childFIFO(t, directory, "gate")
+	owner := support.NewFakeOwner("/projects/a")
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	pid := childPID(t, started)
+	t.Cleanup(func() { _ = syscall.Kill(pid, syscall.SIGKILL) })
+	// A declaration that waits for the exit does not return before the gate opens, and the check stops at the limit of its runner.
+	if err := sidecars.Declare([]host.SidecarDeclaration{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := syscall.Kill(pid, 0); err != nil {
+		t.Fatalf("the declaration returned after the stopping sidecar %d ended: %v", pid, err)
+	}
+	if err := os.WriteFile(gate, []byte("open\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	requireGone(t, pid)
+}
+
+// The stop of the quit writes, for each process that it waits for, the record of that wait (docs/spec/sidecars.md#declaration-and-startup).
+// contract: sidecars.stop.records-what-the-quit-waits-for
+func TestTheQuitRecordsTheProcessesThatItWaitsFor(t *testing.T) {
+	written := support.CaptureLog(t)
+	sidecars, directory := support.ScriptSidecars(t, "#!/bin/sh\necho $$ > DIR/started\nwhile read line; do echo \"$line\"; done\n")
+	started := childFIFO(t, directory, "started")
+	owner := support.NewFakeOwner("/projects/a")
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	pid := childPID(t, started)
+	sidecars.Stop()
+	want := "info host sidecar " + support.EchoSidecar + ": the quit waits for the exit of process " + strconv.Itoa(pid) + "\n"
+	if logged := written(); !strings.Contains(logged, want) {
+		t.Fatalf("log %q does not contain %q", logged, want)
+	}
 }

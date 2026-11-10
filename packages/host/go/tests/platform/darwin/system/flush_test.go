@@ -31,7 +31,7 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 	}
 	received := filepath.Join(directory, "received")
 	// The sidecar blocks the moment it opens the FIFO for reading. Meanwhile it does not read stdin. This is not polling.
-	script := "#!/bin/sh\nread _ < " + fifo + "\nexec cat > " + received + "\n"
+	script := "#!/bin/sh\ntrap '' TERM\nread _ < " + fifo + "\nexec cat > " + received + "\n"
 	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -214,7 +214,7 @@ func TestOrderIsCorrectWhenStopFlushesBufferedMessages(t *testing.T) {
 		t.Fatal(err)
 	}
 	received := filepath.Join(directory, "received")
-	script := "#!/bin/sh\nread _ < " + fifo + "\nexec cat > " + received + "\n"
+	script := "#!/bin/sh\ntrap '' TERM\nread _ < " + fifo + "\nexec cat > " + received + "\n"
 	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +222,6 @@ func TestOrderIsCorrectWhenStopFlushesBufferedMessages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sidecars.StopTimeout = support.Stall // Makes Stop() wait until cat receives 5MB and ends. The deadline catches only a hang
 	owner := support.NewFakeOwner("/p")
 
 	// Surface registration

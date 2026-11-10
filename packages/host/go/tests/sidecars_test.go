@@ -119,7 +119,7 @@ func echoSidecars(t *testing.T) (*host.Sidecars, string) {
 	t.Helper()
 	directory := t.TempDir()
 	record := filepath.Join(directory, "requests")
-	script := "#!/bin/sh\ntee " + record + "\n"
+	script := "#!/bin/sh\ntrap '' TERM\ntee " + record + "\n"
 	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -127,9 +127,6 @@ func echoSidecars(t *testing.T) (*host.Sidecars, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Stop closes stdin and waits for echo to record the remaining lines and end. With a short deadline, under load it would force the end before the record,
-	// so the deadline is stall. echo ends soon at EOF, so the check does not become slow.
-	sidecars.StopTimeout = support.Stall
 	return sidecars, record
 }
 
@@ -245,14 +242,13 @@ func TestSidecarReceivesTheLogDirectory(t *testing.T) {
 func TestDeclaringAddsSidecarsInstalledAfterTheStart(t *testing.T) {
 	directory := t.TempDir()
 	record := filepath.Join(directory, "requests")
-	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte("#!/bin/sh\ntee "+record+"\n"), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte("#!/bin/sh\ntrap '' TERM\ntee "+record+"\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	sidecars, err := host.NewSidecars(nil, directory)
 	if err != nil {
 		t.Fatal(err)
 	}
-	sidecars.StopTimeout = support.Stall
 	owner := support.NewFakeOwner("/projects/a")
 	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "is not declared by any plugin") {
 		t.Fatalf("send before the declaration = %v", err)
@@ -312,7 +308,7 @@ func TestInvalidSidecarDeclarationsAreNotDeclared(t *testing.T) {
 func TestAnInvalidDeclarationLeavesTheOtherSidecarsDeclared(t *testing.T) {
 	const earlier = "@fixture/sidecar-earlier"
 	directory := t.TempDir()
-	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte("#!/bin/sh\ncat\n"), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte("#!/bin/sh\ntrap '' TERM\ncat\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	declarations := append(support.Declare(directory, `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`),
@@ -322,7 +318,6 @@ func TestAnInvalidDeclarationLeavesTheOtherSidecarsDeclared(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sidecars.StopTimeout = support.Stall
 	defer sidecars.Stop()
 	owner := support.NewFakeOwner("/projects/a")
 	if err := sidecars.Send(owner, earlier, "s2", json.RawMessage(`{}`)); err == nil || err.Error() != refused {
@@ -386,13 +381,11 @@ func TestApplicationWithoutSidecarsRejectsSends(t *testing.T) {
 	}
 }
 
-// contract: sidecars.send.fails-fast-when-sidecar-not-keeping-up, sidecars.send.slow-sidecar-does-not-block-others, sidecars.stop.honors-stop-timeout
+// contract: sidecars.send.fails-fast-when-sidecar-not-keeping-up, sidecars.send.slow-sidecar-does-not-block-others
 func TestSlowSidecarDoesNotBlockOtherSends(t *testing.T) {
 	// The slow sidecar does not read stdin, and the other sidecar works normally.
 	// When 257 sends go to the slow sidecar, the 256th succeeds and the 257th fails with the "is not keeping up" error.
-	// This test checks two properties:
-	// 1. Even when the channel of the slow sidecar is full, Send() to the fast sidecar does not block.
-	// 2. Stop() keeps StopTimeout.
+	// Even when the channel of the slow sidecar is full, Send() to the fast sidecar does not block.
 
 	directory := t.TempDir()
 
@@ -417,8 +410,6 @@ func TestSlowSidecarDoesNotBlockOtherSends(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Sets the deadline to 100ms for the test.
-	sidecars.StopTimeout = 100 * time.Millisecond
 
 	owner := support.NewFakeOwner("/projects/test")
 
@@ -467,19 +458,8 @@ func TestSlowSidecarDoesNotBlockOtherSends(t *testing.T) {
 		t.Errorf("fast send took %v, want < 50ms", sendElapsed)
 	}
 
-	// Property 2: Stop() keeps StopTimeout (100ms).
-	// Asserting with a deadline of 200ms clearly distinguishes it from the default of 5 seconds.
-	// The earlier code measured send and stop together and asserted 110ms, which was
-	// the unreasonable claim that "the OS kills and reaps the process in 10ms or less".
-	start = time.Now()
-
-	// Calls Stop().
+	// The slow sidecar does not read its input and ends at the terminate signal of the stop.
 	sidecars.Stop()
-
-	stopElapsed := time.Since(start)
-	if stopElapsed > 200*time.Millisecond {
-		t.Errorf("Stop() took %v, want < 200ms (2 × StopTimeout)", stopElapsed)
-	}
 }
 
 // TestStopGracefulShutdown verifies that, when the sidecar actually reads stdin, Stop() ends
@@ -500,9 +480,6 @@ func TestStopGracefulShutdown(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Stop() forces the end only after the deadline passes. If it returns before the deadline, the sidecar ended by itself at stdin EOF.
-	// The deadline is set to stall, which is sufficiently longer than the process exit time on a loaded machine.
-	sidecars.StopTimeout = support.Stall
 
 	owner := support.NewFakeOwner("/projects/test")
 
@@ -517,14 +494,8 @@ func TestStopGracefulShutdown(t *testing.T) {
 		t.Fatalf("echo event = %+v", event)
 	}
 
-	// Now measures the time of the Stop() call. It must end normally at stdin EOF.
-	start := time.Now()
+	// The stop ends by the exit of the sidecar at the end of its input; a stop that does not end stops at the limit of the runner.
 	sidecars.Stop()
-	elapsed := time.Since(start)
-
-	if elapsed >= sidecars.StopTimeout {
-		t.Errorf("graceful stop took %v, which reached the %v deadline", elapsed, sidecars.StopTimeout)
-	}
 }
 
 // TestStopClosesUnreadOutput verifies that a protocol failure while stopping is written to the log, the read end of the output that the host no longer reads is
@@ -534,7 +505,7 @@ func TestStopGracefulShutdown(t *testing.T) {
 func TestStopClosesUnreadOutput(t *testing.T) {
 	written := support.CaptureLog(t)
 	directory := t.TempDir()
-	script := "#!/bin/sh\nwhile read line; do echo \"$line\"; done\n" +
+	script := "#!/bin/sh\ntrap '' TERM\nwhile read line; do echo \"$line\"; done\n" +
 		"i=0\nwhile [ $i -lt 3000 ]; do echo '{\"surface\":\"s1\",\"closed\":true}'; i=$((i+1)); done\nexit 0\n"
 	if err := os.WriteFile(filepath.Join(directory, "talkative"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
@@ -543,8 +514,6 @@ func TestStopClosesUnreadOutput(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Stop forces the end only after the deadline passes. If it returns before the deadline, the sidecar wrote all its output and ended by itself.
-	sidecars.StopTimeout = support.Stall
 	owner := support.NewFakeOwner("/projects/test")
 	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
 		t.Fatalf("send: %v", err)
@@ -552,11 +521,8 @@ func TestStopClosesUnreadOutput(t *testing.T) {
 	if event := owner.Next(t); event.Surface != "s1" {
 		t.Fatalf("echo event = %+v", event)
 	}
-	start := time.Now()
+	// A stop that waits on the unread output does not return, and the check stops at the limit of its runner.
 	sidecars.Stop()
-	if elapsed := time.Since(start); elapsed >= sidecars.StopTimeout {
-		t.Errorf("stop took %v and reached the %v deadline: the host left the unread output open", elapsed, sidecars.StopTimeout)
-	}
 	logged := written()
 	if want := "error host sidecar @fixture/sidecar-echo: failed: unexpected close answer for s1\n"; !strings.Contains(logged, want) {
 		t.Errorf("log %q does not contain %q", logged, want)
@@ -572,12 +538,11 @@ func TestStopClosesUnreadOutput(t *testing.T) {
 // contract: sidecars.stop.reads-output-to-end
 func TestStopReadsOutputToItsEnd(t *testing.T) {
 	written := support.CaptureLog(t)
-	script := "#!/bin/sh\nclosed=\nwhile read line; do case \"$line\" in *'\"closed\":true'*) closed=1;; *) echo \"$line\";; esac; done\n" +
+	script := "#!/bin/sh\ntrap '' TERM\nclosed=\nwhile read line; do case \"$line\" in *'\"closed\":true'*) closed=1;; *) echo \"$line\";; esac; done\n" +
 		"[ -n \"$closed\" ] || exit 4\necho '{\"surface\":\"s1\",\"closed\":true}' || exit 5\n" +
 		"i=0\nwhile [ $i -lt 3000 ]; do echo '{\"surface\":\"s1\",\"body\":\"late\"}' || exit 5; i=$((i+1)); done\n" +
 		"echo finished > DIR/finished\nexit 0\n"
 	sidecars, directory := support.ScriptSidecars(t, script)
-	sidecars.StopTimeout = support.Stall
 	owner := support.NewFakeOwner("/projects/test")
 	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
 		t.Fatalf("send: %v", err)
@@ -586,11 +551,7 @@ func TestStopReadsOutputToItsEnd(t *testing.T) {
 		t.Fatalf("echo event = %+v", event)
 	}
 	sidecars.Close("s1")
-	start := time.Now()
 	sidecars.Stop()
-	if elapsed := time.Since(start); elapsed >= sidecars.StopTimeout {
-		t.Errorf("stop took %v and reached the %v deadline", elapsed, sidecars.StopTimeout)
-	}
 	if data, err := os.ReadFile(filepath.Join(directory, "finished")); err != nil || string(data) != "finished\n" {
 		t.Errorf("the sidecar did not complete its writes on its way out: finished = %q, %v", data, err)
 	}
@@ -605,11 +566,10 @@ func TestStopReadsOutputToItsEnd(t *testing.T) {
 func TestStopReportsExitStatus(t *testing.T) {
 	written := support.CaptureLog(t)
 	for ending, want := range map[string]string{
-		"exit 3":        "error host sidecar @fixture/sidecar-echo: exited while stopping: exit status 3\n",
-		"kill -TERM $$": "error host sidecar @fixture/sidecar-echo: exited while stopping: signal 15\n",
+		"exit 3":       "error host sidecar @fixture/sidecar-echo: exited while stopping: exit status 3\n",
+		"kill -HUP $$": "error host sidecar @fixture/sidecar-echo: exited while stopping: signal 1\n",
 	} {
-		sidecars, _ := support.ScriptSidecars(t, "#!/bin/sh\nwhile read line; do echo \"$line\"; done\n"+ending+"\n")
-		sidecars.StopTimeout = support.Stall
+		sidecars, _ := support.ScriptSidecars(t, "#!/bin/sh\ntrap '' TERM\nwhile read line; do echo \"$line\"; done\n"+ending+"\n")
 		owner := support.NewFakeOwner("/projects/test")
 		if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
 			t.Fatalf("send: %v", err)
@@ -624,50 +584,23 @@ func TestStopReportsExitStatus(t *testing.T) {
 	}
 }
 
-// TestStopForcedKill verifies that a sidecar that does not end after the deadline is killed.
-// contract: sidecars.stop.kills-after-timeout
-func TestStopForcedKill(t *testing.T) {
+// A sidecar that ignores the end of its input ends at the terminate signal of the stop: the stop ends by that exit, and the host
+// writes neither an error line nor an "exited while stopping" line for it.
+// contract: sidecars.stop.terminates-the-process-group
+func TestAStopTerminatesASidecarThatIgnoresItsInput(t *testing.T) {
 	written := support.CaptureLog(t)
-	directory := t.TempDir()
-
-	// The sidecar: it does not read stdin, so it keeps running after stdin EOF. The stdin of a background command can become /dev/null depending on the shell and
-	// end immediately, so it is not used.
-	stubborn := "#!/bin/sh\nexec sleep 600\n"
-	if err := os.WriteFile(filepath.Join(directory, "stubborn"), []byte(stubborn), 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	// Declares the sidecar.
-	sidecars, err := host.NewSidecars(support.Declare(directory, `{"executable":"stubborn","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Sets the deadline to 100ms for the test.
-	sidecars.StopTimeout = 100 * time.Millisecond
-
+	// The sidecar does not read stdin, so it keeps running after stdin EOF.
+	sidecars, _ := support.ScriptSidecars(t, "#!/bin/sh\nexec sleep 600\n")
 	owner := support.NewFakeOwner("/projects/test")
-
-	// Starts the sidecar.
 	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
 		t.Fatalf("send: %v", err)
 	}
-
-	// Calls Stop(). It must be killed after the deadline.
-	start := time.Now()
+	// A stop that waits for no exit and kills does not return before the exit, and a stop that waits forever stops at the limit
+	// of the runner.
 	sidecars.Stop()
-	elapsed := time.Since(start)
-
-	// Stop() kills after it waits for the deadline. If it returns before the deadline, it did not wait, and the upper bound catches only a hang.
-	// The time until the process ends after the kill grows with the load, so success is not decided by the upper bound.
-	if elapsed < sidecars.StopTimeout || elapsed > support.Stall {
-		t.Errorf("forced kill stop took %v, want at least the %v deadline", elapsed, sidecars.StopTimeout)
-	}
 	logged := written()
-	if want := "error host sidecar @fixture/sidecar-echo: did not end within the stop timeout and was killed\n"; !strings.Contains(logged, want) {
-		t.Errorf("log %q does not contain %q", logged, want)
-	}
-	if strings.Contains(logged, "exited while stopping") {
-		t.Errorf("log %q reports the exit that the kill caused", logged)
+	if strings.Contains(logged, "error host ") || strings.Contains(logged, "exited while stopping") {
+		t.Errorf("the stop by the terminate signal wrote %q", logged)
 	}
 }
 
@@ -710,7 +643,7 @@ func TestCloseReachesOnlyTheSidecarThatHoldsTheSurface(t *testing.T) {
 			t.Fatal(err)
 		}
 		record := filepath.Join(folder, "requests")
-		if err := os.WriteFile(filepath.Join(folder, "echo"), []byte("#!/bin/sh\ntee "+record+"\n"), 0o755); err != nil {
+		if err := os.WriteFile(filepath.Join(folder, "echo"), []byte("#!/bin/sh\ntrap '' TERM\ntee "+record+"\n"), 0o755); err != nil {
 			t.Fatal(err)
 		}
 		return folder, record
@@ -726,7 +659,6 @@ func TestCloseReachesOnlyTheSidecarThatHoldsTheSurface(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sidecars.StopTimeout = support.Stall
 	owner := support.NewFakeOwner("/projects/a")
 	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
@@ -985,7 +917,6 @@ func TestTheStandardErrorOfASidecarIsWrittenAsRecords(t *testing.T) {
 	written := support.CaptureLog(t)
 	script := "#!/bin/sh\necho 'first line' >&2\nprintf 'no line feed' >&2\nwhile read line; do echo \"$line\"; done\n"
 	sidecars, _ := support.ScriptSidecars(t, script)
-	sidecars.StopTimeout = support.Stall
 	owner := support.NewFakeOwner("/projects/test")
 	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
 		t.Fatalf("send: %v", err)
@@ -1008,7 +939,6 @@ func TestTheStandardErrorOfASidecarIsWrittenAsRecords(t *testing.T) {
 func TestTheRelayRecordsEveryMessageWithItsWholeBody(t *testing.T) {
 	script := "#!/bin/sh\nread request\necho '{\"surface\":\"s1\",\"body\":{\"event\":\"state\",\"text\":\"\\ud55c\"}}'\nwhile read line; do :; done\n"
 	sidecars, directory := support.ScriptSidecars(t, script)
-	sidecars.StopTimeout = support.Stall
 	log := support.UseEventLog(t)
 	_ = directory
 	if _, err := host.PerformanceCommand(map[string]any{"action": "on"}); err != nil {
@@ -1373,12 +1303,8 @@ func TestAnImageOfAClosedSurfaceIsAnsweredClosed(t *testing.T) {
 	if event.Surface != "s1" || !reflect.DeepEqual(answer, want) {
 		t.Fatalf("the host answered %s for the image of the closed surface; want %v", event.Body, want)
 	}
-	// The sidecar ends when its input closes, so the stop does not wait for its deadline.
-	begin := time.Now()
+	// The sidecar ends at its stop, which ends by that exit; a stop that does not end stops at the limit of the runner.
 	sidecars.Stop()
-	if elapsed := time.Since(begin); elapsed >= time.Second {
-		t.Fatalf("stop took %v after the answer; the sidecar ends with its input and must not wait the stop deadline of %v", elapsed, sidecars.StopTimeout)
-	}
 }
 
 // contract: sidecars.read.unfinished-line-ends-the-connection
@@ -1416,7 +1342,6 @@ func TestAResponseToASidecarThatEndedIsTheEndedError(t *testing.T) {
 func TestStandardIOSidecarFirstAnswerAfterSpawnIsRecorded(t *testing.T) {
 	script := "#!/bin/sh\necho $$ > DIR/pid\nread request\necho '{\"surface\":\"s1\",\"body\":{\"event\":\"state\"}}'\nwhile read line; do :; done\n"
 	sidecars, directory := support.ScriptSidecars(t, script)
-	sidecars.StopTimeout = support.Stall
 	log := support.UseEventLog(t)
 	if _, err := host.PerformanceCommand(map[string]any{"action": "on"}); err != nil {
 		t.Fatal(err)
@@ -1490,9 +1415,6 @@ func restartSidecars(t *testing.T) (*host.Sidecars, string, *restartClock) {
 	t.Cleanup(sidecars.Stop)
 	clock := &restartClock{}
 	sidecars.Now = clock.read
-	// The restarted sidecar runs the script that does not answer the shutdown, so the stop waits its stop timeout. The test
-	// sets a short timeout, as the other tests of a sidecar that ignores the shutdown do.
-	sidecars.StopTimeout = 100 * time.Millisecond
 	return sidecars, directory, clock
 }
 
