@@ -785,7 +785,103 @@ static void pointerThen(SPPointer *pointer, void *handle, double x, double y, in
 static void afterWebViewsActive(NSWindow *window, WKWebView *target, BOOL waitForAll,
     void (^done)(void), void (^waitCreated)(SPInputActivityWait *));
 
+// One request of sp_input_pointer_then that waits for its turn. It keeps its window and a copy of the borrowed pointer name until
+// it starts or its window closes.
+@interface SPPointerRequest : NSObject {
+@public
+    NSWindow *window;
+    char *name;
+    double x, y, deltaX, deltaY, timeoutSeconds;
+    int phase, button, clicks;
+    sp_input_done done;
+    void *context;
+}
+@end
+@implementation SPPointerRequest
+- (void)dealloc {
+    [window release];
+    free(name);
+    [super dealloc];
+}
+@end
+
+static void pointerStart(void *handle, const char *name, double x, double y, int phase, int button, double deltaX,
+    double deltaY, int clicks, double timeoutSeconds, sp_input_done done, void *context);
+
+// The injected pointer requests of the application run one at a time, in the order in which they reached the main thread: the
+// answer of a request is the event that starts the next (docs/spec/exposure.md#named-pointers). A request that waits for its
+// turn holds no lock and no thread; the close of its window answers it in the close turn.
+static NSMutableArray<SPPointerRequest *> *pointerRequests;
+static BOOL pointerRequestRuns;
+static BOOL pointerRequestsStarting;
+
+static void pointerRequestAnswered(void *context, sp_input_result result, const sp_input_held *held);
+
+static void startPointerRequests(void) {
+    if (pointerRequestsStarting) return;
+    pointerRequestsStarting = YES;
+    while (!pointerRequestRuns && pointerRequests.count > 0) {
+        SPPointerRequest *request = [pointerRequests[0] retain];
+        [pointerRequests removeObjectAtIndex:0];
+        pointerRequestRuns = YES;
+        // The request is released when it answers, which may happen inside pointerStart.
+        pointerStart(request->window, request->name, request->x, request->y, request->phase, request->button, request->deltaX,
+            request->deltaY, request->clicks, request->timeoutSeconds, pointerRequestAnswered, request);
+    }
+    pointerRequestsStarting = NO;
+}
+
+static void pointerRequestAnswered(void *context, sp_input_result result, const sp_input_held *held) {
+    SPPointerRequest *request = context;
+    request->done(request->context, result, held);
+    [request release];
+    pointerRequestRuns = NO;
+    startPointerRequests();
+}
+
+static void observePointerRequestWindows(void) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        pointerRequests = [[NSMutableArray alloc] init];
+        sp_observe_notification("input_inject.pointer_requests", SP_OBSERVE_COUNT, NSWindowWillCloseNotification, nil, nil,
+            ^(NSNotification *notification) {
+                NSWindow *closed = notification.object;
+                NSMutableArray<SPPointerRequest *> *ended = [NSMutableArray array];
+                for (SPPointerRequest *request in pointerRequests) if (request->window == closed) [ended addObject:request];
+                [pointerRequests removeObjectsInArray:ended];
+                for (SPPointerRequest *request in ended) {
+                    sp_log_info("input inject", "a pointer request of a window that closed before its turn is answered rejected");
+                    request->done(request->context, SP_INPUT_REJECTED, NULL);
+                }
+            });
+    });
+}
+
 void sp_input_pointer_then(void *handle, const char *name, double x, double y, int phase, int button, double deltaX,
+    double deltaY, int clicks, double timeoutSeconds, sp_input_done done, void *context) {
+    if (!NSThread.isMainThread) {
+        pointerStart(handle, name, x, y, phase, button, deltaX, deltaY, clicks, timeoutSeconds, done, context);
+        return;
+    }
+    observePointerRequestWindows();
+    SPPointerRequest *request = [[[SPPointerRequest alloc] init] autorelease];
+    request->window = [(__bridge NSWindow *)handle retain];
+    request->name = name ? strdup(name) : NULL;
+    request->x = x;
+    request->y = y;
+    request->phase = phase;
+    request->button = button;
+    request->deltaX = deltaX;
+    request->deltaY = deltaY;
+    request->clicks = clicks;
+    request->timeoutSeconds = timeoutSeconds;
+    request->done = done;
+    request->context = context;
+    [pointerRequests addObject:request];
+    startPointerRequests();
+}
+
+static void pointerStart(void *handle, const char *name, double x, double y, int phase, int button, double deltaX,
     double deltaY, int clicks, double timeoutSeconds, sp_input_done done, void *context) {
     NSWindow *window = (__bridge NSWindow *)handle;
     SPPointer *pointer = NSThread.isMainThread ? pointerNamed(name) : nil;

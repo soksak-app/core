@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"github.com/soksak-app/core/packages/host/go/src/platform/darwin/abi"
 
-	"sync"
 	"unsafe"
 
 	handles "github.com/soksak-app/core/packages/host/go/src/callback"
@@ -16,13 +15,11 @@ import (
 
 // watchers are the input receiver handles of each monitor number. They are read and changed only in main-thread steps.
 var watchers = map[uintptr]handles.Handle{}
-var pointerSequence sync.Mutex
 
-func goHost_surface_hit(owner uintptr, view unsafe.Pointer) int32 {
-	if handles.Handle(owner).Value().(platform.Input).Press(uintptr(view)) {
-		return 1
-	}
-	return 0
+// goHost_surface_pressed receives the surface host that a press or a key input passed through. The library already decided that
+// the view is a surface host, so the answer of Press is not returned.
+func goHost_surface_pressed(owner uintptr, view unsafe.Pointer) {
+	handles.Handle(owner).Value().(platform.Input).Press(uintptr(view))
 }
 
 func goHost_surface_point(owner uintptr, phase int32, x float64, y float64) {
@@ -36,18 +33,11 @@ func (implementation) WatchInput(window platform.Window, input platform.Input) (
 	return monitor, nil
 }
 
-// InjectPointer delivers input with sp_input_pointer_then of native/darwin. It does not activate the application.
+// InjectPointer delivers input with sp_input_pointer_then of native/darwin. It does not activate the application. The library
+// starts each request after the answer of the request before it, so this step returns without waiting for an earlier delivery.
 func (implementation) InjectPointer(window platform.Window, pointer string, x, y float64, phase, button int, deltaX, deltaY float64, clicks int, receive float64, done func(platform.PointerResult, platform.ButtonHeld)) error {
-	pointerSequence.Lock()
-	var once sync.Once
-	serialized := func(result platform.PointerResult, held platform.ButtonHeld) {
-		once.Do(func() {
-			pointerSequence.Unlock()
-			done(result, held)
-		})
-	}
 	native.InjectPointer(uintptr(window), native.CString(pointer), float64(x), float64(y), int32(phase), int32(button), float64(deltaX), float64(deltaY), int32(clicks),
-		float64(receive), uintptr(handles.NewHandle(serialized)))
+		float64(receive), uintptr(handles.NewHandle(done)))
 	return nil
 }
 

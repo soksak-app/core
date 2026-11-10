@@ -101,3 +101,18 @@ fn a_notification_releases_intent_without_claiming_a_response_was_written() {
     .send(raw(&Value::Null));
     assert_eq!(rx.try_recv().unwrap(), ReplyOutcome::NoResponse);
 }
+
+// contract: diagnostics.capture-wait.ends-with-the-connection
+#[test]
+fn the_end_of_the_connection_runs_the_watches_of_the_requests_that_still_run() {
+    let connection = ConnectionEnd::default();
+    let (tx, rx) = mpsc::channel();
+    let running = tx.clone();
+    let _running = connection.watch(move || running.send("running").unwrap());
+    let returned = tx.clone();
+    drop(connection.watch(move || returned.send("returned").unwrap()));
+    connection.end();
+    let late = tx;
+    let _late = connection.watch(move || late.send("late").unwrap());
+    assert_eq!(rx.try_iter().collect::<Vec<_>>(), vec!["running", "late"]);
+}

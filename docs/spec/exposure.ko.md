@@ -291,7 +291,7 @@ Windows 에서 `host.buttons` 와 창의 press·drag 는 system hook 이 아니�
 
 ### Named pointers
 
-`input.pointer`의 `pointer`는 pointer 이름이고, 이것이 없는 요청은 pointer `main`의 입력이다. 각 pointer는 자기 위치, 눌린 버튼, 각 누름을 받은 뷰, 각 누름의 원점을 따로 가지므로 두 pointer가 두 창에서 또는 한 창에서 동시에 누르고 끈다. 실제 cursor는 움직이지 않는다. macOS에서 한 pointer의 입력을 전달하는 동안 `+[NSEvent pressedMouseButtons]`는 그 pointer의 버튼을 답하므로 각 페이지는 자기 gesture의 `buttons`를 보고, 전달 밖에서는 모든 pointer의 버튼을 답한다.
+`input.pointer`의 `pointer`는 pointer 이름이고, 이것이 없는 요청은 pointer `main`의 입력이다. 각 pointer는 자기 위치, 눌린 버튼, 각 누름을 받은 뷰, 각 누름의 원점을 따로 가지므로 두 pointer가 두 창에서 또는 한 창에서 동시에 누르고 끈다. 실제 cursor는 움직이지 않는다. macOS에서 한 pointer의 입력을 전달하는 동안 `+[NSEvent pressedMouseButtons]`는 그 pointer의 버튼을 답하므로 각 페이지는 자기 gesture의 `buttons`를 보고, 전달 밖에서는 모든 pointer의 버튼을 답한다. macOS에서 native library는 애플리케이션의 `input.pointer`를 요청이 main thread에 닿은 순서대로 한 번에 하나씩 전달한다. 요청은 앞 요청이 답한 turn에서 시작하므로, 각 요청의 답이 다음 요청을 시작시키는 event이고 어떤 요청도 자기 차례를 기다리는 동안 lock이나 thread를 쥐지 않는다. 시작하기 전에 창이 닫힌 요청은 close turn에서 입력을 받지 않은 창으로 답한다. 두 host 모두 이 queue로 전달하므로 순서는 한 규칙이다.
 
 AppKit과 WebKit은 일부 상태를 pointer마다가 아니라 창, 페이지, 애플리케이션마다 하나 둔다. 다른 pointer의 열린 누름과 그런 상태를 공유할 입력은 전달하지 않고, 메시지 `pointer <holder> holds a press that this input would share: <reason>`과 함께 1011을 반환한다. macOS의 경우는 다음과 같다.
 

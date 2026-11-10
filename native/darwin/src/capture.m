@@ -16,6 +16,7 @@
 #import "image_region.h"
 #import "application_log.h"
 #import "event_ring.h"
+#import "observe.h"
 #import <ImageIO/ImageIO.h>
 #include <math.h>
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
@@ -26,6 +27,7 @@
 static void setCaptureError(NSString* message);
 static bool hasCaptureError(void);
 static void reportCaptureStreamFailure(SCStream *stream, NSString *message, NSError *error);
+static void endCaptureStream(SCStream *stream);
 
 // The text of a failed capture call: its description, which the system may localize, and its domain and code, which name the failure.
 static NSString *captureFailureText(NSError *error) {
@@ -40,6 +42,13 @@ static dispatch_semaphore_t captureStartDone;
 // The stop request time (mach absolute time) and the signal that a frame presented after it has arrived.
 static uint64_t captureStopAfter;
 static dispatch_semaphore_t captureCaughtUp;
+// Whether the current stream ended: it stopped, its start failed or its window closed. No frame follows, so the waits for a
+// frame end with it. Read and written on captureQueue.
+static BOOL captureStreamEnded;
+// Whether a callback met the stop boundary of captureStopAfter. Read and written on captureQueue.
+static BOOL captureStopReached;
+// Whether the current stream ended, for the first frame wait. Read and written under the lock of SPCapture.
+static BOOL captureFirstFrameEnded;
 static dispatch_queue_t captureQueue;
 static SCStream* captureStream = nil;
 static BOOL captureAcceptingSamples = NO;
@@ -837,6 +846,7 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
     if (captureCaughtUp != NULL && captureStopAfter != 0 && !captureResizing && hasDisplayTime
         && shown >= captureStopAfter) {
         captureStopAfter = 0;
+        captureStopReached = YES;
         dispatch_semaphore_signal(captureCaughtUp);
     }
 }
@@ -1115,6 +1125,7 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
     } else {
         sp_log_info("capture", [NSString stringWithFormat:@"stopped without a delegate error (stream=%p)", stream].UTF8String);
     }
+    endCaptureStream(stream);
 }
 
 @end
@@ -1229,6 +1240,57 @@ static void reportCaptureStreamFailure(SCStream *stream, NSString *message, NSEr
     sp_log_error("capture", [NSString stringWithFormat:@"%@ (stream=%p current=%d)", message, stream, current].UTF8String);
     [sink stopDisplayLinkObservation];
     [sink release];
+}
+
+// Ends the waits for a frame of the current stream when that stream ends. The first frame wait and the stop boundary wait end
+// by a frame or by this end, which no later frame follows; a stream that is not current has no waiter.
+static void endCaptureStream(SCStream *stream) {
+    @synchronized([SPCapture class]) {
+        if (stream == nil || stream != captureStream) return;
+        captureFirstFrameEnded = YES;
+        if (captureFirstFrame) dispatch_semaphore_signal(captureFirstFrame);
+        if (captureQueue == NULL) return;
+        [stream retain];
+        dispatch_async(captureQueue, ^{
+            BOOL current = NO;
+            @synchronized([SPCapture class]) { current = stream == captureStream; }
+            [stream release];
+            if (!current) return;
+            captureStreamEnded = YES;
+            if (captureCaughtUp == NULL || captureStopAfter == 0) return;
+            captureStopAfter = 0;
+            dispatch_semaphore_signal(captureCaughtUp);
+        });
+    }
+}
+
+// Ends the current stream when its window closes. A window that closes is not drawn again, so a recording of it receives no
+// later frame.
+static void observeCaptureWindows(void) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        sp_observe_notification("capture.window_close", SP_OBSERVE_COUNT, NSWindowWillCloseNotification, nil, nil,
+            ^(NSNotification *note) {
+            SCStream *stream = nil;
+            @synchronized([SPCapture class]) {
+                if (captureStream == nil || [(NSWindow *)note.object windowNumber] != captureWindowNumber) return;
+                stream = [captureStream retain];
+            }
+            reportCaptureStreamFailure(stream,
+                [NSString stringWithFormat:@"the recorded window %ld closed", captureWindowNumber], nil);
+            endCaptureStream(stream);
+            [stream release];
+        });
+    });
+}
+
+void sp_capture_end_waits(void) {
+    SCStream *stream = nil;
+    @synchronized([SPCapture class]) { stream = [captureStream retain]; }
+    if (stream == nil) return;
+    reportCaptureStreamFailure(stream, @"the request that waits for the capture ended", nil);
+    endCaptureStream(stream);
+    [stream release];
 }
 
 static bool hasCaptureError(void) {
@@ -1482,11 +1544,8 @@ bool sp_capture_open(long windowNumber, bool display, char **errorOut) {
         [result completeWithFilter:nil configuration:nil error:
             [NSString stringWithFormat:@"window %ld not found", windowNumber]];
     }];
-    long wait = dispatch_semaphore_wait(result.answered, dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC));
-    if (wait != 0) {
-        [result release];
-        return captureOperationFailure(errorOut, @"shareable content query timed out after 10000ms");
-    }
+    // ScreenCaptureKit answers each query with its completion, so the wait ends by it.
+    dispatch_semaphore_wait(result.answered, DISPATCH_TIME_FOREVER);
     if (result.error != nil) {
         captureOperationFailure(errorOut, result.error);
         [result release];
@@ -1618,6 +1677,10 @@ bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut
         captureAcceptingSamples = YES;
     }
     NSError* error = nil;
+    observeCaptureWindows();
+    @synchronized([SPCapture class]) { captureFirstFrameEnded = NO; }
+    captureStreamEnded = NO;
+    captureStopReached = NO;
     captureQueue = dispatch_queue_create("sp.capture", NULL);
     [stream addStreamOutput:captureSink
                               type:SCStreamOutputTypeScreen
@@ -1658,6 +1721,7 @@ bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut
         if (failed != nil) {
             reportCaptureStreamFailure(stream,
                 [NSString stringWithFormat:@"capture did not start: %@", captureFailureText(failed)], failed);
+            endCaptureStream(stream);
         }
         dispatch_semaphore_signal(startDone);
         requestCaptureStopAfterStart(stream, attempt);
@@ -1667,17 +1731,14 @@ bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut
     return true;
 }
 
-// Waits until the stream start request completes. The awaited signal is raised again so that later calls also pass.
-static bool waitCaptureStart(int64_t milliseconds) {
+// Waits until the stream start request completes. ScreenCaptureKit answers each start request with its completion, so the
+// wait ends by it. The awaited signal is raised again so that later calls also pass.
+static bool waitCaptureStart(void) {
     if (captureStartDone == NULL) {
         setCaptureError(@"capture start was not requested");
         return false;
     }
-    if (dispatch_semaphore_wait(captureStartDone,
-        dispatch_time(DISPATCH_TIME_NOW, milliseconds * NSEC_PER_MSEC)) != 0) {
-        setCaptureError([NSString stringWithFormat:@"capture start did not complete within %lldms", milliseconds]);
-        return false;
-    }
+    dispatch_semaphore_wait(captureStartDone, DISPATCH_TIME_FOREVER);
     dispatch_semaphore_signal(captureStartDone);
     return true;
 }
@@ -1687,13 +1748,15 @@ int sp_capture_wait(void) {
         setCaptureError(@"capture is not running");
         return 0;
     }
-    if (dispatch_semaphore_wait(captureFirstFrame,
-        dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC)) != 0) {
-        setCaptureError(@"no capture frame arrived within 10000ms");
-        return 0;
-    }
+    // The wait ends by the first written frame or by the end of the stream, which no frame follows.
+    dispatch_semaphore_wait(captureFirstFrame, DISPATCH_TIME_FOREVER);
+    dispatch_semaphore_signal(captureFirstFrame);
     // The first frame can arrive before the start completes. The recording has started only when the start finishes.
-    if (!waitCaptureStart(10000)) return 0;
+    if (!waitCaptureStart()) return 0;
+    BOOL ended = NO;
+    @synchronized([SPCapture class]) { ended = captureFirstFrameEnded; }
+    if (ended && captureSink.written == captureBefore && !hasCaptureError())
+        setCaptureError(@"the stream ended before a capture frame was written");
     return hasCaptureError() ? 0 : 1;
 }
 
@@ -1705,6 +1768,7 @@ static void registerCaptureStopBoundary(SPCapture *sink, SPCaptureAttempt *attem
     uint64_t targetMachTicks, uint64_t registrationMachTicks, dispatch_semaphore_t caughtUp) {
     captureCaughtUp = caughtUp;
     captureStopAfter = targetMachTicks;
+    captureStopReached = NO;
     [attempt recordStopBoundaryAfterMilliseconds:after targetMachTicks:targetMachTicks
         registrationMachTicks:registrationMachTicks];
     if (sink.latestCallbackSeen) {
@@ -1716,6 +1780,13 @@ static void registerCaptureStopBoundary(SPCapture *sink, SPCaptureAttempt *attem
     // Reuse that callback instead of waiting for another one; idle callbacks also satisfy the stop predicate.
     if (!captureResizing && sink.latestCallbackSeen && sink.latestCallbackDisplayTimePresent
         && sink.latestCallbackDisplayTimeMachTicks >= targetMachTicks) {
+        captureStopAfter = 0;
+        captureStopReached = YES;
+        dispatch_semaphore_signal(caughtUp);
+        return;
+    }
+    // A stream that already ended delivers no later callback.
+    if (captureStreamEnded) {
         captureStopAfter = 0;
         dispatch_semaphore_signal(caughtUp);
     }
@@ -1738,8 +1809,8 @@ int sp_capture_stop(double after) {
         return 0;
     }
     // Stops after a callback delivers a display time at or beyond the later of the call time and requested
-    // presentation time. A pending size change must finish first. If no qualifying callback arrives within the
-    // existing one-second wait, the stop reports an explicit error.
+    // presentation time. A pending size change must finish first. The wait ends by that callback or by the end of the
+    // stream, which no callback follows; an end before the boundary is an explicit error.
     mach_timebase_info_data_t base;
     mach_timebase_info(&base);
     uint64_t now = mach_absolute_time();
@@ -1749,34 +1820,31 @@ int sp_capture_stop(double after) {
     dispatch_sync(captureQueue, ^{
         registerCaptureStopBoundary(captureSink, attempt, after, until, captureRawClock(), caughtUp);
     });
-    if (dispatch_semaphore_wait(caughtUp, dispatch_time(until, NSEC_PER_SEC)) != 0) {
-        NSString *message = captureResizing
-            ? @"no frame at the window's device-pixel size arrived within 1000ms after the requested display time"
-            : @"no frame arrived within 1000ms after the requested display time";
-        setCaptureError(message);
-        sp_log_error("capture stop", message.UTF8String);
-    }
+    dispatch_semaphore_wait(caughtUp, DISPATCH_TIME_FOREVER);
+    __block BOOL reached = NO;
     dispatch_sync(captureQueue, ^{
+        reached = captureStopReached;
         captureCaughtUp = NULL;
         captureStopAfter = 0;
-        // The boundary has been observed (or timed out). Seal intake at this sample-queue fence before
+        // The boundary has been observed or the stream ended. Seal intake at this sample-queue fence before
         // waiting for start completion or asking ScreenCaptureKit to stop the stream.
         closeCaptureSampleIntake(stream);
     });
+    if (!reached) {
+        NSString *message = captureResizing
+            ? @"the stream ended before a frame at the window's device-pixel size arrived after the requested display time"
+            : @"the stream ended before a frame arrived after the requested display time";
+        setCaptureError(message);
+        sp_log_error("capture stop", message.UTF8String);
+    }
     dispatch_release(caughtUp);
     @synchronized (attempt) { attempt.stopRequested = YES; }
-    // A late start callback owns stop cleanup after the existing bound expires. The one-shot owner claim also
-    // resolves a completion that races the timeout without issuing two stop requests.
-    bool started = waitCaptureStart(5000);
+    // The start completion and this caller race for the one stop request; the one-shot owner claim issues it once.
+    bool started = waitCaptureStart();
     bool stopIssued = requestCaptureStopAfterStart(stream, attempt);
     BOOL stopIssuedOrAlready = stopIssued;
     @synchronized (attempt) { stopIssuedOrAlready = stopIssuedOrAlready || attempt.stopRequestIssued; }
-    if (started && stopIssuedOrAlready) {
-        if (dispatch_semaphore_wait(attempt.stopCompleted,
-            dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) != 0) {
-            setCaptureError(@"capture stop did not complete within 5000ms");
-        }
-    }
+    if (started && stopIssuedOrAlready) dispatch_semaphore_wait(attempt.stopCompleted, DISPATCH_TIME_FOREVER);
     // Source manifest finalization closes source intake and drains the shared writer queue.
     finalizeCaptureArtifacts(captureSink);
     @synchronized([SPCapture class]) { captureStream = nil; }
@@ -1901,11 +1969,8 @@ bool sp_capture_still(const long *windowNumbers, int count, const char *path, ch
             [result complete:written error:written ? nil : [NSString stringWithFormat:@"cannot write %@", url.path]];
         }];
     }];
-    long wait = dispatch_semaphore_wait(result.answered, dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC));
-    if (wait != 0) {
-        [result release];
-        return captureOperationFailure(errorOut, @"still capture timed out after 10000ms");
-    }
+    // The query and the screenshot each answer with their completion, and every path of the completions answers the result.
+    dispatch_semaphore_wait(result.answered, DISPATCH_TIME_FOREVER);
     bool written = result.written;
     if (!written) captureOperationFailure(errorOut, result.error);
     [result release];

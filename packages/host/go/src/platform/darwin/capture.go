@@ -50,7 +50,7 @@ func (implementation) WindowNumbers(window platform.Window) ([]int, error) {
 
 func (implementation) CaptureOpen(windowNumber int, display bool) error {
 	var nativeError *byte
-	prepared := bool(diagnosticNative.MainSpCaptureOpen(int64(windowNumber), bool(display), &nativeError))
+	prepared := bool(diagnosticNative.SpCaptureOpen(int64(windowNumber), bool(display), &nativeError))
 	return captureCallError("open", prepared, nativeError)
 }
 
@@ -61,12 +61,12 @@ func (implementation) CaptureStart(directory string, frameIdentity bool) error {
 	where := native.CString(directory)
 	defer native.Free(unsafe.Pointer(where))
 	var nativeError *byte
-	started := bool(diagnosticNative.MainSpCaptureStart(where, bool(frameIdentity), &nativeError))
+	started := bool(diagnosticNative.SpCaptureStart(where, bool(frameIdentity), &nativeError))
 	return captureCallError("start", started, nativeError)
 }
 
 func (implementation) CaptureStop(after float64) (int, error) {
-	frames := int(diagnosticNative.MainSpCaptureStop(float64(after)))
+	frames := int(diagnosticNative.SpCaptureStop(float64(after)))
 	if err := captureErrorIfPresent("stop"); err != nil {
 		return frames, err
 	}
@@ -75,7 +75,7 @@ func (implementation) CaptureStop(after float64) (int, error) {
 
 // CaptureHasStream reports whether the capture module still owns its current stream and writer transaction.
 func (implementation) CaptureHasStream() (bool, error) {
-	return bool(diagnosticNative.MainSpCaptureHasStream()), nil
+	return bool(diagnosticNative.SpCaptureHasStream()), nil
 }
 
 func captureErrorIfPresent(operation string) error {
@@ -87,16 +87,18 @@ func captureErrorIfPresent(operation string) error {
 }
 
 func (implementation) CaptureWait() (bool, error) {
-	if diagnosticNative.MainSpCaptureWait() != 0 {
+	if diagnosticNative.SpCaptureWait() != 0 {
 		return true, nil
 	}
 	return false, captureError("wait")
 }
 
-func (implementation) CaptureLimited() bool { return bool(diagnosticNative.MainSpCaptureLimited()) }
+func (implementation) CaptureEndWaits() { diagnosticNative.SpCaptureEndWaits() }
+
+func (implementation) CaptureLimited() bool { return bool(diagnosticNative.SpCaptureLimited()) }
 
 func (implementation) CaptureLongestGap() float64 {
-	return float64(diagnosticNative.MainSpCaptureLongestGap())
+	return float64(diagnosticNative.SpCaptureLongestGap())
 }
 
 func (implementation) CaptureClock() float64 { return float64(diagnosticNative.SpCaptureClock()) }
@@ -175,7 +177,7 @@ func (implementation) CaptureStill(windowNumbers []int, path string) error {
 	target := native.CString(path)
 	defer native.Free(unsafe.Pointer(target))
 	var nativeError *byte
-	written := bool(diagnosticNative.MainSpCaptureStill(&numbers[0], int32(len(numbers)), target, &nativeError))
+	written := bool(diagnosticNative.SpCaptureStill(&numbers[0], int32(len(numbers)), target, &nativeError))
 	return captureCallError("still", written, nativeError)
 }
 func (implementation) StartDocumentFrameIdentity(document unsafe.Pointer, generation uint64, done func(json.RawMessage, error)) error {

@@ -221,18 +221,24 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
         .plugin(tauri_plugin_deep_link::init())
         .manage(app.clone())
         .plugin(endpoint)
-        // The main page is fetched with a scheme that knows the webview that requested the start document
+        // The main page is fetched with a scheme that knows the webview that requested the start document. WebKit asks
+        // the handler on the main thread, so the document is built on a thread of its own and answered when it is built
         // (docs/spec/native-host.md#page-start).
-        .register_uri_scheme_protocol(soksak_host::start::SCHEME, move |context, request| {
-            soksak_host::start::serve(
-                PAGE_ORIGIN,
-                // default: a request without a host names no owner, so serve answers it not found.
-                request.uri().host().unwrap_or_default(),
-                request.uri().path(),
-                context.webview_label(),
-                &mut |webview| soksak_host::start::start_page(&scheme_app, webview),
-            )
-        });
+        .register_asynchronous_uri_scheme_protocol(
+            soksak_host::start::SCHEME,
+            move |context, request, responder| {
+                let app = scheme_app.clone();
+                soksak_host::start::serve_async(
+                    PAGE_ORIGIN,
+                    // default: a request without a host names no owner, so serve answers it not found.
+                    request.uri().host().unwrap_or_default().to_string(),
+                    request.uri().path().to_string(),
+                    context.webview_label().to_string(),
+                    move |webview| soksak_host::start::start_page(&app, webview),
+                    move |response| responder.respond(response),
+                );
+            },
+        );
     let builder = platform::watch_page_process_end(builder, move |webview| {
         soksak_host::web_content_process_terminated(&webview_of(&terminated_app, webview))
     });

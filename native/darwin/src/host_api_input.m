@@ -8,6 +8,7 @@
 #include "main_thread.h"
 #include "host_callbacks.h"
 #include "observe.h"
+#include "webview_geometry.h"
 #import <Cocoa/Cocoa.h>
 
 static void activated(void *context, sp_activate_result result, const char *frontmost) {
@@ -29,16 +30,16 @@ void injectPointer(uintptr_t window, char *pointer, double x, double y, int phas
     });
 }
 
-// Announces whether a view that a press passes through is a surface. For a surface it returns a non-zero value, and the upward
-// search from the hit view stops there.
-
 // Announces one step of a left button drag in page coordinates. phase is 0 for press, 1 for move and 2 for release.
 
-// Announces the first surface found while going up from a view to the content view. It returns whether a surface was found. This value
-// shows whether the input started in a view of this app and not in the page.
+// Finds the first surface host while going up from a view to the content view and reports the press of that surface to the host
+// with a callback that needs no answer. The class of the view is native state, so the walk enters no Go step for a view on the
+// way up (docs/spec/hosts.md#main-thread-of-the-wails-host). It returns whether a surface was found. This value shows whether the
+// input started in a view of this app and not in the page.
 static int surfaceWalk(uintptr_t owner, NSView* view, NSView* content) {
     while (view != nil && view != content) {
-        if (ON_WORKER(int, sp_host_callback_surface_hit(owner, (void*)view))) {
+        if (sp_surface_is_host(view)) {
+            hostRunOnWorker(^{ sp_host_callback_surface_pressed(owner, (void*)view); });
             return 1;
         }
         view = [view superview];
