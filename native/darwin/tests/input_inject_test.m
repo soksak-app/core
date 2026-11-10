@@ -4,6 +4,7 @@
 #import <Cocoa/Cocoa.h>
 #import <objc/runtime.h>
 #import "input_inject.h"
+#import "input_press_context.h"
 #import "input_virtual.h"
 #import "input_activity_wait.h"
 #import "support/event_wait.h"
@@ -347,6 +348,9 @@ static void checkReceipts(void) {
     });
     check(busy.result == SP_INPUT_UNRECEIVED,
         [NSString stringWithFormat:@"a press that the close of its window ends is reported as not received (%d)", busy.result]);
+    // The close ends the press itself, so the pointer presses again in another window (docs/spec/exposure.md#methods).
+    check(!sp_input_press_open(window, 0) && NSEvent.pressedMouseButtons == sp_input_physical_buttons(),
+        @"the close of its window ends the open press of the pointer");
     NSString *awaited = [NSString stringWithFormat:@"\"target\":{\"class\":\"SPPressedWebView\",\"frame\":[0,0,300,200],\"hidden\":false,\"inWindow\":true,"
         "\"loading\":false,\"url\":\"about:blank\",\"view\":\"%p\"}", view];
     BOOL named = NO;
