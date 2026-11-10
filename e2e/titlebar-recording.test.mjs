@@ -64,8 +64,13 @@ function judge(t, label, { poses, stop, measured }, refreshRate) {
   const largest = Math.max(...measured.filter((frame) => frame.difference !== undefined).map((frame) => Math.abs(frame.difference)));
   t.diagnostic(`${label}: ${measured.length} frames, rows ${[...new Set(recorded.map((frame) => frame.edges[0]))].join(",")}, ` +
     `largest difference ${largest.toFixed(2)}px, longest gap ${stop.longestGap}ms, ${stop.layouts.length} layout transactions`);
+  // A frame whose buttons stand off its row shows a title bar that a layout transaction set with another frame, so the failure names
+  // the transactions that began, presented or committed within 50 ms before that frame, on the clock of the frames.
+  const near = (frame) => stop.layouts.filter((layout) => [layout.begun, layout.presented, layout.committed]
+    .some((at) => at !== null && at <= frame.time && frame.time - at <= 50));
+  const traced = off.slice(0, 12).map((frame) => ({ ...frame, layouts: near(frame) }));
   assert.equal(off.length, 0, `${label}: ${off.length} of ${measured.length} frames have the window button centre more than ` +
-    `${TOLERANCE}px from the first-row centre or cannot be measured: ${JSON.stringify(off.slice(0, 12))}`);
+    `${TOLERANCE}px from the first-row centre or cannot be measured: ${JSON.stringify(traced)}`);
   assert.ok(stop.longestGap <= 100, `${label}: missing frames, gap ${stop.longestGap}ms`);
   assert.deepEqual(missing, [], `${label}: displayed first rows missing from the recording at ${refreshRate}Hz`);
 }
