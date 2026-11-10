@@ -11298,12 +11298,14 @@ const FEATURE_LINKS = [
   {
     id: "F351",
     implementation: [
-      { file: "packages/window-check/app.mjs", symbol: "async function workbenchReplies(client, window)" },
+      { file: "packages/window-check/app.mjs", symbol: "async checkEnded(t)" },
     ],
     tests: [
-      { file: "packages/window-check/test/unresponsive.test.mjs", id: "a document that does not reply to a request and to the probe after it makes the later checks of its application fail at once" },
+      { file: "packages/window-check/test/unresponsive.test.mjs", id: "a check that the test runner ended while a request had no answer makes the later checks of its application fail at once" },
+      { file: "packages/window-check/test/unresponsive.test.mjs", id: "a check that failed in its own code leaves no record while a request is in flight" },
+      { file: "packages/window-check/test/unresponsive.test.mjs", id: "a check that the test runner ended after every request was answered leaves no record" },
     ],
-    expected: "An application that does not reply to a request and to one probe fails every later request and check at once with the record.",
+    expected: "A check that the test runner ended while a request of the application had no answer records the application, and every later request and check of it fails at once with the record.",
     levels: ["unit"],
   },
   {

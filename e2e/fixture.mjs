@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { APPS, keepCommonSettings, open, requireUncovered } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, untilEventLine } from "@soksak/window-check/event-log.mjs";
 import { joinedFailure } from "@soksak/window-check/failure.mjs";
-import { coveringWindows } from "@soksak/window-check/frontmost.mjs";
+import { windowsCoveringWhole } from "@soksak/window-check/frontmost.mjs";
 import { recordCatalog as catalogOfConfiguration } from "@soksak/window-check/catalog.mjs";
 import * as start from "@soksak/window-check/start.mjs";
 
@@ -222,11 +222,13 @@ export async function prepareOcclusionFixture(target, otherWindows, { windows } 
     if (inactiveCount(actual) !== originalCount) throw new Error("placement cohort activation count changed during preparation");
     parked.push({ application:session.app.name, window:session.window, originalFrame:frame, parkedFrame:actual.frame });
   }
-  // Other apps and user windows remain untouched. A window that a window of another application covers whole ends the check as
-  // every covered window does (requireUncovered), naming the covering window: nothing was measured, never a product failure or
-  // a reason to fake visibility. Any other occluded window waits for its occlusion state to change; the wait has no time limit.
+  // Other apps and user windows remain untouched. A window that windows of other applications cover whole stays occluded and posts
+  // no occlusion change, so it ends the check as every covered window does (requireUncovered), naming the covering windows: nothing
+  // was measured, never a product failure or a reason to fake visibility. The window list shows the moves of the cohort, which the
+  // frames read above confirm. Any other occluded window shows a part on the screen, and its occlusion state changes by the
+  // notification that the moves cause; the wait for that change has no time limit.
   const parkedState = await target.get("host.window");
-  if (parkedState.occluded && coveringWindows(target.client.endpoint.pid, parkedState.frame, windows).length > 0)
+  if (parkedState.occluded && windowsCoveringWhole(target.client.endpoint.pid, parkedState.frame, windows).length > 0)
     requireUncovered(target, parkedState, windows);
   const baseline = await target.until("host.window", value => value.occluded === false,
     "placement fixture preparation remains occluded after owned cohort moves");

@@ -142,21 +142,6 @@ test("a page that does not reply records the host and its page processes and nam
   assert.deepEqual(files, sampled.map(([, file]) => file));
 });
 
-test("a request that the page did not answer names the stall records or why they could not be made", async (t) => {
-  const { mkdtempSync, rmSync } = await import("node:fs");
-  const { join } = await import("node:path");
-  const { tmpdir } = await import("node:os");
-  const { EndpointError } = await import("@soksak/client");
-  const { Session } = await import("../app.mjs");
-  const configDir = mkdtempSync(join(tmpdir(), "soksak-stall-config-"));
-  t.after(() => rmSync(configDir, { recursive: true }));
-  const client = { endpoint: { pid: ABSENT_HOST }, request: async () => { throw new EndpointError({ code: -32603, message: "the document did not reply within 10000 ms" }); } };
-  const s = new Session({ name: "tauriv2", configDir }, client);
-  // No process ABSENT_HOST runs, so sample cannot record the host and the reason stays in the error.
-  await assert.rejects(s.request("status.get", { name: "core.verify" }),
-    /^EndpointError: tauriv2 status\.get core\.verify: the document did not reply within 10000 ms; sampling the host failed: sample 999999 /);
-});
-
 test("a page process that already ended does not cost the records of the host and the other pages", async () => {
   const { sampleStall } = await import("../stall-sample.mjs");
   const results = await sampleStall({ host: 10, pages: [12, 13], directory: "/x/logs", time: 7, sample: (pid, file) => {

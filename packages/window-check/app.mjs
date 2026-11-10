@@ -185,7 +185,8 @@ function lock() {
  * Verifies that the process of endpoint.json is the executable of this repository, so that the check does not test an
  * application of another checkout or an earlier build.
  */
-/** The record of an application whose document stopped replying, in its configuration folder (F351). */
+/** The record of an application whose document did not answer a request until the test runner ended the check, in its configuration
+ * folder (F351). */
 const unresponsivePath = (configDir) => join(configDir, "unresponsive.json");
 
 /** The error of an application that has a record of a document that stopped replying, or null without the record. */
@@ -239,16 +240,6 @@ function exitedReason(app) {
   return `not run: ${app.name} process ${record.pid} exited, found by the check "${record.check}"; ${record.evidence}`;
 }
 
-/** Whether the workbench of the window answers one status request; a reply in any form, also an error, shows that it runs. */
-async function workbenchReplies(client, window) {
-  try {
-    await client.request("status.get", { window, name: "core.workbench.error" });
-    return true;
-  } catch (error) {
-    return !(error instanceof EndpointError && /did not reply within/.test(error.message));
-  }
-}
-
 // A Node after-hook failure prevents later after hooks from running. Own all
 // sessions of a test in one hook, and report failures only after every session
 // has run its full audit and released its connection and window-check slot.
@@ -295,7 +286,7 @@ export async function open(t, app, { clipboard = false, inactive = false } = {})
         "or select another one with SOKSAK_APP.",
     );
   }
-  // An application whose document stopped replying in an earlier check of this configuration fails the check at once (F351).
+  // An application whose document did not reply in an earlier check of this configuration fails the check at once (F351).
   const stopped = unresponsiveError(app, "this check does not run");
   if (stopped) throw stopped;
   // An application whose host process exited in an earlier check reports this check as not run because of that exit; the check
@@ -440,6 +431,13 @@ function disposeSessionRecordings(t, folders, preserve) {
 async function finishSessionAudit(t, session, close, pendingDisposal) {
   const failures = [];
   try {
+    // The record of an application that does not reply is written before the cleanups, so their requests fail at once (F351).
+    try {
+      await session.checkEnded(t);
+    } catch (error) {
+      failures.push(error);
+      t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
+    }
     for (const clean of session.cleanups.reverse()) {
       try {
         await clean();
@@ -574,8 +572,28 @@ export class Session {
     // The stall samples that requests of the session started after STALL_AFTER, each as a promise of {line} or {error}.
     // finishSession waits for each one and reports it, so no sample process outlives the check.
     this.stallSamples = new Set();
+    // The requests of the session that have no answer yet, by a key of each request, with the text that names it. checkEnded reads
+    // them when the test runner ends the check (F351).
+    this.unanswered = new Map();
     // The moment the session opened. step writes the time of each step from it.
     this.started = performance.now();
+  }
+
+  /**
+   * Records the application as not replying when the test runner ended the check at its limit while a request of the session had no
+   * answer (F351). No request of the window ends by time (docs/spec/exposure.md: a command has no time limit), so that end of the check
+   * is the event that shows a document that does not reply. The record names the check, the requests and the stall records that those
+   * requests started, and each later request and check of the application fails at once with it. A check that ended in another way
+   * leaves no record: a request that it left in flight can still be answered.
+   */
+  async checkEnded(t) {
+    if (t.error?.failureType !== "testTimeoutFailure" || this.unanswered.size === 0) return;
+    const requests = [...this.unanswered.values()].join(", ");
+    // Each sample ends by the end of its sample process, and a request pending after STALL_AFTER started it long before the limit.
+    const records = (await Promise.all([...this.stallSamples])).map(({ line, error }) => line ?? error.message);
+    const error = [`${requests} had no answer when the test runner ended the check: ${t.error.message}`, ...records].join("; ");
+    writeFileSync(unresponsivePath(this.app.configDir), `${JSON.stringify({ check: this.check ?? t.name, request: requests, error })}\n`);
+    t.diagnostic?.(`${this.app.name} does not reply, so its later checks fail at once: ${error}`);
   }
 
   /** Writes a step that the check starts with its time since the session opened, so a check that its test time limit
@@ -668,6 +686,7 @@ export class Session {
     other.testName = this.testName;
     other.presses = this.presses;
     other.stallSamples = this.stallSamples;
+    other.unanswered = this.unanswered;
     other.started = this.started;
     other.window = window;
     return other;
@@ -680,7 +699,7 @@ export class Session {
   request(method, params = {}, ...rest) {
     if (rest.length > 0) throw new TypeError(`request ${method} takes no options: a request ends by its answer or the close of the connection`);
     const what = `${this.app.name} ${method} ${params.name ?? ""}`.trimEnd();
-    // A request to an application that stopped replying, such as a cleanup of the same check, fails at once (F351).
+    // A request to an application that did not reply, such as a cleanup of the same check, fails at once (F351).
     const stopped = unresponsiveError(this.app);
     if (stopped) return Promise.reject(stopped);
     this.step(`${method} ${params.name ?? ""}`.trimEnd());
@@ -695,28 +714,12 @@ export class Session {
       return `${records.join(", ")}; ${stored}`;
     };
     // The error keeps the name of the failed request. The code stays unchanged.
-    const answer = this.client.request(method, { window: this.window, ...params }).catch(async (error) => {
-      if (error instanceof EndpointError) {
-        error.message = `${what}: ${error.message}`;
-        // A request that the host ended while waiting for the answer of the page is also an unanswered stall, so that
-        // moment is recorded.
-        if (/did not reply within/.test(error.message)) {
-          try {
-            error.message += `; the host's threads at that moment: ${await sample()}`;
-          } catch (failure) {
-            error.message += `; sampling the host failed: ${failure.message}`;
-          }
-          // A workbench that does not reply to one more request either has stopped, so the later checks of the application fail at
-          // once with this record instead of each waiting for its own timeouts (F351).
-          if (!(await workbenchReplies(this.client, this.window))) {
-            error.message += `; ${this.app.name} does not reply to a probe either, so its later checks fail at once`;
-            writeFileSync(unresponsivePath(this.app.configDir),
-              `${JSON.stringify({ check: this.check ?? null, request: what, error: error.message })}\n`);
-          }
-        }
-      }
+    const key = {};
+    this.unanswered.set(key, what);
+    const answer = this.client.request(method, { window: this.window, ...params }).catch((error) => {
+      if (error instanceof EndpointError) error.message = `${what}: ${error.message}`;
       throw error;
-    });
+    }).finally(() => this.unanswered.delete(key));
     return whilePending(answer, what, sample, (text) => this.step(text),
       (started) => this.stallSamples.add(started.then((line) => ({ line }), (error) => ({ error }))));
   }
