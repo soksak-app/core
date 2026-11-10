@@ -89,13 +89,14 @@ impl ExitEnd {
     pub fn end(&self) {
         let byte = 1u8;
         // One byte fits an empty pipe, and a second end finds the reads ended already, so a failed write ends nothing more.
+        // A reader that finished and closed the output closed the wake pipe too (EPIPE): its reads have ended.
         let written =
             unsafe { libc::write(self.wake.as_raw_fd(), std::ptr::from_ref(&byte).cast(), 1) };
         if written < 0 {
-            crate::application_log::log_info(
-                "sidecar output",
-                format!("output end: {}", std::io::Error::last_os_error()),
-            );
+            let error = std::io::Error::last_os_error();
+            if error.raw_os_error() != Some(libc::EPIPE) {
+                crate::application_log::log_info("sidecar output", format!("output end: {error}"));
+            }
         }
     }
 }

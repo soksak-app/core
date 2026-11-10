@@ -1721,6 +1721,7 @@ func (c *Sidecars) launch(name string, lost *revival) (*sidecar, error) {
 		closeWaiters: make(map[string]chan error),
 		surfaces:     make(map[string]bool),
 	}
+	stdoutOutput, stderrOutput := &sidecarOutput{file: stdout}, &sidecarOutput{file: stderr}
 	// The end of the sidecar is the exit of its process, which the wait reports: the host then ends its process group and the
 	// reads of both outputs (docs/spec/sidecars.md#declaration-and-startup).
 	routine.Go("sidecar-wait", func() {
@@ -1729,8 +1730,8 @@ func (c *Sidecars) launch(name string, lost *revival) (*sidecar, error) {
 		if err := current.EndProcessGroup(cmd.Process.Pid); err != nil {
 			LogError("sidecar "+name, err)
 		}
-		for _, output := range []*os.File{stdout, stderr} {
-			if err := output.SetReadDeadline(time.Now()); err != nil && !errors.Is(err, os.ErrClosed) {
+		for _, output := range []*sidecarOutput{stdoutOutput, stderrOutput} {
+			if err := output.end(); err != nil {
 				LogError("sidecar "+name, fmt.Sprintf("end output: %v", err))
 			}
 		}
@@ -1743,16 +1744,42 @@ func (c *Sidecars) launch(name string, lost *revival) (*sidecar, error) {
 			LogError("sidecar "+name, fmt.Sprintf("read error output: %v", err))
 		}
 		records.Flush()
-		if err := stderr.Close(); err != nil {
+		if err := stderrOutput.Close(); err != nil {
 			LogError("sidecar "+name, fmt.Sprintf("close error output: %v", err))
 		}
 	})
 	process.begin = func() {
 		routine.Go("sidecar-write", func() { c.write(process) }) // write goroutine: reads from the outbox channel and writes to stdin.
 		// read goroutine: reads from stdout and passes events.
-		routine.Go("sidecar-read", func() { c.read(process, exitOutput{file: stdout, platform: current}, stdout) })
+		routine.Go("sidecar-read", func() { c.read(process, exitOutput{file: stdout, platform: current}, stdoutOutput) })
 	}
 	return process, nil
+}
+
+// sidecarOutput is an output pipe of a sidecar that the exit of the sidecar ends and its reader closes. The lock orders the two,
+// so the end never reaches a closed pipe and an end after the close ends nothing more.
+type sidecarOutput struct {
+	file   *os.File
+	mu     sync.Mutex
+	closed bool
+}
+
+// end makes the reads of the output take what the pipe holds and end (exitOutput).
+func (o *sidecarOutput) end() error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.closed {
+		return nil
+	}
+	return o.file.SetReadDeadline(time.Now())
+}
+
+// Close closes the read end of the output after its reads.
+func (o *sidecarOutput) Close() error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.closed = true
+	return o.file.Close()
 }
 
 // exitOutput reads an output pipe of a sidecar until the exit of the sidecar ends it: the wait sets a past read deadline, and the
