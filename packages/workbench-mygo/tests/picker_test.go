@@ -857,6 +857,38 @@ func TestACloseRequestOfTheWindowAsksAboutAModifiedTab(t *testing.T) {
 	}
 }
 
+// The pick that closes the window answers before the window closes, as the page answers core.picker.pick before the host closes the
+// window: the close waits for the answers of the commands that run, which follow the frame that shows their change.
+func TestThePickThatClosesTheWindowAnswersBeforeTheClose(t *testing.T) {
+	f := modifiedShell(t)
+	f.shell.Event("project-close-request", nil)
+	f.settle()
+	asked := status[pickerStatus](t, f.shellFixture, "core.picker")
+	index := -1
+	for i, item := range asked.Items {
+		if item.Name == "저장하지 않고 닫기" {
+			index = i
+		}
+	}
+	if index < 0 {
+		t.Fatalf("the question has no discard item: %+v", asked.Items)
+	}
+	answered, closedFirst := false, false
+	f.shell.Registry().RunLater("core.picker.pick", json.RawMessage(fmt.Sprintf(`{"index":%d}`, index)), func(_ any, err error) {
+		if err != nil {
+			t.Errorf("core.picker.pick failed: %v", err)
+		}
+		answered, closedFirst = true, f.host.called("windowClose")
+	})
+	f.settle()
+	if !answered || !f.host.called("windowClose") {
+		t.Fatalf("the pick answered %v and the window closed %v", answered, f.host.called("windowClose"))
+	}
+	if closedFirst {
+		t.Fatal("the window closed before the pick answered")
+	}
+}
+
 // A plugin change asks about a modified tab before the new start: the answer that does not apply keeps the workbench, core.plugins.apply
 // asks again and answers reloaded false for a kept tab, and the answer that applies without saving starts the workbench again after the
 // answer reloaded true (docs/spec/installation.md#applying-a-change).
