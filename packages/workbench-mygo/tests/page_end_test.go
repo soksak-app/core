@@ -5,7 +5,6 @@ package workbench_test
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -49,17 +48,19 @@ func TestAFlushEndsWhileEventsKeepComing(t *testing.T) {
 // (docs/spec/exposure.md#registration).
 // contract: workbench.close.waits-for-the-commands-before-it
 func TestTheCloseOfAWindowWaitsForNoCommandThatStartsAfterIt(t *testing.T) {
-	stored := &storedHost{extra: map[string]workbench.HostCall{"filePlace": neverAnswered(t)}}
+	stored := &storedHost{common: map[string]any{"projectOpening": "windows"}, extra: map[string]workbench.HostCall{"filePlace": neverAnswered(t)}}
 	f := newShell(t, stored)
-	f.run("core.library.form.open", map[string]string{"mode": "open"})
-	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
-	f.run("core.library.form.submit", nil)
-	// The close saves a new geometry of the window first, and that save waits until the test releases it.
+	f.openFolder("/work/alpha")
+	// The window shows the project, so the close saves a new geometry of the window first, and that save waits until the test
+	// releases it.
 	stored.geometry = map[string]any{"x": 10, "y": 20, "width": 900, "height": 700}
 	release := make(chan struct{})
 	stored.holdWorkspace = release
 	f.shell.Event("project-close-request", nil)
 	f.pending.drain(t)
+	if stored.called("windowClose") {
+		t.Fatal("the close did not wait for the save of the geometry")
+	}
 	f.shell.Registry().RunLater("core.file.place", json.RawMessage(`{"name":"a.txt"}`), func(any, error) {})
 	close(release)
 	f.pending.drain(t)
@@ -119,11 +120,17 @@ func TestARuntimeImageDetachKeepsTheSeatOfItsSurface(t *testing.T) {
 	}
 }
 
-// lastPlacementHolds tells whether the last syncSurfaces request of the host names the surface id.
+// lastPlacementHolds tells whether the last syncSurfaces request of the host stands the surface id visible. A held surface that its
+// seat does not draw stays in the request without being visible.
 func lastPlacementHolds(stored *surfaceHost, id string) bool {
 	if len(stored.requests) == 0 {
 		return false
 	}
-	encoded, err := json.Marshal(stored.requests[len(stored.requests)-1]["surfaces"])
-	return err == nil && strings.Contains(string(encoded), `"`+id+`"`)
+	surfaces, _ := stored.requests[len(stored.requests)-1]["surfaces"].([]any) // silent: a request without surfaces holds none.
+	for _, surface := range surfaces {
+		if fields, _ := surface.(map[string]any); fields["id"] == id && fields["visible"] == true {
+			return true
+		}
+	}
+	return false
 }
