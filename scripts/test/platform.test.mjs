@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { test } from 'node:test';
 import { runInNewContext } from 'node:vm';
 import { applicationArtifact, applicationExecutables, crashReports, listProcesses, openApplication, PlatformOperationNotImplemented, processExecutable,
-  processStacks, quitApplication, releaseKey, releasePlatform, runNativeTests, waitForLockRelease } from '../platform/platform.js';
+  processFolderRoot, processStacks, quitApplication, releaseKey, releasePlatform, runNativeTests, waitForLockRelease } from '../platform/platform.js';
 import { processExecutable as linuxProcessExecutable } from '../platform/linux/process-executable.mjs';
 
 const notImplemented = (operation, platform) => ({ name: 'PlatformOperationNotImplemented', message: `${operation} is not implemented on ${platform}` });
@@ -143,6 +144,12 @@ test('an unimplemented platform operation rejects with its named error when it i
       await assert.rejects(() => call(platform), PlatformOperationNotImplemented);
     }
   }
+});
+
+test('the temporary folders of a test run lie in /tmp on a unix system and in the temporary folder on Windows', { timeout: 10000 }, async () => {
+  for (const platform of ['darwin', 'linux']) assert.equal(await processFolderRoot({ platform }), realpathSync('/tmp'), platform);
+  assert.equal(await processFolderRoot({ platform: 'win32' }), tmpdir());
+  await assert.rejects(() => processFolderRoot({ platform: 'unknown' }), notImplemented('processFolderRoot', 'unknown'));
 });
 
 test('the common platform modules name no macOS mechanism', { timeout: 10000 }, () => {

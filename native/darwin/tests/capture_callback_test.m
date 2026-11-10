@@ -391,18 +391,44 @@ int main(void) { @autoreleasepool {
                 @"the first sample trace explicitly preserves missing status and display time");
         }
         discard();
+        // No frame arrives and the request that waits ends: the end of its endpoint connection ends the first-frame wait,
+        // in either order with the wait, and the wait fails by that end and by nothing else.
+        [starts removeAllObjects];
         method_setImplementation(method, (IMP)holdStart);
+        check(start(directory), @"the connection-end attempt starts");
+        void (^connectionStart)(NSError *) = starts.count == 1 ? [[starts[0] retain] autorelease] : nil;
+        check(connectionStart != nil, @"the connection-end attempt holds its start completion");
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
+            sp_capture_end_waits();
+            if (connectionStart != nil) connectionStart(nil);
+        });
+        int connectionWaited = sp_capture_wait();
+        check(connectionWaited == 0 && strstr(sp_capture_error(), "the request that waits for the capture ended") != NULL,
+            [NSString stringWithFormat:@"the end of the connection ends the first-frame wait (%s)", sp_capture_error()]);
+        discard();
+        [starts removeAllObjects];
         NSArray *timeoutStartEvents = capturedEvents(^{ check(start(directory),
             @"the no-first-sample attempt starts"); });
         NSDictionary *timeoutRequest = lifecycleEvent(timeoutStartEvents, @"start-request", nil);
         NSString *timeoutSession = timeoutRequest[@"fields"][@"session"];
         check([[NSFileManager defaultManager] createDirectoryAtPath:[NSString stringWithUTF8String:path]
             withIntermediateDirectories:YES attributes:nil error:NULL], @"the failed-attempt folder exists before wait");
+        // No frame arrives. The recorded window closes while the wait runs, which ends the stream, and the held start then
+        // completes; the wait ends by that close and by nothing else.
+        void (^heldStart)(NSError *) = starts.count == 1 ? [[starts[0] retain] autorelease] : nil;
+        check(heldStart != nil, @"the no-first-sample attempt holds its start completion");
+        // The close and the completion arrive on another queue in either order with the wait; the end of the stream stays
+        // recorded, so the wait ends by it whichever comes first.
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
+            [NSNotificationCenter.defaultCenter postNotificationName:NSWindowWillCloseNotification object:window];
+            if (heldStart != nil) heldStart(nil);
+        });
         __block int waited = -1;
         NSArray *failureEvents = capturedEvents(^{ waited = sp_capture_wait(); });
         check(lifecycleMachTickFieldsMatchSchema(failureEvents),
             @"failure lifecycle Mach-tick fields are strings or null");
-        check(waited == 0, @"a missing first frame follows the normal capture-wait failure path");
+        check(waited == 0 && strstr(sp_capture_error(), "closed") != NULL,
+            [NSString stringWithFormat:@"a window that closes before the first frame ends the capture wait (%s)", sp_capture_error()]);
         NSDictionary *failed = lifecycleEvent(failureEvents, @"failed", timeoutSession);
         check(failed != nil && failed[@"fields"][@"stopAfterMilliseconds"] == [NSNull null]
             && failed[@"fields"][@"stopTargetMachTicks"] == [NSNull null]
@@ -429,7 +455,7 @@ int main(void) { @autoreleasepool {
             && ![failed[@"fields"][@"startCompletionSeen"] boolValue]
             && ![failed[@"fields"][@"firstSampleSeen"] boolValue]
             && ![failed[@"fields"][@"delegateStopSeen"] boolValue]
-            && [failed[@"fields"][@"reason"] containsString:@"no capture frame arrived"]
+            && [failed[@"fields"][@"reason"] containsString:@"closed"]
             && [failed[@"fields"][@"machTimebaseNumerator"] unsignedIntValue] > 0
             && [failed[@"fields"][@"machTimebaseDenominator"] unsignedIntValue] > 0
             && failureCount == 1 && validFacts;
@@ -437,7 +463,7 @@ int main(void) { @autoreleasepool {
             && ![failed[@"fields"][@"startCompletionSeen"] boolValue]
             && ![failed[@"fields"][@"firstSampleSeen"] boolValue]
             && ![failed[@"fields"][@"delegateStopSeen"] boolValue]
-            && [failed[@"fields"][@"reason"] containsString:@"no capture frame arrived"]
+            && [failed[@"fields"][@"reason"] containsString:@"closed"]
             && [failed[@"fields"][@"machTimebaseNumerator"] unsignedIntValue] > 0
             && [failed[@"fields"][@"machTimebaseDenominator"] unsignedIntValue] > 0
             && failureCount == 1 && validFacts,
@@ -453,8 +479,8 @@ int main(void) { @autoreleasepool {
             [NSString stringWithFormat:@"the failed-attempt folder is removed after its lifecycle summary (%@)", removeError]);
         discard();
 
-        // Hold a real stream's start callback across the bounded stop wait. The late callback must own the only
-        // valid stop request after the caller has closed sample intake and finalized its artifacts.
+        // Hold a real stream's start callback while the stop waits. The stop waits for that completion and then owns the only
+        // valid stop request; a sample of the retired stream changes nothing after finalization.
         [starts removeAllObjects];
         Method stopMethod = class_getInstanceMethod([SCStream class], @selector(stopCaptureWithCompletionHandler:));
         check(stopMethod != NULL, @"the controlled stop request boundary exists");
@@ -493,7 +519,7 @@ int main(void) { @autoreleasepool {
             // stop request, regardless of which side observes the completion first.
             [starts removeAllObjects];
             NSArray *onTimeStartEvents = capturedEvents(^{ check(start(directory),
-                @"the bounded-start attempt starts"); });
+                @"the on-time start attempt starts"); });
             NSDictionary *onTimeRequest = lifecycleEvent(onTimeStartEvents, @"start-request", nil);
             captureSink.latestCallbackSeen = YES;
             captureSink.latestCallbackStatusPresent = YES;
@@ -503,16 +529,13 @@ int main(void) { @autoreleasepool {
             stopRequests = 0;
             stopRequestedBeforeStartCompletion = NO;
             stopReplyError = nil;
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 50 * NSEC_PER_MSEC),
-                dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
-                    if (starts.count == 1) {
-                        void (^complete)(NSError *) = starts[0];
-                        complete(nil);
-                    }
-                });
+            // The start hook held the completion when the start returned; it arrives on another queue, before or while the
+            // stop waits for it, and the one stop request follows it in either order.
+            void (^onTimeStart)(NSError *) = starts.count == 1 ? [[starts[0] retain] autorelease] : nil;
+            dispatch_async(dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{ if (onTimeStart != nil) onTimeStart(nil); });
             sp_capture_stop(0);
             check(onTimeRequest != nil && stopRequests == 1 && !stopRequestedBeforeStartCompletion,
-                @"a start completing inside the existing bound receives exactly one later stop request");
+                @"a start completing around the stop receives exactly one later stop request");
 
             [starts removeAllObjects];
             NSArray *pendingEvents = capturedEvents(^{ check(start(directory),
@@ -526,39 +549,29 @@ int main(void) { @autoreleasepool {
             captureSink.latestCallbackDisplayTimeMachTicks = UINT64_MAX;
             stopRequests = 0;
             stopRequestedBeforeStartCompletion = NO;
-            stopReplyError = nil;
-            CFTimeInterval stopBegan = CACurrentMediaTime();
-            capturedEvents(^{ sp_capture_stop(0); });
-            double stopElapsed = CACurrentMediaTime() - stopBegan;
-            check(stopRequests == 0 && !stopRequestedBeforeStartCompletion,
-                @"a start timeout does not call stop before start completion");
-            check(stopElapsed >= 4.9 && stopElapsed < 6.0
-                && strstr(sp_capture_error(), "capture start did not complete within 5000ms") != NULL,
-                @"a pending start preserves its 5000ms timeout and returns within the existing bound");
-            check(captureStream == nil, @"the timed-out stream is retired before its delayed completion");
+            stopReplyError = fault(@"fixture pending-start stop failure");
+            // The start completion arrives on another queue, before or while the stop waits for it; the stop returns only
+            // after it, and the one stop request follows it in either order.
+            void (^pendingStart)(NSError *) = starts.count == 1 ? [[starts[0] retain] autorelease] : nil;
+            dispatch_async(dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{ if (pendingStart != nil) pendingStart(nil); });
+            NSArray *pendingStopEvents = capturedEvents(^{ sp_capture_stop(0); });
+            check(pendingStart != nil && stopRequests == 1 && !stopRequestedBeforeStartCompletion,
+                @"a pending start receives exactly one stop request after its completion");
+            check(strstr(sp_capture_error(), "within") == NULL, @"the stop waits for the pending start and has no deadline");
+            check(strstr(sp_capture_error(), "fixture pending-start stop failure") != NULL,
+                @"the stop error of the pending start belongs to the stopped recording");
+            BOOL pendingStopReported = NO;
+            for (NSDictionary *event in pendingStopEvents) {
+                if (![event[@"name"] isEqual:@"native.record.error"]) continue;
+                pendingStopReported |= [event[@"fields"][ @"text"] containsString:@"fixture pending-start stop failure"];
+            }
+            check(pendingStopReported, @"the stop error of the pending start is reported to diagnostics");
+            check(captureStream == nil, @"the stopped stream is retired");
             NSError *snapshotError = nil;
-            NSDictionary *beforeLateCompletion = artifactSnapshot(directory, &snapshotError);
-            check(beforeLateCompletion != nil, [NSString stringWithFormat:@"the finalized artifact snapshot is readable (%@)", snapshotError]);
+            NSDictionary *afterStop = artifactSnapshot(directory, &snapshotError);
+            check(afterStop != nil, [NSString stringWithFormat:@"the finalized artifact snapshot is readable (%@)", snapshotError]);
             NSObject *replacement = [NSObject new];
             captureStream = (SCStream *)replacement;
-            stopReplyError = fault(@"fixture late cleanup stop failure");
-            NSArray *lateCompletionEvents = capturedEvents(^{
-                if (starts.count == 1) {
-                    void (^complete)(NSError *) = starts[0];
-                    complete(nil);
-                }
-            });
-            check(stopRequests == 1 && !stopRequestedBeforeStartCompletion,
-                @"a successful late start requests exactly one stop after completion");
-            check(strstr(sp_capture_error(), "capture start did not complete within 5000ms") != NULL
-                && strstr(sp_capture_error(), "fixture late cleanup stop failure") == NULL,
-                @"late cleanup preserves the primary start-timeout error and replacement recording state");
-            BOOL lateStopReported = NO;
-            for (NSDictionary *event in lateCompletionEvents) {
-                if (![event[@"name"] isEqual:@"native.record.error"]) continue;
-                lateStopReported |= [event[@"fields"][ @"text"] containsString:@"fixture late cleanup stop failure"];
-            }
-            check(lateStopReported, @"a late cleanup stop error is reported to diagnostics");
             CMSampleBufferRef retiredSample = sampleWithStatus(YES);
             int queuedBefore = captureSink.queued;
             int completeBefore = captureSink.complete;
@@ -572,9 +585,9 @@ int main(void) { @autoreleasepool {
                 && [retired[@"fields"][ @"reason"] isEqual:@"stream-replaced"],
                 @"a callback from the retired attempt cannot mutate replacement recording state");
             snapshotError = nil;
-            NSDictionary *afterLateCompletion = artifactSnapshot(directory, &snapshotError);
-            check(afterLateCompletion != nil && [afterLateCompletion isEqualToDictionary:beforeLateCompletion],
-                @"late start and sample callbacks do not mutate finalized artifacts");
+            NSDictionary *afterLateSample = artifactSnapshot(directory, &snapshotError);
+            check(afterLateSample != nil && [afterLateSample isEqualToDictionary:afterStop],
+                @"a late sample callback does not mutate finalized artifacts");
             [pendingStream release];
             [replacement release]; captureStream = nil;
             stopReplyError = nil;

@@ -190,6 +190,8 @@ func (s *Shell) settleModified(words modifiedAnswers, done func(settled bool)) {
 // of it, because the request may belong to a quit.
 func (s *Shell) closeWindowAsked() {
 	s.settleModified(closeAnswers, func(settled bool) {
+		// The close is decided here, so it waits for the commands that run now and for none that starts later (afterCommands).
+		mark := s.commandMark()
 		if !settled {
 			cids := s.events.BeginOperation("workbench.window.operation", map[string]any{"action": "close_kept"})
 			s.calls.Caused(cids).CallInOrder("workspace", "windowCloseKept", nil, func(_ any, err error) {
@@ -206,8 +208,8 @@ func (s *Shell) closeWindowAsked() {
 			}
 			s.flushTabs(func() {
 				// The call ends the workbench of the window, so its first event leaves before the call, and it waits for the answers
-				// that the window owes, as the answer of the pick that closes it (afterAnswers).
-				s.afterAnswers(func() {
+				// that the window owed when the close was decided, as the answer of the pick that closes it (afterCommands).
+				s.afterCommands(mark, func() {
 					cids := s.events.BeginOperation("workbench.window.operation", map[string]any{"action": "close"})
 					s.events.Flush(func() {
 						s.calls.Caused(cids).CallInOrder("workspace", "windowClose", nil, func(_ any, err error) {

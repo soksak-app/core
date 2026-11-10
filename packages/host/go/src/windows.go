@@ -224,8 +224,6 @@ func (h *Host) WindowReady(ctx context.Context) error {
 	}
 	h.mu.Lock()
 	s.ready = true
-	readied := s.readied
-	s.readied = nil
 	h.mu.Unlock()
 	s.first.Do(func() { s.Emit("page-ready") })
 	s.imageDetachPageReady()
@@ -233,9 +231,7 @@ func (h *Host) WindowReady(ctx context.Context) error {
 	s.replayRegistrations()
 	routine.Go("windows-changed", h.windowsChanged)
 	routine.Go("deep-link-ready", func() { h.deepLinks.Ready(h.runDeepLink) })
-	for _, ready := range readied {
-		close(ready)
-	}
+	h.endReloads(s, nil)
 	routine.Go("window-rewatch", s.rewatch)
 	return nil
 }
@@ -247,6 +243,7 @@ func (h *Host) WindowClose(ctx context.Context) error {
 	}
 	h.mu.Lock()
 	s.ready = false
+	s.closeAsked = false
 	h.mu.Unlock()
 	s.window.Close()
 	return nil
@@ -268,9 +265,13 @@ func ShowWindow(window platform.Window) {
 // WindowCloseKept records that the page kept a modified tab when the window was asked to close, which ends a quit that
 // asked the window (docs/spec/hosts.md#process-lifecycle).
 func (h *Host) WindowCloseKept(ctx context.Context) error {
-	if _, err := h.surface(ctx); err != nil {
+	s, err := h.surface(ctx)
+	if err != nil {
 		return err
 	}
+	h.mu.Lock()
+	s.closeAsked = false
+	h.mu.Unlock()
 	h.quit.Cancel()
 	h.cancelUpdate()
 	// A request of the operating system waits for its answer; the application does not quit, so the answer is the
@@ -509,10 +510,8 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 		if place, text, reported := PageProcessEnded(s.name, h.quit.Active()); reported {
 			LogError(place, text)
 		}
-		// The workbench ended with the process of its page, so the keys that wait for its decision go.
-		s.mainPageEnded()
-		// The page that a removal asked ended, so the removal is allowed (docs/spec/projects.md).
-		h.removals.Abandon(s.name)
+		// The workbench ended with the process of its page, so what the page owed ends now (endPage).
+		h.endPage(s)
 	})
 	win.OnWindowEvent(WindowWorkbenchCommitted, func() {
 		RecordWindowEvent(s.name, "navigation_committed")
@@ -527,6 +526,9 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 				delete(h.owners, id)
 			}
 		}
+		if ready {
+			s.closeAsked = true
+		}
 		quit := h.quit.Active() && len(h.windows) == 0
 		h.mu.Unlock()
 		if ready {
@@ -537,6 +539,7 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 		RecordWindowEvent(s.name, "closed")
 		s.close()
 		h.relay.Abandon(func(t relayTarget) bool { return t.owner == s })
+		h.endReloads(s, rpcError(codeNoWindow, "the window closed before the reloaded page reported ready"))
 		h.notifyWorkspace()
 		routine.Go("windows-changed", h.windowsChanged)
 		if quit {
@@ -566,6 +569,7 @@ func (h *Host) shouldQuit() bool {
 	unready := make([]*Surfaces, 0)
 	for _, s := range h.windows {
 		if s.ready {
+			s.closeAsked = true
 			windows = append(windows, s)
 		} else {
 			unready = append(unready, s)

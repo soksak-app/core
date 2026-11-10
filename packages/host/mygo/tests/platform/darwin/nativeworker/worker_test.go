@@ -129,14 +129,13 @@ func TestNativeCallbacksUseTheFrameworkWorker(t *testing.T) {
 	var initialWorker uint64
 	var state unsafe.Pointer
 	var failures []string
-	var hitCount, messageCount, presentationCount int
-	callbacks.SurfaceHit = func(got uintptr, context unsafe.Pointer) int32 {
-		hitCount++
+	var pressCount, messageCount, presentationCount int
+	callbacks.SurfacePressed = func(got uintptr, context unsafe.Pointer) {
+		pressCount++
 		if got != token || thread() != initialWorker {
 			failures = append(failures, "surface callback lost token or worker thread identity")
 		}
 		state = context
-		return -51
 	}
 	callbacks.NativeMessage = func(got uint64, message *byte) {
 		messageCount++
@@ -179,8 +178,8 @@ func TestNativeCallbacksUseTheFrameworkWorker(t *testing.T) {
 	if record[2] != record[0] || record[3] != record[0] || record[4] != 1 || record[5] != 1 {
 		t.Errorf("main reentrancy, completion and borrowed scope: %v", record)
 	}
-	if hitCount != 1 || messageCount != 1 || presentationCount != 1 {
-		t.Errorf("callback counts: %d %d %d", hitCount, messageCount, presentationCount)
+	if pressCount != 1 || messageCount != 1 || presentationCount != 1 {
+		t.Errorf("callback counts: %d %d %d", pressCount, messageCount, presentationCount)
 	}
 	t.Logf("native main=%d worker=%d nested main=%d completion main=%d", record[0], record[1], record[2], record[3])
 	for _, failure := range failures {

@@ -1005,3 +1005,22 @@ func TestRecordedDragStopsItsLayoutTraceAfterTheLastLayoutIsPresented(t *testing
 		t.Fatalf("error %v, order %v; want the drag error and the trace stopped after it", err, order)
 	}
 }
+
+// contract: diagnostics.capture-wait.ends-with-the-connection
+func TestTheEndOfTheConnectionEndsTheCaptureWaitsOnlyWhileItsRequestRuns(t *testing.T) {
+	conn := &endpointConn{out: make(chan endpointFrame, 4), done: make(chan struct{})}
+	ended := make(chan struct{})
+	stop := watchConnectionEnd(conn, func() { close(ended) })
+	close(conn.done)
+	<-ended
+	stop()
+
+	returnedConn := &endpointConn{out: make(chan endpointFrame, 4), done: make(chan struct{})}
+	lateEnds := 0
+	stopReturned := watchConnectionEnd(returnedConn, func() { lateEnds++ })
+	stopReturned()
+	close(returnedConn.done)
+	if lateEnds != 0 {
+		t.Fatalf("the end of the connection after the request returned ended %d waits", lateEnds)
+	}
+}

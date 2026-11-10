@@ -167,6 +167,7 @@ fn invalid_json_closes_connection() {
 | `diagnostics.capture-document-identity.start-selects-one-source-per-capture` | capture 하나는 document identity source를 최대 하나 선택하며 두 번째 source는 거부한다. | all |
 | `diagnostics.capture-document-identity.start-requires-explicit-capture-endpoint` | document identity source는 명시적인 capture endpoint가 필요하며 drag operation이 소유한 identity capture에는 연결할 수 없다. | all |
 | `diagnostics.capture-start.waits-for-prior-identity-removal` | 새 capture 시작은 이전에 선택한 document identity source 제거가 완료될 때까지 기다린다. | all |
+| `diagnostics.capture-wait.ends-with-the-connection` | 실행 중인 `diagnostics.capture.start`, `diagnostics.capture.stop`, `diagnostics.drag` 의 endpoint connection 이 끝나면 recording 의 frame 대기가 끝난다. 요청이 돌아온 뒤에는 그 connection 의 끝이 어떤 대기도 끝내지 않는다. | all |
 | `diagnostics.capture-document-identity.callback-completion-is-single-use` | 첫 callback이 document identity 결과를 제공하며 추가 호출은 오류를 보고하고 완료된 결과를 대체하지 않는다. | wailsv3, mygo only: Go callback closure는 반복 호출이 가능하며 Rust FnOnce callback은 이를 정적으로 막는다 |
 | `diagnostics.capture-document-identity.schedule-error-preserves-callback-error` | 동기 callback이 오류를 보고한 뒤 scheduling도 실패하면 반환 오류는 두 오류를 보존한다. 성공 callback이 scheduling 실패를 대체하지 않는다. | all |
 | `diagnostics.capture-stop.bounds-identity-callback-wait` | document identity callback 대기는 제한되어 있으며 callback이 오지 않으면 명시적인 timeout 오류를 반환한다. | all |

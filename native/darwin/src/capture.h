@@ -14,7 +14,13 @@ bool sp_capture_open(long windowNumber, bool display, char **error);
 // capture identity session is installed. false preserves the ordinary recorded-frame path.
 bool sp_capture_start(const char *directory, bool frame_identity, char **error);
 const char *sp_capture_error(void);
+// Waits for the first written frame and the start completion. The wait ends by that frame or by the end of the stream: its
+// stop, the failure of its start, the close of its window or sp_capture_end_waits.
 int sp_capture_wait(void);
+// Ends the stream of the current recording for the waits for a frame, because the request that waits for it ended (the
+// endpoint connection that asked closed). A waiting sp_capture_wait or the stop boundary wait of sp_capture_stop returns,
+// and the recording records an error. Without a current stream it does nothing. Any thread may call it.
+void sp_capture_end_waits(void);
 // Whether a native stream is currently owned by the capture module. False means no current stream; it does not
 // establish that an earlier ScreenCaptureKit stop callback completed successfully.
 bool sp_capture_has_stream(void);
@@ -25,8 +31,9 @@ bool sp_capture_has_stream(void);
 // If the write queue capacity is exhausted, the recording fails. Stopping keeps both the earlier recording error and
 // the
 // stop error in sp_capture_error, so success is not judged by the returned frame count alone.
-// A start timeout keeps its existing error and wait bound. A successful late start owns exactly one deferred
-// native stop; failed starts request none. Deferred cleanup cannot change a replacement recording or finalized artifacts.
+// The stop waits for a callback at the boundary or for the end of the stream (see sp_capture_wait), then for the start
+// completion and the stop completion, without a time limit. A start that completes during the stop owns or shares the
+// one native stop; failed starts request none.
 int sp_capture_stop(double after);
 // Returns true if the last recording exhausted its callback evidence capacity.
 bool sp_capture_limited(void);

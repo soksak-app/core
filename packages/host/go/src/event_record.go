@@ -115,7 +115,9 @@ func EmitClosed(cause string, fields map[string]any) {
 type QuitSource map[string]any
 
 // HostQuitSource is a quit that the host asked for itself: request is `quit-command`, `last-window-closed` or `update`.
-func HostQuitSource(request string) QuitSource { return QuitSource{"source": "host", "request": request} }
+func HostQuitSource(request string) QuitSource {
+	return QuitSource{"source": "host", "request": request}
+}
 
 // AppleEventQuitSource is a quit Apple event and the process that sent it, 0 when the event names none, with the bundle
 // identifier or name of that process while it runs, empty otherwise.

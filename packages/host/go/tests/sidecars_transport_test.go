@@ -1610,6 +1610,68 @@ func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 	sidecars.Stop()
 }
 
+// The stop waits for no start: a stop during the start of a service returns before the service answers its hello, the send that
+// waited for that start fails as a send after the stop, and the start that ends later closes the connection that it opened
+// (docs/spec/sidecars.md#declaration-and-startup).
+func TestTheStopDoesNotWaitForAStart(t *testing.T) {
+	root := t.TempDir()
+	socket := filepath.Join(support.SocketParent(t), "s.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	writeHarnessEndpoint(t, root, socket)
+	helloSeen := make(chan struct{})
+	release := make(chan struct{})
+	ended := make(chan struct{})
+	go func() {
+		defer close(ended)
+		connection, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer connection.Close()
+		reader := bufio.NewReader(connection)
+		if _, err := reader.ReadBytes('\n'); err != nil {
+			return
+		}
+		close(helloSeen)
+		<-release
+		_, _ = io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n")
+		// The start that ends after the stop closes its connection, so the service reads to the end.
+		for {
+			if _, err := reader.ReadBytes('\n'); err != nil {
+				return
+			}
+		}
+	}()
+	sidecars, err := NewSidecars(support.HarnessDeclarations(t.TempDir()), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := &support.HarnessOwner{Root: "/stop", Seen: make(chan SidecarMessage, 1)}
+	started := make(chan error, 1)
+	go func() {
+		started <- sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`))
+	}()
+	<-helloSeen
+	stopped := make(chan struct{})
+	go func() {
+		sidecars.Stop()
+		close(stopped)
+	}()
+	// The stop returns while the service has not answered its hello: its return is the event, and the hello is released only
+	// after it. A stop that waits for the start never returns, and the runner reports the stop.
+	<-stopped
+	close(release)
+	if err := <-started; err == nil || err.Error() != "sidecars are stopped" {
+		t.Fatalf("the send that waited for the start = %v, want the failure of a send after the stop", err)
+	}
+	// The start that ended after the stop closes its connection, which ends the read of the service.
+	<-ended
+}
+
 // holdPipe makes the FIFO path and holds its write end until the check ends. A fixture process that reads it ends at the end
 // of the check, also when the check is killed, because the kernel then closes the write end.
 func holdPipe(t *testing.T, path string) {

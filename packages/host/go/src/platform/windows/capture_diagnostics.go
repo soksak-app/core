@@ -30,6 +30,9 @@ func (implementation) CaptureWait() (bool, error) { return false, unsupported("w
 
 func (implementation) CaptureStop(float64) (int, error) { return 0, unsupported("window recording") }
 
+// CaptureEndWaits has no wait to end: this platform records no window.
+func (implementation) CaptureEndWaits() {}
+
 func (implementation) CaptureHasStream() (bool, error) { return false, unsupported("window recording") }
 
 func (implementation) CaptureLimited() bool { return false }

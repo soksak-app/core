@@ -200,6 +200,8 @@ type Sidecars struct {
 	// so even after the project of the window changed, the requests and closes of an already open surface are sent with this root.
 	roots   map[string]string
 	stopped bool
+	// stopDetach is the detach of the stop, which a start that ends after the stop applies to its own process.
+	stopDetach bool
 	// unannouncedLoss is a persistent sidecar whose connection was lost and whose owning surfaces have not been told yet (V5-106).
 	// The start that announces the loss consumes this record; the first start has no announcement.
 	unannouncedLoss map[string]bool
@@ -1257,17 +1259,9 @@ func (c *Sidecars) stop(detach bool) {
 		close(c.stopSignal)
 	}
 	c.stopped = true
-	// A sidecar that is starting is registered when it ends, so the running list is read after waiting for that start.
-	for len(c.starting) > 0 {
-		var wait chan struct{}
-		for _, starting := range c.starting {
-			wait = starting
-			break
-		}
-		c.mu.Unlock()
-		<-wait
-		c.mu.Lock()
-	}
+	c.stopDetach = detach
+	// The stop waits for no start: a start that ends after this registers nothing and stops its own process
+	// (docs/spec/sidecars.md#declaration-and-startup).
 	// A send to outbox happens inside the lock and only to a sidecar in the running list. It is removed from the list before the channel is closed,
 	// so the surface close of a window that closes during the termination sends nothing. A sidecar on standard input and output ends, so it does not reply
 	// to the close. A persistent service replies to a close sent before the stop ahead of the close-owner reply, so that surface is kept until the reply or the end of
@@ -1652,12 +1646,18 @@ func (c *Sidecars) processContext(ctx context.Context, name string, lost *reviva
 	if err != nil {
 		return nil, false, err
 	}
-	// Stop reads the running list after waiting for the starts to end, so a start that ended while stopping is also registered and Stop cleans it up.
-	c.running[name] = process
-	process.begin()
+	// The stop read the running list without waiting for this start, so a start that ends after the stop registers nothing and
+	// stops its own process by the stop rules (docs/spec/sidecars.md#declaration-and-startup).
 	if c.stopped {
+		detach := c.stopDetach
+		c.mu.Unlock()
+		process.begin()
+		c.stopProcesses([]*sidecar{process}, detach, true)
+		c.mu.Lock()
 		return nil, false, errors.New("sidecars are stopped")
 	}
+	c.running[name] = process
+	process.begin()
 	return process, true, nil
 }
 

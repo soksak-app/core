@@ -674,6 +674,10 @@ impl Platform for Darwin {
         Ok(capture::has_stream())
     }
     #[cfg(feature = "diagnostics")]
+    fn capture_end_waits(&self) {
+        capture::end_waits()
+    }
+    #[cfg(feature = "diagnostics")]
     fn document_frame_identity_start(
         &self,
         document: Handle,

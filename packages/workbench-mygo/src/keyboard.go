@@ -1,6 +1,10 @@
 package workbench
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+	"slices"
+)
 
 // The keyboard of the window follows the focus ring (docs/spec/exposure.md#keyboard-focus): while no modal is open, the active
 // surface of the card with the ring holds the keyboard. Every move of the ring goes through focusCard, and the frame that shows
@@ -90,21 +94,28 @@ func (s *Shell) focusCard(card string) {
 // one such change. A run that asked for no frame, or that failed, answers at once. A placement or a keyboard call that fails has
 // shown its failure in its own line, and the command answers with the result of its run (docs/spec/exposure.md#registration). A run
 // that wrote settings first waits until the host wrote them (afterSettingsWrites).
-func (s *Shell) followCommand(answer func(value any, err error)) func(value any, err error) {
+// Each command answers once: a second answer of the same run is a defect of the command, which the workbench shows and does not pass
+// on (docs/spec/exposure.md#registration).
+func (s *Shell) followCommand(name string, answer func(value any, err error)) func(value any, err error) {
 	requests, writes := s.frameRequests.Load(), s.settingsIssued
-	s.answering++
+	s.commands++
+	number := s.commands
+	if s.answering == nil {
+		s.answering = map[int]bool{}
+	}
+	s.answering[number] = true
 	answered := func(value any, err error) {
 		answer(value, err)
-		s.answering--
-		if s.answering == 0 {
-			waiting := s.afterAnswering
-			s.afterAnswering = nil
-			for _, run := range waiting {
-				run()
-			}
-		}
+		delete(s.answering, number)
+		s.endAnswerWaits()
 	}
+	once := false
 	return func(value any, err error) {
+		if once {
+			s.fail(fmt.Errorf("command %s answered a second time", name))
+			return
+		}
+		once = true
 		s.afterSettingsWrites(writes, func(failure error) {
 			if err == nil && failure != nil {
 				value, err = nil, failure
@@ -119,14 +130,39 @@ func (s *Shell) followCommand(answer func(value any, err error)) func(value any,
 	}
 }
 
-// afterAnswers runs run once every command that runs has answered, at once when none runs: a step that ends the document of the window,
-// as its close, comes after the answers that the document still owes (followCommand).
-func (s *Shell) afterAnswers(run func()) {
-	if s.answering == 0 {
-		run()
-		return
+// answerWait is a step that waits for the answers of the commands up to the number until.
+type answerWait struct {
+	until int
+	run   func()
+}
+
+// commandMark is the number of the last command that started: a step decided now waits for the commands up to it (afterCommands).
+func (s *Shell) commandMark() int { return s.commands }
+
+// afterCommands runs run once every command up to the number mark has answered, at once when none of them runs: a step that ends the
+// document of the window, as its close, comes after the answers that the document owed when the step was decided, and a command
+// that starts later does not delay it, because the end of the workbench ends that command (followCommand,
+// docs/spec/exposure.md#registration).
+func (s *Shell) afterCommands(mark int, run func()) {
+	s.answerWaits = append(s.answerWaits, answerWait{until: mark, run: run})
+	s.endAnswerWaits()
+}
+
+// endAnswerWaits runs each wait whose commands have answered, in the order of the waits.
+func (s *Shell) endAnswerWaits() {
+	oldest := math.MaxInt
+	for number := range s.answering {
+		oldest = min(oldest, number)
 	}
-	s.afterAnswering = append(s.afterAnswering, run)
+	ended := 0
+	for ended < len(s.answerWaits) && s.answerWaits[ended].until < oldest {
+		ended++
+	}
+	runs := slices.Clone(s.answerWaits[:ended])
+	s.answerWaits = s.answerWaits[ended:]
+	for _, wait := range runs {
+		wait.run()
+	}
 }
 
 // afterKeyboard gives answers of a placement that ended to the keyboard decision that follows it.

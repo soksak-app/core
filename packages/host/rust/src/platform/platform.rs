@@ -910,8 +910,13 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// Starts to record frames in directory.
     fn capture_start(&self, directory: &str, frame_identity: bool) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
-    /// Waits for the first frame and returns whether it was recorded.
+    /// Waits for the first frame or for the end of the stream and returns whether the frame was recorded.
     fn capture_wait(&self) -> Result<bool, String>;
+    #[cfg(feature = "diagnostics")]
+    /// Ends the waits of the current recording for a frame, because the request that waits ended: a waiting
+    /// capture_wait or the boundary wait of capture_stop returns, and the recording records an error. Any thread may
+    /// call it.
+    fn capture_end_waits(&self);
     #[cfg(feature = "diagnostics")]
     /// Records until the presentation time after (ms, the call time when 0), ends the record and returns the number of
     /// recorded frames.

@@ -786,7 +786,11 @@ fn a_watch_ends_at_status_ended() {
     ]);
     assert_eq!(
         (code, stdout.as_str(), stderr.as_str()),
-        (1, "1\n2\n", "sok: status core.screen ended: surface-closed\n")
+        (
+            1,
+            "1\n2\n",
+            "sok: status core.screen ended: surface-closed\n"
+        )
     );
 }
 
@@ -835,10 +839,21 @@ fn a_gesture_sends_one_press_on_one_connection() {
         .iter()
         .map(|request| request["id"].as_u64().expect("id"))
         .collect();
-    assert_eq!(ids, [1, 2, 3, 4, 5], "the gesture used more than one connection");
+    assert_eq!(
+        ids,
+        [1, 2, 3, 4, 5],
+        "the gesture used more than one connection"
+    );
 
     let (code, _, stderr) = run(&[
-        "input", "gesture", "--clicks", "2", "--points", "7,8", "--config-dir", &dir,
+        "input",
+        "gesture",
+        "--clicks",
+        "2",
+        "--points",
+        "7,8",
+        "--config-dir",
+        &dir,
     ]);
     assert_eq!(code, 0, "{stderr}");
     let requests = fake.requests.lock().expect("requests").clone();
@@ -884,7 +899,11 @@ fn a_failed_gesture_step_ends_the_command() {
     ]);
     assert_eq!(
         (code, stdout.as_str(), stderr.as_str()),
-        (1, "", "sok: gesture step 2: a mouse button is pressed (1007)\n")
+        (
+            1,
+            "",
+            "sok: gesture step 2: a mouse button is pressed (1007)\n"
+        )
     );
     assert_eq!(
         fake.methods(),
@@ -984,7 +1003,10 @@ fn an_interrupt_ends_a_watch_that_waits_in_a_write() {
     let stored = std::fs::read_dir(&logs)
         .expect("logs")
         .map(|entry| entry.expect("entry").path())
-        .filter(|path| path.extension().is_some_and(|extension| extension == "jsonl"))
+        .filter(|path| {
+            path.extension()
+                .is_some_and(|extension| extension == "jsonl")
+        })
         .map(|path| std::fs::read_to_string(path).expect("log file"))
         .any(|text| {
             text.lines().any(|line| {

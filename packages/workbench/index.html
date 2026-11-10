@@ -588,18 +588,25 @@ const coreExposure = installCoreExposure({
     projectTabs: workarea.querySelector(".project-column") ? "left" : "top",
   }),
 });
-// The reason for the placeholder of a tab of a plugin that is not loaded is set by the installation state (docs/spec/plugins.md). When the state is read,
-// the placeholder is drawn again. A read failure is left as an error of that state.
-await pluginOperations.refresh();
-await pluginOperations.refreshOutdated();
-await appUpdate.refresh();
-// On the first run, the starter pack is installed and the page is reloaded to load the installed plugins (docs/spec/installation.md).
-// While reloading, this page does not create a space.
-if (await pluginOperations.installStarter(starterPack(), defaultRegistry(), log, showError)) {
-  location.reload();
-  await new Promise(() => {});
+// Every wait of the start can fail, and a failure rejects the memory readiness, so no drawn placement waits for a readiness that
+// never comes.
+try {
+  // The reason for the placeholder of a tab of a plugin that is not loaded is set by the installation state (docs/spec/plugins.md). When the state is read,
+  // the placeholder is drawn again. A read failure is left as an error of that state.
+  await pluginOperations.refresh();
+  await pluginOperations.refreshOutdated();
+  await appUpdate.refresh();
+  // On the first run, the starter pack is installed and the page is reloaded to load the installed plugins (docs/spec/installation.md).
+  // While reloading, this page does not create a space.
+  if (await pluginOperations.installStarter(starterPack(), defaultRegistry(), log, showError)) {
+    location.reload();
+    await new Promise(() => {});
+  }
+  await coreExposure;
+} catch (error) {
+  rejectMemoryPlacementReady(error);
+  throw error;
 }
-await coreExposure;
 onDrag(coreChanged);
 /* Keyboard shortcuts also run commands. */
 addEventListener("keydown", (event) => {

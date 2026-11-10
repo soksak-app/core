@@ -81,8 +81,8 @@ func Bind(callbacks abi.Callbacks) (abi.CallbackTable, error) {
 	if callbacks.NativeFullscreenDone == nil {
 		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: native_fullscreen_done")
 	}
-	if callbacks.SurfaceHit == nil {
-		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: surface_hit")
+	if callbacks.SurfacePressed == nil {
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: surface_pressed")
 	}
 	if callbacks.SurfacePoint == nil {
 		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: surface_point")
@@ -150,7 +150,7 @@ func Bind(callbacks abi.Callbacks) (abi.CallbackTable, error) {
 		purego.NewCallback(callbacks.NativeUiRun),
 		purego.NewCallback(callbacks.NativeResponderChanged),
 		purego.NewCallback(callbacks.NativeFullscreenDone),
-		purego.NewCallback(callbacks.SurfaceHit),
+		purego.NewCallback(callbacks.SurfacePressed),
 		purego.NewCallback(callbacks.SurfacePoint),
 		purego.NewCallback(callbacks.InputDelivered),
 		purego.NewCallback(callbacks.InputActivated),

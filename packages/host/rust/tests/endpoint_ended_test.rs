@@ -84,8 +84,14 @@ fn a_watch_ends_with_its_producer() {
     let mut connection = endpoint_client::connect(endpoint.address(), Duration::from_secs(5));
     let surface = json!({"window": "w1", "name": "core.view", "surface": "tab-1"});
     let plain = json!({"window": "w1", "name": "core.view"});
-    assert_eq!(request(&mut connection, 1, "status.watch", surface.clone())["result"], Value::Null);
-    assert_eq!(request(&mut connection, 2, "status.watch", plain.clone())["result"], Value::Null);
+    assert_eq!(
+        request(&mut connection, 1, "status.watch", surface.clone())["result"],
+        Value::Null
+    );
+    assert_eq!(
+        request(&mut connection, 2, "status.watch", plain.clone())["result"],
+        Value::Null
+    );
 
     notifier.changed("w1", "core.view", Some("tab-1"), &raw(&json!(1)).unwrap());
     notifier.ended("w1", Some("tab-1"), "surface-closed");
@@ -107,7 +113,12 @@ fn a_watch_ends_with_its_producer() {
         receive(&mut connection)["params"],
         json!({"window": "w1", "name": "core.view", "value": 3})
     );
-    assert!(!notifier.watches("w1").iter().any(|watch| watch.surface.is_some()));
+    assert!(
+        !notifier
+            .watches("w1")
+            .iter()
+            .any(|watch| watch.surface.is_some())
+    );
 
     notifier.ended("w1", None, "window-closed");
     assert_eq!(
@@ -118,7 +129,10 @@ fn a_watch_ends_with_its_producer() {
     assert!(notifier.watches("w1").is_empty());
 
     // The ended watch starts anew: the page receives a second status.watch of the surface and never a status.unwatch.
-    assert_eq!(request(&mut connection, 3, "status.watch", surface)["result"], Value::Null);
+    assert_eq!(
+        request(&mut connection, 3, "status.watch", surface)["result"],
+        Value::Null
+    );
     let calls = page.calls.lock().unwrap().clone();
     let methods: Vec<&str> = calls.iter().map(|(method, _)| method.as_str()).collect();
     assert_eq!(
