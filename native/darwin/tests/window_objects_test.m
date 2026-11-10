@@ -11,6 +11,7 @@
 #import "webview_input.h"
 #import "window_facts.h"
 #import "window_objects.h"
+#import "support/run_until.h"
 
 static int failures = 0;
 
@@ -44,14 +45,17 @@ static void counted(void *context, const sp_window_objects *counts, bool reached
     state->counts = *counts;
 }
 
-// Handles events one by one until done is called. Uses one autorelease pool per event.
-static void handleEventsUntilCounted(SPCounted *state) {
+// Handles events one by one until done is called. Uses one autorelease pool per event. A waiting count queues a drain event
+// before each sleep of the run loop, so each event wait ends.
+static void handleEventsUntilCounted(const char *what, SPCounted *state) {
+    fprintf(stderr, "WAIT %s\n", what);
     while (state->calls == 0) {
         @autoreleasepool {
             NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:NSDate.distantFuture inMode:NSDefaultRunLoopMode dequeue:YES];
             if (event) [NSApp sendEvent:event];
         }
     }
+    fprintf(stderr, "reached: %s\n", what);
 }
 
 int main(void) { @autoreleasepool {
@@ -112,16 +116,18 @@ int main(void) { @autoreleasepool {
             @"an autoreleased window keeps its composition until its event iteration ends (%@)", describe(pending)]);
         sp_window_objects_when(&baseline, counted, &state);
         NSEvent *event;
+        fprintf(stderr, "WAIT the posted drain event is delivered\n");
         do {
             event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:NSDate.distantFuture
                 inMode:NSDefaultRunLoopMode dequeue:YES];
             if (!event) continue;
             [NSApp sendEvent:event];
         } while (event == nil || event.type != NSEventTypeApplicationDefined || event.subtype == 0);
+        fprintf(stderr, "reached: the posted drain event is delivered\n");
         check(event != nil, @"the posted event is delivered");
         check(state.calls == 0, @"the counts are not read in the iteration that handles the posted event");
     }
-    handleEventsUntilCounted(&state);
+    handleEventsUntilCounted("the counts reach the baseline", &state);
     check(state.calls == 1 && state.mainThread, [NSString stringWithFormat:
         @"the counts are given once on the main thread after the posted event (calls %d)", state.calls]);
     check(state.reached && same(state.counts, baseline), [NSString stringWithFormat:
@@ -130,7 +136,7 @@ int main(void) { @autoreleasepool {
 
     SPCounted now = {0};
     sp_window_objects_when(NULL, counted, &now);
-    handleEventsUntilCounted(&now);
+    handleEventsUntilCounted("the counts without expected counts are given", &now);
     check(now.calls == 1 && now.reached && same(now.counts, baseline), [NSString stringWithFormat:
         @"without expected counts the counts after the posted event are given (calls %d, reached %d, counts %@)",
         now.calls, now.reached, describe(now.counts)]);

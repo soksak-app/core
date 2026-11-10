@@ -8,6 +8,7 @@
 #import "webview_input.h"
 #import "window_facts.h"
 #import "window_objects.h"
+#import "support/run_until.h"
 
 static int failures = 0;
 
@@ -16,20 +17,16 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-// Runs the run loop until the condition holds; each turn waits for a source of the run loop. A load does not need application
-// events, and handling them would activate the application. what names the wait in the record of a run that the runner ends.
+// Runs the run loop until the condition holds (support/run_until.h). A load does not need application events, and handling them
+// would activate the application, so the run loop leaves them queued.
 static void until(NSString *what, BOOL (^done)(void)) {
-    while (!done()) {
-        @autoreleasepool {
-            [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:NSDate.distantFuture];
-        }
-    }
-    fprintf(stdout, "reached: %s\n", what.UTF8String);
+    sp_run_until(what.UTF8String, done);
 }
 
 // Handles the application-defined events until the condition holds. The count request of sp_window_objects_when is answered
 // through the queued application-defined event.
 static void untilEventHandled(NSString *what, BOOL (^done)(void)) {
+    fprintf(stderr, "WAIT %s\n", what.UTF8String);
     while (!done()) {
         @autoreleasepool {
             // Only the application-defined event is dequeued; the system activation event stays queued, so the
@@ -39,7 +36,7 @@ static void untilEventHandled(NSString *what, BOOL (^done)(void)) {
             if (event) [NSApp sendEvent:event];
         }
     }
-    fprintf(stdout, "reached: %s\n", what.UTF8String);
+    fprintf(stderr, "reached: %s\n", what.UTF8String);
 }
 
 // The message handler of the modal. It is the handler that the host registers under the name "soksak".
@@ -114,7 +111,7 @@ int main(void) { @autoreleasepool {
     check(webviewInputRegister(root), @"the main webview registers for input");
     [root loadHTMLString:@"<!doctype html><body>main</body>" baseURL:nil];
     [window orderFrontRegardless];
-    until(@"the main page did not load", ^BOOL { return rootNavigation.finished; });
+    until(@"the main page loads", ^BOOL { return rootNavigation.finished; });
 
     sp_window_objects before = sp_window_objects_count();
     check(before.inputRegistrations == 1, [NSString stringWithFormat:@"one input registration exists before the modal (%ld)", before.inputRegistrations]);
@@ -143,7 +140,7 @@ int main(void) { @autoreleasepool {
         check(webviewInputRegister(modal), @"the modal registers for input");
         [window.contentView addSubview:modal positioned:NSWindowAbove relativeTo:root];
         [modal loadHTMLString:@"<!doctype html><body>modal</body>" baseURL:nil];
-        until(@"the modal page did not load", ^BOOL { return modal.finished; });
+        until(@"the modal page loads", ^BOOL { return modal.finished; });
         sp_window_objects open = sp_window_objects_count();
         check(open.inputRegistrations == 2, [NSString stringWithFormat:@"two input registrations exist while the modal is open (%ld)", open.inputRegistrations]);
 
@@ -173,7 +170,7 @@ int main(void) { @autoreleasepool {
     // The count is answered after the run loop handles the events that release the autoreleased objects of the close.
     __block SPCountAnswer answer = {0};
     sp_window_objects_when(&before, countAnswered, &answer);
-    untilEventHandled(@"the count was not answered", ^BOOL { return answer.answered; });
+    untilEventHandled(@"the count is answered", ^BOOL { return answer.answered; });
     check(answer.reached && answer.counts.inputRegistrations == before.inputRegistrations,
         [NSString stringWithFormat:@"the closed modal releases its input registration (%ld, expected %ld)",
             answer.counts.inputRegistrations, before.inputRegistrations]);

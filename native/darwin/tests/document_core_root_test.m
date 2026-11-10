@@ -8,6 +8,7 @@
 #import <WebKit/WebKit.h>
 #import "support/temporary_folder.h"
 #import "support/view_import_map.h"
+#import "support/run_until.h"
 #import "document_view.h"
 #import "webview_geometry.h"
 #import "window_facts.h"
@@ -22,13 +23,10 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-// Runs the run loop until done holds; each turn waits for a source of the run loop. what names the wait in the record of a
-// run that the runner ends.
+// Runs the run loop until done holds (support/run_until.h), so a condition that a timer, an observer or a main queue block changes
+// ends the wait in the pass that changes it.
 static void until(NSString *what, BOOL (^done)(void)) {
-    while (!done()) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:NSDate.distantFuture];
-    }
-    fprintf(stdout, "reached: %s\n", what.UTF8String);
+    sp_run_until(what.UTF8String, done);
 }
 
 static NSDictionary *latest;
