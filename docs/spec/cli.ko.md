@@ -18,9 +18,10 @@
 | `sok commands [window]` | `exposure.list`의 `commands` 목록을 출력한다. 선언된 command마다 설명, 매개변수 schema, 결과 schema다 |
 | `sok windows` | 실행 중인 애플리케이션의 창을 나열한다 |
 | `sok exposures [window]` | 선언된 모든 status, command, element 항목을 나열한다 |
-| `sok status <name> [window] [--surface <id>] [--watch]` | Status 값을 출력한다. `--watch`는 값과 이후 바뀔 때마다 JSON 한 줄씩 출력한다 |
+| `sok status <name> [window] [--surface <id>] [--watch]` | Status 값을 출력한다. `--watch`는 값과 이후 바뀔 때마다 JSON 한 줄씩 출력한다. SIGINT나 SIGTERM은 watch를 끝낸다: signal을 받은 routine이 연결을 닫고, 닫힘의 결과와 함께 명령을 기록하고, 상태 0으로, 또는 닫힘의 오류와 함께 1로 프로세스를 끝낸다. 명령이 표준 출력 쓰기에서 기다리는 동안에도 같다 |
 | `sok element rect\|click\|input\|dispatch <name> [window] [--surface <id>] [--index <n>] [--value <text>] [--event <json>]` | 선언된 element 항목에 동작한다 |
-| `sok input pointer [window] --x <x> --y <y> --phase move\|down\|drag\|up\|scroll [--button left\|right] [--delta-x <n>] [--delta-y <n>] [--clicks <n>] [--activate]` | Native pointer 입력을 보낸다 |
+| `sok input pointer [window] --x <x> --y <y> --phase move\|down\|drag\|up\|scroll [--button left\|right] [--delta-x <n>] [--delta-y <n>] [--clicks <n>] [--activate]` | Native pointer 입력을 보낸다. 누름은 그 명령의 연결의 것이므로 `--phase down` 명령이 끝나면 그 점에서 누름을 뗀다([메서드](exposure.ko.md#메서드)). 여러 점에 걸친 제스처는 `sok input gesture`다 |
+| `sok input gesture [window] [--pointer <name>] [--button left\|right] [--clicks <n>] --points <x>,<y>[;<x>,<y>]...` | 연결 하나로 native 제스처 하나를 보낸다: 첫 점에서 `down`, 뒤의 각 점으로 `drag`, 마지막 점에서 `up`이므로 점 하나는 click이다. 아무것도 출력하지 않고 전달된 `up` 뒤에 끝난다. 실패한 단계는 그 단계의 오류와 번호로 명령을 끝내고, 연결의 끝이 누름을 뗀다 |
 | `sok input key [window] --key <key> --phase down\|up [--text <text>] [--modifiers shift,control,option,command]` | Native key 입력을 보낸다 |
 | `sok debug query [--channel <channel>] [--level <level>] [--class <class>] [--layer <layer>] [--event <name>] [--event-prefix <prefix>] [--surface <id>] [--session <id>] [--cid <id>] [--run <id>] [--text <text>] [--from <time>] [--to <time>] [--order asc\|desc] [--limit <n>] [--after <cursor>] [--around <cursor> [--earlier <n>] [--later <n>]]` | 설정 폴더의 event 파일에서 filter를 통과한 event의 page 하나를 파일의 색인으로 찾아 한 행에 한 줄의 글로 출력하고, 빠뜨린 schema 번호가 다른 파일을 표준 오류에 밝힌다([logging](logging.ko.md#질의), [debug](debug.ko.md#타임라인)). 실행 중인 애플리케이션이 필요 없다 |
 | `sok debug replay <session> [--until <sequence>]` | 저장된 입력에서 해당 sidecar의 재생 실행 파일로 session의 화면을 다시 만들고, 저장된 sidecar와 page의 모든 hash를 재생한 hash와 비교해 첫 불일치를 session, 순번, 층을 이름으로 가진 `error` event로 보고하며 종료 상태 1로 끝난다([replay](replay.ko.md#명령)). 실행 중인 애플리케이션이 필요 없다 |

@@ -856,7 +856,7 @@ export function openSettings() {
     // The application renders it, so it is not shown here. The position and size must be read from this element,
     // so it is hidden with visibility, not display.
     card.style.visibility = "hidden";
-    overlay.show(card, rect, answer);
+    overlay.show(card, rect, answer, () => closeSettings());
   } else {
     standIn(true, rect);
   }

@@ -793,6 +793,10 @@ func (s *Surfaces) surfacesClosed(ids []string) {
 	for _, id := range ids {
 		closed[id] = true
 		s.windowEvent("exposure-registered", map[string]any{"surface": id, "closed": true})
+		// The surface closed or its document was replaced, so the producer of its watches ended (docs/spec/exposure.md#methods).
+		if s.host.endpoint != nil {
+			s.host.endpoint.ProducerEnded(s.name, id, "surface-closed")
+		}
 	}
 	s.host.relay.Abandon(func(t relayTarget) bool { return t.owner == s && closed[t.surface] })
 }

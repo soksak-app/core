@@ -109,6 +109,30 @@ func (f *firstLine) Write(data []byte) (int, error) {
 // command.
 var runLog atomic.Pointer[EventLog]
 
+// interruptRecorder stores the command with the status and the error text of a run that a termination signal ends, flushes the
+// event file and closes it; Logged installs it for the run.
+var interruptRecorder atomic.Pointer[func(status int, errorText string)]
+
+// exitProcess ends the process; it is os.Exit.
+var exitProcess = os.Exit
+
+// interrupted ends the run from the routine that received SIGINT or SIGTERM, with the result closeErr of closing the endpoint
+// connection (docs/spec/cli.md): status 0, or 1 with the error of the close on the standard error. It stores the command with
+// that result before the process ends, so the run is recorded also while the command waits in a write to its standard output.
+func interrupted(closeErr error) {
+	status, text := 0, ""
+	if closeErr != nil {
+		status, text = 1, "sok: "+closeErr.Error()
+		if _, err := fmt.Fprintln(os.Stderr, text); err != nil {
+			status = 3
+		}
+	}
+	if record := interruptRecorder.Load(); record != nil {
+		(*record)(status, text)
+	}
+	exitProcess(status)
+}
+
 // Logged runs command and records it: it starts the event file of the targeted configuration directory, runs the command,
 // stores a panic of the command with its stack as the exit status PanicStatus, stores the command with its result, and
 // flushes the file. An event file that cannot be started is reported on the standard error and the command runs without it.
@@ -156,8 +180,17 @@ func Logged(args []string, stdout, stderr io.Writer, options Options, command Co
 			fmt.Fprintf(stderr, "sok: event log: %v\n", err)
 		}
 	}
+	interrupt := func(status int, errorText string) {
+		finish(status, errorText)
+		if err := log.Flush(eventFlushDeadline); err != nil {
+			fmt.Fprintf(stderr, "sok: event log: %v\n", err)
+		}
+		log.Close()
+	}
 	panicRecorder.Store(&record)
+	interruptRecorder.Store(&interrupt)
 	status, panicked := Guard(func() int { return command(args, stdout, captured, options) })
+	interruptRecorder.Store(nil)
 	panicRecorder.Store(nil)
 	if panicked != nil {
 		if _, writeErr := fmt.Fprintf(captured, "sok: panic: %s\n%s", panicked.Text, panicked.Stack); writeErr != nil {

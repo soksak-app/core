@@ -431,10 +431,55 @@ struct Line {
     page: bool,
 }
 
+/// The pointer and button of a press in its window: each pointer holds its own presses (docs/spec/exposure.md#named-pointers).
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+struct PressKey {
+    window: String,
+    pointer: String,
+    /// 0 left, 1 right.
+    button: i32,
+}
+
+/// An open press: the connection whose `down` delivered it, the point of its last delivered `down` or `drag`, and the click
+/// count of its `down`.
+#[derive(Clone, Debug)]
+struct Press {
+    peer: u64,
+    x: f64,
+    y: f64,
+    clicks: i32,
+}
+
+/// The release of a press that waits for the event that lifts its refusal: `BUTTON_HELD` waits for `host.buttons` mask 0 and
+/// `POINTER_HELD` for the next end of a press.
+struct Release {
+    key: PressKey,
+    press: Press,
+    code: i64,
+}
+
+/// The open presses of the endpoint and the releases that wait (docs/spec/exposure.md#methods).
+#[derive(Default)]
+struct Presses {
+    open: HashMap<PressKey, Press>,
+    waiting: Vec<Release>,
+    /// The number of events that lifted each refusal, `BUTTON_HELD` first and `POINTER_HELD` second, so a release that was
+    /// refused while such an event came is delivered again at once instead of waiting for the next one.
+    lifts: [u64; 2],
+}
+
+/// The place of the refusal code in `Presses::lifts`.
+fn lift_index(code: i64) -> usize {
+    usize::from(code == POINTER_HELD)
+}
+
 struct Shared {
     service: Arc<dyn Service>,
     peers: Mutex<HashMap<u64, Peer>>,
     lines: Mutex<HashMap<Topic, Line>>,
+    /// The open presses, which a delivered `input.pointer` changes. A lock of it is taken after the lock of `peers` when both
+    /// are held.
+    presses: Mutex<Presses>,
     next: AtomicU64,
     orders: AtomicU64,
     /// Whether the endpoint stopped and started to close the connections. It distinguishes the reason for closing a
@@ -497,6 +542,108 @@ impl Notifier {
         for window in windows {
             self.changed(&window, name, None, value);
         }
+        // A mask 0 lifts the refusal 1007 of the releases that wait for it.
+        if name == "host.buttons"
+            && serde_json::from_str::<Value>(value.get())
+                .is_ok_and(|buttons| buttons["mask"] == json!(0))
+        {
+            release_waiting(&self.0, BUTTON_HELD);
+        }
+    }
+
+    /// Ends the watches whose producer ended: with `surface`, the watches of that surface of the window window, which end when
+    /// the surface closes or its document is replaced; without it, every watch of the window, which ends when the window
+    /// closes. Each connection that holds such a watch receives one `status.ended {window, name, surface?, reason}` after the
+    /// `status.changed` that it received before, and the watch is removed without a `status.unwatch` to the page, so a later
+    /// `status.watch` of it starts anew (docs/spec/exposure.md#methods). The diagnostic record is no watch and stays. The watches
+    /// end in this call, so no later `status.changed` reaches them; a write of the endpoint can wait for a connection, so the
+    /// main thread that closes a window or a surface hands the notifications to their own routine.
+    pub fn ended(&self, window: &str, surface: Option<&str>, reason: &str) {
+        let ends = |watch: &Watch| {
+            watch.window == window && (surface.is_none() || watch.surface.as_deref() == surface)
+        };
+        let mut notices = Vec::new();
+        {
+            // default: a lock that a panicking thread poisoned still holds the peers and the lines, which the end of the
+            // watches updates together; the panic hook records the panic.
+            let mut peers = self.0.peers.lock().unwrap_or_else(PoisonError::into_inner);
+            // default: a lock that a panicking thread poisoned still holds the lines, which the end orders with the peers;
+            // the panic hook records the panic.
+            let mut lines = self.0.lines.lock().unwrap_or_else(PoisonError::into_inner);
+            for state in peers.values_mut() {
+                let mut watches: Vec<Watch> = state
+                    .watches
+                    .iter()
+                    .filter(|watch| ends(*watch))
+                    .cloned()
+                    .collect();
+                if watches.is_empty() {
+                    continue;
+                }
+                watches.sort();
+                for watch in &watches {
+                    state.watches.remove(watch);
+                    // A start of this watch that the page refuses later finds no change of this connection to revert.
+                    state.changes.remove(&Topic::Status(watch.clone()));
+                }
+                notices.push((state.writer.clone(), watches));
+            }
+            lines.retain(|topic, line| match topic {
+                Topic::Status(watch) if ends(watch) => {
+                    // The page that followed the value ended with its producer, so the next start goes to the page again.
+                    line.page = false;
+                    line.running || !line.changes.is_empty()
+                }
+                _ => true,
+            });
+        }
+        #[derive(Serialize)]
+        struct Params<'a> {
+            window: &'a str,
+            name: &'a str,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            surface: Option<&'a str>,
+            reason: &'a str,
+        }
+        #[derive(Serialize)]
+        struct Notification<'a> {
+            jsonrpc: &'static str,
+            method: &'static str,
+            params: Params<'a>,
+        }
+        if notices.is_empty() {
+            return;
+        }
+        let reason = reason.to_string();
+        crate::routine::spawn_named("endpoint-ended", move || {
+            for (writer, watches) in notices {
+                // default: a lock that a panicking thread poisoned still holds the connection, which is written as before;
+                // the panic hook records the panic.
+                let mut writer = writer.lock().unwrap_or_else(PoisonError::into_inner);
+                for watch in watches {
+                    let message = Notification {
+                        jsonrpc: "2.0",
+                        method: "status.ended",
+                        params: Params {
+                            window: &watch.window,
+                            name: &watch.name,
+                            surface: watch.surface.as_deref(),
+                            reason: &reason,
+                        },
+                    };
+                    match write_to_peer(&mut *writer, &message) {
+                        Ok(()) => {}
+                        Err(Unsent::PeerClosed) => {
+                            log_info(
+                                "endpoint",
+                                "notification status.ended not sent: peer closed",
+                            );
+                        }
+                        Err(Unsent::Failed(error)) => log_error("endpoint notification", error),
+                    }
+                }
+            }
+        });
     }
 
     /// Returns the watches of the window window.
@@ -861,6 +1008,7 @@ impl Endpoint {
             service,
             peers: Mutex::new(HashMap::new()),
             lines: Mutex::new(HashMap::new()),
+            presses: Mutex::new(Presses::default()),
             next: AtomicU64::new(1),
             orders: AtomicU64::new(1),
             stopping: AtomicBool::new(false),
@@ -1266,9 +1414,18 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
             }
             continue;
         }
+        let input = (request.method == "input.pointer")
+            .then(|| pointer_input(request.params.as_ref()))
+            .flatten();
         let shared = shared.clone();
         crate::routine::spawn_named("endpoint-run", move || {
             let outcome = run(&shared, &request.method, request.params, Some(reply));
+            // The press is the connection's before the answer goes, so a request that follows the answer finds it.
+            if outcome.is_ok()
+                && let Some((window, input)) = input
+            {
+                delivered(&shared, peer, window, &input);
+            }
             // A timeout is an error that the requesting side receives, but only this record keeps which method and what
             // it waited for.
             if let Err(failure) = &outcome
@@ -1588,6 +1745,189 @@ fn forget(shared: &Arc<Shared>, peer: u64) {
         // the panic hook records the panic.
         .unwrap_or_else(PoisonError::into_inner)
         .remove(&peer);
+    // The connection is gone from the peers, so a `down` of it that is delivered after this releases its press itself.
+    let owned: Vec<(PressKey, Press)> = {
+        // default: a lock that a panicking thread poisoned still holds the presses, and the presses of the connection are
+        // taken from them; the panic hook records the panic.
+        let mut presses = shared.presses.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut keys: Vec<PressKey> = presses
+            .open
+            .iter()
+            .filter(|(_, press)| press.peer == peer)
+            .map(|(key, _)| key.clone())
+            .collect();
+        keys.sort();
+        keys.into_iter()
+            .filter_map(|key| presses.open.remove(&key).map(|press| (key, press)))
+            .collect()
+    };
+    for (key, press) in owned {
+        release(shared, key, press);
+    }
+}
+
+/// Reads the window and the pointer input of the params of `input.pointer`. Params that the host refuses are no input, and
+/// the request fails without a press.
+fn pointer_input(params: Option<&Value>) -> Option<(String, crate::platform::Pointer)> {
+    let params = params?.as_object()?;
+    let window = params.get("window")?.as_str()?.to_string();
+    // default: params that do not parse are refused by the request itself, which delivers nothing.
+    let input = crate::exposure::pointer(params).ok()?;
+    Some((window, input))
+}
+
+/// Applies a delivered `input.pointer` of the connection peer to the open presses: a `down` opens the press of the connection,
+/// a `drag` moves its point, and an `up` ends it, whichever connection sent it.
+fn delivered(shared: &Shared, peer: u64, window: String, input: &crate::platform::Pointer) {
+    let key = PressKey {
+        window,
+        pointer: input.pointer.clone(),
+        button: input.button,
+    };
+    match input.phase {
+        1 => {
+            let press = Press {
+                peer,
+                x: input.x,
+                y: input.y,
+                clicks: input.clicks,
+            };
+            {
+                // default: a lock that a panicking thread poisoned still holds the peers, which are only read; the panic
+                // hook records the panic.
+                let peers = shared.peers.lock().unwrap_or_else(PoisonError::into_inner);
+                if peers.contains_key(&peer) {
+                    // default: a lock that a panicking thread poisoned still holds the presses, which take the new press;
+                    // the panic hook records the panic.
+                    let mut presses = shared.presses.lock().unwrap_or_else(PoisonError::into_inner);
+                    // A release that waits for an earlier press of this pointer and button found that press ended, since a
+                    // new press of them was delivered.
+                    presses.waiting.retain(|release| release.key != key);
+                    presses.open.insert(key, press);
+                    return;
+                }
+            }
+            // The connection closed while its `down` was delivered, so its close found no press to release.
+            release(shared, key, press);
+        }
+        2 => {
+            // default: a lock that a panicking thread poisoned still holds the presses, whose point the drag moves; the
+            // panic hook records the panic.
+            let mut presses = shared.presses.lock().unwrap_or_else(PoisonError::into_inner);
+            if let Some(press) = presses.open.get_mut(&key) {
+                press.x = input.x;
+                press.y = input.y;
+            }
+        }
+        3 => {
+            {
+                // default: a lock that a panicking thread poisoned still holds the presses, which the release ends; the
+                // panic hook records the panic.
+                let mut presses = shared.presses.lock().unwrap_or_else(PoisonError::into_inner);
+                presses.open.remove(&key);
+                // A release that waits for this press finds it ended.
+                presses.waiting.retain(|release| release.key != key);
+            }
+            release_waiting(shared, POINTER_HELD);
+        }
+        _ => {}
+    }
+}
+
+/// The text of a press in the application log.
+fn press_text(key: &PressKey) -> String {
+    let button = if key.button == 1 { "right" } else { "left" };
+    format!(
+        "pointer {} button {button} in window {}",
+        key.pointer, key.window
+    )
+}
+
+/// Delivers the `up` of a press that its connection left open, at the point of its last delivered input. A refusal 1007 or
+/// 1011 waits for the event that lifts it, and any other refusal finds the press ended already; both are written to the
+/// application log at `info` (docs/spec/exposure.md#methods).
+fn release(shared: &Shared, key: PressKey, press: Press) {
+    let mut params = Map::new();
+    params.insert("pointer".into(), json!(key.pointer));
+    params.insert("x".into(), json!(press.x));
+    params.insert("y".into(), json!(press.y));
+    params.insert("phase".into(), json!("up"));
+    params.insert(
+        "button".into(),
+        json!(if key.button == 1 { "right" } else { "left" }),
+    );
+    params.insert("clicks".into(), json!(press.clicks));
+    loop {
+        // default: a lock that a panicking thread poisoned still holds the presses, whose lift counts are only read; the
+        // panic hook records the panic.
+        let before = shared.presses.lock().unwrap_or_else(PoisonError::into_inner).lifts;
+        let failure = match shared.service.call(&key.window, "input.pointer", params.clone(), None) {
+            Ok(_) => {
+                release_waiting(shared, POINTER_HELD);
+                return;
+            }
+            Err(failure) => failure,
+        };
+        if failure.code != BUTTON_HELD && failure.code != POINTER_HELD {
+            log_info(
+                "endpoint",
+                format!(
+                    "the release of {} ended nothing: code {}: {}",
+                    press_text(&key),
+                    failure.code,
+                    failure.message
+                ),
+            );
+            return;
+        }
+        {
+            // default: a lock that a panicking thread poisoned still holds the presses, which keep the release that waits;
+            // the panic hook records the panic.
+            let mut presses = shared.presses.lock().unwrap_or_else(PoisonError::into_inner);
+            let index = lift_index(failure.code);
+            // The event that lifts the refusal came while the release was refused, so the release goes again now.
+            if presses.lifts[index] != before[index] {
+                continue;
+            }
+            presses.waiting.push(Release {
+                key: key.clone(),
+                press,
+                code: failure.code,
+            });
+        }
+        let lift = if failure.code == BUTTON_HELD {
+            "host.buttons mask 0"
+        } else {
+            "the end of a press"
+        };
+        log_info(
+            "endpoint",
+            format!(
+                "the release of {} waits for {lift}: code {}",
+                press_text(&key),
+                failure.code
+            ),
+        );
+        return;
+    }
+}
+
+/// Delivers again the releases that wait for the event that lifts the refusal code.
+fn release_waiting(shared: &Shared, code: i64) {
+    let lifted: Vec<Release> = {
+        // default: a lock that a panicking thread poisoned still holds the presses, whose waiting releases are taken; the
+        // panic hook records the panic.
+        let mut presses = shared.presses.lock().unwrap_or_else(PoisonError::into_inner);
+        presses.lifts[lift_index(code)] += 1;
+        let (lifted, kept) = std::mem::take(&mut presses.waiting)
+            .into_iter()
+            .partition(|release| release.code == code);
+        presses.waiting = kept;
+        lifted
+    };
+    for waiting in lifted {
+        release(shared, waiting.key, waiting.press);
+    }
 }
 
 #[cfg(test)]

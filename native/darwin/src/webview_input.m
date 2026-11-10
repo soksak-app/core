@@ -198,17 +198,6 @@ void webviewInputReceive(WKWebView *view, NSString *type, NSTimeInterval timeout
     });
 }
 
-void webviewInputReceiveThenDrain(WKWebView *view, NSString *type, NSTimeInterval timeout, void (^done)(BOOL received)) {
-    NSCAssert(NSThread.isMainThread, @"Webview input receipts require the main thread");
-    webviewInputReceive(view, type, timeout, ^(BOOL received) {
-        if (!hasPendingMouseDrain(view)) {
-            done(NO);
-            return;
-        }
-        [view _doAfterProcessingAllPendingMouseEvents:^{ done(received); }];
-    });
-}
-
 void webviewInputSendThen(WKWebView *view, NSString *type, NSTimeInterval timeout,
     BOOL (^send)(void), void (^done)(BOOL received)) {
     NSCAssert(NSThread.isMainThread, @"Webview input receipts require the main thread");
@@ -218,15 +207,11 @@ void webviewInputSendThen(WKWebView *view, NSString *type, NSTimeInterval timeou
         return;
     }
     if (!hasPendingMouseDrain(view)) { done(NO); return; }
+    // The receipt is the end of the input (docs/spec/exposure.md#methods): no later step of WebKit, such as the end of its pending
+    // mouse events, delays the answer.
     SPInputWait *wait = [[SPInputWait new] autorelease];
     wait.type = type;
-    wait.done = ^(BOOL received) {
-        if (!received || !hasPendingMouseDrain(view)) {
-            done(NO);
-            return;
-        }
-        [view _doAfterProcessingAllPendingMouseEvents:^{ done(YES); }];
-    };
+    wait.done = done;
     [handler.waits addObject:wait];
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(timeout * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         if ([handler.waits containsObject:wait]) endAtLimit(view, handler, wait, timeout);

@@ -818,6 +818,8 @@ export const surfaces = native ? {
 
 let pick = null;
 let shown = null;
+// The show of the modal on display: a later show, also of the same element, is another one.
+let showing = null;
 
 /* The state that the open modal document reported last. It is core.modal of docs/spec/exposure.md. */
 let modalDocument = null;
@@ -969,7 +971,11 @@ export const shapes = native ? {
  * Without an application the element is not hidden and this document draws it as it is.
  */
 export const overlay = native ? {
-    show(el, rect, onPick) {
+    /**
+     * The modal is open from this call (docs/spec/native-modals.md). When the host refuses its overlayShow and it is still the
+     * modal on display, it closes as hide() does in the turn of the answer, and refused(reason) lets its owner close its layer.
+     */
+    show(el, rect, onPick, refused) {
       // This interface shows one modal at a time. If the one on display is not closed, its window stays
       // in the application and nothing refers to it.
       if (shown) this.hide();
@@ -985,16 +991,23 @@ export const overlay = native ? {
       const name = el.getAttribute("aria-label");
       if (!name) throw new Error(`${el.id} needs an aria-label to name its overlay`);
       shown = el.id;
+      const show = {};
+      showing = show;
       modalDocument = null;
       modalChanged();
       const style = getComputedStyle(el);
       modalFrame = overlayFrame(el, rect);
+      // tellInTurn writes the failure to the application log; a refusal of a modal that was replaced or closed changes nothing.
       tellInTurn("overlayShow", {
         id: shown,
         title: name,
         rect: modalFrame,
         ...drawing(el),
         radius: el.dataset.nativeModal === "dialog" ? 0 : parseFloat(style.borderTopLeftRadius),
+      }).then(undefined, (reason) => {
+        if (showing !== show) return;
+        this.hide();
+        refused?.(reason);
       });
     },
 
@@ -1022,6 +1035,7 @@ export const overlay = native ? {
       if (el && shown !== el.id) return;
       const id = shown;
       shown = null;
+      showing = null;
       pick = null;
       modalDocument = null;
       modalChanged();

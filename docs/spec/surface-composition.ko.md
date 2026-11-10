@@ -80,11 +80,12 @@ view 표면에서 입력과 시각의 소유 순서는 위에서부터 view의 D
 const composition = await bridge.composition.create({
   regions: { view: document.querySelector("[data-region=view]") },
   overlays: {},
+  input: { view: (event) => receive(event) },
 });
 const view = composition.region("view");
 ```
 
-키는 manifest 선언과 정확히 같아야 하고 모든 값은 호출 문서의 요소여야 한다. 생성은 모든 영역을 붙이고 완전한 배치 스냅샷 하나를 보낸다. 선언이나 요소가 빠지거나 더 있으면 아무것도 붙이지 않고 실패한다.
+키는 manifest 선언과 정확히 같아야 하고 모든 값은 호출 문서의 요소여야 한다. `input`은 생성이 줄 때 선언된 image region마다 함수 하나를 두고 다른 키는 두지 않으며, 그 함수가 그 영역의 `input` event의 handler다([image regions](native-surfaces.ko.md#그림-영역)). 빠지거나, 더 있거나, 함수가 아닌 항목은 `composition input must exactly match the image regions of the surface declaration (expected <names>)`로 생성을 실패시킨다. 생성은 모든 영역을 붙이고 완전한 배치 스냅샷 하나를 보낸다. 선언이나 요소가 빠지거나 더 있으면 아무것도 붙이지 않고 실패한다.
 
 `composition.update(change)`는 코드가 주도하는 DOM 변경을 적용하고, 선언한 모든 앵커와 오버레이를 측정한 다음 완전한 스냅샷 하나를 보낸다. 컨트롤러는 모든 앵커·오버레이·조상의 크기 변경, 뷰포트 크기 변경, 스크롤, DOM 변경을 관찰한다. 감지한 모든 변경은 같은 완전한 스냅샷을 보낸다. 어떤 관찰자나 호출자도 영역 하나만 따로 보낼 수 없다. 개별 공개 `attach`, `place`, 원시 영역 포트는 존재하지 않는다.
 

@@ -87,8 +87,8 @@ async function ownDeclarations() {
 export const expose = page?.exposure ? createExpose(page.exposure, ownDeclarations) : null;
 
 /** Attaches all declared native anchors at once and places them together in one measurement. */
-export async function createSurfaceComposition({ regions = {}, overlays = {} } = {}) {
+export async function createSurfaceComposition({ regions = {}, overlays = {}, input } = {}) {
   if (!runtimePage) return null;
   const declaration = (await ownManifest()).surface?.composition;
-  return createSurfaceCompositionController(runtimePage, declaration, { regions, overlays }, window);
+  return createSurfaceCompositionController(runtimePage, declaration, { regions, overlays, input }, window);
 }

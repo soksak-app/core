@@ -793,4 +793,8 @@ func (s *Surfaces) close() {
 		}
 	})
 	routine.Go("sidecars-close-owner", func() { s.sidecars.CloseOwner(s) })
+	// The window closed, so the producer of every watch of it ended (docs/spec/exposure.md#methods).
+	if s.host.endpoint != nil {
+		s.host.endpoint.ProducerEnded(s.name, "", "window-closed")
+	}
 }

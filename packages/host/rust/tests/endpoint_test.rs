@@ -30,6 +30,8 @@ struct Fake {
     seen: Mutex<Sender<(String, String, Value)>>,
     /// A method of the page that ends with a timeout.
     timing_out: Mutex<Option<String>>,
+    /// The phase of `input.pointer` that is refused, and the code of the refusal.
+    refusing: Mutex<Option<(String, i64)>>,
 }
 
 impl Fake {
@@ -40,6 +42,7 @@ impl Fake {
                 calls: Mutex::new(Vec::new()),
                 seen: Mutex::new(tx),
                 timing_out: Mutex::new(None),
+                refusing: Mutex::new(None),
             }),
             rx,
         )
@@ -73,6 +76,15 @@ impl Service for Fake {
         _reply: Option<soksak_host::endpoint::ReplyScope>,
     ) -> Result<Box<RawValue>, Failure> {
         let plain = params.get("name").and_then(Value::as_str) == Some("core.plain");
+        let refused = self
+            .refusing
+            .lock()
+            .unwrap()
+            .clone()
+            .filter(|(phase, _)| {
+                method == "input.pointer"
+                    && params.get("phase").and_then(Value::as_str) == Some(phase.as_str())
+            });
         let call = (
             window.to_string(),
             method.to_string(),
@@ -80,6 +92,9 @@ impl Service for Fake {
         );
         self.calls.lock().unwrap().push(call.clone());
         let _ = self.seen.lock().unwrap().send(call);
+        if let Some((phase, code)) = refused {
+            return Err(Failure::new(code, format!("the {phase} is refused")));
+        }
         if self.timing_out.lock().unwrap().as_deref() == Some(method) {
             return Err(Failure::new(
                 endpoint::TIMED_OUT,
@@ -1537,4 +1552,99 @@ fn a_zero_ready_termination_intent_replies_before_the_actual_socket_closes() {
         endpoint::ReplyOutcome::Written
     );
     assert_eq!(endpoint::read_frame(&mut client).unwrap(), None);
+}
+
+/// Waits for the next `input.pointer` call of the page with the phase `phase` and returns its params. The release of a closed
+/// connection runs in the serve thread of that connection, which no call of the test is ordered after, so the wait ends with
+/// the call itself; a release that never comes leaves the test to the limit of its runner, which reports the stall.
+fn next_pointer(seen: &Receiver<(String, String, Value)>, phase: &str) -> Value {
+    loop {
+        let (window, method, params) = seen
+            .recv()
+            .unwrap_or_else(|_| panic!("the page ended before an input.pointer {phase} reached it"));
+        if method == "input.pointer" && params["phase"] == phase {
+            assert_eq!(window, "w1");
+            return params;
+        }
+    }
+}
+
+// The close of a connection releases the press that its down opened, at the point of its last delivered drag, and a press
+// that an up of any connection ended is not released again.
+// contract: endpoint.input.close-releases-presses
+#[test]
+fn the_close_of_a_connection_releases_its_presses() {
+    let config = folder::Folder::new();
+    let (fake, seen) = Fake::new();
+    let endpoint = start(config.path(), "test-press", fake.clone());
+    let mut first = open(&endpoint);
+    let pointer = |phase: &str, x: i64, y: i64| {
+        json!({"window": "w1", "pointer": "second", "x": x, "y": y, "phase": phase, "button": "right"})
+    };
+    assert_eq!(
+        request(&mut first, 1, "input.pointer", pointer("down", 10, 20))["result"],
+        Value::Null
+    );
+    assert_eq!(
+        request(&mut first, 2, "input.pointer", pointer("drag", 30, 40))["result"],
+        Value::Null
+    );
+    // A press of the main pointer that an up of another connection ended is no press of this connection any more.
+    let main = |phase: &str| json!({"window": "w1", "x": 1, "y": 2, "phase": phase});
+    request(&mut first, 3, "input.pointer", main("down"));
+    let mut second = open(&endpoint);
+    request(&mut second, 1, "input.pointer", main("up"));
+    while seen.try_recv().is_ok() {}
+    drop(first);
+    let released = next_pointer(&seen, "up");
+    assert_eq!(
+        released,
+        json!({"pointer": "second", "x": 30.0, "y": 40.0, "phase": "up", "button": "right", "clicks": 1})
+    );
+    // The close found no other press: the next pointer call of the page is the one of the second connection.
+    request(&mut second, 2, "input.pointer", main("move"));
+    let next = next_pointer(&seen, "move");
+    assert_eq!(next["x"], 1);
+    assert!(
+        seen.try_recv().is_err(),
+        "the close released a press that an up had ended: {:?}",
+        fake.calls()
+    );
+    endpoint.stop();
+}
+
+// A release refused with 1007 is delivered at the next host.buttons mask 0, and not at a mask that is not 0.
+// contract: endpoint.input.close-releases-presses
+#[test]
+fn a_release_refused_while_a_button_is_held_waits_for_mask_zero() {
+    let config = folder::Folder::new();
+    let (fake, seen) = Fake::new();
+    let endpoint = start(config.path(), "test-press-held", fake.clone());
+    let notifier = endpoint.notifier();
+    let mut connection = open(&endpoint);
+    request(
+        &mut connection,
+        1,
+        "input.pointer",
+        json!({"window": "w1", "x": 5, "y": 6, "phase": "down"}),
+    );
+    *fake.refusing.lock().unwrap() = Some(("up".into(), endpoint::BUTTON_HELD));
+    while seen.try_recv().is_ok() {}
+    drop(connection);
+    next_pointer(&seen, "up");
+    *fake.refusing.lock().unwrap() = None;
+    notifier.notify_watchers("host.buttons", &raw(&json!({"mask": 1})).unwrap());
+    notifier.notify_watchers("host.buttons", &raw(&json!({"mask": 0})).unwrap());
+    let released = next_pointer(&seen, "up");
+    assert_eq!(
+        released,
+        json!({"pointer": "main", "x": 5.0, "y": 6.0, "phase": "up", "button": "left", "clicks": 1})
+    );
+    let ups = fake
+        .calls()
+        .iter()
+        .filter(|(_, method, params)| method == "input.pointer" && params["phase"] == "up")
+        .count();
+    assert_eq!(ups, 2, "the release was not delivered once after mask 0: {:?}", fake.calls());
+    endpoint.stop();
 }

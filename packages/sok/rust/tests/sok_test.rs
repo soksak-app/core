@@ -750,3 +750,247 @@ fn the_build_identifier_follows_the_dev_feature() {
         assert_eq!(soksak_sok::identity::identity(), "app.soksak.tauri");
     }
 }
+
+// The producer of a watch that ends sends status.ended, and the watch ends with exit status 1 and the error that names the
+// status and the reason (docs/spec/exposure.md#methods).
+// contract: endpoint.status.ended-ends-a-watch
+#[test]
+fn a_watch_ends_at_status_ended() {
+    let changed = r#"{"jsonrpc":"2.0","method":"status.changed","params":{"window":"main","name":"core.screen","surface":"tab-1","value":2}}"#;
+    let other = r#"{"jsonrpc":"2.0","method":"status.ended","params":{"window":"main","name":"core.other","surface":"tab-1","reason":"surface-closed"}}"#;
+    let ended = r#"{"jsonrpc":"2.0","method":"status.ended","params":{"window":"main","name":"core.screen","surface":"tab-1","reason":"surface-closed"}}"#;
+    let fake = start(move |method, _| match method {
+        "status.watch" => result("null"),
+        "status.get" => Answer {
+            result: "1".into(),
+            after: vec![changed.into(), other.into(), ended.into()],
+            close_after: true,
+            ..Answer::default()
+        },
+        _ => Answer {
+            code: -32601,
+            message: format!("unexpected {method}"),
+            ..Answer::default()
+        },
+    });
+    let (code, stdout, stderr) = run(&[
+        "status",
+        "core.screen",
+        "--window",
+        "main",
+        "--surface",
+        "tab-1",
+        "--watch",
+        "--config-dir",
+        &fake.dir(),
+    ]);
+    assert_eq!(
+        (code, stdout.as_str(), stderr.as_str()),
+        (1, "1\n2\n", "sok: status core.screen ended: surface-closed\n")
+    );
+}
+
+// A gesture sends down at the first point, a drag to each later point and up at the last point on one connection, and one
+// point is a click (docs/spec/cli.md).
+#[test]
+fn a_gesture_sends_one_press_on_one_connection() {
+    let fake = start(|method, _| {
+        if method == "windows.list" {
+            result(ONE_WINDOW)
+        } else {
+            result("null")
+        }
+    });
+    let dir = fake.dir();
+    let (code, stdout, stderr) = run(&[
+        "input",
+        "gesture",
+        "--pointer",
+        "second",
+        "--button",
+        "right",
+        "--points",
+        "1,2;3.5,4;5,6",
+        "--config-dir",
+        &dir,
+    ]);
+    assert_eq!((code, stdout.as_str()), (0, ""), "{stderr}");
+    let requests = fake.requests.lock().expect("requests").clone();
+    let steps: Vec<String> = requests
+        .iter()
+        .filter(|request| request["method"] == "input.pointer")
+        .map(|request| request["params"].to_string())
+        .collect();
+    assert_eq!(
+        steps,
+        [
+            r#"{"button":"right","phase":"down","pointer":"second","window":"main","x":1,"y":2}"#,
+            r#"{"button":"right","phase":"drag","pointer":"second","window":"main","x":3.5,"y":4}"#,
+            r#"{"button":"right","phase":"drag","pointer":"second","window":"main","x":5,"y":6}"#,
+            r#"{"button":"right","phase":"up","pointer":"second","window":"main","x":5,"y":6}"#,
+        ]
+    );
+    // windows.list chose the window on the same connection, so every step has the id that follows the one before.
+    let ids: Vec<u64> = requests
+        .iter()
+        .map(|request| request["id"].as_u64().expect("id"))
+        .collect();
+    assert_eq!(ids, [1, 2, 3, 4, 5], "the gesture used more than one connection");
+
+    let (code, _, stderr) = run(&[
+        "input", "gesture", "--clicks", "2", "--points", "7,8", "--config-dir", &dir,
+    ]);
+    assert_eq!(code, 0, "{stderr}");
+    let requests = fake.requests.lock().expect("requests").clone();
+    let click: Vec<String> = requests[requests.len() - 2..]
+        .iter()
+        .map(|request| request["params"].to_string())
+        .collect();
+    assert_eq!(
+        click,
+        [
+            r#"{"clicks":2,"phase":"down","window":"main","x":7,"y":8}"#,
+            r#"{"clicks":2,"phase":"up","window":"main","x":7,"y":8}"#,
+        ]
+    );
+
+    let (code, _, stderr) = run(&["input", "gesture", "--points", "1;2", "--config-dir", &dir]);
+    assert_eq!(code, 2, "{stderr}");
+    assert!(
+        stderr.starts_with("sok: --points must be x,y pairs separated by ;\n"),
+        "{stderr}"
+    );
+}
+
+// A step of a gesture that fails ends the command with its number and its error, and no later step is sent.
+#[test]
+fn a_failed_gesture_step_ends_the_command() {
+    let fake = start(|method, params| match method {
+        "windows.list" => result(ONE_WINDOW),
+        "input.pointer" if params["phase"] == "drag" => Answer {
+            code: 1007,
+            message: "a mouse button is pressed".into(),
+            ..Answer::default()
+        },
+        _ => result("null"),
+    });
+    let (code, stdout, stderr) = run(&[
+        "input",
+        "gesture",
+        "--points",
+        "1,2;3,4",
+        "--config-dir",
+        &fake.dir(),
+    ]);
+    assert_eq!(
+        (code, stdout.as_str(), stderr.as_str()),
+        (1, "", "sok: gesture step 2: a mouse button is pressed (1007)\n")
+    );
+    assert_eq!(
+        fake.methods(),
+        ["windows.list", "input.pointer", "input.pointer"]
+    );
+}
+
+/// The child of the interrupt check: the executable sok with its standard output on a pipe.
+struct Watching {
+    pid: String,
+    ended: bool,
+}
+
+impl Drop for Watching {
+    fn drop(&mut self) {
+        // A child that did not end by itself is ended, so a failed check leaves no process.
+        if self.ended {
+            return;
+        }
+        let _ = std::process::Command::new("kill")
+            .args(["-KILL", &self.pid])
+            .stderr(std::process::Stdio::null())
+            .status();
+    }
+}
+
+// SIGTERM ends a watch while the command waits in a write to its standard output: the routine of the signal closes the
+// connection, stores the command and ends the process with status 0 (docs/spec/cli.md).
+#[test]
+fn an_interrupt_ends_a_watch_that_waits_in_a_write() {
+    // The value is larger than any pipe buffer, so its write waits for a reader that never reads it all.
+    let big = format!(
+        r#"{{"jsonrpc":"2.0","method":"status.changed","params":{{"window":"main","name":"core.screen","value":"{}"}}}}"#,
+        "x".repeat(4 << 20)
+    );
+    let fake = start(move |method, _| match method {
+        "status.watch" => result("null"),
+        "status.get" => Answer {
+            result: "1".into(),
+            after: vec![big.clone()],
+            ..Answer::default()
+        },
+        _ => Answer {
+            code: -32601,
+            message: format!("unexpected {method}"),
+            ..Answer::default()
+        },
+    });
+    std::fs::write(
+        fake.config_dir.path().join("log-policy.json"),
+        r#"{"schema":1,"classes":{"lifecycle":"debug","input":"debug","call":"debug","io":"debug","frame":"debug"}}"#,
+    )
+    .expect("log-policy.json");
+    let child = std::process::Command::new(env!("CARGO_BIN_EXE_sok"))
+        .args([
+            "status",
+            "core.screen",
+            "--window",
+            "main",
+            "--watch",
+            "--config-dir",
+            &fake.dir(),
+        ])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .expect("sok starts");
+    let mut child = child;
+    let mut watching = Watching {
+        pid: child.id().to_string(),
+        ended: false,
+    };
+    let mut stdout = child.stdout.take().expect("stdout");
+    // The first line is the value, and the first byte after it is the start of the write of the large value, which
+    // cannot end before the pipe is read.
+    let mut seen = Vec::new();
+    let mut byte = [0u8; 1];
+    while seen.len() < 3 {
+        stdout.read_exact(&mut byte).expect("the watch printed");
+        seen.push(byte[0]);
+    }
+    assert_eq!(seen, b"1\n\"");
+    let pid = watching.pid.clone();
+    let signal = std::process::Command::new("kill")
+        .args(["-TERM", &pid])
+        .status()
+        .expect("kill runs");
+    assert!(signal.success(), "kill -TERM {pid} failed");
+    // The pipe stays unread while sok ends, so its write still waits. A sok that does not end leaves the test to the limit of
+    // its runner, which reports the stall.
+    let status = child.wait().expect("wait");
+    watching.ended = true;
+    drop(stdout);
+    assert_eq!(status.code(), Some(0), "sok ended with {status:?}");
+    let logs = fake.config_dir.path().join("logs");
+    let stored = std::fs::read_dir(&logs)
+        .expect("logs")
+        .map(|entry| entry.expect("entry").path())
+        .filter(|path| path.extension().is_some_and(|extension| extension == "jsonl"))
+        .map(|path| std::fs::read_to_string(path).expect("log file"))
+        .any(|text| {
+            text.lines().any(|line| {
+                let event: Value = serde_json::from_str(line).expect("event line");
+                event["event"] == "sok.command" && event["fields"]["status"] == 0
+            })
+        });
+    assert!(stored, "no sok.command with status 0 in {}", logs.display());
+}

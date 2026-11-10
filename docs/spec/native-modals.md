@@ -36,6 +36,14 @@ needs a unique, nonempty `id` and a nonempty `aria-label`. Choose the mode befor
 opening; to change modes, close and open the view again.
 Only one overlay is open at a time. Opening another closes the previous native
 view; its owner remains responsible for cleaning up the previous DOM.
+The modal is open from `show()`, so `core.modal` and the keyboard of the
+workbench follow it at once, and it stays open until `hide()` or until the host
+refuses its `overlayShow`. A refusal ends the modal in the turn in which the
+answer arrives, as `hide()` does, when that modal is still the one shown, and
+then calls `refused(reason)`, the fourth argument of `show()`, so its owner
+closes its layer: a question that waits for a pick of the modal ends without
+one. A refusal of a modal that was replaced or closed before the answer changes
+nothing, and the failure stays in the application log.
 
 The following markup uses the example's `app.css` classes. The scrim remains in
 the main document to block its DOM input; only the card is copied into the

@@ -29,6 +29,8 @@ commands:
   status NAME [window] [--surface S] [--watch]
   element rect|click|input|dispatch NAME [window] [--surface S] [--index N] [--value V] [--event JSON]
   input pointer [window] [--pointer NAME] --x X --y Y --phase move|down|drag|up|scroll [--button left|right] [--delta-x N] [--delta-y N] [--clicks N] [--activate]
+  input gesture [window] [--pointer NAME] [--button left|right] [--clicks N] --points X,Y[;X,Y]...
+                            sends down at the first point, a drag to each later point and up at the last on one connection
   input key [window] --key K --phase down|up [--text T] [--modifiers shift,control,option,command]
   debug query [--channel C] [--level L] [--class C] [--layer L] [--event E] [--event-prefix P] [--surface S] [--session S] [--cid C] [--run R] [--text T] [--from T] [--to T] [--order asc|desc] [--limit N] [--after CURSOR]
                             prints one page of the events of the event files that pass the filter
@@ -67,7 +69,7 @@ var booleans = map[string]bool{"watch": true, "activate": true, "help": true}
 // options are the flags that take a value.
 var options = map[string]bool{
 	"config-dir": true, "window": true, "project": true, "surface": true, "index": true, "value": true, "event": true,
-	"wait": true, "bundle": true, "target": true, "x": true, "y": true, "phase": true, "platform": true, "button": true, "pointer": true, "delta-x": true, "clicks": true, "delta-y": true, "key": true, "text": true, "modifiers": true,
+	"wait": true, "bundle": true, "target": true, "x": true, "y": true, "phase": true, "platform": true, "button": true, "pointer": true, "delta-x": true, "clicks": true, "delta-y": true, "points": true, "key": true, "text": true, "modifiers": true,
 	"level": true, "layer": true, "session": true, "cid": true, "from": true, "to": true,
 	"channel": true, "class": true, "event-prefix": true, "run": true, "order": true, "limit": true, "after": true, "around": true, "earlier": true, "later": true, "until": true,
 }
@@ -178,6 +180,8 @@ type request struct {
 	method string
 	params map[string]any
 	watch  bool
+	// steps are the requests of a gesture, sent one after another on the connection of the command. A gesture prints nothing.
+	steps []request
 	// field is the field of the result object to print. When it is empty, the whole result is printed.
 	field string
 }
@@ -311,6 +315,8 @@ func plan(a arguments, window func() (string, error)) (request, error) {
 				return request{method: "input.pointer", params: compact("window", w, "pointer", optional(a, "pointer"), "x", x, "y", y, "phase", phase,
 					"button", optional(a, "button"), "deltaX", deltaX, "deltaY", deltaY, "clicks", clicks, "activate", activate)}, nil
 			})
+		case "gesture":
+			return planGesture(a, withWindow)
 		case "key":
 			key, err := a.required("key")
 			if err != nil {
@@ -338,6 +344,46 @@ func plan(a arguments, window func() (string, error)) (request, error) {
 		return request{}, usage("unknown input kind: %s", kind)
 	}
 	return request{}, usage("unknown command: %s", command)
+}
+
+// planGesture turns `input gesture` into its steps: down at the first point, a drag to each later point and up at the last
+// point, so one point is a click (docs/spec/cli.md). The steps share one connection, so the end of the connection releases a
+// press that a failed step left open (docs/spec/exposure.md#methods).
+func planGesture(a arguments, withWindow func(func(string) (request, error)) (request, error)) (request, error) {
+	text, err := a.required("points")
+	if err != nil {
+		return request{}, err
+	}
+	if button, ok := a.values["button"]; ok && button != "left" && button != "right" {
+		return request{}, usage("--button must be left or right")
+	}
+	clicks, err := a.number("clicks")
+	if err != nil {
+		return request{}, err
+	}
+	type point struct{ x, y float64 }
+	var points []point
+	for _, item := range strings.Split(text, ";") {
+		xText, yText, found := strings.Cut(item, ",")
+		x, xErr := strconv.ParseFloat(strings.TrimSpace(xText), 64)
+		y, yErr := strconv.ParseFloat(strings.TrimSpace(yText), 64)
+		if !found || xErr != nil || yErr != nil || math.IsInf(x, 0) || math.IsNaN(x) || math.IsInf(y, 0) || math.IsNaN(y) {
+			return request{}, usage("--points must be x,y pairs separated by ;")
+		}
+		points = append(points, point{x, y})
+	}
+	return withWindow(func(w string) (request, error) {
+		step := func(phase string, at point, clicks any) request {
+			return request{method: "input.pointer", params: compact("window", w, "pointer", optional(a, "pointer"), "x", at.x, "y", at.y,
+				"phase", phase, "button", optional(a, "button"), "clicks", clicks)}
+		}
+		steps := []request{step("down", points[0], clicks)}
+		for _, at := range points[1:] {
+			steps = append(steps, step("drag", at, nil))
+		}
+		steps = append(steps, step("up", points[len(points)-1], clicks))
+		return request{steps: steps}, nil
+	})
 }
 
 // windowEntry is one window of the windows.list result.
@@ -409,8 +455,9 @@ func compactLine(raw json.RawMessage) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
-// watch prints the status value and each later change, one per line. On SIGINT or SIGTERM it closes the connection and
-// ends successfully.
+// watch prints the status value and each later change, one per line. A status.ended of the watch ends it with the error
+// `status <name> ended: <reason>`. On SIGINT or SIGTERM the routine that receives the signal closes the connection and
+// ends the run itself (interrupted), so a command that waits in a write to its standard output ends too.
 func watch(client *Client, params map[string]any, stdout io.Writer) error {
 	stopped := make(chan struct{})
 	signals := make(chan os.Signal, 1)
@@ -422,7 +469,9 @@ func watch(client *Client, params map[string]any, stdout io.Writer) error {
 	Go("interrupt", func() {
 		if _, ok := <-signals; ok {
 			close(stopped)
-			closed <- client.Close()
+			err := client.Close()
+			closed <- err
+			interrupted(err)
 		}
 	})
 	matches := func(raw json.RawMessage) (json.RawMessage, bool, error) {
@@ -451,6 +500,18 @@ func watch(client *Client, params map[string]any, stdout io.Writer) error {
 		return err
 	}
 	client.Notify = func(method string, raw json.RawMessage) error {
+		if method == "status.ended" {
+			var ended struct {
+				Reason string `json:"reason"`
+			}
+			if err := json.Unmarshal(raw, &ended); err != nil {
+				return fmt.Errorf("status.ended has unexpected params: %w", err)
+			}
+			if _, same, err := matches(raw); err != nil || !same {
+				return err
+			}
+			return fmt.Errorf("status %s ended: %s", params["name"], ended.Reason)
+		}
 		if method != "status.changed" {
 			return nil
 		}
@@ -606,6 +667,14 @@ func run(args []string, stdout, stderr io.Writer, options Options) (err error) {
 	}
 	if req.watch {
 		return watch(c, req.params, stdout)
+	}
+	for n, step := range req.steps {
+		if _, err := c.Request(step.method, step.params); err != nil {
+			return fmt.Errorf("gesture step %d: %w", n+1, err)
+		}
+	}
+	if req.steps != nil {
+		return nil
 	}
 	var params any
 	if req.params != nil {

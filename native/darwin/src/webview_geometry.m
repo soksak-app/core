@@ -543,12 +543,16 @@ static BOOL holdsSurface(NSView *view) {
 // A press on the workbench: a press in the content view of a window that holds a surface, outside the views of its surfaces and
 // outside its modal web views (docs/spec/native-surfaces.md#keyboard-of-a-surface). A modal web view is a web view of the content
 // view other than the main web view; it takes the keyboard itself, and its document owes no decision of the workbench
-// (docs/spec/native-modals.md#keyboard).
+// (docs/spec/native-modals.md#keyboard). The press belongs to the view that AppKit gives it, which -[NSWindow sendEvent:] hits from
+// the frame view of the window: a press on the title bar belongs to the title bar, also where the content runs under it, and the title
+// bar tracks it, moves or zooms the window and asks the workbench no decision.
 static bool pressOnWorkbench(void *owner, double x, double y) {
     NSView *content = ((NSWindow *)owner).contentView;
-    if (!content || !holdsSurface(content)) return false;
-    NSView *hit = [content hitTest:[content.superview convertPoint:NSMakePoint(x, y) fromView:nil]];
-    if (!hit || surfaceHost(hit)) return false;
+    NSView *frame = content.superview;
+    if (!content || !frame || !holdsSurface(content)) return false;
+    // The frame view has no superview, so the point in the window is the point of its hit test.
+    NSView *hit = [frame hitTest:NSMakePoint(x, y)];
+    if (!hit || ![hit isDescendantOf:content] || surfaceHost(hit)) return false;
     NSView *page = hit;
     while (page && ![page isKindOfClass:WKWebView.class]) page = page.superview;
     return !page || page == (NSView *)sp_window_main_webview(owner);
@@ -600,15 +604,24 @@ static BOOL leftPressOpen(NSWindow *window) {
     return (sp_input_person_buttons() & 1) != 0 || sp_input_press_open(window, 0);
 }
 
-static char keyboardPendingKey, keyboardMonitorKey, keyboardClosedKey;
+static char keyboardPendingKey, keyboardMonitorKey, keyboardElsewhereKey, keyboardTrackingKey, keyboardTrackingArmedKey,
+    keyboardClosedKey;
 
 // Ends the wait for the release of the press of window and returns the keyboard move that waited.
 static void (^takeKeyboardWait(NSWindow *window))(void) {
-    id monitor = objc_getAssociatedObject(window, &keyboardMonitorKey);
-    if (monitor) {
+    const void *monitors[] = {&keyboardMonitorKey, &keyboardElsewhereKey};
+    for (size_t i = 0; i < sizeof monitors / sizeof monitors[0]; i++) {
+        id monitor = objc_getAssociatedObject(window, monitors[i]);
+        if (!monitor) continue;
         [NSEvent removeMonitor:monitor];
-        objc_setAssociatedObject(window, &keyboardMonitorKey, nil, OBJC_ASSOCIATION_RETAIN);
+        objc_setAssociatedObject(window, monitors[i], nil, OBJC_ASSOCIATION_RETAIN);
     }
+    id tracking = objc_getAssociatedObject(window, &keyboardTrackingKey);
+    if (tracking) {
+        CFRunLoopObserverInvalidate((CFRunLoopObserverRef)tracking);
+        objc_setAssociatedObject(window, &keyboardTrackingKey, nil, OBJC_ASSOCIATION_RETAIN);
+    }
+    objc_setAssociatedObject(window, &keyboardTrackingArmedKey, nil, OBJC_ASSOCIATION_RETAIN);
     void (^give)(void) = [[objc_getAssociatedObject(window, &keyboardPendingKey) retain] autorelease];
     objc_setAssociatedObject(window, &keyboardPendingKey, nil, OBJC_ASSOCIATION_COPY);
     return give;
@@ -646,12 +659,45 @@ static void giveKeyboardAfterPress(NSWindow *window, void (^give)(void)) {
     }
     objc_setAssociatedObject(window, &keyboardPendingKey, give, OBJC_ASSOCIATION_COPY);
     if ((sp_input_person_buttons() & 1) == 0 || objc_getAssociatedObject(window, &keyboardMonitorKey)) return;
+    // The wait of a person's press ends with the first of three events, each of which AppKit gives once for the release
+    // (docs/spec/native-surfaces.md#keyboard-of-a-surface). The first is the release that the application dispatches.
     id monitor = sp_observe_local_monitor("webview_geometry.press_release", SP_OBSERVE_RECORD, NSEventMaskLeftMouseUp, ^NSEvent *(NSEvent *event) {
         // It runs after AppKit delivered this release to the view.
         dispatch_async(dispatch_get_main_queue(), ^{ sp_surface_press_released(window); });
         return event;
     });
     objc_setAssociatedObject(window, &keyboardMonitorKey, monitor, OBJC_ASSOCIATION_RETAIN);
+    // The second is the release that another application receives after the application lost the press to it.
+    id elsewhere = sp_observe_global_monitor("webview_geometry.press_release_elsewhere", SP_OBSERVE_RECORD, NSEventMaskLeftMouseUp,
+        ^(NSEvent *event) {
+            (void)event;
+            dispatch_async(dispatch_get_main_queue(), ^{ sp_surface_press_released(window); });
+        });
+    objc_setAssociatedObject(window, &keyboardElsewhereKey, elsewhere, OBJC_ASSOCIATION_RETAIN);
+    // The third is the end of an event tracking loop that took the release out of the queue without dispatching it, as the buttons
+    // of the title bar, a control and a text view do while they track their press: no monitor sees that release. A tracking loop
+    // runs the main run loop in the event tracking mode, so its entry in that mode arms one block of the default mode, which runs at
+    // the first turn of the default mode after the loop ended. That turn is the end of the tracking loop, an event that comes once
+    // for each loop; the block reads the button there and ends the wait when the button is up. A press whose button is still down
+    // then waits on for its release, and a later tracking loop arms the block again. Nothing runs while the loop tracks, and no
+    // turn is polled.
+    CFRunLoopObserverRef tracking = sp_observe_run_loop("webview_geometry.press_tracking", SP_OBSERVE_COUNT, CFRunLoopGetMain(),
+        kCFRunLoopEntry, true, 0, ^{
+            CFStringRef mode = CFRunLoopCopyCurrentMode(CFRunLoopGetMain());
+            BOOL tracks = mode && CFEqual(mode, (CFStringRef)NSEventTrackingRunLoopMode);
+            if (mode) CFRelease(mode);
+            if (!tracks || objc_getAssociatedObject(window, &keyboardTrackingArmedKey)) return;
+            objc_setAssociatedObject(window, &keyboardTrackingArmedKey, @YES, OBJC_ASSOCIATION_RETAIN);
+            CFRunLoopPerformBlock(CFRunLoopGetMain(), kCFRunLoopDefaultMode, ^{
+                if (!objc_getAssociatedObject(window, &keyboardTrackingArmedKey)) return;
+                objc_setAssociatedObject(window, &keyboardTrackingArmedKey, nil, OBJC_ASSOCIATION_RETAIN);
+                if (!leftPressOpen(window)) sp_surface_press_released(window);
+            });
+        });
+    if (tracking) {
+        objc_setAssociatedObject(window, &keyboardTrackingKey, (id)tracking, OBJC_ASSOCIATION_RETAIN);
+        CFRelease(tracking);
+    }
 }
 
 // The first image region in view that shows: a view that takes the first responder and is no web view, whose document holds

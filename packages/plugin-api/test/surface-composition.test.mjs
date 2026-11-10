@@ -59,6 +59,7 @@ function runtime({ documentAttach, imageAttach, place } = {}) {
   const documentCalls = [];
   const imageCalls = [];
   const placements = [];
+  const imageListeners = [];
   const document = {
     attach: (name) => {
       documentCalls.push(["attach", name]);
@@ -83,9 +84,10 @@ function runtime({ documentAttach, imageAttach, place } = {}) {
     caret: (...args) => { imageCalls.push(["caret", ...args]); return Promise.resolve(); },
     text: (...args) => { imageCalls.push(["text", ...args]); return Promise.resolve(); },
     detach: (name) => { imageCalls.push(["detach", name]); return Promise.resolve(); },
-    on: () => Promise.resolve(() => {}),
+    on: (listener) => { imageListeners.push(listener); return Promise.resolve(() => {}); },
   };
   return {
+    imageListeners,
     page: {
       document,
       image,
@@ -348,6 +350,42 @@ test("declaration keys and document ownership are validated before attachment", 
   await assert.rejects(createSurfaceCompositionController(r.page, declaration, {
     regions: { page: f.page, image: foreign }, overlays: { toolbar: f.toolbar, badge: f.badge },
   }, f.window), /must be an element in this document/);
+  assert.deepEqual(r.documentCalls, []);
+  assert.deepEqual(r.imageCalls, []);
+});
+
+// The input handler of an image region is the input of the creation: it exists from the attachment, so an input event that arrives
+// before the creation answers reaches it in its dispatch, and on("input") of that region is refused (docs/spec/native-surfaces.md#image-regions).
+test("the input of the creation receives each input event of its image region in the dispatch, from the attachment", async () => {
+  const f = fixture();
+  let attached;
+  const r = runtime({ imageAttach: () => new Promise((resolve) => (attached = resolve)) });
+  const received = [];
+  const creating = createSurfaceCompositionController(r.page, declaration, {
+    regions: { page: f.page, image: f.image },
+    overlays: { toolbar: f.toolbar, badge: f.badge },
+    input: { image: (event) => received.push(event.actions) },
+  }, f.window);
+  await settle();
+  for (const listener of r.imageListeners) listener("image", { type: "input", actions: ["focus"] });
+  assert.deepEqual(received, [["focus"]], "an input event before the creation answered waited for a handler");
+  attached();
+  const composition = await creating;
+  for (const listener of r.imageListeners) listener("image", { type: "input", actions: ["key"] });
+  assert.deepEqual(received, [["focus"], ["key"]]);
+  assert.throws(() => composition.region("image").on("input", () => {}),
+    { message: "image image: the input handler is the input of composition.create" });
+});
+
+test("a creation input that does not match the image regions fails before attachment", async () => {
+  const f = fixture();
+  const r = runtime();
+  const expected = { message: "composition input must exactly match the image regions of the surface declaration (expected image)" };
+  for (const input of [{}, { image: () => {}, page: () => {} }, { image: "handler" }, null]) {
+    await assert.rejects(createSurfaceCompositionController(r.page, declaration, {
+      regions: { page: f.page, image: f.image }, overlays: { toolbar: f.toolbar, badge: f.badge }, input,
+    }, f.window), expected);
+  }
   assert.deepEqual(r.documentCalls, []);
   assert.deepEqual(r.imageCalls, []);
 });

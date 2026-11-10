@@ -819,7 +819,7 @@ function openLayer(anchor, ask, items, pick, align = "right", groups = [{ headin
   // element and renders it in such a view, so the surfaces below keep running. The whole element is passed, so the
   // application does not need to know its content.
   if (native) {
-    overlay.show(pickerEl, rect, pickerAnswer(keys, run));
+    overlay.show(pickerEl, rect, pickerAnswer(keys, run), () => closePicker("refused"));
     pickerEl.hidden = true;
   } else {
     standIn(true, rect);

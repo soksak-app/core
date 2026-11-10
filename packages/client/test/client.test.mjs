@@ -302,6 +302,34 @@ test("a watch with a surface requests that surface and ignores changes of other 
     Array(2).fill({ window: "main", name: "probe.lines", surface: "tab-a" }));
 });
 
+// The host ends a watch whose producer ended with status.ended and removes it without an unwatch (docs/spec/exposure.md), so the
+// watch rejects with ENDED, sends no status.unwatch, and a later watch of the same key subscribes anew.
+test("status.ended rejects the watch with ENDED and a later watch subscribes again", async (t) => {
+  let watcher = null;
+  let read;
+  const reads = new Promise((resolve) => (read = resolve));
+  const server = await startFakeEndpoint({
+    "status.watch": (params, connection) => { watcher = connection; return null; },
+    "status.get": () => { read(); return []; },
+    "status.unwatch": () => null,
+  });
+  t.after(() => server.close());
+  const client = await connect({ configDir: server.configDir });
+  t.after(() => client.close());
+  const first = client.watch("main", "probe.lines", () => false, { surface: "tab-a", timeout: 5000 });
+  const second = client.watch("main", "probe.lines", () => false, { surface: "tab-a", timeout: 5000 });
+  await reads;
+  watcher.notify("status.ended", { window: "main", name: "probe.lines", surface: "tab-b", reason: "surface-closed" });
+  watcher.notify("status.ended", { window: "main", name: "probe.lines", surface: "tab-a", reason: "surface-closed" });
+  for (const watch of [first, second]) {
+    await assert.rejects(watch, (error) => error.code === "ENDED" && error.message === "status probe.lines ended: surface-closed");
+  }
+  const again = client.watch("main", "probe.lines", (lines) => lines.length === 0, { surface: "tab-a", timeout: 5000 });
+  assert.deepEqual(await again, []);
+  assert.deepEqual(server.requests.map((m) => m.method).filter((m) => m !== "status.get"),
+    ["status.watch", "status.watch", "status.unwatch"]);
+});
+
 // A reload of the page removes the watches of its document, so an unwatch that the host refuses with 1003 (the document
 // closed or the page is not ready) ends that watch; it is reported to the caller of the watch and the connection stays open.
 test("an unwatch refused with 1003 rejects the watch and keeps the connection", async (t) => {

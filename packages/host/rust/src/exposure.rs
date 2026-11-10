@@ -1219,12 +1219,18 @@ pub(crate) fn replay_registrations(window: &Window) {
     }
 }
 
-/// Removes the registrations and the pending requests of a surface page when it closes or reloads.
+/// Removes the registrations and the pending requests of a surface page when it closes or reloads, and ends the watches of
+/// the surface, whose producer was that document (docs/spec/exposure.md#methods).
 pub(crate) fn surface_closed(window: &Window, surface: &str) {
     window
         .state::<Exposure>()
         .relay
         .abandon(&label_for(window, surface));
+    if let Some(endpoint) = window.state::<Exposure>().endpoint.get() {
+        endpoint
+            .notifier()
+            .ended(window.label(), Some(surface), "surface-closed");
+    }
     remove_surface_registrations(window_data(window), surface);
     if let Err(error) = window.emit(
         "exposure-registered",
@@ -1312,11 +1318,15 @@ pub(crate) fn rewatch(window: &Window) {
     });
 }
 
-/// When the window closes, ends the requests sent to the documents of the window and removes the state record of the
-/// window.
+/// When the window closes, ends the watches and the requests sent to the documents of the window and removes the state
+/// record of the window.
 pub(crate) fn window_closed(window: &Window) {
     let state = window.state::<Exposure>();
     let main = window.label().to_string();
+    // Every watch of the window ends with the window, which produced its values (docs/spec/exposure.md#methods).
+    if let Some(endpoint) = state.endpoint.get() {
+        endpoint.notifier().ended(&main, None, "window-closed");
+    }
     let surfaces = format!("surface-{main}-");
     state
         .relay
