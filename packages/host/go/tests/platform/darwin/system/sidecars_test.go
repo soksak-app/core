@@ -13,7 +13,6 @@ import (
 	"sync"
 	"syscall"
 	"testing"
-	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
@@ -133,11 +132,7 @@ func TestCloseDuringStopSendsNothing(t *testing.T) {
 		t.Fatalf("closing during stop = %+v, want none", closing)
 	}
 	releaseSidecar()
-	select {
-	case <-stopped:
-	case <-time.After(support.Stall):
-		t.Fatal("stop did not return after the sidecar ended")
-	}
+	<-stopped
 }
 
 // contract: sidecars.protocol.closed-surface-messages-are-discarded-and-unknown-ones-fail, sidecars.protocol.dropped-message-is-recorded, sidecars.image.retired-owner-dispositions

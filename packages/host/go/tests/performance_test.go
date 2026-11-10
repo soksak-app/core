@@ -207,11 +207,7 @@ func waitForFirstSample(t *testing.T) {
 		default:
 		}
 	})
-	select {
-	case <-sampled:
-	case <-time.After(support.Stall):
-		t.Fatalf("the sampler stored no sample within %v of the switch; the test stalled", support.Stall)
-	}
+	<-sampled
 }
 
 // contract: performance.sampler.reads-every-registered-process

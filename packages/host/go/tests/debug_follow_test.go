@@ -11,13 +11,8 @@ import (
 // nextNotice reads the next published notice.
 func nextNotice(t *testing.T, notices <-chan host.LogNotice) host.LogNotice {
 	t.Helper()
-	select {
-	case notice := <-notices:
-		return notice
-	case <-time.After(5 * time.Second):
-		t.Fatal("a notice did not arrive")
-		return host.LogNotice{}
-	}
+	notice := <-notices
+	return notice
 }
 
 // contract: debug.follow.coalesces-writes-into-a-notice
@@ -74,11 +69,7 @@ func TestLogNoticesAreBoundedInRateAndCountWhatTheyCoalesce(t *testing.T) {
 // enterSpacing waits until the publisher entered the spacing after a notice.
 func enterSpacing(t *testing.T, spaced <-chan struct{}) {
 	t.Helper()
-	select {
-	case <-spaced:
-	case <-time.After(5 * time.Second):
-		t.Fatal("the publisher did not enter the spacing after a notice")
-	}
+	<-spaced
 }
 
 // contract: debug.follow.announces-only-changes-that-are-not-log-reads

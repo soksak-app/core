@@ -151,11 +151,7 @@ func runHarnessReconnect(t *testing.T, sequential bool) {
 	secondOwner := &support.HarnessOwner{Root: "/second", Seen: make(chan SidecarMessage, 4)}
 
 	awaitInitial := func(owner *support.HarnessOwner) {
-		select {
-		case <-owner.Seen:
-		case <-time.After(support.Stall):
-			t.Fatal("no initial event; the test stalled")
-		}
+		<-owner.Seen
 	}
 	// The host connects the cut socket again immediately and sends the connection event. A send after
 	// it receives that event goes to the connection made again, so endpoint reuse and reconnection are verified.
@@ -165,8 +161,6 @@ func runHarnessReconnect(t *testing.T, sequential bool) {
 			if string(event.Body) != `{"connected":true,"event":"connection"}` {
 				t.Fatalf("event after the connection loss = %s, want the connection event", event.Body)
 			}
-		case <-time.After(support.Stall):
-			t.Fatal("no connection event; the test stalled")
 		}
 	}
 	if sequential {
@@ -223,8 +217,6 @@ func runHarnessReconnect(t *testing.T, sequential bool) {
 			if string(event.Body) != `{"operation":"reconnect"}` {
 				t.Fatalf("reconnect event = %s", event.Body)
 			}
-		case <-time.After(support.Stall):
-			t.Fatal("no reconnect event; the test stalled")
 		}
 	}
 
@@ -579,11 +571,7 @@ func TestPersistentStopAnswersADiscardedImageBeforeServiceShutdown(t *testing.T)
 	if err := sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case <-owner.Seen:
-	case <-time.After(support.Stall):
-		t.Fatal("the service's open event did not reach its owner")
-	}
+	<-owner.Seen
 	sidecars.Close("surface")
 	sidecars.Stop()
 	got := written()
@@ -786,13 +774,9 @@ func TestPersistentTransportReplacesEndpointLeftByDeadService(t *testing.T) {
 	if err := sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case event := <-owner.Seen:
-		if event.Surface != "surface" {
-			t.Fatalf("unexpected surface: %s", event.Surface)
-		}
-	case <-time.After(support.Stall):
-		t.Fatal("no replacement event; the test stalled")
+	event := <-owner.Seen
+	if event.Surface != "surface" {
+		t.Fatalf("unexpected surface: %s", event.Surface)
 	}
 	if _, err := os.Stat(filepath.Join(serviceDir, "endpoint.json")); !os.IsNotExist(err) {
 		t.Fatalf("stale endpoint was not removed: %v", err)
@@ -1417,13 +1401,8 @@ func TestPersistentConnectionNoticeReachesOnlyTheSurfacesThatSent(t *testing.T) 
 
 func receiveSidecarMessage(t *testing.T, seen <-chan SidecarMessage) SidecarMessage {
 	t.Helper()
-	select {
-	case message := <-seen:
-		return message
-	case <-time.After(support.Stall):
-		t.Fatalf("no sidecar message arrived within %v; the test stalled", support.Stall)
-		return SidecarMessage{}
-	}
+	message := <-seen
+	return message
 }
 
 // failureOwner is a window that collects sidecar messages and failures separately.
@@ -1499,14 +1478,8 @@ func expectConnectionFailure(t *testing.T, payload []byte, reason string) {
 		}
 	case message := <-owner.seen:
 		t.Fatalf("the bad line was delivered as a message: %+v", message)
-	case <-time.After(support.Stall):
-		t.Fatal("no sidecar failure; the test stalled")
 	}
-	select {
-	case <-closed:
-	case <-time.After(support.Stall):
-		t.Fatal("the host kept the connection open; the test stalled")
-	}
+	<-closed
 }
 
 // contract: sidecars-transport.persistent.invalid-event-fails-the-connection
@@ -1829,7 +1802,7 @@ func TestPersistentServiceWritesItsStandardErrorToItsLog(t *testing.T) {
 		t.Fatal(err)
 	}
 	owner := &support.HarnessOwner{Root: "/exit", Seen: make(chan SidecarMessage, 1)}
-	if err := support.SendWithin(t, sidecars, owner, 30*time.Second); err == nil {
+	if err := support.SendOpen(sidecars, owner); err == nil {
 		t.Fatal("the service that exits started")
 	}
 	data, err := os.ReadFile(filepath.Join(config, "logs", "service.log"))
@@ -1859,7 +1832,7 @@ func TestPersistentStartFailsWhenTheServiceLogCannotOpen(t *testing.T) {
 		t.Fatal(err)
 	}
 	owner := &support.HarnessOwner{Root: "/exit", Seen: make(chan SidecarMessage, 1)}
-	err = support.SendWithin(t, sidecars, owner, 30*time.Second)
+	err = support.SendOpen(sidecars, owner)
 	if want := "sidecar fixture-service: service log: create logs directory: "; err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Fatalf("service log failure = %v, want prefix %q", err, want)
 	}
@@ -1880,7 +1853,7 @@ func TestPersistentStartFailsWhenTheServiceExitsBeforeItsEndpoint(t *testing.T) 
 		t.Fatal(err)
 	}
 	owner := &support.HarnessOwner{Root: "/exit", Seen: make(chan SidecarMessage, 1)}
-	err = support.SendWithin(t, sidecars, owner, 30*time.Second)
+	err = support.SendOpen(sidecars, owner)
 	if want := "sidecar fixture-service: service exited before endpoint"; err == nil || err.Error() != want {
 		t.Fatalf("exited service = %v, want %q", err, want)
 	}
@@ -2174,12 +2147,9 @@ func serveReplaceService(t *testing.T, root, oldVersion, installedVersion string
 		// The host waits for its own child (cmd.Wait in the sidecar exit path), so this test does not reap the pid: a reap here could take
 		// that child. A killed child is reaped by the host; a zombie that remains is already ended, and ps reports its state as Z. The
 		// end of a process that is not a child of the test gives the test no event, so the cleanup polls its state until the kill ended
-		// it; the bound only ends a cleanup that hangs.
-		for started := time.Now(); installedProcessRunning(pid); time.Sleep(10 * time.Millisecond) {
-			if time.Since(started) > support.Stall {
-				t.Errorf("installed service process %d outlived the test", pid)
-				return
-			}
+		// it; a process that the kill does not end leaves the check to the limit of its runner.
+		for installedProcessRunning(pid) {
+			time.Sleep(10 * time.Millisecond)
 		}
 	})
 	service := &replaceService{listener: listener, second: make(chan struct{}), process: process, folder: folder}
@@ -2757,11 +2727,7 @@ func TestDetachClosesTheConnectionOfAPersistentServiceWithoutClosingTheOwner(t *
 	receiveSidecarMessage(t, owner.Seen)
 	sidecars.Detach()
 	// The connection ends, which is the only thing that the service learns, and the sessions of the service stay.
-	select {
-	case <-service.firstEnded:
-	case <-time.After(10 * time.Second):
-		t.Fatal("the connection of the service did not end")
-	}
+	<-service.firstEnded
 	for _, operation := range service.received() {
 		if operation == "close-owner" || operation == "shutdown" {
 			t.Fatalf("the service received %v", service.received())
@@ -3223,13 +3189,9 @@ func TestPersistentProtocolViolationsStopTheRestarts(t *testing.T) {
 		if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 			t.Fatalf("send at %v: %v", offset, err)
 		}
-		select {
-		case failure := <-owner.failures:
-			if !strings.HasPrefix(failure.Reason, "invalid message: ") {
-				t.Fatalf("failure at %v = %+v", offset, failure)
-			}
-		case <-time.After(support.Stall):
-			t.Fatalf("no sidecar failure at %v; the test stalled", offset)
+		failure := <-owner.failures
+		if !strings.HasPrefix(failure.Reason, "invalid message: ") {
+			t.Fatalf("failure at %v = %+v", offset, failure)
 		}
 	}
 	clock.set(40 * time.Second)

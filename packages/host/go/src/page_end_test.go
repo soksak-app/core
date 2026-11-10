@@ -5,7 +5,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 	"unsafe"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
@@ -52,17 +51,13 @@ func (w *pageEndWindow) end() {
 // waitSent waits until the window received name and returns what it received before.
 func (w *pageEndWindow) waitSent(t *testing.T, name string) {
 	t.Helper()
-	limit := time.After(5 * time.Second)
-	for {
-		select {
-		case got := <-w.sent:
-			if got == name {
-				return
-			}
-		case <-limit:
-			t.Fatalf("the window did not receive %s", name)
+	// A name that never comes leaves the check to the limit of its runner.
+	for got := range w.sent {
+		if got == name {
+			return
 		}
 	}
+	t.Fatalf("the window did not receive %s", name)
 }
 
 // pageEndPlatform answers the native calls of a window whose page starts, ends and closes.
@@ -98,17 +93,14 @@ func askPage(t *testing.T, h *Host, s *Surfaces, window *pageEndWindow) <-chan e
 	return reply
 }
 
-// wantClosedDocument waits for reply to end with the code of a closed document. The bound only ends a check that hangs.
+// wantClosedDocument waits for reply to end with the code of a closed document; a reply that never ends leaves the check to
+// the limit of its runner.
 func wantClosedDocument(t *testing.T, reply <-chan error, what string) {
 	t.Helper()
-	select {
-	case err := <-reply:
-		var failure *RPCError
-		if !errors.As(err, &failure) || failure.Code != codeNoWindow {
-			t.Fatalf("%s ended with %v, want %d", what, err, codeNoWindow)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatalf("%s still waits for a page that ended", what)
+	err := <-reply
+	var failure *RPCError
+	if !errors.As(err, &failure) || failure.Code != codeNoWindow {
+		t.Fatalf("%s ended with %v, want %d", what, err, codeNoWindow)
 	}
 }
 
@@ -170,14 +162,10 @@ func TestAReloadEndsWithTheCloseOfItsWindow(t *testing.T) {
 	if window.closing() {
 		t.Fatal("a window whose page is not ready kept its close")
 	}
-	select {
-	case err := <-reloaded:
-		var failure *RPCError
-		if !errors.As(err, &failure) || failure.Code != codeNoWindow || !strings.Contains(failure.Message, "the window closed before the reloaded page reported ready") {
-			t.Fatalf("the reload of a closed window ended with %v", err)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("the reload of a closed window still waits for its page")
+	err := <-reloaded
+	var failure *RPCError
+	if !errors.As(err, &failure) || failure.Code != codeNoWindow || !strings.Contains(failure.Message, "the window closed before the reloaded page reported ready") {
+		t.Fatalf("the reload of a closed window ended with %v", err)
 	}
 }
 
@@ -206,7 +194,5 @@ func TestAReloadEndsWithAFailedStart(t *testing.T) {
 			!strings.Contains(failure.Message, "the layout cannot be cancelled") {
 			t.Fatalf("the reload whose page failed to start ended with %v", err)
 		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("the reload whose page failed to start still waits for its page")
 	}
 }

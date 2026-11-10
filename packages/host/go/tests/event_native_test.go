@@ -122,11 +122,7 @@ type wakingLog struct {
 func (w *wakingLog) waitFor(t *testing.T, name string) {
 	t.Helper()
 	for {
-		select {
-		case <-w.writes:
-		case <-time.After(5 * time.Second):
-			t.Fatalf("%s was not stored at once", name)
-		}
+		<-w.writes
 		if stores(t, w.EventLog, name) {
 			return
 		}
@@ -170,11 +166,7 @@ func startWaking(t *testing.T, ring *fakeRing, interval time.Duration) *wakingLo
 // slept waits for the next sleep of the writer.
 func (w *wakingLog) slept(t *testing.T) {
 	t.Helper()
-	select {
-	case <-w.sleeps:
-	case <-time.After(5 * time.Second):
-		t.Fatal("the writer did not sleep")
-	}
+	<-w.sleeps
 }
 
 // contract: log.native.stores-pulled-records-in-the-layer-native

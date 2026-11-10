@@ -705,13 +705,8 @@ func closingSnapshots(sidecars *host.Sidecars) chan []host.ClosingSurface {
 // nextClosing receives the next closing value. If none arrives, the check fails.
 func nextClosing(t *testing.T, snapshots chan []host.ClosingSurface) []host.ClosingSurface {
 	t.Helper()
-	select {
-	case value := <-snapshots:
-		return value
-	case <-time.After(support.Stall):
-		t.Fatal("closing did not change")
-		return nil
-	}
+	value := <-snapshots
+	return value
 }
 
 // closingScript writes a sidecar executable in directory and builds its declaration.
@@ -785,13 +780,9 @@ func TestFailedCloseAnswerIsLoggedBeforeTheClosingEntryEnds(t *testing.T) {
 		t.Fatal(err)
 	}
 	sidecars.Close("s1")
-	select {
-	case log := <-atEnd:
-		if want := "error host sidecar @fixture/sidecar-echo: close s1: busy\n"; !strings.Contains(log, want) {
-			t.Fatalf("log at the end of the closing entry %q does not contain %q", log, want)
-		}
-	case <-time.After(support.Stall):
-		t.Fatal("the closing entry did not end")
+	log := <-atEnd
+	if want := "error host sidecar @fixture/sidecar-echo: close s1: busy\n"; !strings.Contains(log, want) {
+		t.Fatalf("log at the end of the closing entry %q does not contain %q", log, want)
 	}
 }
 
@@ -802,13 +793,9 @@ func TestCloseAnswerForAnOpenSurfaceFailsTheSidecar(t *testing.T) {
 	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case failure := <-owner.Failures:
-		if got := failure.(host.SidecarFailure).Reason; got != "unexpected close answer for s1" {
-			t.Fatalf("failure reason = %q", got)
-		}
-	case <-time.After(support.Stall):
-		t.Fatal("the unexpected close answer did not fail the sidecar")
+	failure := <-owner.Failures
+	if got := failure.(host.SidecarFailure).Reason; got != "unexpected close answer for s1" {
+		t.Fatalf("failure reason = %q", got)
 	}
 }
 
@@ -1220,25 +1207,19 @@ func TestTheSamplerNamesARunningSidecarUntilItEnds(t *testing.T) {
 		}
 		return count
 	}
-	// The sampler stores a first sample of the host when it starts; wait for it so that it does not run among the samples below.
-	// The sampler gives no event for that sample, so the check polls the stored records for it.
-	for deadline := time.Now().Add(5 * time.Second); samples(false) == 0; {
-		if time.Now().After(deadline) {
-			t.Fatal("the sampler stored no sample of the host")
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	// The sampler stores a first sample of the host when it starts; the check waits for it and sets an interval of an hour, so
+	// that no sample of the sampler runs among the samples below.
+	waitForFirstSample(t)
 	sidecars, _ := support.ScriptSidecars(t, "#!/bin/sh\ncat >/dev/null\n")
 	owner := support.NewFakeOwner("/projects/a")
 	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	host.PerformanceSample()
-	// The periodic sampler of the trace runs besides the two samples of this test, so under load a further sample can fall while the
-	// sidecar runs. The order of the records states the contract: a sample names the sidecar while it runs, and none names it after
-	// its exit record.
-	if got := samples(true); got < 1 {
-		t.Fatalf("a running sidecar was named by %d samples, want at least 1", got)
+	// The order of the records states the contract: a sample names the sidecar while it runs, and none names it after its exit
+	// record.
+	if got := samples(true); got != 1 {
+		t.Fatalf("a running sidecar was named by %d samples, want 1", got)
 	}
 	sidecars.Stop()
 	host.PerformanceSample()

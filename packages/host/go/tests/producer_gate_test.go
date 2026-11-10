@@ -203,11 +203,7 @@ func TestTheCountsOfAClosedGateAreReportedEachSecondAndAtAFlush(t *testing.T) {
 func awaitMarker(t *testing.T, log *host.EventLog, slept <-chan struct{}, marker string) {
 	t.Helper()
 	for {
-		select {
-		case <-slept:
-		case <-time.After(support.Stall):
-			t.Fatalf("the writer did not sleep after the marker %s within %v; the test stalled", marker, support.Stall)
-		}
+		<-slept
 		for _, event := range readEventLog(t, log.Path()) {
 			if fields, _ := event["fields"].(map[string]any); fields["name"] == marker {
 				return

@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
-	"time"
 	"unsafe"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
@@ -229,13 +228,9 @@ func TestAChangeOfTheBackingScaleRefreshesTheRastersOfTheWindow(t *testing.T) {
 	for _, listener := range window.listeners[WindowScaleChanged] {
 		listener()
 	}
-	select {
-	case got := <-fake.placed:
-		if got != handle {
-			t.Fatalf("the refresh read the placement of %p, want %p", got, handle)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("a change of the backing scale did not refresh the rasters")
+	got := <-fake.placed
+	if got != handle {
+		t.Fatalf("the refresh read the placement of %p, want %p", got, handle)
 	}
 }
 

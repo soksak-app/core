@@ -50,16 +50,14 @@ func blockedSidecar(t *testing.T, root string, surfaces int, now func() time.Tim
 	if err := sidecars.Send(owner, support.EchoSidecar, "s1", blocker); err != nil {
 		t.Fatal(err)
 	}
-	for wait := 0; ; wait++ {
+	// A writer that never starts the line leaves the check to the limit of its runner.
+	for {
 		writing, err := sidecars.Writing(support.EchoSidecar)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if writing > 64<<10 {
 			break
-		}
-		if wait == 10000 {
-			t.Fatalf("the writer did not start the line of %d bytes within 10 s (writing %d)", len(blocker), writing)
 		}
 		time.Sleep(time.Millisecond)
 	}

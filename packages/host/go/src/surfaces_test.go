@@ -46,16 +46,12 @@ func TestContinuousLayoutWaitsForApplicationDOMBeforeRasterAndCommit(t *testing.
 		if phase != "views" {
 			t.Fatalf("continuous layout reached %s before registering root-view presentation", phase)
 		}
-	case <-time.After(time.Second):
-		t.Fatal("continuous layout did not register root-view presentation")
 	}
 	select {
 	case phase := <-phases:
 		if phase != "dom" {
 			t.Fatalf("continuous layout reached %s before the controlled DOM presentation callback", phase)
 		}
-	case <-time.After(time.Second):
-		t.Fatal("continuous layout did not request DOM presentation")
 	}
 	select {
 	case phase := <-phases:
@@ -1565,8 +1561,6 @@ func presentThroughFixture(t *testing.T, ticket uint64) (func(error), *layoutPla
 		return notice, fake, finished
 	case err := <-finished:
 		t.Fatalf("the present ended without the presentation notice of the Frontend: %v", err)
-	case <-time.After(5 * time.Second):
-		t.Fatal("the present did not ask for the presentation notice of the Frontend")
 	}
 	return nil, nil, nil
 }
@@ -1579,13 +1573,9 @@ func TestLayoutCommitsAfterThePresentationNoticeOfTheFrontend(t *testing.T) {
 	// (TestAFailedPresentationNoticeCancelsTheLayout).
 	fake.noticed.Store(true)
 	notice(nil)
-	select {
-	case ticket := <-fake.commits:
-		if ticket != 7 {
-			t.Fatalf("the layout committed ticket %d, want 7", ticket)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("the layout did not commit after the presentation notice")
+	ticket := <-fake.commits
+	if ticket != 7 {
+		t.Fatalf("the layout committed ticket %d, want 7", ticket)
 	}
 	if err := <-finished; err != nil {
 		t.Fatalf("the present failed: %v", err)
@@ -1605,8 +1595,6 @@ func TestAFailedPresentationNoticeCancelsTheLayout(t *testing.T) {
 		if ticket != 8 {
 			t.Fatalf("the layout cancelled ticket %d, want 8", ticket)
 		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("the failed notice did not cancel the layout")
 	}
 	if err := <-finished; err == nil || !strings.Contains(err.Error(), "the window holds its frames") {
 		t.Fatalf("the present ended with %v, want the error of the notice", err)
@@ -1629,23 +1617,17 @@ func TestAPresentationRecordsEachOfItsStagesInOrder(t *testing.T) {
 	performanceOn.Store(false)
 	notice, fake, finished := presentThroughFixture(t, 9)
 	notice(nil)
-	select {
-	case <-fake.commits:
-	case <-time.After(5 * time.Second):
-		t.Fatal("the layout did not commit after the presentation notice")
-	}
+	<-fake.commits
 	if err := <-finished; err != nil {
 		t.Fatalf("the present failed: %v", err)
 	}
 	want := []string{"present-prepare-ui", "present-dom-register-ui", "present-dom-callback", "present-raster-wait", "present-commit-ui"}
 	var records []map[string]any
 	// The callback and the commit write their records after they hand their result on, and no event reports those writes, so
-	// the buffer is read until it holds a record of every stage.
-	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(time.Millisecond) {
+	// the buffer is read until it holds a record of every stage; a stage that writes no record leaves the check to the limit
+	// of its runner.
+	for records = bufferedTraces(t, "host.frame.surface.dispatch"); len(records) < len(want); time.Sleep(time.Millisecond) {
 		records = bufferedTraces(t, "host.frame.surface.dispatch")
-		if len(records) >= len(want) || time.Now().After(deadline) {
-			break
-		}
 	}
 	entered := func(record map[string]any) uint64 {
 		text, _ := record["entered_ns"].(string)

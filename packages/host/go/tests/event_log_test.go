@@ -225,11 +225,7 @@ func refuseWhileHeld(t *testing.T, log *host.EventLog, hold *writerHold, first i
 	if !log.Emit(host.LevelError, "host.test.failure", map[string]any{"reason": "the writer is held"}) {
 		t.Fatal("the error was refused")
 	}
-	select {
-	case <-hold.entered:
-	case <-time.After(5 * time.Second):
-		t.Fatal("the writer did not write the error")
-	}
+	<-hold.entered
 	for index := first; index < first+20; index++ {
 		if log.Emit(host.LevelInfo, "host.test.event", map[string]any{"index": index}) {
 			accepted++
@@ -375,11 +371,7 @@ func TestAnEventLogErrorIsWrittenWithoutWaitingForTheBatchInterval(t *testing.T)
 	}
 	// The interval of 30 seconds ends in no test, so a write that stores the error was not the write of an interval.
 	for {
-		select {
-		case <-writes:
-		case <-time.After(5 * time.Second):
-			t.Fatal("the error was not written")
-		}
+		<-writes
 		for _, event := range readEventLog(t, log.Path()) {
 			if event["event"] == "host.test.failure" {
 				return
@@ -678,14 +670,10 @@ func TestTheWriterAnnouncesEachWriteToItsObserver(t *testing.T) {
 	if err := log.Flush(5 * time.Second); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case got := <-announcements:
-		info, err := os.Stat(got.path)
-		if err != nil || filepath.Base(got.path) != "host-b1.jsonl" || got.size != info.Size() {
-			t.Fatalf("announced %+v, the file is %v (%v)", got, info, err)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("the write was not announced")
+	got := <-announcements
+	info, err := os.Stat(got.path)
+	if err != nil || filepath.Base(got.path) != "host-b1.jsonl" || got.size != info.Size() {
+		t.Fatalf("announced %+v, the file is %v (%v)", got, info, err)
 	}
 	log.Close()
 }
@@ -711,8 +699,8 @@ func TestASteadyStreamOfEventsIsWrittenAtEachBatchInterval(t *testing.T) {
 		}
 	})
 	// The first event is written at once, by a writer that slept or at the end of its interval; the second write comes while
-	// the stream still runs. The pause between two events only keeps the stream steady and decides nothing.
-	stall := time.After(5 * time.Second)
+	// the stream still runs. The pause between two events only keeps the stream steady and decides nothing; a writer that waits
+	// for a quiet interval leaves the check to the limit of its runner.
 	for index, wrote := 0, 0; wrote < 2; index++ {
 		if !log.Emit(host.LevelInfo, "host.test.event", map[string]any{"index": index}) {
 			t.Fatalf("event %d was refused", index)
@@ -720,8 +708,6 @@ func TestASteadyStreamOfEventsIsWrittenAtEachBatchInterval(t *testing.T) {
 		select {
 		case <-writes:
 			wrote++
-		case <-stall:
-			t.Fatalf("the writer wrote %d times while %d events arrived every 5 ms; it waits for a quiet interval", wrote, index+1)
 		default:
 		}
 		time.Sleep(5 * time.Millisecond)

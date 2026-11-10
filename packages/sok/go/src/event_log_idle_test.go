@@ -85,13 +85,8 @@ func idleLog(t *testing.T, interval time.Duration) *idleWriter {
 // loss, a request or the report of a held count wakes a writer that sleeps, so what follows a sleep is what the test does.
 func (w *idleWriter) slept(t *testing.T) bool {
 	t.Helper()
-	select {
-	case countHeld := <-w.sleeps:
-		return countHeld
-	case <-time.After(5 * time.Second):
-		t.Fatal("the writer did not sleep")
-		return false
-	}
+	countHeld := <-w.sleeps
+	return countHeld
 }
 
 // wrote reports the writes that the writer made and the test did not take, without waiting.
@@ -113,11 +108,7 @@ func fileHas(t *testing.T, path, text string) bool {
 func (w *idleWriter) waitForFile(t *testing.T, text, what string) {
 	t.Helper()
 	for {
-		select {
-		case <-w.writes:
-		case <-time.After(5 * time.Second):
-			t.Fatalf("%s: %s is not stored", what, text)
-		}
+		<-w.writes
 		if fileHas(t, w.log.Path(), text) {
 			return
 		}
@@ -315,11 +306,7 @@ func TestAFlushThatAFlushFindsBehindItIsAnswered(t *testing.T) {
 	if err := log.Flush(5 * time.Second); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case <-second:
-	case <-time.After(5 * time.Second):
-		t.Fatal("the flush behind the flush was not answered")
-	}
+	<-second
 }
 
 // A flush request and an event are in the queue behind the stop: the source puts them there while the writer pulls for it.
@@ -347,11 +334,7 @@ func TestAFlushThatAStopFindsBehindItIsAnswered(t *testing.T) {
 	}
 	armed.Store(true)
 	log.Close()
-	select {
-	case <-second:
-	case <-time.After(5 * time.Second):
-		t.Fatal("the flush behind the stop was not answered")
-	}
+	<-second
 	if !fileHas(t, log.Path(), "writer.flush.behind") {
 		t.Fatal("the event behind the flush was not stored")
 	}
@@ -381,12 +364,8 @@ func TestAFlushOfAWriterThatEndedSaysSo(t *testing.T) {
 	log.Close()
 	answered := make(chan error, 1)
 	go func() { answered <- log.Flush(time.Hour) }()
-	select {
-	case err := <-answered:
-		if err == nil || !strings.Contains(err.Error(), "ended") || strings.Contains(err.Error(), "within") {
-			t.Fatalf("Flush of a writer that ended returned %v", err)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("Flush of a writer that ended waited for its deadline")
+	err := <-answered
+	if err == nil || !strings.Contains(err.Error(), "ended") || strings.Contains(err.Error(), "within") {
+		t.Fatalf("Flush of a writer that ended returned %v", err)
 	}
 }

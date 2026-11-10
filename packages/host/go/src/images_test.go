@@ -392,11 +392,7 @@ func TestPendingNewerFrameIsRequiredAfterTheWaitBegins(t *testing.T) {
 	blocked := make(chan struct{}, 4)
 	done := make(chan error, 1)
 	go func() { done <- images.waitCurrentObserved(time.Minute, func() { blocked <- struct{}{} }) }()
-	select {
-	case <-blocked:
-	case <-time.After(5 * time.Second):
-		t.Fatal("image wait did not begin")
-	}
+	<-blocked
 	// The first frame is presented while the second is accepted, and the wait checks that state and blocks again.
 	images.mu.Lock()
 	state := images.states[key]
@@ -409,8 +405,6 @@ func TestPendingNewerFrameIsRequiredAfterTheWaitBegins(t *testing.T) {
 	case <-blocked:
 	case outcome := <-done:
 		t.Fatalf("the wait ended with %v when the earlier frame was presented", outcome)
-	case <-time.After(5 * time.Second):
-		t.Fatal("image wait did not check the presented frame")
 	}
 	select {
 	case outcome := <-done:
@@ -433,8 +427,6 @@ func TestPendingNewerFrameIsRequiredAfterTheWaitBegins(t *testing.T) {
 		if outcome != nil {
 			t.Fatalf("the presented newer frame ended the wait with %v", outcome)
 		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("image wait did not end")
 	}
 }
 

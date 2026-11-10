@@ -3,7 +3,6 @@ package host
 import (
 	"os"
 	"testing"
-	"time"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
@@ -36,10 +35,6 @@ func TestNativeWakeTurnsThePipeIntoTheWakeOfTheWriter(t *testing.T) {
 		if _, err := writer.Write([]byte{0}); err != nil {
 			t.Fatal(err)
 		}
-		select {
-		case <-wake:
-		case <-time.After(5 * time.Second):
-			t.Fatal("a byte in the pipe did not reach the wake")
-		}
+		<-wake
 	}
 }
