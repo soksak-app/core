@@ -1492,10 +1492,17 @@ pub fn window_state(window: &Window) -> Result<Option<Geometry>, String> {
 /// Records that the main page started. Call it before the start document request answers. It leaves the window not
 /// ready, ends the requests sent to the previous page, and cleans up the surface documents, the image regions and the
 /// modals of the previous page.
+/// Allows each removal that asked the page of window, because that page ended: its WebContent process ended or its next page
+/// starts (docs/spec/projects.md).
+pub(crate) fn removal_page_ended(window: &Window) {
+    window.state::<Windows>().removals.abandon(window.label());
+}
+
 pub(crate) fn page_started(window: &Window) -> Result<(), String> {
     let data = window_data(window)?;
     let cleanup = (|| {
         data.ready.store(false, Ordering::Relaxed);
+        removal_page_ended(window);
         // No page shows the failures of the cleared ends, so the host writes them.
         for failure in data.images.detach_page_starting() {
             log_error("image detach", failure);

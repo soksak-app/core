@@ -21,13 +21,15 @@ use std::time::Duration;
 use super::DocumentViewportMarker;
 use super::{
     CoreRootHost, CoreRootResolver, DOMOverlay, Delivery, DocumentOptions, Frame, Handle, Hit,
-    ImagePresentation, ImageReleased, Insets, Key, Listener, NativeEventWait, PersistentStream,
-    Platform, Pointer, ProcessFootprint, Raster, WindowOverlay,
+    ImagePresentation, ImageReleased, Insets, Key, Listener, NativeEventWait, OutputEnd,
+    OutputPipe, PersistentStream, Platform, Pointer, ProcessFootprint, Raster, WindowOverlay,
 };
 
 #[cfg(feature = "diagnostics")]
 #[path = "capture.rs"]
 mod capture;
+#[path = "child_process.rs"]
+mod child_process;
 #[path = "clipboard.rs"]
 mod clipboard;
 #[path = "diagnostic_reports.rs"]
@@ -954,6 +956,24 @@ impl Platform for Darwin {
     }
     fn exit_status(&self, status: std::process::ExitStatus) -> Result<String, String> {
         endpoint::exit_status(status)
+    }
+    fn new_process_group(&self, command: &mut std::process::Command) -> Result<(), String> {
+        child_process::new_process_group(command);
+        Ok(())
+    }
+    fn end_process_group(&self, pid: u32) -> Result<(), String> {
+        child_process::end_process_group(pid)
+    }
+    fn wait_process_exit(&self, pid: u32) -> Result<(), String> {
+        child_process::wait_process_exit(pid)
+    }
+    fn exit_output(&self, output: OutputPipe) -> Result<(Box<dyn Read + Send>, OutputEnd), String> {
+        let descriptor = match output {
+            OutputPipe::Stdout(pipe) => std::os::fd::OwnedFd::from(pipe),
+            OutputPipe::Stderr(pipe) => std::os::fd::OwnedFd::from(pipe),
+        };
+        let (reads, end) = child_process::exit_output(descriptor)?;
+        Ok((Box::new(reads), Box::new(move || end.end())))
     }
 }
 

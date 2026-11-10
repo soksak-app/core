@@ -1127,7 +1127,26 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// Writes the end of an ended process as `exit status <code>` or `signal <number>`. Both hosts write the end of a
     /// sidecar to the log with the same text (docs/spec/sidecars.md#declaration-and-startup).
     fn exit_status(&self, status: std::process::ExitStatus) -> Result<String, String>;
+    /// Makes command start as the leader of a new process group, so the processes that it starts belong to that group
+    /// unless they leave it (docs/spec/sidecars.md#declaration-and-startup). Call it before command starts.
+    fn new_process_group(&self, command: &mut std::process::Command) -> Result<(), String>;
+    /// Sends the force-kill signal to the process group whose leader is `pid`. A group without a process has ended.
+    fn end_process_group(&self, pid: u32) -> Result<(), String>;
+    /// Waits until the child process `pid` exits, without reaping it, so its owner still reaps it.
+    fn wait_process_exit(&self, pid: u32) -> Result<(), String>;
+    /// Makes the reads of an output pipe of a child process end with the function that it returns: a read then takes what
+    /// the pipe holds at that moment and returns the end of the output, although another process keeps the pipe open.
+    fn exit_output(&self, output: OutputPipe) -> Result<(Box<dyn Read + Send>, OutputEnd), String>;
 }
+
+/// An output pipe of a child process.
+pub enum OutputPipe {
+    Stdout(std::process::ChildStdout),
+    Stderr(std::process::ChildStderr),
+}
+
+/// Ends the reads of an output pipe that `exit_output` made.
+pub type OutputEnd = Box<dyn Fn() + Send + Sync>;
 
 /// Returns the implementation of the current operating system.
 /// What `native_event_wake` returns.

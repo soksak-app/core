@@ -810,4 +810,19 @@ impl Platform for Windows {
     fn exit_status(&self, status: std::process::ExitStatus) -> Result<String, String> {
         unsupported::exit_status(status)
     }
+    fn new_process_group(&self, _command: &mut std::process::Command) -> Result<(), String> {
+        Err("new process group is not implemented on windows".to_string())
+    }
+    fn end_process_group(&self, _pid: u32) -> Result<(), String> {
+        Err("process group end is not implemented on windows".to_string())
+    }
+    fn wait_process_exit(&self, _pid: u32) -> Result<(), String> {
+        Err("process exit wait is not implemented on windows".to_string())
+    }
+    fn exit_output(
+        &self,
+        _output: super::OutputPipe,
+    ) -> Result<(Box<dyn std::io::Read + Send>, super::OutputEnd), String> {
+        Err("output end is not implemented on windows".to_string())
+    }
 }
