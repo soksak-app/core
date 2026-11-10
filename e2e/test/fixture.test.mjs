@@ -309,6 +309,8 @@ test("a plugin change waits for the new start in the event log and reads the wor
   const calls = [];
   const s = {
     app: { configDir },
+    // The connection of the fixture stays open, so the event line wait ends only by its line.
+    client: { ended: new Promise(() => {}) },
     get: async (name) => {
       calls.push(["get", name]);
       if (name !== "core.window.workbench") throw new Error(`unexpected status ${name}`);

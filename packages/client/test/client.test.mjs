@@ -344,8 +344,11 @@ test("status.ended rejects the watch with ENDED and a later watch subscribes aga
   for (const watch of [first, second]) {
     await assert.rejects(watch, (error) => error.code === "ENDED" && error.message === "status probe.lines ended: surface-closed");
   }
+  // The watch resolves before its unwatch reaches the endpoint, so the check waits for that request.
+  const unwatched = requested(server, (m) => m.method === "status.unwatch");
   const again = client.watch("main", "probe.lines", (lines) => lines.length === 0, { surface: "tab-a" });
   assert.deepEqual(await again, []);
+  await unwatched;
   assert.deepEqual(server.requests.map((m) => m.method).filter((m) => m !== "status.get"),
     ["status.watch", "status.watch", "status.unwatch"]);
 });
