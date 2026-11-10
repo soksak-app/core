@@ -1,6 +1,7 @@
 // The macOS implementation of the platform operations of scripts/platform/platform.js. The selector loads this module only when an
 // operation runs for the platform `darwin`.
 import { execFile } from 'node:child_process';
+import { realpathSync } from 'node:fs';
 import { promisify } from 'node:util';
 import { macosMinimum } from '../../macos-minimum.mjs';
 
@@ -8,6 +9,15 @@ export { applicationArtifact, applicationExecutables } from './artifacts.mjs';
 export { crashReports, listProcesses, openApplication, quitApplication, runNativeTests, waitForLockRelease } from './end-to-end.mjs';
 export { processExecutable } from './process-executable.mjs';
 export { sampleProcess as processStacks } from '@soksak/window-check/stall-sample.mjs';
+
+/**
+ * The folder of the temporary folders of a test run. The temporary folder of the user has 49 bytes, which leaves the sockets of the
+ * host tests too little room, so the folders lie in `/tmp`, with its symbolic links resolved so that the path a test resolves has the
+ * same length.
+ */
+export function processFolderRoot() {
+  return realpathSync('/tmp');
+}
 
 /**
  * The JSON AST of clang for the Objective-C translation unit `file`, compiled as cgo compiles the darwin layer: with blocks, with the
