@@ -304,7 +304,7 @@ AppKit과 WebKit은 일부 상태를 pointer마다가 아니라 창, 페이지, 
 
 ### Virtual key window
 
-실제로 활성이 아닌 애플리케이션에서 `input.key`와 `input.pointer`의 `move`는 macOS에서 그 창을 virtual key window로 만든다. 이 창은 애플리케이션 안에서 key window와 main window로 답하고, 애플리케이션은 활성으로 답하므로 WebKit이 hover와 page focus를 갱신한다. 시스템의 key window와 앞 애플리케이션은 바뀌지 않는다. 규칙은 다음과 같다.
+실제로 활성이 아닌 애플리케이션에서 `input.key`와 `input.pointer`의 `move`는 macOS에서 그 창을 virtual key window로 만든다. 이 창은 애플리케이션 안에서 key window와 main window로 답하고, 애플리케이션은 활성으로 답하므로 WebKit이 hover와 page focus를 갱신한다. 시스템의 key window는 바뀌지 않고, 애플리케이션은 앞으로 오지 않는다: 앞 애플리케이션이 되지 않고, 시스템은 그것을 활성으로 보지 않는다. 그 밖에 어느 애플리케이션이 앞에 있는지는 다른 process의 일이므로 어떤 검사도 그것으로 판정하지 않는다. 규칙은 다음과 같다.
 
 - 프로세스에 많아야 하나다. 다른 창으로 보낸 입력은 상태를 그 창으로 옮긴다.
 - AppKit은 활성이 아닌 애플리케이션에도 key window를 둘 수 있다. 예를 들어 다른 창이 virtual key window인 동안 host가 보여 준 창이고, 이때 `host.window`는 `key` true와 `active` false를 보고한다. 그 창의 입력은 활성이 아닌 애플리케이션의 입력이다. `move`는 그 창을 virtual key window로 만들고, press는 뷰로 바로 간다.
