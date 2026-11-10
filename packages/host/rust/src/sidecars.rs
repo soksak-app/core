@@ -367,9 +367,18 @@ struct CloseFailure {
     send_close: bool,
 }
 
+/// What a replacement waits on for room in the queue of the connection: the stop of the sidecars ends the wait by
+/// shutting the socket down, as the end of the connection does.
+struct RoomWait<'a> {
+    socket: &'a PersistentSocket,
+    stop: &'a crate::platform::StopSignal,
+    name: &'a str,
+}
+
 /// Closes the owner of a persistent service and tells it to shut down, once for the connection: a caller that finds
 /// the close done or running by another caller waits for it and returns `Ok(false)`, and the caller that does it
-/// returns `Ok(true)`. A failed close is not done, so the next caller tries again.
+/// returns `Ok(true)`. A failed close is not done, so the next caller tries again. Without room the close fails on a
+/// full queue, and with room it waits for room in the queue.
 fn close_persistent_owner(
     outbox: &SyncSender<Outgoing>,
     close_waiters: &ReplyWaiters,
@@ -377,6 +386,7 @@ fn close_persistent_owner(
     connected: &AtomicBool,
     owner_closed: &Mutex<bool>,
     prefix: &str,
+    room: Option<&RoomWait<'_>>,
 ) -> Result<bool, CloseFailure> {
     // default: a lock that a panicking thread poisoned still holds the close state of the owner,
     // which the call amends; the panic hook records the panic.
@@ -384,7 +394,14 @@ fn close_persistent_owner(
     if *closed {
         return Ok(false);
     }
-    send_close_owner_and_shutdown(outbox, close_waiters, shutdown_waiters, connected, prefix)?;
+    send_close_owner_and_shutdown(
+        outbox,
+        close_waiters,
+        shutdown_waiters,
+        connected,
+        prefix,
+        room,
+    )?;
     *closed = true;
     Ok(true)
 }
@@ -445,6 +462,70 @@ fn end_transport(outbox: &SyncSender<Outgoing>, socket: &PersistentSocket, name:
     }
 }
 
+/// Queues the close-owner or shutdown line of operation. The stop waits for no room in the queue: a full queue fails
+/// the close, and the caller ends the connection. A replacement waits for room until the connection ends or the
+/// sidecars stop, which shuts the socket down; either ends the writer, which drops the queue and ends the wait
+/// (docs/spec/persistent-services.md#closing-and-recovery). A closed queue fails with `disconnected_close` as the
+/// close of the transport.
+fn queue_close(
+    outbox: &SyncSender<Outgoing>,
+    bytes: Vec<u8>,
+    room: Option<&RoomWait<'_>>,
+    operation: &str,
+    disconnected_close: bool,
+) -> Result<(), CloseFailure> {
+    let line = match outbox.try_send(Outgoing::Line(QueuedLine::new(bytes))) {
+        Ok(()) => return Ok(()),
+        Err(TrySendError::Disconnected(_)) => {
+            return Err(CloseFailure {
+                text: format!("send {operation}: sending on a closed channel"),
+                send_close: disconnected_close,
+            });
+        }
+        Err(TrySendError::Full(line)) => line,
+    };
+    let Some(room) = room else {
+        return Err(CloseFailure {
+            text: format!("{operation}: the queue of the connection is full"),
+            send_close: true,
+        });
+    };
+    let socket = Arc::clone(room.socket);
+    let name = room.name.to_string();
+    let watch = room.stop.watch(move || {
+        let socket = socket
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the socket, which is only shut down; the
+            // panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner);
+        // A connection that ended already has nothing to shut down.
+        match socket.shutdown() {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotConnected => {}
+            Err(error) => log_error(&format!("sidecar {name}"), format!("replace stop: {error}")),
+        }
+    });
+    if watch.is_none() {
+        return Err(CloseFailure {
+            text: "sidecars are stopped".to_string(),
+            send_close: true,
+        });
+    }
+    let sent = outbox.send(line);
+    drop(watch);
+    match sent {
+        Ok(()) => Ok(()),
+        Err(_) if room.stop.stopped() => Err(CloseFailure {
+            text: "sidecars are stopped".to_string(),
+            send_close: true,
+        }),
+        Err(_) => Err(CloseFailure {
+            text: format!("{operation}: the connection ended before the queue had room"),
+            send_close: true,
+        }),
+    }
+}
+
 /// Sends close-owner and shutdown through the outbox of a persistent service and waits for each answer, which the answer
 /// or the end of the connection ends (docs/spec/persistent-services.md#closing-and-recovery). The ids of the requests
 /// start with `prefix`.
@@ -454,6 +535,7 @@ fn send_close_owner_and_shutdown(
     shutdown_waiters: &ReplyWaiters,
     connected: &AtomicBool,
     prefix: &str,
+    room: Option<&RoomWait<'_>>,
 ) -> Result<(), CloseFailure> {
     let request = format!("{prefix}-close");
     let line = serde_json::json!({"operation": "close-owner", "request": request});
@@ -474,20 +556,9 @@ fn send_close_owner_and_shutdown(
         text: format!("close owner: {text}"),
         send_close: true,
     })?;
-    // The stop waits for no room in the queue: a full queue fails the close, and the caller ends the connection
-    // (docs/spec/persistent-services.md#closing-and-recovery).
-    if let Err(error) = outbox.try_send(Outgoing::Line(QueuedLine::new(bytes))) {
+    if let Err(failure) = queue_close(outbox, bytes, room, "close-owner", false) {
         remove_waiter(close_waiters, &request);
-        return Err(match error {
-            TrySendError::Full(_) => CloseFailure {
-                text: "close-owner: the queue of the connection is full".to_string(),
-                send_close: true,
-            },
-            TrySendError::Disconnected(_) => CloseFailure {
-                text: "send close-owner: sending on a closed channel".to_string(),
-                send_close: false,
-            },
-        });
+        return Err(failure);
     }
     // The read thread answers the waiter or fails it when the connection ends.
     match rx.recv() {
@@ -522,19 +593,9 @@ fn send_close_owner_and_shutdown(
         text: format!("shutdown: {text}"),
         send_close: true,
     })?;
-    if let Err(error) = outbox.try_send(Outgoing::Line(QueuedLine::new(shutdown_bytes))) {
+    if let Err(failure) = queue_close(outbox, shutdown_bytes, room, "shutdown", true) {
         remove_waiter(shutdown_waiters, &shutdown_request);
-        return Err(CloseFailure {
-            text: match error {
-                TrySendError::Full(_) => {
-                    "shutdown: the queue of the connection is full".to_string()
-                }
-                TrySendError::Disconnected(_) => {
-                    "send shutdown: sending on a closed channel".to_string()
-                }
-            },
-            send_close: true,
-        });
+        return Err(failure);
     }
     match shutdown_rx.recv() {
         Ok(Ok(())) => Ok(()),
@@ -773,12 +834,20 @@ fn write_line(
     name: &str,
     line: &QueuedLine,
     writing: &AtomicUsize,
+    terminated: &AtomicBool,
 ) -> bool {
     let started = Instant::now();
     writing.store(line.bytes.len(), Ordering::Release);
     let written = stdin.write_all(&line.bytes);
     writing.store(0, Ordering::Release);
     if let Err(e) = written {
+        if terminated.load(Ordering::Acquire) {
+            crate::application_log::log_info(
+                &format!("sidecar {name}"),
+                "the stop ended the process before a line was written",
+            );
+            return false;
+        }
         log_error(&format!("sidecar {name}"), format!("write: {e}"));
         return false;
     }
@@ -1057,6 +1126,9 @@ struct Process {
     /// Ends when the read thread of a standard-I/O process has read the output to its end and judged it, so the stop
     /// reads the record of that judgment after it (docs/spec/sidecars.md#declaration-and-startup).
     read_ended: Option<Receiver<()>>,
+    /// True once the stop sent the terminate signal to the process group: a line that the writer could not write after
+    /// it is a line that the stop ended, not a failure.
+    terminated: Arc<AtomicBool>,
 }
 
 type RetainWaiters = Arc<Mutex<HashMap<String, SyncSender<Result<usize, String>>>>>;
@@ -2279,6 +2351,11 @@ impl<O: Owner> Sidecars<O> {
             std::process::id(),
             REPLACEMENTS.fetch_add(1, Ordering::Relaxed)
         );
+        let room = RoomWait {
+            socket: &socket,
+            stop: &self.core.stop_signal,
+            name,
+        };
         let closed = close_persistent_owner(
             &outbox,
             &close_waiters,
@@ -2286,6 +2363,7 @@ impl<O: Owner> Sidecars<O> {
             &connected,
             &owner_closed,
             &prefix,
+            Some(&room),
         );
         // The caller that did not close the owner leaves the transport to the one that did.
         let send_close = match &closed {
@@ -2736,6 +2814,7 @@ impl<O: Owner> Sidecars<O> {
                         &persistent.connected,
                         &persistent.owner_closed,
                         &prefix,
+                        None,
                     );
                     // The caller that did not close the owner leaves the transport to the one that did.
                     let send_close = match &closed {
@@ -2772,12 +2851,16 @@ impl<O: Owner> Sidecars<O> {
                 }
             }
             let Process {
-                child, read_ended, ..
+                child,
+                read_ended,
+                terminated,
+                ..
             } = process;
             let Some(mut child) = child else {
                 continue;
             };
             let pid = child.id();
+            terminated.store(true, Ordering::Release);
             // The stop terminates the process group, so a sidecar that ignores the end of its input ends, and so do the
             // processes that it started in its group.
             match current().and_then(|platform| platform.terminate_process_group(pid)) {
@@ -3088,11 +3171,19 @@ impl<O: Owner> Core<O> {
         let state_clone = Arc::clone(&core.state);
         let writing = Arc::new(AtomicUsize::new(0));
         let write_writing = Arc::clone(&writing);
+        let terminated = Arc::new(AtomicBool::new(false));
+        let write_terminated = Arc::clone(&terminated);
 
         threads.push(Box::new(move || {
             // The end of the writer closes stdin when it drops it.
             write_in_order(&state_clone, &write_name, &rx, |line| {
-                write_line(&mut stdin, &write_name, line, &write_writing)
+                write_line(
+                    &mut stdin,
+                    &write_name,
+                    line,
+                    &write_writing,
+                    &write_terminated,
+                )
             });
         }));
 
@@ -3126,6 +3217,7 @@ impl<O: Owner> Core<O> {
                 surfaces: HashSet::new(),
                 closed_surfaces: HashSet::new(),
                 read_ended: Some(read_ended),
+                terminated,
             },
             threads,
         })
@@ -3728,6 +3820,7 @@ impl<O: Owner> Core<O> {
                 surfaces: HashSet::new(),
                 closed_surfaces: HashSet::new(),
                 read_ended: None,
+                terminated: Arc::default(),
                 persistent: Some(PersistentConnection {
                     version,
                     close_waiters,
@@ -4810,8 +4903,6 @@ mod stop_test;
 #[cfg(test)]
 #[path = "sidecars_session_retention_test.rs"]
 pub(crate) mod session_retention_test;
-
-#[cfg(all(test, unix))]
 
 /// Records a received body and returns whether native image dispatch consumes it.
 pub fn receive_sidecar_message(trace: impl FnOnce(), handle_image: impl FnOnce() -> bool) -> bool {

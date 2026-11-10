@@ -701,7 +701,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/platform/darwin/endpoint.go", symbol: "func (implementation) EndProcessGroup(pid int) error {" },
       { file: "packages/host/rust/src/platform/darwin/child_process.rs", symbol: "pub fn wait_process_exit(pid: u32) -> Result<(), String> {" },
       { file: "packages/host/rust/src/platform/darwin/child_process.rs", symbol: "impl Read for ExitOutput {" },
-      { file: "packages/host/go/src/sidecars.go", symbol: "return fmt.Errorf(\"sidecar %s: close-owner: the queue of the connection is full\", process.name)" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "return fmt.Errorf(\"sidecar %s: %s: the queue of the connection is full\", process.name, operation)" },
       { file: "packages/host/rust/src/sidecars.rs", symbol: "fn end_transport(outbox: &SyncSender<Outgoing>, socket: &PersistentSocket, name: &str) {" },
       { file: "packages/host/go/src/sidecars.go", symbol: "func (p *imagePresents) refuse() {" },
       { file: "packages/host/rust/src/images.rs", symbol: "pub(crate) fn refuse(&self) {" },

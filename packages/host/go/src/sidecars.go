@@ -110,9 +110,12 @@ type sidecar struct {
 	readyRecorded bool
 	outbox        chan queuedLine
 	// writing is the size in bytes of the line that the writer is writing, and 0 between lines.
-	writing  atomic.Int64
-	exited   chan struct{}
-	muClosed sync.Mutex
+	writing atomic.Int64
+	// terminated is true once the stop sent the terminate signal to the process group: a line that the writer could not
+	// write after it is a line that the stop ended, not a failure.
+	terminated atomic.Bool
+	exited     chan struct{}
+	muClosed   sync.Mutex
 	// held is the number of the held returns and closes. A sender raises it before it orders a held message.
 	held          atomic.Int64
 	pendingCloses pendingLines // The pending closed messages, in the order of sending
@@ -1129,7 +1132,7 @@ func (c *Sidecars) Replace(ctx context.Context, name string) error {
 	c.declarations.RUnlock()
 	c.replacing[name] = replacement{running: process.version, installed: installed, pid: process.servicePID}
 	c.mu.Unlock()
-	if err := c.closePersistentOwner(process, ctx); err != nil {
+	if err := c.closePersistentOwner(process, ctx, true); err != nil {
 		c.mu.Lock()
 		delete(c.replacing, name)
 		c.mu.Unlock()
@@ -1309,6 +1312,7 @@ func (c *Sidecars) stopProcesses(processes []*sidecar, detach, quit bool) {
 			continue
 		}
 		close(process.outbox)
+		process.terminated.Store(true)
 		if platformErr != nil {
 			LogError("sidecar "+process.name, fmt.Sprintf("terminate: %v", platformErr))
 			continue
@@ -1336,7 +1340,7 @@ func (c *Sidecars) stopProcesses(processes []*sidecar, detach, quit bool) {
 			}
 			if p.persistent {
 				// The close ends by the answers of close-owner and shutdown or by the end of the connection.
-				if err := c.closePersistentOwner(p, context.Background()); err != nil {
+				if err := c.closePersistentOwner(p, context.Background(), false); err != nil {
 					LogError("sidecar "+p.name, fmt.Sprintf("close owner: %v", err))
 				}
 				return
@@ -1524,19 +1528,19 @@ func (c *Sidecars) Retain(surfaces []RetainedSurface) (int, error) {
 	return total, nil
 }
 
-func (c *Sidecars) closePersistentOwner(process *sidecar, ctx context.Context) error {
+func (c *Sidecars) closePersistentOwner(process *sidecar, ctx context.Context, waitRoom bool) error {
 	process.ownerMutex.Lock()
 	defer process.ownerMutex.Unlock()
 	if process.transportClosed {
 		// Another caller closed the owner and the transport.
 		return nil
 	}
-	return c.closeOwnerAndShutdown(process, ctx)
+	return c.closeOwnerAndShutdown(process, ctx, waitRoom)
 }
 
-// closeOwnerAndShutdown sends close-owner and shutdown, waits for each answer and closes the transport. It waits for no room
-// in the queue of the connection. It is called with process.ownerMutex held.
-func (c *Sidecars) closeOwnerAndShutdown(process *sidecar, ctx context.Context) error {
+// closeOwnerAndShutdown sends close-owner and shutdown, waits for each answer and closes the transport. It is called with
+// process.ownerMutex held.
+func (c *Sidecars) closeOwnerAndShutdown(process *sidecar, ctx context.Context, waitRoom bool) error {
 	request := fmt.Sprintf("%d", atomic.AddUint64(&c.nextRequest, 1))
 	waiter := make(chan error, 1)
 	defer func() {
@@ -1552,13 +1556,8 @@ func (c *Sidecars) closeOwnerAndShutdown(process *sidecar, ctx context.Context) 
 		return err
 	}
 	line = append(line, '\n')
-	// The stop waits for no room in the queue: a full queue ends the connection, which the service takes as a lost connection
-	// (docs/spec/persistent-services.md#closing-and-recovery).
-	select {
-	case process.outbox <- queue(line):
-	default:
-		process.closeTransport()
-		return fmt.Errorf("sidecar %s: close-owner: the queue of the connection is full", process.name)
+	if err := c.queueClose(process, ctx, waitRoom, "close-owner", line); err != nil {
+		return err
 	}
 	select {
 	case err := <-waiter:
@@ -1576,11 +1575,8 @@ func (c *Sidecars) closeOwnerAndShutdown(process *sidecar, ctx context.Context) 
 			return marshalErr
 		}
 		shutdownLine = append(shutdownLine, '\n')
-		select {
-		case process.outbox <- queue(shutdownLine):
-		default:
-			process.closeTransport()
-			return fmt.Errorf("sidecar %s: shutdown: the queue of the connection is full", process.name)
+		if err := c.queueClose(process, ctx, waitRoom, "shutdown", shutdownLine); err != nil {
+			return err
 		}
 		select {
 		case shutdownErr := <-shutdownWaiter:
@@ -1590,6 +1586,35 @@ func (c *Sidecars) closeOwnerAndShutdown(process *sidecar, ctx context.Context) 
 			process.closeTransport()
 			return ctx.Err()
 		}
+	case <-ctx.Done():
+		process.closeTransport()
+		return ctx.Err()
+	}
+}
+
+// queueClose queues the close-owner or shutdown line of operation. The stop waits for no room in the queue: a full queue ends the
+// connection, which the service takes as a lost connection. A replacement waits for room until the connection ends or the sidecars
+// stop, which end the connection too (docs/spec/persistent-services.md#closing-and-recovery). Every caller that closes the
+// transport holds process.ownerMutex, as the caller of queueClose does, so the outbox stays open while it waits.
+func (c *Sidecars) queueClose(process *sidecar, ctx context.Context, waitRoom bool, operation string, line []byte) error {
+	select {
+	case process.outbox <- queue(line):
+		return nil
+	default:
+	}
+	if !waitRoom {
+		process.closeTransport()
+		return fmt.Errorf("sidecar %s: %s: the queue of the connection is full", process.name, operation)
+	}
+	select {
+	case process.outbox <- queue(line):
+		return nil
+	case <-process.exited:
+		process.closeTransport()
+		return fmt.Errorf("sidecar %s: %s: the connection ended before the queue had room", process.name, operation)
+	case <-c.stopSignal:
+		process.closeTransport()
+		return errors.New("sidecars are stopped")
 	case <-ctx.Done():
 		process.closeTransport()
 		return ctx.Err()
@@ -2070,6 +2095,10 @@ func (c *Sidecars) writeLine(process *sidecar, line queuedLine) bool {
 	process.writing.Store(int64(len(line.bytes)))
 	defer process.writing.Store(0)
 	if _, err := process.stdin.Write(line.bytes); err != nil {
+		if process.terminated.Load() {
+			LogInfo("sidecar "+process.name, "the stop ended the process before a line was written")
+			return false
+		}
 		LogError("sidecar "+process.name, fmt.Sprintf("write: %v", err))
 		return false
 	}

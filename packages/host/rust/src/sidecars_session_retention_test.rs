@@ -54,6 +54,7 @@ fn native_view_removal_still_closes_a_standard_io_session() {
                 surfaces: HashSet::from([surface.into()]),
                 closed_surfaces: HashSet::new(),
                 read_ended: None,
+                terminated: Default::default(),
             },
         );
     }
@@ -648,6 +649,7 @@ pub(crate) fn mounted_project_probe_wire<O: Owner>(
             surfaces: HashSet::new(),
             closed_surfaces: HashSet::new(),
             read_ended: None,
+            terminated: Default::default(),
         },
     );
     (sidecars, move || match receiver.try_recv() {
@@ -712,6 +714,7 @@ pub(crate) fn background_race_sidecars<O: Owner>(
             surfaces: HashSet::new(),
             closed_surfaces: HashSet::new(),
             read_ended: None,
+            terminated: Default::default(),
         },
     );
     (sidecars, move || {

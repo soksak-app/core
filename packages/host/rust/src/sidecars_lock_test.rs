@@ -228,6 +228,7 @@ fn poisoned_reply_waiter_locks_still_close_the_owner_of_a_service() {
         &connected,
         &owner_closed,
         "test",
+        None,
     );
     service.join().unwrap();
     assert!(
@@ -241,6 +242,7 @@ fn poisoned_reply_waiter_locks_still_close_the_owner_of_a_service() {
         &connected,
         &owner_closed,
         "test",
+        None,
     );
     assert!(
         matches!(again, Ok(false)),
@@ -267,6 +269,7 @@ fn fast_close_answer_preserves_both_closing_transitions() {
                 surfaces: ["tab-standard".into()].into(),
                 closed_surfaces: Default::default(),
                 read_ended: None,
+                terminated: Default::default(),
             },
         );
         state.owners.insert("tab-standard".into(), owner.clone());
@@ -322,6 +325,7 @@ fn status_only_consumer_receives_stop_closing_removal() {
                 surfaces: ["tab-standard".into()].into(),
                 closed_surfaces: Default::default(),
                 read_ended: None,
+                terminated: Default::default(),
             },
         );
         state.closing.insert(
@@ -365,6 +369,7 @@ fn detach_notification_contains_the_complete_final_status() {
                 surfaces: ["tab-standard".into()].into(),
                 closed_surfaces: Default::default(),
                 read_ended: None,
+                terminated: Default::default(),
             },
         );
         state.running.insert(
@@ -386,6 +391,7 @@ fn detach_notification_contains_the_complete_final_status() {
                 surfaces: Default::default(),
                 closed_surfaces: Default::default(),
                 read_ended: None,
+                terminated: Default::default(),
             },
         );
         state.closing.insert(
@@ -448,6 +454,7 @@ fn outdated_fixture(
                 surfaces: ["tab-fixture".into()].into(),
                 closed_surfaces: Default::default(),
                 read_ended: None,
+                terminated: Default::default(),
             },
         );
         state

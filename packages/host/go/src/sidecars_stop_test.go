@@ -25,7 +25,7 @@ func TestAStopOfAPersistentServiceWaitsForNoRoomInItsQueue(t *testing.T) {
 		closeWaiters: map[string]chan error{}}
 	process.outbox <- queue([]byte("{}\n"))
 	// A close that waits for room in the full queue does not return, and the check stops at the limit of its runner.
-	if err := c.closePersistentOwner(process, context.Background()); err == nil {
+	if err := c.closePersistentOwner(process, context.Background(), false); err == nil {
 		t.Fatal("the close of a service whose queue is full succeeded")
 	}
 	process.responseMutex.Lock()

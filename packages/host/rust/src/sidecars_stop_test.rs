@@ -32,6 +32,7 @@ fn a_close_of_a_persistent_owner_waits_for_no_room_in_its_queue() {
         &shutdown_waiters,
         &connected,
         "fixture",
+        None,
     );
     assert!(
         result.is_err(),
