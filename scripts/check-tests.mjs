@@ -5800,9 +5800,9 @@ const FEATURE_LINKS = [
       { file: "packages/plugin-api/calls.js", symbol: "export function createCalls" },
     ],
     tests: [
-      { file: "packages/plugin-api/test/calls-contract.test.mjs", id: "call limit contract publishes the required cases in order" },
+      { file: "packages/plugin-api/test/calls-contract.test.mjs", id: "call end contract publishes the required cases in order" },
     ],
-    expected: "A call that receives no reply within its declared or default limit is rejected with -32000 and the limit message, and a reply after the limit is a late reply that is not passed to the call, each replayed against the call layer with mock timers and the same outputs.",
+    expected: "A call ends by its reply, its error reply, its cancel or the end of its peer, a reply after a cancel is a late reply that is not passed to the call, and the call layer starts no timer, each replayed against the call layer with the same outputs.",
     levels: ["unit"],
   },
   {

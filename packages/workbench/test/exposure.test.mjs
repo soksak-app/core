@@ -382,23 +382,24 @@ test("requests for surface names are forwarded to the preferred surface in the a
   assert.equal((await made.handle({ method: "status.get", params: { name: "probe.lines" } })).error.code, EXPOSURE_ERRORS.unregistered);
 });
 
-test("commandTimeout gives the declared time limit of a command, and undefined for a command without one", () => {
+// A command has no time limit, so the registry refuses a declaration that states one (`timeout` in docs/spec/exposure.md).
+// contract: exposure.command.declaration-refuses-a-time-limit
+test("the registry refuses a command declaration with timeout and keeps no time limit of a command", () => {
   const made = createRegistry();
   made.declare("core", coreExposes());
   const slow = probeExposes();
   slow.commands.push({ name: "probe.wait", description: "Waits.", params: { type: "object" }, result: {}, timeout: 120000 });
-  made.declare("probe", slow);
-  assert.equal(made.commandTimeout("probe.wait"), 120000);
-  assert.equal(made.commandTimeout("probe.send"), undefined);
-  assert.equal(made.commandTimeout("probe.absent"), undefined);
+  assert.throws(() => made.declare("probe", slow), { message: "probe exposes probe.wait: timeout is not a member of a command declaration" });
+  assert.equal(made.declared("command", "probe.wait"), false, "a refused declaration was registered");
+  assert.equal("commandTimeout" in made, false, "the registry gives a time limit of a command");
 });
 
-test("a forwarded command carries the timeout its declaration gives, and other requests carry none", async () => {
+test("a forwarded request carries no timeout", async () => {
   const host = fakeHost(() => ({ result: null }));
   const made = createRegistry({ call: host.call, report: (error) => { throw error; } });
   made.declare("core", coreExposes());
   const slow = probeExposes();
-  slow.commands.push({ name: "probe.wait", description: "Waits.", params: { type: "object" }, result: {}, timeout: 120000 });
+  slow.commands.push({ name: "probe.wait", description: "Waits.", params: { type: "object" }, result: {} });
   made.declare("probe", slow);
   made.configure({ surfacePlugin: () => "probe" });
   for (const name of ["probe.send", "probe.wait"]) made.registered({ surface: "tab-a", kind: "command", name });
@@ -407,8 +408,15 @@ test("a forwarded command carries the timeout its declaration gives, and other r
   await made.handle({ method: "command.run", params: { name: "probe.send", params: {} } });
   await made.handle({ method: "status.get", params: { name: "probe.lines" } });
   const forwarded = host.calls.filter(([name]) => name === "exposureForward").map(([, arg]) => arg);
-  assert.deepEqual(forwarded.map((arg) => arg.timeout), [120000, undefined, undefined]);
-  assert.equal(Object.hasOwn(forwarded[1], "timeout"), false);
+  assert.equal(forwarded.length, 3);
+  for (const request of forwarded) assert.deepEqual(Object.keys(request).sort(), ["id", "method", "params", "surface"]);
+});
+
+test("the core exposure file declares no command with timeout", () => {
+  const file = JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8"));
+  const timed = file.exposes.commands.filter((command) => "timeout" in command).map((command) => command.name);
+  assert.deepEqual(timed, [], "exposure.json declares a time limit of a command");
+  assert.doesNotThrow(() => validateExposureFile(file));
 });
 
 test("run executes a core command locally with schema checks", async () => {

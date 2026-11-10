@@ -103,7 +103,18 @@ test("a predicate that answers anything but true or false ends the watch with an
       new RegExp(`^Error: the predicate of core\\.screen returned ${type}, not a boolean$`));
     await unwatched;
   }
-  assert.equal(await client.watch("main", "core.screen", () => false, { timeout: 50 }).catch((error) => error.code), "ETIMEDOUT");
+});
+
+test("a predicate that throws ends the watch with its error and unwatches", async (t) => {
+  const sample = sampleHandlers();
+  const server = await startFakeEndpoint(sample.handlers);
+  t.after(() => server.close());
+  const client = await connect({ configDir: server.configDir });
+  t.after(() => client.close());
+  const unwatched = requested(server, (m) => m.method === "status.unwatch");
+  const failure = new Error("the predicate failed");
+  await assert.rejects(client.watch("main", "core.screen", () => { throw failure; }), (error) => error === failure);
+  await unwatched;
 });
 
 test("watch resolves only after its final status.unwatch is acknowledged", async (t) => {
@@ -136,7 +147,7 @@ test("watch resolves from a status.changed notification without further requests
   const client = await connect({ configDir: server.configDir });
   t.after(() => client.close());
   const got = server.nextRequest("status.get");
-  const waiting = client.watch("main", "core.screen", (value) => value === "project", { timeout: 5000 });
+  const waiting = client.watch("main", "core.screen", (value) => value === "project");
   await got;
   sample.set("core.screen", "settings");
   sample.set("core.screen", "project");
@@ -145,18 +156,24 @@ test("watch resolves from a status.changed notification without further requests
   assert.equal(server.requests.filter((m) => m.method === "status.get").length, 1);
 });
 
-test("watch rejects after the timeout and unwatches", async (t) => {
+// A watch has no time limit (status.watch in docs/spec/exposure.md): a value that does not satisfy the predicate keeps it open,
+// and the close of the connection ends it with the close error.
+test("a watch that no value satisfies waits until the connection closes, and the close rejects it", async (t) => {
   const sample = sampleHandlers();
   const server = await startFakeEndpoint(sample.handlers);
   t.after(() => server.close());
   const client = await connect({ configDir: server.configDir });
-  t.after(() => client.close());
-  await assert.rejects(client.watch("main", "core.screen", () => false, { timeout: 50 }), {
-    code: "ETIMEDOUT",
-    message: 'status core.screen did not satisfy the condition within 50 ms; last value "home"',
-  });
+  const got = server.nextRequest("status.get");
+  let settled = false;
+  const watching = client.watch("main", "core.screen", () => false).finally(() => { settled = true; });
+  await got;
+  sample.set("core.screen", "settings");
+  // The answer of a later request comes after the value of status.get and the change, which the predicate refused.
   await client.request("windows.list");
-  assert.ok(server.requests.some((m) => m.method === "status.unwatch"));
+  assert.equal(settled, false, "the watch ended before an event that decides it");
+  client.close();
+  await assert.rejects(watching, { message: "endpoint connection closed" });
+  assert.equal(server.requests.some((m) => m.method === "status.unwatch"), false, "a closed connection sent status.unwatch");
 });
 
 test("concurrent watches of one name unwatch only after the last one ends", async (t) => {
@@ -185,6 +202,9 @@ test("a watch that ends before its subscription is confirmed is unsubscribed bef
     "status.watch": (params, connection) => {
       if (!first) return sample.handlers["status.watch"](params, connection);
       first = false;
+      // A change that arrives before the answer of status.watch reaches the predicate, which ends the watch before its
+      // subscription is confirmed.
+      connection.notify("status.changed", { window: "main", name: "core.screen", value: "early" });
       return new Promise((resolve) => {
         confirm = () => resolve(sample.handlers["status.watch"](params, connection));
       });
@@ -195,12 +215,13 @@ test("a watch that ends before its subscription is confirmed is unsubscribed bef
   const client = await connect({ configDir: server.configDir });
   t.after(() => client.close());
   const unwatch = requested(server, (message) => message.method === "status.unwatch");
-  const expired = client.watch("main", "core.screen", () => false, { timeout: 20 });
-  const timedOut = assert.rejects(expired, { code: "ETIMEDOUT" });
+  const failure = new Error("the predicate failed");
+  const ended = client.watch("main", "core.screen", () => { throw failure; });
+  const failed = assert.rejects(ended, (error) => error === failure);
   await client.request("windows.list");
   confirm();
   await unwatch;
-  await timedOut;
+  await failed;
   const nextStatusWatch = requested(server, (message) => message.method === "status.watch");
   const next = client.watch("main", "core.screen", (value) => value === "later");
   await nextStatusWatch;
@@ -229,7 +250,7 @@ test("a closed connection rejects pending requests and watches", async (t) => {
   const client = await connect({ configDir: server.configDir });
   const got = server.nextRequest("status.get");
   const pending = client.request("hang");
-  const watching = client.watch("main", "core.screen", () => false, { timeout: Infinity });
+  const watching = client.watch("main", "core.screen", () => false);
   await got;
   for (const connection of server.connections) connection.socket.destroy();
   await assert.rejects(pending, /connection closed/);
@@ -292,7 +313,7 @@ test("a watch with a surface requests that surface and ignores changes of other 
   t.after(() => server.close());
   const client = await connect({ configDir: server.configDir });
   t.after(() => client.close());
-  const waiting = client.watch("main", "probe.lines", (lines) => lines.includes("x"), { surface: "tab-a", timeout: 5000 });
+  const waiting = client.watch("main", "probe.lines", (lines) => lines.includes("x"), { surface: "tab-a" });
   await ready;
   watcher.notify("status.changed", { window: "main", name: "probe.lines", value: ["x"] });
   watcher.notify("status.changed", { window: "main", name: "probe.lines", surface: "tab-b", value: ["x"] });
