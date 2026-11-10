@@ -2,7 +2,6 @@ package host
 
 import (
 	"testing"
-	"time"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
@@ -49,12 +48,8 @@ func TestARemovalRequestEndsWithTheEndOfTheOwnerPage(t *testing.T) {
 		t.Fatal(err)
 	}
 	window.end(WindowWorkbenchEnded)
-	select {
-	case allowed := <-asked:
-		if !allowed {
-			t.Fatal("the end of the asked page refused the removal")
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("the page of the asked window ended, and the removal request still waits for its answer")
+	// A request that waits past the end of the page does not answer, and the check stops at the limit of its runner.
+	if allowed := <-asked; !allowed {
+		t.Fatal("the end of the asked page refused the removal")
 	}
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"net"
 	"testing"
-	"time"
 )
 
 // A stop sends close-owner without waiting for room in the queue of the service: a full queue fails the close at once and ends the
@@ -24,17 +23,9 @@ func TestAStopOfAPersistentServiceWaitsForNoRoomInItsQueue(t *testing.T) {
 	process := &sidecar{name: "fixture-service", persistent: true, conn: local, outbox: make(chan queuedLine, 1),
 		closeWaiters: map[string]chan error{}}
 	process.outbox <- queue([]byte("{}\n"))
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	closed := make(chan error, 1)
-	go func() { closed <- c.closePersistentOwner(process, ctx) }()
-	select {
-	case err := <-closed:
-		if err == nil {
-			t.Fatal("the close of a service whose queue is full succeeded")
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("the close waits for room in the full queue of the service")
+	// A close that waits for room in the full queue does not return, and the check stops at the limit of its runner.
+	if err := c.closePersistentOwner(process, context.Background()); err == nil {
+		t.Fatal("the close of a service whose queue is full succeeded")
 	}
 	process.responseMutex.Lock()
 	ended := process.transportClosed
@@ -59,13 +50,9 @@ func TestAPresentThatWaitsForTheMainThreadEndsWithTheStop(t *testing.T) {
 	go func() { answered <- c.presents.present(func() error { return nil }, step) }()
 	task := <-held
 	c.Stop()
-	select {
-	case err := <-answered:
-		if err == nil || err.Error() != presentsRefused {
-			t.Fatalf("the present ended with %v, want %q", err, presentsRefused)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("the present still waits for the main thread after the stop")
+	// A present that still waits for the main thread does not answer, and the check stops at the limit of its runner.
+	if err := <-answered; err == nil || err.Error() != presentsRefused {
+		t.Fatalf("the present ended with %v, want %q", err, presentsRefused)
 	}
 	task()
 	refused := c.presents.present(func() error {

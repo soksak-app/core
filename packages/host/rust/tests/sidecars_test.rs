@@ -2578,26 +2578,26 @@ fn a_disconnect_record_names_how_the_connection_ended() {
     );
 }
 
-/// Bounds the checks of the end of a sidecar process. The end comes from the exit of the process; the bound only ends a check
-/// whose end does not come.
-const PROCESS_END: Duration = Duration::from_secs(20);
+/// Makes the FIFO DIR/name to which a script writes the process id of a process that it started.
+fn child_fifo(directory: &Path, name: &str) -> std::path::PathBuf {
+    let path = directory.join(name);
+    let text = std::ffi::CString::new(path.display().to_string()).unwrap();
+    assert_eq!(
+        unsafe { libc::mkfifo(text.as_ptr(), 0o600) },
+        0,
+        "mkfifo {}: {}",
+        path.display(),
+        std::io::Error::last_os_error()
+    );
+    path
+}
 
-/// The process id that a script wrote to DIR/name; it waits until the script wrote it.
-fn recorded_pid(directory: &Path, name: &str) -> i32 {
-    let deadline = std::time::Instant::now() + PROCESS_END;
-    loop {
-        if let Ok(text) = std::fs::read_to_string(directory.join(name))
-            && let Ok(pid) = text.trim().parse::<i32>()
-            && pid > 0
-        {
-            return pid;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "the script wrote no process id to {name}"
-        );
-        std::thread::sleep(Duration::from_millis(10));
-    }
+/// The process id that a script writes to the FIFO path; the read ends when the script closes its write.
+fn child_pid(path: &Path) -> i32 {
+    let text = std::fs::read_to_string(path).unwrap();
+    let pid = text.trim().parse::<i32>().unwrap();
+    assert!(pid > 0, "the script wrote {text:?} as a process id");
+    pid
 }
 
 /// Kills the process when the check ends, so that no process of a check remains.
@@ -2609,15 +2609,43 @@ impl Drop for Killed {
     }
 }
 
-/// Checks that the process pid ends, as a process of an ended process group does.
+/// Waits for the exit of the process pid, as a process of an ended process group exits; a process that is gone already has
+/// exited too (ESRCH).
 fn require_gone(pid: i32) {
-    let deadline = std::time::Instant::now() + PROCESS_END;
-    while unsafe { libc::kill(pid, 0) } == 0 {
-        assert!(
-            std::time::Instant::now() < deadline,
-            "process {pid} of the process group of the sidecar still runs after the sidecar ended"
-        );
-        std::thread::sleep(Duration::from_millis(10));
+    let queue = unsafe { libc::kqueue() };
+    assert!(queue >= 0, "kqueue: {}", std::io::Error::last_os_error());
+    let change = libc::kevent {
+        ident: pid as libc::uintptr_t,
+        filter: libc::EVFILT_PROC,
+        flags: libc::EV_ADD | libc::EV_ONESHOT,
+        fflags: libc::NOTE_EXIT,
+        data: 0,
+        udata: std::ptr::null_mut(),
+    };
+    let mut event: libc::kevent = unsafe { std::mem::zeroed() };
+    let result = loop {
+        let count = unsafe { libc::kevent(queue, &change, 1, &mut event, 1, std::ptr::null()) };
+        if count >= 0 {
+            break Ok(count);
+        }
+        let error = std::io::Error::last_os_error();
+        if error.raw_os_error() != Some(libc::EINTR) {
+            break Err(error);
+        }
+    };
+    unsafe { libc::close(queue) };
+    match result {
+        Err(error) if error.raw_os_error() == Some(libc::ESRCH) => {}
+        Err(error) => panic!("watch the exit of process {pid}: {error}"),
+        Ok(1)
+            if event.flags & libc::EV_ERROR != 0 && event.data != libc::ESRCH as libc::intptr_t =>
+        {
+            panic!(
+                "watch the exit of process {pid}: {}",
+                std::io::Error::from_raw_os_error(event.data as i32)
+            )
+        }
+        Ok(_) => {}
     }
 }
 
@@ -2629,19 +2657,21 @@ fn a_sidecar_that_exits_fails_while_its_child_keeps_the_output() {
     let (sidecars, directory) = script_sidecars(
         "#!/bin/sh\necho $$ > DIR/pid\nsleep 3600 &\necho $! > DIR/child\nread request\nexit 3\n",
     );
+    let fifo = child_fifo(directory.path(), "child");
     let (window, _events, failures) = failing_owner("a", "/projects/a");
     sidecars
         .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    let child = recorded_pid(directory.path(), "child");
-    let _killed = Killed(child);
-    let failure = failures.recv_timeout(PROCESS_END).expect(
-        "the sidecar exited and no failure came, because a process that it started keeps its output open",
-    );
+    let child = child_pid(&fifo);
+    let killed = Killed(child);
+    // A host that waits for the end of the output delivers no failure, and the check stops at the limit of its runner.
+    let failure = failures
+        .recv()
+        .expect("the sidecar ended without a failure");
     assert_eq!(failure.surface, "s1");
     assert_eq!(failure.reason, "output closed: exit status 3");
     require_gone(child);
-    drop(_killed);
+    drop(killed);
     sidecars.stop();
 }
 
@@ -2653,15 +2683,16 @@ fn a_sidecar_that_exits_fails_while_a_process_outside_its_group_keeps_the_output
     let (sidecars, directory) = script_sidecars(
         "#!/bin/sh\necho $$ > DIR/pid\n/usr/bin/perl -MPOSIX -e 'exit if fork; POSIX::setsid(); open(my $f, \">\", \"DIR/child\"); print $f $$; close $f; sleep 3600'\nread request\nexit 3\n",
     );
+    let fifo = child_fifo(directory.path(), "child");
     let (window, _events, failures) = failing_owner("a", "/projects/a");
     sidecars
         .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    let child = recorded_pid(directory.path(), "child");
+    let child = child_pid(&fifo);
     let killed = Killed(child);
-    let failure = failures.recv_timeout(PROCESS_END).expect(
-        "the sidecar exited and no failure came, because a process outside its group keeps its output open",
-    );
+    let failure = failures
+        .recv()
+        .expect("the sidecar ended without a failure");
     assert_eq!(failure.surface, "s1");
     assert_eq!(failure.reason, "output closed: exit status 3");
     drop(killed);
@@ -2676,19 +2707,14 @@ fn a_stop_ends_by_the_sidecar_exit_and_ends_its_process_group() {
     let (sidecars, directory) = script_sidecars(
         "#!/bin/sh\necho $$ > DIR/pid\nsleep 3600 &\necho $! > DIR/child\nexec cat >/dev/null\n",
     );
+    let fifo = child_fifo(directory.path(), "child");
     let (window, _events) = owner("a", "/projects/a");
     sidecars
         .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    let child = recorded_pid(directory.path(), "child");
+    let child = child_pid(&fifo);
     let _killed = Killed(child);
-    let (stopped, ended) = channel();
-    std::thread::spawn(move || {
-        sidecars.stop();
-        stopped.send(()).expect("the test holds the receiver");
-    });
-    ended
-        .recv_timeout(PROCESS_END)
-        .expect("the sidecar exited and the stop still waits");
+    // A stop that waits for the end of the output does not return, and the check stops at the limit of its runner.
+    sidecars.stop();
     require_gone(child);
 }

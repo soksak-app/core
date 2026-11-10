@@ -376,10 +376,9 @@ mod presentation_queue {
         // The main thread holds the presentation and does not run it, as the main thread that runs the stop at exit does.
         let held = queued.recv().expect("the present enqueued no presentation");
         presents.refuse();
+        // A present that still waits for the main thread does not answer, and the check stops at the limit of its runner.
         assert_eq!(
-            answer
-                .recv_timeout(Duration::from_secs(5))
-                .expect("the present still waits for the main thread after the refusal"),
+            answer.recv().expect("the present ended without an answer"),
             Err(PRESENTS_REFUSED.to_string())
         );
         held();

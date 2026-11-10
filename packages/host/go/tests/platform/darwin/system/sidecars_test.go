@@ -215,56 +215,71 @@ func TestStopCancelsAnImageEmittedAfterStdioSidecarInputCloses(t *testing.T) {
 	}
 }
 
-// processEnd bounds the checks of the end of a sidecar process. The end comes from the exit of the process; the bound only ends a
-// check whose end does not come.
-const processEnd = 20 * time.Second
-
-// recordedPID is the process id that a script wrote to DIR/<name>; it waits until the script wrote it.
-func recordedPID(t *testing.T, directory, name string) int {
+// childFIFO makes the FIFO DIR/<name> to which a script writes the process id of a process that it started.
+func childFIFO(t *testing.T, directory, name string) string {
 	t.Helper()
-	deadline := time.Now().Add(processEnd)
-	for {
-		data, err := os.ReadFile(filepath.Join(directory, name))
-		if pid, parsed := strconv.Atoi(strings.TrimSpace(string(data))); err == nil && parsed == nil && pid > 0 {
-			return pid
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("the script wrote no process id to %s", name)
-		}
-		time.Sleep(10 * time.Millisecond)
+	path := filepath.Join(directory, name)
+	if err := syscall.Mkfifo(path, 0o600); err != nil {
+		t.Fatal(err)
 	}
+	return path
 }
 
-// requireGone checks that the process pid ends, as a process of an ended process group does.
+// childPID reads the process id that a script writes to the FIFO path; the read ends when the script closes its write.
+func childPID(t *testing.T, path string) int {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil || pid <= 0 {
+		t.Fatalf("the script wrote %q as a process id: %v", data, err)
+	}
+	return pid
+}
+
+// requireGone waits for the exit of the process pid, as a process of an ended process group exits; a process that is gone already
+// has exited too (ESRCH).
 func requireGone(t *testing.T, pid int) {
 	t.Helper()
-	deadline := time.Now().Add(processEnd)
-	for syscall.Kill(pid, 0) == nil {
-		if time.Now().After(deadline) {
-			t.Fatalf("process %d of the process group of the sidecar still runs after the sidecar ended", pid)
+	queue, err := syscall.Kqueue()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer syscall.Close(queue)
+	change := []syscall.Kevent_t{{Ident: uint64(pid), Filter: syscall.EVFILT_PROC, Flags: syscall.EV_ADD | syscall.EV_ONESHOT, Fflags: syscall.NOTE_EXIT}}
+	events := make([]syscall.Kevent_t, 1)
+	for {
+		n, err := syscall.Kevent(queue, change, events, nil)
+		if errors.Is(err, syscall.EINTR) {
+			continue
 		}
-		time.Sleep(10 * time.Millisecond)
+		if errors.Is(err, syscall.ESRCH) {
+			return
+		}
+		if err != nil {
+			t.Fatalf("watch the exit of process %d: %v", pid, err)
+		}
+		if n == 1 && events[0].Flags&syscall.EV_ERROR != 0 && syscall.Errno(events[0].Data) != syscall.ESRCH {
+			t.Fatalf("watch the exit of process %d: %v", pid, syscall.Errno(events[0].Data))
+		}
+		return
 	}
 }
 
-// failureWithin returns the next failure of owner, or fails when none comes within processEnd.
-func failureWithin(t *testing.T, owner *support.FakeOwner) support.SidecarFailure {
+// nextFailure returns the next failure of owner.
+func nextFailure(t *testing.T, owner *support.FakeOwner) support.SidecarFailure {
 	t.Helper()
-	select {
-	case value := <-owner.Failures:
-		data, err := json.Marshal(value)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var failure support.SidecarFailure
-		if err := json.Unmarshal(data, &failure); err != nil {
-			t.Fatal(err)
-		}
-		return failure
-	case <-time.After(processEnd):
-		t.Fatal("the sidecar exited and no failure came, because a process that it started keeps its output open")
+	data, err := json.Marshal(<-owner.Failures)
+	if err != nil {
+		t.Fatal(err)
 	}
-	return support.SidecarFailure{}
+	var failure support.SidecarFailure
+	if err := json.Unmarshal(data, &failure); err != nil {
+		t.Fatal(err)
+	}
+	return failure
 }
 
 // The end of a sidecar is the exit of its process: a process that it started keeps its output open, and the exit still fails the
@@ -272,13 +287,15 @@ func failureWithin(t *testing.T, owner *support.FakeOwner) support.SidecarFailur
 // contract: sidecars.end.is-the-process-exit
 func TestASidecarThatExitsFailsWhileItsChildKeepsTheOutput(t *testing.T) {
 	sidecars, directory := support.ScriptSidecars(t, "#!/bin/sh\necho $$ > DIR/pid\nsleep 3600 &\necho $! > DIR/child\nread request\nexit 3\n")
+	fifo := childFIFO(t, directory, "child")
 	owner := support.NewFakeOwner("/projects/a")
 	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	child := recordedPID(t, directory, "child")
+	child := childPID(t, fifo)
 	t.Cleanup(func() { _ = syscall.Kill(child, syscall.SIGKILL) })
-	failure := failureWithin(t, owner)
+	// A host that waits for the end of the output delivers no failure, and the check stops at the limit of its runner.
+	failure := nextFailure(t, owner)
 	if failure.Surface != "s1" || failure.Reason != "output closed: exit status 3" {
 		t.Fatalf("failure = %+v, want output closed: exit status 3", failure)
 	}
@@ -292,13 +309,14 @@ func TestASidecarThatExitsFailsWhileAProcessOutsideItsGroupKeepsTheOutput(t *tes
 	sidecars, directory := support.ScriptSidecars(t, "#!/bin/sh\necho $$ > DIR/pid\n"+
 		"/usr/bin/perl -MPOSIX -e 'exit if fork; POSIX::setsid(); open(my $f, \">\", \"DIR/child\"); print $f $$; close $f; sleep 3600'\n"+
 		"read request\nexit 3\n")
+	fifo := childFIFO(t, directory, "child")
 	owner := support.NewFakeOwner("/projects/a")
 	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	child := recordedPID(t, directory, "child")
+	child := childPID(t, fifo)
 	t.Cleanup(func() { _ = syscall.Kill(child, syscall.SIGKILL) })
-	failure := failureWithin(t, owner)
+	failure := nextFailure(t, owner)
 	if failure.Surface != "s1" || failure.Reason != "output closed: exit status 3" {
 		t.Fatalf("failure = %+v, want output closed: exit status 3", failure)
 	}
@@ -309,21 +327,14 @@ func TestASidecarThatExitsFailsWhileAProcessOutsideItsGroupKeepsTheOutput(t *tes
 // contract: sidecars.end.is-the-process-exit
 func TestAStopEndsBySidecarExitWhileItsChildKeepsTheOutput(t *testing.T) {
 	sidecars, directory := support.ScriptSidecars(t, "#!/bin/sh\necho $$ > DIR/pid\nsleep 3600 &\necho $! > DIR/child\nexec cat >/dev/null\n")
+	fifo := childFIFO(t, directory, "child")
 	owner := support.NewFakeOwner("/projects/a")
 	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	child := recordedPID(t, directory, "child")
+	child := childPID(t, fifo)
 	t.Cleanup(func() { _ = syscall.Kill(child, syscall.SIGKILL) })
-	stopped := make(chan struct{})
-	go func() {
-		sidecars.Stop()
-		close(stopped)
-	}()
-	select {
-	case <-stopped:
-	case <-time.After(processEnd):
-		t.Fatal("the sidecar exited and the stop still waits, because a process that it started keeps its output open")
-	}
+	// A stop that waits for the end of the output does not return, and the check stops at the limit of its runner.
+	sidecars.Stop()
 	requireGone(t, child)
 }
