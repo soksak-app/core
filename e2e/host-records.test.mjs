@@ -30,10 +30,10 @@ for (const app of Object.values(APPS)) {
     await transcript.until((lines) => lines.includes(`info workbench workbench: ${line}`), `the page did not report "${line}"`);
     const logs = readdirSync(join(s.app.configDir, "logs"));
     assert.ok(logs.some((name) => /^host-.+\.jsonl$/.test(name)), `logs/ holds no host event log: ${JSON.stringify(logs)}`);
-    const run = await untilEventLine(s.app.configDir, {}, (entry) => /^info host run: \S+ pid \d+$/.test(entry), 10000, reading(app, RECORDS));
+    const run = await untilEventLine(s.app.configDir, {}, (entry) => /^info host run: \S+ pid \d+$/.test(entry), { ...reading(app, RECORDS), ended: s.client.ended });
     assert.ok(run, "the event log has no run record");
     // The writer stores the record at its next batch, so the check reads the event log until the record is there.
-    assert.equal(await untilEventLine(s.app.configDir, offsets, (entry) => entry === `info workbench workbench: ${line}`, 10000, reading(app, RECORDS)), `info workbench workbench: ${line}`);
+    assert.equal(await untilEventLine(s.app.configDir, offsets, (entry) => entry === `info workbench workbench: ${line}`, { ...reading(app, RECORDS), ended: s.client.ended }), `info workbench workbench: ${line}`);
   });
 }
 

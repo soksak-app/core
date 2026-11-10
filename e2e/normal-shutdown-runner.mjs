@@ -10,9 +10,6 @@ import { prepareRasterSession } from "./raster-probe.mjs";
 import { auditShutdownErrors } from "./shutdown-audit.mjs";
 import { joinedFailure } from "./fixture.mjs";
 
-const STARTUP_LIMIT = 15_000;
-const SHUTDOWN_LIMIT = 5_000;
-const SERVICE_WAIT_LIMIT = 5_000;
 // A request and a watch have no time limit: each ends by its answer or notification, or by the close of the connection.
 function request(client, method, params) {
   return client.request(method, params);
@@ -76,8 +73,15 @@ function serviceEndpoint(configDir) {
   return { file, pid: endpoint.pid };
 }
 
-/** Waits for the service PID through the CLI bundled beside the declared application executable. */
-export async function runSokProcessWait({ binary, configDir, pid, timeoutMs = SERVICE_WAIT_LIMIT, outerLimitMs = timeoutMs + 2_000, cleanupLimitMs = 1_000, spawnChild = spawn }) {
+/**
+ * Waits for the end of the service PID through the CLI bundled beside the declared application executable. `sok process wait` has
+ * no time limit (docs/spec/cli.md): it answers when the operating system reports the end of the PID, so the wait ends by that end
+ * or by the exit of the CLI, and the limit of the test runner bounds a wait that neither ends.
+ */
+export async function runSokProcessWait({ binary, configDir, pid, spawnChild = spawn, ...rest }) {
+  if (Object.keys(rest).length > 0) {
+    throw new TypeError(`runSokProcessWait takes no ${Object.keys(rest).join(", ")}: the wait ends by the end of the process or of the CLI`);
+  }
   const sok = join(dirname(binary), "sok");
   let details;
   try {
@@ -87,7 +91,7 @@ export async function runSokProcessWait({ binary, configDir, pid, timeoutMs = SE
   }
   if (!details.isFile() || (details.mode & 0o111) === 0) throw new Error(`bundled sok executable ${sok} is not an executable file`);
 
-  const child = spawnChild(sok, ["process", "wait", String(pid), "--timeout-ms", String(timeoutMs), "--config-dir", configDir], {
+  const child = spawnChild(sok, ["process", "wait", String(pid), "--config-dir", configDir], {
     stdio: ["ignore", "pipe", "pipe"],
   });
   let stdout = "";
@@ -96,52 +100,10 @@ export async function runSokProcessWait({ binary, configDir, pid, timeoutMs = SE
   child.stderr.setEncoding("utf8");
   child.stdout.on("data", (chunk) => { stdout += chunk; });
   child.stderr.on("data", (chunk) => { stderr += chunk; });
-  const closed = new Promise((resolve, reject) => {
+  const status = await new Promise((resolve, reject) => {
     child.once("error", reject);
     child.once("close", (code, signal) => resolve({ code, signal }));
   });
-  let timer;
-  let timedOut = false;
-  const deadline = new Promise((_, reject) => {
-    timer = setTimeout(() => {
-      timedOut = true;
-      child.kill("SIGTERM");
-      reject(new Error(`bundled sok process wait exceeded ${outerLimitMs}ms for service PID ${pid}`));
-    }, outerLimitMs);
-  });
-  let status;
-  try {
-    status = await Promise.race([closed, deadline]);
-  } catch (error) {
-    if (timedOut) {
-      let cleanupTimeout;
-      let cleanupTimer;
-      try {
-        await Promise.race([closed, new Promise((_, reject) => {
-          cleanupTimer = setTimeout(() => {
-            cleanupTimeout = new Error(`observer cleanup wait exceeded ${cleanupLimitMs}ms after SIGTERM`);
-            reject(cleanupTimeout);
-          }, cleanupLimitMs);
-        })]);
-      } catch (cleanupError) {
-        if (cleanupError === cleanupTimeout) {
-          try {
-            child.kill("SIGKILL");
-            await closed;
-          } catch (reapError) {
-            throw joinedFailure("the shutdown, its observer cleanup and the observer SIGKILL/reap failed", [error, cleanupError, reapError]);
-          }
-          throw joinedFailure("the shutdown and its observer cleanup failed; SIGKILL sent and observer child reaped", [error, cleanupError]);
-        }
-        throw joinedFailure("the shutdown and its observer cleanup failed", [error, cleanupError]);
-      } finally {
-        clearTimeout(cleanupTimer);
-      }
-    }
-    throw error;
-  } finally {
-    clearTimeout(timer);
-  }
   if (status.code !== 0) throw new Error(`bundled sok process wait failed for service PID ${pid} with exit ${status.code ?? status.signal}: ${stderr.trim() || stdout.trim() || "no output"}`);
   let result;
   try {
@@ -166,11 +128,12 @@ export async function runNormalShutdown({
 } = {}) {
   const endpointFile = `${app.configDir}/endpoint.json`;
   const started = Date.now();
-  const waitFilesystem = waitForFilesystem ?? ((label, predicate, limit) => untilFolderState(dirname(endpointFile),
-    () => (predicate() ? Date.now() - started : undefined), limit,
-    () => new Error(`${label} did not reach the expected state within ${limit}ms`)));
-  write(`START normal-shutdown app=${app.name} case_timeout_ms=${SHUTDOWN_LIMIT}`);
-  await waitFilesystem("endpoint", () => existsSync(endpointFile), STARTUP_LIMIT);
+  // Each wait of the check ends by its event and has no time limit: the endpoint file, the end of the connection and the end of
+  // the service process; the limit of the test runner bounds the check.
+  const waitFilesystem = waitForFilesystem ?? ((label, predicate) => untilFolderState(dirname(endpointFile),
+    () => (predicate() ? Date.now() - started : undefined)));
+  write(`START normal-shutdown app=${app.name}`);
+  await waitFilesystem("endpoint", () => existsSync(endpointFile));
   const client = await connectClient({ configDir: app.configDir });
   let service = null;
   const failures = [];
@@ -211,11 +174,11 @@ export async function runNormalShutdown({
       });
       if (reply !== null) throw new Error(`host.quit returned ${JSON.stringify(reply)}, expected null`);
     }
-    const { closedMs } = await waitForShutdown(client, endpointFile, { from, limit: SHUTDOWN_LIMIT });
+    const { closedMs } = await waitForShutdown(client, endpointFile, { from });
     let serviceObservationMs = "none";
     if (service) {
       const observationFrom = Date.now();
-      await waitServiceProcess({ binary: app.binary, configDir: app.configDir, pid: service.pid, timeoutMs: SERVICE_WAIT_LIMIT });
+      await waitServiceProcess({ binary: app.binary, configDir: app.configDir, pid: service.pid });
       if (existsSync(service.file)) throw new Error(`${service.file} remains after service PID ${service.pid} ended`);
       serviceObservationMs = Date.now() - observationFrom;
     }

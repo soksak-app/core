@@ -29,14 +29,16 @@ const RESCAN_REPORT = / File system must be re-scanned\.$/;
 /**
  * Resolves with the first value other than undefined that `read()` returns. `read` runs once after the watch of `folder`
  * (recursive) is active and again at each change and at each report of lost events (RESCAN_REPORT); an error that `read`
- * throws or any other error that the watch reports rejects the wait. At the deadline `timeout` (ms) `read` runs once more,
- * and the wait rejects with the error that `expired()` returns when it returns undefined. An abort of `signal` rejects the
- * wait with its reason, as a process whose state the wait awaits that ends first. The deadline bounds the wait also when
- * the watch does not start or does not end: at a high load of the file system events service the start and the end of a
- * watch can take minutes. The wait settles first and the watch ends after it; endWatches reports a watch end that has not
- * finished and an error of a watch end.
+ * throws or any other error that the watch reports rejects the wait. An abort of `signal`, a process or a connection whose
+ * state the wait awaits that ends first, reads the state once more and rejects the wait with its reason when it is absent. The wait has no time limit: its state, an error,
+ * or the abort ends it, and the limit of the test runner bounds a wait that none of them ends. The wait settles first and the
+ * watch ends after it; endWatches reports an error of a watch end.
  */
-export function untilFolderState(folder, read, timeout, expired, signal) {
+export function untilFolderState(folder, read, options = {}, ...rest) {
+  if (typeof options !== "object" || options === null || rest.length > 0 || Object.hasOwn(options, "timeout")) {
+    return Promise.reject(new TypeError("untilFolderState takes no timeout: a wait ends by its state, an error of its watch or an abort of its signal"));
+  }
+  const { signal } = options;
   return new Promise((resolve, reject) => {
     let active = false;
     let finished = false;
@@ -45,16 +47,15 @@ export function untilFolderState(folder, read, timeout, expired, signal) {
     const finish = (outcome, value) => {
       if (finished) return;
       finished = true;
-      clearTimeout(timer);
       outcome(value);
-      const end = { folder, reported: false };
+      const end = { folder };
       // default: a watch whose start failed has nothing to end, and the error of its start rejected the wait.
       ending.set(end, subscribed.then((subscription) => subscription.unsubscribe(), () => undefined).then(
         () => { ending.delete(end); },
         (error) => { ending.delete(end); endErrors.push(new Error(`the watch of ${folder} failed to end: ${error.message}`, { cause: error })); }));
     };
-    const check = (atDeadline = false) => {
-      if (finished || (!active && !atDeadline)) return;
+    const check = () => {
+      if (finished || !active) return;
       let value;
       try {
         value = read();
@@ -63,12 +64,24 @@ export function untilFolderState(folder, read, timeout, expired, signal) {
         return;
       }
       if (value !== undefined) finish(resolve, value);
-      else if (atDeadline) finish(reject, expired());
     };
-    // The deadline bounds the wait, and the result is judged by the state that `read` returns at it: at a high load the
-    // watch can become active or deliver a change after the deadline, so the state is read once more there.
-    const timer = setTimeout(() => check(true), timeout);
-    signal?.addEventListener("abort", () => finish(reject, signal.reason), { once: true });
+    if (signal?.aborted) {
+      reject(signal.reason);
+      return;
+    }
+    // The abort reads the state once more, also before the watch is active, and judges it: a watch that becomes active or
+    // reports a change only later at a high load leaves the state in the folder unseen until then.
+    signal?.addEventListener("abort", () => {
+      if (finished) return;
+      let value;
+      try {
+        value = read();
+      } catch (error) {
+        finish(reject, error);
+        return;
+      }
+      finish(value !== undefined ? resolve : reject, value !== undefined ? value : signal.reason);
+    }, { once: true });
     const subscribed = subscribe(folder, (error) => (error && !RESCAN_REPORT.test(error.message) ? finish(reject, error) : check()));
     subscribed.then(() => {
       active = true;
@@ -77,30 +90,24 @@ export function untilFolderState(folder, read, timeout, expired, signal) {
   });
 }
 
+/** An AbortSignal that aborts with the value or the reason of `ended` when it settles, such as `client.ended` of a connection. */
+export function endSignal(ended) {
+  const controller = new AbortController();
+  ended.then((cause) => controller.abort(cause), (cause) => controller.abort(cause));
+  return controller.signal;
+}
+
 // The watch ends that have not finished, each with the promise of its end, and the errors of the watch ends since the last report.
 const ending = new Map();
 const endErrors = [];
 
 /**
- * Waits until every watch end has finished or `limit` (ms) has passed, and returns the failures of the watch ends: an
- * error for each watch that has not ended by then, reported once per watch, and each error of a watch end. A check calls
- * it when it ends, because a watch that a wait of the check started ends with that check.
+ * Waits until every watch end has finished, including a watch end that starts while it waits, and returns the errors of the watch
+ * ends. A check calls it when it ends, because a watch that a wait of the check started ends with that check. It has no time limit:
+ * each watch end ends by the answer of its unsubscription.
  */
-export async function endWatches(limit) {
-  let expired = null;
-  if (ending.size) {
-    let timer;
-    const bound = new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new Error(`the watch ends did not finish within ${limit} ms`)), limit);
-    });
-    expired = await Promise.race([Promise.all(ending.values()), bound]).then(() => null, (error) => error);
-    clearTimeout(timer);
-  }
-  const failures = endErrors.splice(0);
-  for (const end of ending.keys()) {
-    if (end.reported) continue;
-    end.reported = true;
-    failures.push(new Error(`the watch of ${end.folder} did not end within ${limit} ms after its wait`, { cause: expired }));
-  }
-  return failures;
+export async function endWatches(...rest) {
+  if (rest.length > 0) throw new TypeError("endWatches takes no limit: each watch end ends by the answer of its unsubscription");
+  while (ending.size) await Promise.all(ending.values());
+  return endErrors.splice(0);
 }

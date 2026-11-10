@@ -25,16 +25,8 @@ mock.module("node:child_process", {
   namedExports: { ...childProcess, execFile },
   defaultExport: { ...childProcess.default, execFile },
 });
-const { whilePending, within } = await import("../app.mjs");
+const { whilePending } = await import("../app.mjs");
 const { sampleProcess } = await import("../stall-sample.mjs");
-
-test("a search that does not end within its limit fails naming the search", async () => {
-  await assert.rejects(within(new Promise(() => {}), 10, "the chain probe"), /^Error: the chain probe did not answer within 10 ms$/);
-});
-
-test("a search that ends within its limit returns its value", async () => {
-  assert.equal(await within(Promise.resolve(7), 1000, "probe"), 7);
-});
 
 test("a failed sample of a pending request is named in the report instead of hiding it", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
@@ -170,10 +162,16 @@ test("a host that refuses the dump event is named in the message instead of hidi
   assert.equal(text, "host.stall.dump not stored: path does not name a file: /x");
 });
 
-test("a host that does not answer the dump event within the bound is named in the message", async () => {
+test("a host whose connection ends before it answers the dump event is named in the message", async () => {
   const { announceStall } = await import("../stall-sample.mjs");
-  const text = await announceStall(() => new Promise(() => {}), "main", ["/x/logs/stall-10-7.txt"], 10);
-  assert.equal(text, "host.stall.dump not stored: no answer within 10 ms");
+  const text = await announceStall(async () => { throw new Error("endpoint connection closed"); }, "main", ["/x/logs/stall-10-7.txt"]);
+  assert.equal(text, "host.stall.dump not stored: endpoint connection closed");
+});
+
+test("the dump event takes no limit", async () => {
+  const { announceStall } = await import("../stall-sample.mjs");
+  await assert.rejects(announceStall(async () => ({ boot: "b1", seq: 9 }), "main", ["/x/logs/stall-10-7.txt"], 10),
+    /^TypeError: announceStall takes no limit/);
 });
 
 test("a request pending past 3 s starts the host and page samples in the same turn", async (t) => {

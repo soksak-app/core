@@ -20,8 +20,8 @@ for (const app of Object.values(APPS)) {
     // A resize lays the plane out again, and that draw throws.
     const { content } = await s.get("host.window");
     await s.run("host.window.resize", { width: content.width - 40, height: content.height });
-    await untilEventLine(app.configDir, offsets, (line) => line.includes("surface presentation failed: diagnostic layout fault"), 30000,
-      reading(app, ["workbench.record.error"]));
+    await untilEventLine(app.configDir, offsets, (line) => line.includes("surface presentation failed: diagnostic layout fault"),
+      { ...reading(app, ["workbench.record.error"]), ended: s.client.ended });
     // The page answers each request after the failure within the time limit of the request.
     for (let round = 0; round < 5; round++) assert.ok(Array.isArray(await s.get("core.surfaces")), `round ${round}: core.surfaces did not answer`);
     await s.run("host.window.resize", { width: content.width, height: content.height });

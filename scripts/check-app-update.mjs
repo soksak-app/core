@@ -49,11 +49,17 @@ const run = (file, args) => execFileSync(file, args, { encoding: "utf8" });
 
 /**
  * Resolves when `ready()` returns a value, evaluating it once the watch of `folder` is active and again on each change
- * (folder-wait.mjs of @soksak/window-check); rejects after WAIT_MS.
+ * (folder-wait.mjs of @soksak/window-check). The folder wait has no time limit; this check bounds each of its steps with WAIT_MS,
+ * which it gives the wait as an abort.
  */
-function untilChange(folder, ready, what) {
-  return untilFolderState(folder, () => ready() || undefined, WAIT_MS,
-    () => new Error(`${what} did not happen in ${WAIT_MS / 1000} s`));
+async function untilChange(folder, ready, what) {
+  const limit = AbortSignal.timeout(WAIT_MS);
+  try {
+    return await untilFolderState(folder, () => ready() || undefined, { signal: limit });
+  } catch (error) {
+    if (limit.aborted) throw new Error(`${what} did not happen in ${WAIT_MS / 1000} s`);
+    throw error;
+  }
 }
 
 /**

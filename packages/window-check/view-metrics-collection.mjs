@@ -546,7 +546,7 @@ export async function withDragTraceMode(s, action) {
   const before = await dragTraceModeSnapshot(s);
   const change = async (performanceTrace, logPolicy) => {
     await s.run("core.settings.set", { patch: { "diagnostics.performance": performanceTrace, "diagnostics.log": logPolicy }, scope: "common" });
-    await untilPolicy(s.app.configDir, policyOfSetting(logPolicy));
+    await untilPolicy(s.app.configDir, policyOfSetting(logPolicy), { ended: s.client.ended });
   };
   let during;
   let result;

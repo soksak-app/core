@@ -45,7 +45,7 @@ for (const app of Object.values(APPS)) {
     await s.flushLog();
     // The sidecar writes its own event file in batches, so the check waits until its record of the input request is in it.
     await untilEventLine(s.app.configDir, eventOffsets, (text) => text.includes("sidecar.rasterprobe.request")
-      && text.includes('"operation":"input"'), 10000, reading(s.app, ["sidecar.rasterprobe.request"]));
+      && text.includes('"operation":"input"'), { ...reading(s.app, ["sidecar.rasterprobe.request"]), ended: s.client.ended });
     const events = readEvents(s.app.configDir, eventOffsets).events;
     const log = events.map((event) => ({ text: eventLine(event), ts: new Date(event.ts_us / 1000).toISOString() }));
     // The trace of the host is in the event log.

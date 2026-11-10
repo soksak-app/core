@@ -143,7 +143,7 @@ test("readEventLines returns the lines of every event after the offsets", (t) =>
   assert.deepEqual(readEventLines(dir, first.offsets).lines, []);
 });
 
-test("untilEventLine returns the first line after the offsets that the predicate accepts, and names the lines it saw on a timeout", async (t) => {
+test("untilEventLine returns the first line after the offsets that the predicate accepts, and names the lines it saw when the writer ends", async (t) => {
   const dir = configDir(t);
   const file = join(dir, "logs", "host-1-10.jsonl");
   writeFileSync(file, line(1, "info", "host.record.info", { where: "early", text: "before the offsets" }));
@@ -151,9 +151,13 @@ test("untilEventLine returns the first line after the offsets that the predicate
   const { offsets } = readEventLines(dir, {});
   // The file changes after the watch is installed: the record arrives while the check waits.
   setImmediate(() => appendFileSync(file, line(2, "info", "workbench.record.info", { where: "workbench", text: "focus in a" }, "workbench")));
-  assert.equal(await untilEventLine(dir, offsets, (text) => text.endsWith("focus in a"), 5000, RECORDS), "info workbench workbench: focus in a");
-  await assert.rejects(untilEventLine(dir, offsets, (text) => text.includes("never"), 100, RECORDS),
-    /no event line matched within 100 ms; the lines after the offsets: \[.*focus in a/);
+  assert.equal(await untilEventLine(dir, offsets, (text) => text.endsWith("focus in a"), RECORDS), "info workbench workbench: focus in a");
+  let end;
+  const ended = new Promise((resolve) => { end = resolve; });
+  const waiting = untilEventLine(dir, offsets, (text) => text.includes("never"), { ...RECORDS, ended });
+  end(new Error("endpoint connection closed"));
+  await assert.rejects(waiting,
+    /the writer of the log ended before an event line matched \(endpoint connection closed\); the lines after the offsets: \[.*focus in a/);
 });
 
 test("untilEventLines waits for a predicate over all the lines after the offsets", async (t) => {
@@ -161,7 +165,7 @@ test("untilEventLines waits for a predicate over all the lines after the offsets
   const file = join(dir, "logs", "host-1-10.jsonl");
   writeFileSync(file, line(1, "error", "host.record.error", { where: "a", text: "first" }));
   setImmediate(() => appendFileSync(file, line(2, "error", "host.record.error", { where: "b", text: "second" })));
-  const lines = await untilEventLines(dir, {}, (all) => all.filter((entry) => entry.startsWith("error ")).length >= 2, 5000,
+  const lines = await untilEventLines(dir, {}, (all) => all.filter((entry) => entry.startsWith("error ")).length >= 2,
     { catalog: CATALOG, records: ["host.record.error"] });
   assert.deepEqual(lines, ["error host a: first", "error host b: second"]);
 });
@@ -179,7 +183,7 @@ test("untilEventLines sees a record that another process appends to an existing 
     appendFileSync(${JSON.stringify(file)}, ${JSON.stringify(line(2, "info", "host.record.info", { where: "w", text: "appended" }))});
   `], { stdio: "inherit" });
   t.after(() => appender.kill());
-  const lines = await untilEventLines(dir, offsets, (all) => all.includes("info host w: appended"), 3000, RECORDS);
+  const lines = await untilEventLines(dir, offsets, (all) => all.includes("info host w: appended"), RECORDS);
   assert.deepEqual(lines, ["info host w: appended"]);
 });
 
@@ -193,7 +197,7 @@ test("untilEventLines sees a file that another process creates", async (t) => {
     writeFileSync(${JSON.stringify(join(dir, "logs", "host-2-20.jsonl"))}, ${JSON.stringify(line(1, "info", "host.record.info", { where: "w", text: "new file" }))});
   `], { stdio: "inherit" });
   t.after(() => creator.kill());
-  const lines = await untilEventLines(dir, offsets, (all) => all.includes("info host w: new file"), 3000, RECORDS);
+  const lines = await untilEventLines(dir, offsets, (all) => all.includes("info host w: new file"), RECORDS);
   assert.deepEqual(lines, ["info host w: new file"]);
 });
 
@@ -280,7 +284,7 @@ test("untilEventLines rejects at once a record that the policy of the folder doe
   const dir = configDir(t);
   writeFileSync(join(dir, "logs", "host-1-10.jsonl"), line(1, "info", "log.open"));
   const started = performance.now();
-  await assert.rejects(untilEventLines(dir, {}, () => false, 3000, { catalog: CATALOG, records: ["sidecar.probe.frame"] }),
+  await assert.rejects(untilEventLines(dir, {}, () => false, { catalog: CATALOG, records: ["sidecar.probe.frame"] }),
     { message: "the check reads sidecar.probe.frame (class frame, level debug), which the log policy " +
       `{"lifecycle":"error","input":"error","call":"error","io":"error","frame":"error"} of ${join(dir, "log-policy.json")} does not store` });
   assert.ok(performance.now() - started < 1000, `the rejection took ${Math.round(performance.now() - started)} ms`);
@@ -291,20 +295,26 @@ test("untilEventLines waits on a record that the policy file of the folder store
   writeFileSync(join(dir, "log-policy.json"),
     JSON.stringify({ schema: 1, classes: { lifecycle: "info", input: "error", call: "error", io: "error", frame: "error" } }));
   writeFileSync(join(dir, "logs", "host-1-10.jsonl"), line(1, "info", "host.record.info", { where: "run", text: "a" }));
-  const lines = await untilEventLines(dir, {}, (all) => all.length === 1, 3000, { catalog: CATALOG, records: ["host.record.info"] });
+  const lines = await untilEventLines(dir, {}, (all) => all.length === 1, { catalog: CATALOG, records: ["host.record.info"] });
   assert.deepEqual(lines, ["info host run: a"]);
 });
 
 test("untilEventLines refuses a wait that names no record", async (t) => {
   const dir = configDir(t);
-  await assert.rejects(untilEventLines(dir, {}, () => true, 3000),
+  await assert.rejects(untilEventLines(dir, {}, () => true, {}),
     { message: "untilEventLines: the wait names no record; give { catalog, records } of the records that the predicate reads" });
+});
+
+test("untilEventLines takes no timeout", async (t) => {
+  const dir = configDir(t);
+  await assert.rejects(untilEventLines(dir, {}, () => true, 3000, RECORDS), /^TypeError: untilEventLines takes no timeout/);
+  await assert.rejects(untilEventLine(dir, {}, () => true, 3000, RECORDS), /^TypeError: untilEventLine takes no timeout/);
 });
 
 test("untilEventLines waits on an event that passes every gate under the default policy", async (t) => {
   const dir = configDir(t);
   writeFileSync(join(dir, "logs", "host-1-10.jsonl"), line(1, "info", "page.start", { url: "a" }, "page"));
-  const lines = await untilEventLines(dir, {}, (all) => all.length === 1, 3000, { catalog: CATALOG, records: ["page.start"] });
+  const lines = await untilEventLines(dir, {}, (all) => all.length === 1, { catalog: CATALOG, records: ["page.start"] });
   assert.deepEqual(lines, ['info page page.start: {"url":"a"}']);
 });
 

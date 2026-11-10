@@ -128,7 +128,7 @@ export const fresh = (s, options = {}) => start.fresh(s, { ...options, startPlug
  * document writes `workbench.start`, and `host.windows`, which the host answers while the page reloads, then reports the page ready.
  */
 export async function pluginChangeApplied(s, offsets, action) {
-  await untilEventLine(s.app.configDir, offsets, (line) => line.includes("workbench.start"), 30000, start.reading(s.app, ["workbench.start"]));
+  await untilEventLine(s.app.configDir, offsets, (line) => line.includes("workbench.start"), { ...start.reading(s.app, ["workbench.start"]), ended: s.client.ended });
   await s.windows(1, `the page was not ready again after ${action}`);
 }
 

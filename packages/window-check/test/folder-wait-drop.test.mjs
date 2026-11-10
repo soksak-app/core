@@ -21,7 +21,7 @@ test("an error of the watch that does not ask for a scan rejects the wait", { ti
   const waiting = untilFolderState("/watched", () => {
     queueMicrotask(() => reportOfWatch(ended));
     return undefined;
-  }, 5000, () => new Error("expired"));
+  });
   await assert.rejects(waiting, ended);
 });
 
@@ -32,6 +32,6 @@ test("a report of lost events without a state rejects no wait and reads the fold
     if (reads === 2) return reads;
     queueMicrotask(() => reportOfWatch(new Error("Too many events. File system must be re-scanned.")));
     return undefined;
-  }, 5000, () => new Error("expired"));
+  });
   assert.equal(await waiting, 2);
 });

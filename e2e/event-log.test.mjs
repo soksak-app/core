@@ -91,7 +91,7 @@ for (const app of Object.values(APPS)) {
     const offsets = Object.fromEntries(Object.entries(currentEventOffsets(app.configDir))
       .filter(([name]) => !name.endsWith(`-${pid}.jsonl`)));
     await untilEventLine(app.configDir, offsets,
-      (line) => line.startsWith("info host host.app.event:") && line.includes('"kind":"started"'), 30000, reading(app, reads));
+      (line) => line.startsWith("info host host.app.event:") && line.includes('"kind":"started"'), { ...reading(app, reads), ended: s.client.ended });
     // The events are read from the event log of the new process, so an event of the process that quit is not counted.
     const names = readdirSync(logs).filter((name) => name.startsWith("host-") && name.endsWith(`-${pid}.jsonl`));
     assert.equal(names.length, 1, `logs/ holds ${names.length} event logs of process ${pid}: ${names.join(", ")}`);
@@ -118,17 +118,17 @@ for (const app of Object.values(APPS)) {
       if (!line.includes("host.trace.surface") || !line.includes(raster.surface)) return false;
       const fields = JSON.parse(line.slice(line.indexOf("{")));
       return fields.phase === "placed" && fields.visible === true && fields.w > 0 && fields.h > 0;
-    }, 30000, reading(app, ["host.trace.surface"]));
+    }, { ...reading(app, ["host.trace.surface"]), ended: s.client.ended });
     assert.ok(placed.includes(raster.surface), `the placed surface event names no surface: ${placed}`);
     const memory = await untilEventLine(app.configDir, offsets,
-      (line) => line.includes("host.sampler.memory") && line.includes('"role":"sidecar"') && line.includes('"rss_kb"'), 60000,
-      reading(app, ["host.sampler.memory"]));
+      (line) => line.includes("host.sampler.memory") && line.includes('"role":"sidecar"') && line.includes('"rss_kb"'),
+      { ...reading(app, ["host.sampler.memory"]), ended: s.client.ended });
     assert.match(memory, /"pid":[0-9]+/, `the memory event of the sidecar holds no process: ${memory}`);
     await s.run("host.window.reload");
     await s.until("host.windows", (list) => list.some((item) => item.window === s.window && item.ready), "the reloaded page did not report ready");
     await s.flushLog();
-    const starts = await untilEventLine(app.configDir, offsets, (line) => line.includes("workbench.start") && line.includes('"url"'), 30000,
-      reading(app, ["workbench.start"]));
+    const starts = await untilEventLine(app.configDir, offsets, (line) => line.includes("workbench.start") && line.includes('"url"'),
+      { ...reading(app, ["workbench.start"]), ended: s.client.ended });
     assert.match(starts, /"started_at":[0-9.]+/, `the workbench start event holds no start time: ${starts}`);
   });
 }

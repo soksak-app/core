@@ -334,9 +334,11 @@ test('forwards CLI SIGTERM to command cancellation and cleanup', { timeout: test
   // The pid file is created by writing a temporary file and renaming it. The reader never reads an empty file in the middle of the write.
   const commandSource = `const {spawn}=require('node:child_process'); const {renameSync,writeFileSync}=require('node:fs'); const child=spawn(process.execPath,['-e',${JSON.stringify(descendantSource)}],{stdio:['ignore','ignore','ignore','ipc']}); child.on('message',message=>{if(message==='ready'){writeFileSync(${JSON.stringify(pidFile + '.tmp')},String(child.pid)); renameSync(${JSON.stringify(pidFile + '.tmp')},${JSON.stringify(pidFile)});}}); setInterval(()=>{},1000);`;
   // The pid file is read once the watch of the folder is active and again at each change, so its rename is seen at any load.
-  const ready = untilFolderState(directory, () => (existsSync(pidFile) ? readFileSync(pidFile, 'utf8') : undefined), hangMs,
-    () => new Error(`${pidFile} was not written within ${hangMs} ms`));
+  // The wait ends by the pid file or by the exit of the command that writes it.
+  const cliEnded = new AbortController();
+  const ready = untilFolderState(directory, () => (existsSync(pidFile) ? readFileSync(pidFile, 'utf8') : undefined), { signal: cliEnded.signal });
   cli = spawn(node, [join(process.cwd(), 'scripts/test-command.mjs'), '--id', 'cli-signal', '--timeout-ms', String(hangMs), '--', node, '-e', commandSource], { stdio: ['ignore', 'pipe', 'pipe'] });
+  cli.once('exit', (code, signal) => cliEnded.abort(new Error(`the command exited with ${code ?? signal} before ${pidFile} was written`)));
   let stdout = '';
   cli.stdout.on('data', (chunk) => { stdout += chunk; });
   // The rename of the pid file is the readiness event.

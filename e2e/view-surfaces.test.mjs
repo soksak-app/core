@@ -8,9 +8,9 @@ import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { APPS, drag, open, within } from "@soksak/window-check/app.mjs";
+import { APPS, drag, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents, traceRows, untilEventLine } from "@soksak/window-check/event-log.mjs";
-import { untilFolderState } from "@soksak/window-check/folder-wait.mjs";
+import { endSignal, untilFolderState } from "@soksak/window-check/folder-wait.mjs";
 import { fresh, reading, START_PLUGIN } from "./fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { rasterMarks, surfaceBoxes, whitePixels } from "./outside.mjs";
@@ -435,7 +435,7 @@ for (const app of Object.values(APPS)) {
       if (!line.startsWith("info workbench workbench.start: ")) return false;
       const fields = JSON.parse(line.slice(line.indexOf("{")));
       return fields.started_at === reloadedDocument.startedAt;
-    }, 30000, reading(s.app, ["workbench.start"]));
+    }, { ...reading(s.app, ["workbench.start"]), ended: s.client.ended });
     await s.until("core.surfaces", (surfaces) => surfaces.some((item) =>
       item.surface === surface && item.exposes.includes("status rasterprobe.session")), "the raster probe did not return after the reload");
     const after = await sessionOf(s, surface, "the raster probe session did not return");
@@ -450,7 +450,7 @@ for (const app of Object.values(APPS)) {
         ["workbench.view.call", "workbench.view.reply", "workbench.view.call.cancel"].includes(event.event));
       return acceptedCurrentViewReplies(events, { window: "main", page: currentPage, plugin: RASTER, surface })
         .find((reply) => reply.outcome === "result");
-    }, 30000, () => new Error(`the raster probe view had no accepted successful reply after reload: ${JSON.stringify(pageEvents)}`));
+    }, { signal: endSignal(s.client.ended) });
     const { id, generation } = accepted;
     assert.equal(unansweredViewCalls(pageEvents).some((call) => call.plugin === RASTER &&
       call.surface === surface && call.id === id && call.generation === generation), false,
@@ -474,9 +474,7 @@ for (const app of Object.values(APPS)) {
       observed = events.filter((event) => event.layer === "workbench" && event.start === currentPage &&
         ["workbench.view.call", "workbench.view.reply", "workbench.view.call.cancel"].includes(event.event));
       return currentPageViewCallCoverage(events, { window: "main", page: currentPage, calls: nativeCalls });
-    }, 30000, () => new Error(`the sealed native view calls did not all receive current-page settlements: ${JSON.stringify({
-      calls: nativeCalls, pageEvents: observed,
-    })}`));
+    }, { signal: endSignal(s.client.ended) });
     assert.equal(coverage.length, nativeCalls.length,
       "the current page did not settle every native view call through the sealed offset");
     t.diagnostic(`all ${coverage.length} sealed calls settled on the replacement page`);
@@ -525,12 +523,12 @@ for (const app of Object.values(APPS)) {
     s.cleanup(() => checks.stop());
     const returnSets = 3;
     const roundTripsPerSet = 5;
-    const roundTimeout = 60000;
     for (let set = 0; set < returnSets; set++) {
       const roundLabel = `set ${set + 1}/${returnSets}, ${roundTripsPerSet} uninterrupted round trips`;
       const started = Date.now();
       t.diagnostic(`${app.name}: START ${roundLabel}`);
-      await within((async () => {
+      // Each round trip ends by the events of its steps; the limit of the test runner bounds the set.
+      await (async () => {
       await s.flushLog();
       const baselineRows = traceRows(readEvents(s.app.configDir, placementRowsFrom).events);
       const offsets = currentEventOffsets(s.app.configDir);
@@ -543,17 +541,18 @@ for (const app of Object.values(APPS)) {
       await s.flushLog();
       // Only an image region whose placement changed in this gesture joins its presentation wait (docs/spec/plugin-processes.md, rule 6);
       // an image region that stayed in place adds no join. Each awaited image region ends presented in this set; an abandoned wait fails
-      // at once, and a missing presentation fails at the deadline with the phases that were observed
+      // at once, and a missing presentation holds the set until the limit of the test
       // (docs/spec/native-surfaces.md#view-surfaces). The frames below measure the boxes of every image region either way.
       const awaited = expectedPresentations(baselineRows, traceRowsNow(), rasters.map((raster) => raster.surface));
       const joinsOf = (rows) => awaited.map((surface) => ({ surface, ...viewPresentationJoins(rows, surface) }));
-      // untilFolderState re-reads the trace at each change of the logs folder; the deadline is the only timer.
+      // untilFolderState re-reads the trace at each change of the logs folder and has no timer: a presentation, an abandoned wait or
+      // the end of the connection ends it.
       const joins = await untilFolderState(join(s.app.configDir, "logs"), () => {
         const current = joinsOf(traceRowsNow());
         const ended = current.find((entry) => entry.abandoned.length > 0 || entry.phases.includes("abandoned"));
         if (ended) throw new Error(`set ${set}: ${ended.surface} presentation wait ended without presentation; ${describe(current)}`);
         return current.every((entry) => entry.phases.includes("presented")) ? current : undefined;
-      }, 30000, () => new Error(`set ${set}: not every awaited image region presented within 30000 ms; ${describe(joinsOf(traceRowsNow()))}`));
+      }, { signal: endSignal(s.client.ended) });
       t.diagnostic(`${app.name}: set ${set + 1} awaited image regions ${awaited.length}, presentations ${joins.map((entry) =>
         entry.phases.filter((phase) => phase === "presented").length).join(",") || "none"}`);
       const edgeWidths = [];
@@ -635,7 +634,7 @@ for (const app of Object.values(APPS)) {
       }
       const failures = checks.values.filter((value) => value?.failed > 0);
       assert.deepEqual(failures, [], `project return set ${set} reported a composition failure`);
-      })(), roundTimeout, `${app.name}: ${roundLabel}`);
+      })();
       t.diagnostic(`${app.name}: PASS ${roundLabel} (${Date.now() - started}ms)`);
     }
   });

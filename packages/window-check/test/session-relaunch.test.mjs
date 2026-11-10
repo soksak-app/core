@@ -42,12 +42,12 @@ test("a relaunch whose process exited and that no process replaced fails with th
     { seq: 5404, level: "info", event: "log.closed", fields: { cause: "update" } },
     { seq: 5417, level: "error", event: "host.record.error", fields: { text: "the main webview is not in the window hierarchy", where: "main webview identity" } },
   ].map((record) => JSON.stringify(record)).join("\n") + "\n");
-  nextEndpoint = async () => { throw new Error(`endpoint.json named no process other than ${pid} within 60000 ms`); };
+  nextEndpoint = async () => { throw new SyntaxError("endpoint.json is not JSON: Unexpected end of JSON input"); };
   t.after(() => { nextEndpoint = async () => ({ pid: 200 }); });
   const session = new Session({ name: "probe", configDir }, { endpoint: { pid }, close() {}, request: async () => null });
   session.check = "full screen";
   await assert.rejects(session.relaunch(), (error) => {
-    assert.match(error.message, new RegExp(`^probe process ${pid} exited in the check "full screen" and no process took its place \\(endpoint\\.json named no process other than ${pid} within 60000 ms\\)`));
+    assert.match(error.message, new RegExp(`^probe process ${pid} exited in the check "full screen" and no process took its place \\(endpoint\\.json is not JSON: Unexpected end of JSON input\\)`));
     assert.match(error.message, /seq 5404 log\.closed cause update; seq 5417 host\.record\.error the main webview is not in the window hierarchy \(main webview identity\)/);
     return true;
   });

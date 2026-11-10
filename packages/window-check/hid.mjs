@@ -132,42 +132,6 @@ for (const item of list) {
 }
 return JSON.stringify(null);`);
 
-// The screen rectangle of the visible banner of the notification center whose body is input.body. The banner is drawn
-// inside the full-screen window of the notification center, so the function finds it in the Accessibility tree and not in the window list. Another process draws the banner, and the application
-// under check receives no event when the banner appears, so the function reads again for input.within milliseconds.
-const bannerWith = jxa(`
-const center = Application("System Events").processes.whose({ bundleIdentifier: "com.apple.notificationcenterui" });
-const find = () => {
-  if (center.length === 0) return null;
-  for (const window of center[0].windows()) {
-    for (const group of window.entireContents()) {
-      let role = "";
-      try { role = group.role(); } catch (error) { continue; }
-      if (role !== "AXGroup") continue;
-      let texts = [];
-      try { texts = group.staticTexts().map((text) => text.name()); } catch (error) { continue; }
-      if (texts.includes(input.body)) {
-        const [x, y] = group.position();
-        const [width, height] = group.size();
-        return { x, y, width, height, texts };
-      }
-    }
-  }
-  return null;
-};
-const until = Date.now() + input.within;
-let banner = find();
-while (!banner && Date.now() < until) {
-  delay(0.05);
-  banner = find();
-}
-return JSON.stringify(banner);`);
-
-/** Finds the notification banner whose body is body within within milliseconds and returns {x, y, width, height, texts} (screen coordinates). It returns null when there is none. */
-export function waitNotificationBanner(body, within) {
-  return bannerWith({ body, within });
-}
-
 const finderOpen = jxa(`
 const finder = Application("Finder");
 finder.open(Path(input.directory));

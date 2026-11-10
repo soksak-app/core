@@ -58,7 +58,7 @@ for (const app of Object.values(APPS)) {
             return result;
           },
           untilFramesQuiet: () => untilFramesQuiet({ frames: async () => [(await s.get("host.window")).frames] }),
-          frameRecords: () => applyTrace((name, params) => s.run(name, params), FRAME_RECORDS, app.configDir),
+          frameRecords: () => applyTrace((name, params) => s.run(name, params), FRAME_RECORDS, app.configDir, { ended: s.client.ended }),
           gcLoop: (on) => s.request("diagnostics.gc.loop", { on }),
           uncapturedDrag: () => drag(s, VIEW_DRAG_PLAN),
           record: async (gesture) => {

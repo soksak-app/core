@@ -106,9 +106,6 @@ export function assertEndpointUsesCurrentBuild(endpoint, resolvedBinary, binaryM
   }
 }
 
-// The time limit (ms) for the end of the folder watches that the waits of a check started, at the end of the check.
-const WATCH_END_LIMIT = 10_000;
-
 /**
  * The sequential-run lock between check files. A second check run fails without waiting. The lock file holds the number
  * of the owning process; when that process does not exist, the lock is a remnant and is replaced.
@@ -466,7 +463,7 @@ async function finishSessionAudit(t, session, close, pendingDisposal) {
       t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
     }
     // A folder watch that a wait of the check started ends with the check (folder-wait.mjs).
-    for (const error of await endWatches(WATCH_END_LIMIT)) {
+    for (const error of await endWatches()) {
       failures.push(error);
       t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
     }
@@ -610,8 +607,9 @@ export class Session {
    */
   async relaunch() {
     const previous = this.client.endpoint.pid;
-    // The watch starts before the request, so an endpoint that the new process writes at once is not missed.
-    const next = untilEndpoint(this.app.configDir, previous, 60000);
+    // The watch starts before the request, so an endpoint that the new process writes at once is not missed. The wait ends by
+    // that endpoint and has no time limit: a process that no process replaces holds the check until the limit of the test.
+    const next = untilEndpoint(this.app.configDir, previous);
     this.step(`relaunch process ${previous}`);
     await this.request("diagnostics.host.relaunch");
     let endpoint;
@@ -1093,15 +1091,6 @@ function compact(object) {
   return Object.fromEntries(Object.entries(object).filter(([, value]) => value !== undefined));
 }
 
-/** Fails when the promise does not answer within ms. A search of a check that has its own end uses it; a request does not. */
-export function within(promise, ms, what) {
-  let timer;
-  const limit = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`${what} did not answer within ${ms} ms`)), ms);
-  });
-  return Promise.race([promise, limit]).finally(() => clearTimeout(timer));
-}
-
 /**
  * Returns the promise unchanged and records the host threads when it is still pending at STALL_AFTER (F69). The record ends no
  * wait. A request still pending at STALL_AFTER starts the host and page samples in the same turn, so a stall keeps its stacks.
@@ -1194,7 +1183,7 @@ export async function prepareFixture(s, { settings = {}, performanceTrace = TRAC
   let records;
   try {
     await s.request("diagnostics.fixture", { settings: { ...settings, "diagnostics.performance": performanceTrace, "diagnostics.log": kept } });
-    await untilPolicy(s.app.configDir, policy);
+    await untilPolicy(s.app.configDir, policy, { ended: s.client.ended });
     await s.presented();
     if (presentationErrors.length) {
       throw new Error(`test preparation reported presentation errors before reload: ${JSON.stringify(presentationErrors)}; ` +

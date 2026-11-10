@@ -138,7 +138,7 @@ for (const app of Object.values(APPS)) {
         event.event === "sidecar.rasterprobe.frame" && event.surface === raster.surface
         && event.mono_ns / 1e6 >= run.ticks[0] && event.mono_ns / 1e6 <= run.displayed);
       return supplierFrames.length > 0;
-    }, 10000, reading(app, ["sidecar.rasterprobe.frame"]));
+    }, { ...reading(app, ["sidecar.rasterprobe.frame"]), ended: s.client.ended });
     const { draw } = supplierDrawDurations(supplierFrames);
     t.diagnostic(`supplier frame draw (ms): count ${draw.length}, median ${draw[Math.floor(draw.length / 2)].toFixed(3)}, ` +
       `p90 ${draw[Math.floor(draw.length * .9)].toFixed(3)}, max ${draw.at(-1).toFixed(3)}`);

@@ -66,7 +66,7 @@ test("the endpoint wait reads an endpoint written before its watch is active", {
     fs.writeFileSync(temporary, `${JSON.stringify({ pid: 200, address: "/tmp/new.sock" })}\n`);
     fs.renameSync(temporary, join(dir, "endpoint.json"));
   };
-  const waiting = untilEndpoint(dir, 100, 2000);
+  const waiting = untilEndpoint(dir, 100);
   assert.deepEqual(await waiting, { pid: 200, address: "/tmp/new.sock" });
 });
 
@@ -74,7 +74,7 @@ test("the policy wait reads a policy written before its watch is active", { time
   const dir = folder(t);
   const policy = policyOfSetting(EVERY_LEVEL);
   change = () => fs.writeFileSync(join(dir, "log-policy.json"), JSON.stringify({ schema: POLICY_SCHEMA, classes: policy.classes }));
-  await untilPolicy(dir, policy, 2000);
+  await untilPolicy(dir, policy);
 });
 
 test("the event line wait reads a line appended before its watch is active", { timeout: 10000 }, async (t) => {
@@ -87,7 +87,7 @@ test("the event line wait reads a line appended before its watch is active", { t
   fs.writeFileSync(file, record(1, "log.open", {}));
   const catalog = { events: { "host.record.<level>": { layer: "host", class: "lifecycle", level: ["error", "info"] } } };
   change = () => fs.appendFileSync(file, record(2, "host.record.info", { where: "w", text: "appended" }));
-  const lines = await untilEventLines(dir, {}, (all) => all.includes("info host w: appended"), 2000,
+  const lines = await untilEventLines(dir, {}, (all) => all.includes("info host w: appended"),
     { catalog, records: ["host.record.info"] });
   assert.ok(lines.includes("info host w: appended"));
 });
