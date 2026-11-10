@@ -827,7 +827,7 @@
           "held"
         ]
       },
-      "description": "An exposure reply matched no waiting request, and the host refused it: held says where the relay keeps the id, as other-target (a request of another document waits under it), expired, ended, or none (the relay holds no request under it)."
+      "description": "An exposure reply matched no waiting request, and the host refused it: held says where the relay keeps the id, as other-target (a request of another document waits under it), ended (the request ended before this reply), or none (the relay holds no request under it)."
     },
     "host.call.peer-lost": {
       "layer": "host",
