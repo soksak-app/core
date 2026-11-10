@@ -782,6 +782,9 @@ void sp_window_focus_workbench(void *handle) {
     NSWindow *window = (NSWindow *)handle;
     giveKeyboardAfterPress(window, ^{
         NSView *target = (NSView *)sp_window_main_webview(window) ?: frameworkKeyView(window.contentView);
+        // A framework that draws the workbench may remove its view when the window closes, while the window still shows; the
+        // workbench of a closing window takes no keyboard, and that is no error.
+        if (!target && objc_getAssociatedObject(window, &keyboardClosedKey)) return;
         if (!target) {
             sp_log_error("surface keyboard", "the window has no view of the workbench that takes the keyboard");
             return;

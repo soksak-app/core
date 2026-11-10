@@ -5,6 +5,17 @@
 #import "window_facts.h"
 #import "window_reveal.h"
 #import "private/webkit.h"
+#import <objc/runtime.h>
+
+// The calls that wait for the reveal of a window (sp_window_after_reveal), held by the window while its reveal is pending.
+static char revealWaitersKey;
+
+// Runs the calls that waited for the reveal of window, once.
+static void runRevealWaiters(NSWindow *window) {
+    NSArray *waiters = [[objc_getAssociatedObject(window, &revealWaitersKey) retain] autorelease];
+    objc_setAssociatedObject(window, &revealWaitersKey, nil, OBJC_ASSOCIATION_RETAIN);
+    for (void (^waiter)(void) in waiters) waiter();
+}
 
 // Observes loading of the main web view and makes the window opaque when the first load ends. After the
 // window is revealed it ends the observation and releases itself.
@@ -47,6 +58,7 @@
     [_webview removeObserver:self forKeyPath:@"loading"];
     [_webview _doAfterNextPresentationUpdate:^{
         self->_window.alphaValue = 1;
+        runRevealWaiters(self->_window);
         [self release];
     }];
 }
@@ -69,9 +81,22 @@ bool sp_window_reveal_after_load(void *handle, char **error) {
         return false;
     }
     window.alphaValue = 0;
+    if (!objc_getAssociatedObject(window, &revealWaitersKey)) {
+        objc_setAssociatedObject(window, &revealWaitersKey, [NSMutableArray array], OBJC_ASSOCIATION_RETAIN);
+    }
     // The observer releases itself when the window is revealed.
     [[[SPWindowReveal alloc] initWithWindow:window webview:main] start];
     return true;
+}
+
+void sp_window_after_reveal(void *handle, void (^done)(void)) {
+    NSCAssert(NSThread.isMainThread, @"window reveal requires the UI thread");
+    NSMutableArray *waiters = objc_getAssociatedObject((NSWindow *)handle, &revealWaitersKey);
+    if (!waiters) {
+        done();
+        return;
+    }
+    [waiters addObject:[[done copy] autorelease]];
 }
 
 // keepFrame gives a window that the order put on the screen the frame that it had before, which the host gave it. AppKit constrains the

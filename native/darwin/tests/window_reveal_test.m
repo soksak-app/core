@@ -5,6 +5,7 @@
 #import <WebKit/WebKit.h>
 #import "support/temporary_folder.h"
 #import "capture.h"
+#import "surface_layout.h"
 #import "window_facts.h"
 #import "window_reveal.h"
 
@@ -83,6 +84,36 @@ int main(void) { @autoreleasepool {
     [window close];
     [main release];
     [window release];
+
+    // A wait for the screen that shows the state of a window waits for the reveal: until then the window shows nothing.
+    WKWebView *waiting = nil;
+    NSWindow *unrevealed = makeWindow(&waiting);
+    check(sp_window_reveal_after_load(unrevealed, &error), @"a window that a settled wait asks about is prepared");
+    [unrevealed orderFrontRegardless];
+    __block BOOL settled = NO;
+    __block CGFloat alphaAtSettle = -1;
+    surfaceLayoutAfterSettled(unrevealed, ^(void (^presented)(const char *)) { presented(NULL); }, ^(double displayed, const char *failure) {
+        (void)displayed;
+        (void)failure;
+        settled = YES;
+        alphaAtSettle = unrevealed.alphaValue;
+    });
+    NSDate *before = [NSDate dateWithTimeIntervalSinceNow:0.3];
+    while (!settled && before.timeIntervalSinceNow > 0) {
+        [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.005]];
+    }
+    check(!settled, @"a settled wait of a window that is not revealed does not end before the reveal");
+    [waiting loadHTMLString:@"<body style='margin:0;background:rgb(0,0,255)'></body>" baseURL:nil];
+    check(waitRevealed(unrevealed, waiting, &loading), @"the window that a settled wait asks about is revealed");
+    NSDate *after = [NSDate dateWithTimeIntervalSinceNow:2];
+    while (!settled && after.timeIntervalSinceNow > 0) {
+        [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.005]];
+    }
+    check(settled && alphaAtSettle == 1,
+        [NSString stringWithFormat:@"the settled wait of a window ends after its reveal (settled %d, alpha %.1f)", settled, alphaAtSettle]);
+    [unrevealed close];
+    [waiting release];
+    [unrevealed release];
 
     WKWebView *failing = nil;
     NSWindow *failed = makeWindow(&failing);

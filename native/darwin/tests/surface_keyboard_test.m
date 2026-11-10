@@ -13,6 +13,13 @@
 
 static int failures;
 static void runDirectly(void (^work)(void)) { work(); }
+
+// A view that takes the first responder, as the view of a framework that draws the workbench does.
+@interface SPKeyView : NSView
+@end
+@implementation SPKeyView
+- (BOOL)acceptsFirstResponder { return YES; }
+@end
 static void check(BOOL ok, const char *message) {
     fprintf(ok ? stdout : stderr, "%s: %s\n", ok ? "PASS" : "FAIL", message);
     if (!ok) failures++;
@@ -613,6 +620,36 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"a closed window drops the 2 held key events, got %@", closedFields].UTF8String);
     sp_region_close(heldRegion);
     sp_window_end_responder_observation(holdingObservation);
+
+    // A framework that draws the workbench removes its view when its window closes, while the window still shows (mygo removes it in
+    // windowWillClose:). A move of the keyboard to the workbench that then arrives finds no view, and is no error: the window closes.
+    NSWindow *framework = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 400, 300)
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+    framework.releasedWhenClosed = NO;
+    SPKeyView *drawn = [[[SPKeyView alloc] initWithFrame:framework.contentView.bounds] autorelease];
+    [framework.contentView addSubview:drawn];
+    [framework orderBack:nil];
+    sp_window_focus_workbench(framework);
+    check(framework.firstResponder == drawn, "the view of a framework that draws the workbench takes the keyboard");
+    __block BOOL shownWhileClosing = NO;
+    __block NSArray<NSDictionary *> *closingFocus = nil;
+    id closingObserver = [NSNotificationCenter.defaultCenter addObserverForName:NSWindowWillCloseNotification object:framework queue:nil
+        usingBlock:^(NSNotification *note) {
+            (void)note;
+            [drawn removeFromSuperview];
+            shownWhileClosing = framework.isVisible;
+            closingFocus = [capturedEvents(^{ sp_window_focus_workbench(framework); }) retain];
+        }];
+    [framework close];
+    [NSNotificationCenter.defaultCenter removeObserver:closingObserver];
+    NSMutableArray<NSString *> *closingErrors = [NSMutableArray array];
+    for (NSDictionary *event in closingFocus) {
+        if ([event[@"name"] isEqual:@"native.record.error"]) [closingErrors addObject:event[@"fields"][@"text"] ?: @""];
+    }
+    check(shownWhileClosing, "the window still shows while it closes");
+    check(closingFocus != nil && closingErrors.count == 0,
+        [NSString stringWithFormat:@"a move to the workbench of a closing window whose view is gone records no error, got %@", closingErrors].UTF8String);
+    [closingFocus release];
 
     sp_window_end_responder_observation(observation);
     return failures ? 1 : 0;

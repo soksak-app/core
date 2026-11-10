@@ -14,6 +14,11 @@
 // an error string that the caller releases with free() to error. On success error is NULL.
 bool sp_window_reveal_after_load(void *window, char **error);
 
+// Calls done on the main thread once window is revealed: at once for a window whose reveal is not pending, and otherwise
+// right after sp_window_reveal_after_load made it opaque. A window waiting for its reveal shows nothing, so a wait for the
+// screen that shows its state waits for the reveal first.
+void sp_window_after_reveal(void *window, void (^done)(void));
+
 // Puts a window on screen without taking the front from another application.
 //
 // The one value is whether the system holds this application as active (NSRunningApplication). Launch Services
