@@ -8,6 +8,7 @@
 #import <CommonCrypto/CommonDigest.h>
 #import <objc/runtime.h>
 #include <signal.h>
+#import "support/run_until.h"
 
 // Distinct responders make a global/current-window menu dispatch observable.
 @interface MenuWindowResponder : NSView
@@ -238,7 +239,7 @@ int main(void) { @autoreleasepool {
     __block BOOL closingLoaded = NO;
     [closing loadHTMLString:@"<p>closing</p>" baseURL:nil];
     [closing evaluateJavaScript:@"1" completionHandler:^(id result, NSError *error) { (void)result; (void)error; closingLoaded = YES; }];
-    while (!closingLoaded) [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate distantFuture]];
+    sp_run_until("the closing page answers its script", ^BOOL { return closingLoaded; });
     pid_t closingProcess = [[closing valueForKey:@"_webProcessIdentifier"] intValue];
     NSDictionary *withPage = parse(sp_window_facts(window, sp_window_composition(window)));
     check(closingProcess > 0 && closingProcess != pageProcess
@@ -258,7 +259,7 @@ int main(void) { @autoreleasepool {
     check(closingExited || kill(closingProcess, 0) != 0
             || (pageless.count == 1 && [pageless[0][@"pid"] intValue] == closingProcess && [pageless[0][@"ending"] boolValue]),
         [NSString stringWithFormat:@"the process whose page closed is reported without a page and ending: %@", pageless]);
-    while (!closingExited) [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate distantFuture]];
+    sp_run_until("the process of the closed page exits", ^BOOL { return closingExited; });
     dispatch_source_cancel(exitSource);
     dispatch_release(exitSource);
     NSDictionary *afterExit = parse(sp_window_facts(window, sp_window_composition(window)));
