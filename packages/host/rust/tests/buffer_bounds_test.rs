@@ -304,7 +304,7 @@ fn a_pending_close_beyond_the_bound_is_dropped_and_the_surface_is_not_waited_for
 
 /// A relayed request has no time limit, so the relay keeps no expired requests; the requests that the end of their document
 /// ended are the ones it remembers for their late replies, at most 256 of them.
-// contract: buffers.relay-expired.bounded-and-counted
+// contract: buffers.relay-ended.bounded-and-counted
 #[test]
 fn the_relay_remembers_at_most_256_ended_requests_and_counts_the_ones_it_forgets() {
     let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());

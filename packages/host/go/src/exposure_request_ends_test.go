@@ -140,7 +140,9 @@ func forward(page context.Context, h *Host, request string) <-chan ExposureResul
 	reply := make(chan ExposureResult, 1)
 	go func() {
 		got, err := h.ExposureForward(page, json.RawMessage(request))
-		if err != nil {
+		if rpc, ok := err.(*RPCError); ok {
+			got = ExposureResult{Error: rpc}
+		} else if err != nil {
 			got = ExposureResult{Error: &RPCError{Message: err.Error()}}
 		}
 		reply <- got
@@ -170,35 +172,92 @@ func expectEndedReplyObserved(t *testing.T, id uint64) {
 	t.Fatalf("info records %v, want %q", bufferedTraces(t, "host.record.info"), want)
 }
 
+// forwardOf is the exposureForward request of the main page to the surface tab with origin.
+func forwardOf(origin uint64) string {
+	return fmt.Sprintf(`{"id":1,"origin":%d,"surface":"tab","method":"probe.run","params":{}}`, origin)
+}
+
+// expectForwardEndedWithoutResult receives the end of the forward and fails when it carries a result.
+func expectForwardEndedWithoutResult(t *testing.T, reply <-chan ExposureResult, what string) {
+	t.Helper()
+	if got := <-reply; got.Error == nil {
+		t.Fatalf("%s answered %s, want no result", what, got.Result)
+	}
+}
+
+// expectLateForwardReplyObserved sends the reply of the surface tab to the ended forward and fails when the host does not accept
+// it as the observation of an ended request.
+func expectLateForwardReplyObserved(t *testing.T, h *Host, s *Surfaces, forwarded uint64) {
+	t.Helper()
+	if err := h.relay.Resolve(forwarded, relayTarget{owner: s, surface: "tab"}, ExposureResult{Result: json.RawMessage(`5`)}); err != nil {
+		t.Fatalf("the reply of the surface after the end of the origin = %v, want it accepted as an observation", err)
+	}
+	expectEndedReplyObserved(t, forwarded)
+}
+
 // The main page forwards the command.run that it handles to the surface tab with origin, the id of that command.run. The end of
-// the endpoint connection that sent the command.run ends the forward on the host too; the host answers nothing, and the reply of
-// the surface document after it is the observation of an ended request. The two ends are received in any order.
-// contract: exposure.relay.connection-end-ends-its-requests
+// the endpoint connection that sent the command.run ends the origin request and with it the forward; the host answers nothing,
+// and the reply of the surface document after it is the observation of an ended request. The two ends are received in any
+// order.
+// contract: exposure.relay.forward-lives-while-its-origin-is-open
 func TestTheEndOfTheConnectionOfItsOriginEndsAForward(t *testing.T) {
 	isolateTraceRecords(t)
 	h, s, window, page := forwardFixture()
 	connection, end := context.WithCancel(context.Background())
 	answer := commandRun(connection, h)
 	origin := <-window.requests
-	reply := forward(page, h, fmt.Sprintf(`{"id":1,"origin":%d,"surface":"tab","method":"probe.run","params":{}}`, origin))
+	reply := forward(page, h, forwardOf(origin))
 	forwarded := <-window.requests
 	expectForwardOpen(t, reply, "the forward that the surface received")
 	end()
 	if got := <-answer; got.err == nil {
 		t.Fatalf("command.run whose connection ended answered %s, want no result", got.result)
 	}
-	if got := <-reply; got.Error == nil {
-		t.Fatalf("the forward whose origin connection ended answered %s, want no result", got.Result)
+	expectForwardEndedWithoutResult(t, reply, "the forward whose origin connection ended")
+	expectLateForwardReplyObserved(t, h, s, forwarded)
+}
+
+// The answer of the main page ends the origin request, and a forward of that origin that still waits ends then with no result.
+// contract: exposure.relay.forward-lives-while-its-origin-is-open
+func TestTheAnswerOfItsOriginEndsAWaitingForward(t *testing.T) {
+	isolateTraceRecords(t)
+	h, s, window, page := forwardFixture()
+	answer := commandRun(context.Background(), h)
+	origin := <-window.requests
+	reply := forward(page, h, forwardOf(origin))
+	forwarded := <-window.requests
+	expectForwardOpen(t, reply, "the forward that the surface received")
+	if err := h.relay.Resolve(origin, relayTarget{owner: s}, ExposureResult{Result: json.RawMessage(`7`)}); err != nil {
+		t.Fatalf("the answer of the main page: %v", err)
 	}
-	if err := h.relay.Resolve(forwarded, relayTarget{owner: s, surface: "tab"}, ExposureResult{Result: json.RawMessage(`5`)}); err != nil {
-		t.Fatalf("the reply of the surface after the end of the connection = %v, want it accepted as an observation", err)
+	if got := <-answer; got.err != nil || string(got.result) != `7` {
+		t.Fatalf("command.run answered %s %v, want the answer 7 of the main page", got.result, got.err)
 	}
-	expectEndedReplyObserved(t, forwarded)
+	expectForwardEndedWithoutResult(t, reply, "the forward whose origin the main page answered")
+	expectLateForwardReplyObserved(t, h, s, forwarded)
+}
+
+// The end of the origin request with 1003, here by the end of the main page that runs it, ends its forward with no result.
+// contract: exposure.relay.forward-lives-while-its-origin-is-open
+func TestTheEndOfItsOriginWith1003EndsAWaitingForward(t *testing.T) {
+	isolateTraceRecords(t)
+	h, s, window, page := forwardFixture()
+	answer := commandRun(context.Background(), h)
+	origin := <-window.requests
+	reply := forward(page, h, forwardOf(origin))
+	forwarded := <-window.requests
+	expectForwardOpen(t, reply, "the forward that the surface received")
+	h.relay.Abandon(func(target relayTarget) bool { return target.owner == s && target.surface == "" })
+	if rpc, ok := (<-answer).err.(*RPCError); !ok || rpc.Code != codeNoWindow {
+		t.Fatalf("command.run of an ended page answered %v, want 1003", rpc)
+	}
+	expectForwardEndedWithoutResult(t, reply, "the forward whose origin ended with 1003")
+	expectLateForwardReplyObserved(t, h, s, forwarded)
 }
 
 // A forward without origin is the main page's own and belongs to no connection: the end of an endpoint connection leaves it
 // waiting, checked once the command.run of that connection ended, and the reply of the surface ends it with that reply.
-// contract: exposure.relay.connection-end-ends-its-requests
+// contract: exposure.relay.forward-lives-while-its-origin-is-open
 func TestAForwardWithoutOriginIsNotEndedByAConnectionEnd(t *testing.T) {
 	h, s, window, page := forwardFixture()
 	connection, end := context.WithCancel(context.Background())
@@ -217,9 +276,9 @@ func TestAForwardWithoutOriginIsNotEndedByAConnectionEnd(t *testing.T) {
 	}
 }
 
-// The end of one connection ends only the forwards whose origin is its own request: a forward of the request of another
-// connection keeps waiting, checked once the command.run of the ended connection ended.
-// contract: exposure.relay.connection-end-ends-its-requests
+// The end of one origin request ends only its own forwards: a forward of the request of another connection keeps waiting,
+// checked once the command.run of the ended connection ended.
+// contract: exposure.relay.forward-lives-while-its-origin-is-open
 func TestTheEndOfAConnectionLeavesTheForwardsOfAnotherOrigin(t *testing.T) {
 	h, s, window, page := forwardFixture()
 	ending, end := context.WithCancel(context.Background())
@@ -227,7 +286,7 @@ func TestTheEndOfAConnectionLeavesTheForwardsOfAnotherOrigin(t *testing.T) {
 	<-window.requests
 	keptAnswer := commandRun(context.Background(), h)
 	kept := <-window.requests
-	reply := forward(page, h, fmt.Sprintf(`{"id":1,"origin":%d,"surface":"tab","method":"probe.run","params":{}}`, kept))
+	reply := forward(page, h, forwardOf(kept))
 	forwarded := <-window.requests
 	end()
 	<-endedAnswer
@@ -241,18 +300,28 @@ func TestTheEndOfAConnectionLeavesTheForwardsOfAnotherOrigin(t *testing.T) {
 	}
 }
 
-// A forward whose origin connection ended before the forward reached the host ends the same way, so the end does not depend
-// on the order of the connection end and the forward.
-// contract: exposure.relay.connection-end-ends-its-requests
-func TestAForwardOfAnOriginWhoseConnectionEndedEnds(t *testing.T) {
+// A forward whose origin names no open request, one that ended by the end of its connection or an id that the host never sent,
+// is not sent to the surface and is refused at once with 1003, so the result does not depend on the order of the end of the
+// origin and the forward. That nothing reached the surface is checked when the refusal is received, because the forward sends
+// before it waits.
+// contract: exposure.relay.forward-lives-while-its-origin-is-open
+func TestAForwardWhoseOriginIsNotOpenIsRefusedWithoutBeingSent(t *testing.T) {
 	h, _, window, page := forwardFixture()
 	connection, end := context.WithCancel(context.Background())
 	answer := commandRun(connection, h)
-	origin := <-window.requests
+	ended := <-window.requests
 	end()
 	<-answer
-	got := <-forward(page, h, fmt.Sprintf(`{"id":1,"origin":%d,"surface":"tab","method":"probe.run","params":{}}`, origin))
-	if got.Error == nil {
-		t.Fatalf("the forward of an origin whose connection ended answered %s, want no result", got.Result)
+	for _, origin := range []uint64{ended, ended + 100} {
+		got := <-forward(page, h, forwardOf(origin))
+		want := fmt.Sprintf("the origin request %d has ended", origin)
+		if got.Error == nil || got.Error.Code != codeNoWindow || got.Error.Message != want {
+			t.Fatalf("the forward of origin %d answered %+v, want 1003 %q", origin, got, want)
+		}
+		select {
+		case sent := <-window.requests:
+			t.Fatalf("the forward of origin %d was sent to the surface as request %d", origin, sent)
+		default:
+		}
 	}
 }

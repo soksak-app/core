@@ -317,7 +317,7 @@ fn relay_forward(
 }
 
 /// `exposureForward` carries `origin`, the id of the `exposure-request` that the main page handles, as an id.
-// contract: exposure.relay.connection-end-ends-its-requests
+// contract: exposure.relay.forward-lives-while-its-origin-is-open
 #[test]
 fn a_forward_carries_its_origin_as_an_id() {
     let request = json!({"id": 1, "surface": "tab", "method": "probe.run", "params": {}});
@@ -333,10 +333,29 @@ fn a_forward_carries_its_origin_as_an_id() {
     );
 }
 
-/// The end of the connection of the request origin ends the request and each forward of that origin on the host, which
-/// answers nothing; the reply of the surface document after it is the observation of an ended request. The ends are received
-/// in any order.
-// contract: exposure.relay.connection-end-ends-its-requests
+/// Receives the end of the forward and fails when it carries a result.
+fn expect_ended_without_result(outcome: &mpsc::Receiver<Outcome>, what: &str) {
+    assert!(outcome.recv().unwrap().is_err(), "{what} answered a result");
+}
+
+/// Sends the reply of the surface document to the ended forward id and checks that the host writes it as the observation of an
+/// ended request.
+fn expect_late_reply_observed(relay: &Relay, log: &EventLog, config: &Path, id: u64) {
+    assert_eq!(
+        relay.reply("surface-main-a", &text(json!({"id": id, "result": 5}))),
+        Ok(()),
+        "the reply after the end of the origin is an observation"
+    );
+    log.flush(WAIT).unwrap();
+    let text = records::text_of(&records::read_events(&records::event_log_path(config)));
+    let want = format!(" info host exposure: exposure reply {id} arrived after its request ended");
+    assert!(text.contains(&want), "no {want:?} in {text}");
+}
+
+/// The end of the connection of the request origin ends the request and with it each forward of that origin on the host,
+/// which answers nothing; the reply of the surface document after it is the observation of an ended request. The ends are
+/// received in any order.
+// contract: exposure.relay.forward-lives-while-its-origin-is-open
 #[test]
 fn the_end_of_the_connection_of_its_origin_ends_a_forward() {
     let _serial = RECORDS.lock().unwrap_or_else(|poison| poison.into_inner());
@@ -352,31 +371,57 @@ fn the_end_of_the_connection_of_its_origin_ends_a_forward() {
         "the forward ended before the connection of its origin ended"
     );
     relay.end(origin);
-    assert!(
-        origin_outcome.recv().unwrap().is_err(),
-        "the request whose connection ended answered a result"
-    );
-    assert!(
-        outcome.recv().unwrap().is_err(),
-        "the forward whose origin connection ended answered a result"
-    );
-    assert_eq!(
-        relay.reply("surface-main-a", &text(json!({"id": id, "result": 1}))),
-        Ok(()),
-        "the reply after the end of the connection is an observation"
-    );
-    log.flush(WAIT).unwrap();
-    let text = records::text_of(&records::read_events(&records::event_log_path(
-        config.path(),
-    )));
-    let want = format!(" info host exposure: exposure reply {id} arrived after its request ended");
-    assert!(text.contains(&want), "no {want:?} in {text}");
+    expect_ended_without_result(&origin_outcome, "the request whose connection ended");
+    expect_ended_without_result(&outcome, "the forward whose origin connection ended");
+    expect_late_reply_observed(&relay, &log, config.path(), id);
+    use_host_event_log(None);
+}
+
+/// The answer of the main page ends the origin request, and a forward of that origin that still waits ends then with no
+/// result.
+// contract: exposure.relay.forward-lives-while-its-origin-is-open
+#[test]
+fn the_answer_of_its_origin_ends_a_waiting_forward() {
+    let _serial = RECORDS.lock().unwrap_or_else(|poison| poison.into_inner());
+    let config = folder::Folder::new();
+    let log = records::start_writer(config.path());
+    let relay = Arc::new(Relay::default());
+    let (origin_outcome, origin_ids) = relay_request(&relay, "main");
+    let origin = origin_ids.recv().unwrap();
+    let (outcome, ids) = relay_forward(&relay, origin, "surface-main-a");
+    let id = ids.recv().unwrap();
+    relay
+        .reply("main", &text(json!({"id": origin, "result": 7})))
+        .expect("the answer of the main page");
+    assert_eq!(value(&origin_outcome.recv().unwrap().unwrap()), json!(7));
+    expect_ended_without_result(&outcome, "the forward whose origin the main page answered");
+    expect_late_reply_observed(&relay, &log, config.path(), id);
+    use_host_event_log(None);
+}
+
+/// The end of the origin request with 1003, here by the close of the main page that runs it, ends its forward with no
+/// result.
+// contract: exposure.relay.forward-lives-while-its-origin-is-open
+#[test]
+fn the_end_of_its_origin_with_1003_ends_a_waiting_forward() {
+    let _serial = RECORDS.lock().unwrap_or_else(|poison| poison.into_inner());
+    let config = folder::Folder::new();
+    let log = records::start_writer(config.path());
+    let relay = Arc::new(Relay::default());
+    let (origin_outcome, origin_ids) = relay_request(&relay, "main");
+    let origin = origin_ids.recv().unwrap();
+    let (outcome, ids) = relay_forward(&relay, origin, "surface-main-a");
+    let id = ids.recv().unwrap();
+    relay.abandon("main");
+    assert_eq!(origin_outcome.recv().unwrap().unwrap_err().code, 1003);
+    expect_ended_without_result(&outcome, "the forward whose origin ended with 1003");
+    expect_late_reply_observed(&relay, &log, config.path(), id);
     use_host_event_log(None);
 }
 
 /// A forward without origin belongs to no connection: the end of a connection leaves it waiting, checked once the request of
 /// that connection ended, and the reply of the surface ends it with that reply.
-// contract: exposure.relay.connection-end-ends-its-requests
+// contract: exposure.relay.forward-lives-while-its-origin-is-open
 #[test]
 fn a_forward_without_origin_is_not_ended_by_a_connection_end() {
     let relay = Arc::new(Relay::default());
@@ -396,9 +441,9 @@ fn a_forward_without_origin_is_not_ended_by_a_connection_end() {
     assert_eq!(value(&outcome.recv().unwrap().unwrap()), json!(5));
 }
 
-/// The end of one connection ends only the forwards whose origin is its own request: a forward of the request of another
-/// connection keeps waiting, checked once the request of the ended connection ended.
-// contract: exposure.relay.connection-end-ends-its-requests
+/// The end of one origin request ends only its own forwards: a forward of the request of another connection keeps waiting,
+/// checked once the request of the ended connection ended.
+// contract: exposure.relay.forward-lives-while-its-origin-is-open
 #[test]
 fn the_end_of_a_connection_leaves_the_forwards_of_another_origin() {
     let relay = Arc::new(Relay::default());
@@ -424,21 +469,34 @@ fn the_end_of_a_connection_leaves_the_forwards_of_another_origin() {
     assert_eq!(value(&outcome.recv().unwrap().unwrap()), json!(5));
 }
 
-/// A forward whose origin connection ended before the forward reached the relay ends the same way, so the end does not depend
-/// on the order of the connection end and the forward.
-// contract: exposure.relay.connection-end-ends-its-requests
+/// A forward whose origin names no open request, one that ended by the end of its connection or an id that the relay never
+/// sent, is not sent to the surface and is refused at once with 1003, so the result does not depend on the order of the end
+/// of the origin and the forward.
+// contract: exposure.relay.forward-lives-while-its-origin-is-open
 #[test]
-fn a_forward_of_an_origin_whose_connection_ended_ends() {
+fn a_forward_whose_origin_is_not_open_is_refused_without_being_sent() {
     let relay = Arc::new(Relay::default());
     let (origin_outcome, origin_ids) = relay_request(&relay, "main");
-    let origin = origin_ids.recv().unwrap();
-    relay.end(origin);
+    let ended = origin_ids.recv().unwrap();
+    relay.end(ended);
     assert!(origin_outcome.recv().unwrap().is_err());
-    let outcome = relay.request_of(origin, "surface-main-a", |_| Ok(()));
-    assert!(
-        outcome.is_err(),
-        "the forward of an origin whose connection ended answered a result"
-    );
+    for origin in [ended, ended + 100] {
+        let mut sent = false;
+        let failure = relay
+            .request_of(origin, "surface-main-a", |_| {
+                sent = true;
+                Ok(())
+            })
+            .unwrap_err();
+        assert_eq!(
+            (failure.code, failure.message),
+            (1003, format!("the origin request {origin} has ended"))
+        );
+        assert!(
+            !sent,
+            "the forward of origin {origin} was sent to the surface"
+        );
+    }
 }
 
 // contract: exposure.list.host-owner-without-page

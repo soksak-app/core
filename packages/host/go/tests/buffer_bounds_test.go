@@ -16,7 +16,7 @@ import (
 
 // A relayed request has no time limit, so the relay keeps no expired requests; the requests that the end of their document
 // ended are the ones it remembers for their late replies, at most 256 of them.
-// contract: buffers.relay-expired.bounded-and-counted
+// contract: buffers.relay-ended.bounded-and-counted
 func TestTheRelayRemembersAtMost256EndedRequestsAndCountsTheOnesItForgets(t *testing.T) {
 	log := support.UseRoomyEventLog(t)
 	relay := host.NewRelay[string]()

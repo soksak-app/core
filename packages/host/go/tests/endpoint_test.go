@@ -884,6 +884,48 @@ func TestSubscriptionChangesKeepArrivalOrder(t *testing.T) {
 	}
 }
 
+// An unwatch enters the queue of its topic only when the last change of its connection for the topic is a watch. While the
+// page holds the first watch of connection A, the second unwatch of A, whose last change is the queued unwatch, and the unwatch
+// of connection B, which never watched, change nothing: each is answered null before the page answers, so neither waited in
+// the queue. After the page answers, the watch and the first unwatch of A succeed and the page received one status.unwatch.
+// contract: endpoint.watch.unwatch-enters-the-queue-only-after-a-watch
+func TestAnUnwatchAfterNoWatchChangesNothingAndIsAnsweredWithoutTheQueue(t *testing.T) {
+	backend := newFakeBackend()
+	backend.held = make(chan struct{})
+	backend.holdMethod = "status.watch"
+	backend.entered = make(chan struct{}, 1)
+	_, address, _ := serve(t, backend)
+	a, b := dial(t, address), dial(t, address)
+	watch := map[string]any{"window": "main", "name": "core.layout"}
+	request := func(conn net.Conn, id int, method string) {
+		send(t, conn, map[string]any{"jsonrpc": "2.0", "id": id, "method": method, "params": watch})
+	}
+	request(a, 1, "status.watch")
+	<-backend.entered
+	request(a, 2, "status.unwatch")
+	request(a, 3, "status.unwatch")
+	request(b, 1, "status.unwatch")
+	for _, unanswered := range []struct {
+		conn net.Conn
+		name string
+		id   int
+	}{{a, "the second unwatch of A", 3}, {b, "the unwatch of B", 1}} {
+		got := receiveInTurn(t, unanswered.conn)
+		if got.ID == nil || *got.ID != unanswered.id || got.Error != nil || string(got.Result) != "null" {
+			t.Fatalf("%s answered %+v while the page holds the watch, want null", unanswered.name, got)
+		}
+	}
+	close(backend.held)
+	for _, id := range []int{1, 2} {
+		if got := receiveInTurn(t, a); got.ID == nil || *got.ID != id || got.Error != nil {
+			t.Fatalf("reply %+v, want the success of request %d of A", got, id)
+		}
+	}
+	if got := len(backend.unwatched); got != 1 {
+		t.Fatalf("the page received %d status.unwatch, want 1", got)
+	}
+}
+
 // contract: endpoint.watch.other-requests-not-blocked-by-pending-subscription
 func TestPendingSubscriptionDoesNotBlockOtherRequests(t *testing.T) {
 	backend := newFakeBackend()
