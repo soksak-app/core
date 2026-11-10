@@ -1173,6 +1173,18 @@ pub(crate) fn replay_registrations(window: &Window) {
     }
 }
 
+/// Ends with 1003 the requests forwarded to the surface page of window whose WebContent process ended, because no reply
+/// comes from an ended process (docs/spec/exposure.md#methods). A webview that is not a surface of window ends nothing.
+pub(crate) fn surface_process_ended(window: &Window, webview: &str) {
+    end_surface_process_requests(&window.state::<Exposure>().relay, window.label(), webview);
+}
+
+fn end_surface_process_requests(relay: &Relay, window: &str, webview: &str) {
+    if webview.starts_with(&format!("surface-{window}-")) {
+        relay.abandon(webview);
+    }
+}
+
 /// Removes the registrations and the pending requests of a surface page when it closes or reloads, and ends the watches of
 /// the surface, whose producer was that document (docs/spec/exposure.md#methods).
 pub(crate) fn surface_closed(window: &Window, surface: &str) {

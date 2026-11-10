@@ -217,6 +217,76 @@ fn relay_answers_surface(relay: &Relay, reloading: &AtomicBool) -> Result<Box<Ra
     })
 }
 
+/// The end of the WebContent process of a surface page ends the requests to that surface with 1003 in its turn, and the later
+/// reply of the surface settles nothing; the requests to another surface and to the surface of another window keep waiting.
+// contract: exposure.relay.surface-process-end-ends-its-requests
+#[test]
+fn the_end_of_the_process_of_a_surface_page_ends_the_requests_to_that_surface() {
+    let relay = std::sync::Arc::new(Relay::default());
+    let reloading = std::sync::Arc::new(AtomicBool::new(false));
+    let (outcome, mine) = mpsc::channel();
+    let (sent, sent_id) = mpsc::channel();
+    let asking = relay.clone();
+    let asking_reload = reloading.clone();
+    std::thread::spawn(move || {
+        let reply = request_surface(&asking, &asking_reload, "surface-main-tab", |id| {
+            sent.send(id).map_err(|error| error.to_string())
+        });
+        outcome.send(reply).expect("the test holds the receiver");
+    });
+    let id = sent_id
+        .recv()
+        .expect("the request to the surface was not sent");
+    let sibling = pending_surface(&relay, &reloading, "surface-main-other-tab");
+    let theirs = pending_surface(&relay, &reloading, "surface-second-tab");
+    end_surface_process_requests(&relay, "main", "main");
+    assert_eq!(
+        waiting(&relay),
+        3,
+        "the end of the main page process ended a request to a surface"
+    );
+    end_surface_process_requests(&relay, "main", "surface-main-tab");
+    let ended = mine
+        .recv()
+        .expect("the request to the surface of the ended process answers");
+    assert!(
+        matches!(ended, Err(failure) if failure.code == MISSING_DOCUMENT),
+        "the request to the surface of the ended process did not end with the closed-document code"
+    );
+    let late = RawValue::from_string(format!(r#"{{"id":{id},"result":1}}"#))
+        .expect("the late reply is JSON");
+    assert_eq!(
+        relay.reply("surface-main-tab", &late),
+        Ok(()),
+        "the late reply of the surface was not taken as an observation"
+    );
+    assert_eq!(waiting(&relay), 2, "the late reply settled another request");
+    assert!(
+        sibling.try_recv().is_err(),
+        "the request to another surface ended"
+    );
+    assert!(
+        theirs.try_recv().is_err(),
+        "the request to the surface of another window ended"
+    );
+    relay.abandon("surface-main-other-tab");
+    relay.abandon("surface-second-tab");
+    assert!(
+        sibling
+            .recv()
+            .expect("the abandoned request answers")
+            .is_err(),
+        "the abandoned request did not fail"
+    );
+    assert!(
+        theirs
+            .recv()
+            .expect("the abandoned request answers")
+            .is_err(),
+        "the abandoned request did not fail"
+    );
+}
+
 // contract: exposure.relay.page-reload-ends-surface-requests
 #[test]
 fn a_reload_asked_of_a_page_ends_the_requests_to_its_surfaces() {

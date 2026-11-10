@@ -471,6 +471,8 @@ pub fn web_content_process_terminated(webview: &Webview) {
             "modal key wait",
             crate::modals::modal_process_ended(&window),
         );
+    } else {
+        exposure::surface_process_ended(&window, webview.label());
     }
     if let Err(error) = webview.reload() {
         log_error(&place, format!("{}: reload: {error}", webview.label()));
