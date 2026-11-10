@@ -1160,3 +1160,38 @@ func pressLabeled(nodes []ui.ElementNode, label string) (ui.ElementNode, bool) {
 	}
 	return ui.ElementNode{}, false
 }
+
+// manyPlugins is an installation of count plugins, each with a surface, so that the add menu holds more items than its height.
+func manyPlugins(count int) *storedHost {
+	plugins := []string{}
+	for index := range count {
+		id := fmt.Sprintf("p%02d", index)
+		plugins = append(plugins, fmt.Sprintf(`{"id":%q,"package":%q,"version":"1.0.0","manifest":{"id":%q,"name":%q,"description":"a surface",`+
+			`"mark":"Pl","icon":"<path d=\"M1 1h14\"/>","surface":{"composition":{"kind":"view","page":"a.html"}}}}`, id, id, id, "Plugin "+id))
+	}
+	return &storedHost{common: map[string]any{}, installed: `{"plugins":[` + strings.Join(plugins, ",") + `]}`}
+}
+
+// Under the classic scroller style the list of a menu whose items overflow gives a thin bar its room, as the picker of the page
+// with scrollbar-width:thin: each item is narrower by the small width of the system, and under the overlay style by nothing.
+func TestTheListOfAMenuGivesAThinClassicBarItsRoom(t *testing.T) {
+	f := projectOn(t, manyPlugins(40))
+	card := f.tabbedCards()[0]
+	f.click("core.card.add", card)
+	if menu := f.menu(); !menu.Open || len(menu.Items) != 40 {
+		t.Fatalf("the menu is %+v", menu)
+	}
+	overlay := element(t, f.tester, "core.picker.item", "p00").Bounds
+	f.tester.SetPreferences(ui.Preferences{ClassicScrollbars: true, ClassicScrollbarWidth: 17, ThinClassicScrollbarWidth: 13})
+	f.settle()
+	classic := element(t, f.tester, "core.picker.item", "p00").Bounds
+	if classic.X != overlay.X || classic.W != overlay.W-13 {
+		t.Fatalf("an item is at x %g, %g wide under the classic style and at x %g, %g wide under the overlay style; want the same x and 13 narrower",
+			classic.X, classic.W, overlay.X, overlay.W)
+	}
+	f.tester.SetPreferences(ui.Preferences{})
+	f.settle()
+	if again := element(t, f.tester, "core.picker.item", "p00").Bounds; again != overlay {
+		t.Fatalf("an item is %+v back under the overlay style, %+v before", again, overlay)
+	}
+}
