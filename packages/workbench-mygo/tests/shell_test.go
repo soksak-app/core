@@ -9,7 +9,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -65,15 +64,15 @@ type storedHost struct {
 	open []string
 	// appUpdate is the answer of appUpdateState, and opened holds the arguments of linkOpen.
 	appUpdate any
-	// holdAppUpdate, when set, keeps the answer of appUpdateState until it closes.
-	holdAppUpdate <-chan struct{}
+	// holdAppUpdate, when set, keeps the answer of appUpdateState until it opens.
+	holdAppUpdate *gate
 	opened        []json.RawMessage
 	// backgrounds are the values of setDialogBackground in their order.
 	backgrounds []bool
 	// forwards are the requests that the shell forwarded to surfaces, and each gets an empty result.
 	forwards []map[string]any
-	// holdForwards, when set, keeps the answer of a forwarded request until it closes.
-	holdForwards chan struct{}
+	// holdForwards, when set, keeps the answer of a forwarded request until it opens.
+	holdForwards *gate
 	// failForwards, when set, is the answer of a forwarded request.
 	failForwards error
 	// extra holds the host calls that the base table has not.
@@ -97,7 +96,7 @@ type storedHost struct {
 	// workspaces holds each workspace call that the host took: its kind, and for a patch the patched members in their order.
 	workspaces []string
 	// holdWorkspace keeps an actual settings handler pending for retirement owners.
-	holdWorkspace <-chan struct{}
+	holdWorkspace *gate
 	traces        []string
 	// installed is the document of the installed plugins, and it is empty without plugins.
 	installed string
@@ -338,7 +337,7 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 			}
 			h.forwards = append(h.forwards, request)
 			if h.holdForwards != nil {
-				<-h.holdForwards
+				h.holdForwards.wait()
 			}
 			if h.failForwards != nil {
 				return nil, h.failForwards
@@ -386,7 +385,7 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 		"linkOpen": answer("linkOpen", func(argument json.RawMessage) (any, error) { h.opened = append(h.opened, argument); return nil, nil }),
 		"appUpdateState": answer("appUpdateState", func(json.RawMessage) (any, error) {
 			if h.holdAppUpdate != nil {
-				<-h.holdAppUpdate
+				h.holdAppUpdate.wait()
 			}
 			return h.appUpdate, nil
 		}),
@@ -465,7 +464,7 @@ func (h *storedHost) projectOpen(argument json.RawMessage) (any, error) {
 
 func (h *storedHost) workspace(argument json.RawMessage) (any, error) {
 	if h.holdWorkspace != nil {
-		<-h.holdWorkspace
+		h.holdWorkspace.wait()
 	}
 	var request struct {
 		Kind    string
@@ -1022,25 +1021,14 @@ func (f *shellFixture) until(done func() bool) {
 	})
 }
 
-// until runs the steps until done reports true, and judges done at each event that can change the state: a step, and the
-// moment a goroutine of a host call stops working, because the state can arrive on it without a step. When no goroutine works,
-// only the next step changes the state, posted by a timer or by a goroutine that a step woke, so until waits for that step. It
-// has no time limit: a state that never arrives holds the test, and the limit of the test runner reports it.
+// until runs the steps until done reports true. It judges done once at each event that can change the state: a step, and a
+// change of the goroutines of the workbench (activity), which a host call makes when it ends or waits at a gate or
+// a mailbox of the test. It has no time limit: a state that never arrives holds the test, and the limit of the test runner reports
+// it.
 func (s steps) until(t testing.TB, done func() bool) {
 	t.Helper()
 	for !done() {
-		if task, queued := s.queued(); queued {
-			task()
-			continue
-		}
-		if workingGoroutine() != "" {
-			runtime.Gosched()
-			continue
-		}
-		if done() {
-			return
-		}
-		(<-s)()
+		s.next()
 	}
 }
 

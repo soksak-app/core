@@ -251,7 +251,7 @@ func TestAnAttachThatWaitsForTheSessionOfAClosedTabEndsWithItsView(t *testing.T)
 	stored.installed = unloadDocument
 	stored.projects = []map[string]any{storedProject(tab("tab-aaaaaa", "notes"), tab("tab-bbbbbb", "notes"))}
 	base := stored.table()["workspace"]
-	read := make(chan struct{})
+	read := newGate()
 	var attaches atomic.Int32
 	stored.calls = map[string]workbench.HostCall{
 		"workspace": func(ctx context.Context, argument json.RawMessage) (any, error) {
@@ -260,7 +260,7 @@ func TestAnAttachThatWaitsForTheSessionOfAClosedTabEndsWithItsView(t *testing.T)
 				return nil, err
 			}
 			if request.Kind == "tabSession" && request.Tab == "tab-aaaaaa" {
-				<-read
+				read.wait()
 				return nil, nil
 			}
 			return base(ctx, argument)
@@ -277,7 +277,7 @@ func TestAnAttachThatWaitsForTheSessionOfAClosedTabEndsWithItsView(t *testing.T)
 	f.settle()
 	replies := len(stored.replies)
 	f.command("core.tab.close", map[string]string{"tab": "tab-aaaaaa"})
-	close(read)
+	read.open()
 	f.settle()
 	if n := attaches.Load(); n != 0 {
 		t.Fatalf("the attach of the closed tab made %d host calls", n)
@@ -295,13 +295,13 @@ func TestAnAttachThatTheHostAnswersAfterItsProjectClosedKeepsNoRegion(t *testing
 	stored := &surfaceHost{}
 	stored.installed = unloadDocument
 	stored.projects = []map[string]any{storedProject(tab("tab-aaaaaa", "notes"), tab("tab-bbbbbb", "notes"))}
-	attaching, attached := make(chan struct{}), make(chan struct{})
+	attaching, attached := make(chan struct{}), newGate()
 	var states []string
 	var mu sync.Mutex
 	stored.calls = map[string]workbench.HostCall{
 		"documentAttach": func(context.Context, json.RawMessage) (any, error) {
 			close(attaching)
-			<-attached
+			attached.wait()
 			return nil, nil
 		},
 		"documentInteractionState": func(_ context.Context, argument json.RawMessage) (any, error) {
@@ -322,7 +322,7 @@ func TestAnAttachThatTheHostAnswersAfterItsProjectClosedKeepsNoRegion(t *testing
 	f.settle()
 	<-attaching
 	f.command("core.project.close", map[string]string{"id": "prj-a"})
-	close(attached)
+	attached.open()
 	f.settle()
 	f.command("core.projects.flush", map[string]any{})
 	mu.Lock()

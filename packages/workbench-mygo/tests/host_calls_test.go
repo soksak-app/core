@@ -6,9 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"runtime"
-	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
@@ -22,10 +21,11 @@ func (s steps) post(task func()) { s <- task }
 // run runs the next step.
 func (s steps) run() { (<-s)() }
 
-// drain runs the later steps until nothing can post another one: no step waits and every other goroutine waits for
-// something only a goroutine or the test can end. A host call that still runs holds it however long it takes, and one
-// that waits for the test does not. A timer is not waited for; a test that needs one runs until its state arrives. The
-// drain judges no time: a goroutine that keeps working holds it, and the limit of the test runner reports that test.
+// drain runs the later steps until nothing can post another one: no step waits and no goroutine of the workbench works. A host
+// call that still runs holds it however long it takes, and one that waits at a gate of the test does not. A timer is not waited
+// for; a test that needs one runs until its state arrives. drain judges once at each event that can end it, a step or the end
+// or the gate of a goroutine (activity), and judges no time: a goroutine that keeps working holds it, and the limit of the test
+// runner reports that test.
 func (s steps) drain(t testing.TB) {
 	t.Helper()
 	for {
@@ -33,17 +33,25 @@ func (s steps) drain(t testing.TB) {
 			task()
 			continue
 		}
-		if workingGoroutine() != "" {
-			// A goroutine works: it posts a step, changes a state or waits, and the yield lets it go on.
-			runtime.Gosched()
+		if activity.running() == 0 {
+			// Every goroutine posted its step before it ended or stopped at a gate, so a step that is not here now never comes.
+			task, queued := s.queued()
+			if !queued {
+				return
+			}
+			task()
 			continue
 		}
-		// The goroutines waited after every step that they posted, so a step that is not here now never comes.
-		task, queued := s.queued()
-		if !queued {
-			return
-		}
+		s.next()
+	}
+}
+
+// next runs the next step, or returns at the next change of the goroutines of the workbench, whichever comes first.
+func (s steps) next() {
+	select {
+	case task := <-s:
 		task()
+	case <-activity.changed:
 	}
 }
 
@@ -57,43 +65,131 @@ func (s steps) queued() (func(), bool) {
 	}
 }
 
-// waitingStates are the states of a goroutine that only another goroutine can end, as runtime.Stack prints them.
-var waitingStates = []string{"chan receive", "chan send", "select", "sync.Cond.Wait", "sync.WaitGroup.Wait", "IO wait", "finalizer wait"}
+// activity counts the goroutines of the workbench that work: the workbench counts each goroutine that it starts until its end
+// (workbench.Running), and a gate of the test takes a goroutine out of the count while it waits there. Each change of the count,
+// and each state that a test fixture sets on such a goroutine without a step (wake), is a change that until and drain judge.
+var activity = newActivity()
 
-// workingGoroutine returns the stack of a goroutine other than the caller that is not waiting, or "" when there is none.
-func workingGoroutine() string {
-	buffer := make([]byte, 1<<20)
-	for {
-		n := runtime.Stack(buffer, true)
-		if n < len(buffer) {
-			buffer = buffer[:n]
-			break
-		}
-		buffer = make([]byte, 2*len(buffer))
+type activityCount struct {
+	mu      sync.Mutex
+	working int
+	changed chan struct{}
+}
+
+func newActivity() *activityCount {
+	a := &activityCount{changed: make(chan struct{}, 1)}
+	workbench.Running = a.add
+	return a
+}
+
+func (a *activityCount) add(delta int) {
+	a.mu.Lock()
+	a.working += delta
+	a.mu.Unlock()
+	a.wake()
+}
+
+func (a *activityCount) running() int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.working
+}
+
+// wake tells until and drain that a state changed. A change that nobody waits for yet stays until the next wait.
+func (a *activityCount) wake() {
+	select {
+	case a.changed <- struct{}{}:
+	default:
 	}
-	// The stack of the caller comes first.
-	for _, stack := range strings.Split(string(buffer), "\n\n")[1:] {
-		_, rest, found := strings.Cut(stack, "[")
-		if !found {
-			continue
-		}
-		state, _, _ := strings.Cut(rest, "]")
-		state, _, _ = strings.Cut(state, ",")
-		if slices.ContainsFunc(waitingStates, func(waiting string) bool { return strings.HasPrefix(state, waiting) }) {
-			continue
-		}
-		return stack
+}
+
+// gate holds the goroutines of host calls that wait for the test until it opens. A goroutine that waits at the gate does not
+// work, so drain does not wait for it; open counts each waiting goroutine as working again before it lets it go, so no drain
+// ends between the opening and the work that follows it. A gate opens once, and an open after that does nothing.
+type gate struct {
+	mu      sync.Mutex
+	waiting int
+	opened  bool
+	ch      chan struct{}
+}
+
+func newGate() *gate { return &gate{ch: make(chan struct{})} }
+
+// wait holds the goroutine until the gate opens.
+func (g *gate) wait() {
+	g.mu.Lock()
+	if g.opened {
+		g.mu.Unlock()
+		return
 	}
-	return ""
+	g.waiting++
+	g.mu.Unlock()
+	activity.add(-1)
+	<-g.ch
+}
+
+// open lets every goroutine that waits at the gate go on, and every later wait passes.
+func (g *gate) open() {
+	g.mu.Lock()
+	if g.opened {
+		g.mu.Unlock()
+		return
+	}
+	g.opened = true
+	waiting := g.waiting
+	g.waiting = 0
+	g.mu.Unlock()
+	activity.add(waiting)
+	close(g.ch)
+}
+
+// mailbox carries values from a goroutine of the test or of a host call to a host call that waits for them. A host call that waits
+// for a value does not work; put counts it as working again before it hands the value over.
+type mailbox[T any] struct {
+	mu      sync.Mutex
+	values  []T
+	waiting int
+	ch      chan T
+}
+
+func newMailbox[T any]() *mailbox[T] { return &mailbox[T]{ch: make(chan T)} }
+
+// take returns the next value, and holds the goroutine until one is put.
+func (m *mailbox[T]) take() T {
+	m.mu.Lock()
+	if len(m.values) > 0 {
+		value := m.values[0]
+		m.values = m.values[1:]
+		m.mu.Unlock()
+		return value
+	}
+	m.waiting++
+	m.mu.Unlock()
+	activity.add(-1)
+	return <-m.ch
+}
+
+// put hands value to a goroutine that waits for one, or keeps it for the next take.
+func (m *mailbox[T]) put(value T) {
+	m.mu.Lock()
+	if m.waiting == 0 {
+		m.values = append(m.values, value)
+		m.mu.Unlock()
+		return
+	}
+	m.waiting--
+	m.mu.Unlock()
+	activity.add(1)
+	m.ch <- value
 }
 
 func TestPresentSurfacesFromAStepAnswersInALaterStep(t *testing.T) {
 	queue := make(steps, 8)
 	// The handler waits for work that runs in a later step, as PresentSurfaces waits for the worker of the main thread.
-	work := make(chan struct{})
+	work := newGate()
 	calls := workbench.NewCalls(map[string]workbench.HostCall{
 		"presentSurfaces": func(_ context.Context, argument json.RawMessage) (any, error) {
-			<-work
+			work.wait()
 			return string(argument), nil
 		},
 	}, queue.post)
@@ -110,7 +206,7 @@ func TestPresentSurfacesFromAStepAnswersInALaterStep(t *testing.T) {
 	if answer != nil {
 		t.Fatalf("the answer arrived in the step of the call: %v", answer)
 	}
-	queue.post(func() { close(work) })
+	queue.post(work.open)
 	queue.run()
 	queue.run()
 	if answer != `{"id":1}` {
@@ -145,12 +241,12 @@ func TestAHandlerErrorReachesTheAnswer(t *testing.T) {
 
 func TestCallsOfOneOrderRunOneAfterTheOther(t *testing.T) {
 	queue := make(steps, 8)
-	first, entered := make(chan struct{}), make(chan string, 2)
+	first, entered := newGate(), make(chan string, 2)
 	calls := workbench.NewCalls(map[string]workbench.HostCall{
 		"sidecarSend": func(_ context.Context, argument json.RawMessage) (any, error) {
 			entered <- string(argument)
 			if string(argument) == `"first"` {
-				<-first
+				first.wait()
 			}
 			return nil, nil
 		},
@@ -165,7 +261,7 @@ func TestCallsOfOneOrderRunOneAfterTheOther(t *testing.T) {
 		t.Fatalf("%s started before the first call finished", got)
 	default:
 	}
-	close(first)
+	first.open()
 	queue.run()
 	if got := <-entered; got != `"second"` {
 		t.Fatalf("the second call is %s", got)
@@ -173,25 +269,22 @@ func TestCallsOfOneOrderRunOneAfterTheOther(t *testing.T) {
 	queue.run()
 }
 
-// works keeps a host call working for many turns of the scheduler without waiting for anything, so drain sees it run; it measures
-// no time.
-func works() {
-	for range 10000 {
-		runtime.Gosched()
-	}
-}
-
-// A host call that still runs holds drain, however late its answer comes: a later step of it is part of the steps.
+// A host call that still runs holds drain, however late its answer comes: a later step of it is part of the steps. The handler
+// tells that it started and waits at a gate; the test opens the gate, so the handler works on while drain runs.
 func TestDrainWaitsForAHostCallThatRuns(t *testing.T) {
 	queue := make(steps, 8)
+	started, proceed := make(chan struct{}, 1), newGate()
 	calls := workbench.NewCalls(map[string]workbench.HostCall{
 		"slow": func(context.Context, json.RawMessage) (any, error) {
-			works()
+			started <- struct{}{}
+			proceed.wait()
 			return "done", nil
 		},
 	}, queue.post)
 	var answer any
 	calls.Call("slow", nil, func(value any, _ error) { answer = value })
+	<-started
+	proceed.open()
 	queue.drain(t)
 	if answer != "done" {
 		t.Fatalf("drain ended with the answer %v", answer)
@@ -201,10 +294,10 @@ func TestDrainWaitsForAHostCallThatRuns(t *testing.T) {
 // A host call that waits for the test does not hold drain: only the test can end the wait.
 func TestDrainEndsWhileAHostCallWaitsForTheTest(t *testing.T) {
 	queue := make(steps, 8)
-	release := make(chan struct{})
+	release := newGate()
 	calls := workbench.NewCalls(map[string]workbench.HostCall{
 		"held": func(context.Context, json.RawMessage) (any, error) {
-			<-release
+			release.wait()
 			return "done", nil
 		},
 	}, queue.post)
@@ -214,7 +307,7 @@ func TestDrainEndsWhileAHostCallWaitsForTheTest(t *testing.T) {
 	if answer != nil {
 		t.Fatalf("the answer %v came before the release", answer)
 	}
-	close(release)
+	release.open()
 	queue.drain(t)
 	if answer != "done" {
 		t.Fatalf("drain ended with the answer %v", answer)
@@ -226,7 +319,6 @@ func TestDrainFollowsTheCallsOfAnAnswer(t *testing.T) {
 	queue := make(steps, 8)
 	calls := workbench.NewCalls(map[string]workbench.HostCall{
 		"next": func(context.Context, json.RawMessage) (any, error) {
-			works()
 			return nil, nil
 		},
 	}, queue.post)
@@ -249,12 +341,12 @@ func TestDrainFollowsTheCallsOfAnAnswer(t *testing.T) {
 // its order, reaches no handler.
 func TestEndedCallsAnswerNothingAndCallNothing(t *testing.T) {
 	queue := make(steps, 8)
-	release := make(chan struct{})
+	release := newGate()
 	entered := make(chan string, 4)
 	calls := workbench.NewCalls(map[string]workbench.HostCall{
 		"presentSurfaces": func(context.Context, json.RawMessage) (any, error) {
 			entered <- "presentSurfaces"
-			<-release
+			release.wait()
 			return nil, errors.New("surface preparation 9 is no longer current")
 		},
 		"exposureChanged": func(context.Context, json.RawMessage) (any, error) {
@@ -267,7 +359,7 @@ func TestEndedCallsAnswerNothingAndCallNothing(t *testing.T) {
 	calls.CallInOrder("surfaces", "exposureChanged", nil, func(any, error) { answers = append(answers, "exposureChanged") })
 	queue.drain(t)
 	calls.End()
-	close(release)
+	release.open()
 	queue.drain(t)
 	calls.Call("exposureChanged", nil, func(any, error) { answers = append(answers, "exposureChanged") })
 	queue.drain(t)

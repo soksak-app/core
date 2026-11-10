@@ -122,12 +122,12 @@ func TestRetiredSettingsCompletionDoesNotApplyPolicy(t *testing.T) {
 	app.Shown(window)
 	queue.drain(t)
 	before := len(stored.policies)
-	release := make(chan struct{})
+	release := newGate()
 	stored.holdWorkspace = release
 	app.Emit(window, "exposure-request", map[string]any{"id": 77, "method": "command.run", "params": json.RawMessage(`{"name":"core.settings.set","params":{"patch":{"diagnostics.log":{}},"scope":"common"}}`)})
 	queue.drain(t)
 	app.Close(window)
-	close(release)
+	release.open()
 	queue.drain(t)
 	if len(stored.policies) != before {
 		t.Fatalf("retired settings answer applied a policy: %v", stored.policies[before:])
@@ -142,7 +142,7 @@ func TestASettingsCommandAnswersAfterTheWrite(t *testing.T) {
 	tester := ui.NewTester(app.Build(window), 1200, 800)
 	app.Shown(window)
 	window.settle(t, queue, tester)
-	release := make(chan struct{})
+	release := newGate()
 	stored.holdWorkspace = release
 	app.Emit(window, "exposure-request", map[string]any{"id": 78, "method": "command.run",
 		"params": json.RawMessage(`{"name":"core.settings.set","params":{"patch":{"mode":"dark"},"scope":"common"}}`)})
@@ -153,7 +153,7 @@ func TestASettingsCommandAnswersAfterTheWrite(t *testing.T) {
 	if at := answered(); at >= 0 {
 		t.Fatalf("core.settings.set answered %v before the host wrote the settings", (*replies)[at])
 	}
-	close(release)
+	release.open()
 	window.settle(t, queue, tester)
 	at := answered()
 	if at < 0 || (*replies)[at]["error"] != nil {

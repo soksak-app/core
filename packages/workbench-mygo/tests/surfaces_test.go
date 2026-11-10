@@ -66,8 +66,8 @@ type surfaceHost struct {
 	// pending is the opened layout that no preparation took over and no cancel ended, which holds the frames of the window as the
 	// host does: while it stands, no other frame opens a layout.
 	pending uint64
-	// presentGate, when set, holds each presentSurfaces until it closes, so a frame draws while a placement runs.
-	presentGate    chan struct{}
+	// presentGate, when set, holds each presentSurfaces until it opens, so a frame draws while a placement runs.
+	presentGate    *gate
 	declareFailure error
 	// presentedFailure is the error of each waitPresented, while a surface has not presented.
 	presentedFailure error
@@ -176,7 +176,7 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 		gate := h.presentGate
 		h.orderMu.Unlock()
 		if gate != nil {
-			<-gate
+			gate.wait()
 		}
 		h.placed++
 		h.called("presentSurfaces")
@@ -1913,7 +1913,7 @@ func TestEachPlacementGivesTheFirstRowOfItsFrame(t *testing.T) {
 // the frame. A frame factor that changed after the frame shows with the next frame, which places its own row.
 func TestAPlacementAtTheAnswerGivesTheFirstRowItsFrameDrew(t *testing.T) {
 	f, stored := surfaceShell(t)
-	gate := make(chan struct{})
+	gate := newGate()
 	stored.orderMu.Lock()
 	stored.presentGate = gate
 	stored.orderMu.Unlock()
@@ -1941,7 +1941,7 @@ func TestAPlacementAtTheAnswerGivesTheFirstRowItsFrameDrew(t *testing.T) {
 	stored.orderMu.Lock()
 	stored.presentGate = nil
 	stored.orderMu.Unlock()
-	close(gate)
+	gate.open()
 	f.pending.drain(t)
 	if got := len(stored.requests); got != requests+1 {
 		t.Fatalf("the answer of the running placement made %d placements without a frame, want 1", got-requests)
@@ -2030,7 +2030,7 @@ func TestAFrameThatMovesASurfaceOpensTheLayoutBeforeItsPlacement(t *testing.T) {
 // answer of the running placement places the lines of that frame at once instead of waiting for a frame that the transaction holds.
 func TestAFrameThatMovesASurfaceDuringAPlacementIsPlacedAtItsAnswer(t *testing.T) {
 	f, stored := surfaceShell(t)
-	gate := make(chan struct{})
+	gate := newGate()
 	stored.orderMu.Lock()
 	stored.presentGate = gate
 	stored.orderMu.Unlock()
@@ -2049,7 +2049,7 @@ func TestAFrameThatMovesASurfaceDuringAPlacementIsPlacedAtItsAnswer(t *testing.T
 	stored.orderMu.Lock()
 	stored.presentGate = nil
 	stored.orderMu.Unlock()
-	close(gate)
+	gate.open()
 	f.pending.drain(t)
 	if got := len(stored.requests); got != requests+1 {
 		t.Fatalf("the answer of the running placement made %d placements without a frame, want 1", got-requests)

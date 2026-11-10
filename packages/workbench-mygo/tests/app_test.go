@@ -308,10 +308,10 @@ func TestAPlacementAnsweredAfterTheWorkbenchEndedStatesNothing(t *testing.T) {
 	stored := &storedHost{installed: installedSessionView, common: map[string]any{"memorySaverDelay": 30},
 		projects: []map[string]any{storedProject(tab("tab-bbbbbb", "session"))}}
 	viewPlacements(stored)
-	presenting, release := make(chan struct{}, 8), make(chan struct{})
+	presenting, release := make(chan struct{}, 8), newGate()
 	stored.extra["presentSurfaces"] = func(context.Context, json.RawMessage) (any, error) {
 		presenting <- struct{}{}
-		<-release
+		release.wait()
 		return nil, errors.New("surface preparation 9 is no longer current")
 	}
 	var mu sync.Mutex
@@ -338,7 +338,7 @@ func TestAPlacementAnsweredAfterTheWorkbenchEndedStatesNothing(t *testing.T) {
 	before := len(changes)
 	mu.Unlock()
 	app.Close(window)
-	close(release)
+	release.open()
 	queue.drain(t)
 	mu.Lock()
 	defer mu.Unlock()
@@ -419,9 +419,9 @@ func TestPluginsApplyStartsTheWorkbenchAgain(t *testing.T) {
 // that made the change answers (docs/spec/installation.md#applying-a-change).
 func TestAPluginChangeStartsAfterTheReplyOfARunningCommand(t *testing.T) {
 	stored := &storedHost{}
-	release := make(chan struct{})
+	release := newGate()
 	stored.extra = map[string]workbench.HostCall{
-		"pluginsRun": func(context.Context, json.RawMessage) (any, error) { <-release; return nil, nil },
+		"pluginsRun": func(context.Context, json.RawMessage) (any, error) { release.wait(); return nil, nil },
 	}
 	app, window, queue, replies := fixtureApp(t, stored)
 	tester := ui.NewTester(app.Build(window), 1200, 800)
@@ -435,7 +435,7 @@ func TestAPluginChangeStartsAfterTheReplyOfARunningCommand(t *testing.T) {
 	if len(window.starts) != 0 {
 		t.Fatal("the workbench started again before the command that changed the plugins answered")
 	}
-	close(release)
+	release.open()
 	window.settle(t, queue, tester)
 	window.started(t, queue)
 	answered := slices.IndexFunc(*replies, func(reply map[string]any) bool { return reply["id"] == float64(8) })

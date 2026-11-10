@@ -3387,14 +3387,16 @@ const FEATURE_LINKS = [
     id: "F562",
     implementation: [
       { file: "packages/workbench-mygo/tests/host_calls_test.go", symbol: "func (s steps) drain(t testing.TB)" },
-      { file: "packages/workbench-mygo/tests/host_calls_test.go", symbol: "func workingGoroutine() string" },
+      { file: "packages/workbench-mygo/src/host_calls.go", symbol: "var Running = func(delta int) {}" },
+      { file: "packages/workbench-mygo/tests/host_calls_test.go", symbol: "func (a *activityCount) add(delta int)" },
+      { file: "packages/workbench-mygo/tests/host_calls_test.go", symbol: "func (g *gate) wait()" },
     ],
     tests: [
       { file: "packages/workbench-mygo/tests/host_calls_test.go", id: "TestDrainWaitsForAHostCallThatRuns" },
       { file: "packages/workbench-mygo/tests/host_calls_test.go", id: "TestDrainEndsWhileAHostCallWaitsForTheTest" },
       { file: "packages/workbench-mygo/tests/host_calls_test.go", id: "TestDrainFollowsTheCallsOfAnAnswer" },
     ],
-    expected: "drain ends when no step waits and every other goroutine waits for something only another goroutine or the test can end.",
+    expected: "drain ends when no step waits and no goroutine of the workbench works: each host call counts while it runs and stops counting while it waits at a gate or a mailbox of the test.",
     levels: ["unit"],
   },
   {

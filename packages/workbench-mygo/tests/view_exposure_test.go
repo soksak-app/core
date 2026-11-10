@@ -24,7 +24,7 @@ type viewRelay struct {
 	mu     sync.Mutex
 	// next numbers the forwards, open holds the forwards that wait, and answers the replies of the main page by request id.
 	next     uint64
-	open     map[uint64]chan map[string]any
+	open     map[uint64]*mailbox[map[string]any]
 	answers  map[float64]map[string]any
 	requests []map[string]any
 	pushed   []map[string]any
@@ -40,7 +40,7 @@ func newViewRelay(t *testing.T) *viewRelay {
 
 func newViewRelayOn(t *testing.T, stored *surfaceHost) *viewRelay {
 	t.Helper()
-	r := &viewRelay{t: t, stored: stored, open: map[uint64]chan map[string]any{}, answers: map[float64]map[string]any{},
+	r := &viewRelay{t: t, stored: stored, open: map[uint64]*mailbox[map[string]any]{}, answers: map[float64]map[string]any{},
 		post: func(map[string]any) (any, error) { return nil, nil }}
 	read := func(argument json.RawMessage) map[string]any {
 		var value map[string]any
@@ -59,11 +59,11 @@ func newViewRelayOn(t *testing.T, stored *surfaceHost) *viewRelay {
 			r.mu.Lock()
 			r.next++
 			id := r.next
-			reply := make(chan map[string]any, 1)
+			reply := newMailbox[map[string]any]()
 			r.open[id] = reply
 			r.mu.Unlock()
 			r.emit("exposure-request", map[string]any{"id": id, "surface": request["surface"], "method": request["method"], "params": request["params"]})
-			return <-reply, nil
+			return reply.take(), nil
 		},
 		"exposureReply": func(_ context.Context, argument json.RawMessage) (any, error) {
 			reply := read(argument)
@@ -78,7 +78,7 @@ func newViewRelayOn(t *testing.T, stored *surfaceHost) *viewRelay {
 				return nil, errors.New("the reply has no request")
 			}
 			delete(r.open, uint64(reply["id"].(float64)))
-			open <- reply
+			open.put(reply)
 			return nil, nil
 		},
 		"exposureChanged": func(_ context.Context, argument json.RawMessage) (any, error) {

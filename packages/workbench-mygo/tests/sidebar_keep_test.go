@@ -103,7 +103,7 @@ func TestTheSwitchDrawsThePlaneBeforeTheSettingsWriteAnswers(t *testing.T) {
 	f, stored := surfaceShellOf(t, sidebarsInstalled)
 	shown := leftSections(t, stored)
 	writes, presented := len(stored.settings), stored.placed
-	release := make(chan struct{})
+	release := newGate()
 	stored.holdWorkspace = release
 	f.click("core.chrome.left", "")
 	f.settle()
@@ -122,7 +122,7 @@ func TestTheSwitchDrawsThePlaneBeforeTheSettingsWriteAnswers(t *testing.T) {
 			t.Fatalf("the placement before the settings write holds the sections %v, want %s hidden", hidden, id)
 		}
 	}
-	close(release)
+	release.open()
 	f.settle()
 	if len(stored.settings) != writes+1 || stored.settings[writes]["patch"].(map[string]any)["left"] != false {
 		t.Fatalf("the host wrote the settings %v, want left false", stored.settings[writes:])

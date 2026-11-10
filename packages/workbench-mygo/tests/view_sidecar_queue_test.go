@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"reflect"
-	"sync"
 	"testing"
 
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
@@ -14,9 +13,8 @@ import (
 // Ending A and mounting B before that queue starts must cancel A's queued send;
 // suppressing only its eventual reply cannot undo a sidecar operation.
 func TestQueuedRetiredViewSidecarSendNeverReachesHostHandlerAfterReplacement(t *testing.T) {
-	gate := make(chan struct{})
-	var release sync.Once
-	t.Cleanup(func() { release.Do(func() { close(gate) }) })
+	gate := newGate()
+	t.Cleanup(gate.open)
 	entered := make(chan string, 4)
 	stored := &surfaceHost{calls: map[string]workbench.HostCall{
 		"viewSidecarSend": func(_ context.Context, argument json.RawMessage) (any, error) {
@@ -30,7 +28,7 @@ func TestQueuedRetiredViewSidecarSendNeverReachesHostHandlerAfterReplacement(t *
 			}
 			entered <- request.Body.Operation
 			if request.Body.Operation == "blocking" {
-				<-gate
+				gate.wait()
 			}
 			return nil, nil
 		},
@@ -59,7 +57,7 @@ func TestQueuedRetiredViewSidecarSendNeverReachesHostHandlerAfterReplacement(t *
 	send(1, 2, "retired-A")
 	f.shell.Event("view-process-ended", []any{map[string]any{"surface": surface, "generation": uint64(1)}})
 	send(2, 3, "current-B")
-	release.Do(func() { close(gate) })
+	gate.open()
 	f.pending.drain(t)
 	got := []string{}
 	for {

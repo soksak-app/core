@@ -135,7 +135,13 @@ func (a *App) Build(window host.Frontend) func(c *ui.Context) {
 	painted := window.(Painted)
 	shell, err := NewShell(ShellOptions{Now: time.Now, Declared: declared, Calls: NewCalls(a.options.Table(window), a.options.Post),
 		Environment: a.options.Environment, Installed: a.options.Installed(),
-		Reload:      func() { routine.Go("workbench-reload", window.StartWorkbench) },
+		Reload: func() {
+			Running(1)
+			routine.Go("workbench-reload", func() {
+				defer Running(-1)
+				window.StartWorkbench()
+			})
+		},
 		Detaching:   func() []string { return a.options.Detaching(window) },
 		Project:     projectOfAddress(painted.Address()),
 		Located:     func(project string) { painted.SetAddress(addressOfProject(project)) },
