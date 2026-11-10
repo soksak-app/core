@@ -2,7 +2,7 @@
 
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
 
-use crate::platform::Handle;
+use crate::platform::{Handle, LayoutRecord};
 
 unsafe extern "C" {
     fn sp_capture_open(window_number: isize, display: bool, error: *mut *mut c_char) -> bool;
@@ -151,25 +151,78 @@ pub fn layout_trace_start() {
     unsafe { surfaceLayoutTraceStart() }
 }
 
-/// Stops the record and returns ticket, begun, presented, committed and requested for each transaction. Call it on the
-/// main thread. The number of values equals SURFACE_LAYOUT_TRACE_STAGES of native.
-pub fn layout_trace_stop() -> Result<Vec<[f64; 5]>, String> {
+/// The number of values in the native record of one transaction (SURFACE_LAYOUT_TRACE_STAGES of native): ticket, begun,
+/// presented, committed, requested, commit path code and open at commit.
+const SURFACE_LAYOUT_TRACE_STAGES: usize = 7;
+/// The commit path codes of the native record (SURFACE_LAYOUT_COMMIT_* of native).
+const SURFACE_LAYOUT_COMMIT_PRESENT: f64 = 1.0;
+const SURFACE_LAYOUT_COMMIT_START: f64 = 2.0;
+const SURFACE_LAYOUT_COMMIT_VIEW_JOIN: f64 = 3.0;
+const SURFACE_LAYOUT_COMMIT_VIEW_ABANDON: f64 = 4.0;
+const SURFACE_LAYOUT_COMMIT_CANCEL: f64 = 5.0;
+
+/// Stops the record and returns the record of each transaction. Call it on the main thread.
+pub fn layout_trace_stop() -> Result<Vec<LayoutRecord>, String> {
     const CAPACITY: usize = 4096;
-    let mut values = vec![0.0; CAPACITY * 5];
+    let mut values = vec![0.0; CAPACITY * SURFACE_LAYOUT_TRACE_STAGES];
     let count = unsafe { surfaceLayoutTraceStop(values.as_mut_ptr(), CAPACITY) };
     if count > CAPACITY {
         return Err(format!(
             "layout trace capacity exceeded: {count} records, capacity {CAPACITY}"
         ));
     }
-    Ok(values
-        .as_chunks::<5>()
+    layout_records(&values, count)
+}
+
+/// The name of a commit path code of the native record. None for a code that the native code does not declare.
+fn commit_path_name(code: f64) -> Option<&'static str> {
+    [
+        (SURFACE_LAYOUT_COMMIT_PRESENT, "present"),
+        (SURFACE_LAYOUT_COMMIT_START, "start"),
+        (SURFACE_LAYOUT_COMMIT_VIEW_JOIN, "view-join"),
+        (SURFACE_LAYOUT_COMMIT_VIEW_ABANDON, "view-abandon"),
+        (SURFACE_LAYOUT_COMMIT_CANCEL, "cancel"),
+    ]
+    .into_iter()
+    .find(|(declared, _)| *declared == code)
+    .map(|(_, name)| name)
+}
+
+/// Reads count native layout records. A commit path code that the native code does not declare is an error.
+fn layout_records(values: &[f64], count: usize) -> Result<Vec<LayoutRecord>, String> {
+    values
+        .as_chunks::<SURFACE_LAYOUT_TRACE_STAGES>()
         .0
         .iter()
         .take(count)
-        .copied()
-        .collect())
+        .map(|value| {
+            let commit_path = if value[5].is_nan() {
+                None
+            } else {
+                let name = commit_path_name(value[5]).ok_or_else(|| {
+                    format!(
+                        "layout transaction {} has the unknown commit path {}",
+                        value[0] as u64, value[5]
+                    )
+                })?;
+                Some(name)
+            };
+            Ok(LayoutRecord {
+                ticket: value[0] as u64,
+                begun: value[1],
+                presented: value[2],
+                committed: value[3],
+                requested: value[4],
+                commit_path,
+                open_at_commit: value[6],
+            })
+        })
+        .collect()
 }
+
+#[cfg(test)]
+#[path = "capture_layout_test.rs"]
+mod layout_test;
 
 /// Prepares the window with the window number as a capture target. When display is set, it captures the windows of this
 /// application on the display that holds the window.

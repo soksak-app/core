@@ -1762,7 +1762,7 @@ fn finish_capture_stop(
     directory: &Path,
     count: i32,
     frame_identity: bool,
-    finalize: impl FnOnce() -> Result<(Vec<[f64; 5]>, bool, f64), Failure>,
+    finalize: impl FnOnce() -> Result<(Vec<crate::platform::LayoutRecord>, bool, f64), Failure>,
 ) -> Result<Value, Failure> {
     match finalize() {
         Ok((layouts, limited, gap)) => Ok(crate::recording::stop_payload(

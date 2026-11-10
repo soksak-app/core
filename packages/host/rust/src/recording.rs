@@ -9,6 +9,8 @@ use std::sync::{Mutex, PoisonError};
 
 use serde_json::{Value, json};
 
+use crate::platform::LayoutRecord;
+
 /// The response of the request that ended a recording. It holds the frame folder, callback status artifact, number of frames,
 /// whether the recording reached the limit, and the longest interval between frames.
 pub fn stop_payload(
@@ -16,7 +18,7 @@ pub fn stop_payload(
     count: i32,
     limited: bool,
     longest_gap: f64,
-    layouts: &[[f64; 5]],
+    layouts: &[LayoutRecord],
     frame_identity: bool,
 ) -> Value {
     let callback_status = directory.join("callback-status.jsonl");
@@ -28,9 +30,9 @@ pub fn stop_payload(
     payload
 }
 
-/// Converts the placement transaction record into {ticket, begun, presented, committed}. A stage that did not happen is
-/// null.
-pub fn layout_trace(records: &[[f64; 5]]) -> Value {
+/// Converts the placement transaction records into {ticket, begun, requested, presented, committed, commitPath,
+/// openAtCommit}. A value that did not happen is null.
+pub fn layout_trace(records: &[LayoutRecord]) -> Value {
     let stage = |value: f64| {
         if value.is_nan() {
             Value::Null
@@ -43,11 +45,13 @@ pub fn layout_trace(records: &[[f64; 5]]) -> Value {
             .iter()
             .map(|record| {
                 serde_json::json!({
-                    "ticket": record[0] as u64,
-                    "begun": stage(record[1]),
-                    "requested": stage(record[4]),
-                    "presented": stage(record[2]),
-                    "committed": stage(record[3]),
+                    "ticket": record.ticket,
+                    "begun": stage(record.begun),
+                    "requested": stage(record.requested),
+                    "presented": stage(record.presented),
+                    "committed": stage(record.committed),
+                    "commitPath": record.commit_path,
+                    "openAtCommit": stage(record.open_at_commit),
                 })
             })
             .collect(),

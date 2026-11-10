@@ -319,6 +319,25 @@ pub struct DOMOverlay {
     pub visible: bool,
 }
 
+/// The record of one placement transaction in a layout trace. The times are ms on the same clock as the presentation time
+/// of the recorded frames, and a stage that did not happen is NaN.
+#[cfg(feature = "diagnostics")]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LayoutRecord {
+    pub ticket: u64,
+    pub begun: f64,
+    pub requested: f64,
+    pub presented: f64,
+    pub committed: f64,
+    /// What committed the transaction: "present" (the presentation of the host), "start" (the start transaction of a new
+    /// page), "view-join" (the presentation of the last joined view), "view-abandon" (the abandon of the last joined view)
+    /// or "cancel". None when the transaction did not commit.
+    pub commit_path: Option<&'static str>,
+    /// The number of the other CATransaction pairs of the native code that were open at the commit. NaN when the
+    /// transaction did not commit.
+    pub open_at_commit: f64,
+}
+
 /// A global overlay of the main DOM plane and its CSS coordinates.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WindowOverlay {
@@ -903,9 +922,8 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// Call it on the main thread.
     fn layout_trace_start(&self) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
-    /// Stops the record and returns ticket, begun, presented and committed (ms, on the same clock as the presentation
-    /// time) of each transaction. A stage that did not happen is NaN. Call it on the main thread.
-    fn layout_trace_stop(&self) -> Result<Vec<[f64; 5]>, String>;
+    /// Stops the record and returns the record of each transaction. Call it on the main thread.
+    fn layout_trace_stop(&self) -> Result<Vec<LayoutRecord>, String>;
 
     #[cfg(feature = "diagnostics")]
     /// Creates or observes an ordinary text view for native keyboard comparison. Call on the main thread; completion runs once there.
