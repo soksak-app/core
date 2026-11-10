@@ -294,9 +294,8 @@ type Capturer interface {
 	DeliveredNotifications(done func(json string))
 	// LayoutTraceStart starts recording, for each layout transaction, the start, the app DOM display confirmation, and the commit time. Call it on the UI thread.
 	LayoutTraceStart()
-	// LayoutTraceStop stops the recording and returns, for each transaction, ticket, begun, presented and committed (ms, on the same clock as the display time).
-	// A stage that did not happen is NaN. Call it on the UI thread.
-	LayoutTraceStop() ([][5]float64, error)
+	// LayoutTraceStop stops the recording and returns the record of each transaction. Call it on the UI thread.
+	LayoutTraceStop() ([]LayoutRecord, error)
 	// LayoutTraceRequested records the time at which the presentation of the open layout transaction was requested, and returns
 	// the function that records the time at which it was confirmed. Call both on the UI thread.
 	LayoutTraceRequested() (presented func())
@@ -961,4 +960,18 @@ func (d *Dispatcher) Message(identifier uint64, body string) {
 		}
 		handler(identifier, body)
 	})
+}
+
+// LayoutRecord is the record of one layout transaction in a layout trace. The times are ms on the same clock as the display
+// time of the recorded frames, and a stage that did not happen is NaN.
+type LayoutRecord struct {
+	Ticket                                 uint64
+	Begun, Requested, Presented, Committed float64
+	// CommitPath names what committed the transaction: "present" (the presentation of the host), "start" (the start
+	// transaction of a new page), "view-join" (the presentation of the last joined view), "view-abandon" (the abandon of the
+	// last joined view) or "cancel". It is empty when the transaction did not commit.
+	CommitPath string
+	// OpenAtCommit is the number of the other CATransaction pairs of the native code that were open at the commit. It is NaN
+	// when the transaction did not commit.
+	OpenAtCommit float64
 }

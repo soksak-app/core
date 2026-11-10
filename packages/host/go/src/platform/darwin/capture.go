@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/soksak-app/core/packages/host/go/src/platform/darwin/abi"
+	"math"
 
 	"strings"
 	"unsafe"
@@ -119,17 +120,42 @@ func (implementation) LayoutTraceRequested() (presented func()) {
 	return func() { diagnosticNative.MainSurfaceLayoutTracePresented(ticket) }
 }
 
-func (implementation) LayoutTraceStop() ([][5]float64, error) {
+func (implementation) LayoutTraceStop() ([]platform.LayoutRecord, error) {
 	const capacity = 4096
 	values := make([]float64, capacity*abi.SURFACE_LAYOUT_TRACE_STAGES)
 	count := int(diagnosticNative.MainSurfaceLayoutTraceStop(&values[0], capacity))
 	if count > capacity {
 		return nil, fmt.Errorf("layout trace capacity exceeded: %d records, capacity %d", count, capacity)
 	}
-	records := make([][5]float64, count)
+	return layoutRecords(values, count)
+}
+
+// layoutCommitPaths names each commit path code of the native layout trace.
+var layoutCommitPaths = map[float64]string{
+	abi.SURFACE_LAYOUT_COMMIT_PRESENT:      "present",
+	abi.SURFACE_LAYOUT_COMMIT_START:        "start",
+	abi.SURFACE_LAYOUT_COMMIT_VIEW_JOIN:    "view-join",
+	abi.SURFACE_LAYOUT_COMMIT_VIEW_ABANDON: "view-abandon",
+	abi.SURFACE_LAYOUT_COMMIT_CANCEL:       "cancel",
+}
+
+// layoutRecords reads count native layout records of SURFACE_LAYOUT_TRACE_STAGES values each: ticket, begun, presented,
+// committed, requested, commit path code and open at commit. A code that the native code does not declare is an error.
+func layoutRecords(values []float64, count int) ([]platform.LayoutRecord, error) {
+	records := make([]platform.LayoutRecord, count)
 	for i := range records {
-		for j := 0; j < abi.SURFACE_LAYOUT_TRACE_STAGES; j++ {
-			records[i][j] = float64(values[i*abi.SURFACE_LAYOUT_TRACE_STAGES+j])
+		value := values[i*abi.SURFACE_LAYOUT_TRACE_STAGES : (i+1)*abi.SURFACE_LAYOUT_TRACE_STAGES]
+		path := ""
+		if !math.IsNaN(value[5]) {
+			name, ok := layoutCommitPaths[value[5]]
+			if !ok {
+				return nil, fmt.Errorf("layout transaction %d has the unknown commit path %v", uint64(value[0]), value[5])
+			}
+			path = name
+		}
+		records[i] = platform.LayoutRecord{
+			Ticket: uint64(value[0]), Begun: value[1], Presented: value[2], Committed: value[3], Requested: value[4],
+			CommitPath: path, OpenAtCommit: value[6],
 		}
 	}
 	return records, nil

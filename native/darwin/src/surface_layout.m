@@ -94,19 +94,39 @@ static void releaseSettled(void);
 // Diagnostic trace. Records ticket, begun, presented, and committed for each transaction. The drag check uses it to divide the delay of the recording frames into stages.
 static NSMutableArray<NSMutableArray<NSNumber *> *> *trace;
 
-static void traceMark(uint64_t ticket, NSUInteger stage) {
+// The CATransaction pairs of this code that are open, the layout transaction included.
+static NSUInteger openTransactions;
+
+void surfaceTransactionBegin(void) {
+    NSCAssert(NSThread.isMainThread, @"a transaction of the surfaces requires the UI thread");
+    openTransactions++;
+    [CATransaction begin];
+}
+
+void surfaceTransactionCommit(void) {
+    NSCAssert(NSThread.isMainThread, @"a transaction of the surfaces requires the UI thread");
+    NSCAssert(openTransactions > 0, @"a transaction of the surfaces commits without its begin");
+    openTransactions--;
+    [CATransaction commit];
+}
+
+static void traceValue(uint64_t ticket, NSUInteger stage, double value) {
     if (!trace) return;
-    double now = CACurrentMediaTime() * 1000;
     NSMutableArray<NSNumber *> *record = nil;
     for (NSMutableArray<NSNumber *> *item in trace.reverseObjectEnumerator) {
         if (item[0].unsignedLongLongValue == ticket) { record = item; break; }
     }
     if (!record) {
-        record = [NSMutableArray arrayWithObjects:@(ticket), @(NAN), @(NAN), @(NAN), @(NAN), nil];
+        record = [NSMutableArray arrayWithObject:@(ticket)];
+        for (NSUInteger i = 1; i < SURFACE_LAYOUT_TRACE_STAGES; i++) [record addObject:@(NAN)];
         [trace addObject:record];
     }
     // When one transaction checks the presentation several times, the last check is kept.
-    record[stage] = @(now);
+    record[stage] = @(value);
+}
+
+static void traceMark(uint64_t ticket, NSUInteger stage) {
+    traceValue(ticket, stage, CACurrentMediaTime() * 1000);
 }
 
 uint64_t surfaceLayoutTraceRequested(void) {
@@ -264,7 +284,7 @@ static void releaseInput(void *owner) {
 static void startLayout(SPLayoutRequest *request) {
     watchInput();
     if (!activeOwner) {
-        [CATransaction begin];
+        surfaceTransactionBegin();
         [CATransaction setDisableActions:YES];
         activeOwner = request.owner;
     }
@@ -303,13 +323,16 @@ void surfaceLayoutBegin(void *owner, uint64_t ticket, void (^ready)(int)) {
     [waiting addObject:request];
 }
 
-// Ends the open transaction: the CATransaction commits, and the next waiting layout starts.
-static void finishTransaction(void) {
+// Ends the open transaction through path (SURFACE_LAYOUT_COMMIT_*): the CATransaction commits, and the next waiting layout
+// starts. The record of the transaction names the path and the other pairs of this code that were open at the commit.
+static void finishTransaction(int path) {
     uint64_t ticket = preparation;
     void *owner = activeOwner;
     committing = NO;
     activeOwner = NULL;
-    [CATransaction commit];
+    traceValue(ticket, 5, path);
+    traceValue(ticket, 6, openTransactions - 1);
+    surfaceTransactionCommit();
     traceMark(ticket, 3);
     if (layoutEnded) layoutEnded(owner);
     releaseWhenFree(owner);
@@ -325,9 +348,9 @@ static bool detachViewJoin(SPViewJoin *join) {
     return true;
 }
 
-// Finishes a deferred commit once the last joined view has ended.
-static void finishDeferredCommit(void) {
-    if (committing && viewJoins.count == 0) finishTransaction();
+// Finishes a deferred commit through path once the last joined view has ended.
+static void finishDeferredCommit(int path) {
+    if (committing && viewJoins.count == 0) finishTransaction(path);
 }
 
 // Ends every view wait of the open transaction without a presentation.
@@ -335,7 +358,8 @@ static void dropViewJoins(void) {
     for (SPViewJoin *join in [[viewJoins copy] autorelease]) detachViewJoin(join);
 }
 
-bool surfaceLayoutCommit(void *owner, uint64_t ticket) {
+// Commits the open transaction of owner when ticket is its preparation, through path, or defers the commit to the last joined view.
+static bool commitLayout(void *owner, uint64_t ticket, int path) {
     NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
     if (activeOwner != owner || ticket != preparation || committing) {
         return false;
@@ -344,8 +368,12 @@ bool surfaceLayoutCommit(void *owner, uint64_t ticket) {
         committing = YES;
         return true;
     }
-    finishTransaction();
+    finishTransaction(path);
     return true;
+}
+
+bool surfaceLayoutCommit(void *owner, uint64_t ticket) {
+    return commitLayout(owner, ticket, SURFACE_LAYOUT_COMMIT_PRESENT);
 }
 
 bool surfaceLayoutIsPreparing(void *owner) {
@@ -491,8 +519,8 @@ void surfaceLayoutCancel(void *owner) {
     }
     if (activeOwner == owner) {
         dropViewJoins();
-        if (committing) finishTransaction();
-        else surfaceLayoutCommit(owner, preparation);
+        if (committing) finishTransaction(SURFACE_LAYOUT_COMMIT_CANCEL);
+        else commitLayout(owner, preparation, SURFACE_LAYOUT_COMMIT_CANCEL);
     }
     releaseSettled();
 }
@@ -506,8 +534,8 @@ void surfaceLayoutCancelTicket(void *owner, uint64_t ticket) {
     }
     if (activeOwner == owner && preparation == ticket) {
         dropViewJoins();
-        if (committing) finishTransaction();
-        else surfaceLayoutCommit(owner, ticket);
+        if (committing) finishTransaction(SURFACE_LAYOUT_COMMIT_CANCEL);
+        else commitLayout(owner, ticket, SURFACE_LAYOUT_COMMIT_CANCEL);
     }
     releaseSettled();
 }
@@ -740,7 +768,7 @@ void surfaceLayoutInjectSettledFailure(void) {
 
 - (void)commitAfterPresentation {
     [_webview _doAfterNextPresentationUpdate:^{
-        surfaceLayoutCommit(self->_owner, self->_ticket);
+        commitLayout(self->_owner, self->_ticket, SURFACE_LAYOUT_COMMIT_START);
         [self release];
     }];
 }
@@ -804,7 +832,7 @@ bool surfaceLayoutJoinView(void *owner, uint64_t ticket, void *handle, void (^pr
     [view _doAfterNextPresentationUpdate:^{
         if (!detachViewJoin(join)) return;
         finish();
-        finishDeferredCommit();
+        finishDeferredCommit(SURFACE_LAYOUT_COMMIT_VIEW_JOIN);
     }];
     return true;
 }
@@ -819,7 +847,7 @@ bool surfaceLayoutAbandonView(void *owner, void *handle) {
     }
     if (!found) return false;
     detachViewJoin(found);
-    finishDeferredCommit();
+    finishDeferredCommit(SURFACE_LAYOUT_COMMIT_VIEW_ABANDON);
     return true;
 }
 

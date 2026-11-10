@@ -750,7 +750,7 @@ impl Platform for Darwin {
         Ok(())
     }
     #[cfg(feature = "diagnostics")]
-    fn layout_trace_stop(&self) -> Result<Vec<[f64; 5]>, String> {
+    fn layout_trace_stop(&self) -> Result<Vec<crate::platform::LayoutRecord>, String> {
         capture::layout_trace_stop()
     }
     #[cfg(feature = "diagnostics")]

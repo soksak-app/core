@@ -13,6 +13,7 @@ use std::sync::Mutex;
 mod records;
 
 use soksak_host::event_record::use_host_event_log;
+use soksak_host::platform::LayoutRecord;
 use soksak_host::recording::{Capture, Recording, Target, stop_payload};
 
 /// The records of the host are process-wide, so the tests of this file that attach a writer run one at a time: a test reads
@@ -738,12 +739,34 @@ fn the_stop_payload_preserves_layout_stages() {
         3,
         false,
         0.0,
-        &[[7.0, 10.0, 20.0, 30.0, 15.0]],
+        &[
+            LayoutRecord {
+                ticket: 7,
+                begun: 10.0,
+                requested: 15.0,
+                presented: 20.0,
+                committed: 30.0,
+                commit_path: Some("view-join"),
+                open_at_commit: 1.0,
+            },
+            LayoutRecord {
+                ticket: 8,
+                begun: 40.0,
+                requested: f64::NAN,
+                presented: f64::NAN,
+                committed: f64::NAN,
+                commit_path: None,
+                open_at_commit: f64::NAN,
+            },
+        ],
         false,
     );
     assert_eq!(
         payload["layouts"],
-        serde_json::json!([{"ticket":7,"begun":10.0,"requested":15.0,"presented":20.0,"committed":30.0}])
+        serde_json::json!([
+            {"ticket":7,"begun":10.0,"requested":15.0,"presented":20.0,"committed":30.0,"commitPath":"view-join","openAtCommit":1.0},
+            {"ticket":8,"begun":40.0,"requested":null,"presented":null,"committed":null,"commitPath":null,"openAtCommit":null}
+        ])
     );
 }
 

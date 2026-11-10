@@ -3,7 +3,6 @@
 // while this window reads again after another window changes the scale. The buttons and the first row are measured in the pixels of the frame
 // (titlebar-measurement.mjs). A value in the DOM does not tell the screen that the frame showed.
 import assert from "node:assert/strict";
-import { rmSync } from "node:fs";
 import test from "node:test";
 
 import { APPS, open, requireUncovered } from "@soksak/window-check/app.mjs";
@@ -34,22 +33,19 @@ async function recordable(s) {
 
 /**
  * Runs action(displayed) while the window is recorded. action returns, in order, the states { displayed, at } displayed during the recording (display time,
- * first-row height). It measures the buttons and the first row in each frame and deletes the recording folder.
+ * first-row height). It measures the buttons and the first row in each frame. The session removes the recording when the check passes and keeps it, with
+ * its stop reply and the displayed states, when the check fails, so a failure leaves its evidence.
  */
 async function record(s, buttons, action) {
   const { displayed } = await s.presented();
   const recording = await s.record();
-  try {
-    const poses = await action(displayed);
-    const stop = await recording.stop({ after: poses.at(-1).displayed + 100 });
-    assert.equal(stop.limited, false, "the recording reached its frame cap");
-    // Reads and measures one frame at a time. The whole recording is not held in memory.
-    const measured = frames(recording.frames).map((path, index) => ({ index, ...measureTitlebar(readFrame(path), buttons) }));
-    return { poses, stop, measured };
-  } finally {
-    // A failure to stop the recording is stopped by the session cleanup (Session.record).
-    rmSync(recording.frames, { recursive: true, force: true });
-  }
+  const poses = await action(displayed);
+  const stop = await recording.stop({ after: poses.at(-1).displayed + 100 });
+  recording.keep("poses", poses);
+  assert.equal(stop.limited, false, "the recording reached its frame cap");
+  // Reads and measures one frame at a time. The whole recording is not held in memory.
+  const measured = frames(recording.frames).map((path, index) => ({ index, ...measureTitlebar(readFrame(path), buttons) }));
+  return { poses, stop, measured };
 }
 
 /**
@@ -79,7 +75,9 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: every recorded frame keeps the window buttons centred in the first row while the frame factor steps from 1 to 3 and back`,
     { timeout: 120000 }, async (t) => {
       const s = await open(t, app);
-      await fresh(s);
+      // The performance trace records the layouts of the page and the surface dispatch of the host, so a missing first row names the
+      // stage that held it. This check judges which rows reach the screen, not how fast, so the trace changes no judged value.
+      await fresh(s, { performanceTrace: true });
       // The check windows overlap and can cover this one whole, and WebKit draws an occluded window less often.
       await uncoverFromCheckWindows(t, s);
       s.cleanup(() => setFrame(s, 1));

@@ -795,6 +795,8 @@ export class Session {
    * Starts a recording. The returned stop sends diagnostics.capture.stop once and returns its result or error. When
    * stop fails, the host may already have ended the recording, so a second stop is not sent. The cleanup sends stop only
    * if none was sent. finishSession removes the folder only after every cleanup and the error audit succeed.
+   * The folder of a failed check is its evidence: stop writes its whole reply, every layout transaction included, to
+   * stop.json, and keep(name, value) writes a value that the check judged, such as its displayed states, to <name>.json.
    */
   async record(params = {}) {
     // Frame identity is decoded from the captured pixels of the window, which a window that is covered whole does not present.
@@ -817,11 +819,16 @@ export class Session {
         sent = true;
         return this.request("diagnostics.capture.stop", options).then((result) => {
           requireCallbackStatusArtifact(result, frames);
+          writeFileSync(join(frames, "stop.json"), JSON.stringify(result));
           return result;
         }).catch((error) => {
           this.failedRecordings.set(identity, error);
           throw error;
         });
+      },
+      keep: (name, value) => {
+        if (!/^[a-z][a-z-]*$/.test(name)) throw new Error(`a kept value needs a plain name, not ${JSON.stringify(name)}`);
+        writeFileSync(join(frames, `${name}.json`), JSON.stringify(value));
       },
     };
   }

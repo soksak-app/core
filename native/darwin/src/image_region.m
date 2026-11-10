@@ -25,6 +25,7 @@
 #import "webview_input.h"
 #import "observe.h"
 #import "webview_geometry.h"
+#import "surface_layout.h"
 
 static BOOL inputRangeFitsLength(NSRange range, NSUInteger length) {
     return range.location != NSNotFound && range.location <= length && range.length <= length - range.location;
@@ -239,10 +240,10 @@ void sp_region_restore_capture_identity(void) {
     NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
     for (SPImageRegion *region in spLiveRegions) {
         if (region.closed || region.presented == NULL || region.imageLayer.contents == (__bridge id)region.presented) continue;
-        [CATransaction begin];
+        surfaceTransactionBegin();
         [CATransaction setDisableActions:YES];
         region.imageLayer.contents = (__bridge id)region.presented;
-        [CATransaction commit];
+        surfaceTransactionCommit();
     }
 }
 
@@ -557,10 +558,10 @@ static void spEnsurePressOriginMonitor(void) {
 }
 
 - (void)applyInsetsNow {
-    [CATransaction begin];
+    surfaceTransactionBegin();
     [CATransaction setDisableActions:YES];
     [self applyInsetsInTransaction];
-    [CATransaction commit];
+    surfaceTransactionCommit();
 }
 
 // Applies the prepared geometry. The outer surface transaction owns the presentation of this change.
@@ -1899,13 +1900,13 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
     IOSurfaceRef previous = view.presented;
     uint64_t previousGeneration = view.presentedGeneration, previousRaster = view.presentedRaster;
     int previousSequence = view.presentedSequence;
-    [CATransaction begin];
+    surfaceTransactionBegin();
     [CATransaction setDisableActions:YES];
     [view applyInsetsInTransaction];
     view.imageLayer.contents = displayContents;
     view.shownPixelsPerUnit = [view backingPixelsPerUnit];
     [view updateContentsScale];
-    [CATransaction commit];
+    surfaceTransactionCommit();
     view.presented = presentation;
     view.presentedWidth = surfaceWidth;
     view.presentedHeight = surfaceHeight;
@@ -2049,10 +2050,10 @@ void sp_region_close(void *handle) {
     }
     if (view.released && view.presented) {
         // Closing ends the lease of the presented surface: the layer stops presenting it in a committed transaction.
-        [CATransaction begin];
+        surfaceTransactionBegin();
         [CATransaction setDisableActions:YES];
         view.imageLayer.contents = nil;
-        [CATransaction commit];
+        surfaceTransactionCommit();
         IOSurfaceRef held = view.presented;
         view.presented = NULL;
         view.released(view.releasedContext, view.presentedGeneration, view.presentedRaster, view.presentedSequence);

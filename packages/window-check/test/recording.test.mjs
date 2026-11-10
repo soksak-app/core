@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -39,7 +39,8 @@ function fakeClient(directory, { stopFails = false, removeFramesOnStopFailure = 
         }
         const callbackStatus = join(frames, "callback-status.jsonl");
         if (!missingCallbackStatus) writeFileSync(join(storedFrames, "callback-status.jsonl"), "{\"sequence\":1,\"status\":0,\"displayTime\":\"123\"}\n");
-        return { frames, callbackStatus, count: 2, limited: false, longestGap: 16 };
+        return { frames, callbackStatus, count: 2, limited: false, longestGap: 16,
+          layouts: [{ ticket: 3, begun: 1, requested: 2, presented: 3, committed: 4 }] };
       }
       throw new Error(`unexpected ${method}`);
     },
@@ -159,6 +160,23 @@ test("finalization tolerates a tracked recording folder already removed", async 
 
   await cleanUp(s);
   assert.equal(existsSync(frames), false);
+});
+
+// A failed check keeps its recording, and the recording holds what the check judged: the whole stop reply with every layout
+// transaction, and the values that the check keeps beside it.
+test("a stopped recording keeps its stop reply and the values that the check keeps", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "soksak-record-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const client = fakeClient(directory);
+  const s = newSession(directory, client);
+  const recording = await s.record();
+  const stopped = await recording.stop({ after: 7 });
+  assert.deepEqual(JSON.parse(readFileSync(join(recording.frames, "stop.json"), "utf8")), stopped);
+  recording.keep("poses", [{ displayed: 12.5, at: 40 }]);
+  assert.deepEqual(JSON.parse(readFileSync(join(recording.frames, "poses.json"), "utf8")), [{ displayed: 12.5, at: 40 }]);
+  assert.throws(() => recording.keep("../poses", []), /a kept value needs a plain name/);
+  await cleanUp(s);
+  assert.equal(existsSync(recording.frames), false, "the recording of a passed check stayed");
 });
 
 test("a recording stop requires its callback status artifact", async (t) => {

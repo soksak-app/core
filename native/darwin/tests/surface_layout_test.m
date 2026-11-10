@@ -750,6 +750,9 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"the trace records ticket 103 begun <= requested <= presented <= committed within the "
             "transaction (%zu records: ticket %.0f, begun %.3f, requested %.3f, presented %.3f, committed %.3f within %.3f..%.3f)",
             traced, trace[0], trace[1], trace[4], trace[2], trace[3], traceBegan, traceEnded]);
+    check(traced == 1 && trace[5] == SURFACE_LAYOUT_COMMIT_PRESENT && trace[6] == 0,
+        [NSString stringWithFormat:@"the trace names the presentation commit of ticket 103 with no other pair open "
+            "(path %.0f, open %.0f)", trace[5], trace[6]]);
     surfaceLayoutBegin(window, 104, ^(int allowed) {});
     check(surfaceLayoutCommit(window, 104) && surfaceLayoutTraceStop(trace, 4) == 0,
         @"a stopped trace records nothing");
@@ -761,6 +764,16 @@ int main(void) { @autoreleasepool {
     size_t capacityCount = surfaceLayoutTraceStop(trace, 1);
     check(capacityCount == 2, [NSString stringWithFormat:
         @"the trace reports all records when output capacity is exceeded (got %zu, expected 2)", capacityCount]);
+    // A layout transaction that commits inside another CATransaction pair of this code records that pair as open.
+    surfaceLayoutTraceStart();
+    surfaceLayoutBegin(window, 109, ^(int allowed) {});
+    surfaceTransactionBegin();
+    BOOL nestedCommitted = surfaceLayoutCommit(window, 109);
+    surfaceTransactionCommit();
+    size_t nestedCount = surfaceLayoutTraceStop(trace, 4);
+    check(nestedCommitted && nestedCount == 1 && trace[0] == 109 && trace[5] == SURFACE_LAYOUT_COMMIT_PRESENT && trace[6] == 1,
+        [NSString stringWithFormat:@"the trace records one other pair open at a nested commit (%zu records: ticket %.0f, "
+            "path %.0f, open %.0f)", nestedCount, trace[0], trace[5], trace[6]]);
 
     SPWait externalWait = waitWhileBusy(main, external, signal);
     check(externalWait.beforeRelease,

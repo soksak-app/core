@@ -916,11 +916,11 @@ static void sendBody(id<WKURLSchemeTask> task, NSData *data) {
     if (!self.viewportMarkerEnabled) return;
     CALayer *layer = self.layer;
     if (layer) {
-        [CATransaction begin];
+        surfaceTransactionBegin();
         [CATransaction setDisableActions:YES];
         layer.borderColor = self.viewportMarkerOriginalBorderColor;
         layer.borderWidth = self.viewportMarkerOriginalBorderWidth;
-        [CATransaction commit];
+        surfaceTransactionCommit();
     }
     if (!self.viewportMarkerOriginalWantsLayer) self.wantsLayer = NO;
     if (self.viewportMarkerOriginalBorderColor) {
@@ -2298,11 +2298,11 @@ bool sp_document_viewport_marker(void *document, bool enabled, uint8_t *rgb3, do
         documentViewportMarkerError(error, "the cyan viewport marker color cannot be created");
         return false;
     }
-    [CATransaction begin];
+    surfaceTransactionBegin();
     [CATransaction setDisableActions:YES];
     layer.borderColor = cyan;
     layer.borderWidth = 2;
-    [CATransaction commit];
+    surfaceTransactionCommit();
     CGColorRelease(cyan);
     return true;
 }
