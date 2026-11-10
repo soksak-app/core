@@ -663,7 +663,7 @@ impl Notifier {
                 let mut watches: Vec<Watch> = state
                     .watches
                     .iter()
-                    .filter(|watch| ends(*watch))
+                    .filter(|watch| ends(watch))
                     .cloned()
                     .collect();
                 if watches.is_empty() {
