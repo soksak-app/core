@@ -1602,16 +1602,6 @@ func Functions(library uintptr) (abi.NativeFunctions, error) {
 		purego.RegisterFunc(&functions.UiEnqueue, address)
 	}
 	{
-		address, err := purego.Dlsym(library, "uiEnqueueAfter")
-		if err != nil {
-			return abi.NativeFunctions{}, fmt.Errorf("native API uiEnqueueAfter: %w", err)
-		}
-		if address == 0 {
-			return abi.NativeFunctions{}, fmt.Errorf("native API uiEnqueueAfter: symbol has a null address")
-		}
-		purego.RegisterFunc(&functions.UiEnqueueAfter, address)
-	}
-	{
 		address, err := purego.Dlsym(library, "watchButtons")
 		if err != nil {
 			return abi.NativeFunctions{}, fmt.Errorf("native API watchButtons: %w", err)

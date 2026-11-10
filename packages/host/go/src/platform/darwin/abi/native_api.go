@@ -263,7 +263,6 @@ type NativeFunctions struct {
 	SurfaceUnwatchMouse                   func(uintptr)
 	SurfaceWatchMouse                     func(uintptr, uintptr) uintptr
 	UiEnqueue                             func(uintptr)
-	UiEnqueueAfter                        func(uint64, uintptr)
 	WatchButtons                          func() bool
 	WindowFileDrop                        func(unsafe.Pointer, uintptr) bool
 }
@@ -745,9 +744,6 @@ func (functions NativeFunctions) Validate() error {
 	}
 	if functions.UiEnqueue == nil {
 		return fmt.Errorf("native API function is missing: uiEnqueue")
-	}
-	if functions.UiEnqueueAfter == nil {
-		return fmt.Errorf("native API function is missing: uiEnqueueAfter")
 	}
 	if functions.WatchButtons == nil {
 		return fmt.Errorf("native API function is missing: watchButtons")

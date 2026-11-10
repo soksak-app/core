@@ -436,7 +436,6 @@ export const MAIN_THREAD_FREE = {
   "sp_capture_*": "the window recording and the still capture keep their state in capture.m under its own lock and queues, wait for the completions of ScreenCaptureKit on other queues and hand their AppKit work to the main queue, so a step that called them would hold the main thread while those completions arrive",
   sp_facts_free: "the function frees a string that a native function returned",
   sp_ui_enqueue: "the function adds a C function to the main queue of libdispatch, which any thread may do",
-  sp_ui_enqueue_after: "the function adds a C function to the main queue of libdispatch after a delay, which any thread may do",
   sp_host_callbacks_install: "startup copies the complete host callback table before native work begins, without invoking a callback or accessing AppKit",
   sp_host_diagnostic_callbacks_install: "diagnostic startup copies its complete callback table before diagnostic work begins, without invoking a callback or accessing AppKit",
   sp_stall_heartbeat: "the stall watch calls it on its own thread, because a stalled main thread could not run it, and it uses atomics and CFRunLoopPerformBlock, which any thread may call",

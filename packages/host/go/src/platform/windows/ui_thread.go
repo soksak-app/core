@@ -151,8 +151,3 @@ func afterOnUIThread(wait time.Duration, task func()) (cancel func()) {
 func (implementation) EnqueueUI(work func()) error {
 	return uiTasks.add(work)
 }
-
-// EnqueueUIAfter runs work once as a later step of the UI thread after delay.
-func (implementation) EnqueueUIAfter(delay time.Duration, work func()) error {
-	return uiTasks.addAfter(delay, work)
-}

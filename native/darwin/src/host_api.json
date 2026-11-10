@@ -159,7 +159,6 @@
     "surfaceUnwatchMouse",
     "surfaceWatchMouse",
     "uiEnqueue",
-    "uiEnqueueAfter",
     "watchButtons",
     "windowFileDrop"
   ],

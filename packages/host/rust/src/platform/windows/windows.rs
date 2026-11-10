@@ -62,13 +62,6 @@ impl Platform for Windows {
     fn enqueue_ui(&self, work: Box<dyn FnOnce() + Send>) -> Result<(), String> {
         ui_thread::enqueue_ui(work)
     }
-    fn enqueue_ui_after(
-        &self,
-        delay: std::time::Duration,
-        work: Box<dyn FnOnce() + Send>,
-    ) -> Result<(), String> {
-        ui_thread::enqueue_ui_after(delay, work)
-    }
     fn window_handle(&self, window: &Window) -> Result<Handle, String> {
         unsupported::window_handle(window)
     }

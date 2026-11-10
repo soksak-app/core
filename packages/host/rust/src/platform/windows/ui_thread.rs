@@ -175,8 +175,3 @@ pub(super) fn post(task: Task) -> Result<(), String> {
 pub fn enqueue_ui(work: Task) -> Result<(), String> {
     TASKS.add(work)
 }
-
-/// Runs work once as a later step of the UI thread after delay.
-pub fn enqueue_ui_after(delay: Duration, work: Task) -> Result<(), String> {
-    UiQueue::add_after(&TASKS, delay, work)
-}

@@ -92,7 +92,8 @@ void scheduleCaptureStill(const long *windowNumbers, int count, const char *path
     long *numbers = NULL;
     if (windowNumbers != NULL && count > 0) {
         numbers = malloc(sizeof(long) * (size_t)count);
-        if (numbers != NULL) memcpy(numbers, windowNumbers, sizeof(long) * (size_t)count);
+        // A loop of assignments copies the numbers, so the function calls no native function on the calling thread.
+        if (numbers != NULL) for (int index = 0; index < count; index++) numbers[index] = windowNumbers[index];
     }
     char *target = path != NULL ? strdup(path) : NULL;
     int held = numbers != NULL ? count : 0;

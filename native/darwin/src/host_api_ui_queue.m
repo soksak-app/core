@@ -9,7 +9,6 @@ static void nativeUIRun(uintptr_t context) {
     hostRunOnWorker(^{ sp_host_callback_native_ui_run(context); });
 }
 void uiEnqueue(uintptr_t context) { sp_ui_enqueue(nativeUIRun, context); }
-void uiEnqueueAfter(uint64_t delay, uintptr_t context) { sp_ui_enqueue_after(delay, nativeUIRun, context); }
 void installMainThread(uintptr_t worker, uintptr_t main) {
     hostInstallMainThread((void (*)(void (^)(void)))worker, (void (*)(void (^)(void)))main);
 }

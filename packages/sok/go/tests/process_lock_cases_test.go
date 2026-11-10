@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	testplatform "github.com/soksak-app/core/packages/sok/go/tests/platform"
 )
 
 // lockCase is one case of the process.lock table (docs/spec/cases/process-lock.json).
@@ -62,7 +64,7 @@ func TestAWritingCommandReadsTheProcessLockCaseTable(t *testing.T) {
 					t.Fatal(err)
 				}
 				defer owner.Close()
-				if err := holdLock(owner); err != nil {
+				if err := testplatform.HoldLock(owner); err != nil {
 					t.Fatal(err)
 				}
 			}
