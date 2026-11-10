@@ -1,5 +1,7 @@
 //! Checks the decision logic of image envelopes and the confirmation of their representation.
 
+#[path = "support/child.rs"]
+mod child;
 #[path = "support/folder.rs"]
 mod folder;
 
@@ -442,13 +444,7 @@ fn presentation_wait_timeout_returns_its_failure_and_writes_no_log_line() {
         .stdin(std::process::Stdio::null())
         .output()
         .unwrap();
-    assert!(
-        output.status.success(),
-        "child ended with {:?}, output {:?}, error output {:?}",
-        output.status,
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
+    child::require_success(&output, config.path());
     // The wait ended with its own failure, so the event log holds log.open and the run record and nothing else but the registrations of the native observers.
     // The registrations of the native observers are the events `native.observe.registered`; they are not part of the wait. The native
     // ring refuses the observer events that come before the writer applies its policy and reports them as `native.log.gated`, which
@@ -1245,13 +1241,7 @@ fn image_frame_refusals_are_recorded() {
         .stdin(std::process::Stdio::null())
         .output()
         .unwrap();
-    assert!(
-        output.status.success(),
-        "child ended with {:?}, output {:?}, error output {:?}",
-        output.status,
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
+    child::require_success(&output, config.path());
     let stdout = String::from_utf8_lossy(&output.stdout);
     // The harness writes `test <name> ... ` before the test runs, so the line starts after it.
     let frame = stdout
@@ -1466,12 +1456,7 @@ fn image_frame_nonce_cause_is_recorded() {
         .stdin(std::process::Stdio::null())
         .output()
         .unwrap();
-    assert!(
-        output.status.success(),
-        "child ended with {:?}: {}",
-        output.status,
-        String::from_utf8_lossy(&output.stderr)
-    );
+    child::require_success(&output, config.path());
 }
 
 // contract: image.drawing.sent-at-attach-and-on-change

@@ -1,5 +1,7 @@
 //! Sidecar channel tests. They use a fake window and shell script sidecars.
 
+#[path = "support/child.rs"]
+mod child;
 #[path = "support/folder.rs"]
 mod folder;
 
@@ -1728,13 +1730,7 @@ fn a_dropped_sidecar_message_is_recorded() {
         .stdin(std::process::Stdio::null())
         .output()
         .unwrap();
-    assert!(
-        output.status.success(),
-        "child ended with {:?}, output {:?}, error output {:?}",
-        output.status,
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
+    child::require_success(&output, config.path());
     let log = records::text_of(&records::read_events(&records::event_log_path(
         config.path(),
     )));
@@ -1779,11 +1775,7 @@ fn the_lifetime_of_a_sidecar_is_recorded_as_events() {
         .env("SOKSAK_LIFETIME_CHILD", config.path())
         .output()
         .unwrap();
-    assert!(
-        output.status.success(),
-        "the child check failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    child::require_success(&output, config.path());
     let mut pids = std::collections::BTreeSet::new();
     let seen: Vec<(String, String)> = records::read_events(&records::event_log_path(config.path()))
         .into_iter()
@@ -1845,11 +1837,7 @@ fn the_sampler_names_a_running_sidecar_until_it_ends() {
         .env("SOKSAK_SAMPLER_CHILD", config.path())
         .output()
         .unwrap();
-    assert!(
-        output.status.success(),
-        "the child check failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    child::require_success(&output, config.path());
     // The periodic sampler of the trace runs besides the two samples of the child, so under load a third sample can fall
     // while the sidecar runs. The order of the records states the contract: a sample names the sidecar while it runs, and
     // no sample names it after its exit record.
@@ -1908,11 +1896,7 @@ fn a_request_with_cids_is_recorded_as_an_event() {
         .env("SOKSAK_REQUEST_CHILD", config.path())
         .output()
         .unwrap();
-    assert!(
-        output.status.success(),
-        "the child check failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    child::require_success(&output, config.path());
     let requests: Vec<serde_json::Value> =
         records::read_events(&records::event_log_path(config.path()))
             .into_iter()
@@ -1978,11 +1962,7 @@ fn replies_of_child(name: &str, variable: &str) -> (String, Vec<serde_json::Valu
         .env(variable, config.path())
         .output()
         .unwrap();
-    assert!(
-        output.status.success(),
-        "the child check failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    child::require_success(&output, config.path());
     let replies = records::read_events(&records::event_log_path(config.path()))
         .into_iter()
         .filter(|event| event["event"] == "host.sidecar.reply")
