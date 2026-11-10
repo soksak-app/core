@@ -408,3 +408,88 @@ func TestTheQuitRecordsTheProcessesThatItWaitsFor(t *testing.T) {
 		t.Fatalf("log %q does not contain %q", logged, want)
 	}
 }
+
+// The quit stop refuses the exit while a sidecar that it stops runs, ends at the exit of that sidecar, and accepts the exit
+// after it; without a sidecar to stop it accepts the exit at once (docs/spec/hosts.md#process-lifecycle).
+// contract: sidecars.stop.quit-exits-after-its-sidecars
+func TestTheQuitStopExitsAfterItsSidecars(t *testing.T) {
+	written := support.CaptureLog(t)
+	// The sidecar ignores the terminate signal and the end of its input and exits when the check opens its gate.
+	sidecars, directory := support.ScriptSidecars(t, "#!/bin/sh\ntrap '' TERM\necho $$ > DIR/started\nread request\nread gate < DIR/gate\nexit 0\n")
+	started := childFIFO(t, directory, "started")
+	gate := holdFIFO(t, directory, "gate")
+	owner := support.NewFakeOwner("/projects/a")
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	pid := childPID(t, started)
+	t.Cleanup(func() { _ = syscall.Kill(pid, syscall.SIGKILL) })
+	ended := make(chan struct{})
+	if sidecars.QuitStop(false, func() { close(ended) }) {
+		t.Fatal("the quit stop accepted the exit while its sidecar runs")
+	}
+	// The gate holds the sidecar, so no exit can end the stop before the gate opens.
+	select {
+	case <-ended:
+		t.Fatal("the quit stop ended while its sidecar runs")
+	default:
+	}
+	if err := syscall.Kill(pid, 0); err != nil {
+		t.Fatalf("the quit stop ended the sidecar %d that it waits for: %v", pid, err)
+	}
+	if _, err := gate.WriteString("open\n"); err != nil {
+		t.Fatal(err)
+	}
+	<-ended
+	requireGone(t, pid)
+	if !sidecars.QuitStop(false, func() { t.Error("the end of an ended quit stop ran again") }) {
+		t.Fatal("the quit stop refused the exit after its sidecars exited")
+	}
+	want := "info host sidecar " + support.EchoSidecar + ": the quit waits for the exit of process " + strconv.Itoa(pid) + "\n"
+	if logged := written(); !strings.Contains(logged, want) {
+		t.Fatalf("log %q does not contain %q", logged, want)
+	}
+	empty, _ := support.ScriptSidecars(t, "#!/bin/sh\ncat\n")
+	if !empty.QuitStop(false, func() { t.Error("the quit stop without a sidecar ran its end") }) {
+		t.Fatal("the quit stop without a sidecar refused the exit")
+	}
+}
+
+// A quit request while the quit stop runs force-kills the process group of each sidecar that has not exited and records it; the
+// stop then ends by that exit (docs/spec/hosts.md#process-lifecycle).
+// contract: sidecars.stop.second-quit-kills-what-remains
+func TestASecondQuitKillsTheSidecarsThatTheQuitStopWaitsFor(t *testing.T) {
+	written := support.CaptureLog(t)
+	// The sidecar ignores the terminate signal and the end of its input, and the check never opens its gate.
+	sidecars, directory := support.ScriptSidecars(t, "#!/bin/sh\ntrap '' TERM\necho $$ > DIR/started\nread request\nread gate < DIR/gate\nexit 0\n")
+	started := childFIFO(t, directory, "started")
+	holdFIFO(t, directory, "gate")
+	owner := support.NewFakeOwner("/projects/a")
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	pid := childPID(t, started)
+	t.Cleanup(func() { _ = syscall.Kill(pid, syscall.SIGKILL) })
+	ended := make(chan struct{})
+	if sidecars.QuitStop(false, func() { close(ended) }) {
+		t.Fatal("the quit stop accepted the exit while its sidecar runs")
+	}
+	if sidecars.QuitStop(false, func() { t.Error("the second quit ran a second end") }) {
+		t.Fatal("the second quit accepted the exit while the sidecar runs")
+	}
+	// A second quit that kills nothing leaves the stop waiting, and the check stops at the limit of its runner.
+	<-ended
+	requireGone(t, pid)
+	if !sidecars.QuitStop(false, func() {}) {
+		t.Fatal("the quit stop refused the exit after the kill")
+	}
+	want := "info host sidecar " + support.EchoSidecar + ": the second quit kills process " + strconv.Itoa(pid) + "\n"
+	logged := written()
+	if !strings.Contains(logged, want) {
+		t.Fatalf("log %q does not contain %q", logged, want)
+	}
+	// The exit by the force-kill signal of the second quit is the quit itself.
+	if strings.Contains(logged, "exited while stopping") {
+		t.Fatalf("log %q reports the exit that the second quit caused", logged)
+	}
+}

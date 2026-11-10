@@ -924,6 +924,107 @@ fn persistent_stop_does_not_log_its_own_close_as_a_read_error() {
     service.join().unwrap();
 }
 
+// A quit request while the quit stop waits for the close of a persistent owner ends the connection of the service and
+// records it; the stop then ends by the end of the connection (docs/spec/hosts.md#process-lifecycle).
+// contract: sidecars.stop.second-quit-ends-service-connections
+#[test]
+fn a_second_quit_ends_the_connection_of_a_service_that_the_quit_stop_waits_for() {
+    // The log is the standard error, so the same check runs as a child process and its output is read.
+    if std::env::var_os("SOKSAK_SECOND_QUIT_CHILD").is_none() {
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "a_second_quit_ends_the_connection_of_a_service_that_the_quit_stop_waits_for",
+                "--nocapture",
+            ])
+            .env("SOKSAK_SECOND_QUIT_CHILD", "1")
+            .output()
+            .unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(output.status.success(), "the child check failed: {stderr}");
+        let want = format!(
+            "info host sidecar {ECHO}: the second quit ends the connection of the service\n"
+        );
+        assert!(
+            stderr.contains(&want),
+            "log {stderr:?} does not contain {want:?}"
+        );
+        return;
+    }
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
+    let service_directory = config_directory.path().join("services/echo");
+    std::fs::create_dir_all(&service_directory).unwrap();
+    let socket_path = service_directory.join("second-quit.sock");
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    let endpoint = serde_json::json!({
+        "protocol": 1,
+        "pid": std::process::id(),
+        "socket": socket_path,
+        "token": "second-quit-token"
+    });
+    std::fs::write(
+        service_directory.join("endpoint.json"),
+        serde_json::to_vec(&endpoint).unwrap(),
+    )
+    .unwrap();
+    // The service never answers close-owner, so only the end of the connection ends the close of the stop. It reads until
+    // the connection ends.
+    let (seen_sender, seen) = channel::<String>();
+    let service = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let mut line = String::new();
+        loop {
+            line.clear();
+            if reader.read_line(&mut line).unwrap_or(0) == 0 {
+                break;
+            }
+            let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+            let operation = request["operation"].as_str().unwrap_or("").to_string();
+            if operation == "hello" {
+                let reply = serde_json::json!({"operation": "hello", "protocol": 1, "ok": true});
+                writeln!(stream, "{reply}").unwrap();
+            }
+            seen_sender.send(operation).unwrap();
+        }
+    });
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
+    let sidecars = Sidecars::new(
+        &declare(&fixture, executable_directory.path()),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    let (owner, _events) = owner("second-quit", "/projects/second-quit");
+    sidecars
+        .send(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    let (end, ended) = channel::<()>();
+    assert!(
+        !sidecars.quit_stop(false, move || end.send(()).unwrap()),
+        "the quit stop accepted the exit while the close of the owner runs"
+    );
+    // The close of the stop has reached the service, which does not answer it.
+    while seen.recv().unwrap() != "close-owner" {}
+    assert!(
+        ended.try_recv().is_err(),
+        "the quit stop ended while the service holds its answer to close-owner"
+    );
+    assert!(
+        !sidecars.quit_stop(false, || panic!("the second quit ran a second end")),
+        "the second quit accepted the exit while the close of the owner runs"
+    );
+    // A second quit that ends no connection leaves the stop waiting, and the check stops at the limit of its runner.
+    ended.recv().unwrap();
+    service.join().unwrap();
+    assert!(
+        sidecars.quit_stop(false, || {}),
+        "the quit stop refused the exit after the end of the connection"
+    );
+}
+
 // contract: sidecars-transport.stop.accepts-close-answers-sent-before-stop
 #[test]
 fn persistent_stop_accepts_the_answer_to_a_close_sent_before_the_stop() {

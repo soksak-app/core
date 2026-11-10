@@ -2697,6 +2697,50 @@ func TestAStopLeavesTheCloseOfAReplacementToTheReplacement(t *testing.T) {
 	}
 }
 
+// A quit request while the quit stop waits for the close of a persistent owner ends the connection of the service and records it;
+// the stop then ends by the end of the connection (docs/spec/hosts.md#process-lifecycle).
+// contract: sidecars.stop.second-quit-ends-service-connections
+func TestASecondQuitEndsTheConnectionOfAServiceThatTheQuitStopWaitsFor(t *testing.T) {
+	written := support.CaptureLog(t)
+	root := t.TempDir()
+	service := serveReplaceService(t, root, "0.0.7", "0.0.7")
+	// The service holds its answer to close-owner, so only the end of the connection ends the close of the stop.
+	service.hold = make(chan struct{})
+	defer close(service.hold)
+	service.closeOwner = make(chan struct{}, 4)
+	service.firstEnded = make(chan struct{})
+	sidecars := replaceSidecars(t, root, service)
+	owner := &support.HarnessOwner{Root: "/replace", Seen: make(chan SidecarMessage, 8)}
+	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	receiveSidecarMessage(t, owner.Seen)
+	ended := make(chan struct{})
+	if sidecars.QuitStop(false, func() { close(ended) }) {
+		t.Fatal("the quit stop accepted the exit while the close of the owner runs")
+	}
+	// The close of the stop has reached the service, which holds its answer.
+	<-service.closeOwner
+	select {
+	case <-ended:
+		t.Fatal("the quit stop ended while the service holds its answer to close-owner")
+	default:
+	}
+	if sidecars.QuitStop(false, func() { t.Error("the second quit ran a second end") }) {
+		t.Fatal("the second quit accepted the exit while the close of the owner runs")
+	}
+	// A second quit that ends no connection leaves the stop waiting, and the check stops at the limit of its runner.
+	<-ended
+	<-service.firstEnded
+	if !sidecars.QuitStop(false, func() {}) {
+		t.Fatal("the quit stop refused the exit after the end of the connection")
+	}
+	want := "info host sidecar fixture-service: the second quit ends the connection of the service\n"
+	if logged := written(); !strings.Contains(logged, want) {
+		t.Fatalf("log %q does not contain %q", logged, want)
+	}
+}
+
 // contract: sidecars-transport.detach.closes-the-connection-without-closing-the-owner
 func TestDetachClosesTheConnectionOfAPersistentServiceWithoutClosingTheOwner(t *testing.T) {
 	root := t.TempDir()

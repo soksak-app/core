@@ -1155,6 +1155,130 @@ fn the_quit_records_the_processes_that_it_waits_for() {
     );
 }
 
+// The quit stop refuses the exit while a sidecar that it stops runs, ends at the exit of that sidecar, and accepts the
+// exit after it; without a sidecar to stop it accepts the exit at once (docs/spec/hosts.md#process-lifecycle).
+// contract: sidecars.stop.quit-exits-after-its-sidecars
+#[test]
+fn the_quit_stop_exits_after_its_sidecars() {
+    const STARTED: &str = "the check started the sidecar as process ";
+    let Some(stderr) = logged_by_child("the_quit_stop_exits_after_its_sidecars") else {
+        records::capturing(|| {
+            use std::io::Write;
+            // The sidecar ignores the terminate signal and the end of its input and exits when the check opens its
+            // gate.
+            let (sidecars, directory) = script_sidecars(
+                "#!/bin/sh\ntrap '' TERM\necho $$ > DIR/started\nread request\nread gate < DIR/gate\nexit 0\n",
+            );
+            let started = child_fifo(directory.path(), "started");
+            let mut gate = hold_fifo(directory.path(), "gate");
+            let (window, _events) = owner("a", "/projects/a");
+            sidecars
+                .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+                .unwrap();
+            let pid = child_pid(&started);
+            let _killed = Killed(pid);
+            eprintln!("{STARTED}{pid}");
+            let (end, ended) = channel::<()>();
+            assert!(
+                !sidecars.quit_stop(false, move || end.send(()).unwrap()),
+                "the quit stop accepted the exit while its sidecar runs"
+            );
+            // The gate holds the sidecar, so no exit can end the stop before the gate opens.
+            assert!(
+                ended.try_recv().is_err(),
+                "the quit stop ended while its sidecar runs"
+            );
+            assert_eq!(
+                unsafe { libc::kill(pid, 0) },
+                0,
+                "the quit stop ended the sidecar {pid} that it waits for"
+            );
+            gate.write_all(b"open\n").unwrap();
+            ended.recv().unwrap();
+            require_gone(pid);
+            assert!(
+                sidecars.quit_stop(false, || panic!("the end of an ended quit stop ran again")),
+                "the quit stop refused the exit after its sidecars exited"
+            );
+            let (empty, _empty_directory) = script_sidecars("#!/bin/sh\ncat\n");
+            assert!(
+                empty.quit_stop(false, || panic!(
+                    "the quit stop without a sidecar ran its end"
+                )),
+                "the quit stop without a sidecar refused the exit"
+            );
+        });
+        return;
+    };
+    let pid = stderr
+        .lines()
+        .find_map(|line| line.strip_prefix(STARTED))
+        .unwrap_or_else(|| panic!("the child named no process in {stderr:?}"));
+    let want = format!("info host sidecar {ECHO}: the quit waits for the exit of process {pid}\n");
+    assert!(
+        stderr.contains(&want),
+        "log {stderr:?} does not contain {want:?}"
+    );
+}
+
+// A quit request while the quit stop runs force-kills the process group of each sidecar that has not exited and records
+// it; the stop then ends by that exit (docs/spec/hosts.md#process-lifecycle).
+// contract: sidecars.stop.second-quit-kills-what-remains
+#[test]
+fn a_second_quit_kills_the_sidecars_that_the_quit_stop_waits_for() {
+    const STARTED: &str = "the check started the sidecar as process ";
+    let Some(stderr) =
+        logged_by_child("a_second_quit_kills_the_sidecars_that_the_quit_stop_waits_for")
+    else {
+        records::capturing(|| {
+            // The sidecar ignores the terminate signal and the end of its input, and the check never opens its gate.
+            let (sidecars, directory) = script_sidecars(
+                "#!/bin/sh\ntrap '' TERM\necho $$ > DIR/started\nread request\nread gate < DIR/gate\nexit 0\n",
+            );
+            let started = child_fifo(directory.path(), "started");
+            let _gate = hold_fifo(directory.path(), "gate");
+            let (window, _events) = owner("a", "/projects/a");
+            sidecars
+                .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+                .unwrap();
+            let pid = child_pid(&started);
+            let _killed = Killed(pid);
+            eprintln!("{STARTED}{pid}");
+            let (end, ended) = channel::<()>();
+            assert!(
+                !sidecars.quit_stop(false, move || end.send(()).unwrap()),
+                "the quit stop accepted the exit while its sidecar runs"
+            );
+            assert!(
+                !sidecars.quit_stop(false, || panic!("the second quit ran a second end")),
+                "the second quit accepted the exit while the sidecar runs"
+            );
+            // A second quit that kills nothing leaves the stop waiting, and the check stops at the limit of its runner.
+            ended.recv().unwrap();
+            require_gone(pid);
+            assert!(
+                sidecars.quit_stop(false, || {}),
+                "the quit stop refused the exit after the kill"
+            );
+        });
+        return;
+    };
+    let pid = stderr
+        .lines()
+        .find_map(|line| line.strip_prefix(STARTED))
+        .unwrap_or_else(|| panic!("the child named no process in {stderr:?}"));
+    let want = format!("info host sidecar {ECHO}: the second quit kills process {pid}\n");
+    assert!(
+        stderr.contains(&want),
+        "log {stderr:?} does not contain {want:?}"
+    );
+    // The exit by the force-kill signal of the second quit is the quit itself.
+    assert!(
+        !stderr.contains("exited while stopping"),
+        "log {stderr:?} reports the exit that the second quit caused"
+    );
+}
+
 /// The log is the standard error, so a check that asserts the log runs the same check in a child process and reads its
 /// output. In the child process it returns None and the check runs the sidecar. In the parent process it runs the check
 /// of the test name as a child and returns the standard error when that check passed.
