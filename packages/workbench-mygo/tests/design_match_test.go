@@ -73,6 +73,29 @@ func TestAControlStandsInTheMiddleOfItsRow(t *testing.T) {
 	}
 }
 
+// The name of the value of an order row is a text of the segment, which takes the body size of the page, so each button stands after
+// the name at the place of the page.
+func TestTheButtonsOfAnOrderRowStandAfterTheNameOfItsValueAtTheBodySize(t *testing.T) {
+	f := opened(t)
+	f.tester.SetSize(1200, 3200)
+	f.settle()
+	for _, want := range []struct {
+		item string
+		x    float32
+	}{
+		{"order:sidebarOrder:0:down", 641.5},
+		{"order:sidebarOrder:1:up", 652.75},
+		{"order:sidebarOrder:1:down", 683.56},
+		{"order:sidebarOrder:2:up", 630.25},
+		{"order:sidebarOrder:2:down", 661.06},
+		{"order:sidebarOrder:3:up", 641.5},
+	} {
+		if button := f.box("core.settings-modal.order", want.item); !designNear(button.X, want.x) {
+			t.Fatalf("the button %s is at x %v, want %v", want.item, button.X, want.x)
+		}
+	}
+}
+
 // The two buttons of a set stand in a segment at the end of the row, and the caption takes the rest of it.
 func TestTheButtonsOfASetAreASegment(t *testing.T) {
 	f := settingsSection(t, "sidebars")

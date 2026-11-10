@@ -230,11 +230,12 @@ func (s *Shell) drawSettingsRow(c *ui.Context, row settingsRow, pane settingsPan
 	}
 	if row.value != "" {
 		// An order row: the name column, then a segment of the name of its value and the segment of its buttons, as orderRows of
-		// packages/workbench/settings-ui.js draws it; a mark stands after the segment.
+		// packages/workbench/settings-ui.js draws it; the name is a text of the segment, which inherits the body size of the page,
+		// and a mark stands after the segment.
 		ui.Row(c).FillWidth().MinHeight(pane.rowH).Gap(pane.rowGap).AlignItems(ui.Center).Children(func() {
 			s.drawRowName(c, row.name, pane)
 			ui.Row(c).Shrink(0).Gap(pane.segGap).Padding(pane.segPad).AlignItems(ui.Center).Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.radiusSmall()).Background(s.palette.Bg).Children(func() {
-				ui.Text(c, row.value).NoWrap().FontSize(s.textControl()).TextColor(s.palette.Fg)
+				ui.Text(c, row.value).NoWrap().FontSize(s.textBody()).TextColor(s.palette.Fg)
 				ui.Row(c).Shrink(0).Gap(pane.segGap).Padding(pane.segPad).Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.radiusSmall()).Background(s.palette.Bg).Children(func() {
 					for _, control := range row.controls {
 						if control.Name == "core.settings-modal.order" {
