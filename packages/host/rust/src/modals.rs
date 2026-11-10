@@ -564,8 +564,7 @@ pub fn wait_for_paint(window: &Window, timeout: std::time::Duration) -> bool {
     // panic hook records the panic.
     let mut held = state.open.lock().unwrap_or_else(PoisonError::into_inner);
     let deadline = std::time::Instant::now() + timeout;
-    while let Some(modal) = held.as_ref().filter(|m| !m.painted) {
-        let _ = modal;
+    while held.as_ref().is_some_and(|m| !m.painted) {
         let Some(remaining) = deadline.checked_duration_since(std::time::Instant::now()) else {
             return true;
         };
