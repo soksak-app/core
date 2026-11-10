@@ -651,12 +651,13 @@ func (s *Shell) leavePlace() {
 	s.text.KeepPressedCard(func(string) bool { return false })
 }
 
-// browse shows the library, as the project button does.
-func (s *Shell) browse() {
+// browse shows the library, as the project button does. The library shows the common settings (beginSettings).
+func (s *Shell) browse() error {
 	s.keep()
 	s.leavePlace()
 	s.browsing = true
 	s.options.Invalidate()
+	return s.beginSettings(s.settings.Common())
 }
 
 // removeProjectThen removes the project id, as projects.close does, and tells whether the project was removed: a kept tab of the
@@ -738,6 +739,8 @@ func (s *Shell) dropProject(id string) {
 		s.savedLayout = ""
 		s.showPlane(nil)
 		s.options.Located("")
+		// The library shows the common settings until another project shows (beginSettings).
+		s.failed(s.beginSettings(s.settings.Common()))
 		for _, project := range s.projects {
 			if s.windowProjects[project.ID] {
 				s.activate(project.ID)
