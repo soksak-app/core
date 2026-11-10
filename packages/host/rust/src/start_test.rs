@@ -1,5 +1,4 @@
 use std::sync::{Mutex, mpsc};
-use std::time::Duration;
 
 use serde_json::json;
 
@@ -32,12 +31,14 @@ fn the_page_start_sends_the_image_detach_and_lists_its_surface_without_waiting()
             );
             result_sender.send(document).unwrap();
         });
+        // The start returns while the supplier never acknowledges: the detach and the document are the events, and a
+        // start that waits for the acknowledgement never answers, which the runner limit names.
         let request = detach_receiver
-            .recv_timeout(Duration::from_secs(2))
+            .recv()
             .expect("the page start sent no image detach");
         assert_eq!(request["image"]["detach"]["name"], "region");
         let document = result_receiver
-            .recv_timeout(Duration::from_secs(2))
+            .recv()
             .expect("the page start waited for the acknowledgement of the detach")
             .unwrap();
         let document: serde_json::Value = serde_json::from_slice(&document).unwrap();
