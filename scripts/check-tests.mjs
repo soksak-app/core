@@ -555,6 +555,18 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F727",
+    implementation: [
+      { file: "native/darwin/tests/input_virtual_test.m", symbol: "static BOOL stayedBehind(void) {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/input_virtual_test.m", id: "the application has not taken the front at the end" },
+      { file: "native/darwin/tests/capture_covered_test.m", id: "the capture does not bring the application to the front" },
+    ],
+    expected: "A native check judges only this process at the front: the application is not the frontmost application and the system does not hold it as active; which other application is in front judges nothing.",
+    levels: ["unit"],
+  },
+  {
     id: "F718-4",
     implementation: [
       { file: "packages/host/go/src/surfaces.go", symbol: "func (h *Host) endPage(s *Surfaces) {" },
