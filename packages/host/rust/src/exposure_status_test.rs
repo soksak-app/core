@@ -258,7 +258,9 @@ fn a_reload_asked_of_a_page_ends_the_requests_to_the_page() {
     let (sent, wait) = mpsc::channel();
     let asking = relay.clone();
     std::thread::spawn(move || {
-        let reply = asking.request("main", None, |_| sent.send(()).map_err(|error| error.to_string()));
+        let reply = asking.request("main", None, |_| {
+            sent.send(()).map_err(|error| error.to_string())
+        });
         outcome.send(reply).expect("the test holds the receiver");
     });
     wait.recv_timeout(Duration::from_secs(5))

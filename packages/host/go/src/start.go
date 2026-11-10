@@ -111,13 +111,15 @@ func StartWorkbench(h *Host, window Frontend, shown bool) error {
 		return ErrNoStartWindow
 	}
 	if err := h.pageStarting(s); err != nil {
-		return err
+		return h.startFailed(s, err)
 	}
 	// The workbench draws its first row at the height of the common settings (docs/spec/native-surfaces.md#title-bar-height).
 	snapshot, snapshotErr := h.runWorkspace(WorkspaceRequest{Kind: "snapshot"})
 	titlebar := func(common Record) error { return s.startWorkbenchTitlebar(common, shown) }
-	_, _, _, err := startParts(snapshot, snapshotErr, titlebar, func() (Chrome, error) { return Chrome{}, nil })
-	return err
+	if _, _, _, err := startParts(snapshot, snapshotErr, titlebar, func() (Chrome, error) { return Chrome{}, nil }); err != nil {
+		return h.startFailed(s, err)
+	}
+	return nil
 }
 
 // startPage starts the main page of a window and builds the start document of that window. Before it answers, it leaves the window in the not ready state,
@@ -130,27 +132,34 @@ func (h *Host) startPage(window uint) ([]byte, error) {
 		return nil, ErrNoStartWindow
 	}
 	if err := h.pageStarting(s); err != nil {
-		return nil, err
+		return nil, h.startFailed(s, err)
 	}
 	snapshot, snapshotErr := h.runWorkspace(WorkspaceRequest{Kind: "snapshot"})
 	// The first draw of the page does not wait for the preparation, so the title bar is first set to the height of that first row and then the controls are read.
 	// (docs/spec/native-surfaces.md#title-bar-height).
 	workspace, workspaceErr, controls, err := startParts(snapshot, snapshotErr, s.startTitlebar, s.WindowChrome)
 	if err != nil {
-		return nil, err
+		return nil, h.startFailed(s, err)
+	}
+	// A page whose document carries the error of the snapshot shows that error and reports no ready.
+	if workspaceErr != nil {
+		h.startFailed(s, workspaceErr)
 	}
 	// The list is read after the detaches start, so a detach that ends later is told by its image-detach-ended event.
 	return StartDocument(workspace, workspaceErr, controls, s.pendingImageDetachSurfaces())
 }
 
-// pageStarting ends what the previous page of s left: the window takes the new page as not ready, and the surface documents and the
-// requests of the previous page end.
+// startFailed ends the reloads of s that wait for the page whose start failed with err, and returns err.
+func (h *Host) startFailed(s *Surfaces, err error) error {
+	h.endReloads(s, rpcError(codeNoWindow, "the reloaded page did not start: %v", err))
+	return err
+}
+
+// pageStarting ends what the previous page of s left: its generation ends (answerPage), and its surface documents close, which also
+// gives the keys that waited for the decision of its workbench. The new page accepts requests to surface documents again.
 func (h *Host) pageStarting(s *Surfaces) error {
-	h.mu.Lock()
-	s.ready = false
-	h.mu.Unlock()
+	h.answerPage(s)
 	s.imageDetachPageStarting()
-	h.relay.Abandon(func(t relayTarget) bool { return t.owner == s && t.surface == "" })
 	s.pageStarted()
 	// Dialog claims belong to the ended workbench, even if its surface reload fails.
 	s.discardOverlay()

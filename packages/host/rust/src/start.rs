@@ -140,7 +140,9 @@ pub fn start_page(app: &AppHandle, webview: &str) -> Result<Vec<u8>, String> {
         .get_window(webview)
         .filter(|window| window.label() == webview)
         .ok_or_else(|| NO_WINDOW.to_string())?;
-    after_page_started(
+    // A page whose document carries the error of the snapshot shows that error and reports no ready.
+    let mut snapshot_failure = None;
+    let started = after_page_started(
         || crate::windows::page_started(&window),
         || {
             let snapshot = serde_json::from_value(serde_json::json!({ "kind": "snapshot" }))
@@ -148,21 +150,35 @@ pub fn start_page(app: &AppHandle, webview: &str) -> Result<Vec<u8>, String> {
                 .and_then(|request| crate::workspace::handle(app, request));
             // The first draw of the page does not wait for readiness, so the title bar is first set to the height of that first
             // row, and then the controls are read (docs/spec/native-surfaces.md#title-bar-height).
-            start_parts(
+            let parts = start_parts(
                 snapshot,
                 |common| crate::windows::start_titlebar(&window, common),
                 || {
                     serde_json::to_value(crate::windows::window_chrome(&window)?)
                         .map_err(|error| error.to_string())
                 },
-            )
+            );
+            if let Ok((Err(failure), _)) = &parts {
+                snapshot_failure = Some(failure.clone());
+            }
+            parts
         },
         || {
             Ok(crate::windows::window_data(&window)?
                 .images
                 .pending_detach_surfaces())
         },
-    )
+    );
+    // A reload that waits for this page ends with the reason that the page did not start.
+    if let Some(reason) = started.as_ref().err().cloned().or(snapshot_failure)
+        && let Ok(data) = crate::windows::window_data(&window)
+    {
+        crate::windows::end_reloads(
+            &data,
+            Err(format!("the reloaded page did not start: {reason}")),
+        );
+    }
+    started
 }
 
 #[cfg(test)]

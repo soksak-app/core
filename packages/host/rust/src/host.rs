@@ -446,7 +446,8 @@ pub fn web_content_process_terminated(webview: &Webview) {
     let window = webview.window();
     if webview.label() == window.label() && windows::window_data(&window).is_ok() {
         log_failure("page process", documents::main_page_process_ended(&window));
-        log_failure("key wait", crate::surfaces::keys_page_ended(&window));
+        // The workbench ended with the process of its page, so what the page owed ends now.
+        log_failure("page end", windows::end_page(&window));
     } else if crate::modals::is_modal_of(webview.label(), window.label()) {
         log_failure(
             "modal key wait",

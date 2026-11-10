@@ -24,7 +24,6 @@ func neverAnswered(t *testing.T) workbench.HostCall {
 
 // A flush waits for the events queued before it and not for an event stream that never goes quiet: a closed gate counts an event in
 // every step, and the flush still ends after the batch that carries what was queued (docs/spec/logging.md#operation-chains).
-// contract: workbench.events.flush-ends-at-its-watermark
 func TestAFlushEndsWhileEventsKeepComing(t *testing.T) {
 	f := newWriter(t, nil)
 	f.events.Info("place: gated")
@@ -46,7 +45,6 @@ func TestAFlushEndsWhileEventsKeepComing(t *testing.T) {
 
 // The close of a window waits for the commands that ran when it was decided and for none that starts later
 // (docs/spec/exposure.md#registration).
-// contract: workbench.close.waits-for-the-commands-before-it
 func TestTheCloseOfAWindowWaitsForNoCommandThatStartsAfterIt(t *testing.T) {
 	stored := &storedHost{common: map[string]any{"projectOpening": "windows"}, extra: map[string]workbench.HostCall{"filePlace": neverAnswered(t)}}
 	f := newShell(t, stored)
@@ -71,7 +69,6 @@ func TestTheCloseOfAWindowWaitsForNoCommandThatStartsAfterIt(t *testing.T) {
 
 // A new start of the workbench for a plugin change waits for the replies of the requests delivered before the apply decided it and
 // for none delivered later, which the end of the workbench ends (docs/spec/installation.md#applying-a-change).
-// contract: workbench.reload.waits-for-the-requests-before-it
 func TestAPluginApplyStartsAgainWithoutARequestDeliveredAfterIt(t *testing.T) {
 	stored := &storedHost{extra: map[string]workbench.HostCall{"filePlace": neverAnswered(t)}}
 	app, window, queue, replies := fixtureApp(t, stored)
@@ -97,7 +94,6 @@ func TestAPluginApplyStartsAgainWithoutARequestDeliveredAfterIt(t *testing.T) {
 
 // A runtime image detach of a view keeps the seat of its surface, as on the hosts with a main page: the surface stands in every
 // placement while the detach runs, so no answer of the detach has a seat to give back (docs/spec/native-surfaces.md#view-surfaces).
-// contract: workbench.view.image-detach-keeps-the-seat
 func TestARuntimeImageDetachKeepsTheSeatOfItsSurface(t *testing.T) {
 	stored := &surfaceHost{}
 	stored.installed = unloadDocument
