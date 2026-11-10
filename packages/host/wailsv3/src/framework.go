@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"fmt"
+	"sync/atomic"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
@@ -27,8 +28,20 @@ func (Framework) RegisteredCallbacks() int64 { return 0 }
 // MainPage is true: a window shows the workbench in a main page.
 func (Framework) MainPage() bool { return true }
 
-// Step runs task as one step of the main thread and returns when it returned.
-func (Framework) Step(task func()) { application.InvokeSync(task) }
+// running is set by Run just before the framework runs. The step of the framework reads the platform of the application, which
+// only its run sets; before the run, the host runs on the main goroutine, which the framework locks to the main thread in its
+// init (docs/spec/hosts.md, main thread of the Wails host).
+var running atomic.Bool
+
+// Step runs task as one step of the main thread and returns when it returned. Before the run, the caller is on the main thread,
+// so the step is task itself.
+func (Framework) Step(task func()) {
+	if !running.Load() {
+		task()
+		return
+	}
+	application.InvokeSync(task)
+}
 
 // Post runs task as a later step of the main thread.
 func (Framework) Post(task func()) { application.InvokeAsync(task) }

@@ -72,6 +72,7 @@ func Run(assets fs.FS, options host.Options) error {
 	if err := session.BlockAsyncSignals(); err != nil {
 		return err
 	}
+	running.Store(true)
 	return session.Finish(app.Run())
 }
 
