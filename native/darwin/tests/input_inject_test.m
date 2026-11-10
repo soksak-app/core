@@ -209,12 +209,31 @@ static SPReceipt pointerThen(NSWindow *window, WKWebView *view, double x, double
     return receipt;
 }
 
+// A web view that counts the presses that reach it: the point at which a press has been sent.
+@interface SPPressedWebView : WKWebView
+@property(nonatomic) NSUInteger presses;
+@end
+@implementation SPPressedWebView
+- (void)mouseDown:(NSEvent *)event {
+    self.presses++;
+    [super mouseDown:event];
+}
+@end
+
+// Runs the main queue until a marker block that it enqueues now has run: the point at which a check sees what the turns
+// before it decided, with no time in the check.
+static void runMarker(void) {
+    __block BOOL ran = NO;
+    dispatch_async(dispatch_get_main_queue(), ^{ ran = YES; });
+    until(^BOOL { return ran; });
+}
+
 // Checks that the completion of a press and release is called after the document receives them. A content world that the page cannot see reports the receipt.
 static void checkReceipts(void) {
     NSWindow *window = [[[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(300, 200))
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO] autorelease];
     [window setReleasedWhenClosed:NO];
-    WKWebView *view = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 300, 200)] autorelease];
+    SPPressedWebView *view = [[[SPPressedWebView alloc] initWithFrame:NSMakeRect(0, 0, 300, 200)] autorelease];
     window.contentView = view;
     [view loadHTMLString:@"<!doctype html><body style='margin:0;height:200px'><script>window.probe={events:[]};"
         "for (const type of ['pointerdown','pointerup']) addEventListener(type,e=>probe.events.push({type}),true);"
@@ -256,27 +275,29 @@ static void checkReceipts(void) {
     SPTimed hiddenScroll = {NO, SP_INPUT_DELIVERED, [NSDate timeIntervalSinceReferenceDate], 0};
     SPTimed *hiddenScrollState = &hiddenScroll;
     sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 50, 50, 4, 0, 0, 40, 1, timed, hiddenScrollState);
-    until(^BOOL { return hiddenScrollState->done; });
-    check(hiddenScroll.result == SP_INPUT_UNRECEIVED && hiddenScroll.took < 1,
-        [NSString stringWithFormat:@"a scroll into a window that is not shown is refused at once (%d after %.3fs)",
-            hiddenScroll.result, hiddenScroll.took]);
+    runMarker();
+    check(hiddenScroll.done && hiddenScroll.result == SP_INPUT_UNRECEIVED,
+        [NSString stringWithFormat:@"a scroll into a window that is not shown is refused in its turn (done %d, %d)",
+            hiddenScroll.done, hiddenScroll.result]);
     [window orderBack:nil];
 
     // A press that a busy document has not received when its window closes ends with the close and is reported as not
-    // received. The record names, at the level error, the web view whose receipt it awaited and the view the press reached, so
+    // received. The window closes once the press has reached the web view, while the document is still busy. The record names, at the level error, the web view whose receipt it awaited and the view the press reached, so
     // a press that reached another page is told from a page that did not answer.
     [view evaluateJavaScript:@"{const end=Date.now()+2500; while(Date.now()<end){}} null" completionHandler:nil];
     SPTimed busy = {NO, SP_INPUT_DELIVERED, [NSDate timeIntervalSinceReferenceDate], 0};
     SPTimed *busyState = &busy;
     NSString *unreceived = capturedRecords(^{
+        NSUInteger pressed = view.presses;
         sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 50, 50, 1, 0, 0, 0, 1, timed, busyState);
-        [window performSelector:@selector(close) withObject:nil afterDelay:0.3];
+        until(^BOOL { return view.presses > pressed || busyState->done; });
+        check(!busyState->done, @"a press into a busy document waits for its receipt");
+        [window close];
         until(^BOOL { return busyState->done; });
     });
-    check(busy.result == SP_INPUT_UNRECEIVED && busy.took < 2,
-        [NSString stringWithFormat:@"a press that the close of its window ends is reported as not received (%d after %.3fs)",
-            busy.result, busy.took]);
-    NSString *awaited = [NSString stringWithFormat:@"\"target\":{\"class\":\"WKWebView\",\"frame\":[0,0,300,200],\"hidden\":false,\"inWindow\":true,"
+    check(busy.result == SP_INPUT_UNRECEIVED,
+        [NSString stringWithFormat:@"a press that the close of its window ends is reported as not received (%d)", busy.result]);
+    NSString *awaited = [NSString stringWithFormat:@"\"target\":{\"class\":\"SPPressedWebView\",\"frame\":[0,0,300,200],\"hidden\":false,\"inWindow\":true,"
         "\"loading\":false,\"url\":\"about:blank\",\"view\":\"%p\"}", view];
     BOOL named = NO;
     for (NSString *line in [unreceived componentsSeparatedByString:@"\n"]) {
