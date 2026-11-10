@@ -234,6 +234,37 @@ test("a watched status sends its current value and each change with its version 
   assert.deepEqual(changes, [], "an unwatched status sends nothing");
 });
 
+// The first status.watch answers when its first read ended, and a watch while that read runs answers with the same outcome; a failed
+// read ends the watch in that turn, so the next watch reads again and sends its value (docs/spec/exposure.md#relay).
+test("a status watch answers at the end of its first read, and a failed read ends the watch", async () => {
+  const entries = exposureEntries(declarationMap(exposes()));
+  const reads = [];
+  let stopped = 0;
+  entries.status("probe.lines", () => new Promise((resolve, reject) => reads.push({ resolve, reject })),
+    () => () => { stopped++; });
+  const changes = [];
+  const changed = (name, v, version) => changes.push([name, v, version]);
+  const answers = [];
+  const watch = () => replyPayload(() => entries.answer("status.watch", { name: "probe.lines" }, changed))
+    .then((payload) => { answers.push(payload); return payload; });
+  const first = watch();
+  const joined = watch();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(answers, [], "a watch answered before its first read ended");
+  assert.equal(reads.length, 1, "a watch during the first read read again");
+  reads.shift().reject(new Error("the document is gone"));
+  const refusal = { error: { code: EXPOSURE_ERRORS.failed, message: "the document is gone" } };
+  assert.deepEqual(await first, refusal);
+  assert.deepEqual(await joined, refusal, "a watch during the read did not get the outcome of that read");
+  assert.equal(stopped, 1, "the failed read did not end the watch");
+  const again = watch();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(reads.length, 1, "the watch after the failure did not read again");
+  reads.shift().resolve(["a"]);
+  assert.deepEqual(await again, { result: null });
+  assert.deepEqual(changes, [["probe.lines", ["a"], 1]]);
+});
+
 test("a surface page registers declared names once through its port and answers forwarded requests", async () => {
   const registered = [];
   const replies = [];

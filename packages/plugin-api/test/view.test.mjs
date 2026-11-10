@@ -106,6 +106,29 @@ test("the 257th host message before the attach is reported through the handler a
   assert.deepEqual(received, Array.from({ length: QUEUE_LIMIT }, (_, index) => index + 1));
 });
 
+// Each message is passed in its own call: a message whose listener throws is reported through the handler, and the next message is
+// still passed, before and after the attach (docs/spec/plugin-processes.md, rule 4).
+test("a message whose listener throws is reported and the next message is still passed", (t) => {
+  const { posted, host } = setup(t);
+  host({ sok: 1, id: 1, result: "first" });
+  host({ sok: 1, id: 2, result: "fails" });
+  host({ sok: 1, id: 3, result: "third" });
+  const before = posted.length;
+  const received = [];
+  const listener = (message) => {
+    if (message.result === "fails") throw new Error(`message ${message.id} failed`);
+    received.push(message.id);
+  };
+  globalThis.window.sokView.attach(listener);
+  host({ sok: 1, id: 4, result: "fails" });
+  host({ sok: 1, id: 5, result: "fifth" });
+  assert.deepEqual(received, [1, 3, 5], "a message after one that threw was not passed");
+  assert.deepEqual(plain(posted.slice(before)), [
+    { event: "view.error", plugin: "probe", reason: "message failed: message 2 failed for probe" },
+    { event: "view.error", plugin: "probe", reason: "message failed: message 4 failed for probe" },
+  ]);
+});
+
 test("a host message without the sok marker is reported as an error and passed to no listener", (t) => {
   const { posted, host } = setup(t);
   const received = [];
@@ -576,6 +599,20 @@ test("a request for a command the view did not register replies with the unregis
   host({ sok: 1, id: 10, command: "probe.other", params: null });
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(posted.at(-1), { sok: 1, reply: 10, error: { code: 1002, message: "view command probe.other is not registered" } });
+});
+
+// A forwarded core document exposure request that the view has no handler for is answered with the refusal, so each request gets
+// its answer (docs/spec/plugin-processes.md, rule 4). A document without window.sokSurface has no such handler.
+test("a core document exposure request without a handler is answered with the refusal", async (t) => {
+  const { posted, host } = setup(t);
+  createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  host({ sok: 1, event: "exposure-request",
+    data: { id: 9, surface: "probe-tab", method: "status.get", params: { name: "core.surface.document" } } });
+  await new Promise((resolve) => setImmediate(resolve));
+  const reply = plain(posted.at(-1));
+  assert.equal(reply.command, "runtime.native.call", `the request got no answer: ${JSON.stringify(reply)}`);
+  assert.deepEqual(reply.params, { name: "exposureReply", payload: { id: 9, error: {
+    code: 1002, message: "view probe has no core document exposure handler for core.surface.document" } } });
 });
 
 test("a handler that throws replies with its message as the error of the reply", async (t) => {

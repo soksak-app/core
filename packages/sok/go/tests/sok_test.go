@@ -26,6 +26,8 @@ type fakeEndpoint struct {
 	configDir string
 	mu        sync.Mutex
 	requests  []map[string]any
+	// connections is the number of connections that the endpoint accepted.
+	connections int
 }
 
 // answer is the response to a method and params. result is the original JSON, and the response is an error response
@@ -74,6 +76,9 @@ func startEndpoint(t *testing.T, respond func(method string, params map[string]a
 			if err != nil {
 				return
 			}
+			fake.mu.Lock()
+			fake.connections++
+			fake.mu.Unlock()
 			go func() {
 				defer conn.Close()
 				for {
@@ -279,6 +284,77 @@ func TestWatchPrintsTheValueAndEachChange(t *testing.T) {
 	}
 	if got := strings.Join(fake.methods(), ","); got != "status.watch,status.get" {
 		t.Fatalf("methods %s", got)
+	}
+}
+
+// A status.ended of the watched status ends the watch with exit status 1 and the error that names the status and the reason;
+// a status.ended of another status does not.
+// contract: endpoint.status.ended-ends-a-watch
+func TestAWatchEndsWhenItsProducerEnds(t *testing.T) {
+	ended := func(name string) string {
+		return fmt.Sprintf(`{"jsonrpc":"2.0","method":"status.ended","params":{"window":"main","name":%q,"surface":"tab","reason":"surface-closed"}}`, name)
+	}
+	fake := startEndpoint(t, func(method string, _ map[string]any) answer {
+		switch method {
+		case "status.watch":
+			return answer{result: "null"}
+		case "status.get":
+			// The endpoint closes after the notifications, so a watch that ignores status.ended ends with the close instead.
+			return answer{result: "1", after: []string{ended("fixture.other"), ended("fixture.value")}, closeAfter: true}
+		}
+		return answer{code: -32601, message: "unexpected " + method}
+	})
+	code, stdout, stderr := run("status", "fixture.value", "--window", "main", "--surface", "tab", "--watch", "--config-dir", fake.configDir)
+	if code != 1 || stdout != "1\n" || stderr != "sok: status fixture.value ended: surface-closed\n" {
+		t.Fatalf("code %d stdout %q stderr %q, want 1, the value and the end of the watch", code, stdout, stderr)
+	}
+}
+
+// A gesture sends down at the first point, a drag to each later point and up at the last point, on one connection, and prints
+// nothing.
+func TestAGestureSendsItsStepsOnOneConnection(t *testing.T) {
+	fake := startEndpoint(t, func(method string, _ map[string]any) answer {
+		if method == "input.pointer" {
+			return answer{result: "null"}
+		}
+		return answer{code: -32601, message: "unexpected " + method}
+	})
+	code, stdout, stderr := run("input", "gesture", "--window", "main", "--pointer", "second", "--clicks", "2", "--points", "10,20;30,40;50,60", "--config-dir", fake.configDir)
+	if code != 0 || stdout != "" || stderr != "" {
+		t.Fatalf("code %d stdout %q stderr %q, want 0 and no output", code, stdout, stderr)
+	}
+	fake.mu.Lock()
+	defer fake.mu.Unlock()
+	if fake.connections != 1 {
+		t.Fatalf("the gesture used %d connections, want 1", fake.connections)
+	}
+	want := []string{"down 10 20 2", "drag 30 40 <nil>", "drag 50 60 <nil>", "up 50 60 2"}
+	if len(fake.requests) != len(want) {
+		t.Fatalf("requests %v, want %v", fake.requests, want)
+	}
+	for n, request := range fake.requests {
+		params, _ := request["params"].(map[string]any)
+		got := fmt.Sprintf("%v %v %v %v", params["phase"], params["x"], params["y"], params["clicks"])
+		if request["method"] != "input.pointer" || got != want[n] || params["pointer"] != "second" || params["window"] != "main" {
+			t.Fatalf("step %d is %v %v, want input.pointer %s of pointer second in main", n+1, request["method"], params, want[n])
+		}
+	}
+}
+
+// A gesture step that fails ends the command with the error of the step and its number.
+func TestAGestureStepThatFailsEndsTheCommand(t *testing.T) {
+	fake := startEndpoint(t, func(method string, params map[string]any) answer {
+		if method == "input.pointer" && params["phase"] == "drag" {
+			return answer{code: 1007, message: "held"}
+		}
+		return answer{result: "null"}
+	})
+	code, _, stderr := run("input", "gesture", "--window", "main", "--points", "1,2;3,4", "--config-dir", fake.configDir)
+	if code != 1 || stderr != "sok: gesture step 2: held (1007)\n" {
+		t.Fatalf("code %d stderr %q, want 1 and the error of step 2", code, stderr)
+	}
+	if got := strings.Join(fake.methods(), ","); got != "input.pointer,input.pointer" {
+		t.Fatalf("methods %s, want the down and the failed drag", got)
 	}
 }
 
