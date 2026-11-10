@@ -93,7 +93,7 @@ turn을 넘어 열려 있는 배치 트랜잭션은 그 owner의 다음 event �
 - 그 ticket을 가진 페이지나 workbench의 끝: 호스트는 그 끝을 아는 turn에서 창의 모든 트랜잭션을 취소한다. 그 끝은 메인 페이지 web content process의 끝, 그 창의 새 페이지나 workbench의 시작, 창의 닫기다;
 - hold가 있는 동안 애플리케이션이 받는 누름이나 key event. 아래에 적는다.
 
-hold가 있는 동안 애플리케이션의 `sendEvent:`에 닿는 누름(어느 단추든 mouse down)이나 key event(key down, key up, modifier 변경)는 그 turn에서, 어떤 monitor나 gate나 view가 그 event를 보기 전에 hold를 곧바로 끝낸다. 그러면 열린 각 트랜잭션은 참여한 peer가 그때까지 표시한 것을 커밋한다: 표시하지 않은 각 참여는 reason `input`의 abandon으로 끝나고, 표시 요청 안의 각 기다림이 끝나며, 요청은 그 커밋이 화면에 놓은 상태로 답한다. 그 뒤 event는 커밋된 배치 아래에서 애플리케이션을 계속 지나가므로, 보류된 입력의 gate는 그것을 그 자리의 view에 넘기고 누름은 대상을 잃지 않는다. pointer의 이동과 끌기는 아무것도 끝내지 않으므로 divider 끌기의 frame은 hold를 유지한다. hold의 어떤 끝도 시간에 의존하지 않는다: 그리기를 멈춘 peer는 사용자의 다음 동작까지만 화면을 붙든다.
+라이브러리는 사용자의 동작을 애플리케이션 수준의 장치 하나로 알린다: `-[NSApplication sendEvent:]`에 닿는 모든 누름(어느 단추든 mouse down)과 모든 key event(key down, key up, modifier 변경)는, 그것으로 보낸 합성 event를 포함해, 그 turn에서 어떤 monitor나 gate나 view가 그 event를 보기 전에 `surfaceInputActionObserve`가 더한 각 observer에게 알려진다. 각 event는 한 번 알려진다: 기다림이 붙든 event는 돌아올 때 다시 알려지지 않는다. 사용자의 다음 동작이 만드는 각 끝은 이 장치만 구독하며, hold의 끝도 그 하나다. hold가 있는 동안 도착한 그런 누름이나 key event는 hold를 곧바로 끝낸다. 그러면 열린 각 트랜잭션은 참여한 peer가 그때까지 표시한 것을 커밋한다: 표시하지 않은 각 참여는 reason `input`의 abandon으로 끝나고, 표시 요청 안의 각 기다림이 끝나며, 요청은 그 커밋이 화면에 놓은 상태로 답한다. 그 뒤 event는 커밋된 배치 아래에서 애플리케이션을 계속 지나가므로, 보류된 입력의 gate는 그것을 그 자리의 view에 넘기고 누름은 대상을 잃지 않는다. pointer의 이동과 끌기는 아무것도 끝내지 않으므로 divider 끌기의 frame은 hold를 유지한다. hold의 어떤 끝도 시간에 의존하지 않는다: 그리기를 멈춘 peer는 사용자의 다음 동작까지만 화면을 붙든다.
 
 참여한 view는 자기 표시, abandon, 또는 자기 닫기로 기다림을 끝낸다: view web view의 네이티브 닫기(`nativeWebviewCloseOnMain`)와 document view의 닫기(`sp_document_close`)는 닫는 turn에서 그 view의 참여를 모두 abandon한다. 창 밖의 view는 표시하지 않기 때문이다. 각 참여는 한 번 끝나고, 미룬 커밋은 마지막 참여가 끝나는 turn에서 마친다.
 
