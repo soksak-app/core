@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
-import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { APPS, MAIN_PAGE_APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { turnOffCardSidebars } from "./card-sidebar-choices.mjs";
 import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
@@ -249,7 +249,7 @@ for (const app of Object.values(APPS))
 // commands of the settings window. Expected: after each change the workbench answers the next request, core.sidebars shows the
 // window sidebars that the switches and the links give, and the window sidebars stand where the order places them.
 for (const app of Object.values(APPS))
-  test(`${app.name}: the workbench answers after the sidebar settings of the settings window change`, { timeout: 120000 }, async (t) => {
+  test(`${app.name}: the workbench answers after the sidebar settings of the settings window change`, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const { values, overridden } = await s.get("core.settings");
@@ -297,19 +297,13 @@ for (const app of Object.values(APPS))
     async function reveal(label, name, index) {
       for (;;) {
         await s.presented();
-        // element.rect of a control of a native modal answers the report of the modal document, and the first report of a view
-        // races the frame that presents it, so the refused request is tried again after the next presented frame. A host that
-        // draws its modal itself answers element.rect at once and never refuses.
-        let rect;
-        for (;;) {
-          try {
-            rect = await s.rect(name, index);
-            break;
-          } catch (error) {
-            if (!/has not reported/.test(error.message)) throw error;
-            await s.presented();
-          }
-        }
+        // element.rect of a control of a native modal answers the report of the modal document, which core.modal holds, so the
+        // check waits until that report names the control. A host that draws its modal itself has no modal document and answers
+        // element.rect at once.
+        if (MAIN_PAGE_APPS.includes(app))
+          await s.until("core.modal", (modal) => (modal?.document?.elements ?? []).filter((item) => item.name === name).length > index,
+            `${label}: the modal document did not report ${name} ${index}`);
+        const rect = await s.rect(name, index);
         const { pane, scroll } = await s.get("core.settings-modal");
         const point = { x: (rect.document?.x ?? 0) + rect.x + rect.width / 2, y: (rect.document?.y ?? 0) + rect.y + rect.height / 2 };
         if (point.y - rect.height / 2 >= pane.y && point.y + rect.height / 2 <= pane.y + pane.h) return point;
