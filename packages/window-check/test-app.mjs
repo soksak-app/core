@@ -4,7 +4,7 @@
 // @soksak/window-check, the core release that the plugin repository names. For each application of the run (`--app`, or requiredApps
 // of app.mjs, so SOKSAK_APP selects one) the run downloads the published application zip `soksak-<version>-<platform>-<host>.zip`
 // into build/app-cache/<version>/ of the repository once and extracts its application there. The release platform, the application
-// and its executables, the extraction, the quit keys, the lock wait and the process list are the platform operations of platform.mjs;
+// and its executables, the extraction, the quit keys, the lock wait and the process list are the platform operations of platform/platform.mjs;
 // a platform that does not implement one fails the step that calls it, before any download. Each run makes a new configuration
 // root under build/test-app/ and builds a registry folder in it: the release of the repository that the pack command writes
 // (`make pack OUT={out}` by default; `{out}` is the release folder), the `pnpm pack` release of the start probe that this package
@@ -33,8 +33,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { APP_NAMES, requiredApps } from "./app.mjs";
 import { untilFolderState } from "./folder-wait.mjs";
-import { applicationBundle, applicationExecutables, extractApplication, listProcesses, quitKeys, releasePlatform,
-  waitForLockRelease } from "./platform.mjs";
+import { applicationBundle, applicationExecutables, extractApplication, listProcesses, quitKeys, releasePlatform, runPlatform,
+  waitForLockRelease } from "./platform/platform.mjs";
 import { START_PROBE } from "./start.mjs";
 
 /** The release files of core. */
@@ -63,7 +63,7 @@ const sha256 = (file) => createHash("sha256").update(readFileSync(file)).digest(
 export const coreVersion = () => readJson(new URL("./package.json", import.meta.url)).version;
 
 /** The published application zip of `host` for `version` on the release platform of `platform` and `arch`, as core names its release files. */
-export function applicationZip(version, host, { platform = process.platform, arch = process.arch } = {}) {
+export function applicationZip(version, host, { platform = runPlatform(), arch = process.arch } = {}) {
   const name = `soksak-${version}-${releasePlatform({ platform, arch })}-${host}.zip`;
   return { name, url: `${RELEASES}/v${version}/${name}` };
 }
@@ -322,7 +322,7 @@ export async function fetchJson(url, { timeout = LIMITS.index, signal, fetchImpl
  * once by the platform operations of `platform`. `run(file, args)` runs the extraction program, `extract(zip, folder)` replaces the
  * extraction and `fetchImpl` the download in a test. A platform without an operation of the application rejects before the download.
  */
-export async function cachedBundle(cache, version, host, { platform = process.platform, arch = process.arch, signal, fetchImpl,
+export async function cachedBundle(cache, version, host, { platform = runPlatform(), arch = process.arch, signal, fetchImpl,
   write = () => {}, run: runProgram = (file, args) => run(file, args, { signal, timeout: LIMITS.extract }),
   extract = (zip, folder) => extractApplication(zip, folder, { platform, run: runProgram }) } = {}) {
   const folder = join(cache, version, host);
@@ -492,7 +492,7 @@ export function remainingProcesses(processes, paths, self = process.pid) {
  * `<step>: <reason>`; an empty list is a passed run.
  */
 export async function testApp({ root, apps = requiredApps(process.env), pack = DEFAULT_PACK, index, real = false, checks,
-  checkTimeout = LIMITS.checks, signal, platform = process.platform, write = (line) => process.stdout.write(`test-app: ${line}\n`) }) {
+  checkTimeout = LIMITS.checks, signal, platform = runPlatform(), write = (line) => process.stdout.write(`test-app: ${line}\n`) }) {
   const version = coreVersion();
   const hosts = apps;
   let selected;

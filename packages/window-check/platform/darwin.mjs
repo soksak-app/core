@@ -1,4 +1,4 @@
-// The macOS implementation of the platform operations of platform.mjs. The selector loads this module only when an operation runs
+// The macOS implementation of the platform operations of platform/platform.mjs. The selector loads this module only when an operation runs
 // for the platform `darwin`. The published application zip holds the bundle `soksak.app` (docs/spec/hosts.md).
 import { join } from "node:path";
 

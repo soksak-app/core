@@ -384,10 +384,10 @@ const FEATURE_LINKS = [
   {
     id: "F696-10",
     implementation: [
-      { file: "packages/window-check/platform.mjs", symbol: "export class PlatformOperationNotImplemented extends Error {" },
-      { file: "packages/window-check/platform.mjs", symbol: "export function releasePlatform({ platform = process.platform, arch = process.arch } = {}) {" },
+      { file: "packages/window-check/platform/platform.mjs", symbol: "export class PlatformOperationNotImplemented extends Error {" },
+      { file: "packages/window-check/platform/platform.mjs", symbol: "export function releasePlatform({ platform = runPlatform(), arch = process.arch } = {}) {" },
       { file: "packages/window-check/platform/darwin.mjs", symbol: "export async function listProcesses(run) {" },
-      { file: "packages/window-check/test-app.mjs", symbol: "export async function cachedBundle(cache, version, host, { platform = process.platform, arch = process.arch, signal, fetchImpl," },
+      { file: "packages/window-check/test-app.mjs", symbol: "export async function cachedBundle(cache, version, host, { platform = runPlatform(), arch = process.arch, signal, fetchImpl," },
       { file: "packages/window-check/test-app.mjs", symbol: "async function quit(child, sok, configDir, by, root, platform) {" },
     ],
     tests: [

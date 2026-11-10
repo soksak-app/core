@@ -18,6 +18,7 @@ import { BREAKS } from "../../packages/soksak/scripts/breaks.mjs";
 import { find as findReleaseMarkers } from "../check-release.mjs";
 import { FRAMEWORK_TABLE, LANGUAGE_TABLE, auditHostPairs, findStubs, findUndecodedCommandArguments } from "../check-host-files.mjs";
 import { auditPlatformSource } from "../check-platform-files.mjs";
+import { GATE_SOURCES } from "../check-boundaries.mjs";
 import { auditActivationUnboundNames, auditE2ESource } from "../check-app-tests.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
@@ -151,11 +152,10 @@ test("boundary audit reports a check that names a plugin other than a fixture pl
   await write(join(core, "e2e/listed.test.mjs"), `await s.run("listed.focus");\n`);
   await write(join(core, "docs/spec/verification-boundaries.json"),
     JSON.stringify({ schema: 1, files: [{ file: "e2e/listed.test.mjs", owner: "core", reason: "converts to a fixture" }] }));
-  // The gate sources: the window check runner names a registry that is not the fixture registry.
-  await write(join(core, "Makefile"), "FIXTURE_REGISTRY = target/fixture-registry\n");
-  await write(join(core, "scripts/acceptance-run.mjs"), "\n");
-  await write(join(core, "scripts/candidate-acceptance.mjs"), "\n");
-  await write(join(core, "scripts/test-app.mjs"), "const index = 'target/registry/index.json';\n");
+  // The gate sources that the audit reads: the window check runner names a registry that is not the fixture registry, and each
+  // other gate source names none.
+  const gate = { Makefile: "FIXTURE_REGISTRY = target/fixture-registry\n", "scripts/test-app.mjs": "const index = 'target/registry/index.json';\n" };
+  for (const source of GATE_SOURCES) await write(join(core, source), gate[source] ?? "\n");
   assert.equal((await run("git", ["init", "--quiet", core])).code, 0);
   // The audit reads the tracked files of the checkout.
   assert.equal((await run("git", ["-C", core, "add", "--", "Makefile", "packages", "e2e", "scripts", "docs"])).code, 0);
