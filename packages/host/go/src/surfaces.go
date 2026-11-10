@@ -1773,7 +1773,13 @@ func (s *Surfaces) ensureCurrentPresentationJoins(window platform.Window, req Pr
 		if err != nil {
 			return err
 		}
-		if !joined || generation != channel.generation {
+		// A transaction that a press or key event ended while the presentation waited takes no join: it committed what its
+		// joined views had presented, and the commit of the ticket answers that state, as the first stage records only the views
+		// that joined (docs/spec/native-surfaces.md#layout-transaction).
+		if !joined {
+			continue
+		}
+		if generation != channel.generation {
 			return fmt.Errorf("visible view %s generation %d was not joined to presentation %d", placement.ID, channel.generation, req.Ticket)
 		}
 	}

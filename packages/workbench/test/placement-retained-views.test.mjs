@@ -78,6 +78,7 @@ test("a host placement retains mounted dormant views and excludes cold dormant v
     const record = { surfaces: [view("visible-view", 0)], settled: true, drawn: true, titlebar: 40 };
     const requested = [record.surfaces[0], view("retained-view", 20),
       { ...view("cold-view", 40), retainedTextSize: () => 1.875 }, view("background-view", 60)];
+    let held = null;
     const answer = await placeCompositorRecord(record, requested,
       (request) => host.surfaces.place({ ...record, surfaces: request.surfaces }),
       ["placement-probe"],
@@ -86,6 +87,7 @@ test("a host placement retains mounted dormant views and excludes cold dormant v
         background: (surface) => surface.id === "background-view",
         authorize,
         prepare: retainedMounts.prepareRetainedSurface,
+        held: (ids) => { held = ids; },
       });
 
     assert.deepEqual(calls.find(({ name }) => name === "syncSurfaces")?.request.surfaces.map(({ id }) => id),
@@ -108,6 +110,8 @@ test("a host placement retains mounted dormant views and excludes cold dormant v
       "the host sync began before the placement read the declaration of every requested view");
     assert.deepEqual(answer.placements.map(({ id }) => id), ["visible-view"], "the host's dormant placement entered the compositor result");
     assert.deepEqual(answer.deferred, [], "a cold dormant view was reported as a host deferral");
+    assert.deepEqual(held, ["visible-view", "retained-view", "cold-view"],
+      "the surfaces that the host holds for the keyboard left out the retained views of the complete request");
 
     const retained = view("retained-view", 20);
     const saver = createMemorySaver({

@@ -581,6 +581,25 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F737",
+    implementation: [
+      { file: "packages/host/go/src/surfaces.go", symbol: "if !joined {\n\t\t\tcontinue\n\t\t}" },
+      { file: "packages/workbench/compositor.js", symbol: "held(validated.placements.map(({ id }) => id));" },
+      { file: "packages/workbench/index.html", symbol: "held: (surfaceIds) => { hostHeld = surfaceIds; }," },
+      { file: "packages/workbench-mygo/src/shell_project.go", symbol: "s.retainSessionsThen(ended)" },
+      { file: "e2e/view-surfaces.test.mjs", symbol: "the layout probe views ${probeViews.join(\", \")} did not all attach their document region" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/view_join_test.go", id: "TestAReplacedRootOfATransactionThatInputEndedJoinsNothingAndDoesNotFailTheCommit" },
+      { file: "packages/workbench/test/placement-retained-views.test.mjs", id: "a host placement retains mounted dormant views and excludes cold dormant views" },
+      { file: "packages/workbench/test/keyboard.test.mjs", id: "the page answers each placement and each responder move to the keyboard" },
+      { file: "packages/workbench-mygo/tests/sidecar_sessions_test.go", id: "TestARemovalAnswersAfterTheRetainOfTheSessionsOfTheRemovedProject" },
+      { file: "e2e/view-surfaces.test.mjs", id: "a split while the sidecar service is stopped waits for its raster and leaves the next fixture and splits usable" },
+    ],
+    expected: "A commit after a transaction that a press or key event ended joins no replaced view, the page counts every placement of the complete host request as held for the keyboard, a mygo removal answers after the retain of the sessions of the removed project, and the image region checks wait for the raster of a stopped service and for each document region by their events.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F736",
     implementation: [
       { file: "packages/workbench/compositor.js", symbol: "const layoutGrid = seated.values().next().value?.grid ?? null;" },
@@ -10171,7 +10190,7 @@ const FEATURE_LINKS = [
       { file: "e2e/view-surfaces.test.mjs", symbol: "region.presented !== null" },
     ],
     tests: [
-      { file: "e2e/view-surfaces.test.mjs", id: "a presentation that fails while the sidecar service is stopped leaves the next fixture and splits usable" },
+      { file: "e2e/view-surfaces.test.mjs", id: "a split while the sidecar service is stopped waits for its raster and leaves the next fixture and splits usable" },
     ],
     expected: "The window check of a failed terminal presentation waits while a region has not presented yet.",
     levels: ["application"],

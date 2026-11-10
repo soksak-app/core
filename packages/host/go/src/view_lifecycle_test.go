@@ -82,6 +82,8 @@ type lifecyclePlatform struct {
 	cancelledLayouts []platform.Window
 	cancelledTickets []uint64
 	layoutOperations []string
+	// inputEnded are the tickets whose transaction a press or key event ended, which native joins no view to.
+	inputEnded map[uint64]bool
 }
 
 // viewJoin is one join of a view to a layout transaction. abandons counts the calls of its abandon.
@@ -96,6 +98,9 @@ type viewJoin struct {
 
 // JoinView records the join and returns the function that counts its abandon.
 func (p *lifecyclePlatform) JoinView(window platform.Window, ticket uint64, view unsafe.Pointer, presented func(), ended func(string)) (func() error, bool, error) {
+	if p.inputEnded[ticket] {
+		return nil, false, nil
+	}
 	join := &viewJoin{window: window, ticket: ticket, view: view, presented: presented, ended: ended}
 	p.joins = append(p.joins, join)
 	return func() error {

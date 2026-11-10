@@ -352,6 +352,8 @@ onCommit((record) => {
     record.surfaces = record.surfaces.filter(({ id }) => !refusedViews.has(id));
     const placed = all.filter((entry) => !entry.refused);
     const activeIds = new Set((currentGrid()?.cards ?? []).map((card) => activeTab(card)?.id).filter(Boolean));
+    // The keyboard can go to every surface that the host holds, a retained view outside the record included.
+    let hostHeld = [];
     const answer = await placeSurfaces(() => placeCompositorRecord(record, placed,
       (request) => host.place(request), host.kinds, {
         activeIds,
@@ -359,11 +361,12 @@ onCommit((record) => {
         background: (surface) => registry.keepsBackground({ plugin: surface.plugin, kind: surfaceKindOf(surface.surface).kind }),
         authorize: authorizeSurface,
         prepare: prepareRetainedSurface,
+        held: (surfaceIds) => { hostHeld = surfaceIds; },
       }), { retain: ids, unload });
     releaseRetainedSurfaceSlots(record, ids, unload);
     const placedIds = new Set(answer.placements.map(({ id }) => id));
     for (const surface of record.surfaces) if (placedIds.has(surface.id)) authorizeSurface(surface.id);
-    if (record.drawn) await keyboardPlaced(answer.placements.filter(({ visible }) => visible).map(({ id }) => id), [...placedIds]);
+    if (record.drawn) await keyboardPlaced(answer.placements.filter(({ visible }) => visible).map(({ id }) => id), hostHeld);
     return answer;
   });
 });

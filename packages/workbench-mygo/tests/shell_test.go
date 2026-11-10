@@ -86,9 +86,11 @@ type storedHost struct {
 	startFails bool
 	// refusedFiles are the errors of refused stored files that the snapshot carries, projectsError and settingsError.
 	refusedFiles map[string]string
-	// retains holds the argument of each sidecarsRetain call.
-	retains []json.RawMessage
-	failing map[string]error
+	// retains holds the argument of each sidecarsRetain call, and holdRetains, when set, keeps the answer of each retain until it
+	// opens.
+	retains     []json.RawMessage
+	holdRetains *gate
+	failing     map[string]error
 	// policies holds the policy of each log call that stores one, and traces the action of each performance call.
 	policies []map[string]string
 	// policyBatches captures what actually reached the host before each policy transition.
@@ -319,8 +321,12 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 		"windowReady":  answer("windowReady", none),
 		"sidecarsRetain": answer("sidecarsRetain", func(argument json.RawMessage) (any, error) {
 			h.mu.Lock()
-			defer h.mu.Unlock()
 			h.retains = append(h.retains, argument)
+			hold := h.holdRetains
+			h.mu.Unlock()
+			if hold != nil {
+				hold.wait()
+			}
 			return nil, nil
 		}),
 		"setTheme":           answer("setTheme", func(argument json.RawMessage) (any, error) { h.theme = argument; return nil, nil }),
