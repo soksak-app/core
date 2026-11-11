@@ -48,10 +48,9 @@ const RULES = [
   { what: "a wait for the real activation; wait for virtualKey of host.window", pattern: /\.active(\s*===\s*true)?\s*&&\s*\w+\.key\b/, realState: true },
 ];
 
-// The checks that keep the real activation and the person (F756): the composition of the input method of the system, which serves only
-// the key window of the application that the system holds as active, and the save panel, which the emulated input does not reach.
-// The session defines the helper of the real pointer for them.
-const REAL_STATE_EXEMPT = ["e2e/activation/", "e2e/person/", "packages/window-check/app.mjs", "packages/window-check/test/pointer-outside.test.mjs"];
+// The checks that keep the real activation (F756): the composition of the input method of the system, which serves only the key window
+// of the application that the system holds as active. The session defines the helper of the real pointer for them.
+const REAL_STATE_EXEMPT = ["e2e/activation/", "packages/window-check/app.mjs", "packages/window-check/test/pointer-outside.test.mjs"];
 
 // app.mjs of the harness reports a check of an application whose host process exited as not run: the check that found the exit
 // failed with it and its log records, so the skip hides no failure, and starting the application again would hide the exit.

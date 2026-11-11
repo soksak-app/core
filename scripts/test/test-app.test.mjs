@@ -189,10 +189,6 @@ test("the plan prepares, starts the three applications, checks and quits them in
   assert.deepEqual(plan.find((item) => item.name === "native end-to-end tests"), { name: "native end-to-end tests", phase: "check", kind: "native",
     target: "e2e", platform: "darwin", env: { SOKSAK_CONFIG_ROOT: configRoot } });
   assert.equal(plan.some((item) => item.name === "capture text warm-up"), false);
-  const person = await e2ePlan({ root, configRoot, script: "test-app:person", platform: "darwin" });
-  assert.deepEqual(person.find((item) => item.name === "window checks").argv.slice(2, 4), ["--script", "test-app:person"]);
-  assert.ok(!person.find((item) => item.name === "window checks").argv.includes("--when-idle"));
-  assert.equal(person.some((item) => item.name === "native end-to-end tests"), false);
 });
 
 test("test-app resolves the executables of each platform from its declared application artifact", { timeout: 5000 }, async () => {

@@ -374,7 +374,7 @@ TAURI_DEBUG_FEATURES = diagnostics,dev
 WAILS_DEBUG_TAGS     = diagnostics dev
 # The declared core release candidate is the RELEASE constant of scripts/check-versions.mjs.
 DIAGNOSTIC_RELEASE := $(filter 0.0.%,$(shell sed -n 's/^export const RELEASE = "\(.*\)";$$/\1/p' scripts/check-versions.mjs))
-.PHONY: build-native fetch-native build-sok build-fixture-registry build-fixture-registry-from-sok copy-frontend-browser run-browser copy-frontend-wailsv3 copy-frontend-tauriv2 copy-frontend-mygo test-wailsv3 test-tauriv2 test-mygo test-hosts check-release-wailsv3 check-release-tauriv2 check-release-mygo check-rust-format check-rust-clippy check-go-format run-tauriv2 run-tauriv2-release build-tauriv2 build-tauriv2-release run-wailsv3 run-wailsv3-release build-wailsv3 build-wailsv3-release run-mygo run-mygo-release build-mygo build-mygo-release test-app test-app-candidate test-app-capture-input-close test-app-host-go test-app-activation test-app-person test-app-section-design benchmark-input-latency measure-examples-size run-tauriv2 run-tauriv2-release run-wailsv3 run-wailsv3-release test-app
+.PHONY: build-native fetch-native build-sok build-fixture-registry build-fixture-registry-from-sok copy-frontend-browser run-browser copy-frontend-wailsv3 copy-frontend-tauriv2 copy-frontend-mygo test-wailsv3 test-tauriv2 test-mygo test-hosts check-release-wailsv3 check-release-tauriv2 check-release-mygo check-rust-format check-rust-clippy check-go-format run-tauriv2 run-tauriv2-release build-tauriv2 build-tauriv2-release run-wailsv3 run-wailsv3-release build-wailsv3 build-wailsv3-release run-mygo run-mygo-release build-mygo build-mygo-release test-app test-app-candidate test-app-capture-input-close test-app-host-go test-app-activation test-app-section-design benchmark-input-latency measure-examples-size run-tauriv2 run-tauriv2-release run-wailsv3 run-wailsv3-release test-app
 
 # rustup installs cargo in $(CARGO_HOME)/bin, which is ~/.cargo/bin when CARGO_HOME is not set, and adds the path to
 # the shell profile. The shell of make does not read the profile, and a hosted runner sets CARGO_HOME outside HOME.
@@ -640,8 +640,7 @@ check-release-mygo: build-mygo-release
 # The window checks drive running applications in sequence through the local endpoint; the harness does not start them.
 # The end-to-end checks (docs/operations/examples.md#test-kinds): the window checks of the running applications and the native
 # end-to-end tests. They need a display, so they run only locally. test-app-activation runs the checks of the input method of the
-# system, which a person approves because they activate the applications and change the input source; test-app-person runs the
-# checks that a person operates at the machine.
+# system, which a person approves because they activate the applications and change the input source.
 # Each e2e target builds the three debug applications and the fixture registry of e2e/fixtures, and scripts/test-app.mjs runs the
 # window-check script and the native end-to-end target of its tier in a new configuration root under target/e2e: it installs every
 # fixture plugin into each application, starts the applications, runs the checks and quits the applications.
@@ -666,9 +665,6 @@ test-app-candidate:
 
 test-app-activation: $(E2E_BUILD)
 	@node scripts/test-app.mjs --script test-app:activation --native test-app-activation
-
-test-app-person: $(E2E_BUILD)
-	@node scripts/test-app.mjs --script test-app:person
 
 # These targets run one observation, benchmark or repeat against applications that already run; they build and start nothing.
 # Leaves stills of the sections in target/section-design for inspection at original resolution.
