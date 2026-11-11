@@ -58,6 +58,7 @@ function port() {
     scrollTo: async (name, x, y) => { calls.push(["scrollTo", name, x, y]); return { x, y }; },
     read: async (name, frame, ref) => { calls.push(["read", name, frame, ref]); return { value: "text" }; },
     act: async (name, frame, ref, action, value) => { calls.push(["act", name, frame, ref, action, value]); return { ok: true }; },
+    evaluate: async (name, frame, js, awaitPromise) => { calls.push(["evaluate", name, frame, js, awaitPromise]); return { value: 42 }; },
     detach: async (name) => { calls.push(["detach", name]); },
     onState: (fn) => { receive = fn; return Promise.resolve(() => { stopped = true; }); },
     post: async (name, message) => { calls.push(["post", name, message]); },
@@ -363,6 +364,17 @@ test("an interactive subscription receives the folded frames of the stream", asy
   p.stream("page", 1, { type: "reset" });
   assert.deepEqual(received[1], { type: "reset" });
   await subscription.close();
+});
+
+test("evaluate sends the source and resolves to the value", async () => {
+  const f = fixture();
+  const p = port();
+  const region = attachRegion(p, f.element, "page", f.window, { report() {} });
+  p.release();
+  const answer = await region.evaluate("0", "1 + 1");
+  assert.deepEqual(answer, { value: 42 });
+  assert.deepEqual(p.calls.filter(([kind]) => kind === "evaluate"), [["evaluate", "page", "0", "1 + 1", false]]);
+  await assert.rejects(region.evaluate("", "x"), /evaluate requires a frame path/);
 });
 
 test("act sends the action and resolves to the outcome", async () => {

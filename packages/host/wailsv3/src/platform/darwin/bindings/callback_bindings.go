@@ -42,6 +42,7 @@ extern void goHost_document_scrolled(uintptr_t arg0, char * arg1);
 extern void goHost_document_read(uintptr_t arg0, char * arg1);
 extern void goHost_document_confirmed(uintptr_t arg0, char * arg1);
 extern void goHost_document_acted(uintptr_t arg0, char * arg1);
+extern void goHost_document_evaled(uintptr_t arg0, char * arg1);
 extern void goHost_document_event(uintptr_t arg0, char * arg1);
 extern void goHost_memory_pressure(char * arg0, unsigned long long arg1);
 extern void goHost_dock_new_window(void);
@@ -176,6 +177,9 @@ func InstallCallbacks(callbacks abi.Callbacks) error {
 	if callbacks.DocumentActed == nil {
 		return fmt.Errorf("native callback is missing: document_acted")
 	}
+	if callbacks.DocumentEvaled == nil {
+		return fmt.Errorf("native callback is missing: document_evaled")
+	}
 	if callbacks.DocumentEvent == nil {
 		return fmt.Errorf("native callback is missing: document_event")
 	}
@@ -225,6 +229,7 @@ func InstallCallbacks(callbacks abi.Callbacks) error {
 	native.document_read = (*[0]byte)(C.goHost_document_read)
 	native.document_confirmed = (*[0]byte)(C.goHost_document_confirmed)
 	native.document_acted = (*[0]byte)(C.goHost_document_acted)
+	native.document_evaled = (*[0]byte)(C.goHost_document_evaled)
 	native.document_event = (*[0]byte)(C.goHost_document_event)
 	native.memory_pressure = (*[0]byte)(C.goHost_memory_pressure)
 	native.dock_new_window = (*[0]byte)(C.goHost_dock_new_window)
@@ -415,6 +420,11 @@ func goHost_document_confirmed(arg0 C.uintptr_t, arg1 *C.char) {
 //export goHost_document_acted
 func goHost_document_acted(arg0 C.uintptr_t, arg1 *C.char) {
 	callbackHandlers.DocumentActed(uintptr(arg0), (*byte)(unsafe.Pointer(arg1)))
+}
+
+//export goHost_document_evaled
+func goHost_document_evaled(arg0 C.uintptr_t, arg1 *C.char) {
+	callbackHandlers.DocumentEvaled(uintptr(arg0), (*byte)(unsafe.Pointer(arg1)))
 }
 
 //export goHost_document_event

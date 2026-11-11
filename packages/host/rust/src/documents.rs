@@ -2827,6 +2827,90 @@ pub struct ActResult {
     pub request: Option<u64>,
 }
 
+/// The result of one evaluation, or the refusal that names the missing grant.
+#[derive(Debug, Default, PartialEq, Serialize)]
+pub struct EvalResult {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub refusal: Option<String>,
+}
+
+/// Evaluates a JavaScript expression in a frame under the evaluate grant.
+pub fn eval_in_frame(
+    webview: &Webview,
+    request: Request,
+    path: String,
+    source: String,
+    await_promise: bool,
+) -> Result<EvalResult, String> {
+    if path.is_empty() || source.is_empty() {
+        return Err("eval requires a frame path and a source".to_string());
+    }
+    let platform = platform::current()?;
+    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+    let path_for_run = path.clone();
+    let source_for_run = source.clone();
+    with_document(webview, &request, move |handle| {
+        platform.eval_document(handle, &path, &source_for_run, await_promise, false,
+            Box::new(move |reply| {
+                if sender.send(reply).is_err() {
+                    log_error("document eval", "the caller stopped waiting for the probe");
+                }
+            }),
+        )
+    })?;
+    let reply = receiver
+        .recv()
+        .map_err(|_| format!("document {} gave no eval probe reply", request.document))?;
+    #[derive(Deserialize)]
+    struct Probe {
+        #[serde(default)]
+        origin: String,
+        #[serde(default)]
+        error: Option<String>,
+    }
+    let probe: Probe = serde_json::from_str(&reply)
+        .map_err(|_| format!("document {} eval probe reply is not JSON: {reply}", request.document))?;
+    if let Some(error) = probe.error {
+        return Err(format!("document {} eval probe failed: {error}", request.document));
+    }
+    if !APPROVALS.granted(APPROVAL_EVALUATE, &probe.origin) {
+        return Ok(EvalResult { value: None, refusal: Some("evaluate requires approval".to_string()) });
+    }
+    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+    with_document(webview, &request, move |handle| {
+        platform.eval_document(handle, &path_for_run, &source, await_promise, true,
+            Box::new(move |reply| {
+                if sender.send(reply).is_err() {
+                    log_error("document eval", "the caller stopped waiting for the reply");
+                }
+            }),
+        )
+    })?;
+    let reply = receiver
+        .recv()
+        .map_err(|_| format!("document {} gave no eval reply", request.document))?;
+    #[derive(Deserialize)]
+    struct Full {
+        #[serde(default)]
+        value: Option<serde_json::Value>,
+        #[serde(default)]
+        origin: String,
+        #[serde(default)]
+        error: Option<String>,
+    }
+    let full: Full = serde_json::from_str(&reply)
+        .map_err(|_| format!("document {} eval reply is not JSON: {reply}", request.document))?;
+    if let Some(error) = full.error {
+        return Err(format!("document {} eval failed: {error}", request.document));
+    }
+    if full.origin != probe.origin {
+        return Err(format!("document {} eval origin changed during the evaluation", request.document));
+    }
+    Ok(EvalResult { value: full.value, refusal: None })
+}
+
 /// Runs one narrow action on the operable element ref of the frame at path under the act grant.
 pub fn act_on(
     webview: &Webview,

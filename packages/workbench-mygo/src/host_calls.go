@@ -67,6 +67,7 @@ func hostCalls(h *host.Host) map[string]HostCall {
 		"documentScrollTo":         answerOf(h.DocumentScrollTo),
 		"documentRead":             answerOf(h.DocumentRead),
 		"documentAct":              answerOf(h.DocumentAct),
+		"documentEval":             answerOf(h.DocumentEval),
 		"documentApprovalsGrant":  answerOf(h.DocumentApprovalsGrant),
 		"documentApprovalsList":    answerOf(h.DocumentApprovalsList),
 		"documentApprovalsRevoke":  answerOf(h.DocumentApprovalsRevoke),

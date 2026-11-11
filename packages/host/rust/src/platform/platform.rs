@@ -615,6 +615,16 @@ pub trait Platform: CoreRootHost + Send + Sync {
         document: Handle,
         reply: Box<dyn FnOnce(String) + Send>,
     ) -> Result<(), String>;
+    /// Evaluates a JavaScript expression in the content world of the frame at path. Call it on the main thread.
+    fn eval_document(
+        &self,
+        document: Handle,
+        path: &str,
+        source: &str,
+        await_promise: bool,
+        granted: bool,
+        reply: Box<dyn FnOnce(String) + Send>,
+    ) -> Result<(), String>;
     /// Runs one narrow action on the operable element ref of the frame at path; without the grant the reply names the
     /// origin and the classification, with the grant it names the outcome. Call it on the main thread.
     fn act_document(

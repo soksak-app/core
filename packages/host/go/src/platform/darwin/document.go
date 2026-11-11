@@ -270,6 +270,20 @@ func (implementation) ReadDocument(document unsafe.Pointer, path string, ref int
 	native.DocumentRead(document, native.CString(path), int32(ref), granted, uintptr(handles.NewHandle(reply)))
 }
 
+// EvalDocument evaluates a JavaScript expression; the reply of native names the origin or the result.
+func (implementation) EvalDocument(document unsafe.Pointer, path, source string, awaitPromise, granted bool, reply func(value string)) {
+	native.DocumentEval(document, native.CString(path), native.CString(source), awaitPromise, granted,
+		uintptr(handles.NewHandle(reply)))
+}
+
+// goHost_document_evaled receives the one reply of an evaluation and releases its receiver.
+func goHost_document_evaled(context uintptr, value *byte) {
+	handle := handles.Handle(uintptr(context))
+	reply := handle.Value().(func(string))
+	handle.Delete()
+	reply(native.GoString(value))
+}
+
 // ActDocument runs one narrow action; the reply of native names the probe or the outcome.
 func (implementation) ActDocument(document unsafe.Pointer, path string, ref, action int, value string, granted bool, reply func(value string)) {
 	native.DocumentAct(document, native.CString(path), int32(ref), int32(action), native.CString(value), granted,

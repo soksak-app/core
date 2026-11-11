@@ -505,6 +505,9 @@ type Platform interface {
 	// GoDocument runs back 0, forward 1, reload 2, stop 3, and the history entry that is offset away from the current one 4,
 	// and returns whether it ran.
 	GoDocument(document unsafe.Pointer, action, offset int) bool
+	// EvalDocument evaluates a JavaScript expression in the content world of the frame at path; without the grant
+	// the reply names the origin alone, with the grant it names the result.
+	EvalDocument(document unsafe.Pointer, path, source string, awaitPromise, granted bool, reply func(value string))
 	// ActDocument runs one narrow action on the operable element ref of the frame at path; without the grant the
 	// reply names the origin of the frame and the classification of the element, with the grant it names the outcome.
 	// The action is 0 click, 1 fill, 2 press, 3 select; the fill and select actions take a value.

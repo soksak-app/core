@@ -57,6 +57,14 @@ void documentConfirm(void *document, const char *kind, const char *origin, const
     hostRunOnMain(^{ sp_document_confirm(document, kind, origin, summary, documentConfirmBridge, (void *)context); });
 }
 
+static void documentEvalBridge(void *context, const char *reply) {
+    hostRunOnWorker(^{ sp_host_callback_document_evaled((uintptr_t)context, (char *)reply); });
+}
+
+void documentEval(void *document, const char *path, const char *source, bool await_promise, bool granted, uintptr_t context) {
+    hostRunOnMain(^{ sp_document_eval(document, path, source, await_promise, granted, documentEvalBridge, (void *)context); });
+}
+
 static void documentActBridge(void *context, const char *reply) {
     hostRunOnWorker(^{ sp_host_callback_document_acted((uintptr_t)context, (char *)reply); });
 }

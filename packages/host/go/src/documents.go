@@ -1033,6 +1033,54 @@ func (s *Surfaces) actDocument(viewID uint64, req DocumentRequest, approvals *Ap
 	return DocumentActResult{OK: full.OK}, nil
 }
 
+// DocumentEvalResult is the result of one evaluation, or the refusal that names the missing grant.
+type DocumentEvalResult struct {
+	Value   json.RawMessage `json:"value,omitempty"`
+	Refusal string          `json:"refusal,omitempty"`
+	Request uint64          `json:"request,omitempty"`
+}
+
+// evalDocument evaluates a JavaScript expression in the content world of the frame at path under the evaluate grant.
+func (s *Surfaces) evalDocument(viewID uint64, req DocumentRequest, approvals *Approvals, path, source string, awaitPromise bool) (DocumentEvalResult, error) {
+	answers := make(chan string, 2)
+	err := s.withDocument(viewID, req, func(handle unsafe.Pointer) error {
+		system.EvalDocument(handle, path, source, awaitPromise, false, func(reply string) { answers <- reply })
+		return nil
+	})
+	if err != nil {
+		return DocumentEvalResult{}, err
+	}
+	var probe struct {
+		Origin string `json:"origin"`
+		Error  string `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(<-answers), &probe); err != nil || probe.Error != "" {
+		return DocumentEvalResult{}, fmt.Errorf("document %s eval probe failed: %s", req.Document, probe.Error)
+	}
+	if !approvals.Granted(ApprovalEvaluate, probe.Origin) {
+		return DocumentEvalResult{Refusal: "evaluate requires approval", Request: approvals.Grant("request", probe.Origin)}, nil
+	}
+	err = s.withDocument(viewID, req, func(handle unsafe.Pointer) error {
+		system.EvalDocument(handle, path, source, awaitPromise, true, func(reply string) { answers <- reply })
+		return nil
+	})
+	if err != nil {
+		return DocumentEvalResult{}, err
+	}
+	var full struct {
+		Value  json.RawMessage `json:"value"`
+		Origin string          `json:"origin"`
+		Error  string          `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(<-answers), &full); err != nil || full.Error != "" {
+		return DocumentEvalResult{}, fmt.Errorf("document %s eval failed: %s", req.Document, full.Error)
+	}
+	if full.Origin != probe.Origin {
+		return DocumentEvalResult{}, fmt.Errorf("document %s eval origin changed during the evaluation", req.Document)
+	}
+	return DocumentEvalResult{Value: full.Value}, nil
+}
+
 // confirmGrant shows the confirmation panel of the region and records the grant of a positive answer.
 func (s *Surfaces) confirmGrant(viewID uint64, req DocumentRequest, approvals *Approvals, kind, origin, summary string) (bool, error) {
 	answers := make(chan string, 1)

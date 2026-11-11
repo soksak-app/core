@@ -282,6 +282,17 @@ pub fn query_document(
     missing("document query")
 }
 
+pub fn eval_document(
+    _document: Handle,
+    _path: &str,
+    _source: &str,
+    _await_promise: bool,
+    _granted: bool,
+    _reply: Box<dyn FnOnce(String) + Send>,
+) -> Result<(), String> {
+    missing("document eval")
+}
+
 pub fn act_document(
     _document: Handle,
     _path: &str,

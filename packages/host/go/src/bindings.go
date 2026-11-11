@@ -364,6 +364,28 @@ func isFinite(v float64) bool {
 	return !math.IsNaN(v) && !math.IsInf(v, 0)
 }
 
+// DocumentEval evaluates a JavaScript expression in a frame of a region under the evaluate grant.
+func (h *Host) DocumentEval(ctx context.Context, reqJSON json.RawMessage) (DocumentEvalResult, error) {
+	req, err := argument[DocumentRequest]("request", reqJSON)
+	if err != nil {
+		return DocumentEvalResult{}, err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return DocumentEvalResult{}, err
+	}
+	var args struct {
+		Frame        string `json:"frame"`
+		Source       string `json:"js"`
+		AwaitPromise bool   `json:"await"`
+	}
+	if err := json.Unmarshal(reqJSON, &args); err != nil || args.Frame == "" || args.Source == "" {
+		return DocumentEvalResult{}, fmt.Errorf("eval requires a frame path and a source")
+	}
+	result, err := s.evalDocument(uint64(s.window.ID()), req, h.approvals, args.Frame, args.Source, args.AwaitPromise)
+	return result, DocumentCallError("documentEval", err)
+}
+
 // DocumentAct runs one narrow action on an operable element of a frame of a region under the act grant of the origin
 // of that frame; a submit control or a form field of an origin without the grant answers the refusal.
 func (h *Host) DocumentAct(ctx context.Context, reqJSON json.RawMessage) (DocumentActResult, error) {

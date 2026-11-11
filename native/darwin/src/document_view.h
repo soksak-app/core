@@ -143,6 +143,13 @@ typedef void (*sp_document_act_reply)(void *context, const char *json);
 void sp_document_act(void *document, const char *path, int ref, int action, const char *value, bool granted,
     sp_document_act_reply reply, void *context);
 
+// Evaluates a JavaScript expression in the content world of the frame at path and reports the result once. Without
+// the grant the reply names the origin of the frame alone; with the grant it names the value of the expression as
+// JSON. The error reply names a closed region, an unknown path or a failure of the evaluation.
+typedef void (*sp_document_eval_reply)(void *context, const char *json);
+void sp_document_eval(void *document, const char *path, const char *source, bool await_promise, bool granted,
+    sp_document_eval_reply reply, void *context);
+
 // Turns the stream "elements" or "requests" of the document on or off; the host turns a stream on while it has a
 // subscriber. A stream that is off collects nothing. Turning the element stream on sends a snapshot; turning it off drops
 // an unacknowledged snapshot. Returns false for another stream name or a closed document.

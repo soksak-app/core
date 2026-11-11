@@ -777,6 +777,19 @@ fn document_approvals_revoke(kind: String, origin: Option<String>) -> Result<boo
     Ok(true)
 }
 
+/// Evaluates a JavaScript expression in a frame of a region under the evaluate grant.
+#[tauri::command]
+async fn document_eval(
+    webview: Webview,
+    request: Argument<documents::Request>,
+    frame: String,
+    js: String,
+    await_promise: bool,
+) -> Result<documents::EvalResult, String> {
+    let Argument(request) = request;
+    blocking(move || documents::eval_in_frame(&webview, request, frame, js, await_promise)).await
+}
+
 /// Runs one narrow action on an operable element of a frame of a region under the act grant.
 #[tauri::command]
 async fn document_act(

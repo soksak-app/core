@@ -216,6 +216,15 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
       if (!Number.isInteger(ref) || ref < 1) return Promise.reject(new Error(`act requires a positive ref, not ${JSON.stringify(ref)}`));
       return queue(() => port.act(name, frame, ref, action, String(value ?? "")));
     },
+    /**
+     * Evaluates a JavaScript expression in the content world of the frame at path and resolves to {value}, or to
+     * {refusal} when the origin of the frame holds no evaluate grant for this session.
+     */
+    evaluate(frame, js, awaitPromise = false) {
+      if (typeof frame !== "string" || frame === "") return Promise.reject(new Error(`evaluate requires a frame path, not ${JSON.stringify(frame)}`));
+      if (typeof js !== "string" || js === "") return Promise.reject(new Error(`evaluate requires a source, not ${JSON.stringify(js)}`));
+      return queue(() => port.evaluate(name, frame, js, awaitPromise));
+    },
     back() { return this.go("back"); },
     forward() { return this.go("forward"); },
     reload() { return this.go("reload"); },

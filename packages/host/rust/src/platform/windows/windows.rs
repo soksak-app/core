@@ -307,6 +307,18 @@ impl Platform for Windows {
     ) -> Result<(), String> {
         unsupported::query_document(document, reply)
     }
+    fn eval_document(
+        &self,
+        document: Handle,
+        path: &str,
+        source: &str,
+        await_promise: bool,
+        granted: bool,
+        reply: Box<dyn FnOnce(String) + Send>,
+    ) -> Result<(), String> {
+        unsupported::eval_document(document, path, source, await_promise, granted, reply)
+    }
+
     fn act_document(
         &self,
         document: Handle,

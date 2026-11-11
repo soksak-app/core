@@ -418,6 +418,18 @@ impl Platform for Darwin {
         document::query(document, reply);
         Ok(())
     }
+    fn eval_document(
+        &self,
+        document: Handle,
+        path: &str,
+        source: &str,
+        await_promise: bool,
+        granted: bool,
+        reply: Box<dyn FnOnce(String) + Send>,
+    ) -> Result<(), String> {
+        document::eval_in(document, path, source, await_promise, granted, reply);
+        Ok(())
+    }
     fn act_document(
         &self,
         document: Handle,

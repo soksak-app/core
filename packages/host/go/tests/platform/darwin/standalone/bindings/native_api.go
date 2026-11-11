@@ -36,6 +36,9 @@ func Functions() abi.NativeFunctions {
 		DocumentCreate: func(a0 unsafe.Pointer, a1 *byte, a2 *byte, a3 *byte, a4 *byte, a5 *byte, a6 uintptr) unsafe.Pointer {
 			return C.documentCreate(a0, (*C.char)(unsafe.Pointer(a1)), (*C.char)(unsafe.Pointer(a2)), (*C.char)(unsafe.Pointer(a3)), (*C.char)(unsafe.Pointer(a4)), (*C.char)(unsafe.Pointer(a5)), C.uintptr_t(a6))
 		},
+		DocumentEval: func(a0 unsafe.Pointer, a1 *byte, a2 *byte, a3 bool, a4 bool, a5 uintptr) {
+			C.documentEval(a0, (*C.char)(unsafe.Pointer(a1)), (*C.char)(unsafe.Pointer(a2)), C.bool(a3), C.bool(a4), C.uintptr_t(a5))
+		},
 		DocumentQuery: func(a0 unsafe.Pointer, a1 uintptr) { C.documentQuery(a0, C.uintptr_t(a1)) },
 		DocumentRead: func(a0 unsafe.Pointer, a1 *byte, a2 int32, a3 bool, a4 uintptr) {
 			C.documentRead(a0, (*C.char)(unsafe.Pointer(a1)), C.int(a2), C.bool(a3), C.uintptr_t(a4))

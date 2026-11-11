@@ -2168,6 +2168,38 @@ void sp_document_confirm(void *handle, const char *kind, const char *origin, con
     [panel makeKeyAndOrderFront:nil];
 }
 
+void sp_document_eval(void *handle, const char *path, const char *source, bool await_promise, bool granted,
+    sp_document_eval_reply reply, void *context) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    SPDocumentView *view = (SPDocumentView *)handle;
+    if (!view || view.closed) {
+        reply(context, "{\"error\":\"the document region is closed\"}");
+        return;
+    }
+    NSString *wanted = [NSString stringWithUTF8String:path ?: ""];
+    WKFrameInfo *frame = [view interactiveFrameOfPath:wanted];
+    if (frame == nil) {
+        reply(context, [[NSString stringWithFormat:@"{\"error\":\"no frame of path %s\"}", path ?: ""] UTF8String]);
+        return;
+    }
+    NSString *origin = [view interactiveOriginOfPath:wanted] ?: @"";
+    if (!granted) {
+        reply(context, [[NSString stringWithFormat:@"{\"origin\":\"%@\"}", origin] UTF8String]);
+        return;
+    }
+    [view callAsyncJavaScript:@"try { return { value: await eval(source) }; } catch (e) { return { error: String(e) }; }"
+        arguments:@{ @"source": [NSString stringWithUTF8String:source ?: ""] } inFrame:frame
+        inContentWorld:[WKContentWorld worldWithName:kDocumentWorld]
+        completionHandler:^(id result, NSError *error) {
+            if (error) {
+                reply(context, [[NSString stringWithFormat:@"{\"error\":\"%@\"}",
+                    error.localizedDescription] UTF8String]);
+                return;
+            }
+            reply(context, [[NSString stringWithFormat:@"{\"origin\":\"%@\"}", origin] UTF8String]);
+        }];
+}
+
 void sp_document_act(void *handle, const char *path, int ref, int action, const char *value, bool granted,
     sp_document_act_reply reply, void *context) {
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");

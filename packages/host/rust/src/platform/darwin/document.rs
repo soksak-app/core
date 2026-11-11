@@ -91,6 +91,15 @@ unsafe extern "C" {
     fn sp_document_appearance(document: *mut c_void, dark: bool);
     fn sp_document_close(document: *mut c_void);
     fn sp_document_query(document: *mut c_void, reply: Event, context: *mut c_void);
+    fn sp_document_eval(
+        document: *mut c_void,
+        path: *const c_char,
+        source: *const c_char,
+        await_promise: bool,
+        granted: bool,
+        reply: Event,
+        context: *mut c_void,
+    );
     fn sp_document_act(
         document: *mut c_void,
         path: *const c_char,
@@ -356,6 +365,27 @@ extern "C" fn act_replied(context: *mut c_void, value: *const c_char) {
         .to_string_lossy()
         .into_owned();
     (receiver.0)(value);
+}
+
+/// The receiver of one evaluation reply. Native calls it once.
+struct EvalReceiver(Box<dyn FnOnce(String) + Send>);
+
+extern "C" fn eval_replied(context: *mut c_void, value: *const c_char) {
+    let receiver = unsafe { Box::from_raw(context as *mut EvalReceiver) };
+    let value = unsafe { CStr::from_ptr(value) }
+        .to_string_lossy()
+        .into_owned();
+    (receiver.0)(value);
+}
+
+/// Evaluates a JavaScript expression in the content world of the frame at path.
+pub fn eval_in(document: Handle, path: &str, source: &str, await_promise: bool, granted: bool,
+    reply: Box<dyn FnOnce(String) + Send>) {
+    let receiver = Box::into_raw(Box::new(EvalReceiver(reply)));
+    let path = std::ffi::CString::new(path).unwrap_or_default();
+    let source = std::ffi::CString::new(source).unwrap_or_default();
+    unsafe { sp_document_eval(document as *mut c_void, path.as_ptr(), source.as_ptr(), await_promise, granted,
+        eval_replied, receiver as *mut c_void) };
 }
 
 /// Runs one narrow action on the operable element ref of the frame at path.
