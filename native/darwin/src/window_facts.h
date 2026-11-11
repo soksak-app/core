@@ -28,8 +28,10 @@ void *sp_window_main_webview(void *window);
 //             view is the view address, draws tells whether it paints its own background, alpha is the
 //             alpha of the background color under the page, document tells whether it is the web view of a document
 //             region
-//   sheet     the sheet attached to the window, null without one: {kind, frame}, kind save, open (an open panel), alert (the
-//             window of an NSAlert) or other, frame in screen coordinates. A sheet is not one of children.
+//   sheet     the sheet attached to the window, null without one: {kind, frame, directory, name}, kind save, open (an open
+//             panel), alert (the window of an NSAlert) or other, frame in screen coordinates, directory the folder that an open
+//             or save panel shows and name the name in the name field of a save panel, each null for a sheet without it. A sheet
+//             is not one of children.
 //   nativeSurfaces logical surface containers [{view, x, y, width, height, hidden}], window coordinates.
 //   documentWebviews   the web views of document regions
 //   appDomWebviews     every other web view: the app DOM and one web view for each view surface
