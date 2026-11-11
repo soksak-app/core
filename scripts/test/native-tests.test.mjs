@@ -59,6 +59,8 @@ test("the activation target builds and runs its cases through the native test ru
     "document_view_test",
     "image_region_ime_test",
     "view_focus_test",
+    "input_virtual_ime_test",
+    "ime_person_app",
   ]) {
     const path = join(buildDir, name);
     writeFileSync(path, "");
@@ -77,12 +79,24 @@ test("the activation target builds and runs its cases through the native test ru
   const lines = output.split("\n");
   const runnerLines = lines.filter((line) => line.includes("native-tests.mjs"));
   assert.equal(runnerLines.length, 1, output);
-  const runnerArgs = runnerLines[0].trim().split(/\s+/).slice(2);
+  // The recipe is `[NAME="value" ...] node <runner> <build> <case>...`: the environment the cases read, then the runner.
+  const words = runnerLines[0].trim().split(/\s+/);
+  const environment = {};
+  while (/^[A-Z_][A-Z0-9_]*=/.test(words[0])) {
+    const [name, ...value] = words.shift().split("=");
+    environment[name] = value.join("=").replace(/^"(.*)"$/, "$1");
+  }
+  // The input method check of the virtual key window starts the person's application that the target builds.
+  assert.deepEqual(environment, { SOKSAK_IME_PERSON_APP: join(buildDir, "ime_person_app") }, runnerLines[0]);
+  assert.equal(words[0], "node", runnerLines[0]);
+  assert.match(words[1], /\/scripts\/native-tests\.mjs$/, runnerLines[0]);
+  const runnerArgs = words.slice(2);
   assert.equal(runnerArgs[0], buildDir);
   assert.deepEqual(runnerArgs.slice(1), [
     "window_fullscreen_test",
     "webview_input_test,--monitor",
     "image_region_ime_test",
+    "input_virtual_ime_test",
   ]);
   assert.deepEqual(lines.filter((line) => /^\s*@?[^ ]*\/[^ ]+_test(?:\s|$)/.test(line)), [], output);
 });
