@@ -348,7 +348,7 @@ func TestThePluginPageGivesAClassicBarItsRoom(t *testing.T) {
 	for number := range 40 {
 		plugins = append(plugins, map[string]any{"id": fmt.Sprintf("tool%02d", number), "name": fmt.Sprintf("Tool %d", number),
 			"description": "A tool whose description takes a few lines of its card, so that the cards of forty tools overflow the library.",
-			"versions": []any{map[string]any{"version": "0.0.40", "engines": map[string]string{"soksak": "*"}, "sidecars": map[string]string{}}}})
+			"versions":    []any{map[string]any{"version": "0.0.40", "engines": map[string]string{"soksak": "*"}, "sidecars": map[string]string{}}}})
 	}
 	index["plugins"] = plugins
 	f := pluginShell(t, &pluginsHost{registry: "file:///registry/index.json", index: index}, `{"plugins":[]}`)
