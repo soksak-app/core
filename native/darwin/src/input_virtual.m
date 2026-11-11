@@ -193,6 +193,17 @@ static NSView *textInputClient(NSWindow *window) {
     return view;
 }
 
+void *sp_input_virtual_text_client(void *handle) {
+    NSCAssert(NSThread.isMainThread, @"the text input client belongs to the main thread");
+    NSResponder *responder = ((__bridge NSWindow *)handle).firstResponder;
+    NSView *view = [responder isKindOfClass:NSView.class] ? (NSView *)responder : nil;
+    while (view && !([view respondsToSelector:@selector(setMarkedText:selectedRange:replacementRange:)]
+        && [view respondsToSelector:@selector(insertText:replacementRange:)] && [view respondsToSelector:@selector(unmarkText)])) {
+        view = view.superview;
+    }
+    return (__bridge void *)view;
+}
+
 bool sp_input_virtual_send_key_to_web_view(void *handle, void *event) {
     NSCAssert(NSThread.isMainThread, @"the virtual key window belongs to the main thread");
     NSWindow *window = (__bridge NSWindow *)handle;

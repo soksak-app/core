@@ -17,7 +17,8 @@ use super::DocumentViewportMarker;
 use super::{
     ClipboardValue, CoreRootHost, CoreRootResolver, DOMOverlay, Delivery, DocumentOptions, Frame,
     FullscreenResult, Handle, Hit, ImagePresentation, ImageReleased, Insets, Key, Listener,
-    NativeEventWait, PersistentStream, Platform, Pointer, ProcessFootprint, Raster, WindowOverlay,
+    NativeEventWait, PersistentStream, Platform, Pointer, ProcessFootprint, Raster, TextInput,
+    WindowOverlay,
 };
 
 /// The time that a press or a release waits for the web view to receive it, and the time that an activation waits for the
@@ -519,6 +520,9 @@ impl Platform for Windows {
     }
     fn input_key(&self, window: Handle, key: &Key) -> Result<Delivery, String> {
         input::key(window, key)
+    }
+    fn input_text(&self, _window: Handle, _text: &TextInput) -> Result<Delivery, String> {
+        Err("input.text is not implemented on this platform".into())
     }
 
     #[cfg(feature = "diagnostics")]

@@ -13,6 +13,7 @@ use objc2::runtime::{AnyClass, AnyObject, Bool};
 
 use super::super::{
     ButtonHeld, Delivery, Frame, FrontmostApplication, Handle, Hit, Key, Pointer, PointerHeld,
+    TextInput,
 };
 use super::{NSPoint, NSRect};
 
@@ -43,6 +44,15 @@ unsafe extern "C" {
         text: *const c_char,
         modifiers: u32,
         down: bool,
+    ) -> i32;
+    fn sp_input_text(
+        window: *mut c_void,
+        phase: i32,
+        text: *const c_char,
+        selection_start: std::ffi::c_long,
+        selection_length: std::ffi::c_long,
+        replacement_start: std::ffi::c_long,
+        replacement_length: std::ffi::c_long,
     ) -> i32;
 }
 
@@ -223,6 +233,35 @@ pub fn key(window: Handle, key: &Key) -> Result<Delivery, String> {
     Ok(match result {
         SP_INPUT_DELIVERED => Delivery::Delivered,
         SP_INPUT_INACTIVE => Delivery::Inactive,
+        _ => Delivery::Rejected,
+    })
+}
+
+/// Gives one step of a composition to the text input client of the key responder of the window and returns whether it was
+/// delivered. Call it on the main thread. A text that contains a NUL character returns an error.
+pub fn text(window: Handle, text: &TextInput) -> Result<Delivery, String> {
+    let typed = text
+        .text
+        .as_deref()
+        .map(CString::new)
+        .transpose()
+        .map_err(|e| e.to_string())?;
+    let typed = typed
+        .as_ref()
+        .map_or(std::ptr::null(), |typed| typed.as_ptr());
+    let result = unsafe {
+        sp_input_text(
+            window as *mut c_void,
+            text.phase as i32,
+            typed,
+            text.selection_start as std::ffi::c_long,
+            text.selection_length as std::ffi::c_long,
+            text.replacement_start as std::ffi::c_long,
+            text.replacement_length as std::ffi::c_long,
+        )
+    };
+    Ok(match result {
+        SP_INPUT_DELIVERED => Delivery::Delivered,
         _ => Delivery::Rejected,
     })
 }

@@ -107,3 +107,9 @@ void surfaceUnwatchMouse(uintptr_t monitor) {
 int main_sp_input_key(uintptr_t window, const char *key, const char *text, unsigned int modifiers, bool down) {
     return ON_MAIN(sp_input_result, sp_input_key((void *)window, key, text, modifiers, down));
 }
+
+int main_sp_input_text(uintptr_t window, int phase, const char *text, long selection_start, long selection_length, long replacement_start,
+    long replacement_length) {
+    return ON_MAIN(sp_input_result, sp_input_text((void *)window, (sp_input_text_phase)phase, text, selection_start, selection_length,
+        replacement_start, replacement_length));
+}

@@ -33,6 +33,7 @@ type fakeBackend struct {
 	bodies   []string
 	commands []string
 	keys     []host.KeyInput
+	texts    []host.TextInput
 	pointers []host.PointerInput
 	// When held exists, the first request of holdMethod signals entered and does not reply until held closes.
 	held       chan struct{}
@@ -112,6 +113,13 @@ func (b *fakeBackend) HostCommand(window, name string, params json.RawMessage, _
 func (b *fakeBackend) Pointer(window string, input host.PointerInput) error {
 	b.mu.Lock()
 	b.pointers = append(b.pointers, input)
+	b.mu.Unlock()
+	return nil
+}
+
+func (b *fakeBackend) Text(window string, input host.TextInput) error {
+	b.mu.Lock()
+	b.texts = append(b.texts, input)
 	b.mu.Unlock()
 	return nil
 }
@@ -645,6 +653,55 @@ func TestEndpointKeyWithEmptyTextHasNoText(t *testing.T) {
 	want := host.KeyInput{Key: "Enter", Down: true}
 	if len(backend.keys) != 1 || backend.keys[0] != want {
 		t.Fatalf("key input %+v, want %+v: InjectKey types the key name for an empty text", backend.keys, want)
+	}
+}
+
+// contract: endpoint.input.text-phases, endpoint.input.text-ranges, endpoint.input.text-invalid
+func TestEndpointTextSteps(t *testing.T) {
+	backend := newFakeBackend()
+	_, address, _ := serve(t, backend)
+	conn := dial(t, address)
+	steps := []map[string]any{
+		{"window": "main", "phase": "mark", "text": "한😀"},
+		{"window": "main", "phase": "mark", "text": "한글", "selection": map[string]any{"start": 0, "length": 1},
+			"replacement": map[string]any{"start": 2, "length": 3}},
+		{"window": "main", "phase": "insert", "text": "한"},
+		{"window": "main", "phase": "unmark"},
+	}
+	for index, params := range steps {
+		if got := call(t, conn, index+1, "input.text", params); got.Error != nil {
+			t.Fatalf("input.text %v: %+v", params, got)
+		}
+	}
+	invalid := []map[string]any{
+		{"window": "main", "phase": "compose", "text": "a"},
+		{"window": "main", "phase": "mark"},
+		{"window": "main", "phase": "unmark", "text": "a"},
+		{"window": "main", "phase": "mark", "text": "ab", "selection": map[string]any{"start": 1, "length": 2}},
+		{"window": "main", "phase": "insert", "text": "a", "selection": map[string]any{"start": 0, "length": 0}},
+		{"window": "main", "phase": "insert", "text": "a", "replacement": map[string]any{"start": -1, "length": 0}},
+		{"window": "main", "phase": "mark", "text": "a", "selection": map[string]any{"start": 0}},
+	}
+	for index, params := range invalid {
+		if got := call(t, conn, 10+index, "input.text", params); got.Error == nil || got.Error.Code != -32602 {
+			t.Fatalf("input.text %v: %+v, want -32602", params, got)
+		}
+	}
+	backend.mu.Lock()
+	defer backend.mu.Unlock()
+	want := []host.TextInput{
+		{Phase: host.TextMark, Text: "한😀", SelectionStart: 3, ReplacementStart: -1},
+		{Phase: host.TextMark, Text: "한글", SelectionStart: 0, SelectionLength: 1, ReplacementStart: 2, ReplacementLength: 3},
+		{Phase: host.TextInsert, Text: "한", ReplacementStart: -1},
+		{Phase: host.TextUnmark, ReplacementStart: -1},
+	}
+	if len(backend.texts) != len(want) {
+		t.Fatalf("text input %+v, want %+v", backend.texts, want)
+	}
+	for index := range want {
+		if backend.texts[index] != want[index] {
+			t.Fatalf("text input %d %+v, want %+v", index, backend.texts[index], want[index])
+		}
 	}
 }
 

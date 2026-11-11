@@ -199,6 +199,20 @@ function buildTools(window, exposure) {
         ["key", "phase"],
       ),
     },
+    {
+      name: "input_text",
+      description: "Gives one step of a composition to the text input client of the key responder of the window, as an input method does: mark sets the marked text, insert commits a text, unmark commits the marked text as it is.",
+      inputSchema: object(
+        {
+          window: windowProperty,
+          phase: { type: "string", enum: ["mark", "insert", "unmark"] },
+          text: { type: "string", description: "The marked or inserted text; unmark takes none." },
+          selection: { type: "object", properties: { start: { type: "integer", minimum: 0 }, length: { type: "integer", minimum: 0 } }, required: ["start", "length"], description: "Only for mark: the selected range in the marked text, in UTF-16 code units. Defaults to the caret at its end." },
+          replacement: { type: "object", properties: { start: { type: "integer", minimum: 0 }, length: { type: "integer", minimum: 0 } }, required: ["start", "length"], description: "The range of the document text that the step replaces, in UTF-16 code units. Defaults to the marked text or the selection." },
+        },
+        ["phase"],
+      ),
+    },
   );
   return tools;
 }
@@ -226,7 +240,7 @@ async function callTool(params) {
   if (name === "status_watch_once" && Object.hasOwn(args, "timeout")) {
     throw new RpcError(-32602, "status_watch_once takes no timeout: the value or the end of the connection ends the wait");
   }
-  const known = ["windows_list", "status_get", "status_watch_once", "element_rect", "element_act", "input_pointer", "input_key"];
+  const known = ["windows_list", "status_get", "status_watch_once", "element_rect", "element_act", "input_pointer", "input_key", "input_text"];
   if (!known.includes(name) && !(name.startsWith(COMMAND_PREFIX) && /^[a-z0-9_-]+$/.test(name.slice(COMMAND_PREFIX.length)))) {
     throw new RpcError(-32602, `unknown tool: ${name}`);
   }
@@ -255,6 +269,9 @@ async function callTool(params) {
           break;
         case "input_key":
           value = await c.request("input.key", withWindow(window, args, ["key", "text", "modifiers", "phase"]));
+          break;
+        case "input_text":
+          value = await c.request("input.text", withWindow(window, args, ["phase", "text", "selection", "replacement"]));
           break;
         default:
           value = await c.request("command.run", {

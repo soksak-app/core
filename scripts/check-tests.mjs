@@ -9209,6 +9209,23 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F756-2",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "sp_input_result sp_input_text(void *handle, sp_input_text_phase phase, const char *text, long selectionStart, long selectionLength," },
+      { file: "packages/host/go/src/endpoint.go", symbol: "func inputText(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "pub fn text_input(params: &Map<String, Value>) -> Result<TextInput, Failure> {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/input_virtual_test.m", id: "the composition types into the page (%@)" },
+      { file: "packages/host/go/tests/endpoint_test.go", id: "TestEndpointTextSteps" },
+      { file: "packages/host/rust/tests/exposure_test.rs", id: "a_text_input_reaches_the_platform_as_one_step_of_a_composition" },
+      { file: "packages/sok/go/tests/sok_test.go", id: "TestTheOnlyWindowIsUsedAndParametersAreSent" },
+      { file: "packages/window-check/test/session-text.test.mjs", id: "a session sends a step of a composition as input.text" },
+    ],
+    expected: "input.text gives the steps of an input method, the marked text with its selection, the inserted text and the commit of the marked text, to the text input client of the key responder of a covered window of an application that is not active, and the page composes them.",
+    levels: ["unit"],
+  },
+  {
     id: "F160.31",
     implementation: [
       { file: "packages/sok/go/src/event_log.go", symbol: "func StartEventLog" },

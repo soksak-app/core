@@ -241,7 +241,7 @@ fn the_only_window_is_used_and_parameters_are_sent() {
             result("null")
         }
     });
-    let cases: [(&[&str], &str, &str); 9] = [
+    let cases: [(&[&str], &str, &str); 11] = [
         (
             &["status", "core.screen", "--surface", "tab-1"],
             "status.get",
@@ -320,6 +320,27 @@ fn the_only_window_is_used_and_parameters_are_sent() {
             ],
             "input.key",
             r#"{"key":"a","modifiers":["shift","command"],"phase":"down","window":"main"}"#,
+        ),
+        (
+            &[
+                "input",
+                "text",
+                "--phase",
+                "mark",
+                "--text",
+                "한글",
+                "--selection",
+                "0,1",
+                "--replacement",
+                "2,3",
+            ],
+            "input.text",
+            r#"{"phase":"mark","replacement":{"length":3,"start":2},"selection":{"length":1,"start":0},"text":"한글","window":"main"}"#,
+        ),
+        (
+            &["input", "text", "--phase", "unmark"],
+            "input.text",
+            r#"{"phase":"unmark","window":"main"}"#,
         ),
     ];
     for (args, method, params) in cases {

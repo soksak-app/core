@@ -288,6 +288,19 @@ int main(void) { @autoreleasepool {
     check(sp_input_key(window, "a", "a", 0, true) == SP_INPUT_DELIVERED && sp_input_key(window, "a", "a", 0, false) == SP_INPUT_DELIVERED, @"a key is delivered");
     awaitPage(view, @"the field takes the text a", @"input", @"document.getElementById('field').value === 'a'");
     check([evaluate(view, @"document.getElementById('field').value") isEqual:@"a"], [NSString stringWithFormat:@"the key types into the page (%@)", evaluate(view, @"document.getElementById('field').value")]);
+    // A composition as the input method of the system gives it to the text input client of the key responder: the marked text,
+    // its replacement and its commit, in the covered window of an application that is not active.
+    check(sp_input_text(window, SP_INPUT_TEXT_MARK, "\xe3\x85\x8e", 1, 0, -1, 0) == SP_INPUT_DELIVERED, @"a marked text is delivered");
+    awaitPage(view, @"the field shows the marked text", @"input", @"document.getElementById('field').value === 'a\u314e'");
+    check(sp_input_text(window, SP_INPUT_TEXT_MARK, "\xed\x95\x98", 1, 0, -1, 0) == SP_INPUT_DELIVERED, @"a second marked text replaces the first");
+    awaitPage(view, @"the field shows the replaced marked text", @"input", @"document.getElementById('field').value === 'a\ud558'");
+    check(sp_input_text(window, SP_INPUT_TEXT_INSERT, "\xed\x95\x9c", 0, 0, -1, 0) == SP_INPUT_DELIVERED, @"an inserted text is delivered");
+    awaitPage(view, @"the field commits the inserted text", @"compositionend", @"document.getElementById('field').value === 'a\ud55c'");
+    check(sp_input_text(window, SP_INPUT_TEXT_MARK, "\xea\xb8\x80", 1, 0, -1, 0) == SP_INPUT_DELIVERED
+        && sp_input_text(window, SP_INPUT_TEXT_UNMARK, NULL, 0, 0, -1, 0) == SP_INPUT_DELIVERED, @"a marked text is committed as it is");
+    awaitPage(view, @"the field commits the marked text", @"compositionend", @"document.getElementById('field').value === 'a\ud55c\uae00'");
+    check([evaluate(view, @"document.getElementById('field').value") isEqual:@"a한글"],
+        [NSString stringWithFormat:@"the composition types into the page (%@)", evaluate(view, @"document.getElementById('field').value")]);
     check(monitored == 3, [NSString stringWithFormat:@"a local monitor sees the press, the release and the key of a virtual key window (%lu)", (unsigned long)monitored]);
     [NSEvent removeMonitor:monitor];
 

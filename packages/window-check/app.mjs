@@ -892,6 +892,15 @@ export class Session {
     return this.request("input.key", { key, phase, ...options });
   }
 
+  /**
+   * One step of a composition, as the input method of the system gives it to the text input client of the key responder
+   * (input.text): `mark` with the marked text, `insert` with the committed text, or `unmark`. `options` holds `selection` and
+   * `replacement`, each `{start, length}` in UTF-16 code units.
+   */
+  text(phase, text, options = {}) {
+    return this.request("input.text", { phase, ...(text === undefined ? {} : { text }), ...options });
+  }
+
   /** A native click with press and release. */
   async click(x, y) {
     await this.until("host.buttons", (value) => value.mask === 0, "a mouse button stayed pressed");

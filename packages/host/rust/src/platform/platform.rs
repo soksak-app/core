@@ -346,6 +346,30 @@ pub enum Delivery {
     PointerHeld(PointerHeld),
 }
 
+/// One step of a composition of `input.text`, as the input method of the system gives it to the text input client of the key
+/// responder. Ranges count UTF-16 code units, and `replacement_start` -1 is no range, which replaces the marked text or the
+/// selection.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TextInput {
+    pub phase: TextPhase,
+    pub text: Option<String>,
+    pub selection_start: i64,
+    pub selection_length: i64,
+    pub replacement_start: i64,
+    pub replacement_length: i64,
+}
+
+/// The step of a composition.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextPhase {
+    /// The marked text and the selection in it (setMarkedText).
+    Mark = 0,
+    /// The inserted text, which ends the composition (insertText).
+    Insert = 1,
+    /// The commit of the marked text as it is (unmarkText).
+    Unmark = 2,
+}
+
 /// A key action that is delivered as native input.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Key {
@@ -932,6 +956,9 @@ pub trait Platform: CoreRootHost + Send + Sync {
     ) -> Result<(), String>;
     /// Delivers key input to the window and returns whether it was delivered. Call it on the main thread.
     fn input_key(&self, window: Handle, key: &Key) -> Result<Delivery, String>;
+    /// Gives one step of a composition to the text input client of the key responder of the window and returns whether it was
+    /// delivered. Call it on the main thread.
+    fn input_text(&self, window: Handle, text: &TextInput) -> Result<Delivery, String>;
 
     // Capture
     //

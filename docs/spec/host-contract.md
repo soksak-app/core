@@ -420,6 +420,9 @@ Items:
 | `endpoint.input.key-control-option-and-text` | The control and option modifiers become 6, and text is passed through. | all |
 | `endpoint.input.key-empty-text-types-the-key` | A key with an empty text reaches the platform with no text, so the key name gives the characters of the event. | all |
 | `endpoint.input.key-invalid-phase-or-modifier-type` | An unknown key phase or a non-array modifiers value returns -32602. | all |
+| `endpoint.input.text-phases` | A text input of the phase mark, insert or unmark reaches the platform with that step; mark without a selection puts the caret at the end of the text, counted in UTF-16 code units, and a step without a replacement has none (-1). | all |
+| `endpoint.input.text-ranges` | The selection of mark and the replacement of mark and insert reach the platform as given, as start and length in UTF-16 code units. | all |
+| `endpoint.input.text-invalid` | An unknown phase, mark or insert without text, unmark with a text, a selection outside the text or on insert, a negative range and a range without start or length return -32602. | all |
 | `endpoint.discovery.writes-endpoint-json` | endpoint.json holds the transport, address, pid, application, version, executable, and start time. | all |
 | `endpoint.discovery.written-after-first-window` | endpoint.json is not written when the endpoint starts; publishing it for a window that does not exist fails and writes no file; after publishing for an existing window, a request for that window is answered. | all |
 | `endpoint.discovery.endpoint-json-mode-0600` | endpoint.json has mode 0600. | all |

@@ -1140,3 +1140,51 @@ fn a_registration_kind_is_status_command_or_element() {
         );
     }
 }
+
+// contract: endpoint.input.text-phases, endpoint.input.text-ranges, endpoint.input.text-invalid
+#[test]
+fn a_text_input_reaches_the_platform_as_one_step_of_a_composition() {
+    let read = |value: Value| exposure::text_input(value.as_object().unwrap());
+    let step = |phase, text: Option<&str>, selection: (i64, i64), replacement: (i64, i64)| {
+        exposure::TextInput {
+            phase,
+            text: text.map(str::to_string),
+            selection_start: selection.0,
+            selection_length: selection.1,
+            replacement_start: replacement.0,
+            replacement_length: replacement.1,
+        }
+    };
+    assert_eq!(
+        read(json!({"phase": "mark", "text": "한😀"})).unwrap(),
+        step(exposure::TextPhase::Mark, Some("한😀"), (3, 0), (-1, 0)),
+        "mark without a selection puts the caret at the end, counted in UTF-16 code units"
+    );
+    assert_eq!(
+        read(
+            json!({"phase": "mark", "text": "한글", "selection": {"start": 0, "length": 1},
+            "replacement": {"start": 2, "length": 3}})
+        )
+        .unwrap(),
+        step(exposure::TextPhase::Mark, Some("한글"), (0, 1), (2, 3))
+    );
+    assert_eq!(
+        read(json!({"phase": "insert", "text": "한"})).unwrap(),
+        step(exposure::TextPhase::Insert, Some("한"), (0, 0), (-1, 0))
+    );
+    assert_eq!(
+        read(json!({"phase": "unmark"})).unwrap(),
+        step(exposure::TextPhase::Unmark, None, (0, 0), (-1, 0))
+    );
+    for invalid in [
+        json!({"phase": "compose", "text": "a"}),
+        json!({"phase": "mark"}),
+        json!({"phase": "unmark", "text": "a"}),
+        json!({"phase": "mark", "text": "ab", "selection": {"start": 1, "length": 2}}),
+        json!({"phase": "insert", "text": "a", "selection": {"start": 0, "length": 0}}),
+        json!({"phase": "insert", "text": "a", "replacement": {"start": -1, "length": 0}}),
+        json!({"phase": "mark", "text": "a", "selection": {"start": 0}}),
+    ] {
+        assert_eq!(read(invalid.clone()).unwrap_err().code, -32602, "{invalid}");
+    }
+}

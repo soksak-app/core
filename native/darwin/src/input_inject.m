@@ -1446,6 +1446,35 @@ static sp_input_result keyInput(void *handle, const char *key, const char *text,
     return SP_INPUT_DELIVERED;
 }
 
+sp_input_result sp_input_text(void *handle, sp_input_text_phase phase, const char *text, long selectionStart, long selectionLength,
+    long replacementStart, long replacementLength) {
+    NSCAssert(NSThread.isMainThread, @"text input belongs to the main thread");
+    NSWindow *window = (__bridge NSWindow *)handle;
+    if (!window || phase < SP_INPUT_TEXT_MARK || phase > SP_INPUT_TEXT_UNMARK) return SP_INPUT_REJECTED;
+    NSString *string = text ? [NSString stringWithUTF8String:text] : nil;
+    if (phase != SP_INPUT_TEXT_UNMARK && !string) return SP_INPUT_REJECTED;
+    if (phase == SP_INPUT_TEXT_MARK && (selectionStart < 0 || selectionLength < 0
+        || (NSUInteger)selectionStart + (NSUInteger)selectionLength > string.length)) {
+        return SP_INPUT_REJECTED;
+    }
+    if (replacementStart >= 0 && replacementLength < 0) return SP_INPUT_REJECTED;
+    // The window takes the keyboard as for a key: in an application that is not really active it becomes the virtual key window, so
+    // the page holds its focus; in an application that is really active the step goes to the window whether it is key or not.
+    if (!keyForInput(window)) enterVirtual(window);
+    id<NSTextInputClient> client = (__bridge id<NSTextInputClient>)sp_input_virtual_text_client(handle);
+    if (!client) return SP_INPUT_REJECTED;
+    NSRange replacement = replacementStart < 0 ? NSMakeRange(NSNotFound, 0) : NSMakeRange((NSUInteger)replacementStart, (NSUInteger)replacementLength);
+    switch (phase) {
+        case SP_INPUT_TEXT_MARK:
+            [client setMarkedText:string selectedRange:NSMakeRange((NSUInteger)selectionStart, (NSUInteger)selectionLength)
+                 replacementRange:replacement];
+            break;
+        case SP_INPUT_TEXT_INSERT: [client insertText:string replacementRange:replacement]; break;
+        case SP_INPUT_TEXT_UNMARK: [client unmarkText]; break;
+    }
+    return SP_INPUT_DELIVERED;
+}
+
 // JSON string of text; null when text is NULL.
 static NSString *jsonText(const char *text) {
     if (!text) return @"null";

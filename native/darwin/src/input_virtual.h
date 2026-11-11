@@ -42,3 +42,7 @@ bool sp_input_virtual_send_key_to_web_view(void *window, void *event);
 // AppKit also holds a key window in an application that is not active, such as a window that a host shows while another window
 // is the virtual key window; its input is input of an application that is not active and goes to the window or the view.
 bool sp_input_virtual_through_application(void *window);
+
+// The text input client that holds the keyboard of window: the nearest view from its first responder up that takes marked text
+// and inserted text (NSTextInputClient), or NULL. Main thread.
+void *sp_input_virtual_text_client(void *window);

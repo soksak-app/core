@@ -1132,6 +1132,27 @@ func (b hostBackend) Key(window string, input KeyInput) error {
 	return delivered(result == platform.PointerDelivered, nil)
 }
 
+func (b hostBackend) Text(window string, input TextInput) error {
+	s, err := b.window(window)
+	if err != nil {
+		return err
+	}
+	var result platform.PointerResult
+	err = s.useWindow(func(window platform.Window) error {
+		var injected error
+		result, injected = system.InjectText(window, input.Phase, input.Text, input.SelectionStart, input.SelectionLength,
+			input.ReplacementStart, input.ReplacementLength)
+		return injected
+	})
+	if err != nil {
+		return nativeError(codeNoInput, err)
+	}
+	if result != platform.PointerDelivered {
+		return rpcError(codeInvalidParams, "the window has no text input client that takes the text")
+	}
+	return nil
+}
+
 // native reads the native JSON with read on the UI thread and puts it into into. inspect runs after the read in the same UI thread
 // task.
 func native(read func() (string, error), into any, inspect func()) error {

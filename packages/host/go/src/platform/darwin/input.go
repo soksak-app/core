@@ -145,6 +145,23 @@ func (implementation) InjectKey(window platform.Window, key, text string, modifi
 	}
 }
 
+// InjectText gives a step of a composition with sp_input_text of native/darwin.
+func (implementation) InjectText(window platform.Window, phase int, text string, selectionStart, selectionLength, replacementStart,
+	replacementLength int) (platform.PointerResult, error) {
+	var typed *byte
+	if phase != abi.SP_INPUT_TEXT_UNMARK {
+		typed = native.CString(text)
+		defer native.Free(unsafe.Pointer(typed))
+	}
+	switch native.MainSpInputText(uintptr(window), int32(phase), typed, int64(selectionStart), int64(selectionLength),
+		int64(replacementStart), int64(replacementLength)) {
+	case abi.SP_INPUT_DELIVERED:
+		return platform.PointerDelivered, nil
+	default:
+		return platform.PointerRejected, nil
+	}
+}
+
 func (implementation) UnwatchInput(monitor uintptr) {
 	if handle, ok := watchers[monitor]; ok {
 		native.SurfaceUnwatchMouse(uintptr(monitor))

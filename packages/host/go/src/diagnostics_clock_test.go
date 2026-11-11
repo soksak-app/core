@@ -26,6 +26,7 @@ func (diagnosticsClockBackend) HostCommand(string, string, json.RawMessage, *Rep
 }
 func (diagnosticsClockBackend) Pointer(string, PointerInput) error { return nil }
 func (diagnosticsClockBackend) Key(string, KeyInput) error         { return nil }
+func (diagnosticsClockBackend) Text(string, TextInput) error       { return nil }
 
 type diagnosticsClockReply struct {
 	JSONRPC string          `json:"jsonrpc"`

@@ -170,6 +170,7 @@ export function sampleHandlers() {
       return null;
     },
     "input.key": (params) => (window(params), null),
+    "input.text": (params) => (window(params), null),
   };
   return {
     handlers,

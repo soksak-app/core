@@ -106,6 +106,7 @@ test("legacy initialize handshake then tools/list", async (t) => {
     "element_act",
     "input_pointer",
     "input_key",
+    "input_text",
   ]);
   for (const name of names) assert.match(name, /^[A-Za-z0-9_.-]{1,128}$/);
   // A notification gets no response.
@@ -166,6 +167,7 @@ test("tools/call maps tools to endpoint methods", async (t) => {
   assert.equal(await call("input_pointer", { x: 1, y: 2, phase: "move", activate: true }), null);
   assert.equal(await call("input_pointer", { x: 1, y: 2, phase: "down", clicks: 2 }), null);
   assert.equal(await call("input_key", { key: "Enter", phase: "down", modifiers: ["shift"] }), null);
+  assert.equal(await call("input_text", { phase: "mark", text: "한", selection: { start: 0, length: 1 } }), null);
   assert.deepEqual(
     endpoint.requests.map((m) => [m.method, m.params]),
     [
@@ -180,6 +182,7 @@ test("tools/call maps tools to endpoint methods", async (t) => {
       ["input.pointer", { window: "main", x: 1, y: 2, phase: "move", activate: true }],
       ["input.pointer", { window: "main", x: 1, y: 2, phase: "down", clicks: 2 }],
       ["input.key", { window: "main", key: "Enter", phase: "down", modifiers: ["shift"] }],
+      ["input.text", { window: "main", phase: "mark", text: "한", selection: { start: 0, length: 1 } }],
     ],
   );
 });

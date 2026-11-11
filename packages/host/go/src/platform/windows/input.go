@@ -49,6 +49,11 @@ func (implementation) InjectPointer(window platform.Window, pointer string, x, y
 	})
 }
 
+// InjectText is not implemented on Windows: the composition of input.text has no call of the DevTools protocol here yet.
+func (implementation) InjectText(platform.Window, int, string, int, int, int, int) (platform.PointerResult, error) {
+	return platform.PointerRejected, fmt.Errorf("input.text is not implemented on this platform")
+}
+
 // InjectKey queues a key input through the DevTools protocol of the web view of the window. The next input reports a call that failed,
 // because this call answers on the UI thread before the call ends. Call it on the UI thread.
 func (implementation) InjectKey(window platform.Window, key, text string, modifiers uint, down bool) (platform.PointerResult, error) {

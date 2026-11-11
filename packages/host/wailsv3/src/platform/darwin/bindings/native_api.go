@@ -101,6 +101,9 @@ func Functions() abi.NativeFunctions {
 		MainSpInputKey: func(a0 uintptr, a1 *byte, a2 *byte, a3 uint32, a4 bool) int32 {
 			return int32(C.main_sp_input_key(C.uintptr_t(a0), (*C.char)(unsafe.Pointer(a1)), (*C.char)(unsafe.Pointer(a2)), C.uint(a3), C.bool(a4)))
 		},
+		MainSpInputText: func(a0 uintptr, a1 int32, a2 *byte, a3 int64, a4 int64, a5 int64, a6 int64) int32 {
+			return int32(C.main_sp_input_text(C.uintptr_t(a0), C.int(a1), (*C.char)(unsafe.Pointer(a2)), C.long(a3), C.long(a4), C.long(a5), C.long(a6)))
+		},
 		MainSpLinkOpen: func(a0 *byte) *byte {
 			return (*byte)(unsafe.Pointer(C.main_sp_link_open((*C.char)(unsafe.Pointer(a0)))))
 		},

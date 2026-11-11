@@ -28,7 +28,9 @@ use crate::platform;
 use crate::surfaces::label_for;
 use crate::windows::{self, NativeFailure, WindowData, window_data, with_native_owner};
 
-pub use crate::platform::{ButtonHeld, Delivery, FrontmostApplication, Key, Pointer, PointerHeld};
+pub use crate::platform::{
+    ButtonHeld, Delivery, FrontmostApplication, Key, Pointer, PointerHeld, TextInput, TextPhase,
+};
 
 /// The entries that the host declares. The format is the same as exposes of plugin.json, and each kind is in name
 /// order.
@@ -425,6 +427,67 @@ pub fn key(params: &Map<String, Value>) -> Result<Key, Failure> {
         modifiers,
         down,
     })
+}
+
+/// Reads a range of `input.text`, `{start, length}` in UTF-16 code units, inside `limit` code units, or anywhere for None.
+fn text_range(value: &Value, name: &str, limit: Option<i64>) -> Result<(i64, i64), Failure> {
+    let field = |field: &str| value.get(field).and_then(Value::as_i64);
+    let (Some(start), Some(length)) = (field("start"), field("length")) else {
+        return Err(Failure::params(format!("{name} must be {{start, length}}")));
+    };
+    if start < 0 || length < 0 || limit.is_some_and(|limit| start + length > limit) {
+        return Err(Failure::params(format!("{name} is outside the text")));
+    }
+    Ok((start, length))
+}
+
+/// Reads the parameters of `input.text`.
+pub fn text_input(params: &Map<String, Value>) -> Result<TextInput, Failure> {
+    let phase = match params.get("phase").and_then(Value::as_str) {
+        Some("mark") => TextPhase::Mark,
+        Some("insert") => TextPhase::Insert,
+        Some("unmark") => TextPhase::Unmark,
+        _ => return Err(Failure::params("phase must be mark, insert or unmark")),
+    };
+    let given = |name: &str| params.get(name).is_some_and(|value| !value.is_null());
+    let mut input = TextInput {
+        phase,
+        text: None,
+        selection_start: 0,
+        selection_length: 0,
+        replacement_start: -1,
+        replacement_length: 0,
+    };
+    if phase == TextPhase::Unmark {
+        if given("text") || given("selection") || given("replacement") {
+            return Err(Failure::params(
+                "unmark takes no text, selection or replacement",
+            ));
+        }
+        return Ok(input);
+    }
+    let text = match params.get("text") {
+        Some(Value::String(text)) => text.clone(),
+        None | Some(Value::Null) => return Err(Failure::params("text is required")),
+        Some(_) => return Err(Failure::params("text must be a string")),
+    };
+    let units = text.encode_utf16().count() as i64;
+    if phase == TextPhase::Mark {
+        input.selection_start = units;
+    }
+    if given("selection") {
+        if phase != TextPhase::Mark {
+            return Err(Failure::params("selection applies to mark"));
+        }
+        (input.selection_start, input.selection_length) =
+            text_range(&params["selection"], "selection", Some(units))?;
+    }
+    if given("replacement") {
+        (input.replacement_start, input.replacement_length) =
+            text_range(&params["replacement"], "replacement", None)?;
+    }
+    input.text = Some(text);
+    Ok(input)
 }
 
 /// The document of a waiting request and the request whose handling forwarded it, if any.
@@ -2922,6 +2985,19 @@ impl Host {
         }
     }
 
+    /// Gives one step of a composition on the main thread.
+    fn input_text(&self, window: &Window, text: TextInput) -> Result<Value, Failure> {
+        let platform = platform::current().map_err(|e| Failure::new(NO_INPUT, e))?;
+        match with_native_owner(window, move |handle| platform.input_text(handle, &text)) {
+            Ok(Delivery::Delivered) => Ok(Value::Null),
+            Ok(_) => Err(Failure::new(
+                INVALID_PARAMS,
+                "the window has no text input client that takes the text",
+            )),
+            Err(failure) => Err(native_failure(window.label(), NO_INPUT)(failure)),
+        }
+    }
+
     /// Delivers key input on the main thread.
     fn input_key(&self, window: &Window, key: Key) -> Result<Value, Failure> {
         let platform = platform::current().map_err(|e| Failure::new(NO_INPUT, e))?;
@@ -2996,6 +3072,7 @@ impl Host {
         match method {
             "input.pointer" => raw(&self.input_pointer(window, pointer(&params)?)?),
             "input.key" => raw(&self.input_key(window, key(&params)?)?),
+            "input.text" => raw(&self.input_text(window, text_input(&params)?)?),
             "exposure.list" => {
                 let page_params = params.clone();
                 exposure_list(&params, || self.page(window, method, page_params, reply))

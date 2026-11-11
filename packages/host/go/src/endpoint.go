@@ -24,6 +24,7 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+	"unicode/utf16"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 	"github.com/soksak-app/core/packages/host/go/src/routine"
@@ -151,6 +152,25 @@ type KeyInput struct {
 	Down      bool
 }
 
+// The steps of a composition of input.text, as the input method of the system gives them to the text input client of the key
+// responder.
+const (
+	TextMark   = 0
+	TextInsert = 1
+	TextUnmark = 2
+)
+
+// TextInput is one step of a composition (docs/spec/exposure.md#methods). Ranges count UTF-16 code units; ReplacementStart -1 is
+// no range, which replaces the marked text or the selection.
+type TextInput struct {
+	Phase             int
+	Text              string
+	SelectionStart    int
+	SelectionLength   int
+	ReplacementStart  int
+	ReplacementLength int
+}
+
 // Backend is the windows and pages that the endpoint uses. When the error is an *RPCError, the reply uses its number.
 type Backend interface {
 	// Windows is the list of open windows.
@@ -167,6 +187,8 @@ type Backend interface {
 	// Pointer and Key deliver native input to a window.
 	Pointer(window string, input PointerInput) error
 	Key(window string, input KeyInput) error
+	// Text gives one step of a composition to the text input client of the key responder of a window.
+	Text(window string, input TextInput) error
 }
 
 // SocketDirectory is the directory in which the application places its socket. It is under the temporary directory of the user.
@@ -1282,6 +1304,7 @@ var endpointMethods = map[string]endpointMethod{
 	"element.act":   elementRequest("element.act"),
 	"input.pointer": inputPointer,
 	"input.key":     inputKey,
+	"input.text":    inputText,
 }
 
 // namePattern is the form of an entry name.
@@ -1581,6 +1604,80 @@ func inputKey(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScop
 		mask |= bit
 	}
 	return nil, e.backend.Key(window, KeyInput{Key: k.Key, Text: k.Text, Modifiers: mask, Down: k.Phase == "down"})
+}
+
+// textRange is a range of input.text: {start, length} in UTF-16 code units.
+type textRange struct {
+	Start  *int
+	Length *int
+}
+
+// read checks the range against limit, the length of the text it lies in, or -1 for a range of the document, and returns its
+// start and length.
+func (r *textRange) read(name string, limit int) (int, int, error) {
+	if r.Start == nil || r.Length == nil {
+		return 0, 0, rpcError(codeInvalidParams, "%s must be {start, length}", name)
+	}
+	start, length := *r.Start, *r.Length
+	if start < 0 || length < 0 || (limit >= 0 && start+length > limit) {
+		return 0, 0, rpcError(codeInvalidParams, "%s is outside the text", name)
+	}
+	return start, length, nil
+}
+
+func inputText(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
+	window, err := e.window(params)
+	if err != nil {
+		return nil, err
+	}
+	var t struct {
+		Phase       string
+		Text        *string
+		Selection   *textRange
+		Replacement *textRange
+	}
+	if err := decode(params, &t); err != nil {
+		return nil, err
+	}
+	input := TextInput{ReplacementStart: -1}
+	switch t.Phase {
+	case "mark":
+		input.Phase = TextMark
+	case "insert":
+		input.Phase = TextInsert
+	case "unmark":
+		input.Phase = TextUnmark
+	default:
+		return nil, rpcError(codeInvalidParams, "phase must be mark, insert or unmark")
+	}
+	if input.Phase == TextUnmark {
+		if t.Text != nil || t.Selection != nil || t.Replacement != nil {
+			return nil, rpcError(codeInvalidParams, "unmark takes no text, selection or replacement")
+		}
+		return nil, e.backend.Text(window, input)
+	}
+	if t.Text == nil {
+		return nil, rpcError(codeInvalidParams, "text is required")
+	}
+	input.Text = *t.Text
+	units := len(utf16.Encode([]rune(input.Text)))
+	if input.Phase == TextMark {
+		input.SelectionStart = units
+	}
+	if t.Selection != nil {
+		if input.Phase != TextMark {
+			return nil, rpcError(codeInvalidParams, "selection applies to mark")
+		}
+		if input.SelectionStart, input.SelectionLength, err = t.Selection.read("selection", units); err != nil {
+			return nil, err
+		}
+	}
+	if t.Replacement != nil {
+		if input.ReplacementStart, input.ReplacementLength, err = t.Replacement.read("replacement", -1); err != nil {
+			return nil, err
+		}
+	}
+	return nil, e.backend.Text(window, input)
 }
 
 // The method name of the request. A request without one has an empty string.

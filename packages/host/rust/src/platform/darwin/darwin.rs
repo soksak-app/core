@@ -21,7 +21,7 @@ use super::{
     CoreRootHost, CoreRootResolver, DOMOverlay, Delivery, DocumentOptions, Frame, FullscreenResult,
     Handle, Hit, ImagePresentation, ImageReleased, Insets, Key, Listener, NativeEventWait,
     OutputEnd, OutputPipe, PersistentStream, Platform, Pointer, ProcessFootprint, Raster,
-    WindowOverlay,
+    TextInput, WindowOverlay,
 };
 
 #[cfg(feature = "diagnostics")]
@@ -659,6 +659,9 @@ impl Platform for Darwin {
     }
     fn input_key(&self, window: Handle, key: &Key) -> Result<Delivery, String> {
         input::key(window, key)
+    }
+    fn input_text(&self, window: Handle, text: &TextInput) -> Result<Delivery, String> {
+        input::text(window, text)
     }
 
     #[cfg(feature = "diagnostics")]

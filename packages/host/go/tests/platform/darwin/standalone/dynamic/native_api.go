@@ -492,6 +492,16 @@ func Functions(library uintptr) (abi.NativeFunctions, error) {
 		purego.RegisterFunc(&functions.MainSpInputKey, address)
 	}
 	{
+		address, err := purego.Dlsym(library, "main_sp_input_text")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_input_text: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_input_text: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.MainSpInputText, address)
+	}
+	{
 		address, err := purego.Dlsym(library, "main_sp_link_open")
 		if err != nil {
 			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_link_open: %w", err)

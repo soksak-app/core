@@ -214,6 +214,8 @@ func TestTheOnlyWindowIsUsedAndParametersAreSent(t *testing.T) {
 		{[]string{"input", "pointer", "--x", "1", "--y", "2", "--phase", "down", "--clicks", "2"}, "input.pointer", `{"clicks":2,"phase":"down","window":"main","x":1,"y":2}`},
 		{[]string{"input", "pointer", "--pointer", "second", "--x", "3", "--y", "4", "--phase", "drag"}, "input.pointer", `{"phase":"drag","pointer":"second","window":"main","x":3,"y":4}`},
 		{[]string{"input", "key", "--key", "a", "--phase", "down", "--modifiers", "shift,,command"}, "input.key", `{"key":"a","modifiers":["shift","command"],"phase":"down","window":"main"}`},
+		{[]string{"input", "text", "--phase", "mark", "--text", "한글", "--selection", "0,1", "--replacement", "2,3"}, "input.text", `{"phase":"mark","replacement":{"length":3,"start":2},"selection":{"length":1,"start":0},"text":"한글","window":"main"}`},
+		{[]string{"input", "text", "--phase", "unmark"}, "input.text", `{"phase":"unmark","window":"main"}`},
 	}
 	for _, c := range cases {
 		code, stdout, stderr := run(append(c.args, "--config-dir", fake.configDir)...)

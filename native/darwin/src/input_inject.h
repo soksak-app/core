@@ -129,3 +129,19 @@ void sp_input_activate_at(void *window, double x, double y, sp_activate_done don
 // type; when it is NULL, key is used. modifiers is a bit sum: 1 Shift, 2 Control, 4 Option, 8 Command. down true is a
 // press and false is a release.
 sp_input_result sp_input_key(void *window, const char *key, const char *text, unsigned modifiers, bool down);
+
+// The steps of a composition that the input method of the system gives the text input client of the key responder.
+typedef enum {
+    SP_INPUT_TEXT_MARK = 0,   // setMarkedText:selectedRange:replacementRange: with text and the selection in it
+    SP_INPUT_TEXT_INSERT = 1, // insertText:replacementRange: with text, which ends the composition
+    SP_INPUT_TEXT_UNMARK = 2, // unmarkText, which commits the marked text as it is
+} sp_input_text_phase;
+
+// Gives one step of a composition to the text input client of window: the nearest view from its first responder up that is a
+// text input client, as the input method of the system does for the key window of an active application. It works the same in a
+// covered window and in an application that is not active, where the window becomes the virtual key window as for a key.
+// selectionStart and selectionLength are the selected range in text for SP_INPUT_TEXT_MARK; replacementStart -1 replaces the
+// marked text or the selection, as the input method does without a range. Ranges count UTF-16 code units. A window without a text
+// input client, a missing or invalid text, a selection outside text and an unknown phase answer SP_INPUT_REJECTED. Main thread.
+sp_input_result sp_input_text(void *window, sp_input_text_phase phase, const char *text, long selectionStart, long selectionLength,
+    long replacementStart, long replacementLength);

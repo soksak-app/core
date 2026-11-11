@@ -59,6 +59,8 @@ commands:
   input gesture [window] [--pointer NAME] [--button left|right] [--clicks N] --points X,Y[;X,Y]...
                             sends down at the first point, a drag to each later point and up at the last on one connection
   input key [window] --key K --phase down|up [--text T] [--modifiers shift,control,option,command]
+  input text [window] --phase mark|insert|unmark [--text T] [--selection START,LENGTH] [--replacement START,LENGTH]
+                            gives one step of a composition to the text input client of the key responder, as an input method does
   debug query [--channel C] [--level L] [--class C] [--layer L] [--event E] [--event-prefix P] [--surface S] [--session S] [--cid C] [--run R] [--text T] [--from T] [--to T] [--order asc|desc] [--limit N] [--after CURSOR]
                             prints one page of the events of the event files that pass the filter
   debug replay SESSION [--until SEQUENCE]
@@ -130,6 +132,8 @@ const OPTIONS: &[&str] = &[
     "key",
     "text",
     "modifiers",
+    "selection",
+    "replacement",
     "level",
     "layer",
     "session",
@@ -239,6 +243,21 @@ impl Arguments {
             .filter(|value| value.is_finite() && !text.trim().is_empty());
         let value = value.ok_or_else(|| usage!("--{name} must be a number"))?;
         Ok(Some(number_value(value)))
+    }
+
+    /// Reads `--name START,LENGTH` as the range `{start, length}` of `input.text`, or None when it is not given.
+    fn text_range(&self, name: &str) -> Result<Option<Value>, Error> {
+        let Some(given) = self.values.get(name) else {
+            return Ok(None);
+        };
+        let parts: Vec<&str> = given.split(',').collect();
+        if let [start, length] = parts.as_slice()
+            && let (Ok(start), Ok(length)) =
+                (start.trim().parse::<i64>(), length.trim().parse::<i64>())
+        {
+            return Ok(Some(serde_json::json!({"start": start, "length": length})));
+        }
+        Err(usage!("--{name} must be START,LENGTH"))
     }
 
     fn required_number(&self, name: &str) -> Result<Option<Value>, Error> {
@@ -450,6 +469,24 @@ fn plan(
                             ("phase", text(phase)),
                             ("text", a.optional("text")),
                             ("modifiers", modifiers),
+                        ])),
+                        mode: Mode::Once,
+                        field: None,
+                    })
+                }
+                "text" => {
+                    let phase = a.required("phase")?;
+                    let selection = a.text_range("selection")?;
+                    let replacement = a.text_range("replacement")?;
+                    let window = window()?;
+                    Ok(Request {
+                        method: "input.text",
+                        params: Some(compact(vec![
+                            ("window", text(window)),
+                            ("phase", text(phase)),
+                            ("text", a.optional("text")),
+                            ("selection", selection),
+                            ("replacement", replacement),
                         ])),
                         mode: Mode::Once,
                         field: None,

@@ -659,6 +659,10 @@ type Platform interface {
 	// InjectKey delivers a key input to the window and returns whether it delivered it. modifiers is the bit sum of 1 Shift, 2 Control,
 	// 4 Option and 8 Command.
 	InjectKey(window Window, key, text string, modifiers uint, down bool) (PointerResult, error)
+	// InjectText gives one step of a composition (0 mark, 1 insert, 2 unmark) to the text input client of the key responder of the
+	// window, as the input method of the system does, and returns whether it delivered it. Ranges count UTF-16 code units, and
+	// replacementStart -1 is no range.
+	InjectText(window Window, phase int, text string, selectionStart, selectionLength, replacementStart, replacementLength int) (PointerResult, error)
 
 	// Listen creates the listener of the local endpoint in directory. directory must be exclusive to the current user.
 	// application is part of the address name.

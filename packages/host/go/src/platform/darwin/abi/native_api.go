@@ -51,6 +51,12 @@ const SP_INPUT_POINTER_HELD = 6
 
 const SP_INPUT_PRESS_OPEN = 5
 
+const SP_INPUT_TEXT_INSERT = 1
+
+const SP_INPUT_TEXT_MARK = 0
+
+const SP_INPUT_TEXT_UNMARK = 2
+
 const SP_INPUT_UNRECEIVED = 3
 
 const SURFACE_LAYOUT_COMMIT_CANCEL = 5
@@ -152,6 +158,7 @@ type NativeFunctions struct {
 	MainSpDocumentZoom                    func(unsafe.Pointer, float64) bool
 	MainSpHostPresentationComplete        func(unsafe.Pointer, *byte)
 	MainSpInputKey                        func(uintptr, *byte, *byte, uint32, bool) int32
+	MainSpInputText                       func(uintptr, int32, *byte, int64, int64, int64, int64) int32
 	MainSpLinkOpen                        func(*byte) *byte
 	MainSpMemoryPressureInject            func(*byte) bool
 	MainSpMenuItems                       func() *byte
@@ -412,6 +419,9 @@ func (functions NativeFunctions) Validate() error {
 	}
 	if functions.MainSpInputKey == nil {
 		return fmt.Errorf("native API function is missing: main_sp_input_key")
+	}
+	if functions.MainSpInputText == nil {
+		return fmt.Errorf("native API function is missing: main_sp_input_text")
 	}
 	if functions.MainSpLinkOpen == nil {
 		return fmt.Errorf("native API function is missing: main_sp_link_open")

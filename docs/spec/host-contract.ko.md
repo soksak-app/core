@@ -422,6 +422,9 @@ fn invalid_json_closes_connection() {
 | `endpoint.input.key-control-option-and-text` | control과 option 수정자는 6이 되고 text는 그대로 전달된다. | all |
 | `endpoint.input.key-empty-text-types-the-key` | text가 빈 키는 text 없이 플랫폼에 닿으므로, 키 이름이 event의 문자를 정한다. | all |
 | `endpoint.input.key-invalid-phase-or-modifier-type` | 알 수 없는 키 phase나 배열이 아닌 modifiers 값은 -32602를 반환한다. | all |
+| `endpoint.input.text-phases` | phase가 mark, insert, unmark인 text 입력은 그 단계로 platform에 닿는다. selection이 없는 mark는 caret을 text 끝(UTF-16 code unit으로 센다)에 두고, replacement가 없는 단계는 replacement가 없다(-1). | all |
+| `endpoint.input.text-ranges` | mark의 selection과 mark, insert의 replacement는 주어진 대로 UTF-16 code unit의 start와 length로 platform에 닿는다. | all |
+| `endpoint.input.text-invalid` | 알 수 없는 phase, text 없는 mark나 insert, text가 있는 unmark, text 밖이거나 insert에 붙은 selection, 음수 범위, start나 length가 없는 범위는 -32602를 반환한다. | all |
 | `endpoint.discovery.writes-endpoint-json` | endpoint.json은 전송 방식, 주소, pid, 애플리케이션, 버전, 실행 파일, 시작 시각을 담는다. | all |
 | `endpoint.discovery.written-after-first-window` | 엔드포인트를 시작할 때 endpoint.json을 쓰지 않는다. 없는 창으로 게시하면 실패하고 파일을 쓰지 않으며, 있는 창으로 게시한 뒤에는 그 창의 요청에 응답한다. | all |
 | `endpoint.discovery.endpoint-json-mode-0600` | endpoint.json의 모드는 0600이다. | all |
