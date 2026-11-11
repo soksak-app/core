@@ -578,7 +578,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/mygo/tests/presentation_test.go", id: "TestE2EAWindowHearsWhenAnotherCoversIt" },
       { file: "packages/host/mygo/tests/platform/darwin/system/view_surface_test.go", id: "TestE2EAViewPageShowsInASurfaceHostOfTheNativeView" },
     ],
-    expected: "A Go window check of the mygo adapter judges a shown window by a state that windows of other applications do not change, a check whose subject is an occlusion event fails with the cover as its reason when the screen shows none of its window, and a view session makes host calls only after its workbench reported ready.",
+    expected: "A Go window check of the mygo adapter judges a shown window by a state that windows of other applications do not change, a check whose subject is an occlusion event raises the windows of the mygo platform above the windows of other applications for its run, and a view session makes host calls only after its workbench reported ready.",
     levels: ["application"],
   },
   {
