@@ -35,40 +35,38 @@ test("the run uses the published application zip of the core release of this pac
 
 test("the options select the applications, the pack command, the checks and their time limit", () => {
   assert.deepEqual(parseTestAppOptions([], {}),
-    { apps: [...APP_NAMES], pack: DEFAULT_PACK, index: undefined, checkTimeout: 3_600_000, real: false, checks: undefined });
-  assert.deepEqual(parseTestAppOptions(["--app", "mygo", "--real"], {}).apps, ["mygo"]);
+    { apps: [...APP_NAMES], pack: DEFAULT_PACK, index: undefined, checkTimeout: 3_600_000, checks: undefined });
+  assert.deepEqual(parseTestAppOptions(["--app", "mygo"], {}).apps, ["mygo"]);
   assert.deepEqual(parseTestAppOptions([], { SOKSAK_APP: "wailsv3" }).apps, ["wailsv3"]);
   assert.deepEqual(parseTestAppOptions(["--pack", "pnpm pack --pack-destination {out}", "--check-timeout", "60", "e2e/a.test.mjs"], {}),
-    { apps: [...APP_NAMES], pack: "pnpm pack --pack-destination {out}", index: undefined, checkTimeout: 60_000, real: false, checks: ["e2e/a.test.mjs"] });
+    { apps: [...APP_NAMES], pack: "pnpm pack --pack-destination {out}", index: undefined, checkTimeout: 60_000, checks: ["e2e/a.test.mjs"] });
   assert.throws(() => parseTestAppOptions(["--app", "other"], {}), /unknown SOKSAK_APP: other/);
-  assert.throws(() => parseTestAppOptions(["--real", "e2e/a.test.mjs"], {}), /--real selects the checks under e2e\/real\/; it takes no paths/);
+  // Every check runs with the input that the host emulates inside the application, so no option selects checks of real input.
+  assert.throws(() => parseTestAppOptions(["--real"], {}), /Unknown option '--real'/);
   assert.throws(() => parseTestAppOptions(["--check-timeout", "0"], {}), /--check-timeout 0 is not a positive number of seconds/);
   assert.throws(() => parseTestAppOptions(["--pack", "make pack"], {}), /names no \{out\}/);
   assert.deepEqual(packArgv(DEFAULT_PACK, "/r"), ["make", "pack", "OUT=/r"]);
 });
 
-test("--index names the registry index of the run, as a file URL or a path, and takes neither --pack nor --real", () => {
+test("--index names the registry index of the run, as a file URL or a path, and takes no --pack", () => {
   assert.deepEqual(parseTestAppOptions(["--index", "file:///r/build/index.json", "environment/a.test.mjs"], {}),
-    { apps: [...APP_NAMES], pack: undefined, index: "/r/build/index.json", checkTimeout: 3_600_000, real: false, checks: ["environment/a.test.mjs"] });
+    { apps: [...APP_NAMES], pack: undefined, index: "/r/build/index.json", checkTimeout: 3_600_000, checks: ["environment/a.test.mjs"] });
   assert.equal(parseTestAppOptions(["--index", "build/index.json"], {}).index, "build/index.json");
   assert.throws(() => parseTestAppOptions(["--index", "https://example.invalid/index.json"], {}),
     /--index https:\/\/example\.invalid\/index\.json is no file URL and no path/);
   assert.throws(() => parseTestAppOptions(["--index", ""], {}), /--index names no index/);
   assert.throws(() => parseTestAppOptions(["--index", "build/index.json", "--pack", DEFAULT_PACK], {}),
     /--index installs from a built registry index; it takes no --pack/);
-  assert.throws(() => parseTestAppOptions(["--index", "build/index.json", "--real"], {}),
-    /--index installs from a built registry index; it takes no --real/);
 });
 
-test("the checks are the test files under e2e/ outside e2e/real/ and e2e/fixtures/, or with --real those under e2e/real/", (t) => {
+test("the checks are the test files under e2e/ outside e2e/fixtures/", (t) => {
   const root = folder(t);
   for (const file of ["e2e/a.test.mjs", "e2e/start.mjs", "e2e/test/helper.mjs", "e2e/real/b.test.mjs", "e2e/fixtures/p/test.mjs",
     "e2e/node_modules/x/c.test.mjs", "e2e/bench/test-d.mjs"]) {
     mkdirSync(join(root, file, ".."), { recursive: true });
     writeFileSync(join(root, file), "");
   }
-  assert.deepEqual(checkFiles(root), ["e2e/a.test.mjs", "e2e/bench/test-d.mjs", "e2e/test/helper.mjs"]);
-  assert.deepEqual(checkFiles(root, { real: true }), ["e2e/real/b.test.mjs"]);
+  assert.deepEqual(checkFiles(root), ["e2e/a.test.mjs", "e2e/bench/test-d.mjs", "e2e/real/b.test.mjs", "e2e/test/helper.mjs"]);
   assert.throws(() => checkFiles(folder(t)), /no test file under e2e\//);
 });
 

@@ -1,5 +1,5 @@
 // The window-check run of a plugin repository against the published core application (docs/spec/plugins.md#window-checks-of-a-plugin):
-//   sok-test-app [--app <host>] [--real] [--pack <command> | --index <index>] [--check-timeout <seconds>] [<file, folder or glob>...]
+//   sok-test-app [--app <host>] [--pack <command> | --index <index>] [--check-timeout <seconds>] [<file, folder or glob>...]
 // run from the root of the plugin repository (`pnpm exec sok-test-app`). The core version is the version of this installed
 // @soksak/window-check, the core release that the plugin repository names. For each application of the run (`--app`, or requiredApps
 // of app.mjs, so SOKSAK_APP selects one) the run downloads the published application zip `soksak-<version>-<platform>-<host>.zip`
@@ -13,11 +13,11 @@
 // index.json. The `sok` of each bundle sets that index and installs every plugin of the folder into the configuration of its
 // application. With `--index`, a file URL or a path of a built registry index such as the one that `make build` of the registry
 // writes, the run builds no registry folder and installs no plugin: the `sok` of each bundle sets that index, and the first run of
-// each application installs the starter pack that its environment.json names from it; `--index` takes no `--pack` and no `--real`.
+// each application installs the starter pack that its environment.json names from it; `--index` takes no `--pack`.
 // The run starts the applications, runs the checks with node:test, one file at a time, with SOKSAK_REGISTRY_INDEX set to the file
 // URL that `registry use` recorded, and quits each application through the quit item of its application menu, the last one
-// through the quit key, as a person does. The checks are the given
-// paths, or with `--real` the test files under e2e/real/, or else the test files under e2e/ outside e2e/real/ and e2e/fixtures/.
+// through the quit key, as a person does. The checks are the given paths, or else the test files under e2e/ outside e2e/fixtures/;
+// every check drives the application with the input that its host emulates inside the application.
 // It fails when a step fails, when an application ends with another status than 0 or when a process of the root or of a bundle
 // remains; each failure names its step. Every download and command is bounded by a time limit and ends at an interrupt. A passed
 // run removes its root; a failed run keeps it with the output of the applications.
@@ -140,11 +140,10 @@ const isTestFile = (name, inTestFolder) => /\.(c|m)?js$/.test(name)
   && (inTestFolder || /(^|[.\-_])test\.(c|m)?js$/.test(name) || /^test-/.test(name) || /^test\.(c|m)?js$/.test(name));
 
 /**
- * The checks of the run in the repository `root`, as paths relative to it: with `real` the test files under e2e/real/, otherwise the
- * test files under e2e/ outside e2e/real/ and e2e/fixtures/, in name order. node_modules is never searched. A run without checks is
- * an error.
+ * The checks of the run in the repository `root`, as paths relative to it: the test files under e2e/ outside e2e/fixtures/, in name
+ * order. node_modules is never searched. A run without checks is an error.
  */
-export function checkFiles(root, { real = false } = {}) {
+export function checkFiles(root) {
   const base = join(root, "e2e");
   const files = [];
   const visit = (dir, inTestFolder) => {
@@ -152,16 +151,15 @@ export function checkFiles(root, { real = false } = {}) {
       const path = join(dir, entry.name);
       if (entry.isDirectory()) {
         if (entry.name === "node_modules") continue;
-        if (dir === base && !real && (entry.name === "real" || entry.name === "fixtures")) continue;
+        if (dir === base && entry.name === "fixtures") continue;
         visit(path, inTestFolder || entry.name === "test");
       } else if (entry.isFile() && isTestFile(entry.name, inTestFolder)) {
         files.push(relative(root, path));
       }
     }
   };
-  const start = real ? join(base, "real") : base;
-  if (existsSync(start)) visit(start, false);
-  if (files.length === 0) throw new Error(`no test file under ${relative(root, start)}/`);
+  if (existsSync(base)) visit(base, false);
+  if (files.length === 0) throw new Error(`no test file under ${relative(root, base)}/`);
   return files;
 }
 
@@ -190,24 +188,22 @@ export function checkEnv(root, executables, index) {
 }
 
 /**
- * The options of `sok-test-app`: `{ apps, pack, index, checkTimeout, real, checks }`; `checks` is undefined when no path is given.
+ * The options of `sok-test-app`: `{ apps, pack, index, checkTimeout, checks }`; `checks` is undefined when no path is given.
  * `index` is the path of the registry index that `--index` names as a file URL or a path, or undefined; with it `pack` is undefined.
  */
 export function parseTestAppOptions(argv, env = process.env) {
   const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, strict: true, options: {
-    pack: { type: "string" }, index: { type: "string" }, "check-timeout": { type: "string" }, real: { type: "boolean", default: false },
+    pack: { type: "string" }, index: { type: "string" }, "check-timeout": { type: "string" },
     app: { type: "string" } } });
   let checkTimeout = LIMITS.checks;
   if (values["check-timeout"] !== undefined) {
     if (!/^[1-9]\d*$/.test(values["check-timeout"])) throw new Error(`--check-timeout ${values["check-timeout"]} is not a positive number of seconds`);
     checkTimeout = Number(values["check-timeout"]) * 1000;
   }
-  if (values.real && positionals.length > 0) throw new Error("--real selects the checks under e2e/real/; it takes no paths");
   let index;
   if (values.index !== undefined) {
     if (values.index === "") throw new Error("--index names no index");
     if (values.pack !== undefined) throw new Error("--index installs from a built registry index; it takes no --pack");
-    if (values.real) throw new Error("--index installs from a built registry index; it takes no --real");
     if (values.index.startsWith("file:")) index = fileURLToPath(values.index);
     else if (/^[a-z][a-z0-9+.-]*:\/\//i.test(values.index)) throw new Error(`--index ${values.index} is no file URL and no path`);
     else index = values.index;
@@ -215,7 +211,7 @@ export function parseTestAppOptions(argv, env = process.env) {
   const pack = index === undefined ? values.pack ?? DEFAULT_PACK : undefined;
   if (pack !== undefined) packArgv(pack, "{out}");
   const apps = values.app === undefined ? requiredApps(env) : requiredApps({ SOKSAK_APP: values.app });
-  return { apps, pack, index, checkTimeout, real: values.real, checks: positionals.length ? positionals : undefined };
+  return { apps, pack, index, checkTimeout, checks: positionals.length ? positionals : undefined };
 }
 
 /** Prefixes the error of `work` with the name of its step. */
@@ -491,13 +487,13 @@ export function remainingProcesses(processes, paths, self = process.pid) {
  * Runs the window checks of the plugin repository `root` (`sok-test-app`). Resolves with the failures, each
  * `<step>: <reason>`; an empty list is a passed run.
  */
-export async function testApp({ root, apps = requiredApps(process.env), pack = DEFAULT_PACK, index, real = false, checks,
+export async function testApp({ root, apps = requiredApps(process.env), pack = DEFAULT_PACK, index, checks,
   checkTimeout = LIMITS.checks, signal, platform = runPlatform(), write = (line) => process.stdout.write(`test-app: ${line}\n`) }) {
   const version = coreVersion();
   const hosts = apps;
   let selected;
   try {
-    selected = checks ?? checkFiles(root, { real });
+    selected = checks ?? checkFiles(root);
   } catch (error) {
     return [`checks: ${error.message}`];
   }

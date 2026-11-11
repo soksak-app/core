@@ -84,6 +84,20 @@ test("a window run waits for no idle time of the person: the runner and the make
   }
 });
 
+test("a window check leaves the default run only where the input that the host emulates cannot reach what it judges", { timeout: 10000 }, () => {
+  // The host emulates the keyboard and the pointer inside the application, so a check runs in the default run unless what it judges
+  // follows the system: the input method of the really active application, the local event monitors of AppKit, the change of the
+  // real key window, the system cursor, or a system panel (docs/operations/examples.md#end-to-end-run).
+  const root = fileURLToPath(new URL("../..", import.meta.url));
+  const checks = (folder) => readdirSync(join(root, "e2e", folder)).filter((name) => name.endsWith(".test.mjs")).sort();
+  assert.deepEqual(checks("activation"), ["ime.test.mjs", "marked-text.test.mjs", "picker-press-outside.test.mjs",
+    "registry-active.test.mjs", "view-focus.test.mjs", "view-ime-escape.test.mjs"]);
+  assert.deepEqual(checks("real"), ["card-chrome.test.mjs"]);
+  assert.deepEqual(checks("person"), ["debug-save.test.mjs"]);
+  assert.equal(existsSync(join(root, "packages/window-check/hid.mjs")), false,
+    "the published window-check package keeps a tool that posts real input");
+});
+
 test("candidate acceptance has a make entrypoint that requires explicit context and script without rebuilding", { timeout: 10000 }, () => {
   const cwd = fileURLToPath(new URL('../../', import.meta.url));
   const missing = spawnSync('make', ['--no-print-directory', 'test-app-candidate'], { cwd, encoding: 'utf8' });

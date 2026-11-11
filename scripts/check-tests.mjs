@@ -2228,7 +2228,7 @@ const FEATURE_LINKS = [
       { file: "e2e/benchmark/cases/view-drag.mjs", symbol: "export async function runViewDrag({ options, pageProcess, steps }) {" },
       { file: "e2e/benchmark/cases/view-drag.mjs", symbol: "export function viewDragB3Values(state, { firstDrag, recorded, gcLoop }) {" },
       { file: "e2e/benchmark/cases/floor-page.mjs", symbol: "export async function openFloorPage(s, { card } = {}) {" },
-      { file: "packages/window-check/hid.mjs", symbol: "export function readWindowElements(app) {" },
+      { file: "packages/window-check/accessibility.mjs", symbol: "export function readWindowElements(app) {" },
       { file: "e2e/benchmark/cases/resize.mjs", symbol: "export function resizeGeometry(gesture, decoded, { cornerRadiusPt, slotInsetsPt, measure = measureFloorLayoutFrame }) {" },
       { file: "e2e/benchmark/cases/resize.mjs", symbol: "export function resizeB3Values(state, { recorded }) {" },
       { file: "packages/window-check/view-metrics-collection.mjs", symbol: "export const TAB_PLACEMENT = Object.freeze({" },
@@ -2254,7 +2254,7 @@ const FEATURE_LINKS = [
       { file: "e2e/test/view-drag-case.test.mjs", id: "the view drag runs the drags of B3 in order and reads the processes around the first and the elements before them" },
       { file: "e2e/test/view-drag-case.test.mjs", id: "the B3 values of the view drag are the first-drag figures in the state 0 and the U7 figures of the third drag in the state frame-records" },
       { file: "e2e/test/floor-page-fixture.test.mjs", id: "the floor page is a view whose page draws the measurement colour and runs no code but the declaration of its composition" },
-      { file: "packages/window-check/test/hid-elements.test.mjs", id: "the elements of the windows of an application are counted by their accessibility role" },
+      { file: "packages/window-check/test/accessibility.test.mjs", id: "the elements of the windows of an application are counted by their accessibility role" },
       { file: "e2e/test/resize-case.test.mjs", id: "each recorded frame of a maximise is judged with the geometry rule of the view drag on the floor page" },
       { file: "e2e/test/resize-case.test.mjs", id: "the B3 values of the resize catch-up are its verdict in the state captured and the U7 figures of the maximise in the state frame-records" },
       { file: "e2e/test/idle-tab-case.test.mjs", id: "the idle tab limit is the bound of IDLE_TAB_BOUND_KB in the performance goals, and a measured cost above it fails the benchmark" },
@@ -3478,7 +3478,7 @@ const FEATURE_LINKS = [
     id: "F625",
     implementation: [
       { file: "scripts/benchmark-b3.mjs", symbol: '  if (needsPermission.length > 0 && !accessibility()) {' },
-      { file: "packages/window-check/hid.mjs", symbol: 'export const trusted = jxa(`return JSON.stringify($.AXIsProcessTrusted());`);' },
+      { file: "packages/window-check/accessibility.mjs", symbol: 'export const trusted = jxa(`return JSON.stringify($.AXIsProcessTrusted());`);' },
     ],
     tests: [
       { file: "scripts/test/benchmark-b3.test.mjs", id: "a run of a scenario whose target needs the Accessibility permission fails before its configuration when the permission is missing" },

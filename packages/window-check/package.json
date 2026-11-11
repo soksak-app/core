@@ -21,6 +21,7 @@
     "./view-metrics.mjs": "./view-metrics.mjs",
     "./lz4.mjs": "./lz4.mjs",
     "./order-names.mjs": "./order-names.mjs",
+    "./accessibility.mjs": "./accessibility.mjs",
     "./pasteboard.mjs": "./pasteboard.mjs",
     "./png.mjs": "./png.mjs",
     "./repeat.mjs": "./repeat.mjs",
@@ -42,7 +43,6 @@
     "./process-table.mjs": "./process-table.mjs",
     "./region-raster.mjs": "./region-raster.mjs",
     "./chains.mjs": "./chains.mjs",
-    "./hid.mjs": "./hid.mjs",
     "./package.json": "./package.json"
   },
   "files": [
@@ -62,6 +62,7 @@
     "view-metrics.mjs",
     "lz4.mjs",
     "order-names.mjs",
+    "accessibility.mjs",
     "pasteboard.mjs",
     "platform/",
     "png.mjs",
@@ -86,7 +87,6 @@
     "process-table.mjs",
     "region-raster.mjs",
     "chains.mjs",
-    "hid.mjs",
     "fixtures/"
   ],
   "bin": {

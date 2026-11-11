@@ -1,14 +1,15 @@
-// Real-input-tier checks of the card chrome of core: the cursors of the dividers and the card icons, the native focus that a real click
-// gives a view and its card, and the selection of a tab by a real click on its notice. The views are those of the raster probe, whose
-// image region the sidecar redraws on command, and of the layout probe, whose tab takes a notice through tab.notify.
+// Real-input-tier check of the card chrome of core: the cursors of the dividers and the card icons. The system cursor follows the
+// pointer of the window server, which the input that the host emulates inside the application does not move, so this check keeps
+// real input (docs/operations/examples.md#end-to-end-run). The views are those of the raster probe, whose image region the sidecar
+// redraws on command.
 // Run it only with `make test-app-real` in a run that the user approved.
 import assert from "node:assert/strict";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { fresh, START_PLUGIN } from "../fixture.mjs";
+import { fresh } from "../fixture.mjs";
 import { imageRect, rasterProbeTab } from "../input-probe.mjs";
-import { bringFront, click, post, requireTrusted, screenCenter, systemCursor } from "@soksak/window-check/hid.mjs";
+import { bringFront, post, requireTrusted, screenCenter, systemCursor } from "./hid.mjs";
 
 /** The colours that the raster probe repaints its image region in while a check reads the cursor over a divider. */
 const REDRAW_COLOURS = Object.freeze(["#204060", "#602040", "#406020"]);
@@ -27,24 +28,6 @@ async function rasterCards(s, count) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: a real click gives native focus to the clicked view and its card`, { timeout: 90000 }, async (t) => {
-    requireTrusted();
-    const s = await open(t, app);
-    await fresh(s);
-    const views = await rasterCards(s, 3);
-    await s.presented();
-    await bringFront(s, app, await imageRect(s, views[0].surface));
-    for (const view of [...views, views[0]]) {
-      const point = await screenCenter(s, await imageRect(s, view.surface));
-      click(point.x, point.y);
-      await s.until("core.grid", (grid) => grid.cards.some((card) => card.focused &&
-        card.tabs.some((tab) => tab.id === view.surface)), `the card of ${view.surface} did not take focus`);
-      const host = await s.until("host.window", (window) => window.responder?.surface === view.surface,
-        `${view.surface} did not become the native first responder after a real click`);
-      assert.deepEqual(host.regions.filter((region) => region.focused).map((region) => region.surface), [view.surface]);
-    }
-  });
-
   test(`${app.name}: dividers and card icons show their cursors after moves, focus changes, and view redraws`, { timeout: 180000 }, async (t) => {
     requireTrusted();
     const s = await open(t, app);
@@ -129,35 +112,5 @@ for (const app of Object.values(APPS)) {
     assert.equal(seen.closeAfterView, "pointingHand", `close icon after the view: ${JSON.stringify(seen)}`);
     assert.ok(seen.dividerDuringRedraw.every((name) => resize.includes(name)), `divider during redraws: ${JSON.stringify(seen)}`);
     assert.ok(resize.includes(seen.dividerAfterFocus), `divider after a focus change: ${JSON.stringify(seen)}`);
-  });
-
-  test(`${app.name}: clicking a real tab notice of a tab out of view selects its tab`, { timeout: 60000 }, async (t) => {
-    requireTrusted();
-    const s = await open(t, app);
-    await fresh(s);
-    const cardOf = (grid, surface) => grid.cards.find((card) => card.tabs.some((tab) => tab.id === surface));
-    const start = (await s.get("core.grid")).cards.find((card) => card.focused);
-    assert.ok(start, "the start layout has no focused card");
-    const shown = start.active;
-    const { tab: hidden } = await s.run("core.card.add-tab", { card: start.id, plugin: START_PLUGIN });
-    s.cleanup(() => s.run("core.tab.close", { tab: hidden }));
-    await s.registered(hidden, [`command ${START_PLUGIN}.notify`]);
-    await s.run("core.tab.select", { tab: shown });
-    await s.until("core.grid", (grid) => cardOf(grid, shown).active === shown && cardOf(grid, shown).focused,
-      "the first tab did not return to view in its focused card");
-    await s.run(`${START_PLUGIN}.notify`, { text: "PRESS-NOTICE", policy: "tab" }, hidden);
-    await s.until("core.grid", (grid) => cardOf(grid, hidden).tabs.find((item) => item.id === hidden).notice === "PRESS-NOTICE",
-      "the tab out of view did not show a tab notice");
-    const grid = await s.get("core.grid");
-    const index = grid.cards.flatMap((card) => card.tabs).findIndex((item) => item.id === hidden);
-    assert.ok(index >= 0, "the tab out of view is not rendered");
-    const tab = await s.rect("core.card.tab", index);
-    const center = await bringFront(s, app, tab);
-    post([{ type: "move", ...center }, { type: "down", ...center }, { type: "up", ...center }]);
-    await s.until("core.grid", (now) => cardOf(now, hidden).active === hidden,
-      "clicking the tab notice did not select its tab");
-    await s.run("core.card.focus", { card: cardOf(await s.get("core.grid"), hidden).id });
-    await s.until("core.grid", (now) => cardOf(now, hidden).focused,
-      "the selected tab's card did not take focus");
   });
 }

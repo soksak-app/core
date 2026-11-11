@@ -47,7 +47,7 @@ const ACTIVATION_DIRS = ["e2e/activation/", "e2e/real/"];
 // The real input tool of the harness, which only the checks of the real-input tier use: it activates the app before it sends HID
 // events, and it leaves an interval between HID events at the speed of a human movement. The interval is not a wait for state, and
 // the window server coalesces drag events sent without an interval. A fixed wait is not allowed outside this file.
-const REAL_INPUT_TOOL = "packages/window-check/hid.mjs";
+const REAL_INPUT_TOOL = "e2e/real/hid.mjs";
 // app.mjs of the harness reports a check of an application whose host process exited as not run: the check that found the exit
 // failed with it and its log records, so the skip hides no failure, and starting the application again would hide the exit.
 const NOT_RUN_REPORTER = "packages/window-check/app.mjs";
