@@ -3,7 +3,8 @@
 //
 // The test selects Korean 2-Set as the input source of the system for its run and restores the previous source at its end, also
 // when it fails, ends by an uncaught exception or ends by a signal that a process can catch. It starts ime_person_app
-// (SOKSAK_IME_PERSON_APP), which takes the front as the application of a person and composes 하 in its own text view. This
+// (SOKSAK_IME_PERSON_APP), which takes the front as the application of a person, with a window that shows nothing and lets clicks
+// pass, and composes 하 in its own text view; at its end it returns the front to the application that held it. This
 // application stays behind and is never active: a text view in its covered window takes g k s and Space, Backspace or Escape
 // through input.key, which makes that window the virtual key window. A person's input method composes those keys as 한 Space,
 // 하 and 한 (the AppKit reference of image_region_ime_test). After each sequence the composition of the person must stay as it was.
@@ -299,6 +300,9 @@ int main(void) { @autoreleasepool {
     if (!ready) return finish();
     tellPerson(@"compose");
     NSDictionary *composed = awaitPerson(@"composed", 0);
+    printf("NOTE: the window of the person shows nothing (alpha %s) and is its key window (%s); its input context is current (%s), "
+        "and the input method composes in it: %s\n", [composed[@"alpha"] description].UTF8String, [composed[@"front"] description].UTF8String,
+        [composed[@"current"] description].UTF8String, [composed[@"marked"] isEqual:@"하"] ? "yes" : "no");
     check([composed[@"marked"] isEqual:@"하"], [NSString stringWithFormat:@"the person composes 하 (%@)", composed]);
     if (![composed[@"marked"] isEqual:@"하"]) return finish();
 
@@ -306,6 +310,8 @@ int main(void) { @autoreleasepool {
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(240, 240, 360, 120)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
     [window setReleasedWhenClosed:NO];
+    // The window shows nothing, so it covers nothing of the screen of the person.
+    window.alphaValue = 0;
     SPRecordingTextView *view = [[[SPRecordingTextView alloc] initWithFrame:NSMakeRect(0, 0, 360, 120)] autorelease];
     view.calls = [NSMutableArray array];
     window.contentView = view;

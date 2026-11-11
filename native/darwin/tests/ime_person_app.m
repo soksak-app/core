@@ -1,4 +1,5 @@
-// The application of a person for input_virtual_ime_test: a separate process that takes the front, holds a composition of the
+// The application of a person for input_virtual_ime_test: a separate process that takes the front with a window that shows nothing
+// and lets every click pass, holds a composition of the
 // input method in its text view, and reports the state of that view, so the test judges whether a key of the virtual key window
 // of another application takes the composition of the person.
 //
@@ -8,7 +9,8 @@
 //   state    reports the state of the text view
 //   quit     discards the composition, returns the front to the given application and exits
 // The end of standard input, which the end of the test causes, quits in the same way. Each report is one JSON line on standard
-// output: {"kind", "marked", "text", "source", "front"}; kind is ready, composed, state, or for a change of the text view by the
+// output: {"kind", "marked", "text", "source", "front", "alpha", "current"}, where current states whether the input context of the
+// text view is the current input context of the application; kind is ready, composed, state, or for a change of the text view by the
 // input method mark, insert or unmark.
 #import <Cocoa/Cocoa.h>
 #import <Carbon/Carbon.h>
@@ -34,6 +36,8 @@ static void report(NSString *kind) {
         @"text": personView.string ?: @"",
         @"source": currentSource(),
         @"front": @(NSRunningApplication.currentApplication.isActive && personView.window.isKeyWindow),
+        @"alpha": @(personView.window.alphaValue),
+        @"current": @(NSTextInputContext.currentInputContext == personView.inputContext),
     };
     NSData *json = [NSJSONSerialization dataWithJSONObject:line options:0 error:NULL];
     fwrite(json.bytes, 1, json.length, stdout);
@@ -102,6 +106,10 @@ int main(int argc, const char *argv[]) {
         NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(200, 200, 360, 120)
             styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
         window.title = @"input_virtual_ime_test person";
+        // The person does not see the window and clicks through it: it covers nothing of the screen, and it can still be the key
+        // window whose text view is the client of the input method.
+        window.alphaValue = 0;
+        window.ignoresMouseEvents = YES;
         personView = [[SPPersonTextView alloc] initWithFrame:NSMakeRect(0, 0, 360, 120)];
         window.contentView = personView;
         [window makeFirstResponder:personView];
