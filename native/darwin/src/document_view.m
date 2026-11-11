@@ -1387,6 +1387,30 @@ static void sendBody(id<WKURLSchemeTask> task, NSData *data) {
 
 // Delivers the claim of a slot to the frame whose address matches it among the reports that hold no claim yet. A message
 // that a script of one frame posts does not reach the content world of another frame, so the host calls the frame itself.
+// The origin of the report of the frame at path, or nil for a frame without a report.
+- (NSString *)interactiveOriginOfPath:(NSString *)path {
+    NSDictionary *report = [self interactiveReportOfPath:path];
+    return [report[@"origin"] isKindOfClass:NSString.class] ? report[@"origin"] : nil;
+}
+
+// The report of the frame at path, composed with the same composition that the fold uses, or nil.
+- (NSDictionary *)interactiveReportOfPath:(NSString *)path {
+    __block NSDictionary *found = nil;
+    [self interactivePathsEnumerate:^(NSString *token, NSString *composed) {
+        if ([composed isEqualToString:path]) found = self.interactiveReports[token];
+    }];
+    return found;
+}
+
+// Walks the reports with their composed paths on the calling thread.
+- (void)interactivePathsEnumerate:(void (^)(NSString *token, NSString *path))visit {
+    if (self.interactiveReports.count == 0) return;
+    NSMutableDictionary<NSString *, NSString *> *paths = [self interactivePaths];
+    for (NSString *token in self.interactiveOrder) {
+        if (paths[token] != nil) visit(token, paths[token]);
+    }
+}
+
 // Resolves the frame info of a path with the same composition that the fold uses, or nil.
 - (WKFrameInfo *)interactiveFrameOfPath:(NSString *)path {
     if (self.interactiveReports.count == 0) return nil;
@@ -2012,16 +2036,24 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
     return view; // The caller owns this reference until sp_document_close.
 }
 
-void sp_document_read(void *handle, const char *path, int ref, sp_document_read_reply reply, void *context) {
+void sp_document_read(void *handle, const char *path, int ref, bool granted, sp_document_read_reply reply, void *context) {
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
     SPDocumentView *view = (SPDocumentView *)handle;
     if (!view || view.closed) {
         reply(context, "{\"error\":\"the document region is closed\"}");
         return;
     }
-    WKFrameInfo *frame = [view interactiveFrameOfPath:[NSString stringWithUTF8String:path ?: ""]];
+    NSString *wanted = [NSString stringWithUTF8String:path ?: ""];
+    WKFrameInfo *frame = [view interactiveFrameOfPath:wanted];
     if (frame == nil) {
         reply(context, [[NSString stringWithFormat:@"{\"error\":\"no frame of path %s\"}", path ?: ""] UTF8String]);
+        return;
+    }
+    // Without the grant the reply names the origin of the frame alone, so the host gates on the origin of the frame
+    // that it is about to read, not on an origin that an earlier report held.
+    NSString *origin = [view interactiveOriginOfPath:wanted] ?: @"";
+    if (!granted) {
+        reply(context, [[NSString stringWithFormat:@"{\"origin\":\"%@\"}", origin] UTF8String]);
         return;
     }
     [view callAsyncJavaScript:@"return soksakReadValue(ref);" arguments:@{ @"ref": @(ref) } inFrame:frame
@@ -2032,8 +2064,9 @@ void sp_document_read(void *handle, const char *path, int ref, sp_document_read_
                     error.localizedDescription].UTF8String);
                 return;
             }
-            reply(context, [NSString stringWithFormat:@"{\"value\":%@}",
-                result == nil ? @"null" : [NSString stringWithFormat:@"\"%@\"", [result description]]].UTF8String);
+            NSString *value = result == nil ? @"null" : [NSString stringWithFormat:@"\"%@\"", result];
+            reply(context, [[NSString stringWithFormat:@"{\"value\":%@,\"origin\":\"%@\"}",
+                value, origin] UTF8String]);
         }];
 }
 

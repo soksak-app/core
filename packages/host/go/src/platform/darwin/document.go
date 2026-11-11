@@ -266,8 +266,8 @@ func (implementation) GoDocument(document unsafe.Pointer, action, offset int) bo
 }
 
 // ReadDocument reads the value of an operable element; the reply of native names the value or the error.
-func (implementation) ReadDocument(document unsafe.Pointer, path string, ref int, reply func(value string)) {
-	native.DocumentRead(document, native.CString(path), int32(ref), uintptr(handles.NewHandle(reply)))
+func (implementation) ReadDocument(document unsafe.Pointer, path string, ref int, granted bool, reply func(value string)) {
+	native.DocumentRead(document, native.CString(path), int32(ref), granted, uintptr(handles.NewHandle(reply)))
 }
 
 // goHost_document_read receives the one reply of a read and releases its receiver.

@@ -973,6 +973,56 @@ func ParseDocumentScrollPoint(document, reply string) (DocumentScrollPoint, erro
 }
 
 // scrollDocument scrolls the main document of the region to the CSS pixel position and returns the settled position.
+// DocumentReadValue is the value of one read of an operable element, or the refusal that names the missing grant.
+type DocumentReadValue struct {
+	Value   *string `json:"value"`
+	Refusal string  `json:"refusal,omitempty"`
+	Request uint64  `json:"request,omitempty"`
+}
+
+// readDocument reads the value of the operable element ref of the frame at path under the value-read grant of the
+// origin of that frame. The first reply of native names the origin without a value; a grant of that origin answers the
+// value, and no grant answers the refusal with the request identifier of a grant that the person has not given.
+func (s *Surfaces) readDocument(viewID uint64, req DocumentRequest, approvals *Approvals, path string, ref int) (DocumentReadValue, error) {
+	answers := make(chan string, 2)
+	err := s.withDocument(viewID, req, func(handle unsafe.Pointer) error {
+		system.ReadDocument(handle, path, ref, false, func(reply string) { answers <- reply })
+		return nil
+	})
+	if err != nil {
+		return DocumentReadValue{}, err
+	}
+	var probe struct {
+		Origin string `json:"origin"`
+		Error  string `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(<-answers), &probe); err != nil || probe.Error != "" {
+		return DocumentReadValue{}, fmt.Errorf("document %s read probe failed: %s", req.Document, probe.Error)
+	}
+	if !approvals.Granted(ApprovalValueRead, probe.Origin) {
+		return DocumentReadValue{Refusal: "value-read requires approval", Request: approvals.Grant("request", probe.Origin)}, nil
+	}
+	err = s.withDocument(viewID, req, func(handle unsafe.Pointer) error {
+		system.ReadDocument(handle, path, ref, true, func(reply string) { answers <- reply })
+		return nil
+	})
+	if err != nil {
+		return DocumentReadValue{}, err
+	}
+	var full struct {
+		Value  *string `json:"value"`
+		Origin string  `json:"origin"`
+		Error  string  `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(<-answers), &full); err != nil || full.Error != "" {
+		return DocumentReadValue{}, fmt.Errorf("document %s read failed: %s", req.Document, full.Error)
+	}
+	if full.Origin != probe.Origin {
+		return DocumentReadValue{}, fmt.Errorf("document %s read origin changed during the read", req.Document)
+	}
+	return DocumentReadValue{Value: full.Value}, nil
+}
+
 func (s *Surfaces) scrollDocument(viewID uint64, req DocumentRequest, x, y float64) (DocumentScrollPoint, error) {
 	replies := make(chan string, 1)
 	err := s.withDocument(viewID, req, func(handle unsafe.Pointer) error {

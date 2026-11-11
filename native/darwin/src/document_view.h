@@ -121,11 +121,12 @@ void sp_document_set_stream(void *document, sp_document_stream stream, void *con
 typedef void (*sp_document_scrolled)(void *context, const char *json);
 void sp_document_scroll_to(void *document, double x, double y, sp_document_scrolled reply, void *context);
 
-// Reads the value of the operable element ref of the frame at path and reports it once. The reply is {"value": text} or
-// {"value": null} for an element with no value or a sensitive element, and {"error": reason} for a closed region, an
-// unknown path or an unknown ref.
+// Reads the value of the operable element ref of the frame at path and reports it once. Without the grant the reply is
+// {"origin": origin} alone, so the host learns the origin of the frame that it gates on; with the grant the reply is
+// {"value": value, "origin": origin}, where a sensitive element answers a null value. The error reply names a closed
+// region, an unknown path or a read that failed.
 typedef void (*sp_document_read_reply)(void *context, const char *json);
-void sp_document_read(void *document, const char *path, int ref, sp_document_read_reply reply, void *context);
+void sp_document_read(void *document, const char *path, int ref, bool granted, sp_document_read_reply reply, void *context);
 
 // Turns the stream "elements" or "requests" of the document on or off; the host turns a stream on while it has a
 // subscriber. A stream that is off collects nothing. Turning the element stream on sends a snapshot; turning it off drops

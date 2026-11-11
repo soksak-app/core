@@ -18,7 +18,7 @@ void documentSetViewResponsiveness(void *document, uintptr_t context);
 void documentSetEvent(void *document, uintptr_t context);
 void documentSetStream(void *document, uintptr_t context);
 void documentScrollTo(void *document, double x, double y, uintptr_t context);
-void documentRead(void *document, const char *path, int ref, uintptr_t context);
+void documentRead(void *document, const char *path, int ref, bool granted, uintptr_t context);
 void main_sp_view_import_map_set(const char *map);
 const char *main_sp_document_last_error(void);
 void main_sp_document_fail_creation_for_test(const char *cause);

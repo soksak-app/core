@@ -102,7 +102,7 @@ type NativeFunctions struct {
 	DocumentBinaryTake                    func(unsafe.Pointer, *byte, *unsafe.Pointer, *uint64) *byte
 	DocumentCreate                        func(unsafe.Pointer, *byte, *byte, *byte, *byte, *byte, uintptr) unsafe.Pointer
 	DocumentQuery                         func(unsafe.Pointer, uintptr)
-	DocumentRead                          func(unsafe.Pointer, *byte, int32, uintptr)
+	DocumentRead                          func(unsafe.Pointer, *byte, int32, bool, uintptr)
 	DocumentScrollTo                      func(unsafe.Pointer, float64, float64, uintptr)
 	DocumentSetEvent                      func(unsafe.Pointer, uintptr)
 	DocumentSetMessage                    func(unsafe.Pointer, uintptr)

@@ -505,9 +505,10 @@ type Platform interface {
 	// GoDocument runs back 0, forward 1, reload 2, stop 3, and the history entry that is offset away from the current one 4,
 	// and returns whether it ran.
 	GoDocument(document unsafe.Pointer, action, offset int) bool
-	// ReadDocument reads the value of the operable element ref of the frame at path; reply receives the value once, as
-	// {value} or {error}.
-	ReadDocument(document unsafe.Pointer, path string, ref int, reply func(value string))
+	// ReadDocument reads the value of the operable element ref of the frame at path; without the grant the reply names
+	// the origin of the frame alone, with the grant it names the value and the origin, and the error reply names the
+	// failure.
+	ReadDocument(document unsafe.Pointer, path string, ref int, granted bool, reply func(value string))
 	// ScrollDocument scrolls the main document of the region to the CSS pixel position; reply receives the settled
 	// position once, as {x, y} or {error}.
 	ScrollDocument(document unsafe.Pointer, x, y float64, reply func(value string))
