@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { displayPeriod, displayRefreshes, refreshAfter } from "../display-refresh.mjs";
+import { displayRefreshes, refreshAfter } from "../display-refresh.mjs";
 
 const observation = (timestamp, duration) => ({ timestamp, targetTimestamp: timestamp + duration, duration, displayID: 1, windowNumber: 2, visible: true, occluded: false, sequence: 0 });
 
@@ -20,13 +20,6 @@ test("display refreshes reject missing observations and invalid timestamps", { t
   assert.throws(() => displayRefreshes({ state: "available", omittedObservations: 0 }), /observations array/);
   assert.throws(() => displayRefreshes({ state: "available", omittedObservations: 0, observations: [{ timestamp: NaN, duration: 1 / 60 }] }), /no timestamp/);
   assert.throws(() => displayRefreshes({ state: "available", omittedObservations: 0, observations: [{ timestamp: 1, duration: 0 }] }), /no display period/);
-});
-
-test("the display period is the median of the observed refresh durations", { timeout: 1000 }, () => {
-  const at = (duration) => ({ state: "available", reason: null, omittedObservations: 0, observations: [observation(0, duration)] });
-  assert.ok(Math.abs(displayPeriod({ ...at(1 / 120), observations: [observation(0, 1 / 120), observation(0, 1 / 60), observation(0, 1 / 120)] }) - 1000 / 120) < 1e-9);
-  assert.ok(Math.abs(displayPeriod(at(1 / 60)) - 1000 / 60) < 1e-9);
-  assert.throws(() => displayPeriod({ state: "available", omittedObservations: 0, observations: [] }), /no display refresh/);
 });
 
 test("the window end is the count-th observed refresh after a time", { timeout: 1000 }, () => {

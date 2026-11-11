@@ -22,15 +22,6 @@ export function displayRefreshes(link) {
   return { times, periods };
 }
 
-/** The median display period (ms) of the observed refreshes of a recording. */
-export function displayPeriod(link) {
-  const { periods } = displayRefreshes(link);
-  assert.ok(periods.length > 0, "the recording has no display refresh");
-  const sorted = [...periods].sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 1 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
-}
-
 /** The time of the count-th observed refresh strictly after a time. times must be ascending. */
 export function refreshAfter(times, time, count) {
   const first = times.findIndex((refresh) => refresh > time);
