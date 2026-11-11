@@ -2558,3 +2558,7 @@ mod document_viewport_marker_test {
 #[cfg(test)]
 #[path = "diagnostics_test.rs"]
 mod capture_stop_test;
+
+#[cfg(test)]
+#[path = "diagnostics_new_window_test.rs"]
+mod new_window_test;
