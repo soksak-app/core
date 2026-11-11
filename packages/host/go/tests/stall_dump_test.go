@@ -80,8 +80,13 @@ func TestAStallDumpIsAnEventThatNamesTheRunningCallsAndTheReplyNamesItsPosition(
 	if got := mustRoundTrip(t, reply); !reflect.DeepEqual(got, want) {
 		t.Fatalf("reply %v, want %v", got, want)
 	}
+	// Each stall of a window check is its own sample file, so a later dump names another path.
+	later := filepath.Join(filepath.Dir(dump), "stall-10-8.txt")
+	if err := os.WriteFile(later, []byte("Sampling process 10"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	calls = host.NewRunningCalls()
-	reply, err = host.StallDump(dump, "main", calls, now)
+	reply, err = host.StallDump(later, "main", calls, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,6 +122,14 @@ func TestAStallDumpWritesTheStacksOfEveryGoroutineBesideTheDump(t *testing.T) {
 	text := string(stacks)
 	if !strings.Contains(text, "[chan receive") || !strings.Contains(text, "parkedInAStallDump") {
 		t.Fatalf("the goroutine stacks do not show the goroutine parked on its channel:\n%s", text)
+	}
+	// The file is the state that the event of the first dump names, so a second dump of the same path is refused and keeps it.
+	_, err = host.StallDump(dump, "main", host.NewRunningCalls(), time.Now())
+	if err == nil || !strings.HasPrefix(err.Error(), "goroutine stacks: ") || !strings.HasSuffix(err.Error(), ": file exists") {
+		t.Fatalf("a second dump of the same path returned %v, want the refusal of the existing goroutine stacks", err)
+	}
+	if again, err := os.ReadFile(dump + ".goroutines.txt"); err != nil || string(again) != text {
+		t.Fatalf("a refused dump changed the goroutine stacks of the first dump: %v", err)
 	}
 }
 
