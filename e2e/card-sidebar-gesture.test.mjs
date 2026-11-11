@@ -103,8 +103,8 @@ for (const app of Object.values(APPS)) {
               for (const distance of [10, 20, 30, 40, 30, 20, 10, 0]) {
                 await inactive();
                 const began = performance.now();
-                // Each drag step moves the border to another distance, so the recording owes it a frame.
-                owed.push(await owe(s));
+                // Each drag step moves the border to another distance: the recording owes frames from the step to its display.
+                const from = await owe(s);
                 await s.pointer(
                   x + (vertical ? sign(side) * distance : 0),
                   y + (vertical ? 0 : sign(side) * distance),
@@ -116,6 +116,7 @@ for (const app of Object.values(APPS)) {
                   `${side}: drag did not save ${120 + distance} points`,
                 );
                 const { displayed } = await s.presented();
+                owed.push({ from, to: displayed });
                 await inactive();
                 const current = await measure(s, card.id);
                 poses.push({

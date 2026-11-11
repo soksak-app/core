@@ -30,8 +30,9 @@ for (const app of Object.values(APPS)) {
       const recording = await s.record();
       // Session.record stops an unfinished recording during cleanup and preserves its failure.
       // The new view is a tab of the second layout probe, whose empty area shows only the background of its page.
-      // The new tab changes the screen, so the recording owes it a frame (judgeShownChanges).
-      const owed = [await owe(s)];
+      // The new tab changes the screen: the recording owes frames from the request to the display of its first theme
+      // (judgeShownChanges).
+      const from = await owe(s);
       const { tab } = await s.run("core.card.add-tab", { card: card.id, plugin: "layoutprobe2" });
       await s.until("core.surfaces", surfaces => surfaces.some(surface => surface.surface === tab && surface.visible &&
         surface.exposes.includes("element layoutprobe2.empty")), "the new view did not expose its empty area");
@@ -39,6 +40,7 @@ for (const app of Object.values(APPS)) {
         "the new view did not apply its first theme", { surface: tab });
       const empty = await s.rect("layoutprobe2.empty", undefined, tab);
       const { displayed } = await s.presented();
+      const owed = [{ from, to: displayed }];
       const stopped = await recording.stop({ after: displayed + 100 });
       const captured = frames(recording.frames).map(readFrame);
       assert.equal(captured.length, stopped.count, "first-theme recording has missing frame files");

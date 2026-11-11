@@ -53,19 +53,22 @@ for (const app of Object.values(APPS))
         [],
       );
       ({ displayed } = await s.presented());
+      // The toggles asked for before this measurement are shown by this display.
+      for (const change of owed) change.to ??= displayed;
       t.diagnostic(
         `${mode}: card=${JSON.stringify({ x: card.x, y: card.y, w: card.w, h: card.h })}; right=${JSON.stringify(bar.rect)}; native=${JSON.stringify(native.applied)}; sections=${bar.sections.map((section) => section.id)}; endpoint=${s.client.endpoint.pid}`,
       );
     }
     try {
       await measure("normal");
-      // Each full screen toggle changes the screen, so the recording owes it a frame (judgeShownChanges).
-      owed.push(await owe(s));
+      // Each full screen toggle changes the screen: the recording owes frames from the toggle to the display that the next
+      // measurement waits for (judgeShownChanges).
+      owed.push({ from: await owe(s) });
       await s.run("core.card.fullscreen", { card: target.id });
       try {
         await measure("fullscreen");
       } finally {
-        owed.push(await owe(s));
+        owed.push({ from: await owe(s) });
         await s.run("core.card.fullscreen", { card: target.id });
       }
       await measure("restored");

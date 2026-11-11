@@ -27,10 +27,11 @@ for (const app of Object.values(APPS)) test(`${app.name}: rail groups follow adj
   const record = async (label, change, loops, changes) => {
     const recording = await s.record();
     const directory = recording.frames;
-    // A change of the screen owes the recording a frame (judgeShownChanges).
-    const owed = changes ? [await owe(s)] : [];
+    // A change of the screen owes the recording frames from its request to its display (judgeShownChanges).
+    const from = changes ? await owe(s) : null;
     await change();
     const { displayed } = await s.presented();
+    const owed = from === null ? [] : [{ from, to: displayed }];
     const stopped = await recording.stop({ after: displayed });
     try {
       assert.equal(stopped.limited, false, `${label}: the recording reached its frame limit`);

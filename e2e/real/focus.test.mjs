@@ -37,17 +37,18 @@ for (const app of Object.values(APPS)) {
     const recording = await s.record();
     const directory = recording.frames;
     const focus = await s.collect("core.focus");
-    // The raster probe draws a frame after each input that it handles, so the recording owes each press a frame
-    // (judgeShownChanges).
-    const owed = [];
+    // The raster probe draws a frame after each input that it handles: the recording owes frames from each press to the
+    // display after the last one (judgeShownChanges).
+    const pressed = [];
     for (const region of regions) {
       const target = await screenCenter(s, await imageRect(s, region.surface));
-      owed.push(await owe(s));
+      pressed.push(await owe(s));
       click(target.x, target.y);
       await s.until("host.window", (window) => window.responder?.surface === region.surface,
         `${region.surface} did not become the native first responder after a real click`);
     }
     const { displayed } = await s.presented();
+    const owed = pressed.map((from) => ({ from, to: displayed }));
     const stopped = await recording.stop({ after: displayed });
     const values = await focus.stop();
 

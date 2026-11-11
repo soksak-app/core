@@ -296,8 +296,9 @@ test("a drag step that waits longer than the limit for a frame fails and names w
     layouts: [{ ticket: 6, begun: 40, committed: 50 }, { ticket: 7, begun: 120, committed: 150 }, { ticket: 8, begun: 200, committed: null }],
     mainThread: [...every(2, 114, 8), ...every(234, 306, 8)],
   });
-  await assert.rejects(drag(s, gapPlan, { capture: true }), new RegExp("^Error: the application did not show drag step 13 of 38, " +
-    "asked at 100\\.0ms on the clock of the recording, within 100ms: the next frame was displayed 160ms later, at 260\\.0ms; " +
+  await assert.rejects(drag(s, gapPlan, { capture: true }), new RegExp("^Error: the application did not show drag step 13 of 38 " +
+    "\\(asked at 100\\.0ms on the clock of the recording\\) without waiting longer than 100ms for a frame: after 100\\.0ms the " +
+    "next frame was displayed 160ms later, at 260\\.0ms; " +
     "in that time the check asked for 20 drag steps, the host began 2 layouts \\[7,8\\] and committed 1 \\[7\\], and the " +
     "main thread of the host ran no display-link callback for 120ms of it; recording .*drag-1; 1-minute load average " +
     "\\d+\\.\\d\\d$"));
@@ -306,7 +307,7 @@ test("a drag step that waits longer than the limit for a frame fails and names w
 test("a drag step after the last recorded frame fails", async (t) => {
   const s = gapSession(t, { frames: every(0, 96, 8), ticks: every(4, 100, 8) });
   await assert.rejects(drag(s, gapPlan, { capture: true }),
-    /^Error: the application did not show drag step 13 of 13, asked at 100\.0ms on the clock of the recording, within 100ms: the recording has no frame after it;/);
+    /^Error: the application did not show drag step 13 of 13 \(asked at 100\.0ms on the clock of the recording\) without waiting longer than 100ms for a frame: the recording has no frame after 100\.0ms;/);
 });
 
 test("a captured drag whose reply has no step times fails", async (t) => {

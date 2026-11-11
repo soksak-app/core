@@ -28,11 +28,11 @@ function stopReply(t, { frames, mainThread = [], layouts = [] }) {
 }
 
 // A click recording: the window stays unchanged before the first click, between the clicks and after the last one is shown,
-// so its longest gap is 400ms, and each click is shown 30ms after it was asked for.
+// so its longest gap is 452ms; each click is shown 30ms after it was asked for and its final state 8ms later.
 test("a recording whose changes are each shown within the limit passes however long the window stays unchanged between them", (t) => {
   const stopped = stopReply(t, { frames: [0, 230, 238, 640, 648, 1100] });
   assert.equal(stopped.longestGap, 452);
-  judgeShownChanges(stopped, [200, 610]);
+  judgeShownChanges(stopped, [{ from: 200, to: 238 }, { from: 610, to: 648 }]);
 });
 
 test("a change that the application shows later than the limit fails as a defect of the application", (t) => {
@@ -41,16 +41,33 @@ test("a change that the application shows later than the limit fails as a defect
     mainThread: [2, 10, 18, 26, 34, 120, 128, 136, 144, 152, 160, 168, 176, 184, 192, 200, 208, 216, 224],
     layouts: [{ ticket: 4, begun: 22, requested: 23, presented: null, committed: 232 }],
   });
-  assert.throws(() => judgeShownChanges(stopped, [20], { what: "click" }), new RegExp("^Error: the application did not show " +
-    "click 1 of 1, asked at 20\\.0ms on the clock of the recording, within 100ms: the next frame was displayed 210ms later, " +
-    "at 230\\.0ms; in that time the check asked for 1 clicks, the host began 1 layouts \\[4\\] and committed 0 \\[\\], and the " +
+  assert.throws(() => judgeShownChanges(stopped, [{ from: 20 }], { what: "click" }), new RegExp("^Error: the application did " +
+    "not show click 1 of 1 \\(asked at 20\\.0ms on the clock of the recording\\) without waiting longer than 100ms for a frame: " +
+    "after 20\\.0ms the next frame was displayed 210ms later, at 230\\.0ms; in that time the check asked for 1 clicks, the host began 1 layouts \\[4\\] and committed 0 \\[\\], and the " +
     "main thread of the host ran no display-link callback for 86ms of it; recording .*soksak-shown-changes-[^;]*; 1-minute " +
     "load average \\d+\\.\\d\\d$"));
 });
 
+// A transition that the window shows through several frames: its first frame comes 20ms after the request, and then the
+// window waits 150ms before the frame that shows the final state.
+test("a change shown through several frames fails when a frame of it comes later than the limit after the frame before it", (t) => {
+  const stopped = stopReply(t, { frames: [0, 120, 128, 278, 286, 900] });
+  judgeShownChanges(stopped, [{ from: 100, to: 128 }]);
+  assert.throws(() => judgeShownChanges(stopped, [{ from: 100, to: 286 }], { what: "full screen click" }), new RegExp(
+    "^Error: the application did not show full screen click 1 of 1 \\(asked at 100\\.0ms, its final state displayed at " +
+    "286\\.0ms on the clock of the recording\\) without waiting longer than 100ms for a frame: after 128\\.0ms the next frame " +
+    "was displayed 150ms later, at 278\\.0ms;"));
+});
+
+test("a change whose final state the recording does not reach fails", (t) => {
+  const stopped = stopReply(t, { frames: [0, 120] });
+  assert.throws(() => judgeShownChanges(stopped, [{ from: 100, to: 200 }]),
+    /without waiting longer than 100ms for a frame: the recording has no frame after 120\.0ms;/);
+});
+
 test("a recording judged without the times of its changes fails", (t) => {
   const stopped = stopReply(t, { frames: [0, 8] });
-  for (const owed of [undefined, null, [Number.NaN]]) {
+  for (const owed of [undefined, null, [{ from: Number.NaN }], [{ from: 1, to: "2" }], [5]]) {
     assert.throws(() => judgeShownChanges(stopped, owed), /^Error: the recording has no times of the changes that it shows/);
   }
 });

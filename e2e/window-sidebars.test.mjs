@@ -124,15 +124,15 @@ for (const app of Object.values(APPS))
     const recording = await s.request("diagnostics.capture.start", {});
     let displayed = 0,
       stop;
-    // A selection changes the screen when it changes the active tab or the focused card, so the recording owes each such
-    // selection a frame and a selection of the active tab of the focused card none (judgeShownChanges).
+    // A selection changes the screen when it changes the active tab or the focused card, so the recording owes frames from each
+    // such selection to its display and a selection of the active tab of the focused card none (judgeShownChanges).
     const owed = [];
     try {
       try {
         for (const card of baseline.cards.filter((card) => card.tabs.length))
           for (const tab of card.tabs) {
             const before = (await s.get("core.grid")).cards.find((item) => item.id === card.id);
-            if (before?.active !== tab.id || before?.focused !== true) owed.push(await owe(s));
+            const from = before?.active !== tab.id || before?.focused !== true ? await owe(s) : null;
             await s.run("core.tab.select", { tab: tab.id });
             await s.until(
               "core.grid",
@@ -142,6 +142,7 @@ for (const app of Object.values(APPS))
               "tab selection did not settle",
             );
             ({ displayed } = await s.presented());
+            if (from !== null) owed.push({ from, to: displayed });
             observations.push({ ...(await measure(card, tab)), displayed });
           }
       } finally {

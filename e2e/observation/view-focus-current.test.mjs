@@ -28,11 +28,12 @@ for (const app of Object.values(APPS)) {
     s.cleanup(async () => {
       if (!stopped) await recording.stop({ after: 0 });
     });
-    // The raster probe draws a frame after each input that it handles, so the recording owes the click a frame within 33ms
-    // (judgeShownChanges).
-    const owed = [await owe(s)];
+    // The raster probe draws a frame after each input that it handles: the recording owes frames no more than 33ms apart from
+    // the click to its display (judgeShownChanges).
+    const from = await owe(s);
     await s.click(point.x, point.y);
     const { displayed } = await s.presented();
+    const owed = [{ from, to: displayed }];
     stopped = true;
     const captured = await recording.stop({ after: displayed + 100 });
     const decoded = frames(recording.frames).map(readFrame);

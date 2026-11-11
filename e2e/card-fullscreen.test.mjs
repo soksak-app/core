@@ -19,13 +19,15 @@ async function clickFullscreen(t, s, card, expected) {
   s.trackRecording(directory);
   let displayed = 0;
   let stopped;
-  // The click toggles the full screen of the card, so the recording owes it a frame (judgeShownChanges).
+  // The click toggles the full screen of the card: the recording owes frames from the click to the display of the full screen
+  // (judgeShownChanges).
   const owed = [];
   try {
-    owed.push(await owe(s));
+    const from = await owe(s);
     await s.click(control.x + control.width / 2, control.y + control.height / 2);
     await s.until("core.grid", grid => grid.fullscreen === expected, "fullscreen button did not toggle its card");
     ({ displayed } = await s.presented());
+    owed.push({ from, to: displayed });
   } finally { stopped = await s.request("diagnostics.capture.stop", { after: displayed ? displayed + 100 : 0 }); }
   const captured = frames(directory).map(readFrame);
   assert.ok(captured.length > 1, "fullscreen click recording is incomplete");
@@ -211,18 +213,20 @@ for (const app of Object.values(APPS)) {
     const recording = await s.record();
     let displayed = 0;
     let stopped;
-    // Each click selects the other tab of the card, so the recording owes each a frame (judgeShownChanges).
+    // Each click selects the other tab of the card: the recording owes frames from the click to the display of the tab
+    // (judgeShownChanges).
     const owed = [];
     try {
       for (const selected of [other.id, card.active]) {
         // The tab elements are numbered across every card in the order of core.grid, the hidden cards of fullscreen too.
         const rect = await s.rect("core.card.tab", tabElementIndex(added, selected));
-        owed.push(await owe(s));
+        const from = await owe(s);
         await s.click((rect.document?.x ?? 0) + rect.x + rect.width / 2,
           (rect.document?.y ?? 0) + rect.y + rect.height / 2);
         await s.until("core.grid", grid => grid.cards.find(item => item.id === own).active === selected,
           "the click did not switch the tab");
         ({ displayed } = await s.presented());
+        owed.push({ from, to: displayed });
         const after = await s.get("core.grid");
         assert.equal(after.fullscreen, own, "the tab click left fullscreen");
         const visible = (await s.get("host.window")).surfaces.filter(surface => surface.visible);

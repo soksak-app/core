@@ -121,9 +121,9 @@ for (const app of Object.values(APPS))
       let recording = await s.request("diagnostics.capture.start", {});
       // The times at which the check asked for a change of the screen during the current recording (judgeShownChanges).
       let owed = [];
-      // Asks for a change of the screen: the recording owes it a frame.
+      // Asks for a change of the screen: the recording owes frames from the request to the display that the next check waits for.
       const change = async (run) => {
-        owed.push(await owe(s));
+        owed.push({ from: await owe(s) });
         return run();
       };
       const audit = await s.collect("core.verify");
@@ -133,6 +133,8 @@ for (const app of Object.values(APPS))
         const began = performance.now();
         console.info(`START ${app.name}: ${label}`);
         ({ displayed } = await s.presented());
+        // The changes asked for since the last check are shown by this display.
+        for (const change of owed) change.to ??= displayed;
         const host = await s.get("host.window");
         const grid = await s.get("core.grid");
         const current = grid.cards.find((item) => item.id === card.id);

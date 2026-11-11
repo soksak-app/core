@@ -681,13 +681,15 @@ const FEATURE_LINKS = [
   {
     id: "F755",
     implementation: [
-      { file: "packages/window-check/app.mjs", symbol: "export function judgeShownChanges(stopped, owed, { layouts = stopped.layouts, what = \"change\", limit = GAP } = {}) {" },
+      { file: "packages/window-check/app.mjs", symbol: "export function judgeShownChanges(stopped, changes, { layouts = stopped.layouts, what = \"change\", limit = GAP } = {}) {" },
       { file: "packages/window-check/app.mjs", symbol: "export async function owe(s) {" },
       { file: "packages/window-check/drag-measurement.mjs", symbol: "export function shownTimes(samples, ticks) {" },
     ],
     tests: [
       { file: "packages/window-check/test/shown-changes.test.mjs", id: "a recording whose changes are each shown within the limit passes however long the window stays unchanged between them" },
       { file: "packages/window-check/test/shown-changes.test.mjs", id: "a change that the application shows later than the limit fails as a defect of the application" },
+      { file: "packages/window-check/test/shown-changes.test.mjs", id: "a change shown through several frames fails when a frame of it comes later than the limit after the frame before it" },
+      { file: "packages/window-check/test/shown-changes.test.mjs", id: "a change whose final state the recording does not reach fails" },
       { file: "packages/window-check/test/shown-changes.test.mjs", id: "a recording judged without the times of its changes fails" },
       { file: "packages/window-check/test/shown-changes.test.mjs", id: "a recording in which the check asked for no change passes" },
       { file: "packages/window-check/test/shown-changes.test.mjs", id: "owe reads the clock of the recordings in milliseconds" },
@@ -697,7 +699,7 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/test/recording.test.mjs", id: "a captured drag whose reply has no step times fails" },
       { file: "packages/window-check/test/drag-measurement.test.mjs", id: "drag cadence ends at the first shown frame after the last step" },
     ],
-    expected: "A window check judges its recording by the changes of the screen that it asked for: each drag step, command or input that changes the screen owes the next recorded frame within 100ms on the clock of the recording, and the time in which the check asked for no change is not judged. A change that waits longer fails as a defect of the application and names the changes asked for in that time, the layouts that the host began and committed and the longest display-link silence of the main thread. The cadence of a view drag ends at the first shown frame after its last step.",
+    expected: "A window check judges its recording by the changes of the screen that it asked for: from each drag step, command or input that changes the screen to the first recorded frame after it and between the frames up to the one that shows its final state, no wait on the clock of the recording is longer than 100ms, and the time in which the check asked for no change is not judged. A longer wait fails as a defect of the application and names the changes asked for in that time, the layouts that the host began and committed and the longest display-link silence of the main thread. The cadence of a view drag ends at the first shown frame after its last step.",
     levels: ["unit"],
   },
   {

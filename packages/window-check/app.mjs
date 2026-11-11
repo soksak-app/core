@@ -1339,43 +1339,53 @@ export async function owe(s) {
 }
 
 /**
- * The change that waited longest for the next recorded frame: `owed` are the times at which the screen was asked to change
- * and `frames` the display times of the recorded frames, both in ms on the clock of the recording. Returns {index, at, next,
- * wait} with the 1-based index of the change, its time, the time of the first frame after it (null when the recording has
- * none) and the time between the two (Infinity without a frame).
+ * The longest wait for a recorded frame within the changes: `changes` are {from, to?}, the time at which the screen was asked
+ * to change and the display time of its final state (absent for a change shown by one frame), and `frames` the display times
+ * of the recorded frames, all in ms on the clock of the recording. A change waits from its request to the first frame after it
+ * and from each frame to the next until the first frame at or after its final state. Returns {index, at, next, wait} with the
+ * 1-based index of the change, the start of the wait, the frame that ends it (null when the recording has none) and its length
+ * (Infinity without a frame), or null without changes.
  */
-function longestWait(owed, frames) {
+function longestWait(changes, frames) {
   let worst = null;
-  let next = 0;
-  owed.forEach((at, index) => {
-    while (next < frames.length && frames[next] <= at) next++;
-    const shown = next < frames.length ? frames[next] : null;
-    const wait = shown === null ? Infinity : shown - at;
-    if (!worst || wait > worst.wait) worst = { index: index + 1, at, next: shown, wait };
+  changes.forEach(({ from, to = from }, index) => {
+    let at = from;
+    let ended = false;
+    for (const frame of frames) {
+      if (frame <= from) continue;
+      if (!worst || frame - at > worst.wait) worst = { index: index + 1, at, next: frame, wait: frame - at };
+      at = frame;
+      if (frame >= to) { ended = true; break; }
+    }
+    if (!ended && (!worst || worst.wait !== Infinity)) worst = { index: index + 1, at, next: null, wait: Infinity };
   });
   return worst;
 }
 
 /**
- * Judges a recording by the changes of the screen that the check asked for. Every time of `owed` (ms on the clock of the
- * recording: the steps of a drag, or `owe` read before a command or an input that changes the screen) is owed the next
- * recorded frame within GAP; the times in which the check asked for no change owe none, so the window may stay unchanged
- * there and the longest gap of the whole recording does not judge it. A change that waits longer is a defect of the
- * application, which did not show it: the failure names the change, the time of the next frame, the changes asked for in that
- * time, the layouts that the host began and committed in it (`layouts`, by default those of the stop reply) and the longest
- * time in which the main thread of the host ran no display-link callback, so it tells a main thread that stopped from a
- * transaction that waited for its commit and from committed layouts whose frames did not come. `what` names one change and
- * `limit` (ms, GAP by default) bounds the wait. A recording in which the check asked for no change owes no frame.
+ * Judges a recording by the changes of the screen that the check asked for. Each change {from, to?} (ms on the clock of the
+ * recording) holds the time at which the check asked for it (a step of a drag, or `owe` read before a command or an input) and,
+ * for a change that the window shows through several frames, the display time of its final state (`displayed` of
+ * `host.window.presented`). From the request to the first frame after it and between the frames up to the one that shows the
+ * final state, no wait is longer than `limit` (ms, GAP by default). The times outside the changes owe no frame, so the window
+ * may stay unchanged there and the longest gap of the whole recording does not judge it. A longer wait is a defect of the
+ * application, which did not show the change: the failure names the change, the wait, the changes asked for in it, the layouts
+ * that the host began and committed in it (`layouts`, by default those of the stop reply) and the longest time in which the main
+ * thread of the host ran no display-link callback, so it tells a main thread that stopped from a transaction that waited for its
+ * commit and from committed layouts whose frames did not come. `what` names one change. A recording in which the check asked
+ * for no change owes no frame.
  */
-export function judgeShownChanges(stopped, owed, { layouts = stopped.layouts, what = "change", limit = GAP } = {}) {
-  if (!Array.isArray(owed) || !owed.every(Number.isFinite)) {
-    throw new Error(`the recording has no times of the changes that it shows (${what} times ${JSON.stringify(owed)}), so its ` +
-      "frames cannot be judged against them");
+export function judgeShownChanges(stopped, changes, { layouts = stopped.layouts, what = "change", limit = GAP } = {}) {
+  if (!Array.isArray(changes) || !changes.every((change) => Number.isFinite(change?.from)
+    && (change.to === undefined || Number.isFinite(change.to)))) {
+    throw new Error(`the recording has no times of the changes that it shows (${what} times ${JSON.stringify(changes)}), so ` +
+      "its frames cannot be judged against them");
   }
-  const worst = longestWait(owed, recordedFrameTimes(stopped.callbackStatus));
+  const worst = longestWait(changes, recordedFrameTimes(stopped.callbackStatus));
   if (worst === null || worst.wait <= limit) return;
+  const change = changes[worst.index - 1];
   const end = worst.next ?? Infinity;
-  const asked = owed.filter((at) => at >= worst.at && at < end).length;
+  const asked = changes.filter(({ from }) => from >= worst.at && from < end).length;
   const inSpan = (stage) => (layouts ?? []).filter((layout) => typeof layout[stage] === "number"
     && layout[stage] >= worst.at && layout[stage] < end).map((layout) => layout.ticket);
   const begun = inSpan("begun");
@@ -1389,13 +1399,15 @@ export function judgeShownChanges(stopped, owed, { layouts = stopped.layouts, wh
     const silence = Math.max(0, ...points.slice(1).map((at, i) => at - points[i]));
     mainThread = `the main thread of the host ran no display-link callback for ${silence.toFixed(0)}ms of it`;
   }
+  const final = change.to === undefined ? "" : `, its final state displayed at ${change.to.toFixed(1)}ms`;
   const shown = worst.next === null
-    ? "the recording has no frame after it"
-    : `the next frame was displayed ${worst.wait.toFixed(0)}ms later, at ${worst.next.toFixed(1)}ms`;
-  throw new Error(`the application did not show ${what} ${worst.index} of ${owed.length}, asked at ${worst.at.toFixed(1)}ms on ` +
-    `the clock of the recording, within ${limit}ms: ${shown}; in that time the check asked for ${asked} ${what}s, the host ` +
-    `began ${begun.length} layouts ${JSON.stringify(begun)} and committed ${committed.length} ${JSON.stringify(committed)}, ` +
-    `and ${mainThread}; recording ${stopped.frames}; 1-minute load average ${loadavg()[0].toFixed(2)}`);
+    ? `the recording has no frame after ${worst.at.toFixed(1)}ms`
+    : `after ${worst.at.toFixed(1)}ms the next frame was displayed ${worst.wait.toFixed(0)}ms later, at ${worst.next.toFixed(1)}ms`;
+  throw new Error(`the application did not show ${what} ${worst.index} of ${changes.length} (asked at ${change.from.toFixed(1)}ms` +
+    `${final} on the clock of the recording) without waiting longer than ${limit}ms for a frame: ${shown}; in that time the ` +
+    `check asked for ${asked} ${what}s, the host began ${begun.length} layouts ${JSON.stringify(begun)} and committed ` +
+    `${committed.length} ${JSON.stringify(committed)}, and ${mainThread}; recording ${stopped.frames}; 1-minute load average ` +
+    `${loadavg()[0].toFixed(2)}`);
 }
 
 function requireCallbackStatusArtifact(result, frames) {
@@ -1479,7 +1491,7 @@ async function dragDrawing(s, plan, capture, frameIdentity) {
   }
   // A drag changes the screen with every step, so each step (ticks of the reply) is owed the next recorded frame.
   // A drag without steps changed nothing, so a reply without step times cannot be judged.
-  const steps = Array.isArray(result.ticks) && result.ticks.length === 0 ? null : result.ticks;
+  const steps = !Array.isArray(result.ticks) ? result.ticks : result.ticks.length > 0 ? result.ticks.map((from) => ({ from })) : null;
   judgeShownChanges(stopped, steps, { layouts: result.layouts, what: "drag step" });
   return {
     ...result,

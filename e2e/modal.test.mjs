@@ -187,10 +187,11 @@ for (const app of Object.values(APPS)) {
     s.trackRecording(directory);
     let displayed = 0;
     let stopped;
-    // Opening the settings shows the modal, so the recording owes it a frame (judgeShownChanges).
+    // Opening the settings shows the modal: the recording owes frames from the request to the display of the modal
+    // (judgeShownChanges).
     const owed = [];
     try {
-      owed.push(await owe(s));
+      const from = await owe(s);
       await s.run("core.settings.open");
       s.cleanup(() => s.run("core.settings.close"));
       await s.until("core.settings-modal", (modal) => modal.open, "settings did not open");
@@ -203,6 +204,7 @@ for (const app of Object.values(APPS)) {
           "the settings web view was not shown");
       }
       ({ displayed } = await s.presented());
+      owed.push({ from, to: displayed });
       const card = await s.rect("core.settings-modal.card");
       assert.ok(card.width > 0 && card.height > 0, "the actual named settings card was not rendered");
     } finally {
