@@ -207,3 +207,135 @@ fn a_reload_ends_with_a_failed_start() {
         "the reload whose page failed to start",
     );
 }
+
+/// Starts the settled frame wait of the window data, of a host call of the page with page_call, whose screen never presents,
+/// and returns the receiver of its end after the wait reached its settled step.
+fn frame_wait(data: &Arc<WindowData>, page_call: bool) -> mpsc::Receiver<Result<f64, Failure>> {
+    let (outcome, received) = mpsc::channel();
+    let (settled, wait) = mpsc::channel();
+    let waiting = data.clone();
+    std::thread::spawn(move || {
+        let ended = waiting.wait_settled_frame(page_call, |_done| {
+            settled.send(()).expect("the test holds the receiver");
+            Ok(())
+        });
+        outcome.send(ended).expect("the test holds the receiver");
+    });
+    wait.recv()
+        .expect("the wait did not reach its settled step");
+    received
+}
+
+/// Checks that the wait whose end ended receives ended with 1003 and the text end.
+fn want_frame_end(ended: &mpsc::Receiver<Result<f64, Failure>>, end: &str, what: &str) {
+    match ended.recv().expect("the wait answers") {
+        Err(failure) => assert!(
+            failure.code == MISSING_DOCUMENT && failure.message == end,
+            "{what} ended with {} {:?}, want {MISSING_DOCUMENT} {end:?}",
+            failure.code,
+            failure.message
+        ),
+        Ok(displayed) => panic!("{what} presented at {displayed}"),
+    }
+}
+
+/// Sends the reload request to the ready page of the window data.
+fn ask_reload(relay: &Arc<Relay>, data: &Arc<WindowData>) {
+    reload_ready_page(relay, data, "main", || Ok(()), || (), || Ok(()), || Ok(()))
+        .expect("the reload request is sent");
+}
+
+// The reload request ends the page, and with it the presented wait of a host call of that page: the page reloads only after
+// every call that it sent has its reply, and the screen of the page that ended never presents for it
+// (docs/spec/native-host.md#page-reload).
+// contract: reload.page-end-ends-the-presented-waits-of-its-calls
+#[test]
+fn the_reload_request_ends_the_presented_wait_of_a_call_of_the_page() {
+    let relay = Arc::new(Relay::default());
+    let data = ready_page();
+    let ended = frame_wait(&data, true);
+    assert!(
+        ended.try_recv().is_err(),
+        "the presented wait of the page ended at its settled step before the reload request"
+    );
+    ask_reload(&relay, &data);
+    want_frame_end(
+        &ended,
+        "the page is reloading",
+        "the presented wait of a call of the reloading page",
+    );
+}
+
+// A presented call that reaches the host after the reload request ends at once, and a call of the new page waits again.
+// contract: reload.page-end-ends-the-presented-waits-of-its-calls
+#[test]
+fn a_presented_call_after_the_page_ended_ends_until_the_new_page_starts() {
+    let relay = Arc::new(Relay::default());
+    let data = ready_page();
+    ask_reload(&relay, &data);
+    let late = data.wait_settled_frame(true, |_| {
+        panic!("the presented call after the reload request waited for the screen")
+    });
+    assert!(
+        matches!(&late, Err(failure) if failure.code == MISSING_DOCUMENT && failure.message == "the page is reloading"),
+        "the presented call after the reload request ended with {:?}",
+        late.map_err(|failure| failure.message)
+    );
+    data.start_page_calls();
+    let ended = frame_wait(&data, true);
+    data.end_waits("the window closed");
+    want_frame_end(
+        &ended,
+        "the window closed",
+        "the presented call of the new page",
+    );
+}
+
+// The end of the page process ends the presented wait of a call of the page with that end.
+// contract: reload.page-end-ends-the-presented-waits-of-its-calls
+#[test]
+fn the_end_of_the_page_process_ends_the_presented_wait_of_a_call_of_the_page() {
+    let data = ready_page();
+    let ended = frame_wait(&data, true);
+    data.end_waits("the page process ended");
+    want_frame_end(
+        &ended,
+        "the page process ended",
+        "the presented wait of a call of the ended page process",
+    );
+}
+
+// A new page that starts without a reload request ends the presented waits of the calls of the page before it.
+// contract: reload.page-end-ends-the-presented-waits-of-its-calls
+#[test]
+fn the_start_of_a_new_page_ends_the_presented_wait_of_a_call_of_the_page_before_it() {
+    let data = ready_page();
+    let ended = frame_wait(&data, true);
+    data.start_page_calls();
+    want_frame_end(
+        &ended,
+        "a new page started",
+        "the presented wait of a call of the replaced page",
+    );
+}
+
+// The presented wait of an endpoint request, host.window.presented, is no call of the page: the end of the page does not end it,
+// and the close of the window does.
+// contract: reload.page-end-ends-the-presented-waits-of-its-calls
+#[test]
+fn the_end_of_the_page_leaves_the_presented_wait_of_an_endpoint_request() {
+    let relay = Arc::new(Relay::default());
+    let data = ready_page();
+    let ended = frame_wait(&data, false);
+    ask_reload(&relay, &data);
+    assert!(
+        ended.try_recv().is_err(),
+        "the reload request ended the presented wait of an endpoint request"
+    );
+    data.end_waits("the window closed");
+    want_frame_end(
+        &ended,
+        "the window closed",
+        "the presented wait of an endpoint request",
+    );
+}
