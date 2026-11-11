@@ -62,6 +62,12 @@ pub fn observe_cursor(_window: Handle, _changed: Box<dyn Fn()>) -> Result<Handle
 
 pub fn end_cursor_observation(_observation: Handle) {}
 
+pub fn observe_sheet(_window: Handle, _changed: Box<dyn Fn()>) -> Result<Handle, String> {
+    missing("sheet observation")
+}
+
+pub fn end_sheet_observation(_observation: Handle) {}
+
 pub fn titlebar_height(_window: Handle) -> Result<f64, String> {
     missing("window title bar")
 }

@@ -14,7 +14,7 @@ void *sp_window_set_main_webview(void *window, void *main);
 // Returns only the registered app DOM web view. A window that is not registered gives NULL.
 void *sp_window_main_webview(void *window);
 
-// {frame, content, scale, key, active, children, controls, webviews, nativeSurfaces, appDomWebviews, documentWebviews}
+// {frame, content, scale, key, active, children, sheet, controls, webviews, nativeSurfaces, appDomWebviews, documentWebviews}
 //   activationObservation {registered: boolean, count: canonical unsigned decimal string}; the process-lifetime
 //             activation notification counter counts independently of event policy. registered is true only after
 //             the actual observer was installed. Reading facts does not install observers or change the count.
@@ -28,6 +28,8 @@ void *sp_window_main_webview(void *window);
 //             view is the view address, draws tells whether it paints its own background, alpha is the
 //             alpha of the background color under the page, document tells whether it is the web view of a document
 //             region
+//   sheet     the sheet attached to the window, null without one: {kind, frame}, kind save, open (an open panel), alert (the
+//             window of an NSAlert) or other, frame in screen coordinates. A sheet is not one of children.
 //   nativeSurfaces logical surface containers [{view, x, y, width, height, hidden}], window coordinates.
 //   documentWebviews   the web views of document regions
 //   appDomWebviews     every other web view: the app DOM and one web view for each view surface
@@ -114,3 +116,15 @@ void *sp_window_observe_responder(void *window, void (^changed)(void));
 // Ends the observation that sp_window_observe_responder returned and releases it, so its callback is not called again. It
 // does not use the window, so it may run after AppKit released the window.
 void sp_window_end_responder_observation(void *observation);
+
+// Calls changed on the main thread each time a sheet begins on the window (NSWindowWillBeginSheetNotification) or ends
+// (NSWindowDidEndSheetNotification). The change of a begin comes after AppKit attached the sheet, so the facts that it reads hold
+// the sheet. Returns the observation, which the caller ends once with sp_window_end_sheet_observation, or NULL when there is no
+// window or no callback.
+#ifdef __BLOCKS__
+void *sp_window_observe_sheet(void *window, void (^changed)(void));
+#endif
+
+// Ends the observation that sp_window_observe_sheet returned and releases it, so its callback is not called again. It does not
+// use the window, so it may run after AppKit released the window.
+void sp_window_end_sheet_observation(void *observation);

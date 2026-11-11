@@ -470,6 +470,13 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 			if observed != nil {
 				fatalError("window cursor", observed)
 			}
+			// The sheet that a panel or an alert attaches to the window is a value of host.window, so a check knows that it opened.
+			mainThreadStep(func() {
+				s.sheetObservation, observed = system.ObserveSheet(win.NativeWindow(), s.windowChanged)
+			})
+			if observed != nil {
+				fatalError("window sheet", observed)
+			}
 			// A framework places a new window on the display of the key window of the active application, which for an application
 			// that is not active is a display of another application, so the window goes to the display of the frontmost window of
 			// this application before it shows (native/darwin/src/window_reveal.h).
@@ -802,6 +809,8 @@ func (s *Surfaces) close() {
 		s.responderObservation = nil
 		system.EndCursorObservation(s.cursorObservation)
 		s.cursorObservation = nil
+		system.EndSheetObservation(s.sheetObservation)
+		s.sheetObservation = nil
 		if s.monitor != 0 {
 			system.UnwatchInput(s.monitor)
 		}

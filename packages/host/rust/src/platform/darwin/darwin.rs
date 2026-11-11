@@ -183,6 +183,12 @@ impl Platform for Darwin {
     fn end_cursor_observation(&self, observation: Handle) {
         input::end_cursor_observation(observation)
     }
+    fn observe_sheet(&self, window: Handle, changed: Box<dyn Fn()>) -> Result<Handle, String> {
+        window::observe_sheet(window, changed)
+    }
+    fn end_sheet_observation(&self, observation: Handle) {
+        window::end_sheet_observation(observation)
+    }
 
     fn fullscreen(
         &self,

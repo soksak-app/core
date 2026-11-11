@@ -8,9 +8,11 @@
 bool nativeWindowFullscreen(uintptr_t window, bool on, uintptr_t callback);
 void *nativeWindowObserveResponder(uintptr_t window, uintptr_t callback);
 void *nativeWindowObserveCursor(uintptr_t window, uintptr_t callback);
+void *nativeWindowObserveSheet(uintptr_t window, uintptr_t callback);
 void nativeWindowPrepare(uintptr_t window);
 void main_sp_window_end_responder_observation(void *observation);
 void main_sp_input_virtual_end_cursor_observation(void *observation);
+void main_sp_window_end_sheet_observation(void *observation);
 double main_windowTitlebarHeight(uintptr_t window);
 bool main_windowSetTitlebarHeight(uintptr_t window, double height, char **failure);
 void main_windowControls(uintptr_t window, double *out);

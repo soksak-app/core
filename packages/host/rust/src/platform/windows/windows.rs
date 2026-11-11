@@ -100,6 +100,12 @@ impl Platform for Windows {
     fn end_cursor_observation(&self, observation: Handle) {
         unsupported::end_cursor_observation(observation)
     }
+    fn observe_sheet(&self, window: Handle, changed: Box<dyn Fn()>) -> Result<Handle, String> {
+        unsupported::observe_sheet(window, changed)
+    }
+    fn end_sheet_observation(&self, observation: Handle) {
+        unsupported::end_sheet_observation(observation)
+    }
 
     fn fullscreen(
         &self,

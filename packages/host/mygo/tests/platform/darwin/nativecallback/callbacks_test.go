@@ -204,7 +204,7 @@ func TestNativeCallbacksPreserveTheDeclaredABI(t *testing.T) {
 		"NativeCommitted", "NativeTerminated", "NativeMessage", "FileDropped", "FileDropReleased", "ImageReleased", "ImageChanged",
 		"NativeStartPageReady", "NativeLayoutReady", "NativePresentationDone", "NativeJoinEnded", "NativeSettledPresent", "NativeSettledPresentEnded",
 		"NativeLayoutStarted", "NativeLayoutEnded", "NativeSettledDone", "NotificationEvent", "QuitRequest", "NativeUiRun",
-		"NativeResponderChanged", "NativeCursorChanged", "NativeFullscreenDone", "SurfacePressed", "SurfacePoint", "InputDelivered", "InputActivated",
+		"NativeResponderChanged", "NativeCursorChanged", "NativeSheetChanged", "NativeFullscreenDone", "SurfacePressed", "SurfacePoint", "InputDelivered", "InputActivated",
 		"DocumentChanged", "DocumentMessage", "ViewMessage", "ViewEnded", "ViewResponsiveness", "DocumentStream", "CoreRootServe",
 		"DocumentQueried", "DocumentEvent", "MemoryPressure", "DockNewWindow", "MouseButtonsChanged", "NativeInputSourceAdopted",
 		"WindowObjectsCounted", "PageObjectsCounted", "DeliveredNotifications", "DocumentFrameIdentityDone", "InputReferenceReply", "ProcessExitAnswered",
