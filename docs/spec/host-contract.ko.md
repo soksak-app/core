@@ -130,6 +130,8 @@ fn invalid_json_closes_connection() {
 | `window.facts.cursor` | `host.window`는 `cursor`를 native window facts가 준 그대로 보고한다. 애플리케이션이 virtual key window에 정한 cursor의 이름이고, 창이 virtual key window가 아니거나 cursor가 정해지지 않았거나 platform의 facts가 그것을 보고하지 않으면 `null`이다. 이름이 아닌 값은 거부한다. | all |
 | `window.facts.activation-observation-refuses-invalid-native-evidence` | `activationObservation`이 없거나, `registered`가 boolean이 아니거나, `count`가 canonical unsigned 64-bit 10진 문자열이 아니면(숫자, 빈 문자열, 앞자리 0이나 부호, 소수, 18446744073709551615 초과) `host.window` 읽기는 `activationObservation`을 이름으로 밝힌 오류로 실패한다. | all |
 | `window.facts.activation-observation-declares-its-schema` | `host.window` 선언은 `activationObservation`에 `registered` `{"type": "boolean"}`과 `count` `{"type": "string", "pattern": "^(0\|[1-9][0-9]*)$"}` property를 준다. | all |
+| `window.facts.display-and-order` | `host.window` 은 `display` 와 `order` 를 네이티브 창 facts 가 주는 대로 알린다: 창의 display index 와, 화면에서 같은 level 창들 사이 창의 자리 `{index, count, otherInFront}` 이며, facts 가 알 수 없으면 각각 `null` 이다. | all |
+| `window.order.raise-and-lower` | 호스트는 `host.window.raise` 와 `host.window.lower` 를 빈 parameter 와 null 결과의 command 로 선언하고, 둘은 platform 을 거쳐 창의 네이티브 창 순서를 바꾼다. | all |
 | `links.open.accepts-web-and-mail-schemes` | 절대 `http`, `https`, `mailto` URL은 열기를 받아들인다. | all |
 | `links.open.rejects-other-schemes` | 다른 스킴의 URL, 해석되지 않는 URL, 8192자보다 긴 URL은 거부한다. | all |
 | `notifications.request.accepts-tab-notices` | 제어 문자 없이 1–256자인 표면과 제목, 1–1024자인 본문의 알림을 받아들이며, 제거에는 표면만 필요하다. | all |

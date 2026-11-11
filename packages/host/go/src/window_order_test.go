@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"testing"
 
@@ -48,7 +49,7 @@ func orderHost(t *testing.T, p *orderPlatform) (*Host, *Surfaces) {
 
 // host.window reports the display of the window and its place among the windows on the screen as the platform reads them, and
 // null for each that the platform cannot tell.
-// contract: window.order.reported
+// contract: window.facts.display-and-order
 func TestWindowReportsItsDisplayAndItsPlaceAmongTheWindowsOnTheScreen(t *testing.T) {
 	for _, c := range []struct{ name, display, order string }{
 		{name: "a window on the screen", display: "1", order: `{"index":2,"count":5,"otherInFront":true}`},
@@ -83,16 +84,17 @@ func TestWindowReportsItsDisplayAndItsPlaceAmongTheWindowsOnTheScreen(t *testing
 	}
 }
 
-// host.window.raise and host.window.lower order the native window of the window through the platform, and a refusal of the
-// platform is the error of the command.
+// host.window.raise and host.window.lower are commands of the host with empty parameters and a null result, they order the
+// native window of the window through the platform, and a refusal of the platform is the error of the command.
 // contract: window.order.raise-and-lower
 func TestRaiseAndLowerOrderTheNativeWindow(t *testing.T) {
 	p := &orderPlatform{}
 	h, _ := orderHost(t, p)
 	backend := hostBackend{h: h}
 	for _, name := range []string{"host.window.raise", "host.window.lower"} {
-		if hostCommands[name].Description == "" {
-			t.Fatalf("%s is not a declared host command", name)
+		declared := hostCommands[name]
+		if declared.Description == "" || !reflect.DeepEqual(declared.Params, emptyObject) || !reflect.DeepEqual(declared.Result, nullSchema) {
+			t.Fatalf("%s is declared as %#v, want a host command with empty parameters and a null result", name, declared)
 		}
 		if result, err := backend.HostCommand("main", name, json.RawMessage(`{}`), nil); err != nil || result != nil {
 			t.Fatalf("%s answered %v, %v, want null", name, result, err)
