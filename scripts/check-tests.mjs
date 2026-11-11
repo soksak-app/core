@@ -9277,7 +9277,8 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "native/darwin/tests/window_facts_test.m", id: "a window without a sheet reports no sheet" },
-      { file: "native/darwin/tests/window_facts_test.m", id: "a %@ sheet is reported with its kind and frame (%@, expected %@)" },
+      { file: "native/darwin/tests/window_facts_test.m", id: "a %@ sheet is reported with its kind, frame, folder and name (%@, expected %@)" },
+      { file: "native/darwin/tests/window_facts_test.m", id: "a %@ panel reports the folder that it shows (%@)" },
       { file: "native/darwin/tests/window_facts_test.m", id: "the begin of a %@ sheet is one change whose facts hold the sheet (%d changes, %@)" },
       { file: "native/darwin/tests/window_facts_test.m", id: "a window whose %@ sheet ended reports no sheet" },
       { file: "native/darwin/tests/window_facts_test.m", id: "the end of a %@ sheet is one change whose facts hold no sheet (%d changes, %@)" },

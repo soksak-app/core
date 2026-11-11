@@ -372,8 +372,12 @@ int main(void) { @autoreleasepool {
     check(sp_window_observe_sheet(NULL, ^{}) == NULL, @"a sheet observation without a window is refused");
     NSAlert *alert = [[[NSAlert alloc] init] autorelease];
     alert.messageText = @"window_facts_test";
+    // A save panel reports its folder and the name in its name field, an open panel its folder, so a check knows where Return
+    // saves before it presses it.
+    NSSavePanel *savePanel = NSSavePanel.savePanel;
+    savePanel.nameFieldStringValue = @"window_facts_test.txt";
     NSArray *sheets = @[
-        @[@"save", NSSavePanel.savePanel],
+        @[@"save", savePanel],
         @[@"open", NSOpenPanel.openPanel],
         @[@"alert", alert],
     ];
@@ -385,14 +389,21 @@ int main(void) { @autoreleasepool {
         NSWindow *sheet = window.attachedSheet;
         NSRect frame = sheet.frame;
         CGFloat top = NSMaxY(NSScreen.screens.firstObject.frame);
+        id directory = [sheet isKindOfClass:NSSavePanel.class] ? (id)((NSSavePanel *)sheet).directoryURL.path : nil;
+        id name = [kind isEqual:@"save"] ? (id)@"window_facts_test.txt" : nil;
         NSDictionary *expected = @{ @"kind": kind, @"frame": @{ @"x": @(frame.origin.x), @"y": @(top - NSMaxY(frame)),
-            @"width": @(frame.size.width), @"height": @(frame.size.height) } };
+            @"width": @(frame.size.width), @"height": @(frame.size.height) },
+            @"directory": directory ?: NSNull.null, @"name": name ?: NSNull.null };
         NSDictionary *reported = parse(sp_window_facts(window, sp_window_composition(window)))[@"sheet"];
         check(sheet != nil && [reported isEqual:expected],
-            [NSString stringWithFormat:@"a %@ sheet is reported with its kind and frame (%@, expected %@)", kind, reported, expected]);
+            [NSString stringWithFormat:@"a %@ sheet is reported with its kind, frame, folder and name (%@, expected %@)", kind, reported, expected]);
         check(sheetChanges == before + 1 && [sheetAtChange isEqual:expected],
             [NSString stringWithFormat:@"the begin of a %@ sheet is one change whose facts hold the sheet (%d changes, %@)", kind,
                 sheetChanges - before, sheetAtChange]);
+        if (![kind isEqual:@"alert"]) {
+            check([reported[@"directory"] isKindOfClass:NSString.class] && [reported[@"directory"] length] > 0,
+                [NSString stringWithFormat:@"a %@ panel reports the folder that it shows (%@)", kind, reported[@"directory"]]);
+        }
         int attached = sheetChanges;
         [window endSheet:sheet];
         eventWait([NSString stringWithFormat:@"the end of the %@ sheet", kind], ^BOOL{ return sheetChanges > attached; });
