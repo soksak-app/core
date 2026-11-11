@@ -3,6 +3,7 @@ module github.com/soksak-app/core/apps/mygo
 go 1.27.3
 
 require (
+	github.com/egoist/mygo v0.7.4
 	github.com/soksak-app/core/packages/host/go v0.0.0
 	github.com/soksak-app/core/packages/host/mygo v0.0.0
 	github.com/soksak-app/core/packages/workbench-mygo v0.0.0
@@ -11,7 +12,6 @@ require (
 require (
 	github.com/Masterminds/semver/v3 v3.5.0 // indirect
 	github.com/ebitengine/purego v0.11.1 // indirect
-	github.com/egoist/mygo v0.7.4 // indirect
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
 	github.com/go-text/typesetting v0.3.5 // indirect
 	github.com/soksak-app/core/packages/sok/go v0.0.0 // indirect
@@ -26,4 +26,4 @@ require (
 // notification center delegate, draws while a window is occluded, and builds
 // a frame that an open transaction of the application keeps from a drawable
 // to draw it after the commit.
-replace github.com/egoist/mygo => github.com/min-0-max/mygo v0.7.4-244-g4abb83d-soksak.4
+replace github.com/egoist/mygo => github.com/min-0-max/mygo v0.7.4-244-g4abb83d-soksak.5
