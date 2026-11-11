@@ -10,6 +10,7 @@
 - F754: child 를 일부러 crash 시키는 check 는 child 의 crash exception 을 처리해 시스템이 crash report 를 쓰지 않게 하고, crash 파일 또는 error 줄, `SIGABRT` 종료, 응답한 exception 으로 판정한다. 시스템 crash report 감시는 지웠고, Go check 는 cgo 유무 모두에서 build 되며, `make test-hosts` 의 Rust run 은 두 Rust check 가 필요로 하는 `host-test` 를 켠다.
 - F758: 새 window 는 모든 host 에서 show 전에 `sp_window_place_new` 를 거쳐, 다른 애플리케이션의 key window 가 있는 display 가 아니라 애플리케이션의 가장 앞 window 가 있는 display 의 작업 영역 가운데에 열린다.
 - F757: surface 를 제거하는 배치는 페이지와 mygo 워크벤치 모두에서 워크벤치가 그보다 먼저 보낸, 그 surface 로 가는 키보드 call 을 기다리므로, 호스트가 그런 call 을 창이 쥐지 않은 surface 로 거부하지 않는다.
+- F756: window run은 더 이상 사람의 유휴 시간을 기다리지 않는다(`--when-idle`과 `WHEN_IDLE` 제거). `diagnostics.drag`는 세 host에서 gesture 동안 자기 창을 구동하므로 사람의 pointer event는 그 창의 view에 닿지 않고, 응답은 버린 event를 `dropped`로 알리며, drag check는 활성 창을 잰다. show-behind check는 앞 애플리케이션이 아니라 자기 애플리케이션의 활성과 자기 window 뒤의 window를 판정한다.
 - F726: `document_throttle_test` 는 숨긴 document region 과 덮인 document region 을 page 의 `visibilitychange` event 로 판정한다. 각 hidden 상태는 다음 visible 상태까지 animation frame 을 실행하지 않고, timer turn 은 보고만 하며 판정하지 않는다. 검사의 모든 대기는 고정 시간 동안의 속도 대신 그 event 로 끝난다.
 - F718-10: window 의 어떤 배치도 view 를 기다리지 않는다. 배치는 composition 을 선언한 view 를 보내고, 진행 중인 선언은 host 의 답을 기다리며, 선언하지 않은 view 는 deferred 로 둔다. 그 view 의 선언이 page 를 다시 layout 한다. core 명령의 drawn 대기는 진행 중인 선언에 대한 host 의 답만 기다린다.
 - F718-11: Rust host test 가 release 를 `POINTER_HELD` 로 거절하고, 다음 press 의 끝에서 그것이 전달됨을 Go test 옆에서 확인한다.
