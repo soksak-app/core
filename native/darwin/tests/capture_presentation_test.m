@@ -265,7 +265,7 @@ int main(void) { @autoreleasepool {
     configuration.pixelFormat = kCVPixelFormatType_32BGRA;
     configuration.colorSpaceName = kCGColorSpaceSRGB;
     configuration.showsCursor = NO;
-    configuration.minimumFrameInterval = CMTimeMake(1, 120);
+    configuration.minimumFrameInterval = kCMTimeZero;
     configuration.queueDepth = 8;
     SPCaptureOutput *output = [SPCaptureOutput new];
     SCStream *stream = [[SCStream alloc] initWithFilter:filter configuration:configuration delegate:output];

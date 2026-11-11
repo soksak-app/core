@@ -265,6 +265,8 @@ Release는 plugin과 sidecar 저장소가 build에 쓰는 것을 담으므로, �
 
 `make benchmark-empty-window [SECONDS=N]`은 `packages/host/mygo/benchmark/platform/darwin`를 실행한다. mygo framework adapter 없이 1200×760 point의 framework 창을 열어 workbench를 그리지 않고, JSON 한 줄을 쓴다: 유휴 창의 footprint(`footprintBytes`), `seconds`(기본 240) 동안의 CPU(`cpuSeconds`), resize 중간의 footprint(`resizeFootprintBytes`), 그 3 s 뒤의 footprint(`afterResizeFootprintBytes`). `packages/host/mygo/benchmark/empty_window_test.go`는 fixture 창으로 인자, 창 크기, 측정값, 출력을 검사한다.
 
+각 resize 단계는 창이 새 크기로 그린 뒤에 돌아오므로, resize는 고정된 간격이 아니라 창의 paint에 맞춰 진행된다.
+
 ## Three-host benchmark
 
 three-host benchmark B3는 다섯 application에서 한 session으로 [performance goals](../spec/hosts.ko.md#performance-goals)를 잰다. other host는 mygo host와 같은 revision에서 build한 Wails host와 Tauri host다. baseline host는 측정 target을 완성하는 revision(F502-2)에서 build한 Wails host와 Tauri host이며, 이 revision은 Wails host나 Tauri host가 실행하는 code를 바꾸는 모든 item보다 앞선다. 각 baseline host는 branch `reference/b3-baseline-hosts`의 head를 checkout한 검증 checkout에서 build하고 실행하며, 이 branch는 그 revision 뒤에 측정 target을 바꾸는 commit만 가진다: 측정 target을 바꾸는 item은 그 변경을 이 branch에 자기 commit으로 적용하고, 새 head를 other host checkout의 git common directory에 있는 baseline record `b3/baseline.json`에 쓴다. 이 파일은 그 checkout의 모든 worktree가 공유하고 `cargo clean`이 지우지 않는다. baseline record(schema 2)는 그 branch의 head를 순서대로, 모든 application이 설치하는 각 sidecar release의 id, version, `sha256`, 그리고 baseline host가 설치하는 각 plugin release의 version과 `sha256`을 가진다; 이것은 저장소의 기록이 아니다. 이 branch는 그 revision의 host 코드와 executable 이름, status 이름을 유지한다. 이 branch는 `main`에 merge하지 않는다. 그 revision 이후의 각 commit은 `main`이 가진 변경을 적용하기 때문이다.

@@ -13,9 +13,18 @@ import (
 )
 
 // fixtureWindow records the sizes that the benchmark sets.
-type fixtureWindow struct{ sizes [][2]int }
+type fixtureWindow struct {
+	sizes   [][2]int
+	failure error
+}
 
-func (w *fixtureWindow) Resize(width, height int) { w.sizes = append(w.sizes, [2]int{width, height}) }
+func (w *fixtureWindow) Resize(width, height int) error {
+	if w.failure != nil {
+		return w.failure
+	}
+	w.sizes = append(w.sizes, [2]int{width, height})
+	return nil
+}
 
 // fixtureProcess answers from fixed lists and records when the benchmark read the footprint.
 type fixtureProcess struct {
@@ -79,6 +88,33 @@ func TestAFailedReadingEndsTheBenchmark(t *testing.T) {
 	_, err := benchmark.Measure(&fixtureWindow{}, &fixtureProcess{failure: failure}, benchmark.Options{Seconds: 1}, func(time.Duration) {})
 	if !errors.Is(err, failure) {
 		t.Fatalf("the benchmark returned %v", err)
+	}
+}
+
+// contract: mygo.benchmark.empty-window-reads-the-window
+func TestAResizeErrorEndsTheBenchmark(t *testing.T) {
+	failure := errors.New("window closed")
+	window := &fixtureWindow{failure: failure}
+	process := &fixtureProcess{window: window, footprints: []int64{10, 20}, cpu: []time.Duration{0, 0}}
+	_, err := benchmark.Measure(window, process, benchmark.Options{Seconds: 1}, func(time.Duration) {})
+	if !errors.Is(err, failure) {
+		t.Fatalf("the benchmark returned %v, want the resize error", err)
+	}
+	if len(process.readAt) != 1 {
+		t.Fatalf("the footprint was read after %v sizes, want only the idle reading", process.readAt)
+	}
+}
+
+// contract: mygo.benchmark.empty-window-reads-the-window
+func TestTheResizeWaitsForTheWindowNotForTheClock(t *testing.T) {
+	window := &fixtureWindow{}
+	process := &fixtureProcess{window: window, footprints: []int64{10, 20, 30}, cpu: []time.Duration{time.Second, 3500 * time.Millisecond}}
+	var slept []time.Duration
+	if _, err := benchmark.Measure(window, process, benchmark.Options{Seconds: 240}, func(d time.Duration) { slept = append(slept, d) }); err != nil {
+		t.Fatal(err)
+	}
+	if want := []time.Duration{240 * time.Second, 3 * time.Second}; !slices.Equal(slept, want) {
+		t.Fatalf("the benchmark slept %v, want %v: the resize paces by the window's paints, not by a clock", slept, want)
 	}
 }
 
