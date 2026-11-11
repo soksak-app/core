@@ -6,9 +6,11 @@
 // Each input goes to the window that the caller names, at window points of its content (origin at the top left), as an input
 // of the endpoint names the window of its request: a person presses at a point of the screen, and the panel over the window
 // takes the press. A case judges what the panel did with the input: the button that ended the sheet, the item that the menu
-// ran. A sheet or a menu that the input did not reach is ended by the test after the input has been handled, so the next case
-// runs.
+// ran, read before the test ends what the input left. A sheet answers NOT_ENDED until its completion runs, so a sheet that the
+// input did not end is told from one that it cancelled (NSModalResponseCancel is 0). A sheet or a menu that the input did not
+// reach is ended by the test after the input has been handled, so the next case runs.
 #import <Cocoa/Cocoa.h>
+#import <OSLog/OSLog.h>
 #import "input_inject.h"
 #import "input_virtual.h"
 #import "support/event_wait.h"
@@ -20,6 +22,20 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 static void note(NSString *message) { fprintf(stdout, "NOTE: %s\n", message.UTF8String); }
+
+// The response of a sheet whose completion has not run.
+static const NSModalResponse NOT_ENDED = NSIntegerMin;
+
+// Writes the menu tracking records of AppKit for this process since since (NSMenuTrackingLoggingEnabled), so a menu that did not
+// take the input states what its tracking did with each event.
+static void noteMenuTracking(NSDate *since, NSString *what) {
+    NSError *error = nil;
+    OSLogStore *store = [OSLogStore storeWithScope:OSLogStoreCurrentProcessIdentifier error:&error];
+    OSLogEnumerator *entries = [store entriesEnumeratorWithOptions:0 position:[store positionWithDate:since]
+        predicate:[NSPredicate predicateWithFormat:@"subsystem == 'com.apple.AppKit' AND category CONTAINS[c] 'Menu'"] error:&error];
+    if (!entries) { note([NSString stringWithFormat:@"%@: the log of the process cannot be read: %@", what, error]); return; }
+    for (OSLogEntry *entry in entries) note([NSString stringWithFormat:@"%@: AppKit %@", what, entry.composedMessage]);
+}
 
 static const char *resultText(sp_input_result result) {
     switch (result) {
@@ -114,7 +130,7 @@ static NSAlert *showAlert(NSWindow *window, NSModalResponse *response) {
     alert.messageText = @"Panel check";
     [alert addButtonWithTitle:@"First"];
     [alert addButtonWithTitle:@"Second"];
-    *response = 0;
+    *response = NOT_ENDED;
     [alert beginSheetModalForWindow:window completionHandler:^(NSModalResponse returned) { *response = returned; }];
     eventWait(@"the alert sheet shows", ^BOOL { return alert.window.isVisible; });
     return alert;
@@ -129,10 +145,14 @@ static NSAlert *showAlert(NSWindow *window, NSModalResponse *response) {
 
 @interface MenuTarget : NSObject
 @property NSInteger runs;
+@property(copy) NSString *chosen;
 - (void)act:(id)sender;
+- (void)choose:(NSPopUpButton *)sender;
 @end
 @implementation MenuTarget
 - (void)act:(id)sender { self.runs++; }
+- (void)choose:(NSPopUpButton *)sender { self.chosen = sender.titleOfSelectedItem; }
+- (void)dealloc { [_chosen release]; [super dealloc]; }
 @end
 
 // The window of the application at a menu level that shows a menu, or nil.
@@ -162,6 +182,7 @@ static void whileTracking(NSMenu *menu, NSString *what, BOOL *tracked, void (^at
 
 int main(void) { @autoreleasepool {
     setvbuf(stdout, NULL, _IOLBF, 0);
+    [NSUserDefaults.standardUserDefaults registerDefaults:@{@"NSMenuTrackingLoggingEnabled": @YES}];
     [NSApplication sharedApplication];
     [NSApp finishLaunching];
     installMarks();
@@ -211,7 +232,7 @@ int main(void) { @autoreleasepool {
     NSSavePanel *save = [NSSavePanel savePanel];
     save.directoryURL = [NSURL fileURLWithPath:folder];
     save.nameFieldStringValue = @"panel-check.txt";
-    __block NSModalResponse saved = 0;
+    __block NSModalResponse saved = NOT_ENDED;
     [save beginSheetModalForWindow:window completionHandler:^(NSModalResponse returned) { saved = returned; }];
     eventWait(@"the save panel sheet shows", ^BOOL { return window.attachedSheet != nil && window.attachedSheet.isVisible; });
     note([@"save panel: " stringByAppendingString:panelFacts(window.attachedSheet)]);
@@ -222,7 +243,7 @@ int main(void) { @autoreleasepool {
     endSheet(window, @"save panel Return");
     save = [NSSavePanel savePanel];
     save.directoryURL = [NSURL fileURLWithPath:folder];
-    saved = 0;
+    saved = NOT_ENDED;
     [save beginSheetModalForWindow:window completionHandler:^(NSModalResponse returned) { saved = returned; }];
     eventWait(@"the save panel sheet shows again", ^BOOL { return window.attachedSheet != nil && window.attachedSheet.isVisible; });
     NSButton *cancel = buttonTitled(window.attachedSheet.contentView, @"Cancel");
@@ -236,7 +257,7 @@ int main(void) { @autoreleasepool {
     // An open panel sheet: Escape cancels it.
     NSOpenPanel *open = [NSOpenPanel openPanel];
     open.directoryURL = [NSURL fileURLWithPath:folder];
-    __block NSModalResponse opened = 0;
+    __block NSModalResponse opened = NOT_ENDED;
     [open beginSheetModalForWindow:window completionHandler:^(NSModalResponse returned) { opened = returned; }];
     eventWait(@"the open panel sheet shows", ^BOOL { return window.attachedSheet != nil && window.attachedSheet.isVisible; });
     note([@"open panel: " stringByAppendingString:panelFacts(window.attachedSheet)]);
@@ -258,21 +279,28 @@ int main(void) { @autoreleasepool {
         NSWindow *shown = menuWindow(window);
         note([NSString stringWithFormat:@"context menu: %@", shown ? panelFacts(shown) : @"no menu window of the application"]);
         if (!shown) return;
+        // A person moves the pointer with the button held onto the item, which highlights it, and releases it there.
         NSPoint item = pointOfScreenRect(window, shown.frame);
+        sp_input_result drag = sp_input_pointer_clicks(window, item.x, item.y, 2, 1, 1);
         sp_input_result up = sp_input_pointer_clicks(window, item.x, item.y, 3, 1, 1);
-        note([NSString stringWithFormat:@"context menu: release over the item %s at %@", resultText(up), NSStringFromPoint(item)]);
+        note([NSString stringWithFormat:@"context menu: drag onto the item %s, release over it %s at %@", resultText(drag),
+            resultText(up), NSStringFromPoint(item)]);
     });
+    NSDate *menuStart = NSDate.date;
     sp_input_result down = sp_input_pointer_clicks(window, 300, 200, 1, 1, 1);
     note([NSString stringWithFormat:@"context menu: right press %s", resultText(down)]);
     settle(@"the context menu input is handled");
     check(tracked, @"a right press of the window opens its context menu");
     check(target.runs == 1, [NSString stringWithFormat:@"the release over the item of a context menu runs the item (runs %ld)", (long)target.runs]);
+    if (target.runs != 1) noteMenuTracking(menuStart, @"context menu");
     content.menu = nil;
 
     // The menu of a pop-up button: a press opens it, Down Arrow moves to the next item and Return chooses it.
     NSPopUpButton *popup = [[[NSPopUpButton alloc] initWithFrame:NSMakeRect(40, 40, 180, 26) pullsDown:NO] autorelease];
     [popup addItemsWithTitles:@[@"One", @"Two", @"Three"]];
     [popup selectItemAtIndex:0];
+    popup.target = target;
+    popup.action = @selector(choose:);
     [content addSubview:popup];
     NSPoint at = pointOf(window, popup);
     tracked = NO;
@@ -286,8 +314,10 @@ int main(void) { @autoreleasepool {
     note([NSString stringWithFormat:@"pop-up menu: press %s", resultText(down)]);
     settle(@"the pop-up menu input is handled");
     check(tracked, @"a press of a pop-up button opens its menu");
-    check(popup.indexOfSelectedItem == 1, [NSString stringWithFormat:
-        @"Down Arrow and Return in the menu of a pop-up button choose the next item (selected %ld)", (long)popup.indexOfSelectedItem]);
+    // The action of the pop-up button runs only for an item that the menu chose, and not for the end of the tracking by the test.
+    check([target.chosen isEqualToString:@"Two"], [NSString stringWithFormat:
+        @"Down Arrow and Return in the menu of a pop-up button choose the next item (chosen %@, selected %ld)", target.chosen,
+        (long)popup.indexOfSelectedItem]);
 
     check(!NSRunningApplication.currentApplication.active, @"the input left the application inactive");
     [cover close];
