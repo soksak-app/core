@@ -119,7 +119,7 @@ func TestADragOfAWindowWithoutAMainPageDeliversNativeInputAndReadsTheWorkbench(t
 		hear(StepRecord{Kind: "selector", Callback: "mouseDragged:", Entry: 1_000_000, Return: 3_500_000})
 		hear(StepRecord{Kind: "block", Callback: "frame", Entry: 0, Return: 9_000_000})
 		hear(StepRecord{Kind: "selector", Callback: "mouseDragged:", Entry: 5_000_000, Return: 6_000_000})
-		return map[string]any{"steps": 2}, nil
+		return map[string]any{"steps": 2, "asked": 32}, nil
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -139,8 +139,8 @@ func TestADragOfAWindowWithoutAMainPageDeliversNativeInputAndReadsTheWorkbench(t
 	if !reflect.DeepEqual(result["handled"], []float64{2.5, 1}) {
 		t.Fatalf("handled = %v", result["handled"])
 	}
-	if result["steps"] != 2 {
-		t.Fatalf("the reply lost the steps of the delivery: %v", result)
+	if result["steps"] != 2 || result["asked"] != 32 {
+		t.Fatalf("the reply lost the steps or the asked time of the delivery: %v", result)
 	}
 }
 

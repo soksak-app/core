@@ -913,8 +913,9 @@ func TestNativeDragDeliversThePressTheStepsAndTheReleaseOfEachRoundTrip(t *testi
 	if want := append(trip(0), trip(4)...); !reflect.DeepEqual(delivered, want) {
 		t.Fatalf("native drag delivered\n%s\nwant\n%s", strings.Join(delivered, "\n"), strings.Join(want, "\n"))
 	}
-	if result["from"] != from || result["steps"] != 8 || result["asked"] != 128 {
-		t.Fatalf("native drag result %v, want from %v, steps 8 and asked 128", result, from)
+	// Each leg runs for its own duration, so its steps follow the step period: MS / 16 ms per leg, two legs per round trip.
+	if wantSteps := 2 * plan.Times * (plan.MS / 16); result["from"] != from || result["steps"] != wantSteps || result["asked"] != plan.Times*2*plan.MS {
+		t.Fatalf("native drag result %v, want from %v, steps %d and asked %d", result, from, wantSteps, plan.Times*2*plan.MS)
 	}
 	if took, ok := result["took"].(int64); !ok || took < 0 {
 		t.Fatalf("native drag result took %#v, want a non-negative number of milliseconds", result["took"])
