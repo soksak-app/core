@@ -33,7 +33,7 @@ static _Atomic(void *) current;
 static id closeObserver, moveMonitor;
 static double pointX, pointY;
 static bool hasPoint;
-static BOOL (*appKitIsKey)(id, SEL), (*appKitIsMain)(id, SEL), (*appKitIsActive)(id, SEL);
+static BOOL (*appKitIsKey)(id, SEL), (*appKitIsMain)(id, SEL), (*appKitIsActive)(id, SEL), (*appKitPrivateIsKey)(id, SEL);
 static NSWindow *(*appKitKeyWindow)(id, SEL), *(*appKitMainWindow)(id, SEL);
 static void (*appKitOrderFront)(id, SEL, id), (*appKitMakeKeyAndOrderFront)(id, SEL, id), (*appKitOrderFrontRegardless)(id, SEL);
 static void (*appKitMakeKeyWindow)(id, SEL);
@@ -80,6 +80,13 @@ bool sp_input_virtual_any(void) {
 
 static BOOL answerIsKey(NSWindow *self, SEL selector) {
     return self == answering() ? YES : appKitIsKey(self, selector);
+}
+
+// The key state that AppKit reads inside its own event handling, such as the decision of -[NSWindow sendEvent:] whether a left
+// press is the first click that activates the window, which it then gives to the view only when the view accepts the first
+// mouse. It reads the flag of the window, not -isKeyWindow, so the virtual key window answers here as well.
+static BOOL answerPrivateIsKey(NSWindow *self, SEL selector) {
+    return self == answering() ? YES : appKitPrivateIsKey(self, selector);
 }
 
 static BOOL answerIsMain(NSWindow *self, SEL selector) {
@@ -208,6 +215,10 @@ static void install(void) {
     dispatch_once(&once, ^{
         Class window = NSWindow.class, application = NSApplication.class;
         appKitIsKey = (BOOL (*)(id, SEL))replace(window, @selector(isKeyWindow), (IMP)answerIsKey);
+        // Private (docs/operations/private-native-apis.md). Without it a press of the virtual key window that passes the
+        // application is a first click, which AppKit drops for a web view.
+        NSCAssert(class_getInstanceMethod(window, NSSelectorFromString(@"_isKeyWindow")), @"AppKit has -[NSWindow _isKeyWindow]");
+        appKitPrivateIsKey = (BOOL (*)(id, SEL))replace(window, NSSelectorFromString(@"_isKeyWindow"), (IMP)answerPrivateIsKey);
         appKitIsMain = (BOOL (*)(id, SEL))replace(window, @selector(isMainWindow), (IMP)answerIsMain);
         appKitIsActive = (BOOL (*)(id, SEL))replace(application, @selector(isActive), (IMP)answerIsActive);
         appKitKeyWindow = (NSWindow *(*)(id, SEL))replace(application, @selector(keyWindow), (IMP)answerKeyWindow);

@@ -6,6 +6,7 @@
 // a replacement of pressedMouseButtons, both set before the virtual state replaces them, so these are what it reads as AppKit.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
+#import <objc/message.h>
 #import <objc/runtime.h>
 #import "event_ring.h"
 #import "input_inject.h"
@@ -314,13 +315,14 @@ static NSUInteger count(void (^block)(void), NSString *reason) {
 
 // The methods that the virtual state replaces, and their implementations before the first entry.
 static const SEL *windowSelectors(void) {
-    static SEL selectors[6];
+    static SEL selectors[7];
     selectors[0] = @selector(isKeyWindow);
     selectors[1] = @selector(isMainWindow);
     selectors[2] = @selector(orderFront:);
     selectors[3] = @selector(makeKeyAndOrderFront:);
     selectors[4] = @selector(orderFrontRegardless);
     selectors[5] = @selector(makeKeyWindow);
+    selectors[6] = NSSelectorFromString(@"_isKeyWindow");
     return selectors;
 }
 static const SEL *applicationSelectors(void) {
@@ -330,10 +332,10 @@ static const SEL *applicationSelectors(void) {
     selectors[2] = @selector(mainWindow);
     return selectors;
 }
-static IMP windowMethods[6], applicationMethods[3], viewInputContext;
+static IMP windowMethods[7], applicationMethods[3], viewInputContext;
 static BOOL unchanged(void) {
     if (viewInputContext != method_getImplementation(class_getInstanceMethod(NSView.class, @selector(inputContext)))) return NO;
-    for (int i = 0; i < 6; i++) if (windowMethods[i] != method_getImplementation(class_getInstanceMethod(NSWindow.class, windowSelectors()[i]))) return NO;
+    for (int i = 0; i < 7; i++) if (windowMethods[i] != method_getImplementation(class_getInstanceMethod(NSWindow.class, windowSelectors()[i]))) return NO;
     for (int i = 0; i < 3; i++) if (applicationMethods[i] != method_getImplementation(class_getInstanceMethod(NSApplication.class, applicationSelectors()[i]))) return NO;
     return YES;
 }
@@ -350,7 +352,7 @@ int main(void) { @autoreleasepool {
     method_setImplementation(class_getClassMethod(NSEvent.class, @selector(pressedMouseButtons)), (IMP)testButtons);
     method_setImplementation(class_getInstanceMethod(NSApplication.class, @selector(activateIgnoringOtherApps:)), (IMP)testActivate);
 
-    for (int i = 0; i < 6; i++) windowMethods[i] = method_getImplementation(class_getInstanceMethod(NSWindow.class, windowSelectors()[i]));
+    for (int i = 0; i < 7; i++) windowMethods[i] = method_getImplementation(class_getInstanceMethod(NSWindow.class, windowSelectors()[i]));
     for (int i = 0; i < 3; i++) applicationMethods[i] = method_getImplementation(class_getInstanceMethod(NSApplication.class, applicationSelectors()[i]));
     viewInputContext = method_getImplementation(class_getInstanceMethod(NSView.class, @selector(inputContext)));
     installTrace();
@@ -387,6 +389,10 @@ int main(void) { @autoreleasepool {
     check(!unchanged(), @"the first entry replaces the methods");
     check(window.isKeyWindow && window.isMainWindow && NSApp.isActive && NSApp.keyWindow == window && NSApp.mainWindow == window, @"the window answers as the key and main window of an active application");
     check(!cover.isKeyWindow && !second.isKeyWindow, @"another window does not answer as key");
+    BOOL (*privateIsKey)(id, SEL) = (BOOL (*)(id, SEL))objc_msgSend;
+    SEL privateKey = NSSelectorFromString(@"_isKeyWindow");
+    check(privateIsKey(window, privateKey) && !privateIsKey(cover, privateKey),
+        @"the key state that AppKit reads in its event handling answers the virtual key window");
     pointer(window, 40, 80, 0);
     pointer(window, 42, 82, 0);
     drain(view);
