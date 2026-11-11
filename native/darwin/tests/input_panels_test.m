@@ -133,6 +133,21 @@ static BOOL traceWindowKeyEquivalent(NSWindow *self, SEL selector, NSEvent *even
         taken, eventKind(event)]);
     return taken;
 }
+// The view of a panel of the system (NSRemoteView of ViewBridge) forwards a key equivalent to the service of the panel and answers
+// what the service answers; the trace writes that answer. ViewBridge loads with the first panel, so it is traced from then on.
+static BOOL (*viewBridgeKeyEquivalent)(id, SEL, NSEvent *);
+static BOOL traceRemoteKeyEquivalent(NSView *self, SEL selector, NSEvent *event) {
+    BOOL taken = viewBridgeKeyEquivalent(self, selector, event);
+    if (tracing) note([NSString stringWithFormat:@"trace: -[NSRemoteView performKeyEquivalent:] answers %d for %@", taken,
+        eventKind(event)]);
+    return taken;
+}
+static void installRemoteTrace(void) {
+    Class remote = NSClassFromString(@"NSRemoteView");
+    if (viewBridgeKeyEquivalent || !remote) return;
+    viewBridgeKeyEquivalent = (BOOL (*)(id, SEL, NSEvent *))method_setImplementation(
+        class_getInstanceMethod(remote, @selector(performKeyEquivalent:)), (IMP)traceRemoteKeyEquivalent);
+}
 static void installTrace(void) {
     appKitWindowSendEvent = (void (*)(id, SEL, NSEvent *))method_setImplementation(
         class_getInstanceMethod(NSWindow.class, @selector(sendEvent:)), (IMP)traceWindowSendEvent);
@@ -350,8 +365,13 @@ int main(void) { @autoreleasepool {
     [save beginSheetModalForWindow:window completionHandler:^(NSModalResponse returned) { saved = returned; }];
     eventWait(@"the save panel sheet shows", ^BOOL { return window.attachedSheet != nil && window.attachedSheet.isVisible; });
     note([@"save panel: " stringByAppendingString:panelFacts(window.attachedSheet)]);
+    installRemoteTrace();
+    tracing = YES;
     // The panel selects the name when it shows, so the typed name replaces it.
     for (NSString *letter in @[@"t", @"y", @"p", @"e", @"d"]) key(window, letter.UTF8String, @"save panel name");
+    settle(@"the typed name is handled");
+    note([NSString stringWithFormat:@"save panel: the panel names %@ after the typed name, the key window answers %@",
+        save.nameFieldStringValue, NSApp.keyWindow.class]);
     key(window, "Enter", @"save panel");
     eventWait(@"the save panel ends", ^BOOL { return saved != NOT_ENDED; });
     check(saved == NSModalResponseOK && [save.URL.lastPathComponent isEqualToString:@"typed"], [NSString stringWithFormat:
@@ -385,6 +405,7 @@ int main(void) { @autoreleasepool {
     note([@"open panel: " stringByAppendingString:panelFacts(window.attachedSheet)]);
     key(window, "Escape", @"open panel");
     eventWait(@"the open panel ends", ^BOOL { return opened != NOT_ENDED; });
+    tracing = NO;
     check(opened == NSModalResponseCancel,
         [NSString stringWithFormat:@"Escape cancels an open panel sheet (response %ld)", (long)opened]);
 
