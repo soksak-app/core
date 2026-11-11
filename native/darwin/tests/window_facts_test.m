@@ -354,6 +354,66 @@ int main(void) { @autoreleasepool {
     check(changes == shown + 1, [NSString stringWithFormat:@"hiding the window reports an occlusion change (%d changes)",
         changes - shown]);
     check(!reportedOnScreen, @"the observation of a hidden window reports that it is not on screen");
+    // A sheet of the window: none before it begins, its kind and frame while it is attached, none again after it ends, and one
+    // change of the sheet observation at the begin and one at the end. The window goes behind every window, as the window of an
+    // application that is not active, and its sheets go with it. The change of the begin comes after AppKit attached the sheet,
+    // so the facts that the change reads hold the sheet.
+    [window orderBack:nil];
+    check(parse(sp_window_facts(window, sp_window_composition(window)))[@"sheet"] == NSNull.null,
+        @"a window without a sheet reports no sheet");
+    __block int sheetChanges = 0;
+    __block id sheetAtChange = nil;
+    void *sheetObservation = sp_window_observe_sheet(window, ^{
+        sheetChanges++;
+        [sheetAtChange release];
+        sheetAtChange = [parse(sp_window_facts(window, sp_window_composition(window)))[@"sheet"] retain];
+    });
+    check(sheetObservation != NULL, @"the sheet observation starts");
+    check(sp_window_observe_sheet(NULL, ^{}) == NULL, @"a sheet observation without a window is refused");
+    NSAlert *alert = [[[NSAlert alloc] init] autorelease];
+    alert.messageText = @"window_facts_test";
+    NSArray *sheets = @[
+        @[@"save", NSSavePanel.savePanel],
+        @[@"open", NSOpenPanel.openPanel],
+        @[@"alert", alert],
+    ];
+    for (NSArray *row in sheets) {
+        NSString *kind = row[0];
+        int before = sheetChanges;
+        [row[1] beginSheetModalForWindow:window completionHandler:^(NSModalResponse response) { (void)response; }];
+        eventWait([NSString stringWithFormat:@"the begin of the %@ sheet", kind], ^BOOL{ return sheetChanges > before; });
+        NSWindow *sheet = window.attachedSheet;
+        NSRect frame = sheet.frame;
+        CGFloat top = NSMaxY(NSScreen.screens.firstObject.frame);
+        NSDictionary *expected = @{ @"kind": kind, @"frame": @{ @"x": @(frame.origin.x), @"y": @(top - NSMaxY(frame)),
+            @"width": @(frame.size.width), @"height": @(frame.size.height) } };
+        NSDictionary *reported = parse(sp_window_facts(window, sp_window_composition(window)))[@"sheet"];
+        check(sheet != nil && [reported isEqual:expected],
+            [NSString stringWithFormat:@"a %@ sheet is reported with its kind and frame (%@, expected %@)", kind, reported, expected]);
+        check(sheetChanges == before + 1 && [sheetAtChange isEqual:expected],
+            [NSString stringWithFormat:@"the begin of a %@ sheet is one change whose facts hold the sheet (%d changes, %@)", kind,
+                sheetChanges - before, sheetAtChange]);
+        int attached = sheetChanges;
+        [window endSheet:sheet];
+        eventWait([NSString stringWithFormat:@"the end of the %@ sheet", kind], ^BOOL{ return sheetChanges > attached; });
+        check(parse(sp_window_facts(window, sp_window_composition(window)))[@"sheet"] == NSNull.null,
+            [NSString stringWithFormat:@"a window whose %@ sheet ended reports no sheet", kind]);
+        check(sheetChanges == attached + 1 && sheetAtChange == NSNull.null,
+            [NSString stringWithFormat:@"the end of a %@ sheet is one change whose facts hold no sheet (%d changes, %@)", kind,
+                sheetChanges - attached, sheetAtChange]);
+    }
+    sp_window_end_sheet_observation(sheetObservation);
+    int ended = sheetChanges;
+    [NSSavePanel.savePanel beginSheetModalForWindow:window completionHandler:^(NSModalResponse response) { (void)response; }];
+    NSWindow *unobserved = window.attachedSheet;
+    [window endSheet:unobserved];
+    // The changes of the observation come on the main queue, so a block queued after the end runs after any change of the sheet.
+    __block BOOL drained = NO;
+    dispatch_async(dispatch_get_main_queue(), ^{ drained = YES; });
+    eventWait(@"the main queue after a sheet without observation", ^BOOL{ return drained; });
+    check(unobserved != nil && sheetChanges == ended, @"an ended sheet observation reports no change");
+    [sheetAtChange release];
+    [window orderOut:nil];
     check(!NSApp.isActive, @"application stays inactive");
     [window close];
     return failures ? 1 : 0;
