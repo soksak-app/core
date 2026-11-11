@@ -1,6 +1,7 @@
 package workbench_test
 
 import (
+	"fmt"
 	"math"
 	"reflect"
 	"slices"
@@ -30,7 +31,7 @@ func hostedPlugins() workbench.PluginPage {
 func drawPlugins(page *workbench.PluginPage, errors *workbench.ShownErrors, binder *workbench.Binder) *ui.Tester {
 	return ui.NewTester(func(c *ui.Context) {
 		workbench.DrawPluginSearch(c, binder, page.Query, func(field ui.Element) ui.Element { return field.FillWidth() })
-		workbench.DrawPluginPage(c, binder, *page, errors, workbench.PluginLook{Width: 640, LeastCard: 245, Gap: 10, Control: 12, Small: 11, Caption: 10, LineHeight: 1.45,
+		workbench.DrawPluginPage(c, binder, *page, errors, workbench.PluginLook{LeastCard: 245, Gap: 10, Control: 12, Small: 11, Caption: 10, LineHeight: 1.45,
 			Space1: 4, Space2: 8, Space3: 12, FieldPadY: 5, BorderWidth: 1})
 	}, 640, 900)
 }
@@ -336,5 +337,29 @@ func TestADescriptionBreaksAtTheSpaceBeforeAWordWithAPoint(t *testing.T) {
 	const lines = 5 * 11 * 1.45
 	if box := f.box("core.library.plugins.about", "layoutprobe"); math.Abs(float64(box.W)-259) > 0.01 || math.Abs(float64(box.H)-lines) > 0.01 {
 		t.Fatalf("the description is %v wide and %v high, want 259 wide and %v high", box.W, box.H, lines)
+	}
+}
+
+// Under the classic scroller style the plugin page, whose cards overflow the library, lays its grid out beside the bar, as the grid
+// of .library-plugins of the page: the four columns share the width less 17 points, each card 17/4 points narrower.
+func TestThePluginPageGivesAClassicBarItsRoom(t *testing.T) {
+	index := registryOf(map[string][]string{})
+	plugins := []any{}
+	for number := range 40 {
+		plugins = append(plugins, map[string]any{"id": fmt.Sprintf("tool%02d", number), "name": fmt.Sprintf("Tool %d", number),
+			"description": "A tool whose description takes a few lines of its card, so that the cards of forty tools overflow the library.",
+			"versions": []any{map[string]any{"version": "0.0.40", "engines": map[string]string{"soksak": "*"}, "sidecars": map[string]string{}}}})
+	}
+	index["plugins"] = plugins
+	f := pluginShell(t, &pluginsHost{registry: "file:///registry/index.json", index: index}, `{"plugins":[]}`)
+	f.run("core.library.page", map[string]string{"page": "plugins"})
+	first, second := f.box("core.library.plugins.about", "tool00"), f.box("core.library.plugins.about", "tool01")
+	f.tester.SetPreferences(ui.Preferences{ClassicScrollbars: true, ClassicScrollbarWidth: 17, ThinClassicScrollbarWidth: 13})
+	f.settle()
+	got := f.box("core.library.plugins.about", "tool00")
+	next := f.box("core.library.plugins.about", "tool01")
+	if got.X != first.X || math.Abs(float64(got.W-(first.W-17.0/4))) > 0.01 || math.Abs(float64(next.X-(second.X-17.0/4))) > 0.01 {
+		t.Fatalf("the descriptions are at x %v, %v wide, and x %v beside the classic bar, at x %v, %v wide, and x %v without; want each card 17/4 narrower",
+			got.X, got.W, next.X, first.X, first.W, second.X)
 	}
 }

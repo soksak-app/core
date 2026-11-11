@@ -1638,3 +1638,43 @@ func TestAnOrderRowShowsTheNameOfItsValueAndTheFirstRowTheNameOfTheSetting(t *te
 		t.Fatalf("the name %+v stands outside the line of the first row %+v", name, first)
 	}
 }
+
+// Under the classic scroller style the general section, whose content overflows the pane, lays its content out beside the bar, as
+// the pane of the page with overflow:auto: each control is 17 points narrower at its place, and the grid of themes has as many
+// columns of the least tile width as the narrower pane holds.
+func TestTheGeneralSettingsGiveAClassicBarItsRoom(t *testing.T) {
+	f := opened(t)
+	declared, err := workbench.ReadDeclarations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	metric := func(name string) float32 {
+		value, ok := declared.Metric(name)
+		if !ok {
+			t.Fatalf("no metric %s", name)
+		}
+		return float32(value)
+	}
+	least, gap := metric("theme-swatch-min-w"), metric("theme-grid-gap")
+	tile := func(inner float32) float32 {
+		columns := float32(math.Floor(float64((inner + gap) / (least + gap))))
+		return (inner - gap*(columns-1)) / columns
+	}
+	overlay := f.box("core.settings-modal.set", "projectOpening")
+	theme := f.box("core.settings-modal.theme", "theme:midnight")
+	// The grid of themes starts at the start of the pane, and the selector ends at its end.
+	inner := overlay.X + overlay.W - theme.X
+	if !designNear(theme.W, tile(inner)) {
+		t.Fatalf("a theme is %v wide in a pane %v wide, want %v", theme.W, inner, tile(inner))
+	}
+	f.tester.SetPreferences(ui.Preferences{ClassicScrollbars: true, ClassicScrollbarWidth: 17, ThinClassicScrollbarWidth: 13})
+	f.settle()
+	classic := f.box("core.settings-modal.set", "projectOpening")
+	if classic.X != overlay.X || !designNear(classic.W, overlay.W-17) {
+		t.Fatalf("the selector is at x %v, %v wide under the classic style and at x %v, %v wide under the overlay style; want the same x and 17 narrower",
+			classic.X, classic.W, overlay.X, overlay.W)
+	}
+	if got := f.box("core.settings-modal.theme", "theme:midnight"); got.X != theme.X || !designNear(got.W, tile(inner-17)) {
+		t.Fatalf("a theme is at x %v, %v wide beside the classic bar, want x %v and %v wide", got.X, got.W, theme.X, tile(inner-17))
+	}
+}

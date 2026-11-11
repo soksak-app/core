@@ -22,7 +22,7 @@ type settingsPane struct {
 	segGap, segPad, segButtonPadY, segButtonPadX                                               float32
 	scopeGap, scopePadY, scopePadX, scopeMark, nameGap, captionGap, lineHeight, tracking       float32
 	paneTop, paneX, paneBottom, rowGap, fieldPadY, buttonPadX, fieldPadX, arrowInset           float32
-	swatchMinW, swatchW, gridGap, gridMargin, swatchGap, swatchPad, boxH, boxBorder            float32
+	swatchMinW, gridGap, gridMargin, swatchGap, swatchPad, boxH, boxBorder                     float32
 	railW, pairLeft, pairInset, dotInset, dot                                                  float32
 	focusOutline, focusOffset                                                                  float32
 	switchW, switchH, knobInset, knob, knobOn, switchOnMix, slideGap, trackH, thumb            float32
@@ -153,7 +153,9 @@ func (s *Shell) drawSettingsBody(c *ui.Context, model *settingsModel, width, mos
 		w.scrollKey, w.scroll.X, w.scroll.Y = key, 0, 0
 	}
 	ui.Scroll(c).TrackScroll(&w.scroll).Width(width).MaxHeight(most).Children(func() {
-		ui.Column(c).Width(width).Padding(pane.paneTop, pane.paneX, pane.paneBottom, pane.paneX).Children(func() {
+		// The pane fills the room the scroll container gives it, beside its classic bar when the content overflows, as the pane of
+		// packages/workbench/app.css does.
+		ui.Column(c).FillWidth().Padding(pane.paneTop, pane.paneX, pane.paneBottom, pane.paneX).Children(func() {
 			ui.Row(c).FillWidth().Gap(pane.scopeGap).Margin(0, 0, pane.scopeGap, 0).BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.Edge).Role(ui.RoleGroup).Label("설정 범위").Children(func() {
 				for _, control := range model.scopes {
 					s.drawSettingsScope(c, control, pane)
@@ -162,10 +164,6 @@ func (s *Shell) drawSettingsBody(c *ui.Context, model *settingsModel, width, mos
 			if model.folder != "" {
 				ui.Text(s.binder.Name(c, "core.settings-modal.folder", ""), model.folder).TextColor(s.palette.Muted).FontSize(s.textSmall()).Margin(0, 0, pane.captionGap, 0)
 			}
-			// A grid of themes has as many columns of the least width as the pane holds, and they share the free width.
-			inner := width - 2*pane.paneX
-			columns := max(1, float32(math.Floor(float64((inner+pane.gridGap)/(pane.swatchMinW+pane.gridGap)))))
-			pane.swatchW = (inner - pane.gridGap*(columns-1)) / columns
 			for index, group := range model.groups {
 				s.drawSettingsGroup(c, group, pane, index == len(model.groups)-1)
 			}
@@ -209,7 +207,8 @@ func (s *Shell) drawSettingsGroup(c *ui.Context, group settingsGroup, pane setti
 
 func (s *Shell) drawSettingsRow(c *ui.Context, row settingsRow, pane settingsPane) {
 	if len(row.controls) > 0 && row.controls[0].kind == controlSwatch {
-		ui.Row(c).FillWidth().Gap(pane.gridGap).Margin(0, 0, pane.gridMargin, 0).Wrap().Children(func() {
+		// .th-grid: as many columns of the least width as the pane holds, which share the free width.
+		ui.Grid(c).ColumnTracks(ui.Fr(1).Min(pane.swatchMinW).AutoFill()).FillWidth().Gap(pane.gridGap).Margin(0, 0, pane.gridMargin, 0).Children(func() {
 			for _, control := range row.controls {
 				s.drawControl(c, control, pane)
 			}
@@ -400,7 +399,7 @@ func (s *Shell) drawSwatch(c *ui.Context, control *SettingsControl, pane setting
 	card := func(children func()) {
 		ui.Box(c).Grow(1).FillHeight().Background(ui.Hex(colors["card"])).Border(pane.boxBorder, ui.Hex(colors["edge"])).Radius(radius).Children(children)
 	}
-	button.Width(pane.swatchW).Column().Gap(pane.swatchGap).Padding(pane.swatchPad).Border(s.palette.BorderWidth, frame).Radius(s.radiusSmall()).Label(control.Label).Children(func() {
+	button.Column().Gap(pane.swatchGap).Padding(pane.swatchPad).Border(s.palette.BorderWidth, frame).Radius(s.radiusSmall()).Label(control.Label).Children(func() {
 		ui.Box(c).FillWidth().Height(pane.boxH).Background(ui.Hex(colors["bg"])).Border(pane.boxBorder, ui.Hex(colors["edge"])).Radius(s.radiusSmall()).Clip().Children(func() {
 			ui.Box(c).Absolute().Left(0).Top(0).Bottom(0).Width(pane.railW).Background(ui.Hex(colors["rail"]))
 			ui.Row(c).Absolute().Left(pane.pairLeft).Top(pane.pairInset).Right(pane.pairInset).Bottom(pane.pairInset).Gap(slit).Background(between).Children(func() {

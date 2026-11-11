@@ -1162,12 +1162,15 @@ func pressLabeled(nodes []ui.ElementNode, label string) (ui.ElementNode, bool) {
 }
 
 // manyPlugins is an installation of count plugins, each with a surface, so that the add menu holds more items than its height.
-func manyPlugins(count int) *storedHost {
+func manyPlugins(count int) *storedHost { return manyPluginsNamed(count, "Plugin ") }
+
+// manyPluginsNamed is manyPlugins whose plugins have names of prefix and their id.
+func manyPluginsNamed(count int, prefix string) *storedHost {
 	plugins := []string{}
 	for index := range count {
 		id := fmt.Sprintf("p%02d", index)
 		plugins = append(plugins, fmt.Sprintf(`{"id":%q,"package":%q,"version":"1.0.0","manifest":{"id":%q,"name":%q,"description":"a surface",`+
-			`"mark":"Pl","icon":"<path d=\"M1 1h14\"/>","surface":{"composition":{"kind":"view","page":"a.html"}}}}`, id, id, id, "Plugin "+id))
+			`"mark":"Pl","icon":"<path d=\"M1 1h14\"/>","surface":{"composition":{"kind":"view","page":"a.html"}}}}`, id, id, id, prefix+id))
 	}
 	return &storedHost{common: map[string]any{}, installed: `{"plugins":[` + strings.Join(plugins, ",") + `]}`}
 }
@@ -1187,6 +1190,31 @@ func TestTheListOfAMenuGivesAThinClassicBarItsRoom(t *testing.T) {
 	classic := element(t, f.tester, "core.picker.item", "p00").Bounds
 	if classic.X != overlay.X || classic.W != overlay.W-13 {
 		t.Fatalf("an item is at x %g, %g wide under the classic style and at x %g, %g wide under the overlay style; want the same x and 13 narrower",
+			classic.X, classic.W, overlay.X, overlay.W)
+	}
+	f.tester.SetPreferences(ui.Preferences{})
+	f.settle()
+	if again := element(t, f.tester, "core.picker.item", "p00").Bounds; again != overlay {
+		t.Fatalf("an item is %+v back under the overlay style, %+v before", again, overlay)
+	}
+}
+
+// Under the classic scroller style a menu whose items are wider than its least width keeps their width beside its thin bar and is as
+// much wider, as the picker of the page, whose width counts the bar of its overflow: the add menu stands at the end of its button, so
+// each item stands 13 points further left, as wide as under the overlay style.
+func TestAMenuWiderThanItsLeastWidthWidensByItsThinClassicBar(t *testing.T) {
+	f := projectOn(t, manyPluginsNamed(40, "Save close probe "))
+	card := f.tabbedCards()[0]
+	f.click("core.card.add", card)
+	if menu := f.menu(); !menu.Open || len(menu.Items) != 40 {
+		t.Fatalf("the menu is %+v", menu)
+	}
+	overlay := element(t, f.tester, "core.picker.item", "p00").Bounds
+	f.tester.SetPreferences(ui.Preferences{ClassicScrollbars: true, ClassicScrollbarWidth: 17, ThinClassicScrollbarWidth: 13})
+	f.settle()
+	classic := element(t, f.tester, "core.picker.item", "p00").Bounds
+	if classic.X != overlay.X-13 || classic.W != overlay.W {
+		t.Fatalf("an item is at x %g, %g wide under the classic style and at x %g, %g wide under the overlay style; want 13 further left and as wide",
 			classic.X, classic.W, overlay.X, overlay.W)
 	}
 	f.tester.SetPreferences(ui.Preferences{})

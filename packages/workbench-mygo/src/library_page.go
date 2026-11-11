@@ -557,7 +557,7 @@ func (s *Shell) drawLibraryFooter(c *ui.Context, width float32) {
 	})
 }
 
-// pluginLook is the theme and the lengths of the plugin page at width.
+// pluginLook is the theme and the lengths of the plugin page in a window whose library is width wide less its padding.
 func (s *Shell) pluginLook(width float32) PluginLook {
 	m, p := s.metrics, s.palette
 	least := m.libraryCardMinW
@@ -566,7 +566,7 @@ func (s *Shell) pluginLook(width float32) PluginLook {
 	}
 	return PluginLook{Bg: p.Bg, Card: p.Card, Fg: p.Fg, Muted: p.Muted, Edge: p.Edge, Rail: p.Rail, No: p.No, Control: s.textControl(), Small: s.textSmall(),
 		Caption: s.textCaption(), LineHeight: m.lineHeight, Radius: p.Radius, RadiusSmall: s.radiusSmall(), BorderWidth: p.BorderWidth, Gap: p.Gap, Space1: m.space1,
-		Space2: m.space2, Space3: m.space3, FieldPadY: m.fieldPadY, Width: width, LeastCard: least}
+		Space2: m.space2, Space3: m.space3, FieldPadY: m.fieldPadY, LeastCard: least}
 }
 
 // uiButton gives a pressable element the look of .ui-button, and of .library-primary with primary.

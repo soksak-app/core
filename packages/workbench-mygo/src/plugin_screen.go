@@ -284,12 +284,12 @@ func versionLine(page PluginPage, row PluginRow) string {
 	return strings.Join(parts, " · ")
 }
 
-// PluginLook is the theme and the lengths of the plugin page, which the window gives. Width is the width of the page.
+// PluginLook is the theme and the lengths of the plugin page, which the window gives. LeastCard is the least width of a card.
 type PluginLook struct {
-	Bg, Card, Fg, Muted, Edge, Rail, No                 ui.Color
-	Control, Small, Caption, LineHeight                 float32
-	Radius, RadiusSmall, BorderWidth, Gap               float32
-	Space1, Space2, Space3, FieldPadY, Width, LeastCard float32
+	Bg, Card, Fg, Muted, Edge, Rail, No          ui.Color
+	Control, Small, Caption, LineHeight          float32
+	Radius, RadiusSmall, BorderWidth, Gap        float32
+	Space1, Space2, Space3, FieldPadY, LeastCard float32
 }
 
 func (l PluginLook) text(c *ui.Context, text string, size float32, color ui.Color) ui.Element {
@@ -316,7 +316,8 @@ func (l PluginLook) error(c *ui.Context, shown *ShownErrors, where string) {
 }
 
 // DrawPluginPage draws the plugin page: the reason of a failure, the update list, the outdated services and the cards of the shown plugins in as
-// many columns of the least card width as the page takes.
+// many columns of the least card width as the page holds, the grid of .library-plugins of packages/workbench/library.css, in the room its
+// scroll container gives it beside a classic bar.
 func DrawPluginPage(c *ui.Context, binder *Binder, page PluginPage, shown *ShownErrors, look PluginLook) {
 	gap := 2 * look.Gap
 	ui.Column(c).FillWidth().Gap(gap).Children(func() {
@@ -326,12 +327,10 @@ func DrawPluginPage(c *ui.Context, binder *Binder, page PluginPage, shown *Shown
 			drawOutdatedSidecars(c, binder, page, look)
 		}
 		rows := shownRows(page)
-		columns := max(1, int((look.Width+gap)/(look.LeastCard+gap)))
-		width := (look.Width - float32(columns-1)*gap) / float32(columns)
-		for start := 0; start < len(rows); start += columns {
-			ui.Row(c.Key(start)).FillWidth().Gap(gap).AlignItems(ui.Stretch).Children(func() {
-				for _, row := range rows[start:min(start+columns, len(rows))] {
-					drawPluginCard(c.Key(row.ID), binder, page, row, shown, look, width)
+		if len(rows) > 0 {
+			ui.Grid(c).ColumnTracks(ui.Fr(1).Min(look.LeastCard).AutoFill()).FillWidth().Gap(gap).Children(func() {
+				for _, row := range rows {
+					drawPluginCard(c.Key(row.ID), binder, page, row, shown, look)
 				}
 			})
 		}
@@ -449,13 +448,13 @@ func drawOutdatedSidecars(c *ui.Context, binder *Binder, page PluginPage, look P
 	}
 }
 
-func drawPluginCard(c *ui.Context, binder *Binder, page PluginPage, row PluginRow, shown *ShownErrors, look PluginLook, width float32) {
+func drawPluginCard(c *ui.Context, binder *Binder, page PluginPage, row PluginRow, shown *ShownErrors, look PluginLook) {
 	where := "library plugin " + row.ID
 	edge, stateColor := look.Edge, look.Muted
 	if row.State == "loaded" {
 		edge, stateColor = look.Rail, look.Rail
 	}
-	ui.Column(c).Width(width).Gap(look.Space1).Padding(look.Space2, look.Space3, look.Space2, look.Space3).Border(look.BorderWidth, edge).Radius(look.Radius).
+	ui.Column(c).Gap(look.Space1).Padding(look.Space2, look.Space3, look.Space2, look.Space3).Border(look.BorderWidth, edge).Radius(look.Radius).
 		Background(look.Card).Role(ui.RoleListItem).Label(row.Name).Children(func() {
 		ui.Row(c).FillWidth().Gap(look.Space2).AlignItems(ui.Baseline).Children(func() {
 			look.text(c, row.Name, look.Control, look.Fg).Bold().SingleLine().Ellipsis("…").Shrink(1)
