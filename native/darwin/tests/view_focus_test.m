@@ -212,12 +212,12 @@ static void activationDescriptionLifetimeTest(void) {
     ActivationDescriptionFactory previousFactory = activationDescriptionFactory;
     activationDescriptionFactory = shortLivedActivationDescription;
     @autoreleasepool {
-        activationReported(NULL, SP_ACTIVATE_REFUSED, "frontmost.test");
+        activationReported(NULL, SP_ACTIVATE_NOT_KEY, "frontmost.test");
     }
     activationDescriptionFactory = previousFactory;
     activationDescriptionDeallocated = NULL;
-    check(activationDone && activationResult == SP_ACTIVATE_REFUSED,
-        @"the activation callback records the refusal result");
+    check(activationDone && activationResult == SP_ACTIVATE_NOT_KEY,
+        @"the activation callback records a result that names the frontmost application");
     BOOL retained = !deallocated;
     check(retained, @"the saved frontmost description survives the callback autorelease pool");
     if (retained) {
