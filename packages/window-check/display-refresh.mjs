@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
  * that moves between displays keeps the rate of the display it was on at each refresh.
  */
 export function displayRefreshes(link) {
+  assert.ok(link?.state === "available", `display link is ${link?.state}: ${link?.reason}`);
   assert.ok(Array.isArray(link?.observations), "display-link.json has no observations array");
   assert.ok(link.omittedObservations === 0,
     `display-link.json omitted ${link.omittedObservations} observations`);
