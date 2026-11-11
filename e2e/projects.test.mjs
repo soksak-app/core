@@ -344,7 +344,10 @@ for (const app of Object.values(APPS)) {
       JSON.stringify({ before: beforeClose, saved: saved.geometry, after: afterOpen }));
     assert.equal(await mode(child), "light");
     await activate(s, first.id, "return the main window to the first project");
-    const title = `${first.title} / ${app.name === "wailsv3" ? "Wails v3" : "Tauri v2"}`;
+    // The end of a window title is the display name of the framework of the host (DisplayName of its framework adapter).
+    const framework = { wailsv3: "Wails v3", tauriv2: "Tauri v2", mygo: "mygo" }[app.name];
+    if (framework === undefined) throw new Error(`the framework display name of ${app.name} is not declared`);
+    const title = `${first.title} / ${framework}`;
     await s.until("host.windows", (list) => list.find((w) => w.window === s.window)?.title === title,
       "the main window title did not follow the project");
     await child.close();
