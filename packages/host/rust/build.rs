@@ -14,4 +14,17 @@ fn main() {
             );
         }
     }
+    // The host test library is linked only into the tests that need it (feature host-test).
+    if std::env::var_os("CARGO_FEATURE_HOST_TEST").is_some() {
+        let library = pkg_config::Config::new()
+            .statik(true)
+            .probe("soksak-host-test")
+            .expect("soksak-host-test must be built: make -C native/darwin build-host-test");
+        for directory in &library.link_paths {
+            println!(
+                "cargo:rerun-if-changed={}",
+                directory.join("libhost_test.a").display()
+            );
+        }
+    }
 }
