@@ -804,7 +804,9 @@ export class Session {
     // A recording reads the pixels of the window, whatever the windows of other applications in front of it: the capture reads
     // the window itself, and the recording holds the covered drawing until it stops (holdCovered), so the image regions and the
     // document regions of a covered window draw as they do on the screen and the window keeps its place in the window order.
-    const release = await holdCovered(this);
+    // A recording of a new window (newWindow) reads a window that the application creates after the start answers, so it holds
+    // nothing of the requesting window.
+    const release = params.newWindow === true ? async () => {} : await holdCovered(this);
     this.cleanup(release);
     let started;
     try {

@@ -1,8 +1,8 @@
 // Measures by recording whether a new window draws a complete first screen from the first frame in which it is visible (docs/spec/surface-composition.md,
-// docs/spec/native-host.md). A recording can start only after the window exists, so on a display that has existing windows, a display recording that covers
-// all windows of this application captures the moment the new window appears, and a recording that does not show the window appear fails. The region of the
-// new window is set with the screen coordinates of that window after the recording ends. Two windows are measured: a new window, which shows the library, and
-// the window of a project that opens in its own window.
+// docs/spec/native-host.md). The recording of a new window (diagnostics.capture.start newWindow, docs/spec/endpoint.md) holds the show of the next window of
+// the application and puts it on screen at the start of its stream, so the recording has the first frame in which the window is on screen. A new window is
+// transparent until its reveal, so its first frames are transparent, and a recording that does not show the window appear fails. Two windows are measured:
+// a new window, which shows the library, and the window of a project that opens in its own window.
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -12,7 +12,7 @@ import test from "node:test";
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
-import { cardPoint, fullSize, inWindow, LOGO, sample, undrawn } from "./screen-drawn.mjs";
+import { cardPoint, fullSize, LOGO, sample, undrawn } from "./screen-drawn.mjs";
 
 /** The pixels seen at every grid step inside rect (window coordinates) of view. */
 function grid(view, rect, step) {
@@ -41,39 +41,32 @@ function closeOthers(s, label) {
 }
 
 /**
- * Records the display while opening adds a window, and checks the frames of that window. ready waits for the first screen of the window and returns the
- * card point (window points) that must have the card color, or null for a screen without cards.
+ * Records the new window that opening adds from its first frame, and checks the frames of that window. ready waits for the first screen of the window and
+ * returns the card point (window points) that must have the card color, or null for a screen without cards.
  */
 async function firstFrames(t, s, label, opening, ready) {
-  const { displayed } = await s.presented();
-  const recording = await s.record({ display: true });
+  const recording = await s.record({ newWindow: true });
   await opening();
   const list = await s.windows(2, `${label}: the window did not open`);
   const child = s.on(list.find((w) => w.window !== s.window).window);
   const card = await ready(child);
-  // A host shows a new window only after its first screen (docs/spec/native-host.md#page-start), so the workbench can be ready while
-  // the window is still off the screen, and the presented time of a window on no screen is the time of the call. The recording ends
-  // after the window is on the screen; the presented time of a window that waits for its reveal is the frame after the reveal.
-  await child.until("host.window", (value) => value.occluded === false, `${label}: the new window did not show on the screen`);
+  // A host shows a new window only after its first screen (docs/spec/native-host.md#page-start), so the workbench can be ready while the window is still
+  // transparent; the presented time of a window that waits for its reveal is the frame after the reveal, so the recording ends after the window shows.
   const shown = await child.presented();
-  const stop = await recording.stop({ after: Math.max(displayed, shown.displayed) + 100 });
+  const stop = await recording.stop({ after: shown.displayed + 100 });
   assert.equal(stop.limited, false, `${label}: the recording reached its frame cap`);
   const window = (await child.get("host.window")).frame;
-  // A display recording covers the display that holds the center of the recorded window (native/darwin/src/capture.m).
-  const own = (await s.get("host.window")).frame;
-  const centre = { x: own.x + own.width / 2, y: own.y + own.height / 2 };
-  const display = (await s.get("host.screens")).find((screen) => centre.x >= screen.x && centre.x < screen.x + screen.width &&
-    centre.y >= screen.y && centre.y < screen.y + screen.height);
-  assert.ok(display, `${label}: no screen holds the recorded window ${JSON.stringify(own)}`);
+  // A window recording reads the window itself, so the window points of LOGO and cardPoint sample its frames.
   // A new window opens on the display of the frontmost window of the application (native/darwin/src/window_reveal.h), so the recording holds it.
   assert.ok(window.x >= display.x && window.y >= display.y && window.x + window.width <= display.x + display.width &&
     window.y + window.height <= display.y + display.height,
     `${label}: the new window ${JSON.stringify(window)} is not inside the recorded display ${JSON.stringify(display)}`);
-  const captured = frames(recording.frames).map(readFrame).map((frame) => inWindow(frame, display, window));
+  const captured = frames(recording.frames).map(readFrame);
   assert.ok(captured.length > 1, `${label}: the recording has ${captured.length} frames`);
   const region = { x: 0, y: 0, width: window.width, height: window.height };
   // The window opening animation starts the window slightly smaller, so the content is counted in the inner region that the window covers from the start.
   const inner = { x: region.width * 0.06, y: region.height * 0.06, width: region.width * 0.88, height: region.height * 0.88 };
+  // The first frame is the window on screen before its reveal, which a window recording reads as transparent pixels.
   const before = grid(captured[0], region, 16);
   const last = captured.at(-1);
   // The background of the first screen is the color of the empty area below the library or the cards.

@@ -9291,6 +9291,8 @@ const FEATURE_LINKS = [
       { file: "native/darwin/src/capture.m", symbol: "long sp_capture_wait_new_window(uint64_t token) {" },
       { file: "packages/host/go/src/recording.go", symbol: "func (r *Recording) StartNewWindow(capture NewWindowCapture, directory string, frameIdentity bool) error {" },
       { file: "packages/host/rust/src/recording.rs", symbol: "pub fn start_new_window(" },
+      { file: "packages/window-check/app.mjs", symbol: "const release = params.newWindow === true ? async () => {} : await holdCovered(this);" },
+      { file: "e2e/window-first-frames.test.mjs", symbol: "const recording = await s.record({ newWindow: true });" },
     ],
     tests: [
       { file: "native/darwin/tests/document_draw_covered_test.m", id: "the region of the covered window shows its document when the state was set before the cover" },
@@ -9316,9 +9318,12 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/diagnostics_new_window_test.rs", id: "a_failed_hold_starts_no_recording" },
       { file: "packages/host/rust/src/diagnostics_new_window_test.rs", id: "the_stop_ends_a_hold_that_no_show_took" },
       { file: "packages/host/rust/src/diagnostics_new_window_test.rs", id: "a_failure_after_the_hold_releases_the_held_window" },
+      { file: "packages/window-check/test/recording-covered.test.mjs", id: "a recording of a new window starts without a hold of the covered drawing of the requesting window" },
+      { file: "e2e/window-first-frames.test.mjs", id: "a new window shows its complete first screen from its first frame" },
+      { file: "e2e/window-first-frames.test.mjs", id: "a project window shows its complete first screen from its first frame" },
     ],
-    expected: "The native checks that judge what the window server shows order their windows behind every window, as an application that is not active shows one, cover a window with a window of their own ordered directly above it, draw covered where they capture a document, and judge only what holds whatever windows of a person cover their windows. A recording of a new window holds the next show of a window that is not on screen, sizes the recording from the window, and puts the window on screen at the completion of the stream start, so its first frame is the first frame of the window; every end of the hold puts a held window on screen, and a show without a hold is unchanged.",
-    levels: ["native", "unit"],
+    expected: "The native checks that judge what the window server shows order their windows behind every window, as an application that is not active shows one, cover a window with a window of their own ordered directly above it, draw covered where they capture a document, and judge only what holds whatever windows of a person cover their windows. A recording of a new window holds the next show of a window that is not on screen, sizes the recording from the window, and puts the window on screen at the completion of the stream start, so its first frame is the first frame of the window; every end of the hold puts a held window on screen, and a show without a hold is unchanged. The first-frame window check records the new window itself from its first frame, whose transparent frames before the reveal show it appear.",
+    levels: ["native", "unit", "application"],
   },
   {
     id: "F160.31",
