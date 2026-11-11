@@ -146,7 +146,8 @@ test('candidate policy reuses declared application scripts and native mode argum
   const root = fileURLToPath(new URL('../../', import.meta.url));
   assert.ok(candidateScripts(root).includes('benchmark:view-drag'));
   assert.ok(candidateNativeTests(root, 'test-app').includes('capture_resize_test'));
-  assert.ok(candidateNativeTests(root, 'test-app:activation').includes('webview_input_test --baseline'));
+  assert.ok(candidateNativeTests(root, 'test-app:activation').includes('webview_input_test --monitor'));
+  assert.ok(candidateNativeTests(root, 'test-app:activation').includes('input_virtual_ime_test'));
   assert.deepEqual(candidateNativeTests(root, 'benchmark:view-drag'), []);
 });
 
