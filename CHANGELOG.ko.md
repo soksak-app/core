@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F757: surface 를 제거하는 배치는 페이지와 mygo 워크벤치 모두에서 워크벤치가 그보다 먼저 보낸, 그 surface 로 가는 키보드 call 을 기다리므로, 호스트가 그런 call 을 창이 쥐지 않은 surface 로 거부하지 않는다.
 - F726: `document_throttle_test` 는 숨긴 document region 과 덮인 document region 을 page 의 `visibilitychange` event 로 판정한다. 각 hidden 상태는 다음 visible 상태까지 animation frame 을 실행하지 않고, timer turn 은 보고만 하며 판정하지 않는다. 검사의 모든 대기는 고정 시간 동안의 속도 대신 그 event 로 끝난다.
 - F718-10: window 의 어떤 배치도 view 를 기다리지 않는다. 배치는 composition 을 선언한 view 를 보내고, 진행 중인 선언은 host 의 답을 기다리며, 선언하지 않은 view 는 deferred 로 둔다. 그 view 의 선언이 page 를 다시 layout 한다. core 명령의 drawn 대기는 진행 중인 선언에 대한 host 의 답만 기다린다.
 - F718-11: Rust host test 가 release 를 `POINTER_HELD` 로 거절하고, 다음 press 의 끝에서 그것이 전달됨을 Go test 옆에서 확인한다.

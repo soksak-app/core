@@ -567,3 +567,49 @@ func describeTargets(targets []*string) []string {
 	}
 	return described
 }
+
+// A placement that leaves a surface out removes it from the host, and the keyboard calls go in an order of their own, which no
+// placement waits for. So the placement waits for the keyboard calls to that surface that went out before it, and the host never
+// refuses such a call as a call to a surface that it no longer holds (docs/spec/native-surfaces.md#keyboard-of-a-surface).
+func TestAPlacementThatRemovesASurfaceWaitsForTheKeyboardCallToIt(t *testing.T) {
+	f, stored := surfaceShell(t)
+	cards, tabs := keyboardCards(t, f)
+	focused, _ := keyboardRing(t, f)
+	other := cards[0]
+	if other == focused {
+		other = cards[1]
+	}
+	gate := newGate()
+	stored.orderMu.Lock()
+	stored.focusGate, stored.order = gate, nil
+	stored.orderMu.Unlock()
+	later := func(name string, params any) {
+		raw, err := json.Marshal(params)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.shell.Registry().RunLater(name, raw, func(_ any, err error) {
+			if err != nil {
+				t.Errorf("%s failed: %v", name, err)
+			}
+		})
+		f.pending.drain(t)
+		f.tester.Frame()
+		f.pending.drain(t)
+	}
+	// The keyboard call to the active surface of the other card waits in the host while the card closes.
+	later("core.card.focus", map[string]string{"card": other})
+	later("core.card.close", map[string]string{"card": other})
+	if !stored.holds(tabs[other][0]) {
+		calls, _ := stored.calledNow()
+		t.Fatalf("the placement removed %s before the host answered the keyboard call to it: %s", tabs[other][0], calls)
+	}
+	stored.orderMu.Lock()
+	stored.focusGate = nil
+	stored.orderMu.Unlock()
+	gate.open()
+	f.settle()
+	if stored.holds(tabs[other][0]) {
+		t.Fatalf("the host still holds %s of the closed card", tabs[other][0])
+	}
+}

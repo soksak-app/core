@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F757: A placement that removes a surface waits for the keyboard calls to that surface that the workbench sent before it, in the page and in the mygo workbench, so the host no longer refuses such a call as a surface that the window does not hold.
 - F726: `document_throttle_test` judges a hidden and a covered document region by the `visibilitychange` events of its page: each hidden state runs no animation frame until the next visible state, its timer turns are reported and not judged, and every wait of the check ends by its event instead of a rate over a fixed time.
 - F718-10: No placement of a window waits for a view: a placement sends the views that declared their composition, waits for the host answer of a declaration in flight and defers a view that has not declared, which lays the page out again at its declaration; the drawn wait of a core command waits only for the host answer of a declaration in flight.
 - F718-11: A Rust host test refuses a release with `POINTER_HELD` and finds it delivered at the end of the next press, beside the Go test.

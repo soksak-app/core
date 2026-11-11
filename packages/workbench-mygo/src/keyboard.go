@@ -34,6 +34,9 @@ type keyboardState struct {
 	// wait for the keyboard calls that run. sending counts those calls.
 	decided, answered []func(err error)
 	sending           int
+	// sent counts the keyboard calls to each surface that the host has not answered. A placement that leaves such a surface out
+	// waits for them (placeSurfaces).
+	sent map[string]int
 }
 
 // keyboardPressed follows the release of a left press on the workbench: the pass that it asks for runs the click of the press
@@ -72,8 +75,19 @@ func (s *Shell) sendKeyboard(target *string, decided bool) {
 	}
 	s.keyboard.owed, s.keyboard.target = false, target
 	s.keyboard.sending++
+	if target != nil {
+		if s.keyboard.sent == nil {
+			s.keyboard.sent = map[string]int{}
+		}
+		s.keyboard.sent[*target]++
+	}
 	s.calls.CallInOrder(keyboardOrder, "surfaceFocus", request, func(_ any, err error) {
 		s.keyboard.sending--
+		if target != nil {
+			if s.keyboard.sent[*target]--; s.keyboard.sent[*target] == 0 {
+				delete(s.keyboard.sent, *target)
+			}
+		}
 		if err != nil {
 			err = fmt.Errorf("surface focus: %w", err)
 			s.fail(err)
@@ -164,6 +178,16 @@ func (s *Shell) endAnswerWaits() {
 	for _, wait := range runs {
 		wait.run()
 	}
+}
+
+// keyboardSentToAnyBut tells whether a keyboard call that the host has not answered goes to a surface that is not in kept.
+func (s *Shell) keyboardSentToAnyBut(kept []string) bool {
+	for surface := range s.keyboard.sent {
+		if !slices.Contains(kept, surface) {
+			return true
+		}
+	}
+	return false
 }
 
 // afterKeyboard gives answers of a placement that ended to the keyboard decision that follows it.

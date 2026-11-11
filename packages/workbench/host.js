@@ -512,6 +512,16 @@ function orderedSurfacePlacement(operation) {
   return previous.then(operation).finally(release);
 }
 let layoutPresented = false;
+/* The keyboard calls (surfaceFocus) that the host has not answered, by their surface: each entry ends when the host answered or
+   refused the call. They go in the order of the other host calls, which no placement waits for, and a placement that leaves a
+   surface out removes it, so that placement waits for the calls to that surface sent before it; the host would refuse a call that
+   reaches it after the removal (docs/spec/native-surfaces.md#keyboard-of-a-surface). */
+const keyboardCalls = new Map();
+/** The end of every unanswered keyboard call to a surface that surfaces (the ids of a placement request) leaves out. */
+function keyboardCallsLeftOut(surfaces) {
+  const kept = new Set(surfaces.map(({ id }) => id));
+  return Promise.all([...keyboardCalls].filter(([surface]) => !kept.has(surface)).flatMap(([, calls]) => [...calls]));
+}
 /* The ticket of a preparation whose draw a layout epoch change cancelled. Its transaction stays open, and the next preparation of the window
    extends it: that preparation places every surface again and commits both with its own presentation, because a commit of the undrawn
    preparation would show its native frames over the DOM of the earlier layout. A failed next preparation or a cancel without a handover
@@ -636,7 +646,20 @@ export const surfaces = native ? {
      * Gives the keyboard of the window to a surface, and to the workbench for null (docs/spec/native-surfaces.md#keyboard-of-a-surface).
      * A decided call answers a release and goes out at once; a call without decided follows the ordered calls.
      */
-    focus: (surface, decided = false) => decided ? tellAhead("surfaceFocus", { surface, decided: true }) : tellInTurn("surfaceFocus", { surface }),
+    focus(surface, decided = false) {
+      const answered = decided ? tellAhead("surfaceFocus", { surface, decided: true }) : tellInTurn("surfaceFocus", { surface });
+      if (surface !== null) {
+        const ended = Promise.resolve(answered).then(() => undefined, () => undefined);
+        const calls = keyboardCalls.get(surface) ?? new Set();
+        calls.add(ended);
+        keyboardCalls.set(surface, calls);
+        ended.then(() => {
+          calls.delete(ended);
+          if (calls.size === 0 && keyboardCalls.get(surface) === calls) keyboardCalls.delete(surface);
+        });
+      }
+      return answered;
+    },
 
     theme(values) {
       themeReply = tellInTurn("setTheme", values);
@@ -729,7 +752,9 @@ export const surfaces = native ? {
           // This preparation takes over a handed-over transaction: a successful one commits it, and a failed one cancels it.
           const handed = handedTicket;
           handedTicket = null;
+          const keyboardAnswered = keyboardCallsLeftOut(request.surfaces);
           const scheduled = layoutTurn.then(async () => {
+            await keyboardAnswered;
             if (hasView) {
               let reply;
               do {

@@ -665,6 +665,14 @@ func (s *Shell) placeSurfaces() {
 		s.options.Invalidate()
 		return
 	}
+	// The host removes each surface that the request leaves out, and the keyboard calls go in an order of their own, which no
+	// placement waits for. While the host has not answered a keyboard call to a surface that these lines leave out, the frame places
+	// nothing, as while a placement runs, and the frame after the answer places them; the host would refuse the call after the
+	// removal (docs/spec/native-surfaces.md#keyboard-of-a-surface).
+	if s.keyboardSentToAnyBut(s.surfaces.order) {
+		s.calls.AfterOrder(keyboardOrder, s.options.Invalidate)
+		return
+	}
 	request, err := s.surfaceRequest()
 	if err != nil {
 		s.fail(err)

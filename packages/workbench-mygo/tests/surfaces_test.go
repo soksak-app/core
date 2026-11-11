@@ -67,7 +67,9 @@ type surfaceHost struct {
 	// host does: while it stands, no other frame opens a layout.
 	pending uint64
 	// presentGate, when set, holds each presentSurfaces until it opens, so a frame draws while a placement runs.
-	presentGate    *gate
+	presentGate *gate
+	// focusGate, when set, holds each surfaceFocus until it opens, before the host judges whether it holds the surface.
+	focusGate      *gate
 	declareFailure error
 	// presentedFailure is the error of each waitPresented, while a surface has not presented.
 	presentedFailure error
@@ -189,6 +191,12 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 		}
 		if err := json.Unmarshal(argument, &request); err != nil {
 			return nil, err
+		}
+		h.orderMu.Lock()
+		gate := h.focusGate
+		h.orderMu.Unlock()
+		if gate != nil {
+			gate.wait()
 		}
 		// The host holds the surfaces of the last syncSurfaces and refuses a surface that it does not hold
 		// (docs/spec/host-contract.md, surface-layout.keyboard-follows-the-focus-ring).
