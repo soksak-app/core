@@ -17,6 +17,7 @@
 #import <Cocoa/Cocoa.h>
 #import <Carbon/Carbon.h>
 #import <objc/runtime.h>
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #include <stdatomic.h>
 #import "input_inject.h"
 #import "input_activity_wait.h"
@@ -230,6 +231,17 @@ static NSSavePanel *systemPanelOf(NSWindow *window) {
 
 static const char *const systemPanelRefusal =
     "the panel content runs in a system service; only the name, Return and Escape are taken";
+static const char *const openPanelRefusal =
+    "the content of an open panel runs in a system service and its selection is not known; only Escape is taken";
+
+// The reason of the last refused Return of a panel, kept for the record of its key.
+static NSString *systemPanelWhy;
+
+static const char *systemPanelReason(NSString *reason) {
+    systemPanelWhy = [[reason stringByReplacingOccurrencesOfString:@"\\" withString:@"\\\\"]
+        stringByReplacingOccurrencesOfString:@"\"" withString:@"\\\""];
+    return systemPanelWhy.UTF8String;
+}
 
 // Appends text to the name of panel, as typing at the end of its name field does.
 static void systemPanelType(NSSavePanel *panel, NSString *text) {
@@ -243,20 +255,85 @@ static void systemPanelBackspace(NSSavePanel *panel) {
     panel.nameFieldStringValue = [name substringToIndex:[name rangeOfComposedCharacterSequenceAtIndex:name.length - 1].location];
 }
 
-// A key of a panel of the system: Return saves or opens (-ok:), Escape cancels (-cancel:), Backspace removes the last character of
-// the name and a key with a stated text types it at the end of the name. Shift is the only modifier of such a key. Any other key is
-// refused in its turn with why.
+// Saves panel under its name in its folder, as Save of a person does, or answers why it does not.
+//
+// The service of the panel runs the checks of Save and then sends its result, which -[NSSavePanel observeMostRecentCompletion:]
+// passes to -[NSSavePanel completeWithReturnCode:url:urls:]: that ends the sheet and calls the completion handler. The panel of the
+// application has no Save of its own (-[NSSavePanel ok:] raises "not implemented") and the service takes no OK from the
+// application (NSOSPServiceExportedToHostProtocol), so the checks of the service are made here and the result is given to that
+// method. They refuse what a person would be stopped at: a name that the service does not take (empty, with '/' or ':', starting
+// with '.', longer than -[NSRemoteSavePanel _isSaveFilenameLengthLegal] allows: 255 bytes, and the folder and the name with 9 more
+// bytes below 1025), an extension outside allowedContentTypes, an existing file, which a person is asked to replace, and the refusal
+// of the delegate. The service is then told that the panel ended (-cancel:), whose completion the ended panel ignores.
+static const char *systemPanelSave(NSSavePanel *panel) {
+    NSString *name = panel.nameFieldStringValue;
+    if (!name.length) return systemPanelReason(@"the name of the save panel is empty");
+    if ([name rangeOfCharacterFromSet:[NSCharacterSet characterSetWithCharactersInString:@"/:"]].location != NSNotFound) {
+        return systemPanelReason([NSString stringWithFormat:@"the name %@ contains '/' or ':'", name]);
+    }
+    if ([name hasPrefix:@"."]) return systemPanelReason([NSString stringWithFormat:@"the name %@ starts with '.'", name]);
+    id<NSOpenSavePanelDelegate> delegate = panel.delegate;
+    if ([delegate respondsToSelector:@selector(panel:userEnteredFilename:confirmed:)]) {
+        NSString *entered = [delegate panel:panel userEnteredFilename:name confirmed:YES];
+        if (!entered) return systemPanelReason([NSString stringWithFormat:@"the delegate of the save panel refused the name %@", name]);
+        name = entered;
+    }
+    NSURL *folder = panel.directoryURL;
+    if (!folder) return systemPanelReason(@"the save panel has no folder");
+    size_t nameBytes = strlen(name.fileSystemRepresentation), folderBytes = strlen(folder.path.fileSystemRepresentation);
+    if (nameBytes > 255 || folderBytes + nameBytes + 9 >= 1025) {
+        return systemPanelReason([NSString stringWithFormat:@"the name %@ is longer than the save panel takes", name]);
+    }
+    NSArray<UTType *> *types = panel.allowedContentTypes;
+    if (types.count) {
+        UTType *type = [UTType typeWithFilenameExtension:name.pathExtension];
+        BOOL allowed = NO;
+        for (UTType *allowedType in types) allowed = allowed || (type && [type conformsToType:allowedType]);
+        if (!allowed) {
+            return systemPanelReason([NSString stringWithFormat:@"the extension of %@ is not one of the types of the save panel", name]);
+        }
+    }
+    NSURL *url = [folder URLByAppendingPathComponent:name isDirectory:NO];
+    if ([NSFileManager.defaultManager fileExistsAtPath:url.path]) {
+        return systemPanelReason([NSString stringWithFormat:@"%@ exists; the save panel does not replace it", url.path]);
+    }
+    if ([delegate respondsToSelector:@selector(panel:validateURL:error:)]) {
+        NSError *error = nil;
+        if (![delegate panel:panel validateURL:url error:&error]) {
+            return systemPanelReason(error.localizedDescription ?: [NSString stringWithFormat:@"the delegate of the save panel refused %@", url.path]);
+        }
+    }
+    SEL complete = NSSelectorFromString(@"completeWithReturnCode:url:urls:");
+    NSCAssert([panel respondsToSelector:complete], @"a save panel completes through completeWithReturnCode:url:urls:");
+    ((void (*)(id, SEL, NSInteger, NSURL *, NSArray<NSURL *> *))[panel methodForSelector:complete])(panel, complete,
+        NSModalResponseOK, url, @[url]);
+    [panel cancel:nil];
+    return NULL;
+}
+
+// A key of a panel of the system. In a save panel Return saves (systemPanelSave), Escape cancels (-cancel:), Backspace removes the
+// last character of the name and a key with a stated text types it at the end of the name; Shift is the only modifier of such a
+// key. An open panel takes only Escape. Any other key is refused in its turn with why.
 static sp_input_result systemPanelKey(NSSavePanel *panel, const char *key, const char *text, unsigned modifiers, bool down,
     const char **why) {
     BOOL enter = strcmp(key, "Enter") == 0, escape = strcmp(key, "Escape") == 0, backspace = strcmp(key, "Backspace") == 0;
     BOOL typed = text && *text && !enter && !escape && !backspace;
+    if ([panel isKindOfClass:NSOpenPanel.class] && !escape) {
+        *why = openPanelRefusal;
+        return SP_INPUT_REJECTED;
+    }
     if ((!enter && !escape && !backspace && !typed) || (modifiers & ~1u) || ((enter || escape || backspace) && modifiers)) {
         *why = systemPanelRefusal;
         return SP_INPUT_REJECTED;
     }
     if (!down) return SP_INPUT_DELIVERED;
-    if (enter) [panel ok:nil];
-    else if (escape) [panel cancel:nil];
+    if (enter) {
+        const char *refused = systemPanelSave(panel);
+        if (refused) {
+            *why = refused;
+            return SP_INPUT_REJECTED;
+        }
+    } else if (escape) [panel cancel:nil];
     else if (backspace) systemPanelBackspace(panel);
     else systemPanelType(panel, [NSString stringWithUTF8String:text]);
     return SP_INPUT_DELIVERED;
@@ -1588,7 +1665,7 @@ sp_input_result sp_input_text(void *handle, sp_input_text_phase phase, const cha
     // process to show it in.
     NSSavePanel *panel = systemPanelOf(keyWindowOf(window));
     if (panel) {
-        if (phase != SP_INPUT_TEXT_INSERT || replacementStart >= 0) return SP_INPUT_REJECTED;
+        if (phase != SP_INPUT_TEXT_INSERT || replacementStart >= 0 || [panel isKindOfClass:NSOpenPanel.class]) return SP_INPUT_REJECTED;
         systemPanelType(panel, string);
         return SP_INPUT_DELIVERED;
     }
