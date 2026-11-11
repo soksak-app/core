@@ -414,6 +414,8 @@ int main(void) { @autoreleasepool {
     // The cursor. The pointer of the application is the injected point, so the page under it sets its cursor although other
     // windows cover the window and the real pointer is elsewhere, and the cursor stays with the window: host.window reports it,
     // its watchers hear it, and AppKit does not hold it as the cursor of a person.
+    // The hover moves above may have set the cursor of the button already, so the observation starts after it.
+    awaitCursor(window, @"pointingHand");
     __block NSUInteger cursorChanges = 0;
     void *cursorObservation = sp_input_virtual_observe_cursor(window, ^{ cursorChanges++; eventWake(); });
     check(cursorObservation != NULL, @"the cursor of a window is observed");
@@ -422,7 +424,6 @@ int main(void) { @autoreleasepool {
         @"the pointer of the application is the injected point and the system pointer stays");
     check([NSWindow windowNumberAtPoint:injected belowWindowWithWindowNumber:0] == window.windowNumber,
         @"the window under the pointer of the application is the virtual key window, although another window covers it");
-    awaitCursor(window, @"pointingHand");
     check(pointer(window, 50, 25, 0) == SP_INPUT_DELIVERED, @"a move over the field is delivered");
     awaitCursor(window, @"iBeam");
     check(pointer(window, 300, 250, 0) == SP_INPUT_DELIVERED, @"a move over the empty page is delivered");
@@ -430,13 +431,14 @@ int main(void) { @autoreleasepool {
     check([NSCursor.currentCursor.image.TIFFRepresentation isEqualToData:NSCursor.arrowCursor.image.TIFFRepresentation],
         @"the current cursor of the application is the cursor of the virtual key window");
     check([facts(window)[@"cursor"] isEqual:@"arrow"], [NSString stringWithFormat:@"host.window reports the cursor (%@)", facts(window)[@"cursor"]]);
-    check(cursorChanges >= 3, [NSString stringWithFormat:@"the observation hears each change of the cursor (%lu)", (unsigned long)cursorChanges]);
+    check(cursorChanges == 2, [NSString stringWithFormat:@"the observation hears each change of the cursor (%lu)", (unsigned long)cursorChanges]);
     sp_input_virtual_end_cursor_observation(cursorObservation);
     NSUInteger heardBefore = cursorChanges;
     check(pointer(window, 40, 80, 0) == SP_INPUT_DELIVERED, @"a move over the button is delivered again");
     awaitCursor(window, @"pointingHand");
     check(cursorChanges == heardBefore, @"an ended observation hears nothing");
-    pointer(window, 42, 82, 0);
+    // WebKit gives the page the moves of the cursor checks after this turn, so they reach it before the events are cleared below.
+    drain(view);
 
     // A real move does not reach the page; it passes the application as a person's move does.
     evaluate(view, @"events.length=0;null");
