@@ -1283,20 +1283,28 @@ fn an_answered_capture_operation_takes_back_its_ends() {
 // contract: diagnostics.drag.page-receives-every-step
 #[test]
 fn a_page_drag_sends_every_step() {
-    let mut sent = 0;
-    send_steps(8, Duration::from_millis(1), || {
-        sent += 1;
-        true
-    });
-    assert_eq!(
-        sent, 8,
-        "the page received {sent} of the 8 steps of its drag"
-    );
-    let mut after_failure = 0;
-    send_steps(8, Duration::from_millis(1), || {
-        after_failure += 1;
-        false
-    });
+    // A display of 125 Hz has a period of 8 ms, so a round trip of 32 ms legs takes 4 steps each way. The clock advances only
+    // by the waits, so the count does not depend on the machine.
+    let run = |refuse_after: Option<usize>| {
+        let now = std::cell::Cell::new(Duration::ZERO);
+        let mut sent = 0;
+        send_legs(
+            1,
+            32.0,
+            || Ok(Some(125)),
+            |period| now.set(now.get() + period),
+            || now.get(),
+            |step| {
+                assert!(step.is_ok(), "a step of a window at 125 Hz failed: {step:?}");
+                sent += 1;
+                refuse_after.is_none_or(|limit| sent < limit)
+            },
+        );
+        sent
+    };
+    let sent = run(None);
+    assert_eq!(sent, 8, "the page received {sent} of the 8 steps of its drag");
+    let after_failure = run(Some(1));
     assert_eq!(
         after_failure, 1,
         "a step that the window refused did not end the run"
