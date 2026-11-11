@@ -45,7 +45,7 @@ var presentedSchema = map[string]any{"type": "object", "properties": map[string]
 
 var hostStatus = map[string]hostEntry{
 	"host.window": {
-		Description: "Window frame and system pointer location in screen coordinates, content size, backing scale, the maximum refresh rate of its screen (null when the window is on no screen), maximized, key and application active state, whether other windows cover the whole window, child window count, the sheet attached to the window with its kind and frame (null without one), the WebContent process of the app page (0 before it starts), the WebContent processes that held a page of the application and hold none while they live, with whether WebKit ends each (null on a platform that does not report them), whether the application is quitting, window buttons, webview frames, native surfaces, document regions, image regions with the number of frames that the host marked presented for each, the open native modal, and the frames and command buffers of the workbench and whether it settled after its last frame, null on a host whose workbench WebKit draws.",
+		Description: "Window frame and system pointer location in screen coordinates, content size, backing scale, the maximum refresh rate of its screen (null when the window is on no screen), maximized, key and application active state, whether other windows cover the whole window, child window count, the sheet attached to the window with its kind, frame, the folder of a panel and the name of a save panel (null without one), the WebContent process of the app page (0 before it starts), the WebContent processes that held a page of the application and hold none while they live, with whether WebKit ends each (null on a platform that does not report them), whether the application is quitting, window buttons, webview frames, native surfaces, document regions, image regions with the number of frames that the host marked presented for each, the open native modal, and the frames and command buffers of the workbench and whether it settled after its last frame, null on a host whose workbench WebKit draws.",
 		Schema: map[string]any{"type": "object", "properties": map[string]any{
 			"frame":       rectSchema,
 			"pointer":     map[string]any{"type": "object", "properties": map[string]any{"x": map[string]any{"type": "number"}, "y": map[string]any{"type": "number"}}},
@@ -73,6 +73,7 @@ var hostStatus = map[string]hostEntry{
 			"children": map[string]any{"type": "integer"},
 			"sheet": map[string]any{"type": []string{"object", "null"}, "required": []string{"kind", "frame"}, "properties": map[string]any{
 				"kind": map[string]any{"type": "string", "enum": windowSheetKinds}, "frame": rectSchema,
+				"directory": map[string]any{"type": []string{"string", "null"}}, "name": map[string]any{"type": []string{"string", "null"}},
 			}},
 			"pagelessProcesses": map[string]any{"type": []string{"array", "null"}, "items": map[string]any{"type": "object",
 				"required": []string{"pid", "ending"}, "properties": map[string]any{
@@ -1487,10 +1488,13 @@ type WindowFrameCounters struct {
 // WindowOrder is the place of a window among the windows on the screen: the number of windows of its window level in front of
 // it, the number of windows of that level, and whether a window of another process stands in front of it over a part of it.
 // WindowSheet is the sheet attached to a window in host.window: an open panel, a save panel, the window of an alert, or another
-// sheet, with its frame in screen coordinates. A sheet is not a child window.
+// sheet, with its frame in screen coordinates, the folder that an open or save panel shows and the name in the name field of a
+// save panel, each nil for a sheet without it. A sheet is not a child window.
 type WindowSheet struct {
-	Kind  string `json:"kind"`
-	Frame frame  `json:"frame"`
+	Kind      string  `json:"kind"`
+	Frame     frame   `json:"frame"`
+	Directory *string `json:"directory"`
+	Name      *string `json:"name"`
 }
 
 // windowSheetKinds are the kinds of WindowSheet.
