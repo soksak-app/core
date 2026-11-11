@@ -748,6 +748,22 @@ async fn document_query(webview: Webview, request: Argument<documents::Request>)
     .await
 }
 
+/// Answers the granted kinds and origins of the session in a stable order.
+#[tauri::command]
+fn document_approvals_list() -> Result<Vec<(String, String)>, String> {
+    Ok(documents::APPROVALS.list())
+}
+
+/// Removes one grant of a kind for an origin, or every grant of the kind without an origin.
+#[tauri::command]
+fn document_approvals_revoke(kind: String, origin: Option<String>) -> Result<bool, String> {
+    if kind.is_empty() {
+        return Err("approvals revoke requires a kind".to_string());
+    }
+    documents::APPROVALS.revoke(&kind, origin.as_deref().unwrap_or(""));
+    Ok(true)
+}
+
 /// Reads the value of an operable element of a frame of a region; without the grant the reply names the origin.
 #[tauri::command]
 async fn document_read(

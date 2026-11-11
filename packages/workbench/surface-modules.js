@@ -184,6 +184,8 @@ function pageRuntime(surface, scoped, compositionReady, lifetime) {
       go: (name, action, offset) => invoke("documentGo", offset === undefined ? { document: name, action } : { document: name, action, offset }),
       scrollTo: (name, x, y) => invoke("documentScrollTo", { document: name, x, y }),
       read: (name, frame, ref) => invoke("documentRead", { document: name, frame, ref }),
+      approvalsList: () => invoke("documentApprovalsList", {}),
+      approvalsRevoke: (kind, origin) => invoke("documentApprovalsRevoke", { kind, origin: origin ?? "" }),
       detach: async (name) => {
         const reply = await hostClose("documentDetach", { document: name });
         documentRegions.detached(surface.surfaceId, name);

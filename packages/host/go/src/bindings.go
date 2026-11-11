@@ -364,6 +364,24 @@ func isFinite(v float64) bool {
 	return !math.IsNaN(v) && !math.IsInf(v, 0)
 }
 
+// DocumentApprovalsList answers the granted kinds and origins of the session in a stable order.
+func (h *Host) DocumentApprovalsList(ctx context.Context, reqJSON json.RawMessage) ([][2]string, error) {
+	return h.approvals.List(), nil
+}
+
+// DocumentApprovalsRevoke removes one grant of a kind for an origin, or every grant of the kind without an origin.
+func (h *Host) DocumentApprovalsRevoke(ctx context.Context, reqJSON json.RawMessage) (bool, error) {
+	var args struct {
+		Kind   string `json:"kind"`
+		Origin string `json:"origin"`
+	}
+	if err := json.Unmarshal(reqJSON, &args); err != nil || args.Kind == "" {
+		return false, fmt.Errorf("approvals revoke requires a kind")
+	}
+	h.approvals.Revoke(args.Kind, args.Origin)
+	return true, nil
+}
+
 // DocumentRead reads the value of an operable element of a frame of a region under the value-read grant of the origin
 // of that frame; without the grant the reply names the refusal and its request identifier.
 func (h *Host) DocumentRead(ctx context.Context, reqJSON json.RawMessage) (DocumentReadValue, error) {

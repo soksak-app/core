@@ -50,6 +50,8 @@ const COMMAND = {
   documentQuery: "document_query",
   documentScrollTo: "document_scroll_to",
   documentRead: "document_read",
+  documentApprovalsList: "document_approvals_list",
+  documentApprovalsRevoke: "document_approvals_revoke",
   documentInteractionState: "document_interaction_state",
   documentPost: "document_post",
   viewRequest: "view_request",
@@ -139,6 +141,8 @@ const ARG = {
   documentQuery: (request) => ({ request }),
   documentScrollTo: ({ surface, document, x, y }) => ({ request: { surface, document }, x, y }),
   documentRead: ({ surface, document, frame, ref }) => ({ request: { surface, document }, frame, ref }),
+  documentApprovalsList: ({ surface }) => ({ request: { surface, document: "" } }),
+  documentApprovalsRevoke: ({ surface, kind, origin }) => ({ request: { surface, document: "" }, kind, origin: origin ?? "" }),
   documentInteractionState: (request) => ({ request }),
   documentPost: (request) => ({ request }),
   viewRequest: (request) => ({ request }),
@@ -368,6 +372,8 @@ export const page = (() => {
       go: (document, action, offset) => call("documentGo", offset === undefined ? { surface, document, action } : { surface, document, action, offset }),
       scrollTo: (document, x, y) => call("documentScrollTo", { surface, document, x, y }),
       read: (document, frame, ref) => call("documentRead", { surface, document, frame, ref }),
+      approvalsList: () => call("documentApprovalsList", { surface }),
+      approvalsRevoke: (kind, origin) => call("documentApprovalsRevoke", { surface, kind, origin: origin ?? "" }),
       detach: (document) => call("documentDetach", { surface, document }),
       onState: (fn) => listen("document-state", (e) => {
         if (e.payload.surface === surface) fn(e.payload.document, e.payload.state);

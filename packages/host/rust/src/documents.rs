@@ -2776,6 +2776,38 @@ fn parse_scroll_point(document: &str, reply: &str) -> Result<ScrollPoint, String
     Ok(ScrollPoint { x: both.x, y: both.y })
 }
 
+/// The session-scoped table of the grants of the gated operations, shared by every window.
+#[derive(Default)]
+pub struct Approvals {
+    inner: std::sync::Mutex<std::collections::BTreeSet<(String, String)>>,
+}
+
+impl Approvals {
+    pub fn granted(&self, kind: &str, origin: &str) -> bool {
+        self.inner.lock().unwrap().contains(&(kind.to_string(), origin.to_string()))
+    }
+    pub fn grant(&self, kind: &str, origin: &str) {
+        self.inner.lock().unwrap().insert((kind.to_string(), origin.to_string()));
+    }
+    pub fn revoke(&self, kind: &str, origin: &str) {
+        let mut set = self.inner.lock().unwrap();
+        if origin.is_empty() {
+            set.retain(|(k, _)| k != kind);
+        } else {
+            set.remove(&(kind.to_string(), origin.to_string()));
+        }
+    }
+    pub fn list(&self) -> Vec<(String, String)> {
+        self.inner.lock().unwrap().iter().cloned().collect()
+    }
+}
+
+/// The kinds of the gated operations.
+pub const APPROVAL_VALUE_READ: &str = "value-read";
+pub const APPROVAL_ACT: &str = "act";
+pub const APPROVAL_EVALUATE: &str = "evaluate";
+pub const APPROVAL_INPUT: &str = "input";
+
 /// The answer of one read of an operable element: the value, or the origin that the grant gates on.
 #[derive(Debug, Default, PartialEq, Serialize)]
 pub struct ReadValue {
@@ -2785,12 +2817,20 @@ pub struct ReadValue {
     pub origin: Option<String>,
 }
 
+/// The process-wide approvals table of the session (one host process serves one session).
+pub static APPROVALS: Approvals = Approvals {
+    inner: std::sync::Mutex::new(std::collections::BTreeSet::new()),
+};
+
 /// Reads the value of the operable element ref of the frame at path; without the grant the reply names the origin of
 /// the frame alone, with the grant it names the value and the origin.
 pub fn read(webview: &Webview, request: Request, path: String, ref_: i32, granted: bool) -> Result<ReadValue, String> {
     if path.is_empty() || ref_ < 1 {
         return Err("read requires a frame path and a positive ref".to_string());
     }
+    // The granted flag names the phase: the probe answers the origin, the read answers the value; the approval check
+    // itself runs between the two calls in the caller that holds the table.
+    let _ = &APPROVALS;
     let platform = platform::current()?;
     let (sender, receiver) = std::sync::mpsc::sync_channel(1);
     with_document(webview, &request, move |handle| {

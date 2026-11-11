@@ -90,6 +90,8 @@ const METHOD = {
   documentQuery: "DocumentQuery",
   documentScrollTo: "DocumentScrollTo",
   documentRead: "DocumentRead",
+  documentApprovalsList: "DocumentApprovalsList",
+  documentApprovalsRevoke: "DocumentApprovalsRevoke",
   documentInteractionState: "DocumentInteractionState",
   documentPost: "DocumentPost",
   viewEvent: "ViewEvent", viewReply: "ViewReply", viewRequest: "ViewRequest",
@@ -242,6 +244,8 @@ export const page = (() => {
       go: (document, action, offset) => call("documentGo", offset === undefined ? { surface, document, action } : { surface, document, action, offset }),
       scrollTo: (document, x, y) => call("documentScrollTo", { surface, document, x, y }),
       read: (document, frame, ref) => call("documentRead", { surface, document, frame, ref }),
+      approvalsList: () => call("documentApprovalsList", { surface }),
+      approvalsRevoke: (kind, origin) => call("documentApprovalsRevoke", { surface, kind, origin: origin ?? "" }),
       detach: (document) => call("documentDetach", { surface, document }),
       onState: (fn) => listen("document-state", (sent) => {
         if (sent.surface === surface) fn(sent.document, sent.state);
