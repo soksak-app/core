@@ -36,8 +36,36 @@ static void noteLog(NSDate *since, NSPredicate *predicate, NSString *source, NSS
     OSLogEnumerator *entries = [store entriesEnumeratorWithOptions:0 position:[store positionWithDate:since] predicate:predicate
         error:&error];
     if (!entries) { note([NSString stringWithFormat:@"%@: the log of the process cannot be read: %@", what, error]); return; }
-    for (OSLogEntry *entry in entries) note([NSString stringWithFormat:@"%@: %@ %@", what, source, entry.composedMessage]);
+    NSUInteger count = 0;
+    for (OSLogEntry *entry in entries) {
+        note([NSString stringWithFormat:@"%@: %@ %@", what, source, entry.composedMessage]);
+        count++;
+    }
+    note([NSString stringWithFormat:@"%@: %lu %@ log entries of the process", what, (unsigned long)count, source]);
 }
+// Writes the log of the process pid since since, as `log show` reads it from the log store, so the reasons that a process of the
+// system wrote for an event it ignored are in the output of the case. Only the subsystems of ViewBridge and AppKit are read.
+static void noteProcessLog(pid_t pid, NSDate *since, NSString *what) {
+    NSTask *task = [[[NSTask alloc] init] autorelease];
+    task.executableURL = [NSURL fileURLWithPath:@"/usr/bin/log"];
+    NSDateFormatter *format = [[[NSDateFormatter alloc] init] autorelease];
+    format.dateFormat = @"yyyy-MM-dd HH:mm:ss";
+    task.arguments = @[@"show", @"--style", @"compact", @"--start", [format stringFromDate:since], @"--predicate",
+        [NSString stringWithFormat:@"processID == %d AND (subsystem == 'com.apple.ViewBridge' OR subsystem == 'com.apple.AppKit')",
+            pid]];
+    NSPipe *pipe = [NSPipe pipe];
+    task.standardOutput = pipe;
+    NSError *error = nil;
+    if (![task launchAndReturnError:&error]) { note([NSString stringWithFormat:@"%@: log show cannot run: %@", what, error]); return; }
+    NSData *output = [pipe.fileHandleForReading readDataToEndOfFile];
+    [task waitUntilExit];
+    NSString *text = [[[NSString alloc] initWithData:output encoding:NSUTF8StringEncoding] autorelease];
+    NSArray *lines = [text componentsSeparatedByString:@"\n"];
+    note([NSString stringWithFormat:@"%@: log show of pid %d exited %d with %lu lines", what, pid, task.terminationStatus,
+        (unsigned long)lines.count]);
+    for (NSString *line in lines) if (line.length) note([NSString stringWithFormat:@"%@: pid %d: %@", what, pid, line]);
+}
+
 static void noteMenuTracking(NSDate *since, NSString *what) {
     noteLog(since, [NSPredicate predicateWithFormat:@"subsystem == 'com.apple.AppKit' AND category CONTAINS[c] 'Menu'"], @"AppKit",
         what);
@@ -281,7 +309,8 @@ static void whileTracking(NSMenu *menu, NSString *what, BOOL *tracked, void (^at
 
 int main(void) { @autoreleasepool {
     setvbuf(stdout, NULL, _IOLBF, 0);
-    [NSUserDefaults.standardUserDefaults registerDefaults:@{@"NSMenuTrackingLoggingEnabled": @YES}];
+    // ViewBridge writes its log only while this default holds (VBShouldLogFirst reads NSViewBridgeBoolShouldLog).
+    [NSUserDefaults.standardUserDefaults registerDefaults:@{@"NSMenuTrackingLoggingEnabled": @YES, @"NSViewBridgeBoolShouldLog": @YES}];
     [NSApplication sharedApplication];
     [NSApp finishLaunching];
     installMarks();
@@ -410,6 +439,12 @@ int main(void) { @autoreleasepool {
         save.nameFieldStringValue, NSApp.keyWindow.class]);
     // The log of ViewBridge in this process states how the panel view judged the keyness of its window and what it forwarded.
     noteLog(saveStart, [NSPredicate predicateWithFormat:@"subsystem == 'com.apple.ViewBridge'"], @"ViewBridge", @"save panel");
+    SEL serviceSelector = NSSelectorFromString(@"viewServiceProcessIdentifier");
+    NSView *remote = window.attachedSheet.contentView;
+    if ([remote respondsToSelector:serviceSelector]) {
+        noteProcessLog(((pid_t (*)(id, SEL))[remote methodForSelector:serviceSelector])(remote, serviceSelector), saveStart,
+            @"save panel service");
+    }
     key(window, "Enter", @"save panel");
     eventWait(@"the save panel ends", ^BOOL { return saved != NOT_ENDED; });
     check(saved == NSModalResponseOK && [save.URL.lastPathComponent isEqualToString:@"typed"], [NSString stringWithFormat:

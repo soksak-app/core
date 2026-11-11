@@ -59,7 +59,8 @@ static pid_t serviceOf(NSWindow *panel) {
     return ((pid_t (*)(id, SEL))[content methodForSelector:selector])(content, selector);
 }
 
-// The window of service that shows the content of panel: the window of that process whose bounds hold the center of the panel.
+// The window of service that shows the content of panel: the window of that process with the size of the panel whose bounds hold
+// the center of the panel. The service holds other windows, such as one of 500 by 500 points while it lays out the panel.
 static CGWindowID serviceWindowOf(pid_t service, NSWindow *panel) {
     NSArray *windows = [(NSArray *)CGWindowListCopyWindowInfo(kCGWindowListOptionAll, kCGNullWindowID) autorelease];
     CGFloat top = NSMaxY(NSScreen.screens.firstObject.frame);
@@ -70,7 +71,10 @@ static CGWindowID serviceWindowOf(pid_t service, NSWindow *panel) {
         if (!CGRectMakeWithDictionaryRepresentation((CFDictionaryRef)window[(id)kCGWindowBounds], &bounds)) continue;
         note([NSString stringWithFormat:@"service window %@ bounds %@ layer %@ on screen %@", window[(id)kCGWindowNumber],
             NSStringFromRect(NSRectFromCGRect(bounds)), window[(id)kCGWindowLayer], window[(id)kCGWindowIsOnscreen] ?: @NO]);
-        if (CGRectContainsPoint(bounds, center)) return [window[(id)kCGWindowNumber] unsignedIntValue];
+        if (CGRectContainsPoint(bounds, center) && bounds.size.width == NSWidth(panel.frame)
+            && bounds.size.height == NSHeight(panel.frame)) {
+            return [window[(id)kCGWindowNumber] unsignedIntValue];
+        }
     }
     return kCGNullWindowID;
 }
@@ -122,6 +126,29 @@ static NSRect accessibleButton(id element, NSString *title) {
     return NSZeroRect;
 }
 
+// Writes the log of the process pid since since, as `log show` reads it from the log store, so the reasons that a process of the
+// system wrote for an event it ignored are in the output of the case. Only the subsystems of ViewBridge and AppKit are read.
+static void noteProcessLog(pid_t pid, NSDate *since, NSString *what) {
+    NSTask *task = [[[NSTask alloc] init] autorelease];
+    task.executableURL = [NSURL fileURLWithPath:@"/usr/bin/log"];
+    NSDateFormatter *format = [[[NSDateFormatter alloc] init] autorelease];
+    format.dateFormat = @"yyyy-MM-dd HH:mm:ss";
+    task.arguments = @[@"show", @"--style", @"compact", @"--start", [format stringFromDate:since], @"--predicate",
+        [NSString stringWithFormat:@"processID == %d AND (subsystem == 'com.apple.ViewBridge' OR subsystem == 'com.apple.AppKit')",
+            pid]];
+    NSPipe *pipe = [NSPipe pipe];
+    task.standardOutput = pipe;
+    NSError *error = nil;
+    if (![task launchAndReturnError:&error]) { note([NSString stringWithFormat:@"%@: log show cannot run: %@", what, error]); return; }
+    NSData *output = [pipe.fileHandleForReading readDataToEndOfFile];
+    [task waitUntilExit];
+    NSString *text = [[[NSString alloc] initWithData:output encoding:NSUTF8StringEncoding] autorelease];
+    NSArray *lines = [text componentsSeparatedByString:@"\n"];
+    note([NSString stringWithFormat:@"%@: log show of pid %d exited %d with %lu lines", what, pid, task.terminationStatus,
+        (unsigned long)lines.count]);
+    for (NSString *line in lines) if (line.length) note([NSString stringWithFormat:@"%@: pid %d: %@", what, pid, line]);
+}
+
 // Shows a save panel sheet over window and finds the process and the window of its service. Answers NO, with a FAIL, when the
 // service is not the save panel service of the system or has no window of the panel: no record is sent then.
 static BOOL showPanel(NSWindow *window, NSSavePanel *save, NSModalResponse *response, pid_t *service, CGWindowID *serviceWindow,
@@ -171,6 +198,7 @@ int main(void) { @autoreleasepool {
     [cover orderWindow:NSWindowAbove relativeTo:window.windowNumber];
     check(!NSRunningApplication.currentApplication.active, @"the application is not active");
     NSString *folder = temporaryFolder(@"soksak-input-panel-service-");
+    NSDate *start = NSDate.date;
 
     // A press of the Cancel button of a save panel sheet, sent as a press and a release record to the service, cancels it.
     NSSavePanel *save = [NSSavePanel savePanel];
@@ -181,6 +209,8 @@ int main(void) { @autoreleasepool {
     CGWindowID serviceWindow = kCGNullWindowID;
     if (showPanel(window, save, &saved, &service, &serviceWindow, @"press")) {
         NSRect cancel = accessibleButton(window.attachedSheet, @"Cancel");
+        id children = attribute(window.attachedSheet, NSAccessibilityChildrenAttribute);
+        note([NSString stringWithFormat:@"press: the accessibility children of the panel: %@", children]);
         check(!NSIsEmptyRect(cancel), @"press: the Cancel button of the panel is found through its accessibility");
         if (!NSIsEmptyRect(cancel)) {
             CGFloat top = NSMaxY(NSScreen.screens.firstObject.frame);
@@ -198,6 +228,7 @@ int main(void) { @autoreleasepool {
                 NSStringFromPoint(NSPointFromCGPoint(point)), downError, upError]);
             check(downError == kCGErrorSuccess && upError == kCGErrorSuccess, @"press: SkyLight sends the press and the release");
             judgePerson(before, @"press, the records sent");
+            noteProcessLog(service, start, @"press");
             eventWait(@"the pressed save panel ends", ^BOOL { return saved != NOT_ENDED; });
             judgePerson(before, @"press, the panel ended");
             check(saved == NSModalResponseCancel,
@@ -225,6 +256,7 @@ int main(void) { @autoreleasepool {
         note([NSString stringWithFormat:@"Return: records sent, key down %d, key up %d", downError, upError]);
         check(downError == kCGErrorSuccess && upError == kCGErrorSuccess, @"Return: SkyLight sends the key down and the key up");
         judgePerson(before, @"Return, the records sent");
+        noteProcessLog(service, start, @"Return");
         eventWait(@"the save panel ends on Return", ^BOOL { return saved != NOT_ENDED; });
         judgePerson(before, @"Return, the panel ended");
         check(saved == NSModalResponseOK && [save.URL.lastPathComponent isEqualToString:@"untitled"], [NSString stringWithFormat:
