@@ -113,6 +113,8 @@ int main(void) { @autoreleasepool {
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 800, 500)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
     window.releasedWhenClosed = NO;
+    // A press reaches only a window on the screen; the window stands behind the windows of the person.
+    [window orderBack:nil];
     NSView *content = [[NSView alloc] initWithFrame:window.contentView.bounds];
     content.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     [window.contentView addSubview:content];
@@ -758,6 +760,8 @@ int main(void) { @autoreleasepool {
     NSWindow *plain = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 800, 500)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
     plain.releasedWhenClosed = NO;
+    // A press reaches only a window on the screen; the window stands behind the windows of the person.
+    [plain orderBack:nil];
     NSView *plainNative = (NSView *)sp_window_native_view(plain);
     [plain.contentView addSubview:plainNative];
     plainNative.frame = plain.contentView.bounds;

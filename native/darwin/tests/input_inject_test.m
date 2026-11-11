@@ -604,6 +604,8 @@ static void checkPointerTargetAcrossViews(void) {
     SPPointerTarget *first = [[[SPPointerTarget alloc] initWithFrame:NSMakeRect(0, 0, 120, 120)] autorelease];
     SPPointerTarget *second = [[[SPPointerTarget alloc] initWithFrame:NSMakeRect(120, 0, 120, 120)] autorelease];
     [content addSubview:first]; [content addSubview:second]; window.contentView = content;
+    // A person presses only a window on the screen; the window stands behind the windows of the person.
+    [window orderBack:nil];
     check(sp_input_pointer(window, 30, 30, 1, 0, 0, 0) == SP_INPUT_DELIVERED, @"cross-view press delivered");
     check(sp_input_pointer(window, 150, 30, 2, 0, 0, 0) == SP_INPUT_DELIVERED, @"cross-view drag delivered");
     check(sp_input_pointer(window, 150, 30, 3, 0, 0, 0) == SP_INPUT_DELIVERED, @"cross-view release delivered");
@@ -632,6 +634,31 @@ static void checkPointerTargetAcrossViews(void) {
     check(sp_input_pointer(window, 150, 30, 2, 0, 0, 0) == SP_INPUT_REJECTED,
         @"a removed press target rejects the remaining gesture");
     [window close]; [window release];
+}
+
+// A window that is not shown takes no pointer input: no person points at it, and AppKit gives no press to it. Its move, press and
+// release are refused in their turn with the reason, and the view under the point receives nothing.
+static void checkHiddenWindowRefusesPointer(void) {
+    NSWindow *window = [[[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(200, 100))
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO] autorelease];
+    window.releasedWhenClosed = NO;
+    SPPointerTarget *target = [[[SPPointerTarget alloc] initWithFrame:NSMakeRect(0, 0, 200, 100)] autorelease];
+    window.contentView = target;
+    __block sp_input_result move = SP_INPUT_DELIVERED, down = SP_INPUT_DELIVERED, up = SP_INPUT_DELIVERED;
+    NSString *records = capturedRecords(^{
+        move = sp_input_pointer(window, 20, 20, 0, 0, 0, 0);
+        down = sp_input_pointer(window, 20, 20, 1, 0, 0, 0);
+        up = sp_input_pointer(window, 20, 20, 3, 0, 0, 0);
+    });
+    check(move == SP_INPUT_REJECTED && down == SP_INPUT_REJECTED && up == SP_INPUT_REJECTED && target.downs == 0 && target.ups == 0,
+        [NSString stringWithFormat:@"a move, a press and a release of a window that is not shown are refused (%d %d %d, downs %lu, ups %lu)",
+            move, down, up, (unsigned long)target.downs, (unsigned long)target.ups]);
+    check(hasRecord(records, @[@"\"kind\":\"pointer\"", @"\"phase\":1", @"\"result\":\"rejected\"", @"\"reason\":\"the window is not shown\""]),
+        [NSString stringWithFormat:@"the refusal of a window that is not shown is recorded with its reason (got %@)", records]);
+    [window orderBack:nil];
+    check(sp_input_pointer(window, 20, 20, 1, 0, 0, 0) == SP_INPUT_DELIVERED && sp_input_pointer(window, 20, 20, 3, 0, 0, 0) == SP_INPUT_DELIVERED
+        && target.downs == 1 && target.ups == 1, @"the window takes the press and its release once it is shown");
+    [window close];
 }
 
 static void checkIndependentWindowKeys(void) {
@@ -795,6 +822,7 @@ static void checkButtonsByWindow(void) {
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO] autorelease];
     [first setReleasedWhenClosed:NO];
     first.contentView = [[[SPPointerTarget alloc] initWithFrame:NSMakeRect(0, 0, 200, 100)] autorelease];
+    [first orderBack:nil];
     NSWindow *second = nil;
     check(sp_input_pointer(first, 20, 20, 1, 1, 0, 0) == SP_INPUT_DELIVERED && NSEvent.pressedMouseButtons == 2,
         @"a right press has the bit of the right button");
@@ -803,11 +831,14 @@ static void checkButtonsByWindow(void) {
             styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
         [second setReleasedWhenClosed:NO];
         second.contentView = [[[SPPointerTarget alloc] initWithFrame:NSMakeRect(0, 0, 200, 100)] autorelease];
+        [second orderBack:nil];
         check(sp_input_pointer(second, 20, 20, 1, 1, 0, 0) == SP_INPUT_PRESS_OPEN,
             @"a press of a button whose press the pointer holds in another window answers press open");
         check(sp_input_pointer(first, 20, 20, 3, 1, 0, 0) == SP_INPUT_DELIVERED && sp_input_pointer(second, 20, 20, 1, 1, 0, 0) == SP_INPUT_DELIVERED
             && sp_input_pointer(second, 20, 20, 1, 0, 0, 0) == SP_INPUT_DELIVERED && NSEvent.pressedMouseButtons == 3,
             @"after the release the pointer presses both buttons in the second window");
+        // A window off the screen is not held by the list of windows, so the release lets it go.
+        [second orderOut:nil];
         [second release];
     }
     eventWait(@"the released window ends its open presses", ^BOOL { return NSEvent.pressedMouseButtons == 0; });
@@ -864,6 +895,7 @@ int main(void) { @autoreleasepool {
     checkActivityWaitAggregation();
     checkActivityWaitDelayedRegistration();
     checkActivityWaitRegistrationEnd();
+    checkHiddenWindowRefusesPointer();
     checkPointerTargetAcrossViews();
     checkMoveReachesEveryOwner();
     check(pressedButtonsImplementation() != appKitButtons, @"a delivered press shows its button to WebKit");
@@ -930,6 +962,7 @@ int main(void) { @autoreleasepool {
         NSWindow *recorded = [[[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(120, 80))
             styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO] autorelease];
         recorded.releasedWhenClosed = NO;
+        [recorded orderBack:nil];
         NSString *records = capturedRecords(^{
             sp_input_key(recorded, "NoSuchKey", NULL, 0, true);
             sp_input_key(recorded, "Escape", NULL, 1, true);
@@ -944,6 +977,7 @@ int main(void) { @autoreleasepool {
             [NSString stringWithFormat:@"a key record names the first responder that receives the key (got %@)", records]);
         check(hasRecord(records, @[@"\"kind\":\"pointer\"", @"\"pointer\":\"main\"", @"\"phase\":2", @"\"result\":\"rejected\"", @"\"reason\":\"no open press of the pointer and button in the window\""]),
             [NSString stringWithFormat:@"a rejected pointer input is recorded with its reason (got %@)", records]);
+        [recorded orderOut:nil];
     }
     awaitPage(view, @"the page receives both keydown events", @"keydown", @"probe.events.filter(e=>e.type==='keydown').length >= 2");
     NSArray *keysSeen = evaluate(view, @"probe.events.filter(e=>e.type==='keydown').map(e=>e.key)");
