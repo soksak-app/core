@@ -40,6 +40,8 @@ function captureSession(t, { bytes, presentationError, stopError, viewError,
     async request(method, { window, ...params }) {
       assert.equal(window, "main");
       calls.push([method, params]);
+      // A recording holds the covered drawing of the window until it stops (holdCovered of the session).
+      if (method === "diagnostics.window.draw-covered") return null;
       if (method === "diagnostics.capture.start") return { frames: frameDir };
       if (method === "command.run") {
         assert.equal(params.name, "host.window.presented");
@@ -109,8 +111,9 @@ for (const geometry of [
     const capture = captureSession(t, { bytes: capturedFrame(geometry) });
     const sample = await regionSample(capture.session, geometry.rect ?? rect);
     assert.deepEqual(sample, [12, 34, 56], "the sample must read the marked region pixel, not the white surrounding card");
-    assert.deepEqual(capture.calls, [["diagnostics.capture.start", {}],
-      ["command.run", { name: "host.window.presented", params: {} }], ["diagnostics.capture.stop", { after: 42 }]]);
+    assert.deepEqual(capture.calls, [["diagnostics.window.draw-covered", { draw: true }], ["diagnostics.capture.start", {}],
+      ["command.run", { name: "host.window.presented", params: {} }], ["diagnostics.capture.stop", { after: 42 }],
+      ["diagnostics.window.draw-covered", { draw: false }]]);
     assert.equal(existsSync(capture.frameDir), true, "the completed capture must remain until session finalization");
     await capture.finish(true);
     assert.equal(stops(capture).length, 1, "finalization must not repeat the stop");
