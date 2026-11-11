@@ -246,6 +246,10 @@ type surfaceState struct {
 	// opened is the layout transaction that a frame opened for the lines it drew, which no preparation has taken over yet, and 0
 	// without one (openLayout).
 	opened uint64
+	// cancelling is the number of cancels of opened layouts that the host has not answered, and afterCancel tells that a frame drew
+	// other lines meanwhile, which the frame after the last answer places (placeSurfaces).
+	cancelling  int
+	afterCancel bool
 	// applied holds where the host applied each visible surface, in window coordinates.
 	applied map[string]layout.Rect
 	// controls is the area of the window buttons that the host answered, and failure the error of the last placement.
@@ -637,6 +641,14 @@ func (s *Shell) placeSurfaces() {
 	// The first row is part of the placement: the host sets the title bar, and so the window buttons, with the frame that draws the row
 	// (frameLayout of packages/workbench/frame-text.js), also when no surface moved.
 	same := slices.Equal(lines, s.surfaces.placed) && (s.surfaces.titlebar == 0 || s.surfaces.row == s.surfaces.titlebar)
+	if !same && s.surfaces.opened == 0 && s.surfaces.cancelling > 0 {
+		// The cancel of a layout that an earlier frame opened is a host call, and until the host ends that layout it holds the frames
+		// of the window and opens no other one. The frame places nothing, and the answer of the cancel asks for the frame that places
+		// these lines; a running placement learns that the window drew other lines.
+		s.surfaces.moved = s.surfaces.moved || s.surfaces.running
+		s.surfaces.afterCancel = true
+		return
+	}
 	if !same {
 		s.openLayout()
 	}
@@ -778,9 +790,15 @@ func (s *Shell) cancelOpened() {
 	if ticket == 0 {
 		return
 	}
+	s.surfaces.cancelling++
 	s.calls.CallInOrder(surfaceOrder, "cancelSurfaces", map[string]any{"ticket": ticket}, func(_ any, err error) {
+		s.surfaces.cancelling--
 		if err != nil {
 			s.fail(fmt.Errorf("cancelling the layout of the frame: %w", err))
+		}
+		if s.surfaces.cancelling == 0 && s.surfaces.afterCancel {
+			s.surfaces.afterCancel = false
+			s.options.Invalidate()
 		}
 	})
 }

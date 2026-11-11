@@ -613,3 +613,56 @@ func TestAPlacementThatRemovesASurfaceWaitsForTheKeyboardCallToIt(t *testing.T) 
 		t.Fatalf("the host still holds %s of the closed card", tabs[other][0])
 	}
 }
+
+// A frame that waits for a keyboard call cancels the layout that it opened, and the cancel is a host call that goes its own way.
+// While the host has not ended that layout, it holds the frames of the window, and no frame opens another one: a frame that comes
+// meanwhile, such as the frame after the answer of the keyboard call, places nothing, and the frame after the cancel places the lines
+// (docs/spec/hosts.md#native-views).
+func TestNoFrameOpensALayoutWhileTheCancelOfTheLastIsOnItsWay(t *testing.T) {
+	f, stored := surfaceShell(t)
+	cards, tabs := keyboardCards(t, f)
+	focused, _ := keyboardRing(t, f)
+	other := cards[0]
+	if other == focused {
+		other = cards[1]
+	}
+	focus, cancel := newGate(), newGate()
+	stored.orderMu.Lock()
+	stored.focusGate, stored.cancelGate, stored.order = focus, cancel, nil
+	stored.orderMu.Unlock()
+	later := func(name string, params any) {
+		raw, err := json.Marshal(params)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.shell.Registry().RunLater(name, raw, func(_ any, err error) {
+			if err != nil {
+				t.Errorf("%s failed: %v", name, err)
+			}
+		})
+		f.pending.drain(t)
+		f.tester.Frame()
+		f.pending.drain(t)
+	}
+	// The keyboard call to the active surface of the other card waits in the host while the card closes, so the frame of the close
+	// cancels the layout that it opened, and the cancel waits in the host.
+	later("core.card.focus", map[string]string{"card": other})
+	later("core.card.close", map[string]string{"card": other})
+	stored.orderMu.Lock()
+	stored.focusGate = nil
+	stored.orderMu.Unlock()
+	focus.open()
+	f.settle()
+	if !stored.holds(tabs[other][0]) {
+		calls, _ := stored.calledNow()
+		t.Fatalf("a frame placed the lines before the host ended the cancelled layout: %s", calls)
+	}
+	stored.orderMu.Lock()
+	stored.cancelGate = nil
+	stored.orderMu.Unlock()
+	cancel.open()
+	f.settle()
+	if stored.holds(tabs[other][0]) {
+		t.Fatalf("the host still holds %s of the closed card", tabs[other][0])
+	}
+}

@@ -69,7 +69,9 @@ type surfaceHost struct {
 	// presentGate, when set, holds each presentSurfaces until it opens, so a frame draws while a placement runs.
 	presentGate *gate
 	// focusGate, when set, holds each surfaceFocus until it opens, before the host judges whether it holds the surface.
-	focusGate      *gate
+	focusGate *gate
+	// cancelGate, when set, holds each cancelSurfaces until it opens, before the host ends the cancelled layout.
+	cancelGate     *gate
 	declareFailure error
 	// presentedFailure is the error of each waitPresented, while a surface has not presented.
 	presentedFailure error
@@ -157,6 +159,12 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 		var request struct{ Ticket uint64 }
 		if err := json.Unmarshal(argument, &request); err != nil {
 			return nil, err
+		}
+		h.orderMu.Lock()
+		gate := h.cancelGate
+		h.orderMu.Unlock()
+		if gate != nil {
+			gate.wait()
 		}
 		h.orderMu.Lock()
 		h.cancelled = append(h.cancelled, request.Ticket)
