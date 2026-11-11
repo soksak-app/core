@@ -8,16 +8,15 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { coverCheckWindow, fresh, uncoverFromCheckWindows } from "./fixture.mjs";
+import { coverCheckWindow, fresh } from "./fixture.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a covered window is occluded and hides the document of its tab`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
     const { surface } = await fresh(s);
-    // The check windows overlap and can cover this one whole; the check starts from a window that is not occluded.
-    await uncoverFromCheckWindows(t, s);
-    await s.until("layoutprobe.document", (at) => at.reported && at.document === "visible",
-      "the region document did not report itself visible", { surface });
+    // The check starts behind the windows of a person, which may cover this window already; the claim holds whatever covered it
+    // before, so the check covers it with its own window and judges only the covered state (docs/spec/hosts.md#launch-activation).
+    await s.until("layoutprobe.document", (at) => at.reported, "the region document did not report its visibility", { surface });
 
     // A project window of the same application covers the check window, which a project-window check may open.
     const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-occlusion-")));

@@ -314,15 +314,6 @@ pub(crate) fn call(
             };
             draw_covered(window, draw)
         }
-        "diagnostics.windows.raise" => {
-            let Some(raise) = params.get("raise").and_then(Value::as_bool) else {
-                return Err(Failure::params("raise must be a boolean"));
-            };
-            let platform = platform::current().map_err(internal)?;
-            on_main(window, move || platform.raise_windows(raise))
-                .map(|()| Value::Null)
-                .map_err(|error| Failure::new(crate::endpoint::HANDLER_FAILED, error))
-        }
         _ => Err(Failure::new(
             -32601,
             format!("{method} is not a diagnostic method"),

@@ -95,9 +95,6 @@ mod window;
 #[cfg(feature = "diagnostics")]
 #[path = "window_objects.rs"]
 mod window_objects;
-#[cfg(feature = "diagnostics")]
-#[path = "windows_raise.rs"]
-mod windows_raise;
 
 /// The point that AppKit returns for the event location. It is declared because objc2 must know the layout of the
 /// message return value.
@@ -446,11 +443,6 @@ impl Platform for Darwin {
     #[cfg(feature = "diagnostics")]
     fn draw_documents_covered(&self, window: Handle, draw: bool) -> Result<(), String> {
         document::draw_covered(window, draw)
-    }
-    #[cfg(feature = "diagnostics")]
-    fn raise_windows(&self, raise: bool) -> Result<(), String> {
-        windows_raise::raise(raise);
-        Ok(())
     }
     #[cfg(feature = "diagnostics")]
     fn document_viewport_marker(

@@ -32,48 +32,14 @@ func TestE2EShowWaitsForTheFirstFrame(t *testing.T) {
 	}
 }
 
-// A status read of whether the window is occluded is worth nothing to a watcher that hears of no change, so a window hears when
-// some of it shows, when another covers all of it and when some of it shows again. Only a window that the screen shows hears
-// these changes, so the check raises its windows above the windows of other applications (raise,
-// docs/spec/hosts.md#launch-activation) and its own windows alone decide what covers the window.
-func TestE2EAWindowHearsWhenAnotherCoversIt(t *testing.T) {
-	raise(t)
-	framework, _, below := support.Open(t, "below")
-	above := framework.NewWindow(host.WindowOptions{Name: "above", Title: "soksak", Width: 400, Height: 300}).(*adapter.Frontend)
-	t.Cleanup(above.Window().Destroy)
-	covered := make(chan struct{}, 8)
-	uncovered := make(chan struct{}, 8)
-	below.OnWindowEvent(host.WindowHide, func() { covered <- struct{}{} })
-	below.OnWindowEvent(host.WindowShow, func() { uncovered <- struct{}{} })
-	below.Show()
-	support.Wait(t, "the window below", below.Window().IsVisible)
-	receive(t, "the show of the window below", uncovered)
-	above.Show()
-	support.Wait(t, "the window above", above.Window().IsVisible)
-	x, y := below.Position()
-	above.SetSize(600, 500)
-	above.SetPosition(x-100, y-100)
-	receive(t, "the cover", covered)
-	for len(uncovered) > 0 {
-		<-uncovered
-	}
-	above.SetPosition(x+1000, y)
-	receive(t, "the uncover", uncovered)
-}
-
 // A window that the host shows goes on the screen with the first screen of its workbench, and a check may size and move it before
-// that, as e2e/placement.test.mjs does with the project window that covers the window of the check. The frame set while the window
-// waited is the frame it goes on the screen with, above the window it covers, so the covered window hears the cover.
-func TestE2EAWindowMovedOverAnotherBeforeItsFirstScreenCoversIt(t *testing.T) {
-	raise(t)
+// that, as e2e/window-occlusion.test.mjs does with the project window that covers the window of the check. The frame set while the
+// window waited is the frame it goes on the screen with. The window starts behind the windows of a person, whose cover decides
+// whether the window below can hear a change of its occlusion, so the check judges the frame only (docs/spec/hosts.md#launch-activation).
+func TestE2EAWindowMovedBeforeItsFirstScreenKeepsItsFrame(t *testing.T) {
 	framework, workbench, below := support.Open(t, "below")
-	covered := make(chan struct{}, 8)
-	uncovered := make(chan struct{}, 8)
-	below.OnWindowEvent(host.WindowHide, func() { covered <- struct{}{} })
-	below.OnWindowEvent(host.WindowShow, func() { uncovered <- struct{}{} })
 	below.Show()
 	support.Wait(t, "the window below", below.Window().IsVisible)
-	receive(t, "the show of the window below", uncovered)
 	workbench.HoldFirstScreen()
 	above := framework.NewWindow(host.WindowOptions{Name: "above", Title: "soksak", Width: 400, Height: 300}).(*adapter.Frontend)
 	t.Cleanup(above.Window().Destroy)
@@ -90,34 +56,6 @@ func TestE2EAWindowMovedOverAnotherBeforeItsFirstScreenCoversIt(t *testing.T) {
 	if ax, ay := above.Position(); ax != x-100 || ay != y-100 {
 		t.Fatalf("the window above went on the screen at %v,%v, not at the position %v,%v set before its first screen", ax, ay, x-100, y-100)
 	}
-	receive(t, "the cover", covered)
-}
-
-// receive waits for a value of events.
-func receive(t *testing.T, what string, events <-chan struct{}) {
-	t.Helper()
-	select {
-	case <-events:
-	case <-time.After(10 * time.Second):
-		t.Fatalf("%s did not arrive within 10 s", what)
-	}
-}
-
-// raise stands the windows of the application above the normal windows of other applications until the test ends
-// (diagnostics.windows.raise, docs/spec/endpoint.md#diagnostic-builds): each window that the application shows meanwhile takes the
-// level of the check windows, so the windows that a person leaves on the screen cover none of them.
-func raise(t *testing.T) {
-	t.Helper()
-	system, err := platform.Current()
-	if err != nil {
-		t.Fatalf("the platform cannot be read: %v", err)
-	}
-	windows, ok := system.(interface{ RaiseWindows(raise bool) })
-	if !ok {
-		t.Fatal("the platform cannot raise the windows of the application")
-	}
-	mygo.RunOnMain(func() { windows.RaiseWindows(true) })
-	t.Cleanup(func() { mygo.RunOnMain(func() { windows.RaiseWindows(false) }) })
 }
 
 // presentation runs the presentation notice as a step of the main thread and returns its result.

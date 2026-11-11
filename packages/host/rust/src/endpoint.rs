@@ -90,7 +90,6 @@ const DIAGNOSTICS: &[&str] = &[
     "diagnostics.modal.held",
     "diagnostics.presentation.failure",
     "diagnostics.window.draw-covered",
-    "diagnostics.windows.raise",
     "diagnostics.input.source",
     "diagnostics.input.reference",
     "diagnostics.log.flush",
@@ -2147,20 +2146,12 @@ mod draw_covered_release_declaration_test {
     }
 }
 
-#[cfg(all(test, feature = "diagnostics"))]
-mod windows_raise_declaration_test {
-    // contract: diagnostics.windows.raise.is-declared
+#[cfg(test)]
+mod windows_raise_absence_test {
+    // No build raises the windows of the application: a check starts behind the windows of other applications and measures
+    // covered windows (docs/spec/hosts.md#launch-activation).
     #[test]
-    fn windows_raise_method_is_declared() {
-        assert!(super::declared("diagnostics.windows.raise"));
-    }
-}
-
-#[cfg(all(test, not(feature = "diagnostics")))]
-mod windows_raise_release_declaration_test {
-    // A build without diagnostics has no raise of the windows.
-    #[test]
-    fn a_build_without_diagnostics_declares_no_windows_raise() {
+    fn no_build_declares_a_raise_of_the_windows() {
         assert!(!super::declared("diagnostics.windows.raise"));
     }
 }

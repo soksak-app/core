@@ -6,7 +6,7 @@
 // of the focused card.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { keepCommonSettings } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, untilEventLine } from "@soksak/window-check/event-log.mjs";
 import { joinedFailure } from "@soksak/window-check/failure.mjs";
 import { recordCatalog as catalogOfConfiguration } from "@soksak/window-check/catalog.mjs";
@@ -149,130 +149,22 @@ export async function pluginChangeStarted(s, change, action) {
 }
 
 
-/** Prepares a real visible occlusion baseline without activating a window. The caller supplies only windows of its declared
- * diagnostic cohort. The check owns the order of its windows: every application of the target and of the cohort raises its
- * windows above the normal windows of other applications (diagnostics.windows.raise) until the check ends, so the windows that a
- * person leaves on the screen cover none of them, and the moves of the cohort decide what covers the target. */
-export async function prepareOcclusionFixture(target, otherWindows) {
-  const key = session => `${session.app.name}/${session.window}`;
-  if (!target || !Array.isArray(otherWindows)) throw new TypeError("placement fixture requires an explicit owned cohort");
-  const own = key(target), seen = new Set();
-  for (const other of otherWindows) {
-    const identity = key(other);
-    if (identity === own) throw new Error("placement target cannot belong to the parked cohort");
-    if (seen.has(identity)) throw new Error("placement fixture has duplicate parked window ownership");
-    seen.add(identity);
-  }
-  const validFrame = frame => frame && ["x","y","width","height"].every(field=>Number.isFinite(frame[field]))
-    && frame.width>0 && frame.height>0;
-  const inactiveCount = state => {
-    const observation = state?.activationObservation;
-    if (state?.active !== false || observation?.registered !== true
-      || typeof observation.count !== "string" || !/^(0|[1-9]\d*)$/.test(observation.count)) {
-      throw new Error("placement fixture preparation requires actual inactive activation observation");
-    }
-    return observation.count;
-  };
-  const before = await target.get("host.window"), count = inactiveCount(before);
-  const [screen] = await target.get("host.screens"), area = screen?.visible;
-  if (!validFrame(before.frame) || !validFrame(area)) throw new Error("placement fixture preparation has invalid public screen/window geometry");
-  // The restoration gives back the whole recorded frame: the content size through host.window.resize, then the origin.
-  const snapshots = [{ session: target, frame: { ...before.frame }, content: { width: before.content.width, height: before.content.height }, count }];
-  for (const session of otherWindows) {
-    const state = await session.get("host.window");
-    if (!validFrame(state.frame)) throw new Error("placement fixture preparation has invalid owned cohort geometry");
-    snapshots.push({ session, frame: { ...state.frame }, content: { width: state.content.width, height: state.content.height },
-      count: inactiveCount(state) });
-  }
-  // Each window is parked at the top of the work area of the target, also a window that its application opened on another
-  // display, and the restoration gives its recorded frame back; a window larger than the area cannot be parked in it.
-  for (const { session, frame } of snapshots) {
-    if (frame.width>area.width || frame.height>area.height)
-      throw new Error(`placement fixture preparation cannot keep normal owned frames within the visible work area: ${session.app.name} ` +
-        `${session.window} ${JSON.stringify(frame)} in ${JSON.stringify(area)}`);
-  }
-  // Register the target and entire original cohort before any mutation, including a move
-  // that fails after earlier windows have already moved.
-  if (snapshots.length) target.cleanup(async () => {
-    const failures = [];
-    for (const { session, frame, content, count: originalCount } of snapshots) {
-      try {
-        let state = await session.get("host.window");
-        if (state.frame.width !== frame.width || state.frame.height !== frame.height) {
-          await session.run("host.window.resize", content);
-          state = await session.get("host.window");
-        }
-        if (state.frame.x !== frame.x || state.frame.y !== frame.y)
-          await session.run("host.window.move", { x: frame.x, y: frame.y });
-        const restored = await session.until("host.window", value =>
-          ["x","y","width","height"].every(field=>value.frame[field]===frame[field]),
-        "placement fixture did not restore the exact owned cohort frame");
-        if (inactiveCount(restored) !== originalCount) throw new Error("placement cohort activation count changed during restoration");
-      } catch (error) {
-        failures.push(new Error(`${session.app.name} ${session.window}: ${error?.message ?? error}`, { cause: error }));
-      }
-    }
-    if (failures.length) throw joinedFailure("placement owned cohort restoration failed", failures);
-  });
-  const raised = new Set();
-  for (const { session } of snapshots) {
-    if (raised.has(session.client)) continue;
-    raised.add(session.client);
-    session.cleanup(() => session.request("diagnostics.windows.raise", { raise: false }));
-    await session.request("diagnostics.windows.raise", { raise: true });
-  }
-  const parked = [];
-  for (const { session, frame, count: originalCount } of snapshots) {
-    // A real inactive normal-frame observation established this exposed edge:
-    // target left, other declared cohort windows right. Do not raise or resize.
-    const x = session === target ? area.x : area.x + area.width - frame.width, y = area.y;
-    if (frame.x !== x || frame.y !== y) await session.run("host.window.move", { x, y });
-    const actual = await session.until("host.window", value => value.frame.x===x && value.frame.y===y
-      && value.frame.width===frame.width && value.frame.height===frame.height,
-    "placement fixture owned cohort move did not reach its exact frame");
-    if (inactiveCount(actual) !== originalCount) throw new Error("placement cohort activation count changed during preparation");
-    parked.push({ application:session.app.name, window:session.window, originalFrame:frame, parkedFrame:actual.frame });
-  }
-  // The windows of other applications stand below the raised windows, so only the cohort can cover the target, and the moves leave
-  // it a part on the screen: its occlusion state changes by the notification that the moves cause.
-  const baseline = await target.until("host.window", value => value.occluded === false,
-    "placement fixture preparation remains occluded after owned cohort moves");
-  if (inactiveCount(baseline) !== count) throw new Error("placement target activation count changed during preparation");
-  return { before, baseline, parked };
-}
-
-/**
- * Uncovers the window of `s` from the windows of the other check applications: it opens each of `apps` but the application of `s`
- * inactive (an application outside the required set opens as null and owns no window), and parks their windows through
- * prepareOcclusionFixture, which restores every frame when the check ends. The check windows overlap, and the mygo window, centred
- * between the two others, is covered whole; a check whose subject is the occlusion of its window or a window appearing on the
- * display starts from a window that reports `occluded` false, and the raise of prepareOcclusionFixture keeps the windows of other
- * applications behind the check windows (docs/spec/hosts.md#launch-activation).
- */
-export async function uncoverFromCheckWindows(t, s, { apps = APPS, openApp = open } = {}) {
-  const otherWindows = [];
-  for (const other of Object.values(apps)) {
-    if (other.name === s.app.name) continue;
-    const peer = await openApp(t, other, { inactive: true });
-    if (peer === null) continue;
-    for (const window of await peer.get("host.windows")) otherWindows.push(peer.on(window.window));
-  }
-  return prepareOcclusionFixture(s, otherWindows);
-}
-
 /**
  * Covers the window of `s` with `cover`, a ready window of the same application that the check opened, and returns the frame
  * of the covered window. host.windows lists a window ready before it is on the screen, because a host shows a new window after
- * its first screen (docs/spec/native-host.md#page-start), so the cover is judged by its presented layout and by its own
- * occlusion: once it shows in front of the covered window it reports `occluded` false. Only then does the occlusion of the
- * covered window tell what the cover does. The windows of the application stand raised above the windows of other applications
- * (prepareOcclusionFixture), so only the windows of the check can keep the cover occluded.
+ * its first screen (docs/spec/native-host.md#page-start), so the cover is judged by its presented layout and by a frame that
+ * holds the whole covered window. A window that an inactive application shows goes directly above its frontmost window
+ * (docs/spec/hosts.md#launch-activation), so the cover stands over the covered window. Every check starts behind the windows of a
+ * person, so the occlusion of the cover itself is no criterion.
  */
 export async function coverCheckWindow(s, cover) {
   const covered = (await s.get("host.window")).frame;
   await cover.run("host.window.resize", { width: covered.width + 200, height: covered.height + 100 });
   await cover.run("host.window.move", { x: covered.x - 100, y: covered.y - 50 });
   await cover.presented();
-  await cover.until("host.window", (w) => w.occluded === false, "the covering window did not show on the screen");
+  const holds = ({ frame }) => frame.x <= covered.x && frame.y <= covered.y && frame.x + frame.width >= covered.x + covered.width
+    && frame.y + frame.height >= covered.y + covered.height;
+  await cover.until("host.window", holds,
+    `the covering window does not hold the frame of the check window ${JSON.stringify(covered)}`);
   return covered;
 }

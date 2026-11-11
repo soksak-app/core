@@ -250,7 +250,6 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Darwin host event bridge", "objective-c", ["native/darwin/src/host_api_events.m"], ["packages/host/go/tests/event_native_platform_test.go"], { testLanguage: "go", sharedTests: true }),
   lane("Darwin host document bridge", "objective-c", ["native/darwin/src/host_api_document.m"], ["packages/host/go/src/platform/darwin/document_test.go", "e2e/document-typing.test.mjs", "e2e/save-close.test.mjs"], { testLanguage: "go", testExtensions: new Set([".go", ".mjs"]), sharedTests: true }),
   lane("Darwin host document diagnostic bridges", "objective-c", ["native/darwin/src/host_api_document_draw_covered.m", "native/darwin/src/host_api_document_viewport_marker.m"], ["native/darwin/tests/document_draw_covered_test.m", "native/darwin/tests/document_viewport_marker_test.m", "e2e/design-hosts.test.mjs", "e2e/view-display.test.mjs"], { testLanguage: "objective-c", testExtensions: new Set([".m", ".mjs"]), sharedTests: true }),
-  lane("Darwin host window diagnostic bridge", "objective-c", ["native/darwin/src/host_api_windows_raise.m"], ["native/darwin/tests/windows_raise_test.m"], { testLanguage: "objective-c", sharedTests: true }),
   lane("Darwin host view and layout bridges", "objective-c", ["native/darwin/src/host_api_webview.m", "native/darwin/src/host_api_window.m", "native/darwin/src/host_api_layout.m", "native/darwin/src/host_api_shapes.m", "native/darwin/src/host_api_system.m", "native/darwin/src/webview.m"], ["e2e/projects.test.mjs", "e2e/modal.test.mjs", "e2e/controls.test.mjs", "e2e/view-restart.test.mjs", "e2e/native-window-color-space.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Darwin host image bridge", "objective-c", ["native/darwin/src/host_api_image.m"], ["e2e/view-display.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Darwin host input bridges", "objective-c", ["native/darwin/src/host_api_input.m", "native/darwin/src/host_api_input_reference.m", "native/darwin/src/host_api_input_source.m", "native/darwin/src/host_api_mouse_buttons.m"], ["e2e/two-pointers.test.mjs", "e2e/native-drag.test.mjs", "e2e/activation/view-focus.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
@@ -570,15 +569,13 @@ const FEATURE_LINKS = [
   {
     id: "F703",
     implementation: [
-      { file: "packages/host/mygo/tests/presentation_test.go", symbol: "func raise(t *testing.T) {" },
       { file: "packages/host/mygo/tests/platform/darwin/system/view_surface_test.go", symbol: "w.startOnce.Do(func() { w.started <- err })" },
     ],
     tests: [
       { file: "packages/host/mygo/tests/presentation_test.go", id: "TestE2EShowWaitsForTheFirstFrame" },
-      { file: "packages/host/mygo/tests/presentation_test.go", id: "TestE2EAWindowHearsWhenAnotherCoversIt" },
       { file: "packages/host/mygo/tests/platform/darwin/system/view_surface_test.go", id: "TestE2EAViewPageShowsInASurfaceHostOfTheNativeView" },
     ],
-    expected: "A Go window check of the mygo adapter judges a shown window by a state that windows of other applications do not change, a check whose subject is an occlusion event raises the windows of the mygo platform above the windows of other applications for its run, and a view session makes host calls only after its workbench reported ready.",
+    expected: "A Go window check of the mygo adapter judges a shown window by a state that windows of other applications do not change, and a view session makes host calls only after its workbench reported ready.",
     levels: ["application"],
   },
   {
@@ -617,45 +614,20 @@ const FEATURE_LINKS = [
     expected: "The windows and covers of a native check that judges what the window server shows stand above the windows of other applications, so a window that another application brings forward does not change the occlusion state that the check reads, and each one-sided host test has a row of the allowed differences.",
     levels: ["native", "unit"],
   },
-  {
-    id: "F747",
-    implementation: [
-      { file: "native/darwin/src/window_reveal.m", symbol: "void sp_windows_raise(bool raise) {" },
-      { file: "e2e/fixture.mjs", symbol: "await session.request(\"diagnostics.windows.raise\", { raise: true });" },
-    ],
-    tests: [
-      { file: "native/darwin/tests/windows_raise_test.m", id: "the raise changes no activation and no key window" },
-      { file: "packages/host/go/src/diagnostics_test.go", id: "TestWindowsRaiseSetsTheLevelOfTheWindowsInAStepOfTheMainThread" },
-      { file: "e2e/test/placement-fixture.test.mjs", id: "the check raises its windows, so a window of another application in front of them covers none of them" },
-      { file: "e2e/placement.test.mjs", id: "a check window that another window covers reports occluded to its watchers" },
-      { file: "e2e/window-occlusion.test.mjs", id: "a covered window is occluded and hides the document of its tab" },
-    ],
-    expected: "A window check whose subject is the occlusion of a window raises the windows of its applications above the normal windows of other applications for its run without an activation, so the windows that a person leaves on the screen do not decide its result.",
-    levels: ["native", "unit", "application"],
-  },
+
   {
     id: "F748",
     implementation: [
       { file: "Cargo.toml", symbol: "wry = { git = \"https://github.com/min-0-max/wry\", tag = \"wry-v0.57.0-soksak.1\" }" },
     ],
     tests: [
-      { file: "e2e/placement.test.mjs", id: "a check window that another window covers reports occluded to its watchers" },
+      { file: "e2e/window-occlusion.test.mjs", id: "a covered window is occluded and hides the document of its tab" },
       { file: "e2e/window-first-frames.test.mjs", id: "a new window shows its complete first screen from its first frame" },
     ],
     expected: "A Tauri host that creates a window or a view while no other application is active stays inactive, because the creation of a webview makes no activation call.",
     levels: ["application"],
   },
-  {
-    id: "F749",
-    implementation: [
-      { file: "e2e/fixture.mjs", symbol: "const x = session === target ? area.x : area.x + area.width - frame.width, y = area.y;" },
-    ],
-    tests: [
-      { file: "e2e/test/placement-fixture.test.mjs", id: "a cohort window that stands on another display is parked in the work area of the target and restored there" },
-    ],
-    expected: "The occlusion fixture parks every window of the check applications at the top of the work area of the target, also a window on another display, and restores every recorded frame.",
-    levels: ["unit"],
-  },
+
   {
     id: "F750",
     implementation: [
@@ -12374,7 +12346,6 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/src/shell_statuses.go", symbol: "func (s *Shell) cardRect(id string) (layout.Rect, bool) {" },
       { file: "e2e/fixture.mjs", symbol: "export async function probeSidebarSets(" },
       { file: "e2e/fixture.mjs", symbol: "export async function settingsShown(" },
-      { file: "e2e/fixture.mjs", symbol: "export async function uncoverFromCheckWindows(" },
       { file: "e2e/fixture.mjs", symbol: "export async function pluginChangeStarted(" },
       { file: "packages/workbench-mygo/src/shell.go", symbol: "for _, refused := range []*string{snapshot.ProjectsError, snapshot.SettingsError} {" },
       { file: "packages/workbench-mygo/src/events.go", symbol: "func (e *Events) emit(at time.Time, level sok.Level, event string, fields func() map[string]any, cids []string) {" },
@@ -12409,9 +12380,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/src/view_calls.go", symbol: "s.calls.withContext(call.ctx).CallInOrder(" },
       { file: "packages/workbench/surface-modules.js", symbol: "export function holdCompositionDeclarations(surfaceIds, place) {" },
       { file: "packages/workbench/host.js", symbol: "if (deferredViews.length) surfaceModules.holdCompositionDeclarations(deferredViews, scheduled);" },
-      { file: "e2e/fixture.mjs", symbol: "await session.request(\"diagnostics.windows.raise\", { raise: true });" },
       { file: "packages/workbench-mygo/src/shell_exposure.go", symbol: "func (s *Shell) closeRegistrations(surface string) {" },
-      { file: "e2e/fixture.mjs", symbol: "await session.run(\"host.window.resize\", content);" },
       { file: "packages/workbench-mygo/src/picker.go", symbol: "ui.Row(c).Grow(1).Justify(ui.End).AlignItems(ui.Center).PaddingStart(metrics.noteGap)" },
       { file: "packages/workbench/settings-ui.js", symbol: "title.className = \"text-field\";" },
       { file: "packages/workbench/library.js", symbol: "line.dataset.expose = 'core.library.plugins.contribution';" },
@@ -12574,9 +12543,6 @@ const FEATURE_LINKS = [
       { file: "e2e/test/fixture.test.mjs", id: "the sidebar sets of the configuration take the sections of the layout probe set of their layout and keep their ids" },
       { file: "e2e/test/fixture.test.mjs", id: "the settings dialog is shown when the modal web view of a main page shows it, and on the mygo host when core.modal names it" },
       { file: "e2e/test/fixture.test.mjs", id: "a plugin change waits for the new start in the event log and reads the workbench only when the page is ready again" },
-      { file: "e2e/test/placement-fixture.test.mjs", id: "a check uncovers its window from the windows of the other check applications, which it opens inactive" },
-      { file: "e2e/test/placement-fixture.test.mjs", id: "the check raises its windows, so a window of another application in front of them covers none of them" },
-      { file: "e2e/test/placement-fixture.test.mjs", id: "a selected single host raises its own windows before its move" },
       { file: "packages/workbench-mygo/tests/shell_sidebars_test.go", id: "TestAProjectWithAnUnknownSectionInItsSetsDoesNotOpen" },
       { file: "packages/workbench-mygo/tests/fixture_test.go", id: "TestTheTraceRecordsAFocusedCardWhileItIsOn" },
       { file: "packages/workbench-mygo/tests/picker_test.go", id: "TestASaveThatLeavesTheTabModifiedIsTheErrorOfTheTab" },
@@ -12614,7 +12580,7 @@ const FEATURE_LINKS = [
       { file: "e2e/window-first-frames.test.mjs", id: "a project window shows its complete first screen from its first frame" },
       { file: "packages/workbench-mygo/tests/library_test.go", id: "TestAProjectThatAnotherWindowRemovedLeavesTheWindow" },
       { file: "packages/workbench-mygo/tests/picker_test.go", id: "TestAWindowWhoseProjectAnotherWindowRemovedClosesWithoutAQuestion" },
-      { file: "packages/host/mygo/tests/presentation_test.go", id: "TestE2EAWindowMovedOverAnotherBeforeItsFirstScreenCoversIt" },
+      { file: "packages/host/mygo/tests/presentation_test.go", id: "TestE2EAWindowMovedBeforeItsFirstScreenKeepsItsFrame" },
       { file: "packages/host/mygo/tests/platform/darwin/system/view_surface_test.go", id: "TestE2EAReloadRequestStartsTheWorkbenchAgain" },
       { file: "scripts/test/platform.test.mjs", id: "a quit by the key completes when the quit that the key down started closed the window before the key up" },
       { file: "native/darwin/tests/input_source_test.m", id: "a text input client without an input context is not an active text client" },
@@ -12626,8 +12592,6 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/test/recording-covered.test.mjs", id: "a recording holds the covered drawing of its window from before the capture starts" },
       { file: "packages/window-check/test/recording-covered.test.mjs", id: "the stop of a recording ends its hold of the covered drawing, also when the stop fails" },
       { file: "packages/workbench-mygo/tests/view_exposure_test.go", id: "TestTheRegistrationsOfAViewEndWithItsProcess" },
-      { file: "e2e/test/placement-fixture.test.mjs", id: "the restoration gives back the whole frame that the preparation recorded, its size included" },
-      { file: "e2e/test/placement-fixture.test.mjs", id: "a failed restoration names the cause of each window that it did not restore" },
       { file: "packages/workbench-mygo/tests/picker_test.go", id: "TestTheMarkOfAMenuItemStandsAGapAndTheNoteGapAfterItsName" },
       { file: "packages/workbench/test/settings-controls.test.mjs", id: "every setting form is drawn with its one control" },
       { file: "packages/workbench/test/library-plugins.test.mjs", id: "the plugin page of the library lists each plugin with its description, versions, sidecars and actions" },
@@ -12695,8 +12659,8 @@ const FEATURE_LINKS = [
       { file: "e2e/test/host-transcript.test.mjs", id: "the start values that a settled preparation carries are not part of its layout" },
       { file: "e2e/test/host-transcript.test.mjs", id: "a layout rests at the last settled presentation that no preparation follows" },
       { file: "e2e/test/host-transcript.test.mjs", id: "a transcript has settled once the page presented a preparation as settled" },
-      { file: "e2e/test/cover-fixture.test.mjs", id: "a cover is placed over the check window and judged once its layout presented and it shows" },
-      { file: "e2e/test/cover-fixture.test.mjs", id: "a cover that does not show fails the check with the cover as its reason" },
+      { file: "e2e/test/cover-fixture.test.mjs", id: "a cover is placed over the check window and judged by its presented layout and its frame, not by its own occlusion" },
+      { file: "e2e/test/cover-fixture.test.mjs", id: "a cover whose frame does not hold the check window fails the check with the frames" },
       { file: "e2e/test/window-show-behind.test.mjs", id: "the first window is measured at its show, after a relaunch that starts the application in the background" },
       { file: "packages/host/mygo/src/frontend_test.go", id: "TestAWaitForTheReleaseOfAWindowEndsWhenTheWindowCloses" },
       { file: "packages/host/go/src/open_layout_test.go", id: "TestAPreparationOfAClosedWindowBeginsNoLayout" },
@@ -15287,7 +15251,9 @@ const MOVED_COMPLETIONS = new Set(["F6", "F596","F239-170", "F239-197", "F239-24
 // F239-141, F239-152, F239-173, F239-177, F239-179 and F239-47-15 to F239-47-35), the editor save check (F212.12-2-1-1), the
 // real terminal wheel and text pointer checks (F94, F95) and the terminal selection follow check (F428).
 // F756 removes the idle gate of the window runs whose poll F160.26 recorded, so that completion has no implementation left.
-const REMOVED_COMPLETIONS = new Set(["F160.26", "F239-98", "F239-98-1", "F239-98-1-1", "F239-98-2", "F239-98-3", "F239-98-4", "F239-47-17",
+// F756 removes the raise of the windows of a check (F747) and the parking of the windows of the occlusion fixture (F749): every check
+// starts behind the windows of a person and covers its window with its own window.
+const REMOVED_COMPLETIONS = new Set(["F747", "F749", "F160.26", "F239-98", "F239-98-1", "F239-98-1-1", "F239-98-2", "F239-98-3", "F239-98-4", "F239-47-17",
   "F239-47-19", "F239-134", "F239-158", "F239-175", "F239-47-10", "F239-47-12", "F239-47-13", "F239-47-14", "F212.12-1-15-5", "F212.9-3-1", "F212.9a-1", "F239-107-1", "F239-220", "F239-40", "F239-43",
   "F249", "F292-7", "F68", "F60", "F91", "F114", "F116", "F125", "F239-269", "F55", "F239-47-24", "F239-182", "F239-68", "F278",
   "F278-1", "F280", "F283-1", "F283-2", "F286", "F290", "F292-26-3", "F226", "F239-39", "F239-41", "F239-41-1", "F239-42",

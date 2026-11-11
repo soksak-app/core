@@ -162,16 +162,6 @@ func DiagnosticFunctions(library uintptr) (abi.DiagnosticFunctions, error) {
 		purego.RegisterFunc(&functions.MainSpInputSourceCurrent, address)
 	}
 	{
-		address, err := purego.Dlsym(library, "main_sp_windows_raise")
-		if err != nil {
-			return abi.DiagnosticFunctions{}, fmt.Errorf("native API main_sp_windows_raise: %w", err)
-		}
-		if address == 0 {
-			return abi.DiagnosticFunctions{}, fmt.Errorf("native API main_sp_windows_raise: symbol has a null address")
-		}
-		purego.RegisterFunc(&functions.MainSpWindowsRaise, address)
-	}
-	{
 		address, err := purego.Dlsym(library, "main_surfaceLayoutTracePresented")
 		if err != nil {
 			return abi.DiagnosticFunctions{}, fmt.Errorf("native API main_surfaceLayoutTracePresented: %w", err)

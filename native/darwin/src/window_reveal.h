@@ -38,19 +38,6 @@ bool sp_window_place_new(void *window, char **error);
 // behind every window when it shows no other window, and leaves a window that is already its only one where it is. The
 // window then is the key window that the application gives the keyboard to when it is activated.
 //
-// While sp_windows_raise holds the windows of the application raised, the window takes the check window level before it is
-// ordered.
-//
 // Call it on the main thread (docs/spec/hosts.md#launch-activation).
 void sp_window_show(void *window);
 
-// Raises the windows of the application above the windows of other applications, or ends that; diagnostic builds call it
-// (diagnostics.windows.raise, docs/spec/endpoint.md#diagnostic-builds) so that a check owns the stacking of its windows. With
-// raise, each window of the application at the normal window level takes the check window level (NSPopUpMenuWindowLevel, the
-// level of the windows of the native checks), so a normal window of another application does not cover it, and each window
-// that sp_window_show shows while the state is on takes that level before it is ordered. Without, the windows that the state
-// raised and that still stand at that level go back to the normal level, and later windows show at the normal level. The
-// windows change level from back to front, and AppKit orders a window that enters a level in front of its peers there, so the
-// order among the windows of the application stays. It changes no activation, no key window and no frame, and orders no window
-// in. Call it on the main thread.
-void sp_windows_raise(bool raise);

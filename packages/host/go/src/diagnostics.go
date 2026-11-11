@@ -55,7 +55,6 @@ func init() {
 	diagnosticMethods["diagnostics.modal.held"] = onModalWebViews(diagnosticModalHeld)
 	diagnosticMethods["diagnostics.presentation.failure"] = diagnosticPresentationFailure
 	diagnosticMethods["diagnostics.window.draw-covered"] = diagnosticWindowDrawCovered
-	diagnosticMethods["diagnostics.windows.raise"] = diagnosticWindowsRaise
 	diagnosticMethods["diagnostics.input.source"] = diagnosticInputSource
 	diagnosticMethods["diagnostics.input.reference"] = diagnosticInputReference
 	diagnosticMethods["diagnostics.log.flush"] = diagnosticLogFlush
@@ -343,37 +342,6 @@ func diagnosticWindowDrawCovered(e *Endpoint, _ *endpointConn, params json.RawMe
 	if err := s.sendImageDrawing(); err != nil {
 		return nil, err
 	}
-	return nil, nil
-}
-
-// windowsRaisePlatform is implemented only by platforms that raise the windows of the application above the windows of other
-// applications.
-type windowsRaisePlatform interface {
-	RaiseWindows(raise bool)
-}
-
-// diagnosticWindowsRaise sets the windows of the application at the normal window level, and each window that the application
-// shows while the state is on, to the check window level, so that a check owns the stacking of its windows, or puts the windows
-// that it raised back to the normal level. It changes no activation, no key window and no frame
-// (docs/spec/endpoint.md#diagnostic-builds).
-func diagnosticWindowsRaise(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
-	if _, err := e.window(params); err != nil {
-		return nil, err
-	}
-	var p struct {
-		Raise *bool `json:"raise"`
-	}
-	if err := decode(params, &p); err != nil {
-		return nil, err
-	}
-	if p.Raise == nil {
-		return nil, rpcError(codeInvalidParams, "raise is required")
-	}
-	windows, ok := system.(windowsRaisePlatform)
-	if !ok {
-		return nil, errors.New("the raise of the windows is unavailable on this platform")
-	}
-	mainThreadStep(func() { windows.RaiseWindows(*p.Raise) })
 	return nil, nil
 }
 

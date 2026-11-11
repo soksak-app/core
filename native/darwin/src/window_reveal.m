@@ -139,54 +139,9 @@ static void keepFrame(NSWindow *window, BOOL wasVisible, NSRect given) {
     if (!wasVisible && !NSEqualRects(window.frame, given)) [window setFrame:given display:YES];
 }
 
-// The window level of the windows of a check that owns their stacking (sp_windows_raise), the level of the windows of the native
-// checks (native/darwin/tests/support/check_level.h).
-static const NSWindowLevel kRaisedWindowLevel = NSPopUpMenuWindowLevel;
-
-// Whether the windows of the application stand at kRaisedWindowLevel (sp_windows_raise).
-static bool windowsRaised;
-
-// Marks a window that sp_windows_raise or sp_window_show raised, so that the end of the state lowers that window and no other.
-static char raisedKey;
-
-// Raises window when it stands at the normal level.
-static void raiseWindow(NSWindow *window) {
-    if (window.level != NSNormalWindowLevel) return;
-    window.level = kRaisedWindowLevel;
-    objc_setAssociatedObject(window, &raisedKey, @YES, OBJC_ASSOCIATION_RETAIN);
-}
-
-// The windows of the application from back to front: the windows on the screen in their order, then the others.
-static NSArray<NSWindow *> *windowsBackToFront(void) {
-    NSMutableArray<NSWindow *> *windows = [NSMutableArray array];
-    for (NSNumber *number in [NSWindow windowNumbersWithOptions:0].reverseObjectEnumerator) {
-        NSWindow *window = [NSApp windowWithWindowNumber:number.integerValue];
-        if (window) [windows addObject:window];
-    }
-    for (NSWindow *window in NSApp.windows) {
-        if (![windows containsObject:window]) [windows addObject:window];
-    }
-    return windows;
-}
-
-void sp_windows_raise(bool raise) {
-    NSCAssert(NSThread.isMainThread, @"window raise requires the UI thread");
-    windowsRaised = raise;
-    for (NSWindow *window in windowsBackToFront()) {
-        if (raise) {
-            raiseWindow(window);
-            continue;
-        }
-        if (!objc_getAssociatedObject(window, &raisedKey)) continue;
-        objc_setAssociatedObject(window, &raisedKey, nil, OBJC_ASSOCIATION_RETAIN);
-        if (window.level == kRaisedWindowLevel) window.level = NSNormalWindowLevel;
-    }
-}
-
 void sp_window_show(void *handle) {
     NSCAssert(NSThread.isMainThread, @"window show requires the UI thread");
     NSWindow *window = (NSWindow *)handle;
-    if (windowsRaised) raiseWindow(window);
     BOOL wasVisible = window.isVisible;
     NSRect given = window.frame;
     if (NSRunningApplication.currentApplication.active) {

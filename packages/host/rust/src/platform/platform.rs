@@ -749,11 +749,6 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// (docs/spec/native-surfaces.md#document-regions). Call it on the main thread.
     #[cfg(feature = "diagnostics")]
     fn draw_documents_covered(&self, window: Handle, draw: bool) -> Result<(), String>;
-    /// Sets the windows of the application at the normal window level, and each window that the application shows while the
-    /// state is on, to the check window level, or puts the windows that it raised back to the normal level
-    /// (diagnostics.windows.raise, docs/spec/endpoint.md#diagnostic-builds). Call it on the main thread.
-    #[cfg(feature = "diagnostics")]
-    fn raise_windows(&self, raise: bool) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
     /// Sets the diagnostic marker on an attached native document view. `None` is allowed only for an idempotent stop.
     /// Returns the marker style reported by the native view. Call it on the main thread.

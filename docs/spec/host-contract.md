@@ -159,7 +159,6 @@ Items:
 | `diagnostics.document.viewport-marker.reports-native-errors` | A native marker failure is returned with its original text and the internal-error code; the command does not report success. | all |
 | `diagnostics.capture.document-identity.start.is-declared` | Diagnostic builds declare `diagnostics.capture.document-identity.start`. | all |
 | `diagnostics.window.draw-covered.is-declared` | Diagnostic builds declare `diagnostics.window.draw-covered`. | all |
-| `diagnostics.windows.raise.is-declared` | Diagnostic builds declare `diagnostics.windows.raise`. | all |
 | `diagnostics.capture-document-identity.stop-preserves-captures-without-a-document-source` | Stopping with no selected document identity source skips source freeze and removal, stops the capture once, and preserves both values of the `frameIdentity` capture option. | all |
 | `diagnostics.capture-document-identity.stop-orders-freeze-capture-and-cleanup` | With a selected source, stop freezes that source, stops capture, then removes the same generation; `issuedSlots` comes from the successful freeze reply. | all |
 | `diagnostics.capture-document-identity.stop-does-not-credit-unconfirmed-freeze` | A failed source freeze contributes no issued-slot count, but stop still attempts capture finalization and source removal and preserves the failure. | all |
