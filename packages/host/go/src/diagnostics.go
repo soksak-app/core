@@ -631,12 +631,16 @@ func (c platformCapture) newWindowCapturer() (platform.NewWindowCapturer, error)
 	return capturer, nil
 }
 
+// HoldNewWindow sets the hold as one step of the main thread: the platform orders the windows of the application there, and the
+// native call forwards to the main thread only from the worker of the framework, so a call from the goroutine of a request ran
+// on that goroutine and ended the process.
 func (c platformCapture) HoldNewWindow() error {
 	capturer, err := c.newWindowCapturer()
 	if err != nil {
 		return err
 	}
-	return capturer.CaptureHoldNewWindow()
+	mainThreadStep(func() { err = capturer.CaptureHoldNewWindow() })
+	return err
 }
 
 // WaitNewWindow waits, as the other capture waits do, until the close of the endpoint connection of the request or of its

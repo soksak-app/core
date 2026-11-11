@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
@@ -201,5 +202,49 @@ func TestTheConnectionAndTheWindowOfTheRequestEndTheWaitForAHeldWindow(t *testin
 				t.Fatalf("the wait ended with %v, want its end by %s", err, end)
 			}
 		})
+	}
+}
+
+// mainStepFramework is a framework whose step of the main thread marks the time it runs a task.
+type mainStepFramework struct {
+	frameworkRecord
+	inStep *atomic.Bool
+}
+
+func (f mainStepFramework) Step(task func()) {
+	f.inStep.Store(true)
+	defer f.inStep.Store(false)
+	task()
+}
+
+// holdThreadCapturer records whether the hold of a new window ran inside a step of the main thread.
+type holdThreadCapturer struct {
+	platform.Capturer
+	inStep *atomic.Bool
+	calls  []bool
+}
+
+func (c *holdThreadCapturer) CaptureHoldNewWindow() error {
+	c.calls = append(c.calls, c.inStep.Load())
+	return nil
+}
+func (c *holdThreadCapturer) CaptureWaitNewWindow(uint64) (int, error) {
+	return -1, errors.New("not waited")
+}
+func (c *holdThreadCapturer) CaptureReleaseNewWindow() {}
+
+// The hold of a new window is a call into AppKit, which the native library runs on the main thread only when the worker of the
+// framework calls it; the request that starts the recording runs on its own goroutine.
+func TestTheHoldOfANewWindowRunsAsAStepOfTheMainThread(t *testing.T) {
+	inStep := &atomic.Bool{}
+	previous := framework
+	framework = mainStepFramework{inStep: inStep}
+	t.Cleanup(func() { framework = previous })
+	capturer := &holdThreadCapturer{inStep: inStep}
+	if err := (platformCapture{Capturer: capturer}).HoldNewWindow(); err != nil {
+		t.Fatal(err)
+	}
+	if len(capturer.calls) != 1 || !capturer.calls[0] {
+		t.Fatalf("the hold ran %d times, inside a step of the main thread %v; want once inside a step", len(capturer.calls), capturer.calls)
 	}
 }

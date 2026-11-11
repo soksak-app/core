@@ -323,6 +323,7 @@ type Capturer interface {
 // recording of that window puts the window on screen, so the first frame of the recording is the first frame of the window.
 type NewWindowCapturer interface {
 	// CaptureHoldNewWindow holds the next show of a window that is not on screen. It fails while a recording runs or a hold is set.
+	// Call it on the UI thread.
 	CaptureHoldNewWindow() error
 	// CaptureWaitNewWindow waits until a show was held and returns the window server number of that window. The end of the wait
 	// of token (CaptureEndWait) ends the hold, shows a held window and fails with `no new window was shown before <reason>`.
