@@ -176,7 +176,7 @@ async function captureFloorDrag(s, configDir, { marks, cornerRadiusPt, slotInset
   const lag = pointerLag(shown, run.ticks, run.boundary);
   const refreshRate = (await s.get("host.window")).refreshRate;
   const times = shownTimes(shown, run.ticks);
-  const performance = measureDragPerformance(times, lag, refreshRate);
+  const performance = measureDragPerformance(times, lag, 1000 / refreshRate);
   const report = {
     host: s.app.name,
     performance,
@@ -203,6 +203,6 @@ async function captureFloorDrag(s, configDir, { marks, cornerRadiusPt, slotInset
       layouts: run.layouts,
       ticks: run.ticks,
     },
-    assertPerformance: () => assertDragPerformance(times, lag, refreshRate),
+    assertPerformance: () => assertDragPerformance(times, lag, 1000 / refreshRate),
   };
 }

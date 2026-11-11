@@ -57,7 +57,7 @@ for (const app of Object.values(APPS)) {
     const repeated = new Set(changes.filter((item) => item.change === null).map((item) => item.time));
     const shown = samples.filter((sample) => !repeated.has(sample.time));
     const lag = pointerLag(shown, run.ticks, run.boundary);
-    const performance = measureDragPerformance(shownTimes(shown, run.ticks), lag, (await s.get("host.window")).refreshRate);
+    const performance = measureDragPerformance(shownTimes(shown, run.ticks), lag, 1000 / (await s.get("host.window")).refreshRate);
     const convergence = cardEdgeConvergence(samples, run.ticks.at(-1));
     const report = { load: loadavg(), performance, convergence, transactionCadence: transactionCadence(run.layouts), repeatedFrames: repeated.size, samples, ticks: run.ticks, boundary: run.boundary, layouts: run.layouts, times: captured.map((item) => item.time), unmeasured };
     const directory = join(app.configDir, "logs", "plain-view-latency");

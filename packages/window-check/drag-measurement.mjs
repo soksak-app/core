@@ -10,10 +10,10 @@ export function measureDragFrameCadence(times) {
   return longest;
 }
 
-/** Applies the dedicated view-drag cadence performance target. */
-export function assertDragFrameCadence(times) {
+/** Applies the view-drag cadence target: no recording gap longer than two display periods. */
+export function assertDragFrameCadence(times, period) {
   const longest = measureDragFrameCadence(times);
-  assert.ok(longest <= 35, `view drag recording gap ${longest.toFixed(3)}ms exceeds 35ms`);
+  assert.ok(longest <= 2 * period, `view drag recording gap ${longest.toFixed(3)}ms exceeds ${(2 * period).toFixed(3)}ms`);
   return longest;
 }
 
@@ -216,27 +216,26 @@ export function shownTimes(samples, ticks) {
   return samples.filter(({ time }) => time >= ticks[0]).map(({ time }) => time);
 }
 
-/** Records the cadence and refresh-rate-based latency targets without treating valid slow data as missing data. */
-export function measureDragPerformance(times, lag, refreshRate) {
+/** Records the cadence and period-based latency targets without treating valid slow data as missing data. */
+export function measureDragPerformance(times, lag, period) {
   const longest = measureDragFrameCadence(times);
-  assert.ok(Number.isFinite(refreshRate) && refreshRate > 0, "drag display refresh rate is invalid");
+  assert.ok(Number.isFinite(period) && period > 0, "drag display period is invalid");
   const latency = { median: lag?.median, p90: lag?.p90, worst: lag?.lag };
   assert.ok(Object.values(latency).every((value) => Number.isFinite(value) && value >= 0),
     "drag latency measurements are missing or invalid");
-  const period = 1000 / refreshRate;
   const targets = { median: 2.5 * period, p90: 3 * period, worst: 4 * period };
-  const exceeded = longest > 35 ? ["cadence"] : [];
+  const exceeded = longest > 2 * period ? ["cadence"] : [];
   for (const key of Object.keys(targets)) if (latency[key] > targets[key]) exceeded.push(key);
   // The interval of the shown frames follows the interval of the input while a layout takes less than that interval.
   const intervals = times.slice(1).map((time, index) => time - times[index]).sort((a, b) => a - b);
   const frameInterval = intervals[Math.floor(intervals.length / 2)];
-  return { cadence: { measured: longest, target: 33 }, frameInterval, latency, targets, refreshRate,
+  return { cadence: { measured: longest, target: 2 * period }, frameInterval, latency, targets, period,
     exceeded, targetsMet: exceeded.length === 0 };
 }
 
 /** Applies the unchanged targets in a dedicated performance benchmark. */
-export function assertDragPerformance(times, lag, refreshRate) {
-  const report = measureDragPerformance(times, lag, refreshRate);
+export function assertDragPerformance(times, lag, period) {
+  const report = measureDragPerformance(times, lag, period);
   assert.ok(report.targetsMet, `drag performance targets exceeded: ${JSON.stringify(report)}`);
   return report;
 }

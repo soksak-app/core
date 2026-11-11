@@ -81,7 +81,7 @@ function assertAligned(run, marks, refreshRate) {
 
   const lag = pointerLag(shown, run.ticks, run.boundary);
   lag.stages = lagStages(lag, run.ticks, run.layouts);
-  lag.performance = measureDragPerformance(shownTimes(shown, run.ticks), lag, refreshRate);
+  lag.performance = measureDragPerformance(shownTimes(shown, run.ticks), lag, 1000 / refreshRate);
 
   return lag;
 }

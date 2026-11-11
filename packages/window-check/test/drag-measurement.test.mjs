@@ -40,9 +40,10 @@ test("pointer lag measures finite frames after input", { timeout: 1000 }, () => 
 });
 
 
-test("view drag cadence requires every frame within 35 milliseconds", { timeout: 1000 }, () => {
-  assert.equal(assertDragFrameCadence([0, 16, 51, 67]), 35);
-  assert.throws(() => assertDragFrameCadence([0, 16, 51.01, 67]), /35.*gap|gap.*35/);
+test("view drag cadence requires every frame within two display periods", { timeout: 1000 }, () => {
+  assert.equal(assertDragFrameCadence([0, 16, 51, 67], 17.5), 35);
+  assert.throws(() => assertDragFrameCadence([0, 16, 51.01, 67], 17.5), /35.*gap|gap.*35/);
+  assert.throws(() => assertDragFrameCadence([0, 17, 34], 8.33), /exceeds 16\.660ms/);
 });
 
 test("view drag cadence rejects missing or invalid frame times", { timeout: 1000 }, () => {
@@ -82,25 +83,25 @@ test("drag cadence measurement retains intervals beyond the performance target",
   assert.equal(typeof measurement.measureDragFrameCadence, "function", "separate cadence measurement is required");
   assert.equal(measurement.measureDragFrameCadence([0, 34, 68]), 34);
   assert.throws(() => measurement.measureDragFrameCadence([0, 0]), /frame times/);
-  assert.throws(() => measurement.assertDragFrameCadence([0, 36, 72]), /exceeds 35ms/);
+  assert.throws(() => measurement.assertDragFrameCadence([0, 36, 72], 17.5), /exceeds 35\.000ms/);
 });
 
 
 test("drag performance keeps existing targets separate from valid measurements", { timeout: 1000 }, () => {
   assert.equal(typeof measurement.measureDragPerformance, "function", "separate performance results are required");
-  const report = measurement.measureDragPerformance([0, 36, 72], { lag: 100, median: 40, p90: 70 }, 60);
+  const report = measurement.measureDragPerformance([0, 36, 72], { lag: 100, median: 40, p90: 70 }, 1000 / 60);
   assert.deepEqual(report.exceeded, ["cadence", "p90", "worst"]);
-  assert.throws(() => measurement.assertDragPerformance([0, 36, 72], { lag: 100, median: 40, p90: 70 }, 60),
+  assert.throws(() => measurement.assertDragPerformance([0, 36, 72], { lag: 100, median: 40, p90: 70 }, 1000 / 60),
     /performance targets/);
-  assert.equal(measurement.assertDragPerformance([0, 16, 32], { lag: 20, median: 10, p90: 15 }, 120).targetsMet, true);
-  assert.throws(() => measurement.measureDragPerformance([0, 16], { lag: NaN, median: 1, p90: 2 }, 60), /latency/);
-  assert.throws(() => measurement.measureDragPerformance([0, 16], { lag: 1, median: 1, p90: 1 }, 0), /refresh/);
+  assert.equal(measurement.assertDragPerformance([0, 16, 32], { lag: 20, median: 10, p90: 15 }, 1000 / 120).targetsMet, true);
+  assert.throws(() => measurement.measureDragPerformance([0, 16], { lag: NaN, median: 1, p90: 2 }, 1000 / 60), /latency/);
+  assert.throws(() => measurement.measureDragPerformance([0, 16], { lag: 1, median: 1, p90: 1 }, 0), /display period/);
 });
 
 test("drag performance states the median interval of the shown frames", { timeout: 1000 }, () => {
   const lag = { lag: 20, median: 10, p90: 15 };
-  assert.equal(measurement.measureDragPerformance([0, 8, 16, 24], lag, 120).frameInterval, 8);
-  assert.equal(measurement.measureDragPerformance([0, 17, 33, 50, 67], lag, 120).frameInterval, 17);
+  assert.equal(measurement.measureDragPerformance([0, 8, 16, 24], lag, 1000 / 120).frameInterval, 8);
+  assert.equal(measurement.measureDragPerformance([0, 17, 33, 50, 67], lag, 1000 / 120).frameInterval, 17);
 });
 
 test("transaction cadence includes commit waiting and total transaction duration", { timeout: 1000 }, () => {
