@@ -29,6 +29,7 @@
   "dependencies": {
     "@soksak/client": "workspace:*",
     "@soksak/plugin-api": "workspace:*",
-    "@soksak/window-check": "workspace:*"
+    "@soksak/window-check": "workspace:*",
+    "@soksak/workbench": "workspace:*"
   }
 }
