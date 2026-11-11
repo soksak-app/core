@@ -9287,7 +9287,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/windows_main_page_test.go", id: "TestAWindowWithoutAMainPageCallsNoMainWebViewOperation" },
       { file: "packages/host/rust/src/window_sheet_test.rs", id: "host_window_reports_its_sheet" },
       { file: "scripts/test/test-kinds.test.mjs", id: "the root make targets are the only entry points of the window checks" },
-      { file: "e2e/debug-save.test.mjs", id: "the save panel of the debug view saves with Return, under a typed name, and answers null on Escape" },
+      { file: "e2e/debug-save.test.mjs", id: "the save panel of the debug view saves under a typed name with Return, refuses an existing name and answers null on Escape" },
     ],
     expected: "host.window reports the sheet attached to a window with its kind and frame and notifies its watchers when the sheet begins and ends, so the check of the save panel of the debug view waits for the panel and saves, renames and cancels it with emulated input in the default run, with no check that waits for a person.",
     levels: ["native", "unit", "application"],
