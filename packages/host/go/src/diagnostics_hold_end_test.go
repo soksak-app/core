@@ -261,11 +261,19 @@ func TestARefusedSurfaceHoldReleasesNothing(t *testing.T) {
 
 // contract: diagnostics.drag.page-receives-every-step
 func TestAPageDragSendsEveryStep(t *testing.T) {
-	const ticks = 8
-	sent := 0
-	sendSteps(ticks, time.Millisecond, func() { sent++ })
-	if sent != ticks {
-		t.Fatalf("the page received %d of the %d steps of its drag", sent, ticks)
+	now := time.Duration(0)
+	var ticks []dragTick
+	sendLegs(dragPlan{MS: 10, Times: 2}, func() (*int, error) { rate := 1000; return &rate, nil },
+		func() time.Duration { return now }, func(d time.Duration) { now += d },
+		func(tick dragTick) { ticks = append(ticks, tick) })
+	lasts := 0
+	for _, tick := range ticks {
+		if tick.Last {
+			lasts++
+		}
+	}
+	if lasts != 4 || !ticks[len(ticks)-1].Last {
+		t.Fatalf("%d of %d steps ended a leg; want the four legs of the drag to end, the last step among them", lasts, len(ticks))
 	}
 }
 

@@ -890,13 +890,15 @@ func TestNativeDragDeliversThePressTheStepsAndTheReleaseOfEachRoundTrip(t *testi
 	from := point{X: 100, Y: 50}
 	var delivered []string
 	ticks := 0
-	result, err := nativeDrag(plan, from, stoppedClock, func(input PointerInput) error {
+	var now time.Duration
+	clock := func() time.Duration { return now }
+	result, err := nativeDrag(plan, from, clock, func(input PointerInput) error {
 		if input.Activate || input.Button != "left" {
 			t.Fatalf("native drag input %+v activates or uses another button than the primary one", input)
 		}
 		delivered = append(delivered, fmt.Sprintf("%s %g,%g after %d", input.Phase, input.X, input.Y, ticks))
 		return nil
-	}, func() { ticks++ }, func() error { return nil })
+	}, func() error { ticks++; now += 16 * time.Millisecond; return nil }, func() error { return nil })
 	if err != nil {
 		t.Fatalf("native drag: %v", err)
 	}
@@ -911,8 +913,9 @@ func TestNativeDragDeliversThePressTheStepsAndTheReleaseOfEachRoundTrip(t *testi
 	if want := append(trip(0), trip(4)...); !reflect.DeepEqual(delivered, want) {
 		t.Fatalf("native drag delivered\n%s\nwant\n%s", strings.Join(delivered, "\n"), strings.Join(want, "\n"))
 	}
-	if result["from"] != from || result["steps"] != 8 || result["asked"] != 128 {
-		t.Fatalf("native drag result %v, want from %v, steps 8 and asked 128", result, from)
+	// Each leg runs for its own duration, so its steps follow the step period: MS / 16 ms per leg, two legs per round trip.
+	if wantSteps := 2 * plan.Times * (plan.MS / 16); result["from"] != from || result["steps"] != wantSteps || result["asked"] != plan.Times*2*plan.MS {
+		t.Fatalf("native drag result %v, want from %v, steps %d and asked %d", result, from, wantSteps, plan.Times*2*plan.MS)
 	}
 	if took, ok := result["took"].(int64); !ok || took < 0 {
 		t.Fatalf("native drag result took %#v, want a non-negative number of milliseconds", result["took"])
@@ -926,7 +929,7 @@ func TestNativeDragDeliversThePressTheStepsAndTheReleaseOfEachRoundTrip(t *testi
 			return errors.New("the window did not accept the input")
 		}
 		return nil
-	}, func() {}, func() error { return nil })
+	}, func() error { return nil }, func() error { return nil })
 	if err == nil || err.Error() != "native drag step 1: the window did not accept the input" {
 		t.Fatalf("native drag with a failing step: error %v", err)
 	}
@@ -948,7 +951,7 @@ func TestANativeDragPressesOnlyAfterTheWindowPresentedItsLayout(t *testing.T) {
 		func(input PointerInput) error {
 			events = append(events, input.Phase)
 			return nil
-		}, func() {}, func() error {
+		}, func() error { now += 16 * time.Millisecond; return nil }, func() error {
 			now += late
 			answers++
 			events = append(events, fmt.Sprintf("presented %d", answers))
@@ -973,17 +976,19 @@ func TestANativeDragPressesOnlyAfterTheWindowPresentedItsLayout(t *testing.T) {
 			t.Fatalf("native drag pressWaits[%d] = %d ms, want the %d ms the window took to answer", i, wait, late.Milliseconds())
 		}
 	}
-	if took, ok := result["took"].(int64); !ok || took != 0 {
-		t.Fatalf("native drag took %#v ms with steps that do not wait, want 0 without the waits", result["took"])
+	// Three round trips of four steps of 16 ms each; the waits are not in took.
+	if took, ok := result["took"].(int64); !ok || took != 192 {
+		t.Fatalf("native drag took %#v ms, want 192 ms of steps without the waits", result["took"])
 	}
 
 	// A wait that fails delivers no press.
 	events = nil
-	_, err = nativeDrag(dragPlan{Axis: "x", Line: 3, DX: 20, MS: 32, Times: 2}, point{X: 100, Y: 50}, stoppedClock,
+	var waitNow time.Duration
+	_, err = nativeDrag(dragPlan{Axis: "x", Line: 3, DX: 20, MS: 32, Times: 2}, point{X: 100, Y: 50}, func() time.Duration { return waitNow },
 		func(input PointerInput) error {
 			events = append(events, input.Phase)
 			return nil
-		}, func() {}, func() error {
+		}, func() error { waitNow += 16 * time.Millisecond; return nil }, func() error {
 			if len(events) > 0 {
 				return errors.New("the window did not present within 10s")
 			}
@@ -994,6 +999,22 @@ func TestANativeDragPressesOnlyAfterTheWindowPresentedItsLayout(t *testing.T) {
 	}
 	if len(events) != 6 || events[5] != "up" {
 		t.Fatalf("native drag with a failing wait delivered %v, want only the first round trip", events)
+	}
+}
+
+// contract: diagnostics.drag.native-delivers-pointer-gesture
+func TestStepPeriodFollowsTheRefreshRateOfTheWindowAndAssumesNone(t *testing.T) {
+	sixty, oneTwenty := 60, 120
+	for _, test := range []struct {
+		rate *int
+		want time.Duration
+	}{{&sixty, time.Second / 60}, {&oneTwenty, time.Second / 120}} {
+		if got, err := stepPeriod(test.rate); err != nil || got != test.want {
+			t.Fatalf("stepPeriod(%d) = %v, %v; want %v", *test.rate, got, err, test.want)
+		}
+	}
+	if _, err := stepPeriod(nil); err == nil || err.Error() != "the window is on no display with a refresh rate" {
+		t.Fatalf("stepPeriod(nil) error %v, want the window is on no display with a refresh rate", err)
 	}
 }
 
@@ -1107,5 +1128,70 @@ func TestTheEndOfTheConnectionEndsTheCaptureWaitsOnlyWhileItsRequestRuns(t *test
 	returnedConn.close("the requester closed")
 	if lateEnds != 0 {
 		t.Fatalf("the end of the connection after the request returned ended %d waits", lateEnds)
+	}
+}
+
+// contract: diagnostics.drag.page-legs-follow-the-refresh-rate
+func TestPageLegsPaceEachStepByTheRefreshRateReadAtThatStep(t *testing.T) {
+	reads := 0
+	rateOf := func() (*int, error) {
+		reads++
+		rate := 60
+		if reads > 3 {
+			rate = 120
+		}
+		return &rate, nil
+	}
+	now := time.Duration(0)
+	var waits []time.Duration
+	var ticks []dragTick
+	sendLegs(dragPlan{MS: 50, Times: 1}, rateOf, func() time.Duration { return now }, func(d time.Duration) {
+		waits = append(waits, d)
+		now += d
+	}, func(tick dragTick) { ticks = append(ticks, tick) })
+	if len(waits) != len(ticks) || len(waits) < 4 {
+		t.Fatalf("%d waits for %d ticks; want one wait per tick and a leg longer than three steps", len(waits), len(ticks))
+	}
+	for i, wait := range waits {
+		want := time.Second / 60
+		if i >= 3 {
+			want = time.Second / 120
+		}
+		if wait != want {
+			t.Fatalf("step %d waited %v, want %v for the refresh rate read at that step", i, wait, want)
+		}
+	}
+	lasts := 0
+	for i, tick := range ticks {
+		if tick.Error != "" {
+			t.Fatalf("step %d failed: %s", i, tick.Error)
+		}
+		if tick.Last {
+			lasts++
+			if tick.Fraction != 1 {
+				t.Fatalf("the last step of the leg reached %v, want 1", tick.Fraction)
+			}
+		} else if tick.Fraction <= 0 || tick.Fraction >= 1 {
+			t.Fatalf("step %d reached %v of its leg, want a fraction between 0 and 1", i, tick.Fraction)
+		}
+	}
+	if lasts != 2 {
+		t.Fatalf("%d steps ended a leg, want one per leg of the round trip (2)", lasts)
+	}
+
+	var failed []dragTick
+	sendLegs(dragPlan{MS: 50, Times: 1}, func() (*int, error) { return nil, errors.New("no window facts") },
+		func() time.Duration { return 0 }, func(time.Duration) { t.Fatal("a failed read must not wait") },
+		func(tick dragTick) { failed = append(failed, tick) })
+	if len(failed) != 1 || failed[0].Error != "no window facts" {
+		t.Fatalf("ticks after a failed read %v, want one error tick carrying the read error", failed)
+	}
+
+	var unpaced []dragTick
+	sendLegs(dragPlan{MS: 50, Times: 1}, func() (*int, error) { return nil, nil },
+		func() time.Duration { return 0 }, func(time.Duration) { t.Fatal("a missing rate must not wait") },
+		func(tick dragTick) { unpaced = append(unpaced, tick) })
+	if len(unpaced) != 1 || unpaced[0].Error != "the window is on no display with a refresh rate" {
+		t.Fatalf("ticks without a refresh rate %v, want one error tick naming the missing display rate", unpaced)
 	}
 }

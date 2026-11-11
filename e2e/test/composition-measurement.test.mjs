@@ -12,7 +12,7 @@ test("drag measurement rejects a stationary, incomplete, or non-returning gestur
 });
 
 test("every layout held for two frames must appear in the recording, and shorter ones may be replaced", () => {
-  // The steps are 16ms apart. 0 -> -10 -> -20 (held for three steps) -> -10 -> 0 (end).
+  // The fixture ticks are 16 ms apart. The host paces real drag steps by the display period of the window, so no step has a fixed length.
   const ticks = [0, 16, 32, 48, 64, 80];
   const boundary = [100, 90, 80, 80, 80, 90, 100];
   const sample = (time, offset) => ({ time, position: 200 + offset });

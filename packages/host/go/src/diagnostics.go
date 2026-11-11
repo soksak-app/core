@@ -171,9 +171,6 @@ func diagnosticClock(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *Re
 // and separated by dots, so they do not collide with this value.
 const logTopic = "#diagnostics.log"
 
-// frameStep is the length of one step of a drag. The page counts the steps with the same value.
-const frameStep = 16 * time.Millisecond
-
 // The ends of a native wait for an event that may not come (docs/spec/endpoint.md): no limit ends it.
 const (
 	waitEndConnection = "the endpoint connection of the request closed"
@@ -498,8 +495,8 @@ func parseDragNative(params json.RawMessage) (bool, error) {
 // reply is {from, steps, took, asked, pressWaits}: took is the time from the first press to the last release without the
 // waits before the presses, on clock, the clock of the host, asked the time that the steps ask, and pressWaits the wait before
 // each press, all in milliseconds.
-func nativeDrag(plan dragPlan, from point, clock func() time.Duration, deliver func(PointerInput) error, step func(), presented func() error) (map[string]any, error) {
-	per := plan.steps()
+func nativeDrag(plan dragPlan, from point, clock func() time.Duration, deliver func(PointerInput) error, step func() error, presented func() error) (map[string]any, error) {
+	span := float64(plan.MS) * float64(time.Millisecond)
 	at := func(fraction float64) point {
 		return point{X: from.X + plan.DX*fraction, Y: from.Y + plan.DY*fraction}
 	}
@@ -509,6 +506,7 @@ func nativeDrag(plan dragPlan, from point, clock func() time.Duration, deliver f
 	began := clock()
 	var waited time.Duration
 	pressWaits := make([]int64, 0, plan.Times)
+	steps := 0
 	for turn := 0; turn < plan.Times; turn++ {
 		waiting := clock()
 		if err := presented(); err != nil {
@@ -521,36 +519,62 @@ func nativeDrag(plan dragPlan, from point, clock func() time.Duration, deliver f
 			return nil, fmt.Errorf("native drag press of round trip %d: %w", turn+1, err)
 		}
 		last := from
-		for i := 1; i <= 2*per; i++ {
-			step()
-			fraction := float64(i) / float64(per)
-			if i > per {
-				fraction = float64(2*per-i) / float64(per)
-			}
-			last = at(fraction)
-			if err := deliver(input("drag", last)); err != nil {
-				err = fmt.Errorf("native drag step %d: %w", turn*2*per+i, err)
-				if released := deliver(input("up", last)); released != nil {
-					err = fmt.Errorf("%w; release after the failed step: %v", err, released)
+		// Each leg runs until its elapsed time reaches plan.MS, so the position follows the time of the host and
+		// not a count of steps fixed in advance. The steps are the refreshes that the window presented.
+		for _, back := range []bool{false, true} {
+			legStart := clock()
+			for {
+				if err := step(); err != nil {
+					err = fmt.Errorf("native drag step %d: %w", steps+1, err)
+					if released := deliver(input("up", last)); released != nil {
+						err = fmt.Errorf("%w; release after the failed step: %v", err, released)
+					}
+					return nil, err
 				}
-				return nil, err
+				steps++
+				elapsed := float64(clock()-legStart) / span
+				fraction := math.Min(elapsed, 1)
+				if back {
+					fraction = 1 - fraction
+				}
+				last = at(fraction)
+				if err := deliver(input("drag", last)); err != nil {
+					err = fmt.Errorf("native drag step %d: %w", steps, err)
+					if released := deliver(input("up", last)); released != nil {
+						err = fmt.Errorf("%w; release after the failed step: %v", err, released)
+					}
+					return nil, err
+				}
+				if elapsed >= 1 {
+					break
+				}
 			}
 		}
 		if err := deliver(input("up", from)); err != nil {
 			return nil, fmt.Errorf("native drag release of round trip %d: %w", turn+1, err)
 		}
 	}
-	steps := plan.Times * 2 * per
 	return map[string]any{"from": from, "steps": steps, "took": (clock() - began - waited).Milliseconds(),
-		"asked": steps * int(frameStep/time.Millisecond), "pressWaits": pressWaits}, nil
+		"asked": plan.Times * 2 * plan.MS, "pressWaits": pressWaits}, nil
 }
 
-// steps is the number of steps of a one-way move. The page counts them in the same way.
-func (p dragPlan) steps() int {
-	if n := int(math.Round(float64(p.MS) / float64(frameStep/time.Millisecond))); n > 1 {
-		return n
+// stepPeriod is the length of one step at refreshRate, the refresh rate of the display that shows the window at the
+// moment the step is taken. A missing rate is an error: no step length is assumed.
+func stepPeriod(refreshRate *int) (time.Duration, error) {
+	if refreshRate == nil || *refreshRate <= 0 {
+		return 0, errors.New("the window is on no display with a refresh rate")
 	}
-	return 1
+	return time.Second / time.Duration(*refreshRate), nil
+}
+
+// refreshRate reads the refresh rate of the display that shows the window now, or nil when the window is on no screen.
+func (s *Surfaces) refreshRate() (*int, error) {
+	var facts windowFacts
+	err := s.nativeFacts(func(window platform.Window) (string, error) { return system.WindowFacts(window) }, &facts, nil)
+	if err != nil {
+		return nil, err
+	}
+	return facts.RefreshRate, nil
 }
 
 // recording is a recording in progress.
@@ -733,8 +757,7 @@ func diagnosticDrag(e *Endpoint, c *endpointConn, params json.RawMessage, reply 
 	}
 	var tickMu sync.Mutex
 	sent := []float64{}
-	ticks := plan.steps() * 2 * plan.Times
-	s.note(fmt.Sprintf("diagnostics: drag %s:%d by %g,%g in %d steps, %d times, native %t", plan.Axis, plan.Line, plan.DX, plan.DY, plan.steps(), plan.Times, native))
+	s.note(fmt.Sprintf("diagnostics: drag %s:%d by %g,%g for %d ms, %d times, native %t", plan.Axis, plan.Line, plan.DX, plan.DY, plan.MS, plan.Times, native))
 	stepped := func() {
 		if clock != nil {
 			tickMu.Lock()
@@ -752,7 +775,7 @@ func diagnosticDrag(e *Endpoint, c *endpointConn, params json.RawMessage, reply 
 		case native:
 			return nativeDragPresented(ctx, h, s, plan, from, stepped)
 		default:
-			return pageDrag(ctx, h, s, plan, ticks, stepped)
+			return pageDrag(ctx, h, s, plan, stepped)
 		}
 	}
 	var layouts []map[string]any
@@ -792,32 +815,65 @@ func diagnosticDrag(e *Endpoint, c *endpointConn, params json.RawMessage, reply 
 	return result, nil
 }
 
-// pageDrag requests the drag of plan from the page and sends the time of each of its ticks steps as a diagnostics-tick
-// event, calling sent at each. It answers the result of the page after the last layout is displayed. The end of ctx ends the request.
-func pageDrag(ctx context.Context, h *Host, s *Surfaces, plan dragPlan, ticks int, sent func()) (map[string]any, error) {
-	// The tick starts after the request is sent so that the first tick arrives after the page received the drag request. Every step
+// dragTick is one step of a drag that the page performs. Fraction is how far its leg has reached, from 0 to 1, and Last ends the
+// leg. Error reports that the next step could not be paced, which ends the drag.
+type dragTick struct {
+	Fraction float64 `json:"fraction"`
+	Last     bool    `json:"last"`
+	Error    string  `json:"error,omitempty"`
+}
+
+// sendLegs sends the steps of the 2 × plan.Times one-way legs of plan. Each leg runs until plan.MS has passed on clock. Each step
+// comes one display period after the one before, the period the window has at the moment of the step (stepPeriod), so the length
+// of a step follows the display the window is on. A failed read sends one error tick and ends the drag.
+func sendLegs(plan dragPlan, refreshRate func() (*int, error), clock func() time.Duration, wait func(time.Duration), send func(dragTick)) {
+	span := time.Duration(plan.MS) * time.Millisecond
+	for leg := 0; leg < 2*plan.Times; leg++ {
+		began := clock()
+		for {
+			rate, err := refreshRate()
+			var period time.Duration
+			if err == nil {
+				period, err = stepPeriod(rate)
+			}
+			if err != nil {
+				send(dragTick{Error: err.Error()})
+				return
+			}
+			wait(period)
+			elapsed := clock() - began
+			last := elapsed >= span
+			fraction := 1.0
+			if !last {
+				fraction = float64(elapsed) / float64(span)
+			}
+			send(dragTick{Fraction: fraction, Last: last})
+			if last {
+				break
+			}
+		}
+	}
+}
+
+// pageDrag requests the drag of plan from the page and sends its steps as diagnostics-tick events, calling sent at each step that
+// was sent. It answers the result of the page after the last layout is displayed. The end of ctx ends the request.
+func pageDrag(ctx context.Context, h *Host, s *Surfaces, plan dragPlan, sent func()) (map[string]any, error) {
+	// The steps start after the request is sent so that the first step arrives after the page received the drag request. Every step
 	// is sent, also after the request ended, so the page that runs the gesture receives each of its steps (docs/spec/endpoint.md).
 	reply := h.relay.request(ctx, relayTarget{owner: s}, 0, func(id uint64) error {
 		s.window.Emit("exposure-request", map[string]any{"id": id, "method": "diagnostics.drag", "params": plan})
+		began := time.Now()
 		routine.Go("diagnostics-ticks", func() {
-			sendSteps(ticks, frameStep, func() {
-				sent()
-				s.window.Emit("diagnostics-tick")
+			sendLegs(plan, s.refreshRate, func() time.Duration { return time.Since(began) }, time.Sleep, func(tick dragTick) {
+				if tick.Error == "" {
+					sent()
+				}
+				s.window.Emit("diagnostics-tick", tick)
 			})
 		})
 		return nil
 	})
 	return dragResult(ctx, h, s, reply)
-}
-
-// sendSteps calls step ticks times, one frame apart; nothing but the last step ends it.
-func sendSteps(ticks int, frame time.Duration, step func()) {
-	tick := time.NewTicker(frame)
-	defer tick.Stop()
-	for left := ticks; left > 0; left-- {
-		<-tick.C
-		step()
-	}
 }
 
 // dragStepCallback is the callback through which a step of a native drag reaches the view of a window.
@@ -852,7 +908,10 @@ func workbenchDrag(plan dragPlan, ask func(method string, params any) (json.RawM
 	if err := json.Unmarshal(raw, &record); err != nil {
 		return nil, fmt.Errorf("the workbench record of the drag is not {boundary}: %w", err)
 	}
-	steps := plan.Times * 2 * plan.steps()
+	steps, ok := result["steps"].(int)
+	if !ok {
+		return nil, fmt.Errorf("the drag reply has no steps: %v", result)
+	}
 	if len(handled) != steps || len(record.Boundary) != steps+1 {
 		return nil, fmt.Errorf("the drag delivered %d steps and recorded %d callbacks and %d boundary positions", steps, len(handled), len(record.Boundary))
 	}
@@ -887,22 +946,25 @@ func dragBoundary(ctx context.Context, h *Host, s *Surfaces, plan dragPlan) (poi
 // answers after the last release when the last layout is displayed.
 func nativeDragPresented(ctx context.Context, h *Host, s *Surfaces, plan dragPlan, from point, sent func()) (map[string]any, error) {
 	backend := hostBackend{h: h}
-	tick := time.NewTicker(frameStep)
-	defer tick.Stop()
 	start := time.Now()
 	clock := func() time.Duration { return time.Since(start) }
 	result, err := nativeDrag(plan, from, clock, func(input PointerInput) error { return backend.Pointer(s.name, input) },
-		func() {
-			<-tick.C
+		func() error {
+			// The period is read from the display of the window at the moment of the step, so a window that moves
+			// between a 60 Hz and a 120 Hz display follows the display it is on.
+			rate, err := s.refreshRate()
+			if err != nil {
+				return err
+			}
+			period, err := stepPeriod(rate)
+			if err != nil {
+				return err
+			}
+			time.Sleep(period)
 			sent()
+			return nil
 		}, func() error {
 			_, err := s.presented(ctx)
-			// The steps of the round trip are timed from its press, not from before the wait.
-			tick.Reset(frameStep)
-			select {
-			case <-tick.C:
-			default:
-			}
 			return err
 		})
 	if err != nil {

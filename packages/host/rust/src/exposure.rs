@@ -1837,6 +1837,26 @@ pub(crate) fn window_processes(
     })
 }
 
+/// Reads the refresh rate of the display that shows the window now, the refreshRate of the window status; it is None when
+/// the window is on no screen. A drag step is paced by it, so it is read at each step.
+pub(crate) fn window_refresh_rate(window: &Window) -> Result<Option<u64>, String> {
+    let platform = platform::current()?;
+    let facts = with_native_owner(window, move |handle| platform.window_facts(handle)).map_err(
+        |failure| match failure {
+            NativeFailure::Closed => "project window is closed".to_string(),
+            NativeFailure::Failed(error) => error,
+        },
+    )?;
+    match &facts["refreshRate"] {
+        serde_json::Value::Null => Ok(None),
+        rate => rate
+            .as_u64()
+            .filter(|rate| *rate > 0)
+            .map(Some)
+            .ok_or_else(|| format!("window facts have an invalid refreshRate: {rate}")),
+    }
+}
+
 /// Calculates the host.window value of a window. It is called from a thread that is not the main thread.
 /// The first responder of the window as host.window reports it, without its class: `{owner, surface, document}`.
 pub(crate) fn window_responder(window: &Window) -> Result<Value, String> {

@@ -93,29 +93,26 @@ registry.method("diagnostics.surface.held", async ({ surface }) => {
   return null;
 });
 
-host?.on("diagnostics-tick", () => {
+// The host paces each step of a drag and sends it as diagnostics-tick, with the fraction of its leg that the step reaches
+// (docs/spec/endpoint.md). A step that arrives while nothing waits for it is queued.
+host?.on("diagnostics-tick", (step) => {
   if (waiting) {
     const go = waiting;
     waiting = null;
-    go();
+    go(step);
   } else {
-    pending++;
+    queued.push(step);
   }
 });
 
 /**
  * The time of a step is given by the host.
  *
- * When the window is not in front, the browser treats this document as hidden and throttles setTimeout to nearly one second.
- * If a step requested at 16 ms stretches that much, the drag no longer runs at the speed of a person dragging, and a
- * defect that appears only at that speed does not appear. The clock of the host is not delayed wherever the window is,
- * so this file states what the drag is, and the host gives the time of each step
- * with the diagnostics-tick event.
- *
- * Arrived steps are counted. If the next step arrives while this document is processing one step, nothing is
- * waiting for it yet.
+ * When the window is not in front, the browser treats this document as hidden and throttles setTimeout to nearly one second,
+ * so this document does not time the steps. The host paces each step by the display period of the window at that moment and
+ * sends the fraction of the leg that the step reaches with the diagnostics-tick event.
  */
-let pending = 0;
+let queued = [];
 let waiting = null;
 
 /* Number of steps that arrived before this document waited, and number of steps that were queued that way. If both are 0,
@@ -124,19 +121,15 @@ let deepest = 0;
 let late = 0;
 
 const tick = () => {
-  if (pending > 0) {
-    deepest = Math.max(deepest, pending);
+  if (queued.length > 0) {
+    deepest = Math.max(deepest, queued.length);
     late++;
-    pending--;
-    return Promise.resolve();
+    return Promise.resolve(queued.shift());
   }
   return new Promise((go) => {
     waiting = go;
   });
 };
-
-/** Length of one step: the interval at which the screen updates. The host sends steps with the same value. */
-const FRAME = 16;
 
 /**
  * Shakes the boundary given by name and, when it ends, returns the elapsed time and the late steps.
@@ -144,18 +137,17 @@ const FRAME = 16;
  * The boundary is given by axis and line number, not by coordinates. With coordinates, the values would have to be set again
  * whenever the window size differs, and a miss does nothing.
  *
- * Each step is delivered through the same path as a press on a surface. The host sends steps × 2 × times
- * diagnostics-tick events at the FRAME interval.
+ * Each step is delivered through the same path as a press on a surface. The host sends one diagnostics-tick event per step,
+ * and each leg of the drag ends at the step that the host marks last.
  */
 async function shake({ axis, line, dx, dy, ms, times }) {
   const from = boundaryPoint(axis, line);
-  const steps = Math.max(1, Math.round(ms / FRAME));
 
   // It moves back and forth with one press held. If the pointer were released and pressed again, the next press would miss when the boundary stopped at the minimum card size
   // and did not move by the given amount.
   // Steps that an earlier drag received and did not use do not belong to this drag. If they were kept, this
   // drag would consume them at once and end earlier than requested.
-  pending = 0;
+  queued = [];
   waiting = null;
   late = 0;
   deepest = 0;
@@ -166,16 +158,17 @@ async function shake({ axis, line, dx, dy, ms, times }) {
   // Time (ms) in which this document applied the input and computed the layout at each step. It shows whether the early steps are slow.
   const handled = [];
   const began = performance.now();
+  let steps = 0;
   for (let turn = 0; turn < times; turn++) {
-    await sweep(from, dx, dy, 0, 1, steps, () => boundary.push(currentGrid().boundaryPos(axis, line)), handled);
-    await sweep(from, dx, dy, 1, 0, steps, () => boundary.push(currentGrid().boundaryPos(axis, line)), handled);
+    steps += await sweep(from, dx, dy, 0, 1, () => boundary.push(currentGrid().boundaryPos(axis, line)), handled);
+    steps += await sweep(from, dx, dy, 1, 0, () => boundary.push(currentGrid().boundaryPos(axis, line)), handled);
   }
   const took = performance.now() - began;
   surfaceInput({ phase: 2, x: from.x, y: from.y });
   // This clock belongs to the page. The browser throttles it when the window is not in front, so the elapsed
   // time is returned together.
   return {
-    from, steps: times * 2 * steps, took: Math.round(took), asked: times * 2 * steps * FRAME,
+    from, steps, took: Math.round(took), asked: times * 2 * ms,
     late, deepest, boundary, handled,
   };
 }
@@ -189,14 +182,21 @@ function boundaryPoint(axis, line) {
   return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
 }
 
-/** Moves the pressed point from one fraction of the offset to another and calls moved at each step. */
-async function sweep(from, dx, dy, start, end, steps, moved, handled) {
-  for (let i = 1; i <= steps; i++) {
-    await tick();
-    const at = start + (end - start) * (i / steps);
+/**
+ * Moves the pressed point from one fraction of the offset to another, one step per diagnostics-tick, until the host marks
+ * the last step of the leg. Returns the number of steps of the leg. A step that the host could not pace is an error.
+ */
+async function sweep(from, dx, dy, start, end, moved, handled) {
+  let steps = 0;
+  for (;;) {
+    const step = await tick();
+    if (step.error) throw new Error(step.error);
+    steps++;
+    const at = start + (end - start) * step.fraction;
     const began = performance.now();
     surfaceInput({ phase: 1, x: from.x + dx * at, y: from.y + dy * at });
     moved();
     handled.push(Math.round((performance.now() - began) * 10) / 10);
+    if (step.last) return steps;
   }
 }

@@ -30,9 +30,6 @@ use crate::platform::{DocumentViewportMarker, Handle};
 use crate::recording::{Capture, Recording, Target, layout_trace};
 use crate::workspace::Workspace;
 
-/// The interval of one drag step. The page calculates the number of steps with the same value.
-const FRAME: Duration = Duration::from_millis(16);
-
 /// A recording in progress.
 static RECORDING: Recording = Recording::new();
 static DOCUMENT_FRAME_IDENTITY: Mutex<()> = Mutex::new(());
@@ -1399,30 +1396,31 @@ fn parse_drag_native(params: &mut Map<String, Value>) -> Result<bool, Failure> {
     }
 }
 
-/// The drag that the host delivers as native input: the offset of the boundary, the steps of a one-way move and the
+/// The drag that the host delivers as native input: the offset of the boundary, the time of one leg in milliseconds and the
 /// round trips.
 struct NativeDragPlan {
     dx: f64,
     dy: f64,
-    per: u64,
+    ms: f64,
     times: u64,
 }
 
 /// Delivers the drag of plan from the boundary point from as native input of the primary button, as a person drags: for
-/// each round trip a press at from, each step as a drag of the button at from plus the offset times the fraction of the
-/// step, out and back, and a release at from after the last step. deliver delivers one input without activating the
-/// window or the application, step returns at the host time of the next step, and presented returns when the window has
-/// presented its current layout; it runs before each press, because a press goes where the last frame drew. A failed
-/// input after a press releases the button at the last point, so no press stays open in the window. The reply is {from,
-/// steps, took, asked, pressWaits}: took is the time from the first press to the last release without the waits before
-/// the presses, on clock, the clock of the host, asked the time that the steps ask, and pressWaits the wait before each press,
-/// all in milliseconds.
+/// each round trip a press at from, the steps of each leg as a drag of the button at from plus the offset times the
+/// fraction of the leg reached, out and back, and a release at from after the last step. Each leg runs until plan.ms
+/// milliseconds have passed on clock, the clock of the host, so the position follows the time of the host and the steps
+/// are the refreshes that the window presented. deliver delivers one input without activating the window or the
+/// application, step returns at the host time of the next step, and presented returns when the window has presented its
+/// current layout; it runs before each press, because a press goes where the last frame drew. A failed input after a press
+/// releases the button at the last point, so no press stays open in the window. The reply is {from, steps, took, asked,
+/// pressWaits}: took is the time from the first press to the last release without the waits before the presses, asked the
+/// time that the steps ask (times × 2 × ms), and pressWaits the wait before each press, all in milliseconds.
 fn native_drag(
     plan: &NativeDragPlan,
     from: (f64, f64),
     clock: impl Fn() -> Duration,
     mut deliver: impl FnMut(platform::Pointer) -> Result<(), Failure>,
-    mut step: impl FnMut(),
+    mut step: impl FnMut() -> Result<(), Failure>,
     mut presented: impl FnMut() -> Result<(), Failure>,
 ) -> Result<Value, Failure> {
     let input = |phase: i32, (x, y): (f64, f64)| platform::Pointer {
@@ -1437,9 +1435,11 @@ fn native_drag(
         activate: false,
     };
     let at = |fraction: f64| (from.0 + plan.dx * fraction, from.1 + plan.dy * fraction);
+    let span = plan.ms / 1000.0;
     let began = clock();
     let mut waited = Duration::ZERO;
     let mut press_waits = Vec::with_capacity(plan.times as usize);
+    let mut steps: u64 = 0;
     for turn in 0..plan.times {
         let waiting = clock();
         presented().map_err(|error| {
@@ -1465,27 +1465,37 @@ fn native_drag(
                 ),
             )
         })?;
-        for i in 1..=2 * plan.per {
-            step();
-            let fraction = if i > plan.per {
-                (2 * plan.per - i) as f64 / plan.per as f64
-            } else {
-                i as f64 / plan.per as f64
-            };
-            let last = at(fraction);
-            if let Err(error) = deliver(input(2, last)) {
-                let mut message = format!(
-                    "native drag step {}: {}",
-                    turn * 2 * plan.per + i,
-                    error.message
-                );
-                if let Err(released) = deliver(input(3, last)) {
-                    message = format!(
-                        "{message}; release after the failed step: {}",
-                        released.message
-                    );
+        let mut last = from;
+        for back in [false, true] {
+            let leg_start = clock();
+            loop {
+                if let Err(error) = step() {
+                    let mut message = format!("native drag step {}: {}", steps + 1, error.message);
+                    if let Err(released) = deliver(input(3, last)) {
+                        message = format!(
+                            "{message}; release after the failed step: {}",
+                            released.message
+                        );
+                    }
+                    return Err(Failure::new(error.code, message));
                 }
-                return Err(Failure::new(error.code, message));
+                steps += 1;
+                let elapsed = (clock() - leg_start).as_secs_f64() / span;
+                let reached = elapsed.min(1.0);
+                last = at(if back { 1.0 - reached } else { reached });
+                if let Err(error) = deliver(input(2, last)) {
+                    let mut message = format!("native drag step {steps}: {}", error.message);
+                    if let Err(released) = deliver(input(3, last)) {
+                        message = format!(
+                            "{message}; release after the failed step: {}",
+                            released.message
+                        );
+                    }
+                    return Err(Failure::new(error.code, message));
+                }
+                if elapsed >= 1.0 {
+                    break;
+                }
             }
         }
         deliver(input(3, from)).map_err(|error| {
@@ -1499,14 +1509,22 @@ fn native_drag(
             )
         })?;
     }
-    let steps = plan.times * 2 * plan.per;
     Ok(json!({
         "from": {"x": from.0, "y": from.1},
         "steps": steps,
         "took": (clock() - began - waited).as_millis() as u64,
-        "asked": steps * FRAME.as_millis() as u64,
+        "asked": ((plan.times * 2) as f64 * plan.ms).round() as u64,
         "pressWaits": press_waits,
     }))
+}
+
+/// The length of one step at refresh_rate, the refresh rate of the display that shows the window at the moment the step is
+/// taken. A missing rate is an error: no step length is assumed.
+fn step_period(refresh_rate: Option<u64>) -> Result<Duration, Failure> {
+    match refresh_rate {
+        Some(rate) if rate > 0 => Ok(Duration::from_nanos(1_000_000_000 / rate)),
+        _ => Err(internal("the window is on no display with a refresh rate")),
+    }
 }
 
 /// Reads the point of a boundary of a native drag after the window presented its current layout. A press goes where the
@@ -1565,8 +1583,6 @@ fn drag(
             "ms must be positive and times must be at least 1",
         ));
     }
-    let per = ((ms / FRAME.as_millis() as f64).round() as u64).max(1);
-    let steps = per * 2 * times;
     // With native, the page answers the point of the boundary, and the host delivers the drag as native input there.
     let from = if native {
         Some(presented_boundary(
@@ -1597,7 +1613,7 @@ fn drag(
     exposure::note(
         window,
         &format!(
-            "diagnostics: drag {}:{} by {},{} in {per} steps, {times} times, native {native}",
+            "diagnostics: drag {}:{} by {},{} for {ms} ms, {times} times, native {native}",
             // default: only the log text is built. The page checks the axis and answers an invalid value as an error.
             params["axis"].as_str().unwrap_or_default(),
             params["line"],
@@ -1624,12 +1640,9 @@ fn drag(
                 dy: params["dy"]
                     .as_f64()
                     .ok_or_else(|| Failure::params("dy must be a number"))?,
-                per,
+                ms,
                 times,
             };
-            // The steps of a round trip are timed from its press, not from before the wait.
-            let pressed = std::cell::Cell::new(Instant::now());
-            let due = std::cell::Cell::new(0);
             let start = Instant::now();
             native_drag(
                 &plan,
@@ -1637,12 +1650,11 @@ fn drag(
                 || start.elapsed(),
                 |pointer| host.input_pointer(window, pointer).map(|_| ()),
                 || {
-                    // Each step is delivered at its scheduled time relative to the press of its round trip, as tick
-                    // sends the steps of the page.
-                    due.set(due.get() + 1);
-                    if let Some(left) = (FRAME * due.get()).checked_sub(pressed.get().elapsed()) {
-                        std::thread::sleep(left);
-                    }
+                    // The period is read from the display that shows the window at the moment of the step, so a window
+                    // that moves between a 60 Hz and a 120 Hz display follows the display it is on.
+                    let period =
+                        step_period(exposure::window_refresh_rate(window).map_err(internal)?)?;
+                    std::thread::sleep(period);
                     if let Some(platform) = clock {
                         match (platform.capture_clock(), recorded.lock()) {
                             (Ok(now), Ok(mut ticks)) => ticks.push(now),
@@ -1650,11 +1662,10 @@ fn drag(
                             (_, Err(error)) => log_error("drag tick clock", error),
                         }
                     }
+                    Ok(())
                 },
                 || {
                     exposure::presented(window, None)?;
-                    pressed.set(Instant::now());
-                    due.set(0);
                     Ok(())
                 },
             )
@@ -1662,7 +1673,7 @@ fn drag(
         // The page discards the previous steps when it starts a drag, so the steps are sent after the request event.
         None => host
             .page_then(window, "diagnostics.drag", params, None, move || {
-                tick(ticking, steps, clock, recorded)
+                tick(ticking, times, ms, clock, recorded)
             })
             .and_then(|result| exposure::parsed(&result)),
     };
@@ -1749,46 +1760,85 @@ fn stop_after_settled<T, L>(
     (settled, stop())
 }
 
-/// Sends the drag step time to the page steps times. Each step is sent at its scheduled time relative to the start
-/// time. If each step slept in turn, the execution time of each step would accumulate into the later steps.
+/// Sends the steps of the 2 × times one-way legs of a drag of ms milliseconds to the page as diagnostics-tick events. Each
+/// leg runs until ms has passed on the clock of the drag. Each step comes one display period after the one before, the
+/// period the window has at the moment of the step, so the length of a step follows the display the window is on. A failed
+/// read sends one error tick and ends the drag.
 fn tick(
     window: Window,
-    steps: u64,
+    times: u64,
+    ms: f64,
     clock: Option<&'static dyn platform::Platform>,
     sent: std::sync::Arc<std::sync::Mutex<Vec<f64>>>,
 ) {
     crate::routine::spawn_named("diagnostics-ticks", move || {
-        send_steps(steps, FRAME, || {
-            if let Some(platform) = clock {
-                match (platform.capture_clock(), sent.lock()) {
-                    (Ok(now), Ok(mut ticks)) => ticks.push(now),
-                    (Err(error), _) => log_error("drag tick clock", error),
-                    (_, Err(error)) => log_error("drag tick clock", error),
+        let began = Instant::now();
+        send_legs(
+            times,
+            ms,
+            || exposure::window_refresh_rate(&window),
+            std::thread::sleep,
+            || began.elapsed(),
+            |step| {
+                let payload = match step {
+                    Ok((fraction, last)) => {
+                        if let Some(platform) = clock {
+                            match (platform.capture_clock(), sent.lock()) {
+                                (Ok(now), Ok(mut ticks)) => ticks.push(now),
+                                (Err(error), _) => log_error("drag tick clock", error),
+                                (_, Err(error)) => log_error("drag tick clock", error),
+                            }
+                        }
+                        json!({"fraction": fraction, "last": last})
+                    }
+                    Err(message) => json!({"error": message}),
+                };
+                match window.emit("diagnostics-tick", payload) {
+                    Ok(()) => true,
+                    Err(error) => {
+                        log_error("diagnostics-tick", error);
+                        false
+                    }
                 }
-            }
-            match window.emit("diagnostics-tick", ()) {
-                Ok(()) => true,
-                Err(error) => {
-                    log_error("diagnostics-tick", error);
-                    false
-                }
-            }
-        });
+            },
+        );
     });
 }
 
-/// Runs step steps times, each at its multiple of frame from the start. Every step runs, also after the request of the drag
-/// ended, so the page that runs the gesture receives each of its steps (docs/spec/endpoint.md); only a step that returns
-/// false, a window that can no longer receive, ends the run.
-fn send_steps(steps: u64, frame: Duration, mut step: impl FnMut() -> bool) {
-    let began = Instant::now();
-    for index in 1..=steps {
-        let due = frame * index as u32;
-        if let Some(left) = due.checked_sub(began.elapsed()) {
-            std::thread::sleep(left);
-        }
-        if !step() {
-            return;
+/// Runs the legs of a drag of times round trips of ms milliseconds on clock. Each step waits one display period, the period
+/// of the window at the moment of the step, then calls send with its fraction and whether it ends the leg; a failed read
+/// calls send with the error and ends the drag. send returns false when the window can no longer receive, which ends the run.
+fn send_legs(
+    times: u64,
+    ms: f64,
+    mut refresh_rate: impl FnMut() -> Result<Option<u64>, String>,
+    mut wait: impl FnMut(Duration),
+    clock: impl Fn() -> Duration,
+    mut send: impl FnMut(Result<(f64, bool), String>) -> bool,
+) {
+    let span = ms / 1000.0;
+    for _ in 0..2 * times {
+        let began = clock();
+        loop {
+            let period = match refresh_rate()
+                .and_then(|rate| step_period(rate).map_err(|error| error.message))
+            {
+                Ok(period) => period,
+                Err(message) => {
+                    send(Err(message));
+                    return;
+                }
+            };
+            wait(period);
+            let elapsed = (clock() - began).as_secs_f64();
+            let last = elapsed >= span;
+            let fraction = if last { 1.0 } else { elapsed / span };
+            if !send(Ok((fraction, last))) {
+                return;
+            }
+            if last {
+                break;
+            }
         }
     }
 }

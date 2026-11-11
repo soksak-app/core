@@ -109,7 +109,7 @@ function assertNoWhiteSurfaceBleed(run, message, marks) {
     `${message}: white pixels ${(worst.ratio * 100).toFixed(2)}% in frame ${worst.frame} ` +
       `within card ${worst.measured?.card?.l}..${worst.measured?.card?.r}, ` +
       `rows ${worst.y0}..${worst.y1}`);
-  // Each step is 16ms, so the short return of this drag can be shorter than one display. The check requires only a layout that stayed for a long time.
+  // Each step waits one display period of the window's display, so a return leg shorter than one display period may show no layout. The check requires only a layout that stayed for a long time.
   assertHeldStatesShown(samples, run.ticks, run.boundary);
 }
 
