@@ -136,6 +136,7 @@ fn a_page_start_ends_the_waits_the_layout_and_the_key_wait_of_the_earlier_page()
 
 // WebKit asks for the start document on the main thread, and its title bar may wait for a later turn of that thread, so the
 // document is built on a thread of its own and answered when it is built (docs/spec/native-host.md#page-start).
+// contract: page.start.document-is-built-off-the-asking-thread
 #[test]
 fn the_start_document_is_built_off_the_thread_that_asks_for_it() {
     let (answered, answer) = mpsc::channel();

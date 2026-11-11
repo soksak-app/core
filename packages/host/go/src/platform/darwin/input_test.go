@@ -12,6 +12,7 @@ import (
 
 // An injection is a step of the main thread, and the delivery of an earlier injection comes in a later step, so an injection
 // returns without waiting for that delivery; the native library orders the injections (docs/spec/exposure.md#named-pointers).
+// contract: endpoint.input.pointer-injection-does-not-wait-for-earlier-delivery
 func TestAnInjectionReturnsBeforeTheDeliveryOfTheInjectionBeforeIt(t *testing.T) {
 	saved := native.InjectPointer
 	t.Cleanup(func() { native.InjectPointer = saved })

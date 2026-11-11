@@ -80,6 +80,7 @@ func TestProcessEndedRootIsRejoinedOnItsOpenTicketBeforeCommit(t *testing.T) {
 // A press or key event that ends the transaction while the presentation waits commits what the joined views presented, so a
 // generation that replaced a root view meanwhile joins nothing and the commit of the ticket answers the committed state
 // (docs/spec/native-surfaces.md#layout-transaction).
+// contract: surface-layout.input-ended-ticket-joins-no-replaced-root
 func TestAReplacedRootOfATransactionThatInputEndedJoinsNothingAndDoesNotFailTheCommit(t *testing.T) {
 	s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
 	window := platform.Window(1)

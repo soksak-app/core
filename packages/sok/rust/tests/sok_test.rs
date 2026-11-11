@@ -797,6 +797,7 @@ fn a_watch_ends_at_status_ended() {
 
 // A gesture sends down at the first point, a drag to each later point and up at the last point on one connection, and one
 // point is a click (docs/spec/cli.md).
+// contract: cli.input.gesture-sends-one-press-on-one-connection
 #[test]
 fn a_gesture_sends_one_press_on_one_connection() {
     let fake = start(|method, _| {
@@ -879,6 +880,7 @@ fn a_gesture_sends_one_press_on_one_connection() {
 }
 
 // A step of a gesture that fails ends the command with its number and its error, and no later step is sent.
+// contract: cli.input.gesture-step-failure-ends-the-command
 #[test]
 fn a_failed_gesture_step_ends_the_command() {
     let fake = start(|method, params| match method {
@@ -933,6 +935,7 @@ impl Drop for Watching {
 
 // SIGTERM ends a watch while the command waits in a write to its standard output: the routine of the signal closes the
 // connection, stores the command and ends the process with status 0 (docs/spec/cli.md).
+// contract: cli.status.signal-ends-a-watch-that-waits-in-a-write
 #[test]
 fn an_interrupt_ends_a_watch_that_waits_in_a_write() {
     // The value is larger than any pipe buffer, so its write waits for a reader that never reads it all.
