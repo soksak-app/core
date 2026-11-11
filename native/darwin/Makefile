@@ -424,6 +424,7 @@ NATIVE_TESTS = observe_test \
   image_nonce_ownership_test \
   image_region_background_test \
   image_region_test \
+  image_region_test,--activation \
   press_release_test \
   image_region_decoration_test \
   iosurface_use_count_test \
@@ -505,8 +506,8 @@ test-capture-stop-intake: $(BUILD)/capture_stop_intake_test
 test-pressure: $(BUILD)/document_pressure_test
 	@$(BUILD)/document_pressure_test
 
-test-app-activation: $(BUILD)/webview_input_test $(BUILD)/webview_inspector_test $(BUILD)/window_fullscreen_test $(BUILD)/image_region_test $(BUILD)/image_region_ime_test
-	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) webview_inspector_test window_fullscreen_test webview_input_test,--baseline webview_input_test image_region_test,--activation image_region_ime_test
+test-app-activation: $(BUILD)/webview_input_test $(BUILD)/webview_inspector_test $(BUILD)/window_fullscreen_test $(BUILD)/image_region_ime_test
+	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) webview_inspector_test window_fullscreen_test webview_input_test,--baseline webview_input_test image_region_ime_test
 
 # Runs only the focused AppKit reference input-context readiness case and restores the outer input source and application.
 test-app-input-reference-readiness: $(BUILD)/input_reference_test

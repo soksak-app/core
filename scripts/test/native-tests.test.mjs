@@ -37,7 +37,7 @@ test("the default native suite runs the standalone host test API", () => {
   assert.match(runs[0], /(?:^|\s)input_activate_test(?:\s|$)/, "the default native run omits the emulated activation");
   // A check that activates a window does it with the emulated activation of sp_input_activate, which leaves the process inactive,
   // so it runs in the default suite (F756).
-  for (const entry of ["view_focus_test,--activation", "document_view_test,--activation"]) {
+  for (const entry of ["view_focus_test,--activation", "document_view_test,--activation", "image_region_test,--activation"]) {
     assert.ok(runs[0].split(/\s+/).includes(entry), `the default native run omits the emulated activation of ${entry}`);
   }
 });
@@ -84,13 +84,8 @@ test("the activation target builds and runs its cases through the native test ru
     "window_fullscreen_test",
     "webview_input_test,--baseline",
     "webview_input_test",
-    "image_region_test,--activation",
     "image_region_ime_test",
   ]);
-  assert.ok(
-    lines.some((line) => line.includes(`-o ${buildDir}/image_region_test`)),
-    "the activation target does not build image_region_test before running it",
-  );
   assert.deepEqual(lines.filter((line) => /^\s*@?[^ ]*\/[^ ]+_test(?:\s|$)/.test(line)), [], output);
 });
 

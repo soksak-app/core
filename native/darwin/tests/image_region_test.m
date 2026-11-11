@@ -9,6 +9,7 @@
 #import "image_capture_match.h"
 #import "capture_frame_identity.h"
 #import "input_inject.h"
+#import "input_virtual.h"
 #import "input_press_context.h"
 #import "observe.h"
 #import "support/records.h"
@@ -296,13 +297,32 @@ static IOSurfaceRef createColoredGlobalSurface(size_t width, size_t height, unsi
     return surface;
 }
 
-void sp_test_declare_activation(void);
+static BOOL activateAnswered;
+static sp_activate_result activateResult;
+
+static void activated(void *context, sp_activate_result result, const char *frontmost) {
+    (void)context;
+    (void)frontmost;
+    activateResult = result;
+    activateAnswered = YES;
+    eventWake();
+}
+
+// Makes window key with the emulated activation of sp_input_activate, which leaves the process inactive and makes the window the
+// virtual key window of an application that answers as active (input_virtual.h), as the endpoint does for a check.
+static void activateWindow(NSWindow *window, NSString *what) {
+    activateAnswered = NO;
+    sp_input_activate(window, activated, NULL);
+    eventWait(@"the emulated activation answers", ^BOOL { return activateAnswered; });
+    check(activateResult == SP_ACTIVATE_DONE && sp_input_virtual_is(window) && window.isKeyWindow && NSApp.isActive,
+        [NSString stringWithFormat:@"%@: the window becomes the virtual key window of an application that answers as active (activation %d, virtual %d)",
+            what, activateResult, (int)sp_input_virtual_is(window)]);
+}
 
 int main(int argc, char **argv) { @autoreleasepool {
-    // activation activates the application and checks whether a press in the OS event queue makes the web view the first responder.
-    // Used only by make test-app-activation.
+    // activation makes the window key with the emulated activation and checks whether a press in the OS event queue makes the web
+    // view the first responder.
     BOOL activation = argc > 1 && strcmp(argv[1], "--activation") == 0;
-    if (activation) sp_test_declare_activation();
     // The records of the input method are info and debug events, which the default policy refuses (docs/spec/logging.md#policy):
     // the policy that stores every level is set here, and the default policy is tested in event_ring_test.
     const int8_t everything[SP_CLASS_COUNT] = {SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE};
@@ -1855,8 +1875,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_focus(logicalRegion97);
         check(window.firstResponder == (NSResponder *)logicalRegion97,
             @"press focus: logical-surface region starts as the window first responder");
-        [NSApp activateIgnoringOtherApps:YES];
-        [window makeKeyAndOrderFront:nil];
+        activateWindow(window, @"press focus: logical surface");
         NSView *logicalRegionView97 = (NSView *)logicalRegion97;
         NSRect logicalFrame97 = [logicalRegionView97 convertRect:logicalRegionView97.bounds toView:nil];
         NSPoint logicalPoint97 = NSMakePoint(NSMidX(logicalFrame97), NSMidY(logicalFrame97));
@@ -2016,8 +2035,7 @@ int main(int argc, char **argv) { @autoreleasepool {
             @"press focus: the focused region starts as the window first responder");
         [collectedEvents removeAllObjects];
 
-        [NSApp activateIgnoringOtherApps:YES];
-        [window makeKeyAndOrderFront:nil];
+        activateWindow(window, @"press focus");
         NSView *regionView15 = (NSView *)region15;
         NSRect frame15 = [regionView15 convertRect:regionView15.bounds toView:nil];
         NSPoint inside15 = NSMakePoint(NSMidX(frame15), NSMidY(frame15));
@@ -2264,9 +2282,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_place(regionB16, 100, 150, 100, 50, true);
         // Finish activation and the preceding window first and then focus A; if activation sets the responder again,
         // the resign of A happens at a place other than a press and the reproduction is disturbed.
-        [NSApp activateIgnoringOtherApps:YES];
-        [window makeKeyAndOrderFront:nil];
-        eventWait(@"the application is active and the window is key", ^BOOL { return NSApp.isActive && window.isKeyWindow; });
+        activateWindow(window, @"press focus A->B");
         waitForPostedEvents(@"the events of the activation are dispatched");
         waitForMainQueueTurn(@"the work that the activation queued runs");
         sp_region_focus(regionA16);
