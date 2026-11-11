@@ -9,7 +9,7 @@ import { b3Conditions, b3Target, fixtureSettings, withB3Out } from "../benchmark
 import { B3_MEASUREMENTS } from "../benchmark/measurements.mjs";
 
 const FRAME_DEBUG = policyOfSetting({ frame: "debug" }).classes;
-const CONDITIONS = { refreshRate: 120, backingScale: 2, traceState: false, logPolicy: FRAME_DEBUG, window: { width: 1200, height: 760 }, occluded: false, active: true };
+const CONDITIONS = { refreshRate: 120, refreshRates: { w1: 120 }, backingScale: 2, traceState: false, logPolicy: FRAME_DEBUG, window: { width: 1200, height: 760 }, occluded: false, active: true };
 
 function folder(t) {
   const path = mkdtempSync(join(tmpdir(), "b3-run-"));
