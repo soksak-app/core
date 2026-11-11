@@ -622,6 +622,45 @@ func (c platformCapture) Stop() (int, error) {
 }
 func (c platformCapture) HasStream() (bool, error) { return c.CaptureHasStream() }
 
+// newWindowCapturer is the platform recording of a new window, or an error on a platform without it.
+func (c platformCapture) newWindowCapturer() (platform.NewWindowCapturer, error) {
+	capturer, ok := c.Capturer.(platform.NewWindowCapturer)
+	if !ok {
+		return nil, errors.New("the recording of a new window is not implemented on this platform")
+	}
+	return capturer, nil
+}
+
+func (c platformCapture) HoldNewWindow() error {
+	capturer, err := c.newWindowCapturer()
+	if err != nil {
+		return err
+	}
+	return capturer.CaptureHoldNewWindow()
+}
+
+// WaitNewWindow waits, as the other capture waits do, until the close of the endpoint connection of the request or of its
+// window, also after the request returned, because the hold of a recording that the request started waits for a window that
+// the application has not created yet. registerEnd receives the end of the wait for the stop of the recording.
+func (c platformCapture) WaitNewWindow(registerEnd func(end func(reason string))) (int, error) {
+	capturer, err := c.newWindowCapturer()
+	if err != nil {
+		return -1, err
+	}
+	answer := awaitCapture(c, func(token uint64) captureAnswer[int] {
+		registerEnd(func(reason string) { c.CaptureEndWait(token, reason) })
+		number, err := capturer.CaptureWaitNewWindow(token)
+		return captureAnswer[int]{number, err}
+	})
+	return answer.value, answer.err
+}
+
+func (c platformCapture) ReleaseNewWindow() {
+	if capturer, err := c.newWindowCapturer(); err == nil {
+		capturer.CaptureReleaseNewWindow()
+	}
+}
+
 func (c platformCapture) Limited() bool { return c.CaptureLimited() }
 
 type captureStatus interface {
@@ -1023,6 +1062,16 @@ func startCapture(h *Host, s *Surfaces, c *endpointConn, display bool, frameIden
 	return directory, nil
 }
 
+// startNewWindowCapture holds the next new window of the application and answers with the frame directory once the hold is
+// set; the recording of that window starts when the application shows it (Recording.StartNewWindow).
+func startNewWindowCapture(h *Host, s *Surfaces, capture platformCapture, frameIdentity bool) (string, error) {
+	directory := filepath.Join(h.workspace.directory, "logs", "captures", fmt.Sprintf("%s-new-%d", s.name, time.Now().UnixNano()))
+	if err := recording.StartNewWindow(capture, directory, frameIdentity); err != nil {
+		return "", err
+	}
+	return directory, nil
+}
+
 // diagnosticCaptureStill takes one picture of a window without giving it focus, writes it to <config-dir>/captures/still-*/window.png, and returns
 // the path. It is observation material for visual checks during development, and the requester deletes that directory after checking.
 func diagnosticCaptureStill(e *Endpoint, c *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
@@ -1101,6 +1150,14 @@ func diagnosticCaptureStart(e *Endpoint, c *endpointConn, params json.RawMessage
 	capture, err := recorder(s, c)
 	if err != nil {
 		return nil, err
+	}
+	if p.NewWindow {
+		directory, err := startNewWindowCapture(h, s, capture, p.FrameIdentity)
+		if err != nil {
+			return nil, err
+		}
+		mainThreadStep(capture.LayoutTraceStart)
+		return map[string]any{"frames": directory}, nil
 	}
 	var directory string
 	err = withDocumentFrameIdentityLifecycle(func() error {
@@ -1258,17 +1315,29 @@ func frameIdentityFinitePositive(value float64) bool {
 type captureStartOptions struct {
 	Display       bool `json:"display"`
 	FrameIdentity bool `json:"frameIdentity"`
+	NewWindow     bool `json:"newWindow"`
 }
 
 func parseCaptureStartOptions(params json.RawMessage) (captureStartOptions, error) {
 	var request struct {
 		Display       bool            `json:"display"`
 		FrameIdentity json.RawMessage `json:"frameIdentity"`
+		NewWindow     json.RawMessage `json:"newWindow"`
 	}
 	if err := decode(params, &request); err != nil {
 		return captureStartOptions{}, err
 	}
 	options := captureStartOptions{Display: request.Display}
+	if len(request.NewWindow) != 0 {
+		var newWindow *bool
+		if err := json.Unmarshal(request.NewWindow, &newWindow); err != nil || newWindow == nil {
+			return captureStartOptions{}, rpcError(codeInvalidParams, "newWindow must be a boolean")
+		}
+		options.NewWindow = *newWindow
+	}
+	if options.NewWindow && options.Display {
+		return captureStartOptions{}, rpcError(codeInvalidParams, "newWindow records the new window alone and cannot be combined with display")
+	}
 	if len(request.FrameIdentity) == 0 {
 		return options, nil
 	}

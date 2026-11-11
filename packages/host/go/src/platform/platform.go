@@ -318,6 +318,19 @@ type Capturer interface {
 	CaptureEndWait(token uint64, reason string)
 }
 
+// NewWindowCapturer is the recording of a new window from its first frame (docs/spec/endpoint.md, diagnostics.capture.start
+// newWindow). The platform holds the next show of a window that is not on screen, and the completion of the stream start of the
+// recording of that window puts the window on screen, so the first frame of the recording is the first frame of the window.
+type NewWindowCapturer interface {
+	// CaptureHoldNewWindow holds the next show of a window that is not on screen. It fails while a recording runs or a hold is set.
+	CaptureHoldNewWindow() error
+	// CaptureWaitNewWindow waits until a show was held and returns the window server number of that window. The end of the wait
+	// of token (CaptureEndWait) ends the hold, shows a held window and fails with `no new window was shown before <reason>`.
+	CaptureWaitNewWindow(token uint64) (int, error)
+	// CaptureReleaseNewWindow ends the hold at once, from any thread: a held window goes on screen.
+	CaptureReleaseNewWindow()
+}
+
 // CoreRootResolver returns the file at urlPath of the core root of a view of plugin (docs/spec/plugin-processes.md, rule 4)
 // with its content type. found is false for a path that is not served.
 type CoreRootResolver func(plugin, urlPath string) (data []byte, contentType string, found bool)

@@ -116,6 +116,25 @@ func (implementation) CaptureWait(token uint64) (bool, error) {
 	return false, fmt.Errorf("capture wait: %s", answer.failure)
 }
 
+// CaptureHoldNewWindow holds the next show of a window that is not on screen; the native call runs on the main thread.
+func (implementation) CaptureHoldNewWindow() error {
+	var nativeError *byte
+	held := bool(diagnosticNative.MainSpCaptureHoldNewWindow(&nativeError))
+	return captureCallError("hold of a new window", held, nativeError)
+}
+
+// CaptureWaitNewWindow waits until a show was held and returns the window server number of that window.
+func (implementation) CaptureWaitNewWindow(token uint64) (int, error) {
+	answer := awaitCaptureAnswer(func(context uintptr) { diagnosticNative.ScheduleCaptureWaitNewWindow(token, context) })
+	if answer.failed {
+		return -1, errors.New(answer.failure)
+	}
+	return int(answer.result), nil
+}
+
+// CaptureReleaseNewWindow ends the hold of a new window and shows a held window.
+func (implementation) CaptureReleaseNewWindow() { diagnosticNative.ReleaseCaptureNewWindow() }
+
 // CaptureEndWait ends the wait of the capture call of token from any thread.
 func (implementation) CaptureEndWait(token uint64, reason string) {
 	text := native.CString(reason)
