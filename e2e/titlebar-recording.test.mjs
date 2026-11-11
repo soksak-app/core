@@ -23,8 +23,16 @@ async function setFrame(s, factor) {
   await s.presented();
 }
 
-/** The button rectangle of the window to record. */
+/**
+ * The button rectangle of the window to record. The pointer of an earlier step can rest on an element with a tooltip, as the space
+ * tab that the frame factor check presses, and the mygo workbench draws that tooltip in its window, over the first row and under the
+ * window buttons, where it covers what the measurement reads. A move to the top of the first row, above its elements, ends that
+ * hover, and the recording starts after a frame of the window that shows the move.
+ */
 async function recordable(s) {
+  const before = await s.get("host.window");
+  await s.pointer(before.content.width / 2, 4, "move");
+  await s.presented();
   const window = await s.get("host.window");
   assert.equal(window.controls.length, 3, `the window reports ${window.controls.length} buttons`);
   assert.ok(window.controls.every((button) => !button.hidden), "a window button is hidden");
