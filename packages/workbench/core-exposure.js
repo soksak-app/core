@@ -432,9 +432,9 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   registry.command("core.settings.change", invalid(async ({ key, value: input, scope }) => {
     await changeSetting(key, input, scope, "core.settings.change");
   }));
-  registry.command("core.settings.theme", async ({ name, mode, scope }) => {
+  registry.command("core.settings.theme", async ({ name, mode, scope = "common" }) => {
     // default: when mode is omitted, the current mode is used, and when scope is omitted, the global scope is used (core.settings.theme in exposure.json).
-    await applyTheme(name, mode ?? scopedValue("mode", scope ?? "common"), scope, "core.settings.theme");
+    await applyTheme(name, mode ?? scopedValue("mode", scope), scope, "core.settings.theme");
   });
   registry.command("core.settings.link", invalid(async ({ place, plugin = null, set: choice, scope = "common" }) => {
     if (choice !== "off" && choice !== "inherit" && !scopedValue("sets", scope).some((s) => s.id === choice)) {
