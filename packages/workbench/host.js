@@ -650,9 +650,13 @@ export const surfaces = native ? {
       const answered = decided ? tellAhead("surfaceFocus", { surface, decided: true }) : tellInTurn("surfaceFocus", { surface });
       if (surface !== null) {
         const ended = Promise.resolve(answered).then(() => undefined, () => undefined);
-        const calls = keyboardCalls.get(surface) ?? new Set();
+        // The first unanswered call to a surface starts its set; a later one joins it.
+        let calls = keyboardCalls.get(surface);
+        if (calls === undefined) {
+          calls = new Set();
+          keyboardCalls.set(surface, calls);
+        }
         calls.add(ended);
-        keyboardCalls.set(surface, calls);
         ended.then(() => {
           calls.delete(ended);
           if (calls.size === 0 && keyboardCalls.get(surface) === calls) keyboardCalls.delete(surface);
