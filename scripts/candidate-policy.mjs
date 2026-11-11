@@ -23,7 +23,8 @@ export function candidateNativeTests(root, script) {
   if (target === null) return [];
   const makefile = readFileSync(join(root, 'native/darwin/Makefile'), 'utf8');
   const recipe = new RegExp(`^${target}:[^\\n]*\\n((?:\\t[^\\n]*\\n)*)`, 'm').exec(makefile)?.[1];
-  let entries = /@node \$\(NATIVE_TEST_RUNNER\) \$\(abspath \$\(BUILD\)\) (.+)/.exec(recipe ?? '')?.[1];
+  // The recipe is `@[NAME="value" ...] node <runner> <build> <entries>`: the environment that its cases read, then the runner.
+  let entries = /@(?:[A-Z_][A-Z0-9_]*="[^"]*" )*node \$\(NATIVE_TEST_RUNNER\) \$\(abspath \$\(BUILD\)\) (.+)/.exec(recipe ?? '')?.[1];
   if (entries === '$(NATIVE_E2E_TESTS)') entries = /^NATIVE_E2E_TESTS\s*=\s*((?:[^\n]*\\\n)*[^\n]*)/m.exec(makefile)?.[1].replace(/\\\n/g, ' ');
   if (!entries || entries.includes('$')) throw new Error(`native/darwin/Makefile: cannot identify the complete ${target} runner entries`);
   return entries.trim().split(/\s+/).map((entry) => entry.replaceAll(',', ' '));
