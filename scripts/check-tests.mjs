@@ -581,6 +581,25 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F739",
+    implementation: [
+      { file: "packages/host/go/src/diagnostics.go", symbol: "func (set *modalHoldSet) heldWait(s *Surfaces) (func(), error) {" },
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn modal_held_hold(window: &str) -> Result<Arc<ModalHold>, Failure> {" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/diagnostics_hold_window_test.go", id: "TestAModalHoldEndsWithItsWindow" },
+      { file: "packages/host/go/src/diagnostics_hold_end_test.go", id: "TestModalHeldAnswersWhenTheConnectionOfTheHoldCloses" },
+      { file: "packages/host/rust/src/diagnostics_test.rs", id: "a_modal_hold_ends_with_its_window" },
+      { file: "packages/host/rust/src/diagnostics_test.rs", id: "a_modal_hold_ends_with_the_connection_that_turned_it_on" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestAnUnansweredRetainEndsWithItsConnection" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "an_unanswered_retain_ends_with_its_connection" },
+      { file: "packages/sok/rust/src/platform/darwin/process_wait_signal_test.rs", id: "process_wait_ends_by_a_signal_on_darwin" },
+      { file: "packages/sok/rust/src/platform/linux/process_wait_signal_test.rs", id: "process_wait_ends_by_a_signal_on_linux" },
+    ],
+    expected: "A check of the end of a modal hold reads the hold as diagnostics.modal.held does before it ends the hold, a check of an unanswered retain ends after the host connected again, and each Rust signal test of the process wait has one name in its crate.",
+    levels: ["unit"],
+  },
+  {
     id: "F738",
     implementation: [
       { file: "native/darwin/src/application_log.m", symbol: "void sp_log_fatal_exception(void *thrown) {" },

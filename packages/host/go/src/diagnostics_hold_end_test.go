@@ -102,6 +102,22 @@ func ended(done <-chan struct{}) bool {
 	return true
 }
 
+// heldAnswer reads the modal content hold of window s as diagnostics.modal.held does when it arrives, before the end that
+// the test then makes, and closes the returned channel when the wait of that answer returns.
+func heldAnswer(t *testing.T, s *Surfaces) <-chan struct{} {
+	t.Helper()
+	wait, err := modalHolds.heldWait(s)
+	if err != nil {
+		t.Fatalf("diagnostics.modal.held answered %v while the hold was on", err)
+	}
+	answered := make(chan struct{})
+	go func() {
+		wait()
+		close(answered)
+	}()
+	return answered
+}
+
 // heldModal reports whether window s still holds its modal content reply.
 func heldModal(s *Surfaces) bool {
 	modalHolds.mu.Lock()
@@ -148,17 +164,16 @@ func TestAModalHoldEndsWithTheConnectionThatTurnedItOn(t *testing.T) {
 
 // contract: diagnostics.modal-hold.ends-with-window-or-connection
 func TestModalHeldAnswersWhenTheConnectionOfTheHoldCloses(t *testing.T) {
-	e, _, _ := heldEndpoint(t)
+	e, s, _ := heldEndpoint(t)
 	endModalHoldsAfter(t, e)
 	c := endpointConnection(t)
 	if err := call(t, e, c, "diagnostics.modal.hold", `{"window":"window-a","on":true}`); err != nil {
 		t.Fatal(err)
 	}
-	answered := make(chan error, 1)
-	go func() { answered <- call(t, e, nil, "diagnostics.modal.held", `{"window":"window-a"}`) }()
+	answered := heldAnswer(t, s)
 	c.close("the requester closed")
-	if err := <-answered; err != nil {
-		t.Fatalf("diagnostics.modal.held answered %v at the end of the hold by its connection", err)
+	if !ended(answered) {
+		t.Fatal("diagnostics.modal.held did not answer at the end of the hold by its connection")
 	}
 }
 

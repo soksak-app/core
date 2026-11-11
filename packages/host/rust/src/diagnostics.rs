@@ -2229,8 +2229,18 @@ fn delivered_notifications(window: &Window) -> Result<Value, Failure> {
 }
 
 fn modal_held(window: &str) -> Result<Value, Failure> {
-    let hold = modal_hold_of(window)
-        .ok_or_else(|| internal("modal content answers are not held in this window"))?;
+    await_modal_held(&modal_held_hold(window)?);
+    Ok(Value::Null)
+}
+
+/// Reads the hold of window when diagnostics.modal.held arrives; it fails when the window does not hold answers.
+fn modal_held_hold(window: &str) -> Result<Arc<ModalHold>, Failure> {
+    modal_hold_of(window)
+        .ok_or_else(|| internal("modal content answers are not held in this window"))
+}
+
+/// Returns when the window of hold holds a modal content answer or the hold ends.
+fn await_modal_held(hold: &ModalHold) {
     // default: a lock that a panicking thread poisoned still holds the held answer of the modal, and the wait loses no
     // notification it was not waiting for; the panic hook records the panic.
     let mut state = hold.state.lock().unwrap_or_else(PoisonError::into_inner);
@@ -2242,7 +2252,6 @@ fn modal_held(window: &str) -> Result<Value, Failure> {
             // held answer; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner);
     }
-    Ok(Value::Null)
 }
 
 #[cfg(test)]

@@ -1025,37 +1025,48 @@ func TestAnUnansweredRetainEndsWithItsConnection(t *testing.T) {
 	read := make(chan struct{}, 1)
 	// The test sends on end when the service ends the connection that carried the retain.
 	end := make(chan struct{})
+	// revived closes when the host connected again after the end of that connection (V5-106).
+	revived := make(chan struct{})
 	go func() {
 		connection, err := listener.Accept()
 		if err != nil {
 			return
 		}
-		// A connection that the host opens again finds no service.
-		listener.Close()
-		defer connection.Close()
-		reader := bufio.NewReader(connection)
-		for {
-			line, err := reader.ReadBytes('\n')
-			if err != nil {
-				return
-			}
-			var request map[string]any
-			if json.Unmarshal(line, &request) != nil {
-				return
-			}
-			switch request["operation"] {
-			case "hello":
-				encoded, _ := json.Marshal(map[string]any{"operation": "hello", "protocol": 1, "ok": true})
-				if _, err := connection.Write(append(encoded, '\n')); err != nil {
+		func() {
+			defer connection.Close()
+			reader := bufio.NewReader(connection)
+			for {
+				line, err := reader.ReadBytes('\n')
+				if err != nil {
 					return
 				}
-			case "retain":
-				// The service reads the retain, does not answer it and ends the connection when the test says so.
-				read <- struct{}{}
-				<-end
-				return
+				var request map[string]any
+				if json.Unmarshal(line, &request) != nil {
+					return
+				}
+				switch request["operation"] {
+				case "hello":
+					encoded, _ := json.Marshal(map[string]any{"operation": "hello", "protocol": 1, "ok": true})
+					if _, err := connection.Write(append(encoded, '\n')); err != nil {
+						return
+					}
+				case "retain":
+					// The service reads the retain, does not answer it and ends the connection when the test says so.
+					read <- struct{}{}
+					<-end
+					return
+				}
 			}
+		}()
+		// The host connects again after it read the endpoint and checked its process, which it does with a process of its own,
+		// so the check ends only after that process ended. The service ends that connection before its hello, and the
+		// restart fails without starting a process.
+		again, err := listener.Accept()
+		if err != nil {
+			return
 		}
+		again.Close()
+		close(revived)
 	}()
 
 	sidecars, err := NewSidecars(support.HarnessDeclarations(t.TempDir()), root)
@@ -1080,6 +1091,7 @@ func TestAnUnansweredRetainEndsWithItsConnection(t *testing.T) {
 	}
 	close(end)
 	err = <-ended
+	<-revived
 	if err == nil {
 		t.Fatal("a retain that the service did not answer succeeded")
 	}
