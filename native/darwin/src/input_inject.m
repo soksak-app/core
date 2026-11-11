@@ -189,7 +189,7 @@ static BOOL attachedTo(NSWindow *candidate, NSWindow *window) {
     for (NSWindow *step = candidate; step; step = step.sheetParent ?: step.parentWindow) {
         if (step == window) return YES;
     }
-    return NO;
+    return NO; // silent: the predicate answers NO for a window that is not window and not attached to it, which its caller passes over
 }
 
 // The window that takes a pointer input of window at the window point x, y, which the call changes to the window point of that
