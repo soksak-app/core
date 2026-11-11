@@ -99,6 +99,38 @@ void sp_window_after_reveal(void *handle, void (^done)(void)) {
     [waiters addObject:[[done copy] autorelease]];
 }
 
+bool sp_window_place_new(void *handle, char **error) {
+    NSCAssert(NSThread.isMainThread, @"window placement requires the UI thread");
+    *error = NULL;
+    NSWindow *window = (NSWindow *)handle;
+    NSScreen *screen = nil;
+    // The windows of the application on the screen, from front to back. The display of a window is the one that holds most of
+    // its frame.
+    for (NSNumber *number in [NSWindow windowNumbersWithOptions:0]) {
+        if (number.integerValue == window.windowNumber) continue;
+        NSWindow *front = [NSApp windowWithWindowNumber:number.integerValue];
+        if (!front) continue;
+        CGFloat most = 0;
+        for (NSScreen *candidate in NSScreen.screens) {
+            NSRect shared = NSIntersectionRect(candidate.frame, front.frame);
+            if (NSWidth(shared) * NSHeight(shared) > most) {
+                most = NSWidth(shared) * NSHeight(shared);
+                screen = candidate;
+            }
+        }
+        if (screen) break;
+    }
+    if (!screen) screen = NSScreen.mainScreen;
+    if (!screen) {
+        *error = strdup("window placement found no display");
+        return false;
+    }
+    NSRect area = screen.visibleFrame, frame = window.frame;
+    [window setFrameOrigin:NSMakePoint(NSMinX(area) + floor((NSWidth(area) - NSWidth(frame)) / 2),
+        NSMinY(area) + floor((NSHeight(area) - NSHeight(frame)) / 2))];
+    return true;
+}
+
 // keepFrame gives a window that the order put on the screen the frame that it had before, which the host gave it. AppKit constrains the
 // frame of a window that it puts on the screen (constrainFrameRect:toScreen:), and a window that a framework shows only after its
 // first screen goes on the screen after the moves of the host, so a window that reaches over an edge of the screen would move, where a

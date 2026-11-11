@@ -392,6 +392,9 @@ type Platform interface {
 	// RevealAfterLoad keeps the window transparent and makes it opaque when the next display ends after the first load of the main web view finished.
 	// The caller puts the window on the screen after this call (native/darwin/src/window_reveal.h). Call it on the UI thread.
 	RevealAfterLoad(window Window) error
+	// PlaceNewWindow centers a new window, before it shows, in the work area of the display of the frontmost window of the application,
+	// or of the main screen when the application shows no other window (native/darwin/src/window_reveal.h). Call it on the UI thread.
+	PlaceNewWindow(window Window) error
 	// ShowWindow puts the window on the screen without taking the front from another application: it comes to the
 	// front of an active application, and an application that is not active keeps it behind the front window
 	// (native/darwin/src/window_reveal.h, docs/spec/hosts.md#launch-activation).

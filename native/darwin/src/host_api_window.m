@@ -33,4 +33,7 @@ void main_windowResizeInstant(void) { hostRunOnMain(^{ windowResizeInstant(); })
 bool main_sp_window_reveal_after_load(uintptr_t window, char **error) {
     return ON_MAIN(bool, sp_window_reveal_after_load((void *)window, error));
 }
+bool main_sp_window_place_new(uintptr_t window, char **error) {
+    return ON_MAIN(bool, sp_window_place_new((void *)window, error));
+}
 void main_sp_window_show(uintptr_t window) { hostRunOnMain(^{ sp_window_show((void *)window); }); }

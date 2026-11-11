@@ -65,6 +65,10 @@ async function firstFrames(t, s, label, opening, ready) {
   const display = (await s.get("host.screens")).find((screen) => centre.x >= screen.x && centre.x < screen.x + screen.width &&
     centre.y >= screen.y && centre.y < screen.y + screen.height);
   assert.ok(display, `${label}: no screen holds the recorded window ${JSON.stringify(own)}`);
+  // A new window opens on the display of the frontmost window of the application (native/darwin/src/window_reveal.h), so the recording holds it.
+  assert.ok(window.x >= display.x && window.y >= display.y && window.x + window.width <= display.x + display.width &&
+    window.y + window.height <= display.y + display.height,
+    `${label}: the new window ${JSON.stringify(window)} is not inside the recorded display ${JSON.stringify(display)}`);
   const captured = frames(recording.frames).map(readFrame).map((frame) => inWindow(frame, display, window));
   assert.ok(captured.length > 1, `${label}: the recording has ${captured.length} frames`);
   const region = { x: 0, y: 0, width: window.width, height: window.height };

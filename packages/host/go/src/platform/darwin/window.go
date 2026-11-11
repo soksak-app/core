@@ -147,6 +147,15 @@ func (implementation) ShowWindow(window platform.Window) error {
 	return nil
 }
 
+func (implementation) PlaceNewWindow(window platform.Window) error {
+	var failure *byte
+	if !bool(native.MainSpWindowPlaceNew(uintptr(window), &failure)) {
+		defer native.Free(unsafe.Pointer(failure))
+		return errors.New(native.GoString(failure))
+	}
+	return nil
+}
+
 func (implementation) RevealAfterLoad(window platform.Window) error {
 	var failure *byte
 	if !bool(native.MainSpWindowRevealAfterLoad(uintptr(window), &failure)) {

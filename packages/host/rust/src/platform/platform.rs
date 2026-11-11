@@ -523,6 +523,10 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// main webview ended. The caller puts the window on the screen after this call
     /// (native/darwin/src/window_reveal.h). Call it on the UI thread.
     fn reveal_after_load(&self, window: Handle) -> Result<(), String>;
+    /// Centers a new window, before it shows, in the work area of the display of the frontmost window of the application,
+    /// or of the main screen when the application shows no other window (native/darwin/src/window_reveal.h). Call it on
+    /// the UI thread.
+    fn place_new_window(&self, window: Handle) -> Result<(), String>;
     /// Puts the window on the screen without taking the front from another application: it comes to the front of an
     /// active application, and an application that is not active keeps it behind the front window
     /// (docs/spec/hosts.md#launch-activation). Call it on the main thread.

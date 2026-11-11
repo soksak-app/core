@@ -463,6 +463,14 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 			if observed != nil {
 				fatalError("window responder", observed)
 			}
+			// A framework places a new window on the display of the key window of the active application, which for an application
+			// that is not active is a display of another application, so the window goes to the display of the frontmost window of
+			// this application before it shows (native/darwin/src/window_reveal.h).
+			var placed error
+			mainThreadStep(func() { placed = system.PlaceNewWindow(win.NativeWindow()) })
+			if placed != nil {
+				fatalError("window placement", placed)
+			}
 			if framework.MainPage() {
 				var failed error
 				mainThreadStep(func() { failed = system.RevealAfterLoad(win.NativeWindow()) })

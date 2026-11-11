@@ -91,6 +91,7 @@
     "main_sp_window_move",
     "main_sp_window_native_view",
     "main_sp_window_on_screen",
+    "main_sp_window_place_new",
     "main_sp_window_reveal_after_load",
     "main_sp_window_show",
     "main_surfaceLayoutAbandonView",

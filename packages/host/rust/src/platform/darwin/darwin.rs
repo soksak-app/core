@@ -162,6 +162,9 @@ impl Platform for Darwin {
     fn reveal_after_load(&self, window: Handle) -> Result<(), String> {
         window::reveal_after_load(window)
     }
+    fn place_new_window(&self, window: Handle) -> Result<(), String> {
+        window::place_new_window(window)
+    }
     fn show_window(&self, window: Handle) -> Result<(), String> {
         window::show_window(window)
     }

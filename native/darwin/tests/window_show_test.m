@@ -107,6 +107,40 @@ int main(void) { @autoreleasepool {
         [window release];
     }
 
+    // A framework places a new window on the main screen, the display of the key window of the active application, which for an
+    // application that is not active is a display of another application. sp_window_place_new centers the window in the work
+    // area of the display of the frontmost other window of the application, and of the main screen when there is none. The
+    // other window is on the last display, which on a machine with one display is the main screen too.
+    NSScreen *last = NSScreen.screens.lastObject;
+    check(last != nil, @"the check found no display");
+    NSRect area = last.visibleFrame;
+    NSWindow *front = [[NSWindow alloc] initWithContentRect:NSMakeRect(NSMinX(area) + 10, NSMinY(area) + 10, 200, 150)
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+    front.releasedWhenClosed = NO;
+    struct { NSString *what; NSArray<NSNumber *> *others; NSScreen *screen; } placements[] = {
+        {@"a new window beside another window of the application", @[@(front.windowNumber)], last},
+        {@"the first window of the application", @[], NSScreen.mainScreen},
+    };
+    for (size_t i = 0; i < sizeof placements / sizeof placements[0]; i++) {
+        NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 300, 200)
+            styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+        window.releasedWhenClosed = NO;
+        [window setFrameOrigin:NSMakePoint(NSMinX(NSScreen.screens.firstObject.frame), NSMinY(NSScreen.screens.firstObject.frame))];
+        ownWindows = [@[@(window.windowNumber)] arrayByAddingObjectsFromArray:placements[i].others];
+        NSRect within = placements[i].screen.visibleFrame, frame = window.frame;
+        NSPoint want = NSMakePoint(NSMinX(within) + floor((NSWidth(within) - NSWidth(frame)) / 2),
+            NSMinY(within) + floor((NSHeight(within) - NSHeight(frame)) / 2));
+        char *error = NULL;
+        bool placed = sp_window_place_new(window, &error);
+        check(placed, [NSString stringWithFormat:@"%@: the placement failed with %s", placements[i].what, error ? error : "no error"]);
+        free(error);
+        check(NSEqualPoints(window.frame.origin, want), [NSString stringWithFormat:@"%@: the window is at %@, want %@, the center of the work area %@",
+            placements[i].what, NSStringFromPoint(window.frame.origin), NSStringFromPoint(want), NSStringFromRect(within)]);
+        check(!window.isVisible, [NSString stringWithFormat:@"%@: the placement put the window on the screen", placements[i].what]);
+        [window release];
+    }
+    [front release];
+
     if (failures) return 1;
     printf("window show: ok\n");
     return 0;

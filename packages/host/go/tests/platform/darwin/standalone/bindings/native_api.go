@@ -166,6 +166,9 @@ func Functions() abi.NativeFunctions {
 		},
 		MainSpWindowNativeView: func(a0 uintptr) unsafe.Pointer { return C.main_sp_window_native_view(C.uintptr_t(a0)) },
 		MainSpWindowOnScreen:   func(a0 uintptr) bool { return bool(C.main_sp_window_on_screen(C.uintptr_t(a0))) },
+		MainSpWindowPlaceNew: func(a0 uintptr, a1 **byte) bool {
+			return bool(C.main_sp_window_place_new(C.uintptr_t(a0), (**C.char)(unsafe.Pointer(a1))))
+		},
 		MainSpWindowRevealAfterLoad: func(a0 uintptr, a1 **byte) bool {
 			return bool(C.main_sp_window_reveal_after_load(C.uintptr_t(a0), (**C.char)(unsafe.Pointer(a1))))
 		},

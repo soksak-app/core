@@ -75,6 +75,9 @@ impl Platform for Windows {
     fn reveal_after_load(&self, window: Handle) -> Result<(), String> {
         unsupported::reveal_after_load(window)
     }
+    fn place_new_window(&self, window: Handle) -> Result<(), String> {
+        unsupported::place_new_window(window)
+    }
     fn show_window(&self, window: Handle) -> Result<(), String> {
         show_windows::show_window(window)
     }

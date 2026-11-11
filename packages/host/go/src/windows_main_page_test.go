@@ -51,6 +51,11 @@ func (p *pagelessPlatform) ObserveResponder(platform.Window, func()) (unsafe.Poi
 	return nil, nil
 }
 
+func (p *pagelessPlatform) PlaceNewWindow(platform.Window) error {
+	p.calls = append(p.calls, "place")
+	return nil
+}
+
 // contract: application.window.no-main-page-calls-no-main-web-view
 func TestAWindowWithoutAMainPageCallsNoMainWebViewOperation(t *testing.T) {
 	window := &pagelessWindow{native: platform.Window(1)}
@@ -60,11 +65,43 @@ func TestAWindowWithoutAMainPageCallsNoMainWebViewOperation(t *testing.T) {
 	t.Cleanup(func() { framework, system = previousFramework, previousSystem })
 	host := &Host{windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{}}
 	host.newWindow("main", "")
-	if strings.Join(fake.calls, ",") != "titlebar,responder" {
-		t.Fatalf("the window preparation made the calls %v, want the title bar and the responder observation", fake.calls)
+	if strings.Join(fake.calls, ",") != "titlebar,responder,place" {
+		t.Fatalf("the window preparation made the calls %v, want the title bar, the responder observation and the placement", fake.calls)
 	}
 	if window.shows != 1 {
 		t.Fatalf("the window was shown %d times, want once", window.shows)
+	}
+}
+
+// placingPlatform records whether the window was shown when the host placed it.
+type placingPlatform struct {
+	pagelessPlatform
+	window      *pagelessWindow
+	placedShown []int
+}
+
+func (p *placingPlatform) PlaceNewWindow(window platform.Window) error {
+	if window != p.window.native {
+		return errors.New("the placement names another window")
+	}
+	p.placedShown = append(p.placedShown, p.window.shows)
+	return nil
+}
+
+// A framework places a new window on the display of the key window of the active application, which for an application that is
+// not active is the display of another application, so the host places every new window before it shows it (window_reveal.h).
+// contract: application.window.new-window-placed-before-show
+func TestANewWindowIsPlacedBeforeItShows(t *testing.T) {
+	window := &pagelessWindow{native: platform.Window(1)}
+	previousFramework, previousSystem := framework, system
+	fake := &placingPlatform{window: window}
+	framework, system = pagelessFramework{window: window}, fake
+	t.Cleanup(func() { framework, system = previousFramework, previousSystem })
+	host := &Host{windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{}}
+	host.newWindow("main", "")
+	if !reflect.DeepEqual(fake.placedShown, []int{0}) || window.shows != 1 {
+		t.Fatalf("the window was placed %d times with the shows %v before each placement and shown %d times, want one placement before the one show",
+			len(fake.placedShown), fake.placedShown, window.shows)
 	}
 }
 

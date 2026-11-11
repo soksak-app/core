@@ -19,6 +19,16 @@ bool sp_window_reveal_after_load(void *window, char **error);
 // screen that shows its state waits for the reveal first.
 void sp_window_after_reveal(void *window, void (^done)(void));
 
+// Places a new window, before the host shows it, centered in the work area (visibleFrame) of the display of the frontmost window
+// of the application, and of the main screen when the application shows no other window. Every framework places a window that it
+// creates on NSScreen.mainScreen, the display of the key window of the active application, so the new window of an application
+// that is not active would open on the display where another application has its key window. The host moves or sizes the window
+// after this call when it restores a stored frame.
+//
+// Call it on the main thread. Returns false when no display exists, and writes an error string that the caller releases with
+// free() to error. On success error is NULL.
+bool sp_window_place_new(void *window, char **error);
+
 // Puts a window on screen without taking the front from another application.
 //
 // The one value is whether the system holds this application as active (NSRunningApplication). Launch Services

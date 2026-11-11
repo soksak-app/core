@@ -25,6 +25,9 @@ pub fn window_handle(_window: &Window) -> Result<Handle, String> {
 pub fn window_color_space(_window: Handle) -> Result<Value, String> {
     missing("window color space")
 }
+pub fn place_new_window(_window: Handle) -> Result<(), String> {
+    missing("new window placement")
+}
 pub fn reveal_after_load(_window: Handle) -> Result<(), String> {
     missing("window reveal")
 }

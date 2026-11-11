@@ -922,6 +922,16 @@ func Functions(library uintptr) (abi.NativeFunctions, error) {
 		purego.RegisterFunc(&functions.MainSpWindowOnScreen, address)
 	}
 	{
+		address, err := purego.Dlsym(library, "main_sp_window_place_new")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_window_place_new: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_window_place_new: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.MainSpWindowPlaceNew, address)
+	}
+	{
 		address, err := purego.Dlsym(library, "main_sp_window_reveal_after_load")
 		if err != nil {
 			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_window_reveal_after_load: %w", err)

@@ -814,10 +814,11 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
     let main = root_view(&window).ok_or("the main webview is gone")?;
     let main = crate::exposure::with_view(&main, move |view| platform.view_id(view))?;
     platform.set_main_webview(owner, main)?;
-    // The window is shown after the first screen is presented (docs/spec/native-host.md#page-start). The window is
-    // created hidden, put on the screen transparent, and becomes opaque when the first screen is presented.
-    platform.reveal_after_load(owner)?;
-    window.show().map_err(|e| e.to_string())?;
+    show_new_window(&NewWindow {
+        platform: &*platform,
+        owner,
+        window: &window,
+    })?;
     // The native view lies over the DOM, so the page handles a dropped file relative to the DOM element at that point.
     let dropped = window.clone();
     // The page interprets the content and reports errors (core.drop).
@@ -1111,6 +1112,47 @@ impl WindowFront for Window {
     fn is_focused(&self) -> crate::framework::Result<bool> {
         Window::is_focused(self)
     }
+}
+
+/// The steps that put a new window on the screen. The real window implements them, and a test supplies a recorder.
+pub trait NewWindowShow {
+    /// Centers the window in the work area of the display of the frontmost window of the application.
+    fn place(&self) -> Result<(), String>;
+    /// Keeps the window transparent until its first screen is presented.
+    fn reveal(&self) -> Result<(), String>;
+    fn show(&self) -> Result<(), String>;
+}
+
+/// A window that register shows, with the platform and the native window that it shows it through.
+struct NewWindow<'a> {
+    platform: &'a dyn platform::Platform,
+    owner: Handle,
+    window: &'a Window,
+}
+
+impl NewWindowShow for NewWindow<'_> {
+    fn place(&self) -> Result<(), String> {
+        self.platform.place_new_window(self.owner)
+    }
+
+    fn reveal(&self) -> Result<(), String> {
+        self.platform.reveal_after_load(self.owner)
+    }
+
+    fn show(&self) -> Result<(), String> {
+        self.window.show().map_err(|e| e.to_string())
+    }
+}
+
+/// Puts a new window on the screen. A framework places a new window on the display of the key window of the active
+/// application, which for an application that is not active is a display of another application, so the window goes to the
+/// display of the frontmost window of this application first (native/darwin/src/window_reveal.h). The window is shown after
+/// its first screen is presented (docs/spec/native-host.md#page-start): it is created hidden, put on the screen transparent,
+/// and becomes opaque when the first screen is presented.
+pub fn show_new_window(window: &impl NewWindowShow) -> Result<(), String> {
+    window.place()?;
+    window.reveal()?;
+    window.show()
 }
 
 /// Shows the window that owns a project opened from another window. The window comes in front of the other windows of

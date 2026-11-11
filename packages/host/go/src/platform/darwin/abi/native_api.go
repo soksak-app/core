@@ -195,6 +195,7 @@ type NativeFunctions struct {
 	MainSpWindowMove                      func(uintptr, float64, float64) bool
 	MainSpWindowNativeView                func(uintptr) unsafe.Pointer
 	MainSpWindowOnScreen                  func(uintptr) bool
+	MainSpWindowPlaceNew                  func(uintptr, **byte) bool
 	MainSpWindowRevealAfterLoad           func(uintptr, **byte) bool
 	MainSpWindowShow                      func(uintptr)
 	MainSurfaceLayoutAbandonView          func(uintptr, unsafe.Pointer) bool
@@ -540,6 +541,9 @@ func (functions NativeFunctions) Validate() error {
 	}
 	if functions.MainSpWindowOnScreen == nil {
 		return fmt.Errorf("native API function is missing: main_sp_window_on_screen")
+	}
+	if functions.MainSpWindowPlaceNew == nil {
+		return fmt.Errorf("native API function is missing: main_sp_window_place_new")
 	}
 	if functions.MainSpWindowRevealAfterLoad == nil {
 		return fmt.Errorf("native API function is missing: main_sp_window_reveal_after_load")

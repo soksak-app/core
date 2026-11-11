@@ -20,4 +20,5 @@ bool main_sp_window_move(uintptr_t window, double x, double y);
 char *main_sp_screens(void);
 void main_windowResizeInstant(void);
 bool main_sp_window_reveal_after_load(uintptr_t window, char **error);
+bool main_sp_window_place_new(uintptr_t window, char **error);
 void main_sp_window_show(uintptr_t window);

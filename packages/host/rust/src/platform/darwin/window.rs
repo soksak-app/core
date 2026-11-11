@@ -41,6 +41,22 @@ pub fn show_window(window: Handle) -> Result<(), String> {
     Ok(())
 }
 
+pub fn place_new_window(window: Handle) -> Result<(), String> {
+    unsafe extern "C" {
+        fn sp_window_place_new(window: *mut c_void, error: *mut *mut c_char) -> bool;
+        fn free(pointer: *mut c_void);
+    }
+    let mut error = std::ptr::null_mut();
+    if unsafe { sp_window_place_new(window as *mut c_void, &mut error) } {
+        return Ok(());
+    }
+    let message = unsafe { CStr::from_ptr(error) }
+        .to_string_lossy()
+        .into_owned();
+    unsafe { free(error as *mut c_void) };
+    Err(message)
+}
+
 pub fn reveal_after_load(window: Handle) -> Result<(), String> {
     unsafe extern "C" {
         fn sp_window_reveal_after_load(window: *mut c_void, error: *mut *mut c_char) -> bool;

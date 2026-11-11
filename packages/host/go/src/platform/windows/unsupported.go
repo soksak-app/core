@@ -72,6 +72,9 @@ func (implementation) ConfigureMainWindow(platform.Window, bool) error {
 func (implementation) RevealAfterLoad(platform.Window) error {
 	return unsupported("window reveal")
 }
+func (implementation) PlaceNewWindow(platform.Window) error {
+	return unsupported("new window placement")
+}
 func (implementation) SetMainWebview(platform.Window) error {
 	return unsupported("main webview identity")
 }
