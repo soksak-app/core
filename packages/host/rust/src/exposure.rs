@@ -3195,3 +3195,7 @@ mod pageless_processes_tests;
 #[cfg(test)]
 #[path = "window_cursor_test.rs"]
 mod cursor_tests;
+
+#[cfg(test)]
+#[path = "window_sheet_test.rs"]
+mod sheet_tests;
