@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, judgeShownChanges, open, owe } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
 import { frames } from "@soksak/window-check/frame.mjs";
 import { imageRect, readyInputProbe, rasterProbeTab } from "../input-probe.mjs";
@@ -37,8 +37,12 @@ for (const app of Object.values(APPS)) {
     const recording = await s.record();
     const directory = recording.frames;
     const focus = await s.collect("core.focus");
+    // The raster probe draws a frame after each input that it handles, so the recording owes each press a frame
+    // (judgeShownChanges).
+    const owed = [];
     for (const region of regions) {
       const target = await screenCenter(s, await imageRect(s, region.surface));
+      owed.push(await owe(s));
       click(target.x, target.y);
       await s.until("host.window", (window) => window.responder?.surface === region.surface,
         `${region.surface} did not become the native first responder after a real click`);
@@ -49,7 +53,7 @@ for (const app of Object.values(APPS)) {
 
     assert.equal(stopped.limited, false, "the recording reached its frame limit");
     assert.ok(frames(directory).length > 0, "the recording has no frames");
-    assert.ok(stopped.longestGap <= 100, `the recording has a ${stopped.longestGap}ms gap`);
+    judgeShownChanges(stopped, owed, { what: "image region press" });
     // The first value is the state (text field) when the watch starts. Every focus that enters the field again after that is a transition.
     const transitions = values.slice(1).filter((value, index) => value?.name === "probeinput.field" &&
       values[index]?.name !== "probeinput.field");

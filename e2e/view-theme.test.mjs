@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, judgeShownChanges, open, owe } from "@soksak/window-check/app.mjs";
 import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
 import { fresh, paintProbeDocument } from "./fixture.mjs";
 
@@ -30,6 +30,8 @@ for (const app of Object.values(APPS)) {
       const recording = await s.record();
       // Session.record stops an unfinished recording during cleanup and preserves its failure.
       // The new view is a tab of the second layout probe, whose empty area shows only the background of its page.
+      // The new tab changes the screen, so the recording owes it a frame (judgeShownChanges).
+      const owed = [await owe(s)];
       const { tab } = await s.run("core.card.add-tab", { card: card.id, plugin: "layoutprobe2" });
       await s.until("core.surfaces", surfaces => surfaces.some(surface => surface.surface === tab && surface.visible &&
         surface.exposes.includes("element layoutprobe2.empty")), "the new view did not expose its empty area");
@@ -42,7 +44,7 @@ for (const app of Object.values(APPS)) {
       assert.equal(captured.length, stopped.count, "first-theme recording has missing frame files");
       assert.ok(captured.length > 1, "first-theme recording is incomplete");
       assert.equal(stopped.limited, false, "first-theme recording exhausted its buffer");
-      assert.ok(stopped.longestGap <= 100, `first-theme recording gap ${stopped.longestGap}ms`);
+      judgeShownChanges(stopped, owed, { what: "new tab" });
       assert.ok(empty.width > 24 && empty.height > 24, "the empty view has no sample area");
       for (const [index, frame] of captured.entries()) {
         const scale = frame.scale * frame.contentScale;

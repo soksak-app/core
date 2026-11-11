@@ -133,6 +133,14 @@ test("drag cadence reads the shown frames from the first input", { timeout: 1000
   assert.throws(() => measurement.shownTimes(samples, []), /no step times/);
 });
 
+// After the display of the last step the window has nothing to show, so the time until the recording stops is no gap of the
+// drag: the cadence ends at the first shown frame at or after the last step.
+test("drag cadence ends at the first shown frame after the last step", { timeout: 1000 }, () => {
+  const samples = [{ time: 10, position: 0 }, { time: 80, position: 10 }, { time: 96, position: 20 }, { time: 104, position: 10 },
+    { time: 480, position: 11 }];
+  assert.deepEqual(measurement.shownTimes(samples, [70, 86, 100]), [80, 96, 104]);
+});
+
 
 test("view drag gaps and latency are judged by the display period at their own time", { timeout: 1000 }, () => {
   // The window is on a 120 Hz display until 200ms, then on a 60 Hz display.

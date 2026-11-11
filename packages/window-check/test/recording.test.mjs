@@ -199,12 +199,12 @@ test("a captured drag remains available when the session fails", async (t) => {
   const s = newSession(directory, client);
   const frames = join(directory, "logs", "captures", "drag-1");
   mkdirSync(frames);
-  writeFileSync(join(frames, "callback-status.jsonl"), "{}\n");
+  writeFileSync(join(frames, "callback-status.jsonl"), frameLines([0, 16]));
   s.get = async () => ({ active: false, occluded: false });
   s.presented = async () => ({ displayed: 12 });
   s.request = async (method) => {
     if (method === "diagnostics.window.draw-covered") return null;
-    if (method === "diagnostics.drag") return { frames, took: 100, asked: 100 };
+    if (method === "diagnostics.drag") return { frames, took: 100, asked: 100, ticks: [4, 12], layouts: [] };
     if (method === "diagnostics.capture.stop") return { frames, callbackStatus: join(frames, "callback-status.jsonl"),
       count: 1, limited: false, longestGap: 16 };
     throw new Error(`unexpected ${method}`);
@@ -234,25 +234,39 @@ test("a capture is preserved when the final application error audit fails", asyn
 });
 
 /**
- * A session whose captured drag stops with `longestGap` and the callback status lines `lines`: each is [status, display time in
- * ms], on a timebase of nanoseconds.
+ * The callback status lines of complete frames displayed at `times` (ms), on a timebase of nanoseconds, as the recorder writes
+ * them for a window stream.
  */
-function gapSession(t, longestGap, lines) {
+const frameLines = (times) => times.map((ms, index) => JSON.stringify({ sequence: index + 1, status: 0,
+  frame: `frame-${index + 1}.bgra`, displayTime: String(Math.round(ms * 1e6)), machTimebaseNumerator: 1,
+  machTimebaseDenominator: 1 })).join("\n") + "\n";
+
+/**
+ * A session whose captured drag sends its steps at `ticks` and stops with complete frames displayed at `frames`, the layouts
+ * `layouts` of the drag and display-link callbacks of the main thread at `mainThread`, all in ms on the clock of the recording.
+ * The stop reports the longest display interval of the frames as the host does.
+ */
+function gapSession(t, { frames: times, ticks, layouts = [], mainThread = [] }) {
   const directory = mkdtempSync(join(tmpdir(), "soksak-drag-gap-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const s = newSession(directory, fakeClient(directory));
   const frames = join(directory, "logs", "captures", "drag-1");
   mkdirSync(frames);
   const callbackStatus = join(frames, "callback-status.jsonl");
-  writeFileSync(callbackStatus, lines.map(([status, ms], index) => JSON.stringify({ sequence: index + 1, status,
-    frame: status === 0 ? `frame-${index + 1}.bgra` : null, displayTime: String(ms * 1e6),
-    machTimebaseNumerator: 1, machTimebaseDenominator: 1 })).join("\n") + "\n");
+  writeFileSync(callbackStatus, frameLines(times));
+  const displayLink = join(frames, "display-link.json");
+  writeFileSync(displayLink, JSON.stringify({ state: "available", reason: "", omittedObservations: 0,
+    observations: mainThread.map((ms, index) => ({ sequence: index + 1, callbackTime: String(Math.round(ms * 1e6)),
+      machTimebaseNumerator: 1, machTimebaseDenominator: 1 })) }));
+  const longestGap = Math.max(...times.slice(1).map((ms, i) => ms - times[i]));
   s.get = async () => ({ active: false, occluded: false });
-  s.presented = async () => ({ displayed: 12 });
+  s.presented = async () => ({ displayed: times.at(-1) });
   s.request = async (method) => {
     if (method === "diagnostics.window.draw-covered") return null;
-    if (method === "diagnostics.drag") return { frames, took: 100, asked: 100 };
-    if (method === "diagnostics.capture.stop") return { frames, callbackStatus, count: 3, limited: false, longestGap };
+    if (method === "diagnostics.drag") return { frames, took: 100, asked: 100, ticks, layouts };
+    if (method === "diagnostics.capture.stop") {
+      return { frames, callbackStatus, displayLink, count: times.length, limited: false, longestGap, layouts: [] };
+    }
     throw new Error(`unexpected ${method}`);
   };
   return s;
@@ -260,14 +274,43 @@ function gapSession(t, longestGap, lines) {
 
 const gapPlan = { axis: "y", line: 1, dx: 0, dy: 10, ms: 100, times: 1 };
 
-test("a drag whose window presented nothing new for longer than the limit fails and says the recorder saw it unchanged", async (t) => {
-  const s = gapSession(t, 131, [[0, 0], [0, 16], [1, 32], [1, 48], [1, 64], [1, 80], [1, 96], [1, 112], [1, 128], [0, 147], [0, 163]]);
-  await assert.rejects(drag(s, gapPlan, { capture: true }),
-    /^Error: the window presented nothing new for 131ms \(the recorder saw it unchanged\); a drag changes the screen with every frame, so a presentation more than 100ms apart fails; 1-minute load average \d+\.\d\d$/);
+/** The times from `from` to `to` (ms) every `step` ms. */
+const every = (from, to, step) => Array.from({ length: Math.floor((to - from) / step) + 1 }, (_, i) => from + i * step);
+
+// ScreenCaptureKit delivers no callback for a window that stays as it is, so the recording of a drag has no frames before the
+// first step, between the release of a round trip and the next press, and after the display of the last step, however long
+// those times are. The drag owes a frame only to its steps.
+test("a drag whose window stays unchanged before its first step, between its round trips and after its last step passes", async (t) => {
+  const s = gapSession(t, {
+    frames: [0, ...every(150, 246, 8), ...every(400, 496, 8), 880],
+    ticks: [...every(152, 244, 8), ...every(402, 494, 8)],
+  });
+  const result = await drag(s, gapPlan, { capture: true });
+  assert.equal(result.longestGap, 384);
 });
 
-test("a drag whose recording missed more than the limit fails and says the frames were not recorded", async (t) => {
-  const s = gapSession(t, 131, [[0, 0], [0, 16], [1, 32], [0, 147], [0, 163]]);
+test("a drag step that waits longer than the limit for a frame fails and names what the host did in that time", async (t) => {
+  const s = gapSession(t, {
+    frames: [...every(0, 96, 8), ...every(260, 308, 8)],
+    ticks: every(4, 300, 8),
+    layouts: [{ ticket: 6, begun: 40, committed: 50 }, { ticket: 7, begun: 120, committed: 150 }, { ticket: 8, begun: 200, committed: null }],
+    mainThread: [...every(2, 114, 8), ...every(234, 306, 8)],
+  });
+  await assert.rejects(drag(s, gapPlan, { capture: true }), new RegExp("^Error: the application did not show drag step 13 of 38, " +
+    "asked at 100\\.0ms on the clock of the recording, within 100ms: the next frame was displayed 160ms later, at 260\\.0ms; " +
+    "in that time the check asked for 20 drag steps, the host began 2 layouts \\[7,8\\] and committed 1 \\[7\\], and the " +
+    "main thread of the host ran no display-link callback for 120ms of it; recording .*drag-1; 1-minute load average " +
+    "\\d+\\.\\d\\d$"));
+});
+
+test("a drag step after the last recorded frame fails", async (t) => {
+  const s = gapSession(t, { frames: every(0, 96, 8), ticks: every(4, 100, 8) });
   await assert.rejects(drag(s, gapPlan, { capture: true }),
-    /^Error: the recording has a 131ms gap between frames; frames longer than 100ms apart were not recorded, so this run did not measure the whole gesture; 1-minute load average \d+\.\d\d$/);
+    /^Error: the application did not show drag step 13 of 13, asked at 100\.0ms on the clock of the recording, within 100ms: the recording has no frame after it;/);
+});
+
+test("a captured drag whose reply has no step times fails", async (t) => {
+  const s = gapSession(t, { frames: every(0, 96, 8), ticks: undefined });
+  await assert.rejects(drag(s, gapPlan, { capture: true }),
+    /^Error: the recording has no times of the changes that it shows \(drag step times undefined\), so its frames cannot be judged against them$/);
 });

@@ -4,7 +4,7 @@ import { readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import test from "node:test";
 
-import { APPS, holdCovered, MAIN_PAGE_APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, holdCovered, judgeShownChanges, MAIN_PAGE_APPS, open, owe } from "@soksak/window-check/app.mjs";
 import { fresh as prepare } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { addRasterTab, RASTER, rasterReady } from "./raster-probe.mjs";
@@ -187,7 +187,10 @@ for (const app of Object.values(APPS)) {
     s.trackRecording(directory);
     let displayed = 0;
     let stopped;
+    // Opening the settings shows the modal, so the recording owes it a frame (judgeShownChanges).
+    const owed = [];
     try {
+      owed.push(await owe(s));
       await s.run("core.settings.open");
       s.cleanup(() => s.run("core.settings.close"));
       await s.until("core.settings-modal", (modal) => modal.open, "settings did not open");
@@ -206,7 +209,7 @@ for (const app of Object.values(APPS)) {
       stopped = await s.request("diagnostics.capture.stop", { after: displayed ? displayed + 100 : 0 });
     }
     assert.equal(stopped.limited, false, "the recording reached its bounded buffer");
-    assert.ok(stopped.longestGap <= 100, `the recording has a ${stopped.longestGap}ms gap`);
+    judgeShownChanges(stopped, owed, { what: "settings open" });
     const captured = frames(directory).map(readFrame);
     const first = captured[0];
     const after = captured.filter((frame) => frame.time >= displayed);

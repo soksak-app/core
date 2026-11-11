@@ -10,7 +10,10 @@ async function runDrag(t, options) {
   const directory = mkdtempSync(join(tmpdir(), "drag-frame-identity-"));
   const frames = join(directory, "frames");
   mkdirSync(frames);
-  writeFileSync(join(frames, "callback-status.jsonl"), "{}\n");
+  // Two complete frames displayed at 0 and 16 ms, on a timebase of nanoseconds, after the steps at 4 and 12 ms of the drag.
+  writeFileSync(join(frames, "callback-status.jsonl"), [0, 16].map((ms, index) => JSON.stringify({ sequence: index + 1, status: 0,
+    frame: `frame-${index + 1}.bgra`, displayTime: String(ms * 1e6), machTimebaseNumerator: 1, machTimebaseDenominator: 1 }))
+    .join("\n") + "\n");
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const calls = [];
   const stoppedIdentity = { manifest: join(frames, "frame-identities", "manifest.json"), status: "complete" };
@@ -24,7 +27,7 @@ async function runDrag(t, options) {
     request: async (method, params) => {
       if (method === "diagnostics.window.draw-covered") return null;
       calls.push({ method, params });
-      if (method === "diagnostics.drag") return { frames, took: 100, asked: 100 };
+      if (method === "diagnostics.drag") return { frames, took: 100, asked: 100, ticks: [4, 12], layouts: [] };
       if (method === "diagnostics.capture.stop") return {
         frames,
         callbackStatus: join(frames, "callback-status.jsonl"),

@@ -2,7 +2,7 @@
 // raster probe logs the pointer events of its image region (rasterprobe.input pointer) and focuses its region on a primary press.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, judgeShownChanges, open, owe } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { RASTER, REGION } from "../raster-probe.mjs";
 
@@ -28,6 +28,9 @@ for (const app of Object.values(APPS)) {
     s.cleanup(async () => {
       if (!stopped) await recording.stop({ after: 0 });
     });
+    // The raster probe draws a frame after each input that it handles, so the recording owes the click a frame within 33ms
+    // (judgeShownChanges).
+    const owed = [await owe(s)];
     await s.click(point.x, point.y);
     const { displayed } = await s.presented();
     stopped = true;
@@ -36,7 +39,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(decoded.length, captured.count, "every captured frame must decode");
     assert.ok(decoded.length >= 2, "the recording must cover the whole click");
     assert.equal(captured.limited, false, "the recording reached its limit");
-    assert.ok(captured.longestGap <= 33, `recording frame gap ${captured.longestGap}ms exceeds 33ms`);
+    judgeShownChanges(captured, owed, { what: "click", limit: 33 });
     const after = await s.get("host.window");
     const input = await s.until("rasterprobe.input", (value) => value.pointer.some((event) => event.type === "pointerup"),
       "the raster probe view logged no pointerup of the click", { surface });

@@ -233,13 +233,17 @@ export function assertFinalContentSize(samples, ended) {
 
 
 /**
- * The times of the shown frames from the first input, which measureDragPerformance judges. samples are the frames whose pixels
- * differ from the frame before them: a capture also delivers a frame with the pixels of the frame before it, so the number of such
- * frames changes between runs, and a repeated frame neither shows a layout nor ends a gap between two layouts.
+ * The times of the shown frames of the drag, which measureDragPerformance judges: from the first input to the first shown frame
+ * after the last step. samples are the frames whose pixels differ from the frame before them: a capture also delivers a frame
+ * with the pixels of the frame before it, so the number of such frames changes between runs, and a repeated frame neither shows
+ * a layout nor ends a gap between two layouts. After the display of the last step the window has nothing to show, so the time
+ * until the recording stops is no gap of the drag.
  */
 export function shownTimes(samples, ticks) {
   assert.ok(Array.isArray(ticks) && ticks.length > 0, "the host reported no step times");
-  return samples.filter(({ time }) => time >= ticks[0]).map(({ time }) => time);
+  const times = samples.map(({ time }) => time).filter((time) => time >= ticks[0]);
+  const last = times.findIndex((time) => time > ticks.at(-1));
+  return last < 0 ? times : times.slice(0, last + 1);
 }
 
 /**

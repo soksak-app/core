@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, judgeShownChanges, open, owe } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 
 for (const app of Object.values(APPS))
@@ -24,6 +24,8 @@ for (const app of Object.values(APPS))
     const recording = await s.request("diagnostics.capture.start", {});
     let stop,
       displayed = 0;
+    // The times of the changes of the screen during the recording (judgeShownChanges).
+    const owed = [];
     async function measure(mode) {
       const bars = await s.until(
         "core.sidebars",
@@ -57,10 +59,13 @@ for (const app of Object.values(APPS))
     }
     try {
       await measure("normal");
+      // Each full screen toggle changes the screen, so the recording owes it a frame (judgeShownChanges).
+      owed.push(await owe(s));
       await s.run("core.card.fullscreen", { card: target.id });
       try {
         await measure("fullscreen");
       } finally {
+        owed.push(await owe(s));
         await s.run("core.card.fullscreen", { card: target.id });
       }
       await measure("restored");
@@ -73,7 +78,7 @@ for (const app of Object.values(APPS))
         assert.equal(captured.length, stop.count);
         assert.ok(captured.length > 2);
         assert.equal(stop.limited, false);
-        assert.ok(stop.longestGap <= 100);
+        judgeShownChanges(stop, owed, { what: "full screen toggle" });
         t.diagnostic(`frames=${stop.count}; gap=${stop.longestGap}ms`);
       } finally {
         rmSync(recording.frames, { recursive: true, force: true });

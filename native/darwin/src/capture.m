@@ -866,8 +866,10 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
         sp_log_error("capture callback", message.UTF8String);
         return;
     }
-    // If the window is not redrawn, frames keep arriving at the fixed interval but are all
-    // marked idle and have no image. Counting them makes it possible to state why there are 0 frames.
+    // A window stream delivers a complete frame when the window server updates the window. While the window stays as it
+    // is, the stream delivers idle frames without an image for some refreshes and often no callback at all, so a time
+    // without callbacks does not show a lost frame. Counting idle frames states why a recording that received callbacks
+    // has 0 frames.
     // A frame without a status cannot be known to be complete, so the recording fails.
     SCFrameStatus status = SCFrameStatusComplete;
     BOOL hasStatus = frameStatus(sample, &status);

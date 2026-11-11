@@ -5,7 +5,7 @@ import { rmSync } from "node:fs";
 import { dirname } from "node:path";
 import { readPng } from "@soksak/window-check/png.mjs";
 import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
-import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { APPS, judgeShownChanges, keepCommonSettings, open, owe } from "@soksak/window-check/app.mjs";
 import { fresh, probeSidebarSets } from "./fixture.mjs";
 import { tabElementIndex } from "./input-probe.mjs";
 
@@ -19,7 +19,10 @@ async function clickFullscreen(t, s, card, expected) {
   s.trackRecording(directory);
   let displayed = 0;
   let stopped;
+  // The click toggles the full screen of the card, so the recording owes it a frame (judgeShownChanges).
+  const owed = [];
   try {
+    owed.push(await owe(s));
     await s.click(control.x + control.width / 2, control.y + control.height / 2);
     await s.until("core.grid", grid => grid.fullscreen === expected, "fullscreen button did not toggle its card");
     ({ displayed } = await s.presented());
@@ -27,7 +30,7 @@ async function clickFullscreen(t, s, card, expected) {
   const captured = frames(directory).map(readFrame);
   assert.ok(captured.length > 1, "fullscreen click recording is incomplete");
   assert.equal(stopped.limited, false, "fullscreen recording reached its bounded buffer");
-  assert.ok(stopped.longestGap <= 100, `fullscreen recording gap ${stopped.longestGap}ms`);
+  judgeShownChanges(stopped, owed, { what: "fullscreen click" });
   const grid = await s.get("core.grid");
   const shown = grid.cards.find(item => item.id === card.id);
   const last = captured.at(-1);
@@ -208,10 +211,13 @@ for (const app of Object.values(APPS)) {
     const recording = await s.record();
     let displayed = 0;
     let stopped;
+    // Each click selects the other tab of the card, so the recording owes each a frame (judgeShownChanges).
+    const owed = [];
     try {
       for (const selected of [other.id, card.active]) {
         // The tab elements are numbered across every card in the order of core.grid, the hidden cards of fullscreen too.
         const rect = await s.rect("core.card.tab", tabElementIndex(added, selected));
+        owed.push(await owe(s));
         await s.click((rect.document?.x ?? 0) + rect.x + rect.width / 2,
           (rect.document?.y ?? 0) + rect.y + rect.height / 2);
         await s.until("core.grid", grid => grid.cards.find(item => item.id === own).active === selected,
@@ -230,7 +236,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(captured.length, stopped.count, "tab recording has missing frame files");
     assert.ok(captured.length > 1, "tab switching recording is incomplete");
     assert.equal(stopped.limited, false, "tab recording reached its bounded buffer");
-    assert.ok(stopped.longestGap <= 100, `tab recording gap ${stopped.longestGap}ms`);
+    judgeShownChanges(stopped, owed, { what: "tab click" });
     t.diagnostic(`two tab presentation waits completed: ${captured.length} decoded frames`);
     await s.run("core.card.fullscreen", { card: own });
     await s.until("core.grid", grid => grid.fullscreen === null, "fullscreen did not end");

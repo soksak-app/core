@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
-import { APPS, holdCovered, open } from "@soksak/window-check/app.mjs";
+import { APPS, holdCovered, judgeShownChanges, open, owe } from "@soksak/window-check/app.mjs";
 import { fresh, joinedFailure } from "./fixture.mjs";
 import { requireContentWidth } from "./card-panel-checks.mjs";
 import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
@@ -119,6 +119,13 @@ for (const app of Object.values(APPS))
       await s.presented();
       let recordingStopped = false;
       let recording = await s.request("diagnostics.capture.start", {});
+      // The times at which the check asked for a change of the screen during the current recording (judgeShownChanges).
+      let owed = [];
+      // Asks for a change of the screen: the recording owes it a frame.
+      const change = async (run) => {
+        owed.push(await owe(s));
+        return run();
+      };
       const audit = await s.collect("core.verify");
       const errors = [];
       let displayed;
@@ -232,7 +239,8 @@ for (const app of Object.values(APPS))
         const stop = await s.request("diagnostics.capture.stop", { after: displayed + 100 });
         recordingStopped = true;
         assert.equal(stop.limited, false);
-        assert.ok(stop.longestGap <= 100, `missing frames: ${stop.longestGap}ms`);
+        judgeShownChanges(stop, owed);
+        owed = [];
         const captured = frames(recording.frames).map(readFrame);
         assert.ok(captured.length > 4, "incomplete recording");
         assert.ok(
@@ -246,37 +254,39 @@ for (const app of Object.values(APPS))
         console.info(`PASS ${app.name}: ${label} (${Math.round(performance.now() - began)}ms)`);
       }
       try {
-        await s.run("host.window.resize", { width: 1200, height: 754 });
+        // A window that already has the short height does not change, so it owes no frame.
+        if ((await s.get("host.window")).content.height === 754) await s.run("host.window.resize", { width: 1200, height: 754 });
+        else await change(() => s.run("host.window.resize", { width: 1200, height: 754 }));
         await s.until("host.window", (window) => window.content.height === 754, "window did not reach short height");
         await check("short normal");
         // Starts the recording in a small window and records the transition to a large window.
         recording = await s.request("diagnostics.capture.start", {});
         recordingStopped = false;
-        await s.run("host.window.resize", { width: 1200, height: 880 });
+        await change(() => s.run("host.window.resize", { width: 1200, height: 880 }));
         await s.until("host.window", (window) => window.content.height === 880, "window did not grow");
         await check("tall normal");
         recording = await s.request("diagnostics.capture.start", {});
         recordingStopped = false;
         for (const side of ["left", "right"]) {
-          await s.run("core.card.sidebar.size", { card: card.id, side, size: 480 });
+          await change(() => s.run("core.card.sidebar.size", { card: card.id, side, size: 480 }));
           choices[side].size = 480;
           last.width = side;
         }
         await check("wide sidebars normal");
         recording = await s.request("diagnostics.capture.start", {});
         recordingStopped = false;
-        await s.run("core.card.fullscreen", { card: card.id });
+        await change(() => s.run("core.card.fullscreen", { card: card.id }));
         await check("wide sidebars fullscreen");
         recording = await s.request("diagnostics.capture.start", {});
         recordingStopped = false;
-        await s.run("core.card.fullscreen", { card: card.id });
+        await change(() => s.run("core.card.fullscreen", { card: card.id }));
         await check("wide sidebars restored");
         recording = await s.request("diagnostics.capture.start", {});
         recordingStopped = false;
         // When the left appears open, a click saves the collapse. When it appears collapsed, a click saves the expansion, so the check confirms the visible state first.
         const leftShown = (await s.get("core.grid")).cards.find((item) => item.id === card.id).sidebars.left;
         assert.equal(leftShown.collapsed, false, "the left panel must be shown open before the manual fold");
-        await s.run("core.card.sidebar.toggle", { card: card.id, side: "left" });
+        await change(() => s.run("core.card.sidebar.toggle", { card: card.id, side: "left" }));
         choices.left.collapsed = true;
         last.width = "left";
         // The collapsed left uses only the divider width (6), so in a 762pt card the content width is 762 - 2 (border) - 6 - 480 = 274pt, which is larger than the minimum
@@ -284,17 +294,17 @@ for (const app of Object.values(APPS))
         await check("manual left fold");
         recording = await s.request("diagnostics.capture.start", {});
         recordingStopped = false;
-        await s.run("host.window.resize", { width: 1220, height: 880 });
+        await change(() => s.run("host.window.resize", { width: 1220, height: 880 }));
         await s.until("host.window", (window) => window.content.width === 1220, "window did not reach wider width");
         await check("manual fold wider normal");
         recording = await s.request("diagnostics.capture.start", {});
         recordingStopped = false;
-        await s.run("core.card.fullscreen", { card: card.id });
+        await change(() => s.run("core.card.fullscreen", { card: card.id }));
         await check("manual fold fullscreen");
         recording = await s.request("diagnostics.capture.start", {});
         recordingStopped = false;
-        await s.run("core.card.fullscreen", { card: card.id });
-        await s.run("host.window.resize", { width: 1200, height: 754 });
+        await change(() => s.run("core.card.fullscreen", { card: card.id }));
+        await change(() => s.run("host.window.resize", { width: 1200, height: 754 }));
         await s.until("host.window", (window) => window.content.height === 754, "window did not restore height");
         // The width equals the manual left fold, so the right is expanded and only the height is insufficient.
         await check("manual fold short restore");

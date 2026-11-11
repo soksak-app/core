@@ -1,7 +1,7 @@
 // Checks the native pointer input of the card four-side handles and the recorded boundary coordinates.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, judgeShownChanges, open, owe } from "@soksak/window-check/app.mjs";
 import { fresh, joinedFailure } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { recordedEdges } from "./sidebar-gesture-recording.mjs";
@@ -93,6 +93,8 @@ for (const app of Object.values(APPS)) {
           let down = false;
           let stopped;
           const elapsed = [];
+          // The times of the drag steps on the clock of the recording (judgeShownChanges).
+          const owed = [];
           const gestureErrors = [];
           {
             try {
@@ -101,6 +103,8 @@ for (const app of Object.values(APPS)) {
               for (const distance of [10, 20, 30, 40, 30, 20, 10, 0]) {
                 await inactive();
                 const began = performance.now();
+                // Each drag step moves the border to another distance, so the recording owes it a frame.
+                owed.push(await owe(s));
                 await s.pointer(
                   x + (vertical ? sign(side) * distance : 0),
                   y + (vertical ? 0 : sign(side) * distance),
@@ -187,7 +191,7 @@ for (const app of Object.values(APPS)) {
             });
             assert.ok(captured.length > 4, `${side}: incomplete gesture recording`);
             assert.equal(stopped.limited, false, "recording exhausted its buffer");
-            assert.ok(stopped.longestGap <= 100, `${side}: missing frames, gap ${stopped.longestGap}ms`);
+            judgeShownChanges(stopped, owed, { what: `${side} drag step` });
             assert.ok(
               Array.isArray(stopped.layouts) && stopped.layouts.length > 0,
               `${side}: missing layout transaction timeline`,

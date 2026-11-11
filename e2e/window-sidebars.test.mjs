@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
-import { APPS, MAIN_PAGE_APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { APPS, MAIN_PAGE_APPS, judgeShownChanges, keepCommonSettings, open, owe } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { turnOffCardSidebars } from "./card-sidebar-choices.mjs";
 import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
@@ -124,10 +124,15 @@ for (const app of Object.values(APPS))
     const recording = await s.request("diagnostics.capture.start", {});
     let displayed = 0,
       stop;
+    // A selection changes the screen when it changes the active tab or the focused card, so the recording owes each such
+    // selection a frame and a selection of the active tab of the focused card none (judgeShownChanges).
+    const owed = [];
     try {
       try {
         for (const card of baseline.cards.filter((card) => card.tabs.length))
           for (const tab of card.tabs) {
+            const before = (await s.get("core.grid")).cards.find((item) => item.id === card.id);
+            if (before?.active !== tab.id || before?.focused !== true) owed.push(await owe(s));
             await s.run("core.tab.select", { tab: tab.id });
             await s.until(
               "core.grid",
@@ -143,7 +148,7 @@ for (const app of Object.values(APPS))
         stop = await s.request("diagnostics.capture.stop", { after: displayed ? displayed + 100 : 0 });
       }
       assert.equal(stop.limited, false);
-      assert.ok(stop.longestGap <= 100, `recording gap ${stop.longestGap}ms`);
+      judgeShownChanges(stop, owed, { what: "tab selection" });
       const captured = frames(recording.frames).map(readFrame);
       assert.ok(captured.length > 2, "incomplete focus/tab recording");
       assert.equal(captured.length, stop.count, "recorded and written frame counts differ");

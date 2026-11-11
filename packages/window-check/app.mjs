@@ -1296,37 +1296,106 @@ export async function drag(s, plan, { capture = false, frameIdentity } = {}) {
 const MARGIN = 1.25;
 
 /**
- * The allowed limit (ms) of the display interval between recorded frames. During a drag the screen changes with every
- * frame.
+ * The allowed limit (ms) of the time that a change of the screen which a check asked for waits for the next recorded frame.
  */
 const GAP = 100;
 
 const paced = ({ took, asked }) => took <= asked * MARGIN && took >= asked / MARGIN;
 
-/** The status of a stream callback whose window did not change since the last frame (SCFrameStatusIdle). */
-const IDLE = 1;
+/** A raw mach time of a capture record, as milliseconds on the clock of the recording (sp_capture_clock). */
+const machMs = (ticks, numerator, denominator) => Number(BigInt(ticks) * BigInt(numerator) / BigInt(denominator)) / 1e6;
 
 /**
- * Whether the recorder saw the window unchanged through the longest gap between the complete frames of the callback status
- * file `path`: every callback inside that gap is idle, and no two callbacks, with the frames at its ends, are more than
- * GAP apart.
+ * The display times (ms) of the complete frames that the callback status file `path` names, in their order. ScreenCaptureKit
+ * delivers a complete frame of a window stream when the window server updates the window; while the window stays as it is,
+ * it delivers idle frames for some refreshes and often no callback at all, so neither idle frames nor their absence tell a
+ * window that stayed as it was from a frame that the recorder lost.
  */
-function sawUnchanged(path) {
-  const callbacks = readFileSync(path, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line)).map((row) => ({
-    status: row.status,
-    complete: row.status === 0 && typeof row.frame === "string",
-    ms: Number(BigInt(row.displayTime) * BigInt(row.machTimebaseNumerator) / BigInt(row.machTimebaseDenominator)) / 1e6,
-  }));
-  const frames = callbacks.map((callback, index) => ({ ...callback, index })).filter((callback) => callback.complete);
-  let widest = null;
-  for (let i = 1; i < frames.length; i++) {
-    if (!widest || frames[i].ms - frames[i - 1].ms > widest[1].ms - widest[0].ms) widest = [frames[i - 1], frames[i]];
+function recordedFrameTimes(path) {
+  return readFileSync(path, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line))
+    .filter((row) => row.status === 0 && typeof row.frame === "string")
+    .map((row) => machMs(row.displayTime, row.machTimebaseNumerator, row.machTimebaseDenominator));
+}
+
+/**
+ * The callback times (ms) of the display link that the recording observed on the main thread of the host
+ * (display-link.json), or the state and reason of the observation when it is not available.
+ */
+function displayLinkTimes(path) {
+  if (typeof path !== "string") return { unavailable: `missing from the stop reply (displayLink ${JSON.stringify(path)})` };
+  const trace = JSON.parse(readFileSync(path, "utf8"));
+  if (trace.state !== "available") return { unavailable: `${trace.state}${trace.reason ? ` (${trace.reason})` : ""}` };
+  return { times: trace.observations.map((row) => machMs(row.callbackTime, row.machTimebaseNumerator, row.machTimebaseDenominator)) };
+}
+
+/**
+ * The time (ms) on the clock of the recordings of session `s` (`diagnostics.clock`, the clock of `sp_capture_clock`). A check
+ * reads it right before it asks for a change of the screen and passes it to `judgeShownChanges`.
+ */
+export async function owe(s) {
+  const { mono_ns: ns } = await s.request("diagnostics.clock", {});
+  if (typeof ns !== "string" || !/^[1-9][0-9]*$/.test(ns)) throw new Error(`diagnostics.clock returned an invalid mono_ns ${JSON.stringify(ns)}`);
+  return Number(BigInt(ns)) / 1e6;
+}
+
+/**
+ * The change that waited longest for the next recorded frame: `owed` are the times at which the screen was asked to change
+ * and `frames` the display times of the recorded frames, both in ms on the clock of the recording. Returns {index, at, next,
+ * wait} with the 1-based index of the change, its time, the time of the first frame after it (null when the recording has
+ * none) and the time between the two (Infinity without a frame).
+ */
+function longestWait(owed, frames) {
+  let worst = null;
+  let next = 0;
+  owed.forEach((at, index) => {
+    while (next < frames.length && frames[next] <= at) next++;
+    const shown = next < frames.length ? frames[next] : null;
+    const wait = shown === null ? Infinity : shown - at;
+    if (!worst || wait > worst.wait) worst = { index: index + 1, at, next: shown, wait };
+  });
+  return worst;
+}
+
+/**
+ * Judges a recording by the changes of the screen that the check asked for. Every time of `owed` (ms on the clock of the
+ * recording: the steps of a drag, or `owe` read before a command or an input that changes the screen) is owed the next
+ * recorded frame within GAP; the times in which the check asked for no change owe none, so the window may stay unchanged
+ * there and the longest gap of the whole recording does not judge it. A change that waits longer is a defect of the
+ * application, which did not show it: the failure names the change, the time of the next frame, the changes asked for in that
+ * time, the layouts that the host began and committed in it (`layouts`, by default those of the stop reply) and the longest
+ * time in which the main thread of the host ran no display-link callback, so it tells a main thread that stopped from a
+ * transaction that waited for its commit and from committed layouts whose frames did not come. `what` names one change and
+ * `limit` (ms, GAP by default) bounds the wait. A recording in which the check asked for no change owes no frame.
+ */
+export function judgeShownChanges(stopped, owed, { layouts = stopped.layouts, what = "change", limit = GAP } = {}) {
+  if (!Array.isArray(owed) || !owed.every(Number.isFinite)) {
+    throw new Error(`the recording has no times of the changes that it shows (${what} times ${JSON.stringify(owed)}), so its ` +
+      "frames cannot be judged against them");
   }
-  if (!widest) return false;
-  const inside = callbacks.slice(widest[0].index + 1, widest[1].index);
-  if (inside.length === 0 || inside.some((callback) => callback.status !== IDLE)) return false;
-  const times = [widest[0], ...inside, widest[1]].map((callback) => callback.ms);
-  return times.every((ms, i) => i === 0 || ms - times[i - 1] <= GAP);
+  const worst = longestWait(owed, recordedFrameTimes(stopped.callbackStatus));
+  if (worst === null || worst.wait <= limit) return;
+  const end = worst.next ?? Infinity;
+  const asked = owed.filter((at) => at >= worst.at && at < end).length;
+  const inSpan = (stage) => (layouts ?? []).filter((layout) => typeof layout[stage] === "number"
+    && layout[stage] >= worst.at && layout[stage] < end).map((layout) => layout.ticket);
+  const begun = inSpan("begun");
+  const committed = inSpan("committed");
+  const displayLink = displayLinkTimes(stopped.displayLink);
+  let mainThread;
+  if (displayLink.unavailable) {
+    mainThread = `the display-link observation of the main thread is ${displayLink.unavailable}`;
+  } else {
+    const points = [worst.at, ...displayLink.times.filter((at) => at > worst.at && at < end), ...(worst.next === null ? [] : [worst.next])];
+    const silence = Math.max(0, ...points.slice(1).map((at, i) => at - points[i]));
+    mainThread = `the main thread of the host ran no display-link callback for ${silence.toFixed(0)}ms of it`;
+  }
+  const shown = worst.next === null
+    ? "the recording has no frame after it"
+    : `the next frame was displayed ${worst.wait.toFixed(0)}ms later, at ${worst.next.toFixed(1)}ms`;
+  throw new Error(`the application did not show ${what} ${worst.index} of ${owed.length}, asked at ${worst.at.toFixed(1)}ms on ` +
+    `the clock of the recording, within ${limit}ms: ${shown}; in that time the check asked for ${asked} ${what}s, the host ` +
+    `began ${begun.length} layouts ${JSON.stringify(begun)} and committed ${committed.length} ${JSON.stringify(committed)}, ` +
+    `and ${mainThread}; recording ${stopped.frames}; 1-minute load average ${loadavg()[0].toFixed(2)}`);
 }
 
 function requireCallbackStatusArtifact(result, frames) {
@@ -1408,17 +1477,10 @@ async function dragDrawing(s, plan, capture, frameIdentity) {
   if (stopped.limited) {
     throw new Error("the recording reached its finite frame limit before the gesture completed");
   }
-  // A drag changes the screen with every frame, so recorded frames more than GAP apart fail the check, and the error
-  // says which of the two it was: the recorder saw the window unchanged through the gap, or it saw nothing.
-  if (stopped.longestGap > GAP) {
-    const gap = stopped.longestGap.toFixed(0);
-    const load = `1-minute load average ${loadavg()[0].toFixed(2)}`;
-    throw new Error(sawUnchanged(callbackStatus)
-      ? `the window presented nothing new for ${gap}ms (the recorder saw it unchanged); a drag changes the screen ` +
-        `with every frame, so a presentation more than ${GAP}ms apart fails; ${load}`
-      : `the recording has a ${gap}ms gap between frames; frames longer than ${GAP}ms apart were not recorded, so ` +
-        `this run did not measure the whole gesture; ${load}`);
-  }
+  // A drag changes the screen with every step, so each step (ticks of the reply) is owed the next recorded frame.
+  // A drag without steps changed nothing, so a reply without step times cannot be judged.
+  const steps = Array.isArray(result.ticks) && result.ticks.length === 0 ? null : result.ticks;
+  judgeShownChanges(stopped, steps, { layouts: result.layouts, what: "drag step" });
   return {
     ...result,
     callbackStatus,
