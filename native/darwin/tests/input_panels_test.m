@@ -1,0 +1,297 @@
+// Checks that the emulated input of a window (sp_input_pointer, sp_input_key) reaches the system panels that the application
+// shows over that window, as the input of a person reaches them in an application that is not active: an alert sheet, a save and
+// an open panel sheet, a context menu and the menu of a pop-up button. The window stands behind a window of its own that covers
+// it, and the test process is never active, so the input passes the application as the input of the virtual key window does.
+//
+// Each input goes to the window that the caller names, at window points of its content (origin at the top left), as an input
+// of the endpoint names the window of its request: a person presses at a point of the screen, and the panel over the window
+// takes the press. A case judges what the panel did with the input: the button that ended the sheet, the item that the menu
+// ran. A sheet or a menu that the input did not reach is ended by the test after the input has been handled, so the next case
+// runs.
+#import <Cocoa/Cocoa.h>
+#import "input_inject.h"
+#import "input_virtual.h"
+#import "support/event_wait.h"
+#import "support/temporary_folder.h"
+
+static int failures;
+static void check(BOOL condition, NSString *message) {
+    fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
+    if (!condition) failures++;
+}
+static void note(NSString *message) { fprintf(stdout, "NOTE: %s\n", message.UTF8String); }
+
+static const char *resultText(sp_input_result result) {
+    switch (result) {
+        case SP_INPUT_DELIVERED: return "delivered";
+        case SP_INPUT_REJECTED: return "rejected";
+        case SP_INPUT_INACTIVE: return "inactive";
+        case SP_INPUT_UNRECEIVED: return "unreceived";
+        case SP_INPUT_BUTTON_HELD: return "button held";
+        case SP_INPUT_PRESS_OPEN: return "press open";
+        case SP_INPUT_POINTER_HELD: return "pointer held";
+    }
+    return "unknown";
+}
+
+// The marks that the application has dispatched. A mark is an application-defined event at the end of the event queue, so its
+// dispatch follows every event that was queued before it.
+static NSInteger marksSeen;
+static NSInteger marksPosted;
+static void installMarks(void) {
+    [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskApplicationDefined handler:^NSEvent *(NSEvent *event) {
+        if (event.subtype == 77) { marksSeen = MAX(marksSeen, (NSInteger)event.data1); return nil; }
+        return event;
+    }];
+}
+// Waits until the application has dispatched every event that was queued before this call.
+static void settle(NSString *what) {
+    NSInteger mark = ++marksPosted;
+    [NSApp postEvent:[NSEvent otherEventWithType:NSEventTypeApplicationDefined location:NSZeroPoint modifierFlags:0 timestamp:0
+        windowNumber:0 context:nil subtype:77 data1:mark data2:0] atStart:NO];
+    eventWait(what, ^BOOL { return marksSeen >= mark; });
+}
+
+// The window point (origin at the top left of the content) of window that shows the screen point of the center of view.
+static NSPoint pointOf(NSWindow *window, NSView *view) {
+    NSRect rect = [view.window convertRectToScreen:[view convertRect:view.bounds toView:nil]];
+    NSPoint base = [window convertPointFromScreen:NSMakePoint(NSMidX(rect), NSMidY(rect))];
+    NSView *content = window.contentView;
+    NSPoint local = [content convertPoint:base fromView:nil];
+    return NSMakePoint(local.x, content.isFlipped ? local.y : NSHeight(content.bounds) - local.y);
+}
+static NSPoint pointOfScreenRect(NSWindow *window, NSRect rect) {
+    NSPoint base = [window convertPointFromScreen:NSMakePoint(NSMidX(rect), NSMidY(rect))];
+    NSView *content = window.contentView;
+    NSPoint local = [content convertPoint:base fromView:nil];
+    return NSMakePoint(local.x, content.isFlipped ? local.y : NSHeight(content.bounds) - local.y);
+}
+
+static void click(NSWindow *window, NSPoint point, int button, NSString *what) {
+    sp_input_result down = sp_input_pointer_clicks(window, point.x, point.y, 1, button, 1);
+    sp_input_result up = sp_input_pointer_clicks(window, point.x, point.y, 3, button, 1);
+    note([NSString stringWithFormat:@"%@: press %s, release %s at %@", what, resultText(down), resultText(up),
+        NSStringFromPoint(point)]);
+}
+static void key(NSWindow *window, const char *name, NSString *what) {
+    sp_input_result down = sp_input_key(window, name, NULL, 0, true);
+    sp_input_result up = sp_input_key(window, name, NULL, 0, false);
+    note([NSString stringWithFormat:@"%@: key %s down %s, up %s", what, name, resultText(down), resultText(up)]);
+}
+
+// The button of view whose title is title, in the view tree under view.
+static NSButton *buttonTitled(NSView *view, NSString *title) {
+    if ([view isKindOfClass:NSButton.class] && [((NSButton *)view).title isEqualToString:title]) return (NSButton *)view;
+    for (NSView *child in view.subviews) {
+        NSButton *found = buttonTitled(child, title);
+        if (found) return found;
+    }
+    return nil;
+}
+
+// The facts of a panel: its class, whether the application holds its window, the process that owns its window in the window
+// server, and its frame.
+static NSString *panelFacts(NSWindow *panel) {
+    NSArray *info = [(NSArray *)CGWindowListCopyWindowInfo(kCGWindowListOptionIncludingWindow, (CGWindowID)panel.windowNumber)
+        autorelease];
+    return [NSString stringWithFormat:@"class %@, in the windows of the application %@, window %ld owned by pid %@ (own pid %d), "
+        @"frame %@, content %@", NSStringFromClass(panel.class), [NSApp.windows containsObject:panel] ? @"YES" : @"NO",
+        (long)panel.windowNumber, info.firstObject[(id)kCGWindowOwnerPID] ?: @"-", getpid(), NSStringFromRect(panel.frame),
+        NSStringFromClass(panel.contentView.class)];
+}
+
+// Ends a sheet of window that the input did not end, after the input was handled.
+static void endSheet(NSWindow *window, NSString *what) {
+    NSWindow *sheet = window.attachedSheet;
+    if (!sheet) return;
+    note([NSString stringWithFormat:@"%@: the test ends the sheet that the input left", what]);
+    [window endSheet:sheet returnCode:NSModalResponseAbort];
+    eventWait([what stringByAppendingString:@": the sheet ends"], ^BOOL { return window.attachedSheet == nil; });
+}
+
+static NSAlert *showAlert(NSWindow *window, NSModalResponse *response) {
+    NSAlert *alert = [[NSAlert new] autorelease];
+    alert.messageText = @"Panel check";
+    [alert addButtonWithTitle:@"First"];
+    [alert addButtonWithTitle:@"Second"];
+    *response = 0;
+    [alert beginSheetModalForWindow:window completionHandler:^(NSModalResponse returned) { *response = returned; }];
+    eventWait(@"the alert sheet shows", ^BOOL { return alert.window.isVisible; });
+    return alert;
+}
+
+// A view whose context menu is its menu.
+@interface MenuView : NSView
+@end
+@implementation MenuView
+- (BOOL)isFlipped { return YES; }
+@end
+
+@interface MenuTarget : NSObject
+@property NSInteger runs;
+- (void)act:(id)sender;
+@end
+@implementation MenuTarget
+- (void)act:(id)sender { self.runs++; }
+@end
+
+// The window of the application at a menu level that shows a menu, or nil.
+static NSWindow *menuWindow(NSWindow *except) {
+    for (NSWindow *window in NSApp.windows) {
+        if (window != except && window.isVisible && window.level >= NSPopUpMenuWindowLevel) return window;
+    }
+    return nil;
+}
+
+// Runs attempt once the menu tracks, and ends the tracking after the events that attempt queued were handled: the tracking reads
+// the queued events before the run loop runs a block of the main queue.
+static void whileTracking(NSMenu *menu, NSString *what, BOOL *tracked, void (^attempt)(void)) {
+    __block id observer = [NSNotificationCenter.defaultCenter addObserverForName:NSMenuDidBeginTrackingNotification object:menu
+        queue:nil usingBlock:^(NSNotification *note_) {
+            [NSNotificationCenter.defaultCenter removeObserver:observer];
+            *tracked = YES;
+            dispatch_async(dispatch_get_main_queue(), ^{
+                attempt();
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    if (menuWindow(nil)) note([NSString stringWithFormat:@"%@: the test ends the tracking that the input left", what]);
+                    [menu cancelTracking];
+                });
+            });
+        }];
+}
+
+int main(void) { @autoreleasepool {
+    setvbuf(stdout, NULL, _IOLBF, 0);
+    [NSApplication sharedApplication];
+    [NSApp finishLaunching];
+    installMarks();
+
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(160, 160, 640, 480)
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+    window.releasedWhenClosed = NO;
+    window.animationBehavior = NSWindowAnimationBehaviorNone;
+    MenuView *content = [[[MenuView alloc] initWithFrame:NSMakeRect(0, 0, 640, 480)] autorelease];
+    window.contentView = content;
+    [window orderBack:nil];
+    // A window of the test covers the window, as a window of a person does.
+    NSWindow *cover = [[NSWindow alloc] initWithContentRect:NSMakeRect(140, 140, 700, 560)
+        styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
+    cover.releasedWhenClosed = NO;
+    cover.backgroundColor = NSColor.grayColor;
+    [cover orderWindow:NSWindowAbove relativeTo:window.windowNumber];
+    check(!NSRunningApplication.currentApplication.active, @"the application is not active");
+
+    // An alert sheet: a press of its first button ends it with that button.
+    NSModalResponse response = 0;
+    NSAlert *alert = showAlert(window, &response);
+    note([@"alert sheet: " stringByAppendingString:panelFacts(alert.window)]);
+    click(window, pointOf(window, alert.buttons[0]), 0, @"alert sheet");
+    settle(@"the press of the alert is handled");
+    check(response == NSAlertFirstButtonReturn,
+        [NSString stringWithFormat:@"a press of the first button of an alert sheet ends it with that button (response %ld)", (long)response]);
+    endSheet(window, @"alert sheet press");
+
+    // Return presses the default button of the alert sheet, and Escape its cancel button.
+    alert = showAlert(window, &response);
+    key(window, "Enter", @"alert sheet");
+    settle(@"the key of the alert is handled");
+    check(response == NSAlertFirstButtonReturn,
+        [NSString stringWithFormat:@"Return ends an alert sheet with its default button (response %ld)", (long)response]);
+    endSheet(window, @"alert sheet Return");
+    alert = showAlert(window, &response);
+    [alert.buttons[1] setKeyEquivalent:@"\033"];
+    key(window, "Escape", @"alert sheet");
+    settle(@"the Escape of the alert is handled");
+    check(response == NSAlertSecondButtonReturn,
+        [NSString stringWithFormat:@"Escape ends an alert sheet with its cancel button (response %ld)", (long)response]);
+    endSheet(window, @"alert sheet Escape");
+
+    // A save panel sheet: Return saves under the name of the panel, and a press of its cancel button cancels it.
+    NSString *folder = temporaryFolder(@"soksak-input-panels-");
+    NSSavePanel *save = [NSSavePanel savePanel];
+    save.directoryURL = [NSURL fileURLWithPath:folder];
+    save.nameFieldStringValue = @"panel-check.txt";
+    __block NSModalResponse saved = 0;
+    [save beginSheetModalForWindow:window completionHandler:^(NSModalResponse returned) { saved = returned; }];
+    eventWait(@"the save panel sheet shows", ^BOOL { return window.attachedSheet != nil && window.attachedSheet.isVisible; });
+    note([@"save panel: " stringByAppendingString:panelFacts(window.attachedSheet)]);
+    key(window, "Enter", @"save panel");
+    settle(@"the key of the save panel is handled");
+    check(saved == NSModalResponseOK,
+        [NSString stringWithFormat:@"Return ends a save panel sheet with OK (response %ld)", (long)saved]);
+    endSheet(window, @"save panel Return");
+    save = [NSSavePanel savePanel];
+    save.directoryURL = [NSURL fileURLWithPath:folder];
+    saved = 0;
+    [save beginSheetModalForWindow:window completionHandler:^(NSModalResponse returned) { saved = returned; }];
+    eventWait(@"the save panel sheet shows again", ^BOOL { return window.attachedSheet != nil && window.attachedSheet.isVisible; });
+    NSButton *cancel = buttonTitled(window.attachedSheet.contentView, @"Cancel");
+    note([NSString stringWithFormat:@"save panel: its Cancel button %@", cancel ? @"is a view of the application" : @"is not found"]);
+    if (cancel) click(window, pointOf(window, cancel), 0, @"save panel");
+    settle(@"the press of the save panel is handled");
+    check(saved == NSModalResponseCancel,
+        [NSString stringWithFormat:@"a press of the Cancel button of a save panel sheet cancels it (response %ld)", (long)saved]);
+    endSheet(window, @"save panel press");
+
+    // An open panel sheet: Escape cancels it.
+    NSOpenPanel *open = [NSOpenPanel openPanel];
+    open.directoryURL = [NSURL fileURLWithPath:folder];
+    __block NSModalResponse opened = 0;
+    [open beginSheetModalForWindow:window completionHandler:^(NSModalResponse returned) { opened = returned; }];
+    eventWait(@"the open panel sheet shows", ^BOOL { return window.attachedSheet != nil && window.attachedSheet.isVisible; });
+    note([@"open panel: " stringByAppendingString:panelFacts(window.attachedSheet)]);
+    key(window, "Escape", @"open panel");
+    settle(@"the key of the open panel is handled");
+    check(opened == NSModalResponseCancel,
+        [NSString stringWithFormat:@"Escape cancels an open panel sheet (response %ld)", (long)opened]);
+    endSheet(window, @"open panel Escape");
+
+    // A context menu: a right press opens it, and the release over its item runs the item.
+    MenuTarget *target = [[MenuTarget new] autorelease];
+    NSMenu *context = [[[NSMenu alloc] initWithTitle:@"Context"] autorelease];
+    NSMenuItem *act = [[[NSMenuItem alloc] initWithTitle:@"Act" action:@selector(act:) keyEquivalent:@""] autorelease];
+    act.target = target;
+    [context addItem:act];
+    content.menu = context;
+    BOOL tracked = NO;
+    whileTracking(context, @"context menu", &tracked, ^{
+        NSWindow *shown = menuWindow(window);
+        note([NSString stringWithFormat:@"context menu: %@", shown ? panelFacts(shown) : @"no menu window of the application"]);
+        if (!shown) return;
+        NSPoint item = pointOfScreenRect(window, shown.frame);
+        sp_input_result up = sp_input_pointer_clicks(window, item.x, item.y, 3, 1, 1);
+        note([NSString stringWithFormat:@"context menu: release over the item %s at %@", resultText(up), NSStringFromPoint(item)]);
+    });
+    sp_input_result down = sp_input_pointer_clicks(window, 300, 200, 1, 1, 1);
+    note([NSString stringWithFormat:@"context menu: right press %s", resultText(down)]);
+    settle(@"the context menu input is handled");
+    check(tracked, @"a right press of the window opens its context menu");
+    check(target.runs == 1, [NSString stringWithFormat:@"the release over the item of a context menu runs the item (runs %ld)", (long)target.runs]);
+    content.menu = nil;
+
+    // The menu of a pop-up button: a press opens it, Down Arrow moves to the next item and Return chooses it.
+    NSPopUpButton *popup = [[[NSPopUpButton alloc] initWithFrame:NSMakeRect(40, 40, 180, 26) pullsDown:NO] autorelease];
+    [popup addItemsWithTitles:@[@"One", @"Two", @"Three"]];
+    [popup selectItemAtIndex:0];
+    [content addSubview:popup];
+    NSPoint at = pointOf(window, popup);
+    tracked = NO;
+    whileTracking(popup.menu, @"pop-up menu", &tracked, ^{
+        sp_input_result up = sp_input_pointer_clicks(window, at.x, at.y, 3, 0, 1);
+        note([NSString stringWithFormat:@"pop-up menu: release on the button %s", resultText(up)]);
+        key(window, "ArrowDown", @"pop-up menu");
+        key(window, "Enter", @"pop-up menu");
+    });
+    down = sp_input_pointer_clicks(window, at.x, at.y, 1, 0, 1);
+    note([NSString stringWithFormat:@"pop-up menu: press %s", resultText(down)]);
+    settle(@"the pop-up menu input is handled");
+    check(tracked, @"a press of a pop-up button opens its menu");
+    check(popup.indexOfSelectedItem == 1, [NSString stringWithFormat:
+        @"Down Arrow and Return in the menu of a pop-up button choose the next item (selected %ld)", (long)popup.indexOfSelectedItem]);
+
+    check(!NSRunningApplication.currentApplication.active, @"the input left the application inactive");
+    [cover close];
+    [window close];
+    if (failures) fprintf(stderr, "%d failures\n", failures);
+    return failures ? 1 : 0;
+} }
