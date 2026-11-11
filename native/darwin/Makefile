@@ -128,7 +128,7 @@ endif
 
 CFLAGS     := -arch $(ARCH) -fblocks -fmodules -Wall -Werror -O2 $(MINIMUM)
 
-.PHONY: build-host-callback-worker build-host-callback-abi build fetch test test-app benchmark-site-cost test-capture-frame-identity test-capture-stop-intake test-app-activation test-app-input-reference-readiness test-app-activation-backspace test-app-activation-backspace-repeat build-ime-activation-target test-ime-cli test-app-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost benchmark-webview-resize-cadence build-test repeat repeat-suite clean pkgconfig-current
+.PHONY: build-host-callback-worker build-host-callback-abi build fetch test test-app benchmark-site-cost test-capture-frame-identity test-capture-stop-intake test-app-activation test-app-virtual-ime test-app-input-reference-readiness test-app-activation-backspace test-app-activation-backspace-repeat build-ime-activation-target test-ime-cli test-app-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost benchmark-webview-resize-cadence build-test repeat repeat-suite clean pkgconfig-current
 
 build: fetch $(LIBRARY) $(PKGCONFIG)
 
@@ -510,8 +510,13 @@ test-capture-stop-intake: $(BUILD)/capture_stop_intake_test
 test-pressure: $(BUILD)/document_pressure_test
 	@$(BUILD)/document_pressure_test
 
-test-app-activation: $(BUILD)/webview_input_test $(BUILD)/window_fullscreen_test $(BUILD)/image_region_ime_test
-	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) window_fullscreen_test webview_input_test,--monitor image_region_ime_test
+test-app-activation: $(BUILD)/webview_input_test $(BUILD)/window_fullscreen_test $(BUILD)/image_region_ime_test $(BUILD)/input_virtual_ime_test $(BUILD)/ime_person_app
+	@SOKSAK_IME_PERSON_APP="$(BUILD)/ime_person_app" node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) window_fullscreen_test webview_input_test,--monitor image_region_ime_test input_virtual_ime_test
+
+# Runs only the input method check of the virtual key window, which selects Korean 2-Set for its run and starts the person's
+# application in front (tests/input_virtual_ime_test.m).
+test-app-virtual-ime: $(BUILD)/input_virtual_ime_test $(BUILD)/ime_person_app
+	@SOKSAK_IME_PERSON_APP="$(BUILD)/ime_person_app" node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) input_virtual_ime_test
 
 # Runs only the focused AppKit reference input-context readiness case and restores the outer input source and application.
 test-app-input-reference-readiness: $(BUILD)/input_reference_test
@@ -571,6 +576,9 @@ $(BUILD)/image_region_ime_test: tests/image_region_ime_test.m tests/support/ime_
 	@clang $(CFLAGS) -DVIEW_PAGE_CASES='"$(VIEW_PAGE_CASES)"' -I$(CURDIR)/process-identity/include -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/ime_cli.m tests/support/ime_source_restore.m tests/support/event_wait.m tests/support/no_activation.m tests/support/records.m tests/support/temporary_folder.m tests/support/view_import_map.m -L$(BUILD) -lsoksak-darwin -L$(CURDIR)/process-identity/lib -lsoksak-process-identity $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
 
 $(BUILD)/ime_source_probe: tests/ime_source_probe.m Makefile | $(BUILD)
+	@clang $(CFLAGS) $< $(FRAMEWORKS) -o $@
+
+$(BUILD)/ime_person_app: tests/ime_person_app.m Makefile | $(BUILD)
 	@clang $(CFLAGS) $< $(FRAMEWORKS) -o $@
 
 $(BUILD)/ime_source_restore_test: tests/ime_source_restore_test.m tests/support/ime_source_restore.m tests/support/ime_source_restore.h $(LIBRARY) $(PROCESS_IDENTITY_LIBRARY) $(wildcard src/*.h src/private/*.h tests/support/*.h tests/support/*.m)
