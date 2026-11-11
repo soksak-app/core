@@ -442,6 +442,11 @@ impl Platform for Darwin {
         document::draw_covered(window, draw)
     }
     #[cfg(feature = "diagnostics")]
+    fn raise_windows(&self, raise: bool) -> Result<(), String> {
+        window::raise(raise);
+        Ok(())
+    }
+    #[cfg(feature = "diagnostics")]
     fn document_viewport_marker(
         &self,
         document: Option<Handle>,

@@ -41,3 +41,4 @@
 #include "host_api_webview.h"
 #include "host_api_window.h"
 #include "host_api_window_objects.h"
+#include "host_api_windows_raise.h"

@@ -29,7 +29,7 @@ const APPS = ["wailsv3", "tauriv2", "mygo"];
 
 /** The markers of diagnostic code: diagnostic method names, recording library symbols, and sidecar diagnostic symbols. */
 const MARKS = [
-  { what: "diagnostic method", pattern: /diagnostics\.(fixture|drag|knob|transcript|capture|modal|surface|window\.draw-covered)/ },
+  { what: "diagnostic method", pattern: /diagnostics\.(fixture|drag|knob|transcript|capture|modal|surface|window\.draw-covered|windows\.raise)/ },
   { what: "window capture symbol", pattern: /sp_capture_/ },
   // A release executable with symbols stripped has no sp_capture_. The ObjC class names of the recording remain as strings.
   { what: "window capture class", pattern: /SPCapture/ },

@@ -159,6 +159,7 @@ fn invalid_json_closes_connection() {
 | `diagnostics.document.viewport-marker.reports-native-errors` | native marker 실패는 원래 text와 internal-error code로 반환하며 성공으로 보고하지 않는다. | all |
 | `diagnostics.capture.document-identity.start.is-declared` | 진단 build는 `diagnostics.capture.document-identity.start`를 선언한다. | all |
 | `diagnostics.window.draw-covered.is-declared` | 진단 build는 `diagnostics.window.draw-covered`를 선언한다. | all |
+| `diagnostics.windows.raise.is-declared` | 진단 build는 `diagnostics.windows.raise`를 선언한다. | all |
 | `diagnostics.capture-document-identity.stop-preserves-captures-without-a-document-source` | 선택된 document identity source가 없는 중지는 source freeze와 제거를 건너뛰고 capture를 한 번 중지하며 `frameIdentity` option의 두 값을 모두 보존한다. | all |
 | `diagnostics.capture-document-identity.stop-orders-freeze-capture-and-cleanup` | 선택된 source가 있으면 중지는 source를 freeze하고 capture를 중지한 뒤 같은 generation을 제거한다. `issuedSlots`는 성공한 freeze reply에서 온다. | all |
 | `diagnostics.capture-document-identity.stop-does-not-credit-unconfirmed-freeze` | source freeze에 실패하면 issued-slot count를 더하지 않지만 capture finalization과 source 제거는 계속 시도하고 오류를 보존한다. | all |

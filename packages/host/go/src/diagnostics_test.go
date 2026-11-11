@@ -1005,6 +1005,63 @@ func TestDrawCoveredIsADiagnosticMethod(t *testing.T) {
 	}
 }
 
+// The method that raises the windows of the application to the check window level is a diagnostic method.
+// contract: diagnostics.windows.raise.is-declared
+func TestWindowsRaiseIsADiagnosticMethod(t *testing.T) {
+	if _, found := diagnosticMethods["diagnostics.windows.raise"]; !found {
+		t.Fatal("diagnostics.windows.raise is not a diagnostic method")
+	}
+}
+
+// raisingPlatform records each raise of the windows of the application and whether it ran in a step of the main thread.
+type raisingPlatform struct {
+	platform.Platform
+	inside *bool
+	calls  []string
+}
+
+func (p *raisingPlatform) RaiseWindows(raise bool) {
+	if !*p.inside {
+		p.calls = append(p.calls, "outside the main thread")
+		return
+	}
+	p.calls = append(p.calls, fmt.Sprintf("raise %t", raise))
+}
+
+// diagnostics.windows.raise requires its boolean, changes the level of the windows of the application in a step of the main
+// thread, and answers null.
+func TestWindowsRaiseSetsTheLevelOfTheWindowsInAStepOfTheMainThread(t *testing.T) {
+	method := diagnosticMethods["diagnostics.windows.raise"]
+	if method == nil {
+		t.Fatal("diagnostics.windows.raise is not registered")
+	}
+	inside := false
+	raiser := &raisingPlatform{inside: &inside}
+	savedFramework, savedSystem := framework, system
+	framework, system = markedStepFramework{inside: &inside}, raiser
+	t.Cleanup(func() { framework, system = savedFramework, savedSystem })
+	h := &Host{windows: map[uint]*Surfaces{1: {name: "window-a", documents: NewDocuments()}}}
+	e := &Endpoint{backend: hostBackend{h: h}}
+
+	for _, params := range []string{`{"window":"window-a"}`, `{"window":"window-a","raise":1}`} {
+		if _, err := method(e, nil, json.RawMessage(params), nil); err == nil {
+			t.Fatalf("diagnostics.windows.raise %s answered without an error", params)
+		}
+	}
+	if len(raiser.calls) != 0 {
+		t.Fatalf("a refused request changed the windows: %v", raiser.calls)
+	}
+	for _, raise := range []bool{true, false} {
+		result, err := method(e, nil, json.RawMessage(fmt.Sprintf(`{"window":"window-a","raise":%t}`, raise)), nil)
+		if err != nil || result != nil {
+			t.Fatalf("diagnostics.windows.raise %t = %v, %v; want null", raise, result, err)
+		}
+	}
+	if want := []string{"raise true", "raise false"}; !reflect.DeepEqual(raiser.calls, want) {
+		t.Fatalf("the windows changed as %v, want %v", raiser.calls, want)
+	}
+}
+
 // contract: recording.drag.layout-trace-after-settle
 func TestRecordedDragStopsItsLayoutTraceAfterTheLastLayoutIsPresented(t *testing.T) {
 	var order []string

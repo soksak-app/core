@@ -332,6 +332,10 @@ impl Platform for Windows {
         Err("not implemented on Windows".into())
     }
     #[cfg(feature = "diagnostics")]
+    fn raise_windows(&self, _raise: bool) -> Result<(), String> {
+        Err("not implemented on Windows".into())
+    }
+    #[cfg(feature = "diagnostics")]
     fn document_viewport_marker(
         &self,
         _document: Option<Handle>,

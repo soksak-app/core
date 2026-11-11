@@ -178,6 +178,7 @@
     "main_sp_document_draw_covered",
     "main_sp_document_viewport_marker",
     "main_sp_input_source_current",
+    "main_sp_windows_raise",
     "main_surfaceLayoutTracePresented",
     "main_surfaceLayoutTraceRequested",
     "main_surfaceLayoutTraceStart",
