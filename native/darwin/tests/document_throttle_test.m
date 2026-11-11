@@ -11,6 +11,7 @@
 #import <Network/Network.h>
 #import <QuartzCore/QuartzCore.h>
 #import <WebKit/WebKit.h>
+#import "support/check_level.h"
 #import "support/temporary_folder.h"
 #import "document_view.h"
 #import "webview_geometry.h"
@@ -197,6 +198,7 @@ int main(void) { @autoreleasepool {
             windowVisible = (window.occlusionState & NSWindowOcclusionStateVisible) != 0;
             wake();
         }];
+    window.level = kCheckWindowLevel;
     [window orderFrontRegardless];
     windowVisible = (window.occlusionState & NSWindowOcclusionStateVisible) != 0;
     void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
@@ -239,6 +241,7 @@ int main(void) { @autoreleasepool {
         styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
     [cover setReleasedWhenClosed:NO];
     cover.backgroundColor = NSColor.blackColor;
+    cover.level = kCheckWindowLevel;
     [cover orderFrontRegardless];
     until(^BOOL { return !windowVisible; });
     NSDictionary *covered = change(view, next);

@@ -8,6 +8,7 @@
 #import <Network/Network.h>
 #import <QuartzCore/QuartzCore.h>
 #import <WebKit/WebKit.h>
+#import "support/check_level.h"
 #import "support/event_wait.h"
 #import "support/temporary_folder.h"
 #import "capture.h"
@@ -136,6 +137,7 @@ static Window openWindow(NSRect frame) {
     WKWebView *main = [[[WKWebView alloc] initWithFrame:window.contentView.bounds] autorelease];
     main.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     [window.contentView addSubview:main];
+    window.level = kCheckWindowLevel;
     [window orderFrontRegardless];
     void *surface = sp_surface_create(sp_window_set_main_webview(window, main));
     check(surface != NULL, @"a surface is created in the window");
@@ -259,6 +261,7 @@ int main(void) { @autoreleasepool {
     [firstCover setReleasedWhenClosed:NO];
     firstCover.animationBehavior = NSWindowAnimationBehaviorNone;
     firstCover.backgroundColor = NSColor.blackColor;
+    firstCover.level = kCheckWindowLevel;
     [firstCover orderFrontRegardless];
     eventWait(@"the first cover occludes the first window", ^BOOL { return occluded(first.window); });
     check(!occluded(other.window), @"the first cover leaves a part of the other window visible");
@@ -267,6 +270,7 @@ int main(void) { @autoreleasepool {
     [cover setReleasedWhenClosed:NO];
     cover.animationBehavior = NSWindowAnimationBehaviorNone;
     cover.backgroundColor = NSColor.blackColor;
+    cover.level = kCheckWindowLevel;
     [cover orderFrontRegardless];
     eventWait(@"the cover occludes both windows", ^BOOL { return occluded(first.window) && occluded(other.window); });
     check(becomes(otherRegion, @"hidden"), @"the region of the other covered window hides its document");

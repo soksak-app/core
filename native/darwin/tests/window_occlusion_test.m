@@ -4,6 +4,7 @@
 // they must finish in an occluded window too. The check does not activate the application.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
+#import "support/check_level.h"
 #import "window_facts.h"
 #import "webview_geometry.h"
 #import "private/webkit.h"
@@ -79,6 +80,7 @@ int main(void) { @autoreleasepool {
     page.navigationDelegate = surfaceNavigation;
     [main loadHTMLString:@"<!doctype html><body>main</body>" baseURL:nil];
     [page loadHTMLString:@"<!doctype html><body>surface</body>" baseURL:nil];
+    window.level = kCheckWindowLevel;
     [window orderFrontRegardless];
     eventWait(@"the main and surface pages load in a visible window", ^BOOL { return navigation.finished && surfaceNavigation.finished
         && (window.occlusionState & NSWindowOcclusionStateVisible) != 0; });
@@ -94,6 +96,7 @@ int main(void) { @autoreleasepool {
         styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO] autorelease];
     [cover setReleasedWhenClosed:NO];
     cover.backgroundColor = NSColor.blackColor;
+    cover.level = kCheckWindowLevel;
     [cover orderFrontRegardless];
     eventWait([NSString stringWithFormat:@"the covering window occludes the main window (window %@ on %@ level %ld, cover %@ on %@ level %ld visible %d)",
             NSStringFromRect(window.frame), NSStringFromRect(window.screen.frame), (long)window.level,

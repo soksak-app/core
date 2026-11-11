@@ -2,6 +2,7 @@
 // movement correctly. The check does not activate the application.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
+#import "support/check_level.h"
 #import "webview_geometry.h"
 #import "window_facts.h"
 #import "input_virtual.h"
@@ -336,6 +337,7 @@ int main(void) { @autoreleasepool {
         reportedOnScreen = onScreen;
     }), @"occlusion observation starts");
     check(!sp_window_observe_occlusion(NULL, ^(bool onScreen) { (void)onScreen; }), @"occlusion observation without a window is rejected");
+    observed.level = kCheckWindowLevel;
     [observed orderFrontRegardless];
     eventWait(@"the shown window reports an occlusion change", ^BOOL{ return changes > 0; });
     check(changes > 0 && (observed.occlusionState & NSWindowOcclusionStateVisible) != 0,

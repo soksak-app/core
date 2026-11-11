@@ -4,6 +4,7 @@
 #import "../src/capture.m"
 #import "support/event_wait.h"
 #import <objc/runtime.h>
+#import "support/check_level.h"
 
 static int failures;
 static void check(BOOL condition, NSString *message) {
@@ -48,6 +49,7 @@ int main(void) { @autoreleasepool {
         styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
     window.releasedWhenClosed = NO;
     window.animationBehavior = NSWindowAnimationBehaviorNone;
+    window.level = kCheckWindowLevel;
     [window orderFrontRegardless];
     // A preparation sizes the recording from the bounds that the window server reports for the window, and the window server
     // has them once it put the window on screen, which the occlusion state reports.

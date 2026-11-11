@@ -1,6 +1,7 @@
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
 #import <WebKit/WebKit.h>
+#import "support/check_level.h"
 #import "capture.h"
 #import "document_view.h"
 #import "private/webkit.h"
@@ -128,6 +129,7 @@ int main(void) { @autoreleasepool {
     void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     webviewSetFrame(surface, 0, 0, 620, 480);
     webviewSetSurfaceHidden(surface, false);
+    window.level = kCheckWindowLevel;
     [window orderFrontRegardless];
     // The window server shows the window before it tells the window that it became visible, and that change of the occlusion
     // state arrives as a window server event.
