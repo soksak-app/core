@@ -1,8 +1,9 @@
 // Checks that a temporary folder that cannot be removed at exit fails the process with a message that names each entry that
 // remains, with its mode and flags (tests/support/temporary_folder.m). The test runs itself as a child that leaves an immutable
 // file in its temporary folder, reads the message of the child, and removes the folder after it clears the flag. It also checks
-// that a kept folder is moved at exit into the folder that NATIVE_TEST_EVIDENCE names, and that a process without it removes the
-// kept folder and fails.
+// that a kept folder is moved at exit into the folder that NATIVE_TEST_EVIDENCE names, that a process without it removes the
+// kept folder and fails, and that a folder removed before the exit is gone at once and frees its place, so a check that repeats
+// creates more folders over its run than a process holds at a time.
 #import <Foundation/Foundation.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -37,6 +38,28 @@ static int keptChild(void) {
         return 2;
     }
     keepTemporaryFolder(folder);
+    printf("%s\n", folder.fileSystemRepresentation);
+    fflush(stdout);
+    return 0;
+}
+
+// The removing child: creates and removes more folders than a process holds at a time, each with a file, and prints the path
+// of the last one after its removal.
+static int removedChild(void) {
+    NSString *folder = nil;
+    for (int i = 0; i < 100; i++) {
+        folder = temporaryFolder(@"soksak-temporary-folder-removed-");
+        if (![@"frame" writeToFile:[folder stringByAppendingPathComponent:@"frame"] atomically:NO encoding:NSUTF8StringEncoding
+                error:nil]) {
+            fprintf(stderr, "the removing child cannot write into %s\n", folder.fileSystemRepresentation);
+            return 2;
+        }
+        removeTemporaryFolder(folder);
+        if ([NSFileManager.defaultManager fileExistsAtPath:folder]) {
+            fprintf(stderr, "the removed folder %s remains\n", folder.fileSystemRepresentation);
+            return 3;
+        }
+    }
     printf("%s\n", folder.fileSystemRepresentation);
     fflush(stdout);
     return 0;
@@ -83,6 +106,7 @@ static ChildRun runChild(const char *executable, NSString *argument, NSDictionar
 int main(int argc, char **argv) { @autoreleasepool {
     if (argc == 2 && strcmp(argv[1], "--child") == 0) return child();
     if (argc == 2 && strcmp(argv[1], "--kept-child") == 0) return keptChild();
+    if (argc == 2 && strcmp(argv[1], "--removed-child") == 0) return removedChild();
     ChildRun held = runChild(argv[0], @"--child", @{});
     int status = held.status;
     NSString *folder = held.folder;
@@ -127,6 +151,11 @@ int main(int argc, char **argv) { @autoreleasepool {
             @"FAIL: NATIVE_TEST_EVIDENCE is not set, so the kept folder %@ is removed", unset.folder]],
         [NSString stringWithFormat:@"a process without NATIVE_TEST_EVIDENCE removes its kept folder and fails (status %d): %@",
             unset.status, unset.message]);
+
+    ChildRun removed = runChild(argv[0], @"--removed-child", @{});
+    check(removed.status == 0 && removed.folder.length > 0 && ![NSFileManager.defaultManager fileExistsAtPath:removed.folder],
+        [NSString stringWithFormat:@"a folder removed before the exit is gone at once and frees its place for the next folder "
+            "(status %d): %@", removed.status, removed.message]);
     if (failures) fprintf(stderr, "%d failures\n", failures);
     return failures ? 1 : 0;
 }}

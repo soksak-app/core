@@ -74,12 +74,12 @@ static void recordStoreEnd(void *context, const char *error) {
 // it during the removal. A directory without a store ends at once. All stores end together: a store that stays open while
 // another ends starts the network process again, and that process writes into the folders. Ends only on the main thread,
 // which owns the documents.
-static BOOL endDocumentStores(void) {
+static BOOL endDocumentStores(char **list, int listCount) {
     if (!pthread_main_np()) return YES;
     size_t count = 0, capacity = 64;
     StoreEnd *ends = calloc(capacity, sizeof(StoreEnd));
-    for (int i = 0; i < folderCount; i++) {
-        char *roots[] = { folders[i], NULL };
+    for (int i = 0; i < listCount; i++) {
+        char *roots[] = { list[i], NULL };
         FTS *walk = fts_open(roots, FTS_PHYSICAL | FTS_NOCHDIR, NULL);
         if (!walk) continue;
         for (FTSENT *entry = fts_read(walk); entry; entry = fts_read(walk)) {
@@ -128,8 +128,22 @@ static BOOL keepFolder(const char *folder) {
     return YES;
 }
 
+// Removes folder with its contents. Returns NO with the failure and the entries that remain written when it stays.
+static BOOL removeFolder(const char *folder) {
+    removefile_state_t state = removefile_state_alloc();
+    removefile_state_set(state, REMOVEFILE_STATE_ERROR_CALLBACK, writeRefusedEntry);
+    int result = removefile(folder, state, REMOVEFILE_RECURSIVE);
+    int error = errno;
+    removefile_state_free(state);
+    if (result == 0 && access(folder, F_OK) != 0) return YES;
+    // removefile returns 0 when its error callback lets it proceed past an entry, so the folder that still exists is the failure.
+    fprintf(stderr, "FAIL: the temporary folder %s is not removed: %s\n", folder, result != 0 ? strerror(error) : "entries remain");
+    writeRemainingEntries(folder);
+    return NO;
+}
+
 static void removeFolders(void) {
-    BOOL failed = !endDocumentStores();
+    BOOL failed = !endDocumentStores(folders, folderCount);
     for (int i = 0; i < folderCount; i++) {
         struct stat info;
         if (lstat(folders[i], &info) != 0 && errno == ENOENT) continue;
@@ -137,18 +151,7 @@ static void removeFolders(void) {
             if (keepFolder(folders[i])) continue;
             failed = YES;
         }
-        removefile_state_t state = removefile_state_alloc();
-        removefile_state_set(state, REMOVEFILE_STATE_ERROR_CALLBACK, writeRefusedEntry);
-        int result = removefile(folders[i], state, REMOVEFILE_RECURSIVE);
-        int error = errno;
-        removefile_state_free(state);
-        if (result != 0 || access(folders[i], F_OK) == 0) {
-            // removefile returns 0 when its error callback lets it proceed past an entry, so the folder that still exists is the failure.
-            fprintf(stderr, "FAIL: the temporary folder %s is not removed: %s\n", folders[i],
-                result != 0 ? strerror(error) : "entries remain");
-            writeRemainingEntries(folders[i]);
-            failed = YES;
-        }
+        if (!removeFolder(folders[i])) failed = YES;
     }
     if (failed) _exit(1);
 }
@@ -183,5 +186,24 @@ void keepTemporaryFolder(NSString *folder) {
         return;
     }
     fprintf(stderr, "FAIL: the kept folder %s is not a folder of temporaryFolder\n", folder.fileSystemRepresentation);
+    exit(1);
+}
+
+void removeTemporaryFolder(NSString *folder) {
+    for (int i = 0; i < folderCount; i++) {
+        if (strcmp(folders[i], folder.fileSystemRepresentation) != 0) continue;
+        if (keptFolders[i]) {
+            fprintf(stderr, "FAIL: the kept folder %s is removed before the exit\n", folders[i]);
+            exit(1);
+        }
+        BOOL ended = endDocumentStores(&folders[i], 1);
+        if (!removeFolder(folders[i]) || !ended) exit(1);
+        free(folders[i]);
+        memmove(&folders[i], &folders[i + 1], (size_t)(folderCount - i - 1) * sizeof folders[0]);
+        memmove(&keptFolders[i], &keptFolders[i + 1], (size_t)(folderCount - i - 1) * sizeof keptFolders[0]);
+        folderCount--;
+        return;
+    }
+    fprintf(stderr, "FAIL: the removed folder %s is not a folder of temporaryFolder\n", folder.fileSystemRepresentation);
     exit(1);
 }

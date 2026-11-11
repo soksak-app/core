@@ -17,3 +17,8 @@ NSString *temporaryFolder(NSString *prefix);
 /// failure. A folder that cannot be moved, or a process without NATIVE_TEST_EVIDENCE, is written as a failure, the folder is
 /// removed, and the process ends with status 1. A folder that temporaryFolder did not create fails the process with status 1.
 void keepTemporaryFolder(NSString *folder);
+
+/// Removes folder, which temporaryFolder created and no check keeps, with its contents at once, after the data stores under it
+/// end, and frees its place, so a check that repeats can create more folders over its run than the process holds at a time. A
+/// folder that is not removed, a kept folder, or a folder that temporaryFolder did not create fails the process with status 1.
+void removeTemporaryFolder(NSString *folder);

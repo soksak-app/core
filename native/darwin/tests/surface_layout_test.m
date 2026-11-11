@@ -1,9 +1,11 @@
 // Checks that the app DOM presentation wait excludes independent webviews and that a layout transaction can join a
 // resized plugin root webview. A busy document must not block the app DOM layout. The check does not activate the app.
 #import <Cocoa/Cocoa.h>
+#import <IOSurface/IOSurface.h>
 #import <QuartzCore/QuartzCore.h>
 #import "surface_layout.h"
 #import "capture.h"
+#import "image_region.h"
 #import "input_inject.h"
 #import "support/capture_frame.m"
 #import "support/event_wait.h"
@@ -426,12 +428,20 @@ static void checkQueuedTicketCancel(WKWebViewConfiguration *configuration) {
 }
 
 // The composition of the real DOM bounds and the native region must keep both bounds during preparation. Controls the
-// commit after the display confirmation and also records the frames of the transaction in progress.
-static void checkRecordedComposition(WKWebViewConfiguration *configuration) {
+// commit after the display confirmation and also records the frames of the transaction in progress. With pageChange NO the
+// page draws nothing and the transaction narrows only the native plane, committed at once: a control that the recording
+// delivers the frame of a commit without a drawing of the page at the first refresh after the settled presentation, so a
+// failure of the check with the page tells a late composition of the commit and not a late recording (docs/features.md, F752).
+static void checkRecordedComposition(WKWebViewConfiguration *configuration, BOOL pageChange) {
+    int failed = failures;
+    NSString *variant = pageChange ? @"composition" : @"native plane only";
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(120, 120, 400, 200)
         styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
     window.releasedWhenClosed = NO;
     window.animationBehavior = NSWindowAnimationBehaviorNone;
+    // A window background far from the color of the native plane, so the area that a narrower plane leaves shows in the frames
+    // whatever the page or the window draws there.
+    if (!pageChange) window.backgroundColor = [NSColor colorWithSRGBRed:1 green:0 blue:0 alpha:1];
     WKWebView *main = page(window, configuration, NSMakeRect(0, 0, 400, 200), @"sptest://app/composition");
     check(sp_window_set_main_webview(window, main), @"the composition fixture registers its main DOM");
     void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
@@ -455,11 +465,15 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration) {
         check(error == NULL, @"the initial composition fixture is presented"); shown = at;
     });
     eventWait(@"the settled wait of the initial composition ends", ^BOOL { return shown != 0; });
-    const char *directory = temporaryFolder(@"soksak-composition-test-").fileSystemRepresentation;
+    NSString *folder = temporaryFolder(@"soksak-composition-test-");
     char *operationError = NULL;
     BOOL opened = sp_capture_open(window.windowNumber, false, 0, &operationError);
     BOOL started = NO;
-    if (opened) { free(operationError); operationError = NULL; started = sp_capture_start(directory, false, &operationError); }
+    if (opened) {
+        free(operationError);
+        operationError = NULL;
+        started = sp_capture_start(folder.fileSystemRepresentation, false, &operationError);
+    }
     check(started, [NSString stringWithFormat:@"the composition recording starts (%s)", operationError == NULL ? "" : operationError]);
     free(operationError);
     if (started) {
@@ -467,23 +481,25 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration) {
         surfaceLayoutTraceStart();
         surfaceLayoutBegin(window, 107, ^(int allowed) { check(allowed, @"the composition transaction starts"); });
         webviewSetFrame(surface, 40, 40, 250, 120);
-        __block BOOL ready = NO;
-        [main evaluateJavaScript:@"document.getElementById('box').style.width='250px'"
-            completionHandler:^(id value, NSError *error) {
-                check(error == nil, @"the composition DOM border moves during preparation");
-                surfaceLayoutAfterPresentation(main, ^{ ready = YES; });
-            }];
-        eventWait(@"the app DOM presents the moved border", ^BOOL { return ready; });
-        waitFrames(window.screen, 1);
-        __block BOOL clipped = NO;
-        [main evaluateJavaScript:@"document.styleSheets[0].cssRules[1].style.clipPath='path(\"M0,0H400V200H0ZM40,40v120h250v-120Z\")'"
-            completionHandler:^(id value, NSError *error) {
-                check(error == nil, @"the composition paint clip changes while the native transaction is pending");
-                surfaceLayoutAfterPresentation(main, ^{ clipped = YES; });
-            }];
-        eventWait(@"the app DOM presents the changed paint clip", ^BOOL { return clipped; });
-        waitFrames(window.screen, 5);
-        check(surfaceLayoutCommit(window, 107), @"the controlled composition transaction commits");
+        if (pageChange) {
+            __block BOOL ready = NO;
+            [main evaluateJavaScript:@"document.getElementById('box').style.width='250px'"
+                completionHandler:^(id value, NSError *error) {
+                    check(error == nil, @"the composition DOM border moves during preparation");
+                    surfaceLayoutAfterPresentation(main, ^{ ready = YES; });
+                }];
+            eventWait(@"the app DOM presents the moved border", ^BOOL { return ready; });
+            waitFrames(window.screen, 1);
+            __block BOOL clipped = NO;
+            [main evaluateJavaScript:@"document.styleSheets[0].cssRules[1].style.clipPath='path(\"M0,0H400V200H0ZM40,40v120h250v-120Z\")'"
+                completionHandler:^(id value, NSError *error) {
+                    check(error == nil, @"the composition paint clip changes while the native transaction is pending");
+                    surfaceLayoutAfterPresentation(main, ^{ clipped = YES; });
+                }];
+            eventWait(@"the app DOM presents the changed paint clip", ^BOOL { return clipped; });
+            waitFrames(window.screen, 5);
+        }
+        check(surfaceLayoutCommit(window, 107), [NSString stringWithFormat:@"%@: the controlled transaction commits", variant]);
         shown = 0;
         surfaceLayoutAfterSettled(main.window, surfaceLayoutMainPresentation(main), ^(double at, const char *error) {
             check(error == NULL, @"the final composition fixture is presented"); shown = at;
@@ -492,14 +508,21 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration) {
         int count = sp_capture_stop(shown, 0);
         const char *captureError = sp_capture_error();
         check(count >= 2 && !sp_capture_limited() && captureError[0] == '\0', [NSString stringWithFormat:
-            @"the composition recording includes initial and final frames without truncation or errors "
-            "(%d frames, limited %d, stop after %.3f, error %s)", count, sp_capture_limited(), shown, captureError]);
+            @"%@: the recording includes initial and final frames without truncation or errors "
+            "(%d frames, limited %d, stop after %.3f, error %s)", variant, count, sp_capture_limited(), shown, captureError]);
         double timeline[SURFACE_LAYOUT_TRACE_STAGES] = {0};
         check(surfaceLayoutTraceStop(timeline, 1) == 1, @"the composition recording contains its transaction timeline");
-        for (int index = 1; index <= count; index++) {
-            NSString *path = [[NSString stringWithUTF8String:directory] stringByAppendingPathComponent:
-                [NSString stringWithFormat:@"frame-%04d.bgra", index]];
-            NSData *data = readCaptureFrame([NSData dataWithContentsOfFile:path]);
+        // The capture numbers its frames across the recordings of the process, so the frames of this recording are the
+        // files of its folder in their order.
+        NSMutableArray<NSString *> *frameNames = [NSMutableArray array];
+        for (NSString *name in [NSFileManager.defaultManager contentsOfDirectoryAtPath:folder error:NULL])
+            if ([name.pathExtension isEqualToString:@"bgra"]) [frameNames addObject:name];
+        [frameNames sortUsingSelector:@selector(compare:)];
+        check((int)frameNames.count == count, [NSString stringWithFormat:@"%@: the recording folder holds every recorded frame "
+            "(%lu files, %d reported)", variant, (unsigned long)frameNames.count, count]);
+        for (int index = 1; index <= (int)frameNames.count; index++) {
+            NSData *data = readCaptureFrame([NSData dataWithContentsOfFile:
+                [folder stringByAppendingPathComponent:frameNames[index - 1]]]);
             uint32_t head[3] = {0}; double info[7] = {0};
             BOOL valid = data.length >= sizeof(head) + sizeof(info);
             if (valid) {
@@ -509,10 +532,24 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration) {
                     data.length == sizeof(head) + sizeof(info) + (size_t)head[2] * head[1] &&
                     info[4] > 0 && info[5] > 0;
             }
-            check(valid, [NSString stringWithFormat:@"composition frame %d has complete pixels and metadata", index]);
+            check(valid, [NSString stringWithFormat:@"%@ frame %d has complete pixels and metadata", variant, index]);
             if (!valid) continue;
             const uint8_t *pixels = (const uint8_t *)data.bytes + sizeof(head) + sizeof(info);
             double scale = info[4] * info[5];
+            BOOL preCommit = index == 1 || info[6] < timeline[3];
+            if (!pageChange) {
+                // The column at x 295 lies inside the native plane before the commit and outside the narrower plane after it.
+                size_t px = (size_t)floor((info[0] + 295) * scale), py = (size_t)floor((info[1] + 100) * scale);
+                const uint8_t *rgb = px < head[0] && py < head[1] ? pixels + py * head[2] + px * 4 : NULL;
+                BOOL narrowed = rgb != NULL && (abs((int)rgb[2] - 25) > 6 || abs((int)rgb[1] - 27) > 6 || abs((int)rgb[0] - 36) > 6);
+                if (preCommit)
+                    check(!narrowed, [NSString stringWithFormat:@"%@: a pre-commit frame shows the native plane at x 295", variant]);
+                if (index == count)
+                    check(narrowed, [NSString stringWithFormat:@"%@: the final frame shows the narrower native plane (x 295 rgb %d,%d,%d, "
+                        "display %.3f, committed %.3f)", variant, rgb ? rgb[2] : -1, rgb ? rgb[1] : -1, rgb ? rgb[0] : -1, info[6],
+                        timeline[3]]);
+                continue;
+            }
             BOOL found = NO;
             double borderAt = NAN;
             for (double x = 290; x <= 302 && !found; x += 0.5) {
@@ -531,7 +568,7 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration) {
             check(found, [NSString stringWithFormat:@"composition frame %d/%d preserves the right DOM border "
                 "(display %.3f, begun %.3f, presented %.3f, committed %.3f)",
                 index, count, info[6], timeline[1], timeline[2], timeline[3]]);
-            if (index == 1 || info[6] < timeline[3])
+            if (preCommit)
                 check(borderAt >= 300 && borderAt < 301, [NSString stringWithFormat:
                     @"a pre-commit composition frame retains the initial border (x %.1f)", borderAt]);
             if (index == count)
@@ -539,6 +576,10 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration) {
                     @"the final composition frame contains the moved border (x %.1f)", borderAt]);
         }
     }
+    // The folder of a failing check holds its frames and the status and display time of every callback of the stream
+    // (callback-status.jsonl); a passing check removes its folder at once.
+    if (failures > failed) keepTemporaryFolder(folder);
+    else removeTemporaryFolder(folder);
     sp_surface_close(surface);
     [window close]; [window release];
 }
@@ -579,10 +620,47 @@ static void pointerDone(void *context, sp_input_result result, const sp_input_he
 }
 @end
 
+static void ignoreRegionEvent(void *context, const char *json) { (void)context; (void)json; }
+
+// Presents to region a raster of its current device-pixel size in the color of the native plane, as the supplier of an image
+// region answers the raster size of a placement. Returns false when the region has no raster size or rejects the raster.
+static BOOL presentRegionRaster(void *region, uint64_t raster) {
+    double size[3] = {0};
+    if (!sp_region_raster(region, size) || size[0] < 1 || size[1] < 1) return NO;
+    size_t width = (size_t)size[0], height = (size_t)size[1];
+    IOSurfaceRef surface = IOSurfaceCreate((CFDictionaryRef)@{
+        (id)kIOSurfaceWidth: @(width), (id)kIOSurfaceHeight: @(height),
+        (id)kIOSurfaceBytesPerElement: @4, (id)kIOSurfacePixelFormat: @(kCVPixelFormatType_32BGRA),
+    });
+    if (!surface) return NO;
+    unsigned char nonce[16];
+    arc4random_buf(nonce, sizeof nonce);
+    IOSurfaceSetValue(surface, CFSTR("soksak.frame"), [NSData dataWithBytes:nonce length:sizeof nonce]);
+    IOSurfaceLock(surface, 0, NULL);
+    uint8_t *base = IOSurfaceGetBaseAddress(surface);
+    size_t stride = IOSurfaceGetBytesPerRow(surface);
+    for (size_t y = 0; y < height; y++) {
+        for (size_t x = 0; x < width; x++) {
+            uint8_t *pixel = base + y * stride + x * 4;
+            pixel[0] = 36; pixel[1] = 27; pixel[2] = 25; pixel[3] = 255;
+        }
+    }
+    IOSurfaceUnlock(surface, 0, NULL);
+    BOOL presented = sp_region_present(region, IOSurfaceGetID(surface), nonce, width, height, size[2], 1, raster, 1);
+    CFRelease(surface);
+    return presented;
+}
+
 // A drag of the main page through the input path of the host: each move opens a transaction, the page moves its DOM border
 // in its pointermove handler, the transaction waits for the presentation of that DOM, commits, and the window after one refresh
-// of the screen must show the border beside the native placement of that move.
-static void checkCommitFrame(WKWebViewConfiguration *configuration) {
+// of the screen must show the border beside the native placement of that move. The conditions of the application are added one
+// at a time (docs/features.md, F752): ownTab gives the joined tab view a web process of its own, as a plugin view has, and
+// rasterRefreshes keeps the transaction open for that many refreshes after the presentation callback of the DOM, as the raster
+// wait of the image regions keeps it before the host commits; with imageRegion the surface holds an image region whose raster of
+// the new size is presented after those refreshes, inside the transaction, as the raster wait of the host ends at that
+// presentation.
+static void checkCommitFrame(WKWebViewConfiguration *configuration, NSString *variant, BOOL ownTab, int rasterRefreshes,
+    BOOL imageRegion) {
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(120, 120, 400, 200)
         styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
     window.releasedWhenClosed = NO;
@@ -590,7 +668,8 @@ static void checkCommitFrame(WKWebViewConfiguration *configuration) {
     SPCommitDrawn *drawn = [[SPCommitDrawn new] autorelease];
     [configuration.userContentController addScriptMessageHandler:drawn name:@"commitDrawn"];
     WKWebView *main = page(window, configuration, NSMakeRect(0, 0, 400, 200), @"sptest://app/commit-frame");
-    WKWebView *tab = page(window, configuration, NSMakeRect(0, 0, 20, 20), @"sptest://app/commit-frame-tab");
+    WKWebView *tab = page(window, ownTab ? [[configuration copy] autorelease] : configuration, NSMakeRect(0, 0, 20, 20),
+        @"sptest://app/commit-frame-tab");
     __block int tabPresented = 0;
     check(sp_window_set_main_webview(window, main), @"the commit frame fixture registers its main DOM");
     void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
@@ -601,6 +680,12 @@ static void checkCommitFrame(WKWebViewConfiguration *configuration) {
     NSView *region = (NSView *)sp_surface_native_plane(surface);
     region.wantsLayer = YES;
     region.layer.backgroundColor = [NSColor colorWithSRGBRed:25.0/255 green:27.0/255 blue:36.0/255 alpha:1].CGColor;
+    void *image = imageRegion ? sp_region_create(surface, "commit-frame", ignoreRegionEvent, NULL) : NULL;
+    if (imageRegion) {
+        check(image != NULL, @"the commit frame image region is created in the surface");
+        if (image) sp_region_place(image, 0, 0, 0, 0, true);
+        check(image && presentRegionRaster(image, 1), @"the commit frame image region presents its first raster");
+    }
     __block BOOL loaded = NO;
     // The page moves its border to the x of each pointer move: the border is the column just right of the surface.
     [main evaluateJavaScript:@"document.head.innerHTML='<style>body{margin:0;isolation:isolate}body::before{content:\"\";position:fixed;inset:0;z-index:-1;background:rgb(25,27,36);clip-path:path(\"M0,0H400V200H0ZM40,40v120h260v-120Z\")}</style>';"
@@ -651,7 +736,11 @@ static void checkCommitFrame(WKWebViewConfiguration *configuration) {
         __block BOOL ready = NO;
         surfaceLayoutAfterPresentation(main, ^{ ready = YES; });
         eventWait(@"the app DOM presents the moved border", ^BOOL { return ready; });
-        check(surfaceLayoutCommit(window, ticket), @"the commit frame transaction commits at the presentation callback");
+        if (rasterRefreshes > 0) waitFrames(window.screen, rasterRefreshes);
+        if (image) check(presentRegionRaster(image, 2 + move), [NSString stringWithFormat:
+            @"the image region presents its raster of move %d inside the transaction", move]);
+        check(surfaceLayoutCommit(window, ticket), [NSString stringWithFormat:
+            @"%@: the commit frame transaction commits after the presentation callback", variant]);
         eventWait(@"the joined tab view presents before the move is read", ^BOOL { return tabPresented == move + 1; });
         check(surfaceLayoutTraceStop(timeline, SURFACE_LAYOUT_TRACE_STAGES) == 1, @"the commit frame trace records its transaction");
         // The commit reaches the screen at the first refresh after it, so the screen is read at that refresh.
@@ -670,20 +759,22 @@ static void checkCommitFrame(WKWebViewConfiguration *configuration) {
         if (after != nil) {
             double borderAt = borderColumn(after, x, x);
             check(!isnan(borderAt) && fabs(borderAt - x) < 0.5, [NSString stringWithFormat:
-                @"after move %d the window shows the moved DOM border beside the native placement (expected x %.0f, found %.1f, committed %.3f)",
-                move, x, borderAt, timeline[3]]);
+                @"%@: after move %d the window shows the moved DOM border beside the native placement (expected x %.0f, found %.1f, "
+                "begun %.3f, presented %.3f, committed %.3f)", variant, move, x, borderAt, timeline[1], timeline[2], timeline[3]]);
         }
     }
     PointerDone release = {NO, SP_INPUT_REJECTED};
     sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 220, 100, 3, 0, 0, 0, 1, pointerDone, &release);
     eventWait(@"the release of the drag is delivered", ^BOOL { return release.done; });
-    check(release.result == SP_INPUT_DELIVERED, @"the release of the drag is delivered to the main page");
+    check(release.result == SP_INPUT_DELIVERED, [NSString stringWithFormat:@"%@: the release of the drag is delivered to the main page "
+        "(result %d)", variant, (int)release.result]);
     int count = sp_capture_stop(timeline[3], 0);
     const char *captureError = sp_capture_error();
     check(count >= 1 && !sp_capture_limited() && captureError[0] == '\0', [NSString stringWithFormat:
         @"the commit frame recording stops without dropped frames or errors (%d frames, limited %d, error %s)",
         count, sp_capture_limited(), captureError]);
     [configuration.userContentController removeScriptMessageHandlerForName:@"commitDrawn"];
+    if (image) sp_region_close(image);
     sp_surface_close(surface);
     [window close]; [window release];
 }
@@ -915,8 +1006,13 @@ int main(void) { @autoreleasepool {
     [main _doAfterNextPresentationUpdate:^{ painted = YES; }];
     eventWait(@"the main page presents", ^BOOL { return painted; });
 
-    checkRecordedComposition([[configuration copy] autorelease]);
-    checkCommitFrame([[configuration copy] autorelease]);
+    checkRecordedComposition([[configuration copy] autorelease], YES);
+    checkRecordedComposition([[configuration copy] autorelease], NO);
+    checkCommitFrame([[configuration copy] autorelease], @"tab of the main process", NO, 0, NO);
+    checkCommitFrame([[configuration copy] autorelease], @"tab of its own process", YES, 0, NO);
+    checkCommitFrame([[configuration copy] autorelease], @"tab of its own process, two refreshes of raster wait", YES, 2, NO);
+    checkCommitFrame([[configuration copy] autorelease], @"tab of its own process, an image region raster after two refreshes",
+        YES, 2, YES);
     checkFirstShowPublication([[configuration copy] autorelease]);
     checkSettledWaitsForLayout(window, main);
     checkSettledWaitsForModal(window, main, [[configuration copy] autorelease]);
