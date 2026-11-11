@@ -577,9 +577,11 @@ fn host_entries_are_appended_as_registered() {
             "host.quit",
             "host.window.close",
             "host.window.fullscreen",
+            "host.window.lower",
             "host.window.maximize",
             "host.window.move",
             "host.window.presented",
+            "host.window.raise",
             "host.window.reload",
             "host.window.resize",
         ]
@@ -1186,5 +1188,33 @@ fn a_text_input_reaches_the_platform_as_one_step_of_a_composition() {
         json!({"phase": "mark", "text": "a", "selection": {"start": 0}}),
     ] {
         assert_eq!(read(invalid.clone()).unwrap_err().code, -32602, "{invalid}");
+    }
+}
+
+/// host.window reports the display of the window and its place among the windows on the screen as the native facts read them,
+/// null for each that the facts cannot tell, and refuses facts of another shape.
+#[test]
+fn the_window_reports_its_display_and_its_place_among_the_windows_on_the_screen() {
+    let order = json!({"index": 2, "count": 5, "otherInFront": true});
+    assert_eq!(
+        exposure::window_place(&json!({"display": 1, "order": order})).unwrap(),
+        (json!(1), order.clone())
+    );
+    assert_eq!(
+        exposure::window_place(&json!({"display": null, "order": null})).unwrap(),
+        (Value::Null, Value::Null)
+    );
+    for invalid in [
+        json!({"order": null}),
+        json!({"display": -1, "order": null}),
+        json!({"display": 0}),
+        json!({"display": 0, "order": {"index": 0, "count": 1}}),
+        json!({"display": 0, "order": {"index": 1, "count": 1, "otherInFront": false}}),
+        json!({"display": 0, "order": {"index": 0, "count": 1, "otherInFront": 1}}),
+    ] {
+        assert!(
+            exposure::window_place(&invalid).is_err(),
+            "the facts {invalid} are refused"
+        );
     }
 }

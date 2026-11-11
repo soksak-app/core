@@ -225,6 +225,12 @@ impl Platform for Darwin {
     fn move_window(&self, window: Handle, x: f64, y: f64) -> Result<(), String> {
         window::move_to(window, x, y)
     }
+    fn raise_window(&self, window: Handle) -> Result<(), String> {
+        window::raise(window)
+    }
+    fn lower_window(&self, window: Handle) -> Result<(), String> {
+        window::lower(window)
+    }
     fn screens(&self) -> Result<Value, String> {
         window::screens()
     }

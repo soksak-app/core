@@ -289,6 +289,30 @@ pub fn move_to(window: Handle, x: f64, y: f64) -> Result<(), String> {
     }
 }
 
+/// Orders the window in front of every window of its window level without activating the application.
+pub fn raise(window: Handle) -> Result<(), String> {
+    unsafe extern "C" {
+        fn sp_window_raise(window: *mut c_void) -> bool;
+    }
+    if unsafe { sp_window_raise(window as *mut c_void) } {
+        Ok(())
+    } else {
+        Err("the window is gone or not ordered in".into())
+    }
+}
+
+/// Orders the window behind every window of its window level without changing the active application.
+pub fn lower(window: Handle) -> Result<(), String> {
+    unsafe extern "C" {
+        fn sp_window_lower(window: *mut c_void) -> bool;
+    }
+    if unsafe { sp_window_lower(window as *mut c_void) } {
+        Ok(())
+    } else {
+        Err("the window is gone or not ordered in".into())
+    }
+}
+
 /// The display list.
 pub fn screens() -> Result<Value, String> {
     unsafe extern "C" {

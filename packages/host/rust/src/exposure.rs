@@ -105,6 +105,9 @@ fn host_declarations() -> Value {
                     "registered":{"type":"boolean"}, "count":{"type":"string","pattern":"^(0|[1-9][0-9]*)$"}
                 }},
                 "occluded": {"type": "boolean"},
+                "display": {"type": ["integer", "null"]},
+                "order": {"type": ["object", "null"], "required": ["index", "count", "otherInFront"], "properties": {
+                    "index": {"type": "integer"}, "count": {"type": "integer"}, "otherInFront": {"type": "boolean"}}},
                 "children": {"type": "integer"},
                 "pagelessProcesses": {"type": ["array", "null"], "items": {"type": "object",
                     "required": ["pid", "ending"],
@@ -164,6 +167,8 @@ fn host_declarations() -> Value {
              "params": empty, "result": nothing},
             {"name": "host.window.fullscreen", "description": "Enters full screen, or leaves it with on false.",
              "params": {"type": "object", "properties": {"on": {"type": "boolean"}}}, "result": nothing},
+            {"name": "host.window.lower", "description": "Orders the window behind every window of its level, also of other applications, without changing the active application.",
+             "params": empty, "result": nothing},
             {"name": "host.window.maximize", "description": "Maximizes the window, or restores it with on false.",
              "params": {"type": "object", "properties": {"on": {"type": "boolean"}}}, "result": nothing},
             {"name": "host.window.move", "description": "Moves the window frame origin to a point in screen coordinates.",
@@ -171,6 +176,8 @@ fn host_declarations() -> Value {
              "result": nothing},
             {"name": "host.window.presented", "description": "Resolves after the main page and the shown modal have presented their current geometry and every visible image region has presented its exact current raster, with the display time of that frame.",
              "params": empty, "result": {"type": "object", "properties": {"displayed": {"type": "number"}}}},
+            {"name": "host.window.raise", "description": "Orders the window in front of every window of its level, also of other applications, without activating the application.",
+             "params": empty, "result": nothing},
             {"name": "host.window.reload", "description": "Starts the workbench of the window again.",
              "params": empty, "result": nothing},
             {"name": "host.window.resize", "description": "Resizes the content area.",
@@ -2109,6 +2116,27 @@ fn window_cursor(facts: &Value) -> Result<Value, String> {
     }
 }
 
+/// The display of the window and its place among the windows on the screen in the native facts: display is the index of its
+/// display in the display list or null, and order is {index, count, otherInFront} with index below count, or null. Facts of
+/// another shape are an error.
+pub fn window_place(facts: &Value) -> Result<(Value, Value), String> {
+    let display = facts
+        .get("display")
+        .filter(|display| display.is_null() || display.as_u64().is_some())
+        .ok_or("window facts missing or invalid display")?;
+    let order = facts
+        .get("order")
+        .filter(|order| {
+            order.is_null()
+                || order["count"].as_u64().is_some_and(|count| {
+                    order["index"].as_u64().is_some_and(|index| index < count)
+                        && order["otherInFront"].is_boolean()
+                })
+        })
+        .ok_or("window facts missing or invalid order")?;
+    Ok((display.clone(), order.clone()))
+}
+
 fn window_activation_observation(facts: &Value) -> Result<Value, String> {
     let observation = facts
         .get("activationObservation")
@@ -2243,6 +2271,7 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
     let activation_observation = window_activation_observation(&facts).map_err(internal)?;
     let pageless_processes = window_pageless_processes(&facts).map_err(internal)?;
     let cursor = window_cursor(&facts).map_err(internal)?;
+    let (display, order) = window_place(&facts).map_err(internal)?;
     let mut status = json!({
         "activationObservation": activation_observation,
         "responder": responder,
@@ -2257,6 +2286,8 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
         "cursor": cursor,
         "active": facts["active"],
         "occluded": facts["occluded"],
+        "display": display,
+        "order": order,
         "children": facts["children"],
         "pageProcess": facts["pageProcess"],
         "pagelessProcesses": pageless_processes,
@@ -2826,6 +2857,19 @@ impl Host {
                 let platform = platform::current().map_err(internal)?;
                 with_native_owner(window, move |handle| platform.move_window(handle, x, y))
                     .map_err(native_failure(window.label(), -32603))?;
+                Ok(Value::Null)
+            })(),
+            "host.window.raise" | "host.window.lower" => (|| {
+                let platform = platform::current().map_err(internal)?;
+                let raise = name == "host.window.raise";
+                with_native_owner(window, move |handle| {
+                    if raise {
+                        platform.raise_window(handle)
+                    } else {
+                        platform.lower_window(handle)
+                    }
+                })
+                .map_err(native_failure(window.label(), -32603))?;
                 Ok(Value::Null)
             })(),
             "host.menu.select" => (|| {

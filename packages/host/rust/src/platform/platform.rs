@@ -609,6 +609,12 @@ pub trait Platform: CoreRootHost + Send + Sync {
     fn process_footprint(&self, pid: u32) -> Result<ProcessFootprint, String>;
     /// Moves the upper left of the window frame to the screen coordinates (x, y). Call it on the main thread.
     fn move_window(&self, window: Handle, x: f64, y: f64) -> Result<(), String>;
+    /// Orders the window in front of every window of its window level, of this and of other applications, without activating the
+    /// application or making the window key (host.window.raise). Call it on the main thread.
+    fn raise_window(&self, window: Handle) -> Result<(), String>;
+    /// Orders the window behind every window of its window level, of this and of other applications, without changing the active
+    /// application or the key window (host.window.lower). Call it on the main thread.
+    fn lower_window(&self, window: Handle) -> Result<(), String>;
     /// Returns the displays [{x, y, width, height, scale}] in screen coordinates. Call it on the main thread.
     fn screens(&self) -> Result<Value, String>;
     /// Returns whether the application stays alive when all windows are closed.

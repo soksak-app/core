@@ -137,6 +137,12 @@ impl Platform for Windows {
     fn move_window(&self, window: Handle, x: f64, y: f64) -> Result<(), String> {
         unsupported::move_window(window, x, y)
     }
+    fn raise_window(&self, _window: Handle) -> Result<(), String> {
+        Err("host.window.raise is not implemented on this platform".into())
+    }
+    fn lower_window(&self, _window: Handle) -> Result<(), String> {
+        Err("host.window.lower is not implemented on this platform".into())
+    }
     fn screens(&self) -> Result<Value, String> {
         unsupported::screens()
     }
