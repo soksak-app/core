@@ -64,6 +64,12 @@ var hostStatus = map[string]hostEntry{
 				"count":      map[string]any{"type": "string", "pattern": "^(0|[1-9][0-9]*)$"},
 			}},
 			"occluded": map[string]any{"type": "boolean"},
+			"display":  map[string]any{"type": []string{"integer", "null"}},
+			"order": map[string]any{"type": []string{"object", "null"}, "required": []string{"index", "count", "otherInFront"},
+				"properties": map[string]any{
+					"index": map[string]any{"type": "integer"}, "count": map[string]any{"type": "integer"},
+					"otherInFront": map[string]any{"type": "boolean"},
+				}},
 			"children": map[string]any{"type": "integer"},
 			"pagelessProcesses": map[string]any{"type": []string{"array", "null"}, "items": map[string]any{"type": "object",
 				"required": []string{"pid", "ending"}, "properties": map[string]any{
@@ -177,6 +183,8 @@ var hostCommands = map[string]hostEntry{
 	"host.window.move": {Description: "Moves the window frame origin to a point in screen coordinates.", Result: nullSchema,
 		Params: map[string]any{"type": "object", "properties": map[string]any{
 			"x": map[string]any{"type": "number"}, "y": map[string]any{"type": "number"}}}},
+	"host.window.raise": {Description: "Orders the window in front of every window of its level, also of other applications, without activating the application.", Params: emptyObject, Result: nullSchema},
+	"host.window.lower": {Description: "Orders the window behind every window of its level, also of other applications, without changing the active application.", Params: emptyObject, Result: nullSchema},
 	"host.menu.select": {Description: "Performs the application menu item with the title in the submenu with the menu title.", Result: nullSchema,
 		Params: map[string]any{"type": "object", "properties": map[string]any{
 			"menu": map[string]any{"type": "string"}, "title": map[string]any{"type": "string"}}}},
@@ -939,6 +947,10 @@ func (b hostBackend) HostCommand(window, name string, params json.RawMessage, re
 			return nil, rpcError(codeInvalidParams, "x and y are required")
 		}
 		return nil, s.useWindow(func(window platform.Window) error { return system.MoveWindow(window, *p.X, *p.Y) })
+	case "host.window.raise":
+		return nil, s.useWindow(system.RaiseWindow)
+	case "host.window.lower":
+		return nil, s.useWindow(system.LowerWindow)
 	case "host.menu.select":
 		var p struct {
 			Menu, Title *string
@@ -1242,16 +1254,18 @@ type windowFacts struct {
 		Width  float64 `json:"width"`
 		Height float64 `json:"height"`
 	} `json:"content"`
-	Scale       float64 `json:"scale"`
-	RefreshRate *int    `json:"refreshRate"`
-	Zoomed      bool    `json:"zoomed"`
-	Key         bool    `json:"key"`
-	VirtualKey  bool    `json:"virtualKey"`
-	Cursor      *string `json:"cursor"`
-	Active      bool    `json:"active"`
-	Occluded    bool    `json:"occluded"`
-	Children    int     `json:"children"`
-	PageProcess int     `json:"pageProcess"`
+	Scale       float64      `json:"scale"`
+	RefreshRate *int         `json:"refreshRate"`
+	Zoomed      bool         `json:"zoomed"`
+	Key         bool         `json:"key"`
+	VirtualKey  bool         `json:"virtualKey"`
+	Cursor      *string      `json:"cursor"`
+	Active      bool         `json:"active"`
+	Occluded    bool         `json:"occluded"`
+	Display     *int         `json:"display"`
+	Order       *WindowOrder `json:"order"`
+	Children    int          `json:"children"`
+	PageProcess int          `json:"pageProcess"`
 	// PagelessProcesses is null on a platform whose facts do not report the WebContent processes without a page.
 	PagelessProcesses []PagelessProcess    `json:"pagelessProcesses"`
 	Controls          []WindowControl      `json:"controls"`
@@ -1466,6 +1480,14 @@ type WindowFrameCounters struct {
 	Settled        *bool   `json:"settled"`
 }
 
+// WindowOrder is the place of a window among the windows on the screen: the number of windows of its window level in front of
+// it, the number of windows of that level, and whether a window of another process stands in front of it over a part of it.
+type WindowOrder struct {
+	Index        int  `json:"index"`
+	Count        int  `json:"count"`
+	OtherInFront bool `json:"otherInFront"`
+}
+
 // WindowStatus is the value of host.window.
 type WindowStatus struct {
 	ActivationObservation json.RawMessage `json:"activationObservation"`
@@ -1482,6 +1504,8 @@ type WindowStatus struct {
 	Cursor            *string           `json:"cursor"`
 	Active            bool              `json:"active"`
 	Occluded          bool              `json:"occluded"`
+	Display           *int              `json:"display"`
+	Order             *WindowOrder      `json:"order"`
 	Children          int               `json:"children"`
 	PageProcess       *int              `json:"pageProcess"`
 	PagelessProcesses []PagelessProcess `json:"pagelessProcesses"`
@@ -1586,7 +1610,7 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 	out := WindowStatus{
 		ActivationObservation: facts.ActivationObservation,
 		Frame:                 facts.Frame, Pointer: facts.Pointer, Content: frame{Width: facts.Content.Width, Height: facts.Content.Height},
-		Scale: facts.Scale, RefreshRate: facts.RefreshRate, Maximized: facts.Zoomed, Key: facts.Key, VirtualKey: facts.VirtualKey, Cursor: facts.Cursor, Active: facts.Active, Occluded: facts.Occluded, Children: facts.Children,
+		Scale: facts.Scale, RefreshRate: facts.RefreshRate, Maximized: facts.Zoomed, Key: facts.Key, VirtualKey: facts.VirtualKey, Cursor: facts.Cursor, Active: facts.Active, Occluded: facts.Occluded, Display: facts.Display, Order: facts.Order, Children: facts.Children,
 		Quitting: s.host.quit.Active(),
 		Controls: facts.Controls, Surfaces: []WindowSurface{}, Documents: []WindowDocument{}, Regions: regions,
 		Webviews: []WindowWebview{}, PagelessProcesses: facts.PagelessProcesses,

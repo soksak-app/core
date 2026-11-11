@@ -445,6 +445,12 @@ type Platform interface {
 	WindowHit(window Window, x, y float64) (string, error)
 	// MoveWindow moves the top left of the window frame to the screen coordinates (x, y). Call it on the UI thread.
 	MoveWindow(window Window, x, y float64) error
+	// RaiseWindow orders the window in front of every window of its window level, of this and of other applications, without
+	// activating the application or making the window key (host.window.raise). Call it on the UI thread.
+	RaiseWindow(window Window) error
+	// LowerWindow orders the window behind every window of its window level, of this and of other applications, without
+	// changing the active application or the key window (host.window.lower). Call it on the UI thread.
+	LowerWindow(window Window) error
 	// Screens returns the displays [{x, y, width, height, scale}] as JSON in screen coordinates.
 	// Call it on the UI thread.
 	Screens() (string, error)

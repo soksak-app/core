@@ -155,6 +155,20 @@ func (implementation) MoveWindow(window platform.Window, x, y float64) error {
 	return nil
 }
 
+func (implementation) RaiseWindow(window platform.Window) error {
+	if !native.MainSpWindowRaise(uintptr(window)) {
+		return errors.New("the window is gone or not ordered in")
+	}
+	return nil
+}
+
+func (implementation) LowerWindow(window platform.Window) error {
+	if !native.MainSpWindowLower(uintptr(window)) {
+		return errors.New("the window is gone or not ordered in")
+	}
+	return nil
+}
+
 func (implementation) Screens() (string, error) {
 	return facts(native.MainSpScreens(), "display list")
 }

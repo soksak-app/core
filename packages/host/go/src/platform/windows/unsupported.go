@@ -131,6 +131,14 @@ func (implementation) MoveWindow(platform.Window, float64, float64) error {
 	return unsupported("window placement")
 }
 
+func (implementation) RaiseWindow(platform.Window) error {
+	return fmt.Errorf("host.window.raise is not implemented on this platform")
+}
+
+func (implementation) LowerWindow(platform.Window) error {
+	return fmt.Errorf("host.window.lower is not implemented on this platform")
+}
+
 func (implementation) Screens() (string, error) {
 	return "", unsupported("display list")
 }

@@ -45,7 +45,7 @@ func TestExposureListAppendsHostEntries(t *testing.T) {
 	for _, entry := range append(list.Status, list.Commands...) {
 		names[entry.Name] = entry.Registered
 	}
-	for _, name := range []string{"core.layout", "host.buttons", "host.log", "host.window", "host.windows", "host.screens", "host.dock", "host.window.close", "host.window.fullscreen", "host.window.move", "host.dock.select", "host.hit", "host.quit"} {
+	for _, name := range []string{"core.layout", "host.buttons", "host.log", "host.window", "host.windows", "host.screens", "host.dock", "host.window.close", "host.window.fullscreen", "host.window.move", "host.window.raise", "host.window.lower", "host.dock.select", "host.hit", "host.quit"} {
 		if !names[name] {
 			t.Fatalf("%s is missing or unregistered in %s", name, got.Result)
 		}
@@ -134,9 +134,11 @@ func TestExposureListHostEntriesAreSortedAndDescribed(t *testing.T) {
 		"host.quit",
 		"host.window.close",
 		"host.window.fullscreen",
+		"host.window.lower",
 		"host.window.maximize",
 		"host.window.move",
 		"host.window.presented",
+		"host.window.raise",
 		"host.window.reload",
 		"host.window.resize",
 	}
