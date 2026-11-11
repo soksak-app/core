@@ -10,7 +10,7 @@ export const DOCUMENT_NAME = /^[a-z0-9][a-z0-9-]{0,63}$/;
 export const DOCUMENT_ACTIONS = Object.freeze(["back", "forward", "reload", "stop"]);
 
 /** The streams of a document region (docs/spec/native-surfaces.md#document-streams). */
-export const DOCUMENT_STREAMS = Object.freeze(["elements", "requests"]);
+export const DOCUMENT_STREAMS = Object.freeze(["elements", "interactive", "requests"]);
 
 /**
  * Checks whether the element and its ancestors are hidden by CSS visibility or display.

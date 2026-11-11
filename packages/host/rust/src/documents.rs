@@ -224,7 +224,14 @@ pub fn valid_name(name: &str) -> bool {
 
 /// The stream names of a document region (docs/spec/native-surfaces.md#document-streams).
 const ELEMENTS: &str = "elements";
+const INTERACTIVE: &str = "interactive";
 const REQUESTS: &str = "requests";
+
+/// Reports whether native collects a stream only while it has a subscriber: the element snapshot and the interactive frames turn
+/// on with the first subscription and off with the last. The request collection runs while the region exists.
+fn native_on(stream: &str) -> bool {
+    stream == ELEMENTS || stream == INTERACTIVE
+}
 
 /// The number of request entries that a document region keeps for a new subscription.
 const REQUEST_LOG_LIMIT: usize = 200;
@@ -232,10 +239,10 @@ const REQUEST_LOG_LIMIT: usize = 200;
 /// The text of a stream message that is not a JSON object with the fields of the stream protocol.
 const NOT_JSON: &str = "document stream message is not JSON";
 
-/// Checks that a stream name is elements or requests.
+/// Checks that a stream name is elements, interactive or requests.
 fn check_stream(name: &str) -> Result<(), String> {
     match name {
-        ELEMENTS | REQUESTS => Ok(()),
+        ELEMENTS | INTERACTIVE | REQUESTS => Ok(()),
         _ => Err(format!("unknown document stream {name:?}")),
     }
 }
@@ -317,7 +324,7 @@ impl StreamState {
             }
         });
         lost.into_iter()
-            .filter(|(key, stream)| stream == ELEMENTS && self.count(key, stream) == 0)
+            .filter(|(key, stream)| native_on(stream) && self.count(key, stream) == 0)
             .map(|(key, stream)| StreamEffect {
                 key,
                 stream,
@@ -395,7 +402,7 @@ impl Streams {
             },
         );
         let mut effects = Vec::new();
-        if stream == ELEMENTS && state.count(key, stream) == 1 {
+        if native_on(stream) && state.count(key, stream) == 1 {
             effects.push(StreamEffect {
                 key: key.clone(),
                 stream: stream.to_string(),
@@ -424,7 +431,7 @@ impl Streams {
         };
         state.subscribers.remove(&handle);
         let mut effects = Vec::new();
-        if stream == ELEMENTS && state.count(key, &stream) == 0 {
+        if native_on(&stream) && state.count(key, &stream) == 0 {
             effects.push(StreamEffect {
                 key: key.clone(),
                 stream,
@@ -487,6 +494,16 @@ impl Streams {
         check_stream(&stream)?;
         let mut state = self.lock();
         match (stream.as_str(), kind.as_str()) {
+            (INTERACTIVE, "frames") => {
+                let seq =
+                    seq.ok_or_else(|| r#"document stream "interactive" frames has no seq"#.to_string())?;
+                let deliveries = state.deliveries(key, INTERACTIVE, message);
+                Ok(StreamResult {
+                    deliveries,
+                    ack: true,
+                    seq,
+                })
+            }
             (ELEMENTS, "snapshot") => {
                 let seq = seq.ok_or_else(|| {
                     r#"document stream "elements" snapshot has no seq"#.to_string()

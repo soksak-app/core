@@ -249,3 +249,39 @@ func TestAFailedDocumentAttachTakesBackItsNameAndItsRequestLog(t *testing.T) {
 		t.Fatalf("the failed attach kept its request log: %v", err)
 	}
 }
+
+// contract: documents.stream.interactive
+func TestAnInteractiveSubscriptionTurnsTheStreamOnAndDeliversFoldedFrames(t *testing.T) {
+	streams := NewDocumentStreams()
+	key := DocumentKey{Surface: "surface-a", Name: "page"}
+	handle, effects, initial, err := streams.Subscribe(key, "interactive")
+	if err != nil {
+		t.Fatalf("an interactive subscription was refused: %v", err)
+	}
+	if initial != nil {
+		t.Fatalf("an interactive subscription holds an initial message %s of its own", initial)
+	}
+	want := []StreamEffect{{Key: key, Stream: "interactive", On: true}}
+	if !reflect.DeepEqual(effects, want) {
+		t.Fatalf("the first subscription of the interactive stream gave effects %v, want %v", effects, want)
+	}
+	frames := `{"stream":"interactive","message":{"type":"frames","seq":7,"frames":[],"framesTruncated":0,"viewport":{"w":800,"h":600},"scale":2}}`
+	result, err := streams.Deliver(key, frames)
+	if err != nil {
+		t.Fatalf("a frames message was refused: %v", err)
+	}
+	if !result.Ack || result.Seq != 7 || len(result.Deliveries) != 1 {
+		t.Fatalf("a frames message gave %+v, want one delivery and the acknowledgement of seq 7", result)
+	}
+	if _, err := streams.Deliver(key, `{"stream":"interactive","message":{"type":"frames","viewport":{"w":800,"h":600},"scale":2}}`); err == nil {
+		t.Fatal("a frames message without a seq was accepted")
+	}
+	effects, err = streams.Unsubscribe(key, handle)
+	if err != nil {
+		t.Fatalf("the unsubscribe of the interactive stream: %v", err)
+	}
+	want = []StreamEffect{{Key: key, Stream: "interactive", On: false}}
+	if !reflect.DeepEqual(effects, want) {
+		t.Fatalf("the last unsubscribe of the interactive stream gave effects %v, want %v", effects, want)
+	}
+}

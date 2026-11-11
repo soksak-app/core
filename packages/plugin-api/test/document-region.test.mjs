@@ -348,6 +348,20 @@ test("a stream message that arrives before the subscribe reply reaches the liste
   assert.deepEqual(received, [{ type: "snapshot", seq: 1, nodes: [], total: 0, truncated: false }]);
 });
 
+test("an interactive subscription receives the folded frames of the stream", async () => {
+  const f = fixture();
+  const p = streamPort();
+  const region = attachRegion(p, f.element, "page", f.window, { report() {} });
+  p.release();
+  const received = [];
+  const subscription = await region.subscribe("interactive", (message) => received.push(message));
+  p.stream("page", 1, { type: "frames", seq: 3, frames: [], framesTruncated: 0, viewport: { w: 800, h: 600 }, scale: 2 });
+  assert.deepEqual(received, [{ type: "frames", seq: 3, frames: [], framesTruncated: 0, viewport: { w: 800, h: 600 }, scale: 2 }]);
+  p.stream("page", 1, { type: "reset" });
+  assert.deepEqual(received[1], { type: "reset" });
+  await subscription.close();
+});
+
 test("an unknown stream is rejected before the host is called", async () => {
   const f = fixture();
   const p = streamPort();

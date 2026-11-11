@@ -253,3 +253,50 @@ fn a_dialog_blurs_each_document_and_image_region() {
     assert_eq!(*documents.borrow(), vec![1, 2]);
     assert_eq!(*images.borrow(), vec![3]);
 }
+
+// contract: documents.stream.interactive
+#[test]
+fn an_interactive_subscription_turns_the_stream_on_and_delivers_folded_frames() {
+    let streams = super::Streams::default();
+    let key = ("surface-a".to_string(), "page".to_string());
+    let (handle, effects, initial) = streams
+        .subscribe(&key, "interactive")
+        .expect("an interactive subscription");
+    assert!(
+        initial.is_none(),
+        "an interactive subscription holds an initial message of its own"
+    );
+    assert_eq!(
+        effects,
+        vec![super::StreamEffect {
+            key: key.clone(),
+            stream: "interactive".to_string(),
+            on: true,
+        }]
+    );
+    let frames = r#"{"stream":"interactive","message":{"type":"frames","seq":7,"frames":[],"framesTruncated":0,"viewport":{"w":800,"h":600},"scale":2}}"#;
+    let result = streams.deliver(&key, frames).expect("a frames message");
+    assert!(result.ack, "a frames message is acknowledged");
+    assert_eq!(result.seq, 7);
+    assert_eq!(result.deliveries.len(), 1);
+    assert!(
+        streams
+            .deliver(
+                &key,
+                r#"{"stream":"interactive","message":{"type":"frames","viewport":{"w":800,"h":600},"scale":2}}"#
+            )
+            .is_err(),
+        "a frames message without a seq was accepted"
+    );
+    let effects = streams
+        .unsubscribe(&key, handle)
+        .expect("the unsubscribe of the interactive stream");
+    assert_eq!(
+        effects,
+        vec![super::StreamEffect {
+            key: key.clone(),
+            stream: "interactive".to_string(),
+            on: false,
+        }]
+    );
+}

@@ -1158,16 +1158,23 @@ func (s *Surfaces) detachImage(viewID uint64, req ImageRequest) error {
 
 // Stream names of a document region (docs/spec/native-surfaces.md#document-streams).
 const (
-	streamElements = "elements"
-	streamRequests = "requests"
+	streamElements    = "elements"
+	streamInteractive = "interactive"
+	streamRequests    = "requests"
 )
+
+// streamNativeOn reports whether native collects a stream only while it has a subscriber: the element snapshot and the interactive
+// frames turn on with the first subscription and off with the last. The request collection runs while the region exists.
+func streamNativeOn(stream string) bool {
+	return stream == streamElements || stream == streamInteractive
+}
 
 // requestLogLimit is the number of request entries that a document region keeps for a new subscription.
 const requestLogLimit = 200
 
 // checkStream returns the error for a stream name that is neither elements nor requests.
 func checkStream(name string) error {
-	if name != streamElements && name != streamRequests {
+	if name != streamElements && name != streamInteractive && name != streamRequests {
 		return fmt.Errorf("unknown document stream %q", name)
 	}
 	return nil
@@ -1289,8 +1296,9 @@ func (d *DocumentStreams) Attach(key DocumentKey) ([]StreamEffect, error) {
 }
 
 // Subscribe registers a subscription of stream on the region key and returns its handle, the effects to apply, and the first message
-// of the subscriber. The first message of a requests subscription is the request log; an elements subscription has none, and native
-// sends its first snapshot when the stream turns on. A requests subscription of a region without a request log is an error.
+// of the subscriber. The first message of a requests subscription is the request log; an elements or interactive subscription has
+// none, and native sends its first snapshot or folded value when the stream turns on. A requests subscription of a region without a
+// request log is an error.
 func (d *DocumentStreams) Subscribe(key DocumentKey, stream string) (uint64, []StreamEffect, json.RawMessage, error) {
 	if err := checkStream(stream); err != nil {
 		return 0, nil, nil, err
@@ -1313,7 +1321,7 @@ func (d *DocumentStreams) Subscribe(key DocumentKey, stream string) (uint64, []S
 	handle := d.next
 	d.subs[handle] = streamSubscriptionState{key: key, stream: stream}
 	var effects []StreamEffect
-	if stream == streamElements && d.countLocked(key, stream) == 1 {
+	if streamNativeOn(stream) && d.countLocked(key, stream) == 1 {
 		effects = append(effects, StreamEffect{Key: key, Stream: stream, On: true})
 	}
 	return handle, effects, initial, nil
@@ -1336,7 +1344,7 @@ func (d *DocumentStreams) Unsubscribe(key DocumentKey, handle uint64) ([]StreamE
 	}
 	delete(d.subs, handle)
 	var effects []StreamEffect
-	if sub.stream == streamElements && d.countLocked(key, sub.stream) == 0 {
+	if streamNativeOn(sub.stream) && d.countLocked(key, sub.stream) == 0 {
 		effects = append(effects, StreamEffect{Key: key, Stream: sub.stream, On: false})
 	}
 	return effects, nil
@@ -1355,7 +1363,7 @@ func (d *DocumentStreams) removeSubscriptionsLocked(match func(DocumentKey) bool
 	}
 	var effects []StreamEffect
 	for effect := range lost {
-		if effect.Stream == streamElements && d.countLocked(effect.Key, effect.Stream) == 0 {
+		if streamNativeOn(effect.Stream) && d.countLocked(effect.Key, effect.Stream) == 0 {
 			effects = append(effects, StreamEffect{Key: effect.Key, Stream: effect.Stream, On: false})
 		}
 	}
@@ -1432,6 +1440,12 @@ func (d *DocumentStreams) Deliver(key DocumentKey, value string) (StreamResult, 
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	switch {
+	case envelope.Stream == streamInteractive && message.Type == "frames":
+		if message.Seq == nil {
+			return StreamResult{}, errors.New(`document stream "interactive" frames message has no seq`)
+		}
+		deliveries := d.deliveriesLocked(key, streamInteractive, envelope.Message)
+		return StreamResult{Deliveries: deliveries, Ack: true, Seq: *message.Seq}, nil
 	case envelope.Stream == streamElements && message.Type == "snapshot":
 		if message.Seq == nil {
 			return StreamResult{}, errors.New(`document stream "elements" snapshot has no seq`)
