@@ -1788,6 +1788,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F525-1",
+    implementation: [
+      { file: "packages/window-check/test/folder-wait-churn-rename.mjs", symbol: "export function renameChange(from, to, content, change, rename = fs.renameSync) {" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/folder-wait-churn-rename.test.mjs", id: "a rename that took place and answered ENOENT is a change" },
+      { file: "packages/window-check/test/folder-wait-churn-rename.test.mjs", id: "a rename whose source something removed fails with what the target holds" },
+      { file: "packages/window-check/test/folder-wait-churn-rename.test.mjs", id: "a rename that answered ENOENT while its source is listed fails" },
+      { file: "packages/window-check/test/folder-wait-churn-rename.test.mjs", id: "a rename that took place and answered another failure fails" },
+    ],
+    expected: "The churn writer takes a rename that answered ENOENT and took place as a change, and every other failed rename fails with its report.",
+    levels: ["unit"],
+  },
+  {
     id: "F724",
     implementation: [
       { file: "patches/@parcel__watcher@2.6.0.patch", symbol: "void Backend::release() {" },
