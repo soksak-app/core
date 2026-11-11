@@ -32,5 +32,11 @@ strip = false
 # the front (docs/spec/hosts.md#launch-activation). The fork release tao-v0.37.2-soksak.1, built on tag tao-v0.37.2, makes no
 # call in that case and leaves the activation to Launch Services. The override is removed when a tao release on crates.io
 # carries the change.
+# wry 0.57.0 calls NSApplication activate (activateIgnoringOtherApps: before macOS 14) at the creation of every webview, and
+# macOS grants that activation when no other application is active, so a background Tauri host that opens a window or a view
+# can come to the front (docs/spec/hosts.md#launch-activation). The fork release wry-v0.57.0-soksak.1, built on tag
+# wry-v0.57.0, makes no activation call at the creation and leaves the activation to the show of the window. The override is
+# removed when a wry release on crates.io carries the change.
 [patch.crates-io]
 tao = { git = "https://github.com/min-0-max/tao", tag = "tao-v0.37.2-soksak.1" }
+wry = { git = "https://github.com/min-0-max/wry", tag = "wry-v0.57.0-soksak.1" }
