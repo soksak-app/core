@@ -1,6 +1,6 @@
 {
   "surface": "packages/plugin-api/binder.js#INTERACTIVE",
-  "description": "The operable elements of a document and the audit rows that createBinder reports for them. The selector is the list of element kinds that an audit examines. Each case marks up a delegated root (markup) and lists the audit rows in document order; an element with a command inside the delegated root and an element name is connected and not listed. A row holds the ARIA role of the element (its role attribute, else the implicit role of its tag and input type, textbox for a contenteditable element, or null for an input type without a role), the element name or null, the command or null, and the text, which is the aria-label, else the title, else the text content, trimmed and cut to 40 characters.",
+  "description": "The operable elements of a document and the audit rows that createBinder reports for them. The selector is the list of element kinds that an audit examines; an element inside an inert subtree cannot be operated and is not examined. Each case marks up a delegated root (markup) and lists the audit rows in document order; an element with a command inside the delegated root and an element name is connected and not listed. A row holds the ARIA role of the element (its role attribute, else the implicit role of its tag and input type, textbox for a contenteditable element, or null for an input type without a role), the element name or null, the command or null, and the text, which is the aria-label, else the title, else the text content, trimmed and cut to 40 characters.",
   "selector": "button, input, select, textarea, [role=\"button\"], [contenteditable]:not([contenteditable=\"false\"])",
   "cases": [
     {
@@ -40,6 +40,13 @@
         { "role": "button", "expose": null, "command": null, "text": "Close dialog" },
         { "role": "button", "expose": null, "command": null, "text": "Dismiss" },
         { "role": "button", "expose": null, "command": null, "text": "Adjust the layout of every visible panel" }
+      ]
+    },
+    {
+      "id": "interactive.audit.skips-inert-subtrees",
+      "markup": "<div inert><button data-command='fixture.save'>Kept</button><input type='text'></div><button>Free</button>",
+      "output": [
+        { "role": "button", "expose": null, "command": null, "text": "Free" }
       ]
     }
   ]

@@ -11,6 +11,7 @@ const EXPECTED_IDS = [
   "interactive.audit.lists-unconnected-and-unnamed-elements",
   "interactive.audit.role-takes-the-attribute-then-the-implicit-role",
   "interactive.audit.text-takes-label-then-title-then-truncates",
+  "interactive.audit.skips-inert-subtrees",
 ];
 
 test("INTERACTIVE is the published selector of operable elements", () => {

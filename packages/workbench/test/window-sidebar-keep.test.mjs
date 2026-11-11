@@ -76,6 +76,7 @@ test("a switched window sidebar keeps its section surfaces hidden in the plane, 
   const plane = await import("../plane.js");
   const { sectionSurfaceShown } = await import("../section-surfaces.js");
   const { sidebarsState } = await import("../sidebar-sections.js");
+  const { audit } = await import("../commands.js");
   try {
     let held = null;
     plane.onLayout((made, draw) => { held = draw; });
@@ -103,6 +104,8 @@ test("a switched window sidebar keeps its section surfaces hidden in the plane, 
     assert.ok(hidden[0].closest("[hidden]"), "the kept section of the hidden sidebar is not hidden");
     assert.ok(sectionSurfaceShown(treeId("right")), "the kept section is not held by a sidebar of the frame");
     assert.deepEqual(sidebarsState().map(({ sidebar }) => sidebar), ["left"], "core.sidebars reports the hidden sidebar");
+    // The kept set is not drawn, so its controls are inert and the audit of the workbench lists none of them.
+    assert.deepEqual(audit(document.body), [], "the audit lists the controls of the kept set");
 
     // A show places the kept surface in the sidebar again.
     switchTo("right", true);
@@ -111,6 +114,7 @@ test("a switched window sidebar keeps its section surfaces hidden in the plane, 
     assert.ok(shown[0].closest('.card[data-card-id="right"]'), "the shown section stands outside its sidebar");
     assert.equal(shown[0].closest("[hidden]"), null, "the shown section stays hidden");
     assert.ok(sectionSurfaceShown(treeId("right")));
+    assert.deepEqual(audit(document.body), [], "the audit lists a control of the shown sidebar");
     assert.deepEqual(disposed, [], "the sidebar ended a surface");
     assert.deepEqual(reports, []);
   } finally {

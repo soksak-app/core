@@ -79,6 +79,9 @@ export function roleOf(element) {
   return null;
 }
 
+// An element inside an inert subtree cannot be operated, so the audit does not examine it.
+const operable = (element) => element.closest("[inert]") === null;
+
 const auditRow = (element, connected) => ({
   role: roleOf(element),
   // default: an absent exposure or command is reported as null.
@@ -97,7 +100,7 @@ export function auditDocument(root) {
     return false;
   };
   return documentRoots(root).flatMap((part) => [...part.querySelectorAll(INTERACTIVE)])
-    .filter((element) => !connected(element) || !element.dataset.expose)
+    .filter((element) => operable(element) && (!connected(element) || !element.dataset.expose))
     .map((element) => auditRow(element, connected(element)));
 }
 
@@ -218,7 +221,7 @@ export function createBinder(run, { check, changed = () => {} }) {
    */
   function audit(root) {
     return [...root.querySelectorAll(INTERACTIVE)]
-      .filter((el) => !connected(el) || !el.dataset.expose)
+      .filter((el) => operable(el) && (!connected(el) || !el.dataset.expose))
       .map((el) => auditRow(el, connected(el)));
   }
 

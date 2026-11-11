@@ -330,6 +330,8 @@ export function drawSet(container, sidebar, set, context) {
   apply(record);
   // The kept set of a hidden window sidebar names no element: core.sidebars and the elements report the drawn sidebars only.
   if (context.hidden === true) for (const el of [container, ...container.querySelectorAll("[data-expose]")]) delete el.dataset.expose;
+  // Nobody operates the kept set, so its controls are inert, and the audit of the workbench does not examine them.
+  container.toggleAttribute("inert", context.hidden === true);
   // The sets that left the document release their sections after this set holds its own, so a section that moved here keeps its surface.
   sweep();
 }
