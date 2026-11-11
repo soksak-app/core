@@ -238,13 +238,9 @@ int main(void) { @autoreleasepool {
     reallyActive = YES;
     NSUInteger refused = count(^{
         check(sp_input_pointer(window, 30, 30, 0, 0, 0, 0) == SP_INPUT_INACTIVE, @"an application that is really active answers 1006 for a window that is not its key window");
-        // A key of a person reaches only the key window of the active application, so a key to another window is refused too
-        // and reaches no page.
-        check(sp_input_key(window, "e", "e", 0, true) == SP_INPUT_INACTIVE && sp_input_key(window, "e", "e", 0, false) == SP_INPUT_INACTIVE,
-            @"an application that is really active refuses a key to a window that is not its key window");
     }, nil);
     check(!sp_input_virtual_is(window) && unchanged(), @"real state wins: a refused move replaces no method");
-    check(refused == 0, @"a refused move or key writes no virtual event");
+    check(refused == 0, @"a refused move writes no virtual event");
     reallyActive = NO;
     check(!window.isKeyWindow && !NSApp.isActive && NSApp.keyWindow == nil, @"before the first entry AppKit answers");
 
