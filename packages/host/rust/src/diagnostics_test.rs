@@ -622,8 +622,7 @@ fn step_period_follows_the_refresh_rate_and_assumes_none() {
     for rate in [None, Some(0)] {
         let error = step_period(rate).expect_err("no refresh rate");
         assert_eq!(
-            error.message,
-            "the window is on no display with a refresh rate",
+            error.message, "the window is on no display with a refresh rate",
             "rate {rate:?}"
         );
     }
@@ -644,7 +643,12 @@ fn send_legs_paces_each_step_by_the_refresh_rate_read_at_that_step() {
     send_legs(
         1,
         20.0,
-        || Ok(rates.borrow_mut().pop_front().expect("a rate for each step")),
+        || {
+            Ok(rates
+                .borrow_mut()
+                .pop_front()
+                .expect("a rate for each step"))
+        },
         |period| {
             waits.borrow_mut().push(period);
             now.set(now.get() + period);
@@ -670,7 +674,11 @@ fn send_legs_paces_each_step_by_the_refresh_rate_read_at_that_step() {
         .iter()
         .map(|step| step.as_ref().expect("a step").1)
         .collect();
-    assert_eq!(lasts, [false, true, false, true], "the last step of each leg");
+    assert_eq!(
+        lasts,
+        [false, true, false, true],
+        "the last step of each leg"
+    );
 
     let rates = RefCell::new(std::collections::VecDeque::from([Some(120), None]));
     let now = Cell::new(Duration::ZERO);
@@ -679,7 +687,12 @@ fn send_legs_paces_each_step_by_the_refresh_rate_read_at_that_step() {
     send_legs(
         1,
         20.0,
-        || Ok(rates.borrow_mut().pop_front().expect("a rate for each step")),
+        || {
+            Ok(rates
+                .borrow_mut()
+                .pop_front()
+                .expect("a rate for each step"))
+        },
         |period| {
             waits.borrow_mut().push(period);
             now.set(now.get() + period);
@@ -1295,7 +1308,10 @@ fn a_page_drag_sends_every_step() {
             |period| now.set(now.get() + period),
             || now.get(),
             |step| {
-                assert!(step.is_ok(), "a step of a window at 125 Hz failed: {step:?}");
+                assert!(
+                    step.is_ok(),
+                    "a step of a window at 125 Hz failed: {step:?}"
+                );
                 sent += 1;
                 refuse_after.is_none_or(|limit| sent < limit)
             },
@@ -1303,7 +1319,10 @@ fn a_page_drag_sends_every_step() {
         sent
     };
     let sent = run(None);
-    assert_eq!(sent, 8, "the page received {sent} of the 8 steps of its drag");
+    assert_eq!(
+        sent, 8,
+        "the page received {sent} of the 8 steps of its drag"
+    );
     let after_failure = run(Some(1));
     assert_eq!(
         after_failure, 1,
