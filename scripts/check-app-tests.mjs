@@ -22,7 +22,7 @@ const DIRS = [join(ROOT, "e2e"), join(ROOT, "packages", "window-check")];
 const TYPESCRIPT_API_PATH = createRequire(join(ROOT, "packages", "soksak", "package.json"))
   .resolve("typescript/unstable/sync");
 const TYPESCRIPT_API = await import(pathToFileURL(TYPESCRIPT_API_PATH).href);
-const ACTIVATION_ROOT = join(ROOT, "e2e", "activation");
+const E2E_ROOT = join(ROOT, "e2e");
 
 const RULES = [
   { what: "eval", pattern: /\beval(Async)?\b/ },
@@ -303,13 +303,20 @@ function* sources(dir) {
   }
 }
 
-export function auditActivationUnboundNames(paths = [...sources(ACTIVATION_ROOT)], {
+/** The sources of the window checks under e2e/, without the fixtures, whose plugins run in the application. */
+function* windowCheckSources() {
+  for (const path of sources(E2E_ROOT)) {
+    if (!relative(E2E_ROOT, path).split(sep).includes("fixtures")) yield path;
+  }
+}
+
+export function auditUnboundNames(paths = [...windowCheckSources()], {
   createAPI = (options) => new TYPESCRIPT_API.API(options),
 } = {}) {
-  // Activation fixtures can send OS input; catch lexical name mistakes without
-  // imposing the unrelated type and import diagnostics of a JavaScript project.
+  // A window check runs only in a window run, which no CI runner provides, so a lexical name mistake would show only there;
+  // catch it without imposing the unrelated type and import diagnostics of a JavaScript project.
   const sourceNames = new Map(paths.map((path) => [resolve(ROOT, relative(ROOT, path)), relative(ROOT, path)]));
-  if (sourceNames.size === 0) throw new Error("TypeScript unbound-name check received no activation sources");
+  if (sourceNames.size === 0) throw new Error("TypeScript unbound-name check received no window check sources");
   const formatDiagnostic = (diagnostic) => {
     const name = diagnostic.fileName && sourceNames.get(resolve(diagnostic.fileName));
     const location = diagnostic.fileName
@@ -326,7 +333,7 @@ export function auditActivationUnboundNames(paths = [...sources(ACTIVATION_ROOT)
   const errors = [];
   let result = [];
   try {
-    configDirectory = mkdtempSync(join(tmpdir(), "soksak-activation-typescript-"));
+    configDirectory = mkdtempSync(join(tmpdir(), "soksak-window-check-typescript-"));
     const configPath = join(configDirectory, "tsconfig.json");
     // TypeScript 7 exposes compiler diagnostics through its project API; keep the
     // prior command-line options and root working directory for this file set.
@@ -371,7 +378,7 @@ export function auditActivationUnboundNames(paths = [...sources(ACTIVATION_ROOT)
       return [`${name}:${line}: ${diagnostic.text}`];
     });
   } catch (error) {
-    errors.push(new Error(`TypeScript unbound-name check could not analyze activation sources: ${error.message}`, { cause: error }));
+    errors.push(new Error(`TypeScript unbound-name check could not analyze window check sources: ${error.message}`, { cause: error }));
   }
   if (snapshot) {
     try {
@@ -447,7 +454,7 @@ const errors = [];
 for (const path of DIRS.flatMap((dir) => [...sources(dir)])) {
   errors.push(...auditE2ESource(readFileSync(path, "utf8"), relative(ROOT, path)));
 }
-errors.push(...auditActivationUnboundNames());
+errors.push(...auditUnboundNames());
 
 if (import.meta.url === pathToFileURL(resolve(process.argv[1] ?? "")).href) {
   if (errors.length) {

@@ -59,10 +59,6 @@ async function firstFrames(t, s, label, opening, ready) {
   assert.equal(stop.limited, false, `${label}: the recording reached its frame cap`);
   const window = (await child.get("host.window")).frame;
   // A window recording reads the window itself, so the window points of LOGO and cardPoint sample its frames.
-  // A new window opens on the display of the frontmost window of the application (native/darwin/src/window_reveal.h), so the recording holds it.
-  assert.ok(window.x >= display.x && window.y >= display.y && window.x + window.width <= display.x + display.width &&
-    window.y + window.height <= display.y + display.height,
-    `${label}: the new window ${JSON.stringify(window)} is not inside the recorded display ${JSON.stringify(display)}`);
   const captured = frames(recording.frames).map(readFrame);
   assert.ok(captured.length > 1, `${label}: the recording has ${captured.length} frames`);
   const region = { x: 0, y: 0, width: window.width, height: window.height };

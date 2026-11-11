@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
+import { setImmediate } from "node:timers";
 import test from "node:test";
 
 import { runNormalShutdown } from "../normal-shutdown-runner.mjs";

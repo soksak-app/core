@@ -19,7 +19,7 @@ import { find as findReleaseMarkers } from "../check-release.mjs";
 import { FRAMEWORK_TABLE, LANGUAGE_TABLE, auditHostPairs, findStubs, findUndecodedCommandArguments } from "../check-host-files.mjs";
 import { auditPlatformSource } from "../check-platform-files.mjs";
 import { GATE_SOURCES } from "../check-boundaries.mjs";
-import { auditActivationUnboundNames, auditE2ESource } from "../check-app-tests.mjs";
+import { auditUnboundNames, auditE2ESource } from "../check-app-tests.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const packageRoot = join(root, "packages/soksak");
@@ -477,14 +477,14 @@ test("window-source audit rejects forbidden control paths", { timeout: TREE_AUDI
   assert.match(result.stdout, /Window check sources use only the endpoint/);
 });
 
-test("activation fixture audit rejects unresolved identifiers", { timeout: 5000 }, () => {
-  assert.deepEqual(auditActivationUnboundNames(), []);
+test("window check source audit rejects unresolved identifiers", { timeout: 5000 }, () => {
+  assert.deepEqual(auditUnboundNames(), []);
 });
 
-test("activation unbound-name audit ignores unrelated multiline TypeScript diagnostics", { timeout: 3000 }, async (t) => {
-  const fixture = await mkdtemp(join(tmpdir(), "soksak-activation-ts-diagnostic-"));
+test("unbound-name audit ignores unrelated multiline TypeScript diagnostics", { timeout: 3000 }, async (t) => {
+  const fixture = await mkdtemp(join(tmpdir(), "soksak-unbound-ts-diagnostic-"));
   t.after(() => rm(fixture, { recursive: true, force: true }));
-  const source = join(fixture, "activation.mjs");
+  const source = join(fixture, "check.mjs");
   await writeFile(source, `
 const pending = Math.random() > 0.5;
 const state = pending
@@ -497,13 +497,13 @@ const checked = state;
 void checked;
 `);
 
-  assert.deepEqual(auditActivationUnboundNames([source]), []);
+  assert.deepEqual(auditUnboundNames([source]), []);
 });
 
-test("activation unbound-name audit reports the selected TypeScript diagnostic codes", { timeout: 3000 }, async (t) => {
-  const fixture = await mkdtemp(join(tmpdir(), "soksak-activation-unbound-codes-"));
+test("unbound-name audit reports the selected TypeScript diagnostic codes", { timeout: 3000 }, async (t) => {
+  const fixture = await mkdtemp(join(tmpdir(), "soksak-unbound-unbound-codes-"));
   t.after(() => rm(fixture, { recursive: true, force: true }));
-  const source = join(fixture, "activation.mjs");
+  const source = join(fixture, "check.mjs");
   await writeFile(source, `
 void missingName;
 const shorthand = { missingProperty };
@@ -512,26 +512,26 @@ void exstingName;
 void shorthand;
 `);
 
-  const diagnostics = auditActivationUnboundNames([source]);
+  const diagnostics = auditUnboundNames([source]);
   assert.equal(diagnostics.length, 3, diagnostics.join("\n"));
   assert.ok(diagnostics.some((diagnostic) => diagnostic.includes("Cannot find name 'missingName'")), diagnostics.join("\n"));
   assert.ok(diagnostics.some((diagnostic) => diagnostic.includes("shorthand property 'missingProperty'")), diagnostics.join("\n"));
   assert.ok(diagnostics.some((diagnostic) => diagnostic.includes("Did you mean 'existingName'?")), diagnostics.join("\n"));
 });
 
-test("activation unbound-name audit reports compiler syntax errors", { timeout: 3000 }, async (t) => {
-  const fixture = await mkdtemp(join(tmpdir(), "soksak-activation-syntax-error-"));
+test("unbound-name audit reports compiler syntax errors", { timeout: 3000 }, async (t) => {
+  const fixture = await mkdtemp(join(tmpdir(), "soksak-unbound-syntax-error-"));
   t.after(() => rm(fixture, { recursive: true, force: true }));
-  const source = join(fixture, "activation.mjs");
+  const source = join(fixture, "check.mjs");
   await writeFile(source, "const value = {\n");
 
-  assert.throws(() => auditActivationUnboundNames([source]), /could not analyze activation sources: .*error TS/);
+  assert.throws(() => auditUnboundNames([source]), /could not analyze window check sources: .*error TS/);
 });
 
-test("activation unbound-name audit preserves analysis and cleanup failures", { timeout: 3000 }, async (t) => {
-  const fixture = await mkdtemp(join(tmpdir(), "soksak-activation-cleanup-failure-"));
+test("unbound-name audit preserves analysis and cleanup failures", { timeout: 3000 }, async (t) => {
+  const fixture = await mkdtemp(join(tmpdir(), "soksak-unbound-cleanup-failure-"));
   t.after(() => rm(fixture, { recursive: true, force: true }));
-  const source = join(fixture, "activation.mjs");
+  const source = join(fixture, "check.mjs");
   await writeFile(source, "const value = {\n");
   let tempDirectory;
   let closeCount = 0;
@@ -566,10 +566,10 @@ test("activation unbound-name audit preserves analysis and cleanup failures", { 
     };
   };
 
-  assert.throws(() => auditActivationUnboundNames([source], { createAPI }), (error) => {
+  assert.throws(() => auditUnboundNames([source], { createAPI }), (error) => {
     assert.ok(error instanceof AggregateError);
     assert.equal(error.errors.length, 2);
-    assert.match(error.errors[0].message, /could not analyze activation sources: .*error TS1005/);
+    assert.match(error.errors[0].message, /could not analyze window check sources: .*error TS1005/);
     assert.match(error.errors[1].message, /API cleanup failed: controlled close failure after close/);
     return true;
   });
@@ -578,10 +578,10 @@ test("activation unbound-name audit preserves analysis and cleanup failures", { 
   assert.equal(existsSync(tempDirectory), false);
 });
 
-test("activation unbound-name audit rejects malformed selected diagnostics", { timeout: 3000 }, async (t) => {
-  const fixture = await mkdtemp(join(tmpdir(), "soksak-activation-malformed-diagnostic-"));
+test("unbound-name audit rejects malformed selected diagnostics", { timeout: 3000 }, async (t) => {
+  const fixture = await mkdtemp(join(tmpdir(), "soksak-unbound-malformed-diagnostic-"));
   t.after(() => rm(fixture, { recursive: true, force: true }));
-  const source = join(fixture, "activation.mjs");
+  const source = join(fixture, "check.mjs");
   await writeFile(source, "void value;\n");
   const program = {
     getProgramDiagnostics: () => [],
@@ -590,14 +590,14 @@ test("activation unbound-name audit rejects malformed selected diagnostics", { t
     getSemanticDiagnostics: () => [{ code: 2304, category: 1, text: "Cannot find name 'value'." }],
   };
 
-  assert.throws(() => auditActivationUnboundNames([source], { createAPI: () => diagnosticApi(program) }),
+  assert.throws(() => auditUnboundNames([source], { createAPI: () => diagnosticApi(program) }),
     /TS2304 has no valid source file and position/);
 });
 
-test("activation unbound-name audit skips only confirmed external diagnostics", { timeout: 3000 }, async (t) => {
-  const fixture = await mkdtemp(join(tmpdir(), "soksak-activation-external-diagnostic-"));
+test("unbound-name audit skips only confirmed external diagnostics", { timeout: 3000 }, async (t) => {
+  const fixture = await mkdtemp(join(tmpdir(), "soksak-unbound-external-diagnostic-"));
   t.after(() => rm(fixture, { recursive: true, force: true }));
-  const source = join(fixture, "activation.mjs");
+  const source = join(fixture, "check.mjs");
   const external = join(fixture, "external.d.ts");
   await writeFile(source, "void value;\n");
   await writeFile(external, "declare const value: string;\n");
@@ -609,7 +609,7 @@ test("activation unbound-name audit skips only confirmed external diagnostics", 
     getSourceFileMetadata: () => ({ isFromExternalLibrary: true }),
   };
 
-  assert.deepEqual(auditActivationUnboundNames([source], { createAPI: () => diagnosticApi(program) }), []);
+  assert.deepEqual(auditUnboundNames([source], { createAPI: () => diagnosticApi(program) }), []);
 });
 
 test("window-source audit accepts a Promise reject forwarded through a local timeout helper", { timeout: 1000 }, () => {

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
+import process from "node:process";
 import test from "node:test";
 
 import { APPS, failure, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
