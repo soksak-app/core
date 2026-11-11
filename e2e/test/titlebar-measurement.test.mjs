@@ -9,6 +9,8 @@ const EDGE = [43, 46, 61];
 const BACKGROUND = [16, 17, 23];
 // The button color of an inactive window.
 const BUTTON = [72, 72, 78];
+// A tooltip that the workbench draws in its own window, as the mygo workbench does.
+const TOOLTIP = [236, 236, 242];
 // Three buttons in window coordinates (pt). The vertical position is not used for the measurement.
 const BUTTONS = [9, 29, 49].map((x) => ({ x, y: 0, width: 14, height: 14 }));
 
@@ -16,7 +18,7 @@ const BUTTONS = [9, 29, 49].map((x) => ({ x, y: 0, width: 14, height: 14 }));
  * A frame that draws, at the top of the window, a first row of height row pt (the lower 1pt is the border) and buttons of diameter 14pt whose vertical center is centre pt.
  * The window is at offset (buffer pt) of the buffer, and the area outside the window and the upper left corner are black.
  */
-function synthetic({ row, centre, buttons = BUTTONS, scale = 2, offset = { x: 3, y: 2 }, time = 0 }) {
+function synthetic({ row, centre, buttons = BUTTONS, scale = 2, offset = { x: 3, y: 2 }, time = 0, over = null }) {
   const size = { width: 200, height: 240 };
   const width = (offset.x + size.width) * scale;
   const height = (offset.y + size.height) * scale;
@@ -30,6 +32,7 @@ function synthetic({ row, centre, buttons = BUTTONS, scale = 2, offset = { x: 3,
       if (x >= 0 && y >= 0 && x < size.width && y < size.height && !(x < 6 && y < 6)) {
         colour = y < row - 1 ? CARD : y < row ? EDGE : y < row + 5 ? CARD : BACKGROUND;
         if (centre !== null && buttons.some((button) => Math.hypot(x - (button.x + 7), y - centre) <= 7)) colour = BUTTON;
+        if (over && x >= over.x && x < over.x + over.width && y >= over.y && y < over.y + over.height) colour = TOOLTIP;
       }
       data.set([colour[2], colour[1], colour[0], 255], (dy * width + dx) * 4);
     }
@@ -83,4 +86,24 @@ test("a frame without buttons, without the first-row edge, or with buttons at th
     assert.match(measured?.missing ?? "", reason);
   }
   assert.throws(() => measureTitlebar(synthetic({ row: 54, centre: 27 }), []), /no button frames/);
+});
+
+test("a tooltip over the first row is no first-row edge, so the frame is not measured", () => {
+  // The mygo workbench draws the tooltip of the space tab in its window, over the first row and under the window buttons, while
+  // the pointer rests on the tab; a column through the tooltip reads its body as the lower border of the row.
+  const measured = measureTitlebar(synthetic({ row: 72, centre: 36, over: { x: 5, y: 36, width: 70, height: 11.5 } }), BUTTONS);
+  assert.equal(measured.row, undefined, `the tooltip measured as a first row of ${measured.row}pt`);
+  assert.match(measured.missing ?? "", /thicker than the first-row border/);
+  assert.equal(misaligned([measured]).length, 1);
+});
+
+test("a first-row border as thick as the thickest theme border is measured", () => {
+  const frame = synthetic({ row: 72, centre: 36 });
+  // The border of the synthetic row is 1pt; a theme border of 2pt adds the row above it.
+  for (let dy = (2 + 70) * 2; dy < (2 + 71) * 2; dy++) {
+    for (let dx = 0; dx < frame.width; dx++) frame.data.set([EDGE[2], EDGE[1], EDGE[0], 255], (dy * frame.width + dx) * 4);
+  }
+  const measured = measureTitlebar(frame, BUTTONS);
+  assert.equal(measured.missing, undefined, measured.missing);
+  assert.equal(measured.row, 72);
 });
