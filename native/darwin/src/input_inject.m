@@ -7,8 +7,8 @@
 // drag and a release are delivered to the press target. A move is
 // delivered to the owner of the tracking area that contains the coordinates. In every case the web view receives the
 // native event and delivers a trusted event to the page. A scroll is created as an event that carries window
-// information and is delivered with -[NSWindow sendEvent:]. The system cursor does not move, and no function except
-// sp_input_activate activates the application.
+// information and is delivered with -[NSWindow sendEvent:]. The system cursor does not move, and no function activates
+// the application: sp_input_activate emulates the activation.
 //
 // WebKit updates hover from a move without a button only when the page is active (the window is the key window)
 // (WebFrame::handleMouseEvent). A move in a window that is not the key window is therefore rejected with
@@ -1168,29 +1168,6 @@ static void afterWebViewsActive(NSWindow *window, WKWebView *target, BOOL waitFo
     });
 }
 
-// The ends that the next press or key event of the application fires, each once: a step that macOS refuses without an event ends
-// there, as the layout hold does (docs/spec/native-surfaces.md#layout-transaction).
-static NSMutableArray<void (^)(void)> *nextInputEnds;
-
-static id onNextInput(void (^ended)(void)) {
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        nextInputEnds = [[NSMutableArray alloc] init];
-        surfaceInputActionObserve(^(NSEvent *event) {
-            NSArray<void (^)(void)> *ends = [[nextInputEnds copy] autorelease];
-            [nextInputEnds removeAllObjects];
-            for (void (^end)(void) in ends) end();
-        });
-    });
-    id token = [[ended copy] autorelease];
-    [nextInputEnds addObject:token];
-    return token;
-}
-
-static void forgetNextInput(id token) {
-    if (token) [nextInputEnds removeObjectIdenticalTo:token];
-}
-
 static void report(sp_activate_done done, void *context, sp_activate_result result) {
     if (result == SP_ACTIVATE_DONE) { done(context, result, NULL); return; }
     NSRunningApplication *front = NSWorkspace.sharedWorkspace.frontmostApplication;
@@ -1198,94 +1175,58 @@ static void report(sp_activate_done done, void *context, sp_activate_result resu
     done(context, result, name.UTF8String);
 }
 
+// The activation is emulated (docs/spec/exposure.md#methods): it never asks the system to activate the application or to order
+// the window, so it takes the keyboard from no other application and works for a covered window and a window on no display. In an
+// application that is not really active the window becomes the virtual key window, which answers as the key window of an active
+// application; in an application that is really active the window becomes its key window.
 static void activateWindow(NSWindow *window, WKWebView *target, BOOL waitForAll, sp_activate_done done, void *context) {
     if (!window || !NSThread.isMainThread) { report(done, context, SP_ACTIVATE_REJECTED); return; }
-    // macOS sends no notification for a window that cannot become key or is minimized, so such a window is refused in its turn.
+    // A window that cannot become key or is minimized is refused in its turn: an active application cannot make it key either.
     if (!window.canBecomeKeyWindow || window.isMiniaturized) { report(done, context, SP_ACTIVATE_NOT_KEY); return; }
-    // A real activation replaces the virtual state before its order, which the virtual key window would refuse.
-    sp_input_virtual_end("activate");
+    if (sp_input_virtual_real_active()) [window makeKeyWindow];
+    else sp_input_virtual_enter(window);
+    if (!NSApp.isActive || !window.isKeyWindow) { report(done, context, SP_ACTIVATE_NOT_KEY); return; }
     NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
     __block bool finished = false;
-    // Whether the activation step or the key window step runs; the webview step follows them.
-    __block bool waiting = true;
     NSMutableArray *observers = [NSMutableArray array];
-    __block id inputEnd = nil;
     __block SPInputActivityWait *activityWait = nil;
-    void (^stopObserving)(void) = ^{
-        for (id observer in observers) [center removeObserver:observer];
-        [observers removeAllObjects];
-        forgetNextInput(inputEnd);
-        [inputEnd release];
-        inputEnd = nil;
-    };
     void (^finish)(sp_activate_result) = ^(sp_activate_result result) {
         if (finished) return;
         finished = true;
-        waiting = false;
-        stopObserving();
+        for (id observer in observers) [center removeObserver:observer];
+        [observers removeAllObjects];
         [activityWait finish];
         [activityWait release];
         activityWait = nil;
         report(done, context, result);
     };
-    // The activation step and the key window step end without their notification at an event that macOS gives for the refusal
-    // instead of one: the next press or key event of the application, the close of the window, or another window that becomes key.
-    void (^stepEnded)(NSString *) = ^(NSString *end) {
-        if (!waiting) return;
-        sp_log_info("input inject", [NSString stringWithFormat:@"the %@ step of the activation ended: %@",
-            NSApp.isActive ? @"key window" : @"activation", end].UTF8String);
-        finish(NSApp.isActive ? SP_ACTIVATE_NOT_KEY : SP_ACTIVATE_REFUSED);
-    };
-    // Checks that the window is still active after the web view sent its activity state. Another application or window can take focus in between.
+    // Checks that the window is still active after the web view sent its activity state. Input to another window or a real
+    // activation of another window can take the key in between.
     void (^applied)(void) = ^{
         finish(NSApp.isActive && window.isKeyWindow ? SP_ACTIVATE_DONE : SP_ACTIVATE_LOST);
     };
-    // The webview step: each visible web view reports that it sent the active state. The loss of the activation of the application
-    // or of the window ends it at once, and the close of the window and the ends of a web view end it as pending.
-    void (^webviews)(void) = ^{
-        waiting = false;
-        stopObserving();
-        [observers addObject:sp_observe_notification("input_inject.app_resign", SP_OBSERVE_RECORD,
-            NSApplicationDidResignActiveNotification, NSApp, nil, ^(NSNotification *note) { finish(SP_ACTIVATE_LOST); })];
-        [observers addObject:sp_observe_notification("input_inject.key_resign", SP_OBSERVE_RECORD,
-            NSWindowDidResignKeyNotification, window, nil, ^(NSNotification *note) { finish(SP_ACTIVATE_LOST); })];
-        void (^pending)(NSString *, NSArray<NSString *> *) = ^(NSString *end, NSArray<NSString *> *unresolved) {
-            if (finished) return;
-            NSString *message = sp_input_activity_end_message(YES, activityWait != nil, unresolved, end);
-            if (message) sp_log_error("input inject", message.UTF8String);
-            finish(SP_ACTIVATE_PENDING);
-        };
-        [observers addObject:sp_observe_notification("input_inject.activate_close", SP_OBSERVE_RECORD,
-            NSWindowWillCloseNotification, window, nil, ^(NSNotification *note) {
-                pending(@"the window closed", [activityWait finish]);
-            })];
-        afterWebViewsActive(window, target, waitForAll, applied, pending, ^(SPInputActivityWait *wait) {
-            [wait installIfActivationPending:!finished store:^(SPInputActivityWait *installed) {
-                [activityWait release];
-                activityWait = [installed retain];
-            }];
-        });
+    // Each visible web view reports that it sent the active state. The loss of the activation of the application or of the window
+    // ends the wait at once, and the close of the window and the ends of a web view end it as pending.
+    [observers addObject:sp_observe_notification("input_inject.app_resign", SP_OBSERVE_RECORD,
+        NSApplicationDidResignActiveNotification, NSApp, nil, ^(NSNotification *note) { finish(SP_ACTIVATE_LOST); })];
+    [observers addObject:sp_observe_notification("input_inject.key_resign", SP_OBSERVE_RECORD,
+        NSWindowDidResignKeyNotification, window, nil, ^(NSNotification *note) { finish(SP_ACTIVATE_LOST); })];
+    void (^pending)(NSString *, NSArray<NSString *> *) = ^(NSString *end, NSArray<NSString *> *unresolved) {
+        if (finished) return;
+        NSString *message = sp_input_activity_end_message(YES, activityWait != nil, unresolved, end);
+        if (message) sp_log_error("input inject", message.UTF8String);
+        finish(SP_ACTIVATE_PENDING);
     };
-    // The order of the key window notification and the application activation notification is not defined, so the check runs on both notifications.
-    void (^check)(void) = ^{
-        if (waiting && NSApp.isActive && window.isKeyWindow) webviews();
-    };
-    if (NSApp.isActive && window.isKeyWindow) {
-        webviews();
-        return;
-    }
-    [observers addObject:sp_observe_notification("input_inject.key_window", SP_OBSERVE_RECORD, NSWindowDidBecomeKeyNotification, nil, nil,
-        ^(NSNotification *note) {
-            if (note.object == window) check();
-            else if (NSApp.isActive) stepEnded(@"another window became the key window");
+    [observers addObject:sp_observe_notification("input_inject.activate_close", SP_OBSERVE_RECORD,
+        NSWindowWillCloseNotification, window, nil, ^(NSNotification *note) {
+            pending(@"the window closed", [activityWait finish]);
         })];
-    [observers addObject:sp_observe_notification("input_inject.app_active", SP_OBSERVE_RECORD, NSApplicationDidBecomeActiveNotification, NSApp,
-        nil, ^(NSNotification *note) { check(); })];
-    [observers addObject:sp_observe_notification("input_inject.activate_close", SP_OBSERVE_RECORD, NSWindowWillCloseNotification, window, nil,
-        ^(NSNotification *note) { stepEnded(@"the window closed"); })];
-    inputEnd = [onNextInput(^{ stepEnded(@"the application received a press or key event"); }) retain];
-    [window makeKeyAndOrderFront:nil];
-    [NSApp activateIgnoringOtherApps:YES];
+    afterWebViewsActive(window, target, waitForAll, applied, pending, ^(SPInputActivityWait *wait) {
+        [wait installIfActivationPending:!finished store:^(SPInputActivityWait *installed) {
+            [activityWait release];
+            activityWait = [installed retain];
+        }];
+    });
 }
 
 void sp_input_activate(void *handle, sp_activate_done done, void *context) {

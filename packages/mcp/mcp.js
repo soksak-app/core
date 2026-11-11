@@ -180,7 +180,7 @@ function buildTools(window, exposure) {
           deltaX: { type: "number", description: "Scroll distance in points." },
           deltaY: { type: "number", description: "Scroll distance in points." },
           clicks: { type: "integer", minimum: 1, maximum: 3, description: "Only for down and up: the click count of the event. The second press and release of a double click use 2. Defaults to 1." },
-          activate: { type: "boolean", description: "Only for move: activate the application and make the window key first." },
+          activate: { type: "boolean", description: "Only for move: make the window the key window of the application first, as activating the application does, without taking the keyboard from another application." },
         },
         ["x", "y", "phase"],
       ),

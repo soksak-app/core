@@ -107,8 +107,6 @@ func activationResult(result int32, frontmost string) error {
 	switch result {
 	case abi.SP_ACTIVATE_DONE:
 		return nil
-	case abi.SP_ACTIVATE_REFUSED:
-		return fmt.Errorf("the system did not activate the application; the frontmost application is %s", frontmost)
 	case abi.SP_ACTIVATE_NOT_KEY:
 		return fmt.Errorf("the window did not become key; the frontmost application is %s", frontmost)
 	case abi.SP_ACTIVATE_PENDING:

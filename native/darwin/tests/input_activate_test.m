@@ -1,7 +1,10 @@
-// Checks whether, after the window is activated, a move without a button updates the hover of the page.
+// Checks the emulated activation: the window becomes the key window of an application that answers as active, the stage at
+// which an activation stopped is reported, and after the activation a move without a button updates the hover of the page and a
+// press passes the application.
 //
-// This check activates the application and so takes the user's focus. It is not part of make test and
-// runs only by make test-app-activation. The move is delivered directly to the tracking area owner, so it is independent of the real pointer position.
+// The activation asks the system for nothing, so the process never becomes active (tests/support/no_activation.m) and its windows
+// stay behind the windows of a person. The move is delivered directly to the tracking area owner, so it is independent of the
+// real pointer position.
 #import <Cocoa/Cocoa.h>
 #import <objc/runtime.h>
 #import "input_inject.h"
@@ -107,13 +110,6 @@ static void runMarker(void) {
     eventWait(@"the marker block runs", ^BOOL { return ran; });
 }
 
-// A modifier change that the application receives: a key event, which ends a step that macOS refuses without an event.
-static void applicationKeyEvent(void) {
-    NSEvent *event = [NSEvent keyEventWithType:NSEventTypeFlagsChanged location:NSZeroPoint modifierFlags:0 timestamp:0
-        windowNumber:0 context:nil characters:@"" charactersIgnoringModifiers:@"" isARepeat:NO keyCode:56];
-    [NSApp sendEvent:event];
-}
-
 // A web view that does not report that the active state transmission has finished.
 @interface SPStalledWebView : WKWebView
 // Set when the activation asks the web view to report its active state: the webview step has begun.
@@ -154,20 +150,13 @@ static NSWindow *makeWindow(Class type, NSView *content) {
 static void checkFailures(void) {
     check(activate(nil).result == SP_ACTIVATE_REJECTED, @"activating without a window is rejected");
 
-    // The system does not activate an application whose activation is prohibited, and it sends no event for that refusal: the
-    // request has no limit and ends at the next press or key event that the application receives.
-    NSWindow *refused = makeWindow(NSWindow.class, nil);
-    __block SPActivation state = {NO, SP_ACTIVATE_DONE, ""};
-    sp_input_activate(refused, activated, &state);
-    runMarker();
-    check(!state.done, [NSString stringWithFormat:@"a refused activation waits for an event (answered %d)", state.result]);
-    applicationKeyEvent();
-    eventWait(@"the key event ends the refused activation", ^BOOL { return state.done; });
-    check(state.result == SP_ACTIVATE_REFUSED && state.frontmost[0] != 0 && !NSApp.isActive,
-        [NSString stringWithFormat:@"the next key event ends a refused activation with the frontmost application (%d, %s)",
-            state.result, state.frontmost]);
-    [refused close];
-    [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
+    // The activation of an application whose activation the system prohibits completes: it asks the system for nothing.
+    NSWindow *behind = makeWindow(NSWindow.class, nil);
+    [behind orderBack:nil];
+    SPActivation state = activate(behind);
+    check(state.result == SP_ACTIVATE_DONE && NSApp.isActive && behind.isKeyWindow && !NSRunningApplication.currentApplication.active,
+        [NSString stringWithFormat:@"an activation completes without the system (%d, frontmost %s)", state.result, state.frontmost]);
+    [behind close];
 
     SPStalledWebView *stalled = [[[SPStalledWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)] autorelease];
     NSWindow *pending = makeWindow(NSWindow.class, stalled);
@@ -194,7 +183,7 @@ static void checkFailures(void) {
         [NSString stringWithFormat:@"a hidden webview does not block activation (%d)", state.result]);
 
     NSWindow *other = makeWindow(NSWindow.class, nil);
-    [other orderFront:nil];
+    [other orderBack:nil];
     SPYieldingWebView *yielding = [[[SPYieldingWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)] autorelease];
     yielding.other = other;
     // Checks with a web view that has loaded a document, like a surface of the application.
@@ -205,7 +194,7 @@ static void checkFailures(void) {
     check(state.result == SP_ACTIVATE_LOST && other.isKeyWindow,
         [NSString stringWithFormat:@"a window that loses key status before the state is applied reports lost (%d)", state.result]);
 
-    // Activates a window that cannot become the key window while the application is active.
+    // Activates the window that became key while the activation of another window waited.
     state = activate(other);
     check(state.result == SP_ACTIVATE_DONE,
         [NSString stringWithFormat:@"an ordinary window activates (%d, frontmost %s)", state.result, state.frontmost]);
@@ -221,11 +210,7 @@ static void checkFailures(void) {
     for (NSWindow *window in @[pending, hiddenWindow, other, lost, unkeyable]) [window close];
 }
 
-// tests/support/no_activation.m: this check activates the application in make test-app-activation.
-void sp_test_declare_activation(void);
-
 int main(void) { @autoreleasepool {
-    sp_test_declare_activation();
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
@@ -244,13 +229,13 @@ int main(void) { @autoreleasepool {
         " addEventListener(type,e=>probe.events.push({type,trusted:e.isTrusted,x:e.clientX,y:e.clientY}),true);"
         "</script>";
     loadPage(view, html);
-    [window orderFront:nil];
+    [window orderBack:nil];
     awaitLoad(view);
 
     SPActivation state = activate(window);
     check(state.result == SP_ACTIVATE_DONE,
         [NSString stringWithFormat:@"activation completes (%d, frontmost %s)", state.result, state.frontmost]);
-    check(NSApp.isActive && window.isKeyWindow, @"the application is active and the window is key");
+    check(NSApp.isActive && window.isKeyWindow, @"the application answers as active and the window as key");
 
     check(sp_input_pointer(window, 150, 100, 0, 0, 0, 0) == SP_INPUT_DELIVERED, @"move delivered");
     check(sp_input_pointer(window, 170, 110, 0, 0, 0, 0) == SP_INPUT_DELIVERED, @"second move delivered");
@@ -290,5 +275,6 @@ int main(void) { @autoreleasepool {
     check([[evaluate(view, @"probe.events.filter(e=>e.type==='pointerdown'&&e.trusted).length") description] isEqual:@"1"],
         @"the page receives one trusted pointerdown for the press");
     [window close];
+    check(!NSRunningApplication.currentApplication.active, @"the system does not hold the application as active");
     return failures ? 1 : 0;
 }}

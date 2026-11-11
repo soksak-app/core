@@ -34,6 +34,7 @@ test("the default native suite runs the standalone host test API", () => {
   const runs = output.split("\n").filter((line) => line.startsWith("node ") && line.includes("scripts/native-tests.mjs"));
   assert.equal(runs.length, 1, output);
   assert.match(runs[0], /(?:^|\s)host_test_api_test(?:\s|$)/, "the default native run omits the standalone test API");
+  assert.match(runs[0], /(?:^|\s)input_activate_test(?:\s|$)/, "the default native run omits the emulated activation");
 });
 
 test("the activation target builds and runs its cases through the native test runner", (t) => {
@@ -47,7 +48,6 @@ test("the activation target builds and runs its cases through the native test ru
   writeFileSync(library, "");
   utimesSync(library, future, future);
   for (const name of [
-    "input_activate_test",
     "webview_input_test",
     "webview_inspector_test",
     "window_fullscreen_test",
@@ -75,7 +75,6 @@ test("the activation target builds and runs its cases through the native test ru
   const runnerArgs = runnerLines[0].trim().split(/\s+/).slice(2);
   assert.equal(runnerArgs[0], buildDir);
   assert.deepEqual(runnerArgs.slice(1), [
-    "input_activate_test",
     "webview_inspector_test",
     "window_fullscreen_test",
     "webview_input_test,--baseline",

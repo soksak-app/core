@@ -165,7 +165,6 @@ type Activated = Box<dyn FnOnce(Result<(), String>) + Send>;
 
 /// The result value of sp_input_activate.
 const SP_ACTIVATE_DONE: i32 = 0;
-const SP_ACTIVATE_REFUSED: i32 = 2;
 const SP_ACTIVATE_NOT_KEY: i32 = 3;
 const SP_ACTIVATE_PENDING: i32 = 4;
 const SP_ACTIVATE_LOST: i32 = 5;
@@ -187,9 +186,6 @@ extern "C" fn activated(context: *mut c_void, result: i32, frontmost: *const c_c
 fn activation_result(result: i32, frontmost: &str) -> Result<(), String> {
     match result {
         SP_ACTIVATE_DONE => Ok(()),
-        SP_ACTIVATE_REFUSED => Err(format!(
-            "the system did not activate the application; the frontmost application is {frontmost}"
-        )),
         SP_ACTIVATE_NOT_KEY => Err(format!(
             "the window did not become key; the frontmost application is {frontmost}"
         )),
@@ -203,8 +199,8 @@ fn activation_result(result: i32, frontmost: &str) -> Result<(), String> {
     }
 }
 
-/// Activates the application, makes the window the key window and then calls done at the event that ends the activation. Call it on the
-/// main thread.
+/// Makes the window the key window of an application that answers as active, without activating the application, and then calls done
+/// when the web views of the window applied the active state or an event ended the wait. Call it on the main thread.
 pub fn activate(window: Handle, x: f64, y: f64, done: Activated) {
     let context = Box::into_raw(Box::new(done)) as *mut c_void;
     unsafe { sp_input_activate_at(window as *mut c_void, x, y, activated, context) }

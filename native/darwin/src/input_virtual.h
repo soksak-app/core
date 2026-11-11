@@ -5,6 +5,10 @@
 // not take those from a person. The replaced methods answer the virtual state, so a press, a release and a key of the virtual
 // key window pass -[NSApplication sendEvent:] as a person's do and the local monitors see them; a move goes to the tracking
 // areas of the window directly, so the system cursor and the real pointer stay where they are.
+//
+// While the application answers as active, a request of the application to make another window key (makeKeyWindow,
+// makeKeyAndOrderFront:) moves the virtual key window there, as it makes that window key in an active application, so a host
+// that shows or focuses a window hears the change of the key window as from a person's activation.
 #include <stdbool.h>
 
 // Makes window the virtual key window and reports whether it is. The application that is really active answers false: real

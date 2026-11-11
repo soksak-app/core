@@ -1,7 +1,8 @@
 // A window that becomes the key window reads the plugin state again, because the remote registry sends no change event
-// (docs/spec/installation.md#plugin-operations-in-the-application). The host focuses the window of a project that opens, and
-// a focused window becomes the key window only in the active application; the virtual key window comes only from input and
-// refuses makeKeyAndOrderFront: (docs/spec/exposure.md#virtual-key-window), so this check activates the application.
+// (docs/spec/installation.md#plugin-operations-in-the-application). The host focuses the window of a project that opens, and a
+// focused window becomes the key window of an application that answers as active. The check activates the application as a
+// person does with the emulated activation of input.pointer, which moves the virtual key window to each window that the host
+// focuses (docs/spec/exposure.md#virtual-key-window).
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -22,11 +23,12 @@ for (const app of Object.values(APPS)) {
     // The records that decide whether the owner became key and whether the application was active when the project opened.
     await fresh(s, { log: { lifecycle: "debug" }, reads: ["host.window.event", "host.project.front", "workbench.window.active", "workbench.plugins.reread"] });
     await keepCommonSettings(s);
-    // A window becomes the key window only in the active application, so the check activates the application first, as a person who
-    // switches to it does (docs/spec/installation.md#plugin-operations-in-the-application).
+    // A focused window becomes the key window of an application that answers as active, so the check activates the application
+    // first, as a person who switches to it does (docs/spec/installation.md#plugin-operations-in-the-application).
     const content = (await s.get("host.window")).content;
     await s.pointer(content.width / 2, content.height / 2, "move", { activate: true });
-    await s.until("host.window", (state) => state.active && state.key, "the window did not become the active key window");
+    await s.until("host.window", (state) => state.virtualKey || (state.active && state.key),
+      "the window did not become the key window of an application that answers as active");
     const before = await s.get("core.plugins");
     const installed = before.plugins.find((row) => row.id === PLUGIN).installed.version;
     const newer = nextPatch(installed);

@@ -1096,7 +1096,8 @@ func PointerHeldMessage(held platform.ButtonHeld) string {
 	return fmt.Sprintf("pointer %s holds a press that this input would share: %s", held.Pointer, held.Reason)
 }
 
-// activate activates the application, makes the window the key window, and waits until the web view of the window receives the active state.
+// activate makes the window the key window of an application that answers as active without activating the application
+// (docs/spec/exposure.md#methods), and waits until the web view of the window receives the active state.
 // When activation does not finish, it returns a 1006 error that names the stage where it stopped.
 func (s *Surfaces) activate(x, y float64) error {
 	done := make(chan error, 1)

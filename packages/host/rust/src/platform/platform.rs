@@ -944,7 +944,8 @@ pub trait Platform: CoreRootHost + Send + Sync {
         pointer: Pointer,
         done: Box<dyn FnOnce(Delivery) + Send>,
     ) -> Result<(), String>;
-    /// Activates the application and makes the window the key window. On the main thread it calls done(Ok) when the
+    /// Makes the window the key window of an application that answers as active, as activating the application does, without
+    /// activating it (docs/spec/exposure.md#methods). On the main thread it calls done(Ok) when the
     /// webview of the window reflects the active state, and done(Err) that states the stopped stage at the event that
     /// ended that stage; no stage has a limit. Call it on the main thread.
     fn input_activate(

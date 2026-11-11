@@ -68,6 +68,31 @@ static BOOL reallyActive;
 static NSUInteger personButtons;
 static BOOL testIsActive(id self, SEL selector) { return reallyActive; }
 static NSUInteger testButtons(id self, SEL selector) { return personButtons; }
+// A request of the process to the system to activate it. The test counts it and answers as the system that grants it, so the
+// request ends; it never reaches the system.
+static NSUInteger activationRequests;
+static void testActivate(id self, SEL selector, BOOL ignoringOtherApps) {
+    activationRequests++;
+    reallyActive = YES;
+    [NSNotificationCenter.defaultCenter postNotificationName:NSApplicationDidBecomeActiveNotification object:NSApp];
+}
+
+static sp_activate_result activateResult;
+static BOOL activateDone;
+static void onActivated(void *context, sp_activate_result result, const char *frontmost) {
+    activateResult = result;
+    activateDone = YES;
+    eventWake();
+}
+// Counts the notification name of object while block runs.
+static NSUInteger heard(NSNotificationName name, id object, void (^block)(void)) {
+    __block NSUInteger found = 0;
+    id observer = [NSNotificationCenter.defaultCenter addObserverForName:name object:object queue:nil
+        usingBlock:^(NSNotification *note) { found++; }];
+    block();
+    [NSNotificationCenter.defaultCenter removeObserver:observer];
+    return found;
+}
 
 static NSRect awayFromPointer(NSSize size, CGFloat shift) {
     NSRect screen = NSScreen.mainScreen.visibleFrame;
@@ -181,12 +206,13 @@ static NSUInteger count(void (^block)(void), NSString *reason) {
 
 // The methods that the virtual state replaces, and their implementations before the first entry.
 static const SEL *windowSelectors(void) {
-    static SEL selectors[5];
+    static SEL selectors[6];
     selectors[0] = @selector(isKeyWindow);
     selectors[1] = @selector(isMainWindow);
     selectors[2] = @selector(orderFront:);
     selectors[3] = @selector(makeKeyAndOrderFront:);
     selectors[4] = @selector(orderFrontRegardless);
+    selectors[5] = @selector(makeKeyWindow);
     return selectors;
 }
 static const SEL *applicationSelectors(void) {
@@ -196,10 +222,10 @@ static const SEL *applicationSelectors(void) {
     selectors[2] = @selector(mainWindow);
     return selectors;
 }
-static IMP windowMethods[5], applicationMethods[3], viewInputContext;
+static IMP windowMethods[6], applicationMethods[3], viewInputContext;
 static BOOL unchanged(void) {
     if (viewInputContext != method_getImplementation(class_getInstanceMethod(NSView.class, @selector(inputContext)))) return NO;
-    for (int i = 0; i < 5; i++) if (windowMethods[i] != method_getImplementation(class_getInstanceMethod(NSWindow.class, windowSelectors()[i]))) return NO;
+    for (int i = 0; i < 6; i++) if (windowMethods[i] != method_getImplementation(class_getInstanceMethod(NSWindow.class, windowSelectors()[i]))) return NO;
     for (int i = 0; i < 3; i++) if (applicationMethods[i] != method_getImplementation(class_getInstanceMethod(NSApplication.class, applicationSelectors()[i]))) return NO;
     return YES;
 }
@@ -214,8 +240,9 @@ int main(void) { @autoreleasepool {
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     method_setImplementation(class_getInstanceMethod(NSApplication.class, @selector(isActive)), (IMP)testIsActive);
     method_setImplementation(class_getClassMethod(NSEvent.class, @selector(pressedMouseButtons)), (IMP)testButtons);
+    method_setImplementation(class_getInstanceMethod(NSApplication.class, @selector(activateIgnoringOtherApps:)), (IMP)testActivate);
 
-    for (int i = 0; i < 5; i++) windowMethods[i] = method_getImplementation(class_getInstanceMethod(NSWindow.class, windowSelectors()[i]));
+    for (int i = 0; i < 6; i++) windowMethods[i] = method_getImplementation(class_getInstanceMethod(NSWindow.class, windowSelectors()[i]));
     for (int i = 0; i < 3; i++) applicationMethods[i] = method_getImplementation(class_getInstanceMethod(NSApplication.class, applicationSelectors()[i]));
     viewInputContext = method_getImplementation(class_getInstanceMethod(NSView.class, @selector(inputContext)));
 
@@ -335,6 +362,37 @@ int main(void) { @autoreleasepool {
     check(second.isKeyWindow && !window.isKeyWindow && NSApp.keyWindow == second, @"at most one window answers as key");
     check(sp_input_pointer(window, 30, 30, 0, 0, 0, 0) == SP_INPUT_DELIVERED && window.isKeyWindow && !second.isKeyWindow, @"a move takes the state back");
 
+    // A request of the application to make another window key moves the virtual key window there, as in an active application,
+    // and each window hears the change of its key state. The system key window stays, and makeKeyWindow orders no window.
+    NSUInteger becameKey = heard(NSWindowDidBecomeKeyNotification, second, ^{
+        check(heard(NSWindowDidResignKeyNotification, window, ^{ [second makeKeyAndOrderFront:nil]; }) == 1,
+            @"the virtual key window hears that it resigned the key");
+    });
+    check(becameKey == 1, [NSString stringWithFormat:@"the window that the application makes key hears it (%lu)", (unsigned long)becameKey]);
+    check(sp_input_virtual_is(second) && !sp_input_virtual_is(window) && second.isKeyWindow && !window.isKeyWindow,
+        @"a key request of the application moves the virtual key window");
+    check(!sp_input_virtual_real_key(second) && !sp_input_virtual_real_active(), @"a key request leaves the system key window");
+    [second orderBack:nil];
+    becameKey = heard(NSWindowDidBecomeKeyNotification, window, ^{ [window makeKeyWindow]; });
+    check(becameKey == 1 && sp_input_virtual_is(window) && window.orderedIndex == orderBefore,
+        [NSString stringWithFormat:@"makeKeyWindow moves the virtual key window and orders nothing (%lu, %ld, %ld)",
+            (unsigned long)becameKey, (long)window.orderedIndex, (long)orderBefore]);
+
+    // An activation of a covered window is emulated: the window becomes the virtual key window, the web views hear it, and the
+    // application asks the system for nothing and stays where it was in the order.
+    NSInteger secondOrder = second.orderedIndex;
+    activateDone = NO;
+    sp_input_activate(second, onActivated, NULL);
+    check(activationRequests == 0, [NSString stringWithFormat:@"an activation asks the system for no activation (%lu)", (unsigned long)activationRequests]);
+    check(second.orderedIndex == secondOrder, [NSString stringWithFormat:@"an activation orders no window (%ld, %ld)", (long)second.orderedIndex, (long)secondOrder]);
+    eventWait(@"the activation answers", ^BOOL { return activateDone; });
+    reallyActive = NO;
+    check(activateResult == SP_ACTIVATE_DONE && sp_input_virtual_is(second) && !sp_input_virtual_is(window),
+        [NSString stringWithFormat:@"an activation makes a covered window the virtual key window (%d)", (int)activateResult]);
+    check(stayedBehind(), @"an activation leaves the application behind");
+    [window makeKeyWindow];
+    check(sp_input_virtual_is(window), @"a key request takes the state back");
+
     // A real activation ends the state at once and with one event.
     NSUInteger activated = count(^{
         reallyActive = YES;
@@ -377,16 +435,21 @@ int main(void) { @autoreleasepool {
 
     sp_input_virtual_end("no state");
 
-    // A window that the host shows while another window is the virtual key window becomes the key window of AppKit, and the
+    // A window that the host shows while another window is the virtual key window becomes the virtual key window, as it becomes
+    // the key window in an active application. Without a virtual key window it becomes the key window of AppKit, and the
     // application is still not active. A press and a move of that window are input of an application that is not active: a
     // press goes directly to the view, and a move makes the window the virtual key window.
     check(pointer(second, 30, 30, 0) == SP_INPUT_DELIVERED && sp_input_virtual_is(second), @"a move makes a window the virtual key window");
     NSWindow *shown = makeWindow(880);
     WKWebView *shownView = makePage(shown);
-    sp_window_show(shown);
+    becameKey = heard(NSWindowDidBecomeKeyNotification, shown, ^{ sp_window_show(shown); });
     pageReady(shownView);
+    check(becameKey == 1 && sp_input_virtual_is(shown) && !sp_input_virtual_is(second) && !sp_input_virtual_real_key(shown),
+        [NSString stringWithFormat:@"a window that the host shows beside the virtual key window becomes the virtual key window (%lu)", (unsigned long)becameKey]);
+    sp_input_virtual_end("no state");
+    [shown makeKeyWindow];
     check(sp_input_virtual_real_key(shown) && !sp_input_virtual_real_active(),
-        @"a window shown beside the virtual key window is the key window of AppKit in an application that is not active");
+        @"without a virtual key window a window that the application makes key is the key window of AppKit in an application that is not active");
     __block NSUInteger shownMonitored = 0;
     id shownMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown | NSEventMaskLeftMouseUp
         handler:^NSEvent *(NSEvent *event) { shownMonitored++; return event; }];

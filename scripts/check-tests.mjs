@@ -9226,6 +9226,22 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F756-3",
+    implementation: [
+      { file: "native/darwin/src/input_virtual.m", symbol: "static void moveMakeKeyWindow(NSWindow *self, SEL selector) {" },
+      { file: "native/darwin/src/input_inject.m", symbol: "static void activateWindow(NSWindow *window, WKWebView *target, BOOL waitForAll, sp_activate_done done, void *context) {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/input_virtual_test.m", id: "a key request of the application moves the virtual key window" },
+      { file: "native/darwin/tests/input_virtual_test.m", id: "an activation asks the system for no activation (%lu)" },
+      { file: "native/darwin/tests/input_virtual_test.m", id: "an activation makes a covered window the virtual key window (%d)" },
+      { file: "native/darwin/tests/input_virtual_test.m", id: "a window that the host shows beside the virtual key window becomes the virtual key window (%lu)" },
+      { file: "native/darwin/tests/input_activate_test.m", id: "an activation completes without the system (%d, frontmost %s)" },
+    ],
+    expected: "activate: true makes a covered window the virtual key window without asking the system for an activation or ordering a window, and while the application answers as active a key request of the application moves the virtual key window, so a window that the host shows or focuses hears that it became key.",
+    levels: ["unit"],
+  },
+  {
     id: "F160.31",
     implementation: [
       { file: "packages/sok/go/src/event_log.go", symbol: "func StartEventLog" },

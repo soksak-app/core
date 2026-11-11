@@ -21,6 +21,7 @@ static bool hasPoint;
 static BOOL (*appKitIsKey)(id, SEL), (*appKitIsMain)(id, SEL), (*appKitIsActive)(id, SEL);
 static NSWindow *(*appKitKeyWindow)(id, SEL), *(*appKitMainWindow)(id, SEL);
 static void (*appKitOrderFront)(id, SEL, id), (*appKitMakeKeyAndOrderFront)(id, SEL, id), (*appKitOrderFrontRegardless)(id, SEL);
+static void (*appKitMakeKeyWindow)(id, SEL);
 static NSTextInputContext *(*appKitInputContext)(id, SEL);
 // The web view that takes a key down without its input context while the key is delivered. Main thread.
 static WKWebView *keyWebView;
@@ -84,9 +85,30 @@ static void refuseOrderFront(NSWindow *self, SEL selector, id sender) {
     appKitOrderFront(self, selector, sender);
 }
 
+static bool enter(NSWindow *window, const char *reason);
+
+// While the application answers as active, a request of the application to make another window key moves the virtual key
+// window there, as it makes that window key in an active application, so the windows hear the change of their key state as
+// they do from a person's activation. The system key window does not change. The order of the other window keeps its meaning.
+static BOOL movesKey(NSWindow *window) {
+    NSWindow *virtual = answering();
+    return virtual && window != virtual && window.canBecomeKeyWindow;
+}
+
 static void refuseMakeKeyAndOrderFront(NSWindow *self, SEL selector, id sender) {
     if (self == answering()) { record("order refused", "makeKeyAndOrderFront:"); return; }
+    if (movesKey(self)) {
+        appKitOrderFront(self, @selector(orderFront:), sender);
+        enter(self, "key request");
+        return;
+    }
     appKitMakeKeyAndOrderFront(self, selector, sender);
+}
+
+static void moveMakeKeyWindow(NSWindow *self, SEL selector) {
+    if (self == answering()) return;
+    if (movesKey(self)) { enter(self, "key request"); return; }
+    appKitMakeKeyWindow(self, selector);
 }
 
 static void refuseOrderFrontRegardless(NSWindow *self, SEL selector) {
@@ -119,6 +141,7 @@ static void install(void) {
         appKitOrderFront = (void (*)(id, SEL, id))replace(window, @selector(orderFront:), (IMP)refuseOrderFront);
         appKitMakeKeyAndOrderFront = (void (*)(id, SEL, id))replace(window, @selector(makeKeyAndOrderFront:), (IMP)refuseMakeKeyAndOrderFront);
         appKitOrderFrontRegardless = (void (*)(id, SEL))replace(window, @selector(orderFrontRegardless), (IMP)refuseOrderFrontRegardless);
+        appKitMakeKeyWindow = (void (*)(id, SEL))replace(window, @selector(makeKeyWindow), (IMP)moveMakeKeyWindow);
         appKitInputContext = (NSTextInputContext *(*)(id, SEL))replace(NSView.class, @selector(inputContext), (IMP)answerInputContext);
         sp_observe_notification("input_virtual.app_active", SP_OBSERVE_RECORD, NSApplicationDidBecomeActiveNotification, NSApp, nil,
             ^(NSNotification *note) { if (sp_input_virtual_real_active()) sp_input_virtual_end("activation"); });
@@ -126,10 +149,13 @@ static void install(void) {
 }
 
 bool sp_input_virtual_enter(void *handle) {
+    return enter((__bridge NSWindow *)handle, "input");
+}
+
+static bool enter(NSWindow *window, const char *reason) {
     NSCAssert(NSThread.isMainThread, @"the virtual key window belongs to the main thread");
-    NSWindow *window = (__bridge NSWindow *)handle;
     if (!window || sp_input_virtual_real_active()) return false;
-    if (handle == atomic_load(&current)) return true;
+    if ((__bridge void *)window == atomic_load(&current)) return true;
     install();
     sp_input_virtual_end("another window");
     atomic_store(&current, (__bridge void *)[window retain]);
@@ -144,7 +170,7 @@ bool sp_input_virtual_enter(void *handle) {
     NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
     [center postNotificationName:NSWindowDidBecomeKeyNotification object:window];
     [center postNotificationName:NSWindowDidBecomeMainNotification object:window];
-    record("entered", "input");
+    record("entered", reason);
     return true;
 }
 

@@ -100,8 +100,7 @@ void sp_input_pointer_then(void *window, const char *pointer, double x, double y
 typedef enum {
     SP_ACTIVATE_DONE = 0,
     SP_ACTIVATE_REJECTED = 1, // there is no window, or the caller is not on the main thread
-    SP_ACTIVATE_REFUSED = 2,  // the application did not become active before an event ended the step
-    SP_ACTIVATE_NOT_KEY = 3,  // the application is active, but the window did not become the key window or cannot become it
+    SP_ACTIVATE_NOT_KEY = 3,  // the window did not become the key window or cannot become it
     SP_ACTIVATE_PENDING = 4,  // the web views of the window did not send their activity state before an event ended the step
     SP_ACTIVATE_LOST = 5,     // the application or the window lost activation before or after the web views sent their activity state
 } sp_activate_result;
@@ -110,18 +109,17 @@ typedef enum {
 // identifier; the display name when there is none; NULL when unknown). It is valid only until done returns.
 typedef void (*sp_activate_done)(void *context, sp_activate_result result, const char *frontmost);
 
-// Activates the application and makes the window the key window. After the window is the key window and every web view
-// in the window has sent its activity state to the web process, done is called with SP_ACTIVATE_DONE. No step has a limit
-// (docs/spec/exposure.md#methods). macOS answers a granted request with a notification and a refused one with no event, so the
-// activation step and the key window step end at their notification, at the next press or key event that the application receives
-// or at the close of the window, and the key window step also when another window becomes key. The web view step ends when every
-// web view reported, when the application or the window loses activation (SP_ACTIVATE_LOST), and at the close of the window, the end
-// of the input registration of a web view or the report that its process stopped answering (SP_ACTIVATE_PENDING). A window that
-// cannot become the key window or is minimized is refused in its turn with SP_ACTIVATE_NOT_KEY. done is called once on the main
-// thread. Call this function on the main thread.
+// Makes the window the key window of an application that answers as active, as a person's activation does, without
+// activating the application or ordering the window: in an application that is not really active the window becomes the
+// virtual key window (input_virtual.h), and in an application that is really active it becomes the key window. After every
+// web view in the window has sent its activity state to the web process, done is called with SP_ACTIVATE_DONE. The wait has
+// no limit (docs/spec/exposure.md#methods): it ends when every web view reported, when the application or the window loses
+// activation (SP_ACTIVATE_LOST), and at the close of the window, the end of the input registration of a web view or the report
+// that its process stopped answering (SP_ACTIVATE_PENDING). A window that cannot become the key window or is minimized is
+// refused in its turn with SP_ACTIVATE_NOT_KEY. done is called once on the main thread. Call this function on the main thread.
 void sp_input_activate(void *window, sp_activate_done done, void *context);
 
-// Activates the application and the window, waits until only the web view at the coordinates reflects the active state, and calls done.
+// Activates the window as sp_input_activate does, waits until only the web view at the coordinates reflects the active state, and calls done.
 // When the coordinates are on a native surface, only the window activation completes, without waiting for a web view.
 void sp_input_activate_at(void *window, double x, double y, sp_activate_done done, void *context);
 

@@ -6,11 +6,11 @@
 # workspace points the file at the new location and leaving it in place keeps the file unchanged.
 #
 #   make          build/libsoksak-darwin.a, build/soksak-darwin.pc
-#   make test             runs the checks for input injection, mouse button observation, window state, window button layout,
+#   make test             runs the checks for input injection, the emulated activation, mouse button observation, window state, window button layout,
 #                         title bar height display inside a layout transaction, the start transaction of a re-read, display wait,
 #                         webview focus, view focus, document region, image region, release of a closed window, and window object count.
 #                         It does not activate the application
-#   make test-app-activation  runs the hover check after window activation, the overlapping webview input check (baseline run and
+#   make test-app-activation  runs the overlapping webview input check (baseline run and
 #                         registered run), the web inspector check, the OS event queue click and key check of the document region,
 #                         the Korean input method composition check of the image region, and the activated view-focus page/key check.
 #                         It activates the application and takes the focus
@@ -356,6 +356,7 @@ NATIVE_TESTS = observe_test \
   window_motion_test \
   input_inject_test \
   input_virtual_test \
+  input_activate_test \
   input_virtual_key_equivalent_test \
   input_key_time_test \
   input_pointers_test \
@@ -499,8 +500,8 @@ test-capture-stop-intake: $(BUILD)/capture_stop_intake_test
 test-pressure: $(BUILD)/document_pressure_test
 	@$(BUILD)/document_pressure_test
 
-test-app-activation: $(BUILD)/input_activate_test $(BUILD)/webview_input_test $(BUILD)/webview_inspector_test $(BUILD)/window_fullscreen_test $(BUILD)/document_view_test $(BUILD)/image_region_test $(BUILD)/image_region_ime_test $(BUILD)/view_focus_test
-	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) input_activate_test webview_inspector_test window_fullscreen_test webview_input_test,--baseline webview_input_test document_view_test,--activation image_region_test,--activation image_region_ime_test view_focus_test,--activation
+test-app-activation: $(BUILD)/webview_input_test $(BUILD)/webview_inspector_test $(BUILD)/window_fullscreen_test $(BUILD)/document_view_test $(BUILD)/image_region_test $(BUILD)/image_region_ime_test $(BUILD)/view_focus_test
+	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) webview_inspector_test window_fullscreen_test webview_input_test,--baseline webview_input_test document_view_test,--activation image_region_test,--activation image_region_ime_test view_focus_test,--activation
 
 # Runs only the focused AppKit reference input-context readiness case and restores the outer input source and application.
 test-app-input-reference-readiness: $(BUILD)/input_reference_test

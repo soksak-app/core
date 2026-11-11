@@ -652,7 +652,8 @@ type Platform interface {
 	// For other phases, it calls done immediately after delivery. held is the state of the rejection when the result is PointerButtonHeld
 	// or PointerHeld.
 	InjectPointer(window Window, pointer string, x, y float64, phase, button int, deltaX, deltaY float64, clicks int, done func(result PointerResult, held ButtonHeld)) error
-	// ActivateWindow activates the application and the window. It calls done(nil) on the UI thread after only the web view at the coordinates received the active state,
+	// ActivateWindow makes the window the key window of an application that answers as active without activating the application
+	// (docs/spec/exposure.md#methods). It calls done(nil) on the UI thread after only the web view at the coordinates received the active state,
 	// or calls done with an error that names the stage where it stopped at the event that ended that stage; no stage has a limit.
 	// When the coordinates are a native surface, it does not wait for the web view state.
 	ActivateWindow(window Window, x, y float64, done func(error)) error

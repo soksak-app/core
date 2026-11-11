@@ -349,7 +349,7 @@ make -C native/darwin test-app-activation
 
 `test`는 비활성 애플리케이션의 창에서 `input_inject_test`를 실행한다. 누름, 끌기, 스크롤, 키, 포커스, 버튼 없는 이동의 비활성 결과를 검사하며 애플리케이션을 활성화하지 않는다. 모든 네이티브 검사는 `tests/support/no_activation.m`을 링크하며, 이 파일은 종료할 때 프로세스가 활성이면 검사를 실패시킨다. `test-app-activation`에서 앱을 활성화하는 검사는 먼저 `sp_test_declare_activation`을 호출한다.
 
-`test-app-activation`은 검사 애플리케이션을 활성화하므로 키보드 포커스를 가져간다. 검사 창은 `ignoresMouseEvents`를 설정하지만, AppKit은 실제 포인터가 있는 추적 영역에 이동을 계속 전달한다. 그래서 겹친 웹뷰 검사는 창을 포인터에서 떨어진 곳에 두고, 포인터가 창에 들어오면 그 이유로 실패한다. `input_activate_test`(활성화 후 호버), 겹친 웹뷰 검사 `webview_input_test`(기준 실행 뒤 입력 등록 실행), `document_view_test --activation`(문서 영역에 OS 이벤트 대기열 클릭과 키), `image_region_ime_test`(그림 영역과 AppKit 텍스트 뷰 대조군의 한국어 2벌식 조합), `view_focus_test --activation`(검사 앱 활성화 뒤 page press와 key 수신)을 실행한다.
+`test-app-activation`은 검사 애플리케이션을 활성화하므로 키보드 포커스를 가져간다. 검사 창은 `ignoresMouseEvents`를 설정하지만, AppKit은 실제 포인터가 있는 추적 영역에 이동을 계속 전달한다. 그래서 겹친 웹뷰 검사는 창을 포인터에서 떨어진 곳에 두고, 포인터가 창에 들어오면 그 이유로 실패한다. 겹친 웹뷰 검사 `webview_input_test`(기준 실행 뒤 입력 등록 실행), `document_view_test --activation`(문서 영역에 OS 이벤트 대기열 클릭과 키), `image_region_ime_test`(그림 영역과 AppKit 텍스트 뷰 대조군의 한국어 2벌식 조합), `view_focus_test --activation`(검사 앱 활성화 뒤 page press와 key 수신)을 실행한다.
 
 Activated view-focus 경로는 이전 전면 process를 저장하고 cleanup에서 활성화를 요청한다. 요청이 성공하고 해당 process와 일치하는 `NSWorkspaceDidActivateApplicationNotification`을 10초 안에 관측해야 하며, 그렇지 않으면 검사에 실패한다. 이전 process가 이미 전면이면 추가 activation이 필요하지 않다. Activation을 시도하지 않은 경우에는 전면 앱 변경을 요청하지 않는다. Activation 요청 timeout은 5초이고 page 준비 및 press/key 수신 대기는 각각 10초다. Press와 key는 physical HID 입력이 아니라 합성 AppKit event다. 이 test는 input source를 선택하지 않는다.
 
