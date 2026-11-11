@@ -1,7 +1,6 @@
 // The keyboard of a window follows the active surface of the card with the focus ring (docs/spec/native-surfaces.md#keyboard-of-a-surface).
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
-#import <objc/message.h>
 #import "host_api_webview.h"
 #import "image_region.h"
 #import "input_inject.h"
@@ -77,72 +76,6 @@ static void typeKeys(NSWindow *window, const char *text) {
         check(sp_input_key(window, key, key, 0, false) == SP_INPUT_DELIVERED, "a key release is delivered");
     }
 }
-
-// A responder named by what it is to the page and the workbench of a window: the page, the workbench, a view inside one of
-// them, or its class and address.
-static NSString *identify(NSResponder *responder, NSView *page, NSView *workbench) {
-    if (!responder) return @"none";
-    if (responder == page) return [NSString stringWithFormat:@"the page %p", responder];
-    if (responder == workbench) return [NSString stringWithFormat:@"the workbench %p", responder];
-    if ([responder isKindOfClass:NSView.class] && [(NSView *)responder isDescendantOf:page])
-        return [NSString stringWithFormat:@"%@ %p inside the page", responder.class, responder];
-    if ([responder isKindOfClass:NSView.class] && [(NSView *)responder isDescendantOf:workbench])
-        return [NSString stringWithFormat:@"%@ %p inside the workbench", responder.class, responder];
-    return [NSString stringWithFormat:@"%@ %p", responder.class, responder];
-}
-
-// The calls of the keyboard that the holding window and its web views answer while a press is followed, each named by identify.
-static NSMutableArray<NSString *> *followed;
-static NSView *followedPage, *followedWorkbench;
-
-static void follow(NSString *format, ...) NS_FORMAT_FUNCTION(1, 2);
-static void follow(NSString *format, ...) {
-    if (!followed) return;
-    va_list arguments;
-    va_start(arguments, format);
-    [followed addObject:[[[NSString alloc] initWithFormat:format arguments:arguments] autorelease]];
-    va_end(arguments);
-}
-
-static NSString *named(NSResponder *responder) {
-    return identify(responder, followedPage, followedWorkbench);
-}
-
-// A window that records the events it is sent and each change of its first responder with the answer.
-@interface SPFollowedWindow : NSWindow
-@end
-@implementation SPFollowedWindow
-- (void)sendEvent:(NSEvent *)event {
-    follow(@"window event %lu", (unsigned long)event.type);
-    [super sendEvent:event];
-}
-- (BOOL)makeFirstResponder:(NSResponder *)responder {
-    follow(@"make %@ from %@", named(responder), named(self.firstResponder));
-    BOOL made = [super makeFirstResponder:responder];
-    follow(@"made %@: %d, now %@", named(responder), made, named(self.firstResponder));
-    return made;
-}
-@end
-
-// A web view that records its answers to the first responder calls of its window.
-@interface SPFollowedWebView : WKWebView
-@end
-@implementation SPFollowedWebView
-- (BOOL)becomeFirstResponder {
-    BOOL became = [super becomeFirstResponder];
-    follow(@"%@ becomes first responder: %d", named(self), became);
-    return became;
-}
-- (BOOL)resignFirstResponder {
-    BOOL resigned = [super resignFirstResponder];
-    follow(@"%@ resigns first responder: %d", named(self), resigned);
-    return resigned;
-}
-- (void)mouseDown:(NSEvent *)event {
-    follow(@"%@ mouse down", named(self));
-    [super mouseDown:event];
-}
-@end
 
 // A left press and its release on the workbench of window, the left half of its content.
 static void releaseOnWorkbench(NSWindow *window) {
@@ -529,19 +462,20 @@ int main(void) { @autoreleasepool {
 
     // The keys of a window wait for the decision of the workbench from the release of a press on the workbench
     // (docs/spec/native-surfaces.md#keyboard-of-a-surface). The workbench of this window is the left half, its surface the right.
-    NSWindow *holding = [[SPFollowedWindow alloc] initWithContentRect:NSMakeRect(0, 0, 800, 500)
+    NSWindow *holding = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 800, 500)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
     holding.releasedWhenClosed = NO;
-    WKWebView *holdingMain = [[[SPFollowedWebView alloc] initWithFrame:holding.contentView.bounds] autorelease];
+    // A press reaches only a window on the screen: -[NSWindow _handleLeftMouseDownEvent:isDelayedEvent:] ends without a hit test
+    // for a window that is not visible, as no person can press it. The window stands behind the windows of the person.
+    [holding orderBack:nil];
+    WKWebView *holdingMain = [[[WKWebView alloc] initWithFrame:holding.contentView.bounds] autorelease];
     [holding.contentView addSubview:holdingMain];
     void *holdingObservation = sp_window_observe_responder(holding, ^{});
     void *holdingComposition = sp_window_set_main_webview(holding, holdingMain);
     void *heldHost = sp_surface_create(holdingComposition);
     webviewSetFrame(heldHost, 400, 0, 400, 500);
     webviewSetSurfaceHidden(heldHost, false);
-    WKWebView *heldPage = [[[SPFollowedWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 500)] autorelease];
-    followedPage = heldPage;
-    followedWorkbench = holdingMain;
+    WKWebView *heldPage = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 500)] autorelease];
     check(sp_surface_place_view(heldHost, heldPage), "the page of the surface of the holding window is placed");
     void *heldRegion = sp_region_create(heldHost, "view", regionEvent, NULL);
     placeRegion(heldRegion);
@@ -661,16 +595,8 @@ int main(void) { @autoreleasepool {
     NSString *moved = capturedRecords(^{ sp_input_pointer(holding, 600, 250, 0, 0, 0, 0); });
     check([moved containsString:@"\"kind\":\"pointer\""] && [moved containsString:@"\"phase\":0"],
         [NSString stringWithFormat:@"a move after the release on the workbench is delivered at once, got %@", moved].UTF8String);
-    followed = [NSMutableArray array];
     sp_input_pointer(holding, 600, 250, 1, 0, 0, 0);
-    NSArray<NSString *> *pressCalls = [[followed copy] autorelease];
-    followed = nil;
     check(sp_input_press_open(holding, 0), "a press after the release on the workbench reaches its view at once");
-    NSResponder *pressHolder = holding.firstResponder;
-    NSView *frame = holding.contentView.superview;
-    NSView *appKitHit = [frame hitTest:[frame convertPoint:NSMakePoint(600, holding.contentView.bounds.size.height - 250) fromView:nil]];
-    // The view that AppKit took as the target of the last left press of the window.
-    NSView *lastLeftHit = ((NSView *(*)(id, SEL))objc_msgSend)(holding, NSSelectorFromString(@"_lastLeftHit"));
     sp_input_pointer(holding, 600, 250, 3, 0, 0, 0);
     sp_window_keys_decided(holding);
     runQueuedEvents();
@@ -678,13 +604,7 @@ int main(void) { @autoreleasepool {
     // The press reached the page of the surface, which then holds the keyboard of the surface; the region takes it back.
     NSResponder *pressedHolder = holding.firstResponder;
     check([pressedHolder isKindOfClass:NSView.class] && [(NSView *)pressedHolder isDescendantOf:heldPage],
-        [NSString stringWithFormat:@"the press after the release on the workbench gives the keyboard to the page it reached (holder %@ after the "
-            @"press, %@ after the release; view at the point %@; last left hit %@; page %p, workbench %p; page frame %@, accepts first "
-            @"responder %d, needs a panel %d; calls of the press: %@)",
-            identify(pressHolder, heldPage, holdingMain), identify(pressedHolder, heldPage, holdingMain),
-            identify(appKitHit, heldPage, holdingMain), identify(lastLeftHit, heldPage, holdingMain), heldPage, holdingMain,
-            NSStringFromRect([heldPage convertRect:heldPage.bounds toView:nil]), heldPage.acceptsFirstResponder,
-            heldPage.needsPanelToBecomeKey, [pressCalls componentsJoinedByString:@"; "]].UTF8String);
+        "the press after the release on the workbench gives the keyboard to the page it reached");
     [holding makeFirstResponder:(NSResponder *)heldRegion];
 
     // A press of the window ends the wait: the keys that waited reach the view that holds the keyboard first, in their order, and
