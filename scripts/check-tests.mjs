@@ -9237,6 +9237,7 @@ const FEATURE_LINKS = [
       { file: "native/darwin/tests/input_virtual_test.m", id: "an activation makes a covered window the virtual key window (%d)" },
       { file: "native/darwin/tests/input_virtual_test.m", id: "a window that the host shows beside the virtual key window becomes the virtual key window (%lu)" },
       { file: "native/darwin/tests/input_activate_test.m", id: "an activation completes without the system (%d, frontmost %s)" },
+      { file: "packages/window-check/test/session-activate.test.mjs", id: "a session sends an activating move to the host only" },
     ],
     expected: "activate: true makes a covered window the virtual key window without asking the system for an activation or ordering a window, and while the application answers as active a key request of the application moves the virtual key window, so a window that the host shows or focuses hears that it became key.",
     levels: ["unit"],

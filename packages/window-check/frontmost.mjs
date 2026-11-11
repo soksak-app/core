@@ -1,5 +1,4 @@
-// Reads the active application for diagnostic messages, activates a tested host on request and finds the windows that
-// cover a window. Frontmost state is not a criterion of a check result.
+// Reads the active application for diagnostic messages and finds the windows that cover a window. Frontmost state is not a criterion of a check result.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 
@@ -21,18 +20,9 @@ return JSON.stringify(app.isNil() ? null : {
   bundle: ObjC.unwrap(app.bundleIdentifier) ?? null
 });`);
 
-const activate = jxa(`
-const app = $.NSRunningApplication.runningApplicationWithProcessIdentifier(input.pid);
-return JSON.stringify(!app.isNil() && app.activateWithOptions(0));`);
-
 /** The process number of the application that is active now. */
 export function frontmostApp() {
   return frontmost()?.pid ?? null;
-}
-
-/** Activates the application of process pid. It fails when the application cannot be activated. */
-export function activateApp(pid) {
-  assert.equal(activate({ pid }), true, `application ${pid} could not be activated`);
 }
 
 // The windows of the ordinary layer on the screen, front to back.

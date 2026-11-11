@@ -8,7 +8,6 @@ import { loadavg, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { connect, EndpointError } from "@soksak/client";
-import { activateApp } from "./frontmost.mjs";
 import { STALL_AFTER, announceStall, pageProcesses, sampleStall } from "./stall-sample.mjs";
 import { untilEndpoint } from "./endpoint-wait.mjs";
 import { joinedFailure } from "./failure.mjs";
@@ -740,10 +739,8 @@ export class Session {
   }
 
   async pointer(x, y, phase, options = {}) {
-    // The cooperative activation of macOS rejects a self-activation request of an application that the user has not
-    // activated. Like a user who switches applications, the check process activates the application first, and the host
-    // then waits for the active state of the key window and the web view.
-    if (options.activate) activateApp(this.client.endpoint.pid);
+    // The host emulates the activation of activate: true and waits for the active state of the web views itself
+    // (docs/spec/exposure.md#methods); the check asks the system for nothing.
     const button = options.button ?? "left";
     // Each named pointer holds its own press of each button (docs/spec/exposure.md#named-pointers).
     const named = options.pointer === undefined ? {} : { pointer: options.pointer };
