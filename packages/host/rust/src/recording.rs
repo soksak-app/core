@@ -250,7 +250,7 @@ impl Recording {
         let (done, on_done) = mpsc::channel();
         let registered = end.clone();
         let target_directory = directory.to_path_buf();
-        std::thread::spawn(move || {
+        crate::routine::spawn_named("new-window-recording", move || {
             let register = |given: Box<dyn Fn(&'static str) + Send + Sync>| {
                 // default: a lock that a panicking thread poisoned still holds the end, which this call sets.
                 let mut end = registered.lock().unwrap_or_else(PoisonError::into_inner);

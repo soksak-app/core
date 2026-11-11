@@ -15,6 +15,7 @@ import (
 	"sync"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
+	"github.com/soksak-app/core/packages/host/go/src/routine"
 )
 
 // CaptureTarget is the recording target. With Display, the windows of this app on the display that holds the window are recorded.
@@ -181,7 +182,7 @@ func (r *Recording) StartNewWindow(capture NewWindowCapture, directory string, f
 	r.documentIdentityAllowed = false
 	r.identitySource = nil
 	r.pending = pending
-	go func() {
+	routine.Go("new-window-recording", func() {
 		number, err := capture.WaitNewWindow(pending.registerEnd)
 		if err != nil {
 			pending.done <- newWindowResult{err: err, captureStopped: true}
@@ -192,7 +193,7 @@ func (r *Recording) StartNewWindow(capture NewWindowCapture, directory string, f
 			capture.ReleaseNewWindow()
 		}
 		pending.done <- newWindowResult{err: err, captureStopped: captureStopped}
-	}()
+	})
 	return nil
 }
 
