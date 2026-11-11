@@ -3236,3 +3236,7 @@ mod cursor_tests;
 #[cfg(test)]
 #[path = "window_sheet_test.rs"]
 mod sheet_tests;
+
+#[cfg(test)]
+#[path = "window_order_test.rs"]
+mod order_tests;
