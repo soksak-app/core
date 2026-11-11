@@ -155,6 +155,9 @@ fn invalid_json_closes_connection() {
 | `diagnostics.capture-start.parses-frame-identity-option` | `diagnostics.capture.start`는 선택적 boolean `frameIdentity`를 받고 그 값을 recording capture에 전달한다. | all |
 | `diagnostics.capture-start.frame-identity-is-strict-boolean` | JSON boolean이 아닌 `frameIdentity` 값은 `frameIdentity must be a boolean` 오류로 거부된다. | all |
 | `diagnostics.capture-start.forwards-frame-identity` | recording 시작은 요청된 `frameIdentity` 값을 native capture 시작에 전달한다. | all |
+| `diagnostics.capture-start.new-window-is-strict-boolean` | `diagnostics.capture.start` 는 선택적 boolean `newWindow` 를 받고, 다른 값은 `newWindow must be a boolean` 으로, `display` 와 함께 쓴 `newWindow` 는 `newWindow records the new window alone and cannot be combined with display` 로 거부한다. | all |
+| `diagnostics.capture-start.new-window-answers-once-held` | `newWindow` 가 있으면 start 는 창의 다음 show 의 잡기가 설정되면 답하고, 실패한 잡기는 녹화를 시작하지 않으며, 녹화는 잡힌 창만 연다. | all |
+| `diagnostics.capture-start.new-window-hold-ends` | 어떤 show 도 잡지 못한 잡힌 창의 대기는 요청이 반환된 뒤에도 stop, 요청의 endpoint 연결의 닫힘, 요청 창의 닫힘으로 끝나고, 잡기가 창을 잡은 뒤의 실패는 그 창을 놓아 준다. | all |
 | `diagnostics.document.viewport-marker.is-declared` | 진단 build는 `diagnostics.document.viewport-marker`를 선언한다. | all |
 | `diagnostics.document.viewport-marker.requires-valid-parameters` | viewport-marker command는 비어 있지 않은 `surface`, `document` 문자열과 boolean `enabled`를 요구하며, 없거나 비어 있거나 null이거나 타입이 다른 값은 native 작업 전에 거부한다. | all |
 | `diagnostics.document.viewport-marker.uses-the-owning-window-document` | command는 요청한 surface와 window에 속한 연결 document만 찾는다. 해당 document 없이 시작하면 native 작업 전에 실패하고, 제거 뒤 중지는 idempotent하다. | all |

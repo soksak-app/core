@@ -273,8 +273,14 @@ impl Recording {
                     result
                 }
             };
-            // default: the owner that waits for the result may have gone with the recording; nothing waits then.
-            let _ = done.send(result);
+            if done.send(result).is_err() {
+                // The owner of the recording settles the start before it lets the recording go, so a result that no
+                // owner takes is recorded.
+                crate::application_log::log_error(
+                    "recording",
+                    "the start of a new window recording ended after its recording",
+                );
+            }
         });
         state.directory = Some(directory.to_path_buf());
         state.capture_stopped = false;

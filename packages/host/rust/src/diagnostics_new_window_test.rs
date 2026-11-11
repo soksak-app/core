@@ -72,9 +72,11 @@ impl NewWindowCapture for NewWindowProbe {
     ) -> Result<isize, String> {
         let end = Mutex::new(self.ends.lock().unwrap().clone());
         register_end(Box::new(move |reason| {
-            // default: the probe keeps its receiver, so the send of an end reaches it; an end after the wait answers
-            // nothing.
-            let _ = end.lock().unwrap().send(HoldEvent::Ended(reason));
+            // The probe keeps its receiver for its life, so the send of an end reaches it.
+            end.lock()
+                .unwrap()
+                .send(HoldEvent::Ended(reason))
+                .expect("the probe receives the end of its wait");
         }));
         match self.events.lock().unwrap().recv().unwrap() {
             HoldEvent::Held(number) => Ok(number),
