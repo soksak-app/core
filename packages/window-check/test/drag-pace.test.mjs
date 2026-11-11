@@ -1,13 +1,6 @@
 import assert from "node:assert/strict";
-import { pathToFileURL } from "node:url";
-import test, { mock } from "node:test";
-
-// The window list of the system is not read: no window of another application covers the fake window.
-const frontmost = await import("../frontmost.mjs");
-mock.module(pathToFileURL(new URL("../frontmost.mjs", import.meta.url).pathname).href, {
-  namedExports: { ...frontmost, coveringWindows: () => [] },
-});
-const { drag } = await import("../app.mjs");
+import test from "node:test";
+import { drag } from "../app.mjs";
 
 // A drag that does not run at the asked rate measured nothing, and a second drag that does would make the check pass by
 // chance, so the first drag that is not paced fails the check with the values that tell its cause.

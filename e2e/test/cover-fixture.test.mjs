@@ -37,7 +37,7 @@ function windows({ shows = true } = {}) {
 test("a cover is placed over the check window and judged once its layout presented and it shows", async () => {
   assert.equal(typeof fixtures.coverCheckWindow, "function", "the fixture owns the covering of a check window");
   const { s, cover, calls } = windows();
-  const covered = await fixtures.coverCheckWindow(s, cover, { windows: () => [] });
+  const covered = await fixtures.coverCheckWindow(s, cover);
   assert.deepEqual(covered, FRAME);
   assert.deepEqual(calls, [
     { window: "project-window-1", command: "host.window.resize", params: { width: 1400, height: 860 } },
@@ -47,11 +47,7 @@ test("a cover is placed over the check window and judged once its layout present
   ]);
 });
 
-test("a cover that other windows keep occluded measures nothing and names them", async () => {
+test("a cover that does not show fails the check with the cover as its reason", async () => {
   const { s, cover } = windows({ shows: false });
-  const editor = { owner: "Editor", pid: 900, frame: { x: 0, y: -50, width: 1800, height: 1100 } };
-  // The window list of the screen, front to back: the editor, then the cover and the check window.
-  const own = [{ x: 200, y: -11, width: 1400, height: 860 }, FRAME].map((frame) => ({ owner: "mygo", pid: 700, frame }));
-  await assert.rejects(fixtures.coverCheckWindow(s, cover, { windows: () => [editor, ...own] }),
-    /mygo's window is completely covered by Editor at \{"x":0,"y":-50,"width":1800,"height":1100\}.*Nothing was measured/);
+  await assert.rejects(fixtures.coverCheckWindow(s, cover), /the covering window did not show on the screen/);
 });

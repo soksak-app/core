@@ -2,16 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import * as fixtures from "../fixture.mjs";
 
-async function prepare(target, others, options) {
+async function prepare(target, others) {
   assert.equal(typeof fixtures.prepareOcclusionFixture,"function","placement fixture must own inactive cohort preparation");
-  return fixtures.prepareOcclusionFixture(target,others,options);
+  return fixtures.prepareOcclusionFixture(target,others);
 }
-// The window of another application in front of every check window, which covers each of them whole.
-const EDITOR={owner:"Editor",pid:900,frame:{x:0,y:0,width:1800,height:1100}};
-// The window list of the screen, front to back: the editor, then the check windows in their order.
-const screenWindows=rows=>()=>[EDITOR,...rows.map(row=>({owner:row.app.name,pid:row.client.endpoint.pid,frame:{...row.frame}}))];
-// The refusal of a covered window that requireUncovered states, naming first the window list entry in front that covers it.
-const COVERED=/mygo's window is completely covered by Editor at \{"x":0,"y":0,"width":1800,"height":1100\}(, [^ ]+ at \{[^}]*\})*, so WebKit renders it less often\. Nothing was measured/;
 // The height of the title bar that a window frame holds above its content area in this fake host.
 const TITLE_BAR=28;
 function cohort({external=false,targetName="mygo",failure=null}={}) {
@@ -23,7 +17,10 @@ function cohort({external=false,targetName="mygo",failure=null}={}) {
   const others=rows.filter(row=>row!==target);
   // In this declared layout the two outside windows jointly cover the middle
   // one. A public status provider, not the preparation helper, owns the state.
-  const covered=()=>external || targetName==="mygo" && others.some(s=>s.frame.x===0) && others.some(s=>s.frame.x===600);
+  // `external` is a window of another application in front of every check
+  // window at the normal level: it covers the target until the target raises.
+  const raised=new Set();
+  const covered=()=>external && !raised.has(target.app.name) || targetName==="mygo" && others.some(s=>s.frame.x===0) && others.some(s=>s.frame.x===600);
   for(const row of rows) {
     row.get=async status=>{
       if(status==="host.screens")return [{visible:{x:0,y:39,width:1800,height:1000}}];
@@ -41,12 +38,17 @@ function cohort({external=false,targetName="mygo",failure=null}={}) {
       if(failure===row.app.name && params.x!==row.frame.x)throw new Error("owned cohort move failed");
       Object.assign(row.frame,params);
     };
+    row.request=async(method,params)=>{
+      assert.equal(method,"diagnostics.windows.raise");
+      calls.push({app:row.app.name,command:method,params});
+      if(params.raise)raised.add(row.app.name);else raised.delete(row.app.name);
+    };
     row.cleanup=fn=>cleanups.push(fn);
     row.until=async(status,predicate,message)=>{
       const state=await row.get(status);if(!predicate(state))throw new Error(`${message}; actual occluded=${state.occluded}`);return state;
     };
   }
-  return {target,others,calls,cleanups,rows};
+  return {target,others,calls,cleanups,rows,raised};
 }
 
 test("placement preparation removes joint cohort coverage using only owned moves and restores exact frames",async()=>{
@@ -55,8 +57,8 @@ test("placement preparation removes joint cohort coverage using only owned moves
   assert.equal(result.before.occluded,true);assert.equal(result.baseline.occluded,false);
   assert.equal(f.target.frame.x,0,"the tested normal window must use the proven exposed left edge without activation");
   assert.ok(f.others.every(row=>row.frame.x===600));
-  assert.ok(f.calls.every(call=>call.command==="host.window.move" && f.rows.some(row=>row.app.name===call.app)));
-  assert.equal(f.cleanups.length,1);
+  assert.ok(f.calls.every(call=>["host.window.move","diagnostics.windows.raise"].includes(call.command) && f.rows.some(row=>row.app.name===call.app)));
+  assert.equal(f.cleanups.length,4);
   await f.cleanups[0]();
   assert.deepEqual(f.rows.map(row=>row.frame),original);
 });
@@ -68,30 +70,38 @@ test("placement preparation uses target-left and cohort-right for a right-hand t
   assert.equal(f.target.frame.x,0);
 });
 
-test("a user-front cover fails preparation rather than forging a visible state or skipping",async()=>{
+test("the check raises its windows, so a window of another application in front of them covers none of them",async()=>{
   const f=cohort({external:true});
-  await assert.rejects(prepare(f.target,f.others,{windows:screenWindows(f.rows)}),COVERED);
-  assert.equal(f.cleanups.length,1,"failed preparation must still own restoration");
-  await f.cleanups[0]();
+  const result=await prepare(f.target,f.others);
+  assert.equal(result.before.occluded,true);assert.equal(result.baseline.occluded,false);
+  assert.deepEqual(f.calls.filter(call=>call.command==="diagnostics.windows.raise").map(call=>[call.app,call.params.raise]),
+    [["mygo",true],["wailsv3",true],["tauriv2",true]]);
+  assert.deepEqual([...f.raised].sort(),["mygo","tauriv2","wailsv3"]);
+  assert.equal(f.cleanups.length,4,"one owner restores the frames and each application lowers its windows");
+  for(const cleanup of [...f.cleanups].reverse())await cleanup();
+  assert.deepEqual([...f.raised],[]);
   assert.deepEqual(f.rows.map(row=>row.frame.x),[0,600,300]);
-  assert.ok(f.calls.every(call=>call.command==="host.window.move"));
 });
 
 test("cohort restoration is registered before a partial move failure",async()=>{
   const f=cohort({failure:"tauriv2"});
   f.others.find(row=>row.app.name==="tauriv2").frame.x=500;
   await assert.rejects(prepare(f.target,f.others),/owned cohort move failed/);
-  assert.equal(f.cleanups.length,1);
+  assert.equal(f.cleanups.length,4);
   await f.cleanups[0]();
   assert.deepEqual(f.rows.map(row=>row.frame.x),[0,500,300]);
 });
 
-test("a selected single host still requires a real visible baseline",async()=>{
+test("a selected single host raises its own windows before its move",async()=>{
   const f=cohort({external:true});
-  await assert.rejects(prepare(f.target,[],{windows:screenWindows(f.rows)}),COVERED);
-  assert.deepEqual(f.calls,[{app:"mygo",command:"host.window.move",params:{x:0,y:39}}]);
-  assert.equal(f.cleanups.length,1);
-  await f.cleanups[0]();
+  // Only the selected host runs: no window of another check application stands on the screen.
+  for(const row of f.others)row.frame.x=1800;
+  const result=await prepare(f.target,[]);
+  assert.equal(result.baseline.occluded,false);
+  assert.deepEqual(f.calls,[{app:"mygo",command:"diagnostics.windows.raise",params:{raise:true}},
+    {app:"mygo",command:"host.window.move",params:{x:0,y:39}}]);
+  assert.equal(f.cleanups.length,2);
+  for(const cleanup of [...f.cleanups].reverse())await cleanup();
   assert.equal(f.target.frame.x,300);
 });
 
@@ -121,7 +131,7 @@ test("placement preparation exposes the target at the normal left edge and resto
   assert.equal(result.baseline.occluded,false);
   assert.equal(result.baseline.active,false);
   assert.equal(result.baseline.activationObservation.count,"0");
-  assert.equal(f.cleanups.length,1,"one owner restores the target and every parked window");
+  assert.equal(f.cleanups.length,4,"one owner restores the target and every parked window, and each application lowers its windows");
   f.target.until=until;
   await f.cleanups[0]();
   assert.deepEqual(f.rows.map(row=>row.frame),original);
@@ -144,7 +154,7 @@ test("a check uncovers its window from the windows of the other check applicatio
   assert.equal(result.baseline.occluded,false);
   assert.equal(f.target.frame.x,0);
   assert.ok(f.others.every(row=>row.frame.x===600));
-  assert.equal(f.cleanups.length,1);
+  assert.equal(f.cleanups.length,4);
 });
 
 test("the restoration gives back the whole frame that the preparation recorded, its size included",async()=>{

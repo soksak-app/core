@@ -6,10 +6,9 @@
 // of the focused card.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { APPS, keepCommonSettings, open, requireUncovered } from "@soksak/window-check/app.mjs";
+import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, untilEventLine } from "@soksak/window-check/event-log.mjs";
 import { joinedFailure } from "@soksak/window-check/failure.mjs";
-import { windowsCoveringWhole } from "@soksak/window-check/frontmost.mjs";
 import { recordCatalog as catalogOfConfiguration } from "@soksak/window-check/catalog.mjs";
 import * as start from "@soksak/window-check/start.mjs";
 
@@ -150,9 +149,11 @@ export async function pluginChangeStarted(s, change, action) {
 }
 
 
-/** Prepares a real visible occlusion baseline without raising or activating a
- * window. The caller supplies only windows of its declared diagnostic cohort. */
-export async function prepareOcclusionFixture(target, otherWindows, { windows } = {}) {
+/** Prepares a real visible occlusion baseline without activating a window. The caller supplies only windows of its declared
+ * diagnostic cohort. The check owns the order of its windows: every application of the target and of the cohort raises its
+ * windows above the normal windows of other applications (diagnostics.windows.raise) until the check ends, so the windows that a
+ * person leaves on the screen cover none of them, and the moves of the cohort decide what covers the target. */
+export async function prepareOcclusionFixture(target, otherWindows) {
   const key = session => `${session.app.name}/${session.window}`;
   if (!target || !Array.isArray(otherWindows)) throw new TypeError("placement fixture requires an explicit owned cohort");
   const own = key(target), seen = new Set();
@@ -183,9 +184,10 @@ export async function prepareOcclusionFixture(target, otherWindows, { windows } 
     snapshots.push({ session, frame: { ...state.frame }, content: { width: state.content.width, height: state.content.height },
       count: inactiveCount(state) });
   }
-  for (const { frame } of snapshots) {
+  for (const { session, frame } of snapshots) {
     if (frame.width>area.width || frame.y<area.y || frame.y+frame.height>area.y+area.height)
-      throw new Error("placement fixture preparation cannot keep normal owned frames within the visible work area");
+      throw new Error(`placement fixture preparation cannot keep normal owned frames within the visible work area: ${session.app.name} ` +
+        `${session.window} ${JSON.stringify(frame)} in ${JSON.stringify(area)}`);
   }
   // Register the target and entire original cohort before any mutation, including a move
   // that fails after earlier windows have already moved.
@@ -210,6 +212,13 @@ export async function prepareOcclusionFixture(target, otherWindows, { windows } 
     }
     if (failures.length) throw joinedFailure("placement owned cohort restoration failed", failures);
   });
+  const raised = new Set();
+  for (const { session } of snapshots) {
+    if (raised.has(session.client)) continue;
+    raised.add(session.client);
+    session.cleanup(() => session.request("diagnostics.windows.raise", { raise: false }));
+    await session.request("diagnostics.windows.raise", { raise: true });
+  }
   const parked = [];
   for (const { session, frame, count: originalCount } of snapshots) {
     // A real inactive normal-frame observation established this exposed edge:
@@ -222,14 +231,8 @@ export async function prepareOcclusionFixture(target, otherWindows, { windows } 
     if (inactiveCount(actual) !== originalCount) throw new Error("placement cohort activation count changed during preparation");
     parked.push({ application:session.app.name, window:session.window, originalFrame:frame, parkedFrame:actual.frame });
   }
-  // Other apps and user windows remain untouched. A window that windows of other applications cover whole stays occluded and posts
-  // no occlusion change, so it ends the check as every covered window does (requireUncovered), naming the covering windows: nothing
-  // was measured, never a product failure or a reason to fake visibility. The window list shows the moves of the cohort, which the
-  // frames read above confirm. Any other occluded window shows a part on the screen, and its occlusion state changes by the
-  // notification that the moves cause; the wait for that change has no time limit.
-  const parkedState = await target.get("host.window");
-  if (parkedState.occluded && windowsCoveringWhole(target.client.endpoint.pid, parkedState.frame, windows).length > 0)
-    requireUncovered(target, parkedState, windows);
+  // The windows of other applications stand below the raised windows, so only the cohort can cover the target, and the moves leave
+  // it a part on the screen: its occlusion state changes by the notification that the moves cause.
   const baseline = await target.until("host.window", value => value.occluded === false,
     "placement fixture preparation remains occluded after owned cohort moves");
   if (inactiveCount(baseline) !== count) throw new Error("placement target activation count changed during preparation");
@@ -240,11 +243,11 @@ export async function prepareOcclusionFixture(target, otherWindows, { windows } 
  * Uncovers the window of `s` from the windows of the other check applications: it opens each of `apps` but the application of `s`
  * inactive (an application outside the required set opens as null and owns no window), and parks their windows through
  * prepareOcclusionFixture, which restores every frame when the check ends. The check windows overlap, and the mygo window, centred
- * between the two others, is covered whole; a display measurement requires a window that reports `occluded` false, because WebKit
- * renders a covered window less often (`host.window`, docs/spec/exposure.md#host-entries), and a check orders no window in front of
- * the windows of other applications (docs/spec/hosts.md#launch-activation).
+ * between the two others, is covered whole; a check whose subject is the occlusion of its window or a window appearing on the
+ * display starts from a window that reports `occluded` false, and the raise of prepareOcclusionFixture keeps the windows of other
+ * applications behind the check windows (docs/spec/hosts.md#launch-activation).
  */
-export async function uncoverFromCheckWindows(t, s, { apps = APPS, openApp = open, windows } = {}) {
+export async function uncoverFromCheckWindows(t, s, { apps = APPS, openApp = open } = {}) {
   const otherWindows = [];
   for (const other of Object.values(apps)) {
     if (other.name === s.app.name) continue;
@@ -252,7 +255,7 @@ export async function uncoverFromCheckWindows(t, s, { apps = APPS, openApp = ope
     if (peer === null) continue;
     for (const window of await peer.get("host.windows")) otherWindows.push(peer.on(window.window));
   }
-  return prepareOcclusionFixture(s, otherWindows, { windows });
+  return prepareOcclusionFixture(s, otherWindows);
 }
 
 /**
@@ -260,19 +263,14 @@ export async function uncoverFromCheckWindows(t, s, { apps = APPS, openApp = ope
  * of the covered window. host.windows lists a window ready before it is on the screen, because a host shows a new window after
  * its first screen (docs/spec/native-host.md#page-start), so the cover is judged by its presented layout and by its own
  * occlusion: once it shows in front of the covered window it reports `occluded` false. Only then does the occlusion of the
- * covered window tell what the cover does. A cover that other windows keep occluded ends the check as every covered window does
- * (requireUncovered): nothing was measured.
+ * covered window tell what the cover does. The windows of the application stand raised above the windows of other applications
+ * (prepareOcclusionFixture), so only the windows of the check can keep the cover occluded.
  */
-export async function coverCheckWindow(s, cover, { windows } = {}) {
+export async function coverCheckWindow(s, cover) {
   const covered = (await s.get("host.window")).frame;
   await cover.run("host.window.resize", { width: covered.width + 200, height: covered.height + 100 });
   await cover.run("host.window.move", { x: covered.x - 100, y: covered.y - 50 });
   await cover.presented();
-  try {
-    await cover.until("host.window", (w) => w.occluded === false, "the covering window did not show on the screen");
-  } catch (error) {
-    requireUncovered(cover, await cover.get("host.window"), windows);
-    throw error;
-  }
+  await cover.until("host.window", (w) => w.occluded === false, "the covering window did not show on the screen");
   return covered;
 }

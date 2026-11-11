@@ -1,13 +1,6 @@
 import assert from "node:assert/strict";
-import { pathToFileURL } from "node:url";
-import test, { mock } from "node:test";
-
-// The window list of the system is not read: no window of another application covers the fake window.
-const frontmost = await import("../frontmost.mjs");
-mock.module(pathToFileURL(new URL("../frontmost.mjs", import.meta.url).pathname).href, {
-  namedExports: { ...frontmost, coveringWindows: () => [] },
-});
-const { drag, holdCovered } = await import("../app.mjs");
+import test from "node:test";
+import { drag, holdCovered } from "../app.mjs";
 
 // A covered window draws its image regions only while the check asks for it (docs/spec/native-surfaces.md#image-regions),
 // and the drag measures the page and the regions of that window, so the drag asks for it around the gesture and does not

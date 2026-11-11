@@ -42,12 +42,6 @@ const list = ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo(1
 return JSON.stringify(list.map((item) => ({ owner: item.kCGWindowOwnerName, pid: item.kCGWindowOwnerPID,
   frame: { x: item.kCGWindowBounds.X, y: item.kCGWindowBounds.Y, width: item.kCGWindowBounds.Width, height: item.kCGWindowBounds.Height } })));`);
 
-// The windows in front of the front window of process pid in list, or null when the process has no window in the list.
-function windowsAbove(pid, list) {
-  const own = list.findIndex((item) => item.pid === pid);
-  return own < 0 ? null : list.slice(0, own);
-}
-
 /**
  * The place of the front window of process pid in a window list ordered front to back: the number of windows in front of
  * it. It fails when the process has no window in the list.
@@ -75,60 +69,4 @@ export function windowsBehind(pid, except = []) {
 /** The place of the front window of process pid among the windows of the ordinary layer on the screen. */
 export function windowPlace(pid) {
   return placeIn(windowList(), pid);
-}
-
-/**
- * A window of the ordinary layer that is in front of the front window of process pid and covers the whole frame (screen
- * coordinates). It is stated as the reason when the window is covered and the check does not measure. windows gives the
- * windows of the screen front to back, the window list of the screen unless a test gives its own. It fails when the window
- * of pid is not in the window list.
- */
-export function coveringWindows(pid, frame, windows = windowList) {
-  const above = windowsAbove(pid, windows());
-  assert.ok(above !== null, `process ${pid} has no window in the window list`);
-  return above.filter(({ frame: f }) => f.x <= frame.x && f.y <= frame.y &&
-    f.x + f.width >= frame.x + frame.width && f.y + f.height >= frame.y + frame.height);
-}
-
-/**
- * The windows of the ordinary layer in front of the front window of process pid that overlap the frame (screen coordinates), when
- * together they cover the whole frame, and an empty list when some part of the frame stays uncovered. The screen shows no part of
- * such a window, so its occlusion state stays not visible and posts no change until a covering window moves. windows gives the
- * windows of the screen front to back, the window list of the screen unless a test gives its own. It fails when the window of pid
- * is not in the window list.
- */
-export function windowsCoveringWhole(pid, frame, windows = windowList) {
-  const above = windowsAbove(pid, windows());
-  assert.ok(above !== null, `process ${pid} has no window in the window list`);
-  const right = frame.x + frame.width;
-  const bottom = frame.y + frame.height;
-  const overlapping = above.filter(({ frame: f }) => f.x < right && f.x + f.width > frame.x && f.y < bottom && f.y + f.height > frame.y);
-  // The edges of the overlapping windows inside the frame cut it into cells; each cell lies inside a window or outside every one.
-  const cuts = (start, end, edges) => [...new Set([start, end, ...edges.filter((edge) => edge > start && edge < end)])].sort((a, b) => a - b);
-  const xs = cuts(frame.x, right, overlapping.flatMap(({ frame: f }) => [f.x, f.x + f.width]));
-  const ys = cuts(frame.y, bottom, overlapping.flatMap(({ frame: f }) => [f.y, f.y + f.height]));
-  for (let i = 0; i + 1 < xs.length; i++) {
-    for (let j = 0; j + 1 < ys.length; j++) {
-      const covered = overlapping.some(({ frame: f }) => f.x <= xs[i] && f.x + f.width >= xs[i + 1] && f.y <= ys[j] &&
-        f.y + f.height >= ys[j + 1]);
-      if (!covered) return [];
-    }
-  }
-  return overlapping;
-}
-
-/**
- * Waits for an event that only a window the screen shows produces. When the wait fails, covered() names the windows that
- * cover the window, or returns null when none does; a covered window is stated as the reason, and the error of the wait is
- * the cause. Any other failure of the wait is returned unchanged.
- */
-export async function unlessCovered(wait, covered) {
-  try {
-    return await wait();
-  } catch (error) {
-    const reason = await covered();
-    if (reason === null) throw error;
-    throw new Error(`the window is completely covered by ${reason}, so the screen does not show it and its occlusion state stays not visible. ` +
-      "Nothing was measured: uncover the window, without activating the application, and run the check again.", { cause: error });
-  }
 }

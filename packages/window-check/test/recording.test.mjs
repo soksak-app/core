@@ -23,6 +23,8 @@ function fakeClient(directory, { stopFails = false, removeFramesOnStopFailure = 
     requests,
     request: async (method, params) => {
       requests.push({ method, ...params });
+      // A recording holds the covered drawing of its window until it stops.
+      if (method === "diagnostics.window.draw-covered") return null;
       if (method === "diagnostics.capture.start") {
         running = join(captures, `capture-${requests.length}`);
         mkdirSync(running);
@@ -65,7 +67,7 @@ test("a recording whose stop fails fails finalization, sends no second stop and 
   const client = fakeClient(directory, { stopFails: true });
   const s = newSession(directory, client);
   const recording = await s.record({ display: true });
-  assert.equal(client.requests[0].display, true);
+  assert.equal(client.requests.find((request) => request.method === "diagnostics.capture.start").display, true);
   await assert.rejects(recording.stop({ after: 5 }), /layout trace failed/);
   await assert.rejects(cleanUp(s), /1 recording failed: .*layout trace failed/);
   assert.equal(stops(client).length, 1, "the cleanup sent another stop after one was sent");

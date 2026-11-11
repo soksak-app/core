@@ -34,8 +34,10 @@ func TestE2EShowWaitsForTheFirstFrame(t *testing.T) {
 
 // A status read of whether the window is occluded is worth nothing to a watcher that hears of no change, so a window hears when
 // some of it shows, when another covers all of it and when some of it shows again. Only a window that the screen shows hears
-// these changes, and the check orders no window in front of the windows of other applications (docs/spec/hosts.md#launch-activation).
+// these changes, so the check raises its windows above the windows of other applications (raise,
+// docs/spec/hosts.md#launch-activation) and its own windows alone decide what covers the window.
 func TestE2EAWindowHearsWhenAnotherCoversIt(t *testing.T) {
+	raise(t)
 	framework, _, below := support.Open(t, "below")
 	above := framework.NewWindow(host.WindowOptions{Name: "above", Title: "soksak", Width: 400, Height: 300}).(*adapter.Frontend)
 	t.Cleanup(above.Window().Destroy)
@@ -45,7 +47,7 @@ func TestE2EAWindowHearsWhenAnotherCoversIt(t *testing.T) {
 	below.OnWindowEvent(host.WindowShow, func() { uncovered <- struct{}{} })
 	below.Show()
 	support.Wait(t, "the window below", below.Window().IsVisible)
-	receiveOnScreen(t, "the show of the window below", uncovered, below)
+	receive(t, "the show of the window below", uncovered)
 	above.Show()
 	support.Wait(t, "the window above", above.Window().IsVisible)
 	x, y := below.Position()
@@ -63,6 +65,7 @@ func TestE2EAWindowHearsWhenAnotherCoversIt(t *testing.T) {
 // that, as e2e/placement.test.mjs does with the project window that covers the window of the check. The frame set while the window
 // waited is the frame it goes on the screen with, above the window it covers, so the covered window hears the cover.
 func TestE2EAWindowMovedOverAnotherBeforeItsFirstScreenCoversIt(t *testing.T) {
+	raise(t)
 	framework, workbench, below := support.Open(t, "below")
 	covered := make(chan struct{}, 8)
 	uncovered := make(chan struct{}, 8)
@@ -70,7 +73,7 @@ func TestE2EAWindowMovedOverAnotherBeforeItsFirstScreenCoversIt(t *testing.T) {
 	below.OnWindowEvent(host.WindowShow, func() { uncovered <- struct{}{} })
 	below.Show()
 	support.Wait(t, "the window below", below.Window().IsVisible)
-	receiveOnScreen(t, "the show of the window below", uncovered, below)
+	receive(t, "the show of the window below", uncovered)
 	workbench.HoldFirstScreen()
 	above := framework.NewWindow(host.WindowOptions{Name: "above", Title: "soksak", Width: 400, Height: 300}).(*adapter.Frontend)
 	t.Cleanup(above.Window().Destroy)
@@ -100,32 +103,21 @@ func receive(t *testing.T, what string, events <-chan struct{}) {
 	}
 }
 
-// receiveOnScreen waits for a value of events that only a window that the screen shows produces. When none arrives, it reads from
-// AppKit whether the screen shows some of window, and a window that the screen does not show is stated as the reason: nothing was
-// measured, as unlessCovered of @soksak/window-check/frontmost.mjs states for the window checks.
-func receiveOnScreen(t *testing.T, what string, events <-chan struct{}, window *adapter.Frontend) {
+// raise stands the windows of the application above the normal windows of other applications until the test ends
+// (diagnostics.windows.raise, docs/spec/endpoint.md#diagnostic-builds): each window that the application shows meanwhile takes the
+// level of the check windows, so the windows that a person leaves on the screen cover none of them.
+func raise(t *testing.T) {
 	t.Helper()
-	select {
-	case <-events:
-		return
-	case <-time.After(10 * time.Second):
-	}
 	system, err := platform.Current()
 	if err != nil {
-		t.Fatalf("%s did not arrive within 10 s, and the platform cannot be read: %v", what, err)
+		t.Fatalf("the platform cannot be read: %v", err)
 	}
-	var onScreen bool
-	mygo.RunOnMain(func() { onScreen, err = system.WindowOnScreen(window.NativeWindow()) })
-	switch {
-	case err != nil:
-		t.Fatalf("%s did not arrive within 10 s, and whether the screen shows the window cannot be read: %v", what, err)
-	case !onScreen:
-		t.Fatalf("%s did not arrive within 10 s: the window is ordered in and the screen shows none of it, so its occlusion state "+
-			"stays not visible, because windows of other applications cover all of it. Nothing was measured: uncover the window, "+
-			"without activating the application, and run the check again", what)
-	default:
-		t.Fatalf("%s did not arrive within 10 s, though the screen shows some of the window", what)
+	windows, ok := system.(interface{ RaiseWindows(raise bool) })
+	if !ok {
+		t.Fatal("the platform cannot raise the windows of the application")
 	}
+	mygo.RunOnMain(func() { windows.RaiseWindows(true) })
+	t.Cleanup(func() { mygo.RunOnMain(func() { windows.RaiseWindows(false) }) })
 }
 
 // presentation runs the presentation notice as a step of the main thread and returns its result.

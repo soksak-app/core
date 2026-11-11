@@ -8,7 +8,7 @@ import { loadavg, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { connect, EndpointError } from "@soksak/client";
-import { activateApp, coveringWindows } from "./frontmost.mjs";
+import { activateApp } from "./frontmost.mjs";
 import { STALL_AFTER, announceStall, pageProcesses, sampleStall } from "./stall-sample.mjs";
 import { untilEndpoint } from "./endpoint-wait.mjs";
 import { joinedFailure } from "./failure.mjs";
@@ -1335,28 +1335,6 @@ function requireCallbackStatusArtifact(result, frames) {
     throw new Error(`capture stop callback status artifact is missing or has the wrong path: expected ${expected}, got ${result.callbackStatus}`);
   }
   return expected;
-}
-
-/**
- * The owner name of the other window that covers the window. It is stated as the reason why the measurement is skipped
- * because the window is covered.
- */
-export function coveredBy(s, window, windows) {
-  const covering = coveringWindows(s.client.endpoint.pid, window.frame, windows);
-  return covering.length ? covering.map(({ owner, frame }) => `${owner} at ${JSON.stringify(frame)}`).join(", ")
-    : "windows that together cover it";
-}
-
-/**
- * Refuses a measurement of the pixels of a window that host.window `window` of session `s` reports `occluded`: WebKit renders a
- * window that is covered whole less often, so its frames do not show what the check does. The error names the covering windows
- * (coveredBy, from the window list that `windows` gives, the window list of the screen by default) and states that nothing was
- * measured.
- */
-export function requireUncovered(s, window, windows) {
-  if (!window.occluded) return;
-  throw new Error(`${s.app.name}'s window is completely covered by ${coveredBy(s, window, windows)}, so WebKit renders it less often. ` +
-    "Nothing was measured: uncover the window, without activating the application, and run the check again.");
 }
 
 /** The holds of the covered drawing, by the connection of a session and its window. */
