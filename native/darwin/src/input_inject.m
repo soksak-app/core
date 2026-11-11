@@ -195,10 +195,12 @@ static BOOL attachedTo(NSWindow *candidate, NSWindow *window) {
 // window. The window server gives a person's press to the front window at its point; the windows that the application shows
 // attached to window (its sheets and its child windows) stand in front of it there, so the frontmost of them whose frame holds
 // the point takes the input, as a sheet takes the press of its button. Other windows, of the application or of another, do not
-// take the input of window: the caller names the window it reads, also while other windows cover it.
+// take the input of window: the caller names the window it reads, also while other windows cover it. The order is the order of
+// the window server: -[NSApplication orderedWindows] leaves out panels, and an alert or a save panel sheet is a panel.
 static NSWindow *pointerWindow(NSWindow *window, double *x, double *y) {
     NSPoint screen = [window convertPointToScreen:windowPoint(window, *x, *y)];
-    for (NSWindow *candidate in NSApp.orderedWindows) {
+    for (NSNumber *number in [NSWindow windowNumbersWithOptions:0]) {
+        NSWindow *candidate = [NSApp windowWithWindowNumber:number.integerValue];
         if (candidate == window) break;
         if (!candidate.isVisible || !attachedTo(candidate, window) || !NSPointInRect(screen, candidate.frame)) continue;
         NSPoint point = contentPointOf(candidate, screen);
@@ -416,6 +418,17 @@ bool sp_input_press_open(void *handle, int button) {
 // event loop of its own inside the delivery of the press and reads the next events of the gesture from the event queue of the
 // application, as it reads a person's; an input that arrives while that loop runs reaches the loop only through the queue.
 static NSInteger pressesDelivering;
+
+// The ends of the releases that went to the event queue. The press of such a release stays open, so +[NSEvent pressedMouseButtons]
+// keeps answering its button while the event loop of the view reads the drags before it, and it ends when the delivery of the
+// press returns, after that loop has read the release.
+static NSMutableArray *queuedReleaseEnds;
+static void endQueuedReleases(void) {
+    if (pressesDelivering > 0 || !queuedReleaseEnds.count) return;
+    NSArray *ends = [queuedReleaseEnds autorelease];
+    queuedReleaseEnds = nil;
+    for (dispatch_block_t end in ends) end();
+}
 
 // Delivers one event of a gesture on the path of its press. An event that passes the application while the delivery of a press
 // runs an event loop of its own goes to the event queue, which that loop reads.
@@ -672,6 +685,7 @@ static sp_input_result deliverPointer(SPPointer *pointer, NSWindow *window, doub
                     deliverGesture(hit, mouseEvent(window, down, point, clicks, 1), throughApplication);
                 } @finally {
                     pressesDelivering--;
+                    endQueuedReleases();
                 }
             } @finally {
                 sp_input_press_context_pop(&context);
@@ -689,18 +703,30 @@ static sp_input_result deliverPointer(SPPointer *pointer, NSWindow *window, doub
             bool hasOrigin = sp_input_press_origin_point(window, button, &originX, &originY, &originToken);
             BOOL gestureThroughApplication = press->throughApplication;
             sp_input_press_context context = {0};
+            BOOL queued = phase == 3 && gestureThroughApplication && pressesDelivering > 0;
             if (hasOrigin) sp_input_press_context_push(&context, window, originX, originY);
             @try {
                 NSEvent *event = phase == 2
                     ? mouseEvent(window, right ? NSEventTypeRightMouseDragged : NSEventTypeLeftMouseDragged, point, 0, 1)
                     : mouseEvent(window, right ? NSEventTypeRightMouseUp : NSEventTypeLeftMouseUp, point, clicks, 0);
+                // A release that goes to the event queue ends when the delivery of its press returns.
+                if (queued) {
+                    deliverGesture(hit, event, gestureThroughApplication);
+                    if (!queuedReleaseEnds) queuedReleaseEnds = [[NSMutableArray alloc] init];
+                    [queuedReleaseEnds addObject:[[^{
+                        [press hide];
+                        endPress(press);
+                        if (lastLeft) sp_surface_press_released(window);
+                    } copy] autorelease]];
+                    return SP_INPUT_DELIVERED;
+                }
                 // The release has no button, and the press stays open for the view until the release returns.
                 if (phase == 3) [press hide];
                 if (phase == 3 && lastLeft && !gestureThroughApplication) surfaceLayoutPointerPassing(window, false, point.x, point.y);
                 deliverGesture(hit, event, gestureThroughApplication);
             } @finally {
                 if (hasOrigin) sp_input_press_context_pop(&context);
-                if (phase == 3) {
+                if (phase == 3 && !queued) {
                     endPress(press);
                     if (hasOrigin && !gestureThroughApplication) sp_input_press_origin_clear(window, button, originToken);
                     if (lastLeft) sp_surface_press_released(window);
@@ -731,7 +757,12 @@ static sp_input_result pointerInput(SPPointer *pointer, void *handle, double x, 
         x = point.x;
         y = point.y;
     } else if (!pressed) {
+        NSWindow *named = window;
         window = pointerWindow(window, &x, &y);
+        // AppKit makes the sheet or child window that a person presses the key window; in an application that is not really
+        // active the pressed attached window becomes the virtual key window, so its press passes the application as the
+        // press of a person does and a control that tracks it reads the rest of the gesture from the event queue.
+        if (phase == 1 && window != named && window.canBecomeKeyWindow) enterVirtual(window);
     }
     SPPointer *previous = deliveringPointer;
     deliveringPointer = pointer;
