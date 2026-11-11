@@ -9,6 +9,7 @@ import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { missingPoses } from "./card-panel-checks.mjs";
 import { readDisplayRefreshes } from "@soksak/window-check/display-refresh.mjs";
+import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { TOLERANCE, measureTitlebar, misaligned, rowHeight } from "./titlebar-measurement.mjs";
 
 // The scale steps that rise from 1 to 3 (docs/spec/text-size.md).
