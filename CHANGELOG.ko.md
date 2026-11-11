@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F717: `read {document, frame, ref}`가 세션 승인 게이트 아래에서 프레임의 조작 가능 요소 값을 읽는다. 첫 답은 프레임의 오리진만 이름하고, 그 오리진의 `value-read` 승인 — 영역의 확인 패널이 페이지 라벨이 아니라 오리진을 이름하며 사람의 답으로 기록 — 이 두 번째 답의 값을 답하며, 비밀번호 입력은 승인과 무관하게 null을 답하고 두 답 사이 오리진이 바뀌면 읽기는 실패한다. `approvalsList`와 `approvalsRevoke`가 두 호스트의 포트로 세션 표를 답하고 고친다.
 - F716: `scrollTo {document, x, y}`가 콘텐츠 월드에서 영역의 main 문서를 스크롤하고 스크롤 스크립트 완료의 정착 위치로 답한다. 포트·호출 표·plugin API `scrollTo`의 새 `documentScrollTo` 호출로 이어지며, 유한하지 않은 위치는 거부되고 오류 답은 그것을 이름한다.
 - F715: 문서 영역이 기존 구독에 세 번째 스트림 이름 `interactive`를 받는다. 모든 프레임의 콘텐츠 월드 스크립트가 자기 문서의 조작 가능 요소를 프레임 로컬 rect와 sensitive 플래그로 보고하고 프레임 요소의 로드마다 클레임을 발급하며, 호스트가 각 클레임을 짝 맞는 프레임 안의 호출로 전달하고 보고를 스냅숏 승인 게이트 아래 보고 도착마다 하나의 값으로 접으며, 메인 프레임 커밋이 프레임 표를 비우고 reset을 보낸다. elements와 requests 스트림은 바뀌지 않는다.
 - F696-7: CI 는 `linux-node` job 에서 검증 pipeline 의 headless owner test 를 Linux 로 실행하고, 이 job 은 `os` field 가 Linux 를 제외하는 workspace project 없이 잠긴 dependency 를 설치한다. 실제 macOS 기능이 필요한 owner 는 macOS job 의 system owner 로 실행되고, `make check-windows-rust` 는 Windows host 에서 Rust host 를 Windows 용으로 검사한다.

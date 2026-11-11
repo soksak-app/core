@@ -1413,18 +1413,16 @@ static void sendBody(id<WKURLSchemeTask> task, NSData *data) {
 
 // Resolves the frame info of a path with the same composition that the fold uses, or nil.
 - (WKFrameInfo *)interactiveFrameOfPath:(NSString *)path {
-    if (self.interactiveReports.count == 0) return nil;
-    __block NSMutableDictionary<NSString *, NSString *> *paths = nil;
-    dispatch_sync(dispatch_get_main_queue(), ^{
-        paths = [self interactivePaths];
-    });
-    for (NSString *token in self.interactiveOrder) {
-        if ([paths[token] isEqualToString:path]) {
+    // The caller holds the main thread, so the composition runs inline; a synchronous dispatch to the main queue from
+    // the main thread would stop forever.
+    __block WKFrameInfo *found = nil;
+    [self interactivePathsEnumerate:^(NSString *token, NSString *composed) {
+        if ([composed isEqualToString:path]) {
             id info = self.interactiveInfos[token];
-            return [info isKindOfClass:[WKFrameInfo class]] ? info : nil;
+            if ([info isKindOfClass:[WKFrameInfo class]]) found = info;
         }
-    }
-    return nil;
+    }];
+    return found;
 }
 
 // The paths of the stored reports, composed as the fold composes them.

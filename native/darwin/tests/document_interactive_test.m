@@ -68,6 +68,16 @@ static NSDictionary *framesMessage(void) {
     return nil;
 }
 
+static BOOL readArrived;
+static NSString *readOrigin;
+static void readReplied(void *context, const char *json) {
+    (void)context;
+    NSData *data = [NSData dataWithBytes:json length:strlen(json)];
+    NSDictionary *value = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+    readOrigin = value[@"origin"];
+    readArrived = YES;
+}
+
 static NSDictionary *stateMessage(void) {
     for (NSDictionary *message in [messages reverseObjectEnumerator]) {
         if ([message[@"stream"] isEqual:@"interactive"] && [message[@"message"][@"type"] isEqual:@"reset"]) {
@@ -209,6 +219,14 @@ int main(void) {
         unsigned long long seq = [value[@"seq"] unsignedLongLongValue];
         [messages removeAllObjects];
         (void)seq;
+
+        // A read probe of the main frame names its origin; the grant of the host gates on it.
+        readArrived = NO;
+        sp_document_read(document, "0", 1, false, readReplied, NULL);
+        if (!pumpUntil(stepLimit, ^BOOL { return readArrived; })) {
+            failStep(@"read probe", @"no origin arrived for the read probe");
+        }
+        check([readOrigin length] > 0, [NSString stringWithFormat:@"the probe names the origin: %@", readOrigin]);
 
         // A navigation resets the value; the new document folds again after its script runs.
         [messages removeAllObjects];
