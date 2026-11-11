@@ -19,6 +19,8 @@ bool main_sp_window_on_screen(uintptr_t window);
 char *main_sp_window_color_space_facts(uintptr_t window);
 char *main_sp_window_hit(uintptr_t window, double x, double y);
 bool main_sp_window_move(uintptr_t window, double x, double y);
+bool main_sp_window_raise(uintptr_t window);
+bool main_sp_window_lower(uintptr_t window);
 char *main_sp_screens(void);
 void main_windowResizeInstant(void);
 bool main_sp_window_reveal_after_load(uintptr_t window, char **error);

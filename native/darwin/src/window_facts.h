@@ -19,6 +19,8 @@ void *sp_window_main_webview(void *window);
 //             activation notification counter counts independently of event policy. registered is true only after
 //             the actual observer was installed. Reading facts does not install observers or change the count.
 //   frame     window frame {x, y, width, height}, screen coordinates
+//   display   the index of the display that holds most of the window in the list of sp_screens, null when no display holds it
+//   order     the place of the window among the windows on the screen (sp_window_order_in), null when it is not on the screen
 //   content   content area {width, height}
 //   controls  window buttons [{x, y, width, height, hidden}], window coordinates
 //   webviews  lists the WKWebViews in the window in drawing order (the main position is not assumed)
@@ -49,6 +51,16 @@ char *sp_screens(void);
 
 // Moves the top left of the window frame to screen coordinates (x, y).
 bool sp_window_move(void *window, double x, double y);
+
+// Orders the window in front of every window of its window level, of this and of other applications, without activating the
+// application and without making the window key or main (host.window.raise). Returns false, and orders nothing, when there is
+// no window or the window is not ordered in (closed, minimized or never shown).
+bool sp_window_raise(void *window);
+
+// Orders the window behind every window of its window level, of this and of other applications, without changing the active
+// application, the key window or the main window (host.window.lower). Returns false, and orders nothing, when there is no window
+// or the window is not ordered in.
+bool sp_window_lower(void *window);
 
 // Application menu (JSON array). Each submenu is {title, items: [{title, key}]}; separators are omitted.
 // key is the shortcut: the modifier keys in the order ctrl, opt, shift, cmd joined with +, followed by

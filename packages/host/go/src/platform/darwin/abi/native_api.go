@@ -195,6 +195,7 @@ type NativeFunctions struct {
 	MainSpWindowHit                        func(uintptr, float64, float64) *byte
 	MainSpWindowKeysDecided                func(uintptr)
 	MainSpWindowKeysPageEnded              func(uintptr)
+	MainSpWindowLower                      func(uintptr) bool
 	MainSpWindowMainWebview                func(uintptr) unsafe.Pointer
 	MainSpWindowModalHold                  func(uintptr)
 	MainSpWindowModalHoldEnd               func(uintptr)
@@ -202,6 +203,7 @@ type NativeFunctions struct {
 	MainSpWindowNativeView                 func(uintptr) unsafe.Pointer
 	MainSpWindowOnScreen                   func(uintptr) bool
 	MainSpWindowPlaceNew                   func(uintptr, **byte) bool
+	MainSpWindowRaise                      func(uintptr) bool
 	MainSpWindowRevealAfterLoad            func(uintptr, **byte) bool
 	MainSpWindowShow                       func(uintptr)
 	MainSurfaceLayoutAbandonView           func(uintptr, unsafe.Pointer) bool
@@ -537,6 +539,9 @@ func (functions NativeFunctions) Validate() error {
 	if functions.MainSpWindowKeysPageEnded == nil {
 		return fmt.Errorf("native API function is missing: main_sp_window_keys_page_ended")
 	}
+	if functions.MainSpWindowLower == nil {
+		return fmt.Errorf("native API function is missing: main_sp_window_lower")
+	}
 	if functions.MainSpWindowMainWebview == nil {
 		return fmt.Errorf("native API function is missing: main_sp_window_main_webview")
 	}
@@ -557,6 +562,9 @@ func (functions NativeFunctions) Validate() error {
 	}
 	if functions.MainSpWindowPlaceNew == nil {
 		return fmt.Errorf("native API function is missing: main_sp_window_place_new")
+	}
+	if functions.MainSpWindowRaise == nil {
+		return fmt.Errorf("native API function is missing: main_sp_window_raise")
 	}
 	if functions.MainSpWindowRevealAfterLoad == nil {
 		return fmt.Errorf("native API function is missing: main_sp_window_reveal_after_load")

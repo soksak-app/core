@@ -162,6 +162,7 @@ func Functions() abi.NativeFunctions {
 		},
 		MainSpWindowKeysDecided:   func(a0 uintptr) { C.main_sp_window_keys_decided(C.uintptr_t(a0)) },
 		MainSpWindowKeysPageEnded: func(a0 uintptr) { C.main_sp_window_keys_page_ended(C.uintptr_t(a0)) },
+		MainSpWindowLower:         func(a0 uintptr) bool { return bool(C.main_sp_window_lower(C.uintptr_t(a0))) },
 		MainSpWindowMainWebview:   func(a0 uintptr) unsafe.Pointer { return C.main_sp_window_main_webview(C.uintptr_t(a0)) },
 		MainSpWindowModalHold:     func(a0 uintptr) { C.main_sp_window_modal_hold(C.uintptr_t(a0)) },
 		MainSpWindowModalHoldEnd:  func(a0 uintptr) { C.main_sp_window_modal_hold_end(C.uintptr_t(a0)) },
@@ -173,6 +174,7 @@ func Functions() abi.NativeFunctions {
 		MainSpWindowPlaceNew: func(a0 uintptr, a1 **byte) bool {
 			return bool(C.main_sp_window_place_new(C.uintptr_t(a0), (**C.char)(unsafe.Pointer(a1))))
 		},
+		MainSpWindowRaise: func(a0 uintptr) bool { return bool(C.main_sp_window_raise(C.uintptr_t(a0))) },
 		MainSpWindowRevealAfterLoad: func(a0 uintptr, a1 **byte) bool {
 			return bool(C.main_sp_window_reveal_after_load(C.uintptr_t(a0), (**C.char)(unsafe.Pointer(a1))))
 		},

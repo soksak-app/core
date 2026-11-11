@@ -32,6 +32,8 @@ char *main_sp_window_hit(uintptr_t window, double x, double y) {
     return ON_MAIN(char *, sp_window_hit((void *)window, sp_window_composition((void *)window), x, y));
 }
 bool main_sp_window_move(uintptr_t window, double x, double y) { return ON_MAIN(bool, sp_window_move((void *)window, x, y)); }
+bool main_sp_window_raise(uintptr_t window) { return ON_MAIN(bool, sp_window_raise((void *)window)); }
+bool main_sp_window_lower(uintptr_t window) { return ON_MAIN(bool, sp_window_lower((void *)window)); }
 char *main_sp_screens(void) { return ON_MAIN(char *, sp_screens()); }
 void main_windowResizeInstant(void) { hostRunOnMain(^{ windowResizeInstant(); }); }
 bool main_sp_window_reveal_after_load(uintptr_t window, char **error) {

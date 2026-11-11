@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <signal.h>
 #import "window_facts.h"
+#import "window_order.h"
 #import "input_virtual.h"
 #import "observe.h"
 #import "activity_observers.h"
@@ -179,6 +180,50 @@ static void collectSurfaces(NSWindow *window, NSView *view, NSMutableArray *foun
 }
 
 // The system pointer in screen coordinates, or the injected position of a virtual key window, which is the position of its pages.
+NSDictionary *sp_window_order_in(NSArray<NSDictionary *> *windows, NSInteger number, pid_t pid) {
+    NSMutableArray<NSDictionary *> *shown = [NSMutableArray array];
+    for (NSDictionary *row in windows) {
+        if (row[(id)kCGWindowAlpha] && [row[(id)kCGWindowAlpha] doubleValue] <= 0) continue;
+        [shown addObject:row];
+    }
+    NSUInteger own = NSNotFound;
+    for (NSUInteger at = 0; at < shown.count; at++) {
+        if ([shown[at][(id)kCGWindowNumber] integerValue] == number) { own = at; break; }
+    }
+    if (own == NSNotFound) return nil;
+    NSInteger layer = [shown[own][(id)kCGWindowLayer] integerValue];
+    CGRect bounds = CGRectNull;
+    CGRectMakeWithDictionaryRepresentation((CFDictionaryRef)shown[own][(id)kCGWindowBounds], &bounds);
+    NSUInteger index = 0, count = 0;
+    BOOL otherInFront = NO;
+    for (NSUInteger at = 0; at < shown.count; at++) {
+        NSDictionary *row = shown[at];
+        if ([row[(id)kCGWindowLayer] integerValue] != layer) continue;
+        count++;
+        if (at >= own) continue;
+        index++;
+        if ([row[(id)kCGWindowOwnerPID] intValue] == pid) continue;
+        CGRect other = CGRectNull;
+        CGRectMakeWithDictionaryRepresentation((CFDictionaryRef)row[(id)kCGWindowBounds], &other);
+        if (!CGRectIsEmpty(CGRectIntersection(bounds, other))) otherInFront = YES;
+    }
+    return @{ @"index": @(index), @"count": @(count), @"otherInFront": @(otherInFront) };
+}
+
+// The place of the window among the windows on the screen, or null when the window server does not show it.
+static id orderFact(NSWindow *window) {
+    if (!window.isVisible) return NSNull.null;
+    NSArray *windows = CFBridgingRelease(CGWindowListCopyWindowInfo(
+        kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, kCGNullWindowID));
+    return sp_window_order_in(windows, window.windowNumber, getpid()) ?: (id)NSNull.null;
+}
+
+// The index of the display of the window in the list of sp_screens, or null when no display holds it.
+static id displayFact(NSWindow *window) {
+    NSUInteger index = window.screen ? [NSScreen.screens indexOfObject:window.screen] : NSNotFound;
+    return index == NSNotFound ? (id)NSNull.null : @(index);
+}
+
 static NSDictionary *pointerFact(NSWindow *window) {
     double x = 0, y = 0;
     sp_input_virtual_real_mouse_location(&x, &y);
@@ -255,6 +300,8 @@ char *sp_window_facts(void *handle, void *surfaceView) {
     return copyJSON(@{
         @"responder": responder,
         @"frame": screenRect(window.frame),
+        @"display": displayFact(window),
+        @"order": orderFact(window),
         @"pointer": pointerFact(window),
         @"content": @{ @"width": @(content.bounds.size.width), @"height": @(content.bounds.size.height) },
         @"scale": @(window.backingScaleFactor),
@@ -364,6 +411,26 @@ bool sp_window_move(void *handle, double x, double y) {
         return false;
     }
     [window setFrameOrigin:NSMakePoint(x, primaryTop() - y - window.frame.size.height)];
+    return true;
+}
+
+bool sp_window_raise(void *handle) {
+    NSWindow *window = (NSWindow *)handle;
+    if (!window || !window.isVisible) {
+        sp_log_error("window facts", "the window to raise is missing or not ordered in");
+        return false;
+    }
+    [window orderFrontRegardless];
+    return true;
+}
+
+bool sp_window_lower(void *handle) {
+    NSWindow *window = (NSWindow *)handle;
+    if (!window || !window.isVisible) {
+        sp_log_error("window facts", "the window to lower is missing or not ordered in");
+        return false;
+    }
+    [window orderBack:nil];
     return true;
 }
 

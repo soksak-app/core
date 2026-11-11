@@ -882,6 +882,16 @@ func Functions(library uintptr) (abi.NativeFunctions, error) {
 		purego.RegisterFunc(&functions.MainSpWindowKeysPageEnded, address)
 	}
 	{
+		address, err := purego.Dlsym(library, "main_sp_window_lower")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_window_lower: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_window_lower: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.MainSpWindowLower, address)
+	}
+	{
 		address, err := purego.Dlsym(library, "main_sp_window_main_webview")
 		if err != nil {
 			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_window_main_webview: %w", err)
@@ -950,6 +960,16 @@ func Functions(library uintptr) (abi.NativeFunctions, error) {
 			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_window_place_new: symbol has a null address")
 		}
 		purego.RegisterFunc(&functions.MainSpWindowPlaceNew, address)
+	}
+	{
+		address, err := purego.Dlsym(library, "main_sp_window_raise")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_window_raise: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_window_raise: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.MainSpWindowRaise, address)
 	}
 	{
 		address, err := purego.Dlsym(library, "main_sp_window_reveal_after_load")
