@@ -33,16 +33,19 @@ for (const app of Object.values(APPS)) {
       // The window draws its image regions covered from here on (presentRasterTab), as a check window opens behind other windows.
       const surface = await presentRasterTab(s, targetCard.id);
       await presentedFrame(s, surface);
-      const presentation = await s.presented();
+      await s.presented();
       const host = await s.until("host.window", (value) => value.regions.some((item) => item.surface === surface
         && item.name === REGION && item.visible && item.presented),
       `new raster probe ${surface} lost its presented image before capture stopped`);
       const region = host.regions.find((item) => item.surface === surface && item.name === REGION && item.visible);
       assert.ok(region?.presented, `new raster probe ${surface} has no presented image region: ${JSON.stringify(region)}`);
       const current = tuple(region.presented);
+      // A raster presents further frames after the presentation of its first one, so the capture stops after a display that
+      // follows the read of the frame that it compares with.
+      const shown = await s.presented();
 
       stopAttempted = true;
-      stopResult = await recording.stop({ after: presentation.displayed });
+      stopResult = await recording.stop({ after: shown.displayed });
       assert.deepEqual(stopResult.frameIdentity && Object.keys(stopResult.frameIdentity).sort(), ["manifest", "status"],
         "opt-in stop did not return the declared frame-identity result");
       assert.equal(stopResult.frameIdentity.status, "complete");
