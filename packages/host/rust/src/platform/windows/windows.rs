@@ -339,6 +339,14 @@ impl Platform for Windows {
         Err("not implemented on Windows".into())
     }
     #[cfg(feature = "diagnostics")]
+    fn drive_input(&self, _window: Handle) -> Result<(), String> {
+        Err("not implemented on Windows".into())
+    }
+    #[cfg(feature = "diagnostics")]
+    fn end_input(&self, _window: Handle) -> Result<u64, String> {
+        Err("not implemented on Windows".into())
+    }
+    #[cfg(feature = "diagnostics")]
     fn document_viewport_marker(
         &self,
         _document: Option<Handle>,

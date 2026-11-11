@@ -723,6 +723,11 @@ func diagnosticDrag(e *Endpoint, c *endpointConn, params json.RawMessage, reply 
 	if err != nil {
 		return nil, err
 	}
+	// While the drag runs, the window takes only the pointer input of the drag (docs/spec/endpoint.md#diagnostic-builds).
+	drive, ok := system.(inputDrivePlatform)
+	if !ok {
+		return nil, errors.New("the drive of a window by a check is unavailable on this platform")
+	}
 	// A window without a main page has only native input to drag with.
 	native = native || !framework.MainPage()
 	// With native, the page answers the point of the boundary, and the host delivers the drag as native input there.
@@ -778,8 +783,20 @@ func diagnosticDrag(e *Endpoint, c *endpointConn, params json.RawMessage, reply 
 			return pageDrag(ctx, h, s, plan, stepped)
 		}
 	}
+	driven := func() (map[string]any, error) {
+		return drivenDrag(func() error {
+			return s.useWindow(drive.DriveInput)
+		}, func() (uint64, error) {
+			var dropped uint64
+			err := s.useWindow(func(window platform.Window) error {
+				dropped = drive.EndInput(window)
+				return nil
+			})
+			return dropped, err
+		}, settle)
+	}
 	var layouts []map[string]any
-	result, err := stopAfterSettled(settle, func() error {
+	result, err := stopAfterSettled(driven, func() error {
 		if !captureOptions.capture {
 			return nil
 		}
@@ -812,6 +829,32 @@ func diagnosticDrag(e *Endpoint, c *endpointConn, params json.RawMessage, reply 
 		tickMu.Unlock()
 		result["layouts"] = layouts
 	}
+	return result, nil
+}
+
+// inputDrivePlatform is implemented only by platforms on which a window that a check drives takes only the pointer input of the
+// check: a pointer event of a person in that window reaches no view (native/darwin/src/input_check.h).
+type inputDrivePlatform interface {
+	DriveInput(window platform.Window) error
+	EndInput(window platform.Window) uint64
+}
+
+// drivenDrag runs settle, a drag of a check, while begin holds the window to the pointer input of the check, and ends the drive
+// with end also when the drag fails. The result names in dropped the pointer events of a person that the window did not take, so
+// a drag that a person moved the pointer over reports them instead of mixing them with its steps.
+func drivenDrag(begin func() error, end func() (uint64, error), settle func() (map[string]any, error)) (map[string]any, error) {
+	if err := begin(); err != nil {
+		return nil, fmt.Errorf("the drag cannot drive the window: %w", err)
+	}
+	result, err := settle()
+	dropped, endErr := end()
+	if endErr != nil {
+		endErr = fmt.Errorf("the drag cannot end the drive of the window: %w", endErr)
+	}
+	if err != nil || endErr != nil {
+		return nil, errors.Join(err, endErr)
+	}
+	result["dropped"] = dropped
 	return result, nil
 }
 

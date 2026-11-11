@@ -24,6 +24,7 @@
 #include "host_api_events.h"
 #include "host_api_image.h"
 #include "host_api_input.h"
+#include "host_api_input_check.h"
 #include "host_api_input_reference.h"
 #include "host_api_input_source.h"
 #include "host_api_layout.h"

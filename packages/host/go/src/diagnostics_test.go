@@ -1083,6 +1083,53 @@ func TestWindowsRaiseSetsTheLevelOfTheWindowsInAStepOfTheMainThread(t *testing.T
 	}
 }
 
+// A drag drives its window for the time of its gesture: the drive begins before the gesture and ends after it, also when the
+// gesture fails, a window that a check already drives fails the drag before its gesture, and the result names the pointer events
+// of a person that the window did not take.
+// contract: diagnostics.drag.drives-the-window
+func TestADragDrivesItsWindowForTheTimeOfItsGesture(t *testing.T) {
+	var order []string
+	begin := func() error {
+		order = append(order, "begin")
+		return nil
+	}
+	end := func() (uint64, error) {
+		order = append(order, "end")
+		return 3, nil
+	}
+	result, err := drivenDrag(begin, end, func() (map[string]any, error) {
+		order = append(order, "gesture")
+		return map[string]any{"steps": 4}, nil
+	})
+	if err != nil || !reflect.DeepEqual(order, []string{"begin", "gesture", "end"}) {
+		t.Fatalf("the drag ran %v with error %v, want [begin gesture end]", order, err)
+	}
+	if result["dropped"] != uint64(3) || result["steps"] != 4 {
+		t.Fatalf("the drag answered %v, want the steps of its gesture and 3 dropped events of a person", result)
+	}
+
+	order = nil
+	_, err = drivenDrag(begin, end, func() (map[string]any, error) {
+		order = append(order, "gesture")
+		return nil, errors.New("the page refused the drag")
+	})
+	if err == nil || !strings.Contains(err.Error(), "the page refused the drag") || !reflect.DeepEqual(order, []string{"begin", "gesture", "end"}) {
+		t.Fatalf("a failed gesture ran %v with error %v, want [begin gesture end] and the failure of the gesture", order, err)
+	}
+
+	order = nil
+	_, err = drivenDrag(func() error {
+		order = append(order, "begin")
+		return errors.New("a check already drives the window")
+	}, end, func() (map[string]any, error) {
+		order = append(order, "gesture")
+		return map[string]any{}, nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "a check already drives the window") || !reflect.DeepEqual(order, []string{"begin"}) {
+		t.Fatalf("a drag of a driven window ran %v with error %v, want [begin] and the refusal of the drive", order, err)
+	}
+}
+
 // contract: recording.drag.layout-trace-after-settle
 func TestRecordedDragStopsItsLayoutTraceAfterTheLastLayoutIsPresented(t *testing.T) {
 	var order []string

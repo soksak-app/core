@@ -20,6 +20,7 @@
 #include <stdatomic.h>
 #import "input_inject.h"
 #import "input_activity_wait.h"
+#import "input_check.h"
 #import "input_press_context.h"
 #import "input_virtual.h"
 #import "observe.h"
@@ -208,8 +209,8 @@ static NSUInteger pointerButtons(SPPointer *pointer) {
 // a person's input keeps the implementation of AppKit. During the delivery of the input of a pointer it adds the buttons of that
 // pointer to the value of AppKit, so a page sees the buttons of its own gesture; otherwise it adds the buttons of every pointer.
 static NSUInteger pressedButtonsWithSynthetic(id self, SEL selector) {
-    // A real button never enters a page event of a virtual key window.
-    NSUInteger buttons = sp_input_virtual_any() ? 0 : appKitPressedButtons(self, selector);
+    // A real button never enters a page event of a virtual key window or of a window that a check drives (input_check.h).
+    NSUInteger buttons = sp_input_virtual_any() || sp_input_check_any() ? 0 : appKitPressedButtons(self, selector);
     if (deliveringPointer) return buttons | pointerButtons(deliveringPointer);
     if (atomic_load(&syntheticPresses[0]) > 0) buttons |= 1;
     if (atomic_load(&syntheticPresses[1]) > 0) buttons |= 2;
@@ -231,7 +232,11 @@ unsigned long sp_input_physical_buttons(void) {
 }
 
 unsigned long sp_input_person_buttons(void) {
-    return sp_input_virtual_any() ? 0 : sp_input_physical_buttons();
+    return sp_input_virtual_any() || sp_input_check_any() ? 0 : sp_input_physical_buttons();
+}
+
+bool sp_input_delivering(void) {
+    return deliveringPointer != nil;
 }
 
 // Enters the virtual key window. WebKit reads the buttons of a page event from then on through the replacement.

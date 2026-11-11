@@ -59,8 +59,12 @@ sp_input_result sp_input_pointer_clicks(void *window, double x, double y, int ph
 unsigned long sp_input_physical_buttons(void);
 
 // The buttons that a person holds as input of this application may read them: none while a virtual key window is open
-// (input_virtual.h), whose pages never see a real button.
+// (input_virtual.h), whose pages never see a real button, and none while a check drives a window (input_check.h).
 unsigned long sp_input_person_buttons(void);
+
+// Whether an input of a pointer is delivered on this thread now: an event that reaches -[NSApplication sendEvent:] meanwhile is
+// the synthetic event of that delivery.
+bool sp_input_delivering(void);
 
 // State of a rejection with SP_INPUT_BUTTON_HELD or SP_INPUT_POINTER_HELD.
 //

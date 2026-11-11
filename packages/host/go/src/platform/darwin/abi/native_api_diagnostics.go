@@ -23,6 +23,8 @@ type DiagnosticFunctions struct {
 	ListDeliveredNotifications          func()
 	MainSpDocumentDrawCovered           func(uintptr, bool) bool
 	MainSpDocumentViewportMarker        func(unsafe.Pointer, bool, *uint8, *float64, **byte) bool
+	MainSpInputCheckBegin               func(uintptr) bool
+	MainSpInputCheckEnd                 func(uintptr) uint64
 	MainSpInputSourceCurrent            func() *byte
 	MainSpWindowsRaise                  func(bool)
 	MainSurfaceLayoutTracePresented     func(uint64)
@@ -88,6 +90,12 @@ func (functions DiagnosticFunctions) Validate() error {
 	}
 	if functions.MainSpDocumentViewportMarker == nil {
 		return fmt.Errorf("native API function is missing: main_sp_document_viewport_marker")
+	}
+	if functions.MainSpInputCheckBegin == nil {
+		return fmt.Errorf("native API function is missing: main_sp_input_check_begin")
+	}
+	if functions.MainSpInputCheckEnd == nil {
+		return fmt.Errorf("native API function is missing: main_sp_input_check_end")
 	}
 	if functions.MainSpInputSourceCurrent == nil {
 		return fmt.Errorf("native API function is missing: main_sp_input_source_current")

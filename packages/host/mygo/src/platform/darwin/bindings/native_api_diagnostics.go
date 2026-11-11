@@ -152,6 +152,26 @@ func DiagnosticFunctions(library uintptr) (abi.DiagnosticFunctions, error) {
 		purego.RegisterFunc(&functions.MainSpDocumentViewportMarker, address)
 	}
 	{
+		address, err := purego.Dlsym(library, "main_sp_input_check_begin")
+		if err != nil {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API main_sp_input_check_begin: %w", err)
+		}
+		if address == 0 {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API main_sp_input_check_begin: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.MainSpInputCheckBegin, address)
+	}
+	{
+		address, err := purego.Dlsym(library, "main_sp_input_check_end")
+		if err != nil {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API main_sp_input_check_end: %w", err)
+		}
+		if address == 0 {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API main_sp_input_check_end: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.MainSpInputCheckEnd, address)
+	}
+	{
 		address, err := purego.Dlsym(library, "main_sp_input_source_current")
 		if err != nil {
 			return abi.DiagnosticFunctions{}, fmt.Errorf("native API main_sp_input_source_current: %w", err)

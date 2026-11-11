@@ -1495,16 +1495,9 @@ export async function holdCovered(s) {
 }
 
 async function dragOnce(s, plan, capture, frameIdentity) {
-  // An active window receives the cursor update of AppKit when the layout changes, and the window passes the real
-  // pointer position to the page as a move. A diagnostic drag that is synthesized without a button mixes with that
-  // move, so it is measured only in an inactive application.
-  const window = await s.get("host.window");
-  if (window.active) {
-    throw new Error(`${s.app.name}: synthetic drag measurement refused because host.window.active is true; ` +
-      `pointer ${JSON.stringify(window.pointer)}; window frame ${JSON.stringify(window.frame)}. ` +
-      "An active window can receive AppKit cursor updates at the reported pointer location during the synthetic drag; " +
-      "nothing was measured.");
-  }
+  // The host drives the window during the gesture: a pointer event of a person, also a cursor update that AppKit makes at the
+  // real pointer when the layout changes in an active window, reaches no view of it, and the result counts those events in
+  // dropped (diagnostics.drag, docs/spec/endpoint.md#diagnostic-builds). An active window is therefore measured as an inactive one.
   // An inactive application shows a new window behind the frontmost window, where its image regions do not draw. The drag
   // holds the covered drawing for its duration, so the recording holds the regions; the window keeps its place and keeps
   // reporting its occlusion, and a covered drawing that the check holds stays on after the drag (holdCovered).

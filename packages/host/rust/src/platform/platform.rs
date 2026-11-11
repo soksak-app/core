@@ -754,6 +754,15 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// (diagnostics.windows.raise, docs/spec/endpoint.md#diagnostic-builds). Call it on the main thread.
     #[cfg(feature = "diagnostics")]
     fn raise_windows(&self, raise: bool) -> Result<(), String>;
+    /// Starts the drive of the window by a check: until `end_input` the window takes only the pointer input of the check, and a
+    /// pointer event of a person reaches no view of it (diagnostics.drag, docs/spec/endpoint.md#diagnostic-builds). A window that
+    /// a check already drives is an error. Call it on the main thread.
+    #[cfg(feature = "diagnostics")]
+    fn drive_input(&self, window: Handle) -> Result<(), String>;
+    /// Ends the drive of the window and returns the number of pointer events of a person that the window did not take. Call it
+    /// on the main thread.
+    #[cfg(feature = "diagnostics")]
+    fn end_input(&self, window: Handle) -> Result<u64, String>;
     #[cfg(feature = "diagnostics")]
     /// Sets the diagnostic marker on an attached native document view. `None` is allowed only for an idempotent stop.
     /// Returns the marker style reported by the native view. Call it on the main thread.
