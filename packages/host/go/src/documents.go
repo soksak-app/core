@@ -1040,6 +1040,35 @@ type DocumentEvalResult struct {
 	Request uint64          `json:"request,omitempty"`
 }
 
+// DocumentInputResult is the outcome of one coordinate input action.
+type DocumentInputResult struct {
+	OK    bool   `json:"ok"`
+	Error string `json:"error,omitempty"`
+}
+
+// inputDocument dispatches one coordinate input action on the region viewport.
+func (s *Surfaces) inputDocument(viewID uint64, req DocumentRequest, approvals *Approvals, action int, x, y, dx, dy float64, key string) (DocumentInputResult, error) {
+	answers := make(chan string, 1)
+	err := s.withDocument(viewID, req, func(handle unsafe.Pointer) error {
+		system.InputDocument(handle, action, x, y, dx, dy, key, func(reply string) { answers <- reply })
+		return nil
+	})
+	if err != nil {
+		return DocumentInputResult{}, err
+	}
+	var full struct {
+		OK    bool   `json:"ok"`
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(<-answers), &full); err != nil {
+		return DocumentInputResult{}, fmt.Errorf("document %s input reply is not JSON", req.Document)
+	}
+	if full.Error != "" {
+		return DocumentInputResult{}, fmt.Errorf("document %s input failed: %s", req.Document, full.Error)
+	}
+	return DocumentInputResult{OK: full.OK}, nil
+}
+
 // evalDocument evaluates a JavaScript expression in the content world of the frame at path under the evaluate grant.
 func (s *Surfaces) evalDocument(viewID uint64, req DocumentRequest, approvals *Approvals, path, source string, awaitPromise bool) (DocumentEvalResult, error) {
 	answers := make(chan string, 2)

@@ -104,6 +104,7 @@ type NativeFunctions struct {
 	DocumentConfirm                       func(unsafe.Pointer, *byte, *byte, *byte, uintptr)
 	DocumentCreate                        func(unsafe.Pointer, *byte, *byte, *byte, *byte, *byte, uintptr) unsafe.Pointer
 	DocumentEval                          func(unsafe.Pointer, *byte, *byte, bool, bool, uintptr)
+	DocumentInput                         func(unsafe.Pointer, int32, float64, float64, float64, float64, *byte, uintptr)
 	DocumentQuery                         func(unsafe.Pointer, uintptr)
 	DocumentRead                          func(unsafe.Pointer, *byte, int32, bool, uintptr)
 	DocumentScrollTo                      func(unsafe.Pointer, float64, float64, uintptr)
@@ -289,6 +290,9 @@ func (functions NativeFunctions) Validate() error {
 	}
 	if functions.DocumentEval == nil {
 		return fmt.Errorf("native API function is missing: documentEval")
+	}
+	if functions.DocumentInput == nil {
+		return fmt.Errorf("native API function is missing: documentInput")
 	}
 	if functions.DocumentQuery == nil {
 		return fmt.Errorf("native API function is missing: documentQuery")

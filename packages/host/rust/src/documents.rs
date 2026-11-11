@@ -2836,6 +2836,55 @@ pub struct EvalResult {
     pub refusal: Option<String>,
 }
 
+/// The outcome of one coordinate input action.
+#[derive(Debug, Default, PartialEq, Serialize)]
+pub struct InputResult {
+    pub ok: bool,
+}
+
+/// Dispatches one coordinate input action on the region viewport.
+pub fn input_on(
+    webview: &Webview,
+    request: Request,
+    action: i32,
+    x: f64,
+    y: f64,
+    dx: f64,
+    dy: f64,
+    key: String,
+) -> Result<InputResult, String> {
+    if !(0..=4).contains(&action) {
+        return Err("input requires an action 0-4".to_string());
+    }
+    let platform = platform::current()?;
+    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+    with_document(webview, &request, move |handle| {
+        platform.input_document(handle, action, x, y, dx, dy, &key,
+            Box::new(move |reply| {
+                if sender.send(reply).is_err() {
+                    log_error("document input", "the caller stopped waiting for the reply");
+                }
+            }),
+        )
+    })?;
+    let reply = receiver
+        .recv()
+        .map_err(|_| format!("document {} gave no input reply", request.document))?;
+    #[derive(Deserialize)]
+    struct Both {
+        #[serde(default)]
+        ok: bool,
+        #[serde(default)]
+        error: Option<String>,
+    }
+    let both: Both = serde_json::from_str(&reply)
+        .map_err(|_| format!("document {} input reply is not JSON: {reply}", request.document))?;
+    if let Some(error) = both.error {
+        return Err(format!("document {} input failed: {error}", request.document));
+    }
+    Ok(InputResult { ok: both.ok })
+}
+
 /// Evaluates a JavaScript expression in a frame under the evaluate grant.
 pub fn eval_in_frame(
     webview: &Webview,

@@ -2168,6 +2168,61 @@ void sp_document_confirm(void *handle, const char *kind, const char *origin, con
     [panel makeKeyAndOrderFront:nil];
 }
 
+void sp_document_input(void *handle, int action, double x, double y, double dx, double dy, const char *key,
+    sp_document_input_reply reply, void *context) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    SPDocumentView *view = (SPDocumentView *)handle;
+    if (!view || view.closed) {
+        reply(context, "{\"error\":\"the document region is closed\"}");
+        return;
+    }
+    // The input dispatch runs in the page world of the main frame: it dispatches DOM events at the viewport
+    // coordinates, which reaches every element that the browser draws, including frames that no script of the host
+    // enters and closed shadow roots.
+    NSString *source = [NSString stringWithFormat:
+        @"(() => {"
+        "  const el = document.elementFromPoint(%f, %f);"
+        "  if (!el) return { ok: true };"
+        "  const opts = { bubbles: true, cancelable: true, clientX: %f, clientY: %f };"
+        "  if (%d === 0) { el.dispatchEvent(new MouseEvent('click', opts)); return { ok: true }; }"
+        "  if (%d === 1) { el.dispatchEvent(new MouseEvent('mousemove', opts)); return { ok: true }; }"
+        "  if (%d === 2) {"
+        "    el.dispatchEvent(new MouseEvent('mousedown', opts));"
+        "    const up = new MouseEvent('mouseup', { ...opts, clientX: %f, clientY: %f });"
+        "    el.dispatchEvent(up); return { ok: true };"
+        "  }"
+        "  if (%d === 3) {"
+        "    const k = %@;"
+        "    el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));"
+        "    el.dispatchEvent(new KeyboardEvent('keyup', { key: k, bubbles: true }));"
+        "    return { ok: true };"
+        "  }"
+        "  if (%d === 4) {"
+        "    el.dispatchEvent(new WheelEvent('wheel', { ...opts, deltaX: %f, deltaY: %f, bubbles: true }));"
+        "    return { ok: true };"
+        "  }"
+        "  return { error: 'unknown action' };"
+        "})()",
+        x, y, x, y, action, action, action, x + dx, y + dy, action,
+        [NSString stringWithFormat:@"'%s'", [NSString stringWithUTF8String:key ?: ""].UTF8String],
+        action, dx, dy];
+    [view callAsyncJavaScript:source arguments:@{} inFrame:nil
+        inContentWorld:WKContentWorld.pageWorld
+        completionHandler:^(id result, NSError *error) {
+            if (error) {
+                reply(context, [[NSString stringWithFormat:@"{\"error\":\"%@\"}",
+                    error.localizedDescription] UTF8String]);
+                return;
+            }
+            BOOL ok = [result isKindOfClass:NSDictionary.class] && [result[@"ok"] boolValue];
+            NSString *err = [result isKindOfClass:NSDictionary.class] && [result[@"error"] isKindOfClass:NSString.class]
+                ? result[@"error"] : nil;
+            reply(context, [[NSString stringWithFormat:@"{\"ok\":%@%@}",
+                ok ? @"true" : @"false", err ? [NSString stringWithFormat:@",\"error\":\"%@\"", err] : @""]
+                UTF8String]);
+        }];
+}
+
 void sp_document_eval(void *handle, const char *path, const char *source, bool await_promise, bool granted,
     sp_document_eval_reply reply, void *context) {
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");

@@ -418,6 +418,20 @@ impl Platform for Darwin {
         document::query(document, reply);
         Ok(())
     }
+    fn input_document(
+        &self,
+        document: Handle,
+        action: i32,
+        x: f64,
+        y: f64,
+        dx: f64,
+        dy: f64,
+        key: &str,
+        reply: Box<dyn FnOnce(String) + Send>,
+    ) -> Result<(), String> {
+        document::input(document, action, x, y, dx, dy, key, reply);
+        Ok(())
+    }
     fn eval_document(
         &self,
         document: Handle,

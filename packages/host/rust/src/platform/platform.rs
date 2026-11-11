@@ -615,6 +615,18 @@ pub trait Platform: CoreRootHost + Send + Sync {
         document: Handle,
         reply: Box<dyn FnOnce(String) + Send>,
     ) -> Result<(), String>;
+    /// Dispatches one coordinate input action on the region viewport. Call it on the main thread.
+    fn input_document(
+        &self,
+        document: Handle,
+        action: i32,
+        x: f64,
+        y: f64,
+        dx: f64,
+        dy: f64,
+        key: &str,
+        reply: Box<dyn FnOnce(String) + Send>,
+    ) -> Result<(), String>;
     /// Evaluates a JavaScript expression in the content world of the frame at path. Call it on the main thread.
     fn eval_document(
         &self,

@@ -777,6 +777,22 @@ fn document_approvals_revoke(kind: String, origin: Option<String>) -> Result<boo
     Ok(true)
 }
 
+/// Dispatches one coordinate input action on the region viewport.
+#[tauri::command]
+async fn document_input(
+    webview: Webview,
+    request: Argument<documents::Request>,
+    action: i32,
+    x: f64,
+    y: f64,
+    dx: f64,
+    dy: f64,
+    key: String,
+) -> Result<documents::InputResult, String> {
+    let Argument(request) = request;
+    blocking(move || documents::input_on(&webview, request, action, x, y, dx, dy, key)).await
+}
+
 /// Evaluates a JavaScript expression in a frame of a region under the evaluate grant.
 #[tauri::command]
 async fn document_eval(

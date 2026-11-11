@@ -10,6 +10,7 @@
     "documentConfirm",
     "documentCreate",
     "documentEval",
+    "documentInput",
     "documentQuery",
     "documentRead",
     "documentScrollTo",

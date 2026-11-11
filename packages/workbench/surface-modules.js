@@ -186,6 +186,7 @@ function pageRuntime(surface, scoped, compositionReady, lifetime) {
       read: (name, frame, ref) => invoke("documentRead", { document: name, frame, ref }),
       act: (name, frame, ref, action, value) => invoke("documentAct", { document: name, frame, ref, action, value: value ?? "" }),
       evaluate: (name, frame, js, awaitPromise) => invoke("documentEval", { document: name, frame, js, await: awaitPromise ?? false }),
+      input: (name, action, x, y, dx, dy, key) => invoke("documentInput", { document: name, action, x, y, dx: dx ?? 0, dy: dy ?? 0, key: key ?? "" }),
       approvalsGrant: (kind, origin, summary) => invoke("documentApprovalsGrant", { kind, origin, summary: summary ?? "" }),
       approvalsList: () => invoke("documentApprovalsList", {}),
       approvalsRevoke: (kind, origin) => invoke("documentApprovalsRevoke", { kind, origin: origin ?? "" }),

@@ -225,6 +225,17 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
       if (typeof js !== "string" || js === "") return Promise.reject(new Error(`evaluate requires a source, not ${JSON.stringify(js)}`));
       return queue(() => port.evaluate(name, frame, js, awaitPromise));
     },
+    /**
+     * Dispatches one coordinate input action on the region viewport — the primary path for elements that no
+     * script of the host reaches. The action is "click", "move", "drag", "press" or "scroll".
+     */
+    input(action, x, y, dx = 0, dy = 0, key = "") {
+      const actions = ["click", "move", "drag", "press", "scroll"];
+      const act = actions.indexOf(action);
+      if (act < 0) return Promise.reject(new Error(`input requires one of ${JSON.stringify(actions)}, not ${JSON.stringify(action)}`));
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return Promise.reject(new Error(`input requires finite x and y`));
+      return queue(() => port.input(name, act, x, y, dx, dy, String(key ?? "")));
+    },
     back() { return this.go("back"); },
     forward() { return this.go("forward"); },
     reload() { return this.go("reload"); },

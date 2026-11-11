@@ -270,6 +270,19 @@ func (implementation) ReadDocument(document unsafe.Pointer, path string, ref int
 	native.DocumentRead(document, native.CString(path), int32(ref), granted, uintptr(handles.NewHandle(reply)))
 }
 
+// InputDocument dispatches one coordinate input; the reply of native names the outcome.
+func (implementation) InputDocument(document unsafe.Pointer, action int, x, y, dx, dy float64, key string, reply func(value string)) {
+	native.DocumentInput(document, int32(action), x, y, dx, dy, native.CString(key), uintptr(handles.NewHandle(reply)))
+}
+
+// goHost_document_input receives the one reply of an input and releases its receiver.
+func goHost_document_input(context uintptr, value *byte) {
+	handle := handles.Handle(uintptr(context))
+	reply := handle.Value().(func(string))
+	handle.Delete()
+	reply(native.GoString(value))
+}
+
 // EvalDocument evaluates a JavaScript expression; the reply of native names the origin or the result.
 func (implementation) EvalDocument(document unsafe.Pointer, path, source string, awaitPromise, granted bool, reply func(value string)) {
 	native.DocumentEval(document, native.CString(path), native.CString(source), awaitPromise, granted,

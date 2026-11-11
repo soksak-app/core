@@ -150,6 +150,12 @@ typedef void (*sp_document_eval_reply)(void *context, const char *json);
 void sp_document_eval(void *document, const char *path, const char *source, bool await_promise, bool granted,
     sp_document_eval_reply reply, void *context);
 
+// Dispatches one coordinate input action on the region viewport and reports the outcome once. The action is
+// 0 click, 1 move, 2 drag, 3 press, 4 scroll; the reply is {ok: true} or {error: reason}.
+typedef void (*sp_document_input_reply)(void *context, const char *json);
+void sp_document_input(void *document, int action, double x, double y, double dx, double dy, const char *key,
+    sp_document_input_reply reply, void *context);
+
 // Turns the stream "elements" or "requests" of the document on or off; the host turns a stream on while it has a
 // subscriber. A stream that is off collects nothing. Turning the element stream on sends a snapshot; turning it off drops
 // an unacknowledged snapshot. Returns false for another stream name or a closed document.

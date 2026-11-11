@@ -112,6 +112,16 @@ func Functions(library uintptr) (abi.NativeFunctions, error) {
 		purego.RegisterFunc(&functions.DocumentEval, address)
 	}
 	{
+		address, err := purego.Dlsym(library, "documentInput")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API documentInput: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API documentInput: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.DocumentInput, address)
+	}
+	{
 		address, err := purego.Dlsym(library, "documentQuery")
 		if err != nil {
 			return abi.NativeFunctions{}, fmt.Errorf("native API documentQuery: %w", err)

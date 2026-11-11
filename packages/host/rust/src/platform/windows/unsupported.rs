@@ -282,6 +282,16 @@ pub fn query_document(
     missing("document query")
 }
 
+pub fn input_document(
+    _document: Handle,
+    _action: i32,
+    _x: f64, _y: f64, _dx: f64, _dy: f64,
+    _key: &str,
+    _reply: Box<dyn FnOnce(String) + Send>,
+) -> Result<(), String> {
+    missing("document input")
+}
+
 pub fn eval_document(
     _document: Handle,
     _path: &str,

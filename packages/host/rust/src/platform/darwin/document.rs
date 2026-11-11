@@ -91,6 +91,17 @@ unsafe extern "C" {
     fn sp_document_appearance(document: *mut c_void, dark: bool);
     fn sp_document_close(document: *mut c_void);
     fn sp_document_query(document: *mut c_void, reply: Event, context: *mut c_void);
+    fn sp_document_input(
+        document: *mut c_void,
+        action: i32,
+        x: f64,
+        y: f64,
+        dx: f64,
+        dy: f64,
+        key: *const c_char,
+        reply: Event,
+        context: *mut c_void,
+    );
     fn sp_document_eval(
         document: *mut c_void,
         path: *const c_char,
@@ -376,6 +387,19 @@ extern "C" fn eval_replied(context: *mut c_void, value: *const c_char) {
         .to_string_lossy()
         .into_owned();
     (receiver.0)(value);
+}
+
+struct InputReceiver(Box<dyn FnOnce(String) + Send>);
+extern "C" fn input_replied(context: *mut c_void, value: *const c_char) {
+    let r = unsafe { Box::from_raw(context as *mut InputReceiver) };
+    (r.0)(unsafe { CStr::from_ptr(value) }.to_string_lossy().into_owned());
+}
+/// Dispatches one coordinate input action on the region viewport.
+pub fn input(document: Handle, action: i32, x: f64, y: f64, dx: f64, dy: f64, key: &str,
+    reply: Box<dyn FnOnce(String) + Send>) {
+    let r = Box::into_raw(Box::new(InputReceiver(reply)));
+    let key = std::ffi::CString::new(key).unwrap_or_default();
+    unsafe { sp_document_input(document as *mut c_void, action, x, y, dx, dy, key.as_ptr(), input_replied, r as *mut c_void) };
 }
 
 /// Evaluates a JavaScript expression in the content world of the frame at path.

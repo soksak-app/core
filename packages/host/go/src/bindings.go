@@ -364,6 +364,31 @@ func isFinite(v float64) bool {
 	return !math.IsNaN(v) && !math.IsInf(v, 0)
 }
 
+// DocumentInput dispatches one coordinate input action on the region viewport.
+func (h *Host) DocumentInput(ctx context.Context, reqJSON json.RawMessage) (DocumentInputResult, error) {
+	req, err := argument[DocumentRequest]("request", reqJSON)
+	if err != nil {
+		return DocumentInputResult{}, err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return DocumentInputResult{}, err
+	}
+	var args struct {
+		Action int     `json:"action"`
+		X      float64 `json:"x"`
+		Y      float64 `json:"y"`
+		Dx     float64 `json:"dx"`
+		Dy     float64 `json:"dy"`
+		Key    string  `json:"key"`
+	}
+	if err := json.Unmarshal(reqJSON, &args); err != nil || args.Action < 0 || args.Action > 4 {
+		return DocumentInputResult{}, fmt.Errorf("input requires an action 0-4")
+	}
+	result, err := s.inputDocument(uint64(s.window.ID()), req, h.approvals, args.Action, args.X, args.Y, args.Dx, args.Dy, args.Key)
+	return result, DocumentCallError("documentInput", err)
+}
+
 // DocumentEval evaluates a JavaScript expression in a frame of a region under the evaluate grant.
 func (h *Host) DocumentEval(ctx context.Context, reqJSON json.RawMessage) (DocumentEvalResult, error) {
 	req, err := argument[DocumentRequest]("request", reqJSON)

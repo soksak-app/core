@@ -307,6 +307,17 @@ impl Platform for Windows {
     ) -> Result<(), String> {
         unsupported::query_document(document, reply)
     }
+    fn input_document(
+        &self,
+        document: Handle,
+        action: i32,
+        x: f64, y: f64, dx: f64, dy: f64,
+        key: &str,
+        reply: Box<dyn FnOnce(String) + Send>,
+    ) -> Result<(), String> {
+        unsupported::input_document(document, action, x, y, dx, dy, key, reply)
+    }
+
     fn eval_document(
         &self,
         document: Handle,
