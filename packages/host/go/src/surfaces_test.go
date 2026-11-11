@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -1527,9 +1528,13 @@ type layoutPlatform struct {
 	clock atomic.Uint64
 	// noticed is set by a test before it calls the presentation notice, and early records a commit that ran before it.
 	noticed, early atomic.Bool
+	// running counts the tasks that run, so a test ends after the work of its tasks that follows the result they hand on.
+	running sync.WaitGroup
 }
 
-func (*layoutPlatform) EnqueueUI(task func()) error {
+func (p *layoutPlatform) EnqueueUI(task func()) error {
+	p.running.Add(1)
+	defer p.running.Done()
 	task()
 	return nil
 }
@@ -1557,6 +1562,9 @@ func presentThroughFixture(t *testing.T, ticket uint64) (func(error), *layoutPla
 	saved, savedFramework := system, framework
 	system, framework = fake, stepFramework{}
 	t.Cleanup(func() { system, framework = saved, savedFramework })
+	// A task hands its result on before it ends: the commit and the cancel write their dispatch record after it (returned_ns), so
+	// the test ends with the end of every task, and no record of its ticket reaches the buffer of a later test.
+	t.Cleanup(fake.running.Wait)
 	window := &noticeFrontend{notices: make(chan func(error), 1)}
 	s := &Surfaces{window: window, images: NewImages(), documents: NewDocuments(), sourceOrigins: newSourceOrigins()}
 	finished := make(chan error, 1)
