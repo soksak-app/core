@@ -516,6 +516,13 @@ static sp_input_result deliverPointer(SPPointer *pointer, NSWindow *window, doub
     double deltaX, double deltaY, int clicks, SPHeld *held) {
     void *handle = (__bridge void *)window;
     NSPoint point = windowPoint(window, x, y);
+    // No person points at a window that is not shown, and AppKit gives no press to it:
+    // -[NSWindow _handleLeftMouseDownEvent:isDelayedEvent:] ends before its hit test unless the window is visible. Its move,
+    // press, drag and release are refused in their turn instead of being answered as delivered.
+    if (phase != 4 && (!window.isVisible || window.isMiniaturized)) {
+        held->why = "the window is not shown";
+        return SP_INPUT_REJECTED;
+    }
     if (phase == 0) {
         if (heldByOther(pointer, window, pageAt(window, point), 0, NO, held)) return SP_INPUT_POINTER_HELD;
         if (!keyForInput(window) && !enterVirtual(window)) {
@@ -946,7 +953,7 @@ static void pointerThen(SPPointer *pointer, void *handle, double x, double y, in
         return;
     }
     const char *reason = NULL;
-    if (phase == 0 && !keyForInput(window) && !heldBy(pointer, window, pageAt(window, windowPoint(window, x, y)), 0, NO, &reason)
+    if (phase == 0 && window.isVisible && !window.isMiniaturized && !keyForInput(window) && !heldBy(pointer, window, pageAt(window, windowPoint(window, x, y)), 0, NO, &reason)
         && enterVirtual(window)) {
         // WebKit drops a move until the page has heard that it is active, so the move waits for the state of the web views. The
         // wait has no limit: the report of each web view ends it, and so do the ends of a web view.
