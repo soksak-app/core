@@ -8,7 +8,7 @@ import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { missingPoses } from "./card-panel-checks.mjs";
-import { frames, readFrame } from "@soksak/window-check/frame.mjs";
+import { readDisplayRefreshes } from "../packages/window-check/display-refresh.mjs";
 import { TOLERANCE, measureTitlebar, misaligned, rowHeight } from "./titlebar-measurement.mjs";
 
 // The scale steps that rise from 1 to 3 (docs/spec/text-size.md).
@@ -27,7 +27,7 @@ async function recordable(s) {
   const window = await s.get("host.window");
   assert.equal(window.controls.length, 3, `the window reports ${window.controls.length} buttons`);
   assert.ok(window.controls.every((button) => !button.hidden), "a window button is hidden");
-  return { buttons: window.controls, refreshRate: window.refreshRate };
+  return { buttons: window.controls };
 }
 
 /**
@@ -44,18 +44,18 @@ async function record(s, buttons, action) {
   assert.equal(stop.limited, false, "the recording reached its frame cap");
   // Reads and measures one frame at a time. The whole recording is not held in memory.
   const measured = frames(recording.frames).map((path, index) => ({ index, ...measureTitlebar(readFrame(path), buttons) }));
-  return { poses, stop, measured };
+  return { poses, stop, measured, refreshes: readDisplayRefreshes(recording.frames).times };
 }
 
 /**
  * Judges that in every frame the button center and the first-row center are within TOLERANCE, and that every displayed state
  * was recorded up to the first frame at or after two screen frames from its display.
  */
-function judge(t, label, { poses, stop, measured }, refreshRate) {
+function judge(t, label, { poses, stop, measured, refreshes }) {
   assert.ok(measured.length > 1, `${label}: the recording has ${measured.length} frames`);
   const off = misaligned(measured);
   const recorded = measured.filter((frame) => frame.row !== undefined).map((frame) => ({ time: frame.time, edges: [frame.row] }));
-  const missing = recorded.length ? missingPoses(recorded, poses, refreshRate) : poses;
+  const missing = recorded.length ? missingPoses(recorded, poses, refreshes) : poses;
   const largest = Math.max(...measured.filter((frame) => frame.difference !== undefined).map((frame) => Math.abs(frame.difference)));
   t.diagnostic(`${label}: ${measured.length} frames, rows ${[...new Set(recorded.map((frame) => frame.edges[0]))].join(",")}, ` +
     `largest difference ${largest.toFixed(2)}px, longest gap ${stop.longestGap}ms, ${stop.layouts.length} layout transactions`);
@@ -68,7 +68,7 @@ function judge(t, label, { poses, stop, measured }, refreshRate) {
     `${TOLERANCE}px from the first-row centre or cannot be measured: ${JSON.stringify(traced)}`);
   // The stream delivers a frame only when the window changes, so the longest gap includes the time between two frame factor
   // steps; missing names every displayed first row that the recording did not hold, and the gap is only reported.
-  assert.deepEqual(missing, [], `${label}: displayed first rows missing from the recording at ${refreshRate}Hz`);
+  assert.deepEqual(missing, [], `${label}: displayed first rows missing from the recording`);
 }
 
 for (const app of Object.values(APPS)) {
@@ -85,7 +85,7 @@ for (const app of Object.values(APPS)) {
       await s.click((spaceTab.document?.x ?? 0) + spaceTab.x + spaceTab.width / 2,
         (spaceTab.document?.y ?? 0) + spaceTab.y + spaceTab.height / 2);
       await s.until("core.text", (value) => value.scope.kind === "frame", "pressing the frame did not make it the text size scope");
-      const { buttons, refreshRate } = await recordable(s);
+      const { buttons } = await recordable(s);
       for (const [label, from, steps, command] of [["up", 1, UP, "core.text.larger"], ["down", 3, DOWN, "core.text.smaller"]]) {
         judge(t, label, await record(s, buttons, async (displayed) => {
           const poses = [{ displayed, at: rowHeight(from) }];
@@ -95,7 +95,7 @@ for (const app of Object.values(APPS)) {
             poses.push({ displayed: (await s.presented()).displayed, at: rowHeight(factor) });
           }
           return poses;
-        }), refreshRate);
+        }));
       }
     });
 
@@ -110,7 +110,7 @@ for (const app of Object.values(APPS)) {
       const other = s.on(list.find((w) => w.window !== s.window).window);
       s.cleanup(() => other.close());
       await other.until("core.screen", (value) => value.screen === "library", "the new window did not show the library");
-      const { buttons, refreshRate } = await recordable(s);
+      const { buttons } = await recordable(s);
       const before = (await s.get("core.window.workbench")).start;
       // The setting of another window changes the common scale, and this window reads again before or after it draws that notification. Either way every frame must keep the
       // criterion.
@@ -122,6 +122,6 @@ for (const app of Object.values(APPS)) {
           "the workbench did not start again");
         await s.until("core.text", (value) => value.frame === 2, "the reloaded page did not take frame factor 2");
         return [{ displayed, at: rowHeight(1) }, { displayed: (await s.presented()).displayed, at: rowHeight(2) }];
-      }), refreshRate);
+      }));
     });
 }
