@@ -175,6 +175,47 @@ static NSPoint windowPoint(NSWindow *window, double x, double y) {
     return [content convertPoint:local toView:nil];
 }
 
+// The window point (origin at the top left of the content) of window at the screen point screen.
+static NSPoint contentPointOf(NSWindow *window, NSPoint screen) {
+    NSView *content = window.contentView;
+    NSPoint local = [content convertPoint:[window convertPointFromScreen:screen] fromView:nil];
+    return NSMakePoint(local.x, content.isFlipped ? local.y : NSHeight(content.bounds) - local.y);
+}
+
+// Whether candidate is window or a window that the application shows attached to it: a sheet of it, a child window of it, or
+// such a window of such a window.
+static BOOL attachedTo(NSWindow *candidate, NSWindow *window) {
+    for (NSWindow *step = candidate; step; step = step.sheetParent ?: step.parentWindow) {
+        if (step == window) return YES;
+    }
+    return NO;
+}
+
+// The window that takes a pointer input of window at the window point x, y, which the call changes to the window point of that
+// window. The window server gives a person's press to the front window at its point; the windows that the application shows
+// attached to window (its sheets and its child windows) stand in front of it there, so the frontmost of them whose frame holds
+// the point takes the input, as a sheet takes the press of its button. Other windows, of the application or of another, do not
+// take the input of window: the caller names the window it reads, also while other windows cover it.
+static NSWindow *pointerWindow(NSWindow *window, double *x, double *y) {
+    NSPoint screen = [window convertPointToScreen:windowPoint(window, *x, *y)];
+    for (NSWindow *candidate in NSApp.orderedWindows) {
+        if (candidate == window) break;
+        if (!candidate.isVisible || !attachedTo(candidate, window) || !NSPointInRect(screen, candidate.frame)) continue;
+        NSPoint point = contentPointOf(candidate, screen);
+        *x = point.x;
+        *y = point.y;
+        return candidate;
+    }
+    return window;
+}
+
+// The window that takes a key of window: the sheet that window shows, or the sheet of that sheet, since AppKit makes a sheet the
+// key window while it is shown, and otherwise window.
+static NSWindow *keyWindowOf(NSWindow *window) {
+    while (window.attachedSheet.isVisible) window = window.attachedSheet;
+    return window;
+}
+
 static NSEventModifierFlags flags(unsigned modifiers) {
     NSEventModifierFlags result = 0;
     if (modifiers & 1) result |= NSEventModifierFlagShift;
@@ -665,6 +706,17 @@ static sp_input_result pointerInput(SPPointer *pointer, void *handle, double x, 
     if (!window || !NSThread.isMainThread) { held->why = "no window or not the main thread"; return SP_INPUT_REJECTED; }
     if (!pointer) { held->why = "the pointer name is not 1 to 32 characters of a-z, 0-9 and -"; return SP_INPUT_REJECTED; }
     if (button != 0 && button != 1) { held->why = "the button is not left or right"; return SP_INPUT_REJECTED; }
+    // A drag or a release follows its press to the attached window that took the press; any other input goes to the attached
+    // window at its point.
+    SPPress *pressed = phase == 2 || phase == 3 ? pointer->presses[button] : nil;
+    if (pressed && pressed->window != window && attachedTo(pressed->window, window)) {
+        NSPoint point = contentPointOf(pressed->window, [window convertPointToScreen:windowPoint(window, x, y)]);
+        window = pressed->window;
+        x = point.x;
+        y = point.y;
+    } else if (!pressed) {
+        window = pointerWindow(window, &x, &y);
+    }
     SPPointer *previous = deliveringPointer;
     deliveringPointer = pointer;
     @try {
@@ -1342,6 +1394,7 @@ static sp_input_result keyInput(void *handle, const char *key, const char *text,
     *equivalent = false;
     *typed = false;
     if (!window || !key || !NSThread.isMainThread) { *why = "no window, no key or not the main thread"; return SP_INPUT_REJECTED; }
+    window = keyWindowOf(window);
     NSString *name = [NSString stringWithUTF8String:key];
     unsigned short code = USHRT_MAX;
     for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
