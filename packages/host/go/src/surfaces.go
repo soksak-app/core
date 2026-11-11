@@ -539,6 +539,13 @@ type Surfaces struct {
 	waitEnds   chan struct{}
 	waitsEnded string
 	lastEnd    string
+	// pageCallEnds closes and is replaced at each end of the generation of the main page (endPageCalls), which ends the waits of
+	// the host calls that the page sent: the page reads again only after each of them has its reply. pageCallsEnded is the end
+	// that holds until the next page starts, which a call that begins after it meets at once, and lastPageCallEnd is the last end.
+	// mu protects the three.
+	pageCallEnds    chan struct{}
+	pageCallsEnded  string
+	lastPageCallEnd string
 	// workbenchDialog is true while a dialog that the workbench draws itself is open (SetDialogBackground).
 	workbenchDialog bool
 	shapes          map[string]*nativeShape
@@ -1629,24 +1636,26 @@ func (s *Surfaces) FocusSurface(req FocusRequest) error {
 }
 
 // endPage ends the generation of the main page of s in the turn of the reload request or of the end of the process of the page
-// (docs/spec/hosts.md#process-lifecycle): it answers what the page owed (answerPage), and the keys that waited for the decision of
-// the workbench go.
-func (h *Host) endPage(s *Surfaces) {
-	h.answerPage(s)
+// (docs/spec/hosts.md#process-lifecycle): it answers what the page owed (answerPage) with end, and the keys that waited for the
+// decision of the workbench go.
+func (h *Host) endPage(s *Surfaces, end string) {
+	h.answerPage(s, end)
 	s.mainPageEnded()
 }
 
 // answerPage answers what the main page of s owed when its generation ends. The window is no longer ready, every request to the page
 // and to the surface documents of the window ends with 1003 and later requests to those documents are refused until the next page
 // starts, each removal that asked the page is allowed, and a close question that the page left closes the window as a window whose
-// page is not ready closes. An end that finds nothing owed changes nothing.
-func (h *Host) answerPage(s *Surfaces) {
+// page is not ready closes. The waits of the host calls that the page sent end with 1003 end (endPageCalls), because the page
+// reads again only after each of its calls has its reply. An end that finds nothing owed changes nothing.
+func (h *Host) answerPage(s *Surfaces, end string) {
 	h.mu.Lock()
 	s.ready = false
 	asked := s.closeAsked
 	s.closeAsked = false
 	h.mu.Unlock()
 	s.pageReloading.Store(true)
+	s.endPageCalls(end)
 	h.relay.Abandon(func(t relayTarget) bool { return t.owner == s })
 	// The page that a removal asked ended, so the removal is allowed (docs/spec/projects.md).
 	h.removals.Abandon(s.name)

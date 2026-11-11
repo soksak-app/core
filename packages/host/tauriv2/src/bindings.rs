@@ -304,10 +304,11 @@ fn cancel_surfaces(window: Window, request: Argument<CancelRequest>) -> Result<(
 }
 
 /// Waits for the DOM and native raster presentation of the last stable frame. The page asks it without an endpoint
-/// connection, so the close of the window and the end of its page process end the wait besides its presentation.
+/// connection, so the close of the window, the end of its page process and the end of the generation of the page that asked
+/// it end the wait besides its presentation.
 #[tauri::command]
 async fn wait_presented(window: Window) -> Result<f64, String> {
-    blocking(move || exposure::presented(&window, None).map_err(|error| error.message)).await
+    blocking(move || exposure::page_presented(&window).map_err(|error| error.message)).await
 }
 
 /// Draws a modal element in a webview inside the main window.

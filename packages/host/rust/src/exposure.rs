@@ -2529,14 +2529,37 @@ fn settled_frame(
 /// Waits until the surface placement transaction and the current image raster of the window are settled and the main
 /// document and the visible app document present that placement, and returns the presentation time of that screen (ms,
 /// mach absolute time). The wait has no time limit: the close of the window, the end of its page process and the end of
-/// the endpoint connection of reply end it with 1003, and a presentation failure ends it with its reason.
+/// the endpoint connection of reply end it with 1003, and a presentation failure ends it with its reason. It is the wait of an
+/// endpoint request, which waits through a reload for the screen of the new page.
 pub fn presented(
     window: &Window,
     reply: Option<&crate::endpoint::ReplyScope>,
 ) -> Result<f64, Failure> {
+    presented_until(window, reply, false)
+}
+
+/// `presented` for a host call of the main page (waitPresented): the end of the generation of that page ends it too, with 1003
+/// and that end, because the page reads again only after the call has its reply and the screen of the page that ended never
+/// presents for it (docs/spec/native-host.md#page-reload). A call that begins after that end, before the next page starts, ends
+/// at once.
+pub fn page_presented(window: &Window) -> Result<f64, Failure> {
+    presented_until(window, None, true)
+}
+
+/// `presented` whose waits also end, for a host call of the page (page_call), with the end of the generation of the page.
+fn presented_until(
+    window: &Window,
+    reply: Option<&crate::endpoint::ReplyScope>,
+    page_call: bool,
+) -> Result<f64, Failure> {
     let data = window_data(window).map_err(internal)?;
-    // The ends of the window that come after this mark end the wait (WindowData::end_waits).
+    if page_call && let Some(end) = data.page_calls.holding() {
+        return Err(Failure::new(MISSING_DOCUMENT, end));
+    }
+    // The ends of the window that come after this mark end the wait (WindowData::end_waits), and for a call of the page the
+    // ends of its generation after the page mark (WindowData::end_page_calls).
     let mark = data.ends.mark();
+    let page_mark = data.page_calls.mark();
     let connection_ended = Arc::new(AtomicBool::new(false));
     if let Some(reply) = reply {
         let ended = Arc::clone(&connection_ended);
@@ -2548,43 +2571,44 @@ pub fn presented(
         });
     }
     let ended = || {
-        data.ends.since(mark).or_else(|| {
-            connection_ended
-                .load(Ordering::SeqCst)
-                .then(|| "the endpoint connection of the request ended".to_string())
-        })
+        data.ends
+            .since(mark)
+            .or_else(|| {
+                page_call
+                    .then(|| data.page_calls.since(page_mark))
+                    .flatten()
+            })
+            .or_else(|| {
+                connection_ended
+                    .load(Ordering::SeqCst)
+                    .then(|| "the endpoint connection of the request ended".to_string())
+            })
     };
     let wait_frame = || -> Result<f64, Failure> {
         let platform = platform::current().map_err(internal)?;
         let frontend = Arc::clone(window.frontend());
-        let (tx, rx) = mpsc::channel();
-        on_main(window, move || {
-            settled_frame(
-                frontend.as_ref(),
-                |window, present, done| platform.after_settled(window, present, done),
-                Box::new(move |displayed| {
-                    match tx.send(displayed) {
-                        Ok(()) => {}
-                        // A failure after the request ended was not reported by that request, so it is left as an error
-                        // line.
-                        Err(mpsc::SendError(Err(error))) => log_error("presentation", error),
-                        Err(mpsc::SendError(Ok(_))) => crate::application_log::log_info(
-                            "exposure",
-                            "presentation completion arrived after its request ended",
-                        ),
-                    }
-                }),
-            )
+        data.wait_settled_frame(page_call, |tx| {
+            on_main(window, move || {
+                settled_frame(
+                    frontend.as_ref(),
+                    |window, present, done| platform.after_settled(window, present, done),
+                    Box::new(move |displayed| {
+                        match tx.send(crate::windows::FrameOutcome::Displayed(displayed)) {
+                            Ok(()) => {}
+                            // A failure after the request ended was not reported by that request, so it is left as an error
+                            // line.
+                            Err(mpsc::SendError(crate::windows::FrameOutcome::Displayed(Err(
+                                error,
+                            )))) => log_error("presentation", error),
+                            Err(mpsc::SendError(_)) => crate::application_log::log_info(
+                                "exposure",
+                                "presentation completion arrived after its request ended",
+                            ),
+                        }
+                    }),
+                )
+            })
         })
-        .map_err(internal)?;
-        match rx.recv() {
-            Ok(outcome) => outcome.map_err(internal),
-            // default: the completion goes with the frontend of a closed window without an answer.
-            Err(_) => Err(Failure::new(
-                MISSING_DOCUMENT,
-                "the window closed before it presented",
-            )),
-        }
     };
 
     // An open modal is on the screen at the time this reports only after its revealed webview presented its first

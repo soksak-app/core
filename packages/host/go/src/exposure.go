@@ -614,12 +614,15 @@ func (s *Surfaces) requestSurfaceOf(origin uint64, surface string, send func(id 
 // requests end after the event, so a page that receives the failure already sends no report of it.
 func (s *Surfaces) askPageToReload(emit func()) {
 	emit()
-	s.host.endPage(s)
+	s.host.endPage(s, pageReloadingEnd)
 }
 
 // pageStarted records that a new main page started, which accepts requests to surface documents again.
 func (s *Surfaces) pageStarted() {
 	s.pageReloading.Store(false)
+	s.mu.Lock()
+	s.pageCallsEnded = ""
+	s.mu.Unlock()
 	s.pageProcessStarted()
 }
 
@@ -1858,8 +1861,26 @@ func lastPlacementPresented(placed func() error, settled func() <-chan struct{},
 // presented waits until the surface layout transaction of the window and the current picture raster are fixed and the main page and the visible app document
 // display that layout, and returns the time (ms, mach absolute time) at which that screen is displayed. It has no time limit: the
 // close of the window and the end of its page process end it with 1003, and the end of ctx, the endpoint connection of the request,
-// ends it with an error.
+// ends it with an error. It is the wait of an endpoint request, which waits through a reload for the screen of the new page.
 func (s *Surfaces) presented(ctx context.Context) (float64, error) {
+	return s.presentedUntil(ctx, nil)
+}
+
+// pagePresented is presented for a host call of the main page (waitPresented): the end of the generation of that page ends it too,
+// with 1003 and that end, because the page reads again only after the call has its reply and the screen of the page that ended
+// never presents for it (docs/spec/native-host.md#page-reload). A call that begins after that end, before the next page starts,
+// ends at once.
+func (s *Surfaces) pagePresented(ctx context.Context) (float64, error) {
+	pageEnds, pageEnded := s.pageCallEnd()
+	if pageEnded != "" {
+		return 0, waitEndError(pageEnded)
+	}
+	return s.presentedUntil(ctx, pageEnds)
+}
+
+// presentedUntil is presented whose waits also end when pageEnds closes, with the end of the host calls of the page; a nil
+// pageEnds never closes.
+func (s *Surfaces) presentedUntil(ctx context.Context, pageEnds <-chan struct{}) (float64, error) {
 	ends, ended := s.waitEnd()
 	if ended != "" {
 		return 0, waitEndError(ended)
@@ -1896,6 +1917,8 @@ func (s *Surfaces) presented(ctx context.Context) (float64, error) {
 			return result.displayed, nil
 		case <-ends:
 			return 0, waitEndError(s.lastWaitEnd())
+		case <-pageEnds:
+			return 0, waitEndError(s.lastPageCallEndText())
 		case <-ctx.Done():
 			return 0, connectionEnded()
 		}
@@ -1904,7 +1927,7 @@ func (s *Surfaces) presented(ctx context.Context) (float64, error) {
 	// An open modal is on the screen at the time this reports only after its revealed web view presented its first frame, so
 	// the wait ends at the paint of the modal, at a change of the modal state or at an end of the window (modals.go). It runs before
 	// the settled wait, so the display time that the settled wait reports is at or after the paint of the modal.
-	if err := s.waitForModalPaint(ctx); err != nil {
+	if err := s.waitForModalPaintUntil(ctx, pageEnds); err != nil {
 		return 0, err
 	}
 	if _, err := waitFrame(); err != nil {
@@ -1923,6 +1946,9 @@ func (s *Surfaces) presented(ctx context.Context) (float64, error) {
 		case <-ends:
 			close(stop)
 			return 0, waitEndError(s.lastWaitEnd())
+		case <-pageEnds:
+			close(stop)
+			return 0, waitEndError(s.lastPageCallEndText())
 		case <-ctx.Done():
 			close(stop)
 			return 0, connectionEnded()
@@ -2077,11 +2103,45 @@ func (s *Surfaces) log(line string) {
 	}
 }
 
-// The ends of the waits of a window for its page (Surfaces.waitEnd).
+// The ends of the waits of a window for its page (Surfaces.waitEnd) and of the waits of the host calls of a page
+// (Surfaces.pageCallEnd).
 const (
-	windowClosedEnd = "the window closed"
-	pageEndedEnd    = "the page process ended"
+	windowClosedEnd  = "the window closed"
+	pageEndedEnd     = "the page process ended"
+	pageReloadingEnd = "the page is reloading"
+	pageReplacedEnd  = "a new page started"
 )
+
+// pageCallEnd returns the channel that the next end of the generation of the main page closes, and the end that already holds
+// until the next page starts, empty when none does. A wait of a host call of the page reads both before it waits.
+func (s *Surfaces) pageCallEnd() (<-chan struct{}, string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.pageCallEnds == nil {
+		s.pageCallEnds = make(chan struct{})
+	}
+	return s.pageCallEnds, s.pageCallsEnded
+}
+
+// lastPageCallEndText is the end that last ended the waits of the host calls of the page.
+func (s *Surfaces) lastPageCallEndText() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.lastPageCallEnd
+}
+
+// endPageCalls ends the waits of the host calls that the main page sent with end, and records end for the calls that begin
+// before the next page starts (pageStarted).
+func (s *Surfaces) endPageCalls(end string) {
+	s.mu.Lock()
+	s.pageCallsEnded = end
+	s.lastPageCallEnd = end
+	if s.pageCallEnds != nil {
+		close(s.pageCallEnds)
+	}
+	s.pageCallEnds = make(chan struct{})
+	s.mu.Unlock()
+}
 
 // waitEnd returns the channel that the next end of the waits of the window closes, and the end that already holds, empty when
 // none does. A wait reads both before it waits, so an end before the wait reaches its event ends it the same way.

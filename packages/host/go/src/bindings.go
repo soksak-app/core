@@ -160,12 +160,13 @@ func (h *Host) CancelSurfaces(ctx context.Context, reqJSON json.RawMessage) erro
 	return s.CancelSurfaces(req)
 }
 
+// WaitPresented is the presented wait of a host call of the page, which the end of that page ends too (pagePresented).
 func (h *Host) WaitPresented(ctx context.Context) (float64, error) {
 	s, err := h.surface(ctx)
 	if err != nil {
 		return 0, err
 	}
-	return s.presented(ctx)
+	return s.pagePresented(ctx)
 }
 
 func (h *Host) OverlayUpdate(ctx context.Context, reqJSON json.RawMessage) error {
