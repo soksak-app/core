@@ -51,11 +51,14 @@ for (const app of Object.values(APPS)) {
     await ended(s, byItem.window, `the item ${close.title}`);
 
     const byKey = await newWindow(s);
-    // The key equivalent can end the window at key down; the key up then goes to the window that remains, as from a keyboard.
+    // The menu takes a key equivalent at key down, so Command+W ends the window then, and the key up goes to the window that
+    // remains, as from a keyboard. The window of the key up is the window of the check, named before the key down: the end of the
+    // window completes after the key down answers, so a read of the windows after it does not tell whether the window still
+    // takes the key up.
+    const remains = s;
     const command = { text: "w", modifiers: ["command"] };
     await byKey.key("w", "down", command);
-    const remains = (await s.get("host.windows")).some((entry) => entry.window === byKey.window);
-    await (remains ? byKey : s).key("w", "up", command);
+    await remains.key("w", "up", command);
     await ended(s, byKey.window, "Command+W");
 
   });
