@@ -307,6 +307,16 @@ impl Platform for Windows {
     ) -> Result<(), String> {
         unsupported::query_document(document, reply)
     }
+    fn confirm_document(
+        &self,
+        document: Handle,
+        kind: &str,
+        origin: &str,
+        summary: &str,
+        reply: Box<dyn FnOnce(String) + Send>,
+    ) -> Result<(), String> {
+        unsupported::confirm_document(document, kind, origin, summary, reply)
+    }
     fn read_document(
         &self,
         document: Handle,

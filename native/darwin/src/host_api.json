@@ -6,6 +6,7 @@
     "documentAddScript",
     "documentBinaryPut",
     "documentBinaryTake",
+    "documentConfirm",
     "documentCreate",
     "documentQuery",
     "documentRead",

@@ -270,6 +270,20 @@ func (implementation) ReadDocument(document unsafe.Pointer, path string, ref int
 	native.DocumentRead(document, native.CString(path), int32(ref), granted, uintptr(handles.NewHandle(reply)))
 }
 
+// ConfirmDocument shows the confirmation panel; the reply of native names the answer of the person.
+func (implementation) ConfirmDocument(document unsafe.Pointer, kind, origin, summary string, reply func(value string)) {
+	native.DocumentConfirm(document, native.CString(kind), native.CString(origin), native.CString(summary),
+		uintptr(handles.NewHandle(reply)))
+}
+
+// goHost_document_confirmed receives the one answer of a confirmation and releases its receiver.
+func goHost_document_confirmed(context uintptr, value *byte) {
+	handle := handles.Handle(uintptr(context))
+	reply := handle.Value().(func(string))
+	handle.Delete()
+	reply(native.GoString(value))
+}
+
 // goHost_document_read receives the one reply of a read and releases its receiver.
 func goHost_document_read(context uintptr, value *byte) {
 	handle := handles.Handle(uintptr(context))

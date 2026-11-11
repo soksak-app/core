@@ -418,6 +418,17 @@ impl Platform for Darwin {
         document::query(document, reply);
         Ok(())
     }
+    fn confirm_document(
+        &self,
+        document: Handle,
+        kind: &str,
+        origin: &str,
+        summary: &str,
+        reply: Box<dyn FnOnce(String) + Send>,
+    ) -> Result<(), String> {
+        document::confirm(document, kind, origin, summary, reply);
+        Ok(())
+    }
     fn read_document(
         &self,
         document: Handle,

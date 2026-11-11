@@ -315,6 +315,37 @@ extern "C" fn read_replied(context: *mut c_void, value: *const c_char) {
     (receiver.0)(value);
 }
 
+unsafe extern "C" {
+    fn sp_document_confirm(
+        document: *mut c_void,
+        kind: *const c_char,
+        origin: *const c_char,
+        summary: *const c_char,
+        reply: Event,
+        context: *mut c_void,
+    );
+}
+
+/// The receiver of one confirmation answer. Native calls it once.
+struct ConfirmReceiver(Box<dyn FnOnce(String) + Send>);
+
+extern "C" fn confirm_replied(context: *mut c_void, value: *const c_char) {
+    let receiver = unsafe { Box::from_raw(context as *mut ConfirmReceiver) };
+    let value = unsafe { CStr::from_ptr(value) }
+        .to_string_lossy()
+        .into_owned();
+    (receiver.0)(value);
+}
+
+/// Shows the confirmation panel of the region; reply receives the answer of the person once.
+pub fn confirm(document: Handle, kind: &str, origin: &str, summary: &str, reply: Box<dyn FnOnce(String) + Send>) {
+    let receiver = Box::into_raw(Box::new(ConfirmReceiver(reply)));
+    let kind = std::ffi::CString::new(kind).unwrap_or_default();
+    let origin = std::ffi::CString::new(origin).unwrap_or_default();
+    let summary = std::ffi::CString::new(summary).unwrap_or_default();
+    unsafe { sp_document_confirm(document as *mut c_void, kind.as_ptr(), origin.as_ptr(), summary.as_ptr(), confirm_replied, receiver as *mut c_void) };
+}
+
 /// Reads the value of the operable element ref of the frame at path; without the grant the reply names the origin of
 /// the frame alone, with the grant it names the value and the origin.
 pub fn read(document: Handle, path: &str, ref_: i32, granted: bool, reply: Box<dyn FnOnce(String) + Send>) {

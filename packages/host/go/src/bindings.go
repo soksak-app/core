@@ -364,6 +364,32 @@ func isFinite(v float64) bool {
 	return !math.IsNaN(v) && !math.IsInf(v, 0)
 }
 
+// DocumentApprovalsGrant shows the confirmation panel of the region that names the kind, the origin and the summary;
+// the answer of the person records the grant, and the reply names the answer.
+func (h *Host) DocumentApprovalsGrant(ctx context.Context, reqJSON json.RawMessage) (map[string]any, error) {
+	req, err := argument[DocumentRequest]("request", reqJSON)
+	if err != nil {
+		return nil, err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var args struct {
+		Kind    string `json:"kind"`
+		Origin  string `json:"origin"`
+		Summary string `json:"summary"`
+	}
+	if err := json.Unmarshal(reqJSON, &args); err != nil || args.Kind == "" || args.Origin == "" {
+		return nil, fmt.Errorf("approvals grant requires a kind and an origin")
+	}
+	granted, err := s.confirmGrant(uint64(s.window.ID()), req, h.approvals, args.Kind, args.Origin, args.Summary)
+	if err != nil {
+		return nil, DocumentCallError("documentApprovalsGrant", err)
+	}
+	return map[string]any{"granted": granted}, nil
+}
+
 // DocumentApprovalsList answers the granted kinds and origins of the session in a stable order.
 func (h *Host) DocumentApprovalsList(ctx context.Context, reqJSON json.RawMessage) ([][2]string, error) {
 	return h.approvals.List(), nil

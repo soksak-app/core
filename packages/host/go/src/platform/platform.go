@@ -505,6 +505,9 @@ type Platform interface {
 	// GoDocument runs back 0, forward 1, reload 2, stop 3, and the history entry that is offset away from the current one 4,
 	// and returns whether it ran.
 	GoDocument(document unsafe.Pointer, action, offset int) bool
+	// ConfirmDocument shows the confirmation panel that names the kind, the origin and the summary; reply receives the
+	// answer of the person once, as {granted} or an error.
+	ConfirmDocument(document unsafe.Pointer, kind, origin, summary string, reply func(value string))
 	// ReadDocument reads the value of the operable element ref of the frame at path; without the grant the reply names
 	// the origin of the frame alone, with the grant it names the value and the origin, and the error reply names the
 	// failure.

@@ -2070,6 +2070,69 @@ void sp_document_read(void *handle, const char *path, int ref, bool granted, sp_
         }];
 }
 
+// One confirmation panel: a floating panel with the origin, the summary and two buttons, which answers once.
+@interface SPDocumentConfirmPanel : NSPanel <NSWindowDelegate>
+@property(copy) void (^answer)(BOOL granted);
+@end
+
+@implementation SPDocumentConfirmPanel
+- (void)answer:(BOOL)granted {
+    if (!self.answer) return;
+    void (^block)(BOOL) = self.answer;
+    self.answer = nil;
+    [self orderOut:nil];
+    [self close];
+    block(granted);
+}
+- (void)grant { [self answer:YES]; }
+- (void)deny { [self answer:NO]; }
+- (void)windowWillClose:(NSNotification *)notification {
+    (void)notification;
+    [self answer:NO];
+}
+@end
+
+void sp_document_confirm(void *handle, const char *kind, const char *origin, const char *summary,
+    sp_document_confirm_reply reply, void *context) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    SPDocumentView *view = (SPDocumentView *)handle;
+    if (!view || !view.window) {
+        reply(context, "{\"granted\":false}");
+        return;
+    }
+    NSString *kindText = [NSString stringWithUTF8String:kind ?: ""];
+    NSString *originText = [NSString stringWithUTF8String:origin ?: ""];
+    NSString *summaryText = [NSString stringWithUTF8String:summary ?: ""];
+    // The panel names the origin, not the label: a label is page text that a page writes, the origin is the address
+    // that the frame reports.
+    NSPanel *panel = [[SPDocumentConfirmPanel alloc] initWithContentRect:NSMakeRect(0, 0, 420, 148)
+        styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskNonactivatingPanel
+        backing:NSBackingStoreBuffered defer:NO];
+    panel.title = [NSString stringWithFormat:@"%@ — %@", kindText, originText];
+    panel.floatingPanel = YES;
+    panel.hidesOnDeactivate = NO;
+    panel.delegate = (id<NSWindowDelegate>)panel;
+    NSTextField *text = [NSTextField labelWithString:[NSString stringWithFormat:@"%@\n%@", originText, summaryText]];
+    text.frame = NSMakeRect(16, 60, 388, 72);
+    text.lineBreakMode = NSLineBreakByWordWrapping;
+    [panel.contentView addSubview:text];
+    NSButton *deny = [NSButton buttonWithTitle:@"거부" target:panel action:@selector(deny)];
+    deny.frame = NSMakeRect(220, 12, 90, 32);
+    deny.keyEquivalent = @"\033";
+    [panel.contentView addSubview:deny];
+    NSButton *grant = [NSButton buttonWithTitle:@"승인" target:panel action:@selector(grant)];
+    grant.frame = NSMakeRect(320, 12, 84, 32);
+    grant.bezelStyle = NSBezelStyleRounded;
+    [panel.contentView addSubview:grant];
+    ((SPDocumentConfirmPanel *)panel).answer = ^(BOOL granted) {
+        reply(context, granted ? "{\"granted\":true}" : "{\"granted\":false}");
+    };
+    NSRect screen = (view.window.screen ?: NSScreen.mainScreen).visibleFrame;
+    NSPoint at = NSMakePoint(screen.origin.x + screen.size.width / 2 - 210, screen.origin.y + screen.size.height / 2 - 74);
+    [panel setFrameOrigin:at];
+    [panel makeKeyAndOrderFront:nil];
+}
+
 void sp_document_scroll_to(void *handle, double x, double y, sp_document_scrolled reply, void *context) {
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
     SPDocumentView *view = (SPDocumentView *)handle;

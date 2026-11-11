@@ -49,6 +49,14 @@ static void documentScrolledBridge(void *context, const char *reply) {
     hostRunOnWorker(^{ sp_host_callback_document_scrolled((uintptr_t)context, (char *)reply); });
 }
 
+static void documentConfirmBridge(void *context, const char *reply) {
+    hostRunOnWorker(^{ sp_host_callback_document_confirmed((uintptr_t)context, (char *)reply); });
+}
+
+void documentConfirm(void *document, const char *kind, const char *origin, const char *summary, uintptr_t context) {
+    hostRunOnMain(^{ sp_document_confirm(document, kind, origin, summary, documentConfirmBridge, (void *)context); });
+}
+
 static void documentReadBridge(void *context, const char *reply) {
     hostRunOnWorker(^{ sp_host_callback_document_read((uintptr_t)context, (char *)reply); });
 }

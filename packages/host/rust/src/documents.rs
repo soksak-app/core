@@ -2817,6 +2817,55 @@ pub struct ReadValue {
     pub origin: Option<String>,
 }
 
+/// Shows the confirmation panel of the region and records the grant of a positive answer.
+pub fn confirm_grant(
+    webview: &Webview,
+    request: Request,
+    kind: String,
+    origin: String,
+    summary: String,
+) -> Result<bool, String> {
+    if kind.is_empty() || origin.is_empty() {
+        return Err("approvals grant requires a kind and an origin".to_string());
+    }
+    let platform = platform::current()?;
+    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+    let kind_for_record = kind.clone();
+    let origin_for_record = origin.clone();
+    with_document(webview, &request, move |handle| {
+        platform.confirm_document(
+            handle,
+            &kind,
+            &origin,
+            &summary,
+            Box::new(move |reply| {
+                if sender.send(reply).is_err() {
+                    log_error("document confirm", "the caller stopped waiting for the answer");
+                }
+            }),
+        )
+    })?;
+    let reply = receiver
+        .recv()
+        .map_err(|_| format!("document {} gave no confirmation answer", request.document))?;
+    #[derive(Deserialize)]
+    struct Both {
+        #[serde(default)]
+        granted: bool,
+        #[serde(default)]
+        error: Option<String>,
+    }
+    let both: Both = serde_json::from_str(&reply)
+        .map_err(|_| format!("document {} confirmation reply is not JSON: {reply}", request.document))?;
+    if let Some(error) = both.error {
+        return Err(format!("document {} confirmation failed: {error}", request.document));
+    }
+    if both.granted {
+        APPROVALS.grant(&kind_for_record, &origin_for_record);
+    }
+    Ok(both.granted)
+}
+
 /// The process-wide approvals table of the session (one host process serves one session).
 pub static APPROVALS: Approvals = Approvals {
     inner: std::sync::Mutex::new(std::collections::BTreeSet::new()),

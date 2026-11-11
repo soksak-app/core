@@ -615,6 +615,16 @@ pub trait Platform: CoreRootHost + Send + Sync {
         document: Handle,
         reply: Box<dyn FnOnce(String) + Send>,
     ) -> Result<(), String>;
+    /// Shows the confirmation panel that names the kind, the origin and the summary; reply receives the answer of the
+    /// person once, as {granted}. Call it on the main thread.
+    fn confirm_document(
+        &self,
+        document: Handle,
+        kind: &str,
+        origin: &str,
+        summary: &str,
+        reply: Box<dyn FnOnce(String) + Send>,
+    ) -> Result<(), String>;
     /// Reads the value of the operable element ref of the frame at path; without the grant the reply names the origin
     /// alone, with the grant it names the value and the origin. Call it on the main thread.
     fn read_document(

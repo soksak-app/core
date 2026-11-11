@@ -282,6 +282,16 @@ pub fn query_document(
     missing("document query")
 }
 
+pub fn confirm_document(
+    _document: Handle,
+    _kind: &str,
+    _origin: &str,
+    _summary: &str,
+    _reply: Box<dyn FnOnce(String) + Send>,
+) -> Result<(), String> {
+    missing("document confirm")
+}
+
 pub fn read_document(
     _document: Handle,
     _path: &str,

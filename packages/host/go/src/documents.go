@@ -980,6 +980,29 @@ type DocumentReadValue struct {
 	Request uint64  `json:"request,omitempty"`
 }
 
+// confirmGrant shows the confirmation panel of the region and records the grant of a positive answer.
+func (s *Surfaces) confirmGrant(viewID uint64, req DocumentRequest, approvals *Approvals, kind, origin, summary string) (bool, error) {
+	answers := make(chan string, 1)
+	err := s.withDocument(viewID, req, func(handle unsafe.Pointer) error {
+		system.ConfirmDocument(handle, kind, origin, summary, func(reply string) { answers <- reply })
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+	var answer struct {
+		Granted bool   `json:"granted"`
+		Error   string `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(<-answers), &answer); err != nil || answer.Error != "" {
+		return false, fmt.Errorf("document %s confirmation failed: %s", req.Document, answer.Error)
+	}
+	if answer.Granted {
+		approvals.Grant(kind, origin)
+	}
+	return answer.Granted, nil
+}
+
 // readDocument reads the value of the operable element ref of the frame at path under the value-read grant of the
 // origin of that frame. The first reply of native names the origin without a value; a grant of that origin answers the
 // value, and no grant answers the refusal with the request identifier of a grant that the person has not given.

@@ -748,6 +748,19 @@ async fn document_query(webview: Webview, request: Argument<documents::Request>)
     .await
 }
 
+/// Shows the confirmation panel of the region and records the grant of a positive answer.
+#[tauri::command]
+async fn document_approvals_grant(
+    webview: Webview,
+    request: Argument<documents::Request>,
+    kind: String,
+    origin: String,
+    summary: String,
+) -> Result<bool, String> {
+    let Argument(request) = request;
+    blocking(move || documents::confirm_grant(&webview, request, kind, origin, summary)).await
+}
+
 /// Answers the granted kinds and origins of the session in a stable order.
 #[tauri::command]
 fn document_approvals_list() -> Result<Vec<(String, String)>, String> {

@@ -121,6 +121,13 @@ void sp_document_set_stream(void *document, sp_document_stream stream, void *con
 typedef void (*sp_document_scrolled)(void *context, const char *json);
 void sp_document_scroll_to(void *document, double x, double y, sp_document_scrolled reply, void *context);
 
+// Shows a confirmation panel that names the kind, the origin and the summary, and reports the answer of the person
+// once. The panel blocks no thread: it appears as a floating panel of the window of the region and the reply arrives
+// as the click of its button. The reply is {"granted": true} or {"granted": false}.
+typedef void (*sp_document_confirm_reply)(void *context, const char *json);
+void sp_document_confirm(void *document, const char *kind, const char *origin, const char *summary,
+    sp_document_confirm_reply reply, void *context);
+
 // Reads the value of the operable element ref of the frame at path and reports it once. Without the grant the reply is
 // {"origin": origin} alone, so the host learns the origin of the frame that it gates on; with the grant the reply is
 // {"value": value, "origin": origin}, where a sensitive element answers a null value. The error reply names a closed
