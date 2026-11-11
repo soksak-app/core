@@ -298,6 +298,8 @@ $(BUILD)/capture_cleanup_test: src/capture.m
 
 $(BUILD)/capture_preparation_test: src/capture.m
 
+$(BUILD)/window_show_hold_test: src/capture.m src/window_reveal.m
+
 $(BUILD)/capture_pressure_test: src/capture.m src/host_api_capture.m
 
 $(BUILD)/capture_storage_test: src/capture.m
@@ -469,6 +471,7 @@ NATIVE_E2E_TESTS = window_titlebar_layout_test \
   capture_lifecycle_test \
   capture_cycles_test \
   capture_callback_test \
+  window_show_hold_test \
   image_region_capture_presentation_test
 
 comma := ,
