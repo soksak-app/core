@@ -777,6 +777,20 @@ fn document_approvals_revoke(kind: String, origin: Option<String>) -> Result<boo
     Ok(true)
 }
 
+/// Captures the region in the mode that the caller names.
+#[tauri::command]
+async fn document_capture(
+    webview: Webview,
+    request: Argument<documents::Request>,
+    mode: i32,
+    every: i32,
+    count: i32,
+    for_ms: i32,
+) -> Result<documents::CaptureResult, String> {
+    let Argument(request) = request;
+    blocking(move || documents::capture_document(&webview, request, mode, every, count, for_ms)).await
+}
+
 /// Dispatches one coordinate input action on the region viewport.
 #[tauri::command]
 async fn document_input(

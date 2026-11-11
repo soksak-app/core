@@ -101,6 +101,7 @@ type NativeFunctions struct {
 	DocumentAddScript                     func(unsafe.Pointer, *byte)
 	DocumentBinaryPut                     func(unsafe.Pointer, unsafe.Pointer, uint64, *byte, *byte) *byte
 	DocumentBinaryTake                    func(unsafe.Pointer, *byte, *unsafe.Pointer, *uint64) *byte
+	DocumentCapture                       func(unsafe.Pointer, int32, int32, int32, int32, uintptr)
 	DocumentConfirm                       func(unsafe.Pointer, *byte, *byte, *byte, uintptr)
 	DocumentCreate                        func(unsafe.Pointer, *byte, *byte, *byte, *byte, *byte, uintptr) unsafe.Pointer
 	DocumentEval                          func(unsafe.Pointer, *byte, *byte, bool, bool, uintptr)
@@ -281,6 +282,9 @@ func (functions NativeFunctions) Validate() error {
 	}
 	if functions.DocumentBinaryTake == nil {
 		return fmt.Errorf("native API function is missing: documentBinaryTake")
+	}
+	if functions.DocumentCapture == nil {
+		return fmt.Errorf("native API function is missing: documentCapture")
 	}
 	if functions.DocumentConfirm == nil {
 		return fmt.Errorf("native API function is missing: documentConfirm")

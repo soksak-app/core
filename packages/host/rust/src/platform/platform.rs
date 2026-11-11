@@ -615,6 +615,16 @@ pub trait Platform: CoreRootHost + Send + Sync {
         document: Handle,
         reply: Box<dyn FnOnce(String) + Send>,
     ) -> Result<(), String>;
+    /// Captures the region; reply receives the result once. Call it on the main thread.
+    fn capture_document(
+        &self,
+        document: Handle,
+        mode: i32,
+        every_ms: i32,
+        count: i32,
+        for_ms: i32,
+        reply: Box<dyn FnOnce(String) + Send>,
+    ) -> Result<(), String>;
     /// Dispatches one coordinate input action on the region viewport. Call it on the main thread.
     fn input_document(
         &self,

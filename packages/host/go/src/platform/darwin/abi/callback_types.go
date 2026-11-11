@@ -46,6 +46,7 @@ type Callbacks struct {
 	DocumentActed             func(uintptr, *byte)
 	DocumentEvaled            func(uintptr, *byte)
 	DocumentInput             func(uintptr, *byte)
+	DocumentCaptured          func(uintptr, *byte)
 	DocumentEvent             func(uintptr, *byte)
 	MemoryPressure            func(*byte, uint64)
 	DockNewWindow             func()
@@ -53,4 +54,4 @@ type Callbacks struct {
 }
 
 // CallbackTable holds process-lifetime function addresses in the native header's field order.
-type CallbackTable [42]uintptr
+type CallbackTable [43]uintptr

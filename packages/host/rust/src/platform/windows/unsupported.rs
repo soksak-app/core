@@ -282,6 +282,13 @@ pub fn query_document(
     missing("document query")
 }
 
+pub fn capture_document(
+    _document: Handle, _mode: i32, _every_ms: i32, _count: i32, _for_ms: i32,
+    _reply: Box<dyn FnOnce(String) + Send>,
+) -> Result<(), String> {
+    missing("document capture")
+}
+
 pub fn input_document(
     _document: Handle,
     _action: i32,

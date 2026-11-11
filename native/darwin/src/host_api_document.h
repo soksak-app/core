@@ -23,6 +23,7 @@ void documentConfirm(void *document, const char *kind, const char *origin, const
 void documentAct(void *document, const char *path, int ref, int action, const char *value, bool granted, uintptr_t context);
 void documentEval(void *document, const char *path, const char *source, bool await_promise, bool granted, uintptr_t context);
 void documentInput(void *document, int action, double x, double y, double dx, double dy, const char *key, uintptr_t context);
+void documentCapture(void *document, int mode, int every_ms, int count, int for_ms, uintptr_t context);
 void main_sp_view_import_map_set(const char *map);
 const char *main_sp_document_last_error(void);
 void main_sp_document_fail_creation_for_test(const char *cause);

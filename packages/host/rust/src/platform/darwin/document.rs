@@ -91,6 +91,15 @@ unsafe extern "C" {
     fn sp_document_appearance(document: *mut c_void, dark: bool);
     fn sp_document_close(document: *mut c_void);
     fn sp_document_query(document: *mut c_void, reply: Event, context: *mut c_void);
+    fn sp_document_capture(
+        document: *mut c_void,
+        mode: i32,
+        every_ms: i32,
+        count: i32,
+        for_ms: i32,
+        reply: Event,
+        context: *mut c_void,
+    );
     fn sp_document_input(
         document: *mut c_void,
         action: i32,
@@ -394,6 +403,18 @@ extern "C" fn input_replied(context: *mut c_void, value: *const c_char) {
     let r = unsafe { Box::from_raw(context as *mut InputReceiver) };
     (r.0)(unsafe { CStr::from_ptr(value) }.to_string_lossy().into_owned());
 }
+struct CaptureReceiver(Box<dyn FnOnce(String) + Send>);
+extern "C" fn capture_replied(context: *mut c_void, value: *const c_char) {
+    let r = unsafe { Box::from_raw(context as *mut CaptureReceiver) };
+    (r.0)(unsafe { CStr::from_ptr(value) }.to_string_lossy().into_owned());
+}
+/// Captures the region; reply receives the result once.
+pub fn capture(document: Handle, mode: i32, every_ms: i32, count: i32, for_ms: i32,
+    reply: Box<dyn FnOnce(String) + Send>) {
+    let r = Box::into_raw(Box::new(CaptureReceiver(reply)));
+    unsafe { sp_document_capture(document as *mut c_void, mode, every_ms, count, for_ms, capture_replied, r as *mut c_void) };
+}
+
 /// Dispatches one coordinate input action on the region viewport.
 pub fn input(document: Handle, action: i32, x: f64, y: f64, dx: f64, dy: f64, key: &str,
     reply: Box<dyn FnOnce(String) + Send>) {

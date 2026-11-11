@@ -1046,6 +1046,35 @@ type DocumentInputResult struct {
 	Error string `json:"error,omitempty"`
 }
 
+// DocumentCaptureResult is the result of one capture.
+type DocumentCaptureResult struct {
+	Path    string `json:"path,omitempty"`
+	Frames  string `json:"frames,omitempty"`
+	Count   int    `json:"count,omitempty"`
+	Limited bool   `json:"limited,omitempty"`
+	Error   string `json:"error,omitempty"`
+}
+
+// captureDocument captures the region in the mode that the caller names.
+func (s *Surfaces) captureDocument(viewID uint64, req DocumentRequest, mode, everyMs, count, forMs int) (DocumentCaptureResult, error) {
+	answers := make(chan string, 1)
+	err := s.withDocument(viewID, req, func(handle unsafe.Pointer) error {
+		system.CaptureDocument(handle, mode, everyMs, count, forMs, func(reply string) { answers <- reply })
+		return nil
+	})
+	if err != nil {
+		return DocumentCaptureResult{}, err
+	}
+	var full DocumentCaptureResult
+	if err := json.Unmarshal([]byte(<-answers), &full); err != nil {
+		return DocumentCaptureResult{}, fmt.Errorf("document %s capture reply is not JSON", req.Document)
+	}
+	if full.Error != "" {
+		return DocumentCaptureResult{}, fmt.Errorf("document %s capture failed: %s", req.Document, full.Error)
+	}
+	return full, nil
+}
+
 // inputDocument dispatches one coordinate input action on the region viewport.
 func (s *Surfaces) inputDocument(viewID uint64, req DocumentRequest, approvals *Approvals, action int, x, y, dx, dy float64, key string) (DocumentInputResult, error) {
 	answers := make(chan string, 1)

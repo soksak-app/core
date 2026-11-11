@@ -135,6 +135,9 @@ func Bind(callbacks abi.Callbacks) (abi.CallbackTable, error) {
 	if callbacks.DocumentInput == nil {
 		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: document_input")
 	}
+	if callbacks.DocumentCaptured == nil {
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: document_captured")
+	}
 	if callbacks.DocumentEvent == nil {
 		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: document_event")
 	}
@@ -186,6 +189,7 @@ func Bind(callbacks abi.Callbacks) (abi.CallbackTable, error) {
 		purego.NewCallback(callbacks.DocumentActed),
 		purego.NewCallback(callbacks.DocumentEvaled),
 		purego.NewCallback(callbacks.DocumentInput),
+		purego.NewCallback(callbacks.DocumentCaptured),
 		purego.NewCallback(callbacks.DocumentEvent),
 		purego.NewCallback(callbacks.MemoryPressure),
 		purego.NewCallback(callbacks.DockNewWindow),

@@ -505,6 +505,9 @@ type Platform interface {
 	// GoDocument runs back 0, forward 1, reload 2, stop 3, and the history entry that is offset away from the current one 4,
 	// and returns whether it ran.
 	GoDocument(document unsafe.Pointer, action, offset int) bool
+	// CaptureDocument captures the region; reply receives the result once. The mode is 0 still, 1 sequence,
+	// 2 scroll, 3 video. Still replies the path of one PNG; the other modes follow.
+	CaptureDocument(document unsafe.Pointer, mode, everyMs, count, forMs int, reply func(value string))
 	// InputDocument dispatches one coordinate input action on the region viewport; reply receives the outcome once.
 	// The action is 0 click, 1 move, 2 drag, 3 press, 4 scroll.
 	InputDocument(document unsafe.Pointer, action int, x, y, dx, dy float64, key string, reply func(value string))

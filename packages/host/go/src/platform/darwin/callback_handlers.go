@@ -45,6 +45,7 @@ func callbackHandlers() abi.Callbacks {
 		DocumentActed:             goHost_document_acted,
 		DocumentEvaled:            goHost_document_evaled,
 		DocumentInput:             goHost_document_input,
+		DocumentCaptured:          goHost_document_captured,
 		DocumentEvent:             goHost_document_event,
 		MemoryPressure:            goHost_memory_pressure,
 		DockNewWindow:             goHost_dock_new_window,

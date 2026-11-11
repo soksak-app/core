@@ -236,6 +236,16 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
       if (!Number.isFinite(x) || !Number.isFinite(y)) return Promise.reject(new Error(`input requires finite x and y`));
       return queue(() => port.input(name, act, x, y, dx, dy, String(key ?? "")));
     },
+    /**
+     * Captures the region and resolves to {path} for still mode, {frames, count, limited} for sequence mode,
+     * or an error. The mode is "still", "sequence", "scroll" or "video".
+     */
+    capture(mode, every = 100, count = 0, forMs = 0) {
+      const modes = ["still", "sequence", "scroll", "video"];
+      const m = modes.indexOf(mode);
+      if (m < 0) return Promise.reject(new Error(`capture requires one of ${JSON.stringify(modes)}, not ${JSON.stringify(mode)}`));
+      return queue(() => port.capture(name, m, every, count, forMs));
+    },
     back() { return this.go("back"); },
     forward() { return this.go("forward"); },
     reload() { return this.go("reload"); },

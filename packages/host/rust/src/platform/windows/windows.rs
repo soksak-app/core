@@ -307,6 +307,15 @@ impl Platform for Windows {
     ) -> Result<(), String> {
         unsupported::query_document(document, reply)
     }
+    fn capture_document(
+        &self,
+        document: Handle,
+        mode: i32, every_ms: i32, count: i32, for_ms: i32,
+        reply: Box<dyn FnOnce(String) + Send>,
+    ) -> Result<(), String> {
+        unsupported::capture_document(document, mode, every_ms, count, for_ms, reply)
+    }
+
     fn input_document(
         &self,
         document: Handle,

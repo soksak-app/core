@@ -60,6 +60,7 @@ function port() {
     act: async (name, frame, ref, action, value) => { calls.push(["act", name, frame, ref, action, value]); return { ok: true }; },
     evaluate: async (name, frame, js, awaitPromise) => { calls.push(["evaluate", name, frame, js, awaitPromise]); return { value: 42 }; },
     input: async (name, action, x, y, dx, dy, key) => { calls.push(["input", name, action, x, y, dx, dy, key]); return { ok: true }; },
+    capture: async (name, mode, every, count, forMs) => { calls.push(["capture", name, mode, every, count, forMs]); return { path: "/tmp/x.png" }; },
     detach: async (name) => { calls.push(["detach", name]); },
     onState: (fn) => { receive = fn; return Promise.resolve(() => { stopped = true; }); },
     post: async (name, message) => { calls.push(["post", name, message]); },
@@ -365,6 +366,17 @@ test("an interactive subscription receives the folded frames of the stream", asy
   p.stream("page", 1, { type: "reset" });
   assert.deepEqual(received[1], { type: "reset" });
   await subscription.close();
+});
+
+test("capture sends the mode and resolves to the path", async () => {
+  const f = fixture();
+  const p = port();
+  const region = attachRegion(p, f.element, "page", f.window, { report() {} });
+  p.release();
+  const answer = await region.capture("still");
+  assert.deepEqual(answer, { path: "/tmp/x.png" });
+  assert.deepEqual(p.calls.filter(([kind]) => kind === "capture"), [["capture", "page", 0, 100, 0, 0]]);
+  await assert.rejects(region.capture("destroy"), /capture requires one of/);
 });
 
 test("input sends the action and resolves to the outcome", async () => {

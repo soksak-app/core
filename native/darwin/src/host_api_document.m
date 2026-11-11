@@ -57,6 +57,14 @@ void documentConfirm(void *document, const char *kind, const char *origin, const
     hostRunOnMain(^{ sp_document_confirm(document, kind, origin, summary, documentConfirmBridge, (void *)context); });
 }
 
+static void documentCaptureBridge(void *context, const char *reply) {
+    hostRunOnWorker(^{ sp_host_callback_document_captured((uintptr_t)context, (char *)reply); });
+}
+
+void documentCapture(void *document, int mode, int every_ms, int count, int for_ms, uintptr_t context) {
+    hostRunOnMain(^{ sp_document_capture(document, mode, every_ms, count, for_ms, documentCaptureBridge, (void *)context); });
+}
+
 static void documentInputBridge(void *context, const char *reply) {
     hostRunOnWorker(^{ sp_host_callback_document_input((uintptr_t)context, (char *)reply); });
 }

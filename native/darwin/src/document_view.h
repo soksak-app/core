@@ -156,6 +156,15 @@ typedef void (*sp_document_input_reply)(void *context, const char *json);
 void sp_document_input(void *document, int action, double x, double y, double dx, double dy, const char *key,
     sp_document_input_reply reply, void *context);
 
+// Captures the region and reports the result once. The mode is 0 still, 1 sequence, 2 scroll, 3 video. Still
+// replies {path} of one PNG of the viewport. Sequence replies {frames, count, limited} of a folder of PNGs at the
+// interval. Scroll replies {path} of one stitched PNG of the whole document. Video replies {path, frames, durationMs}
+// of one mp4. The interval in milliseconds and the count or duration limit the sequence and video modes. The reply
+// is {error: reason} for a closed region or a failure.
+typedef void (*sp_document_capture_reply)(void *context, const char *json);
+void sp_document_capture(void *document, int mode, int every_ms, int count, int for_ms,
+    sp_document_capture_reply reply, void *context);
+
 // Turns the stream "elements" or "requests" of the document on or off; the host turns a stream on while it has a
 // subscriber. A stream that is off collects nothing. Turning the element stream on sends a snapshot; turning it off drops
 // an unacknowledged snapshot. Returns false for another stream name or a closed document.

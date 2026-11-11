@@ -2842,6 +2842,66 @@ pub struct InputResult {
     pub ok: bool,
 }
 
+/// The result of one capture.
+#[derive(Debug, Default, PartialEq, Serialize)]
+pub struct CaptureResult {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub frames: Option<String>,
+    #[serde(default)]
+    pub count: i32,
+    #[serde(default)]
+    pub limited: bool,
+}
+
+/// Captures the region in the mode that the caller names.
+pub fn capture_document(
+    webview: &Webview,
+    request: Request,
+    mode: i32,
+    every_ms: i32,
+    count: i32,
+    for_ms: i32,
+) -> Result<CaptureResult, String> {
+    if !(0..=3).contains(&mode) {
+        return Err("capture requires a mode 0-3".to_string());
+    }
+    let platform = platform::current()?;
+    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+    with_document(webview, &request, move |handle| {
+        platform.capture_document(handle, mode, every_ms, count, for_ms,
+            Box::new(move |reply| {
+                if sender.send(reply).is_err() {
+                    log_error("document capture", "the caller stopped waiting for the reply");
+                }
+            }),
+        )
+    })?;
+    let reply = receiver
+        .recv()
+        .map_err(|_| format!("document {} gave no capture reply", request.document))?;
+    #[derive(Deserialize)]
+    struct Both {
+        #[serde(default)]
+        path: Option<String>,
+        #[serde(default)]
+        frames: Option<String>,
+        #[serde(default)]
+        count: i32,
+        #[serde(default)]
+        limited: bool,
+        #[serde(default)]
+        error: Option<String>,
+    }
+    let both: Both = serde_json::from_str(&reply)
+        .map_err(|_| format!("document {} capture reply is not JSON: {reply}", request.document))?;
+    if let Some(error) = both.error {
+        return Err(format!("document {} capture failed: {error}", request.document));
+    }
+    Ok(CaptureResult { path: both.path, frames: both.frames, count: both.count, limited: both.limited })
+}
+
 /// Dispatches one coordinate input action on the region viewport.
 pub fn input_on(
     webview: &Webview,

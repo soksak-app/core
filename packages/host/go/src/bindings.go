@@ -364,6 +364,29 @@ func isFinite(v float64) bool {
 	return !math.IsNaN(v) && !math.IsInf(v, 0)
 }
 
+// DocumentCapture captures the region in the mode that the caller names.
+func (h *Host) DocumentCapture(ctx context.Context, reqJSON json.RawMessage) (DocumentCaptureResult, error) {
+	req, err := argument[DocumentRequest]("request", reqJSON)
+	if err != nil {
+		return DocumentCaptureResult{}, err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return DocumentCaptureResult{}, err
+	}
+	var args struct {
+		Mode  int `json:"mode"`
+		Every int `json:"every"`
+		Count int `json:"count"`
+		ForMs int `json:"for"`
+	}
+	if err := json.Unmarshal(reqJSON, &args); err != nil || args.Mode < 0 || args.Mode > 3 {
+		return DocumentCaptureResult{}, fmt.Errorf("capture requires a mode 0-3")
+	}
+	result, err := s.captureDocument(uint64(s.window.ID()), req, args.Mode, args.Every, args.Count, args.ForMs)
+	return result, DocumentCallError("documentCapture", err)
+}
+
 // DocumentInput dispatches one coordinate input action on the region viewport.
 func (h *Host) DocumentInput(ctx context.Context, reqJSON json.RawMessage) (DocumentInputResult, error) {
 	req, err := argument[DocumentRequest]("request", reqJSON)

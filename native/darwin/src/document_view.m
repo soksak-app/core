@@ -2168,6 +2168,53 @@ void sp_document_confirm(void *handle, const char *kind, const char *origin, con
     [panel makeKeyAndOrderFront:nil];
 }
 
+void sp_document_capture(void *handle, int mode, int every_ms, int count, int for_ms,
+    sp_document_capture_reply reply, void *context) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    SPDocumentView *view = (SPDocumentView *)handle;
+    if (!view || view.closed) {
+        reply(context, "{\"error\":\"the document region is closed\"}");
+        return;
+    }
+    if (mode != 0) {
+        reply(context, "{\"error\":\"the capture mode is not implemented yet\"}");
+        return;
+    }
+    // The still capture takes the snapshot of the region view; the zoom and the scale of the surface are part of it.
+    WKSnapshotConfiguration *config = [[WKSnapshotConfiguration alloc] init];
+    config.rect = view.bounds;
+    [view takeSnapshotWithConfiguration:config completionHandler:^(NSImage *image, NSError *error) {
+        if (error || !image) {
+            reply(context, [[NSString stringWithFormat:@"{\"error\":\"%@\"}",
+                error.localizedDescription ?: @"the snapshot is empty"] UTF8String]);
+            return;
+        }
+        // The capture lands in <config-dir>/captures/<id>/capture.png of the data store of the region.
+        NSBitmapImageRep *rep = [NSBitmapImageRep imageRepWithData:[image TIFFRepresentation]];
+        NSData *png = [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
+        if (!png.length) {
+            reply(context, "{\"error\":\"the snapshot has no pixels\"}");
+            return;
+        }
+        static unsigned long long nextCapture = 0;
+        nextCapture += 1;
+        NSString *folder = [NSString stringWithFormat:@"aside-captures/capture-%llu", nextCapture];
+        NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent:folder];
+        NSError *make = nil;
+        [[NSFileManager defaultManager] createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:&make];
+        if (make) {
+            reply(context, [[NSString stringWithFormat:@"{\"error\":\"%@\"}", make.localizedDescription] UTF8String]);
+            return;
+        }
+        NSString *path = [dir stringByAppendingPathComponent:@"capture.png"];
+        if (![png writeToFile:path atomically:YES]) {
+            reply(context, "{\"error\":\"the capture file was not written\"}");
+            return;
+        }
+        reply(context, [[NSString stringWithFormat:@"{\"path\":\"%@\"}", path] UTF8String]);
+    }];
+}
+
 void sp_document_input(void *handle, int action, double x, double y, double dx, double dy, const char *key,
     sp_document_input_reply reply, void *context) {
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");

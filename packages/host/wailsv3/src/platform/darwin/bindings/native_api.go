@@ -30,6 +30,9 @@ func Functions() abi.NativeFunctions {
 		DocumentBinaryTake: func(a0 unsafe.Pointer, a1 *byte, a2 *unsafe.Pointer, a3 *uint64) *byte {
 			return (*byte)(unsafe.Pointer(C.documentBinaryTake(a0, (*C.char)(unsafe.Pointer(a1)), (*unsafe.Pointer)(unsafe.Pointer(a2)), (*C.size_t)(unsafe.Pointer(a3)))))
 		},
+		DocumentCapture: func(a0 unsafe.Pointer, a1 int32, a2 int32, a3 int32, a4 int32, a5 uintptr) {
+			C.documentCapture(a0, C.int(a1), C.int(a2), C.int(a3), C.int(a4), C.uintptr_t(a5))
+		},
 		DocumentConfirm: func(a0 unsafe.Pointer, a1 *byte, a2 *byte, a3 *byte, a4 uintptr) {
 			C.documentConfirm(a0, (*C.char)(unsafe.Pointer(a1)), (*C.char)(unsafe.Pointer(a2)), (*C.char)(unsafe.Pointer(a3)), C.uintptr_t(a4))
 		},
