@@ -313,7 +313,11 @@ static void awaitCursor(NSWindow *window, NSString *name) {
     }
     return self;
 }
-- (void)cursorUpdate:(NSEvent *)event { (void)event; [NSCursor.openHandCursor set]; }
+- (void)cursorUpdate:(NSEvent *)event {
+    (void)event;
+    note(@"-[SPCursorUpdateView cursorUpdate:] is reached");
+    [NSCursor.openHandCursor set];
+}
 @end
 static NSDictionary *facts(NSWindow *window) {
     NSDictionary *value = factsOf(window);
@@ -662,12 +666,21 @@ int main(void) { @autoreleasepool {
     [rects.contentView addSubview:updateView];
     [rects orderBack:nil];
     [rects orderWindow:NSWindowBelow relativeTo:cover.windowNumber];
-    check(sp_input_pointer(rects, 100, 150, 0, 0, 0, 0) == SP_INPUT_DELIVERED && sp_input_virtual_is(rects),
-        @"a move over a cursor rect of a covered window is delivered");
+    // Each move is sent before the cursor is read: the arguments of a call have no order of evaluation.
+    traceStart = NSProcessInfo.processInfo.systemUptime;
+    note([NSString stringWithFormat:@"the cursor update view has the tracking areas %@ and the view at x 300 is %@", updateView.trackingAreas,
+        [rects.contentView hitTest:[rects.contentView.superview convertPoint:NSMakePoint(300, 150) fromView:nil]].class]);
+    sp_input_result movedOverRect = sp_input_pointer(rects, 100, 150, 0, 0, 0, 0);
+    note([NSString stringWithFormat:@"the move over the cursor rect answers %s", resultText(movedOverRect)]);
+    check(movedOverRect == SP_INPUT_DELIVERED && sp_input_virtual_is(rects), @"a move over a cursor rect of a covered window is delivered");
     check(cursorIs(rects, @"crosshair"), [NSString stringWithFormat:@"the cursor rect under the point sets its cursor (%s)", sp_input_virtual_cursor(rects)]);
-    check(sp_input_pointer(rects, 300, 150, 0, 0, 0, 0) == SP_INPUT_DELIVERED && cursorIs(rects, @"openHand"),
+    sp_input_result movedIntoArea = sp_input_pointer(rects, 300, 150, 0, 0, 0, 0);
+    note([NSString stringWithFormat:@"the move into the tracking area answers %s", resultText(movedIntoArea)]);
+    check(movedIntoArea == SP_INPUT_DELIVERED && cursorIs(rects, @"openHand"),
         [NSString stringWithFormat:@"a tracking area that the point enters updates the cursor (%s)", sp_input_virtual_cursor(rects)]);
-    check(sp_input_pointer(rects, 100, 150, 0, 0, 0, 0) == SP_INPUT_DELIVERED && cursorIs(rects, @"crosshair"),
+    sp_input_result movedBack = sp_input_pointer(rects, 100, 150, 0, 0, 0, 0);
+    note([NSString stringWithFormat:@"the move back over the cursor rect answers %s", resultText(movedBack)]);
+    check(movedBack == SP_INPUT_DELIVERED && cursorIs(rects, @"crosshair"),
         [NSString stringWithFormat:@"the cursor rect sets its cursor again (%s)", sp_input_virtual_cursor(rects)]);
     sp_input_virtual_end("no state");
     check(sp_input_virtual_cursor(rects) == NULL, @"a window that is no longer the virtual key window has no cursor");
