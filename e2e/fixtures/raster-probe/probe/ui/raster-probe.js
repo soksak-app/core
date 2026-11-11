@@ -176,7 +176,12 @@ export async function startRasterProbe({ bridge, expose, document, view }) {
     const preedit = event.preedit ?? null;
     const errors = event.errors ?? [];
     const sequence = inputStatus.read().transactions + 1;
-    changeInput(({ log }) => ({
+    // The transaction carries the focus changes of its scope as focus actions in their order, and the last one is the focus
+    // after it (docs/spec/native-surfaces.md#image-regions); the focus report of a region that takes the first responder as it
+    // shows comes this way.
+    const focus = actions.filter((action) => action.type === "focus").at(-1);
+    changeInput(({ log, focused }) => ({
+      focused: focus === undefined ? focused : focus.focused === true,
       transactions: sequence,
       preedit,
       actions,
