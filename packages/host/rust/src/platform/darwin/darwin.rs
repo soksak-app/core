@@ -83,6 +83,7 @@ mod shapes;
 mod stall_sample;
 #[path = "standard_error.rs"]
 mod standard_error;
+pub(crate) use standard_error::end_on_exception;
 #[path = "system.rs"]
 mod system;
 #[path = "termination.rs"]

@@ -47,7 +47,9 @@ percent-encoding = "2"
 [target.'cfg(target_os = "macos")'.dependencies]
 libc = "0.2"
 mach2 = "0.7"
-objc2 = "0.6"
+# exception catches an Objective-C exception where a thread, a main-thread step or a blocking task of the host starts, so the
+# process ends with its record (platform.rs end_on_exception).
+objc2 = { version = "0.6", features = ["exception"] }
 block2 = "0.6"
 signal-hook = "0.3"
 

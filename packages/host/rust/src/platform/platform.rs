@@ -1275,10 +1275,20 @@ pub enum OutputPipe {
 /// Ends the reads of an output pipe that `exit_output` made.
 pub type OutputEnd = Box<dyn Fn() + Send + Sync>;
 
-/// Returns the implementation of the current operating system.
 /// What `native_event_wake` returns.
 pub type NativeEventWait = Box<dyn FnMut() -> Result<(), String> + Send>;
 
+/// Runs body where a thread, a main-thread step or a blocking task of the host starts. On macOS an Objective-C exception that
+/// leaves body ends the process with the record of an uncaught exception (docs/spec/diagnostics.md); the other platforms throw
+/// no such exception.
+pub fn end_on_exception<T>(body: impl FnOnce() -> T) -> T {
+    #[cfg(target_os = "macos")]
+    return darwin::end_on_exception(body);
+    #[cfg(not(target_os = "macos"))]
+    body()
+}
+
+/// Returns the implementation of the current operating system.
 pub fn current() -> Result<&'static dyn Platform, String> {
     #[cfg(target_os = "macos")]
     return Ok(&darwin::Darwin);

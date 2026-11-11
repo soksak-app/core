@@ -304,15 +304,20 @@ func (s *Session) Open() error {
 	if err := framework.SetMenu(menu); err != nil {
 		return err
 	}
-	// The end of a layout transaction ends the waits inside the presentation request of its window
-	// (docs/spec/native-surfaces.md#layout-transaction).
+	host.watchLayoutEnds()
+	s.main = host.newWindow("main", "/")
+	return nil
+}
+
+// watchLayoutEnds makes the end of each layout transaction end the waits inside the presentation request of its window
+// (docs/spec/native-surfaces.md#layout-transaction). The native observer registers only on the UI thread, and the mygo host runs
+// Open on a worker, so the watch is a step of the main thread.
+func (h *Host) watchLayoutEnds() {
 	mainThreadStep(func() {
-		if err := system.WatchLayoutEnds(host.layoutEnded); err != nil {
+		if err := system.WatchLayoutEnds(h.layoutEnded); err != nil {
 			LogError("surface layout", err)
 		}
 	})
-	s.main = host.newWindow("main", "/")
-	return nil
 }
 
 // Started returns the steps that run when the application started, in order. A framework adapter registers each as a listener of

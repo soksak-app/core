@@ -134,11 +134,25 @@ static void writeFatalLine(const char *text) {
     free(line);
 }
 
-static void uncaughtException(NSException *exception) {
-    NSString *escaped = [[NSString stringWithFormat:@"uncaught exception %@: %@", exception.name, exception.reason]
+// Writes the record of an exception, so the abort that follows adds no second record.
+static void writeExceptionRecord(NSString *name, NSString *reason) {
+    NSString *escaped = [[NSString stringWithFormat:@"uncaught exception %@: %@", name, reason]
         stringByReplacingOccurrencesOfString:@"\n" withString:@"\\n"];
     writeFatalLine(escaped.UTF8String);
     exceptionReported = 1;
+}
+
+static void uncaughtException(NSException *exception) { writeExceptionRecord(exception.name, exception.reason); }
+
+void sp_log_fatal_exception(void *thrown) {
+    id object = (id)thrown;
+    if ([object isKindOfClass:NSException.class]) {
+        uncaughtException((NSException *)object);
+    } else {
+        // A thrown object that is not an NSException has no name and no reason; its class and its description take their places.
+        writeExceptionRecord(object ? NSStringFromClass([object class]) : @"nil", object ? [object description] : @"nil");
+    }
+    abort();
 }
 
 void sp_log_install_fatal_handlers(void) {

@@ -401,14 +401,17 @@ impl AppHandle {
         }
     }
 
-    /// Runs task on the blocking threads of the asynchronous runtime and returns its value.
+    /// Runs task on the blocking threads of the asynchronous runtime and returns its value. An Objective-C exception that
+    /// leaves task ends the process with its record (`platform::end_on_exception`).
     pub async fn spawn_blocking<T: Send + 'static>(
         &self,
         task: impl FnOnce() -> T + Send + 'static,
     ) -> Result<T> {
         let value = self
             .framework
-            .spawn_blocking(Box::new(move || Box::new(task()) as Box<dyn Any + Send>))
+            .spawn_blocking(Box::new(move || {
+                Box::new(crate::platform::end_on_exception(task)) as Box<dyn Any + Send>
+            }))
             .await?;
         value
             .downcast::<T>()
@@ -416,10 +419,10 @@ impl AppHandle {
             .map_err(|_| Error::from("the blocking task returned a value of another type"))
     }
 
-    /// Runs task on the blocking threads of the asynchronous runtime without waiting for it.
+    /// Runs task on the blocking threads of the asynchronous runtime without waiting for it, as `spawn_blocking` runs it.
     pub fn spawn_detached(&self, task: impl FnOnce() + Send + 'static) {
         drop(self.framework.spawn_blocking(Box::new(move || {
-            task();
+            crate::platform::end_on_exception(task);
             Box::new(()) as Box<dyn Any + Send>
         })));
     }
@@ -499,9 +502,12 @@ pub trait Manager {
         state
     }
 
-    /// Runs task as a step of the main thread.
+    /// Runs task as a step of the main thread. An Objective-C exception that leaves task ends the process with its record
+    /// (`platform::end_on_exception`).
     fn post(&self, task: impl FnOnce() + Send + 'static) -> Result<()> {
-        self.app_handle().framework.post(Box::new(task))
+        self.app_handle()
+            .framework
+            .post(Box::new(move || crate::platform::end_on_exception(task)))
     }
 
     /// The windows that are open, by label.

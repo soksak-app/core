@@ -36,6 +36,18 @@ func TestALogicalLengthOfThePortIsTheNearestIntegerOfWails(t *testing.T) {
 	}
 }
 
+// Before the run the host runs on the main goroutine, which Wails locks to the main thread, and the step of Wails reads the
+// platform of the application, which only the run sets: a step that Session.Open took before the run ended the process with a nil
+// pointer before the host wrote its endpoint.
+// contract: application.framework.step-before-the-run-is-the-call
+func TestAStepOfWailsBeforeTheRunIsTheCallOfItsTask(t *testing.T) {
+	ran := false
+	adapter.Framework{}.Step(func() { ran = true })
+	if !ran {
+		t.Fatal("the step before the run returned before its task ran")
+	}
+}
+
 // contract: application.framework.window-events-are-port-events
 func TestEachWindowEventOfTheFrontendIsAnEventOfWails(t *testing.T) {
 	for event, want := range map[host.WindowEvent]events.WindowEventType{
