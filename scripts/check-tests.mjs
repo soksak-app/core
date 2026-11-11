@@ -617,6 +617,18 @@ const FEATURE_LINKS = [
     levels: ["native", "unit"],
   },
   {
+    id: "F741",
+    implementation: [
+      { file: "native/darwin/tests/support/run_until.h", symbol: "static inline void sp_run_until(const char *what, BOOL (^done)(void)) {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/capture_cycles_test.m", id: "the window server shows the capture window" },
+      { file: "native/darwin/tests/capture_test.m", id: "native capture acceptance" },
+    ],
+    expected: "A wait of a native check dispatches the queued application events before it judges its condition, so a change of a window that the window server reports by an event, such as its occlusion state, ends the wait.",
+    levels: ["native"],
+  },
+  {
     id: "F738",
     implementation: [
       { file: "native/darwin/src/application_log.m", symbol: "void sp_log_fatal_exception(void *thrown) {" },
