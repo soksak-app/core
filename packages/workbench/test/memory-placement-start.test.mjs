@@ -38,7 +38,6 @@ test("a placement takes the seat of an unloaded surface out of its record", { ti
 // The start of the page settles the readiness of the memory saver on every path: each top-level wait of the start after the
 // readiness promise exists runs inside the block whose failure rejects it, so a start step that fails leaves no drawn placement
 // waiting for a readiness that never comes.
-// contract: workbench.page-start.memory-readiness-settles
 test("every wait of the page start after the memory readiness exists can reject that readiness", () => {
   const page = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   const lines = page.split("\n");

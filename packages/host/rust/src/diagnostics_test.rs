@@ -628,7 +628,7 @@ fn step_period_follows_the_refresh_rate_and_assumes_none() {
     }
 }
 
-// contract: diagnostics.drag.native-delivers-pointer-gesture
+// contract: diagnostics.drag.page-legs-follow-the-refresh-rate
 #[test]
 fn send_legs_paces_each_step_by_the_refresh_rate_read_at_that_step() {
     let rates = RefCell::new(std::collections::VecDeque::from([
@@ -679,6 +679,17 @@ fn send_legs_paces_each_step_by_the_refresh_rate_read_at_that_step() {
         [false, true, false, true],
         "the last step of each leg"
     );
+    for (index, step) in sends.borrow().iter().enumerate() {
+        let (fraction, last) = *step.as_ref().expect("a step");
+        assert!(
+            if last {
+                fraction == 1.0
+            } else {
+                fraction > 0.0 && fraction < 1.0
+            },
+            "step {index} reached {fraction} of its leg with last {last}"
+        );
+    }
 
     let rates = RefCell::new(std::collections::VecDeque::from([Some(120), None]));
     let now = Cell::new(Duration::ZERO);

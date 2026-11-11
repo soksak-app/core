@@ -5,7 +5,6 @@ import { callEvent, observeHostCalls, settlingCalls } from "../host-calls.js";
 
 // A reloading page sends no call after the reload request, and each such call ends at once with its refusal instead of
 // staying pending: nothing that the page asks after its end is swallowed without an answer (docs/spec/native-host.md#page-reload).
-// contract: workbench.page-reload.refuses-later-calls
 test("settling waits for the calls already sent and refuses every later call at once", { timeout: 1000 }, async () => {
   const sent = [];
   const answers = [];

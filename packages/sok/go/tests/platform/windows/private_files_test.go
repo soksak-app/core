@@ -12,7 +12,6 @@ import (
 	_ "github.com/soksak-app/core/packages/sok/go/src/platform/windows"
 )
 
-// contract: cli.private-files.operations-are-unsupported-on-windows
 func TestPrivateFileOperationsFailExplicitlyWithoutCreatingFiles(t *testing.T) {
 	current, err := platform.Current()
 	if err != nil {

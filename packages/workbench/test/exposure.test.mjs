@@ -309,7 +309,6 @@ test("a view rectangle uses the selected surface's current applied origin once",
 });
 
 
-// contract: exposure.relay.one-answerer-per-request
 test("a view mark is owned by its mount: the dispose of an earlier mount of the same surface keeps the view's mark", async () => {
   const request = { id: 9, surface: "tab-mark", method: "status.get", params: { name: "probe.lines" } };
   const earlier = markViewSurface("tab-mark");

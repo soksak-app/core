@@ -19,7 +19,7 @@ func TestEndpointClosesOnInvalidJSON(t *testing.T) {
 fn invalid_json_closes_connection() {
 ```
 
-테스트 함수 하나는 쉼표로 나눈 여러 사례를 선언할 수 있다. 열다섯 개 선언 경로에서 선택된 테스트 함수는 사례를 하나 이상 선언한다: `packages/host/go/tests/`, `packages/host/go/src/*_test.go`, `packages/host/wailsv3/tests/`, `packages/host/wailsv3/src/*_test.go`, `packages/host/mygo/tests/`, `packages/host/mygo/src/*_test.go`, `packages/host/mygo/benchmark/`, `packages/sok/go/tests/`, `packages/sok/go/src/*_test.go`, `packages/host/rust/tests/`, `packages/host/rust/src/`, `packages/host/tauriv2/tests/`, `packages/host/tauriv2/src/`, `packages/sok/rust/tests/`, `packages/sok/rust/src/`. 테스트는 단언이 사례의 결과를 확인할 때만 그 사례를 선언한다. Go 선언 inventory는 현재 `GOOS`와 `GOARCH`에서 host-contract의 각 설정에 대해 `go list`가 선택한 `_test.go` 파일의 합집합이다. 모든 설정에서 제외된 파일은 이 platform의 host-contract inventory에 포함하지 않는다. 공유 계약 텍스트는 어느 패키지도 소유하지 않는 `docs/spec/cases`에 있다(manifest 사례표와 log-contract fixture). 테스트는 거기서 읽고, `make check-boundaries`는 핵심 패키지의 테스트가 다른 핵심 패키지의 경로를 읽는 것을 거부한다.
+테스트 함수 하나는 쉼표로 나눈 여러 사례를 선언할 수 있다. 열다섯 개 선언 경로에서 선택된 테스트 함수는 사례를 하나 이상 선언한다: `packages/host/go/tests/`, `packages/host/go/src/*_test.go`, `packages/host/wailsv3/tests/`, `packages/host/wailsv3/src/*_test.go`, `packages/host/mygo/tests/`, `packages/host/mygo/src/*_test.go`, `packages/host/mygo/benchmark/`, `packages/sok/go/tests/`, `packages/sok/go/src/*_test.go`, `packages/host/rust/tests/`, `packages/host/rust/src/`, `packages/host/tauriv2/tests/`, `packages/host/tauriv2/src/`, `packages/sok/rust/tests/`, `packages/sok/rust/src/`. 테스트는 단언이 사례의 결과를 확인할 때만 그 사례를 선언한다. Go 선언 inventory는 현재 `GOOS`와 `GOARCH`에서 host-contract의 각 설정에 대해 `go list`가 선택한 `_test.go` 파일의 합집합이다. 모든 설정에서 제외된 파일은 이 platform의 host-contract inventory에 포함하지 않는다. 시험 목록 검사(`scripts/check-tests.mjs`, `make check-tests`)는 `packages/host/`와 `packages/sok/` 아래 `_test.go`와 `.rs` 파일의 선언을 모든 platform에 대해 source에서 읽는다. 이 검사는 run 전에 돌고, 검사하는 기계의 build가 빼는 파일이라도 계약 사례 표에 없는 사례를 선언하면 실패한다. 그래서 사례가 없는 보류 platform의 시험은 사례를 선언하지 않는다. 공유 계약 텍스트는 어느 패키지도 소유하지 않는 `docs/spec/cases`에 있다(manifest 사례표와 log-contract fixture). 테스트는 거기서 읽고, `make check-boundaries`는 핵심 패키지의 테스트가 다른 핵심 패키지의 경로를 읽는 것을 거부한다.
 
 ## 검사
 
@@ -215,6 +215,7 @@ fn invalid_json_closes_connection() {
 | `diagnostics.surface-hold.released-at-connection-close` | `diagnostics.surface.hold`를 요청한 endpoint 연결이 닫히면, 다른 연결이 그 표면의 더 나중 hold를 요청하지 않았으면 호스트는 hold의 창에 event `diagnostics-surface-released` `{surface}`를 보낸다. | all |
 | `diagnostics.native-wait.ends-by-its-event-or-its-end` | `diagnostics.native.objects`, `diagnostics.process.exit`나 capture 동작의 대기는 기다리는 event로 끝나거나, 그 요청의 endpoint 연결의 닫힘, 그 창의 닫힘, 그 page의 끝 가운데 먼저 오는 것으로 끝나며, 어떤 제한도 그것을 끝내지 않는다. 끝난 대기는 그 끝(`the endpoint connection of the request closed`, `the window closed`, `the page of the window ended`)을 마지막으로 본 수와 함께 답하고, 다른 창의 끝은 그 대기를 끝내지 않으며, capture 동작의 token은 앞 동작의 token보다 크고, 돌아온 동작의 끝은 아무것도 끝내지 않는다. | all |
 | `diagnostics.drag.page-receives-every-step` | 메인 페이지의 드래그는 드래그 요청이 끝난 뒤에도 제스처의 모든 단계를 `diagnostics-tick`으로 받는다. | wailsv3, tauriv2 only: mygo host에는 메인 페이지가 없다 |
+| `diagnostics.drag.page-legs-follow-the-refresh-rate` | 메인 페이지 드래그의 각 단계는 `diagnostics-tick` 전에 display period 하나를 기다린다. period 는 그 단계에서 읽은 `1 / host.window.refreshRate` 이므로, 드래그 중에 rate 가 바뀌면 그 뒤 단계가 바뀐다. 각 leg 는 시작부터 드래그의 시계가 `ms` 만큼 흐를 때까지 돌고, 마지막 단계만 fraction 1 과 함께 `last` 를 싣는다. refresh rate 가 있는 display 에 없는 창은 tick `{error: "the window is on no display with a refresh rate"}` 하나를 보내고, 기다리지 않고 드래그를 끝낸다. | wailsv3, tauriv2 only: mygo host에는 메인 페이지가 없다 |
 | `diagnostics.crash.report-is-announced-once` | crash report 폴더에 있는 애플리케이션의 crash report는 level `warn`의 event `host.crash.found`(`path`, `pid`, header의 `time`)이다. 두 번째 lookup은 아무것도 알리지 않고, 나중에 생긴 report는 다음 lookup만 알린다. | all |
 | `diagnostics.crash.report-belongs-to-the-application` | 파일 이름이 다른 이름으로 시작하거나, header가 다른 애플리케이션(애플리케이션 이름으로 시작하는 이름 포함)을 가리키거나, 확장자가 `.ips`가 아닌 report는 알리지 않는다. | all |
 | `diagnostics.crash.lookup-is-bounded` | lookup 한 번은 파일 이름 기준으로 애플리케이션의 최신 report 64개만 알리고 그보다 오래된 것은 알리지 않는다. | all |
@@ -1361,7 +1362,7 @@ fn invalid_json_closes_connection() {
 
 ## Workbench cases
 
-Wails와 Tauri 호스트의 메인 페이지와 mygo 호스트의 workbench는 각자 project data의 view call에 답한다. 그래서 한 동작의 page 시험과 mygo 시험은 시험 바로 위의 줄 `// contract: <id>`로 한 사례를 선언한다. 시험 목록 검사(`scripts/check-tests.mjs`)는 한쪽에 시험이 없는 사례, `packages/workbench-mygo/tests/`의 시험이 선언한 표에 없는 사례, 시험에 붙지 않은 선언에서 실패한다.
+Wails와 Tauri 호스트의 메인 페이지와 mygo 호스트의 workbench는 각자 project data의 view call에 답한다. 그래서 한 동작의 page 시험과 mygo 시험은 시험 바로 위의 줄 `// contract: <id>`로 한 사례를 선언한다. 시험 목록 검사(`scripts/check-tests.mjs`)는 한쪽에 시험이 없는 사례, `packages/workbench-mygo/tests/`의 시험이 선언한 표에 없는 사례, `packages/workbench/test/`의 시험이 선언한 이 표에도 계약 사례 표에도 없는 사례, 시험에 붙지 않은 선언에서 실패한다. page 에만 있는 동작은 사례가 아니며 그 시험은 사례를 선언하지 않는다.
 
 | 층 | 이 사례의 코드 | 시험 |
 | --- | --- | --- |

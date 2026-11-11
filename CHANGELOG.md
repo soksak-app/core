@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F753: The test inventory check fails a host or `sok` test, of any platform, that declares a contract case that the host contract does not have, and a page test that declares a case of neither table; the pacing of the legs of a page drag by the refresh rate read at each step is the contract case `diagnostics.drag.page-legs-follow-the-refresh-rate` of the Wails and Tauri hosts.
 - F755: The failure of a window check for a change shown late names each silence of the display link in the wait as a busy main thread or as display refreshes that did not reach the window, by the refresh period of the display, and names the commit time of each layout committed in the wait; the recording keeps those layouts in `layouts.json`.
 - F757: A frame of the mygo workbench opens no layout while the host has not answered the cancel of the layout that an earlier frame opened and gave up, so the frame after a keyboard call no longer fails with a layout that no preparation took over; the frame after the answer of the cancel places the lines.
 - F733: The library of the mygo workbench lays its project cards out in a grid that fills its scroll container, so under the classic scroller style the cards give the bar its room and the panes of each preview, drawn and reported in `core.library`, stand where the narrower card lays them out.

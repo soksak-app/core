@@ -5,7 +5,6 @@ mod support;
 
 use support::run;
 
-// contract: cli.process-wait.unsupported-on-linux
 #[test]
 fn process_wait_reports_unsupported_platform() {
     let pid = std::process::id().to_string();

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
-import { auditWorkbenchCases, auditCompletedFeatureLinks, auditFixedTemporaryPaths, auditJoinedFailures, auditExecutableLanguageCoverage, auditFailureMatrix, auditFeatureLinks, auditGoFailurePropagation, auditInventory, auditJsFailurePropagation, auditNativeFailurePropagation, auditOwnership, inventorySummary, auditRustFailurePropagation, discoverInventory, packageIndex, repositoryFiles, auditRequirementCoverage, readRequirementScope, requirementSummary } from "../check-tests.mjs";
+import { auditDeclaredContractCases, auditWorkbenchCases, auditCompletedFeatureLinks, auditFixedTemporaryPaths, auditJoinedFailures, auditExecutableLanguageCoverage, auditFailureMatrix, auditFeatureLinks, auditGoFailurePropagation, auditInventory, auditJsFailurePropagation, auditNativeFailurePropagation, auditOwnership, inventorySummary, auditRustFailurePropagation, discoverInventory, packageIndex, repositoryFiles, auditRequirementCoverage, readRequirementScope, requirementSummary } from "../check-tests.mjs";
 
 const files = repositoryFiles();
 
@@ -657,6 +657,32 @@ test("a mygo test of a case that the table does not have, and a declaration on n
   ]), [
     "packages/workbench/test/a.test.mjs:1: the declaration of area.shared is not attached to a test",
     "packages/workbench-mygo/tests/a_test.go:1: workbench case area.other is not in docs/spec/host-contract.md",
+  ]);
+});
+
+test("a page test of a case that neither table has fails", () => {
+  assert.deepEqual(auditWorkbenchCases(WORKBENCH_SPEC, [
+    { path: "packages/workbench/test/a.test.mjs", text: "// contract: host.case, page.only\ntest(\"page\", () => {});\n// contract: area.shared\ntest(\"shared\", () => {});\n" },
+    { path: "packages/workbench-mygo/tests/a_test.go", text: "// contract: area.shared\nfunc TestShared(t *testing.T) {\n}\n" },
+  ]), ["packages/workbench/test/a.test.mjs:1: contract case page.only is not in docs/spec/host-contract.md"]);
+});
+
+// A declaration is read from the source on every platform, also from a file that the build of the checking machine leaves out,
+// so a declaration of a case that the specification lacks fails before any host run.
+test("a host or sok test of every platform declares only cases of the contract table", () => {
+  assert.deepEqual(auditDeclaredContractCases(WORKBENCH_SPEC, [
+    { path: "packages/host/go/src/a_test.go", text: "// contract: host.case\nfunc TestA(t *testing.T) {}\n" },
+    { path: "packages/host/go/src/b_test.go", text: "// contract: host.missing\nfunc TestB(t *testing.T) {}\n" },
+    { path: "packages/sok/go/tests/platform/windows/c_test.go", text: "//go:build windows\n\n// contract: cli.held\nfunc TestC(t *testing.T) {}\n" },
+    { path: "packages/sok/rust/tests/platform/linux/d.rs", text: "#![cfg(target_os = \"linux\")]\n// contract: host.case, cli.linux\n#[test]\nfn d() {}\n" },
+    { path: "packages/host/rust/src/e.rs", text: "// contract: area.shared\n#[test]\nfn e() {}\n" },
+    { path: "packages/host/go/src/host.go", text: "// contract: not.a.test\n" },
+    { path: "packages/workbench/view-calls.js", text: "// contract: prose of a source\n" },
+  ]), [
+    "packages/host/go/src/b_test.go:1: contract case host.missing is not in docs/spec/host-contract.md",
+    "packages/sok/go/tests/platform/windows/c_test.go:3: contract case cli.held is not in docs/spec/host-contract.md",
+    "packages/sok/rust/tests/platform/linux/d.rs:2: contract case cli.linux is not in docs/spec/host-contract.md",
+    "packages/host/rust/src/e.rs:1: contract case area.shared is not in docs/spec/host-contract.md",
   ]);
 });
 

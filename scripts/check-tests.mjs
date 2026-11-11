@@ -15404,6 +15404,44 @@ export function auditCompletedFeatureLinks(features, checklistSource = readFileS
     .map((id) => `${id}: completed capability has no feature link`);
 }
 
+/** The case ids of the table of one section of docs/spec/host-contract.md, or none when the section is missing. */
+function sectionCases(specification, title) {
+  const text = `\n${specification}`;
+  const start = text.indexOf(`\n## ${title}\n`);
+  if (start < 0) return [];
+  const next = text.indexOf("\n## ", start + 1);
+  const section = text.slice(start, next < 0 ? undefined : next);
+  return [...section.matchAll(/^\| `([^`]+)` \|/gm)].map((match) => match[1]);
+}
+
+// The test sources of the hosts and of sok that declare contract cases (docs/spec/host-contract.md#declaration), read on every
+// platform: a file that the build of the checking machine leaves out still declares only cases of the table.
+const CONTRACT_DECLARATION_SOURCES = [
+  { directory: "packages/host/", file: /(?:_test\.go|\.rs)$/ },
+  { directory: "packages/sok/", file: /(?:_test\.go|\.rs)$/ },
+];
+
+/**
+ * Checks that every case that a host or sok test declares is a case of the table "Contract cases". The host contract run reads
+ * only the tests that the build of the checking machine selects; this check reads the source of every platform, before any run.
+ */
+export function auditDeclaredContractCases(specification, files) {
+  const SPEC = "docs/spec/host-contract.md";
+  const cases = new Set(sectionCases(specification, "Contract cases"));
+  const errors = [];
+  for (const { path, text } of files) {
+    if (!CONTRACT_DECLARATION_SOURCES.some(({ directory, file }) => path.startsWith(directory) && file.test(path))) continue;
+    text.split("\n").forEach((line, index) => {
+      const declaration = line.match(/^\s*\/\/\s*contract:\s*(.*)$/);
+      if (!declaration) return;
+      for (const id of declaration[1].split(",").map((item) => item.trim()).filter(Boolean)) {
+        if (!cases.has(id)) errors.push(`${path}:${index + 1}: contract case ${id} is not in ${SPEC}`);
+      }
+    });
+  }
+  return errors;
+}
+
 // The tests of the workbench cases of the two workbenches, which the declaration line of each test names (docs/spec/host-contract.md#workbench-cases).
 const WORKBENCH_CASE_SIDES = [
   { side: "page", directory: "packages/workbench/test/", file: /\.test\.mjs$/, test: /^\s*(?:await\s+)?test\(/ },
@@ -15418,9 +15456,8 @@ export function auditWorkbenchCases(specification, files) {
   const SPEC = "docs/spec/host-contract.md";
   const start = specification.indexOf("\n## Workbench cases\n");
   if (start < 0) return [`${SPEC} has no "Workbench cases" section`];
-  const next = specification.indexOf("\n## ", start + 1);
-  const section = specification.slice(start, next < 0 ? undefined : next);
-  const cases = [...section.matchAll(/^\| `([^`]+)` \|/gm)].map((match) => match[1]);
+  const cases = sectionCases(specification, "Workbench cases");
+  const hostCases = sectionCases(specification, "Contract cases");
   const declared = new Map(WORKBENCH_CASE_SIDES.map(({ side }) => [side, new Set()]));
   const errors = [];
   for (const { path, text } of files) {
@@ -15433,6 +15470,7 @@ export function auditWorkbenchCases(specification, files) {
       for (const id of declaration[1].split(",").map((item) => item.trim())) {
         if (!cases.includes(id)) {
           if (side.side === "mygo") errors.push(`${path}:${index + 1}: workbench case ${id} is not in ${SPEC}`);
+          else if (!hostCases.includes(id)) errors.push(`${path}:${index + 1}: contract case ${id} is not in ${SPEC}`);
           continue;
         }
         if (side.test.test(lines[index + 1])) declared.get(side.side).add(id);
@@ -15475,6 +15513,9 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
     errors.push(`${adapterManifestFile}: cannot read language adapter cases: ${error.message}`);
   }
   errors.push(...auditCompletedFeatureLinks(featureLinks));
+  errors.push(...auditDeclaredContractCases(readFileSync(`${ROOT}docs/spec/host-contract.md`, "utf8"),
+    repositoryFiles().filter((path) => CONTRACT_DECLARATION_SOURCES.some(({ directory, file }) => path.startsWith(directory) && file.test(path)))
+      .map((path) => ({ path, text: readFileSync(`${ROOT}${path}`, "utf8") }))));
   errors.push(...auditWorkbenchCases(readFileSync(`${ROOT}docs/spec/host-contract.md`, "utf8"),
     repositoryFiles().filter((path) => WORKBENCH_CASE_SIDES.some(({ directory, file }) => path.startsWith(directory) && file.test(path)))
       .map((path) => ({ path, text: readFileSync(`${ROOT}${path}`, "utf8") }))));
