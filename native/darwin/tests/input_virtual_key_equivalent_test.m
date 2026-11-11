@@ -69,19 +69,17 @@ static NSMenuItem *item(NSString *title, SEL action, NSString *key) {
     return made;
 }
 
-// Runs the event queue of the application until the key up of the key named name reaches the first responder of window. Every
-// key of the checks ends with its key up, and a key down or an equivalent of the key comes before its key up, so what the key
-// does is complete when its key up is recorded.
-static void awaitKeyUp(NSWindow *window, NSString *name) {
-    Clipboard *clipboard = (Clipboard *)window.firstResponder;
-    NSString *up = [@"keyUp:" stringByAppendingString:name];
-    eventWait([NSString stringWithFormat:@"the key up of %@ reaches the clipboard view", name], ^BOOL {
-        return [clipboard.calls containsObject:up];
-    });
+// Runs the main queue until a marker block queued after every block already on it has run.
+static void drainMainQueue(NSString *what) {
+    __block BOOL passed = NO;
+    dispatch_async(dispatch_get_main_queue(), ^{ passed = YES; });
+    eventWait(what, ^BOOL { return passed; });
 }
 
-// Presses and releases key with modifiers on window and lets the event queue of the application run until its key up arrives.
-// Returns the records of the native library that the key writes.
+// Presses and releases key with modifiers on window. A key that does not wait is delivered within its call, and the main queue
+// runs once for the blocks that it queued. -[NSApplication sendEvent:] gives a key up with Command to no window while the
+// application has a key window, as for a person's key, so a key with Command records no key up. Returns the records of the
+// native library that the key writes.
 static NSString *press(NSWindow *window, const char *key, unsigned modifiers) {
     __block BOOL down = NO, up = NO;
     NSString *records = capturedRecords(^{
@@ -89,7 +87,7 @@ static NSString *press(NSWindow *window, const char *key, unsigned modifiers) {
         up = sp_input_key(window, key, NULL, modifiers, false) == SP_INPUT_DELIVERED;
     });
     check(down && up, [NSString stringWithFormat:@"the key %s with modifiers %u is delivered", key, modifiers]);
-    if (down && up) awaitKeyUp(window, @(key));
+    drainMainQueue([NSString stringWithFormat:@"the blocks that the key %s queued run", key]);
     return records;
 }
 
@@ -139,7 +137,7 @@ int main(void) { @autoreleasepool {
     // Command+C runs copy: through the Copy item, and the key does not also reach the view as a key down.
     NSString *records = press(window, "c", 8);
     check(sp_input_virtual_is(window), @"the window of the key is the virtual key window");
-    check([clipboard.calls isEqual:@[@"copy:Copy", @"keyUp:c"]],
+    check([clipboard.calls isEqual:@[@"copy:Copy"]],
         [NSString stringWithFormat:@"Command+C runs copy: once through the Copy item (calls %@)", clipboard.calls]);
     check(recordsEquivalent(records, YES) && recordsHeld(records, NO),
         [NSString stringWithFormat:@"the key down record states the equivalent and that the key did not wait (records %@)", records]);
@@ -147,14 +145,14 @@ int main(void) { @autoreleasepool {
     // Command+V runs paste: through the Paste item.
     [clipboard.calls removeAllObjects];
     records = press(window, "v", 8);
-    check([clipboard.calls isEqual:@[@"paste:Paste", @"keyUp:v"]],
+    check([clipboard.calls isEqual:@[@"paste:Paste"]],
         [NSString stringWithFormat:@"Command+V runs paste: once through the Paste item (calls %@)", clipboard.calls]);
     check(recordsEquivalent(records, YES), [NSString stringWithFormat:@"the key down record states the equivalent (records %@)", records]);
 
     // A key not owned by the menu reaches the equivalent of the view.
     [clipboard.calls removeAllObjects];
     records = press(window, "k", 8);
-    check([clipboard.calls isEqual:@[@"equivalent:k", @"keyUp:k"]],
+    check([clipboard.calls isEqual:@[@"equivalent:k"]],
         [NSString stringWithFormat:@"Command+K runs the equivalent of the view (calls %@)", clipboard.calls]);
     check(recordsEquivalent(records, YES), [NSString stringWithFormat:@"the key down record states the equivalent (records %@)", records]);
 
@@ -164,7 +162,7 @@ int main(void) { @autoreleasepool {
     check([edit itemWithTitle:@"Select All"] != nil, @"the collision has an actual Select All item");
     [clipboard.calls removeAllObjects];
     records = press(window, "a", 8);
-    check([clipboard.calls isEqual:@[@"selectAll:Select All", @"keyUp:a"]],
+    check([clipboard.calls isEqual:@[@"selectAll:Select All"]],
         [NSString stringWithFormat:@"an enabled native-menu equivalent owns the key before a claiming view (calls %@)", clipboard.calls]);
     // Disabled menu entries do not own an equivalent; NSMenu performs the
     // enabled-state decision and the view still gets its unclaimed shortcut.
@@ -173,7 +171,7 @@ int main(void) { @autoreleasepool {
     selectAll.enabled = NO;
     [clipboard.calls removeAllObjects];
     records = press(window, "a", 8);
-    check([clipboard.calls isEqual:@[@"equivalent:a", @"keyUp:a"]],
+    check([clipboard.calls isEqual:@[@"equivalent:a"]],
         [NSString stringWithFormat:@"a disabled menu equivalent leaves the key to the view (calls %@)", clipboard.calls]);
     selectAll.enabled = YES;
     edit.autoenablesItems = YES;
@@ -189,17 +187,18 @@ int main(void) { @autoreleasepool {
             @"the held key Command+A is kept");
         check(clipboard.calls.count == 0, [NSString stringWithFormat:@"a held key waits for its turn (calls %@)", clipboard.calls]);
         sp_window_modal_hold_end(window);
-        awaitKeyUp(window, @"a");
+        eventWait(@"the held Command+A runs its equivalent", ^BOOL { return clipboard.calls.count > 0; });
+        drainMainQueue(@"the blocks that the held key queued run");
     });
-    check([clipboard.calls isEqual:@[@"selectAll:Select All", @"keyUp:a"]],
+    check([clipboard.calls isEqual:@[@"selectAll:Select All"]],
         [NSString stringWithFormat:@"a held Command+A runs selectAll: once through the Select All item (calls %@)", clipboard.calls]);
     check(recordsEquivalent(records, YES) && recordsHeld(records, YES),
         [NSString stringWithFormat:@"the key down record states the equivalent and that the key waited (records %@)", records]);
 
-    // A Command key that no one takes as an equivalent reaches the first responder as a key down.
+    // A Command key that no one takes as an equivalent reaches the first responder as a key down, and its key up reaches no view.
     [clipboard.calls removeAllObjects];
     records = press(window, "j", 8);
-    check([clipboard.calls isEqual:@[@"keyDown:j", @"keyUp:j"]],
+    check([clipboard.calls isEqual:@[@"keyDown:j"]],
         [NSString stringWithFormat:@"Command+J reaches the first responder as a key down (calls %@)", clipboard.calls]);
     check(recordsEquivalent(records, NO), [NSString stringWithFormat:@"the key down record states no equivalent (records %@)", records]);
 
