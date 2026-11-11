@@ -1,10 +1,11 @@
 // Checks that the registered main webview and the view pages placed in a surface keep running animation frames without
 // hiding the document even when the window is occluded. Layout display and project commands wait for the next display
 // of the main webview, and capture and drawing confirmation of a surface wait for the rendering of the surface, so
-// they must finish in an occluded window too. The check does not activate the application.
+// they must finish in an occluded window too. The check does not activate the application, orders its window behind every
+// window, as an application that is not active shows one (docs/spec/hosts.md#launch-activation), and covers it with a window
+// of its own, so it judges only what holds whatever windows of a person cover the window.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
-#import "support/check_level.h"
 #import "window_facts.h"
 #import "webview_geometry.h"
 #import "private/webkit.h"
@@ -80,15 +81,8 @@ int main(void) { @autoreleasepool {
     page.navigationDelegate = surfaceNavigation;
     [main loadHTMLString:@"<!doctype html><body>main</body>" baseURL:nil];
     [page loadHTMLString:@"<!doctype html><body>surface</body>" baseURL:nil];
-    window.level = kCheckWindowLevel;
-    [window orderFrontRegardless];
-    eventWait(@"the main and surface pages load in a visible window", ^BOOL { return navigation.finished && surfaceNavigation.finished
-        && (window.occlusionState & NSWindowOcclusionStateVisible) != 0; });
-    afterActivityState(main);
-    afterActivityState(page);
-    check([visibility(main) isEqualToString:@"visible"], @"the uncovered document is visible");
-    check([visibility(page) isEqualToString:@"visible"], @"the uncovered surface document is visible");
-    check(sp_window_on_screen(window), @"the uncovered window is on screen");
+    [window orderBack:nil];
+    eventWait(@"the main and surface pages load", ^BOOL { return navigation.finished && surfaceNavigation.finished; });
 
     // AppKit moves a window with a title bar out of the Dock and menu bar areas, so the occluding window covers the
     // real window position.
@@ -96,8 +90,7 @@ int main(void) { @autoreleasepool {
         styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO] autorelease];
     [cover setReleasedWhenClosed:NO];
     cover.backgroundColor = NSColor.blackColor;
-    cover.level = kCheckWindowLevel;
-    [cover orderFrontRegardless];
+    [cover orderWindow:NSWindowAbove relativeTo:window.windowNumber];
     eventWait([NSString stringWithFormat:@"the covering window occludes the main window (window %@ on %@ level %ld, cover %@ on %@ level %ld visible %d)",
             NSStringFromRect(window.frame), NSStringFromRect(window.screen.frame), (long)window.level,
             NSStringFromRect(cover.frame), NSStringFromRect(cover.screen.frame), (long)cover.level, cover.isVisible],
@@ -116,8 +109,6 @@ int main(void) { @autoreleasepool {
 
     check(!NSApp.isActive, @"application stays inactive");
     [cover close];
-    eventWait(@"the window is visible after the cover closed", ^BOOL { return (window.occlusionState & NSWindowOcclusionStateVisible) != 0; });
-    check(sp_window_on_screen(window), @"the window is on screen again after the cover closed");
     [window orderOut:nil];
     eventWait(@"the ordered-out window is no longer visible", ^BOOL { return (window.occlusionState & NSWindowOcclusionStateVisible) == 0; });
     check(!sp_window_on_screen(window), @"the ordered-out window is not on screen");

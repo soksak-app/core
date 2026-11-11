@@ -1,14 +1,15 @@
 // A document region of a covered window shows its document while the window draws covered (sp_document_draw_covered), so a
-// still capture of the covered window holds the document as the capture before the cover does. The state is set once before
-// the cover and once while the window is already covered; a region created later in the window takes it; the region of another
-// window keeps hiding its document while covered; and after the state ends, the covered region hides its document again
-// (docs/spec/native-surfaces.md#document-regions). The check does not activate the application and focuses no window: the
-// windows and the cover are ordered front without activation.
+// still capture of the covered window holds the document as the capture before the cover does. The state is set once when
+// the window opens, before the cover, and once while the window is already covered; a region created later in the window takes
+// it; the region of another window keeps hiding its document while covered; and after the state ends, the covered region hides
+// its document again (docs/spec/native-surfaces.md#document-regions). The check does not activate the application and focuses
+// no window: the windows go behind every window, as an application that is not active shows one
+// (docs/spec/hosts.md#launch-activation), and the cover, a window of the check, goes directly above them, so the check judges
+// only what holds whatever windows of a person cover the windows.
 #import <Cocoa/Cocoa.h>
 #import <Network/Network.h>
 #import <QuartzCore/QuartzCore.h>
 #import <WebKit/WebKit.h>
-#import "support/check_level.h"
 #import "support/event_wait.h"
 #import "support/temporary_folder.h"
 #import "capture.h"
@@ -137,8 +138,7 @@ static Window openWindow(NSRect frame) {
     WKWebView *main = [[[WKWebView alloc] initWithFrame:window.contentView.bounds] autorelease];
     main.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     [window.contentView addSubview:main];
-    window.level = kCheckWindowLevel;
-    [window orderFrontRegardless];
+    [window orderBack:nil];
     void *surface = sp_surface_create(sp_window_set_main_webview(window, main));
     check(surface != NULL, @"a surface is created in the window");
     webviewSetFrame(surface, 0, 0, kWidth, kHeight);
@@ -237,48 +237,44 @@ int main(void) { @autoreleasepool {
     NSString *store = [folder stringByAppendingPathComponent:@"store"];
 
     Window first = openWindow(NSMakeRect(120, 120, kWidth, kHeight));
+    // Set when the window opens, before any region and before the cover. A window behind the windows of a person may be
+    // covered from its first frame, and WebKit hides the document of an occluded window after a delay, so the state set at
+    // the open makes the capture before the cover show the document whatever covers the window.
+    check(sp_document_draw_covered(first.window, true), @"the first window draws its document regions while covered");
     Window other = openWindow(NSMakeRect(200, 160, kWidth, kHeight));
     // The region of the first window spans x 40 to 280 and y 60 to 260 of the content view.
     WKWebView *region = openDocument(first, store, address, 40, 60, 220, 140);
     WKWebView *otherRegion = openDocument(other, store, address, 40, 60, 220, 140);
-    eventWait(@"the windows come on screen", ^BOOL { return !occluded(first.window) && !occluded(other.window); });
-    check([visibility(region) isEqual:@"visible"] && [visibility(otherRegion) isEqual:@"visible"],
-        @"the regions of the uncovered windows show their documents");
+    check([visibility(region) isEqual:@"visible"], @"the region of the window that draws covered shows its document");
     waitForPresentation(region);
     CGFloat scale = first.window.backingScaleFactor;
     // The window controls of a window that has just appeared can still change; the comparisons leave out the title bar, so the
     // capture before the cover follows the composite of the presented document.
-    Image uncovered = capture(first.window, folder, @"uncovered");
+    Image uncovered = capture(first.window, folder, @"before-cover");
     check(pixelAt(uncovered, scale, 160, 160) == kPageColor,
-        [NSString stringWithFormat:@"the uncovered capture holds the document (%06x)", pixelAt(uncovered, scale, 160, 160)]);
+        [NSString stringWithFormat:@"the capture before the cover holds the document (%06x)", pixelAt(uncovered, scale, 160, 160)]);
 
-    // Set before the cover. WebKit hides the document of an occluded window after a delay, and nothing reports that a document
-    // stayed shown. The first window is covered first and the other window after it, so the delay of the other region starts
-    // after the delay of the first region: when the other region has hidden its document, the first region is past its delay.
-    check(sp_document_draw_covered(first.window, true), @"the first window draws its document regions while covered");
-    NSWindow *firstCover = [[[NSWindow alloc] initWithContentRect:NSInsetRect(first.window.frame, -40, -40)
-        styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO] autorelease];
-    [firstCover setReleasedWhenClosed:NO];
-    firstCover.animationBehavior = NSWindowAnimationBehaviorNone;
-    firstCover.backgroundColor = NSColor.blackColor;
-    firstCover.level = kCheckWindowLevel;
-    [firstCover orderFrontRegardless];
-    eventWait(@"the first cover occludes the first window", ^BOOL { return occluded(first.window); });
-    check(!occluded(other.window), @"the first cover leaves a part of the other window visible");
+    // The cover is ordered directly above the first window, which stands in front of the other window, and spans both.
     NSWindow *cover = [[[NSWindow alloc] initWithContentRect:NSInsetRect(NSUnionRect(first.window.frame, other.window.frame), -40, -40)
         styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO] autorelease];
     [cover setReleasedWhenClosed:NO];
     cover.animationBehavior = NSWindowAnimationBehaviorNone;
     cover.backgroundColor = NSColor.blackColor;
-    cover.level = kCheckWindowLevel;
-    [cover orderFrontRegardless];
+    [cover orderWindow:NSWindowAbove relativeTo:first.window.windowNumber];
     eventWait(@"the cover occludes both windows", ^BOOL { return occluded(first.window) && occluded(other.window); });
     check(becomes(otherRegion, @"hidden"), @"the region of the other covered window hides its document");
+    // The first window was occluded no later than a region created now in the other covered window, which has no state and
+    // hides its document after the delay of a region created in a covered window; when that probe has hidden, the region of
+    // the first window is past its own delay.
+    WKWebView *delayProbe = openDocument(other, store, address, 300, 60, 20, 140);
+    check(becomes(delayProbe, @"hidden"), @"a region created in a covered window without the state hides its document");
+    sp_document_close(delayProbe);
     check([visibility(region) isEqual:@"visible"], @"the region of the covered window shows its document when the state was set before the cover");
     waitForPresentation(region);
     Image before = capture(first.window, folder, @"covered-set-before");
     check(sameContent(uncovered, before, scale), [NSString stringWithFormat:
-        @"the covered capture with the state set before the cover equals the uncovered capture (%@)", differences(uncovered, before, scale)]);
+        @"the covered capture with the state set before the cover equals the capture before the cover (%@)",
+        differences(uncovered, before, scale)]);
 
     // The state ends while the window is covered: the region hides its document and does not draw a change. A drawing document
     // runs the animation frame at the first refresh after the script and commits it, the frame is presented at the next refresh
@@ -302,7 +298,8 @@ int main(void) { @autoreleasepool {
     waitForPresentation(region);
     Image restored = capture(first.window, folder, @"covered-restored");
     check(sameContent(uncovered, restored, scale), [NSString stringWithFormat:
-        @"the covered capture with the state set during the cover equals the uncovered capture (%@)", differences(uncovered, restored, scale)]);
+        @"the covered capture with the state set during the cover equals the capture before the cover (%@)",
+        differences(uncovered, restored, scale)]);
 
     // A region created later in the covered window takes the state; the other window keeps hiding its region. A probe region
     // created after it in the other covered window, which has no state, hides its document after the delay of a region created
@@ -336,7 +333,6 @@ int main(void) { @autoreleasepool {
     check(sp_document_draw_covered(first.window, false), @"the state of the first window ends");
     check(!NSApp.isActive, @"the application stays inactive");
     [cover close];
-    [firstCover close];
     sp_document_close(later);
     sp_document_close(region);
     sp_document_close(otherRegion);

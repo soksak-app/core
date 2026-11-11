@@ -602,16 +602,13 @@ const FEATURE_LINKS = [
   {
     id: "F740",
     implementation: [
-      { file: "native/darwin/tests/support/check_level.h", symbol: "static const NSWindowLevel kCheckWindowLevel = NSPopUpMenuWindowLevel;" },
       { file: "docs/spec/hosts.md", symbol: "| H83 | `src/layout_watch_test.go` | none |" },
       { file: "docs/spec/hosts.md", symbol: "| H84 | none | `tests/fatal_exception_test.rs` |" },
     ],
     tests: [
-      { file: "native/darwin/tests/document_draw_covered_test.m", id: "the first cover leaves a part of the other window visible" },
-      { file: "native/darwin/tests/document_draw_covered_test.m", id: "the region of the other covered window hides its document" },
       { file: "scripts/test/platform/darwin/system/host-structure.test.mjs", id: "host structure audit reports a clean paired-host graph" },
     ],
-    expected: "The windows and covers of a native check that judges what the window server shows stand above the windows of other applications, so a window that another application brings forward does not change the occlusion state that the check reads, and each one-sided host test has a row of the allowed differences.",
+    expected: "Each one-sided host test has a row of the allowed differences; the order of the windows of the native checks that F740 raised is F756-7.",
     levels: ["native", "unit"],
   },
 
@@ -9284,6 +9281,24 @@ const FEATURE_LINKS = [
     ],
     expected: "host.window reports the display of a window and its place among the windows of its level, and the raise and the lower of a window order it to the front and the back of its level without changing the active application or the key window; no window check orders a window.",
     levels: ["unit"],
+  },
+  {
+    id: "F756-7",
+    implementation: [
+      { file: "native/darwin/tests/document_draw_covered_test.m", symbol: "[cover orderWindow:NSWindowAbove relativeTo:first.window.windowNumber];" },
+      { file: "native/darwin/tests/document_throttle_test.m", symbol: "[cover orderWindow:NSWindowAbove relativeTo:window.windowNumber];" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/document_draw_covered_test.m", id: "the region of the covered window shows its document when the state was set before the cover" },
+      { file: "native/darwin/tests/document_draw_covered_test.m", id: "the region of the other covered window hides its document" },
+      { file: "native/darwin/tests/document_throttle_test.m", id: "a covered region that draws covered again runs animation frames" },
+      { file: "native/darwin/tests/window_occlusion_test.m", id: "the covered window is not on screen" },
+      { file: "native/darwin/tests/document_viewport_marker_test.m", id: "the window server shows the inactive capture window" },
+      { file: "native/darwin/tests/capture_preparation_test.m", id: "the window server lists the ordered fixture window on screen with its bounds (%@)" },
+      { file: "native/darwin/tests/window_facts_test.m", id: "the observation of a hidden window reports that it is not on screen" },
+    ],
+    expected: "The native checks that judge what the window server shows order their windows behind every window, as an application that is not active shows one, cover a window with a window of their own ordered directly above it, draw covered where they capture a document, and judge only what holds whatever windows of a person cover their windows.",
+    levels: ["native"],
   },
   {
     id: "F160.31",

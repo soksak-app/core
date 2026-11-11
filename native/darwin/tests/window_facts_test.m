@@ -2,7 +2,6 @@
 // movement correctly. The check does not activate the application.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
-#import "support/check_level.h"
 #import "webview_geometry.h"
 #import "window_facts.h"
 #import "input_virtual.h"
@@ -325,8 +324,11 @@ int main(void) { @autoreleasepool {
         && [screens[0][@"scale"] doubleValue] >= 1, @"the primary display is reported at the screen origin with its scale");
     check(parse(sp_dock_items()) != nil, @"Dock items are reported as an array");
     check(!sp_dock_select("No such item"), @"an unknown Dock item is rejected");
-    // When the window is shown or hidden on screen, the window server changes the occlusion state, and the
-    // observation is called for each change. The changes arrive as AppKit events, which the wait sends to the application.
+    // The observation calls its callback with the state of sp_window_on_screen for each occlusion change of the window. The
+    // window goes behind every window, as an application that is not active shows one (docs/spec/hosts.md#launch-activation),
+    // so whether the window server reports a change when it shows depends on the windows of a person in front of it; the
+    // check therefore posts the change notification of AppKit itself, once for the ordered window and once after it is
+    // ordered out, which no window covers.
     NSWindow *observed = [[[NSWindow alloc] initWithContentRect:NSMakeRect(40, 40, 200, 120)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO] autorelease];
     [observed setReleasedWhenClosed:NO];
@@ -337,16 +339,20 @@ int main(void) { @autoreleasepool {
         reportedOnScreen = onScreen;
     }), @"occlusion observation starts");
     check(!sp_window_observe_occlusion(NULL, ^(bool onScreen) { (void)onScreen; }), @"occlusion observation without a window is rejected");
-    observed.level = kCheckWindowLevel;
-    [observed orderFrontRegardless];
-    eventWait(@"the shown window reports an occlusion change", ^BOOL{ return changes > 0; });
-    check(changes > 0 && (observed.occlusionState & NSWindowOcclusionStateVisible) != 0,
-        [NSString stringWithFormat:@"showing the window reports an occlusion change (%d changes)", changes]);
-    check(reportedOnScreen, @"the observation of a shown window reports that it is on screen");
+    [observed orderBack:nil];
+    int before = changes;
+    [NSNotificationCenter.defaultCenter postNotificationName:NSWindowDidChangeOcclusionStateNotification object:observed];
+    // The observation takes the notification on the main queue, which the wait runs.
+    eventWait(@"the ordered window reports an occlusion change", ^BOOL{ return changes > before; });
+    check(changes == before + 1 && reportedOnScreen == sp_window_on_screen(observed),
+        [NSString stringWithFormat:@"an occlusion change of the ordered window reports its on-screen state (%d changes, reported %d, "
+            "state %d)", changes - before, reportedOnScreen, sp_window_on_screen(observed)]);
     int shown = changes;
     [observed orderOut:nil];
+    [NSNotificationCenter.defaultCenter postNotificationName:NSWindowDidChangeOcclusionStateNotification object:observed];
     eventWait(@"the hidden window reports an occlusion change", ^BOOL{ return changes > shown; });
-    check(changes > shown, [NSString stringWithFormat:@"hiding the window reports an occlusion change (%d changes)", changes]);
+    check(changes == shown + 1, [NSString stringWithFormat:@"hiding the window reports an occlusion change (%d changes)",
+        changes - shown]);
     check(!reportedOnScreen, @"the observation of a hidden window reports that it is not on screen");
     check(!NSApp.isActive, @"application stays inactive");
     [window close];

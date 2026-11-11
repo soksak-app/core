@@ -1,7 +1,6 @@
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
 #import <WebKit/WebKit.h>
-#import "support/check_level.h"
 #import "capture.h"
 #import "document_view.h"
 #import "private/webkit.h"
@@ -129,13 +128,12 @@ int main(void) { @autoreleasepool {
     void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     webviewSetFrame(surface, 0, 0, 620, 480);
     webviewSetSurfaceHidden(surface, false);
-    window.level = kCheckWindowLevel;
-    [window orderFrontRegardless];
-    // The window server shows the window before it tells the window that it became visible, and that change of the occlusion
-    // state arrives as a window server event.
-    eventWait(@"the window becomes visible", ^BOOL {
-        return (window.occlusionState & NSWindowOcclusionStateVisible) && onScreen(window);
-    });
+    // The window goes behind every window, as an application that is not active shows one (docs/spec/hosts.md#launch-activation),
+    // so windows of a person may cover it; it draws its document regions while covered, so the captures of the window hold the
+    // document whatever covers it. The order is a call to the window server, which lists the window as on screen once it
+    // returns, covered or not.
+    check(sp_document_draw_covered(window, true), @"the capture window draws its document regions while covered");
+    [window orderBack:nil];
     check(onScreen(window), @"the window server shows the inactive capture window");
 
     NSString *temporary = temporaryFolder(@"soksak-document-viewport-marker-");

@@ -6,12 +6,14 @@
 // timer throttle has no event of WebKit, so its turns are reported and not judged. Every wait ends by its event: the ready
 // state of the listener, the load state of the document, the completion handler of a page script, a display refresh and
 // NSWindowDidChangeOcclusionStateNotification. The check does not activate the application and does not focus any window:
-// the covering window is ordered front without activation.
+// the window goes behind every window, as an application that is not active shows one (docs/spec/hosts.md#launch-activation),
+// and draws its document regions while covered (sp_document_draw_covered), so windows of a person in front of it change
+// nothing; the covering window of the check goes directly above it, and a covered region shows again when the window draws
+// covered once more, because the end of a cover shows only in a window that nothing else covers.
 #import <Cocoa/Cocoa.h>
 #import <Network/Network.h>
 #import <QuartzCore/QuartzCore.h>
 #import <WebKit/WebKit.h>
-#import "support/check_level.h"
 #import "support/temporary_folder.h"
 #import "document_view.h"
 #import "webview_geometry.h"
@@ -198,8 +200,8 @@ int main(void) { @autoreleasepool {
             windowVisible = (window.occlusionState & NSWindowOcclusionStateVisible) != 0;
             wake();
         }];
-    window.level = kCheckWindowLevel;
-    [window orderFrontRegardless];
+    check(sp_document_draw_covered(window, true), @"the window draws its document regions while covered");
+    [window orderBack:nil];
     windowVisible = (window.occlusionState & NSWindowOcclusionStateVisible) != 0;
     void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     check(surface != NULL, @"a logical surface is created for the document");
@@ -216,14 +218,13 @@ int main(void) { @autoreleasepool {
     sp_document_place(document, 10, 20, 30, 40, true);
     check(sp_document_load(document, address.UTF8String), @"the local page address is accepted");
     until(^BOOL { return [latestState[@"url"] isEqual:address] && ![latestState[@"loading"] boolValue]; });
-    until(^BOOL { return windowVisible; });
 
-    // Shown: the region is visible in a window that nothing covers and runs animation frames.
+    // Shown: the region is visible in a window that draws covered and runs animation frames.
     NSDictionary *shown = callPage(view, @"return await window.throttle.frames(3);");
     check([shown[@"state"] isEqual:@"visible"] && [shown[@"frame"] longValue] >= 3,
         [NSString stringWithFormat:@"the shown document runs animation frames (%@, %@ frames)", shown[@"state"], shown[@"frame"]]);
 
-    // Hidden: the region is placed as not visible while the window stays visible, and shown again after the refreshes.
+    // Hidden: the region is placed as not visible while the window draws covered, and shown again after the refreshes.
     // A change of the window before this point, such as its first show, is counted before the first index.
     long next = [shown[@"changes"] longValue];
     sp_document_place(document, 10, 20, 30, 40, false);
@@ -236,22 +237,22 @@ int main(void) { @autoreleasepool {
     check([again[@"state"] isEqual:@"visible"], @"a region that shows again runs animation frames");
     next = [again[@"changes"] longValue];
 
-    // Covered: another opaque window that this check creates covers the window, and goes after the refreshes.
+    // Covered: the window ends drawing covered, another opaque window that this check creates covers it, and after the
+    // refreshes the window draws covered again under the cover.
+    check(sp_document_draw_covered(window, false), @"the window ends drawing its document regions while covered");
     NSWindow *cover = [[NSWindow alloc] initWithContentRect:NSInsetRect(window.frame, -40, -40)
         styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
     [cover setReleasedWhenClosed:NO];
     cover.backgroundColor = NSColor.blackColor;
-    cover.level = kCheckWindowLevel;
-    [cover orderFrontRegardless];
+    [cover orderWindow:NSWindowAbove relativeTo:window.windowNumber];
     until(^BOOL { return !windowVisible; });
     NSDictionary *covered = change(view, next);
     waitRefreshes(window.screen, kHiddenRefreshes);
-    [cover orderOut:nil];
-    NSDictionary *uncovered = change(view, next + 1);
-    judgeHidden(@"covered", covered, uncovered);
-    until(^BOOL { return windowVisible; });
+    check(sp_document_draw_covered(window, true), @"the covered window draws its document regions again");
+    NSDictionary *drawnCovered = change(view, next + 1);
+    judgeHidden(@"covered", covered, drawnCovered);
     again = callPage(view, @"return await window.throttle.frames(1);");
-    check([again[@"state"] isEqual:@"visible"], @"a region whose cover goes runs animation frames");
+    check([again[@"state"] isEqual:@"visible"], @"a covered region that draws covered again runs animation frames");
     check(!NSApp.isActive, @"the application stays inactive");
 
     [NSNotificationCenter.defaultCenter removeObserver:occlusion];

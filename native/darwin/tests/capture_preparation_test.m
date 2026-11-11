@@ -4,7 +4,6 @@
 #import "../src/capture.m"
 #import "support/event_wait.h"
 #import <objc/runtime.h>
-#import "support/check_level.h"
 
 static int failures;
 static void check(BOOL condition, NSString *message) {
@@ -49,12 +48,15 @@ int main(void) { @autoreleasepool {
         styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
     window.releasedWhenClosed = NO;
     window.animationBehavior = NSWindowAnimationBehaviorNone;
-    window.level = kCheckWindowLevel;
-    [window orderFrontRegardless];
-    // A preparation sizes the recording from the bounds that the window server reports for the window, and the window server
-    // has them once it put the window on screen, which the occlusion state reports.
-    eventWait(@"the window server shows the fixture window",
-        ^BOOL { return (window.occlusionState & NSWindowOcclusionStateVisible) != 0; });
+    // The window goes behind every window, as an application that is not active shows one (docs/spec/hosts.md#launch-activation),
+    // so windows of a person may cover it. A preparation sizes the recording from the bounds that the window server reports for
+    // the window, and the window server has them once the order returns, covered or not; the occlusion state, which a cover
+    // changes, tells nothing of them.
+    [window orderBack:nil];
+    NSArray *listed = [(NSArray *)CGWindowListCopyWindowInfo(kCGWindowListOptionIncludingWindow, (CGWindowID)window.windowNumber)
+        autorelease];
+    check(listed.count == 1 && [listed[0][(id)kCGWindowIsOnscreen] boolValue] && listed[0][(id)kCGWindowBounds] != nil,
+        [NSString stringWithFormat:@"the window server lists the ordered fixture window on screen with its bounds (%@)", listed]);
     __block SCShareableContent *content = nil;
     __block NSError *queryError = nil;
     dispatch_semaphore_t ready = dispatch_semaphore_create(0);
