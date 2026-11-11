@@ -1838,7 +1838,8 @@ pub(crate) fn window_processes(
 }
 
 /// Reads the refresh rate of the display that shows the window now, the refreshRate of the window status; it is None when
-/// the window is on no screen. A drag step is paced by it, so it is read at each step.
+/// the window is on no screen. A drag step is paced by it, so it is read at each step; only the diagnostic drag reads it.
+#[cfg(feature = "diagnostics")]
 pub(crate) fn window_refresh_rate(window: &Window) -> Result<Option<u64>, String> {
     let platform = platform::current()?;
     let facts = with_native_owner(window, move |handle| platform.window_facts(handle)).map_err(
