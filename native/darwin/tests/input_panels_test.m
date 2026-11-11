@@ -1,14 +1,15 @@
 // Checks that the emulated input of a window (sp_input_pointer, sp_input_key) reaches the system panels that the application
-// shows over that window, as the input of a person reaches them in an application that is not active: an alert sheet, a save and
-// an open panel sheet, a context menu and the menu of a pop-up button. The window stands behind a window of its own that covers
+// shows over that window, as the input of a person reaches them in an application that is not active: an alert sheet, a context
+// menu, the menu of a pop-up button, and a save and an open panel sheet. The window stands behind a window of its own that covers
 // it, and the test process is never active, so the input passes the application as the input of the virtual key window does.
 //
 // Each input goes to the window that the caller names, at window points of its content (origin at the top left), as an input
 // of the endpoint names the window of its request: a person presses at a point of the screen, and the panel over the window
 // takes the press. A case judges what the panel did with the input: the button that ended the sheet, the item that the menu
 // ran, read before the test ends what the input left. A sheet answers NOT_ENDED until its completion runs, so a sheet that the
-// input did not end is told from one that it cancelled (NSModalResponseCancel is 0). A sheet or a menu that the input did not
-// reach is ended by the test after the input has been handled, so the next case runs.
+// input did not end is told from one that it cancelled (NSModalResponseCancel is 0). An alert sheet or a menu that the input
+// did not reach is ended by the test after the input has been handled, so the next case runs. The open and save panel cases come
+// last: the service of the panel answers their completion through a connection, so they wait for it.
 #import <Cocoa/Cocoa.h>
 #import <OSLog/OSLog.h>
 #import "input_inject.h"
@@ -95,14 +96,17 @@ static void key(NSWindow *window, const char *name, NSString *what) {
     note([NSString stringWithFormat:@"%@: key %s down %s, up %s", what, name, resultText(down), resultText(up)]);
 }
 
-// The button of view whose title is title, in the view tree under view.
-static NSButton *buttonTitled(NSView *view, NSString *title) {
-    if ([view isKindOfClass:NSButton.class] && [((NSButton *)view).title isEqualToString:title]) return (NSButton *)view;
-    for (NSView *child in view.subviews) {
-        NSButton *found = buttonTitled(child, title);
-        if (found) return found;
+// The screen frame of the button titled title in the accessibility tree of element, or an empty rect.
+static NSRect accessibleButton(id element, NSString *title) {
+    if ([[element accessibilityRole] isEqualToString:NSAccessibilityButtonRole]
+        && ([[element accessibilityTitle] isEqualToString:title] || [[element accessibilityLabel] isEqualToString:title])) {
+        return [element accessibilityFrame];
     }
-    return nil;
+    for (id child in [element accessibilityChildren] ?: @[]) {
+        NSRect found = accessibleButton(child, title);
+        if (!NSIsEmptyRect(found)) return found;
+    }
+    return NSZeroRect;
 }
 
 // The facts of a panel: its class, whether the application holds its window, the process that owns its window in the window
@@ -227,46 +231,6 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"Escape ends an alert sheet with its cancel button (response %ld)", (long)response]);
     endSheet(window, @"alert sheet Escape");
 
-    // A save panel sheet: Return saves under the name of the panel, and a press of its cancel button cancels it.
-    NSString *folder = temporaryFolder(@"soksak-input-panels-");
-    NSSavePanel *save = [NSSavePanel savePanel];
-    save.directoryURL = [NSURL fileURLWithPath:folder];
-    save.nameFieldStringValue = @"panel-check.txt";
-    __block NSModalResponse saved = NOT_ENDED;
-    [save beginSheetModalForWindow:window completionHandler:^(NSModalResponse returned) { saved = returned; }];
-    eventWait(@"the save panel sheet shows", ^BOOL { return window.attachedSheet != nil && window.attachedSheet.isVisible; });
-    note([@"save panel: " stringByAppendingString:panelFacts(window.attachedSheet)]);
-    key(window, "Enter", @"save panel");
-    settle(@"the key of the save panel is handled");
-    check(saved == NSModalResponseOK,
-        [NSString stringWithFormat:@"Return ends a save panel sheet with OK (response %ld)", (long)saved]);
-    endSheet(window, @"save panel Return");
-    save = [NSSavePanel savePanel];
-    save.directoryURL = [NSURL fileURLWithPath:folder];
-    saved = NOT_ENDED;
-    [save beginSheetModalForWindow:window completionHandler:^(NSModalResponse returned) { saved = returned; }];
-    eventWait(@"the save panel sheet shows again", ^BOOL { return window.attachedSheet != nil && window.attachedSheet.isVisible; });
-    NSButton *cancel = buttonTitled(window.attachedSheet.contentView, @"Cancel");
-    note([NSString stringWithFormat:@"save panel: its Cancel button %@", cancel ? @"is a view of the application" : @"is not found"]);
-    if (cancel) click(window, pointOf(window, cancel), 0, @"save panel");
-    settle(@"the press of the save panel is handled");
-    check(saved == NSModalResponseCancel,
-        [NSString stringWithFormat:@"a press of the Cancel button of a save panel sheet cancels it (response %ld)", (long)saved]);
-    endSheet(window, @"save panel press");
-
-    // An open panel sheet: Escape cancels it.
-    NSOpenPanel *open = [NSOpenPanel openPanel];
-    open.directoryURL = [NSURL fileURLWithPath:folder];
-    __block NSModalResponse opened = NOT_ENDED;
-    [open beginSheetModalForWindow:window completionHandler:^(NSModalResponse returned) { opened = returned; }];
-    eventWait(@"the open panel sheet shows", ^BOOL { return window.attachedSheet != nil && window.attachedSheet.isVisible; });
-    note([@"open panel: " stringByAppendingString:panelFacts(window.attachedSheet)]);
-    key(window, "Escape", @"open panel");
-    settle(@"the key of the open panel is handled");
-    check(opened == NSModalResponseCancel,
-        [NSString stringWithFormat:@"Escape cancels an open panel sheet (response %ld)", (long)opened]);
-    endSheet(window, @"open panel Escape");
-
     // A context menu: a right press opens it, and the release over its item runs the item.
     MenuTarget *target = [[MenuTarget new] autorelease];
     NSMenu *context = [[[NSMenu alloc] initWithTitle:@"Context"] autorelease];
@@ -318,6 +282,57 @@ int main(void) { @autoreleasepool {
     check([target.chosen isEqualToString:@"Two"], [NSString stringWithFormat:
         @"Down Arrow and Return in the menu of a pop-up button choose the next item (chosen %@, selected %ld)", target.chosen,
         (long)popup.indexOfSelectedItem]);
+
+    // The open and save panels show their content from a service of the system (NSRemoteView), which answers the panel of the
+    // application through a connection, so a panel case waits for the completion of its sheet, with no limit: the limit of the
+    // test ends a wait whose input did not reach the panel, and these cases come last.
+    NSString *folder = temporaryFolder(@"soksak-input-panels-");
+
+    // A save panel sheet takes a typed file name, and Return saves under it.
+    NSSavePanel *save = [NSSavePanel savePanel];
+    save.directoryURL = [NSURL fileURLWithPath:folder];
+    save.nameFieldStringValue = @"untitled";
+    __block NSModalResponse saved = NOT_ENDED;
+    [save beginSheetModalForWindow:window completionHandler:^(NSModalResponse returned) { saved = returned; }];
+    eventWait(@"the save panel sheet shows", ^BOOL { return window.attachedSheet != nil && window.attachedSheet.isVisible; });
+    note([@"save panel: " stringByAppendingString:panelFacts(window.attachedSheet)]);
+    // The panel selects the name when it shows, so the typed name replaces it.
+    for (NSString *letter in @[@"t", @"y", @"p", @"e", @"d"]) key(window, letter.UTF8String, @"save panel name");
+    key(window, "Enter", @"save panel");
+    eventWait(@"the save panel ends", ^BOOL { return saved != NOT_ENDED; });
+    check(saved == NSModalResponseOK && [save.URL.lastPathComponent isEqualToString:@"typed"], [NSString stringWithFormat:
+        @"a typed name and Return end a save panel sheet with OK and that name (response %ld, URL %@)", (long)saved, save.URL]);
+
+    // A press of the Cancel button of a save panel sheet cancels it. The button is found through the accessibility of the panel,
+    // which the service of the panel serves for its content.
+    save = [NSSavePanel savePanel];
+    save.directoryURL = [NSURL fileURLWithPath:folder];
+    saved = NOT_ENDED;
+    [save beginSheetModalForWindow:window completionHandler:^(NSModalResponse returned) { saved = returned; }];
+    eventWait(@"the save panel sheet shows again", ^BOOL { return window.attachedSheet != nil && window.attachedSheet.isVisible; });
+    NSRect cancel = accessibleButton(window.attachedSheet, @"Cancel");
+    note([NSString stringWithFormat:@"save panel: its Cancel button %@", NSIsEmptyRect(cancel) ? @"is not found"
+        : [@"is at " stringByAppendingString:NSStringFromRect(cancel)]]);
+    check(!NSIsEmptyRect(cancel), @"the Cancel button of a save panel sheet is found through its accessibility");
+    if (!NSIsEmptyRect(cancel)) {
+        click(window, pointOfScreenRect(window, cancel), 0, @"save panel");
+        eventWait(@"the pressed save panel ends", ^BOOL { return saved != NOT_ENDED; });
+        check(saved == NSModalResponseCancel,
+            [NSString stringWithFormat:@"a press of the Cancel button of a save panel sheet cancels it (response %ld)", (long)saved]);
+    }
+    endSheet(window, @"save panel press");
+
+    // An open panel sheet: Escape cancels it.
+    NSOpenPanel *open = [NSOpenPanel openPanel];
+    open.directoryURL = [NSURL fileURLWithPath:folder];
+    __block NSModalResponse opened = NOT_ENDED;
+    [open beginSheetModalForWindow:window completionHandler:^(NSModalResponse returned) { opened = returned; }];
+    eventWait(@"the open panel sheet shows", ^BOOL { return window.attachedSheet != nil && window.attachedSheet.isVisible; });
+    note([@"open panel: " stringByAppendingString:panelFacts(window.attachedSheet)]);
+    key(window, "Escape", @"open panel");
+    eventWait(@"the open panel ends", ^BOOL { return opened != NOT_ENDED; });
+    check(opened == NSModalResponseCancel,
+        [NSString stringWithFormat:@"Escape cancels an open panel sheet (response %ld)", (long)opened]);
 
     check(!NSRunningApplication.currentApplication.active, @"the input left the application inactive");
     [cover close];
