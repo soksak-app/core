@@ -38,9 +38,9 @@ export const GOALS_FILE = join(ROOT, "docs", "spec", "performance-goals.json");
 const UNITS = { count: null, verdict: null, s: "above", ms: "above", KB: "above", "frames/s": "below" };
 const BOUNDS = ["equals", "atMost", "atLeast", "below"];
 /** The numeric run conditions; the window conditions are the content size of the window of each scenario and of the scenarios that differ. */
-const CONDITIONS = ["refreshRate", "backingScale", "swapUseBelow", "fseventsdCoreBelow"];
+const CONDITIONS = ["backingScale", "swapUseBelow", "fseventsdCoreBelow"];
 const WINDOW_CONDITIONS = ["window", "scenarioWindows", "occludedScenarios"];
-const VALUE_KEYS = new Set(["id", "goal", "scenario", "target", "measurement", "unit", "over", "bound", "relative", "against", "constant"]);
+const VALUE_KEYS = new Set(["id", "goal", "scenario", "target", "measurement", "unit", "over", "bound", "periods", "relative", "against", "constant"]);
 const VERDICTS = new Set(["passed", "failed"]);
 const HOSTS = ["mygo", "wailsv3", "tauriv2"];
 const OTHER_HOSTS = ["wailsv3", "tauriv2"];
@@ -88,6 +88,14 @@ export function readGoals(text, file) {
       const limit = value.bound[kinds[0]];
       if (value.unit === "verdict" ? !(kinds[0] === "equals" && limit === "passed") : !(typeof limit === "number" && Number.isFinite(limit))) {
         fail(where, `has the bound ${JSON.stringify(value.bound)}, which does not fit the unit ${value.unit}`);
+      }
+    }
+    if (value.periods !== undefined) {
+      if (value.bound !== undefined) fail(where, `has both a bound and periods, which are one bound each`);
+      if (value.unit !== "ms") fail(where, `has periods with the unit ${value.unit}, expected ms`);
+      const kinds = isObject(value.periods) ? Object.keys(value.periods) : [];
+      if (kinds.length !== 1 || !BOUNDS.includes(kinds[0]) || kinds[0] === "below" || typeof value.periods[kinds[0]] !== "number" || !Number.isFinite(value.periods[kinds[0]])) {
+        fail(where, `has the periods ${JSON.stringify(value.periods)}, expected one of equals, atMost, atLeast with a finite number of display periods`);
       }
     }
     if (value.relative !== undefined && value.relative !== true) fail(where, `has relative ${JSON.stringify(value.relative)}, expected true or no key`);
@@ -143,10 +151,10 @@ export function startConditionFailures(goals, start) {
   return failures;
 }
 
-/** The failures of the display conditions of `goals` in the display `display` of a run: its refresh rate and the backing scale of its window. */
+/** The failures of the display conditions of `goals` in the display `display` of a run: the backing scale of its window. The refresh rate is not a condition: each bound that uses it reads the rate its window reported for its measurement. */
 export function displayFailures(goals, display) {
   const failures = [];
-  if (display?.refreshRate !== goals.conditions.refreshRate) failures.push(`the display mode runs at ${JSON.stringify(display?.refreshRate)} Hz, expected ${goals.conditions.refreshRate} Hz`);
+  // The refresh rate is not a condition here: a period bound reads the rate its window reported for its measurement.
   if (display?.backingScale !== goals.conditions.backingScale) failures.push(`the backing scale of the window is ${JSON.stringify(display?.backingScale)}, expected ${goals.conditions.backingScale}`);
   return failures;
 }
@@ -215,6 +223,10 @@ export function meetsBound(bound, measured) {
 
 const BOUND_TEXT = { equals: "equals", atMost: "at most", atLeast: "at least", below: "below" };
 const boundText = (value) => {
+  if (value.periods !== undefined) {
+    const [[kind, limit]] = Object.entries(value.periods);
+    return `${BOUND_TEXT[kind]} ${limit} display period`;
+  }
   const [[kind, limit]] = Object.entries(value.bound);
   return `${BOUND_TEXT[kind]} ${limit}${value.unit === "verdict" || value.unit === "count" ? "" : ` ${value.unit}`}`;
 };
@@ -282,7 +294,16 @@ export function judgeSession(goals, session) {
         failed(`${where}: it records ${id} as ${JSON.stringify(measured)}, which is no ${value.unit === "verdict" ? "verdict" : "number"}`);
         continue;
       }
-      readings.set(`${id}\n${record.application}`, [...(readings.get(`${id}\n${record.application}`) ?? []), { run: record.run, measured }]);
+      let reading = measured;
+      if (value.periods !== undefined) {
+        const rate = record.conditions?.[value.target]?.refreshRate;
+        if (!(Number.isFinite(rate) && rate > 0)) {
+          failed(`${where}: ${id} is judged in display periods, but window ${value.target} reports no refresh rate (${JSON.stringify(rate)})`);
+          continue;
+        }
+        reading = measured / (1000 / rate);
+      }
+      readings.set(`${id}\n${record.application}`, [...(readings.get(`${id}\n${record.application}`) ?? []), { run: record.run, measured: reading }]);
     }
   }
   // The runs of a value of an application in run order, or null after a line that names the missing runs.
@@ -309,9 +330,10 @@ export function judgeSession(goals, session) {
   };
   for (const value of goals.values) {
     const mine = describe(value, apps.mygo);
-    if (value.bound !== undefined && mine !== null) {
+    const bound = value.bound ?? value.periods;
+    if (bound !== undefined && mine !== null) {
       const measured = value.over === "median" ? [median(mine)] : mine;
-      const missed = measured.filter((entry) => !meetsBound(value.bound, entry));
+      const missed = measured.filter((entry) => !meetsBound(bound, entry));
       const text = `${value.id} ${apps.mygo}: ${value.over === "median" ? `median ${measured[0]}` : `runs ${mine.join(" ")}`}, ${boundText(value)}`;
       if (missed.length === 0) lines.push(`passed ${text}`);
       else failed(text);

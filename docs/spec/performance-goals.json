@@ -2,7 +2,6 @@
   "schema": 1,
   "runs": 7,
   "conditions": {
-    "refreshRate": 120,
     "backingScale": 2,
     "swapUseBelow": 0.5,
     "fseventsdCoreBelow": 0.1,
@@ -584,8 +583,8 @@
       "measurement": "dragFrameP90Ms",
       "unit": "ms",
       "over": "median",
-      "bound": {
-        "atMost": 8.33
+      "periods": {
+        "atMost": 1
       }
     },
     {
@@ -596,8 +595,8 @@
       "measurement": "dragStepP90Ms",
       "unit": "ms",
       "over": "median",
-      "bound": {
-        "atMost": 8.33
+      "periods": {
+        "atMost": 1
       }
     },
     {
@@ -608,8 +607,8 @@
       "measurement": "dragFrameP90Ms",
       "unit": "ms",
       "over": "median",
-      "bound": {
-        "atMost": 8.33
+      "periods": {
+        "atMost": 1
       }
     },
     {
@@ -620,8 +619,8 @@
       "measurement": "dragStepP90Ms",
       "unit": "ms",
       "over": "median",
-      "bound": {
-        "atMost": 8.33
+      "periods": {
+        "atMost": 1
       }
     },
     {
@@ -632,8 +631,8 @@
       "measurement": "dragFrameP90Ms",
       "unit": "ms",
       "over": "median",
-      "bound": {
-        "atMost": 8.33
+      "periods": {
+        "atMost": 1
       }
     },
     {
@@ -644,8 +643,8 @@
       "measurement": "dragStepP90Ms",
       "unit": "ms",
       "over": "median",
-      "bound": {
-        "atMost": 8.33
+      "periods": {
+        "atMost": 1
       }
     },
     {
@@ -656,8 +655,8 @@
       "measurement": "dragFirstFrameMs",
       "unit": "ms",
       "over": "median",
-      "bound": {
-        "atMost": 8.33
+      "periods": {
+        "atMost": 1
       }
     },
     {
@@ -668,8 +667,8 @@
       "measurement": "dragFirstFrameMs",
       "unit": "ms",
       "over": "median",
-      "bound": {
-        "atMost": 8.33
+      "periods": {
+        "atMost": 1
       }
     },
     {
@@ -680,8 +679,8 @@
       "measurement": "maximiseFrameP90Ms",
       "unit": "ms",
       "over": "median",
-      "bound": {
-        "atMost": 8.33
+      "periods": {
+        "atMost": 1
       }
     },
     {
@@ -692,8 +691,8 @@
       "measurement": "maximiseStepP90Ms",
       "unit": "ms",
       "over": "median",
-      "bound": {
-        "atMost": 8.33
+      "periods": {
+        "atMost": 1
       }
     },
     {
@@ -704,8 +703,8 @@
       "measurement": "pointerMoveP90Ms",
       "unit": "ms",
       "over": "median",
-      "bound": {
-        "atMost": 8.33
+      "periods": {
+        "atMost": 1
       }
     }
   ]

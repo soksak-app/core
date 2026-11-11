@@ -117,13 +117,11 @@ test("a run outside the run conditions, a failed run, a missing run and an unkno
   delete record("S5", 2, "mygo").conditions;
   session.records.splice(session.records.indexOf(record("S10", 3, "mygo")), 1);
   assert.deepEqual(failedLines(judgeSession(fixtureGoals(), session)), [
-    "failed run 1 of mygo in S0: the display mode runs at 60 Hz, expected 120 Hz",
     "failed run 2 of mygo in S0: the backing scale of the window is 1, expected 2",
     "failed run 3 of mygo in S0: swap use 536870912 B is not below 0.5 of the swap total 1073741824 B",
     "failed run 1 of mygo in S1: fseventsd uses 0.1 of a core, not below 0.1",
     "failed run 2 of wailsv3 in S1: make measure-app-usage STATE=S1 exited with code 1",
     "failed run 3 of tauriv2 in S1: it records G2-S0-frames, which is no value of S1",
-    "failed run 1 of mygo in S5: make benchmark-view-drag TRACE=0: the display mode runs at 60 Hz, expected 120 Hz",
     "failed run 2 of mygo in S5: the run records no conditions of its targets (undefined)",
     "failed run 3 of mygo in S5: make benchmark-view-drag TRACE=0: the window is 760×614 points, expected 1200×760 points",
     "failed run 1 of mygo in S2: make measure-terminal-redraw PLUGIN=rasterprobe RATE=30 ROWS=1: the window is 1200×760 points, expected 760×614 points",
@@ -160,14 +158,16 @@ test("the goals are rejected when they do not hold the format that the judge app
 });
 
 /** A session of the five applications whose runs meet every bound of `goals` with the same readings on every application. */
-function sessionMeeting(goals, path) {
+function sessionMeeting(goals, path, rate = 120) {
   const applications = [["mygo", "mygo", "current"], ["wailsv3", "wailsv3", "current"], ["tauriv2", "tauriv2", "current"],
     ["baseline-wailsv3", "wailsv3", "baseline"], ["baseline-tauriv2", "tauriv2", "baseline"]].map(([name, host, build]) => ({ name, host, build }));
   writeFileSync(join(path, "session.json"), JSON.stringify({ schema: 1, phase: "final", runs: goals.runs, applications }));
   const reading = (value) => {
     if (value.unit === "verdict") return "passed";
-    const [[kind, limit]] = Object.entries(value.bound ?? { none: 100 });
-    return { equals: limit, atMost: limit / 2, atLeast: limit * 2, below: limit / 2, none: limit }[kind];
+    const [[kind, limit]] = Object.entries(value.periods ?? value.bound ?? { none: 100 });
+    // A period bound is judged in display periods: its reading is a number of periods of the rate of the session.
+    const factor = value.periods === undefined ? 1 : 1000 / rate;
+    return factor * { equals: limit, atMost: limit / 2, atLeast: limit * 2, below: limit / 2, none: limit }[kind];
   };
   const lines = [];
   for (const scenario of new Set(goals.values.map((value) => value.scenario))) {
@@ -177,9 +177,9 @@ function sessionMeeting(goals, path) {
         lines.push(JSON.stringify({
           scenario, run, application: name, values, failures: [],
           start: { loadAverage: [1, 1, 1], swap: { usedBytes: 0, totalBytes: 1 << 30 }, fseventsdCores: 0 },
-          display: { refreshRate: goals.conditions.refreshRate, backingScale: goals.conditions.backingScale }, end: { loadAverage: [1, 1, 1] },
+          display: { refreshRate: rate, backingScale: goals.conditions.backingScale }, end: { loadAverage: [1, 1, 1] },
           conditions: Object.fromEntries(goals.values.filter((value) => value.scenario === scenario).map((value) => [value.target, {
-            refreshRate: goals.conditions.refreshRate, backingScale: goals.conditions.backingScale, traceState: false, logPolicy: { lifecycle: "error", input: "error", call: "error", io: "error", frame: "error" },
+            refreshRate: rate, backingScale: goals.conditions.backingScale, traceState: false, logPolicy: { lifecycle: "error", input: "error", call: "error", io: "error", frame: "error" },
             window: goals.conditions.scenarioWindows[scenario] ?? goals.conditions.window, occluded: goals.conditions.occludedScenarios.includes(scenario), active: true,
           }])),
         }));
@@ -207,7 +207,7 @@ test("make check-b3 judges a session folder against docs/spec/performance-goals.
   writeFileSync(join(path, "runs.jsonl"), `${records.map((entry) => JSON.stringify(entry)).join("\n")}\n`);
   const failed = judge();
   assert.equal(failed.status, 2, `make reports the exit status 1 of the judge as 2: ${failed.stdout}${failed.stderr}`);
-  assert.match(failed.stdout, /^failed G8-S1-pointer-move-p90 mygo: median 8\.34, at most 8\.33 ms$/m);
+  assert.match(failed.stdout, /^failed G8-S1-pointer-move-p90 mygo: median [\d.]+, at most 1 display period$/m);
   assert.match(failed.stdout, /^failed G4-S7-section-view mygo: runs (passed )*failed( passed)*, equals passed$/m);
   assert.match(failed.stdout, new RegExp(`^failed session ${path}: 2 failures$`, "m"));
 });
@@ -215,7 +215,7 @@ test("make check-b3 judges a session folder against docs/spec/performance-goals.
 test("a target of S9 reports a covered window and a target of any other scenario a window that is not covered", () => {
   const goals = readGoals(readFileSync(GOALS_FILE, "utf8"), "performance-goals.json");
   const conditions = (scenario, occluded) => ({
-    refreshRate: goals.conditions.refreshRate, backingScale: goals.conditions.backingScale,
+    backingScale: goals.conditions.backingScale,
     window: goals.conditions.scenarioWindows[scenario] ?? goals.conditions.window, active: true, ...(occluded === undefined ? {} : { occluded }),
   });
   assert.deepEqual(targetConditionFailures(goals, "S9", conditions("S9", true)), []);
@@ -229,9 +229,9 @@ test("the judge refuses a session whose run records a covered window", () => {
   const goals = readGoals(readFileSync(GOALS_FILE, "utf8"), "performance-goals.json");
   const record = {
     scenario: "S5", start: { loadAverage: [1, 1, 1], swap: { usedBytes: 0, totalBytes: 1 << 30 }, fseventsdCores: 0 },
-    display: { refreshRate: goals.conditions.refreshRate, backingScale: goals.conditions.backingScale }, end: { loadAverage: [1, 1, 1] },
+    display: { refreshRate: 120, backingScale: goals.conditions.backingScale }, end: { loadAverage: [1, 1, 1] },
     conditions: { "make benchmark-view-drag TRACE=0": {
-      refreshRate: goals.conditions.refreshRate, backingScale: goals.conditions.backingScale, window: goals.conditions.window, occluded: true, active: true,
+      refreshRate: 120, backingScale: goals.conditions.backingScale, window: goals.conditions.window, occluded: true, active: true,
     } },
   };
   assert.deepEqual(runConditionFailures(goals, record), ["make benchmark-view-drag TRACE=0: the window reports occluded true, expected false"]);
@@ -249,7 +249,7 @@ test("the goals name the scenarios whose window is covered, each of them a scena
 test("a target of every scenario reports an active application, S9 as well", () => {
   const goals = readGoals(readFileSync(GOALS_FILE, "utf8"), "performance-goals.json");
   const conditions = (scenario, active) => ({
-    refreshRate: goals.conditions.refreshRate, backingScale: goals.conditions.backingScale,
+    backingScale: goals.conditions.backingScale,
     window: goals.conditions.scenarioWindows[scenario] ?? goals.conditions.window, occluded: goals.conditions.occludedScenarios.includes(scenario),
     ...(active === undefined ? {} : { active }),
   });
@@ -258,4 +258,53 @@ test("a target of every scenario reports an active application, S9 as well", () 
   assert.deepEqual(targetConditionFailures(goals, "S5", conditions("S5", false)), ["the application reports active false, expected true"]);
   assert.deepEqual(targetConditionFailures(goals, "S9", conditions("S9", false)), ["the application reports active false, expected true"]);
   assert.deepEqual(targetConditionFailures(goals, "S8", conditions("S8")), ["the application reports active undefined, expected true"]);
+});
+
+test("a G8 frame bound is one display period of the rate that its window reported for the measurement, at 60 Hz and at 120 Hz", { timeout: 20000 }, (t) => {
+  for (const [rate, ms, passes] of [[60, 12, true], [60, 20, false], [120, 8, true], [120, 9, false]]) {
+    const goals = readGoals(readFileSync(GOALS_FILE, "utf8"), "docs/spec/performance-goals.json");
+    const path = folder(t);
+    sessionMeeting(goals, path, rate);
+    const session = readSession(path);
+    for (let run = 1; run <= goals.runs; run += 1) setReading(session, "mygo", run, "G8-S1-pointer-move-p90", ms);
+    const failed = failedLines(judgeSession(goals, session));
+    if (passes) assert.deepEqual(failed, [], `${rate} Hz at ${ms} ms`);
+    else {
+      assert.equal(failed.length, 1, `${rate} Hz at ${ms} ms: ${failed.join("\n")}`);
+      assert.match(failed[0], /^failed G8-S1-pointer-move-p90 mygo: median [\d.]+, at most 1 display period$/);
+    }
+  }
+});
+
+test("a period bound whose window reports no refresh rate fails its run, and names the goal and the window", { timeout: 20000 }, (t) => {
+  const goals = readGoals(readFileSync(GOALS_FILE, "utf8"), "docs/spec/performance-goals.json");
+  const path = folder(t);
+  sessionMeeting(goals, path);
+  const session = readSession(path);
+  const value = goals.values.find((entry) => entry.id === "G8-S1-pointer-move-p90");
+  const record = session.records.find((entry) => entry.application === "mygo" && entry.run === 1 && Object.hasOwn(entry.values, value.id));
+  record.conditions[value.target].refreshRate = null;
+  assert.deepEqual(failedLines(judgeSession(goals, session)), [
+    `failed run 1 of mygo in S1: ${value.id} is judged in display periods, but window ${value.target} reports no refresh rate (null)`,
+    `failed ${value.id} mygo: the session records 6 of its 7 runs`,
+  ]);
+});
+
+test("the G8 frame bounds are periods of the display, and no G8 value is bounded in milliseconds", { timeout: 1000 }, () => {
+  const goals = readGoals(readFileSync(GOALS_FILE, "utf8"), "docs/spec/performance-goals.json");
+  assert.deepEqual(goals.values.filter((value) => value.goal === "G8" && value.bound !== undefined).map((value) => value.id), []);
+  const periods = ["G8-S5-drag-frame-p90", "G8-S5-drag-step-p90", "G8-S13-drag-frame-p90", "G8-S13-drag-step-p90", "G8-S16-drag-frame-p90", "G8-S16-drag-step-p90", "G8-S5-drag-first-frame", "G8-S13-drag-first-frame", "G8-S5-maximise-frame-p90", "G8-S5-maximise-step-p90", "G8-S1-pointer-move-p90"];
+  assert.deepEqual(goals.values.filter((value) => value.periods !== undefined).map((value) => value.id).sort(), [...periods].sort());
+});
+
+test("a period bound is rejected unless it is a number-bounded value in milliseconds that has no other bound", { timeout: 1000 }, () => {
+  const text = readFileSync(GOALS_FILE, "utf8");
+  const changed = (change) => {
+    const goals = JSON.parse(text);
+    change(goals.values.find((entry) => entry.id === "G8-S1-pointer-move-p90"));
+    return JSON.stringify(goals);
+  };
+  assert.throws(() => readGoals(changed((value) => { value.bound = { atMost: 1 }; }), "goals.json"), /has both a bound and periods/);
+  assert.throws(() => readGoals(changed((value) => { value.unit = "KB"; }), "goals.json"), /has periods with the unit KB, expected ms/);
+  assert.throws(() => readGoals(changed((value) => { value.periods = { atMost: "1" }; }), "goals.json"), /has the periods/);
 });

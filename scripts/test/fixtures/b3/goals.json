@@ -2,7 +2,6 @@
   "schema": 1,
   "runs": 3,
   "conditions": {
-    "refreshRate": 120,
     "backingScale": 2,
     "swapUseBelow": 0.5,
     "fseventsdCoreBelow": 0.1,
