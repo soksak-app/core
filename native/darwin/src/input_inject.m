@@ -412,8 +412,19 @@ bool sp_input_press_open(void *handle, int button) {
     return window && otherPressIn(nil, window, button);
 }
 
-// Delivers one event of a gesture on the path of its press.
+// The number of presses whose delivery has not returned. A view that tracks its press, such as a button or a menu, runs an
+// event loop of its own inside the delivery of the press and reads the next events of the gesture from the event queue of the
+// application, as it reads a person's; an input that arrives while that loop runs reaches the loop only through the queue.
+static NSInteger pressesDelivering;
+
+// Delivers one event of a gesture on the path of its press. An event that passes the application while the delivery of a press
+// runs an event loop of its own goes to the event queue, which that loop reads.
 static void deliverGesture(NSView *hit, NSEvent *event, BOOL throughApplication) {
+    if (throughApplication && pressesDelivering > 0 && event.type != NSEventTypeLeftMouseDown
+        && event.type != NSEventTypeRightMouseDown) {
+        [NSApp postEvent:event atStart:NO];
+        return;
+    }
     if (throughApplication) {
         [NSApp sendEvent:event];
         return;
@@ -656,7 +667,12 @@ static sp_input_result deliverPointer(SPPointer *pointer, NSWindow *window, doub
                 // order without activating the window or application.
                 if (!throughApplication && hit != window.firstResponder && hit.acceptsFirstResponder) [window makeFirstResponder:hit];
                 NSEventType down = right ? NSEventTypeRightMouseDown : NSEventTypeLeftMouseDown;
-                deliverGesture(hit, mouseEvent(window, down, point, clicks, 1), throughApplication);
+                pressesDelivering++;
+                @try {
+                    deliverGesture(hit, mouseEvent(window, down, point, clicks, 1), throughApplication);
+                } @finally {
+                    pressesDelivering--;
+                }
             } @finally {
                 sp_input_press_context_pop(&context);
             }
