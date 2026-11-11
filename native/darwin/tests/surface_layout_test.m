@@ -4,6 +4,7 @@
 #import <QuartzCore/QuartzCore.h>
 #import "surface_layout.h"
 #import "capture.h"
+#import "input_inject.h"
 #import "support/capture_frame.m"
 #import "support/event_wait.h"
 #import "webview_geometry.h"
@@ -542,6 +543,152 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration) {
     [window close]; [window release];
 }
 
+// A commit that follows the presentation callback of its DOM change shows that DOM in the first frame the display presents
+// at or after the commit (docs/spec/native-surfaces.md#layout-transaction). No frame is waited for before the commit.
+// The column in [from, to] whose pixels in the rows of the box differ from the background of the page, or NAN.
+static double borderColumn(NSBitmapImageRep *still, double from, double to) {
+    double scale = (double)still.pixelsWide / 400;
+    for (double x = from; x <= to; x += 1) {
+        BOOL matches = YES;
+        for (int offset = -12; offset <= 12; offset += 6) {
+            NSColor *color = [[still colorAtX:(NSInteger)floor(x * scale) y:(NSInteger)floor((100 + offset) * scale)]
+                colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
+            if (color == nil || (fabs(color.redComponent - 33.0/255) < 0.03 && fabs(color.greenComponent - 36.0/255) < 0.03
+                && fabs(color.blueComponent - 48.0/255) < 0.03)) matches = NO;
+        }
+        if (matches) return x;
+    }
+    return NAN;
+}
+
+typedef struct { BOOL done; sp_input_result result; } PointerDone;
+
+static void pointerDone(void *context, sp_input_result result, const sp_input_held *held) {
+    PointerDone *state = context;
+    state->result = result;
+    state->done = YES;
+}
+
+// Counts the messages that the page sends after it draws a pointer move. The host starts the presentation wait at each one.
+@interface SPCommitDrawn : NSObject <WKScriptMessageHandler>
+@property (nonatomic, assign) NSInteger count;
+@end
+@implementation SPCommitDrawn
+- (void)userContentController:(WKUserContentController *)controller didReceiveScriptMessage:(WKScriptMessage *)message {
+    self.count++;
+}
+@end
+
+// A drag of the main page through the input path of the host: each move opens a transaction, the page moves its DOM border
+// in its pointermove handler, the transaction waits for the presentation of that DOM, commits, and the window after one refresh
+// of the screen must show the border beside the native placement of that move.
+static void checkCommitFrame(WKWebViewConfiguration *configuration) {
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(120, 120, 400, 200)
+        styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
+    window.releasedWhenClosed = NO;
+    window.animationBehavior = NSWindowAnimationBehaviorNone;
+    SPCommitDrawn *drawn = [[SPCommitDrawn new] autorelease];
+    [configuration.userContentController addScriptMessageHandler:drawn name:@"commitDrawn"];
+    WKWebView *main = page(window, configuration, NSMakeRect(0, 0, 400, 200), @"sptest://app/commit-frame");
+    WKWebView *tab = page(window, configuration, NSMakeRect(0, 0, 20, 20), @"sptest://app/commit-frame-tab");
+    __block int tabPresented = 0;
+    check(sp_window_set_main_webview(window, main), @"the commit frame fixture registers its main DOM");
+    void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
+    check(surface != NULL, @"the commit frame fixture creates its native surface");
+    if (surface == NULL) { [window close]; [window release]; return; }
+    webviewSetFrame(surface, 40, 40, 260, 120);
+    webviewSetSurfaceHidden(surface, false);
+    NSView *region = (NSView *)sp_surface_native_plane(surface);
+    region.wantsLayer = YES;
+    region.layer.backgroundColor = [NSColor colorWithSRGBRed:25.0/255 green:27.0/255 blue:36.0/255 alpha:1].CGColor;
+    __block BOOL loaded = NO;
+    // The page moves its border to the x of each pointer move: the border is the column just right of the surface.
+    [main evaluateJavaScript:@"document.head.innerHTML='<style>body{margin:0;isolation:isolate}body::before{content:\"\";position:fixed;inset:0;z-index:-1;background:rgb(25,27,36);clip-path:path(\"M0,0H400V200H0ZM40,40v120h260v-120Z\")}</style>';"
+        "document.body.innerHTML='<div id=box style=\"position:absolute;left:39px;top:39px;width:260px;height:120px;border:1px solid rgb(43,46,61)\"></div>';"
+        "window.addEventListener('pointermove',function(e){if(e.buttons!==1)return;var w=e.clientX-40;"
+        "document.getElementById('box').style.width=w+'px';"
+        "document.styleSheets[0].cssRules[1].style.clipPath='path(\"M0,0H400V200H0ZM40,40v120h'+w+'v-120Z\")';"
+        "window.webkit.messageHandlers.commitDrawn.postMessage(w);},true);"
+        completionHandler:^(id value, NSError *error) {
+            check(error == nil, @"the commit frame fixture installs its DOM border"); loaded = YES;
+        }];
+    eventWait(@"the commit frame fixture installs its DOM border", ^BOOL { return loaded; });
+    [window orderFrontRegardless];
+    __block double shown = 0;
+    surfaceLayoutAfterSettled(main.window, surfaceLayoutMainPresentation(main), ^(double at, const char *error) {
+        check(error == NULL, @"the initial commit frame fixture is presented"); shown = at;
+    });
+    eventWait(@"the settled wait of the initial commit frame fixture ends", ^BOOL { return shown != 0; });
+    const char *directory = temporaryFolder(@"soksak-commit-frame-test-").fileSystemRepresentation;
+    char *operationError = NULL;
+    BOOL opened = sp_capture_open(window.windowNumber, false, 0, &operationError);
+    BOOL started = NO;
+    if (opened) { free(operationError); operationError = NULL; started = sp_capture_start(directory, false, &operationError); }
+    check(started, [NSString stringWithFormat:@"the commit frame recording starts (%s)", operationError == NULL ? "" : operationError]);
+    free(operationError);
+    check(started && sp_capture_wait(0) > 0, @"the commit frame recording contains its initial frame");
+    // The press starts the drag on the main page, left of the surface.
+    PointerDone press = {NO, SP_INPUT_REJECTED};
+    sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 20, 100, 1, 0, 0, 0, 1, pointerDone, &press);
+    eventWait(@"the press of the drag is delivered", ^BOOL { return press.done; });
+    check(press.result == SP_INPUT_DELIVERED, @"the press of the drag is delivered to the main page");
+    double timeline[SURFACE_LAYOUT_TRACE_STAGES] = {0};
+    const int moves = 4;
+    for (int move = 0; move < moves; move++) {
+        double x = 160 + 20 * move;
+        uint64_t ticket = 108 + move;
+        surfaceLayoutTraceStart();
+        surfaceLayoutBegin(window, ticket, ^(int allowed) { check(allowed, @"the commit frame transaction starts"); });
+        check(surfaceLayoutJoinView(window, ticket, tab, ^{ tabPresented++; }), @"the commit frame transaction joins the tab view");
+        PointerDone drag = {NO, SP_INPUT_REJECTED};
+        sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, x, 100, 2, 0, 0, 0, 1, pointerDone, &drag);
+        eventWait(@"the drag move is delivered", ^BOOL { return drag.done; });
+        check(drag.result == SP_INPUT_DELIVERED, [NSString stringWithFormat:@"the drag move to x %.0f is delivered", x]);
+        webviewSetFrame(surface, 40, 40, x - 40, 120);
+        tab.frame = NSMakeRect(0, 0, 20 + move, 20);
+        // The page draws the move and posts its message; the presentation wait starts at that message, as the host does.
+        eventWait(@"the app DOM draws the moved border", ^BOOL { return drawn.count == move + 1; });
+        __block BOOL ready = NO;
+        surfaceLayoutAfterPresentation(main, ^{ ready = YES; });
+        eventWait(@"the app DOM presents the moved border", ^BOOL { return ready; });
+        check(surfaceLayoutCommit(window, ticket), @"the commit frame transaction commits at the presentation callback");
+        eventWait(@"the joined tab view presents before the move is read", ^BOOL { return tabPresented == move + 1; });
+        check(surfaceLayoutTraceStop(timeline, SURFACE_LAYOUT_TRACE_STAGES) == 1, @"the commit frame trace records its transaction");
+        // The commit reaches the screen at the first refresh after it, so the screen is read at that refresh.
+        SPFrames *refreshes = [afterFrames(window.screen, 1, nil) retain];
+        eventWait(@"the display refreshes once after the commit", ^BOOL { return refreshes.left == 0; });
+        [refreshes release];
+        NSString *stillPath = [[NSString stringWithUTF8String:directory] stringByAppendingPathComponent:
+            [NSString stringWithFormat:@"after-move-%d.png", move]];
+        char *stillError = NULL;
+        BOOL captured = sp_capture_still((long[]){window.windowNumber}, 1, stillPath.fileSystemRepresentation, 0, &stillError);
+        check(captured && stillError == NULL, [NSString stringWithFormat:@"the window is captured after move %d (%s)", move,
+            stillError == NULL ? "no error" : stillError]);
+        free(stillError);
+        NSBitmapImageRep *after = captured ? [NSBitmapImageRep imageRepWithData:[NSData dataWithContentsOfFile:stillPath]] : nil;
+        check(after != nil, [NSString stringWithFormat:@"the still after move %d decodes", move]);
+        if (after != nil) {
+            double borderAt = borderColumn(after, x, x);
+            check(!isnan(borderAt) && fabs(borderAt - x) < 0.5, [NSString stringWithFormat:
+                @"after move %d the window shows the moved DOM border beside the native placement (expected x %.0f, found %.1f, committed %.3f)",
+                move, x, borderAt, timeline[3]]);
+        }
+    }
+    PointerDone release = {NO, SP_INPUT_REJECTED};
+    sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 220, 100, 3, 0, 0, 0, 1, pointerDone, &release);
+    eventWait(@"the release of the drag is delivered", ^BOOL { return release.done; });
+    check(release.result == SP_INPUT_DELIVERED, @"the release of the drag is delivered to the main page");
+    int count = sp_capture_stop(timeline[3], 0);
+    const char *captureError = sp_capture_error();
+    check(count >= 1 && !sp_capture_limited() && captureError[0] == '\0', [NSString stringWithFormat:
+        @"the commit frame recording stops without dropped frames or errors (%d frames, limited %d, error %s)",
+        count, sp_capture_limited(), captureError]);
+    [configuration.userContentController removeScriptMessageHandlerForName:@"commitDrawn"];
+    sp_surface_close(surface);
+    [window close]; [window release];
+}
+
+
 // A loaded root webview stays unpublished while its initially hidden surface is prepared, then appears at its placed geometry after commit.
 static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(160, 160, 400, 200)
@@ -769,6 +916,7 @@ int main(void) { @autoreleasepool {
     eventWait(@"the main page presents", ^BOOL { return painted; });
 
     checkRecordedComposition([[configuration copy] autorelease]);
+    checkCommitFrame([[configuration copy] autorelease]);
     checkFirstShowPublication([[configuration copy] autorelease]);
     checkSettledWaitsForLayout(window, main);
     checkSettledWaitsForModal(window, main, [[configuration copy] autorelease]);
