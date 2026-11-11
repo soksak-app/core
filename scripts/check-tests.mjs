@@ -585,6 +585,7 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/host/go/src/diagnostics.go", symbol: "func (set *modalHoldSet) heldWait(s *Surfaces) (func(), error) {" },
       { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn modal_held_hold(window: &str) -> Result<Arc<ModalHold>, Failure> {" },
+      { file: "packages/host/rust/src/surfaces.rs", symbol: "fn commit_layout_after_root_joins(" },
     ],
     tests: [
       { file: "packages/host/go/src/diagnostics_hold_window_test.go", id: "TestAModalHoldEndsWithItsWindow" },
@@ -595,8 +596,9 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "an_unanswered_retain_ends_with_its_connection" },
       { file: "packages/sok/rust/src/platform/darwin/process_wait_signal_test.rs", id: "process_wait_ends_by_a_signal_on_darwin" },
       { file: "packages/sok/rust/src/platform/linux/process_wait_signal_test.rs", id: "process_wait_ends_by_a_signal_on_linux" },
+      { file: "packages/host/rust/src/surfaces_test.rs", id: "a_replaced_root_of_a_transaction_that_input_ended_joins_nothing_and_does_not_fail_the_commit" },
     ],
-    expected: "A check of the end of a modal hold reads the hold as diagnostics.modal.held does before it ends the hold, a check of an unanswered retain ends after the host connected again, and each Rust signal test of the process wait has one name in its crate.",
+    expected: "A check of the end of a modal hold reads the hold as diagnostics.modal.held does before it ends the hold, a check of an unanswered retain ends after the host connected again, each Rust signal test of the process wait has one name in its crate, and the Rust host commits a ticket that input ended without a replaced root that joined nothing.",
     levels: ["unit"],
   },
   {

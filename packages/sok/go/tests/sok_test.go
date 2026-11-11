@@ -315,6 +315,7 @@ func TestAWatchEndsWhenItsProducerEnds(t *testing.T) {
 
 // A gesture sends down at the first point, a drag to each later point and up at the last point, on one connection, and prints
 // nothing.
+// contract: cli.input.gesture-sends-one-press-on-one-connection
 func TestAGestureSendsItsStepsOnOneConnection(t *testing.T) {
 	fake := startEndpoint(t, func(method string, _ map[string]any) answer {
 		if method == "input.pointer" {
@@ -345,6 +346,7 @@ func TestAGestureSendsItsStepsOnOneConnection(t *testing.T) {
 }
 
 // A gesture step that fails ends the command with the error of the step and its number.
+// contract: cli.input.gesture-step-failure-ends-the-command
 func TestAGestureStepThatFailsEndsTheCommand(t *testing.T) {
 	fake := startEndpoint(t, func(method string, params map[string]any) answer {
 		if method == "input.pointer" && params["phase"] == "drag" {
@@ -538,6 +540,7 @@ const watchChild = "SOK_TEST_WATCH_CHILD"
 
 // SIGINT ends a watch whose write to its standard output waits, because nothing reads it: the routine that receives the
 // signal closes the connection and ends the process with status 0 (docs/spec/cli.md).
+// contract: cli.status.signal-ends-a-watch-that-waits-in-a-write
 func TestAnInterruptEndsAWatchThatWaitsInAWrite(t *testing.T) {
 	if config := os.Getenv(watchChild); config != "" {
 		os.Exit(sok.Main([]string{"status", "fixture.value", "--window", "main", "--watch", "--config-dir", config}, os.Stdout, os.Stderr,

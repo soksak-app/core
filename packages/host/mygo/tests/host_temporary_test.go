@@ -14,6 +14,7 @@ import (
 
 // The host keeps its socket folder in the temporary folder across its runs, so a host that a test starts in the test process makes
 // that folder in a short folder of its own, which ends with the host and leaves the temporary folder of the process as it was.
+// contract: test-support.host-temporary.ends-with-the-host
 func TestAHostInTheTestProcessMakesItsSocketFolderInAFolderThatEndsWithIt(t *testing.T) {
 	previous, set := os.LookupEnv("TMPDIR")
 	end, err := support.HostTemporary()
