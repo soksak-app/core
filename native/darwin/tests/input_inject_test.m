@@ -460,16 +460,28 @@ static void checkPointerQueue(void) {
 @property(nonatomic) NSUInteger exits;
 @property(nonatomic) NSUInteger downs;
 @property(nonatomic) NSUInteger movesAtDown;
+// The tracking area of each enter and exit, in order: AppKit gives a crossing the area it crosses (-[NSEvent trackingArea]).
+@property(nonatomic, readonly) NSMutableArray *crossedAreas;
 @end
 @implementation SPTrackedView
-- (void)track:(NSTrackingAreaOptions)options {
+@synthesize crossedAreas = _crossedAreas;
+- (NSMutableArray *)crossedAreas {
+    if (!_crossedAreas) _crossedAreas = [[NSMutableArray alloc] init];
+    return _crossedAreas;
+}
+- (void)dealloc {
+    [_crossedAreas release];
+    [super dealloc];
+}
+- (NSTrackingArea *)track:(NSTrackingAreaOptions)options {
     NSTrackingArea *area = [[[NSTrackingArea alloc] initWithRect:self.bounds options:options | NSTrackingActiveAlways
         owner:self userInfo:nil] autorelease];
     [self addTrackingArea:area];
+    return area;
 }
 - (void)mouseMoved:(NSEvent *)event { self.moves++; }
-- (void)mouseEntered:(NSEvent *)event { self.enters++; }
-- (void)mouseExited:(NSEvent *)event { self.exits++; }
+- (void)mouseEntered:(NSEvent *)event { self.enters++; [self.crossedAreas addObject:event.trackingArea ?: (id)NSNull.null]; }
+- (void)mouseExited:(NSEvent *)event { self.exits++; [self.crossedAreas addObject:event.trackingArea ?: (id)NSNull.null]; }
 // AppKit reads the key state of a window that answers it from the system, so it treats a press there as a first click.
 - (BOOL)acceptsFirstMouse:(NSEvent *)event { return YES; }
 - (void)mouseDown:(NSEvent *)event { self.downs++; self.movesAtDown = self.moves; }
@@ -509,6 +521,11 @@ static void checkMoveReachesEveryOwner(void) {
     [above track:both];
     [inner track:both];
     [hidden track:both];
+    // An owner of two areas, as a WKWebView has one for the pointer and one for modifier keys, below every other view.
+    SPTrackedView *pair = [[[SPTrackedView alloc] initWithFrame:NSMakeRect(0, 0, 100, 100)] autorelease];
+    [content addSubview:pair positioned:NSWindowBelow relativeTo:nil];
+    NSTrackingArea *pairMoves = [pair track:both];
+    NSTrackingArea *pairCrossings = [pair track:NSTrackingMouseEnteredAndExited];
     [quiet track:NSTrackingMouseEnteredAndExited];
     [window orderBack:nil];
     pointerOutside(window);
@@ -523,6 +540,11 @@ static void checkMoveReachesEveryOwner(void) {
         @"owners that still hold the point keep hearing the moves");
     check(inner.moves == 2 && inner.exits == 1 && quiet.exits == 1, @"a move out of an area exits it and sends it no move");
     check(above.exits == 0, @"an area that holds the point is not exited");
+    // An owner of two areas tells their crossings apart by the area of the event, as WebKit does with its area for modifier keys:
+    // the move into the pair enters each area once and the move out exits each once.
+    NSCountedSet *pairCrossed = [NSCountedSet setWithArray:pair.crossedAreas];
+    check(pair.crossedAreas.count == 4 && [pairCrossed countForObject:pairMoves] == 2 && [pairCrossed countForObject:pairCrossings] == 2,
+        [NSString stringWithFormat:@"each enter and exit carries the tracking area that it crosses (%@)", pair.crossedAreas]);
 
     // A press at another point: a person moved there first, so the owners know the point before the press.
     const NSUInteger before = below.moves;

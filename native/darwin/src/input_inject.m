@@ -423,10 +423,14 @@ static void gatherAreas(NSView *view, NSPoint point, NSMutableArray<NSTrackingAr
     for (NSView *child in view.subviews) gatherAreas(child, point, held, left);
 }
 
-static NSEvent *crossing(NSWindow *window, NSEventType type, NSPoint point) {
+// The crossing of area as AppKit sends it: -[NSEvent trackingArea] answers the area, which an AppKit crossing carries in its
+// tracking number. An owner of several areas tells them apart by it: WebKit takes the crossing of its area for modifier key
+// changes as the start or end of that monitor and every other crossing as a mouse move, so a crossing without its area reaches
+// the page as one more move.
+static NSEvent *crossing(NSWindow *window, NSEventType type, NSPoint point, NSTrackingArea *area) {
     return [NSEvent enterExitEventWithType:type location:point modifierFlags:0
         timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber context:nil
-        eventNumber:0 trackingNumber:0 userData:NULL];
+        eventNumber:0 trackingNumber:(NSInteger)area userData:NULL];
 }
 
 // Delivers a move as a person's move arrives: the web view routing runs as for an event that AppKit dispatches, each tracking area
@@ -450,7 +454,7 @@ static bool moveTo(NSWindow *window, NSPoint point) {
         if (![entered containsObject:area]) continue;
         [entered removeObject:area];
         if ((area.options & NSTrackingMouseEnteredAndExited) && [area.owner respondsToSelector:@selector(mouseExited:)]) {
-            [area.owner mouseExited:crossing(window, NSEventTypeMouseExited, point)];
+            [area.owner mouseExited:crossing(window, NSEventTypeMouseExited, point, area)];
             heard = true;
         }
     }
@@ -458,11 +462,11 @@ static bool moveTo(NSWindow *window, NSPoint point) {
         if (!(area.options & (NSTrackingMouseEnteredAndExited | NSTrackingCursorUpdate)) || [entered containsObject:area]) continue;
         [entered addObject:area];
         if ((area.options & NSTrackingMouseEnteredAndExited) && [area.owner respondsToSelector:@selector(mouseEntered:)]) {
-            [area.owner mouseEntered:crossing(window, NSEventTypeMouseEntered, point)];
+            [area.owner mouseEntered:crossing(window, NSEventTypeMouseEntered, point, area)];
             heard = true;
         }
         if (cursor && (area.options & NSTrackingCursorUpdate) && [area.owner respondsToSelector:@selector(cursorUpdate:)]) {
-            [area.owner cursorUpdate:crossing(window, NSEventTypeCursorUpdate, point)];
+            [area.owner cursorUpdate:crossing(window, NSEventTypeCursorUpdate, point, area)];
             heard = true;
         }
     }
