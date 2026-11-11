@@ -14,6 +14,7 @@ import { outside, rasterMarks, whitePixels } from "./outside.mjs";
 import { addRasterTabAt, RASTER } from "./raster-probe.mjs";
 import { alignment, alignmentDelta } from "./alignment.mjs";
 import { measureDragPerformance, shownTimes, assertFinalContentSize, assertHeldStatesShown, assertRoundTrips, lagStages, pointerLag, transactionCadence } from "@soksak/window-check/drag-measurement.mjs";
+import { readDisplayRefreshes } from "@soksak/window-check/display-refresh.mjs";
 
 // Vertical line 1 is the boundary between the left fixed sidebar and the first card of the middle column. Dragging it moves the left
 // edge of that card.
@@ -25,7 +26,7 @@ const READ = 0.5;
 /** Adds a raster probe tab to the first card of the middle column, whose left edge is line 1, and returns `{card, surface}`. */
 const rasterInFirstCard = (s) => addRasterTabAt(s, 1, 0);
 
-function assertAligned(run, marks, refreshRate) {
+function assertAligned(run, marks) {
   const files = frames(run.frames);
   assert.equal(files.length, run.count, "the drag recording omitted a saved frame");
   assert.ok(files.length > 30, `only ${files.length} frames were recorded`);
@@ -81,7 +82,7 @@ function assertAligned(run, marks, refreshRate) {
 
   const lag = pointerLag(shown, run.ticks, run.boundary);
   lag.stages = lagStages(lag, run.ticks, run.layouts);
-  lag.performance = measureDragPerformance(shownTimes(shown, run.ticks), lag, 1000 / refreshRate);
+  lag.performance = measureDragPerformance(shownTimes(shown, run.ticks), lag, readDisplayRefreshes(run.frames));
 
   return lag;
 }
@@ -144,7 +145,7 @@ for (const app of Object.values(APPS)) {
       `p90 ${draw[Math.floor(draw.length * .9)].toFixed(3)}, max ${draw.at(-1).toFixed(3)}`);
     // The transaction period is reported before the delay judgment. Even if the judgment fails, that period stays in the output (F92).
     t.diagnostic(`transaction cadence (ms): ${JSON.stringify(transactionCadence(run.layouts))}`);
-    const lag = assertAligned(run, marks, (await s.get("host.window")).refreshRate);
+    const lag = assertAligned(run, marks);
     t.diagnostic(`performance measurements: ${JSON.stringify(lag.performance)}; system load ${JSON.stringify(loadavg())}, processors ${availableParallelism()}`);
     t.diagnostic(`pointer lag: worst ${lag.lag.toFixed(1)}ms, p90 ${lag.p90.toFixed(1)}ms, median ${lag.median.toFixed(1)}ms; transactions ${lag.stages}`);
   });
