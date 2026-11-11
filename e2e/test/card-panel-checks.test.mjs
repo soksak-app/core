@@ -3,30 +3,40 @@ import test from "node:test";
 
 import { gripInk, missingPoses, panelSurfaceRect, requireCleared, requireContentWidth, tabSwitchPair } from "../card-panel-checks.mjs";
 
+const sixty = Array.from({ length: 2001 }, (_, index) => -1000 + index * 1000 / 60);
+const onetwenty = Array.from({ length: 2001 }, (_, index) => -1000 + index * 1000 / 120);
+
 test("a pose absent from the first recorded frame after two display frames is missing", () => {
   const frames = [{ time: 100, edges: [10] }, { time: 130, edges: [20] }, { time: 200, edges: [40] }, { time: 210, edges: [30] }];
   const poses = [{ displayed: 99, at: 10 }, { displayed: 120, at: 20 }, { displayed: 150, at: 30 }];
-  assert.deepEqual(missingPoses(frames, poses, 60), [{ displayed: 150, at: 30 }]);
-  assert.deepEqual(missingPoses(frames, poses.slice(0, 2), 60), []);
+  assert.deepEqual(missingPoses(frames, poses, sixty), [{ displayed: 150, at: 30 }]);
+  assert.deepEqual(missingPoses(frames, poses.slice(0, 2), sixty), []);
 });
 
 test("a pose in the first frame that a recording gap delivers after two display frames counts as recorded", () => {
   // Measured example at 120 Hz: the stream delivered no frame between 32.2 ms before and 20.3 ms after the display time.
   const frames = [{ time: -32.2, edges: [147] }, { time: 20.3, edges: [137] }, { time: 34, edges: [137] }];
-  assert.deepEqual(missingPoses(frames, [{ displayed: -60, at: 147 }, { displayed: 0, at: 137 }], 120), []);
+  assert.deepEqual(missingPoses(frames, [{ displayed: -60, at: 147 }, { displayed: 0, at: 137 }], onetwenty), []);
 });
 
 test("a pose with no recorded frame after two display frames is missing", () => {
   const frames = [{ time: -32.2, edges: [147] }, { time: 5, edges: [147] }];
-  assert.deepEqual(missingPoses(frames, [{ displayed: -60, at: 147 }, { displayed: 0, at: 137 }], 120), [{ displayed: 0, at: 137 }]);
+  assert.deepEqual(missingPoses(frames, [{ displayed: -60, at: 147 }, { displayed: 0, at: 137 }], onetwenty), [{ displayed: 0, at: 137 }]);
 });
 
 test("a pose displayed before the recording started counts from the first recorded frame", () => {
   const frames = [{ time: 200, edges: [10] }, { time: 216, edges: [20] }];
   // The recording started at 200 and the first state was displayed before that. If the first frame holds that state, it was recorded.
-  assert.deepEqual(missingPoses(frames, [{ displayed: 100, at: 10 }, { displayed: 210, at: 20 }], 60), []);
+  assert.deepEqual(missingPoses(frames, [{ displayed: 100, at: 10 }, { displayed: 210, at: 20 }], sixty), []);
   // A state that changed to the next state before the recording started cannot be recorded, so it cannot be counted as the first frame.
-  assert.deepEqual(missingPoses(frames, [{ displayed: 100, at: 30 }, { displayed: 150, at: 10 }], 60), [{ displayed: 100, at: 30 }]);
+  assert.deepEqual(missingPoses(frames, [{ displayed: 100, at: 30 }, { displayed: 150, at: 10 }], sixty), [{ displayed: 100, at: 30 }]);
+});
+
+test("a pose counts as recorded when its frame falls inside the observed refresh window", () => {
+  // The display refreshes every 1000/60 ms. The state is displayed at 100 ms, so its window ends at the second refresh after it (about 166.7 ms).
+  // A window computed from 120 Hz would end at about 116.7 ms and would miss the frame at 150 ms.
+  const frames = [{ time: 100, edges: [10] }, { time: 150, edges: [20] }, { time: 200, edges: [30] }];
+  assert.deepEqual(missingPoses(frames, [{ displayed: 100, at: 10 }, { displayed: 110, at: 20 }], sixty), []);
 });
 
 test("a pose shown before its reported display time and after the previous pose counts as recorded", () => {
@@ -36,10 +46,10 @@ test("a pose shown before its reported display time and after the previous pose 
     { time: -12, edges: [245] }, { time: 21, edges: [255] },
   ];
   const poses = [{ displayed: -100, at: 235 }, { displayed: 0, at: 245 }, { displayed: 60, at: 255 }];
-  assert.deepEqual(missingPoses(frames, poses, 60), []);
+  assert.deepEqual(missingPoses(frames, poses, sixty), []);
   // A frame before the earlier state was displayed is not a record of this state.
   const stale = [{ time: -150, edges: [245] }, { time: -95, edges: [235] }, { time: 21, edges: [255] }];
-  assert.deepEqual(missingPoses(stale, poses, 60), [{ displayed: 0, at: 245 }]);
+  assert.deepEqual(missingPoses(stale, poses, sixty), [{ displayed: 0, at: 245 }]);
 });
 
 test("panels left after clearing are rejected, including default ones", () => {
