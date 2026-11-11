@@ -60,6 +60,11 @@ pub struct WindowData {
     pub(crate) readied: Mutex<Vec<Readied>>,
     /// The ends of the window and of its main page process, which end the requests that wait in the window.
     pub(crate) ends: WindowEnds,
+    /// The ends of the generations of the main page, which end the waits of the host calls that the page sent: the page reads
+    /// again only after each of them has its reply (docs/spec/native-host.md#page-reload).
+    pub(crate) page_calls: PageCallEnds,
+    /// The settled frame waits of the window that wait for their native answer.
+    pub(crate) frame_waits: FrameWaits,
     /// Set when the window asked its page with `project-close-request` and the page has answered neither `windowClose` nor
     /// `windowCloseKept`, so the end of the page answers it (`answer_close_question`).
     pub close_asked: AtomicBool,
@@ -126,16 +131,181 @@ impl WindowEnds {
     }
 }
 
+/// The end of the waits of the host calls of a page that the reload request sends (docs/spec/native-host.md#page-reload).
+pub(crate) const PAGE_RELOADING_END: &str = "the page is reloading";
+/// The end of the waits of the host calls of a page that the start of a new page sends.
+pub(crate) const PAGE_REPLACED_END: &str = "a new page started";
+
+/// The ends of the generations of the main page of a window, counted as `WindowEnds` counts the ends of the window, and the end
+/// that holds until the next page starts, which a wait of a host call that begins after it meets at once.
+#[derive(Default)]
+pub(crate) struct PageCallEnds(Mutex<PageCallEnd>);
+
+#[derive(Default)]
+struct PageCallEnd {
+    count: u64,
+    last: String,
+    holds: bool,
+}
+
+impl PageCallEnds {
+    fn lock(&self) -> std::sync::MutexGuard<'_, PageCallEnd> {
+        // default: a lock that a panicking thread poisoned still holds the count and the texts, which are only read or
+        // replaced; the panic hook records the panic.
+        self.0.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// The count of the ends so far.
+    pub(crate) fn mark(&self) -> u64 {
+        self.lock().count
+    }
+
+    /// The text of the last end after the count mark, or None when no end came after it.
+    pub(crate) fn since(&self, mark: u64) -> Option<String> {
+        let ends = self.lock();
+        (ends.count > mark).then(|| ends.last.clone())
+    }
+
+    /// The end that holds until the next page starts, or None.
+    pub(crate) fn holding(&self) -> Option<String> {
+        let ends = self.lock();
+        ends.holds.then(|| ends.last.clone())
+    }
+
+    fn record(&self, end: &str) {
+        let mut ends = self.lock();
+        ends.count += 1;
+        ends.last = end.to_string();
+        ends.holds = true;
+    }
+
+    fn release(&self) {
+        self.lock().holds = false;
+    }
+}
+
+/// What a settled frame wait receives: the answer of the platform, or an end of the window, of its page process or, for a wait
+/// of a host call of the page, of the generation of the page.
+pub(crate) enum FrameOutcome {
+    Displayed(Result<f64, String>),
+    Ended(String),
+}
+
+/// The settled frame waits of a window that wait for the answer of the platform, so the ends that come during a wait reach it.
+#[derive(Default)]
+pub(crate) struct FrameWaits(Mutex<FrameWaitList>);
+
+#[derive(Default)]
+struct FrameWaitList {
+    last: u64,
+    waits: HashMap<u64, FrameWait>,
+}
+
+/// One settled frame wait: whether a host call of the page asked it, and the sender of its outcome.
+struct FrameWait {
+    page_call: bool,
+    sender: mpsc::Sender<FrameOutcome>,
+}
+
+impl FrameWaits {
+    fn lock(&self) -> std::sync::MutexGuard<'_, FrameWaitList> {
+        // default: a lock that a panicking thread poisoned still holds the waits, which are only added, removed or ended; the
+        // panic hook records the panic.
+        self.0.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    fn begin(&self, page_call: bool, sender: mpsc::Sender<FrameOutcome>) -> u64 {
+        let mut list = self.lock();
+        list.last += 1;
+        let id = list.last;
+        list.waits.insert(id, FrameWait { page_call, sender });
+        id
+    }
+
+    fn finish(&self, id: u64) {
+        self.lock().waits.remove(&id);
+    }
+
+    /// Ends the waits with end: only those of host calls of the page with page_calls, every wait without.
+    fn end(&self, end: &str, page_calls: bool) {
+        let ended: Vec<FrameWait> = {
+            let mut list = self.lock();
+            let ids: Vec<u64> = list
+                .waits
+                .iter()
+                .filter(|(_, wait)| wait.page_call || !page_calls)
+                .map(|(id, _)| *id)
+                .collect();
+            ids.iter().filter_map(|id| list.waits.remove(id)).collect()
+        };
+        for wait in ended {
+            // default: a wait that already received its answer has dropped its receiver, and nothing waits for this end.
+            let _ = wait.sender.send(FrameOutcome::Ended(end.to_string()));
+        }
+    }
+}
+
 impl WindowData {
     /// Ends the requests that wait in the window with `end`, the close of the window or the end of its main page process: a
-    /// reload that waits for the ready page, a presented wait for the first frame of the modal and a presented wait for the
-    /// end of the continuous update (docs/spec/native-host.md).
+    /// reload that waits for the ready page, a presented wait for the first frame of the modal, a presented wait for the
+    /// end of the continuous update and a presented wait for the settled frame (docs/spec/native-host.md).
     pub(crate) fn end_waits(&self, end: &str) {
         self.ends.record(end);
         self.overlay.wake_paint_waits();
         self.images.wake_waits();
+        self.frame_waits.end(end, false);
         crate::surfaces::end_settled_waits(&self.running);
         end_reloads(self, Err(ReloadEnd::Ended(end.to_string())));
+    }
+
+    /// Ends the waits of the host calls that the main page sent with `end`, the end of the generation of that page, and holds
+    /// the end for the calls that begin before the next page starts (`start_page_calls`): the page reads again only after each
+    /// of its calls has its reply (docs/spec/native-host.md#page-reload).
+    pub(crate) fn end_page_calls(&self, end: &str) {
+        self.page_calls.record(end);
+        self.overlay.wake_paint_waits();
+        self.images.wake_waits();
+        self.frame_waits.end(end, true);
+    }
+
+    /// Ends the waits of the host calls of the page before the new main page that starts, and lets the calls of the new page
+    /// wait.
+    pub(crate) fn start_page_calls(&self) {
+        self.end_page_calls(PAGE_REPLACED_END);
+        self.page_calls.release();
+    }
+
+    /// Waits for the answer of the settled frame wait that start asks of the platform with the sender of the answer, and returns
+    /// the time of that screen. An end of the window or of its page process during the wait ends it with 1003 and that end, and
+    /// so does, for a wait of a host call of the page (page_call), the end of the generation of the page, which ends such a wait
+    /// that begins after it at once until the next page starts.
+    pub(crate) fn wait_settled_frame(
+        &self,
+        page_call: bool,
+        start: impl FnOnce(mpsc::Sender<FrameOutcome>) -> Result<(), String>,
+    ) -> Result<f64, crate::endpoint::Failure> {
+        use crate::endpoint::{Failure, MISSING_DOCUMENT};
+        // The failures of the start and of the platform are internal failures, as the other failures of the presented wait.
+        let internal = |error: String| Failure::new(-32603, error);
+        if page_call && let Some(end) = self.page_calls.holding() {
+            return Err(Failure::new(MISSING_DOCUMENT, end));
+        }
+        let (sender, outcome) = mpsc::channel();
+        let id = self.frame_waits.begin(page_call, sender.clone());
+        let started = start(sender);
+        let answer = started.map(|()| outcome.recv());
+        self.frame_waits.finish(id);
+        match answer {
+            Err(error) => Err(internal(error)),
+            Ok(Ok(FrameOutcome::Displayed(Ok(displayed)))) => Ok(displayed),
+            Ok(Ok(FrameOutcome::Displayed(Err(error)))) => Err(internal(error)),
+            Ok(Ok(FrameOutcome::Ended(end))) => Err(Failure::new(MISSING_DOCUMENT, end)),
+            // default: the registration holds a sender until the wait finishes, so the channel cannot close before an answer.
+            Ok(Err(_)) => Err(Failure::new(
+                MISSING_DOCUMENT,
+                "the window closed before it presented",
+            )),
+        }
     }
 }
 
@@ -1612,6 +1782,8 @@ pub(crate) fn removal_page_ended(window: &Window) {
 /// modals of the previous page.
 pub(crate) fn page_started(window: &Window) -> Result<(), String> {
     let data = window_data(window)?;
+    // The start of a new page ends the waits of the host calls of the earlier page.
+    data.start_page_calls();
     // The start of a new page ends the run of the earlier page with its transactions
     // (docs/spec/native-surfaces.md#layout-transaction).
     crate::surfaces::end_run(&data.running);
@@ -1762,6 +1934,7 @@ pub(crate) fn reload_ready_page(
     close: impl FnOnce() -> Result<(), String>,
 ) -> Result<(), String> {
     crate::exposure::ask_page_to_reload(relay, &data.page_reloading, main, emit)?;
+    data.end_page_calls(PAGE_RELOADING_END);
     leave_page(data, removals, keys, close)
 }
 

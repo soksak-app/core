@@ -158,7 +158,7 @@ func (h *Host) startFailed(s *Surfaces, err error) error {
 // pageStarting ends what the previous page of s left: its generation ends (answerPage), and its surface documents close, which also
 // gives the keys that waited for the decision of its workbench. The new page accepts requests to surface documents again.
 func (h *Host) pageStarting(s *Surfaces) error {
-	h.answerPage(s)
+	h.answerPage(s, pageReplacedEnd)
 	s.imageDetachPageStarting()
 	s.pageStarted()
 	// Dialog claims belong to the ended workbench, even if its surface reload fails.

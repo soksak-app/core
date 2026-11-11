@@ -496,6 +496,12 @@ func (s *Surfaces) modalPaintChanged() {
 // close of the window and the end of its page process end it with 1003, and the end of ctx ends it with an error. Each end is
 // recorded before the wake, so an end before the wait reads the state ends it the same way.
 func (s *Surfaces) waitForModalPaint(ctx context.Context) error {
+	return s.waitForModalPaintUntil(ctx, nil)
+}
+
+// waitForModalPaintUntil is waitForModalPaint that also ends when pageEnds closes, with the end of the host calls of the page; a
+// nil pageEnds never closes.
+func (s *Surfaces) waitForModalPaintUntil(ctx context.Context, pageEnds <-chan struct{}) error {
 	ends, ended := s.waitEnd()
 	if ended != "" {
 		return waitEndError(ended)
@@ -522,6 +528,8 @@ func (s *Surfaces) waitForModalPaint(ctx context.Context) error {
 		case <-paint:
 		case <-ends:
 			return waitEndError(s.lastWaitEnd())
+		case <-pageEnds:
+			return waitEndError(s.lastPageCallEndText())
 		case <-ctx.Done():
 			return connectionEnded()
 		}

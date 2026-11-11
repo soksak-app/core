@@ -551,7 +551,7 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 		}
 		// The workbench ended with the process of its page, so what the page owed ends now (endPage), and so do the waits for
 		// that page: a reload that waits for its ready report and a presented wait.
-		h.endPage(s)
+		h.endPage(s, pageEndedEnd)
 		s.pageProcessEnded()
 	})
 	win.OnWindowEvent(WindowWorkbenchCommitted, func() {
