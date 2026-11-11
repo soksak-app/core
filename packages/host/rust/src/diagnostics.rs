@@ -2229,7 +2229,8 @@ fn delivered_notifications(window: &Window) -> Result<Value, Failure> {
 }
 
 fn modal_held(window: &str) -> Result<Value, Failure> {
-    await_modal_held(&modal_held_hold(window)?);
+    let hold = modal_held_hold(window)?;
+    await_modal_held(&hold);
     Ok(Value::Null)
 }
 
