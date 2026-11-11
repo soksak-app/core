@@ -30,7 +30,9 @@
 
 // Written on the main thread, read on any thread. It holds a retained reference while it is set.
 static _Atomic(void *) current;
-static id closeObserver, moveMonitor;
+static id closeObserver, sheetObserver, moveMonitor;
+// Set while the virtual key window moves between a sheet and the window it is attached to, whose main window does not change.
+static BOOL keepMain;
 static double pointX, pointY;
 static bool hasPoint;
 static BOOL (*appKitIsKey)(id, SEL), (*appKitIsMain)(id, SEL), (*appKitIsActive)(id, SEL), (*appKitPrivateIsKey)(id, SEL);
@@ -89,8 +91,16 @@ static BOOL answerPrivateIsKey(NSWindow *self, SEL selector) {
     return self == answering() ? YES : appKitPrivateIsKey(self, selector);
 }
 
+// The main window of a key window: a sheet does not become main, so while a sheet is key its parent, or the parent of a sheet
+// that is itself a sheet, stays the main window, as AppKit keeps it while a person types into the sheet.
+static NSWindow *mainOf(NSWindow *window) {
+    while (window.sheetParent) window = window.sheetParent;
+    return window;
+}
+
 static BOOL answerIsMain(NSWindow *self, SEL selector) {
-    return self == answering() ? YES : appKitIsMain(self, selector);
+    NSWindow *virtual = answering();
+    return virtual ? self == mainOf(virtual) : appKitIsMain(self, selector);
 }
 
 static BOOL answerIsActive(id self, SEL selector) {
@@ -109,7 +119,7 @@ static NSWindow *answerPrivateKeyWindow(id self, SEL selector) {
 }
 
 static NSWindow *answerMainWindow(id self, SEL selector) {
-    return answering() ?: appKitMainWindow(self, selector);
+    return mainOf(answering()) ?: appKitMainWindow(self, selector);
 }
 
 static void record(const char *phase, const char *reason) {
@@ -261,10 +271,22 @@ static bool enter(NSWindow *window, const char *reason) {
     if (!window || sp_input_virtual_real_active()) return false;
     if ((__bridge void *)window == atomic_load(&current)) return true;
     install();
+    NSWindow *previousMain = mainOf((__bridge NSWindow *)atomic_load(&current));
+    keepMain = previousMain && previousMain == mainOf(window);
     sp_input_virtual_end("another window");
+    keepMain = NO;
     atomic_store(&current, (__bridge void *)[window retain]);
     closeObserver = [sp_observe_notification("input_virtual.close", SP_OBSERVE_RECORD, NSWindowWillCloseNotification, window, nil,
         ^(NSNotification *note) { sp_input_virtual_end("closed"); }) retain];
+    // When a sheet ends, AppKit makes its parent key again; the virtual key window returns to the parent the same way, so an
+    // ended sheet that is ordered out without a close does not stay the key window.
+    NSWindow *parent = window.sheetParent;
+    if (parent) {
+        sheetObserver = [sp_observe_notification("input_virtual.sheet_end", SP_OBSERVE_RECORD, NSWindowDidEndSheetNotification, parent,
+            nil, ^(NSNotification *note) {
+                if ((__bridge void *)window == atomic_load(&current) && !window.isVisible) enter(parent, "sheet ended");
+            }) retain];
+    }
     // A real move holds the position of a person's cursor, so it does not reach a page that a check drives. An injected move
     // does not pass the application and no monitor sees it.
     moveMonitor = [sp_observe_local_monitor("input_virtual.real_move", SP_OBSERVE_COUNT,
@@ -273,7 +295,7 @@ static bool enter(NSWindow *window, const char *reason) {
         }) retain];
     NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
     [center postNotificationName:NSWindowDidBecomeKeyNotification object:window];
-    [center postNotificationName:NSWindowDidBecomeMainNotification object:window];
+    if (mainOf(window) != previousMain) [center postNotificationName:NSWindowDidBecomeMainNotification object:mainOf(window)];
     record("entered", reason);
     return true;
 }
@@ -289,6 +311,9 @@ void sp_input_virtual_end(const char *reason) {
     [NSNotificationCenter.defaultCenter removeObserver:closeObserver];
     [closeObserver release];
     closeObserver = nil;
+    if (sheetObserver) [NSNotificationCenter.defaultCenter removeObserver:sheetObserver];
+    [sheetObserver release];
+    sheetObserver = nil;
     [NSEvent removeMonitor:moveMonitor];
     [moveMonitor release];
     moveMonitor = nil;
@@ -297,7 +322,7 @@ void sp_input_virtual_end(const char *reason) {
     if (strcmp(reason, "closed") != 0 && !window.isKeyWindow) {
         NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
         [center postNotificationName:NSWindowDidResignKeyNotification object:window];
-        [center postNotificationName:NSWindowDidResignMainNotification object:window];
+        if (!keepMain) [center postNotificationName:NSWindowDidResignMainNotification object:mainOf(window)];
     }
     // It is not released inside the notification of its close, and the turn after it holds no pool that outlives the window.
     dispatch_async(dispatch_get_main_queue(), ^{ [window release]; });
