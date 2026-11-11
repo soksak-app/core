@@ -12,6 +12,17 @@ path = "src/host.rs"
 [features]
 diagnostics = ["soksak-sok/diagnostics"]
 dev = ["soksak-sok/dev"]
+# host-test links the native host test library (native/darwin/tests/support) for the tests that run a handled crash child.
+host-test = []
+
+# The fatal tests start a child whose crash exceptions the host test library answers; they need host-test.
+[[test]]
+name = "fatal_exception_test"
+required-features = ["host-test"]
+
+[[test]]
+name = "fatal_signal_test"
+required-features = ["host-test"]
 
 # A measurement prints numbers and asserts nothing (docs/spec/logging.md#writers).
 [[bench]]

@@ -55,3 +55,11 @@ void *sp_host_test_frame_create(int width, int height, const unsigned char *nonc
 uint32_t sp_host_test_frame_id(void *frame);
 bool sp_host_test_frame_in_use(void *frame);
 void sp_host_test_frame_release(void *frame);
+
+// A child started with its crash exceptions answered by a test service: the exceptions are answered as handled, so the system
+// writes no crash report for them. The arguments are newline-separated after path; environment is NAME=VALUE, added to the
+// inherited environment. Standard output and standard error go to output_fd. Returns NULL or an error message.
+const char *sp_host_test_spawn_handled_crash(const char *path, const char *arguments, const char *environment, int output_fd,
+    int *pid, uintptr_t *handle);
+// Waits for the child, ends the service, and writes the raw wait status and the number of answered crash exceptions.
+const char *sp_host_test_wait_handled_crash(uintptr_t handle, int *status, int *handled);

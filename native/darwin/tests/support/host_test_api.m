@@ -279,3 +279,178 @@ void *sp_host_test_frame_create(int width, int height, const unsigned char *nonc
 uint32_t sp_host_test_frame_id(void *frame) { return IOSurfaceGetID((IOSurfaceRef)frame); }
 bool sp_host_test_frame_in_use(void *frame) { return IOSurfaceIsInUse((IOSurfaceRef)frame) != 0; }
 void sp_host_test_frame_release(void *frame) { CFRelease((CFTypeRef)frame); }
+
+#include <errno.h>
+#include <mach/ndr.h>
+#include <mach/thread_status.h>
+#include <signal.h>
+#include <spawn.h>
+#include <string.h>
+#include <sys/wait.h>
+
+// The exception message of a task crash (mach_exc, MIG subsystem 2405): the crashing thread and task are port descriptors.
+#define CRASH_RAISE_ID 2405
+#define CRASH_REPLY_ID 2505
+
+typedef struct {
+    mach_msg_header_t header;
+    mach_msg_body_t body;
+    mach_msg_port_descriptor_t thread;
+    mach_msg_port_descriptor_t task;
+    NDR_record_t ndr;
+    exception_type_t exception;
+    mach_msg_type_number_t code_count;
+    int64_t code[2];
+    mach_msg_trailer_t trailer;
+} crash_request;
+
+typedef struct {
+    mach_msg_header_t header;
+    NDR_record_t ndr;
+    kern_return_t result;
+} crash_reply;
+
+typedef struct {
+    mach_port_t port;
+    pid_t pid;
+    pthread_t thread;
+    _Atomic int handled;
+    int failed;
+} crash_service;
+
+extern char **environ;
+
+// The service answers each crash exception with KERN_SUCCESS, so the system treats the exception as handled and writes no
+// crash report. It ends when the owner destroys the port.
+static void *crashServiceRun(void *argument) {
+    crash_service *service = argument;
+    for (;;) {
+        crash_request request;
+        memset(&request, 0, sizeof(request));
+        kern_return_t result = mach_msg(&request.header, MACH_RCV_MSG, 0, sizeof(request), service->port, MACH_MSG_TIMEOUT_NONE,
+            MACH_PORT_NULL);
+        // The owner destroys the port to end the service; the receive then reports the port as changed or dead.
+        if (result == MACH_RCV_PORT_DIED || result == MACH_RCV_PORT_CHANGED || result == MACH_RCV_INVALID_NAME) return NULL;
+        if (result != KERN_SUCCESS || request.header.msgh_id != CRASH_RAISE_ID) {
+            service->failed = 1;
+            return NULL;
+        }
+        mach_port_deallocate(mach_task_self(), request.thread.name);
+        mach_port_deallocate(mach_task_self(), request.task.name);
+        // The count is set before the reply, so the owner reads it after the child has ended.
+        atomic_fetch_add(&service->handled, 1);
+        crash_reply reply;
+        memset(&reply, 0, sizeof(reply));
+        reply.header.msgh_bits = MACH_MSGH_BITS(MACH_MSGH_BITS_REMOTE(request.header.msgh_bits), 0);
+        reply.header.msgh_size = sizeof(reply);
+        reply.header.msgh_remote_port = request.header.msgh_remote_port;
+        reply.header.msgh_local_port = MACH_PORT_NULL;
+        reply.header.msgh_id = CRASH_REPLY_ID;
+        reply.ndr = NDR_record;
+        reply.result = KERN_SUCCESS;
+        result = mach_msg(&reply.header, MACH_SEND_MSG, sizeof(reply), 0, MACH_PORT_NULL, MACH_MSG_TIMEOUT_NONE, MACH_PORT_NULL);
+        if (result != KERN_SUCCESS) {
+            service->failed = 1;
+            return NULL;
+        }
+    }
+}
+
+// Starts path with the newline-separated arguments after it and NAME=VALUE in the environment, its standard output and standard
+// error on output_fd, and its crash exceptions answered by a service. It returns NULL or an error message.
+const char *sp_host_test_spawn_handled_crash(const char *path, const char *arguments, const char *environment, int output_fd,
+    int *pid, uintptr_t *handle) {
+    crash_service *service = calloc(1, sizeof(*service));
+    if (!service) return "host test crash service allocation failed";
+    if (mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &service->port) != KERN_SUCCESS) {
+        free(service);
+        return "host test crash port allocation failed";
+    }
+    if (mach_port_insert_right(mach_task_self(), service->port, service->port, MACH_MSG_TYPE_MAKE_SEND) != KERN_SUCCESS) {
+        mach_port_destruct(mach_task_self(), service->port, -1, 0);
+        free(service);
+        return "host test crash port send right failed";
+    }
+    char *copy = strdup(arguments);
+    size_t count = 0;
+    if (*arguments) {
+        count = 1;
+        for (const char *character = arguments; *character; character++) {
+            if (*character == '\n') count++;
+        }
+    }
+    char **argv = calloc(count + 2, sizeof(char *));
+    size_t environment_count = 0;
+    while (environ[environment_count]) environment_count++;
+    char **envp = calloc(environment_count + 2, sizeof(char *));
+    if (!copy || !argv || !envp) {
+        free(copy);
+        free(argv);
+        free(envp);
+        mach_port_destruct(mach_task_self(), service->port, -1, 0);
+        free(service);
+        return "host test spawn allocation failed";
+    }
+    argv[0] = (char *)path;
+    if (*copy) {
+        char *token = copy;
+        for (size_t index = 1;; index++) {
+            char *end = strchr(token, '\n');
+            if (end) *end = 0;
+            argv[index] = token;
+            if (!end) break;
+            token = end + 1;
+        }
+    }
+    for (size_t index = 0; index < environment_count; index++) envp[index] = environ[index];
+    envp[environment_count] = (char *)environment;
+
+    posix_spawn_file_actions_t actions;
+    posix_spawnattr_t attributes;
+    posix_spawn_file_actions_init(&actions);
+    posix_spawnattr_init(&attributes);
+    posix_spawn_file_actions_adddup2(&actions, output_fd, STDOUT_FILENO);
+    posix_spawn_file_actions_adddup2(&actions, output_fd, STDERR_FILENO);
+    int error = posix_spawnattr_setexceptionports_np(&attributes, EXC_MASK_CRASH, service->port, EXCEPTION_DEFAULT | MACH_EXCEPTION_CODES,
+        THREAD_STATE_NONE);
+    if (!error) error = posix_spawn(&service->pid, path, &actions, &attributes, argv, envp);
+    posix_spawn_file_actions_destroy(&actions);
+    posix_spawnattr_destroy(&attributes);
+    free(copy);
+    free(argv);
+    free(envp);
+    if (error) {
+        mach_port_destruct(mach_task_self(), service->port, -1, 0);
+        free(service);
+        return "host test crash child could not be spawned";
+    }
+    error = pthread_create(&service->thread, NULL, crashServiceRun, service);
+    if (error) {
+        kill(service->pid, SIGKILL);
+        waitpid(service->pid, NULL, 0);
+        mach_port_destruct(mach_task_self(), service->port, -1, 0);
+        free(service);
+        return "host test crash service thread could not be created";
+    }
+    *pid = service->pid;
+    *handle = (uintptr_t)service;
+    return NULL;
+}
+
+// Waits for the child started by sp_host_test_spawn_handled_crash, ends its service and writes the raw wait status and the
+// number of crash exceptions that the service answered. It returns NULL or an error message.
+const char *sp_host_test_wait_handled_crash(uintptr_t handle, int *status, int *handled) {
+    crash_service *service = (crash_service *)handle;
+    pid_t reaped;
+    do {
+        reaped = waitpid(service->pid, status, 0);
+    } while (reaped == -1 && errno == EINTR);
+    mach_port_destruct(mach_task_self(), service->port, -1, 0);
+    pthread_join(service->thread, NULL);
+    *handled = atomic_load(&service->handled);
+    int failed = service->failed;
+    free(service);
+    if (reaped == -1) return "host test crash child could not be waited for";
+    if (failed) return "host test crash service failed";
+    return NULL;
+}

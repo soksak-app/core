@@ -22,7 +22,9 @@
     "sp_host_test_frame_create",
     "sp_host_test_frame_id",
     "sp_host_test_frame_in_use",
-    "sp_host_test_frame_release"
+    "sp_host_test_frame_release",
+    "sp_host_test_spawn_handled_crash",
+    "sp_host_test_wait_handled_crash"
   ],
   "diagnostics": [],
   "records": [],

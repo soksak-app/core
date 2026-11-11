@@ -12820,14 +12820,14 @@ const FEATURE_LINKS = [
   {
     id: "F313",
     implementation: [
-      { file: "packages/host/rust/tests/support/crash_reports.rs", symbol: "pub fn watch_in(directory: PathBuf, application: &str) -> Self" },
-      { file: "packages/host/go/tests/support/crash_reports.go", symbol: "func WatchCrashReportsIn(" },
+      { file: "packages/host/go/tests/platform/darwin/standalone/handled_crash_nocgo.go", symbol: "func SpawnHandledCrashChild(" },
+      { file: "packages/host/rust/tests/support/crash_child.rs", symbol: "pub fn spawn(" },
     ],
     tests: [
-      { file: "packages/host/rust/tests/crash_reports_test.rs", id: "the_watch_removes_the_saved_report_and_not_the_hidden_file_that_the_system_renames" },
-      { file: "packages/host/go/tests/crash_reports_test.go", id: "TestTheWatchRemovesTheSavedReportAndNotTheHiddenFileThatTheSystemRenames" },
+      { file: "packages/host/go/tests/platform/darwin/system/application_log_test.go", id: "TestStartStandardErrorWritesAFatalErrorToTheCrashFileAndEndsTheProcessWithTheSystemCrash" },
+      { file: "packages/host/rust/tests/fatal_exception_test.rs", id: "an_exception_that_leaves_a_thread_of_the_host_writes_the_error_line_of_an_uncaught_exception" },
     ],
-    expected: "The crash report watch of both host tests removes the saved report of its process and not the hidden file that the system renames.",
+    expected: "The host tests that crash a child judge only the crash file the host writes and the SIGABRT end of the child; the child's exception is answered by the test so that no system crash report is written.",
     levels: ["unit"],
   },
   {
