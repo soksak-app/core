@@ -18,7 +18,7 @@ const crashOutputChild = "SOKSAK_CRASH_OUTPUT_CHILD"
 
 // A runtime fatal error of the host writes its output to logs/host-<boot>.crash and ends the process with SIGABRT. The test
 // judges only that crash file and that signal; the system crash report is kept from being written by a handled crash exception.
-// contract: log.fatal-error.writes-the-crash-file
+// contract: log.fatal-error.writes-the-crash-file, test-support.handled-crash.answers-the-crash-exception
 func TestStartStandardErrorWritesAFatalErrorToTheCrashFileAndEndsTheProcessWithTheSystemCrash(t *testing.T) {
 	if config := os.Getenv(crashOutputChild); config != "" {
 		log, err := host.StartHostEventLog(config)

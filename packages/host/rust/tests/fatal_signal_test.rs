@@ -13,7 +13,7 @@ use soksak_host::application_log::start_standard_error;
 
 const CHILD: &str = "SOKSAK_FATAL_SIGNAL_CHILD";
 
-// contract: log.fatal-signal.writes-an-error-line
+// contract: log.fatal-signal.writes-an-error-line, test-support.handled-crash.answers-the-crash-exception
 #[test]
 fn a_fatal_signal_writes_an_error_line_to_the_standard_error_file() {
     if let Some(config) = std::env::var_os(CHILD) {
