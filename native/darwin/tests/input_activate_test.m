@@ -158,7 +158,10 @@ static void checkFailures(void) {
         [NSString stringWithFormat:@"an activation completes without the system (%d, frontmost %s)", state.result, state.frontmost]);
     [behind close];
 
+    // A web view with no page has no process to send the active state to (the next case), so the stalled web view has a page.
     SPStalledWebView *stalled = [[[SPStalledWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)] autorelease];
+    loadPage(stalled, @"<!doctype html><title>stalled</title>");
+    awaitLoad(stalled);
     NSWindow *pending = makeWindow(NSWindow.class, stalled);
     // The webview step has no limit: a webview that does not report its active state keeps the request waiting until an event
     // ends it, here the close of the window.
@@ -172,6 +175,16 @@ static void checkFailures(void) {
     eventWait(@"the close of the window ends the webview step", ^BOOL { return waiting.done; });
     check(waiting.result == SP_ACTIVATE_PENDING,
         [NSString stringWithFormat:@"the close of the window ends the webview step with pending (%d)", waiting.result]);
+
+    // A visible web view that has loaded no page has no WebContent process, so no active state is sent and WebKit never reports
+    // the transmission: it does not hold the activation. The process that a later load starts reads the active state when it starts.
+    WKWebView *unloaded = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)] autorelease];
+    NSWindow *unloadedWindow = makeWindow(NSWindow.class, unloaded);
+    [unloadedWindow orderBack:nil];
+    state = activate(unloadedWindow);
+    check(state.result == SP_ACTIVATE_DONE && unloaded._webProcessIdentifier == 0,
+        [NSString stringWithFormat:@"a web view without a page does not block activation (%d, process %d)", state.result,
+            unloaded._webProcessIdentifier]);
 
     // A hidden document view is not an input target. While a visible window is being activated, it must not hold an explicit
     // activation request.
@@ -207,7 +220,7 @@ static void checkFailures(void) {
         [NSString stringWithFormat:@"an active application whose window cannot become key reports not key in its turn (done %d, %d)",
             state.done, state.result]);
 
-    for (NSWindow *window in @[pending, hiddenWindow, other, lost, unkeyable]) [window close];
+    for (NSWindow *window in @[pending, unloadedWindow, hiddenWindow, other, lost, unkeyable]) [window close];
 }
 
 int main(void) { @autoreleasepool {

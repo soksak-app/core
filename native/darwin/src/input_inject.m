@@ -1162,6 +1162,13 @@ static void afterWebViewsActive(NSWindow *window, WKWebView *target, BOOL waitFo
         NSMutableArray<WKWebView *> *views = [NSMutableArray array];
         if (target) [views addObject:target];
         else if (waitForAll) collectVisibleWebViews(window.contentView.superview ?: window.contentView, views, YES);
+        // A web view without a WebContent process (no page loaded yet) has no process to send the activity state to: WebKit
+        // never reports the transmission, so waiting for it would never end. The process that a later load starts reads the
+        // activity state of the view when it starts. _webProcessIdentifier is private (docs/operations/private-native-apis.md).
+        [views filterUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(WKWebView *view, NSDictionary *bindings) {
+            (void)bindings;
+            return view._webProcessIdentifier != 0;
+        }]];
         if (views.count == 0) { if (waitCreated) waitCreated(nil); done(); return; }
         NSMutableArray *ends = [NSMutableArray array];
         void (^stop)(void) = ^{
