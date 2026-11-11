@@ -898,6 +898,23 @@ export class Session {
     return this.request("input.text", { phase, ...(text === undefined ? {} : { text }), ...options });
   }
 
+  /**
+   * Orders the window of the session in front of every window of its level without activating the application
+   * (host.window.raise). It is an entry for an AI that uses the application; no window check calls it, because a check measures
+   * a covered window (docs/spec/exposure.md#order-of-a-window).
+   */
+  raise() {
+    return this.run("host.window.raise", {});
+  }
+
+  /**
+   * Orders the window of the session behind every window of its level without changing the active application
+   * (host.window.lower). Like raise, no window check calls it.
+   */
+  lower() {
+    return this.run("host.window.lower", {});
+  }
+
   /** A native click with press and release. */
   async click(x, y) {
     await this.until("host.buttons", (value) => value.mask === 0, "a mouse button stayed pressed");

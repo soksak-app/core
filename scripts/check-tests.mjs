@@ -9265,6 +9265,27 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F756-6",
+    implementation: [
+      { file: "native/darwin/src/window_facts.m", symbol: "bool sp_window_raise(void *handle) {" },
+      { file: "native/darwin/src/window_facts.m", symbol: "bool sp_window_lower(void *handle) {" },
+      { file: "native/darwin/src/window_facts.m", symbol: "NSDictionary *sp_window_order_in(NSArray<NSDictionary *> *windows, NSInteger number, pid_t pid) {" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "pub fn window_place(facts: &Value) -> Result<(Value, Value), String> {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/window_order_test.m", id: "the raise changes neither the active application, the front application nor the key window" },
+      { file: "native/darwin/tests/window_order_test.m", id: "the lower changes neither the active application, the front application nor the key window" },
+      { file: "packages/host/go/src/window_order_test.go", id: "TestWindowReportsItsDisplayAndItsPlaceAmongTheWindowsOnTheScreen" },
+      { file: "packages/host/go/src/window_order_test.go", id: "TestRaiseAndLowerOrderTheNativeWindow" },
+      { file: "packages/host/rust/tests/exposure_test.rs", id: "the_window_reports_its_display_and_its_place_among_the_windows_on_the_screen" },
+      { file: "packages/host/rust/tests/exposure_test.rs", id: "the_raise_and_the_lower_of_a_window_are_host_commands" },
+      { file: "packages/window-check/test/session-order.test.mjs", id: "a session raises and lowers its window through the host commands" },
+      { file: "packages/window-check/test/session-order.test.mjs", id: "no window check and no function of the check package orders a window" },
+    ],
+    expected: "host.window reports the display of a window and its place among the windows of its level, and the raise and the lower of a window order it to the front and the back of its level without changing the active application or the key window; no window check orders a window.",
+    levels: ["unit"],
+  },
+  {
     id: "F160.31",
     implementation: [
       { file: "packages/sok/go/src/event_log.go", symbol: "func StartEventLog" },
