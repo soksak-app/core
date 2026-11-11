@@ -1,5 +1,5 @@
 // Runs the end-to-end checks of core on this computer (docs/operations/examples.md#end-to-end-run):
-//   node scripts/test-app.mjs --script <name> [--native <target>] [--only <file>] [--defaults Name=Value]...
+//   node scripts/test-app.mjs --script <name> [--native <target>] [--only <file>]... [--defaults Name=Value]...
 // The e2e targets of the Makefile build the three debug applications, and then run this script with the window-check script of their
 // tier (`verify`, `test-app:activation`) and the native end-to-end target of that tier. Each run
 // makes a new configuration root under target/e2e, prepares the registry certificates in it and installs every plugin of the fixture
@@ -92,7 +92,9 @@ export function parseDefaults(entries) {
  */
 export async function e2ePlan({ root, configRoot, script, native, candidate, artifacts, only, runFolder, platform,
   fixtures = fixturePluginIds(), defaults = [] }) {
-  if (candidate && (artifacts !== undefined || only !== undefined || defaults.length)) throw new Error('candidate acceptance rejects ordinary selection, artifact or defaults overrides');
+  // `only` is one file selector or the list of a repeated --only, which scripts/node-tests.mjs widens to the files that hold any of them.
+  const onlies = only === undefined ? [] : [only].flat();
+  if (candidate && (artifacts !== undefined || onlies.length || defaults.length)) throw new Error('candidate acceptance rejects ordinary selection, artifact or defaults overrides');
   const defaultsPairs = parseDefaults(defaults);
   if (artifacts) validateOrdinaryArtifacts(artifacts);
   if (artifacts && !isAbsolute(configRoot)) throw new Error('ordinary configuration root must be absolute');
@@ -136,7 +138,7 @@ export async function e2ePlan({ root, configRoot, script, native, candidate, art
     ...(inputs ? [{ name: 'acceptance before', phase: 'prepare', kind: 'capture', capture: 'before' }] : []),
     {
       name: 'window checks', phase: 'check', kind: 'run',
-      argv: ['node', 'scripts/node-tests.mjs', '--script', script, '--concurrency', '1', '--timeout', '600', ...(only === undefined ? [] : ['--only', only])],
+      argv: ['node', 'scripts/node-tests.mjs', '--script', script, '--concurrency', '1', '--timeout', '600', ...onlies.flatMap((value) => ['--only', value])],
       env: {
         ...env,
         ...Object.fromEntries(APPS.map((app) => [`SOKSAK_BINARY_${app.toUpperCase()}`, appBinary(app)])),
@@ -437,7 +439,7 @@ export async function finishCandidate({ root, context, configRoot, runFolder, sc
 async function main(argv) {
   const { values } = parseArgs({
     args: argv, strict: true, options: { script: { type: 'string' }, native: { type: 'string' }, candidate: { type: 'string' },
-      artifacts: { type: 'string' }, 'config-root': { type: 'string' }, only: { type: 'string' }, defaults: { type: 'string', multiple: true } },
+      artifacts: { type: 'string' }, 'config-root': { type: 'string' }, only: { type: 'string', multiple: true }, defaults: { type: 'string', multiple: true } },
   });
   if (values.script === undefined) throw new Error('--script names the window-check script of the run');
   if (values.candidate && (values.artifacts !== undefined || values.only !== undefined || values['config-root'] !== undefined

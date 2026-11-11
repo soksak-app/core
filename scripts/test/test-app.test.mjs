@@ -95,6 +95,18 @@ test("--defaults gives each started application the argument-domain pair and the
     defaults: ["AppleShowScrollBars=Always", "AppleShowScrollBars=WhenScrolling"] }), /AppleShowScrollBars is given twice/);
 });
 
+test("a repeated --only reaches the window checks as one --only for each selector, in order", { timeout: 5000 }, async () => {
+  const plan = await e2ePlan({ root: "/work", configRoot: "/work/target/e2e/run", script: "test-app", platform: "darwin", fixtures: [],
+    only: ["/outside.test.mjs", "/paint.test.mjs", "/card-chrome.test.mjs"] });
+  assert.deepEqual(plan.find((item) => item.name === "window checks").argv.slice(8),
+    ["--only", "/outside.test.mjs", "--only", "/paint.test.mjs", "--only", "/card-chrome.test.mjs"]);
+  const one = await e2ePlan({ root: "/work", configRoot: "/work/target/e2e/run", script: "test-app", platform: "darwin", fixtures: [],
+    only: "window-end.test.mjs" });
+  assert.deepEqual(one.find((item) => item.name === "window checks").argv.slice(8), ["--only", "window-end.test.mjs"]);
+  const none = await e2ePlan({ root: "/work", configRoot: "/work/target/e2e/run", script: "test-app", platform: "darwin", fixtures: [] });
+  assert.equal(none.find((item) => item.name === "window checks").argv.includes("--only"), false);
+});
+
 test("candidate CLI rejects all ordinary options before reading context or starting applications", () => {
   for (const args of [["--only", "window-end.test.mjs"], ["--artifacts", "/must-not-read.json"], ["--config-root", "/must-not-create"],
     ["--defaults", "AppleShowScrollBars=Always"]]) {
