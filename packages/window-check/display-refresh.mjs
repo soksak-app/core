@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 /**
  * Reads the display refreshes that actually occurred for a window from a recording's display-link.json.
@@ -20,6 +22,11 @@ export function displayRefreshes(link) {
     periods.push(observation.duration * 1000);
   }
   return { times, periods };
+}
+
+/** Reads the refreshes of a recording from the display-link.json beside its frames. */
+export function readDisplayRefreshes(directory) {
+  return displayRefreshes(JSON.parse(readFileSync(join(directory, "display-link.json"), "utf8")));
 }
 
 /** The time of the count-th observed refresh strictly after a time. times must be ascending. */

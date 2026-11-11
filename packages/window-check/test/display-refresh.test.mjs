@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { displayRefreshes, refreshAfter } from "../display-refresh.mjs";
+import { displayRefreshes, readDisplayRefreshes, refreshAfter } from "../display-refresh.mjs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const observation = (timestamp, duration) => ({ timestamp, targetTimestamp: timestamp + duration, duration, displayID: 1, windowNumber: 2, visible: true, occluded: false, sequence: 0 });
 
@@ -33,4 +36,17 @@ test("display refreshes reject a recording whose display link is not available",
   const link = { state: "unavailable", reason: "the window is hidden", omittedObservations: 0, observations: [observation(1, 1 / 60)] };
   assert.throws(() => displayRefreshes(link), /display link is unavailable: the window is hidden/);
   assert.throws(() => displayRefreshes({ ...link, state: undefined }), /display link is undefined/);
+});
+
+test("a recording's refresh times are read from its display-link.json", { timeout: 1000 }, () => {
+  const directory = mkdtempSync(join(tmpdir(), "display-refresh-"));
+  try {
+    writeFileSync(join(directory, "display-link.json"), JSON.stringify({ state: "available", reason: "", omittedObservations: 0,
+      observations: [observation(2, 1 / 120), observation(2.5, 1 / 60)] }));
+    assert.deepEqual(readDisplayRefreshes(directory).times, [2000, 2500]);
+    writeFileSync(join(directory, "display-link.json"), JSON.stringify({ state: "unavailable", reason: "hidden", omittedObservations: 0, observations: [] }));
+    assert.throws(() => readDisplayRefreshes(directory), /display link is unavailable: hidden/);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
