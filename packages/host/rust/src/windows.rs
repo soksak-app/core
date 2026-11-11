@@ -239,8 +239,16 @@ impl FrameWaits {
             ids.iter().filter_map(|id| list.waits.remove(id)).collect()
         };
         for wait in ended {
-            // default: a wait that already received its answer has dropped its receiver, and nothing waits for this end.
-            let _ = wait.sender.send(FrameOutcome::Ended(end.to_string()));
+            if wait
+                .sender
+                .send(FrameOutcome::Ended(end.to_string()))
+                .is_err()
+            {
+                crate::application_log::log_info(
+                    "window",
+                    "the end of a presented wait arrived after its request ended",
+                );
+            }
         }
     }
 }
