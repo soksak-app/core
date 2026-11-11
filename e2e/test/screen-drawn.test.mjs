@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { cardPoint, fullSize, inWindow, LOGO, sample, undrawn } from "../screen-drawn.mjs";
+import { alpha, cardPoint, fullSize, inWindow, LOGO, sample, undrawn } from "../screen-drawn.mjs";
 
 const BACKGROUND = [20, 20, 30];
 const CARD = [43, 46, 61];
@@ -29,6 +29,14 @@ test("a sample reads the pixel at a window point through the content rectangle a
   const card = { x: 50, y: 40 };
   assert.deepEqual(sample(frame({ card }), card), CARD);
   assert.deepEqual(sample(frame({ card }), { x: 40, y: 40 }), BACKGROUND);
+});
+
+test("the alpha of a window point is 0 where the window is transparent and is read through the content rectangle and the scale", () => {
+  assert.equal(alpha(frame({ alpha: 0 }), { x: 50, y: 40 }), 0);
+  assert.equal(alpha(frame(), { x: 50, y: 40 }), 255);
+  const half = frame();
+  half.data[(4 + 40) * 2 * half.stride + (4 + 50) * 2 * 4 + 3] = 7;
+  assert.equal(alpha(half, { x: 50, y: 40 }), 7);
 });
 
 test("the card point is at the head of the first card with tabs, on the plane", () => {

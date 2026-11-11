@@ -30,6 +30,12 @@ export function sample(frame, point) {
   return pixel(frame, x, y);
 }
 
+/** The alpha of the frame pixel at the window coordinate (points) point: 0 where the window is transparent, as a new window is before its reveal. */
+export function alpha(frame, point) {
+  const { x, y } = position(frame, point);
+  return frame.data[y * frame.stride + x * 4 + 3];
+}
+
 /** The number of pixels inside rect (window coordinates) that differ from background by more than 40. */
 export function ink(frame, rect, background) {
   let count = 0;

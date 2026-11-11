@@ -12,7 +12,7 @@ import test from "node:test";
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
-import { cardPoint, fullSize, LOGO, sample, undrawn } from "./screen-drawn.mjs";
+import { alpha, cardPoint, fullSize, LOGO, sample, undrawn } from "./screen-drawn.mjs";
 
 /** The pixels seen at every grid step inside rect (window coordinates) of view. */
 function grid(view, rect, step) {
@@ -23,11 +23,13 @@ function grid(view, rect, step) {
   return values;
 }
 
-/** The ratio of points where the channel difference between the two grids exceeds tolerance. */
-function differing(a, b, tolerance) {
+/** The number of points at every grid step inside rect (window coordinates) of view where the window is not transparent (alpha above 0). */
+function opaque(view, rect, step) {
   let count = 0;
-  for (let i = 0; i < a.length; i++) if (a[i].some((value, channel) => Math.abs(value - b[i][channel]) > tolerance)) count++;
-  return count / a.length;
+  for (let y = rect.y + step / 2; y < rect.y + rect.height; y += step) {
+    for (let x = rect.x + step / 2; x < rect.x + rect.width; x += step) if (alpha(view, { x, y }) > 0) count++;
+  }
+  return count;
 }
 
 /** Closes every window but the window of s when the check ends. */
@@ -66,8 +68,6 @@ async function firstFrames(t, s, label, opening, ready) {
   const region = { x: 0, y: 0, width: window.width, height: window.height };
   // The window opening animation starts the window slightly smaller, so the content is counted in the inner region that the window covers from the start.
   const inner = { x: region.width * 0.06, y: region.height * 0.06, width: region.width * 0.88, height: region.height * 0.88 };
-  // The first frame is the window on screen before its reveal, which a window recording reads as transparent pixels.
-  const before = grid(captured[0], region, 16);
   const last = captured.at(-1);
   // The background of the first screen is the color of the empty area below the library or the cards.
   const background = sample(last, { x: region.width / 2, y: region.height * 0.85 });
@@ -75,9 +75,11 @@ async function firstFrames(t, s, label, opening, ready) {
     .filter((value) => value.some((channel, index) => Math.abs(channel - background[index]) > 40)).length;
   const complete = ink(last);
   assert.ok(complete > 0, `${label}: the last frame shows no content in the new window`);
+  // A new window is transparent until its reveal, and a window recording reads it so: every pixel of such a frame has alpha 0. The window appears at the
+  // first frame with a pixel that is not transparent, and a recording whose first frame already shows the window does not show it appear.
   const rows = captured.map((view, index) => ({ index, time: Math.round(view.time - captured[0].time),
-    shown: differing(grid(view, region, 16), before, 12), ink: ink(view) }));
-  const first = rows.findIndex((row) => row.shown > 0.05);
+    opaque: opaque(view, region, 16), ink: ink(view) }));
+  const first = rows.findIndex((row) => row.opaque > 0);
   assert.ok(first > 0, `${label}: the recording does not show the new window appear: ${JSON.stringify(rows.slice(0, 3))}`);
   const empty = rows.slice(first).filter((row) => row.ink < complete / 2);
   // Once the window shows at its full size, each frame has the logo at its place and the card color of the last frame.
