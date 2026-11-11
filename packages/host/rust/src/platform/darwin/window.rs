@@ -41,17 +41,6 @@ pub fn show_window(window: Handle) -> Result<(), String> {
     Ok(())
 }
 
-/// Sets the windows of the application at the normal window level, and each window that the application shows while the state
-/// is on, to the check window level, or puts the windows that it raised back to the normal level (diagnostics.windows.raise).
-/// Call it on the main thread.
-#[cfg(feature = "diagnostics")]
-pub fn raise(raise: bool) {
-    unsafe extern "C" {
-        fn sp_windows_raise(raise: bool);
-    }
-    unsafe { sp_windows_raise(raise) };
-}
-
 pub fn reveal_after_load(window: Handle) -> Result<(), String> {
     unsafe extern "C" {
         fn sp_window_reveal_after_load(window: *mut c_void, error: *mut *mut c_char) -> bool;
