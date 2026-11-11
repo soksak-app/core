@@ -8,6 +8,7 @@
     "documentBinaryTake",
     "documentCreate",
     "documentQuery",
+    "documentRead",
     "documentScrollTo",
     "documentSetEvent",
     "documentSetMessage",

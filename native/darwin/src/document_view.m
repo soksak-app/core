@@ -234,6 +234,17 @@ static NSString *const kInteractiveScript = @"(() => {"
     "  const target = event.target;"
     "  if (target instanceof HTMLIFrameElement || target instanceof HTMLFrameElement) { boundOnce.delete(target); collect(); }"
     "}, true);"
+    "globalThis.soksakReadValue = (ref) => {"
+    "  if (!Number.isInteger(ref) || ref < 1) return null;"
+    "  const found = document.querySelectorAll('a, button, input, select, textarea, [contenteditable=\"true\"], [role]');"
+    "  const el = found[ref - 1];"
+    "  if (!el) return null;"
+    "  if (el instanceof HTMLInputElement && el.type === 'password') return null;"
+    "  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement)"
+    "    return el instanceof HTMLSelectElement ? (el.selectedOptions[0]?.textContent ?? '') : String(el.value ?? '');"
+    "  if (el.isContentEditable) return String(el.innerText ?? '');"
+    "  return el.getAttribute('href') ?? null;"
+    "};"
     "post({ frame, ready: true });"
     "})();";
 
@@ -549,6 +560,8 @@ static void frameIdentityClose(SPDocumentView *view);
 - (void)interactiveChanged;
 - (void)sendInteractiveFold;
 - (void)deliverClaim:(NSString *)claim;
+- (WKFrameInfo *)interactiveFrameOfPath:(NSString *)path;
+- (NSMutableDictionary<NSString *, NSString *> *)interactivePaths;
 @end
 
 #ifdef SOKSAK_DIAGNOSTIC
@@ -1374,6 +1387,51 @@ static void sendBody(id<WKURLSchemeTask> task, NSData *data) {
 
 // Delivers the claim of a slot to the frame whose address matches it among the reports that hold no claim yet. A message
 // that a script of one frame posts does not reach the content world of another frame, so the host calls the frame itself.
+// Resolves the frame info of a path with the same composition that the fold uses, or nil.
+- (WKFrameInfo *)interactiveFrameOfPath:(NSString *)path {
+    if (self.interactiveReports.count == 0) return nil;
+    __block NSMutableDictionary<NSString *, NSString *> *paths = nil;
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        paths = [self interactivePaths];
+    });
+    for (NSString *token in self.interactiveOrder) {
+        if ([paths[token] isEqualToString:path]) {
+            id info = self.interactiveInfos[token];
+            return [info isKindOfClass:[WKFrameInfo class]] ? info : nil;
+        }
+    }
+    return nil;
+}
+
+// The paths of the stored reports, composed as the fold composes them.
+- (NSMutableDictionary<NSString *, NSString *> *)interactivePaths {
+    NSMutableDictionary<NSString *, NSString *> *paths = [NSMutableDictionary dictionary];
+    for (NSString *token in self.interactiveOrder) {
+        WKFrameInfo *info = [self.interactiveInfos[token] isKindOfClass:[WKFrameInfo class]]
+            ? self.interactiveInfos[token] : nil;
+        if (info.isMainFrame) {
+            paths[token] = @"0";
+            break;
+        }
+    }
+    BOOL resolved = YES;
+    while (resolved) {
+        resolved = NO;
+        for (NSString *token in self.interactiveOrder) {
+            if (paths[token] != nil) continue;
+            NSDictionary *report = self.interactiveReports[token];
+            NSString *claim = [report[@"bound"] isKindOfClass:NSString.class] ? report[@"bound"] : nil;
+            NSDictionary *binding = claim != nil ? self.interactiveBindings[claim] : nil;
+            NSString *parent = binding[@"parent"];
+            NSString *parentPath = parent != nil ? paths[parent] : nil;
+            if (parentPath == nil) continue;
+            paths[token] = [NSString stringWithFormat:@"%@.%@", parentPath, binding[@"index"]];
+            resolved = YES;
+        }
+    }
+    return paths;
+}
+
 - (void)deliverClaim:(NSString *)claim {
     NSString *want = [self interactiveSlotAddressOfClaim:claim];
     if (want == nil) return;
@@ -1952,6 +2010,31 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
     [view _setOverrideDeviceScaleFactor:sp_surface_scale(surface)];
     [openDocuments() addObject:view];
     return view; // The caller owns this reference until sp_document_close.
+}
+
+void sp_document_read(void *handle, const char *path, int ref, sp_document_read_reply reply, void *context) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    SPDocumentView *view = (SPDocumentView *)handle;
+    if (!view || view.closed) {
+        reply(context, "{\"error\":\"the document region is closed\"}");
+        return;
+    }
+    WKFrameInfo *frame = [view interactiveFrameOfPath:[NSString stringWithUTF8String:path ?: ""]];
+    if (frame == nil) {
+        reply(context, [[NSString stringWithFormat:@"{\"error\":\"no frame of path %s\"}", path ?: ""] UTF8String]);
+        return;
+    }
+    [view callAsyncJavaScript:@"return soksakReadValue(ref);" arguments:@{ @"ref": @(ref) } inFrame:frame
+        inContentWorld:[WKContentWorld worldWithName:kDocumentWorld]
+        completionHandler:^(id result, NSError *error) {
+            if (error) {
+                reply(context, [NSString stringWithFormat:@"{\"error\":\"%@\"}",
+                    error.localizedDescription].UTF8String);
+                return;
+            }
+            reply(context, [NSString stringWithFormat:@"{\"value\":%@}",
+                result == nil ? @"null" : [NSString stringWithFormat:@"\"%@\"", [result description]]].UTF8String);
+        }];
 }
 
 void sp_document_scroll_to(void *handle, double x, double y, sp_document_scrolled reply, void *context) {

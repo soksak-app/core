@@ -299,3 +299,28 @@ func TestAScrollOfADocumentAnswersTheSettledPositionOfTheReply(t *testing.T) {
 		t.Fatal("a reply that is not JSON is an error")
 	}
 }
+
+// contract: documents.approvals.session-table
+func TestAnApprovalsTableGrantsRevokeAndListByOrigin(t *testing.T) {
+	a := NewApprovals()
+	if a.Granted(ApprovalValueRead, "https://a.example") {
+		t.Fatal("a new table grants nothing")
+	}
+	a.Grant(ApprovalValueRead, "https://a.example")
+	if !a.Granted(ApprovalValueRead, "https://a.example") || a.Granted(ApprovalValueRead, "https://b.example") {
+		t.Fatal("a grant covers one origin")
+	}
+	a.Grant(ApprovalAct, "https://b.example")
+	list := a.List()
+	if len(list) != 2 || list[0] != [2]string{ApprovalAct, "https://b.example"} {
+		t.Fatalf("the list holds the pairs in order: %v", list)
+	}
+	a.Revoke(ApprovalValueRead, "https://a.example")
+	if a.Granted(ApprovalValueRead, "https://a.example") || !a.Granted(ApprovalAct, "https://b.example") {
+		t.Fatal("a revoke removes one grant")
+	}
+	a.Revoke(ApprovalAct, "")
+	if a.Granted(ApprovalAct, "https://b.example") {
+		t.Fatal("a revoke without an origin removes every grant of the kind")
+	}
+}

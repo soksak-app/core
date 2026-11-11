@@ -874,6 +874,75 @@ func (s *Surfaces) documentInteractionState(viewID uint64, req DocumentRequest) 
 	return state, err
 }
 
+// Approvals is the session-scoped table of the grants of the gated operations of a document region. It lives at the
+// host level, shared by every window, because a grant covers an origin for all callers.
+type Approvals struct {
+	mu     sync.Mutex
+	grants map[string]bool
+	next   uint64
+}
+
+// NewApprovals returns an empty approvals table.
+func NewApprovals() *Approvals { return &Approvals{grants: map[string]bool{}} }
+
+// The kinds of the gated operations.
+const (
+	ApprovalValueRead = "value-read"
+	ApprovalAct       = "act"
+	ApprovalEvaluate  = "evaluate"
+	ApprovalInput     = "input"
+)
+
+// Granted reports whether the kind is granted for the origin.
+func (a *Approvals) Granted(kind, origin string) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.grants[kind+"\x00"+origin]
+}
+
+// Grant records the grant of the kind for the origin and returns the request identifier of the grant.
+func (a *Approvals) Grant(kind, origin string) uint64 {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.grants[kind+"\x00"+origin] = true
+	a.next++
+	return a.next
+}
+
+// Revoke removes the grant of the kind for the origin, or every grant of the kind without an origin.
+func (a *Approvals) Revoke(kind, origin string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if origin == "" {
+		for key := range a.grants {
+			if strings.HasPrefix(key, kind+"\x00") {
+				delete(a.grants, key)
+			}
+		}
+		return
+	}
+	delete(a.grants, kind+"\x00"+origin)
+}
+
+// List returns the granted pairs in a stable order.
+func (a *Approvals) List() [][2]string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	var list [][2]string
+	for key := range a.grants {
+		if kind, origin, ok := strings.Cut(key, "\x00"); ok {
+			list = append(list, [2]string{kind, origin})
+		}
+	}
+	sort.Slice(list, func(i, j int) bool {
+		if list[i][0] != list[j][0] {
+			return list[i][0] < list[j][0]
+		}
+		return list[i][1] < list[j][1]
+	})
+	return list
+}
+
 // DocumentCallError returns the failure of the document region call call with its name (docs/spec/native-host.md#host-calls).
 func DocumentCallError(call string, err error) error {
 	if err == nil {

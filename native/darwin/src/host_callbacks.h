@@ -46,6 +46,7 @@
     X(R, bool, core_root_serve, (uintptr_t context, char *plugin, char *path, void **bytes, size_t *length, char **content_type), (context, plugin, path, bytes, length, content_type)) \
     X(V, void, document_queried, (uintptr_t context, char *value), (context, value)) \
     X(V, void, document_scrolled, (uintptr_t context, char *value), (context, value)) \
+    X(V, void, document_read, (uintptr_t context, char *value), (context, value)) \
     X(V, void, document_event, (uintptr_t context, char *value), (context, value)) \
     X(V, void, memory_pressure, (char *level, unsigned long long sequence), (level, sequence)) \
     X(V, void, dock_new_window, (void), ()) \

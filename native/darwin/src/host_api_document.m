@@ -49,6 +49,14 @@ static void documentScrolledBridge(void *context, const char *reply) {
     hostRunOnWorker(^{ sp_host_callback_document_scrolled((uintptr_t)context, (char *)reply); });
 }
 
+static void documentReadBridge(void *context, const char *reply) {
+    hostRunOnWorker(^{ sp_host_callback_document_read((uintptr_t)context, (char *)reply); });
+}
+
+void documentRead(void *document, const char *path, int ref, uintptr_t context) {
+    hostRunOnMain(^{ sp_document_read(document, path, ref, documentReadBridge, (void *)context); });
+}
+
 void documentScrollTo(void *document, double x, double y, uintptr_t context) {
     hostRunOnMain(^{ sp_document_scroll_to(document, x, y, documentScrolledBridge, (void *)context); });
 }

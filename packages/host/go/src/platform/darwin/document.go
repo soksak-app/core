@@ -265,6 +265,19 @@ func (implementation) GoDocument(document unsafe.Pointer, action, offset int) bo
 	return bool(native.MainSpDocumentGo(document, int32(action), int32(offset)))
 }
 
+// ReadDocument reads the value of an operable element; the reply of native names the value or the error.
+func (implementation) ReadDocument(document unsafe.Pointer, path string, ref int, reply func(value string)) {
+	native.DocumentRead(document, native.CString(path), int32(ref), uintptr(handles.NewHandle(reply)))
+}
+
+// goHost_document_read receives the one reply of a read and releases its receiver.
+func goHost_document_read(context uintptr, value *byte) {
+	handle := handles.Handle(uintptr(context))
+	reply := handle.Value().(func(string))
+	handle.Delete()
+	reply(native.GoString(value))
+}
+
 // ScrollDocument scrolls the main document; the reply of native names the settled position.
 func (implementation) ScrollDocument(document unsafe.Pointer, x, y float64, reply func(value string)) {
 	native.DocumentScrollTo(document, x, y, uintptr(handles.NewHandle(reply)))
