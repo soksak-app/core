@@ -594,6 +594,9 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"a move after the release on the workbench is delivered at once, got %@", moved].UTF8String);
     sp_input_pointer(holding, 600, 250, 1, 0, 0, 0);
     check(sp_input_press_open(holding, 0), "a press after the release on the workbench reaches its view at once");
+    NSResponder *pressHolder = holding.firstResponder;
+    NSView *frame = holding.contentView.superview;
+    NSView *appKitHit = [frame hitTest:[frame convertPoint:NSMakePoint(600, holding.contentView.bounds.size.height - 250) fromView:nil]];
     sp_input_pointer(holding, 600, 250, 3, 0, 0, 0);
     sp_window_keys_decided(holding);
     runQueuedEvents();
@@ -601,7 +604,10 @@ int main(void) { @autoreleasepool {
     // The press reached the page of the surface, which then holds the keyboard of the surface; the region takes it back.
     NSResponder *pressedHolder = holding.firstResponder;
     check([pressedHolder isKindOfClass:NSView.class] && [(NSView *)pressedHolder isDescendantOf:heldPage],
-        "the press after the release on the workbench gives the keyboard to the page it reached");
+        [NSString stringWithFormat:@"the press after the release on the workbench gives the keyboard to the page it reached (holder %@ after the "
+            @"press, %@ after the release; view at the point %@; page frame %@, accepts first responder %d, needs a panel %d)",
+            pressHolder.class, pressedHolder.class, appKitHit.class, NSStringFromRect([heldPage convertRect:heldPage.bounds toView:nil]),
+            heldPage.acceptsFirstResponder, heldPage.needsPanelToBecomeKey].UTF8String);
     [holding makeFirstResponder:(NSResponder *)heldRegion];
 
     // A press of the window ends the wait: the keys that waited reach the view that holds the keyboard first, in their order, and
