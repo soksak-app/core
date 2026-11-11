@@ -136,6 +136,18 @@ static void refuseOrderFront(NSWindow *self, SEL selector, id sender) {
 
 static bool enter(NSWindow *window, const char *reason);
 
+// The key equivalent of the default button of a window, which -[NSWindow becomeKeyWindow] gives back to the default button cell
+// (Return) and -[NSWindow resignKeyWindow] takes from it, so Return presses the default button only of the key window. Private
+// (docs/operations/private-native-apis.md): the virtual key window does not pass those methods, so it gives and takes the key
+// equivalent as they do. Without it Return does not press the default button of the virtual key window, such as the first button of
+// an alert sheet.
+static void setDefaultButtonKey(NSWindow *window, BOOL key) {
+    SEL selector = NSSelectorFromString(key ? @"_enableEnablingKeyEquivalentForDefaultButtonCell"
+        : @"_disableEnablingKeyEquivalentForDefaultButtonCell");
+    NSCAssert([window respondsToSelector:selector], @"AppKit gives and takes the key equivalent of the default button");
+    [window performSelector:selector];
+}
+
 // While the application answers as active, a request of the application to make another window key moves the virtual key
 // window there, as it makes that window key in an active application, so the windows hear the change of their key state as
 // they do from a person's activation. The system key window does not change. The order of the other window keeps its meaning.
@@ -294,6 +306,7 @@ static bool enter(NSWindow *window, const char *reason) {
             return event.window && event.window == answering() ? nil : event;
         }) retain];
     NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
+    setDefaultButtonKey(window, YES);
     [center postNotificationName:NSWindowDidBecomeKeyNotification object:window];
     if (mainOf(window) != previousMain) [center postNotificationName:NSWindowDidBecomeMainNotification object:mainOf(window)];
     record("entered", reason);
@@ -321,6 +334,7 @@ void sp_input_virtual_end(const char *reason) {
     // The window that a real activation made key has heard that from AppKit, and a closing window has no state to resign.
     if (strcmp(reason, "closed") != 0 && !window.isKeyWindow) {
         NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
+        setDefaultButtonKey(window, NO);
         [center postNotificationName:NSWindowDidResignKeyNotification object:window];
         if (!keepMain) [center postNotificationName:NSWindowDidResignMainNotification object:mainOf(window)];
     }
