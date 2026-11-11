@@ -497,6 +497,8 @@ packages/sok/go/          packages/sok/rust/
 
 애플리케이션은 `--config-dir PATH`([projects](projects.ko.md#저장))를 두 인자 또는 `--config-dir=PATH`로 받는다. 두 host는 창을 열기 전에 하나의 규칙으로 인자를 읽는다. 애플리케이션이 선언하지 않은 인자는 `unknown argument <argument>`로, 값 없는 flag는 `--<flag> needs a value`로, 두 번 준 flag는 `--<flag> is given twice`로 실패한다. 애플리케이션은 그 문장을 표준 오류에 쓰고 상태 2로 끝난다.
 
+애플리케이션은 macOS 의 argument domain 쌍 `-Name value` 도 받는다. 이름은 글자나 밑줄 뒤에 글자, 숫자, 밑줄이 오는 식별자다. Foundation 이 그 쌍을 명령행에서 직접 `NSUserDefaults` 의 `NSArgumentDomain` 으로 읽으므로, 쌍 하나는 그 process 에만 default 를 정한다(다른 플랫폼은 그 쌍을 읽지 않는다). 예를 들어 `-AppleShowScrollBars Always` 는 native view 와 page 의 scroller style 을 정한다. 두 host 는 같은 규칙으로 그 쌍을 넘긴다. 값이 없거나 빈 쌍은 `-<Name> needs a value` 로, 두 번 준 이름은 `-<Name> is given twice` 로, `-` 하나뿐이거나 식별자가 아닌 이름은 `unknown argument <argument>` 로 실패한다.
+
 진단 build는 `--registry-ca PATH`도 받는다. host의 registry 받기가 운영체제의 인증 기관 대신 신뢰하는 인증 기관을 담은 PEM 파일이며([받기](installation.ko.md#받기)), window check가 local TLS registry를 쓸 수 있게 한다. 읽을 수 없거나 인증서가 없는 파일은 `--registry-ca <path>: <reason>`과 상태 2로 시작을 끝낸다. release build는 이 인자를 선언하지 않으므로 모르는 인자로 거부한다.
 
 ## 프런트엔드와 실행 파일

@@ -26,7 +26,21 @@ func ApplyArguments(options Options) error {
 	return nil
 }
 
+// defaultsName reports whether name is the name of an argument of the macOS argument domain: a letter or an underscore, then letters,
+// digits and underscores.
+func defaultsName(name string) bool {
+	for index, r := range name {
+		letter := r == '_' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
+		if !letter && (index == 0 || r < '0' || r > '9') {
+			return false
+		}
+	}
+	return name != ""
+}
+
 // ParseArguments parses the application arguments. An undeclared argument, a flag without a value, and a flag given twice are errors.
+// A pair `-Name value` whose name is an identifier belongs to the argument domain of macOS, which Foundation reads from the command line
+// itself (NSArgumentDomain of NSUserDefaults); it is accepted and passed over, with the same rules for a missing value and a repetition.
 func ParseArguments(args []string) (Options, error) {
 	var options Options
 	values := map[string]*string{}
@@ -35,6 +49,17 @@ func ParseArguments(args []string) (Options, error) {
 	}
 	given := map[string]bool{}
 	for index := 0; index < len(args); index++ {
+		if name, ok := strings.CutPrefix(args[index], "-"); ok && !strings.HasPrefix(name, "-") && defaultsName(name) {
+			if index+1 == len(args) || args[index+1] == "" {
+				return Options{}, fmt.Errorf("-%s needs a value", name)
+			}
+			if given["-"+name] {
+				return Options{}, fmt.Errorf("-%s is given twice", name)
+			}
+			given["-"+name] = true
+			index++
+			continue
+		}
 		name, value, inline := strings.Cut(strings.TrimPrefix(args[index], "--"), "=")
 		target, declared := values[name]
 		if !strings.HasPrefix(args[index], "--") || !declared {

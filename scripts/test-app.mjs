@@ -1,5 +1,5 @@
 // Runs the end-to-end checks of core on this computer (docs/operations/examples.md#end-to-end-run):
-//   node scripts/test-app.mjs --script <name> [--native <target>]
+//   node scripts/test-app.mjs --script <name> [--native <target>] [--only <file>] [--defaults Name=Value]...
 // The e2e targets of the Makefile build the three debug applications, and then run this script with the window-check script of their
 // tier (`verify`, `test-app:activation`, `test-app:person`) and the native end-to-end target of that tier. Each run
 // makes a new configuration root under target/e2e, prepares the registry certificates in it and installs every plugin of the fixture
@@ -60,6 +60,23 @@ export function newConfigRoot(root) {
 }
 
 /**
+ * Reads the `Name=Value` entries of `--defaults` into an object. The name follows the rule of the hosts for a pair of the argument
+ * domain (an identifier); an entry without `=`, with an empty value, or with a name given twice is an error.
+ */
+export function parseDefaults(entries) {
+  const pairs = {};
+  for (const entry of entries) {
+    const at = entry.indexOf('=');
+    const name = at < 0 ? entry : entry.slice(0, at), value = at < 0 ? '' : entry.slice(at + 1);
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error(`--defaults ${entry}: the name is not an identifier`);
+    if (value === '') throw new Error(`--defaults ${entry}: the value is empty`);
+    if (Object.hasOwn(pairs, name)) throw new Error(`--defaults ${name} is given twice`);
+    pairs[name] = value;
+  }
+  return pairs;
+}
+
+/**
  * The steps of a run. A step of the phase `prepare` that fails skips every later step except those of `cleanup`; a failed `check`
  * skips nothing. `run` runs a command to its end, `start` starts an application and ends when it writes endpoint.json, `native` runs
  * the native end-to-end tests `target` of the platform, `quit` quits a started application as a person does, through the quit item of
@@ -68,11 +85,15 @@ export function newConfigRoot(root) {
  * platform when it is not given; the plan carries it to each step that runs a platform operation and carries no detail of how a
  * platform performs that operation. The plan resolves the application executables of the platform, so a platform that does not
  * implement the application artifact fails before any step starts an application. `fixtures` are the plugin ids of the fixture
- * registry, which each application installs; they are read from e2e/fixtures of this checkout when not given.
+ * registry, which each application installs; they are read from e2e/fixtures of this checkout when not given. `defaults` are the
+ * `Name=Value` entries of `--defaults`: each started application gets the pair `-Name Value` of the macOS argument domain
+ * (docs/spec/hosts.md#application-arguments), so the value holds for that process alone, and the window checks read the entries as
+ * the JSON object SOKSAK_DEFAULTS.
  */
 export async function e2ePlan({ root, configRoot, script, native, candidate, artifacts, only, runFolder, platform,
-  fixtures = fixturePluginIds() }) {
-  if (candidate && (artifacts !== undefined || only !== undefined)) throw new Error('candidate acceptance rejects ordinary selection or artifact overrides');
+  fixtures = fixturePluginIds(), defaults = [] }) {
+  if (candidate && (artifacts !== undefined || only !== undefined || defaults.length)) throw new Error('candidate acceptance rejects ordinary selection, artifact or defaults overrides');
+  const defaultsPairs = parseDefaults(defaults);
   if (artifacts) validateOrdinaryArtifacts(artifacts);
   if (artifacts && !isAbsolute(configRoot)) throw new Error('ordinary configuration root must be absolute');
   const inputs = candidate ?? artifacts;
@@ -109,7 +130,8 @@ export async function e2ePlan({ root, configRoot, script, native, candidate, art
     }),
     ...APPS.map((app) => ({
       name: `start ${app}`, phase: 'prepare', kind: 'start', app, configDir: configDir(configRoot, app), output: join(configRoot, `${app}.out`),
-      argv: [appBinary(app), '--config-dir', configDir(configRoot, app), '--registry-ca', ca],
+      argv: [appBinary(app), '--config-dir', configDir(configRoot, app), '--registry-ca', ca,
+        ...Object.entries(defaultsPairs).flatMap(([name, value]) => [`-${name}`, value])],
     })),
     ...(inputs ? [{ name: 'acceptance before', phase: 'prepare', kind: 'capture', capture: 'before' }] : []),
     {
@@ -120,6 +142,7 @@ export async function e2ePlan({ root, configRoot, script, native, candidate, art
         ...Object.fromEntries(APPS.map((app) => [`SOKSAK_BINARY_${app.toUpperCase()}`, appBinary(app)])),
         SOKSAK_CANDIDATE_REGISTRY: pathToFileURL(registry).href,
         ...(candidate ? { SOKSAK_CANDIDATE_RUN_FOLDER: runFolder } : {}),
+        ...(defaults.length ? { SOKSAK_DEFAULTS: JSON.stringify(defaultsPairs) } : {}),
       },
     },
     ...(native === undefined ? [] : [{ name: 'native end-to-end tests', phase: 'check', kind: 'native', target: native, platform,
@@ -414,11 +437,12 @@ export async function finishCandidate({ root, context, configRoot, runFolder, sc
 async function main(argv) {
   const { values } = parseArgs({
     args: argv, strict: true, options: { script: { type: 'string' }, native: { type: 'string' }, candidate: { type: 'string' },
-      artifacts: { type: 'string' }, 'config-root': { type: 'string' }, only: { type: 'string' } },
+      artifacts: { type: 'string' }, 'config-root': { type: 'string' }, only: { type: 'string' }, defaults: { type: 'string', multiple: true } },
   });
   if (values.script === undefined) throw new Error('--script names the window-check script of the run');
-  if (values.candidate && (values.artifacts !== undefined || values.only !== undefined || values['config-root'] !== undefined)) {
-    throw new Error('candidate acceptance rejects ordinary selection, artifacts and configuration overrides');
+  if (values.candidate && (values.artifacts !== undefined || values.only !== undefined || values['config-root'] !== undefined
+    || values.defaults !== undefined)) {
+    throw new Error('candidate acceptance rejects ordinary selection, artifacts, configuration and defaults overrides');
   }
   if (values['config-root'] !== undefined && values.artifacts === undefined) throw new Error('--config-root requires explicit --artifacts');
   const ordinary = values.artifacts === undefined ? undefined
@@ -463,7 +487,7 @@ async function main(argv) {
   const inputs = {}, steps = [];
   const failures = await runPlan(await e2ePlan({ root: ROOT, configRoot, script: values.script, native: values.native,
     candidate: values.candidate ? prepared?.context : undefined,
-    artifacts: ordinary ? prepared.context : undefined, only: values.only, runFolder }),
+    artifacts: ordinary ? prepared.context : undefined, only: values.only, defaults: values.defaults ?? [], runFolder }),
   { write, interrupted: interrupt.signal, outcome: (value) => steps.push(value),
     capture: async (phase) => {
       inputs[phase] = await (values.candidate ? collectAcceptanceInputs : collectOrdinaryInputs)(ROOT, prepared.context, configRoot);

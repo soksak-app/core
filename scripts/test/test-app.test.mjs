@@ -45,7 +45,7 @@ test("ordinary focused acceptance owns explicit prebuilt artifacts and unchanged
 
 test("candidate plans reject ordinary file selection and artifact overrides", async () => {
   const candidate = { hosts: ["mygo", "tauriv2", "wailsv3"].map((app) => ({ app, bundle: `/candidate/${app}.app` })) };
-  for (const extra of [{ only: "window-end.test.mjs" }, { artifacts: candidate }]) {
+  for (const extra of [{ only: "window-end.test.mjs" }, { artifacts: candidate }, { defaults: ["AppleShowScrollBars=Always"] }]) {
     await assert.rejects(() => e2ePlan({ root: "/source", configRoot: "/configuration", script: "test-app", candidate, ...extra }), /candidate.*(selection|artifacts|override)/);
   }
 });
@@ -64,8 +64,40 @@ test("ordinary artifact input rejects relative paths, incomplete hosts and exist
   assert.equal(readFileSync(join(existing, "retained.txt"), "utf8"), "existing user state");
 });
 
+test("--defaults gives each started application the argument-domain pair and the window checks the same entries", async () => {
+  const root = "/work";
+  const configRoot = "/work/target/e2e/run";
+  const plan = await e2ePlan({ root, configRoot, script: "test-app", platform: "darwin", fixtures: ["probe"], only: "design-hosts",
+    defaults: ["AppleShowScrollBars=Always", "_Key2=a=b"] });
+  for (const app of ["wailsv3", "tauriv2", "mygo"]) {
+    assert.deepEqual(plan.find((item) => item.name === `start ${app}`).argv, [
+      `/work/target/debug/sok-${app}.app/Contents/MacOS/sok-${app}`,
+      "--config-dir", `/work/target/e2e/run/soksak-check-${app}`,
+      "--registry-ca", "/work/target/e2e/run/soksak-check-registry-tls/ca.pem",
+      "-AppleShowScrollBars", "Always", "-_Key2", "a=b",
+    ], app);
+  }
+  // The pair reaches only the started applications: sok and the other steps run without it.
+  for (const item of plan.filter((entry) => entry.kind !== "start" && entry.argv)) {
+    assert.ok(!item.argv.includes("-AppleShowScrollBars"), item.name);
+  }
+  const checks = plan.find((item) => item.name === "window checks");
+  assert.deepEqual(JSON.parse(checks.env.SOKSAK_DEFAULTS), { AppleShowScrollBars: "Always", _Key2: "a=b" });
+  // Without --defaults the applications start with the style of the computer, and the checks get no SOKSAK_DEFAULTS.
+  const plain = await e2ePlan({ root, configRoot, script: "test-app", platform: "darwin", fixtures: ["probe"] });
+  assert.equal(plain.find((item) => item.name === "start mygo").argv.length, 5);
+  assert.equal(Object.hasOwn(plain.find((item) => item.name === "window checks").env, "SOKSAK_DEFAULTS"), false);
+  for (const [entry, message] of [["AppleShowScrollBars", /value is empty/], ["AppleShowScrollBars=", /value is empty/],
+    ["Apple.Show=Always", /not an identifier/], ["1Key=x", /not an identifier/], ["=x", /not an identifier/]]) {
+    await assert.rejects(() => e2ePlan({ root, configRoot, script: "test-app", platform: "darwin", fixtures: [], defaults: [entry] }), message, entry);
+  }
+  await assert.rejects(() => e2ePlan({ root, configRoot, script: "test-app", platform: "darwin", fixtures: [],
+    defaults: ["AppleShowScrollBars=Always", "AppleShowScrollBars=WhenScrolling"] }), /AppleShowScrollBars is given twice/);
+});
+
 test("candidate CLI rejects all ordinary options before reading context or starting applications", () => {
-  for (const args of [["--only", "window-end.test.mjs"], ["--artifacts", "/must-not-read.json"], ["--config-root", "/must-not-create"]]) {
+  for (const args of [["--only", "window-end.test.mjs"], ["--artifacts", "/must-not-read.json"], ["--config-root", "/must-not-create"],
+    ["--defaults", "AppleShowScrollBars=Always"]]) {
     const result = spawnSync(process.execPath, [fileURLToPath(new URL("../test-app.mjs", import.meta.url)), "--script", "test-app", "--candidate", "/must-not-read.json", ...args], { encoding: "utf8" });
     assert.equal(result.status, 1);
     assert.match(result.stderr, /candidate acceptance rejects ordinary/);

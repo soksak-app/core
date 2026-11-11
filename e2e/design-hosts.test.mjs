@@ -1,20 +1,50 @@
 // Compares the places of the workbench elements of every host in the same states of one window of 1200 by 760: the workspace, the
 // menus of the selection layer, the renames, the settings, the library with its forms and pages, the debug view and the card sidebar.
 // The workbench of each host draws the chrome metrics of packages/workbench/workbench.json, so each element stands at one place on
-// every host (docs/spec/projects.md).
+// every host (docs/spec/projects.md). A run with `--defaults AppleShowScrollBars=Always` or `=WhenScrolling` of scripts/test-app.mjs
+// starts the hosts under that scroller style alone, and the check also reads that every host drew it; a run without it compares the
+// hosts under the style of the computer and reads no style.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import test from "node:test";
 
 import { APPS, holdCovered, open, requiresAll } from "@soksak/window-check/app.mjs";
-import { designDifferences } from "@soksak/window-check/design-rects.mjs";
+import { DESIGN_TOLERANCE, designDifferences } from "@soksak/window-check/design-rects.mjs";
 import { cardSidebar, fresh, replacePlaceholders, startTab } from "./fixture.mjs";
 import { retainDesignStateCapture } from "./still-capture.mjs";
 
 const DEBUG_ENTRIES = JSON.parse(readFileSync(new URL("./fixtures/design-debug-entries.json", import.meta.url), "utf8"));
 
 const SIZE = { width: 1200, height: 760 };
+
+const CHROME = JSON.parse(readFileSync(new URL("../packages/workbench/workbench.json", import.meta.url), "utf8")).chrome;
+
+/** The scroller style that the run gave every host through SOKSAK_DEFAULTS, or null when the hosts have the style of the computer. */
+function requestedScrollerStyle(env) {
+  if (env.SOKSAK_DEFAULTS === undefined) return null;
+  const style = JSON.parse(env.SOKSAK_DEFAULTS).AppleShowScrollBars;
+  if (style === undefined) return null;
+  if (style !== "Always" && style !== "WhenScrolling") throw new Error(`AppleShowScrollBars ${style} is not a style this check reads`);
+  return style;
+}
+
+/**
+ * The width that the vertical bar of the settings pane takes from its content in a reading of a general section, whose themes and
+ * controls overflow the pane in the window of SIZE. The pane stands right of the navigation column of set-nav-w and has one padding
+ * on both sides, and the theme grid repeats its columns to fill the content box (`repeat(auto-fill, minmax(…, 1fr))`), so the
+ * first swatch starts at the left of the content box and the last swatch of the first row ends at its right: the right gap to the
+ * card less the left gap past the navigation column is the bar. The border of the card stands in both gaps and cancels.
+ */
+function settingsPaneBar(reading) {
+  const [card] = reading["core.settings-modal.card"] ?? [];
+  const swatches = reading["core.settings-modal.theme"] ?? [];
+  if (!card || !swatches.length) throw new Error("the general section shows no settings card or no theme");
+  const row = swatches.filter((swatch) => Math.abs(swatch.y - swatches[0].y) <= DESIGN_TOLERANCE);
+  const left = swatches[0].x - card.x - parseFloat(CHROME["set-nav-w"]);
+  const right = card.x + card.width - Math.max(...row.map((swatch) => swatch.x + swatch.width));
+  return right - left;
+}
 
 /** The most elements of one name that a state shows; a name with more is a fault of the reading, not of the design. */
 const MOST = 200;
@@ -188,5 +218,19 @@ if (requiresAll(process.env)) test("every host places each workbench element of 
   }
   const differences = designDifferences(readings);
   for (const line of [...stops, ...differences]) t.diagnostic(line);
-  assert.deepEqual({ stops, differences }, { stops: [], differences: [] });
+  // Under the classic style the overflowing pane gives its bar room, under the overlay style the bar takes none.
+  const style = requestedScrollerStyle(process.env);
+  const styles = [];
+  if (style !== null) {
+    for (const [name, states] of Object.entries(readings)) {
+      for (const state of ["settings common general", "settings project general"]) {
+        if (!states[state]) continue;
+        const bar = settingsPaneBar(states[state]);
+        t.diagnostic(`${name} ${state}: the pane bar takes ${bar}`);
+        const drawn = style === "Always" ? bar > DESIGN_TOLERANCE : Math.abs(bar) <= DESIGN_TOLERANCE;
+        if (!drawn) styles.push(`${name} ${state}: the pane bar takes ${bar} under ${style}`);
+      }
+    }
+  }
+  assert.deepEqual({ stops, differences, styles }, { stops: [], differences: [], styles: [] });
 });
