@@ -32,8 +32,14 @@ func fullDocument(b testing.TB) string {
 
 // fullShell returns a shell with eight tabbed cards, twenty tabs, two sections in a window sidebar and an open picker.
 func fullShell(b testing.TB) *shellFixture {
+	f, _ := fullShellOf(b)
+	return f
+}
+
+// fullShellOf is fullShell with the host that stores its surfaces.
+func fullShellOf(b testing.TB) (*shellFixture, *surfaceHost) {
 	b.Helper()
-	f, _ := surfaceShellOf(b, fullDocument(b))
+	f, stored := surfaceShellOf(b, fullDocument(b))
 	for len(f.tabbedCards()) < 8 {
 		split := false
 		for _, card := range f.tabbedCards() {
@@ -65,12 +71,25 @@ func fullShell(b testing.TB) *shellFixture {
 	if tabs := len(f.tabbedCards()); tabs != 8 {
 		b.Fatalf("the window holds %d cards", tabs)
 	}
-	return f
+	return f, stored
 }
 
-// A window at rest asks for no frame: not from its own frame, and not as time passes.
+// readyViews makes the view of each surface of the window report its first call, so no tab shows the turning ring of a loading
+// view.
+func readyViews(t *testing.T, f *shellFixture, stored *surfaceHost) {
+	t.Helper()
+	for id, surface := range stored.lastSurfaces(t) {
+		f.shell.Event("view-call", []any{map[string]any{"surface": id, "plugin": surface["plugin"], "generation": 1, "id": 5,
+			"command": "tab.footer", "params": "ready"}})
+	}
+	f.settle()
+}
+
+// A window at rest asks for no frame: not from its own frame, and not as time passes. A window whose views are all ready is at
+// rest; a loading view turns its ring at each display frame.
 func TestAWindowAtRestAsksForNoFrame(t *testing.T) {
-	f := fullShell(t)
+	f, stored := fullShellOf(t)
+	readyViews(t, f, stored)
 	f.settle()
 	f.tester.Frame()
 	f.settle()
@@ -83,6 +102,24 @@ func TestAWindowAtRestAsksForNoFrame(t *testing.T) {
 	f.settle()
 	if f.frames != before || f.tester.FramePending() {
 		t.Fatalf("the window asked for %d frames at rest", f.frames-before)
+	}
+}
+
+// The ring of a loading view turns at each refresh of the display that shows the window, whatever its rate, so the window asks
+// for the next display frame and not for a frame after a fixed time; a ready view asks for none.
+func TestALoadingViewAsksForEachDisplayFrameUntilItIsReady(t *testing.T) {
+	f, stored := surfaceShell(t)
+	surface := terminalSurface(t, stored)
+	f.tester.Frame()
+	if !f.tester.FramePending() {
+		t.Fatal("the turning ring of a loading view asks for no display frame")
+	}
+	viewCall(t, f, stored, surface, "tab.footer", "ready")
+	readyViews(t, f, stored)
+	f.tester.Frame()
+	f.settle()
+	if f.tester.FramePending() {
+		t.Fatal("a window whose views are ready asks for a display frame")
 	}
 }
 

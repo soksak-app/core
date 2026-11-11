@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 	"strings"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -672,7 +671,9 @@ func (s *Shell) drawSurfaceStatus(c *ui.Context, card, tab string) {
 			}
 			// The ring has its top quarter clear (border-top-color: transparent) and turns once in spinner-turn.
 			at := float64(p.Now().UnixNano()%int64(turn)) / float64(turn) * 2 * math.Pi
-			p.After(time.Second / 60)
+			// The ring turns at each refresh of the display that shows the window, whatever its rate, as the CSS animation of the
+			// JavaScript workbench does.
+			p.AnimationFrame()
 			var ring ui.Path
 			const steps = 24
 			for i := 0; i <= steps; i++ {
