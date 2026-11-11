@@ -1232,6 +1232,14 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
 
 완료 항목과 해당 범위의 증거는 이후 기록에서도 과거 상태로 보존한다.
 
+- [ ] F725 — P1: 브라우저유즈 조작의 계약 사례를 공표한다. Input: plugin API의 계약 파일이 뷰 브리지와 컴포지션을 다루지만 F715~F720의 브라우저유즈 조작은 아무것도 공표하지 않는다. Expected: `packages/plugin-api/contract/`의 `region-interactive.json`, `region-capture.json`, `region-act.json` 계약 파일이 interactive 스트림·캡처·읽기·조작·평가·입력 조작과 그 사례를 다루고 플러그인 저장소가 digest와 함께 복사한다. 이 항목은 조작들이 릴리스에 도달할 때까지 기다린다.
+
+- [ ] F724 — P1: 영역을 video (mp4) 모드로 캡처한다. Input: F721의 캡처 ABI가 모드를 이름하지만 video (mp4) 모드는 아직 구현되지 않았다고 답한다. Expected: video (mp4) 모드가 같은 ABI로 결과의 프레임이나 경로를 답한다. 이 항목은 F721의 still 모드가 릴리스에 도달할 때까지 기다린다.
+
+- [ ] F723 — P1: 영역을 scroll 모드로 캡처한다. Input: F721의 캡처 ABI가 모드를 이름하지만 scroll 모드는 아직 구현되지 않았다고 답한다. Expected: scroll 모드가 같은 ABI로 결과의 프레임이나 경로를 답한다. 이 항목은 F721의 still 모드가 릴리스에 도달할 때까지 기다린다.
+
+- [ ] F722 — P1: 영역을 sequence 모드로 캡처한다. Input: F721의 캡처 ABI가 모드를 이름하지만 sequence 모드는 아직 구현되지 않았다고 답한다. Expected: sequence 모드가 같은 ABI로 결과의 프레임이나 경로를 답한다. 이 항목은 F721의 still 모드가 릴리스에 도달할 때까지 기다린다.
+
 - [o] F720 — P0: 영역 뷰포트에 좌표 입력 조작을 전달한다. Input: F717~F719의 읽기·조작·평가가 프레임의 콘텐츠 월드로 도달하지만, 스크립트 없는 프레임이나 닫힌 섀도 루트의 요소는 다른 경로가 없다. Expected: `input {document, action, x, y, dx?, dy?, key?}`가 영역 뷰포트 좌표에 좌표 입력 조작 — 클릭 0, 이동 1, 드래그 2, 누르기 3, 스크롤 4 — 을 전달한다. 전달은 main 프레임의 페이지 월드에서 실행되어 브라우저가 그리는 모든 요소에 닿는다. 결과: ABI가 1회 응답 콜백과 함께 `sp_document_input`을 싣고 스크립트가 `elementFromPoint`가 해결하는 좌표에 DOM 이벤트를 전달하며 Go·Rust 호스트·포트·호출 표·plugin API `input`이 따른다. Red: plugin API의 `input` 사례가 변경 전 소스에서 알 수 없는 메서드로 실패했다. Green: plugin API 스위트가 847/847을 통과하고 Go·Rust 스위트와 host parity 검사가 통과한다.
 
 - [o] F719 — P0: 승인 게이트를 통해 프레임에서 JavaScript 식을 평가한다. Input: F717의 읽기와 F718의 조작이 좁은 연산을 실행하지만 페이지가 식을 평가할 수 없고, 평가는 좁은 조작이 지키는 모든 동의 경계를 넘는다. Expected: `evaluate {document, frame, js, await?}`가 경로의 프레임 콘텐츠 월드에서 식을 평가한다. 네이티브의 첫 답은 오리진만 이름하고 그 오리진의 `evaluate` 승인이 두 번째 답의 값을 답하며 두 답의 오리진이 같지 않으면 평가는 실패한다. evaluate 승인 없는 페이지는 요청 식별자와 함께 `evaluate requires approval`로 답한다. 결과: ABI가 1회 응답 콜백과 함께 `sp_document_eval`을 싣고 Go·Rust 호스트가 게이트와 함께 네이티브의 두 응답으로 평가를 답하며 포트·호출 표·plugin API `evaluate`가 따른다. Red: plugin API의 `evaluate` 사례가 변경 전 소스에서 알 수 없는 메서드로 실패했다. Green: plugin API 스위트가 846/846을 통과하고 Go·Rust 스위트와 host parity 검사가 통과한다.
