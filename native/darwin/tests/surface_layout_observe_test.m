@@ -379,6 +379,45 @@ static void checkActionsAreToldOnce(void) {
     [window release];
 }
 
+// A key call that a release gives back sends its key event in its turn, while the release of its window still returns. A key
+// that arrived during that return waits behind it in the hold of a newer transaction, so the event of the returned key goes on
+// at once and the keys reach the window in the order they were sent (docs/spec/native-surfaces.md#keyboard-of-a-surface).
+static void checkReturnedKeyKeepsItsTurn(void) {
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(100, 900, 200, 100) styleMask:NSWindowStyleMaskBorderless
+        backing:NSBackingStoreBuffered defer:NO];
+    window.releasedWhenClosed = NO;
+    SPGateView *gate = [[[SPGateView alloc] initWithFrame:window.contentView.bounds] autorelease];
+    [window.contentView addSubview:gate];
+    NSPoint inside = NSMakePoint(50, 50);
+    NSMutableString *typed = [NSMutableString string];
+    id monitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown handler:^NSEvent *(NSEvent *event) {
+        [typed appendString:event.characters];
+        return nil;
+    }];
+    void (^key)(NSString *, unsigned short) = ^(NSString *character, unsigned short code) {
+        [NSApp sendEvent:[NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:0 timestamp:0
+            windowNumber:window.windowNumber context:nil characters:character charactersIgnoringModifiers:character isARepeat:NO
+            keyCode:code]];
+    };
+    __block int pressed = 0;
+    surfaceLayoutBegin(window, 81, ^(int allowed) {});
+    check(surfaceLayoutHoldCall(window, true, inside.x, inside.y, ^{ pressed++; }), @"a press without a target waits for the transaction");
+    check(surfaceLayoutHoldKey(window, ^{ key(@"e", 14); }, ^{}), @"a key waits behind the held press");
+    check(surfaceLayoutCommit(window, 81), @"the transaction of the held press and key commits");
+    // The release returns the press and the key through the queue. A newer transaction of the window opens, and a key sent now
+    // waits behind the return.
+    surfaceLayoutBegin(window, 82, ^(int allowed) {});
+    check(surfaceLayoutHoldKey(window, ^{ key(@"b", 11); }, ^{}), @"a key sent while the release returns waits");
+    runQueue();
+    check(pressed == 1, [NSString stringWithFormat:@"the held press runs once (%d)", pressed]);
+    check([typed isEqualToString:@"eb"], [NSString stringWithFormat:
+        @"the event of a returned key goes on in its turn, ahead of a key that arrived during the return (typed %@)", typed]);
+    [NSEvent removeMonitor:monitor];
+    surfaceLayoutCancel(window);
+    [window close];
+    [window release];
+}
+
 static void runInline(void (^call)(void)) { call(); }
 
 // Ends every transaction that a check left open, whatever its outcome, so each check starts with no open transaction.
@@ -436,6 +475,8 @@ int main(void) { @autoreleasepool {
     checkPressEndsHold();
     resetOwners();
     checkActionsAreToldOnce();
+    resetOwners();
+    checkReturnedKeyKeepsItsTurn();
     [third release];
     [first release];
     [second release];
