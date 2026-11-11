@@ -602,6 +602,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F740",
+    implementation: [
+      { file: "native/darwin/tests/support/check_level.h", symbol: "static const NSWindowLevel kCheckWindowLevel = NSPopUpMenuWindowLevel;" },
+      { file: "docs/spec/hosts.md", symbol: "| H83 | `src/layout_watch_test.go` | none |" },
+      { file: "docs/spec/hosts.md", symbol: "| H84 | none | `tests/fatal_exception_test.rs` |" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/document_draw_covered_test.m", id: "the first cover leaves a part of the other window visible" },
+      { file: "native/darwin/tests/document_draw_covered_test.m", id: "the region of the other covered window hides its document" },
+      { file: "scripts/test/platform/darwin/system/host-structure.test.mjs", id: "host structure audit reports a clean paired-host graph" },
+    ],
+    expected: "The windows and covers of a native check that judges what the window server shows stand above the windows of other applications, so a window that another application brings forward does not change the occlusion state that the check reads, and each one-sided host test has a row of the allowed differences.",
+    levels: ["native", "unit"],
+  },
+  {
     id: "F738",
     implementation: [
       { file: "native/darwin/src/application_log.m", symbol: "void sp_log_fatal_exception(void *thrown) {" },
