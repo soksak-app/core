@@ -10,10 +10,34 @@ export function measureDragFrameCadence(times) {
   return longest;
 }
 
-/** Applies the dedicated view-drag cadence performance target. */
-export function assertDragFrameCadence(times) {
+/**
+ * The period of the display refresh in effect at a time: the latest observed refresh at or before it.
+ * refreshes is { times, periods } from display-refresh.mjs, in milliseconds.
+ */
+function periodAt(refreshes, time) {
+  assert.ok(Array.isArray(refreshes?.times) && refreshes.times.length > 0 &&
+    refreshes.periods?.length === refreshes.times.length, "display refreshes are missing");
+  const index = refreshes.times.findLastIndex((refresh) => refresh <= time);
+  assert.ok(index >= 0, `no display refresh at or before ${time}ms`);
+  const period = refreshes.periods[index];
+  assert.ok(Number.isFinite(period) && period > 0, "drag display period is invalid");
+  return period;
+}
+
+function gapsExceed(times, refreshes) {
+  return times.some((time, index) => index > 0 && time - times[index - 1] > 2 * periodAt(refreshes, time));
+}
+
+/**
+ * Applies the view-drag cadence target: no recording gap longer than two periods of the display at the gap's end.
+ */
+export function assertDragFrameCadence(times, refreshes) {
   const longest = measureDragFrameCadence(times);
-  assert.ok(longest <= 35, `view drag recording gap ${longest.toFixed(3)}ms exceeds 35ms`);
+  for (let index = 1; index < times.length; index++) {
+    const gap = times[index] - times[index - 1];
+    const target = 2 * periodAt(refreshes, times[index]);
+    assert.ok(gap <= target, `view drag recording gap ${gap.toFixed(3)}ms exceeds ${target.toFixed(3)}ms`);
+  }
   return longest;
 }
 
@@ -81,13 +105,15 @@ export function pointerLag(samples, ticks, boundary) {
     }
     // k is the last step that has this layout, so the grid left this layout at step k+1.
     const lag = k < sent ? time - ticks[k + 1] : 0;
-    lags.push(lag);
+    lags.push({ lag, time });
     if (lag > worst.lag) worst = { lag, time, shown, step: k, sent };
   }
-  lags.sort((a, b) => a - b);
+  lags.sort((a, b) => a.lag - b.lag);
   assert.ok(lags.length > 0, "drag measurement has no captured frame at or after the first input");
   const at = (fraction) => lags[Math.min(lags.length - 1, Math.floor(lags.length * fraction))];
-  return { ...worst, median: at(0.5), p90: at(0.9) };
+  const median = at(0.5);
+  const p90 = at(0.9);
+  return { ...worst, median: median.lag, medianTime: median.time, p90: p90.lag, p90Time: p90.time };
 }
 
 /**
@@ -216,27 +242,33 @@ export function shownTimes(samples, ticks) {
   return samples.filter(({ time }) => time >= ticks[0]).map(({ time }) => time);
 }
 
-/** Records the cadence and refresh-rate-based latency targets without treating valid slow data as missing data. */
-export function measureDragPerformance(times, lag, refreshRate) {
+/**
+ * Records the cadence and latency targets. Each gap and each latency value is judged against the display period
+ * at its own time, so a window that moved between displays keeps each judgment on the display it was shown on.
+ */
+export function measureDragPerformance(times, lag, refreshes) {
   const longest = measureDragFrameCadence(times);
-  assert.ok(Number.isFinite(refreshRate) && refreshRate > 0, "drag display refresh rate is invalid");
   const latency = { median: lag?.median, p90: lag?.p90, worst: lag?.lag };
   assert.ok(Object.values(latency).every((value) => Number.isFinite(value) && value >= 0),
     "drag latency measurements are missing or invalid");
-  const period = 1000 / refreshRate;
-  const targets = { median: 2.5 * period, p90: 3 * period, worst: 4 * period };
-  const exceeded = longest > 35 ? ["cadence"] : [];
-  for (const key of Object.keys(targets)) if (latency[key] > targets[key]) exceeded.push(key);
+  // A zero latency has no time and meets every target.
+  const latencyTime = { median: lag?.medianTime, p90: lag?.p90Time, worst: lag?.time };
+  assert.ok(Object.keys(latency).every((key) => latency[key] === 0 || Number.isFinite(latencyTime[key])),
+    "drag latency times are missing or invalid");
+  const factors = { median: 2.5, p90: 3, worst: 4 };
+  const exceeded = gapsExceed(times, refreshes) ? ["cadence"] : [];
+  for (const key of Object.keys(factors)) {
+    if (latency[key] > 0 && latency[key] > factors[key] * periodAt(refreshes, latencyTime[key])) exceeded.push(key);
+  }
   // The interval of the shown frames follows the interval of the input while a layout takes less than that interval.
   const intervals = times.slice(1).map((time, index) => time - times[index]).sort((a, b) => a - b);
   const frameInterval = intervals[Math.floor(intervals.length / 2)];
-  return { cadence: { measured: longest, target: 33 }, frameInterval, latency, targets, refreshRate,
-    exceeded, targetsMet: exceeded.length === 0 };
+  return { cadence: { measured: longest }, frameInterval, latency, exceeded, targetsMet: exceeded.length === 0 };
 }
 
 /** Applies the unchanged targets in a dedicated performance benchmark. */
-export function assertDragPerformance(times, lag, refreshRate) {
-  const report = measureDragPerformance(times, lag, refreshRate);
+export function assertDragPerformance(times, lag, refreshes) {
+  const report = measureDragPerformance(times, lag, refreshes);
   assert.ok(report.targetsMet, `drag performance targets exceeded: ${JSON.stringify(report)}`);
   return report;
 }

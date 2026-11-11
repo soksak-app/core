@@ -6,6 +6,7 @@ import { fresh, joinedFailure } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { recordedEdges } from "./sidebar-gesture-recording.mjs";
 import { missingPoses } from "./card-panel-checks.mjs";
+import { readDisplayRefreshes } from "../packages/window-check/display-refresh.mjs";
 
 const sides = ["top", "bottom", "left", "right"];
 const sign = (side) => (side === "top" || side === "left" ? 1 : -1);
@@ -216,7 +217,7 @@ for (const app of Object.values(APPS)) {
             const missing = missingPoses(
               recorded,
               poses.map((pose) => ({ phase: pose.phase, displayed: pose.displayed, at: initial + sign(side) * (pose.size - 120) })),
-              recordingWindow.refreshRate,
+              readDisplayRefreshes(directory).times,
             );
             // For each missed state it reports the frame that showed its boundary and the times of the frames before and after the display time (ms relative to the display time).
             const around = missing.map((pose) => ({
@@ -232,7 +233,7 @@ for (const app of Object.values(APPS)) {
                 .map((layout) => Object.fromEntries(Object.entries(layout).map(([key, value]) =>
                   [key, key !== "ticket" && typeof value === "number" ? +(value - pose.displayed).toFixed(1) : value]))),
             }));
-            assert.deepEqual(missing, [], `${side}: displayed states missing from the recording at ${recordingWindow.refreshRate}Hz: ${JSON.stringify(around)}`);
+            assert.deepEqual(missing, [], `${side}: displayed states missing from the recording: ${JSON.stringify(around)}`);
             t.diagnostic(
               `${side}: 120 -> 160 -> 120 points, ${captured.length} frames at ${captured[0].width}x${captured[0].height}, ${stopped.layouts.length} layout transactions, gap ${stopped.longestGap}ms, input/presentation steps ${elapsed.join(",")}ms`,
             );

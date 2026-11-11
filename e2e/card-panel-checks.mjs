@@ -1,14 +1,13 @@
 // Verdicts of the card panel window check. test/card-panel-checks.test.mjs checks that the verdicts reject invalid input.
 import assert from "node:assert/strict";
+import { refreshAfter } from "../packages/window-check/display-refresh.mjs";
 
 /**
  * Display states that are missing from the recording. frames are { time, edges } (display time in ms, boundary coordinates measured in that frame) and poses are
- * { displayed, at } (display time in ms, boundary coordinates of that state). A state is missing when it is absent from the frames up to the first frame at or after two screen
- * frames from its display, or when no such frame exists. A frame stream promises no cadence, so the limit is that frame and not a time; each check bounds the recording gap itself.
+ * { displayed, at } (display time in ms, boundary coordinates of that state). Refresh times are the display refreshes of the window (ms). A state is missing when it is absent from the frames up to the first frame at or after the second observed refresh after its display, or when no such frame exists. A frame stream promises no cadence, so the limit is that frame and not a time; each check bounds the recording gap itself.
  */
-export function missingPoses(frames, poses, refreshRate) {
-  assert.ok(Number.isFinite(refreshRate) && refreshRate > 0, `the display refresh rate is unknown (${refreshRate})`);
-  const window = 2000 / refreshRate;
+export function missingPoses(frames, poses, refreshes) {
+  assert.ok(Array.isArray(refreshes) && refreshes.length > 0, "the display refresh times are missing");
   // There is no frame before the recording starts. A state that was displayed before the recording started and did not change until the first frame is counted from the first frame.
   // A state that changed to the next state before the recording started cannot be recorded, so it is counted from its original time.
   const first = Math.min(...frames.map((frame) => frame.time));
@@ -22,7 +21,7 @@ export function missingPoses(frames, poses, refreshRate) {
   // was displayed record an earlier state.
   const after = (index) => (index === 0 ? -Infinity : poses[index - 1].displayed - 1);
   const until = (pose, index) => {
-    const settled = start(pose, index) + window;
+  const settled = refreshAfter(refreshes, start(pose, index), 2);
     return Math.min(...frames.filter((frame) => frame.time >= settled).map((frame) => frame.time), Infinity);
   };
   return poses.filter((pose, index) => !frames.some((frame) => frame.time >= after(index) &&

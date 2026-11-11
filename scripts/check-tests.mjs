@@ -13044,7 +13044,7 @@ const FEATURE_LINKS = [
     id: "F430",
     implementation: [{ file: "e2e/card-panel-checks.mjs", symbol: "missingPoses" }],
     tests: [{ file: "e2e/test/card-panel-checks.test.mjs", id: "a pose in the first frame that a recording gap delivers after two display frames counts as recorded" }],
-    expected: "A displayed state counts as recorded when the frames up to the first frame at or after two display frames hold it.",
+    expected: "A displayed state counts as recorded when the frames up to the first frame at or after the second observed display refresh hold it.",
     levels: ["unit"],
   },
   {
@@ -13981,9 +13981,18 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-159",
-    implementation: [{ file: "packages/window-check/drag-measurement.mjs", symbol: "export function assertDragFrameCadence(" }],
-    tests: [{ file: "packages/window-check/test/drag-measurement.test.mjs", id: "view drag cadence requires every frame within 35 milliseconds" }],
-    expected: "The dedicated view-drag performance check includes every decoded frame and rejects gaps above 33 milliseconds.",
+    implementation: [
+      { file: "packages/window-check/drag-measurement.mjs", symbol: "export function assertDragFrameCadence(" },
+      { file: "packages/window-check/display-refresh.mjs", symbol: "export function displayRefreshes(" },
+      { file: "packages/window-check/display-refresh.mjs", symbol: "export function readDisplayRefreshes(" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/drag-measurement.test.mjs", id: "view drag cadence requires every frame within two display periods" },
+      { file: "packages/window-check/test/display-refresh.test.mjs", id: "display refreshes reject a recording whose display link is not available" },
+      { file: "packages/window-check/test/display-refresh.test.mjs", id: "display refreshes are the observed refreshes in milliseconds" },
+      { file: "packages/window-check/test/display-refresh.test.mjs", id: "a recording's refresh times are read from its display-link.json" },
+    ],
+    expected: "The dedicated view-drag performance check includes every decoded frame and rejects gaps above two display periods of the window's observed refresh.",
     levels: ["unit"],
   },
   {

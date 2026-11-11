@@ -13,6 +13,7 @@ import { drag, keepCommonSettings } from "@soksak/window-check/app.mjs";
 import { frameChange, frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { assertDragPerformance, assertHeldStatesShown, assertRoundTrips, measureDragPerformance, pointerLag, shownTimes,
   transactionCadence } from "@soksak/window-check/drag-measurement.mjs";
+import { readDisplayRefreshes } from "@soksak/window-check/display-refresh.mjs";
 import { outside } from "../../outside.mjs";
 import { declaredSlotInsets, effectiveCardCornerRadiusPt, measureViewFrameGeometry, VIEW_GEOMETRY_COLOR_TOLERANCE }
   from "@soksak/window-check/view-frame-geometry.mjs";
@@ -174,9 +175,9 @@ async function captureFloorDrag(s, configDir, { marks, cornerRadiusPt, slotInset
   assertRoundTrips(samples.map((sample) => sample.position), 2);
   assertHeldStatesShown(samples, run.ticks, run.boundary);
   const lag = pointerLag(shown, run.ticks, run.boundary);
-  const refreshRate = (await s.get("host.window")).refreshRate;
+  const refreshes = readDisplayRefreshes(run.frames);
   const times = shownTimes(shown, run.ticks);
-  const performance = measureDragPerformance(times, lag, refreshRate);
+  const performance = measureDragPerformance(times, lag, refreshes);
   const report = {
     host: s.app.name,
     performance,
@@ -203,6 +204,6 @@ async function captureFloorDrag(s, configDir, { marks, cornerRadiusPt, slotInset
       layouts: run.layouts,
       ticks: run.ticks,
     },
-    assertPerformance: () => assertDragPerformance(times, lag, refreshRate),
+    assertPerformance: () => assertDragPerformance(times, lag, refreshes),
   };
 }

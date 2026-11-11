@@ -81,18 +81,18 @@ test("a third-stage collection failure preserves the valid captured threshold fa
 });
 
 /** Frame times, lag and refresh rate of a structurally valid captured drag that exceeds the unchanged cadence and latency targets. */
-const SLOW_DRAG = Object.freeze({ times: [0, 36, 72], lag: { lag: 100, median: 40, p90: 70 }, refreshRate: 60 });
+const SLOW_DRAG = Object.freeze({ times: [0, 36, 72], lag: { lag: 100, time: 72, median: 40, medianTime: 36, p90: 70, p90Time: 72 }, refreshes: { times: [0], periods: [1000 / 60] } });
 /** A captured drag whose assertPerformance applies assertDragPerformance to SLOW_DRAG and records each error it throws in `judged`. */
 function slowCapture(judged) {
   return { frameCount: 50, assertPerformance() {
-    try { return assertDragPerformance(SLOW_DRAG.times, SLOW_DRAG.lag, SLOW_DRAG.refreshRate); }
+    try { return assertDragPerformance(SLOW_DRAG.times, SLOW_DRAG.lag, SLOW_DRAG.refreshes); }
     catch (error) { judged.push(error); throw error; }
   } };
 }
 
 test("a structurally valid captured drag over the targets is measured without a verdict, and its assertPerformance throws the threshold error",
   { timeout: 5000 }, () => {
-    const measured = measureDragPerformance(SLOW_DRAG.times, SLOW_DRAG.lag, SLOW_DRAG.refreshRate);
+    const measured = measureDragPerformance(SLOW_DRAG.times, SLOW_DRAG.lag, SLOW_DRAG.refreshes);
     assert.equal(measured.targetsMet, false, "a valid slow capture is measured, not rejected, before assertPerformance");
     assert.deepEqual(measured.exceeded, ["cadence", "p90", "worst"]);
     const judged = [];
