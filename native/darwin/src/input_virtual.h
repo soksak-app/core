@@ -1,9 +1,10 @@
 // The virtual key window: one window of this process that answers as the key and main window inside the application, and
 // the application answers as active, while the system key window and the front application stay where a person left them.
 //
-// WebKit updates hover and page focus only for a page of the key window of an active application, and a check must not take
-// those from a person. AppKit keeps its own state, so input of a virtual key window is delivered to the window or the view,
-// never through -[NSApplication sendEvent:]: that path reads the real state and drops a key and a first click.
+// WebKit updates hover and page focus only for a page of the key window of an active application, and input of the host must
+// not take those from a person. The replaced methods answer the virtual state, so a press, a release and a key of the virtual
+// key window pass -[NSApplication sendEvent:] as a person's do and the local monitors see them; a move goes to the tracking
+// areas of the window directly, so the system cursor and the real pointer stay where they are.
 #include <stdbool.h>
 
 // Makes window the virtual key window and reports whether it is. The application that is really active answers false: real

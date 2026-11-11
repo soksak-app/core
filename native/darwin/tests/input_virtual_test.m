@@ -275,7 +275,8 @@ int main(void) { @autoreleasepool {
         timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber context:nil eventNumber:0 clickCount:0 pressure:0]];
     check([eventTypes(view) count] == 0, @"a move that passes the application does not reach a page of the virtual key window");
 
-    // A press, focus and a key. The path through the application would drop each of them.
+    // A press, focus and a key of the covered window of an application that is not active. Each passes the application as the
+    // input of a person does, so a local monitor sees it, and each still reaches the page: the first click is not dropped.
     __block NSUInteger monitored = 0;
     id monitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown | NSEventMaskLeftMouseUp | NSEventMaskKeyDown handler:^NSEvent *(NSEvent *event) { monitored++; return event; }];
     evaluate(view, @"events.length=0;null");
@@ -287,7 +288,7 @@ int main(void) { @autoreleasepool {
     check(sp_input_key(window, "a", "a", 0, true) == SP_INPUT_DELIVERED && sp_input_key(window, "a", "a", 0, false) == SP_INPUT_DELIVERED, @"a key is delivered");
     awaitPage(view, @"the field takes the text a", @"input", @"document.getElementById('field').value === 'a'");
     check([evaluate(view, @"document.getElementById('field').value") isEqual:@"a"], [NSString stringWithFormat:@"the key types into the page (%@)", evaluate(view, @"document.getElementById('field').value")]);
-    check(monitored == 0, @"input of a virtual key window does not pass the application");
+    check(monitored == 3, [NSString stringWithFormat:@"a local monitor sees the press, the release and the key of a virtual key window (%lu)", (unsigned long)monitored]);
     [NSEvent removeMonitor:monitor];
 
     // A real button does not enter a page event, and does not refuse a press.

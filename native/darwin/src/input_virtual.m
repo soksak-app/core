@@ -199,7 +199,7 @@ bool sp_input_virtual_send_key_to_web_view(void *handle, void *event) {
     NSView *client = textInputClient(window);
     if (!sp_input_virtual_is(window) || ![client isKindOfClass:WKWebView.class]) return false;
     keyWebView = (WKWebView *)client;
-    [window sendEvent:(__bridge NSEvent *)event];
+    [NSApp sendEvent:(__bridge NSEvent *)event];
     keyWebView = nil;
     return true;
 }

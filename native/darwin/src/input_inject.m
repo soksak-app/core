@@ -13,7 +13,7 @@
 // WebKit updates hover from a move without a button only when the page is active (the window is the key window)
 // (WebFrame::handleMouseEvent). A move in a window that is not the key window is therefore rejected with
 // SP_INPUT_INACTIVE only by an application that is really active; in an inactive application the move and a key enter the
-// virtual key window (input_virtual.h), whose input never passes -[NSApplication sendEvent:].
+// virtual key window (input_virtual.h), whose presses, releases and keys pass -[NSApplication sendEvent:] as a person's do.
 #import <Cocoa/Cocoa.h>
 #import <Carbon/Carbon.h>
 #import <objc/runtime.h>
@@ -319,6 +319,11 @@ static BOOL otherPressIn(SPPointer *pointer, NSWindow *window, int button) {
     return otherPress(pointer, ^BOOL(SPPress *press) { return press->window == window && press->button == button; }) != nil;
 }
 
+// Whether any pointer holds an open press in window.
+static BOOL windowPressOpen(NSWindow *window) {
+    return otherPress(nil, ^BOOL(SPPress *press) { return press->window == window; }) != nil;
+}
+
 // Whether the input method of the system serves the input context of page: the application is really active, the window is
 // really its key window, and the context is the current one. WebKit passes a mouse event of a page with an input context to that
 // context first (the mouse handlers of WebViewImpl), and the input method answers after the delivery has returned, so WebKit reads
@@ -552,9 +557,12 @@ static sp_input_result deliverPointer(SPPointer *pointer, NSWindow *window, doub
         case 1: {
             // A delivered release ends an open press. A rejected release leaves the press open, so the next press reports that fact.
             if (pointer->presses[button]) { held->why = "a press of this button of the pointer is still open"; return SP_INPUT_PRESS_OPEN; }
-            // AppKit reads its real state in -[NSApplication sendEvent:] and drops a first click, so a press of an application that
-            // is not really active, also of a window that AppKit holds as its key window, takes the direct path.
-            BOOL throughApplication = sp_input_virtual_through_application(handle);
+            // A press of the key window of the application that is really active and a press of the virtual key window pass
+            // -[NSApplication sendEvent:], as the press of a person does, so the local monitors see it; the virtual key window
+            // answers as the key window of an active application there, so AppKit does not drop it as a first click. AppKit
+            // follows one press of a window, so a press while another press of the window is open goes to the view directly.
+            BOOL throughApplication = sp_input_virtual_through_application(handle)
+                || (sp_input_virtual_is(handle) && !windowPressOpen(window));
             if (heldByOther(pointer, window, pageOf(hit), 1, throughApplication, held)) return SP_INPUT_POINTER_HELD;
             sp_input_virtual_set_point(handle, point.x, point.y);
             // The left press of the window is followed for the workbench once, while any pointer holds it.
@@ -1412,8 +1420,8 @@ static sp_input_result keyInput(void *handle, const char *key, const char *text,
     // translation, flags and stated-text mark; never substitute characters.
     (void)event.characters;
     (void)event.charactersIgnoringModifiers;
-    // An inactive application has no key window for a key, and -[NSApplication sendEvent:] drops it while it answers delivered.
-    // The virtual path enforces this project's declared native-menu ownership (shortcuts.json): an enabled menu equivalent
+    // A key of the virtual key window passes -[NSApplication sendEvent:] as the key of a person does, so the local monitors see
+    // it; there the virtual key window answers as the key window of an active application. The virtual path enforces this project's declared native-menu ownership (shortcuts.json): an enabled menu equivalent
     // owns the key before a view. NSMenu resolves and validates that owner; an unclaimed key reaches window equivalents,
     // then the first responder. This is project policy, not AppKit's default view-first dispatch order. A key down of a
     // named key or with a stated text goes to a web view without its input context: a stated text is typed through the text
@@ -1424,7 +1432,7 @@ static sp_input_result keyInput(void *handle, const char *key, const char *text,
         }
         bool toWebView = !*equivalent && down && (named || text) && sp_input_virtual_send_key_to_web_view(window, event);
         *typed = toWebView && text && !named;
-        if (!*equivalent && !toWebView) [window sendEvent:event];
+        if (!*equivalent && !toWebView) [NSApp sendEvent:event];
         return SP_INPUT_DELIVERED;
     }
     // A human key goes only to the key window. When another window is the key window, the key is not delivered to the target window and the

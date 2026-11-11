@@ -9197,6 +9197,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F756-1",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "static BOOL windowPressOpen(NSWindow *window) {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/input_virtual_test.m", id: "a local monitor sees the press, the release and the key of a virtual key window (%lu)" },
+      { file: "native/darwin/tests/input_virtual_test.m", id: "the gesture reaches the page (%@)" },
+    ],
+    expected: "A press, its release and a key of the covered virtual key window of an application that is not active pass the application as a person's input does: a local monitor sees each, and the page still receives the first click and the key.",
+    levels: ["unit"],
+  },
+  {
     id: "F160.31",
     implementation: [
       { file: "packages/sok/go/src/event_log.go", symbol: "func StartEventLog" },
