@@ -8,7 +8,7 @@
 #   make          build/libsoksak-darwin.a, build/soksak-darwin.pc
 #   make test             runs the checks for input injection, the emulated activation, mouse button observation, window state, window button layout,
 #                         title bar height display inside a layout transaction, the start transaction of a re-read, display wait,
-#                         webview focus, the web inspector, overlapping webview input (baseline run and registered run), view focus,
+#                         webview focus, the web inspector, overlapping webview input, view focus,
 #                         document region, image region, release of a closed window, and window object count.
 #                         It does not activate the application
 #   make test-app-activation  runs the overlapping webview input check through the local monitor of an application that is
@@ -388,7 +388,6 @@ NATIVE_TESTS = observe_test \
   presentation_order_test \
   webview_focus_test \
   webview_inspector_test \
-  webview_input_test,--baseline \
   webview_input_test \
   webview_geometry_test \
   webview_geometry_test,-AppleShowScrollBars,Always \

@@ -101,7 +101,7 @@ Tauri 이벤트 전달 콜백은 Tao의 이벤트 처리 잠금을 가진다. �
 
 비공개 플래그는 마우스 진입·이탈 처리에도 영향을 준다. 로컬 모니터는 이동·진입 이벤트에서 선택 대상을 변경하며 이탈 이벤트에서는 변경하지 않는다. WebKit은 플래그가 켜지면 이탈을 버리고 AppKit은 뷰의 이탈과 포인터를 가져가는 이동의 순서를 고정하지 않으므로, 모니터는 포인터를 잃는 뷰에 플래그를 켜기 전에 뷰 밖의 이탈을 보내 페이지가 아무것도 hover하지 않게 한다. 이탈 이벤트가 항상 허용된다고 서술하면 안 된다. 선택자를 사용할 수 없으면 등록이 실패하며, 제거 시 플래그를 초기화한다. 업데이트 후 추적 영역 동작, 이벤트 순서, hover 해제, 숨김·제거, 키보드 입력 유지를 검토한다. 이 API는 WebKit에 이미 제출한 작업을 취소하지 않는다. 유지 중인 검사는 지연된 커서 응답을 검증하지 않는다.
 
-[독립 입력 검사](examples.ko.md#진단)의 기준 실행과 등록 실행, [`modal.test.mjs`](../../e2e/modal.test.mjs)를 사용한다. [`WKWebViewMac.mm`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/mac/WKWebViewMac.mm)의 `_setIgnoresMouseMoveEvents:`와 [`WebViewImpl.mm`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/mac/WebViewImpl.mm)의 추적 처리를 검토한다.
+[독립 입력 검사](examples.ko.md#진단)와 그 `--monitor` 실행, [`modal.test.mjs`](../../e2e/modal.test.mjs)를 사용한다. [`WKWebViewMac.mm`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/mac/WKWebViewMac.mm)의 `_setIgnoresMouseMoveEvents:`와 [`WebViewImpl.mm`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/mac/WebViewImpl.mm)의 추적 처리를 검토한다.
 
 ### 투명 배경
 

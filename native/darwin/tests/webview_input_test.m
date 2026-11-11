@@ -3,8 +3,18 @@
 // WebKit updates hover only in the key window. The check makes its window key with the emulated activation of
 // sp_input_activate, which leaves the process inactive and makes the window the virtual key window, and moves the pointer with
 // sp_input_pointer, which routes the move and gives it to each tracking area that holds the point as AppKit does for a person's
-// move. The window ignores the mouse, so the real pointer reaches none of its tracking areas, and the runs with no argument and
-// with --baseline are part of make test.
+// move. The window ignores the mouse, so the real pointer reaches none of its tracking areas, and the run with no argument is part
+// of make test.
+//
+// The check had a baseline run with unregistered web views, which found that a lower web view also heard a move over the one above
+// it. The WebKit of the system no longer does that on any path: -[WKMouseTrackingObserver mouseMoved:] and mouseEntered: call
+// updateViewIsTopmostAtMouseLocation:, which asks whether the hit test of the content view at the point of the event lies in its
+// web view, and give the event to the web view only then; mouseExited: passes only for a web view that was topmost at the last
+// point. That control has no subject left, so the run is gone (F756).
+//
+// A move that enters a web view reaches its page twice, as a person's does: AppKit gives the enter of the area of the pointer and
+// the move, and WebKit makes a mouse move of each (the enter of its area for modifier keys only starts that monitor). Each count is
+// therefore of one move of a pointer that is already at the point: the check moves there, clears the counts and moves there again.
 //
 // The run with --monitor checks the path of a person's move in an application that is really active: the move passes
 // -[NSApplication sendEvent:], whose local monitor routes it. That needs the system to activate the application, so it runs only
@@ -42,9 +52,9 @@ static void drain(WKWebView *view) {
 
 typedef struct { BOOL done; sp_activate_result result; char frontmost[256]; } SPActivation;
 
-// The runs of the check: the routed moves of sp_input_pointer, the same moves to unregistered web views (the original bug), and
-// the posted moves of an application that is really active, which its local monitor routes.
-typedef enum { SPModeRouted, SPModeBaseline, SPModeMonitor } SPMode;
+// The runs of the check: the routed moves of sp_input_pointer, and the posted moves of an application that is really active,
+// which its local monitor routes.
+typedef enum { SPModeRouted, SPModeMonitor } SPMode;
 
 static void activated(void *context, sp_activate_result result, const char *frontmost) {
     SPActivation *state = context;
@@ -93,7 +103,14 @@ static void deliver(NSWindow *window, NSPoint point, SPMode mode) {
     pointerOutside(window);
 }
 
+static void reset(NSArray *views);
+
+// One move of a pointer that is already at point: the pointer moves there, which may enter the areas at the point, the counts of
+// the pages are cleared, and the pointer moves there again. The pages count only that last move.
 static void move(NSWindow *window, NSArray *views, NSPoint point, SPMode mode) {
+    deliver(window, point, mode);
+    for (WKWebView *view in views) drain(view);
+    reset(views);
     deliver(window, point, mode);
     for (WKWebView *view in views) drain(view);
 }
@@ -207,10 +224,8 @@ void sp_test_declare_activation(void);
 int main(int argc, const char **argv) { @autoreleasepool {
     SPMode mode = SPModeRouted;
     for (int i = 1; i < argc; ++i) {
-        if (strcmp(argv[i], "--baseline") == 0) mode = SPModeBaseline;
         if (strcmp(argv[i], "--monitor") == 0) mode = SPModeMonitor;
     }
-    const BOOL baseline = mode == SPModeBaseline;
     if (mode == SPModeMonitor) sp_test_declare_activation();
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
@@ -240,7 +255,7 @@ int main(int argc, const char **argv) { @autoreleasepool {
     NSMutableArray<SPLoaded *> *loads = [NSMutableArray array];
     for (WKWebView *view in views) {
         [window.contentView addSubview:view];
-        if (!baseline) require(webviewInputRegister(view), @"required webview pointer-input API is unavailable");
+        require(webviewInputRegister(view), @"required webview pointer-input API is unavailable");
         SPLoaded *loaded = [[SPLoaded new] autorelease];
         [loads addObject:loaded];
         view.navigationDelegate = loaded;
@@ -273,37 +288,29 @@ int main(int argc, const char **argv) { @autoreleasepool {
         [view _doAfterNextPresentationUpdate:^{ painted = YES; }];
         eventWait(@"the next presentation of the view", ^BOOL { return painted; });
     }
-    reset(views);
     move(window, views, NSMakePoint(300,150), mode);
-    expectMoves(views, baseline ? @[@1,@1] : @[@0,@1], baseline ? @"original overlap bug" : @"overlap reaches only top DOM");
-    if (!baseline) {
-        reset(views);
-        move(window, views, NSMakePoint(100,150), mode);
-        expectMoves(views, @[@1,@0], @"uncovered bottom receives movement");
-    }
+    expectMoves(views, @[@0,@1], @"overlap reaches only top DOM");
+    move(window, views, NSMakePoint(100,150), mode);
+    expectMoves(views, @[@1,@0], @"uncovered bottom receives movement");
     if (mode == SPModeRouted) {
         top.hidden = YES;
-        reset(views);
         move(window, views, NSMakePoint(300,150), mode);
         expectMoves(views, @[@1,@0], @"hiding the overlay exposes bottom");
         top.hidden = NO;
 
         [window.contentView addSubview:bottom positioned:NSWindowAbove relativeTo:nil];
         settle(bottom);
-        reset(views);
         move(window, views, NSMakePoint(300,150), mode);
         expectMoves(views, @[@1,@0], @"native z-order is authoritative");
         [window.contentView addSubview:top positioned:NSWindowAbove relativeTo:nil];
         settle(top);
 
         top.frame = NSMakeRect(10,10,250,250);
-        reset(views);
         move(window, views, NSMakePoint(300,150), mode);
         expectMoves(views, @[@1,@0], @"moving the overlay updates hit testing");
 
         NSView *cover = [[NSView alloc] initWithFrame:NSMakeRect(0,0,500,400)];
         [window.contentView addSubview:cover];
-        reset(views);
         move(window, views, NSMakePoint(100,150), mode);
         expectMoves(views, @[@0,@0], @"ordinary native view occludes both webviews");
         [cover removeFromSuperview];
@@ -341,7 +348,6 @@ int main(int argc, const char **argv) { @autoreleasepool {
 
         webviewInputUnregister(top);
         [top removeFromSuperview];
-        reset(@[bottom]);
         move(window, @[bottom], NSMakePoint(100,150), mode);
         expectMoves(@[bottom], @[@1], @"closing overlay restores bottom");
         require([evaluate(bottom, @"document.body.matches(':hover')") boolValue], @"body was not hovered before exit");
