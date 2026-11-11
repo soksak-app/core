@@ -16,6 +16,7 @@
 #import <objc/runtime.h>
 #import "input_inject.h"
 #import "input_virtual.h"
+#import "event_ring.h"
 #import "support/event_wait.h"
 #import "support/records.h"
 #import "support/temporary_folder.h"
@@ -295,6 +296,10 @@ static NSString *refusedReturn(NSWindow *window, NSString *what) {
 int main(void) { @autoreleasepool {
     setvbuf(stdout, NULL, _IOLBF, 0);
     [NSUserDefaults.standardUserDefaults registerDefaults:@{@"NSMenuTrackingLoggingEnabled": @YES}];
+    // The record of a key, whose reason the refused Return cases read, is an info record of the ring; the default policy of the
+    // ring stores only errors.
+    const int8_t infoPolicy[SP_CLASS_COUNT] = {SP_EVENT_INFO, SP_EVENT_INFO, SP_EVENT_INFO, SP_EVENT_INFO, SP_EVENT_INFO};
+    check(sp_event_set_policy(infoPolicy), @"the policy stores info records");
     [NSApplication sharedApplication];
     [NSApp finishLaunching];
     installMarks();
