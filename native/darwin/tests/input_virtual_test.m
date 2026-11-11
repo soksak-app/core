@@ -314,8 +314,9 @@ static void awaitCursor(NSWindow *window, NSString *name) {
     return self;
 }
 - (void)cursorUpdate:(NSEvent *)event {
-    (void)event;
-    note(@"-[SPCursorUpdateView cursorUpdate:] is reached");
+    NSArray<NSString *> *stack = NSThread.callStackSymbols;
+    note([NSString stringWithFormat:@"-[SPCursorUpdateView cursorUpdate:] is reached at %@ from\n%@", NSStringFromPoint(event.locationInWindow),
+        [[stack subarrayWithRange:NSMakeRange(0, MIN(stack.count, (NSUInteger)16))] componentsJoinedByString:@"\n"]]);
     [NSCursor.openHandCursor set];
 }
 @end
@@ -674,6 +675,9 @@ int main(void) { @autoreleasepool {
     note([NSString stringWithFormat:@"the move over the cursor rect answers %s", resultText(movedOverRect)]);
     check(movedOverRect == SP_INPUT_DELIVERED && sp_input_virtual_is(rects), @"a move over a cursor rect of a covered window is delivered");
     check(cursorIs(rects, @"crosshair"), [NSString stringWithFormat:@"the cursor rect under the point sets its cursor (%s)", sp_input_virtual_cursor(rects)]);
+    note([NSString stringWithFormat:@"before the move into the tracking area the cursor update view has the visible rect %@, the frame %@ and the point %@",
+        NSStringFromRect(updateView.visibleRect), NSStringFromRect([updateView convertRect:updateView.bounds toView:nil]),
+        NSStringFromPoint([updateView convertPoint:NSMakePoint(300, 150) fromView:nil])]);
     sp_input_result movedIntoArea = sp_input_pointer(rects, 300, 150, 0, 0, 0, 0);
     note([NSString stringWithFormat:@"the move into the tracking area answers %s", resultText(movedIntoArea)]);
     check(movedIntoArea == SP_INPUT_DELIVERED && cursorIs(rects, @"openHand"),
