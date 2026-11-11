@@ -34,100 +34,6 @@ static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
 }
-// The trace of the path of a press of the virtual key window: each step that a mouse event takes from -[NSApplication sendEvent:]
-// to the page, written as a NOTE with its time since the trace began, while tracing is set.
-static BOOL tracing;
-static NSTimeInterval traceStart;
-static void (*appKitApplicationSendEvent)(id, SEL, NSEvent *);
-static void (*appKitWindowSendEvent)(id, SEL, NSEvent *);
-static void (*webKitMouseDown)(id, SEL, NSEvent *);
-static void (*webKitMouseUp)(id, SEL, NSEvent *);
-static BOOL (*webKitAcceptsFirstMouse)(id, SEL, NSEvent *);
-static void (*webKitKeyDown)(id, SEL, NSEvent *);
-static void (*webKitInsertText)(id, SEL, id, NSRange);
-static void note(NSString *message) {
-    fprintf(stdout, "NOTE: %.1f ms %s\n", (NSProcessInfo.processInfo.systemUptime - traceStart) * 1000, message.UTF8String);
-}
-static BOOL tracedMouse(NSEvent *event) {
-    return tracing && (event.type == NSEventTypeLeftMouseDown || event.type == NSEventTypeLeftMouseUp
-        || event.type == NSEventTypeKeyDown || event.type == NSEventTypeKeyUp);
-}
-static NSString *eventName(NSEvent *event) {
-    switch (event.type) {
-        case NSEventTypeLeftMouseDown: return @"mouse down";
-        case NSEventTypeLeftMouseUp: return @"mouse up";
-        case NSEventTypeKeyDown: return @"key down";
-        default: return @"key up";
-    }
-}
-static void traceApplicationSendEvent(NSApplication *self, SEL selector, NSEvent *event) {
-    if (tracedMouse(event)) {
-        note([NSString stringWithFormat:@"-[NSApplication sendEvent:] enters with %@ of window %ld (event window %@, key %@, active %@)",
-            eventName(event), (long)event.windowNumber, event.window, NSApp.keyWindow, NSApp.isActive ? @"YES" : @"NO"]);
-    }
-    appKitApplicationSendEvent(self, selector, event);
-    if (tracedMouse(event)) note([NSString stringWithFormat:@"-[NSApplication sendEvent:] returns from %@", eventName(event)]);
-}
-static void traceWindowSendEvent(NSWindow *self, SEL selector, NSEvent *event) {
-    if (tracedMouse(event)) {
-        NSView *frame = self.contentView.superview ?: self.contentView;
-        NSView *hit = [frame hitTest:[frame.superview ?: frame convertPoint:event.locationInWindow fromView:nil]];
-        note([NSString stringWithFormat:@"-[NSWindow sendEvent:] enters with %@ at %@ (hit %@, first responder %@, key %@)",
-            eventName(event), NSStringFromPoint(event.locationInWindow), hit.class, self.firstResponder.class,
-            self.isKeyWindow ? @"YES" : @"NO"]);
-    }
-    appKitWindowSendEvent(self, selector, event);
-    if (tracedMouse(event)) note([NSString stringWithFormat:@"-[NSWindow sendEvent:] returns from %@", eventName(event)]);
-}
-static void traceMouseDown(WKWebView *self, SEL selector, NSEvent *event) {
-    if (tracing) note(@"-[WKWebView mouseDown:] is reached");
-    webKitMouseDown(self, selector, event);
-}
-static void traceMouseUp(WKWebView *self, SEL selector, NSEvent *event) {
-    if (tracing) note(@"-[WKWebView mouseUp:] is reached");
-    webKitMouseUp(self, selector, event);
-}
-static BOOL traceAcceptsFirstMouse(WKWebView *self, SEL selector, NSEvent *event) {
-    BOOL accepts = webKitAcceptsFirstMouse(self, selector, event);
-    if (tracing) note([NSString stringWithFormat:@"-[WKWebView acceptsFirstMouse:] answers %@", accepts ? @"YES" : @"NO"]);
-    return accepts;
-}
-static void traceKeyDown(WKWebView *self, SEL selector, NSEvent *event) {
-    if (tracing) note([NSString stringWithFormat:@"-[WKWebView keyDown:] is reached (input context %@)", self.inputContext]);
-    webKitKeyDown(self, selector, event);
-}
-static void traceInsertText(WKWebView *self, SEL selector, id text, NSRange range) {
-    if (tracing) note([NSString stringWithFormat:@"-[WKWebView insertText:replacementRange:] is reached with %@", text]);
-    webKitInsertText(self, selector, text, range);
-}
-static void installTrace(void) {
-    webKitKeyDown = (void (*)(id, SEL, NSEvent *))method_setImplementation(
-        class_getInstanceMethod(WKWebView.class, @selector(keyDown:)), (IMP)traceKeyDown);
-    webKitInsertText = (void (*)(id, SEL, id, NSRange))method_setImplementation(
-        class_getInstanceMethod(WKWebView.class, @selector(insertText:replacementRange:)), (IMP)traceInsertText);
-    appKitApplicationSendEvent = (void (*)(id, SEL, NSEvent *))method_setImplementation(
-        class_getInstanceMethod(NSApplication.class, @selector(sendEvent:)), (IMP)traceApplicationSendEvent);
-    appKitWindowSendEvent = (void (*)(id, SEL, NSEvent *))method_setImplementation(
-        class_getInstanceMethod(NSWindow.class, @selector(sendEvent:)), (IMP)traceWindowSendEvent);
-    webKitMouseDown = (void (*)(id, SEL, NSEvent *))method_setImplementation(
-        class_getInstanceMethod(WKWebView.class, @selector(mouseDown:)), (IMP)traceMouseDown);
-    webKitMouseUp = (void (*)(id, SEL, NSEvent *))method_setImplementation(
-        class_getInstanceMethod(WKWebView.class, @selector(mouseUp:)), (IMP)traceMouseUp);
-    webKitAcceptsFirstMouse = (BOOL (*)(id, SEL, NSEvent *))method_setImplementation(
-        class_getInstanceMethod(WKWebView.class, @selector(acceptsFirstMouse:)), (IMP)traceAcceptsFirstMouse);
-}
-static const char *resultText(sp_input_result result) {
-    switch (result) {
-        case SP_INPUT_DELIVERED: return "delivered";
-        case SP_INPUT_REJECTED: return "rejected";
-        case SP_INPUT_INACTIVE: return "inactive";
-        case SP_INPUT_UNRECEIVED: return "unreceived";
-        case SP_INPUT_BUTTON_HELD: return "button held";
-        case SP_INPUT_PRESS_OPEN: return "press open";
-        case SP_INPUT_POINTER_HELD: return "pointer held";
-    }
-    return "unknown";
-}
 static id evaluate(WKWebView *view, NSString *script) {
     __block id out = nil;
     __block BOOL done = NO;
@@ -314,9 +220,7 @@ static void awaitCursor(NSWindow *window, NSString *name) {
     return self;
 }
 - (void)cursorUpdate:(NSEvent *)event {
-    NSArray<NSString *> *stack = NSThread.callStackSymbols;
-    note([NSString stringWithFormat:@"-[SPCursorUpdateView cursorUpdate:] is reached at %@ from\n%@", NSStringFromPoint(event.locationInWindow),
-        [[stack subarrayWithRange:NSMakeRange(0, MIN(stack.count, (NSUInteger)16))] componentsJoinedByString:@"\n"]]);
+    (void)event;
     [NSCursor.openHandCursor set];
 }
 @end
@@ -383,7 +287,6 @@ int main(void) { @autoreleasepool {
     for (int i = 0; i < 7; i++) windowMethods[i] = method_getImplementation(class_getInstanceMethod(NSWindow.class, windowSelectors()[i]));
     for (int i = 0; i < 4; i++) applicationMethods[i] = method_getImplementation(class_getInstanceMethod(NSApplication.class, applicationSelectors()[i]));
     viewInputContext = method_getImplementation(class_getInstanceMethod(NSView.class, @selector(inputContext)));
-    installTrace();
 
     // A window that registered no page has no facts, and reading them fails the check instead of the process.
     NSWindow *bare = makeWindow(0);
@@ -482,22 +385,12 @@ int main(void) { @autoreleasepool {
     __block NSUInteger monitored = 0;
     id monitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown | NSEventMaskLeftMouseUp | NSEventMaskKeyDown handler:^NSEvent *(NSEvent *event) { monitored++; return event; }];
     evaluate(view, @"events.length=0;null");
-    tracing = YES;
-    traceStart = NSProcessInfo.processInfo.systemUptime;
-    sp_input_result pressed = pointer(window, 100, 25, 1);
-    note([NSString stringWithFormat:@"the press answers %s", resultText(pressed)]);
-    check(pressed == SP_INPUT_DELIVERED, @"a press reaches the page within its limit");
-    sp_input_result released = pointer(window, 100, 25, 3);
-    note([NSString stringWithFormat:@"the release answers %s", resultText(released)]);
-    tracing = NO;
-    check(released == SP_INPUT_DELIVERED, @"a release reaches the page within its limit");
+    check(pointer(window, 100, 25, 1) == SP_INPUT_DELIVERED, @"a press reaches the page within its limit");
+    check(pointer(window, 100, 25, 3) == SP_INPUT_DELIVERED, @"a release reaches the page within its limit");
     NSArray *gesture = eventTypes(view);
     check([gesture containsObject:@"pointerdown"] && [gesture containsObject:@"pointerup"] && [gesture containsObject:@"click"], [NSString stringWithFormat:@"the gesture reaches the page (%@)", [gesture componentsJoinedByString:@","]]);
     check([evaluate(view, @"document.activeElement.id") isEqual:@"field"], @"the press focuses the field");
-    tracing = YES;
-    traceStart = NSProcessInfo.processInfo.systemUptime;
     check(sp_input_key(window, "a", "a", 0, true) == SP_INPUT_DELIVERED && sp_input_key(window, "a", "a", 0, false) == SP_INPUT_DELIVERED, @"a key is delivered");
-    tracing = NO;
     awaitPage(view, @"the field takes the text a", @"input", @"document.getElementById('field').value === 'a'");
     check([evaluate(view, @"document.getElementById('field').value") isEqual:@"a"], [NSString stringWithFormat:@"the key types into the page (%@)", evaluate(view, @"document.getElementById('field').value")]);
     // A composition as the input method of the system gives it to the text input client of the key responder: the marked text,
@@ -668,22 +561,13 @@ int main(void) { @autoreleasepool {
     [rects orderBack:nil];
     [rects orderWindow:NSWindowBelow relativeTo:cover.windowNumber];
     // Each move is sent before the cursor is read: the arguments of a call have no order of evaluation.
-    traceStart = NSProcessInfo.processInfo.systemUptime;
-    note([NSString stringWithFormat:@"the cursor update view has the tracking areas %@ and the view at x 300 is %@", updateView.trackingAreas,
-        [rects.contentView hitTest:[rects.contentView.superview convertPoint:NSMakePoint(300, 150) fromView:nil]].class]);
     sp_input_result movedOverRect = sp_input_pointer(rects, 100, 150, 0, 0, 0, 0);
-    note([NSString stringWithFormat:@"the move over the cursor rect answers %s", resultText(movedOverRect)]);
     check(movedOverRect == SP_INPUT_DELIVERED && sp_input_virtual_is(rects), @"a move over a cursor rect of a covered window is delivered");
     check(cursorIs(rects, @"crosshair"), [NSString stringWithFormat:@"the cursor rect under the point sets its cursor (%s)", sp_input_virtual_cursor(rects)]);
-    note([NSString stringWithFormat:@"before the move into the tracking area the cursor update view has the visible rect %@, the frame %@ and the point %@",
-        NSStringFromRect(updateView.visibleRect), NSStringFromRect([updateView convertRect:updateView.bounds toView:nil]),
-        NSStringFromPoint([updateView convertPoint:NSMakePoint(300, 150) fromView:nil])]);
     sp_input_result movedIntoArea = sp_input_pointer(rects, 300, 150, 0, 0, 0, 0);
-    note([NSString stringWithFormat:@"the move into the tracking area answers %s", resultText(movedIntoArea)]);
     check(movedIntoArea == SP_INPUT_DELIVERED && cursorIs(rects, @"openHand"),
         [NSString stringWithFormat:@"a tracking area that the point enters updates the cursor (%s)", sp_input_virtual_cursor(rects)]);
     sp_input_result movedBack = sp_input_pointer(rects, 100, 150, 0, 0, 0, 0);
-    note([NSString stringWithFormat:@"the move back over the cursor rect answers %s", resultText(movedBack)]);
     check(movedBack == SP_INPUT_DELIVERED && cursorIs(rects, @"crosshair"),
         [NSString stringWithFormat:@"the cursor rect sets its cursor again (%s)", sp_input_virtual_cursor(rects)]);
     sp_input_virtual_end("no state");
