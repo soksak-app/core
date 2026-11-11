@@ -78,6 +78,27 @@ impl RunningCalls {
     }
 }
 
+impl RunningCalls {
+    /// Names the running calls of every window that has one, by the window, each as [`RunningCalls::of`] names them at `now`. A
+    /// window without a running call is not in it.
+    pub fn all(&self, now: Instant) -> std::collections::BTreeMap<String, String> {
+        let windows: std::collections::BTreeSet<String> = self
+            .lock()
+            .running
+            .values()
+            .map(|call| call.window.clone())
+            .collect();
+        windows
+            .into_iter()
+            .map(|window| {
+                let running = self.of(&window, now);
+                (window, running)
+            })
+            .filter(|(_, running)| running != "none")
+            .collect()
+    }
+}
+
 /// The error of a reload that `end`, the close of its window or the end of its page process, ended before its page reported
 /// ready, with the running calls of its window.
 pub fn reload_end_text(end: &str, running: &str) -> String {

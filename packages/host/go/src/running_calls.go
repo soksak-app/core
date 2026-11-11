@@ -65,6 +65,24 @@ func (r *RunningCalls) Of(window string, now time.Time) string {
 	return strings.Join(names, ", ")
 }
 
+// All names the running calls of every window that has one, by the window, each as Of names them at now. A window without a
+// running call is not in it.
+func (r *RunningCalls) All(now time.Time) map[string]string {
+	r.mu.Lock()
+	windows := map[string]bool{}
+	for _, call := range r.calls {
+		windows[call.window] = true
+	}
+	r.mu.Unlock()
+	all := make(map[string]string, len(windows))
+	for window := range windows {
+		if running := r.Of(window, now); running != "none" {
+			all[window] = running
+		}
+	}
+	return all
+}
+
 // ReloadEndText is the error of a reload whose wait ended by end (the window closed or the page process ended) before its page
 // reported ready, with the running calls of its window.
 func ReloadEndText(end, running string) string {

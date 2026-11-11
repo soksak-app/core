@@ -291,8 +291,8 @@ export async function sampleStall({ host, pages, directory, time = Date.now(), s
 
 /**
  * Stores the path of the dump of the host, the first of `records`, as the event `host.stall.dump` of the host
- * (`diagnostics.stall.dump`) and returns the text that names the position of the event in its log, or the reason why the host did not
- * store it. The request has no time limit: the answer of the host or the end of its connection, which rejects every pending
+ * (`diagnostics.stall.dump`) and returns the text that names the position of the event in its log and the host calls of the window
+ * that have not returned, which a stalled reload waits for, or the reason why the host did not store it. The request has no time limit: the answer of the host or the end of its connection, which rejects every pending
  * request, ends it, and the limit of the test runner bounds a host that stalls with its connection open.
  *
  * request(method, params)  sends a request of the endpoint. window is the window the request names.
@@ -301,7 +301,9 @@ export async function announceStall(request, window, records, ...rest) {
   if (rest.length > 0) throw new TypeError("announceStall takes no limit: the request ends by the answer of the host or the end of its connection");
   try {
     const position = await request("diagnostics.stall.dump", { window, path: records[0] });
-    return `host.stall.dump at ${position.boot}:${position.seq}`;
+    const stored = `host.stall.dump at ${position.boot}:${position.seq}`;
+    if (typeof position.running !== "string") return `${stored}; the reply names no running host calls: ${JSON.stringify(position)}`;
+    return `${stored}; running host calls of ${window}: ${position.running}`;
   } catch (error) {
     return `host.stall.dump not stored: ${error.message}`;
   }

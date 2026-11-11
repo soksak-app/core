@@ -1624,20 +1624,18 @@ func diagnosticTestMark(e *Endpoint, _ *endpointConn, params json.RawMessage, _ 
 	return map[string]any{"boot": boot, "seq": seq}, nil
 }
 
-// diagnosticStallDump stores the path of a stall dump that the window check wrote as an event and replies with the position of its line.
+// diagnosticStallDump stores the path of a stall dump that the window check wrote as an event with the running host calls and the
+// goroutine stacks, and replies with the position of its line and the running calls of the window of the request.
 func diagnosticStallDump(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
-	if _, err := e.window(params); err != nil {
+	window, err := e.window(params)
+	if err != nil {
 		return nil, err
 	}
 	path, err := ParseStallDump(params)
 	if err != nil {
 		return nil, err
 	}
-	boot, seq, err := EmitStallDump(path)
-	if err != nil {
-		return nil, err
-	}
-	return map[string]any{"boot": boot, "seq": seq}, nil
+	return StallDump(path, window, runningCalls, time.Now())
 }
 
 func parseInputReference(params json.RawMessage) (string, *string, error) {
