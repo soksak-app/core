@@ -1003,6 +1003,22 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// report whether the operating system's asynchronous stop callback has completed.
     fn capture_has_stream(&self) -> Result<bool, String>;
     #[cfg(feature = "diagnostics")]
+    /// Holds the next show of a window that is not on screen, for the recording of a new window from its first frame
+    /// (docs/spec/endpoint.md, diagnostics.capture.start newWindow); the completion of the stream start of the recording of
+    /// that window puts it on screen. It fails while a recording runs or a hold is set. Call it on the main thread.
+    fn capture_hold_new_window(&self) -> Result<(), String> {
+        Err("the recording of a new window is not implemented on this platform".into())
+    }
+    #[cfg(feature = "diagnostics")]
+    /// Waits until a show was held and returns the window server number of that window. The end of the wait of token
+    /// (`capture_end_wait`) ends the hold, shows a held window and fails with `no new window was shown before <reason>`.
+    fn capture_wait_new_window(&self, _token: u64) -> Result<isize, String> {
+        Err("the recording of a new window is not implemented on this platform".into())
+    }
+    #[cfg(feature = "diagnostics")]
+    /// Ends the hold of a new window at once, from any thread: a held window goes on screen.
+    fn capture_release_new_window(&self) {}
+    #[cfg(feature = "diagnostics")]
     /// Starts the document-frame identity producer for an attached view root on the UI thread.
     fn document_frame_identity_start(
         &self,

@@ -701,6 +701,18 @@ impl Platform for Darwin {
         Ok(capture::has_stream())
     }
     #[cfg(feature = "diagnostics")]
+    fn capture_hold_new_window(&self) -> Result<(), String> {
+        capture::hold_new_window()
+    }
+    #[cfg(feature = "diagnostics")]
+    fn capture_wait_new_window(&self, token: u64) -> Result<isize, String> {
+        capture::wait_new_window(token)
+    }
+    #[cfg(feature = "diagnostics")]
+    fn capture_release_new_window(&self) {
+        capture::release_new_window();
+    }
+    #[cfg(feature = "diagnostics")]
     fn document_frame_identity_start(
         &self,
         document: Handle,

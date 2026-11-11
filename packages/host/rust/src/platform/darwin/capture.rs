@@ -21,6 +21,9 @@ unsafe extern "C" {
     fn sp_capture_stop(after: f64, token: u64) -> c_int;
     fn sp_capture_end_wait(token: u64, reason: *const c_char);
     fn sp_capture_has_stream() -> bool;
+    fn sp_capture_hold_new_window(error: *mut *mut c_char) -> bool;
+    fn sp_capture_wait_new_window(token: u64) -> std::os::raw::c_long;
+    fn sp_capture_release_new_window();
     fn sp_document_frame_identity_start(
         document: *mut c_void,
         generation: u64,
@@ -280,6 +283,28 @@ pub fn stop(after: f64, token: u64) -> Result<i32, String> {
     } else {
         Err(format!("capture stop failed: {}", error.to_string_lossy()))
     }
+}
+
+/// Holds the next show of a window that is not on screen. Call it on the main thread.
+pub fn hold_new_window() -> Result<(), String> {
+    let mut error = std::ptr::null_mut();
+    let held = unsafe { sp_capture_hold_new_window(&mut error) };
+    call_result("capture hold of a new window failed", held, error)
+}
+
+/// Waits until a show was held and returns the window server number of that window.
+pub fn wait_new_window(token: u64) -> Result<isize, String> {
+    let number = unsafe { sp_capture_wait_new_window(token) };
+    if number < 0 {
+        let error = unsafe { CStr::from_ptr(sp_capture_error()) };
+        return Err(error.to_string_lossy().into_owned());
+    }
+    Ok(number as isize)
+}
+
+/// Ends the hold of a new window at once: a held window goes on screen.
+pub fn release_new_window() {
+    unsafe { sp_capture_release_new_window() }
 }
 
 /// Reports whether the native capture module still owns the current stream and writer transaction.

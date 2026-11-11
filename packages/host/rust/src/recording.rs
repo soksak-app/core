@@ -5,7 +5,7 @@
 //! transfers the folder to its requester and abort removes it. A remaining recording or cleanup folder blocks another start.
 
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError, mpsc};
 
 use serde_json::{Value, json};
 
@@ -83,12 +83,113 @@ pub trait Capture {
     fn has_stream(&self) -> Result<bool, String>;
 }
 
+/// A recording device that also records a new window from its first frame: it holds the next show of a window that is
+/// not on screen, and the stream start of the recording of that window puts it on screen.
+pub trait NewWindowCapture: Capture + Send + Sync {
+    /// Holds the next show of a window that is not on screen.
+    fn hold_new_window(&self) -> Result<(), String>;
+    /// Waits until a show was held and returns the window server number of that window. It gives `register_end` the end
+    /// of its wait; an ended wait shows a held window and fails with `no new window was shown before <reason>`.
+    fn wait_new_window(
+        &self,
+        register_end: &dyn Fn(Box<dyn Fn(&'static str) + Send + Sync>),
+    ) -> Result<isize, String>;
+    /// Ends the hold at once and shows a held window.
+    fn release_new_window(&self);
+}
+
+/// The end of the stop of a recording for a wait for a held window.
+const NEW_WINDOW_STOP_REASON: &str = "the stop of the recording";
+
+/// The end of the wait for the held window of a new-window recording, given once the wait registered it; an end that
+/// comes before is kept and given at the registration.
+#[derive(Default)]
+struct NewWindowEnd {
+    end: Option<Box<dyn Fn(&'static str) + Send + Sync>>,
+    ended: Option<&'static str>,
+}
+
+/// The start of the recording of a new window that runs after `start_new_window` returned: the wait for the held window,
+/// then the open, the start and the first frame of its recording.
+struct NewWindowStart {
+    done: mpsc::Receiver<(Result<(), String>, bool)>,
+    end: Arc<Mutex<NewWindowEnd>>,
+}
+
 struct State {
     directory: Option<PathBuf>,
     capture_stopped: bool,
     frame_identity: bool,
     document_identity_allowed: bool,
     identity_source: Option<(String, u64)>,
+    pending: Option<NewWindowStart>,
+}
+
+/// Opens, starts and waits for the first frame of a recording, and stops a recording that did not produce it. It returns
+/// the result and whether no stream remains.
+fn begin(
+    capture: &dyn Capture,
+    target: Target,
+    directory: &Path,
+    frame_identity: bool,
+) -> (Result<(), String>, bool) {
+    if let Err(error) = capture.open(target) {
+        return (Err(error), true);
+    }
+    if let Err(error) = capture.start(directory, frame_identity) {
+        return (Err(error), true);
+    }
+    let error = match capture.wait() {
+        Ok(true) => return (Ok(()), false),
+        Ok(false) => "capture did not produce an initial frame".to_string(),
+        Err(error) => error,
+    };
+    match capture.stop() {
+        Ok(_) => (Err(error), true),
+        Err(stop_error) => match capture.has_stream() {
+            Ok(false) => (
+                Err(format!("{error}; capture stop failed: {stop_error}")),
+                true,
+            ),
+            Ok(true) => (
+                Err(format!("{error}; capture stop failed: {stop_error}")),
+                false,
+            ),
+            Err(query_error) => (
+                Err(format!(
+                    "{error}; capture stop failed: {stop_error}; capture ownership query failed: {query_error}"
+                )),
+                false,
+            ),
+        },
+    }
+}
+
+/// Waits for the start of the recording of a new window, ending a hold that no show took, and returns the failure of
+/// that start with whether no stream remains.
+fn settle_new_window(state: &mut State) -> Result<(), (String, bool)> {
+    let Some(pending) = state.pending.take() else {
+        return Ok(());
+    };
+    let end = {
+        // default: a lock that a panicking thread poisoned still holds the end, which this call gives.
+        let mut end = pending.end.lock().unwrap_or_else(PoisonError::into_inner);
+        if end.end.is_none() {
+            end.ended = Some(NEW_WINDOW_STOP_REASON);
+        }
+        end.end.take()
+    };
+    if let Some(end) = end {
+        end(NEW_WINDOW_STOP_REASON);
+    }
+    match pending.done.recv() {
+        Ok((Ok(()), _)) => Ok(()),
+        Ok((Err(error), stopped)) => Err((error, stopped)),
+        Err(_) => Err((
+            "the start of the new window recording ended without a result".into(),
+            true,
+        )),
+    }
 }
 
 /// The folder of the recording in progress.
@@ -111,8 +212,77 @@ impl Recording {
                 frame_identity: false,
                 document_identity_allowed: false,
                 identity_source: None,
+                pending: None,
             }),
         }
+    }
+
+    /// Holds the next show of a window that is not on screen and returns once the hold is set, owning directory. The
+    /// recording of that window then starts on a thread of its own: once the application shows a window, the recording
+    /// opens on it and starts, and the stream start puts the window on screen, so the first frame of the recording is the
+    /// first frame of the window. A failure after the hold took a window shows that window. `finish` and `abort` end a
+    /// hold that no show took and report the result of the start.
+    pub fn start_new_window(
+        &self,
+        capture: Arc<dyn NewWindowCapture>,
+        directory: &Path,
+        frame_identity: bool,
+        make: &dyn Fn(&Path) -> Result<(), String>,
+    ) -> Result<(), String> {
+        // default: poison paths preserve the owned directory and stop status, so start can refuse a running capture.
+        let mut state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(running) = &state.directory {
+            return Err(format!("a capture into {} is running", running.display()));
+        }
+        if let Some((surface, generation)) = &state.identity_source {
+            return Err(format!(
+                "document frame identity cleanup for surface {surface:?} generation {generation} is incomplete"
+            ));
+        }
+        make(directory)?;
+        if let Err(error) = capture.hold_new_window() {
+            return Err(match std::fs::remove_dir_all(directory) {
+                Ok(()) => error,
+                Err(cleanup) => format!("{error}; capture directory cleanup failed: {cleanup}"),
+            });
+        }
+        let end = Arc::new(Mutex::new(NewWindowEnd::default()));
+        let (done, on_done) = mpsc::channel();
+        let registered = end.clone();
+        let target_directory = directory.to_path_buf();
+        std::thread::spawn(move || {
+            let register = |given: Box<dyn Fn(&'static str) + Send + Sync>| {
+                // default: a lock that a panicking thread poisoned still holds the end, which this call sets.
+                let mut end = registered.lock().unwrap_or_else(PoisonError::into_inner);
+                match end.ended {
+                    Some(reason) => given(reason),
+                    None => end.end = Some(given),
+                }
+            };
+            let result = match capture.wait_new_window(&register) {
+                Err(error) => (Err(error), true),
+                Ok(number) => {
+                    let target = Target {
+                        window: number,
+                        display: false,
+                    };
+                    let result = begin(capture.as_ref(), target, &target_directory, frame_identity);
+                    if result.0.is_err() {
+                        capture.release_new_window();
+                    }
+                    result
+                }
+            };
+            // default: the owner that waits for the result may have gone with the recording; nothing waits then.
+            let _ = done.send(result);
+        });
+        state.directory = Some(directory.to_path_buf());
+        state.capture_stopped = false;
+        state.frame_identity = frame_identity;
+        state.document_identity_allowed = false;
+        state.identity_source = None;
+        state.pending = Some(NewWindowStart { done: on_done, end });
+        Ok(())
     }
 
     /// Creates directory with make and starts to record target in that folder. It returns after the first frame was
@@ -350,6 +520,10 @@ impl Recording {
             .unwrap_or_else(PoisonError::into_inner);
         let mut retired_stop_error = None;
         if state.directory.is_some() {
+            if let Err((error, true)) = settle_new_window(&mut state) {
+                state.capture_stopped = true;
+                retired_stop_error = Some(error);
+            }
             if !state.capture_stopped {
                 match capture.stop() {
                     Ok(_) => state.capture_stopped = true,
@@ -410,6 +584,15 @@ impl Recording {
         }
         if state.directory.is_none() {
             return Err("no capture is running".into());
+        }
+        if let Err((error, stopped)) = settle_new_window(&mut state) {
+            // The start failed before a recording ran: the requester owns the folder, which keeps what was written.
+            if stopped {
+                state.directory = None;
+                state.frame_identity = false;
+                self.state.clear_poison();
+            }
+            return Err(error);
         }
         let count = match capture.stop() {
             Ok(count) => count,

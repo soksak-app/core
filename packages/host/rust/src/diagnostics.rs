@@ -27,7 +27,7 @@ use crate::object_counts::{
 };
 use crate::platform;
 use crate::platform::{DocumentViewportMarker, Handle};
-use crate::recording::{Capture, Recording, Target, layout_trace};
+use crate::recording::{Capture, NewWindowCapture, Recording, Target, layout_trace};
 use crate::workspace::Workspace;
 
 /// A recording in progress.
@@ -68,6 +68,33 @@ struct PlatformCapture {
     after: f64,
     window: String,
     connection: crate::endpoint::ConnectionEnd,
+    /// The window of the request, whose main thread runs the hold of a new window.
+    main: Window,
+}
+
+impl NewWindowCapture for PlatformCapture {
+    fn hold_new_window(&self) -> Result<(), String> {
+        let platform = self.platform;
+        on_main(&self.main, move || platform.capture_hold_new_window())
+    }
+    /// Waits as the other capture operations do, until the close of the endpoint connection of the request or of its
+    /// window, also after the request returned, because the hold of a recording that the request started waits for a
+    /// window that the application has not created yet.
+    fn wait_new_window(
+        &self,
+        register_end: &dyn Fn(Box<dyn Fn(&'static str) + Send + Sync>),
+    ) -> Result<isize, String> {
+        let platform = self.platform;
+        self.await_capture(|token| {
+            register_end(Box::new(move |reason| {
+                platform.capture_end_wait(token, reason)
+            }));
+            platform.capture_wait_new_window(token)
+        })
+    }
+    fn release_new_window(&self) {
+        self.platform.capture_release_new_window();
+    }
 }
 
 impl Capture for PlatformCapture {
@@ -158,6 +185,7 @@ fn recorder(
         after: 0.0,
         window: window.label().to_string(),
         connection: connection.clone(),
+        main: window.clone(),
     })
 }
 
@@ -197,6 +225,12 @@ pub(crate) fn call(
         "diagnostics.document.viewport-marker" => document_viewport_marker(window, &params),
         "diagnostics.capture.start" => {
             let options = parse_capture_start_options(&params)?;
+            if options.new_window {
+                let frames = capture_start_new_window(window, &connection, options.frame_identity)?;
+                let platform = platform::current().map_err(internal)?;
+                on_main(window, move || platform.layout_trace_start()).map_err(internal)?;
+                return Ok(json!({"frames": frames.to_string_lossy()}));
+            }
             let display = options.display;
             let frames = with_document_frame_identity_lifecycle(|| {
                 let frames =
@@ -425,6 +459,7 @@ fn document_viewport_marker(
 struct CaptureStartOptions {
     display: bool,
     frame_identity: bool,
+    new_window: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -685,9 +720,20 @@ fn parse_capture_start_options(
         Some(Value::Bool(frame_identity)) => *frame_identity,
         Some(_) => return Err(Failure::params("frameIdentity must be a boolean")),
     };
+    let new_window = match params.get("newWindow") {
+        None => false,
+        Some(Value::Bool(new_window)) => *new_window,
+        Some(_) => return Err(Failure::params("newWindow must be a boolean")),
+    };
+    if new_window && display {
+        return Err(Failure::params(
+            "newWindow records the new window alone and cannot be combined with display",
+        ));
+    }
     Ok(CaptureStartOptions {
         display,
         frame_identity,
+        new_window,
     })
 }
 
@@ -1836,6 +1882,36 @@ fn send_legs(
 
 /// Starts the window record and returns the record directory. When display is set, it records the windows of this
 /// application on the display that holds the window.
+/// Holds the next new window of the application and answers with the frame directory once the hold is set; the recording
+/// of that window starts when the application shows it (`Recording::start_new_window`).
+fn capture_start_new_window(
+    window: &Window,
+    connection: &crate::endpoint::ConnectionEnd,
+    frame_identity: bool,
+) -> Result<PathBuf, Failure> {
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .map_err(|e| internal(format!("the system clock is before 1970: {e}")))?;
+    let directory = window
+        .state::<Workspace>()
+        .directory()
+        .join("logs")
+        .join("captures")
+        .join(format!(
+            "{stamp}-new-{}",
+            CAPTURES.fetch_add(1, Ordering::Relaxed)
+        ));
+    let recorder = Arc::new(recorder(window, connection)?);
+    let platform = recorder.platform;
+    RECORDING
+        .start_new_window(recorder, &directory, frame_identity, &|path| {
+            platform.private_directory(path)
+        })
+        .map_err(internal)?;
+    Ok(directory)
+}
+
 fn capture_start(
     window: &Window,
     connection: &crate::endpoint::ConnectionEnd,
