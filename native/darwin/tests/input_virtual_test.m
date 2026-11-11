@@ -631,7 +631,9 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"a window that the host shows beside the virtual key window becomes the virtual key window (%lu)", (unsigned long)becameKey]);
     sp_input_virtual_end("no state");
     [shown makeKeyWindow];
-    check(sp_input_virtual_real_key(shown) && !sp_input_virtual_real_active(),
+    // -[NSWindow isKeyWindow] of AppKit answers YES only while the application is active, so the key window of AppKit in an
+    // application that is not active is the reference of the application that its event handling reads.
+    check(privateKeyWindow(NSApp, NSSelectorFromString(@"_keyWindow")) == shown && !sp_input_virtual_real_active(),
         @"without a virtual key window a window that the application makes key is the key window of AppKit in an application that is not active");
     __block NSUInteger shownMonitored = 0;
     id shownMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown | NSEventMaskLeftMouseUp
