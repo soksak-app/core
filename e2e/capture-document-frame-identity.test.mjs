@@ -7,7 +7,7 @@ import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents, traceRows } from "@soksak/window-check/event-log.mjs";
-import { fresh, joinedFailure, uncoverFromCheckWindows } from "./fixture.mjs";
+import { fresh, joinedFailure } from "./fixture.mjs";
 import { documentIdentityCardIds, verifyDocumentFrameIdentityCapture, viewGenerationForSurface } from "./document-frame-identity.mjs";
 
 /** The fixture plugin whose root document the capture identifies: a view without regions. */
@@ -17,9 +17,6 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: document-frame identity matches captured WebKit root pixels`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s, { performanceTrace: true });
-    // The check windows overlap and can cover this one whole, and WebKit presents the documents of a covered window less often, so
-    // the identity codes that the root document draws would not reach the captured pixels.
-    await uncoverFromCheckWindows(t, s);
     // Every card shows a tab of the view without regions, so no native region of another tab covers the identity ROI.
     const grid = await s.get("core.grid");
     const offsets = currentEventOffsets(s.app.configDir);

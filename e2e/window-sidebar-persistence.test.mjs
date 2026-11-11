@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
-import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { APPS, holdCovered, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { fresh, joinedFailure } from "./fixture.mjs";
 import { turnOffCardSidebars } from "./card-sidebar-choices.mjs";
 import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
@@ -72,6 +72,9 @@ for (const app of Object.values(APPS))
       const s = await open(t, app);
       t.diagnostic(`tested endpoint: ${JSON.stringify(s.client.endpoint)}`);
       const { surface: start, plugin } = await fresh(s);
+      // The check reads the frames of the native surfaces of its window whatever the windows of other applications in front of it:
+      // the window holds the covered drawing for the whole check (holdCovered), so its regions draw as they do on the screen.
+      s.cleanup(await holdCovered(s));
       await s.run("core.settings.theme", { name: "midnight", mode: "dark" });
       await s.run("core.settings.set", { patch: { focusInd: "corner" }, scope: "common" });
       const initial = await s.get("core.grid");
@@ -198,7 +201,6 @@ for (const app of Object.values(APPS))
           near(surface.declared[key], expected[key], `${label}: declared ${key}`);
         }
         const host = await s.get("host.window");
-        assert.equal(host.occluded, false);
         const native = host.surfaces.find((item) => item.id === probe.id)?.frame;
         assert.ok(native, `${label}: host frame absent`);
         for (const [key, value] of Object.entries({

@@ -2,8 +2,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
-import { APPS, open } from "@soksak/window-check/app.mjs";
-import { fresh, joinedFailure, uncoverFromCheckWindows } from "./fixture.mjs";
+import { APPS, holdCovered, open } from "@soksak/window-check/app.mjs";
+import { fresh, joinedFailure } from "./fixture.mjs";
 import { requireContentWidth } from "./card-panel-checks.mjs";
 import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
 const sides = ["top", "bottom", "left", "right"];
@@ -78,8 +78,9 @@ for (const app of Object.values(APPS))
       const s = await open(t, app);
       t.diagnostic(`tested endpoint: ${JSON.stringify(s.client.endpoint)}`);
       const { plugin } = await fresh(s);
-      // The check windows overlap and can cover this one whole; the measurement needs a window that is not occluded.
-      await uncoverFromCheckWindows(t, s);
+      // The check reads the frames of the native surfaces of its window whatever the windows of other applications in front of it:
+      // the window holds the covered drawing for the whole check (holdCovered), so its regions draw as they do on the screen.
+      s.cleanup(await holdCovered(s));
       await s.run("core.settings.theme", { name: "midnight", mode: "dark" });
       const card = (await s.get("core.grid")).cards.find((c) => c.tabs.some((tab) => tab.plugin === plugin));
       assert.ok(card, `${plugin} card absent`);
@@ -126,7 +127,6 @@ for (const app of Object.values(APPS))
         console.info(`START ${app.name}: ${label}`);
         ({ displayed } = await s.presented());
         const host = await s.get("host.window");
-        assert.equal(host.occluded, false);
         const grid = await s.get("core.grid");
         const current = grid.cards.find((item) => item.id === card.id);
         assert.deepEqual(

@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { fresh, joinedFailure, uncoverFromCheckWindows } from "./fixture.mjs";
+import { fresh, joinedFailure } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { recordedEdges } from "./sidebar-gesture-recording.mjs";
 import { missingPoses } from "./card-panel-checks.mjs";
@@ -38,8 +38,6 @@ for (const app of Object.values(APPS)) {
       // The performance trace records the layouts of the page and the surface dispatch of the host, so a missing state names the
       // stage that held it. This check judges which states reach the screen, not how fast, so the trace changes no judged value.
       const { plugin } = await fresh(s, { performanceTrace: true });
-      // The check windows overlap and can cover this one whole; the measurement needs a window that is not occluded.
-      await uncoverFromCheckWindows(t, s);
       await s.run("core.settings.theme", { name: "midnight", mode: "dark" });
       const card = (await s.get("core.grid")).cards.find((c) => c.tabs.some((tab) => tab.plugin === plugin));
       assert.ok(card, `no ${plugin} card`);
@@ -61,7 +59,6 @@ for (const app of Object.values(APPS)) {
           false,
           `synthetic pointer measurement refused: active window, pointer ${JSON.stringify(state.pointer)}`,
         );
-        assert.equal(state.occluded, false, "synthetic pointer measurement refused: occluded window");
       }
       try {
         for (const side of sides) {

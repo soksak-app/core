@@ -804,9 +804,19 @@ export class Session {
    * stop.json, and keep(name, value) writes a value that the check judged, such as its displayed states, to <name>.json.
    */
   async record(params = {}) {
-    // Frame identity is decoded from the captured pixels of the window, which a window that is covered whole does not present.
-    if (params.frameIdentity) requireUncovered(this, await this.get("host.window"));
-    const { frames } = await this.request("diagnostics.capture.start", params);
+    // A recording reads the pixels of the window, whatever the windows of other applications in front of it: the capture reads
+    // the window itself, and the recording holds the covered drawing until it stops (holdCovered), so the image regions and the
+    // document regions of a covered window draw as they do on the screen and the window keeps its place in the window order.
+    const release = await holdCovered(this);
+    this.cleanup(release);
+    let started;
+    try {
+      started = await this.request("diagnostics.capture.start", params);
+    } catch (error) {
+      await release();
+      throw error;
+    }
+    const { frames } = started;
     let sent = false;
     const identity = this.trackRecording(frames);
     this.cleanup(async () => {
@@ -822,7 +832,7 @@ export class Session {
       stop: (options = {}) => {
         if (sent) return Promise.reject(new Error(`the stop was already sent for the recording ${frames}`));
         sent = true;
-        return this.request("diagnostics.capture.stop", options).then((result) => {
+        return this.request("diagnostics.capture.stop", options).finally(release).then((result) => {
           requireCallbackStatusArtifact(result, frames);
           writeFileSync(join(frames, "stop.json"), JSON.stringify(result));
           return result;

@@ -5,8 +5,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { APPS, open, requireUncovered } from "@soksak/window-check/app.mjs";
-import { fresh, uncoverFromCheckWindows } from "./fixture.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "./fixture.mjs";
 import { missingPoses } from "./card-panel-checks.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { TOLERANCE, measureTitlebar, misaligned, rowHeight } from "./titlebar-measurement.mjs";
@@ -22,10 +22,9 @@ async function setFrame(s, factor) {
   await s.presented();
 }
 
-/** The button rectangle of the window to record and the refresh rate of the display. An occluded window is not measured because WebKit draws it less. */
+/** The button rectangle of the window to record and the refresh rate of the display. */
 async function recordable(s) {
   const window = await s.get("host.window");
-  requireUncovered(s, window);
   assert.equal(window.controls.length, 3, `the window reports ${window.controls.length} buttons`);
   assert.ok(window.controls.every((button) => !button.hidden), "a window button is hidden");
   return { buttons: window.controls, refreshRate: window.refreshRate };
@@ -79,8 +78,6 @@ for (const app of Object.values(APPS)) {
       // The performance trace records the layouts of the page and the surface dispatch of the host, so a missing first row names the
       // stage that held it. This check judges which rows reach the screen, not how fast, so the trace changes no judged value.
       await fresh(s, { performanceTrace: true });
-      // The check windows overlap and can cover this one whole, and WebKit draws an occluded window less often.
-      await uncoverFromCheckWindows(t, s);
       s.cleanup(() => setFrame(s, 1));
       await setFrame(s, 1);
       // Pressing the frame makes the frame the scope of the text size command.
@@ -106,8 +103,6 @@ for (const app of Object.values(APPS)) {
     { timeout: 120000 }, async (t) => {
       const s = await open(t, app);
       await fresh(s);
-      // The check windows overlap and can cover this one whole, and WebKit draws an occluded window less often.
-      await uncoverFromCheckWindows(t, s);
       s.cleanup(() => setFrame(s, 1));
       await setFrame(s, 1);
       await s.run("core.window.new");

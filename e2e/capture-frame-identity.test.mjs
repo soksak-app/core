@@ -7,7 +7,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, drag, open } from "@soksak/window-check/app.mjs";
-import { fresh, joinedFailure, uncoverFromCheckWindows } from "./fixture.mjs";
+import { fresh, joinedFailure } from "./fixture.mjs";
 import { addRasterTab, presentedFrame, presentRasterTab, REGION } from "./raster-probe.mjs";
 
 const tuple = (value) => ({ generation: String(value.generation), raster: String(value.raster), sequence: value.sequence });
@@ -16,9 +16,6 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: opt-in capture identity matches the presented image of an image region`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s, { settings: { memorySaver: false } });
-    // The check windows overlap and can cover this one whole; the identity codes are decoded from the captured pixels of the window,
-    // so the window is uncovered before the capture.
-    await uncoverFromCheckWindows(t, s);
     const targetCard = (await s.get("core.grid")).cards.find((item) => item.focused);
     assert.ok(targetCard, "the start layout has no focused card");
     // The capture starts with no visible image region, so the first image region that it sees is the one the check opens.
