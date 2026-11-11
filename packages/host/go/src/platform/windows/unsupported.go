@@ -42,6 +42,12 @@ func (implementation) ObserveResponder(platform.Window, func()) (unsafe.Pointer,
 
 func (implementation) EndResponderObservation(unsafe.Pointer) {}
 
+func (implementation) ObserveCursor(platform.Window, func()) (unsafe.Pointer, error) {
+	return nil, unsupported("cursor observation")
+}
+
+func (implementation) EndCursorObservation(unsafe.Pointer) {}
+
 func (implementation) TitlebarHeight(platform.Window) (float64, error) {
 	return 0, unsupported("window title bar")
 }

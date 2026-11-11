@@ -573,6 +573,12 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// Ends an observation of observe_responder once, so its changed is not called again. It does not use the window, so it
     /// may run after the window was released. Call it on the UI thread.
     fn end_responder_observation(&self, observation: Handle);
+    /// Calls changed on the UI thread each time the cursor that the application set for the window as the virtual key window
+    /// changes (docs/spec/exposure.md#virtual-key-window), and returns the observation. Call it on the UI thread.
+    fn observe_cursor(&self, window: Handle, changed: Box<dyn Fn()>) -> Result<Handle, String>;
+    /// Ends an observation of observe_cursor once, so its changed is not called again. It does not use the window, so it may
+    /// run after the window was released. Call it on the UI thread.
+    fn end_cursor_observation(&self, observation: Handle);
 
     /// Returns the title bar height (pt) of the window. It is 0 while the title bar is not shown, as in full screen,
     /// and it returns an error when the window has no buttons. Call it on the UI thread.

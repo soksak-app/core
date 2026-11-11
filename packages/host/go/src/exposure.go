@@ -57,6 +57,7 @@ var hostStatus = map[string]hostEntry{
 			"maximized":   map[string]any{"type": "boolean"},
 			"key":         map[string]any{"type": "boolean"},
 			"virtualKey":  map[string]any{"type": "boolean"},
+			"cursor":      map[string]any{"type": []string{"string", "null"}},
 			"active":      map[string]any{"type": "boolean"},
 			"activationObservation": map[string]any{"type": "object", "required": []string{"registered", "count"}, "properties": map[string]any{
 				"registered": map[string]any{"type": "boolean"},
@@ -1246,6 +1247,7 @@ type windowFacts struct {
 	Zoomed      bool    `json:"zoomed"`
 	Key         bool    `json:"key"`
 	VirtualKey  bool    `json:"virtualKey"`
+	Cursor      *string `json:"cursor"`
 	Active      bool    `json:"active"`
 	Occluded    bool    `json:"occluded"`
 	Children    int     `json:"children"`
@@ -1477,6 +1479,7 @@ type WindowStatus struct {
 	Maximized         bool              `json:"maximized"`
 	Key               bool              `json:"key"`
 	VirtualKey        bool              `json:"virtualKey"`
+	Cursor            *string           `json:"cursor"`
 	Active            bool              `json:"active"`
 	Occluded          bool              `json:"occluded"`
 	Children          int               `json:"children"`
@@ -1583,7 +1586,7 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 	out := WindowStatus{
 		ActivationObservation: facts.ActivationObservation,
 		Frame:                 facts.Frame, Pointer: facts.Pointer, Content: frame{Width: facts.Content.Width, Height: facts.Content.Height},
-		Scale: facts.Scale, RefreshRate: facts.RefreshRate, Maximized: facts.Zoomed, Key: facts.Key, VirtualKey: facts.VirtualKey, Active: facts.Active, Occluded: facts.Occluded, Children: facts.Children,
+		Scale: facts.Scale, RefreshRate: facts.RefreshRate, Maximized: facts.Zoomed, Key: facts.Key, VirtualKey: facts.VirtualKey, Cursor: facts.Cursor, Active: facts.Active, Occluded: facts.Occluded, Children: facts.Children,
 		Quitting: s.host.quit.Active(),
 		Controls: facts.Controls, Surfaces: []WindowSurface{}, Documents: []WindowDocument{}, Regions: regions,
 		Webviews: []WindowWebview{}, PagelessProcesses: facts.PagelessProcesses,

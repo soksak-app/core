@@ -57,6 +57,32 @@ func goHost_native_responder_changed(value uintptr) {
 	handles.Handle(value).Value().(func())()
 }
 
+// The cursor observation callbacks by observation. They are read and changed only in main-thread steps.
+var cursorObservers = map[unsafe.Pointer]handles.Handle{}
+
+func (implementation) ObserveCursor(window platform.Window, changed func()) (unsafe.Pointer, error) {
+	handle := handles.NewHandle(changed)
+	observation := native.NativeWindowObserveCursor(uintptr(window), uintptr(handle))
+	if observation == nil {
+		handle.Delete()
+		return nil, errors.New("the cursor of the window cannot be observed")
+	}
+	cursorObservers[observation] = handle
+	return observation, nil
+}
+
+func (implementation) EndCursorObservation(observation unsafe.Pointer) {
+	native.MainSpInputVirtualEndCursorObservation(observation)
+	if handle, ok := cursorObservers[observation]; ok {
+		handle.Delete()
+		delete(cursorObservers, observation)
+	}
+}
+
+func goHost_native_cursor_changed(value uintptr) {
+	handles.Handle(value).Value().(func())()
+}
+
 // goHost_native_fullscreen_done answers a full screen request with its result (window_fullscreen.h, whose values are the
 // platform.FullscreenResult values) and its static message, nil for a finished transition.
 func goHost_native_fullscreen_done(value uintptr, result int32, message *byte) {

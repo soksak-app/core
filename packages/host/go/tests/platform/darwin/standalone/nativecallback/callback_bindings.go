@@ -81,6 +81,9 @@ func Bind(callbacks abi.Callbacks) (abi.CallbackTable, error) {
 	if callbacks.NativeResponderChanged == nil {
 		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: native_responder_changed")
 	}
+	if callbacks.NativeCursorChanged == nil {
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: native_cursor_changed")
+	}
 	if callbacks.NativeFullscreenDone == nil {
 		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: native_fullscreen_done")
 	}
@@ -153,6 +156,7 @@ func Bind(callbacks abi.Callbacks) (abi.CallbackTable, error) {
 		purego.NewCallback(callbacks.QuitRequest),
 		purego.NewCallback(callbacks.NativeUiRun),
 		purego.NewCallback(callbacks.NativeResponderChanged),
+		purego.NewCallback(callbacks.NativeCursorChanged),
 		purego.NewCallback(callbacks.NativeFullscreenDone),
 		purego.NewCallback(callbacks.SurfacePressed),
 		purego.NewCallback(callbacks.SurfacePoint),

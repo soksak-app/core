@@ -1,5 +1,6 @@
 #include "host_api_window.h"
 #include <stdlib.h>
+#include "input_virtual.h"
 #include "webview_geometry.h"
 #include "window_controls.h"
 #include "window_facts.h"
@@ -13,6 +14,9 @@
 // The native calls of this file run on the main thread (main_thread.h).
 void main_sp_window_end_responder_observation(void *observation) {
     hostRunOnMain(^{ sp_window_end_responder_observation(observation); });
+}
+void main_sp_input_virtual_end_cursor_observation(void *observation) {
+    hostRunOnMain(^{ sp_input_virtual_end_cursor_observation(observation); });
 }
 double main_windowTitlebarHeight(uintptr_t window) { return ON_MAIN(double, windowTitlebarHeight((void *)window)); }
 bool main_windowSetTitlebarHeight(uintptr_t window, double height, char **failure) {

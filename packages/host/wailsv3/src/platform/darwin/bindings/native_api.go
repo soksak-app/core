@@ -153,9 +153,10 @@ func Functions() abi.NativeFunctions {
 		MainSpWindowColorSpaceFacts: func(a0 uintptr) *byte {
 			return (*byte)(unsafe.Pointer(C.main_sp_window_color_space_facts(C.uintptr_t(a0))))
 		},
-		MainSpWindowEndResponderObservation: func(a0 unsafe.Pointer) { C.main_sp_window_end_responder_observation(a0) },
-		MainSpWindowFacts:                   func(a0 uintptr) *byte { return (*byte)(unsafe.Pointer(C.main_sp_window_facts(C.uintptr_t(a0)))) },
-		MainSpWindowFocusWorkbench:          func(a0 uintptr) { C.main_sp_window_focus_workbench(C.uintptr_t(a0)) },
+		MainSpWindowEndResponderObservation:    func(a0 unsafe.Pointer) { C.main_sp_window_end_responder_observation(a0) },
+		MainSpInputVirtualEndCursorObservation: func(a0 unsafe.Pointer) { C.main_sp_input_virtual_end_cursor_observation(a0) },
+		MainSpWindowFacts:                      func(a0 uintptr) *byte { return (*byte)(unsafe.Pointer(C.main_sp_window_facts(C.uintptr_t(a0)))) },
+		MainSpWindowFocusWorkbench:             func(a0 uintptr) { C.main_sp_window_focus_workbench(C.uintptr_t(a0)) },
 		MainSpWindowHit: func(a0 uintptr, a1 float64, a2 float64) *byte {
 			return (*byte)(unsafe.Pointer(C.main_sp_window_hit(C.uintptr_t(a0), C.double(a1), C.double(a2))))
 		},
@@ -247,6 +248,9 @@ func Functions() abi.NativeFunctions {
 		NativeWindowMainPresentation: func(a0 uintptr) unsafe.Pointer { return C.nativeWindowMainPresentation(C.uintptr_t(a0)) },
 		NativeWindowObserveResponder: func(a0 uintptr, a1 uintptr) unsafe.Pointer {
 			return C.nativeWindowObserveResponder(C.uintptr_t(a0), C.uintptr_t(a1))
+		},
+		NativeWindowObserveCursor: func(a0 uintptr, a1 uintptr) unsafe.Pointer {
+			return C.nativeWindowObserveCursor(C.uintptr_t(a0), C.uintptr_t(a1))
 		},
 		NativeWindowPrepare:        func(a0 uintptr) { C.nativeWindowPrepare(C.uintptr_t(a0)) },
 		NativeWindowSetMainWebview: func(a0 uintptr) bool { return bool(C.nativeWindowSetMainWebview(C.uintptr_t(a0))) },

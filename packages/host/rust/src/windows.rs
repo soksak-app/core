@@ -836,6 +836,12 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
     // the step ends the observation and not the window.
     let responder_observation =
         platform.observe_responder(owner, Box::new(move || responder_changed(&responding)))?;
+    // The cursor that the application sets for the virtual key window is a value of host.window.
+    let cursor_host = window.clone();
+    let cursor_observation = platform.observe_cursor(
+        owner,
+        Box::new(move || crate::exposure::window_changed(&cursor_host)),
+    )?;
     // Notifies the connections that watch host.window of the change of the occlusion state. Tauri does not send this
     // change as a window event.
     let occluded = window.clone();
@@ -917,6 +923,7 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
                     }
                     log_failure("surface layout cancel", platform.cancel_layout(owner));
                     platform.end_responder_observation(responder_observation);
+                    platform.end_cursor_observation(cursor_observation);
                     // A logical surface holds the main webview, so if it is not closed, the main webview and its web
                     // content process remain.
                     let surfaces = std::mem::take(

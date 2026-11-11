@@ -99,6 +99,7 @@ fn host_declarations() -> Value {
                 "maximized": {"type": "boolean"},
                 "key": {"type": "boolean"},
                 "virtualKey": {"type": "boolean"},
+                "cursor": {"type": ["string", "null"]},
                 "active": {"type": "boolean"},
                 "activationObservation": {"type":"object", "required":["registered","count"], "properties":{
                     "registered":{"type":"boolean"}, "count":{"type":"string","pattern":"^(0|[1-9][0-9]*)$"}
@@ -2096,6 +2097,18 @@ fn window_pageless_processes(facts: &Value) -> Result<Value, String> {
     Ok(rows.clone())
 }
 
+/// The cursor that the application set for the virtual key window: its name, or null when the window is not the virtual key
+/// window, no cursor was set or the platform does not report it.
+fn window_cursor(facts: &Value) -> Result<Value, String> {
+    match facts.get("cursor") {
+        None | Some(Value::Null) => Ok(Value::Null),
+        Some(Value::String(name)) => Ok(Value::String(name.clone())),
+        Some(other) => Err(format!(
+            "window facts have a cursor that is not a name: {other}"
+        )),
+    }
+}
+
 fn window_activation_observation(facts: &Value) -> Result<Value, String> {
     let observation = facts
         .get("activationObservation")
@@ -2229,6 +2242,7 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
     );
     let activation_observation = window_activation_observation(&facts).map_err(internal)?;
     let pageless_processes = window_pageless_processes(&facts).map_err(internal)?;
+    let cursor = window_cursor(&facts).map_err(internal)?;
     let mut status = json!({
         "activationObservation": activation_observation,
         "responder": responder,
@@ -2240,6 +2254,7 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
         "maximized": facts["zoomed"],
         "key": facts["key"],
         "virtualKey": facts["virtualKey"],
+        "cursor": cursor,
         "active": facts["active"],
         "occluded": facts["occluded"],
         "children": facts["children"],
@@ -3132,3 +3147,7 @@ mod activation_observation_tests;
 #[cfg(test)]
 #[path = "window_pageless_processes_test.rs"]
 mod pageless_processes_tests;
+
+#[cfg(test)]
+#[path = "window_cursor_test.rs"]
+mod cursor_tests;

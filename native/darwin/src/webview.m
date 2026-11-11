@@ -9,6 +9,7 @@
 #import "surface_layout.h"
 #import "webview_geometry.h"
 #import "window_fullscreen.h"
+#import "input_virtual.h"
 #import "window_facts.h"
 #import "main_thread.h"
 #import "private/webkit.h"
@@ -273,6 +274,10 @@ static void *nativeWindowObserveResponderOnMain(void *handle, uintptr_t callback
     return sp_window_observe_responder(handle, ^{ hostRunOnWorker(^{ sp_host_callback_native_responder_changed(callback); }); });
 }
 
+static void *nativeWindowObserveCursorOnMain(void *handle, uintptr_t callback) {
+    return sp_input_virtual_observe_cursor(handle, ^{ hostRunOnWorker(^{ sp_host_callback_native_cursor_changed(callback); }); });
+}
+
 // The functions that Go code calls. Go code runs on the worker of the framework, and each function runs its body on the main
 // thread through hostRunOnMain (docs/spec/hosts.md, main thread of the Wails host).
 bool nativeWindowAfterPresentation(uintptr_t handle, uintptr_t callback) {
@@ -352,4 +357,7 @@ bool nativeWindowFullscreen(uintptr_t handle, bool on, uintptr_t callback) {
 }
 void *nativeWindowObserveResponder(uintptr_t handle, uintptr_t callback) {
     return ON_MAIN(void *, nativeWindowObserveResponderOnMain((void *)handle, callback));
+}
+void *nativeWindowObserveCursor(uintptr_t handle, uintptr_t callback) {
+    return ON_MAIN(void *, nativeWindowObserveCursorOnMain((void *)handle, callback));
 }

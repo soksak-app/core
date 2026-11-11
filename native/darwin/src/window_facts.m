@@ -180,8 +180,9 @@ static void collectSurfaces(NSWindow *window, NSView *view, NSMutableArray *foun
 
 // The system pointer in screen coordinates, or the injected position of a virtual key window, which is the position of its pages.
 static NSDictionary *pointerFact(NSWindow *window) {
-    NSPoint at = NSEvent.mouseLocation;
     double x = 0, y = 0;
+    sp_input_virtual_real_mouse_location(&x, &y);
+    NSPoint at = NSMakePoint(x, y);
     if (sp_input_virtual_point((__bridge void *)window, &x, &y)) at = [window convertPointToScreen:NSMakePoint(x, y)];
     return @{ @"x": @(at.x), @"y": @(primaryTop() - at.y) };
 }
@@ -261,6 +262,7 @@ char *sp_window_facts(void *handle, void *surfaceView) {
         @"refreshRate": window.screen ? (id)@(window.screen.maximumFramesPerSecond) : (id)NSNull.null,
         @"key": @(sp_input_virtual_real_key(handle)),
         @"virtualKey": @(sp_input_virtual_is(handle)),
+        @"cursor": sp_input_virtual_cursor(handle) ? @(sp_input_virtual_cursor(handle)) : (id)NSNull.null,
         @"zoomed": @(window.isZoomed),
         @"active": @(sp_input_virtual_real_active()),
         @"activationObservation": @{

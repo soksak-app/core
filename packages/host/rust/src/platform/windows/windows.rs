@@ -94,6 +94,12 @@ impl Platform for Windows {
     fn end_responder_observation(&self, observation: Handle) {
         unsupported::end_responder_observation(observation)
     }
+    fn observe_cursor(&self, window: Handle, changed: Box<dyn Fn()>) -> Result<Handle, String> {
+        unsupported::observe_cursor(window, changed)
+    }
+    fn end_cursor_observation(&self, observation: Handle) {
+        unsupported::end_cursor_observation(observation)
+    }
 
     fn fullscreen(
         &self,

@@ -94,9 +94,16 @@ static NSUInteger heard(NSNotificationName name, id object, void (^block)(void))
     return found;
 }
 
+// The location of the system pointer: while a virtual key window holds an injected point, +[NSEvent mouseLocation] answers that
+// point.
+static NSPoint realPointer(void) {
+    double x = 0, y = 0;
+    sp_input_virtual_real_mouse_location(&x, &y);
+    return NSMakePoint(x, y);
+}
 static NSRect awayFromPointer(NSSize size, CGFloat shift) {
     NSRect screen = NSScreen.mainScreen.visibleFrame;
-    NSPoint at = NSEvent.mouseLocation;
+    NSPoint at = realPointer();
     CGFloat left = at.x < NSMidX(screen) ? NSMaxX(screen) - size.width - 20 - shift : NSMinX(screen) + 20 + shift;
     CGFloat bottom = at.y < NSMidY(screen) ? NSMaxY(screen) - size.height - 60 : NSMinY(screen) + 20;
     return NSMakeRect(left, bottom, size.width, size.height);
@@ -156,7 +163,7 @@ static void awaitPage(WKWebView *view, NSString *what, NSString *type, NSString 
 
 static NSString *const PAGE = @"<!doctype html><style>html,body{margin:0;height:100%}</style>"
     "<input id='field' style='position:absolute;left:10px;top:10px;width:200px;height:30px'>"
-    "<button id='target' style='position:absolute;left:10px;top:60px;width:100px;height:40px'>x</button><script>"
+    "<button id='target' style='position:absolute;left:10px;top:60px;width:100px;height:40px;cursor:pointer'>x</button><script>"
     "window.events=[];for(const t of ['pointermove','pointerdown','pointerup','click','keydown','input'])"
     "addEventListener(t,e=>events.push({type:t,trusted:e.isTrusted,x:e.clientX,y:e.clientY,buttons:e.buttons,key:e.key}),true);</script>";
 static WKWebView *makePage(NSWindow *window) {
@@ -184,6 +191,35 @@ static NSDictionary *factsOf(NSWindow *window) {
     free(json);
     return value;
 }
+// Whether the cursor that the application set for window as the virtual key window is the cursor named name.
+static BOOL cursorIs(NSWindow *window, NSString *name) {
+    const char *cursor = sp_input_virtual_cursor(window);
+    return cursor && [@(cursor) isEqualToString:name];
+}
+// Waits until the cursor of window, the virtual key window, is the cursor named name. A page sets its cursor after the move
+// reaches its web content process, so the wait ends at the change that the cursor observation hears.
+static void awaitCursor(NSWindow *window, NSString *name) {
+    eventWait([NSString stringWithFormat:@"the cursor of the virtual key window is %@", name], ^BOOL { return cursorIs(window, name); });
+}
+// A view whose cursor rect covers its bounds with the crosshair cursor.
+@interface SPCursorRectView : NSView
+@end
+@implementation SPCursorRectView
+- (void)resetCursorRects { [self addCursorRect:self.bounds cursor:NSCursor.crosshairCursor]; }
+@end
+// A view whose tracking area updates the cursor to the open hand when the pointer enters it.
+@interface SPCursorUpdateView : NSView
+@end
+@implementation SPCursorUpdateView
+- (instancetype)initWithFrame:(NSRect)frame {
+    if ((self = [super initWithFrame:frame])) {
+        [self addTrackingArea:[[[NSTrackingArea alloc] initWithRect:NSZeroRect
+            options:NSTrackingCursorUpdate | NSTrackingActiveInKeyWindow | NSTrackingInVisibleRect owner:self userInfo:nil] autorelease]];
+    }
+    return self;
+}
+- (void)cursorUpdate:(NSEvent *)event { (void)event; [NSCursor.openHandCursor set]; }
+@end
 static NSDictionary *facts(NSWindow *window) {
     NSDictionary *value = factsOf(window);
     check(value != nil, @"the window has facts");
@@ -273,7 +309,7 @@ int main(void) { @autoreleasepool {
 
     // Hover. WebKit updates :hover only for a page of the key window.
     evaluate(view, @"events.length=0;null");
-    check(!NSPointInRect(NSEvent.mouseLocation, window.frame), @"the real pointer is outside the window");
+    check(!NSPointInRect(realPointer(), window.frame), @"the real pointer is outside the window");
     check(pointer(window, 300, 250, 0) == SP_INPUT_DELIVERED, @"a move of a window at the back enters the virtual state");
     check(!unchanged(), @"the first entry replaces the methods");
     check(window.isKeyWindow && window.isMainWindow && NSApp.isActive && NSApp.keyWindow == window && NSApp.mainWindow == window, @"the window answers as the key and main window of an active application");
@@ -295,6 +331,33 @@ int main(void) { @autoreleasepool {
     check(!sp_application_active(), @"sp_application_active reports the system state");
     check(stayedBehind(), [NSString stringWithFormat:@"the application does not take the front (frontmost pid %d, this pid %d)",
         NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier, getpid()]);
+
+    // The cursor. The pointer of the application is the injected point, so the page under it sets its cursor although other
+    // windows cover the window and the real pointer is elsewhere, and the cursor stays with the window: host.window reports it,
+    // its watchers hear it, and AppKit does not hold it as the cursor of a person.
+    __block NSUInteger cursorChanges = 0;
+    void *cursorObservation = sp_input_virtual_observe_cursor(window, ^{ cursorChanges++; eventWake(); });
+    check(cursorObservation != NULL, @"the cursor of a window is observed");
+    NSPoint injected = [window convertPointToScreen:NSMakePoint(42, 300 - 82)];
+    check(NSEqualPoints(NSEvent.mouseLocation, injected) && !NSEqualPoints(realPointer(), injected),
+        @"the pointer of the application is the injected point and the system pointer stays");
+    check([NSWindow windowNumberAtPoint:injected belowWindowWithWindowNumber:0] == window.windowNumber,
+        @"the window under the pointer of the application is the virtual key window, although another window covers it");
+    awaitCursor(window, @"pointingHand");
+    check(pointer(window, 50, 25, 0) == SP_INPUT_DELIVERED, @"a move over the field is delivered");
+    awaitCursor(window, @"iBeam");
+    check(pointer(window, 300, 250, 0) == SP_INPUT_DELIVERED, @"a move over the empty page is delivered");
+    awaitCursor(window, @"arrow");
+    check([NSCursor.currentCursor.image.TIFFRepresentation isEqualToData:NSCursor.arrowCursor.image.TIFFRepresentation],
+        @"the current cursor of the application is the cursor of the virtual key window");
+    check([facts(window)[@"cursor"] isEqual:@"arrow"], [NSString stringWithFormat:@"host.window reports the cursor (%@)", facts(window)[@"cursor"]]);
+    check(cursorChanges >= 3, [NSString stringWithFormat:@"the observation hears each change of the cursor (%lu)", (unsigned long)cursorChanges]);
+    sp_input_virtual_end_cursor_observation(cursorObservation);
+    NSUInteger heardBefore = cursorChanges;
+    check(pointer(window, 40, 80, 0) == SP_INPUT_DELIVERED, @"a move over the button is delivered again");
+    awaitCursor(window, @"pointingHand");
+    check(cursorChanges == heardBefore, @"an ended observation hears nothing");
+    pointer(window, 42, 82, 0);
 
     // A real move does not reach the page; it passes the application as a person's move does.
     evaluate(view, @"events.length=0;null");
@@ -403,6 +466,9 @@ int main(void) { @autoreleasepool {
     check(activated == 1, [NSString stringWithFormat:@"a real activation writes one event (%lu)", (unsigned long)activated]);
     NSDictionary *afterActivation = facts(window);
     check(![afterActivation[@"virtualKey"] boolValue] && [afterActivation[@"active"] boolValue], @"host.window reports the activation");
+    check(afterActivation[@"cursor"] == NSNull.null, @"host.window reports no cursor for a window that is not the virtual key window");
+    check(NSCursor.currentCursor != NSCursor.pointingHandCursor && NSCursor.currentCursor != NSCursor.IBeamCursor,
+        @"AppKit never held a cursor of a page of the virtual key window");
     reallyActive = NO;
 
     // A window that closes ends the state, and a closed window answers nothing.
@@ -467,6 +533,29 @@ int main(void) { @autoreleasepool {
     [shown close];
     [shown release];
     drainMainQueue(@"the blocks that the close of the shown window queued run");
+
+    // The cursor of a window without a page: a move sets the cursor of the cursor rect under the point and gives cursorUpdate: to
+    // the owner of a tracking area that it enters, in a covered window, and AppKit keeps its own cursor rects.
+    NSWindow *rects = makeWindow(0);
+    SPCursorRectView *rectView = [[[SPCursorRectView alloc] initWithFrame:NSMakeRect(0, 0, 200, 300)] autorelease];
+    SPCursorUpdateView *updateView = [[[SPCursorUpdateView alloc] initWithFrame:NSMakeRect(220, 0, 200, 300)] autorelease];
+    [rects.contentView addSubview:rectView];
+    [rects.contentView addSubview:updateView];
+    [rects orderBack:nil];
+    [rects orderWindow:NSWindowBelow relativeTo:cover.windowNumber];
+    check(sp_input_pointer(rects, 100, 150, 0, 0, 0, 0) == SP_INPUT_DELIVERED && sp_input_virtual_is(rects),
+        @"a move over a cursor rect of a covered window is delivered");
+    check(cursorIs(rects, @"crosshair"), [NSString stringWithFormat:@"the cursor rect under the point sets its cursor (%s)", sp_input_virtual_cursor(rects)]);
+    check(sp_input_pointer(rects, 300, 150, 0, 0, 0, 0) == SP_INPUT_DELIVERED && cursorIs(rects, @"openHand"),
+        [NSString stringWithFormat:@"a tracking area that the point enters updates the cursor (%s)", sp_input_virtual_cursor(rects)]);
+    check(sp_input_pointer(rects, 100, 150, 0, 0, 0, 0) == SP_INPUT_DELIVERED && cursorIs(rects, @"crosshair"),
+        [NSString stringWithFormat:@"the cursor rect sets its cursor again (%s)", sp_input_virtual_cursor(rects)]);
+    sp_input_virtual_end("no state");
+    check(sp_input_virtual_cursor(rects) == NULL, @"a window that is no longer the virtual key window has no cursor");
+    check(NSCursor.currentCursor != NSCursor.crosshairCursor && NSCursor.currentCursor != NSCursor.openHandCursor,
+        @"AppKit never held a cursor of the virtual key window");
+    [rects close];
+    [rects release];
 
     sp_input_virtual_end("no state");
     [second close];

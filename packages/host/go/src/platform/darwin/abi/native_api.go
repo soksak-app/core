@@ -108,169 +108,171 @@ var (
 )
 
 type NativeFunctions struct {
-	ActivateWindowAt                      func(uintptr, float64, float64, uintptr)
-	Calloc                                func(uint64, uint64) unsafe.Pointer
-	CoreRootSet                           func(uintptr)
-	DocumentAddScript                     func(unsafe.Pointer, *byte)
-	DocumentBinaryPut                     func(unsafe.Pointer, unsafe.Pointer, uint64, *byte, *byte) *byte
-	DocumentBinaryTake                    func(unsafe.Pointer, *byte, *unsafe.Pointer, *uint64) *byte
-	DocumentCreate                        func(unsafe.Pointer, *byte, *byte, *byte, *byte, *byte, uintptr) unsafe.Pointer
-	DocumentQuery                         func(unsafe.Pointer, uintptr)
-	DocumentSetEvent                      func(unsafe.Pointer, uintptr)
-	DocumentSetMessage                    func(unsafe.Pointer, uintptr)
-	DocumentSetStream                     func(unsafe.Pointer, uintptr)
-	DocumentSetViewEnded                  func(unsafe.Pointer, uintptr)
-	DocumentSetViewMessage                func(unsafe.Pointer, uintptr)
-	DocumentSetViewResponsiveness         func(unsafe.Pointer, uintptr)
-	Free                                  func(unsafe.Pointer)
-	HostProcessFootprint                  func(int32, *uint64, *int32, *uint32, *uint32, *int32, *int64) int32
-	ImageCreate                           func(unsafe.Pointer, *byte, uintptr, uintptr) unsafe.Pointer
-	InjectPointer                         func(uintptr, *byte, float64, float64, int32, int32, float64, float64, int32, uintptr)
-	InstallDockMenu                       func() bool
-	InstallMainThread                     func(uintptr, uintptr)
-	InstallQuitRequest                    func() bool
-	MainThreadInstalled                   func(*bool, *bool)
-	MainSpAppMainWindow                   func() uintptr
-	MainSpApplicationActive               func() bool
-	MainSpClipboardClose                  func(unsafe.Pointer)
-	MainSpClipboardOpen                   func(*byte) unsafe.Pointer
-	MainSpClipboardReadFileUrls           func(unsafe.Pointer) *byte
-	MainSpClipboardReadPng                func(unsafe.Pointer) *byte
-	MainSpClipboardReadText               func(unsafe.Pointer) *byte
-	MainSpClipboardWriteText              func(unsafe.Pointer, *byte) *byte
-	MainSpDockItems                       func() *byte
-	MainSpDockSelect                      func(*byte) bool
-	MainSpDocumentAppearance              func(unsafe.Pointer, bool)
-	MainSpDocumentBackground              func(unsafe.Pointer, bool)
-	MainSpDocumentClose                   func(unsafe.Pointer)
-	MainSpDocumentFailCreationForTest     func(*byte)
-	MainSpDocumentGo                      func(unsafe.Pointer, int32, int32) bool
-	MainSpDocumentInteractionState        func(unsafe.Pointer) *byte
-	MainSpDocumentLastError               func() *byte
-	MainSpDocumentLoad                    func(unsafe.Pointer, *byte) bool
-	MainSpDocumentPlace                   func(unsafe.Pointer, float64, float64, float64, float64, bool)
-	MainSpDocumentPost                    func(unsafe.Pointer, *byte) bool
-	MainSpDocumentRestore                 func(unsafe.Pointer, *byte) *byte
-	MainSpDocumentStreamAck               func(unsafe.Pointer, uint64) bool
-	MainSpDocumentStreamOn                func(unsafe.Pointer, *byte, bool) bool
-	MainSpDocumentZoom                    func(unsafe.Pointer, float64) bool
-	MainSpHostPresentationComplete        func(unsafe.Pointer, *byte)
-	MainSpInputKey                        func(uintptr, *byte, *byte, uint32, bool) int32
-	MainSpInputText                       func(uintptr, int32, *byte, int64, int64, int64, int64) int32
-	MainSpLinkOpen                        func(*byte) *byte
-	MainSpMemoryPressureInject            func(*byte) bool
-	MainSpMenuItems                       func() *byte
-	MainSpMenuSelect                      func(uintptr, *byte, *byte) *byte
-	MainSpNotificationsPost               func(*byte, *byte, *byte)
-	MainSpNotificationsRemove             func(*byte)
-	MainSpObserveActivity                 func()
-	MainSpPreferredLanguage               func() *byte
-	MainSpQuitRequestAnswer               func()
-	MainSpQuitRequestCancel               func()
-	MainSpQuitRequestEventType            func() int32
-	MainSpRegionBackground                func(unsafe.Pointer, bool)
-	MainSpRegionCaret                     func(unsafe.Pointer, float64, float64, float64, float64)
-	MainSpRegionClose                     func(unsafe.Pointer)
-	MainSpRegionFacts                     func(unsafe.Pointer) *byte
-	MainSpRegionFocus                     func(unsafe.Pointer)
-	MainSpRegionLastError                 func(unsafe.Pointer) *byte
-	MainSpRegionPlace                     func(unsafe.Pointer, float64, float64, float64, float64, bool)
-	MainSpRegionPresent                   func(unsafe.Pointer, uint32, *uint8, float64, float64, float64, uint64, uint64, int32) bool
-	MainSpRegionRaster                    func(unsafe.Pointer, *float64) bool
-	MainSpRegionSurfacePlaced             func(unsafe.Pointer) bool
-	MainSpRegionText                      func(unsafe.Pointer, *byte)
-	MainSpScreens                         func() *byte
-	MainSpSurfaceClose                    func(unsafe.Pointer)
-	MainSpSurfaceCreate                   func(uintptr) unsafe.Pointer
-	MainSpSurfaceFocus                    func(unsafe.Pointer)
-	MainSpSurfaceFocusForRegion           func(unsafe.Pointer)
-	MainSpSurfaceSetWindowOverlays        func(unsafe.Pointer, *float64, uint64)
-	MainSpViewImportMapSet                func(*byte)
-	MainSpWebviewCollectGarbage           func(unsafe.Pointer) bool
-	MainSpWindowColorSpaceFacts           func(uintptr) *byte
-	MainSpWindowEndResponderObservation   func(unsafe.Pointer)
-	MainSpWindowFacts                     func(uintptr) *byte
-	MainSpWindowFocusWorkbench            func(uintptr)
-	MainSpWindowHit                       func(uintptr, float64, float64) *byte
-	MainSpWindowKeysDecided               func(uintptr)
-	MainSpWindowKeysPageEnded             func(uintptr)
-	MainSpWindowMainWebview               func(uintptr) unsafe.Pointer
-	MainSpWindowModalHold                 func(uintptr)
-	MainSpWindowModalHoldEnd              func(uintptr)
-	MainSpWindowMove                      func(uintptr, float64, float64) bool
-	MainSpWindowNativeView                func(uintptr) unsafe.Pointer
-	MainSpWindowOnScreen                  func(uintptr) bool
-	MainSpWindowPlaceNew                  func(uintptr, **byte) bool
-	MainSpWindowRevealAfterLoad           func(uintptr, **byte) bool
-	MainSpWindowShow                      func(uintptr)
-	MainSurfaceLayoutAbandonView          func(uintptr, unsafe.Pointer) bool
-	MainSurfaceLayoutCancel               func(uintptr)
-	MainSurfaceLayoutCancelTicket         func(uintptr, uint64)
-	MainSurfaceLayoutCommit               func(uintptr, uint64) bool
-	MainSurfaceLayoutInjectSettledFailure func()
-	MainViewRelease                       func(unsafe.Pointer)
-	MainViewRetain                        func(unsafe.Pointer)
-	MainWebviewGetFrame                   func(unsafe.Pointer, *float64)
-	MainWebviewSetFrame                   func(unsafe.Pointer, float64, float64, float64, float64)
-	MainWebviewSetSurfaceAlpha            func(unsafe.Pointer, float64)
-	MainWebviewSetSurfaceHidden           func(unsafe.Pointer, bool)
-	MainWebviewSetSurfaceOverlays         func(unsafe.Pointer, *float64, uint64)
-	MainWindowControls                    func(uintptr, *float64)
-	MainWindowResizeInstant               func()
-	MainWindowSetTitlebarHeight           func(uintptr, float64, **byte) bool
-	MainWindowTitlebarHeight              func(uintptr) float64
-	Malloc                                func(uint64) unsafe.Pointer
-	ModalAligned                          func(uintptr, float64, float64, float64, float64, *float64)
-	ModalViewConfigure                    func(unsafe.Pointer, *byte, float64)
-	ModalViewFocus                        func(unsafe.Pointer, int32)
-	NativeFunctionPresentation            func(uintptr) unsafe.Pointer
-	NativeLayoutObserve                   func()
-	NativeWebviewAfterPresentation        func(unsafe.Pointer, uintptr) bool
-	NativeWebviewBackground               func(unsafe.Pointer, bool)
-	NativeWebviewBounds                   func(unsafe.Pointer, float64, float64, float64, float64)
-	NativeWebviewClose                    func(unsafe.Pointer)
-	NativeWebviewCreate                   func(uintptr, uint64, *byte, *byte, float64, float64, float64, float64, bool, bool) unsafe.Pointer
-	NativeWebviewEval                     func(unsafe.Pointer, *byte)
-	NativeWebviewHidden                   func(unsafe.Pointer, bool)
-	NativeWebviewNavigate                 func(unsafe.Pointer, *byte) bool
-	NativeWindowAfterPresentation         func(uintptr, uintptr) bool
-	NativeWindowAfterSettled              func(uintptr, unsafe.Pointer, uintptr)
-	NativeWindowConfigureMain             func(uintptr, bool) bool
-	NativeWindowFullscreen                func(uintptr, bool, uintptr) bool
-	NativeWindowJoinView                  func(uintptr, uint64, unsafe.Pointer, uintptr) bool
-	NativeWindowLayoutBegin               func(uintptr, uint64, uintptr)
-	NativeWindowMainPresentation          func(uintptr) unsafe.Pointer
-	NativeWindowObserveResponder          func(uintptr, uintptr) unsafe.Pointer
-	NativeWindowPrepare                   func(uintptr)
-	NativeWindowSetMainWebview            func(uintptr) bool
-	NativeWindowStartPage                 func(uintptr, uint64, float64, uintptr)
-	ShapeCreate                           func(uintptr, float64, float64, float64, float64) unsafe.Pointer
-	ShapeDestroy                          func(unsafe.Pointer)
-	ShapeSetFrame                         func(unsafe.Pointer, float64, float64, float64, float64)
-	ShapeSetStyle                         func(unsafe.Pointer, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64)
-	SpBlockAsyncSignals                   func() int32
-	SpDiagnosticReportsDirectory          func(**byte) *byte
-	SpEventDrain                          func(*uint8, uint64) uint64
-	SpEventSetBoot                        func(*byte) bool
-	SpEventSetPolicy                      func(*int8) bool
-	SpEventTakeLoss                       func(uint8) SpEventRingLoss
-	SpEventWakeFd                         func() int32
-	SpFactsFree                           func(*byte)
-	SpMonoNs                              func() uint64
-	SpObserveFlush                        func()
-	SpStallAwaitAwake                     func()
-	SpStallHeartbeat                      func(*uint64, *uint64)
-	SpTerminationSignalSender             func(int32) int32
-	SpTerminationSignalsRecord            func() int32
-	StartMemoryPressure                   func() bool
-	StartNotifications                    func() *byte
-	Strlen                                func(*byte) uint64
-	SurfaceRaise                          func(unsafe.Pointer)
-	SurfaceUnwatchMouse                   func(uintptr)
-	SurfaceWatchMouse                     func(uintptr, uintptr) uintptr
-	UiEnqueue                             func(uintptr)
-	WatchButtons                          func() bool
-	WindowFileDrop                        func(unsafe.Pointer, uintptr) bool
+	ActivateWindowAt                       func(uintptr, float64, float64, uintptr)
+	Calloc                                 func(uint64, uint64) unsafe.Pointer
+	CoreRootSet                            func(uintptr)
+	DocumentAddScript                      func(unsafe.Pointer, *byte)
+	DocumentBinaryPut                      func(unsafe.Pointer, unsafe.Pointer, uint64, *byte, *byte) *byte
+	DocumentBinaryTake                     func(unsafe.Pointer, *byte, *unsafe.Pointer, *uint64) *byte
+	DocumentCreate                         func(unsafe.Pointer, *byte, *byte, *byte, *byte, *byte, uintptr) unsafe.Pointer
+	DocumentQuery                          func(unsafe.Pointer, uintptr)
+	DocumentSetEvent                       func(unsafe.Pointer, uintptr)
+	DocumentSetMessage                     func(unsafe.Pointer, uintptr)
+	DocumentSetStream                      func(unsafe.Pointer, uintptr)
+	DocumentSetViewEnded                   func(unsafe.Pointer, uintptr)
+	DocumentSetViewMessage                 func(unsafe.Pointer, uintptr)
+	DocumentSetViewResponsiveness          func(unsafe.Pointer, uintptr)
+	Free                                   func(unsafe.Pointer)
+	HostProcessFootprint                   func(int32, *uint64, *int32, *uint32, *uint32, *int32, *int64) int32
+	ImageCreate                            func(unsafe.Pointer, *byte, uintptr, uintptr) unsafe.Pointer
+	InjectPointer                          func(uintptr, *byte, float64, float64, int32, int32, float64, float64, int32, uintptr)
+	InstallDockMenu                        func() bool
+	InstallMainThread                      func(uintptr, uintptr)
+	InstallQuitRequest                     func() bool
+	MainThreadInstalled                    func(*bool, *bool)
+	MainSpAppMainWindow                    func() uintptr
+	MainSpApplicationActive                func() bool
+	MainSpClipboardClose                   func(unsafe.Pointer)
+	MainSpClipboardOpen                    func(*byte) unsafe.Pointer
+	MainSpClipboardReadFileUrls            func(unsafe.Pointer) *byte
+	MainSpClipboardReadPng                 func(unsafe.Pointer) *byte
+	MainSpClipboardReadText                func(unsafe.Pointer) *byte
+	MainSpClipboardWriteText               func(unsafe.Pointer, *byte) *byte
+	MainSpDockItems                        func() *byte
+	MainSpDockSelect                       func(*byte) bool
+	MainSpDocumentAppearance               func(unsafe.Pointer, bool)
+	MainSpDocumentBackground               func(unsafe.Pointer, bool)
+	MainSpDocumentClose                    func(unsafe.Pointer)
+	MainSpDocumentFailCreationForTest      func(*byte)
+	MainSpDocumentGo                       func(unsafe.Pointer, int32, int32) bool
+	MainSpDocumentInteractionState         func(unsafe.Pointer) *byte
+	MainSpDocumentLastError                func() *byte
+	MainSpDocumentLoad                     func(unsafe.Pointer, *byte) bool
+	MainSpDocumentPlace                    func(unsafe.Pointer, float64, float64, float64, float64, bool)
+	MainSpDocumentPost                     func(unsafe.Pointer, *byte) bool
+	MainSpDocumentRestore                  func(unsafe.Pointer, *byte) *byte
+	MainSpDocumentStreamAck                func(unsafe.Pointer, uint64) bool
+	MainSpDocumentStreamOn                 func(unsafe.Pointer, *byte, bool) bool
+	MainSpDocumentZoom                     func(unsafe.Pointer, float64) bool
+	MainSpHostPresentationComplete         func(unsafe.Pointer, *byte)
+	MainSpInputKey                         func(uintptr, *byte, *byte, uint32, bool) int32
+	MainSpInputText                        func(uintptr, int32, *byte, int64, int64, int64, int64) int32
+	MainSpLinkOpen                         func(*byte) *byte
+	MainSpMemoryPressureInject             func(*byte) bool
+	MainSpMenuItems                        func() *byte
+	MainSpMenuSelect                       func(uintptr, *byte, *byte) *byte
+	MainSpNotificationsPost                func(*byte, *byte, *byte)
+	MainSpNotificationsRemove              func(*byte)
+	MainSpObserveActivity                  func()
+	MainSpPreferredLanguage                func() *byte
+	MainSpQuitRequestAnswer                func()
+	MainSpQuitRequestCancel                func()
+	MainSpQuitRequestEventType             func() int32
+	MainSpRegionBackground                 func(unsafe.Pointer, bool)
+	MainSpRegionCaret                      func(unsafe.Pointer, float64, float64, float64, float64)
+	MainSpRegionClose                      func(unsafe.Pointer)
+	MainSpRegionFacts                      func(unsafe.Pointer) *byte
+	MainSpRegionFocus                      func(unsafe.Pointer)
+	MainSpRegionLastError                  func(unsafe.Pointer) *byte
+	MainSpRegionPlace                      func(unsafe.Pointer, float64, float64, float64, float64, bool)
+	MainSpRegionPresent                    func(unsafe.Pointer, uint32, *uint8, float64, float64, float64, uint64, uint64, int32) bool
+	MainSpRegionRaster                     func(unsafe.Pointer, *float64) bool
+	MainSpRegionSurfacePlaced              func(unsafe.Pointer) bool
+	MainSpRegionText                       func(unsafe.Pointer, *byte)
+	MainSpScreens                          func() *byte
+	MainSpSurfaceClose                     func(unsafe.Pointer)
+	MainSpSurfaceCreate                    func(uintptr) unsafe.Pointer
+	MainSpSurfaceFocus                     func(unsafe.Pointer)
+	MainSpSurfaceFocusForRegion            func(unsafe.Pointer)
+	MainSpSurfaceSetWindowOverlays         func(unsafe.Pointer, *float64, uint64)
+	MainSpViewImportMapSet                 func(*byte)
+	MainSpWebviewCollectGarbage            func(unsafe.Pointer) bool
+	MainSpWindowColorSpaceFacts            func(uintptr) *byte
+	MainSpWindowEndResponderObservation    func(unsafe.Pointer)
+	MainSpInputVirtualEndCursorObservation func(unsafe.Pointer)
+	MainSpWindowFacts                      func(uintptr) *byte
+	MainSpWindowFocusWorkbench             func(uintptr)
+	MainSpWindowHit                        func(uintptr, float64, float64) *byte
+	MainSpWindowKeysDecided                func(uintptr)
+	MainSpWindowKeysPageEnded              func(uintptr)
+	MainSpWindowMainWebview                func(uintptr) unsafe.Pointer
+	MainSpWindowModalHold                  func(uintptr)
+	MainSpWindowModalHoldEnd               func(uintptr)
+	MainSpWindowMove                       func(uintptr, float64, float64) bool
+	MainSpWindowNativeView                 func(uintptr) unsafe.Pointer
+	MainSpWindowOnScreen                   func(uintptr) bool
+	MainSpWindowPlaceNew                   func(uintptr, **byte) bool
+	MainSpWindowRevealAfterLoad            func(uintptr, **byte) bool
+	MainSpWindowShow                       func(uintptr)
+	MainSurfaceLayoutAbandonView           func(uintptr, unsafe.Pointer) bool
+	MainSurfaceLayoutCancel                func(uintptr)
+	MainSurfaceLayoutCancelTicket          func(uintptr, uint64)
+	MainSurfaceLayoutCommit                func(uintptr, uint64) bool
+	MainSurfaceLayoutInjectSettledFailure  func()
+	MainViewRelease                        func(unsafe.Pointer)
+	MainViewRetain                         func(unsafe.Pointer)
+	MainWebviewGetFrame                    func(unsafe.Pointer, *float64)
+	MainWebviewSetFrame                    func(unsafe.Pointer, float64, float64, float64, float64)
+	MainWebviewSetSurfaceAlpha             func(unsafe.Pointer, float64)
+	MainWebviewSetSurfaceHidden            func(unsafe.Pointer, bool)
+	MainWebviewSetSurfaceOverlays          func(unsafe.Pointer, *float64, uint64)
+	MainWindowControls                     func(uintptr, *float64)
+	MainWindowResizeInstant                func()
+	MainWindowSetTitlebarHeight            func(uintptr, float64, **byte) bool
+	MainWindowTitlebarHeight               func(uintptr) float64
+	Malloc                                 func(uint64) unsafe.Pointer
+	ModalAligned                           func(uintptr, float64, float64, float64, float64, *float64)
+	ModalViewConfigure                     func(unsafe.Pointer, *byte, float64)
+	ModalViewFocus                         func(unsafe.Pointer, int32)
+	NativeFunctionPresentation             func(uintptr) unsafe.Pointer
+	NativeLayoutObserve                    func()
+	NativeWebviewAfterPresentation         func(unsafe.Pointer, uintptr) bool
+	NativeWebviewBackground                func(unsafe.Pointer, bool)
+	NativeWebviewBounds                    func(unsafe.Pointer, float64, float64, float64, float64)
+	NativeWebviewClose                     func(unsafe.Pointer)
+	NativeWebviewCreate                    func(uintptr, uint64, *byte, *byte, float64, float64, float64, float64, bool, bool) unsafe.Pointer
+	NativeWebviewEval                      func(unsafe.Pointer, *byte)
+	NativeWebviewHidden                    func(unsafe.Pointer, bool)
+	NativeWebviewNavigate                  func(unsafe.Pointer, *byte) bool
+	NativeWindowAfterPresentation          func(uintptr, uintptr) bool
+	NativeWindowAfterSettled               func(uintptr, unsafe.Pointer, uintptr)
+	NativeWindowConfigureMain              func(uintptr, bool) bool
+	NativeWindowFullscreen                 func(uintptr, bool, uintptr) bool
+	NativeWindowJoinView                   func(uintptr, uint64, unsafe.Pointer, uintptr) bool
+	NativeWindowLayoutBegin                func(uintptr, uint64, uintptr)
+	NativeWindowMainPresentation           func(uintptr) unsafe.Pointer
+	NativeWindowObserveResponder           func(uintptr, uintptr) unsafe.Pointer
+	NativeWindowObserveCursor              func(uintptr, uintptr) unsafe.Pointer
+	NativeWindowPrepare                    func(uintptr)
+	NativeWindowSetMainWebview             func(uintptr) bool
+	NativeWindowStartPage                  func(uintptr, uint64, float64, uintptr)
+	ShapeCreate                            func(uintptr, float64, float64, float64, float64) unsafe.Pointer
+	ShapeDestroy                           func(unsafe.Pointer)
+	ShapeSetFrame                          func(unsafe.Pointer, float64, float64, float64, float64)
+	ShapeSetStyle                          func(unsafe.Pointer, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64)
+	SpBlockAsyncSignals                    func() int32
+	SpDiagnosticReportsDirectory           func(**byte) *byte
+	SpEventDrain                           func(*uint8, uint64) uint64
+	SpEventSetBoot                         func(*byte) bool
+	SpEventSetPolicy                       func(*int8) bool
+	SpEventTakeLoss                        func(uint8) SpEventRingLoss
+	SpEventWakeFd                          func() int32
+	SpFactsFree                            func(*byte)
+	SpMonoNs                               func() uint64
+	SpObserveFlush                         func()
+	SpStallAwaitAwake                      func()
+	SpStallHeartbeat                       func(*uint64, *uint64)
+	SpTerminationSignalSender              func(int32) int32
+	SpTerminationSignalsRecord             func() int32
+	StartMemoryPressure                    func() bool
+	StartNotifications                     func() *byte
+	Strlen                                 func(*byte) uint64
+	SurfaceRaise                           func(unsafe.Pointer)
+	SurfaceUnwatchMouse                    func(uintptr)
+	SurfaceWatchMouse                      func(uintptr, uintptr) uintptr
+	UiEnqueue                              func(uintptr)
+	WatchButtons                           func() bool
+	WindowFileDrop                         func(unsafe.Pointer, uintptr) bool
 }
 
 func (functions NativeFunctions) Validate() error {
@@ -517,6 +519,9 @@ func (functions NativeFunctions) Validate() error {
 	if functions.MainSpWindowEndResponderObservation == nil {
 		return fmt.Errorf("native API function is missing: main_sp_window_end_responder_observation")
 	}
+	if functions.MainSpInputVirtualEndCursorObservation == nil {
+		return fmt.Errorf("native API function is missing: main_sp_input_virtual_end_cursor_observation")
+	}
 	if functions.MainSpWindowFacts == nil {
 		return fmt.Errorf("native API function is missing: main_sp_window_facts")
 	}
@@ -672,6 +677,9 @@ func (functions NativeFunctions) Validate() error {
 	}
 	if functions.NativeWindowObserveResponder == nil {
 		return fmt.Errorf("native API function is missing: nativeWindowObserveResponder")
+	}
+	if functions.NativeWindowObserveCursor == nil {
+		return fmt.Errorf("native API function is missing: nativeWindowObserveCursor")
 	}
 	if functions.NativeWindowPrepare == nil {
 		return fmt.Errorf("native API function is missing: nativeWindowPrepare")

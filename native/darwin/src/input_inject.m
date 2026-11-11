@@ -419,7 +419,9 @@ static NSEvent *crossing(NSWindow *window, NSEventType type, NSPoint point) {
 
 // Delivers a move as a person's move arrives: the web view routing runs as for an event that AppKit dispatches, each tracking area
 // that the point leaves or enters hears that, and the owner of each area that holds the point and tracks moves hears the move,
-// also under a view that covers it. It reports whether any owner heard anything.
+// also under a view that covers it. In the virtual key window the cursor follows as AppKit sets it for a person's pointer: the
+// owner of each area with NSTrackingCursorUpdate that the point enters hears cursorUpdate:, and the cursor rect of the deepest
+// view under the point sets its cursor (input_virtual.h). It reports whether any owner or cursor rect heard anything.
 static bool moveTo(NSWindow *window, NSPoint point) {
     NSEvent *event = mouseEvent(window, NSEventTypeMouseMoved, point, 0, 0);
     webviewInputRoutePointer(event);
@@ -431,19 +433,24 @@ static bool moveTo(NSWindow *window, NSPoint point) {
         objc_setAssociatedObject(window, &enteredAreasKey, entered, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
     bool heard = false;
+    BOOL cursor = sp_input_virtual_is((__bridge void *)window);
     for (NSTrackingArea *area in left) {
         if (![entered containsObject:area]) continue;
         [entered removeObject:area];
-        if ([area.owner respondsToSelector:@selector(mouseExited:)]) {
+        if ((area.options & NSTrackingMouseEnteredAndExited) && [area.owner respondsToSelector:@selector(mouseExited:)]) {
             [area.owner mouseExited:crossing(window, NSEventTypeMouseExited, point)];
             heard = true;
         }
     }
     for (NSTrackingArea *area in held) {
-        if (!(area.options & NSTrackingMouseEnteredAndExited) || [entered containsObject:area]) continue;
+        if (!(area.options & (NSTrackingMouseEnteredAndExited | NSTrackingCursorUpdate)) || [entered containsObject:area]) continue;
         [entered addObject:area];
-        if ([area.owner respondsToSelector:@selector(mouseEntered:)]) {
+        if ((area.options & NSTrackingMouseEnteredAndExited) && [area.owner respondsToSelector:@selector(mouseEntered:)]) {
             [area.owner mouseEntered:crossing(window, NSEventTypeMouseEntered, point)];
+            heard = true;
+        }
+        if (cursor && (area.options & NSTrackingCursorUpdate) && [area.owner respondsToSelector:@selector(cursorUpdate:)]) {
+            [area.owner cursorUpdate:crossing(window, NSEventTypeCursorUpdate, point)];
             heard = true;
         }
     }
@@ -452,6 +459,7 @@ static bool moveTo(NSWindow *window, NSPoint point) {
         [area.owner mouseMoved:event];
         heard = true;
     }
+    if (cursor && sp_input_virtual_cursor_rect((__bridge void *)window, point.x, point.y)) heard = true;
     return heard;
 }
 

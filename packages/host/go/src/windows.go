@@ -463,6 +463,13 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 			if observed != nil {
 				fatalError("window responder", observed)
 			}
+			// The cursor that the application sets for the virtual key window is a value of host.window.
+			mainThreadStep(func() {
+				s.cursorObservation, observed = system.ObserveCursor(win.NativeWindow(), s.windowChanged)
+			})
+			if observed != nil {
+				fatalError("window cursor", observed)
+			}
 			// A framework places a new window on the display of the key window of the active application, which for an application
 			// that is not active is a display of another application, so the window goes to the display of the frontmost window of
 			// this application before it shows (native/darwin/src/window_reveal.h).
@@ -793,6 +800,8 @@ func (s *Surfaces) close() {
 		// The close ends the observation and not the window, which Wails may have released.
 		system.EndResponderObservation(s.responderObservation)
 		s.responderObservation = nil
+		system.EndCursorObservation(s.cursorObservation)
+		s.cursorObservation = nil
 		if s.monitor != 0 {
 			system.UnwatchInput(s.monitor)
 		}

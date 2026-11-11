@@ -13,6 +13,21 @@
 #import "input_virtual.h"
 #import "observe.h"
 
+// An observation of the cursor of one window. It refers to the window weakly.
+@interface SPCursorObserver : NSObject {
+@public
+    id window;
+}
+@property(nonatomic, copy) void (^changed)(void);
+@end
+@implementation SPCursorObserver
+- (void)dealloc {
+    objc_storeWeak(&window, nil);
+    [_changed release];
+    [super dealloc];
+}
+@end
+
 // Written on the main thread, read on any thread. It holds a retained reference while it is set.
 static _Atomic(void *) current;
 static id closeObserver, moveMonitor;
@@ -22,6 +37,16 @@ static BOOL (*appKitIsKey)(id, SEL), (*appKitIsMain)(id, SEL), (*appKitIsActive)
 static NSWindow *(*appKitKeyWindow)(id, SEL), *(*appKitMainWindow)(id, SEL);
 static void (*appKitOrderFront)(id, SEL, id), (*appKitMakeKeyAndOrderFront)(id, SEL, id), (*appKitOrderFrontRegardless)(id, SEL);
 static void (*appKitMakeKeyWindow)(id, SEL);
+static void (*appKitCursorSet)(id, SEL);
+static NSCursor *(*appKitCurrentCursor)(id, SEL);
+static NSPoint (*appKitMouseLocation)(id, SEL);
+static NSInteger (*appKitWindowNumberAtPoint)(id, SEL, NSPoint, NSInteger);
+static void (*appKitAddCursorRect)(id, SEL, NSRect, NSCursor *);
+// The cursor that the application set for the virtual key window, and the observations of the cursor of a window. Main thread.
+static NSCursor *virtualCursor;
+static NSHashTable *cursorObservers;
+// The cursor rects that resetCursorRects of a view adds while they are collected, or nil. Main thread.
+static NSMutableArray<NSArray *> *collectedRects;
 static NSTextInputContext *(*appKitInputContext)(id, SEL);
 // The web view that takes a key down without its input context while the key is delivered. Main thread.
 static WKWebView *keyWebView;
@@ -116,6 +141,55 @@ static void refuseOrderFrontRegardless(NSWindow *self, SEL selector) {
     appKitOrderFrontRegardless(self, selector);
 }
 
+// The pointer of the application is the injected point of the virtual key window, as the pointer of a person is for a key
+// window of an active application: +[NSEvent mouseLocation] answers it, and +[NSWindow windowNumberAtPoint:belowWindowWithWindowNumber:]
+// answers the virtual key window for it, also while other windows cover it. WebKit sets the cursor of a page only for the window
+// under that point (PageClientImpl::setCursor), so the page under the injected point sets its cursor.
+static bool injectedScreenPoint(NSPoint *screen) {
+    NSWindow *window = NSThread.isMainThread ? answering() : nil;
+    if (!window || !hasPoint) return false;
+    *screen = [window convertPointToScreen:NSMakePoint(pointX, pointY)];
+    return true;
+}
+
+static NSPoint answerMouseLocation(id self, SEL selector) {
+    NSPoint screen;
+    return injectedScreenPoint(&screen) ? screen : appKitMouseLocation(self, selector);
+}
+
+static NSInteger answerWindowNumberAtPoint(id self, SEL selector, NSPoint point, NSInteger below) {
+    NSPoint screen;
+    if (below == 0 && injectedScreenPoint(&screen) && NSEqualPoints(point, screen)) return answering().windowNumber;
+    return appKitWindowNumberAtPoint(self, selector, point, below);
+}
+
+static void cursorChanged(NSWindow *window) {
+    for (SPCursorObserver *observer in cursorObservers.allObjects) {
+        if (objc_loadWeak(&observer->window) == window) observer.changed();
+    }
+}
+
+// The cursor that the application sets while the virtual key window answers is the cursor of that window: the system cursor of a
+// person does not change, and +[NSCursor currentCursor] answers the cursor of the window.
+static void keepCursor(NSCursor *self, SEL selector) {
+    NSWindow *window = NSThread.isMainThread ? answering() : nil;
+    if (!window) { appKitCursorSet(self, selector); return; }
+    if (virtualCursor == self) return;
+    [virtualCursor release];
+    virtualCursor = [self retain];
+    cursorChanged(window);
+}
+
+static NSCursor *answerCurrentCursor(id self, SEL selector) {
+    if (NSThread.isMainThread && answering() && virtualCursor) return virtualCursor;
+    return appKitCurrentCursor(self, selector);
+}
+
+static void collectCursorRect(NSView *self, SEL selector, NSRect rect, NSCursor *cursor) {
+    if (collectedRects && cursor) { [collectedRects addObject:@[[NSValue valueWithRect:rect], cursor]]; return; }
+    appKitAddCursorRect(self, selector, rect, cursor);
+}
+
 // The input method of the system does not serve the virtual key window, so a web view that takes a key down of it answers without
 // an input context while the key is delivered. WebKit reads the input context of a web view through the method of NSView, which
 // -[WKWebView inputContext] calls too, so the replacement of that method answers every reader of it. WebKit then interprets the
@@ -143,6 +217,14 @@ static void install(void) {
         appKitOrderFrontRegardless = (void (*)(id, SEL))replace(window, @selector(orderFrontRegardless), (IMP)refuseOrderFrontRegardless);
         appKitMakeKeyWindow = (void (*)(id, SEL))replace(window, @selector(makeKeyWindow), (IMP)moveMakeKeyWindow);
         appKitInputContext = (NSTextInputContext *(*)(id, SEL))replace(NSView.class, @selector(inputContext), (IMP)answerInputContext);
+        appKitCursorSet = (void (*)(id, SEL))replace(NSCursor.class, @selector(set), (IMP)keepCursor);
+        appKitCurrentCursor = (NSCursor *(*)(id, SEL))method_setImplementation(
+            class_getClassMethod(NSCursor.class, @selector(currentCursor)), (IMP)answerCurrentCursor);
+        appKitMouseLocation = (NSPoint (*)(id, SEL))method_setImplementation(
+            class_getClassMethod(NSEvent.class, @selector(mouseLocation)), (IMP)answerMouseLocation);
+        appKitWindowNumberAtPoint = (NSInteger (*)(id, SEL, NSPoint, NSInteger))method_setImplementation(
+            class_getClassMethod(NSWindow.class, @selector(windowNumberAtPoint:belowWindowWithWindowNumber:)), (IMP)answerWindowNumberAtPoint);
+        appKitAddCursorRect = (void (*)(id, SEL, NSRect, NSCursor *))replace(NSView.class, @selector(addCursorRect:cursor:), (IMP)collectCursorRect);
         sp_observe_notification("input_virtual.app_active", SP_OBSERVE_RECORD, NSApplicationDidBecomeActiveNotification, NSApp, nil,
             ^(NSNotification *note) { if (sp_input_virtual_real_active()) sp_input_virtual_end("activation"); });
     });
@@ -180,6 +262,8 @@ void sp_input_virtual_end(const char *reason) {
     if (!window) return;
     atomic_store(&current, NULL);
     hasPoint = false;
+    [virtualCursor release];
+    virtualCursor = nil;
     [NSNotificationCenter.defaultCenter removeObserver:closeObserver];
     [closeObserver release];
     closeObserver = nil;
@@ -209,6 +293,76 @@ bool sp_input_virtual_point(void *window, double *x, double *y) {
     *x = pointX;
     *y = pointY;
     return true;
+}
+
+void sp_input_virtual_real_mouse_location(double *x, double *y) {
+    NSPoint at = appKitMouseLocation ? appKitMouseLocation(NSEvent.class, @selector(mouseLocation)) : NSEvent.mouseLocation;
+    *x = at.x;
+    *y = at.y;
+}
+
+bool sp_input_virtual_cursor_rect(void *handle, double x, double y) {
+    NSCAssert(NSThread.isMainThread, @"the virtual key window belongs to the main thread");
+    NSWindow *window = (__bridge NSWindow *)handle;
+    if (!sp_input_virtual_is(handle) || !window.contentView) return false;
+    NSPoint point = NSMakePoint(x, y);
+    NSView *content = window.contentView;
+    NSView *hit = [content hitTest:content.superview ? [content.superview convertPoint:point fromView:nil] : point];
+    for (NSView *view = hit; view; view = view == content ? nil : view.superview) {
+        collectedRects = [NSMutableArray array];
+        [view resetCursorRects];
+        NSArray<NSArray *> *rects = collectedRects;
+        collectedRects = nil;
+        NSPoint local = [view convertPoint:point fromView:nil];
+        for (NSArray *entry in rects.reverseObjectEnumerator) {
+            if (!NSPointInRect(local, [entry[0] rectValue])) continue;
+            [(NSCursor *)entry[1] set];
+            return true;
+        }
+    }
+    return false;
+}
+
+// The names of the standard cursors, which a cursor matches by identity or by its image.
+static NSString *cursorName(NSCursor *cursor) {
+    NSMutableDictionary<NSString *, NSCursor *> *named = [NSMutableDictionary dictionaryWithDictionary:@{
+        @"arrow": NSCursor.arrowCursor, @"pointingHand": NSCursor.pointingHandCursor, @"iBeam": NSCursor.IBeamCursor,
+        @"openHand": NSCursor.openHandCursor, @"closedHand": NSCursor.closedHandCursor, @"crosshair": NSCursor.crosshairCursor,
+        @"resizeLeftRight": NSCursor.resizeLeftRightCursor, @"resizeUpDown": NSCursor.resizeUpDownCursor,
+        @"operationNotAllowed": NSCursor.operationNotAllowedCursor,
+    }];
+    if (@available(macOS 15.0, *)) {
+        named[@"columnResize"] = NSCursor.columnResizeCursor;
+        named[@"rowResize"] = NSCursor.rowResizeCursor;
+    }
+    for (NSString *name in named) if (named[name] == cursor) return name;
+    NSData *image = cursor.image.TIFFRepresentation;
+    for (NSString *name in named) if ([named[name].image.TIFFRepresentation isEqualToData:image]) return name;
+    return @"other";
+}
+
+const char *sp_input_virtual_cursor(void *window) {
+    NSCAssert(NSThread.isMainThread, @"the virtual key window belongs to the main thread");
+    return sp_input_virtual_is(window) && virtualCursor ? cursorName(virtualCursor).UTF8String : NULL;
+}
+
+void *sp_input_virtual_observe_cursor(void *handle, void (^changed)(void)) {
+    NSCAssert(NSThread.isMainThread, @"the virtual key window belongs to the main thread");
+    if (!handle || !changed) return NULL;
+    if (!cursorObservers) cursorObservers = [[NSHashTable alloc] initWithOptions:NSPointerFunctionsStrongMemory capacity:4];
+    SPCursorObserver *observer = [[SPCursorObserver alloc] init];
+    objc_storeWeak(&observer->window, (__bridge NSWindow *)handle);
+    observer.changed = changed;
+    [cursorObservers addObject:observer];
+    return observer;
+}
+
+void sp_input_virtual_end_cursor_observation(void *observation) {
+    NSCAssert(NSThread.isMainThread, @"the virtual key window belongs to the main thread");
+    SPCursorObserver *observer = (SPCursorObserver *)observation;
+    if (!observer) return;
+    [cursorObservers removeObject:observer];
+    [observer release];
 }
 
 // The view that takes the text of a key of window: the nearest view from the first responder up that is a text input client.

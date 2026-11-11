@@ -365,6 +365,12 @@ type Platform interface {
 	// EndResponderObservation ends an observation of ObserveResponder once, so its changed is not called again. It does not use
 	// the window, so it may run after the window was released. Call it on the UI thread.
 	EndResponderObservation(observation unsafe.Pointer)
+	// ObserveCursor calls changed on the UI thread each time the cursor that the application set for the window as the virtual
+	// key window changes (docs/spec/exposure.md#virtual-key-window), and returns the observation. Call it on the UI thread.
+	ObserveCursor(window Window, changed func()) (unsafe.Pointer, error)
+	// EndCursorObservation ends an observation of ObserveCursor once, so its changed is not called again. It does not use the
+	// window, so it may run after the window was released. Call it on the UI thread.
+	EndCursorObservation(observation unsafe.Pointer)
 
 	// TitlebarHeight returns the title bar height (pt) of the window. It is 0 while the title bar is not shown, as in full screen, and
 	// it returns an error when the window has no buttons. Call it on the UI thread.

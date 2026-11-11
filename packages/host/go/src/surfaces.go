@@ -480,6 +480,9 @@ type Surfaces struct {
 	// responderObservation is the first responder observation of the window, which close ends. It is read and changed only on
 	// the UI thread.
 	responderObservation unsafe.Pointer
+	// cursorObservation is the observation of the cursor of the window, which close ends. It is read and changed only on the UI
+	// thread.
+	cursorObservation unsafe.Pointer
 	// readied holds a channel for each reload that waits for the new page: WindowReady sends nil, and the close of the window and a
 	// start of the new page that fails send the error that ends the reload. Host.mu protects it.
 	readied []chan error

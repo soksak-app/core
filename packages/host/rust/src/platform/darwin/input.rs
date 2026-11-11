@@ -233,6 +233,33 @@ pub fn key(window: Handle, key: &Key) -> Result<Delivery, String> {
     })
 }
 
+/// Calls changed whenever the cursor that the application set for the window as the virtual key window changes, and returns the
+/// observation that end_cursor_observation ends.
+pub fn observe_cursor(window: Handle, changed: Box<dyn Fn()>) -> Result<Handle, String> {
+    unsafe extern "C" {
+        fn sp_input_virtual_observe_cursor(
+            window: *mut c_void,
+            changed: &block2::Block<dyn Fn()>,
+        ) -> *mut c_void;
+    }
+    let changed = RcBlock::new(changed);
+    let observation = unsafe { sp_input_virtual_observe_cursor(window as *mut c_void, &changed) };
+    if observation.is_null() {
+        Err("the cursor of the window cannot be observed".into())
+    } else {
+        Ok(observation as Handle)
+    }
+}
+
+/// Ends the cursor observation that observe_cursor returned. It does not use the window, so it may run after AppKit released
+/// the window.
+pub fn end_cursor_observation(observation: Handle) {
+    unsafe extern "C" {
+        fn sp_input_virtual_end_cursor_observation(observation: *mut c_void);
+    }
+    unsafe { sp_input_virtual_end_cursor_observation(observation as *mut c_void) }
+}
+
 /// Gives one step of a composition to the text input client of the key responder of the window and returns whether it was
 /// delivered. Call it on the main thread. A text that contains a NUL character returns an error.
 pub fn text(window: Handle, text: &TextInput) -> Result<Delivery, String> {

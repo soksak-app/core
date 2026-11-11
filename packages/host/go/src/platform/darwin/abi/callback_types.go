@@ -28,6 +28,7 @@ type Callbacks struct {
 	QuitRequest               func(int32, *byte)
 	NativeUiRun               func(uintptr)
 	NativeResponderChanged    func(uintptr)
+	NativeCursorChanged       func(uintptr)
 	NativeFullscreenDone      func(uintptr, int32, *byte)
 	SurfacePressed            func(uintptr, unsafe.Pointer)
 	SurfacePoint              func(uintptr, int32, float64, float64)
@@ -48,4 +49,4 @@ type Callbacks struct {
 }
 
 // CallbackTable holds process-lifetime function addresses in the native header's field order.
-type CallbackTable [37]uintptr
+type CallbackTable [38]uintptr

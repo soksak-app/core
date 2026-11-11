@@ -56,6 +56,12 @@ pub fn observe_responder(_window: Handle, _changed: Box<dyn Fn()>) -> Result<Han
 
 pub fn end_responder_observation(_observation: Handle) {}
 
+pub fn observe_cursor(_window: Handle, _changed: Box<dyn Fn()>) -> Result<Handle, String> {
+    missing("cursor observation")
+}
+
+pub fn end_cursor_observation(_observation: Handle) {}
+
 pub fn titlebar_height(_window: Handle) -> Result<f64, String> {
     missing("window title bar")
 }
