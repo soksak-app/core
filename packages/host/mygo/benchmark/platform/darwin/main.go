@@ -5,6 +5,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -18,11 +19,37 @@ import (
 	"github.com/soksak-app/core/packages/host/mygo/benchmark"
 )
 
-// frameworkWindow resizes the window on the main thread.
-type frameworkWindow struct{ window *mygo.Window }
+// frameworkWindow resizes the window on the main thread and waits until the window has painted at the new size.
+type frameworkWindow struct {
+	window  *mygo.Window
+	painted <-chan [2]int
+	closed  <-chan struct{}
+}
 
-func (w frameworkWindow) Resize(width, height int) {
+func (w frameworkWindow) Resize(width, height int) error {
 	mygo.RunOnMain(func() { w.window.SetSize(width, height) })
+	want := [2]int{width, height}
+	for {
+		select {
+		case size := <-w.painted:
+			if size == want {
+				return nil
+			}
+		case <-w.closed:
+			return errors.New("the window closed before it painted at the new size")
+		}
+	}
+}
+
+// reportPaint sends the size of each paint to painted. A paint replaces an unread one, so the newest size always waits there.
+func reportPaint(painted chan [2]int) func(_ *ui.Painter, r ui.Rect) {
+	return func(_ *ui.Painter, r ui.Rect) {
+		select {
+		case <-painted:
+		default:
+		}
+		painted <- [2]int{int(r.W), int(r.H)}
+	}
 }
 
 // ownProcess reads this process.
@@ -54,13 +81,18 @@ func main() {
 	mygo.App.OnWindowAllClosed(func() {})
 	var failure error
 	mygo.App.WhenReady(func() {
+		painted := make(chan [2]int, 1)
+		closed := make(chan struct{})
 		window := mygo.NewWindow(mygo.WindowOptions{
 			Title: "empty", Width: benchmark.Width, Height: benchmark.Height,
-			Content: ui.View(func(*ui.Context) {}),
+			Content: ui.View(func(c *ui.Context) {
+				ui.Box(c).Grow(1).Draw(reportPaint(painted))
+			}),
 		})
+		window.OnClosed(func() { close(closed) })
 		go func() {
 			defer mygo.App.Quit()
-			report, err := benchmark.Measure(frameworkWindow{window}, ownProcess{}, options, time.Sleep)
+			report, err := benchmark.Measure(frameworkWindow{window: window, painted: painted, closed: closed}, ownProcess{}, options, time.Sleep)
 			if err != nil {
 				failure = err
 				return

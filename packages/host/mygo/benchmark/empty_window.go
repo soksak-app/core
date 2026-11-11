@@ -21,8 +21,6 @@ const (
 	// resizeSteps is the number of sizes of a resize, and resizePoints the width that it takes from the window at its middle.
 	resizeSteps  = 60
 	resizePoints = 300
-	// resizeFrame is the time between two sizes of a resize.
-	resizeFrame = 16 * time.Millisecond
 	// settle is the time after a resize at which the benchmark reads the footprint.
 	settle = 3 * time.Second
 )
@@ -53,8 +51,8 @@ func ParseArguments(args []string) (Options, error) {
 
 // Window is the window that the benchmark measures.
 type Window interface {
-	// Resize sets the size of the window in points.
-	Resize(width, height int)
+	// Resize sets the size of the window in points and returns after the window has painted at that size.
+	Resize(width, height int) error
 }
 
 // Process reads the process that shows the window.
@@ -95,8 +93,9 @@ func Measure(window Window, process Process, options Options, sleep func(time.Du
 	}
 	report.CPU = (after - before).Seconds()
 	for step := 1; step <= resizeSteps; step++ {
-		window.Resize(resizedWidth(step), Height)
-		sleep(resizeFrame)
+		if err := window.Resize(resizedWidth(step), Height); err != nil {
+			return Report{}, err
+		}
 		if step == resizeSteps/2 {
 			if report.ResizeFootprint, err = process.Footprint(); err != nil {
 				return Report{}, err
