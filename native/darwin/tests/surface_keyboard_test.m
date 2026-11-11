@@ -1,6 +1,7 @@
 // The keyboard of a window follows the active surface of the card with the focus ring (docs/spec/native-surfaces.md#keyboard-of-a-surface).
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
+#import <objc/message.h>
 #import "host_api_webview.h"
 #import "image_region.h"
 #import "input_inject.h"
@@ -78,6 +79,19 @@ static void typeKeys(NSWindow *window, const char *text) {
 }
 
 // A left press and its release on the workbench of window, the left half of its content.
+// A responder named by what it is to the page and the workbench of a window: the page, the workbench, a view inside one of
+// them, or its class and address.
+static NSString *identify(NSResponder *responder, NSView *page, NSView *workbench) {
+    if (!responder) return @"none";
+    if (responder == page) return [NSString stringWithFormat:@"the page %p", responder];
+    if (responder == workbench) return [NSString stringWithFormat:@"the workbench %p", responder];
+    if ([responder isKindOfClass:NSView.class] && [(NSView *)responder isDescendantOf:page])
+        return [NSString stringWithFormat:@"%@ %p inside the page", responder.class, responder];
+    if ([responder isKindOfClass:NSView.class] && [(NSView *)responder isDescendantOf:workbench])
+        return [NSString stringWithFormat:@"%@ %p inside the workbench", responder.class, responder];
+    return [NSString stringWithFormat:@"%@ %p", responder.class, responder];
+}
+
 static void releaseOnWorkbench(NSWindow *window) {
     check(sp_input_pointer(window, 200, 250, 1, 0, 0, 0) == SP_INPUT_DELIVERED, "a press on the workbench is delivered");
     check(sp_input_pointer(window, 200, 250, 3, 0, 0, 0) == SP_INPUT_DELIVERED, "its release is delivered");
@@ -597,6 +611,8 @@ int main(void) { @autoreleasepool {
     NSResponder *pressHolder = holding.firstResponder;
     NSView *frame = holding.contentView.superview;
     NSView *appKitHit = [frame hitTest:[frame convertPoint:NSMakePoint(600, holding.contentView.bounds.size.height - 250) fromView:nil]];
+    // The view that AppKit took as the target of the last left press of the window.
+    NSView *lastLeftHit = ((NSView *(*)(id, SEL))objc_msgSend)(holding, NSSelectorFromString(@"_lastLeftHit"));
     sp_input_pointer(holding, 600, 250, 3, 0, 0, 0);
     sp_window_keys_decided(holding);
     runQueuedEvents();
@@ -605,9 +621,12 @@ int main(void) { @autoreleasepool {
     NSResponder *pressedHolder = holding.firstResponder;
     check([pressedHolder isKindOfClass:NSView.class] && [(NSView *)pressedHolder isDescendantOf:heldPage],
         [NSString stringWithFormat:@"the press after the release on the workbench gives the keyboard to the page it reached (holder %@ after the "
-            @"press, %@ after the release; view at the point %@; page frame %@, accepts first responder %d, needs a panel %d)",
-            pressHolder.class, pressedHolder.class, appKitHit.class, NSStringFromRect([heldPage convertRect:heldPage.bounds toView:nil]),
-            heldPage.acceptsFirstResponder, heldPage.needsPanelToBecomeKey].UTF8String);
+            @"press, %@ after the release; view at the point %@; last left hit %@; page %p, workbench %p; page frame %@, accepts first "
+            @"responder %d, needs a panel %d)",
+            identify(pressHolder, heldPage, holdingMain), identify(pressedHolder, heldPage, holdingMain),
+            identify(appKitHit, heldPage, holdingMain), identify(lastLeftHit, heldPage, holdingMain), heldPage, holdingMain,
+            NSStringFromRect([heldPage convertRect:heldPage.bounds toView:nil]), heldPage.acceptsFirstResponder,
+            heldPage.needsPanelToBecomeKey].UTF8String);
     [holding makeFirstResponder:(NSResponder *)heldRegion];
 
     // A press of the window ends the wait: the keys that waited reach the view that holds the keyboard first, in their order, and
