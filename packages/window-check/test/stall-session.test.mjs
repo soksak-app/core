@@ -46,7 +46,7 @@ function stalledSession(t) {
   const client = {
     endpoint: { pid: 20 },
     request(method) {
-      if (method === "diagnostics.stall.dump") return Promise.resolve({ boot: "b1", seq: 4 });
+      if (method === "diagnostics.stall.dump") return Promise.resolve({ boot: "b1", seq: 4, running: "wait_presented 3.0s" });
       return new Promise((resolve) => { answer = resolve; });
     },
   };
@@ -84,7 +84,7 @@ test("the session finish waits for a stall sample that a request answered after 
   const logs = join(session.app.configDir, "logs").replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
   assert.deepEqual(diagnostics.filter((line) => line.startsWith("stall sample")).map((line) => new RegExp(
     `^stall sample: probe host\\.window\\.reload still pending after 3000 ms; the host's threads at that moment: ` +
-    `${logs}/stall-20-\\d+\\.txt, ${logs}/stall-20-\\d+-page-21\\.txt; host\\.stall\\.dump at b1:4$`).test(line)), [true]);
+    `${logs}/stall-20-\\d+\\.txt, ${logs}/stall-20-\\d+-page-21\\.txt; host\\.stall\\.dump at b1:4; running host calls of main: wait_presented 3\\.0s$`).test(line)), [true]);
 });
 
 test("the session finish fails with the text of a stall sample that failed", async (t) => {

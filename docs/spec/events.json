@@ -4104,13 +4104,23 @@
         "properties": {
           "path": {
             "type": "string"
+          },
+          "running": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "goroutines": {
+            "type": "string"
           }
         },
         "required": [
-          "path"
+          "path",
+          "running"
         ]
       },
-      "description": "A host that did not answer has its threads sampled into the file at path."
+      "description": "A host that did not answer has its threads sampled into the file at path; running names the host calls of each window that have not returned, and goroutines is the file of the goroutine stacks of a Go host."
     },
     "host.crash.found": {
       "layer": "host",
