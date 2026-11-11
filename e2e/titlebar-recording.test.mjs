@@ -8,7 +8,7 @@ import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { missingPoses } from "./card-panel-checks.mjs";
-import { readDisplayRefreshes } from "../packages/window-check/display-refresh.mjs";
+import { readDisplayRefreshes } from "@soksak/window-check/display-refresh.mjs";
 import { TOLERANCE, measureTitlebar, misaligned, rowHeight } from "./titlebar-measurement.mjs";
 
 // The scale steps that rise from 1 to 3 (docs/spec/text-size.md).
@@ -22,7 +22,7 @@ async function setFrame(s, factor) {
   await s.presented();
 }
 
-/** The button rectangle of the window to record and the refresh rate of the display. */
+/** The button rectangle of the window to record. */
 async function recordable(s) {
   const window = await s.get("host.window");
   assert.equal(window.controls.length, 3, `the window reports ${window.controls.length} buttons`);

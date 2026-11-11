@@ -6,7 +6,7 @@ import { fresh, joinedFailure } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { recordedEdges } from "./sidebar-gesture-recording.mjs";
 import { missingPoses } from "./card-panel-checks.mjs";
-import { readDisplayRefreshes } from "../packages/window-check/display-refresh.mjs";
+import { readDisplayRefreshes } from "@soksak/window-check/display-refresh.mjs";
 
 const sides = ["top", "bottom", "left", "right"];
 const sign = (side) => (side === "top" || side === "left" ? 1 : -1);

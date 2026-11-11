@@ -1,6 +1,6 @@
 // Verdicts of the card panel window check. test/card-panel-checks.test.mjs checks that the verdicts reject invalid input.
 import assert from "node:assert/strict";
-import { refreshAfter } from "../packages/window-check/display-refresh.mjs";
+import { refreshAfter } from "@soksak/window-check/display-refresh.mjs";
 
 /**
  * Display states that are missing from the recording. frames are { time, edges } (display time in ms, boundary coordinates measured in that frame) and poses are

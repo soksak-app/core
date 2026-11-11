@@ -80,7 +80,7 @@ test("a third-stage collection failure preserves the valid captured threshold fa
   assert.equal(judgments, 1, "a valid capture must be judged even when third-stage collection fails");
 });
 
-/** Frame times, lag and refresh rate of a structurally valid captured drag that exceeds the unchanged cadence and latency targets. */
+/** Frame times, lag and observed display refreshes of a structurally valid captured drag that exceeds the unchanged cadence and latency targets. */
 const SLOW_DRAG = Object.freeze({ times: [0, 36, 72], lag: { lag: 100, time: 72, median: 40, medianTime: 36, p90: 70, p90Time: 72 }, refreshes: { times: [0], periods: [1000 / 60] } });
 /** A captured drag whose assertPerformance applies assertDragPerformance to SLOW_DRAG and records each error it throws in `judged`. */
 function slowCapture(judged) {
