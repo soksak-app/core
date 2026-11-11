@@ -409,6 +409,24 @@ int main(void) { @autoreleasepool {
     check(monitored == 3, [NSString stringWithFormat:@"a local monitor sees the press, the release and the key of a virtual key window (%lu)", (unsigned long)monitored]);
     [NSEvent removeMonitor:monitor];
 
+    // Measurement, without judging: a named key of input.key while input.text holds a composition in the page. The input method
+    // of a person takes such a key itself during a composition; this records what the page receives from it instead.
+    evaluate(view, @"window.seen=[];window.ups=0;for(const t of ['keydown','beforeinput','input','compositionend','keyup'])"
+        "addEventListener(t,e=>{seen.push(t+':'+(e.key||e.data||e.inputType||''));if(t==='keyup')ups++;},true);null");
+    for (NSString *key in @[@"Backspace", @"Escape", @"Space"]) {
+        evaluate(view, @"document.getElementById('field').value='a';seen.length=0;ups=0;null");
+        sp_input_text(window, SP_INPUT_TEXT_MARK, "\xed\x95\x98", 1, 0, -1, 0);
+        awaitPage(view, @"the field shows the marked text 하", @"input", @"document.getElementById('field').value === 'a\ud558'");
+        evaluate(view, @"seen.length=0;null");
+        BOOL delivered = sp_input_key(window, key.UTF8String, NULL, 0, true) == SP_INPUT_DELIVERED
+            && sp_input_key(window, key.UTF8String, NULL, 0, false) == SP_INPUT_DELIVERED;
+        awaitPage(view, [NSString stringWithFormat:@"the key up of %@ reaches the page", key], @"keyup", @"ups >= 1");
+        printf("MEASURE: input.key %s during the composition 하 of input.text: delivered %d, field '%s', events %s\n", key.UTF8String,
+            delivered, [evaluate(view, @"document.getElementById('field').value") description].UTF8String,
+            [[evaluate(view, @"seen") componentsJoinedByString:@" "] UTF8String]);
+        sp_input_text(window, SP_INPUT_TEXT_UNMARK, NULL, 0, 0, -1, 0);
+    }
+
     // A real button does not enter a page event, and does not refuse a press.
     personButtons = 1;
     evaluate(view, @"events.length=0;null");
