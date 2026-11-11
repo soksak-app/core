@@ -364,6 +364,7 @@ NATIVE_TESTS = observe_test \
   input_pointers_test \
   input_panels_test \
   input_panel_service_test \
+  input_panel_access_test \
   input_reference_test \
   mouse_buttons_test \
   webview_input_receipts_test \
