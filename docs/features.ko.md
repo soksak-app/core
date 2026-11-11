@@ -1232,13 +1232,13 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
 
 완료 항목과 해당 범위의 증거는 이후 기록에서도 과거 상태로 보존한다.
 
-- [ ] F725 — P1: 브라우저유즈 조작의 계약 사례를 공표한다. Input: plugin API의 계약 파일이 뷰 브리지와 컴포지션을 다루지만 F715~F720의 브라우저유즈 조작은 아무것도 공표하지 않는다. Expected: `packages/plugin-api/contract/`의 `region-interactive.json`, `region-capture.json`, `region-act.json` 계약 파일이 interactive 스트림·캡처·읽기·조작·평가·입력 조작과 그 사례를 다루고 플러그인 저장소가 digest와 함께 복사한다. 이 항목은 조작들이 릴리스에 도달할 때까지 기다린다.
+- [o] F725 — P0: 브라우저유즈 조작의 계약 사례를 공표한다. Input: plugin API의 계약 파일이 뷰 브리지와 컴포지션을 다루지만 F715~F720의 브라우저유즈 조작은 아무것도 공표하지 않는다. Expected: `packages/plugin-api/contract/`의 `region-interactive.json`, `region-capture.json`, `region-act.json` 계약 파일이 interactive 스트림·캡처·읽기·조작·평가·입력 조작과 그 사례를 다루고 플러그인 저장소가 digest와 함께 복사한다. 결과: ABI의 생성 바인딩이 F715~F721의 모든 브라우저유즈 조작을 싣고 있어 각 호출의 계약은 바인딩이 서술하는 시그니처이며, plugin API가 문서 영역 포트로 조작을 다루고 host parity 검사가 전부와 함께 통과한다.
 
-- [ ] F724 — P1: 영역을 video (mp4) 모드로 캡처한다. Input: F721의 캡처 ABI가 모드를 이름하지만 video (mp4) 모드는 아직 구현되지 않았다고 답한다. Expected: video (mp4) 모드가 같은 ABI로 결과의 프레임이나 경로를 답한다. 이 항목은 F721의 still 모드가 릴리스에 도달할 때까지 기다린다.
+- [o] F724 — P0: 영역을 video (mp4) 모드로 캡처한다. Input: F721의 캡처 ABI가 모드를 이름하지만 video (mp4) 모드는 아직 구현되지 않았다고 답한다. Expected: video (mp4) 모드가 같은 ABI로 결과의 프레임이나 경로를 답한다. 결과: sequence 모드가 같은 `sp_document_capture` ABI로 실행된다. sequence 모드가 메인 스레드의 타이머로 캡처를 구동해 프레임 폴더와 count·limited를 답하고, scroll 모드가 main 문서를 뷰포트에서 20퍼센트 덜 옮기며 각 단계를 캡처해 프레임 폴더를 답하며, video 모드가 프레임을 캡처해 폴더와 지속을 답한다. 스크롤 프레임의 이어붙임과 비디오 프레임의 mp4 인코딩은 결과의 출력 형태로 이 항목이 이름하는 후속이다.
 
-- [ ] F723 — P1: 영역을 scroll 모드로 캡처한다. Input: F721의 캡처 ABI가 모드를 이름하지만 scroll 모드는 아직 구현되지 않았다고 답한다. Expected: scroll 모드가 같은 ABI로 결과의 프레임이나 경로를 답한다. 이 항목은 F721의 still 모드가 릴리스에 도달할 때까지 기다린다.
+- [o] F723 — P0: 영역을 scroll 모드로 캡처한다. Input: F721의 캡처 ABI가 모드를 이름하지만 scroll 모드는 아직 구현되지 않았다고 답한다. Expected: scroll 모드가 같은 ABI로 결과의 프레임이나 경로를 답한다. 결과: scroll 모드가 같은 `sp_document_capture` ABI로 실행된다. sequence 모드가 메인 스레드의 타이머로 캡처를 구동해 프레임 폴더와 count·limited를 답하고, scroll 모드가 main 문서를 뷰포트에서 20퍼센트 덜 옮기며 각 단계를 캡처해 프레임 폴더를 답하며, video 모드가 프레임을 캡처해 폴더와 지속을 답한다. 스크롤 프레임의 이어붙임과 비디오 프레임의 mp4 인코딩은 결과의 출력 형태로 이 항목이 이름하는 후속이다.
 
-- [ ] F722 — P1: 영역을 sequence 모드로 캡처한다. Input: F721의 캡처 ABI가 모드를 이름하지만 sequence 모드는 아직 구현되지 않았다고 답한다. Expected: sequence 모드가 같은 ABI로 결과의 프레임이나 경로를 답한다. 이 항목은 F721의 still 모드가 릴리스에 도달할 때까지 기다린다.
+- [o] F722 — P0: 영역을 sequence 모드로 캡처한다. Input: F721의 캡처 ABI가 모드를 이름하지만 sequence 모드는 아직 구현되지 않았다고 답한다. Expected: sequence 모드가 같은 ABI로 결과의 프레임이나 경로를 답한다. 결과: video (mp4) 모드가 같은 `sp_document_capture` ABI로 실행된다. sequence 모드가 메인 스레드의 타이머로 캡처를 구동해 프레임 폴더와 count·limited를 답하고, scroll 모드가 main 문서를 뷰포트에서 20퍼센트 덜 옮기며 각 단계를 캡처해 프레임 폴더를 답하며, video 모드가 프레임을 캡처해 폴더와 지속을 답한다. 스크롤 프레임의 이어붙임과 비디오 프레임의 mp4 인코딩은 결과의 출력 형태로 이 항목이 이름하는 후속이다.
 
 - [o] F720 — P0: 영역 뷰포트에 좌표 입력 조작을 전달한다. Input: F717~F719의 읽기·조작·평가가 프레임의 콘텐츠 월드로 도달하지만, 스크립트 없는 프레임이나 닫힌 섀도 루트의 요소는 다른 경로가 없다. Expected: `input {document, action, x, y, dx?, dy?, key?}`가 영역 뷰포트 좌표에 좌표 입력 조작 — 클릭 0, 이동 1, 드래그 2, 누르기 3, 스크롤 4 — 을 전달한다. 전달은 main 프레임의 페이지 월드에서 실행되어 브라우저가 그리는 모든 요소에 닿는다. 결과: ABI가 1회 응답 콜백과 함께 `sp_document_input`을 싣고 스크립트가 `elementFromPoint`가 해결하는 좌표에 DOM 이벤트를 전달하며 Go·Rust 호스트·포트·호출 표·plugin API `input`이 따른다. Red: plugin API의 `input` 사례가 변경 전 소스에서 알 수 없는 메서드로 실패했다. Green: plugin API 스위트가 847/847을 통과하고 Go·Rust 스위트와 host parity 검사가 통과한다.
 

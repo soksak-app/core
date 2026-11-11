@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F722 to F724: The `sequence`, `scroll` and `video` capture modes run through the same `sp_document_capture` ABI: the sequence mode drives the capture on the main-thread timer and answers the frames folder, the scroll mode steps the main document and snapshots each step, and the video mode captures the frames and answers the folder with the duration.
 - F720: `input {document, action, x, y, dx?, dy?, key?}` dispatches one coordinate input action — click, move, drag, press or scroll — at the viewport coordinates of the region in the page world of the main frame, reaching every element that the browser draws, including frames without scripts and closed shadow roots.
 - F719: `evaluate {document, frame, js, await?}` evaluates a JavaScript expression in the content world of a frame under the `evaluate` approval gate: the first reply names the origin, the grant answers the value, and the origin must stay the same between the two replies.
 - F718: `act {document, frame, ref, action, value?}` runs one narrow action — click, fill with the absolute value, press, select — on an operable element of a frame under the act approval gate: a submit control and a form field of an origin without the `act` grant answer a refusal with a request identifier, and the origin of the act must stay the same between its probe and its run.

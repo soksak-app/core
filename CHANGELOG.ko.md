@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F722~F724: `sequence`, `scroll`, `video` 캡처 모드가 같은 `sp_document_capture` ABI로 실행된다. sequence 모드가 메인 스레드 타이머로 캡처를 구동해 프레임 폴더를 답하고, scroll 모드가 main 문서를 단계별로 옮기며 캡처하고, video 모드가 프레임을 캡처해 폴더와 지속을 답한다.
 - F720: `input {document, action, x, y, dx?, dy?, key?}`가 영역 뷰포트 좌표에 좌표 입력 조작 — click, move, drag, press, scroll — 을 main 프레임의 페이지 월드에서 전달하여 스크립트 없는 프레임과 닫힌 섀도 루트를 포함해 브라우저가 그리는 모든 요소에 닿는다.
 - F719: `evaluate {document, frame, js, await?}`가 `evaluate` 승인 게이트 아래에서 프레임의 콘텐츠 월드에서 JavaScript 식을 평가한다. 첫 답은 오리진을 이름하고 승인이 값을 답하며 두 답의 오리진이 같아야 한다.
 - F718: `act {document, frame, ref, action, value?}`가 `act` 승인 게이트 아래에서 프레임의 조작 가능 요소에 좁은 조작을 실행한다 — 클릭(click), 절대값 채우기(fill), 누르기(press), 선택(select). 제출 컨트롤과 `act` 승인 없는 오리진의 폼 필드는 요청 식별자와 함께 거부로 답하고, 조작의 오리진은 탐침과 실행 사이 같아야 한다. 제출 컨트롤과 act 승인 없는 오리진의 폼 필드는 요청 식별자와 함께 거부로 답하고, 조작의 오리진은 탐침과 실행 사이 같아야 한다.

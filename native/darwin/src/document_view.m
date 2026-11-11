@@ -2176,43 +2176,142 @@ void sp_document_capture(void *handle, int mode, int every_ms, int count, int fo
         reply(context, "{\"error\":\"the document region is closed\"}");
         return;
     }
-    if (mode != 0) {
-        reply(context, "{\"error\":\"the capture mode is not implemented yet\"}");
+    static unsigned long long nextCapture = 0;
+    nextCapture += 1;
+    NSString *folder = [NSString stringWithFormat:@"aside-captures/capture-%llu", nextCapture];
+    NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent:folder];
+    [[NSFileManager defaultManager] createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
+
+    // One snapshot of the region view, saved as a PNG. The block returns the path or nil.
+    void (^saveSnapshot)(void (^)(NSString *path, NSString *error)) = ^(void (^done)(NSString *, NSString *)) {
+        WKSnapshotConfiguration *config = [[WKSnapshotConfiguration alloc] init];
+        config.rect = view.bounds;
+        [view takeSnapshotWithConfiguration:config completionHandler:^(NSImage *image, NSError *error) {
+            if (error || !image) {
+                done(nil, error.localizedDescription ?: @"the snapshot is empty");
+                return;
+            }
+            NSBitmapImageRep *rep = [NSBitmapImageRep imageRepWithData:[image TIFFRepresentation]];
+            NSData *png = [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
+            if (!png.length) {
+                done(nil, @"the snapshot has no pixels");
+                return;
+            }
+            static unsigned long long nextFrame = 0;
+            nextFrame += 1;
+            NSString *name = [NSString stringWithFormat:@"frame-%llu.png", nextFrame];
+            NSString *path = [dir stringByAppendingPathComponent:name];
+            if (![png writeToFile:path atomically:YES]) {
+                done(nil, @"the capture file was not written");
+                return;
+            }
+            done(path, nil);
+        }];
+    };
+
+    if (mode == 0) {
+        // Still: one snapshot, one reply.
+        saveSnapshot(^(NSString *path, NSString *error) {
+            if (error) {
+                reply(context, [[NSString stringWithFormat:@"{\"error\":\"%@\"}", error] UTF8String]);
+                return;
+            }
+            reply(context, [[NSString stringWithFormat:@"{\"path\":\"%@\"}", path] UTF8String]);
+        });
         return;
     }
-    // The still capture takes the snapshot of the region view; the zoom and the scale of the surface are part of it.
-    WKSnapshotConfiguration *config = [[WKSnapshotConfiguration alloc] init];
-    config.rect = view.bounds;
-    [view takeSnapshotWithConfiguration:config completionHandler:^(NSImage *image, NSError *error) {
-        if (error || !image) {
-            reply(context, [[NSString stringWithFormat:@"{\"error\":\"%@\"}",
-                error.localizedDescription ?: @"the snapshot is empty"] UTF8String]);
-            return;
-        }
-        // The capture lands in <config-dir>/captures/<id>/capture.png of the data store of the region.
-        NSBitmapImageRep *rep = [NSBitmapImageRep imageRepWithData:[image TIFFRepresentation]];
-        NSData *png = [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
-        if (!png.length) {
-            reply(context, "{\"error\":\"the snapshot has no pixels\"}");
-            return;
-        }
-        static unsigned long long nextCapture = 0;
-        nextCapture += 1;
-        NSString *folder = [NSString stringWithFormat:@"aside-captures/capture-%llu", nextCapture];
-        NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent:folder];
-        NSError *make = nil;
-        [[NSFileManager defaultManager] createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:&make];
-        if (make) {
-            reply(context, [[NSString stringWithFormat:@"{\"error\":\"%@\"}", make.localizedDescription] UTF8String]);
-            return;
-        }
-        NSString *path = [dir stringByAppendingPathComponent:@"capture.png"];
-        if (![png writeToFile:path atomically:YES]) {
-            reply(context, "{\"error\":\"the capture file was not written\"}");
-            return;
-        }
-        reply(context, [[NSString stringWithFormat:@"{\"path\":\"%@\"}", path] UTF8String]);
-    }];
+    if (mode == 1 || mode == 3) {
+        // Sequence and video: the timer of the main thread drives the capture; the duration or the count stops it.
+        int limit = count > 0 ? count : (for_ms > 0 ? for_ms / (every_ms > 0 ? every_ms : 100) : 1);
+        __block int taken = 0;
+        __block BOOL stopped = NO;
+        __block void (^tick)(void) = nil;
+        NSMutableSet *paths = [NSMutableSet set];
+        void (^finish)(void) = ^{
+            if (stopped) return;
+            stopped = YES;
+            tick = nil;
+            if (mode == 1) {
+                reply(context, [[NSString stringWithFormat:
+                    @"{\"frames\":\"%@\",\"count\":%d,\"limited\":%@}",
+                    dir, taken, taken >= limit ? @"true" : @"false"] UTF8String]);
+            } else {
+                // Video: the frames folder is the answer; the encoding of AVAssetWriter is the follow-up F724.
+                reply(context, [[NSString stringWithFormat:
+                    @"{\"path\":\"%@\",\"frames\":\"%@\",\"count\":%d,\"durationMs\":%d}",
+                    dir, dir, taken, taken * every_ms] UTF8String]);
+            }
+        };
+        tick = ^{
+            if (stopped || taken >= limit) {
+                finish();
+                return;
+            }
+            saveSnapshot(^(NSString *path, NSString *error) {
+                if (stopped) return;
+                if (error) {
+                    finish();
+                    return;
+                }
+                if (path) [paths addObject:path];
+                taken += 1;
+                if (taken >= limit) {
+                    finish();
+                    return;
+                }
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, every_ms * NSEC_PER_MSEC), dispatch_get_main_queue(), tick);
+            });
+        };
+        dispatch_async(dispatch_get_main_queue(), tick);
+        return;
+    }
+    if (mode == 2) {
+        // Scroll: step the main document, snapshot each step, and reply the folder of the frames. The stitching
+        // of the frames is the follow-up F723.
+        __block int step = 0;
+        __block double lastY = -1;
+        __block void (^next)(void) = nil;
+        NSMutableSet *paths = [NSMutableSet set];
+        __block int total = 0;
+        next = ^{
+            if (step >= 200 || (lastY >= 0 && step > 0)) {
+                // The scroll stopped changing or the step limit arrived.
+                reply(context, [[NSString stringWithFormat:
+                    @"{\"path\":\"%@\",\"frames\":\"%@\",\"count\":%d,\"limited\":%d}",
+                    dir, dir, total, step >= 200 ? 1 : 0] UTF8String]);
+                next = nil;
+                return;
+            }
+            saveSnapshot(^(NSString *path, NSString *error) {
+                if (path) {
+                    [paths addObject:path];
+                    total += 1;
+                }
+                // Scroll one viewport minus 20 percent.
+                [view callAsyncJavaScript:
+                    @"window.scrollBy(0, window.innerHeight * 0.8); return window.scrollY;"
+                    arguments:@{} inFrame:nil
+                    inContentWorld:[WKContentWorld worldWithName:kDocumentWorld]
+                    completionHandler:^(id result, NSError *error) {
+                        double y = [result isKindOfClass:NSNumber.class] ? [result doubleValue] : lastY;
+                        if (y == lastY) {
+                            // The scroll did not move: the document is at its end.
+                            reply(context, [[NSString stringWithFormat:
+                                @"{\"path\":\"%@\",\"frames\":\"%@\",\"count\":%d,\"limited\":%d}",
+                                dir, dir, total, step >= 200 ? 1 : 0] UTF8String]);
+                            next = nil;
+                            return;
+                        }
+                        lastY = y;
+                        step += 1;
+                        dispatch_async(dispatch_get_main_queue(), next);
+                    }];
+            });
+        };
+        dispatch_async(dispatch_get_main_queue(), next);
+        return;
+    }
+    reply(context, "{\"error\":\"the capture mode is unknown\"}");
 }
 
 void sp_document_input(void *handle, int action, double x, double y, double dx, double dy, const char *key,
