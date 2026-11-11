@@ -4,11 +4,15 @@
 // display.
 //
 // The inspector is opened through the private WKWebView member `_inspector` (check only, see
-// docs/operations/private-native-apis.md). The inspector window opens, so the check activates the application.
+// docs/operations/private-native-apis.md). The inspector opens on the key window of an application that answers as active, so the
+// check makes its window key with the emulated activation of sp_input_activate, which leaves the process inactive and makes the
+// window the virtual key window (input_virtual.h); the window stays behind the windows of other applications.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "webview_geometry.h"
 #import "window_facts.h"
+#import "input_inject.h"
+#import "input_virtual.h"
 #import "private/webkit.h"
 #import "support/surface_view.h"
 #import "support/event_wait.h"
@@ -31,14 +35,22 @@ static NSString *describe(NSRect rect) {
     return [NSString stringWithFormat:@"%.0f,%.0f %.0fx%.0f", rect.origin.x, rect.origin.y, rect.size.width, rect.size.height];
 }
 
-// tests/support/no_activation.m: this check activates the app in make test-app-activation.
-void sp_test_declare_activation(void);
+static BOOL activateAnswered;
+static sp_activate_result activateResult;
+
+static void activated(void *context, sp_activate_result result, const char *frontmost) {
+    (void)context;
+    (void)frontmost;
+    activateResult = result;
+    activateAnswered = YES;
+    eventWake();
+}
 
 int main(void) { @autoreleasepool {
-    sp_test_declare_activation();
     [NSApplication sharedApplication];
-    [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+    [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
+    [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(200, 200, 1000, 700)
         styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskResizable
         backing:NSBackingStoreBuffered defer:NO];
@@ -54,7 +66,7 @@ int main(void) { @autoreleasepool {
         configuration:[[configuration copy] autorelease]] autorelease];
     [main loadHTMLString:@"<body style='margin:0'>main</body>" baseURL:nil];
     [view loadHTMLString:@"<body style='margin:0'>surface</body>" baseURL:nil];
-    [window makeKeyAndOrderFront:nil];
+    [window orderBack:nil];
     eventWait(@"both documents finish loading", ^BOOL { return !main.loading && !view.loading; });
     void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     check(surface != NULL, @"the main webview creates the surface");
@@ -68,11 +80,11 @@ int main(void) { @autoreleasepool {
     view.inspectable = YES;
     id<SPInspector> inspector = view._inspector;
     check(inspector != nil, @"the surface webview has an inspector");
-    [NSApp activateIgnoringOtherApps:YES];
-    eventWait(@"the application becomes active with the test window as key window", ^BOOL {
-        return NSApp.isActive && window.isKeyWindow;
-    });
-    check(NSApp.isActive && window.isKeyWindow, @"the test window becomes the key window of the active application");
+    sp_input_activate(window, activated, NULL);
+    eventWait(@"the emulated activation answers", ^BOOL { return activateAnswered; });
+    check(activateResult == SP_ACTIVATE_DONE && sp_input_virtual_is(window) && NSApp.isActive && window.isKeyWindow,
+        [NSString stringWithFormat:@"the test window becomes the virtual key window of an application that answers as active (activation %d, virtual %d)",
+            activateResult, (int)sp_input_virtual_is(window)]);
     [inspector connect];
     eventWait(@"the inspector connects", ^BOOL { return inspector.connected; });
     [inspector show];
