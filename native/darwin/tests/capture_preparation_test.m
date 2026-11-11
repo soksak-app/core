@@ -50,9 +50,11 @@ int main(void) { @autoreleasepool {
     window.animationBehavior = NSWindowAnimationBehaviorNone;
     // The window goes behind every window, as an application that is not active shows one (docs/spec/hosts.md#launch-activation),
     // so windows of a person may cover it. A preparation sizes the recording from the bounds that the window server reports for
-    // the window, and the window server has them once the order returns, covered or not; the occlusion state, which a cover
-    // changes, tells nothing of them.
+    // the window. AppKit keeps the order in the open Core Animation transaction of the thread, which the run loop commits at the
+    // end of its pass; the commit sends the order to the window server, which has the bounds once the commit returns, covered or
+    // not, so the test commits the transaction itself. The occlusion state, which a cover changes, tells nothing of them.
     [window orderBack:nil];
+    [CATransaction flush];
     NSArray *listed = [(NSArray *)CGWindowListCopyWindowInfo(kCGWindowListOptionIncludingWindow, (CGWindowID)window.windowNumber)
         autorelease];
     check(listed.count == 1 && [listed[0][(id)kCGWindowIsOnscreen] boolValue] && listed[0][(id)kCGWindowBounds] != nil,

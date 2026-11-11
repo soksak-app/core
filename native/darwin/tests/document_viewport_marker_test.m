@@ -130,10 +130,12 @@ int main(void) { @autoreleasepool {
     webviewSetSurfaceHidden(surface, false);
     // The window goes behind every window, as an application that is not active shows one (docs/spec/hosts.md#launch-activation),
     // so windows of a person may cover it; it draws its document regions while covered, so the captures of the window hold the
-    // document whatever covers it. The order is a call to the window server, which lists the window as on screen once it
-    // returns, covered or not.
+    // document whatever covers it. AppKit keeps the order in the open Core Animation transaction of the thread, which the run loop
+    // commits at the end of its pass; the commit sends the order to the window server, which lists the window as on screen once
+    // the commit returns, covered or not, so the test commits the transaction itself.
     check(sp_document_draw_covered(window, true), @"the capture window draws its document regions while covered");
     [window orderBack:nil];
+    [CATransaction flush];
     check(onScreen(window), @"the window server shows the inactive capture window");
 
     NSString *temporary = temporaryFolder(@"soksak-document-viewport-marker-");
