@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
@@ -201,5 +202,52 @@ func TestTheConnectionAndTheWindowOfTheRequestEndTheWaitForAHeldWindow(t *testin
 				t.Fatalf("the wait ended with %v, want its end by %s", err, end)
 			}
 		})
+	}
+}
+
+// mainStepFramework is a framework whose step of the main thread marks the time it runs, so a test tells a call made in a step
+// from a call made on the goroutine of a request.
+type mainStepFramework struct {
+	frameworkRecord
+	inStep *atomic.Bool
+}
+
+func (f mainStepFramework) Step(task func()) {
+	f.inStep.Store(true)
+	defer f.inStep.Store(false)
+	task()
+}
+
+// stepHoldCapturer is a platform capture that records whether its hold of a new window ran in a step of the main thread.
+type stepHoldCapturer struct {
+	platform.Capturer
+	inStep           *atomic.Bool
+	held, heldInStep bool
+}
+
+func (c *stepHoldCapturer) CaptureHoldNewWindow() error {
+	c.held = true
+	c.heldInStep = c.inStep.Load()
+	return nil
+}
+func (c *stepHoldCapturer) CaptureWaitNewWindow(uint64) (int, error) {
+	return -1, errors.New("no window")
+}
+func (c *stepHoldCapturer) CaptureReleaseNewWindow() {}
+
+// contract: diagnostics.capture-start.new-window-answers-once-held
+func TestTheHoldOfANewWindowRunsInAStepOfTheMainThread(t *testing.T) {
+	// The native hold sets AppKit state and asserts the main thread; the request that starts it runs on a goroutine of the
+	// endpoint, from which the native call of the main thread runs its body directly (native/darwin/src/main_thread.h).
+	inStep := &atomic.Bool{}
+	previous := framework
+	framework = mainStepFramework{inStep: inStep}
+	t.Cleanup(func() { framework = previous })
+	capturer := &stepHoldCapturer{inStep: inStep}
+	if err := (platformCapture{Capturer: capturer}).HoldNewWindow(); err != nil {
+		t.Fatal(err)
+	}
+	if !capturer.held || !capturer.heldInStep {
+		t.Fatalf("the hold ran %v, in a step of the main thread %v; want it in a step", capturer.held, capturer.heldInStep)
 	}
 }
