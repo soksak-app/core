@@ -7,9 +7,11 @@ use crate::process_wait_tests::{hold_the_signals, run_wait};
 // the wait has not ended; the test then raises the signal in its own process and receives the answer, and only after the
 // answer lets the wait return. The command watches the signals before it starts the wait, so the signal cannot come
 // before the watch.
+// The name of the test names its platform: the linux and the darwin module hold the same test, and a test name has one
+// declaration in its crate, which the contract run reads.
 // contract: cli.process-wait.signal-ends-the-wait
 #[test]
-fn process_wait_ends_by_a_signal() {
+fn process_wait_ends_by_a_signal_on_darwin() {
     let _signals = hold_the_signals();
     for (name, signal) in [
         ("SIGINT", signal_hook::consts::SIGINT),
