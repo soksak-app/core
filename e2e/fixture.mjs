@@ -184,8 +184,10 @@ export async function prepareOcclusionFixture(target, otherWindows) {
     snapshots.push({ session, frame: { ...state.frame }, content: { width: state.content.width, height: state.content.height },
       count: inactiveCount(state) });
   }
+  // Each window is parked at the top of the work area of the target, also a window that its application opened on another
+  // display, and the restoration gives its recorded frame back; a window larger than the area cannot be parked in it.
   for (const { session, frame } of snapshots) {
-    if (frame.width>area.width || frame.y<area.y || frame.y+frame.height>area.y+area.height)
+    if (frame.width>area.width || frame.height>area.height)
       throw new Error(`placement fixture preparation cannot keep normal owned frames within the visible work area: ${session.app.name} ` +
         `${session.window} ${JSON.stringify(frame)} in ${JSON.stringify(area)}`);
   }
@@ -223,9 +225,9 @@ export async function prepareOcclusionFixture(target, otherWindows) {
   for (const { session, frame, count: originalCount } of snapshots) {
     // A real inactive normal-frame observation established this exposed edge:
     // target left, other declared cohort windows right. Do not raise or resize.
-    const x = session === target ? area.x : area.x + area.width - frame.width;
-    if (frame.x !== x) await session.run("host.window.move", { x, y: frame.y });
-    const actual = await session.until("host.window", value => value.frame.x===x && value.frame.y===frame.y
+    const x = session === target ? area.x : area.x + area.width - frame.width, y = area.y;
+    if (frame.x !== x || frame.y !== y) await session.run("host.window.move", { x, y });
+    const actual = await session.until("host.window", value => value.frame.x===x && value.frame.y===y
       && value.frame.width===frame.width && value.frame.height===frame.height,
     "placement fixture owned cohort move did not reach its exact frame");
     if (inactiveCount(actual) !== originalCount) throw new Error("placement cohort activation count changed during preparation");

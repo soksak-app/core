@@ -105,6 +105,19 @@ test("a selected single host raises its own windows before its move",async()=>{
   assert.equal(f.target.frame.x,300);
 });
 
+test("a cohort window that stands on another display is parked in the work area of the target and restored there",async()=>{
+  const f=cohort();
+  // The application opened its window on a display above the display of the target.
+  const tauri=f.rows.find(row=>row.app.name==="tauriv2");
+  Object.assign(tauri.frame,{x:-1320,y:-1467});
+  const original=f.rows.map(row=>({...row.frame}));
+  const result=await prepare(f.target,f.others);
+  assert.equal(result.baseline.occluded,false);
+  assert.deepEqual(result.parked.find(row=>row.application==="tauriv2").parkedFrame,{x:600,y:39,width:1200,height:760});
+  for(const cleanup of [...f.cleanups].reverse())await cleanup();
+  assert.deepEqual(f.rows.map(row=>row.frame),original);
+});
+
 test("placement preparation rejects ownership of the target in its parked cohort",async()=>{
   const f=cohort();
   await assert.rejects(prepare(f.target,[...f.others,f.target]),/target.*cohort|cohort.*target/);
