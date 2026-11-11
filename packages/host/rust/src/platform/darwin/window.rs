@@ -174,6 +174,30 @@ pub fn end_responder_observation(observation: Handle) {
     unsafe { sp_window_end_responder_observation(observation as *mut c_void) }
 }
 
+/// Calls changed whenever a sheet begins on the window or ends, after the begin attached the sheet, and returns the observation
+/// that end_sheet_observation ends.
+pub fn observe_sheet(window: Handle, changed: Box<dyn Fn()>) -> Result<Handle, String> {
+    unsafe extern "C" {
+        fn sp_window_observe_sheet(window: *mut c_void, changed: &Block<dyn Fn()>) -> *mut c_void;
+    }
+    let changed = RcBlock::new(changed);
+    let observation = unsafe { sp_window_observe_sheet(window as *mut c_void, &changed) };
+    if observation.is_null() {
+        Err("the sheets of the window cannot be observed".into())
+    } else {
+        Ok(observation as Handle)
+    }
+}
+
+/// Ends the sheet observation that observe_sheet returned. It does not use the window, so it may run after AppKit released the
+/// window.
+pub fn end_sheet_observation(observation: Handle) {
+    unsafe extern "C" {
+        fn sp_window_end_sheet_observation(observation: *mut c_void);
+    }
+    unsafe { sp_window_end_sheet_observation(observation as *mut c_void) }
+}
+
 /// Returns the title bar height of the window. It returns an error for a window that cannot have a title bar.
 pub fn titlebar_height(window: Handle) -> Result<f64, String> {
     unsafe extern "C" {

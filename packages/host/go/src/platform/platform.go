@@ -384,6 +384,12 @@ type Platform interface {
 	// EndCursorObservation ends an observation of ObserveCursor once, so its changed is not called again. It does not use the
 	// window, so it may run after the window was released. Call it on the UI thread.
 	EndCursorObservation(observation unsafe.Pointer)
+	// ObserveSheet calls changed on the UI thread each time a sheet begins on the window or ends, after the begin attached the
+	// sheet, and returns the observation. Call it on the UI thread.
+	ObserveSheet(window Window, changed func()) (unsafe.Pointer, error)
+	// EndSheetObservation ends an observation of ObserveSheet once, so its changed is not called again. It does not use the
+	// window, so it may run after the window was released. Call it on the UI thread.
+	EndSheetObservation(observation unsafe.Pointer)
 
 	// TitlebarHeight returns the title bar height (pt) of the window. It is 0 while the title bar is not shown, as in full screen, and
 	// it returns an error when the window has no buttons. Call it on the UI thread.

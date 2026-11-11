@@ -832,6 +832,16 @@ func Functions(library uintptr) (abi.NativeFunctions, error) {
 		purego.RegisterFunc(&functions.MainSpInputVirtualEndCursorObservation, address)
 	}
 	{
+		address, err := purego.Dlsym(library, "main_sp_window_end_sheet_observation")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_window_end_sheet_observation: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_window_end_sheet_observation: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.MainSpWindowEndSheetObservation, address)
+	}
+	{
 		address, err := purego.Dlsym(library, "main_sp_window_facts")
 		if err != nil {
 			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_window_facts: %w", err)
@@ -1380,6 +1390,16 @@ func Functions(library uintptr) (abi.NativeFunctions, error) {
 			return abi.NativeFunctions{}, fmt.Errorf("native API nativeWindowObserveCursor: symbol has a null address")
 		}
 		purego.RegisterFunc(&functions.NativeWindowObserveCursor, address)
+	}
+	{
+		address, err := purego.Dlsym(library, "nativeWindowObserveSheet")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API nativeWindowObserveSheet: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API nativeWindowObserveSheet: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.NativeWindowObserveSheet, address)
 	}
 	{
 		address, err := purego.Dlsym(library, "nativeWindowPrepare")

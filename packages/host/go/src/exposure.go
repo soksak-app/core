@@ -45,7 +45,7 @@ var presentedSchema = map[string]any{"type": "object", "properties": map[string]
 
 var hostStatus = map[string]hostEntry{
 	"host.window": {
-		Description: "Window frame and system pointer location in screen coordinates, content size, backing scale, the maximum refresh rate of its screen (null when the window is on no screen), maximized, key and application active state, whether other windows cover the whole window, child window count, the WebContent process of the app page (0 before it starts), the WebContent processes that held a page of the application and hold none while they live, with whether WebKit ends each (null on a platform that does not report them), whether the application is quitting, window buttons, webview frames, native surfaces, document regions, image regions with the number of frames that the host marked presented for each, the open native modal, and the frames and command buffers of the workbench and whether it settled after its last frame, null on a host whose workbench WebKit draws.",
+		Description: "Window frame and system pointer location in screen coordinates, content size, backing scale, the maximum refresh rate of its screen (null when the window is on no screen), maximized, key and application active state, whether other windows cover the whole window, child window count, the sheet attached to the window with its kind and frame (null without one), the WebContent process of the app page (0 before it starts), the WebContent processes that held a page of the application and hold none while they live, with whether WebKit ends each (null on a platform that does not report them), whether the application is quitting, window buttons, webview frames, native surfaces, document regions, image regions with the number of frames that the host marked presented for each, the open native modal, and the frames and command buffers of the workbench and whether it settled after its last frame, null on a host whose workbench WebKit draws.",
 		Schema: map[string]any{"type": "object", "properties": map[string]any{
 			"frame":       rectSchema,
 			"pointer":     map[string]any{"type": "object", "properties": map[string]any{"x": map[string]any{"type": "number"}, "y": map[string]any{"type": "number"}}},
@@ -71,6 +71,9 @@ var hostStatus = map[string]hostEntry{
 					"otherInFront": map[string]any{"type": "boolean"},
 				}},
 			"children": map[string]any{"type": "integer"},
+			"sheet": map[string]any{"type": []string{"object", "null"}, "required": []string{"kind", "frame"}, "properties": map[string]any{
+				"kind": map[string]any{"type": "string", "enum": windowSheetKinds}, "frame": rectSchema,
+			}},
 			"pagelessProcesses": map[string]any{"type": []string{"array", "null"}, "items": map[string]any{"type": "object",
 				"required": []string{"pid", "ending"}, "properties": map[string]any{
 					"pid": map[string]any{"type": "integer"}, "ending": map[string]any{"type": "boolean"},
@@ -1265,6 +1268,7 @@ type windowFacts struct {
 	Display     *int         `json:"display"`
 	Order       *WindowOrder `json:"order"`
 	Children    int          `json:"children"`
+	Sheet       *WindowSheet `json:"sheet"`
 	PageProcess int          `json:"pageProcess"`
 	// PagelessProcesses is null on a platform whose facts do not report the WebContent processes without a page.
 	PagelessProcesses []PagelessProcess    `json:"pagelessProcesses"`
@@ -1482,6 +1486,25 @@ type WindowFrameCounters struct {
 
 // WindowOrder is the place of a window among the windows on the screen: the number of windows of its window level in front of
 // it, the number of windows of that level, and whether a window of another process stands in front of it over a part of it.
+// WindowSheet is the sheet attached to a window in host.window: an open panel, a save panel, the window of an alert, or another
+// sheet, with its frame in screen coordinates. A sheet is not a child window.
+type WindowSheet struct {
+	Kind  string `json:"kind"`
+	Frame frame  `json:"frame"`
+}
+
+// windowSheetKinds are the kinds of WindowSheet.
+var windowSheetKinds = []string{"save", "open", "alert", "other"}
+
+// validateWindowSheet refuses a sheet of the native facts whose kind is not a kind of WindowSheet. A missing sheet is null, as on
+// a platform whose facts do not report sheets.
+func validateWindowSheet(sheet *WindowSheet) error {
+	if sheet == nil || slices.Contains(windowSheetKinds, sheet.Kind) {
+		return nil
+	}
+	return fmt.Errorf("window facts have a sheet of the kind %q", sheet.Kind)
+}
+
 type WindowOrder struct {
 	Index        int  `json:"index"`
 	Count        int  `json:"count"`
@@ -1507,6 +1530,7 @@ type WindowStatus struct {
 	Display           *int              `json:"display"`
 	Order             *WindowOrder      `json:"order"`
 	Children          int               `json:"children"`
+	Sheet             *WindowSheet      `json:"sheet"`
 	PageProcess       *int              `json:"pageProcess"`
 	PagelessProcesses []PagelessProcess `json:"pagelessProcesses"`
 	Quitting          bool              `json:"quitting"`
@@ -1606,11 +1630,14 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 	if err := validateActivationObservation(facts.ActivationObservation); err != nil {
 		return WindowStatus{}, err
 	}
+	if err := validateWindowSheet(facts.Sheet); err != nil {
+		return WindowStatus{}, err
+	}
 	// The native facts were read in the same UI-thread operation.
 	out := WindowStatus{
 		ActivationObservation: facts.ActivationObservation,
 		Frame:                 facts.Frame, Pointer: facts.Pointer, Content: frame{Width: facts.Content.Width, Height: facts.Content.Height},
-		Scale: facts.Scale, RefreshRate: facts.RefreshRate, Maximized: facts.Zoomed, Key: facts.Key, VirtualKey: facts.VirtualKey, Cursor: facts.Cursor, Active: facts.Active, Occluded: facts.Occluded, Display: facts.Display, Order: facts.Order, Children: facts.Children,
+		Scale: facts.Scale, RefreshRate: facts.RefreshRate, Maximized: facts.Zoomed, Key: facts.Key, VirtualKey: facts.VirtualKey, Cursor: facts.Cursor, Active: facts.Active, Occluded: facts.Occluded, Display: facts.Display, Order: facts.Order, Children: facts.Children, Sheet: facts.Sheet,
 		Quitting: s.host.quit.Active(),
 		Controls: facts.Controls, Surfaces: []WindowSurface{}, Documents: []WindowDocument{}, Regions: regions,
 		Webviews: []WindowWebview{}, PagelessProcesses: facts.PagelessProcesses,

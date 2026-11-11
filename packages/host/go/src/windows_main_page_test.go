@@ -56,6 +56,11 @@ func (p *pagelessPlatform) ObserveCursor(platform.Window, func()) (unsafe.Pointe
 	return nil, nil
 }
 
+func (p *pagelessPlatform) ObserveSheet(platform.Window, func()) (unsafe.Pointer, error) {
+	p.calls = append(p.calls, "sheet")
+	return nil, nil
+}
+
 func (p *pagelessPlatform) PlaceNewWindow(platform.Window) error {
 	p.calls = append(p.calls, "place")
 	return nil
@@ -70,8 +75,8 @@ func TestAWindowWithoutAMainPageCallsNoMainWebViewOperation(t *testing.T) {
 	t.Cleanup(func() { framework, system = previousFramework, previousSystem })
 	host := &Host{windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{}}
 	host.newWindow("main", "")
-	if strings.Join(fake.calls, ",") != "titlebar,responder,cursor,place" {
-		t.Fatalf("the window preparation made the calls %v, want the title bar, the responder observation, the cursor observation and the placement", fake.calls)
+	if strings.Join(fake.calls, ",") != "titlebar,responder,cursor,sheet,place" {
+		t.Fatalf("the window preparation made the calls %v, want the title bar, the responder observation, the cursor observation, the sheet observation and the placement", fake.calls)
 	}
 	if window.shows != 1 {
 		t.Fatalf("the window was shown %d times, want once", window.shows)

@@ -18,6 +18,9 @@ void main_sp_window_end_responder_observation(void *observation) {
 void main_sp_input_virtual_end_cursor_observation(void *observation) {
     hostRunOnMain(^{ sp_input_virtual_end_cursor_observation(observation); });
 }
+void main_sp_window_end_sheet_observation(void *observation) {
+    hostRunOnMain(^{ sp_window_end_sheet_observation(observation); });
+}
 double main_windowTitlebarHeight(uintptr_t window) { return ON_MAIN(double, windowTitlebarHeight((void *)window)); }
 bool main_windowSetTitlebarHeight(uintptr_t window, double height, char **failure) {
     return ON_MAIN(bool, windowSetTitlebarHeight((void *)window, height, failure));

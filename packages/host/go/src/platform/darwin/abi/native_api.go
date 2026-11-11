@@ -190,6 +190,7 @@ type NativeFunctions struct {
 	MainSpWindowColorSpaceFacts            func(uintptr) *byte
 	MainSpWindowEndResponderObservation    func(unsafe.Pointer)
 	MainSpInputVirtualEndCursorObservation func(unsafe.Pointer)
+	MainSpWindowEndSheetObservation        func(unsafe.Pointer)
 	MainSpWindowFacts                      func(uintptr) *byte
 	MainSpWindowFocusWorkbench             func(uintptr)
 	MainSpWindowHit                        func(uintptr, float64, float64) *byte
@@ -245,6 +246,7 @@ type NativeFunctions struct {
 	NativeWindowMainPresentation           func(uintptr) unsafe.Pointer
 	NativeWindowObserveResponder           func(uintptr, uintptr) unsafe.Pointer
 	NativeWindowObserveCursor              func(uintptr, uintptr) unsafe.Pointer
+	NativeWindowObserveSheet               func(uintptr, uintptr) unsafe.Pointer
 	NativeWindowPrepare                    func(uintptr)
 	NativeWindowSetMainWebview             func(uintptr) bool
 	NativeWindowStartPage                  func(uintptr, uint64, float64, uintptr)
@@ -524,6 +526,9 @@ func (functions NativeFunctions) Validate() error {
 	if functions.MainSpInputVirtualEndCursorObservation == nil {
 		return fmt.Errorf("native API function is missing: main_sp_input_virtual_end_cursor_observation")
 	}
+	if functions.MainSpWindowEndSheetObservation == nil {
+		return fmt.Errorf("native API function is missing: main_sp_window_end_sheet_observation")
+	}
 	if functions.MainSpWindowFacts == nil {
 		return fmt.Errorf("native API function is missing: main_sp_window_facts")
 	}
@@ -688,6 +693,9 @@ func (functions NativeFunctions) Validate() error {
 	}
 	if functions.NativeWindowObserveCursor == nil {
 		return fmt.Errorf("native API function is missing: nativeWindowObserveCursor")
+	}
+	if functions.NativeWindowObserveSheet == nil {
+		return fmt.Errorf("native API function is missing: nativeWindowObserveSheet")
 	}
 	if functions.NativeWindowPrepare == nil {
 		return fmt.Errorf("native API function is missing: nativeWindowPrepare")

@@ -28,6 +28,7 @@ func callbackHandlers() abi.Callbacks {
 		NativeUiRun:               goHost_native_ui_run,
 		NativeResponderChanged:    goHost_native_responder_changed,
 		NativeCursorChanged:       goHost_native_cursor_changed,
+		NativeSheetChanged:        goHost_native_sheet_changed,
 		NativeFullscreenDone:      goHost_native_fullscreen_done,
 		SurfacePressed:            goHost_surface_pressed,
 		SurfacePoint:              goHost_surface_point,

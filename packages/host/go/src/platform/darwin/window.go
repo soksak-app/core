@@ -83,6 +83,32 @@ func goHost_native_cursor_changed(value uintptr) {
 	handles.Handle(value).Value().(func())()
 }
 
+// The sheet observation callbacks by observation. They are read and changed only in main-thread steps.
+var sheetObservers = map[unsafe.Pointer]handles.Handle{}
+
+func (implementation) ObserveSheet(window platform.Window, changed func()) (unsafe.Pointer, error) {
+	handle := handles.NewHandle(changed)
+	observation := native.NativeWindowObserveSheet(uintptr(window), uintptr(handle))
+	if observation == nil {
+		handle.Delete()
+		return nil, errors.New("the sheets of the window cannot be observed")
+	}
+	sheetObservers[observation] = handle
+	return observation, nil
+}
+
+func (implementation) EndSheetObservation(observation unsafe.Pointer) {
+	native.MainSpWindowEndSheetObservation(observation)
+	if handle, ok := sheetObservers[observation]; ok {
+		handle.Delete()
+		delete(sheetObservers, observation)
+	}
+}
+
+func goHost_native_sheet_changed(value uintptr) {
+	handles.Handle(value).Value().(func())()
+}
+
 // goHost_native_fullscreen_done answers a full screen request with its result (window_fullscreen.h, whose values are the
 // platform.FullscreenResult values) and its static message, nil for a finished transition.
 func goHost_native_fullscreen_done(value uintptr, result int32, message *byte) {

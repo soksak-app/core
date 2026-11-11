@@ -128,6 +128,7 @@ type closingPlatform struct{ elementPlatform }
 func (p *closingPlatform) EnqueueUI(func()) error                 { return nil }
 func (p *closingPlatform) EndResponderObservation(unsafe.Pointer) {}
 func (p *closingPlatform) EndCursorObservation(unsafe.Pointer)    {}
+func (p *closingPlatform) EndSheetObservation(unsafe.Pointer)     {}
 
 // A closed window draws no frame that could still name the views of its elements, so its close hands them back after the frame
 // that the window can no longer present.

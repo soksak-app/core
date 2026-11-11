@@ -232,6 +232,18 @@ static NSDictionary *pointerFact(NSWindow *window) {
     return @{ @"x": @(at.x), @"y": @(primaryTop() - at.y) };
 }
 
+// The sheet attached to the window: null without one, else its kind and frame in screen coordinates. An open panel is a save panel
+// too, so it is judged first; an alert sheet is the window of an NSAlert, which is its delegate.
+static id sheetFact(NSWindow *window) {
+    NSWindow *sheet = window.attachedSheet;
+    if (!sheet) return NSNull.null;
+    NSString *kind = [sheet isKindOfClass:NSOpenPanel.class] ? @"open"
+        : [sheet isKindOfClass:NSSavePanel.class] ? @"save"
+        : [(id)sheet.delegate isKindOfClass:NSAlert.class] ? @"alert"
+        : @"other";
+    return @{ @"kind": kind, @"frame": screenRect(sheet.frame) };
+}
+
 char *sp_window_facts(void *handle, void *surfaceView) {
     NSWindow *window = (NSWindow *)handle;
     if (!window || !window.contentView || ((NSView *)surfaceView).window != window) {
@@ -320,6 +332,8 @@ char *sp_window_facts(void *handle, void *surfaceView) {
         // of the presentation measurement.
         @"occluded": @((BOOL)((window.occlusionState & NSWindowOcclusionStateVisible) == 0)),
         @"children": @(window.childWindows.count),
+        // A sheet is not a child window; it is reported apart.
+        @"sheet": sheetFact(window),
         // WebContent process that draws the app page. It is 0 while the page process does not
         // exist yet (private
         // WKWebView property, docs/operations/private-native-apis.md).
@@ -671,5 +685,65 @@ void sp_window_end_responder_observation(void *observation) {
     SPResponderObserver *observer = (SPResponderObserver *)observation;
     if (!observer) return;
     [observer end];
+    [observer release];
+}
+
+// Observation of the sheets of one window. It holds the tokens of the two notifications, whose blocks hold it until its end
+// removes them. The notification center does not retain the window that it filters by.
+@interface SPSheetObserver : NSObject
+@property(nonatomic, retain) id begin;
+@property(nonatomic, retain) id end;
+- (void)stop;
+@end
+
+@implementation SPSheetObserver
+- (void)stop {
+    if (_begin) [NSNotificationCenter.defaultCenter removeObserver:_begin];
+    if (_end) [NSNotificationCenter.defaultCenter removeObserver:_end];
+    self.begin = nil;
+    self.end = nil;
+}
+- (void)dealloc {
+    [self stop];
+    [super dealloc];
+}
+@end
+
+void *sp_window_observe_sheet(void *handle, void (^changed)(void)) {
+    NSCAssert(NSThread.isMainThread, @"sheet observation requires the UI thread");
+    NSWindow *window = (NSWindow *)handle;
+    if (!window || !changed) {
+        sp_log_error("window facts", "the window or the callback of the sheet observation is missing");
+        return NULL;
+    }
+    SPSheetObserver *observer = [[SPSheetObserver alloc] init];
+    void (^callback)(void) = [[changed copy] autorelease];
+    // AppKit posts the begin before it attaches the sheet, inside the call that begins it, so the change goes to the next turn
+    // of the main queue, after that call returned with the sheet attached. A change after the end of the observation is dropped.
+    observer.begin = sp_observe_notification("window_facts.sheet_begin", SP_OBSERVE_RECORD, NSWindowWillBeginSheetNotification,
+        window, NSOperationQueue.mainQueue, ^(NSNotification *notification) {
+            (void)notification;
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (observer.begin) callback();
+            });
+        });
+    observer.end = sp_observe_notification("window_facts.sheet_end", SP_OBSERVE_RECORD, NSWindowDidEndSheetNotification,
+        window, NSOperationQueue.mainQueue, ^(NSNotification *notification) {
+            (void)notification;
+            callback();
+        });
+    if (!observer.begin || !observer.end) {
+        [observer stop];
+        [observer release];
+        return NULL;
+    }
+    return observer;
+}
+
+void sp_window_end_sheet_observation(void *observation) {
+    NSCAssert(NSThread.isMainThread, @"sheet observation requires the UI thread");
+    SPSheetObserver *observer = (SPSheetObserver *)observation;
+    if (!observer) return;
+    [observer stop];
     [observer release];
 }

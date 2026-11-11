@@ -842,6 +842,12 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
         owner,
         Box::new(move || crate::exposure::window_changed(&cursor_host)),
     )?;
+    // The sheet that a panel or an alert attaches to the window is a value of host.window, so a check knows that it opened.
+    let sheet_host = window.clone();
+    let sheet_observation = platform.observe_sheet(
+        owner,
+        Box::new(move || crate::exposure::window_changed(&sheet_host)),
+    )?;
     // Notifies the connections that watch host.window of the change of the occlusion state. Tauri does not send this
     // change as a window event.
     let occluded = window.clone();
@@ -924,6 +930,7 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
                     log_failure("surface layout cancel", platform.cancel_layout(owner));
                     platform.end_responder_observation(responder_observation);
                     platform.end_cursor_observation(cursor_observation);
+                    platform.end_sheet_observation(sheet_observation);
                     // A logical surface holds the main webview, so if it is not closed, the main webview and its web
                     // content process remain.
                     let surfaces = std::mem::take(
