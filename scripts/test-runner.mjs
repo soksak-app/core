@@ -435,8 +435,8 @@ function runOne(item, limitMs, env, outputPath, stacks, temporary) {
  * `{status, elapsedMs, output, detail}` with the status `pass`, `fail` or `timeout`. The processes of a run either all report their test
  * events or none does. A result of a process that reports them also has `tests`, the tests that its files ran, its `PASS` line says
  * `no test ran` when it ran none, and the `TOTAL` counts the tests that ran in the files. `passed` is true when every process passed and,
- * in a run whose processes report their test events, a test ran; otherwise the line `FAIL no test ran in the <n> files of the run` says so. `beforeEach(item)`, when given, is awaited before each test
- * starts; the line `WAIT <name>` names the test that waits for it. `run` (`{id, folder}`), when given, passes the identifier and the folder to each
+ * in a run whose processes report their test events, a test ran; otherwise the line `FAIL no test ran in the <n> files of the run` says so.
+ * `run` (`{id, folder}`), when given, passes the identifier and the folder to each
  * test as `SOKSAK_RUN_ID` and the folder as `SOKSAK_RUN_FOLDER`, stores the output of every test in the folder, and keeps `manifest.json` there with each test, its status,
  * its start and its end in microseconds; the manifest is rewritten when a test starts and when it ends.
  * Each process, a build too, runs with a folder of its own as `TMPDIR`, which the runner removes when the group of the process ended,
@@ -481,11 +481,6 @@ export async function runTests(options) {
   }, heartbeatMs);
   const worker = async () => {
     for (let item = queue.shift(); item; item = queue.shift()) {
-      // The gate decides when the test may start (for example only while the person is away); the wait is not part of its limit.
-      if (options.beforeEach) {
-        write(`WAIT ${item.name}`);
-        await options.beforeEach(item);
-      }
       running.set(item.name, performance.now());
       const limit = item.timeoutMs;
       let entry = null;

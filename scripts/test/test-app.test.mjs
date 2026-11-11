@@ -72,6 +72,18 @@ test("candidate CLI rejects all ordinary options before reading context or start
   }
 });
 
+test("a window run waits for no idle time of the person: the runner and the make targets have no idle option", { timeout: 10000 }, () => {
+  const result = spawnSync(process.execPath, [fileURLToPath(new URL("../test-app.mjs", import.meta.url)), "--when-idle", "5"], { encoding: "utf8" });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Unknown option '--when-idle'/);
+  const cwd = fileURLToPath(new URL("../../", import.meta.url));
+  for (const target of ["test-app", "test-app-capture-input-close"]) {
+    const planned = spawnSync("make", ["--no-print-directory", "-n", target, "WHEN_IDLE=60"], { cwd, encoding: "utf8" });
+    assert.equal(planned.status, 0, planned.stderr);
+    assert.doesNotMatch(planned.stdout, /--when-idle/, `make ${target} passes an idle wait`);
+  }
+});
+
 test("candidate acceptance has a make entrypoint that requires explicit context and script without rebuilding", { timeout: 10000 }, () => {
   const cwd = fileURLToPath(new URL('../../', import.meta.url));
   const missing = spawnSync('make', ['--no-print-directory', 'test-app-candidate'], { cwd, encoding: 'utf8' });
@@ -177,9 +189,9 @@ test("the plan prepares, starts the three applications, checks and quits them in
   assert.deepEqual(plan.find((item) => item.name === "native end-to-end tests"), { name: "native end-to-end tests", phase: "check", kind: "native",
     target: "e2e", platform: "darwin", env: { SOKSAK_CONFIG_ROOT: configRoot } });
   assert.equal(plan.some((item) => item.name === "capture text warm-up"), false);
-  const person = await e2ePlan({ root, configRoot, script: "test-app:person", whenIdle: "60", platform: "darwin" });
+  const person = await e2ePlan({ root, configRoot, script: "test-app:person", platform: "darwin" });
   assert.deepEqual(person.find((item) => item.name === "window checks").argv.slice(2, 4), ["--script", "test-app:person"]);
-  assert.deepEqual(person.find((item) => item.name === "window checks").argv.slice(-2), ["--when-idle", "60"]);
+  assert.ok(!person.find((item) => item.name === "window checks").argv.includes("--when-idle"));
   assert.equal(person.some((item) => item.name === "native end-to-end tests"), false);
 });
 

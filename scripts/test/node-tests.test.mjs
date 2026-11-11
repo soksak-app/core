@@ -1,6 +1,7 @@
 // The Node test files of the workspace run as processes of their own (docs/operations/examples.md#test-parity): the test script of
 // each package names its flags and files, and each file becomes one test with its folder and flags.
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -367,15 +368,12 @@ test("a changed specification file selects the tests of the packages that declar
     /other\/package\.json: specFiles must be a list of paths under docs\/spec\/, found \["docs\/features\.md"\]/);
 });
 
-test("the idle gate waits until the person gave no input for the given seconds", async () => {
-  const { whenIdle } = await import("../node-tests.mjs");
-  const readings = [2, 4, 31];
-  const lines = [];
-  await whenIdle(30, { idle: () => readings.shift(), intervalMs: 1, write: (line) => lines.push(line) })({ name: "e2e/x.test.mjs" });
-  assert.deepEqual(readings, []);
-  assert.equal(lines.length, 2);
-  assert.match(lines[0], /^WAIT e2e\/x\.test\.mjs: the person was active 2s ago, waiting for 30s without input$/);
-  await assert.rejects(whenIdle(30, { idle: () => null })({ name: "x" }), /the system does not report the idle time of the input/);
+test("a run starts each file without waiting for the person, and the runner has no idle option", { timeout: 20000 }, () => {
+  // A window check gives the same result while a person uses the keyboard and the pointer, so no run waits for the person.
+  const result = spawnSync(process.execPath, [fileURLToPath(new URL("../node-tests.mjs", import.meta.url)), "--when-idle", "5",
+    "--script", "no-such-script"], { encoding: "utf8" });
+  assert.equal(result.status, 1, result.stdout);
+  assert.match(result.stderr, /Unknown option '--when-idle'/);
 });
 
 test("a run is named by its start time and process id and keeps its folder under target/test-runs", async () => {

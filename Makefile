@@ -653,16 +653,16 @@ test-app-host-go: build-native-mygo build-native-tests
 	@CGO_ENABLED=0 $(call go-env) node scripts/go-tests.mjs --package './packages/host/mygo/tests/...' --tags 'e2e diagnostics mygo' --test '^TestE2E' --count 1 --timeout $(TEST_TIMEOUT) --ldflags='$(GO_INTERNAL_LINK)'
 
 test-app: check-docs check-app-tests check-exposure $(E2E_BUILD)
-	@node scripts/test-app.mjs --script test-app --native test-app $(if $(WHEN_IDLE),--when-idle $(WHEN_IDLE))
+	@node scripts/test-app.mjs --script test-app --native test-app
 
 # Focused native application checks; preparation, auditing and cleanup use the ordinary window runner.
 test-app-capture-input-close: check-docs check-app-tests check-exposure $(E2E_BUILD)
-	@node scripts/test-app.mjs --script test-app:capture-input-close $(if $(WHEN_IDLE),--when-idle $(WHEN_IDLE))
+	@node scripts/test-app.mjs --script test-app:capture-input-close
 
 # Acceptance consumes the downloaded candidate bundles and frozen component context without rebuilding them.
 test-app-candidate:
 	@test -n "$(CONTEXT)" && test -n "$(SCRIPT)" || { echo "make test-app-candidate CONTEXT=<context.json> SCRIPT=<declared script>" >&2; exit 2; }
-	@node scripts/test-app.mjs --candidate "$(CONTEXT)" --script "$(SCRIPT)" $(if $(WHEN_IDLE),--when-idle $(WHEN_IDLE))
+	@node scripts/test-app.mjs --candidate "$(CONTEXT)" --script "$(SCRIPT)"
 
 test-app-activation: $(E2E_BUILD)
 	@node scripts/test-app.mjs --script test-app:activation --native test-app-activation

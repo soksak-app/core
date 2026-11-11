@@ -9210,10 +9210,16 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
-    id: "F160.26",
-    implementation: [{ file: "scripts/node-tests.mjs", symbol: "export function whenIdle" }],
-    tests: [{ file: "scripts/test/node-tests.test.mjs", id: "the idle gate waits until the person gave no input for the given seconds" }],
-    expected: "The wait of --when-idle reads the idle time of the input at an interval; the examined event sources and the reason each cannot serve are in docs/operations/examples.md.",
+    id: "F756",
+    implementation: [
+      { file: "scripts/node-tests.mjs", symbol: "const { tests: all, before } = discoverNodeTests(" },
+      { file: "scripts/test-app.mjs", symbol: "args: argv, strict: true, options: { script: { type: 'string' }, native: { type: 'string' }, candidate: { type: 'string' }," },
+    ],
+    tests: [
+      { file: "scripts/test/node-tests.test.mjs", id: "a run starts each file without waiting for the person, and the runner has no idle option" },
+      { file: "scripts/test/test-app.test.mjs", id: "a window run waits for no idle time of the person: the runner and the make targets have no idle option" },
+    ],
+    expected: "No window run waits for the idle time of the person: the runners and the make targets have no idle option.",
     levels: ["unit"],
   },
   {

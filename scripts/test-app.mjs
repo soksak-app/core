@@ -1,5 +1,5 @@
 // Runs the end-to-end checks of core on this computer (docs/operations/examples.md#end-to-end-run):
-//   node scripts/test-app.mjs --script <name> [--native <target>] [--when-idle <seconds>]
+//   node scripts/test-app.mjs --script <name> [--native <target>]
 // The e2e targets of the Makefile build the three debug applications, and then run this script with the window-check script of their
 // tier (`verify`, `test-app:activation`, `test-app:real`, `test-app:person`) and the native end-to-end target of that tier. Each run
 // makes a new configuration root under target/e2e, prepares the registry certificates in it and installs every plugin of the fixture
@@ -70,7 +70,7 @@ export function newConfigRoot(root) {
  * implement the application artifact fails before any step starts an application. `fixtures` are the plugin ids of the fixture
  * registry, which each application installs; they are read from e2e/fixtures of this checkout when not given.
  */
-export async function e2ePlan({ root, configRoot, script, native, whenIdle, candidate, artifacts, only, runFolder, platform,
+export async function e2ePlan({ root, configRoot, script, native, candidate, artifacts, only, runFolder, platform,
   fixtures = fixturePluginIds() }) {
   if (candidate && (artifacts !== undefined || only !== undefined)) throw new Error('candidate acceptance rejects ordinary selection or artifact overrides');
   if (artifacts) validateOrdinaryArtifacts(artifacts);
@@ -114,7 +114,7 @@ export async function e2ePlan({ root, configRoot, script, native, whenIdle, cand
     ...(inputs ? [{ name: 'acceptance before', phase: 'prepare', kind: 'capture', capture: 'before' }] : []),
     {
       name: 'window checks', phase: 'check', kind: 'run',
-      argv: ['node', 'scripts/node-tests.mjs', '--script', script, '--concurrency', '1', '--timeout', '600', ...(whenIdle === undefined ? [] : ['--when-idle', whenIdle]), ...(only === undefined ? [] : ['--only', only])],
+      argv: ['node', 'scripts/node-tests.mjs', '--script', script, '--concurrency', '1', '--timeout', '600', ...(only === undefined ? [] : ['--only', only])],
       env: {
         ...env,
         ...Object.fromEntries(APPS.map((app) => [`SOKSAK_BINARY_${app.toUpperCase()}`, appBinary(app)])),
@@ -413,7 +413,7 @@ export async function finishCandidate({ root, context, configRoot, runFolder, sc
 
 async function main(argv) {
   const { values } = parseArgs({
-    args: argv, strict: true, options: { script: { type: 'string' }, native: { type: 'string' }, 'when-idle': { type: 'string' }, candidate: { type: 'string' },
+    args: argv, strict: true, options: { script: { type: 'string' }, native: { type: 'string' }, candidate: { type: 'string' },
       artifacts: { type: 'string' }, 'config-root': { type: 'string' }, only: { type: 'string' } },
   });
   if (values.script === undefined) throw new Error('--script names the window-check script of the run');
@@ -462,7 +462,7 @@ async function main(argv) {
   write(`run ${configRoot}`);
   const inputs = {}, steps = [];
   const failures = await runPlan(await e2ePlan({ root: ROOT, configRoot, script: values.script, native: values.native,
-    whenIdle: values['when-idle'], candidate: values.candidate ? prepared?.context : undefined,
+    candidate: values.candidate ? prepared?.context : undefined,
     artifacts: ordinary ? prepared.context : undefined, only: values.only, runFolder }),
   { write, interrupted: interrupt.signal, outcome: (value) => steps.push(value),
     capture: async (phase) => {

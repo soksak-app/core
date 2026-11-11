@@ -2,7 +2,7 @@
 // starts and ends with its elapsed time, has its own limit, and runs in parallel (docs/operations/examples.md#test-parity).
 // The test script of each package names the flags and the paths: `node --test [flags] <paths>`, optionally after commands such as
 // `pnpm build`. `--script <name>` reads another script of the packages that have it (`verify` runs the window checks, with
-// `--concurrency 1` because they share the applications, and `--timeout <seconds>`, at most 600, which is the limit of each test that declares none, and `--when-idle <seconds>` starts a file only after the person gave no input for that long, so the checks do not take the focus of the person). A file has no limit of its own. The words of the script keep the spaces of their quoted parts and lose their quotes, as the shell of a package script reads them. The files are those that `node --test` runs for the paths: a directory holds every JavaScript file under it, and a path that names no file is an error. `--changed <range>` selects only the packages that hold a file which `git diff --name-only <range>` lists or declare it in `specFiles` of their package.json.
+// `--concurrency 1` because they share the applications, and `--timeout <seconds>`, at most 600, which is the limit of each test that declares none). A file has no limit of its own. The words of the script keep the spaces of their quoted parts and lose their quotes, as the shell of a package script reads them. The files are those that `node --test` runs for the paths: a directory holds every JavaScript file under it, and a path that names no file is an error. `--changed <range>` selects only the packages that hold a file which `git diff --name-only <range>` lists or declare it in `specFiles` of their package.json.
 import { parseArgs } from 'node:util';
 import { execFileSync } from 'node:child_process';
 import { existsSync, globSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -14,29 +14,6 @@ import { auditRunWithCatalog } from './audit-run.mjs';
 import { MAX_TEST_TIMEOUT_MS, runTests } from './test-runner.mjs';
 import { NODE_TEST_REPORTERS } from './node-test-evidence.mjs';
 import { CANDIDATE_HOSTS, candidateScripts } from './candidate-policy.mjs';
-
-/** The seconds since the last keyboard or pointer input of the person, or null when the system does not report it. */
-export function idleSeconds() {
-  const text = execFileSync('ioreg', ['-c', 'IOHIDSystem'], { encoding: 'utf8', maxBuffer: 1 << 24 });
-  const match = /"HIDIdleTime" = (\d+)/.exec(text);
-  return match === null ? null : Number(match[1]) / 1e9;
-}
-
-/**
- * A gate that opens when the person has been idle for `seconds`. No examined event source serves without a permission that an unattended run cannot grant, so the
- * gate reads the idle time every `intervalMs` (docs/operations/examples.md#test-parity).
- */
-export function whenIdle(seconds, { idle = idleSeconds, intervalMs = 5000, write = () => {} } = {}) {
-  return async (item) => {
-    for (;;) {
-      const value = idle();
-      if (value === null) throw new Error('the system does not report the idle time of the input');
-      if (value >= seconds) return;
-      write(`WAIT ${item.name}: the person was active ${value.toFixed(0)}s ago, waiting for ${seconds}s without input`);
-      await new Promise((resolve) => setTimeout(resolve, intervalMs));
-    }
-  };
-}
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
@@ -317,7 +294,6 @@ async function main(argv) {
       script: { type: 'string', default: 'test' },
       timeout: { type: 'string', default: String(TEST_TIMEOUT_MS / 1000) },
       concurrency: { type: 'string', default: String(Math.max(2, cpus().length - 2)) },
-      'when-idle': { type: 'string' },
       changed: { type: 'string' },
     },
   });
@@ -354,9 +330,8 @@ async function main(argv) {
   const run = candidateFolder ? { id: basename(resolve(candidateFolder)), folder: resolve(candidateFolder) } : newRun(ROOT);
   if (candidateFolder && existsSync(join(run.folder, 'manifest.json'))) throw new Error('candidate acceptance cannot reuse an existing run manifest');
   write(`RUN  ${tests.length} test files with ${concurrency} at once, each test limited to ${limitMs / 1000}s and no limit for a file; run ${run.id} keeps its output and manifest in ${run.folder}`);
-  const beforeEach = values['when-idle'] === undefined ? undefined : whenIdle(count('when-idle'), { write });
   // A run passes when every file passed and a file ran a test (runTests).
-  const { passed } = await runTests({ tests, concurrency, write, beforeEach, run });
+  const { passed } = await runTests({ tests, concurrency, write, run });
   if (candidateFolder) {
     const path = join(run.folder, 'manifest.json');
     const manifest = JSON.parse(readFileSync(path, 'utf8'));
