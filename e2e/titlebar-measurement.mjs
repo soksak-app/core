@@ -1,6 +1,7 @@
 // Measures in pixels the center of the window buttons and the center of the first row in one recorded frame (docs/spec/native-surfaces.md#title-bar-height).
 // test/titlebar-measurement.test.mjs checks that it rejects frames whose judgement is off and frames that cannot be measured.
 import { pixel } from "@soksak/window-check/frame.mjs";
+import workbench from "@soksak/workbench/workbench.json" with { type: "json" };
 
 /** The largest distance (px) by which the button center and the first-row center may differ. */
 export const TOLERANCE = 0.5;
@@ -19,6 +20,10 @@ const EDGE = 6;
 const INK = 16;
 // The distance (pt) from the right end of the button area to the column where the background color and the lower border are measured. The first row has a 12px margin to the right of the button area.
 const GAP = 6;
+
+// The lower border of the first row is --bw thick (packages/workbench/app.css), and no theme draws it thicker than this (pt). A line of
+// one colour that is thicker is something drawn over the row, as the tooltip that the mygo workbench draws in its window.
+const BORDER = Math.max(...workbench.themes.map((theme) => parseFloat(theme.shape.bw)));
 
 const differs = (a, b, tolerance) => a.some((value, index) => Math.abs(value - b[index]) > tolerance);
 
@@ -56,6 +61,10 @@ export function measureTitlebar(frame, buttons) {
   const edge = y;
   const line = pixel(frame, column, edge);
   while (y < limit && !differs(pixel(frame, column, y), line, EDGE)) y++;
+  if ((y - edge) / scale > BORDER) {
+    return { time: frame.time, missing: `the line at ${(edge - top) / scale}pt in column ${right + GAP}pt is ${(y - edge) / scale}pt ` +
+      `thick, thicker than the first-row border of every theme (${BORDER}pt), so something covers the first row` };
+  }
   const row = (y - top) / scale;
   const columns = buttons.flatMap((button) => {
     const from = px(button.x + button.width / 4);
