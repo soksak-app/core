@@ -657,6 +657,28 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F750",
+    implementation: [
+      { file: "e2e/capture-frame-identity.test.mjs", symbol: "stopResult = await recording.stop({ after: shown.displayed });" },
+    ],
+    tests: [
+      { file: "e2e/capture-frame-identity.test.mjs", id: "opt-in capture identity matches the presented image of an image region" },
+    ],
+    expected: "The capture identity check of an image region stops its recording after a presentation that follows its read of the presented frame, so the recording holds that frame.",
+    levels: ["application"],
+  },
+  {
+    id: "F751",
+    implementation: [
+      { file: "e2e/projects.test.mjs", symbol: "const framework = { wailsv3: \"Wails v3\", tauriv2: \"Tauri v2\", mygo: \"mygo\" }[app.name];" },
+    ],
+    tests: [
+      { file: "e2e/projects.test.mjs", id: "project windows persist files, inherit settings, and isolate native state" },
+    ],
+    expected: "The project window check expects the title of each host to end with the display name of its framework.",
+    levels: ["application"],
+  },
+  {
     id: "F741",
     implementation: [
       { file: "native/darwin/tests/support/run_until.h", symbol: "static inline void sp_run_until(const char *what, BOOL (^done)(void)) {" },
