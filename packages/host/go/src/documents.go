@@ -874,6 +874,48 @@ func (s *Surfaces) documentInteractionState(viewID uint64, req DocumentRequest) 
 	return state, err
 }
 
+// DocumentCallError returns the failure of the document region call call with its name (docs/spec/native-host.md#host-calls).
+func DocumentCallError(call string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%s: %w", call, err)
+}
+
+// DocumentScrollPoint is the settled position of a scroll of the main document, in CSS pixels.
+type DocumentScrollPoint struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+}
+
+// ParseDocumentScrollPoint reads the reply of a scroll: the settled position, or the error that the reply names.
+func ParseDocumentScrollPoint(document, reply string) (DocumentScrollPoint, error) {
+	var both struct {
+		DocumentScrollPoint
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(reply), &both); err != nil {
+		return DocumentScrollPoint{}, fmt.Errorf("document %s scroll reply is not JSON: %s", document, reply)
+	}
+	if both.Error != "" {
+		return DocumentScrollPoint{}, fmt.Errorf("document %s did not scroll: %s", document, both.Error)
+	}
+	return both.DocumentScrollPoint, nil
+}
+
+// scrollDocument scrolls the main document of the region to the CSS pixel position and returns the settled position.
+func (s *Surfaces) scrollDocument(viewID uint64, req DocumentRequest, x, y float64) (DocumentScrollPoint, error) {
+	replies := make(chan string, 1)
+	err := s.withDocument(viewID, req, func(handle unsafe.Pointer) error {
+		system.ScrollDocument(handle, x, y, func(reply string) { replies <- reply })
+		return nil
+	})
+	if err != nil {
+		return DocumentScrollPoint{}, err
+	}
+	return ParseDocumentScrollPoint(req.Document, <-replies)
+}
+
 // goDocument runs history navigation, opening a history entry, reload, and stop, and returns whether it ran.
 func (s *Surfaces) goDocument(viewID uint64, req DocumentRequest) (bool, error) {
 	action, offset, err := DocumentGoAction(req)

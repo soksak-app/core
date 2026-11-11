@@ -505,6 +505,9 @@ type Platform interface {
 	// GoDocument runs back 0, forward 1, reload 2, stop 3, and the history entry that is offset away from the current one 4,
 	// and returns whether it ran.
 	GoDocument(document unsafe.Pointer, action, offset int) bool
+	// ScrollDocument scrolls the main document of the region to the CSS pixel position; reply receives the settled
+	// position once, as {x, y} or {error}.
+	ScrollDocument(document unsafe.Pointer, x, y float64, reply func(value string))
 	// QueryDocument asks the region for its media, capture and form state; reply receives the JSON reply of native once, as
 	// {media, capture, form} or {error}.
 	QueryDocument(document unsafe.Pointer, reply func(value string))

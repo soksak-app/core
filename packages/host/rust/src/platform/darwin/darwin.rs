@@ -418,6 +418,16 @@ impl Platform for Darwin {
         document::query(document, reply);
         Ok(())
     }
+    fn scroll_document(
+        &self,
+        document: Handle,
+        x: f64,
+        y: f64,
+        reply: Box<dyn FnOnce(String) + Send>,
+    ) -> Result<(), String> {
+        document::scroll_to(document, x, y, reply);
+        Ok(())
+    }
     fn document_interaction_state(&self, document: Handle) -> Result<Option<String>, String> {
         Ok(document::interaction_state(document))
     }

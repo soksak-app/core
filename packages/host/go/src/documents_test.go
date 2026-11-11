@@ -285,3 +285,17 @@ func TestAnInteractiveSubscriptionTurnsTheStreamOnAndDeliversFoldedFrames(t *tes
 		t.Fatalf("the last unsubscribe of the interactive stream gave effects %v, want %v", effects, want)
 	}
 }
+
+// contract: documents.scroll-to.event-settled
+func TestAScrollOfADocumentAnswersTheSettledPositionOfTheReply(t *testing.T) {
+	point, err := ParseDocumentScrollPoint("page", `{"x":10,"y":900}`)
+	if err != nil || point != (DocumentScrollPoint{X: 10, Y: 900}) {
+		t.Fatalf("a reply with a position parses into the position: %v %v", point, err)
+	}
+	if _, err := ParseDocumentScrollPoint("page", `{"error":"the document region is closed"}`); err == nil {
+		t.Fatal("a reply with an error is an error")
+	}
+	if _, err := ParseDocumentScrollPoint("page", `not json`); err == nil {
+		t.Fatal("a reply that is not JSON is an error")
+	}
+}

@@ -55,6 +55,7 @@ function port() {
     place: async (name, insets, visible) => { calls.push(["place", name, insets, visible]); },
     load: async (name, url) => { calls.push(["load", name, url]); },
     go: async (name, action, offset) => { calls.push(offset === undefined ? ["go", name, action] : ["go", name, action, offset]); return true; },
+    scrollTo: async (name, x, y) => { calls.push(["scrollTo", name, x, y]); return { x, y }; },
     detach: async (name) => { calls.push(["detach", name]); },
     onState: (fn) => { receive = fn; return Promise.resolve(() => { stopped = true; }); },
     post: async (name, message) => { calls.push(["post", name, message]); },
@@ -360,6 +361,17 @@ test("an interactive subscription receives the folded frames of the stream", asy
   p.stream("page", 1, { type: "reset" });
   assert.deepEqual(received[1], { type: "reset" });
   await subscription.close();
+});
+
+test("scrollTo sends the position and resolves to the settled position", async () => {
+  const f = fixture();
+  const p = port();
+  const region = attachRegion(p, f.element, "page", f.window, { report() {} });
+  p.release();
+  const settled = await region.scrollTo(120, 40);
+  assert.deepEqual(settled, { x: 120, y: 40 });
+  assert.deepEqual(p.calls.filter(([kind]) => kind === "scrollTo"), [["scrollTo", "page", 120, 40]]);
+  await assert.rejects(region.scrollTo(NaN, 0), /scrollTo requires finite x and y/);
 });
 
 test("an unknown stream is rejected before the host is called", async () => {

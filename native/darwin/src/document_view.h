@@ -116,6 +116,11 @@ bool sp_document_post(void *document, const char *json);
 // document lives.
 void sp_document_set_stream(void *document, sp_document_stream stream, void *context);
 
+// Scrolls the main document of the region to the CSS pixel position and reports the settled position once. The reply is
+// {"x": x, "y": y} with the position that the document took, or {"error": reason} for a closed region.
+typedef void (*sp_document_scrolled)(void *context, const char *json);
+void sp_document_scroll_to(void *document, double x, double y, sp_document_scrolled reply, void *context);
+
 // Turns the stream "elements" or "requests" of the document on or off; the host turns a stream on while it has a
 // subscriber. A stream that is off collects nothing. Turning the element stream on sends a snapshot; turning it off drops
 // an unacknowledged snapshot. Returns false for another stream name or a closed document.

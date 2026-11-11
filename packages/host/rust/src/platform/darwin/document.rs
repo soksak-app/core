@@ -91,6 +91,13 @@ unsafe extern "C" {
     fn sp_document_appearance(document: *mut c_void, dark: bool);
     fn sp_document_close(document: *mut c_void);
     fn sp_document_query(document: *mut c_void, reply: Event, context: *mut c_void);
+    fn sp_document_scroll_to(
+        document: *mut c_void,
+        x: f64,
+        y: f64,
+        reply: Event,
+        context: *mut c_void,
+    );
     fn sp_document_interaction_state(document: *mut c_void) -> *mut c_char;
     fn sp_document_restore(document: *mut c_void, state: *const c_char) -> *const c_char;
     fn free(pointer: *mut c_void);
@@ -273,6 +280,23 @@ extern "C" fn queried(context: *mut c_void, value: *const c_char) {
 pub fn query(document: Handle, reply: Box<dyn FnOnce(String) + Send>) {
     let receiver = Box::into_raw(Box::new(QueryReceiver(reply)));
     unsafe { sp_document_query(document as *mut c_void, queried, receiver as *mut c_void) };
+}
+
+/// The receiver of one scroll reply. Native calls it once.
+struct ScrollReceiver(Box<dyn FnOnce(String) + Send>);
+
+extern "C" fn scrolled(context: *mut c_void, value: *const c_char) {
+    let receiver = unsafe { Box::from_raw(context as *mut ScrollReceiver) };
+    let value = unsafe { CStr::from_ptr(value) }
+        .to_string_lossy()
+        .into_owned();
+    (receiver.0)(value);
+}
+
+/// Scrolls the main document of the region to the CSS pixel position; reply receives the settled position once.
+pub fn scroll_to(document: Handle, x: f64, y: f64, reply: Box<dyn FnOnce(String) + Send>) {
+    let receiver = Box::into_raw(Box::new(ScrollReceiver(reply)));
+    unsafe { sp_document_scroll_to(document as *mut c_void, x, y, scrolled, receiver as *mut c_void) };
 }
 
 /// The interactionState of the region as base64, empty when the web view yields none, or None for a closed region.

@@ -2750,6 +2750,57 @@ pub fn query(webview: &Webview, request: Request) -> Result<Report, String> {
     parse_report(&request.document, &reply)
 }
 
+/// The settled position of a scroll of the main document, in CSS pixels.
+#[derive(Debug, Default, PartialEq, Serialize)]
+pub struct ScrollPoint {
+    pub x: f64,
+    pub y: f64,
+}
+
+/// Reads the reply of a scroll: the settled position, or the error that the reply names.
+fn parse_scroll_point(document: &str, reply: &str) -> Result<ScrollPoint, String> {
+    #[derive(Deserialize)]
+    struct Both {
+        #[serde(default)]
+        x: f64,
+        #[serde(default)]
+        y: f64,
+        #[serde(default)]
+        error: Option<String>,
+    }
+    let both: Both = serde_json::from_str(reply)
+        .map_err(|_| format!("document {document} scroll reply is not JSON: {reply}"))?;
+    if let Some(error) = both.error {
+        return Err(format!("document {document} did not scroll: {error}"));
+    }
+    Ok(ScrollPoint { x: both.x, y: both.y })
+}
+
+/// Scrolls the main document of the region to the CSS pixel position and returns the settled position.
+pub fn scroll_to(webview: &Webview, request: Request, x: f64, y: f64) -> Result<ScrollPoint, String> {
+    if x.is_nan() || x.is_infinite() || y.is_nan() || y.is_infinite() {
+        return Err("scrollTo requires finite x and y".to_string());
+    }
+    let platform = platform::current()?;
+    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+    with_document(webview, &request, move |handle| {
+        platform.scroll_document(
+            handle,
+            x,
+            y,
+            Box::new(move |reply| {
+                if sender.send(reply).is_err() {
+                    log_error("document scroll", "the caller stopped waiting for the reply");
+                }
+            }),
+        )
+    })?;
+    let reply = receiver
+        .recv()
+        .map_err(|_| format!("document {} gave no scroll reply", request.document))?;
+    parse_scroll_point(&request.document, &reply)
+}
+
 /// Returns the interactionState of a document region as base64, empty when the web view yields none.
 pub fn interaction_state(webview: &Webview, request: Request) -> Result<String, String> {
     let platform = platform::current()?;

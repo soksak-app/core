@@ -80,6 +80,14 @@ func goHost_document_queried(context uintptr, value *byte) {
 	reply(native.GoString(value))
 }
 
+// goHost_document_scrolled receives the one reply of a scroll and releases its receiver.
+func goHost_document_scrolled(context uintptr, value *byte) {
+	handle := handles.Handle(uintptr(context))
+	reply := handle.Value().(func(string))
+	handle.Delete()
+	reply(native.GoString(value))
+}
+
 func goHost_document_event(context uintptr, value *byte) {
 	handles.Handle(uintptr(context)).Value().(func(string))(native.GoString(value))
 }
@@ -255,6 +263,11 @@ func (implementation) PostDocument(document unsafe.Pointer, json string) bool {
 
 func (implementation) GoDocument(document unsafe.Pointer, action, offset int) bool {
 	return bool(native.MainSpDocumentGo(document, int32(action), int32(offset)))
+}
+
+// ScrollDocument scrolls the main document; the reply of native names the settled position.
+func (implementation) ScrollDocument(document unsafe.Pointer, x, y float64, reply func(value string)) {
+	native.DocumentScrollTo(document, x, y, uintptr(handles.NewHandle(reply)))
 }
 
 func (implementation) QueryDocument(document unsafe.Pointer, reply func(value string)) {

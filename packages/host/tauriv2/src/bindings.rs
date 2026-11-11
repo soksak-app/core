@@ -748,6 +748,18 @@ async fn document_query(webview: Webview, request: Argument<documents::Request>)
     .await
 }
 
+/// Scrolls the main document of a region to the CSS pixel position and returns the settled position.
+#[tauri::command]
+async fn document_scroll_to(
+    webview: Webview,
+    request: Argument<documents::Request>,
+    x: f64,
+    y: f64,
+) -> Result<documents::ScrollPoint, String> {
+    let Argument(request) = request;
+    blocking(move || documents::scroll_to(&webview, request, x, y)).await
+}
+
 /// Returns the interactionState of a document region as base64.
 #[tauri::command]
 async fn document_interaction_state(webview: Webview, request: Argument<documents::Request>) -> Result<String, String> {

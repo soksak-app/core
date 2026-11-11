@@ -282,6 +282,15 @@ pub fn query_document(
     missing("document query")
 }
 
+pub fn scroll_document(
+    _document: Handle,
+    _x: f64,
+    _y: f64,
+    _reply: Box<dyn FnOnce(String) + Send>,
+) -> Result<(), String> {
+    missing("document scroll")
+}
+
 pub fn document_interaction_state(_document: Handle) -> Result<Option<String>, String> {
     missing("document interaction state")
 }

@@ -40,6 +40,7 @@ type Callbacks struct {
 	DocumentStream            func(uintptr, *byte)
 	CoreRootServe             func(uintptr, *byte, *byte, *unsafe.Pointer, *uint64, **byte) bool
 	DocumentQueried           func(uintptr, *byte)
+	DocumentScrolled          func(uintptr, *byte)
 	DocumentEvent             func(uintptr, *byte)
 	MemoryPressure            func(*byte, uint64)
 	DockNewWindow             func()
@@ -47,4 +48,4 @@ type Callbacks struct {
 }
 
 // CallbackTable holds process-lifetime function addresses in the native header's field order.
-type CallbackTable [36]uintptr
+type CallbackTable [37]uintptr

@@ -102,6 +102,7 @@ type NativeFunctions struct {
 	DocumentBinaryTake                    func(unsafe.Pointer, *byte, *unsafe.Pointer, *uint64) *byte
 	DocumentCreate                        func(unsafe.Pointer, *byte, *byte, *byte, *byte, *byte, uintptr) unsafe.Pointer
 	DocumentQuery                         func(unsafe.Pointer, uintptr)
+	DocumentScrollTo                      func(unsafe.Pointer, float64, float64, uintptr)
 	DocumentSetEvent                      func(unsafe.Pointer, uintptr)
 	DocumentSetMessage                    func(unsafe.Pointer, uintptr)
 	DocumentSetStream                     func(unsafe.Pointer, uintptr)
@@ -278,6 +279,9 @@ func (functions NativeFunctions) Validate() error {
 	}
 	if functions.DocumentQuery == nil {
 		return fmt.Errorf("native API function is missing: documentQuery")
+	}
+	if functions.DocumentScrollTo == nil {
+		return fmt.Errorf("native API function is missing: documentScrollTo")
 	}
 	if functions.DocumentSetEvent == nil {
 		return fmt.Errorf("native API function is missing: documentSetEvent")

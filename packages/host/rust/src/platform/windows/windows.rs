@@ -307,6 +307,15 @@ impl Platform for Windows {
     ) -> Result<(), String> {
         unsupported::query_document(document, reply)
     }
+    fn scroll_document(
+        &self,
+        document: Handle,
+        x: f64,
+        y: f64,
+        reply: Box<dyn FnOnce(String) + Send>,
+    ) -> Result<(), String> {
+        unsupported::scroll_document(document, x, y, reply)
+    }
     fn document_interaction_state(&self, document: Handle) -> Result<Option<String>, String> {
         unsupported::document_interaction_state(document)
     }

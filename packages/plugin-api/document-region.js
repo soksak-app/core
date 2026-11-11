@@ -185,6 +185,14 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
       if (!Number.isInteger(offset) || offset === 0) return Promise.reject(new Error(`invalid history offset ${offset}`));
       return queue(() => port.go(name, "entry", offset));
     },
+    /**
+     * Scrolls the main document of the region to the CSS pixel position and resolves to the settled position {x, y},
+     * which the completion of the scroll script of the content world confirms.
+     */
+    scrollTo(x, y) {
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return Promise.reject(new Error(`scrollTo requires finite x and y, not ${x}, ${y}`));
+      return queue(() => port.scrollTo(name, x, y));
+    },
     back() { return this.go("back"); },
     forward() { return this.go("forward"); },
     reload() { return this.go("reload"); },

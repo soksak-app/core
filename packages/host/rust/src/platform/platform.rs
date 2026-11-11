@@ -615,6 +615,15 @@ pub trait Platform: CoreRootHost + Send + Sync {
         document: Handle,
         reply: Box<dyn FnOnce(String) + Send>,
     ) -> Result<(), String>;
+    /// Scrolls the main document of the region to the CSS pixel position; reply receives the settled position once,
+    /// as {x, y} or {error}. Call it on the main thread.
+    fn scroll_document(
+        &self,
+        document: Handle,
+        x: f64,
+        y: f64,
+        reply: Box<dyn FnOnce(String) + Send>,
+    ) -> Result<(), String>;
     /// The interactionState of the region as base64, empty when the web view yields none, or None for a closed region.
     fn document_interaction_state(&self, document: Handle) -> Result<Option<String>, String>;
     /// Restores the base64 interactionState into a region that has loaded nothing; the error is the refusal of native.

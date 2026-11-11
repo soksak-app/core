@@ -10,6 +10,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"math"
 	"time"
 )
 
@@ -359,6 +360,30 @@ func (h *Host) DocumentGo(ctx context.Context, reqJSON json.RawMessage) (bool, e
 	return s.goDocument(uint64(s.window.ID()), req)
 }
 
+func isFinite(v float64) bool {
+	return !math.IsNaN(v) && !math.IsInf(v, 0)
+}
+
+// DocumentScrollTo scrolls the main document of a region to the CSS pixel position and returns the settled position.
+func (h *Host) DocumentScrollTo(ctx context.Context, reqJSON json.RawMessage) (DocumentScrollPoint, error) {
+	req, err := argument[DocumentRequest]("request", reqJSON)
+	if err != nil {
+		return DocumentScrollPoint{}, err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return DocumentScrollPoint{}, err
+	}
+	var position struct {
+		X float64 `json:"x"`
+		Y float64 `json:"y"`
+	}
+	if err := json.Unmarshal(reqJSON, &position); err != nil || !isFinite(position.X) || !isFinite(position.Y) {
+		return DocumentScrollPoint{}, fmt.Errorf("scrollTo requires finite x and y")
+	}
+	return s.scrollDocument(uint64(s.window.ID()), req, position.X, position.Y)
+}
+
 // DocumentQuery answers the media, capture and form state of a document region (docs/spec/plugins.md#memory-saver).
 func (h *Host) DocumentQuery(ctx context.Context, reqJSON json.RawMessage) (DocumentReport, error) {
 	req, err := argument[DocumentRequest]("request", reqJSON)
@@ -674,7 +699,7 @@ func runNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 			return s.ModalContent(id, instance), nil
 		}
 		return nil, s.ModalReady(id, instance)
-	case "DocumentAttach", "DocumentLoad", "DocumentZoom", "DocumentGo", "DocumentPost", "DocumentDetach", "DocumentSubscribe", "DocumentUnsubscribe":
+	case "DocumentAttach", "DocumentLoad", "DocumentZoom", "DocumentGo", "DocumentPost", "DocumentDetach", "DocumentSubscribe", "DocumentUnsubscribe", "DocumentScrollTo":
 		var req DocumentRequest
 		if err := nativeArgs(call, nativeArg{"request", &req}); err != nil {
 			return nil, err
@@ -695,6 +720,19 @@ func runNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 			return DocumentSubscription{Handle: handle}, err
 		case "DocumentUnsubscribe":
 			return nil, s.unsubscribeDocument(viewID, req)
+		case "DocumentScrollTo":
+			var position struct {
+				X float64 `json:"x"`
+				Y float64 `json:"y"`
+			}
+			if err := nativeArgs(call, nativeArg{"x", &position.X}, nativeArg{"y", &position.Y}); err != nil {
+				return nil, err
+			}
+			if !isFinite(position.X) || !isFinite(position.Y) {
+				return nil, fmt.Errorf("scrollTo requires finite x and y")
+			}
+			point, err := s.scrollDocument(viewID, req, position.X, position.Y)
+			return point, DocumentCallError("documentScrollTo", err)
 		default:
 			return nil, s.detachDocument(viewID, req)
 		}

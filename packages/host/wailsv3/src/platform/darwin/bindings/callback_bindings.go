@@ -38,6 +38,7 @@ extern void goHost_view_responsiveness(uintptr_t arg0, _Bool arg1);
 extern void goHost_document_stream(uintptr_t arg0, char * arg1);
 extern _Bool goHost_core_root_serve(uintptr_t arg0, char * arg1, char * arg2, void ** arg3, size_t * arg4, char ** arg5);
 extern void goHost_document_queried(uintptr_t arg0, char * arg1);
+extern void goHost_document_scrolled(uintptr_t arg0, char * arg1);
 extern void goHost_document_event(uintptr_t arg0, char * arg1);
 extern void goHost_memory_pressure(char * arg0, unsigned long long arg1);
 extern void goHost_dock_new_window(void);
@@ -160,6 +161,9 @@ func InstallCallbacks(callbacks abi.Callbacks) error {
 	if callbacks.DocumentQueried == nil {
 		return fmt.Errorf("native callback is missing: document_queried")
 	}
+	if callbacks.DocumentScrolled == nil {
+		return fmt.Errorf("native callback is missing: document_scrolled")
+	}
 	if callbacks.DocumentEvent == nil {
 		return fmt.Errorf("native callback is missing: document_event")
 	}
@@ -205,6 +209,7 @@ func InstallCallbacks(callbacks abi.Callbacks) error {
 	native.document_stream = (*[0]byte)(C.goHost_document_stream)
 	native.core_root_serve = (*[0]byte)(C.goHost_core_root_serve)
 	native.document_queried = (*[0]byte)(C.goHost_document_queried)
+	native.document_scrolled = (*[0]byte)(C.goHost_document_scrolled)
 	native.document_event = (*[0]byte)(C.goHost_document_event)
 	native.memory_pressure = (*[0]byte)(C.goHost_memory_pressure)
 	native.dock_new_window = (*[0]byte)(C.goHost_dock_new_window)
@@ -375,6 +380,11 @@ func goHost_core_root_serve(arg0 C.uintptr_t, arg1 *C.char, arg2 *C.char, arg3 *
 //export goHost_document_queried
 func goHost_document_queried(arg0 C.uintptr_t, arg1 *C.char) {
 	callbackHandlers.DocumentQueried(uintptr(arg0), (*byte)(unsafe.Pointer(arg1)))
+}
+
+//export goHost_document_scrolled
+func goHost_document_scrolled(arg0 C.uintptr_t, arg1 *C.char) {
+	callbackHandlers.DocumentScrolled(uintptr(arg0), (*byte)(unsafe.Pointer(arg1)))
 }
 
 //export goHost_document_event

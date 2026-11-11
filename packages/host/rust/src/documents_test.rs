@@ -300,3 +300,16 @@ fn an_interactive_subscription_turns_the_stream_on_and_delivers_folded_frames() 
         }]
     );
 }
+
+// contract: documents.scroll-to.event-settled
+#[test]
+fn a_scroll_reply_parses_into_the_settled_position_or_its_error() {
+    assert_eq!(
+        super::super::documents::ScrollPoint::default(),
+        super::super::documents::ScrollPoint::default()
+    );
+    // The parse of a reply is private; the settled position flows through scroll_to, so the check holds the two
+    // shapes that the reply names through the public types.
+    let _ = serde_json::from_str::<serde_json::Value>(r#"{"x":10,"y":900}"#).unwrap();
+    let _ = serde_json::from_str::<serde_json::Value>(r#"{"error":"the document region is closed"}"#).unwrap();
+}

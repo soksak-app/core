@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F716: `scrollTo {document, x, y}`가 콘텐츠 월드에서 영역의 main 문서를 스크롤하고 스크롤 스크립트 완료의 정착 위치로 답한다. 포트·호출 표·plugin API `scrollTo`의 새 `documentScrollTo` 호출로 이어지며, 유한하지 않은 위치는 거부되고 오류 답은 그것을 이름한다.
 - F715: 문서 영역이 기존 구독에 세 번째 스트림 이름 `interactive`를 받는다. 모든 프레임의 콘텐츠 월드 스크립트가 자기 문서의 조작 가능 요소를 프레임 로컬 rect와 sensitive 플래그로 보고하고 프레임 요소의 로드마다 클레임을 발급하며, 호스트가 각 클레임을 짝 맞는 프레임 안의 호출로 전달하고 보고를 스냅숏 승인 게이트 아래 보고 도착마다 하나의 값으로 접으며, 메인 프레임 커밋이 프레임 표를 비우고 reset을 보낸다. elements와 requests 스트림은 바뀌지 않는다.
 - F696-7: CI 는 `linux-node` job 에서 검증 pipeline 의 headless owner test 를 Linux 로 실행하고, 이 job 은 `os` field 가 Linux 를 제외하는 workspace project 없이 잠긴 dependency 를 설치한다. 실제 macOS 기능이 필요한 owner 는 macOS job 의 system owner 로 실행되고, `make check-windows-rust` 는 Windows host 에서 Rust host 를 Windows 용으로 검사한다.
 - F696-4-5: 인식을 대체하려고만 있던 reference-pixel 장치를 제거한다. native/darwin, Go·Rust host, plugin API의 document reference producer와 capture(`diagnostics.capture.document-reference`, 그 contract 행, 명세, provider), terminal reference acquisition과 그 recorded content·recorded fixture, capture callback fixture, 그리고 reference만 쓰던 composition pixel proof와 card frame geometry가 대상이다. 호출자 감사에서 다른 쓰임은 없었다. document frame identity entry, QR atlas, `serveContentPage`는 identity·IME·layout 쓰임으로 남고, root-only frame identity entry는 붙은 document가 plugin-root capability를 얻지 않는다는 검사를 유지한다.

@@ -30,7 +30,10 @@ func Functions() abi.NativeFunctions {
 		DocumentCreate: func(a0 unsafe.Pointer, a1 *byte, a2 *byte, a3 *byte, a4 *byte, a5 *byte, a6 uintptr) unsafe.Pointer {
 			return C.documentCreate(a0, (*C.char)(unsafe.Pointer(a1)), (*C.char)(unsafe.Pointer(a2)), (*C.char)(unsafe.Pointer(a3)), (*C.char)(unsafe.Pointer(a4)), (*C.char)(unsafe.Pointer(a5)), C.uintptr_t(a6))
 		},
-		DocumentQuery:                 func(a0 unsafe.Pointer, a1 uintptr) { C.documentQuery(a0, C.uintptr_t(a1)) },
+		DocumentQuery: func(a0 unsafe.Pointer, a1 uintptr) { C.documentQuery(a0, C.uintptr_t(a1)) },
+		DocumentScrollTo: func(a0 unsafe.Pointer, a1 float64, a2 float64, a3 uintptr) {
+			C.documentScrollTo(a0, C.double(a1), C.double(a2), C.uintptr_t(a3))
+		},
 		DocumentSetEvent:              func(a0 unsafe.Pointer, a1 uintptr) { C.documentSetEvent(a0, C.uintptr_t(a1)) },
 		DocumentSetMessage:            func(a0 unsafe.Pointer, a1 uintptr) { C.documentSetMessage(a0, C.uintptr_t(a1)) },
 		DocumentSetStream:             func(a0 unsafe.Pointer, a1 uintptr) { C.documentSetStream(a0, C.uintptr_t(a1)) },

@@ -88,6 +88,7 @@ const METHOD = {
   documentZoom: "DocumentZoom",
   documentGo: "DocumentGo",
   documentQuery: "DocumentQuery",
+  documentScrollTo: "DocumentScrollTo",
   documentInteractionState: "DocumentInteractionState",
   documentPost: "DocumentPost",
   viewEvent: "ViewEvent", viewReply: "ViewReply", viewRequest: "ViewRequest",
@@ -162,6 +163,7 @@ const SURFACE_METHOD = {
   documentLoad: "DocumentLoad",
   documentZoom: "DocumentZoom",
   documentGo: "DocumentGo",
+  documentScrollTo: "DocumentScrollTo",
   documentDetach: "DocumentDetach",
   documentSubscribe: "DocumentSubscribe",
   documentUnsubscribe: "DocumentUnsubscribe",
@@ -237,6 +239,7 @@ export const page = (() => {
       load: (document, url) => call("documentLoad", { surface, document, url }),
       zoom: (document, zoom) => call("documentZoom", { surface, document, zoom }),
       go: (document, action, offset) => call("documentGo", offset === undefined ? { surface, document, action } : { surface, document, action, offset }),
+      scrollTo: (document, x, y) => call("documentScrollTo", { surface, document, x, y }),
       detach: (document) => call("documentDetach", { surface, document }),
       onState: (fn) => listen("document-state", (sent) => {
         if (sent.surface === surface) fn(sent.document, sent.state);

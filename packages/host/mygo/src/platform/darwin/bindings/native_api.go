@@ -92,6 +92,16 @@ func Functions(library uintptr) (abi.NativeFunctions, error) {
 		purego.RegisterFunc(&functions.DocumentQuery, address)
 	}
 	{
+		address, err := purego.Dlsym(library, "documentScrollTo")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API documentScrollTo: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API documentScrollTo: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.DocumentScrollTo, address)
+	}
+	{
 		address, err := purego.Dlsym(library, "documentSetEvent")
 		if err != nil {
 			return abi.NativeFunctions{}, fmt.Errorf("native API documentSetEvent: %w", err)

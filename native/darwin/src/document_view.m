@@ -1954,6 +1954,30 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
     return view; // The caller owns this reference until sp_document_close.
 }
 
+void sp_document_scroll_to(void *handle, double x, double y, sp_document_scrolled reply, void *context) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    SPDocumentView *view = (SPDocumentView *)handle;
+    if (!view || view.closed) {
+        reply(context, "{\"error\":\"the document region is closed\"}");
+        return;
+    }
+    // The settled position is the completion of the scroll script: the document took the position when the script returned,
+    // and the scroll report of the state names the same position (docs/spec/native-surfaces.md#document-streams).
+    [view callAsyncJavaScript:@"window.scrollTo(x, y); return { x: window.scrollX, y: window.scrollY };"
+        arguments:@{ @"x": @(x), @"y": @(y) } inFrame:nil
+        inContentWorld:[WKContentWorld worldWithName:kDocumentWorld]
+        completionHandler:^(id result, NSError *error) {
+            if (error || ![result isKindOfClass:NSDictionary.class]) {
+                reply(context, [NSString stringWithFormat:@"{\"error\":\"%@\"}",
+                    error ? error.localizedDescription : @"the scroll result is not an object"].UTF8String);
+                return;
+            }
+            NSDictionary *position = result;
+            reply(context, [NSString stringWithFormat:@"{\"x\":%@,\"y\":%@}",
+                position[@"x"], position[@"y"]].UTF8String);
+        }];
+}
+
 void sp_document_query(void *handle, sp_document_query_reply reply, void *context) {
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
     SPDocumentView *view = (SPDocumentView *)handle;

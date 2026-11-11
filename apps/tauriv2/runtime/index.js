@@ -48,6 +48,7 @@ const COMMAND = {
   documentZoom: "document_zoom",
   documentGo: "document_go",
   documentQuery: "document_query",
+  documentScrollTo: "document_scroll_to",
   documentInteractionState: "document_interaction_state",
   documentPost: "document_post",
   viewRequest: "view_request",
@@ -135,6 +136,7 @@ const ARG = {
   documentZoom: (request) => ({ request }),
   documentGo: (request) => ({ request }),
   documentQuery: (request) => ({ request }),
+  documentScrollTo: ({ surface, document, x, y }) => ({ request: { surface, document }, x, y }),
   documentInteractionState: (request) => ({ request }),
   documentPost: (request) => ({ request }),
   viewRequest: (request) => ({ request }),
@@ -362,6 +364,7 @@ export const page = (() => {
       load: (document, url) => call("documentLoad", { surface, document, url }),
       zoom: (document, zoom) => call("documentZoom", { surface, document, zoom }),
       go: (document, action, offset) => call("documentGo", offset === undefined ? { surface, document, action } : { surface, document, action, offset }),
+      scrollTo: (document, x, y) => call("documentScrollTo", { surface, document, x, y }),
       detach: (document) => call("documentDetach", { surface, document }),
       onState: (fn) => listen("document-state", (e) => {
         if (e.payload.surface === surface) fn(e.payload.document, e.payload.state);
