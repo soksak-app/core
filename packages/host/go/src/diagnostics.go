@@ -631,12 +631,16 @@ func (c platformCapture) newWindowCapturer() (platform.NewWindowCapturer, error)
 	return capturer, nil
 }
 
+// HoldNewWindow sets the hold in a step of the main thread: the native hold sets AppKit state, and the request that starts it runs
+// on a goroutine of the endpoint, from which a native call of the main thread runs its body directly
+// (native/darwin/src/main_thread.h).
 func (c platformCapture) HoldNewWindow() error {
 	capturer, err := c.newWindowCapturer()
 	if err != nil {
 		return err
 	}
-	return capturer.CaptureHoldNewWindow()
+	mainThreadStep(func() { err = capturer.CaptureHoldNewWindow() })
+	return err
 }
 
 // WaitNewWindow waits, as the other capture waits do, until the close of the endpoint connection of the request or of its

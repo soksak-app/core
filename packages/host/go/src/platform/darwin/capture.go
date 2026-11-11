@@ -116,7 +116,7 @@ func (implementation) CaptureWait(token uint64) (bool, error) {
 	return false, fmt.Errorf("capture wait: %s", answer.failure)
 }
 
-// CaptureHoldNewWindow holds the next show of a window that is not on screen; the native call runs on the main thread.
+// CaptureHoldNewWindow holds the next show of a window that is not on screen. The caller runs it in a step of the main thread.
 func (implementation) CaptureHoldNewWindow() error {
 	var nativeError *byte
 	held := bool(diagnosticNative.MainSpCaptureHoldNewWindow(&nativeError))
