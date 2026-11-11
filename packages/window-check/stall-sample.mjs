@@ -16,6 +16,21 @@ const SAMPLER_LIMIT = 5000;
 /** The milliseconds in which a process at its limit waits for the state of that moment, longer than SAMPLER_LIMIT. */
 const STATE_LIMIT = 6000;
 
+// The services that sample asks while it records and that a loaded machine answers late. For a binary without symbols, as
+// /bin/sleep, CoreSymbolication looks for its dSYM with a Spotlight query to mds, which tccd attributes, and the run waits
+// for the answer: in the window runs of 2026-11-11 the first reply of mds came 0.4 to 2 s after the query instead of 0.04 s,
+// and a sample of one second did not reach "Sampling completed" within 5 s. Without them sample symbolicates every frame
+// that it symbolicates with them, from the binaries and the shared cache, and the run ends one second after its start.
+const LATE_SERVICES = ["com.apple.metadata.mds", "com.apple.coresymbolicationd"];
+
+/** The sandbox profile of sample: everything else that sample does is allowed. */
+const SAMPLE_PROFILE = `(version 1)(allow default)(deny mach-lookup (global-name ${LATE_SERVICES.map((name) => `"${name}"`).join(" ")}))`;
+
+/** The command and the arguments that sample the threads of pid for seconds into file without the late services. */
+function sampleCommand(pid, seconds, file) {
+  return ["/usr/bin/sandbox-exec", ["-p", SAMPLE_PROFILE, "/usr/bin/sample", String(pid), String(seconds), "-file", file]];
+}
+
 // The state of the machine when a process reached its limit. A stalled process writes nothing itself, so what it waited
 // for is seen only from what surrounds it at that moment.
 async function systemState() {
@@ -30,7 +45,7 @@ async function systemState() {
  * run(command, args, options)  an executor that resolves to a process result ({status, stderr}). The checks replace it.
  */
 export async function samplerState(pid, file, run = runProcess) {
-  const [state, result] = await Promise.all([systemState(), run("/usr/bin/sample", [String(pid), "1", "-file", file], { limitMs: SAMPLER_LIMIT, atLimit: null })]);
+  const [state, result] = await Promise.all([systemState(), run(...sampleCommand(pid, 1, file), { limitMs: SAMPLER_LIMIT, atLimit: null })]);
   if (result.error) return `${state}, stacks of the process not recorded: ${result.error.message}`;
   if (result.status !== 0) return `${state}, stacks of the process not recorded: exited with ${result.status}: ${String(result.stderr).trim()}`;
   return `${state}, stacks of the process: ${file}`;
@@ -90,7 +105,7 @@ export const STALL_AFTER = 3000;
  */
 export async function sampleProcess(pid, file, run = runProcess) {
   const atLimit = (sampler) => samplerState(sampler, `${file}.sampler.txt`);
-  const result = await run("/usr/bin/sample", [String(pid), String(SECONDS), "-file", file], { atLimit });
+  const result = await run(...sampleCommand(pid, SECONDS, file), { atLimit });
   if (result.error) throw new Error(`sample ${pid}: ${result.error.message}`);
   if (result.status !== 0) throw new Error(`sample ${pid} exited with ${result.status}: ${String(result.stderr).trim()}`);
   return file;

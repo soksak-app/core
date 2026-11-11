@@ -54,6 +54,8 @@ test("native stall sampling keeps the check event loop responsive", { timeout: 1
     await beat;
     assert.equal(heartbeat, true);
     assert.equal(await task, join(directory, "sample.txt"));
+    // sample runs without the services of the symbol lookup and still names the functions of the system libraries.
+    assert.match(readFileSync(join(directory, "sample.txt"), "utf8"), /^ +\d+ [A-Za-z_][\w:]* +\(in libsystem_[a-z_]+\.dylib\) \+ \d+/m);
   } finally {
     await task;
   }

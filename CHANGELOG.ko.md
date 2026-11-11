@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F526: window check 의 stall sample 은 load 가 높은 기계에서 늦게 답하는 Spotlight symbol lookup 없이 `sample` 을 돌리므로, load 와 상관없이 멈춘 process 의 stack 을 남긴다.
 - F753: 시험 목록 검사는 host contract 에 없는 contract case 를 선언한 host·`sok` test 에서 platform 에 상관없이 실패하고, 두 표 어디에도 없는 case 를 선언한 page test 에서도 실패한다. page drag 의 leg 가 각 단계에서 읽은 refresh rate 로 걸음을 맞추는 동작은 Wails·Tauri host 의 contract case `diagnostics.drag.page-legs-follow-the-refresh-rate` 다.
 - F755: 늦게 보인 변화로 window check 가 실패하면 기다림 안의 display link 침묵을 display 의 refresh 주기로 바쁜 main thread 와 창에 오지 않은 display refresh 로 나눠 적고, 기다림 안에서 commit 한 각 layout 의 commit 시각을 적는다. 녹화는 그 layout 을 `layouts.json` 에 남긴다.
 - F757: mygo 워크벤치의 frame 은 앞선 frame 이 열고 포기한 layout 의 cancel 에 호스트가 답하지 않은 동안 layout 을 열지 않으므로, 키보드 call 다음 frame 이 더는 preparation 이 넘겨받지 않은 layout 으로 실패하지 않는다. cancel 의 답 다음 frame 이 line 을 배치한다.

@@ -15,7 +15,7 @@ function execFile(command, args, options, callback) {
     queueMicrotask(() => callback(null, ABSENT_DOMAIN, ""));
     return { pid: undefined, kill: () => false };
   }
-  if (command === "/usr/bin/sample" && args[0] === String(ABSENT_HOST)) {
+  if (command === "/usr/bin/sandbox-exec" && args[2] === "/usr/bin/sample" && args[3] === String(ABSENT_HOST)) {
     queueMicrotask(() => callback(Object.assign(new Error(`Command failed: ${command} ${args.join(" ")}`), { code: 255 }), "", ABSENT_SAMPLE));
     return { pid: undefined, kill: () => false };
   }
@@ -59,7 +59,7 @@ test("sampleProcess runs sample on the host process into the given file and repo
   const calls = [];
   const path = await sampleProcess(4321, "/x/stall.txt", (command, args) => { calls.push([command, ...args]); return { status: 0, stderr: "" }; });
   assert.equal(path, "/x/stall.txt");
-  assert.deepEqual(calls, [["/usr/bin/sample", "4321", "2", "-file", "/x/stall.txt"]]);
+  assert.deepEqual(calls.map((call) => call.slice(-5)), [["/usr/bin/sample", "4321", "2", "-file", "/x/stall.txt"]]);
   await assert.rejects(sampleProcess(4321, "/x/stall.txt", () => ({ status: 1, stderr: "sample cannot examine process 4321\n" })),
     /^Error: sample 4321 exited with 1: sample cannot examine process 4321$/);
 });
@@ -103,6 +103,26 @@ test("the limit of a process holds while a check moves mocked timers", { timeout
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const { error } = await runProcess("/bin/sh", ["-c", "exec sleep 5"], { limitMs: 100, atLimit: null });
   assert.equal(error.message, "ended by SIGTERM at its limit of 100 ms; standard error: none");
+});
+
+// A binary without symbols, as /bin/sleep, makes sample look for its dSYM with a Spotlight query, which mds answers and tccd
+// attributes; on a loaded machine its first reply came after 0.4 to 2 s instead of 0.04 s, and a sample of one second did not
+// reach "Sampling completed" within 5 s (the unified log of the window runs of 2026-11-11). The fake answers as that sample
+// did whenever sample can reach those services, so only a sample that does not wait for them keeps the stacks.
+test("a stall sample waits for no symbol lookup of Spotlight, which a loaded machine answers late", async () => {
+  const { samplerState } = await import("../stall-sample.mjs");
+  const calls = [];
+  const loaded = async (command, args, { limitMs = 10000 } = {}) => {
+    calls.push([command, ...args]);
+    const sample = command === "/usr/bin/sample" ? args : command === "/usr/bin/sandbox-exec" && args[0] === "-p" && args[2] === "/usr/bin/sample" ? args.slice(3) : null;
+    assert.ok(sample, `not a sample: ${command} ${args.join(" ")}`);
+    const denied = (service) => command === "/usr/bin/sandbox-exec" && new RegExp(`\\(deny mach-lookup \\(global-name [^)]*"${service.replaceAll(".", "\\.")}"`).test(args[1]);
+    if (denied("com.apple.metadata.mds") && denied("com.apple.coresymbolicationd")) return { status: 0, stderr: "" };
+    return { error: new Error(`ended by SIGTERM at its limit of ${limitMs} ms; standard error: Sampling process ${sample[0]} for ${sample[1]} second`) };
+  };
+  assert.equal(await sampleProcess(4321, "/x/stall.txt", loaded), "/x/stall.txt");
+  assert.match(await samplerState(99, "/x/sampler.txt", loaded), /^free \d+ MB on \/, load \d+\.\d, stacks of the process: \/x\/sampler\.txt$/);
+  assert.deepEqual(calls.map((call) => call.slice(-5)), [["/usr/bin/sample", "4321", "2", "-file", "/x/stall.txt"], ["/usr/bin/sample", "99", "1", "-file", "/x/sampler.txt"]]);
 });
 
 test("stacks that the sampling process cannot record are named with the reason", async () => {

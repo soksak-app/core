@@ -21,8 +21,8 @@ mock.module("node:child_process", {
         queueMicrotask(() => callback(null, "pid/20 = {\n\tservices = {\n\t\t      21      - \tcom.apple.WebKit.WebContent.A\n\t}\n}\n", ""));
         return;
       }
-      if (command !== "/usr/bin/sample") throw new Error(`unexpected execFile: ${command}`);
-      running.push({ pid: Number(args[0]), file: args[args.indexOf("-file") + 1], callback });
+      if (command !== "/usr/bin/sandbox-exec" || args[2] !== "/usr/bin/sample") throw new Error(`unexpected execFile: ${command}`);
+      running.push({ pid: Number(args[3]), file: args[args.indexOf("-file") + 1], callback });
     },
   },
 });
