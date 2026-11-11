@@ -1407,15 +1407,15 @@ fn an_unanswered_retain_ends_with_its_connection() {
     let (read, retain_read) = channel::<()>();
     // The test sends on end when the service ends the connection that carried the retain.
     let (end, ended_by_test) = channel::<()>();
+    // The service sends on revived when the host connected again after the end of that connection (V5-106).
+    let (revived, connected_again) = channel::<()>();
     let service = std::thread::spawn(move || {
         let (mut stream, _) = listener.accept().unwrap();
-        // A connection that the host opens again finds no service.
-        drop(listener);
         let mut reader = BufReader::new(stream.try_clone().unwrap());
         loop {
             let mut line = String::new();
             if reader.read_line(&mut line).unwrap_or(0) == 0 {
-                return;
+                break;
             }
             let request: serde_json::Value = serde_json::from_str(&line).unwrap();
             let reply = match request["operation"].as_str() {
@@ -1426,20 +1426,20 @@ fn an_unanswered_retain_ends_with_its_connection() {
                 Some("retain") => {
                     read.send(()).unwrap();
                     ended_by_test.recv().unwrap();
-                    return;
-                }
-                Some("close-owner") => {
-                    serde_json::json!({"operation": "closed-owner", "request": request["request"], "ok": true})
-                }
-                Some("shutdown") => {
-                    let reply = serde_json::json!({"operation": "shutdown", "request": request["request"], "ok": true});
-                    writeln!(stream, "{}", reply).unwrap();
-                    return;
+                    break;
                 }
                 _ => continue,
             };
             writeln!(stream, "{}", reply).unwrap();
         }
+        drop(reader);
+        drop(stream);
+        // The host connects again after it read the endpoint and checked its process, which it does with a process of its
+        // own, so the check ends only after that process ended. The service ends that connection before its hello, and the
+        // restart fails without starting a process.
+        let (again, _) = listener.accept().unwrap();
+        drop(again);
+        revived.send(()).unwrap();
     });
 
     let fixture = files(
@@ -1474,6 +1474,9 @@ fn an_unanswered_retain_ends_with_its_connection() {
         format!("sidecar {ECHO}: retain: the service connection ended before the answer"),
         "the retain did not end with the end of its connection"
     );
+    connected_again
+        .recv()
+        .expect("the service ended before the host connected again");
     sidecars.stop();
     service.join().unwrap();
 }
