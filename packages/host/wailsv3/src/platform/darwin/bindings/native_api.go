@@ -18,8 +18,11 @@ func Functions() abi.NativeFunctions {
 		ActivateWindowAt: func(a0 uintptr, a1 float64, a2 float64, a3 float64, a4 uintptr) {
 			C.activateWindowAt(C.uintptr_t(a0), C.double(a1), C.double(a2), C.double(a3), C.uintptr_t(a4))
 		},
-		Calloc:            func(a0 uint64, a1 uint64) unsafe.Pointer { return C.calloc(C.size_t(a0), C.size_t(a1)) },
-		CoreRootSet:       func(a0 uintptr) { C.coreRootSet(C.uintptr_t(a0)) },
+		Calloc:      func(a0 uint64, a1 uint64) unsafe.Pointer { return C.calloc(C.size_t(a0), C.size_t(a1)) },
+		CoreRootSet: func(a0 uintptr) { C.coreRootSet(C.uintptr_t(a0)) },
+		DocumentAct: func(a0 unsafe.Pointer, a1 *byte, a2 int32, a3 int32, a4 *byte, a5 bool, a6 uintptr) {
+			C.documentAct(a0, (*C.char)(unsafe.Pointer(a1)), C.int(a2), C.int(a3), (*C.char)(unsafe.Pointer(a4)), C.bool(a5), C.uintptr_t(a6))
+		},
 		DocumentAddScript: func(a0 unsafe.Pointer, a1 *byte) { C.documentAddScript(a0, (*C.char)(unsafe.Pointer(a1))) },
 		DocumentBinaryPut: func(a0 unsafe.Pointer, a1 unsafe.Pointer, a2 uint64, a3 *byte, a4 *byte) *byte {
 			return (*byte)(unsafe.Pointer(C.documentBinaryPut(a0, a1, C.size_t(a2), (*C.char)(unsafe.Pointer(a3)), (*C.char)(unsafe.Pointer(a4)))))

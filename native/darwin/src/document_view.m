@@ -245,6 +245,43 @@ static NSString *const kInteractiveScript = @"(() => {"
     "  if (el.isContentEditable) return String(el.innerText ?? '');"
     "  return el.getAttribute('href') ?? null;"
     "};"
+    "const operable = () => document.querySelectorAll('a, button, input, select, textarea, [contenteditable=\"true\"], [role]');"
+    "const sensitiveOf = (el) => el instanceof HTMLInputElement &&"
+    "  (el.type === 'password' || el.autocomplete === 'current-password' || el.autocomplete === 'new-password' ||"
+    "   el.autocomplete === 'one-time-code' || el.autocomplete.startsWith('cc-'));"
+    "globalThis.soksakActProbe = (ref) => {"
+    "  if (!Number.isInteger(ref) || ref < 1) return null;"
+    "  const el = operable()[ref - 1];"
+    "  if (!el) return null;"
+    "  const submit = (el instanceof HTMLInputElement && (el.type === 'submit' || el.type === 'image')) ||"
+    "    (el instanceof HTMLButtonElement && !!el.form);"
+    "  const formField = !!el.closest('form');"
+    "  return { submit, formField };"
+    "};"
+    "globalThis.soksakAct = (ref, action, value) => {"
+    "  if (!Number.isInteger(ref) || ref < 1) return { error: 'unknown ref' };"
+    "  const el = operable()[ref - 1];"
+    "  if (!el) return { error: 'unknown ref' };"
+    "  const changed = () => {"
+    "    el.dispatchEvent(new Event('input', { bubbles: true }));"
+    "    el.dispatchEvent(new Event('change', { bubbles: true }));"
+    "  };"
+    "  if (action === 0) { el.click(); return { ok: true }; }"
+    "  if (action === 1) {"
+    "    if (sensitiveOf(el)) return { error: 'sensitive element' };"
+    "    el.value = String(value ?? ''); changed(); return { ok: true };"
+    "  }"
+    "  if (action === 2) {"
+    "    el.dispatchEvent(new KeyboardEvent('keydown', { key: String(value ?? ''), bubbles: true }));"
+    "    el.dispatchEvent(new KeyboardEvent('keyup', { key: String(value ?? ''), bubbles: true }));"
+    "    return { ok: true };"
+    "  }"
+    "  if (action === 3) {"
+    "    if (el instanceof HTMLSelectElement) { el.value = String(value ?? ''); changed(); return { ok: true }; }"
+    "    return { error: 'not a select' };"
+    "  }"
+    "  return { error: 'unknown action' };"
+    "};"
     "post({ frame, ready: true });"
     "})();";
 
@@ -2129,6 +2166,57 @@ void sp_document_confirm(void *handle, const char *kind, const char *origin, con
     NSPoint at = NSMakePoint(screen.origin.x + screen.size.width / 2 - 210, screen.origin.y + screen.size.height / 2 - 74);
     [panel setFrameOrigin:at];
     [panel makeKeyAndOrderFront:nil];
+}
+
+void sp_document_act(void *handle, const char *path, int ref, int action, const char *value, bool granted,
+    sp_document_act_reply reply, void *context) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    SPDocumentView *view = (SPDocumentView *)handle;
+    if (!view || view.closed) {
+        reply(context, "{\"error\":\"the document region is closed\"}");
+        return;
+    }
+    NSString *wanted = [NSString stringWithUTF8String:path ?: ""];
+    WKFrameInfo *frame = [view interactiveFrameOfPath:wanted];
+    if (frame == nil) {
+        reply(context, [[NSString stringWithFormat:@"{\"error\":\"no frame of path %s\"}", path ?: ""] UTF8String]);
+        return;
+    }
+    NSString *origin = [view interactiveOriginOfPath:wanted] ?: @"";
+    if (!granted) {
+        // The probe names the classification of the element — a submit control, or a field of a form — because the
+        // host gates on what the element is, not on the label that a page writes.
+        [view callAsyncJavaScript:@"return soksakActProbe(ref);"
+            arguments:@{ @"ref": @(ref) } inFrame:frame
+            inContentWorld:[WKContentWorld worldWithName:kDocumentWorld]
+            completionHandler:^(id result, NSError *error) {
+                if (error || ![result isKindOfClass:NSDictionary.class]) {
+                    reply(context, [NSString stringWithFormat:@"{\"error\":\"the probe failed: %@\"}",
+                        error.localizedDescription].UTF8String);
+                    return;
+                }
+                NSDictionary *probe = result;
+                reply(context, [[NSString stringWithFormat:
+                    @"{\"origin\":\"%@\",\"submit\":%@,\"formField\":%@}",
+                    origin, [probe[@"submit"] boolValue] ? @"true" : @"false",
+                    [probe[@"formField"] boolValue] ? @"true" : @"false"] UTF8String]);
+            }];
+        return;
+    }
+    NSString *text = value ? [NSString stringWithUTF8String:value] : @"";
+    [view callAsyncJavaScript:@"return soksakAct(ref, action, value);"
+        arguments:@{ @"ref": @(ref), @"action": @(action), @"value": text } inFrame:frame
+        inContentWorld:[WKContentWorld worldWithName:kDocumentWorld]
+        completionHandler:^(id result, NSError *error) {
+            if (error) {
+                reply(context, [NSString stringWithFormat:@"{\"error\":\"%@\"}",
+                    error.localizedDescription].UTF8String);
+                return;
+            }
+            reply(context, [[NSString stringWithFormat:@"{\"ok\":%@,\"origin\":\"%@\"}",
+                [result isKindOfClass:NSDictionary.class] && [result[@"ok"] boolValue] ? @"true" : @"false",
+                origin] UTF8String]);
+        }];
 }
 
 void sp_document_scroll_to(void *handle, double x, double y, sp_document_scrolled reply, void *context) {

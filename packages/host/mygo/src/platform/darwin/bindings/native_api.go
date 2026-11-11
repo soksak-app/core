@@ -42,6 +42,16 @@ func Functions(library uintptr) (abi.NativeFunctions, error) {
 		purego.RegisterFunc(&functions.CoreRootSet, address)
 	}
 	{
+		address, err := purego.Dlsym(library, "documentAct")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API documentAct: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API documentAct: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.DocumentAct, address)
+	}
+	{
 		address, err := purego.Dlsym(library, "documentAddScript")
 		if err != nil {
 			return abi.NativeFunctions{}, fmt.Errorf("native API documentAddScript: %w", err)

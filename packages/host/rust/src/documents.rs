@@ -2817,6 +2817,112 @@ pub struct ReadValue {
     pub origin: Option<String>,
 }
 
+/// The outcome of one narrow action, or the refusal that names the missing grant.
+#[derive(Debug, Default, PartialEq, Serialize)]
+pub struct ActResult {
+    pub ok: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub refusal: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request: Option<u64>,
+}
+
+/// Runs one narrow action on the operable element ref of the frame at path under the act grant.
+pub fn act_on(
+    webview: &Webview,
+    request: Request,
+    path: String,
+    ref_: i32,
+    action: i32,
+    value: String,
+) -> Result<ActResult, String> {
+    if path.is_empty() || ref_ < 1 || !(0..=3).contains(&action) {
+        return Err("act requires a frame path, a positive ref and an action 0-3".to_string());
+    }
+    let platform = platform::current()?;
+    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+    let path_for_check = path.clone();
+    let value_for_run = value.clone();
+    with_document(webview, &request, move |handle| {
+        platform.act_document(
+            handle,
+            &path,
+            ref_,
+            action,
+            &value_for_run,
+            false,
+            Box::new(move |reply| {
+                if sender.send(reply).is_err() {
+                    log_error("document act", "the caller stopped waiting for the probe");
+                }
+            }),
+        )
+    })?;
+    let reply = receiver
+        .recv()
+        .map_err(|_| format!("document {} gave no act probe reply", request.document))?;
+    #[derive(Deserialize)]
+    struct Probe {
+        #[serde(default)]
+        origin: String,
+        #[serde(default)]
+        submit: bool,
+        #[serde(default)]
+        form_field: bool,
+        #[serde(default)]
+        error: Option<String>,
+    }
+    let probe: Probe = serde_json::from_str(&reply)
+        .map_err(|_| format!("document {} act probe reply is not JSON: {reply}", request.document))?;
+    if let Some(error) = probe.error {
+        return Err(format!("document {} act probe failed: {error}", request.document));
+    }
+    if probe.submit || (probe.form_field && !APPROVALS.granted(APPROVAL_ACT, &probe.origin)) {
+        return Ok(ActResult {
+            ok: false,
+            refusal: Some("act requires approval".to_string()),
+            request: None,
+        });
+    }
+    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+    with_document(webview, &request, move |handle| {
+        platform.act_document(
+            handle,
+            &path_for_check,
+            ref_,
+            action,
+            &value,
+            true,
+            Box::new(move |reply| {
+                if sender.send(reply).is_err() {
+                    log_error("document act", "the caller stopped waiting for the reply");
+                }
+            }),
+        )
+    })?;
+    let reply = receiver
+        .recv()
+        .map_err(|_| format!("document {} gave no act reply", request.document))?;
+    #[derive(Deserialize)]
+    struct Full {
+        #[serde(default)]
+        ok: bool,
+        #[serde(default)]
+        origin: String,
+        #[serde(default)]
+        error: Option<String>,
+    }
+    let full: Full = serde_json::from_str(&reply)
+        .map_err(|_| format!("document {} act reply is not JSON: {reply}", request.document))?;
+    if let Some(error) = full.error {
+        return Err(format!("document {} act failed: {error}", request.document));
+    }
+    if full.origin != probe.origin {
+        return Err(format!("document {} act origin changed during the act", request.document));
+    }
+    Ok(ActResult { ok: full.ok, refusal: None, request: None })
+}
+
 /// Shows the confirmation panel of the region and records the grant of a positive answer.
 pub fn confirm_grant(
     webview: &Webview,

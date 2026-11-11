@@ -307,6 +307,18 @@ impl Platform for Windows {
     ) -> Result<(), String> {
         unsupported::query_document(document, reply)
     }
+    fn act_document(
+        &self,
+        document: Handle,
+        path: &str,
+        ref_: i32,
+        action: i32,
+        value: &str,
+        granted: bool,
+        reply: Box<dyn FnOnce(String) + Send>,
+    ) -> Result<(), String> {
+        unsupported::act_document(document, path, ref_, action, value, granted, reply)
+    }
     fn confirm_document(
         &self,
         document: Handle,

@@ -505,6 +505,10 @@ type Platform interface {
 	// GoDocument runs back 0, forward 1, reload 2, stop 3, and the history entry that is offset away from the current one 4,
 	// and returns whether it ran.
 	GoDocument(document unsafe.Pointer, action, offset int) bool
+	// ActDocument runs one narrow action on the operable element ref of the frame at path; without the grant the
+	// reply names the origin of the frame and the classification of the element, with the grant it names the outcome.
+	// The action is 0 click, 1 fill, 2 press, 3 select; the fill and select actions take a value.
+	ActDocument(document unsafe.Pointer, path string, ref, action int, value string, granted bool, reply func(value string))
 	// ConfirmDocument shows the confirmation panel that names the kind, the origin and the summary; reply receives the
 	// answer of the person once, as {granted} or an error.
 	ConfirmDocument(document unsafe.Pointer, kind, origin, summary string, reply func(value string))

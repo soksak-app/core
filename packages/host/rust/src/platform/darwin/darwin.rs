@@ -418,6 +418,19 @@ impl Platform for Darwin {
         document::query(document, reply);
         Ok(())
     }
+    fn act_document(
+        &self,
+        document: Handle,
+        path: &str,
+        ref_: i32,
+        action: i32,
+        value: &str,
+        granted: bool,
+        reply: Box<dyn FnOnce(String) + Send>,
+    ) -> Result<(), String> {
+        document::act(document, path, ref_, action, value, granted, reply);
+        Ok(())
+    }
     fn confirm_document(
         &self,
         document: Handle,

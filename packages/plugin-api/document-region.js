@@ -203,6 +203,19 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
       if (!Number.isInteger(ref) || ref < 1) return Promise.reject(new Error(`read requires a positive ref, not ${JSON.stringify(ref)}`));
       return queue(() => port.read(name, frame, ref));
     },
+    /**
+     * Runs one narrow action on the operable element ref of the frame at path: "click", "fill" (absolute value +
+     * input/change events), "press" (keydown/keyup) or "select". Resolves to {ok}, or to {refusal, request} when the
+     * element is a submit control or a form field of an origin without the act grant.
+     */
+    act(do_, frame, ref, value = "") {
+      const actions = ["click", "fill", "press", "select"];
+      const action = actions.indexOf(do_);
+      if (action < 0) return Promise.reject(new Error(`act requires one of ${JSON.stringify(actions)}, not ${JSON.stringify(do_)}`));
+      if (typeof frame !== "string" || frame === "") return Promise.reject(new Error(`act requires a frame path, not ${JSON.stringify(frame)}`));
+      if (!Number.isInteger(ref) || ref < 1) return Promise.reject(new Error(`act requires a positive ref, not ${JSON.stringify(ref)}`));
+      return queue(() => port.act(name, frame, ref, action, String(value ?? "")));
+    },
     back() { return this.go("back"); },
     forward() { return this.go("forward"); },
     reload() { return this.go("reload"); },

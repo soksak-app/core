@@ -135,6 +135,14 @@ void sp_document_confirm(void *document, const char *kind, const char *origin, c
 typedef void (*sp_document_read_reply)(void *context, const char *json);
 void sp_document_read(void *document, const char *path, int ref, bool granted, sp_document_read_reply reply, void *context);
 
+// Runs one narrow action on the operable element ref of the frame at path. Without the grant the reply names the
+// origin of the frame and whether the element is a form submit control or a field of a form, so the host gates on the
+// classification of the element it is about to act on; with the grant the reply names the outcome. The action is
+// 0 click, 1 fill, 2 press, 3 select; the fill and select actions take a value.
+typedef void (*sp_document_act_reply)(void *context, const char *json);
+void sp_document_act(void *document, const char *path, int ref, int action, const char *value, bool granted,
+    sp_document_act_reply reply, void *context);
+
 // Turns the stream "elements" or "requests" of the document on or off; the host turns a stream on while it has a
 // subscriber. A stream that is off collects nothing. Turning the element stream on sends a snapshot; turning it off drops
 // an unacknowledged snapshot. Returns false for another stream name or a closed document.

@@ -980,6 +980,59 @@ type DocumentReadValue struct {
 	Request uint64  `json:"request,omitempty"`
 }
 
+// DocumentActResult is the outcome of one narrow action, or the refusal that names the missing grant.
+type DocumentActResult struct {
+	OK      bool   `json:"ok"`
+	Refusal string `json:"refusal,omitempty"`
+	Request uint64 `json:"request,omitempty"`
+}
+
+// actDocument runs one narrow action on the operable element ref of the frame at path under the act grant of the
+// origin of that frame. The first reply of native names the origin and the classification of the element — a submit
+// control or a field of a form — and a submit control or a form field of an origin without the act grant answers the
+// refusal; every other element runs.
+func (s *Surfaces) actDocument(viewID uint64, req DocumentRequest, approvals *Approvals, path string, ref, action int, value string) (DocumentActResult, error) {
+	answers := make(chan string, 2)
+	err := s.withDocument(viewID, req, func(handle unsafe.Pointer) error {
+		system.ActDocument(handle, path, ref, action, value, false, func(reply string) { answers <- reply })
+		return nil
+	})
+	if err != nil {
+		return DocumentActResult{}, err
+	}
+	var probe struct {
+		Origin    string `json:"origin"`
+		Submit    bool   `json:"submit"`
+		FormField bool   `json:"formField"`
+		Error     string `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(<-answers), &probe); err != nil || probe.Error != "" {
+		return DocumentActResult{}, fmt.Errorf("document %s act probe failed: %s", req.Document, probe.Error)
+	}
+	if probe.Submit || (probe.FormField && !approvals.Granted(ApprovalAct, probe.Origin)) {
+		return DocumentActResult{Refusal: "act requires approval", Request: approvals.Grant("request", probe.Origin)}, nil
+	}
+	err = s.withDocument(viewID, req, func(handle unsafe.Pointer) error {
+		system.ActDocument(handle, path, ref, action, value, true, func(reply string) { answers <- reply })
+		return nil
+	})
+	if err != nil {
+		return DocumentActResult{}, err
+	}
+	var full struct {
+		OK     bool   `json:"ok"`
+		Origin string `json:"origin"`
+		Error  string `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(<-answers), &full); err != nil || full.Error != "" {
+		return DocumentActResult{}, fmt.Errorf("document %s act failed: %s", req.Document, full.Error)
+	}
+	if full.Origin != probe.Origin {
+		return DocumentActResult{}, fmt.Errorf("document %s act origin changed during the act", req.Document)
+	}
+	return DocumentActResult{OK: full.OK}, nil
+}
+
 // confirmGrant shows the confirmation panel of the region and records the grant of a positive answer.
 func (s *Surfaces) confirmGrant(viewID uint64, req DocumentRequest, approvals *Approvals, kind, origin, summary string) (bool, error) {
 	answers := make(chan string, 1)

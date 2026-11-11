@@ -97,6 +97,7 @@ type NativeFunctions struct {
 	ActivateWindowAt                      func(uintptr, float64, float64, float64, uintptr)
 	Calloc                                func(uint64, uint64) unsafe.Pointer
 	CoreRootSet                           func(uintptr)
+	DocumentAct                           func(unsafe.Pointer, *byte, int32, int32, *byte, bool, uintptr)
 	DocumentAddScript                     func(unsafe.Pointer, *byte)
 	DocumentBinaryPut                     func(unsafe.Pointer, unsafe.Pointer, uint64, *byte, *byte) *byte
 	DocumentBinaryTake                    func(unsafe.Pointer, *byte, *unsafe.Pointer, *uint64) *byte
@@ -266,6 +267,9 @@ func (functions NativeFunctions) Validate() error {
 	}
 	if functions.CoreRootSet == nil {
 		return fmt.Errorf("native API function is missing: coreRootSet")
+	}
+	if functions.DocumentAct == nil {
+		return fmt.Errorf("native API function is missing: documentAct")
 	}
 	if functions.DocumentAddScript == nil {
 		return fmt.Errorf("native API function is missing: documentAddScript")

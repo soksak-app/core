@@ -777,6 +777,20 @@ fn document_approvals_revoke(kind: String, origin: Option<String>) -> Result<boo
     Ok(true)
 }
 
+/// Runs one narrow action on an operable element of a frame of a region under the act grant.
+#[tauri::command]
+async fn document_act(
+    webview: Webview,
+    request: Argument<documents::Request>,
+    frame: String,
+    ref_: i32,
+    action: i32,
+    value: String,
+) -> Result<documents::ActResult, String> {
+    let Argument(request) = request;
+    blocking(move || documents::act_on(&webview, request, frame, ref_, action, value)).await
+}
+
 /// Reads the value of an operable element of a frame of a region; without the grant the reply names the origin.
 #[tauri::command]
 async fn document_read(

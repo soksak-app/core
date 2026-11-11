@@ -3,6 +3,7 @@
     "activateWindowAt",
     "calloc",
     "coreRootSet",
+    "documentAct",
     "documentAddScript",
     "documentBinaryPut",
     "documentBinaryTake",

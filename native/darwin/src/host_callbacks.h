@@ -48,6 +48,7 @@
     X(V, void, document_scrolled, (uintptr_t context, char *value), (context, value)) \
     X(V, void, document_read, (uintptr_t context, char *value), (context, value)) \
     X(V, void, document_confirmed, (uintptr_t context, char *value), (context, value)) \
+    X(V, void, document_acted, (uintptr_t context, char *value), (context, value)) \
     X(V, void, document_event, (uintptr_t context, char *value), (context, value)) \
     X(V, void, memory_pressure, (char *level, unsigned long long sequence), (level, sequence)) \
     X(V, void, dock_new_window, (void), ()) \

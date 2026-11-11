@@ -282,6 +282,18 @@ pub fn query_document(
     missing("document query")
 }
 
+pub fn act_document(
+    _document: Handle,
+    _path: &str,
+    _ref_: i32,
+    _action: i32,
+    _value: &str,
+    _granted: bool,
+    _reply: Box<dyn FnOnce(String) + Send>,
+) -> Result<(), String> {
+    missing("document act")
+}
+
 pub fn confirm_document(
     _document: Handle,
     _kind: &str,

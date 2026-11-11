@@ -91,6 +91,16 @@ unsafe extern "C" {
     fn sp_document_appearance(document: *mut c_void, dark: bool);
     fn sp_document_close(document: *mut c_void);
     fn sp_document_query(document: *mut c_void, reply: Event, context: *mut c_void);
+    fn sp_document_act(
+        document: *mut c_void,
+        path: *const c_char,
+        ref_: i32,
+        action: i32,
+        value: *const c_char,
+        granted: bool,
+        reply: Event,
+        context: *mut c_void,
+    );
     fn sp_document_scroll_to(
         document: *mut c_void,
         x: f64,
@@ -335,6 +345,27 @@ extern "C" fn confirm_replied(context: *mut c_void, value: *const c_char) {
         .to_string_lossy()
         .into_owned();
     (receiver.0)(value);
+}
+
+/// The receiver of one act reply. Native calls it once.
+struct ActReceiver(Box<dyn FnOnce(String) + Send>);
+
+extern "C" fn act_replied(context: *mut c_void, value: *const c_char) {
+    let receiver = unsafe { Box::from_raw(context as *mut ActReceiver) };
+    let value = unsafe { CStr::from_ptr(value) }
+        .to_string_lossy()
+        .into_owned();
+    (receiver.0)(value);
+}
+
+/// Runs one narrow action on the operable element ref of the frame at path.
+pub fn act(document: Handle, path: &str, ref_: i32, action: i32, value: &str, granted: bool,
+    reply: Box<dyn FnOnce(String) + Send>) {
+    let receiver = Box::into_raw(Box::new(ActReceiver(reply)));
+    let path = std::ffi::CString::new(path).unwrap_or_default();
+    let value = std::ffi::CString::new(value).unwrap_or_default();
+    unsafe { sp_document_act(document as *mut c_void, path.as_ptr(), ref_, action, value.as_ptr(), granted,
+        act_replied, receiver as *mut c_void) };
 }
 
 /// Shows the confirmation panel of the region; reply receives the answer of the person once.

@@ -364,6 +364,30 @@ func isFinite(v float64) bool {
 	return !math.IsNaN(v) && !math.IsInf(v, 0)
 }
 
+// DocumentAct runs one narrow action on an operable element of a frame of a region under the act grant of the origin
+// of that frame; a submit control or a form field of an origin without the grant answers the refusal.
+func (h *Host) DocumentAct(ctx context.Context, reqJSON json.RawMessage) (DocumentActResult, error) {
+	req, err := argument[DocumentRequest]("request", reqJSON)
+	if err != nil {
+		return DocumentActResult{}, err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return DocumentActResult{}, err
+	}
+	var args struct {
+		Frame  string `json:"frame"`
+		Ref    int    `json:"ref"`
+		Action int    `json:"action"`
+		Value  string `json:"value"`
+	}
+	if err := json.Unmarshal(reqJSON, &args); err != nil || args.Frame == "" || args.Ref < 1 || args.Action < 0 || args.Action > 3 {
+		return DocumentActResult{}, fmt.Errorf("act requires a frame path, a positive ref and an action 0-3")
+	}
+	result, err := s.actDocument(uint64(s.window.ID()), req, h.approvals, args.Frame, args.Ref, args.Action, args.Value)
+	return result, DocumentCallError("documentAct", err)
+}
+
 // DocumentApprovalsGrant shows the confirmation panel of the region that names the kind, the origin and the summary;
 // the answer of the person records the grant, and the reply names the answer.
 func (h *Host) DocumentApprovalsGrant(ctx context.Context, reqJSON json.RawMessage) (map[string]any, error) {

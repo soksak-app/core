@@ -615,6 +615,18 @@ pub trait Platform: CoreRootHost + Send + Sync {
         document: Handle,
         reply: Box<dyn FnOnce(String) + Send>,
     ) -> Result<(), String>;
+    /// Runs one narrow action on the operable element ref of the frame at path; without the grant the reply names the
+    /// origin and the classification, with the grant it names the outcome. Call it on the main thread.
+    fn act_document(
+        &self,
+        document: Handle,
+        path: &str,
+        ref_: i32,
+        action: i32,
+        value: &str,
+        granted: bool,
+        reply: Box<dyn FnOnce(String) + Send>,
+    ) -> Result<(), String>;
     /// Shows the confirmation panel that names the kind, the origin and the summary; reply receives the answer of the
     /// person once, as {granted}. Call it on the main thread.
     fn confirm_document(
