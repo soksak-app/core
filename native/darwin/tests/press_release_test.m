@@ -187,13 +187,14 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"a release that the page does not receive reports the state of its press (%@)", records]);
 
     // The virtual key window answers isActive and isKeyWindow as the key window of an active application. The state of a press
-    // in it keeps the real states, no and no.
+    // in it keeps the real states, no and no, apart from the virtual key window, yes.
     check(sp_input_virtual_enter(window), @"the window becomes the virtual key window");
     check(NSApp.isActive && window.isKeyWindow, @"the virtual key window answers as the key window of an active application");
     uint64_t token = sp_input_press_origin_set(window, 0, point.x, point.y);
-    bool active = true, key = true;
-    check(sp_input_press_origin_state(window, 0, &active, &key) && !active && !key,
-        [NSString stringWithFormat:@"a press of the virtual key window keeps the real states (active %d, key %d)", active, key]);
+    bool active = true, key = true, virtualKey = false;
+    check(sp_input_press_origin_state(window, 0, &active, &key, &virtualKey) && !active && !key && virtualKey,
+        [NSString stringWithFormat:@"a press of the virtual key window keeps the real states apart from the virtual key window "
+            @"(active %d, key %d, virtual %d)", active, key, virtualKey]);
     sp_input_press_origin_clear(window, 0, token);
     sp_input_virtual_end("the check of the press state ended");
     checkHiddenSurfaceRegion();

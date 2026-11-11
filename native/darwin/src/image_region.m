@@ -320,14 +320,15 @@ static void spEnsurePressOriginMonitor(void) {
                         sp_log_error("image region", "the press-origin surface has no page webview for release receipt");
                         sp_input_press_origin_clear(window, button, token);
                     } else {
-                        bool active = false, key = false;
-                        sp_input_press_origin_state(window, button, &active, &key);
+                        bool active = false, key = false, virtualKey = false;
+                        sp_input_press_origin_state(window, button, &active, &key, &virtualKey);
                         webviewInputReceiveThenDrain(webView, @"pointerup", ^(BOOL received) {
                             if (!received) {
                                 NSString *text = [NSString stringWithFormat:
                                     @"the paired pointer release was not received before press-origin cleanup: button %d, "
-                                    @"application active at the press: %s, window key at the press: %s",
-                                    button, active ? "yes" : "no", key ? "yes" : "no"];
+                                    @"application active at the press: %s, window key at the press: %s, "
+                                    @"virtual key window at the press: %s",
+                                    button, active ? "yes" : "no", key ? "yes" : "no", virtualKey ? "yes" : "no"];
                                 sp_log_error("image region", text.UTF8String);
                             }
                             sp_input_press_origin_clear(window, button, token);

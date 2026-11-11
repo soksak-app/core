@@ -134,7 +134,10 @@ uint64_t sp_input_press_origin_set(void *handle, int button, double x, double y)
     }
     uint64_t token = nextPressOriginToken++;
     if (token == 0) token = nextPressOriginToken++;
-    origins[originKey(button)] = @{ @"token": @(token), @"x": @(x), @"y": @(y), @"active": @(NSApp.isActive), @"key": @(window.isKeyWindow) };
+    // The virtual key window answers isActive and isKeyWindow as the key window of an active application, so the record keeps the
+    // real states of the application and the window and whether the window was the virtual key window apart.
+    origins[originKey(button)] = @{ @"token": @(token), @"x": @(x), @"y": @(y), @"active": @(sp_input_virtual_real_active()),
+        @"key": @(sp_input_virtual_real_key(handle)), @"virtual": @(sp_input_virtual_is(handle)) };
     return token;
 }
 
@@ -150,13 +153,14 @@ bool sp_input_press_origin_point(void *handle, int button, double *x, double *y,
     return true;
 }
 
-bool sp_input_press_origin_state(void *handle, int button, bool *active, bool *key) {
+bool sp_input_press_origin_state(void *handle, int button, bool *active, bool *key, bool *virtualKey) {
     NSCAssert(NSThread.isMainThread, @"mouse press origins belong to the main thread");
     NSWindow *window = (__bridge NSWindow *)handle;
     NSDictionary *origin = window ? objc_getAssociatedObject(window, &pressOriginsKey)[originKey(button)] : nil;
     if (!origin) return false;
     *active = [origin[@"active"] boolValue];
     *key = [origin[@"key"] boolValue];
+    *virtualKey = [origin[@"virtual"] boolValue];
     return true;
 }
 

@@ -19,8 +19,10 @@ bool sp_input_press_context_point(void *window, double *x, double *y);
 // outside such a delivery it is SP_INPUT_POINTER_MAIN, which also stands for a person's press.
 uint64_t sp_input_press_origin_set(void *window, int button, double x, double y);
 bool sp_input_press_origin_point(void *window, int button, double *x, double *y, uint64_t *token);
-// The state of the application and of the window at the press of a stored origin. Returns false when no origin is stored.
-bool sp_input_press_origin_state(void *window, int button, bool *active, bool *key);
+// The state of the application and of the window at the press of a stored origin: whether the application was really active,
+// whether the window was really its key window and whether the window was the virtual key window (input_virtual.h), which
+// answers as the key window of an active application. Returns false when no origin is stored.
+bool sp_input_press_origin_state(void *window, int button, bool *active, bool *key, bool *virtualKey);
 void sp_input_press_origin_clear(void *window, int button, uint64_t token);
 // Whether any pointer of sp_input_pointer holds an open press of the button in the window. An origin outlives the release of its press, so it does not tell this.
 bool sp_input_press_open(void *window, int button);
