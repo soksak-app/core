@@ -21,6 +21,7 @@ type DiagnosticFunctions struct {
 	InputSourceRoleIdentifier           func(*byte) *byte
 	InputSourceSelectAndAwait           func(*byte, uintptr)
 	ListDeliveredNotifications          func()
+	MainSpCaptureHoldNewWindow          func(**byte) bool
 	MainSpDocumentDrawCovered           func(uintptr, bool) bool
 	MainSpDocumentViewportMarker        func(unsafe.Pointer, bool, *uint8, *float64, **byte) bool
 	MainSpInputSourceCurrent            func() *byte
@@ -28,10 +29,12 @@ type DiagnosticFunctions struct {
 	MainSurfaceLayoutTraceRequested     func() uint64
 	MainSurfaceLayoutTraceStart         func()
 	MainSurfaceLayoutTraceStop          func(*float64, uint64) uint64
+	ReleaseCaptureNewWindow             func()
 	ScheduleCaptureOpen                 func(int64, bool, uint64, uintptr)
 	ScheduleCaptureStill                func(*int64, int32, *byte, uint64, uintptr)
 	ScheduleCaptureStop                 func(float64, uint64, uintptr)
 	ScheduleCaptureWait                 func(uint64, uintptr)
+	ScheduleCaptureWaitNewWindow        func(uint64, uintptr)
 	ScheduleDocumentFrameIdentityFreeze func(uint64, uintptr) bool
 	ScheduleDocumentFrameIdentityRemove func(uint64, uintptr) bool
 	ScheduleDocumentFrameIdentityStart  func(unsafe.Pointer, uint64, uintptr) bool
@@ -82,6 +85,9 @@ func (functions DiagnosticFunctions) Validate() error {
 	if functions.ListDeliveredNotifications == nil {
 		return fmt.Errorf("native API function is missing: listDeliveredNotifications")
 	}
+	if functions.MainSpCaptureHoldNewWindow == nil {
+		return fmt.Errorf("native API function is missing: main_sp_capture_hold_new_window")
+	}
 	if functions.MainSpDocumentDrawCovered == nil {
 		return fmt.Errorf("native API function is missing: main_sp_document_draw_covered")
 	}
@@ -103,6 +109,9 @@ func (functions DiagnosticFunctions) Validate() error {
 	if functions.MainSurfaceLayoutTraceStop == nil {
 		return fmt.Errorf("native API function is missing: main_surfaceLayoutTraceStop")
 	}
+	if functions.ReleaseCaptureNewWindow == nil {
+		return fmt.Errorf("native API function is missing: releaseCaptureNewWindow")
+	}
 	if functions.ScheduleCaptureOpen == nil {
 		return fmt.Errorf("native API function is missing: scheduleCaptureOpen")
 	}
@@ -114,6 +123,9 @@ func (functions DiagnosticFunctions) Validate() error {
 	}
 	if functions.ScheduleCaptureWait == nil {
 		return fmt.Errorf("native API function is missing: scheduleCaptureWait")
+	}
+	if functions.ScheduleCaptureWaitNewWindow == nil {
+		return fmt.Errorf("native API function is missing: scheduleCaptureWaitNewWindow")
 	}
 	if functions.ScheduleDocumentFrameIdentityFreeze == nil {
 		return fmt.Errorf("native API function is missing: scheduleDocumentFrameIdentityFreeze")

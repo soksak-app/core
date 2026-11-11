@@ -132,6 +132,16 @@ func DiagnosticFunctions(library uintptr) (abi.DiagnosticFunctions, error) {
 		purego.RegisterFunc(&functions.ListDeliveredNotifications, address)
 	}
 	{
+		address, err := purego.Dlsym(library, "main_sp_capture_hold_new_window")
+		if err != nil {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API main_sp_capture_hold_new_window: %w", err)
+		}
+		if address == 0 {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API main_sp_capture_hold_new_window: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.MainSpCaptureHoldNewWindow, address)
+	}
+	{
 		address, err := purego.Dlsym(library, "main_sp_document_draw_covered")
 		if err != nil {
 			return abi.DiagnosticFunctions{}, fmt.Errorf("native API main_sp_document_draw_covered: %w", err)
@@ -202,6 +212,16 @@ func DiagnosticFunctions(library uintptr) (abi.DiagnosticFunctions, error) {
 		purego.RegisterFunc(&functions.MainSurfaceLayoutTraceStop, address)
 	}
 	{
+		address, err := purego.Dlsym(library, "releaseCaptureNewWindow")
+		if err != nil {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API releaseCaptureNewWindow: %w", err)
+		}
+		if address == 0 {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API releaseCaptureNewWindow: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.ReleaseCaptureNewWindow, address)
+	}
+	{
 		address, err := purego.Dlsym(library, "scheduleCaptureOpen")
 		if err != nil {
 			return abi.DiagnosticFunctions{}, fmt.Errorf("native API scheduleCaptureOpen: %w", err)
@@ -240,6 +260,16 @@ func DiagnosticFunctions(library uintptr) (abi.DiagnosticFunctions, error) {
 			return abi.DiagnosticFunctions{}, fmt.Errorf("native API scheduleCaptureWait: symbol has a null address")
 		}
 		purego.RegisterFunc(&functions.ScheduleCaptureWait, address)
+	}
+	{
+		address, err := purego.Dlsym(library, "scheduleCaptureWaitNewWindow")
+		if err != nil {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API scheduleCaptureWaitNewWindow: %w", err)
+		}
+		if address == 0 {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API scheduleCaptureWaitNewWindow: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.ScheduleCaptureWaitNewWindow, address)
 	}
 	{
 		address, err := purego.Dlsym(library, "scheduleDocumentFrameIdentityFreeze")

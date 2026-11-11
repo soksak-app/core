@@ -83,6 +83,16 @@ void scheduleCaptureWait(uint64_t token, uintptr_t context) {
         @autoreleasepool { answerRecording(context, sp_capture_wait(token)); }
     });
 }
+bool main_sp_capture_hold_new_window(char **error) { return ON_MAIN(bool, sp_capture_hold_new_window(error)); }
+void scheduleCaptureWaitNewWindow(uint64_t token, uintptr_t context) {
+    dispatch_async(captureCalls(), ^{
+        @autoreleasepool {
+            long number = sp_capture_wait_new_window(token);
+            answerCapture(context, number, number < 0 ? strdup(sp_capture_error() ?: "no new window was shown") : NULL);
+        }
+    });
+}
+void releaseCaptureNewWindow(void) { sp_capture_release_new_window(); }
 void scheduleCaptureStop(double after, uint64_t token, uintptr_t context) {
     dispatch_async(captureCalls(), ^{
         @autoreleasepool { answerRecording(context, sp_capture_stop(after, token)); }

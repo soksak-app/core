@@ -37,6 +37,7 @@ func DiagnosticFunctions() abi.DiagnosticFunctions {
 			C.inputSourceSelectAndAwait((*C.char)(unsafe.Pointer(a0)), C.uintptr_t(a1))
 		},
 		ListDeliveredNotifications: func() { C.listDeliveredNotifications() },
+		MainSpCaptureHoldNewWindow: func(a0 **byte) bool { return bool(C.main_sp_capture_hold_new_window((**C.char)(unsafe.Pointer(a0)))) },
 		MainSpDocumentDrawCovered: func(a0 uintptr, a1 bool) bool {
 			return bool(C.main_sp_document_draw_covered(C.uintptr_t(a0), C.bool(a1)))
 		},
@@ -50,6 +51,7 @@ func DiagnosticFunctions() abi.DiagnosticFunctions {
 		MainSurfaceLayoutTraceStop: func(a0 *float64, a1 uint64) uint64 {
 			return uint64(C.main_surfaceLayoutTraceStop((*C.double)(unsafe.Pointer(a0)), C.size_t(a1)))
 		},
+		ReleaseCaptureNewWindow: func() { C.releaseCaptureNewWindow() },
 		ScheduleCaptureOpen: func(a0 int64, a1 bool, a2 uint64, a3 uintptr) {
 			C.scheduleCaptureOpen(C.long(a0), C.bool(a1), C.uint64_t(a2), C.uintptr_t(a3))
 		},
@@ -59,7 +61,8 @@ func DiagnosticFunctions() abi.DiagnosticFunctions {
 		ScheduleCaptureStop: func(a0 float64, a1 uint64, a2 uintptr) {
 			C.scheduleCaptureStop(C.double(a0), C.uint64_t(a1), C.uintptr_t(a2))
 		},
-		ScheduleCaptureWait: func(a0 uint64, a1 uintptr) { C.scheduleCaptureWait(C.uint64_t(a0), C.uintptr_t(a1)) },
+		ScheduleCaptureWait:          func(a0 uint64, a1 uintptr) { C.scheduleCaptureWait(C.uint64_t(a0), C.uintptr_t(a1)) },
+		ScheduleCaptureWaitNewWindow: func(a0 uint64, a1 uintptr) { C.scheduleCaptureWaitNewWindow(C.uint64_t(a0), C.uintptr_t(a1)) },
 		ScheduleDocumentFrameIdentityFreeze: func(a0 uint64, a1 uintptr) bool {
 			return bool(C.scheduleDocumentFrameIdentityFreeze(C.uint64_t(a0), C.uintptr_t(a1)))
 		},

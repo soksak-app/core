@@ -15,6 +15,12 @@ void scheduleCaptureOpen(long windowNumber, bool display, uint64_t token, uintpt
 void scheduleCaptureWait(uint64_t token, uintptr_t context);
 void scheduleCaptureStop(double after, uint64_t token, uintptr_t context);
 void scheduleCaptureStill(const long *windowNumbers, int count, const char *path, uint64_t token, uintptr_t context);
+// The recording of a new window from its first frame (capture.h): main_sp_capture_hold_new_window sets the hold on the main
+// thread, scheduleCaptureWaitNewWindow answers context with the number of the held window, or -1 and the end of its wait, and
+// releaseCaptureNewWindow ends the hold from any thread, putting a held window on screen.
+bool main_sp_capture_hold_new_window(char **error);
+void scheduleCaptureWaitNewWindow(uint64_t token, uintptr_t context);
+void releaseCaptureNewWindow(void);
 // Ends the wait of the capture call of token from any thread.
 void endCaptureWait(uint64_t token, const char *reason);
 void main_surfaceLayoutTraceStart(void);
