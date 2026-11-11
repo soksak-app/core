@@ -38,13 +38,37 @@ static BOOL nextPresentation(WKWebView *view) {
     return presented;
 }
 
+// The pixels of the image in sRGB, four bytes each (red, green, blue, alpha), rows from the top, with the color of a translucent
+// pixel unpremultiplied, as the sRGB color of colorAtX:y: gives it. One conversion of the image in place of a color object for
+// each pixel keeps a scan of a capture of the whole window to its pixel count.
+static NSData *sRGBPixels(NSBitmapImageRep *image) {
+    size_t width = (size_t)image.pixelsWide, height = (size_t)image.pixelsHigh;
+    NSMutableData *pixels = [NSMutableData dataWithLength:width * height * 4];
+    CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+    CGContextRef context = CGBitmapContextCreate(pixels.mutableBytes, width, height, 8, width * 4, space,
+        kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
+    CGColorSpaceRelease(space);
+    if (!context) return nil;
+    CGContextSetBlendMode(context, kCGBlendModeCopy);
+    CGContextDrawImage(context, CGRectMake(0, 0, width, height), image.CGImage);
+    CGContextRelease(context);
+    uint8_t *bytes = pixels.mutableBytes;
+    for (size_t index = 0; index < width * height; index++) {
+        uint8_t *pixel = bytes + index * 4;
+        if (pixel[3] == 0 || pixel[3] == 255) continue;
+        for (int channel = 0; channel < 3; channel++) pixel[channel] = (uint8_t)MIN(255, lround(pixel[channel] * 255.0 / pixel[3]));
+    }
+    return pixels;
+}
+
 static size_t greenPixelCount(NSBitmapImageRep *image) {
+    NSData *pixels = sRGBPixels(image);
+    const uint8_t *bytes = pixels.bytes;
     size_t count = 0;
-    for (NSInteger y = 0; y < image.pixelsHigh; y++) {
-        for (NSInteger x = 0; x < image.pixelsWide; x++) {
-            NSColor *color = [[image colorAtX:x y:y] colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
-            if (color.greenComponent > 0.45 && color.redComponent < 0.35 && color.blueComponent < 0.35) count++;
-        }
+    for (NSInteger index = 0; pixels && index < image.pixelsWide * image.pixelsHigh; index++) {
+        const uint8_t *pixel = bytes + index * 4;
+        double red = pixel[0] / 255.0, green = pixel[1] / 255.0, blue = pixel[2] / 255.0;
+        if (green > 0.45 && red < 0.35 && blue < 0.35) count++;
     }
     return count;
 }
@@ -71,10 +95,13 @@ typedef struct {
 
 static CyanBounds cyanBounds(NSBitmapImageRep *image) {
     CyanBounds result = { .left = image.pixelsWide, .top = image.pixelsHigh, .right = -1, .bottom = -1, .count = 0 };
-    for (NSInteger y = 0; y < image.pixelsHigh; y++) {
+    NSData *pixels = sRGBPixels(image);
+    const uint8_t *bytes = pixels.bytes;
+    for (NSInteger y = 0; pixels && y < image.pixelsHigh; y++) {
         for (NSInteger x = 0; x < image.pixelsWide; x++) {
-            NSColor *color = [[image colorAtX:x y:y] colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
-            if (color.greenComponent < 0.8 || color.blueComponent < 0.8 || color.redComponent > 0.2) continue;
+            const uint8_t *pixel = bytes + (y * image.pixelsWide + x) * 4;
+            double red = pixel[0] / 255.0, green = pixel[1] / 255.0, blue = pixel[2] / 255.0;
+            if (green < 0.8 || blue < 0.8 || red > 0.2) continue;
             result.left = MIN(result.left, x);
             result.top = MIN(result.top, y);
             result.right = MAX(result.right, x);
