@@ -9198,11 +9198,13 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "native/darwin/src/input_inject.m", symbol: "static BOOL windowPressOpen(NSWindow *window) {" },
       { file: "native/darwin/src/input_virtual.m", symbol: "static BOOL answerPrivateIsKey(NSWindow *self, SEL selector) {" },
+      { file: "native/darwin/src/input_virtual.m", symbol: "static NSWindow *answerPrivateKeyWindow(id self, SEL selector) {" },
     ],
     tests: [
       { file: "native/darwin/tests/input_virtual_test.m", id: "a local monitor sees the press, the release and the key of a virtual key window (%lu)" },
       { file: "native/darwin/tests/input_virtual_test.m", id: "the gesture reaches the page (%@)" },
       { file: "native/darwin/tests/input_virtual_test.m", id: "the key state that AppKit reads in its event handling answers the virtual key window" },
+      { file: "native/darwin/tests/input_virtual_test.m", id: "the key window that AppKit reads in its event handling is the virtual key window" },
     ],
     expected: "A press, its release and a key of the covered virtual key window of an application that is not active pass the application as a person's input does: a local monitor sees each, and the page still receives the first click and the key.",
     levels: ["unit"],

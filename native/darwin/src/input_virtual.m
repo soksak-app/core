@@ -34,7 +34,7 @@ static id closeObserver, moveMonitor;
 static double pointX, pointY;
 static bool hasPoint;
 static BOOL (*appKitIsKey)(id, SEL), (*appKitIsMain)(id, SEL), (*appKitIsActive)(id, SEL), (*appKitPrivateIsKey)(id, SEL);
-static NSWindow *(*appKitKeyWindow)(id, SEL), *(*appKitMainWindow)(id, SEL);
+static NSWindow *(*appKitKeyWindow)(id, SEL), *(*appKitMainWindow)(id, SEL), *(*appKitPrivateKeyWindow)(id, SEL);
 static void (*appKitOrderFront)(id, SEL, id), (*appKitMakeKeyAndOrderFront)(id, SEL, id), (*appKitOrderFrontRegardless)(id, SEL);
 static void (*appKitMakeKeyWindow)(id, SEL);
 static void (*appKitCursorSet)(id, SEL);
@@ -99,6 +99,13 @@ static BOOL answerIsActive(id self, SEL selector) {
 
 static NSWindow *answerKeyWindow(id self, SEL selector) {
     return answering() ?: appKitKeyWindow(self, selector);
+}
+
+// The key window that AppKit reads inside its own event handling: -[NSApplication sendEvent:] gives a key down or up to this
+// window, not to the window of the event, and drops a key without it. It reads the reference of the application, not
+// -keyWindow, so the virtual key window answers here as well.
+static NSWindow *answerPrivateKeyWindow(id self, SEL selector) {
+    return answering() ?: appKitPrivateKeyWindow(self, selector);
 }
 
 static NSWindow *answerMainWindow(id self, SEL selector) {
@@ -222,6 +229,10 @@ static void install(void) {
         appKitIsMain = (BOOL (*)(id, SEL))replace(window, @selector(isMainWindow), (IMP)answerIsMain);
         appKitIsActive = (BOOL (*)(id, SEL))replace(application, @selector(isActive), (IMP)answerIsActive);
         appKitKeyWindow = (NSWindow *(*)(id, SEL))replace(application, @selector(keyWindow), (IMP)answerKeyWindow);
+        // Private (docs/operations/private-native-apis.md). Without it a key of the virtual key window that passes the
+        // application reaches no window.
+        NSCAssert(class_getInstanceMethod(application, NSSelectorFromString(@"_keyWindow")), @"AppKit has -[NSApplication _keyWindow]");
+        appKitPrivateKeyWindow = (NSWindow *(*)(id, SEL))replace(application, NSSelectorFromString(@"_keyWindow"), (IMP)answerPrivateKeyWindow);
         appKitMainWindow = (NSWindow *(*)(id, SEL))replace(application, @selector(mainWindow), (IMP)answerMainWindow);
         appKitOrderFront = (void (*)(id, SEL, id))replace(window, @selector(orderFront:), (IMP)refuseOrderFront);
         appKitMakeKeyAndOrderFront = (void (*)(id, SEL, id))replace(window, @selector(makeKeyAndOrderFront:), (IMP)refuseMakeKeyAndOrderFront);

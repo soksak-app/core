@@ -43,13 +43,23 @@ static void (*appKitWindowSendEvent)(id, SEL, NSEvent *);
 static void (*webKitMouseDown)(id, SEL, NSEvent *);
 static void (*webKitMouseUp)(id, SEL, NSEvent *);
 static BOOL (*webKitAcceptsFirstMouse)(id, SEL, NSEvent *);
+static void (*webKitKeyDown)(id, SEL, NSEvent *);
+static void (*webKitInsertText)(id, SEL, id, NSRange);
 static void note(NSString *message) {
     fprintf(stdout, "NOTE: %.1f ms %s\n", (NSProcessInfo.processInfo.systemUptime - traceStart) * 1000, message.UTF8String);
 }
 static BOOL tracedMouse(NSEvent *event) {
-    return tracing && (event.type == NSEventTypeLeftMouseDown || event.type == NSEventTypeLeftMouseUp);
+    return tracing && (event.type == NSEventTypeLeftMouseDown || event.type == NSEventTypeLeftMouseUp
+        || event.type == NSEventTypeKeyDown || event.type == NSEventTypeKeyUp);
 }
-static NSString *eventName(NSEvent *event) { return event.type == NSEventTypeLeftMouseDown ? @"mouse down" : @"mouse up"; }
+static NSString *eventName(NSEvent *event) {
+    switch (event.type) {
+        case NSEventTypeLeftMouseDown: return @"mouse down";
+        case NSEventTypeLeftMouseUp: return @"mouse up";
+        case NSEventTypeKeyDown: return @"key down";
+        default: return @"key up";
+    }
+}
 static void traceApplicationSendEvent(NSApplication *self, SEL selector, NSEvent *event) {
     if (tracedMouse(event)) {
         note([NSString stringWithFormat:@"-[NSApplication sendEvent:] enters with %@ of window %ld (event window %@, key %@, active %@)",
@@ -82,7 +92,19 @@ static BOOL traceAcceptsFirstMouse(WKWebView *self, SEL selector, NSEvent *event
     if (tracing) note([NSString stringWithFormat:@"-[WKWebView acceptsFirstMouse:] answers %@", accepts ? @"YES" : @"NO"]);
     return accepts;
 }
+static void traceKeyDown(WKWebView *self, SEL selector, NSEvent *event) {
+    if (tracing) note([NSString stringWithFormat:@"-[WKWebView keyDown:] is reached (input context %@)", self.inputContext]);
+    webKitKeyDown(self, selector, event);
+}
+static void traceInsertText(WKWebView *self, SEL selector, id text, NSRange range) {
+    if (tracing) note([NSString stringWithFormat:@"-[WKWebView insertText:replacementRange:] is reached with %@", text]);
+    webKitInsertText(self, selector, text, range);
+}
 static void installTrace(void) {
+    webKitKeyDown = (void (*)(id, SEL, NSEvent *))method_setImplementation(
+        class_getInstanceMethod(WKWebView.class, @selector(keyDown:)), (IMP)traceKeyDown);
+    webKitInsertText = (void (*)(id, SEL, id, NSRange))method_setImplementation(
+        class_getInstanceMethod(WKWebView.class, @selector(insertText:replacementRange:)), (IMP)traceInsertText);
     appKitApplicationSendEvent = (void (*)(id, SEL, NSEvent *))method_setImplementation(
         class_getInstanceMethod(NSApplication.class, @selector(sendEvent:)), (IMP)traceApplicationSendEvent);
     appKitWindowSendEvent = (void (*)(id, SEL, NSEvent *))method_setImplementation(
@@ -326,17 +348,18 @@ static const SEL *windowSelectors(void) {
     return selectors;
 }
 static const SEL *applicationSelectors(void) {
-    static SEL selectors[3];
+    static SEL selectors[4];
     selectors[0] = @selector(isActive);
     selectors[1] = @selector(keyWindow);
     selectors[2] = @selector(mainWindow);
+    selectors[3] = NSSelectorFromString(@"_keyWindow");
     return selectors;
 }
-static IMP windowMethods[7], applicationMethods[3], viewInputContext;
+static IMP windowMethods[7], applicationMethods[4], viewInputContext;
 static BOOL unchanged(void) {
     if (viewInputContext != method_getImplementation(class_getInstanceMethod(NSView.class, @selector(inputContext)))) return NO;
     for (int i = 0; i < 7; i++) if (windowMethods[i] != method_getImplementation(class_getInstanceMethod(NSWindow.class, windowSelectors()[i]))) return NO;
-    for (int i = 0; i < 3; i++) if (applicationMethods[i] != method_getImplementation(class_getInstanceMethod(NSApplication.class, applicationSelectors()[i]))) return NO;
+    for (int i = 0; i < 4; i++) if (applicationMethods[i] != method_getImplementation(class_getInstanceMethod(NSApplication.class, applicationSelectors()[i]))) return NO;
     return YES;
 }
 
@@ -353,7 +376,7 @@ int main(void) { @autoreleasepool {
     method_setImplementation(class_getInstanceMethod(NSApplication.class, @selector(activateIgnoringOtherApps:)), (IMP)testActivate);
 
     for (int i = 0; i < 7; i++) windowMethods[i] = method_getImplementation(class_getInstanceMethod(NSWindow.class, windowSelectors()[i]));
-    for (int i = 0; i < 3; i++) applicationMethods[i] = method_getImplementation(class_getInstanceMethod(NSApplication.class, applicationSelectors()[i]));
+    for (int i = 0; i < 4; i++) applicationMethods[i] = method_getImplementation(class_getInstanceMethod(NSApplication.class, applicationSelectors()[i]));
     viewInputContext = method_getImplementation(class_getInstanceMethod(NSView.class, @selector(inputContext)));
     installTrace();
 
@@ -393,6 +416,9 @@ int main(void) { @autoreleasepool {
     SEL privateKey = NSSelectorFromString(@"_isKeyWindow");
     check(privateIsKey(window, privateKey) && !privateIsKey(cover, privateKey),
         @"the key state that AppKit reads in its event handling answers the virtual key window");
+    id (*privateKeyWindow)(id, SEL) = (id (*)(id, SEL))objc_msgSend;
+    check(privateKeyWindow(NSApp, NSSelectorFromString(@"_keyWindow")) == window,
+        @"the key window that AppKit reads in its event handling is the virtual key window");
     pointer(window, 40, 80, 0);
     pointer(window, 42, 82, 0);
     drain(view);
@@ -463,7 +489,10 @@ int main(void) { @autoreleasepool {
     NSArray *gesture = eventTypes(view);
     check([gesture containsObject:@"pointerdown"] && [gesture containsObject:@"pointerup"] && [gesture containsObject:@"click"], [NSString stringWithFormat:@"the gesture reaches the page (%@)", [gesture componentsJoinedByString:@","]]);
     check([evaluate(view, @"document.activeElement.id") isEqual:@"field"], @"the press focuses the field");
+    tracing = YES;
+    traceStart = NSProcessInfo.processInfo.systemUptime;
     check(sp_input_key(window, "a", "a", 0, true) == SP_INPUT_DELIVERED && sp_input_key(window, "a", "a", 0, false) == SP_INPUT_DELIVERED, @"a key is delivered");
+    tracing = NO;
     awaitPage(view, @"the field takes the text a", @"input", @"document.getElementById('field').value === 'a'");
     check([evaluate(view, @"document.getElementById('field').value") isEqual:@"a"], [NSString stringWithFormat:@"the key types into the page (%@)", evaluate(view, @"document.getElementById('field').value")]);
     // A composition as the input method of the system gives it to the text input client of the key responder: the marked text,
