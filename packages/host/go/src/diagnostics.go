@@ -171,9 +171,6 @@ func diagnosticClock(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *Re
 // and separated by dots, so they do not collide with this value.
 const logTopic = "#diagnostics.log"
 
-// frameStep is the length of one step of a drag. The page counts the steps with the same value.
-const frameStep = 16 * time.Millisecond
-
 // The ends of a native wait for an event that may not come (docs/spec/endpoint.md): no limit ends it.
 const (
 	waitEndConnection = "the endpoint connection of the request closed"
@@ -580,14 +577,6 @@ func (s *Surfaces) refreshRate() (*int, error) {
 	return facts.RefreshRate, nil
 }
 
-// steps is the number of steps of a one-way move. The page counts them in the same way.
-func (p dragPlan) steps() int {
-	if n := int(math.Round(float64(p.MS) / float64(frameStep/time.Millisecond))); n > 1 {
-		return n
-	}
-	return 1
-}
-
 // recording is a recording in progress.
 var recording Recording
 
@@ -768,8 +757,7 @@ func diagnosticDrag(e *Endpoint, c *endpointConn, params json.RawMessage, reply 
 	}
 	var tickMu sync.Mutex
 	sent := []float64{}
-	ticks := plan.steps() * 2 * plan.Times
-	s.note(fmt.Sprintf("diagnostics: drag %s:%d by %g,%g in %d steps, %d times, native %t", plan.Axis, plan.Line, plan.DX, plan.DY, plan.steps(), plan.Times, native))
+	s.note(fmt.Sprintf("diagnostics: drag %s:%d by %g,%g for %d ms, %d times, native %t", plan.Axis, plan.Line, plan.DX, plan.DY, plan.MS, plan.Times, native))
 	stepped := func() {
 		if clock != nil {
 			tickMu.Lock()
@@ -787,7 +775,7 @@ func diagnosticDrag(e *Endpoint, c *endpointConn, params json.RawMessage, reply 
 		case native:
 			return nativeDragPresented(ctx, h, s, plan, from, stepped)
 		default:
-			return pageDrag(ctx, h, s, plan, ticks, stepped)
+			return pageDrag(ctx, h, s, plan, stepped)
 		}
 	}
 	var layouts []map[string]any
@@ -827,32 +815,65 @@ func diagnosticDrag(e *Endpoint, c *endpointConn, params json.RawMessage, reply 
 	return result, nil
 }
 
-// pageDrag requests the drag of plan from the page and sends the time of each of its ticks steps as a diagnostics-tick
-// event, calling sent at each. It answers the result of the page after the last layout is displayed. The end of ctx ends the request.
-func pageDrag(ctx context.Context, h *Host, s *Surfaces, plan dragPlan, ticks int, sent func()) (map[string]any, error) {
-	// The tick starts after the request is sent so that the first tick arrives after the page received the drag request. Every step
+// dragTick is one step of a drag that the page performs. Fraction is how far its leg has reached, from 0 to 1, and Last ends the
+// leg. Error reports that the next step could not be paced, which ends the drag.
+type dragTick struct {
+	Fraction float64 `json:"fraction"`
+	Last     bool    `json:"last"`
+	Error    string  `json:"error,omitempty"`
+}
+
+// sendLegs sends the steps of the 2 × plan.Times one-way legs of plan. Each leg runs until plan.MS has passed on clock. Each step
+// comes one display period after the one before, the period the window has at the moment of the step (stepPeriod), so the length
+// of a step follows the display the window is on. A failed read sends one error tick and ends the drag.
+func sendLegs(plan dragPlan, refreshRate func() (*int, error), clock func() time.Duration, wait func(time.Duration), send func(dragTick)) {
+	span := time.Duration(plan.MS) * time.Millisecond
+	for leg := 0; leg < 2*plan.Times; leg++ {
+		began := clock()
+		for {
+			rate, err := refreshRate()
+			var period time.Duration
+			if err == nil {
+				period, err = stepPeriod(rate)
+			}
+			if err != nil {
+				send(dragTick{Error: err.Error()})
+				return
+			}
+			wait(period)
+			elapsed := clock() - began
+			last := elapsed >= span
+			fraction := 1.0
+			if !last {
+				fraction = float64(elapsed) / float64(span)
+			}
+			send(dragTick{Fraction: fraction, Last: last})
+			if last {
+				break
+			}
+		}
+	}
+}
+
+// pageDrag requests the drag of plan from the page and sends its steps as diagnostics-tick events, calling sent at each step that
+// was sent. It answers the result of the page after the last layout is displayed. The end of ctx ends the request.
+func pageDrag(ctx context.Context, h *Host, s *Surfaces, plan dragPlan, sent func()) (map[string]any, error) {
+	// The steps start after the request is sent so that the first step arrives after the page received the drag request. Every step
 	// is sent, also after the request ended, so the page that runs the gesture receives each of its steps (docs/spec/endpoint.md).
 	reply := h.relay.request(ctx, relayTarget{owner: s}, 0, func(id uint64) error {
 		s.window.Emit("exposure-request", map[string]any{"id": id, "method": "diagnostics.drag", "params": plan})
+		began := time.Now()
 		routine.Go("diagnostics-ticks", func() {
-			sendSteps(ticks, frameStep, func() {
-				sent()
-				s.window.Emit("diagnostics-tick")
+			sendLegs(plan, s.refreshRate, func() time.Duration { return time.Since(began) }, time.Sleep, func(tick dragTick) {
+				if tick.Error == "" {
+					sent()
+				}
+				s.window.Emit("diagnostics-tick", tick)
 			})
 		})
 		return nil
 	})
 	return dragResult(ctx, h, s, reply)
-}
-
-// sendSteps calls step ticks times, one frame apart; nothing but the last step ends it.
-func sendSteps(ticks int, frame time.Duration, step func()) {
-	tick := time.NewTicker(frame)
-	defer tick.Stop()
-	for left := ticks; left > 0; left-- {
-		<-tick.C
-		step()
-	}
 }
 
 // dragStepCallback is the callback through which a step of a native drag reaches the view of a window.
@@ -887,7 +908,10 @@ func workbenchDrag(plan dragPlan, ask func(method string, params any) (json.RawM
 	if err := json.Unmarshal(raw, &record); err != nil {
 		return nil, fmt.Errorf("the workbench record of the drag is not {boundary}: %w", err)
 	}
-	steps := plan.Times * 2 * plan.steps()
+	steps, ok := result["steps"].(int)
+	if !ok {
+		return nil, fmt.Errorf("the drag reply has no steps: %v", result)
+	}
 	if len(handled) != steps || len(record.Boundary) != steps+1 {
 		return nil, fmt.Errorf("the drag delivered %d steps and recorded %d callbacks and %d boundary positions", steps, len(handled), len(record.Boundary))
 	}

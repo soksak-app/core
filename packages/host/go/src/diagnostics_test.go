@@ -1129,3 +1129,68 @@ func TestTheEndOfTheConnectionEndsTheCaptureWaitsOnlyWhileItsRequestRuns(t *test
 		t.Fatalf("the end of the connection after the request returned ended %d waits", lateEnds)
 	}
 }
+
+// contract: diagnostics.drag.page-legs-follow-the-refresh-rate
+func TestPageLegsPaceEachStepByTheRefreshRateReadAtThatStep(t *testing.T) {
+	reads := 0
+	rateOf := func() (*int, error) {
+		reads++
+		rate := 60
+		if reads > 3 {
+			rate = 120
+		}
+		return &rate, nil
+	}
+	now := time.Duration(0)
+	var waits []time.Duration
+	var ticks []dragTick
+	sendLegs(dragPlan{MS: 50, Times: 1}, rateOf, func() time.Duration { return now }, func(d time.Duration) {
+		waits = append(waits, d)
+		now += d
+	}, func(tick dragTick) { ticks = append(ticks, tick) })
+	if len(waits) != len(ticks) || len(waits) < 4 {
+		t.Fatalf("%d waits for %d ticks; want one wait per tick and a leg longer than three steps", len(waits), len(ticks))
+	}
+	for i, wait := range waits {
+		want := time.Second / 60
+		if i >= 3 {
+			want = time.Second / 120
+		}
+		if wait != want {
+			t.Fatalf("step %d waited %v, want %v for the refresh rate read at that step", i, wait, want)
+		}
+	}
+	lasts := 0
+	for i, tick := range ticks {
+		if tick.Error != "" {
+			t.Fatalf("step %d failed: %s", i, tick.Error)
+		}
+		if tick.Last {
+			lasts++
+			if tick.Fraction != 1 {
+				t.Fatalf("the last step of the leg reached %v, want 1", tick.Fraction)
+			}
+		} else if tick.Fraction <= 0 || tick.Fraction >= 1 {
+			t.Fatalf("step %d reached %v of its leg, want a fraction between 0 and 1", i, tick.Fraction)
+		}
+	}
+	if lasts != 2 {
+		t.Fatalf("%d steps ended a leg, want one per leg of the round trip (2)", lasts)
+	}
+
+	var failed []dragTick
+	sendLegs(dragPlan{MS: 50, Times: 1}, func() (*int, error) { return nil, errors.New("no window facts") },
+		func() time.Duration { return 0 }, func(time.Duration) { t.Fatal("a failed read must not wait") },
+		func(tick dragTick) { failed = append(failed, tick) })
+	if len(failed) != 1 || failed[0].Error != "no window facts" {
+		t.Fatalf("ticks after a failed read %v, want one error tick carrying the read error", failed)
+	}
+
+	var unpaced []dragTick
+	sendLegs(dragPlan{MS: 50, Times: 1}, func() (*int, error) { return nil, nil },
+		func() time.Duration { return 0 }, func(time.Duration) { t.Fatal("a missing rate must not wait") },
+		func(tick dragTick) { unpaced = append(unpaced, tick) })
+	if len(unpaced) != 1 || unpaced[0].Error != "the window is on no display with a refresh rate" {
+		t.Fatalf("ticks without a refresh rate %v, want one error tick naming the missing display rate", unpaced)
+	}
+}
