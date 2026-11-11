@@ -179,6 +179,64 @@ static NSString *const kFormScript = @"(() => {"
     "addEventListener('submit', clear, true);"
     "addEventListener('pagehide', clear);"
     "})();";
+// The script of the interactive stream (docs/spec/native-surfaces.md#document-streams). It runs in every frame in the content
+// world of the host, collects the operable elements of its own document with frame-local rects only while the stream is on,
+// issues a one-time binding token to each child frame slot, and relays the on and off of the stream to its children, which a
+// child accepts only from its parent. The page world receives the same message events, so a token is a slot claim, not a secret;
+// native settles the identity of a report with the frame of its message.
+static NSString *const kInteractiveMessage = @"soksakDocumentInteractive";
+static NSString *const kInteractiveScript = @"(() => {"
+    "const post = (value) => window.webkit.messageHandlers.soksakDocumentInteractive.postMessage(value);"
+    "const frame = crypto.randomUUID();"
+    "let bound = null; let on = false; let observer = null;"
+    "const boundOnce = new WeakSet();"
+    "const sensitive = (element) => element instanceof HTMLInputElement &&"
+    "  (element.type === 'password' || element.autocomplete === 'current-password' || element.autocomplete === 'new-password' ||"
+    "   element.autocomplete === 'one-time-code' || element.autocomplete.startsWith('cc-'));"
+    "const rect = (element) => { const r = element.getBoundingClientRect();"
+    "  return { x: r.x, y: r.y, w: r.width, h: r.height }; };"
+    "const children = () => Array.from(document.querySelectorAll('iframe, frame'));"
+    "const collect = () => {"
+    "  if (!on) return;"
+    "  const found = document.querySelectorAll('a, button, input, select, textarea, [contenteditable=\"true\"], [role]');"
+    "  const elements = []; let truncated = false;"
+    "  for (const el of found) {"
+    "    if (elements.length >= 200) { truncated = true; break; }"
+    "    const label = (el.innerText || el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.value || '')"
+    "      .trim().replace(/\\s+/g, ' ').slice(0, 60);"
+    "    elements.push({ ref: elements.length + 1, tag: el.localName, role: el.getAttribute('role') || '',"
+    "      label, rect: rect(el), sensitive: sensitive(el) });"
+    "  }"
+    "  const slots = [];"
+    "  for (const f of children()) {"
+    "    if (slots.length >= 32) break;"
+    "    const slot = { index: slots.length, rect: rect(f), src: f.src, token: null };"
+    "    if (!boundOnce.has(f)) { boundOnce.add(f); slot.token = crypto.randomUUID(); }"
+    "    slots.push(slot);"
+    "  }"
+    "  post({ frame, bound, origin: location.origin, viewport: { w: innerWidth, h: innerHeight },"
+    "    elements, slots, truncated });"
+    "};"
+    "const turnOn = () => { if (on) return; on = true;"
+    "  observer = new MutationObserver(() => collect());"
+    "  observer.observe(document, { childList: true, subtree: true, attributes: true });"
+    "  collect(); };"
+    "const turnOff = () => { if (!on) return; on = false; observer.disconnect(); observer = null; };"
+    "globalThis.soksakInteractive = (value) => {"
+    "  if (value) { if (on) collect(); else turnOn(); } else turnOff(); return null; };"
+    "globalThis.soksakInteractiveBound = (claim, value) => {"
+    "  bound = typeof claim === 'string' ? claim : null;"
+    "  if (value) { if (on) collect(); else turnOn(); } else turnOff(); return null; };"
+    "addEventListener('pagehide', () => post({ frame, gone: true }));"
+    // The load of a child frame replaces its document without changing this tree: the frame collects again, so the host
+    // sees the new document and hands the claim of the slot to it.
+    "addEventListener('load', (event) => {"
+    "  const target = event.target;"
+    "  if (target instanceof HTMLIFrameElement || target instanceof HTMLFrameElement) { boundOnce.delete(target); collect(); }"
+    "}, true);"
+    "post({ frame, ready: true });"
+    "})();";
+
 
 // The contexts of the key paths that the document view registers; a notification with another context belongs to the platform.
 static char kStateContext;
@@ -426,6 +484,19 @@ static void frameIdentityClose(SPDocumentView *view);
 @property BOOL elementsOn;
 @property BOOL requestsOn;
 @property BOOL ready;
+// The interactive stream (docs/spec/native-surfaces.md#document-streams). The on flag follows the subscribers, and the
+// pending flag marks a report that arrived while a folded value was unacknowledged.
+@property BOOL interactiveOn;
+@property BOOL interactivePending;
+// The seq of the folded value that the host has not acknowledged, of the interactive stream; the seq counter itself is
+// lastSeq, which the element snapshots share, so a seq names one stream message.
+@property unsigned long long interactiveUnacknowledged;
+// The reports of the frames, the order of their arrival and the binding of a child slot claim to its parent report and
+// slot index. The table of the frame infos holds the WKFrameInfo of each token; a main frame commit clears all of them.
+@property(retain) NSMutableDictionary<NSString *, NSDictionary *> *interactiveReports;
+@property(retain) NSMutableArray<NSString *> *interactiveOrder;
+@property(retain) NSMutableDictionary<NSString *, NSDictionary *> *interactiveBindings;
+@property(retain) NSMutableDictionary<NSString *, id> *interactiveInfos;
 // The element tree changed since the last snapshot was taken.
 @property BOOL dirty;
 // A snapshot is being taken from the document.
@@ -473,6 +544,11 @@ static void frameIdentityClose(SPDocumentView *view);
 - (void)sendStream:(NSString *)name message:(NSDictionary *)message;
 - (void)applyStream:(NSString *)name;
 - (void)takeSnapshot;
+- (void)interactiveFrameGone:(NSString *)token;
+- (void)interactiveFrameReport:(NSString *)token report:(NSDictionary *)report;
+- (void)interactiveChanged;
+- (void)sendInteractiveFold;
+- (void)deliverClaim:(NSString *)claim;
 @end
 
 #ifdef SOKSAK_DIAGNOSTIC
@@ -868,6 +944,51 @@ static void sendBody(id<WKURLSchemeTask> task, NSData *data) {
         else [view.formFrames removeObject:body[@"frame"]];
         return;
     }
+    // The interactive stream: a report, or the end, of one frame document of this region.
+    if ([message.name isEqualToString:kInteractiveMessage]) {
+        if (![body[@"frame"] isKindOfClass:NSString.class]) return;
+        NSString *token = body[@"frame"];
+        if ([body[@"gone"] isEqual:@YES]) {
+            [view interactiveFrameGone:token];
+            return;
+        }
+        if (body[@"probe"] != nil) {
+            fprintf(stderr, "PROBE %s: %s\n", token.UTF8String, [body[@"probe"] description].UTF8String);
+            return;
+        }
+        if (body[@"bindError"] != nil) {
+            fprintf(stderr, "BINDERR %s: %s\n", token.UTF8String, [body[@"bindError"] UTF8String]);
+            return;
+        }
+        if (body[@"ready"] != nil) {
+            // A frame that only reported its readiness holds a place for the delivery of its claim; the fold leaves the
+            // place out until the frame collects.
+            if (view.interactiveReports[token] == nil) {
+                if (view.interactiveReports.count >= 64) {
+                    NSString *oldest = view.interactiveOrder.firstObject;
+                    if (oldest != nil) [view interactiveFrameGone:oldest];
+                }
+                NSMutableDictionary *place = [NSMutableDictionary dictionary];
+                place[@"info"] = message.frameInfo;
+                view.interactiveReports[token] = place;
+                [view.interactiveOrder addObject:token];
+                view.interactiveInfos[token] = message.frameInfo;
+                // The arrival of this frame completes the pairing that an earlier report could not finish: every claim
+                // that no frame holds yet goes out again, and the address match takes the ones that name this frame.
+                for (NSString *claim in view.interactiveBindings.allKeys) [view deliverClaim:claim];
+            }
+            return;
+        }
+        if (![body[@"origin"] isKindOfClass:NSString.class] || ![body[@"elements"] isKindOfClass:NSArray.class]
+            || ![body[@"slots"] isKindOfClass:NSArray.class] || ![body[@"viewport"] isKindOfClass:NSDictionary.class]) return;
+        NSDictionary *bound = [body[@"bound"] isKindOfClass:NSString.class]
+            ? @{ @"bound": body[@"bound"] } : @{ };
+        NSMutableDictionary *report = [[body mutableCopy] autorelease];
+        [report addEntriesFromDictionary:bound];
+        report[@"info"] = message.frameInfo;
+        [view interactiveFrameReport:token report:report];
+        return;
+    }
     if (!message.frameInfo.isMainFrame) return;
     if ([message.name isEqualToString:kMessageMessage]) {
         if ([body[@"message"] isKindOfClass:NSString.class]) {
@@ -884,6 +1005,7 @@ static void sendBody(id<WKURLSchemeTask> task, NSData *data) {
             view.ready = YES;
             [view applyStream:@"elements"];
             [view applyStream:@"requests"];
+            [view applyStream:@"interactive"];
         }
         if ([body[@"changed"] isEqual:@YES]) {
             view.dirty = YES;
@@ -1149,8 +1271,16 @@ static void sendBody(id<WKURLSchemeTask> task, NSData *data) {
     self.ready = NO;
     self.dirty = NO;
     self.unacknowledged = 0;
+    self.interactivePending = NO;
+    self.interactiveUnacknowledged = 0;
+    // A main frame commit replaces every frame document, so the frame reports, their claims and their infos all go.
+    [self.interactiveReports removeAllObjects];
+    [self.interactiveOrder removeAllObjects];
+    [self.interactiveBindings removeAllObjects];
+    [self.interactiveInfos removeAllObjects];
     if (self.elementsOn) [self sendStream:@"elements" message:@{ @"type": @"reset" }];
     if (self.requestsOn) [self sendStream:@"requests" message:@{ @"type": @"reset" }];
+    if (self.interactiveOn) [self sendStream:@"interactive" message:@{ @"type": @"reset" }];
 }
 
 // Sends {"stream": name, "message": message} to the receiver of the streams.
@@ -1169,8 +1299,11 @@ static void sendBody(id<WKURLSchemeTask> task, NSData *data) {
 // nothing to tell; its ready message applies the streams.
 - (void)applyStream:(NSString *)name {
     if (self.closed || !self.ready) return;
-    BOOL on = [name isEqualToString:@"elements"] ? self.elementsOn : self.requestsOn;
-    [self callAsyncJavaScript:@"return soksakStream(name, on);" arguments:@{ @"name": name, @"on": @(on) } inFrame:nil
+    BOOL on = [name isEqualToString:@"elements"] ? self.elementsOn
+        : [name isEqualToString:@"interactive"] ? self.interactiveOn : self.requestsOn;
+    NSString *source = [name isEqualToString:@"interactive"] ? @"return soksakInteractive(on);"
+        : @"return soksakStream(name, on);";
+    [self callAsyncJavaScript:source arguments:@{ @"name": name, @"on": @(on) } inFrame:nil
         inContentWorld:[WKContentWorld worldWithName:kDocumentWorld] completionHandler:^(id result, NSError *error) {
         (void)result;
         if (error) sp_log_error("document stream", [NSString stringWithFormat:@"%@ %@: %@", name, on ? @"on" : @"off",
@@ -1202,6 +1335,152 @@ static void sendBody(id<WKURLSchemeTask> task, NSData *data) {
     }];
 }
 
+// Removes the report of a frame that ended and re-folds the value; the claims that its slots issued die with it, so the
+// children that hold them stop resolving until their next bind.
+- (void)interactiveFrameGone:(NSString *)token {
+    if (self.interactiveReports[token] == nil) return;
+    [self.interactiveReports removeObjectForKey:token];
+    [self.interactiveOrder removeObject:token];
+    [self.interactiveInfos removeObjectForKey:token];
+    for (NSString *claim in [self.interactiveBindings allKeys]) {
+        if ([self.interactiveBindings[claim][@"parent"] isEqualToString:token]) {
+            [self.interactiveBindings removeObjectForKey:claim];
+        }
+    }
+    [self interactiveChanged];
+}
+
+// Stores the report of one frame, learns the claims that its slots issue, and re-folds the value. The table holds at most
+// 64 tokens; the oldest report leaves first.
+- (void)interactiveFrameReport:(NSString *)token report:(NSDictionary *)report {
+    if (self.interactiveReports[token] == nil && self.interactiveReports.count >= 64) {
+        NSString *oldest = self.interactiveOrder.firstObject;
+        if (oldest == nil) return;
+        [self interactiveFrameGone:oldest];
+    }
+    if (self.interactiveReports[token] == nil) [self.interactiveOrder addObject:token];
+    self.interactiveReports[token] = report;
+    self.interactiveInfos[token] = report[@"info"];
+    for (NSDictionary *slot in report[@"slots"]) {
+        if (![slot isKindOfClass:NSDictionary.class]) continue;
+        NSString *claim = [slot[@"token"] isKindOfClass:NSString.class] ? slot[@"token"] : nil;
+        NSNumber *index = [slot[@"index"] isKindOfClass:NSNumber.class] ? slot[@"index"] : nil;
+        if (claim == nil || index == nil) continue;
+        self.interactiveBindings[claim] = @{ @"parent": token, @"index": index };
+        [self deliverClaim:claim];
+    }
+    [self interactiveChanged];
+}
+
+// Delivers the claim of a slot to the frame whose address matches it among the reports that hold no claim yet. A message
+// that a script of one frame posts does not reach the content world of another frame, so the host calls the frame itself.
+- (void)deliverClaim:(NSString *)claim {
+    NSString *want = [self interactiveSlotAddressOfClaim:claim];
+    if (want == nil) return;
+    for (NSString *other in self.interactiveOrder) {
+        NSDictionary *child = self.interactiveReports[other];
+        if ([child[@"bound"] isKindOfClass:NSString.class]) continue;
+        WKFrameInfo *info = [self.interactiveInfos[other] isKindOfClass:[WKFrameInfo class]]
+            ? self.interactiveInfos[other] : nil;
+        if (info == nil || ![info.request.URL.absoluteString isEqualToString:want]) continue;
+        [self callAsyncJavaScript:@"return soksakInteractiveBound(claim, on);"
+            arguments:@{ @"claim": claim, @"on": @(self.interactiveOn) } inFrame:info
+            inContentWorld:[WKContentWorld worldWithName:kDocumentWorld]
+            completionHandler:^(id result, NSError *error) { (void)result; (void)error; }];
+        return;
+    }
+}
+
+// The address that the slot of a claim names: the resolved src of its frame, or the blank address of a frame without one.
+- (NSString *)interactiveSlotAddressOfClaim:(NSString *)claim {
+    NSDictionary *binding = self.interactiveBindings[claim];
+    if (binding == nil) return nil;
+    NSDictionary *parent = self.interactiveReports[binding[@"parent"]];
+    for (NSDictionary *slot in parent[@"slots"]) {
+        NSString *token = [slot[@"token"] isKindOfClass:NSString.class] ? slot[@"token"] : nil;
+        if (token == nil || ![token isEqualToString:claim]) continue;
+        NSString *src = [slot[@"src"] isKindOfClass:NSString.class] ? slot[@"src"] : @"";
+        return src.length ? src : @"about:blank";
+    }
+    return nil;
+}
+
+// Marks the fold changed and sends it when the previous value is acknowledged.
+- (void)interactiveChanged {
+    if (self.closed || !self.interactiveOn) return;
+    if (self.interactiveUnacknowledged) {
+        self.interactivePending = YES;
+        return;
+    }
+    [self sendInteractiveFold];
+}
+
+// Composes the paths of the stored reports from the main frame and the slot claims, and sends one folded value. A report
+// whose parent has not arrived yet stays out of this value; the arrival of its parent folds it in.
+- (void)sendInteractiveFold {
+    if (self.closed || !self.ready || !self.interactiveOn || self.interactiveUnacknowledged) return;
+    NSMutableDictionary<NSString *, NSString *> *paths = [NSMutableDictionary dictionary];
+    NSDictionary *main = nil;
+    for (NSString *token in self.interactiveOrder) {
+        NSDictionary *report = self.interactiveReports[token];
+        WKFrameInfo *info = [report[@"info"] isKindOfClass:[WKFrameInfo class]] ? report[@"info"] : nil;
+        if (info.isMainFrame) {
+            main = report;
+            paths[token] = @"0";
+            break;
+        }
+    }
+    if (main == nil) {
+        self.interactivePending = YES;
+        return;
+    }
+    BOOL resolved = YES;
+    while (resolved) {
+        resolved = NO;
+        for (NSString *token in self.interactiveOrder) {
+            if (paths[token] != nil) continue;
+            NSDictionary *report = self.interactiveReports[token];
+            NSString *claim = [report[@"bound"] isKindOfClass:NSString.class] ? report[@"bound"] : nil;
+            NSDictionary *binding = claim != nil ? self.interactiveBindings[claim] : nil;
+            NSString *parent = binding[@"parent"];
+            NSString *parentPath = parent != nil ? paths[parent] : nil;
+            if (parentPath == nil) continue;
+            paths[token] = [NSString stringWithFormat:@"%@.%@", parentPath, binding[@"index"]];
+            resolved = YES;
+        }
+    }
+    NSMutableArray *frames = [NSMutableArray array];
+    NSUInteger dropped = 0;
+    NSArray<NSString *> *ordered = [self.interactiveOrder sortedArrayUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {
+        return [paths[a] ?: @"" compare:paths[b] ?: @"" options:NSNumericSearch];
+    }];
+    for (NSString *token in ordered) {
+        if (paths[token] == nil || ![self.interactiveReports[token][@"elements"] isKindOfClass:NSArray.class]) {
+            dropped += 1;
+            continue;
+        }
+        if (frames.count >= 32) {
+            dropped += 1;
+            continue;
+        }
+        NSDictionary *report = self.interactiveReports[token];
+        NSMutableDictionary *frame = [[report mutableCopy] autorelease];
+        [frame removeObjectForKey:@"info"];
+        frame[@"path"] = paths[token];
+        [frames addObject:frame];
+    }
+    self.lastSeq += 1;
+    self.interactiveUnacknowledged = self.lastSeq;
+    NSMutableDictionary *message = [NSMutableDictionary dictionary];
+    message[@"type"] = @"frames";
+    message[@"seq"] = @(self.lastSeq);
+    message[@"frames"] = frames;
+    message[@"framesTruncated"] = @(dropped);
+    message[@"viewport"] = main[@"viewport"];
+    message[@"scale"] = main[@"scale"] ?: @1;
+    [self sendStream:@"interactive" message:message];
+}
+
 - (void)fail:(NSError *)error {
     // A new navigation that cancelled the earlier navigation is not a failure.
     if ([error.domain isEqualToString:NSURLErrorDomain] && error.code == NSURLErrorCancelled) return;
@@ -1214,6 +1493,7 @@ static void sendBody(id<WKURLSchemeTask> task, NSData *data) {
 // The WebContent process of this document ended. The view stays without a document; the failure reaches the page that
 // owns the region through the document state.
 - (void)webViewWebContentProcessDidTerminate:(WKWebView *)view {
+    fprintf(stderr, "WCPROCESS-TERMINATE\n");
     sp_log_error("document view", [NSString stringWithFormat:@"web content process terminated: %@", self.URL.absoluteString].UTF8String);
     self.navigation = nil;
     self.failure = @"the web content process ended";
@@ -1504,6 +1784,7 @@ static SPDocumentView *pluginView(const char *directory, const char *folder, con
     [configuration.userContentController addScriptMessageHandler:scroll contentWorld:world name:kPageMessage];
     [configuration.userContentController addScriptMessageHandler:scroll contentWorld:world name:kMessageMessage];
     [configuration.userContentController addScriptMessageHandler:scroll contentWorld:world name:kFormMessage];
+    [configuration.userContentController addScriptMessageHandler:scroll contentWorld:world name:kInteractiveMessage];
     if (isView) {
         // The channel script and its handler run in the page world, so the page can read the host messages through
         // window.sokView (docs/spec/native-surfaces.md#view-surfaces).
@@ -1514,6 +1795,8 @@ static SPDocumentView *pluginView(const char *directory, const char *folder, con
     }
     [configuration.userContentController addUserScript:[[[WKUserScript alloc] initWithSource:kFormScript
         injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO inContentWorld:world] autorelease]];
+    [configuration.userContentController addUserScript:[[[WKUserScript alloc] initWithSource:kInteractiveScript
+        injectionTime:WKUserScriptInjectionTimeAtDocumentEnd forMainFrameOnly:NO inContentWorld:world] autorelease]];
     [configuration.userContentController addUserScript:[[[WKUserScript alloc] initWithSource:kMessageScript
         injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:YES inContentWorld:world] autorelease]];
     WKUserScript *script = [[[WKUserScript alloc] initWithSource:kScrollScript
@@ -1526,6 +1809,10 @@ static SPDocumentView *pluginView(const char *directory, const char *folder, con
     scroll.view = view;
     view.scroll = scroll;
     view.formFrames = [NSMutableSet set];
+    view.interactiveReports = [NSMutableDictionary dictionary];
+    view.interactiveOrder = [NSMutableArray array];
+    view.interactiveBindings = [NSMutableDictionary dictionary];
+    view.interactiveInfos = [NSMutableDictionary dictionary];
     view.changed = changed;
     view.context = context;
     view.plugin = folder && plugin ? scheme.plugin : nil;
@@ -1789,6 +2076,23 @@ bool sp_document_stream_on(void *handle, const char *stream, bool on) {
     } else if ([name isEqualToString:@"requests"]) {
         if (view.requestsOn == on) return true;
         view.requestsOn = on;
+    } else if ([name isEqualToString:@"interactive"]) {
+        if (view.interactiveOn == on) return true;
+        view.interactiveOn = on;
+        view.interactivePending = NO;
+        view.interactiveUnacknowledged = 0;
+        if (!on) {
+            for (id frame in view.interactiveInfos.allValues) {
+                if (![frame isKindOfClass:[WKFrameInfo class]]) continue;
+                [view callAsyncJavaScript:@"return soksakInteractive(on);" arguments:@{ @"on": @NO }
+                    inFrame:(WKFrameInfo *)frame inContentWorld:[WKContentWorld worldWithName:kDocumentWorld]
+                    completionHandler:^(id result, NSError *error) { (void)result; (void)error; }];
+            }
+            [view.interactiveReports removeAllObjects];
+            [view.interactiveOrder removeAllObjects];
+            [view.interactiveBindings removeAllObjects];
+            [view.interactiveInfos removeAllObjects];
+        }
     } else {
         return false;
     }
@@ -1802,6 +2106,20 @@ bool sp_document_stream_ack(void *handle, unsigned long long seq) {
     if (!view || view.closed) return false;
     // An acknowledgement of a snapshot sent before a reset releases nothing; one of a seq that was never sent is refused.
     if (seq == 0 || seq > view.lastSeq) return false;
+    // One seq counter serves both streams, so the seq names the message: an unacknowledged element snapshot releases the
+    // snapshot gate, an unacknowledged folded value releases the fold gate, and any earlier seq is already released.
+    if (seq == view.interactiveUnacknowledged) {
+        view.interactiveUnacknowledged = 0;
+        if (view.interactivePending) {
+            view.interactivePending = NO;
+            // The fold of the pending reports goes out as its own main-queue turn, so the stream callback that
+            // acknowledged the last value has returned before the next one enters it.
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [view sendInteractiveFold];
+            });
+        }
+        return true;
+    }
     if (seq != view.unacknowledged) return true;
     view.unacknowledged = 0;
     [view takeSnapshot];
