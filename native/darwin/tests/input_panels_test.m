@@ -12,6 +12,7 @@
 // last: the service of the panel answers their completion through a connection, so they wait for it.
 #import <Cocoa/Cocoa.h>
 #import <OSLog/OSLog.h>
+#import <objc/runtime.h>
 #import "input_inject.h"
 #import "input_virtual.h"
 #import "support/event_wait.h"
@@ -84,11 +85,61 @@ static NSPoint pointOfScreenRect(NSWindow *window, NSRect rect) {
     return NSMakePoint(local.x, content.isFlipped ? local.y : NSHeight(content.bounds) - local.y);
 }
 
+// Presses and releases button at point of window. The release is a request of its own, as the endpoint gives it: it runs in the
+// next turn of the main thread, which is inside the event loop of a view that tracks the press (a button) when the press runs one.
 static void click(NSWindow *window, NSPoint point, int button, NSString *what) {
+    __block sp_input_result up = SP_INPUT_REJECTED;
+    __block BOOL released = NO;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        up = sp_input_pointer_clicks(window, point.x, point.y, 3, button, 1);
+        released = YES;
+    });
     sp_input_result down = sp_input_pointer_clicks(window, point.x, point.y, 1, button, 1);
-    sp_input_result up = sp_input_pointer_clicks(window, point.x, point.y, 3, button, 1);
+    eventWait([what stringByAppendingString:@": the release is delivered"], ^BOOL { return released; });
     note([NSString stringWithFormat:@"%@: press %s, release %s at %@", what, resultText(down), resultText(up),
         NSStringFromPoint(point)]);
+}
+
+// The trace of the path of an input of a sheet: each window that -[NSWindow sendEvent:] gives a mouse or key event, and each
+// button that takes a press or a key equivalent, written as a NOTE while tracing is set.
+static BOOL tracing;
+static void (*appKitWindowSendEvent)(id, SEL, NSEvent *);
+static void (*appKitButtonMouseDown)(id, SEL, NSEvent *);
+static BOOL (*appKitWindowKeyEquivalent)(id, SEL, NSEvent *);
+static NSString *eventKind(NSEvent *event) {
+    switch (event.type) {
+        case NSEventTypeLeftMouseDown: return @"left down";
+        case NSEventTypeLeftMouseUp: return @"left up";
+        case NSEventTypeKeyDown: return [@"key down " stringByAppendingString:event.charactersIgnoringModifiers ?: @""];
+        case NSEventTypeKeyUp: return @"key up";
+        default: return nil;
+    }
+}
+static void traceWindowSendEvent(NSWindow *self, SEL selector, NSEvent *event) {
+    NSString *kind = tracing ? eventKind(event) : nil;
+    if (kind) note([NSString stringWithFormat:@"trace: -[NSWindow sendEvent:] of %@ (%@, key %d, sheet %d) takes %@ at %@",
+        self.class, self.title, self.isKeyWindow, self.isSheet, kind, NSStringFromPoint(event.locationInWindow)]);
+    appKitWindowSendEvent(self, selector, event);
+}
+// AppKit implements -mouseDown: of a button in NSControl, so the trace sees the press of every control.
+static void traceButtonMouseDown(NSControl *self, SEL selector, NSEvent *event) {
+    if (tracing) note([NSString stringWithFormat:@"trace: -[%@ mouseDown:] of %@ is reached", self.class,
+        [self isKindOfClass:NSButton.class] ? ((NSButton *)self).title : @"a control"]);
+    appKitButtonMouseDown(self, selector, event);
+}
+static BOOL traceWindowKeyEquivalent(NSWindow *self, SEL selector, NSEvent *event) {
+    BOOL taken = appKitWindowKeyEquivalent(self, selector, event);
+    if (tracing) note([NSString stringWithFormat:@"trace: -[NSWindow performKeyEquivalent:] of %@ answers %d for %@", self.class,
+        taken, eventKind(event)]);
+    return taken;
+}
+static void installTrace(void) {
+    appKitWindowSendEvent = (void (*)(id, SEL, NSEvent *))method_setImplementation(
+        class_getInstanceMethod(NSWindow.class, @selector(sendEvent:)), (IMP)traceWindowSendEvent);
+    appKitButtonMouseDown = (void (*)(id, SEL, NSEvent *))method_setImplementation(
+        class_getInstanceMethod(NSButton.class, @selector(mouseDown:)), (IMP)traceButtonMouseDown);
+    appKitWindowKeyEquivalent = (BOOL (*)(id, SEL, NSEvent *))method_setImplementation(
+        class_getInstanceMethod(NSWindow.class, @selector(performKeyEquivalent:)), (IMP)traceWindowKeyEquivalent);
 }
 static void key(NSWindow *window, const char *name, NSString *what) {
     sp_input_result down = sp_input_key(window, name, NULL, 0, true);
@@ -190,6 +241,7 @@ int main(void) { @autoreleasepool {
     [NSApplication sharedApplication];
     [NSApp finishLaunching];
     installMarks();
+    installTrace();
 
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(160, 160, 640, 480)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
@@ -207,6 +259,7 @@ int main(void) { @autoreleasepool {
     check(!NSRunningApplication.currentApplication.active, @"the application is not active");
 
     // An alert sheet: a press of its first button ends it with that button.
+    tracing = YES;
     NSModalResponse response = 0;
     NSAlert *alert = showAlert(window, &response);
     note([@"alert sheet: " stringByAppendingString:panelFacts(alert.window)]);
@@ -230,6 +283,7 @@ int main(void) { @autoreleasepool {
     check(response == NSAlertSecondButtonReturn,
         [NSString stringWithFormat:@"Escape ends an alert sheet with its cancel button (response %ld)", (long)response]);
     endSheet(window, @"alert sheet Escape");
+    tracing = NO;
 
     // A context menu: a right press opens it, and the release over its item runs the item.
     MenuTarget *target = [[MenuTarget new] autorelease];
