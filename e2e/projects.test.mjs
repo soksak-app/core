@@ -631,7 +631,9 @@ for (const app of Object.values(APPS)) {
     // When the covering is released, the check writes the positions and states of the two windows and the frontmost application to classify the cause of a changed window order.
     const after = await s.get("host.window");
     if (after.occluded !== true) {
-      const state = ({ frame, occluded, active }) => JSON.stringify({ frame, occluded, active });
+      // order tells whether the window went above its cover (otherInFront 0) or stayed behind a cover that the system no longer
+      // counts as covering it (docs/spec/exposure.md#order-of-a-window).
+      const state = ({ frame, occluded, active, order }) => JSON.stringify({ frame, occluded, active, order });
       assert.fail(`the window became uncovered during the check: window ${state(after)}, ` +
         `cover ${state(await cover.get("host.window"))}, frontmost application ${frontmostApp()}, host ${s.client.endpoint.pid}`);
     }
