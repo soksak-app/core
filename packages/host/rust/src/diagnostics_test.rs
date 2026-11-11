@@ -782,12 +782,17 @@ fn held_modal_content(window: &'static str) -> mpsc::Receiver<()> {
     receiver
 }
 
-/// Runs modal_held for window on a thread and sends its answer.
-fn modal_held_answer(window: &'static str) -> mpsc::Receiver<Result<Value, Failure>> {
+/// Reads the hold of window as diagnostics.modal.held does when it arrives, before the end that the test then makes, and
+/// sends () on a thread when the wait of that answer returns.
+fn modal_held_answer(window: &'static str) -> mpsc::Receiver<()> {
+    let hold = modal_held_hold(window).unwrap_or_else(|failure| {
+        panic!("diagnostics.modal.held answered {failure:?} while the hold was on")
+    });
     let (sender, receiver) = mpsc::channel();
     std::thread::spawn(move || {
+        await_modal_held(&hold);
         sender
-            .send(modal_held(window))
+            .send(())
             .expect("the test dropped the receiver of diagnostics.modal.held");
     });
     receiver
@@ -807,7 +812,7 @@ fn a_modal_hold_ends_with_the_connection_that_turned_it_on() {
         "the held modal content answer was not sent when the connection of the hold closed"
     );
     assert!(
-        settles(&answered).is_some_and(|answer| answer.is_ok()),
+        settles(&answered).is_some(),
         "diagnostics.modal.held did not answer at the end of the hold by its connection"
     );
     assert!(
@@ -852,7 +857,7 @@ fn a_modal_hold_ends_with_its_window() {
         "the held modal content answer was not sent when its window closed"
     );
     assert!(
-        settles(&answered).is_some_and(|answer| answer.is_ok()),
+        settles(&answered).is_some(),
         "diagnostics.modal.held did not answer when the window of the hold closed"
     );
     connection.close();

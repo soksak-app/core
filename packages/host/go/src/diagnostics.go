@@ -1846,17 +1846,29 @@ func diagnosticModalHeld(e *Endpoint, _ *endpointConn, params json.RawMessage, _
 	if err != nil {
 		return nil, err
 	}
-	modalHolds.mu.Lock()
-	hold := modalHolds.windows[s]
-	modalHolds.mu.Unlock()
+	wait, err := modalHolds.heldWait(s)
+	if err != nil {
+		return nil, err
+	}
+	wait()
+	return nil, nil
+}
+
+// heldWait reads the hold of window s when diagnostics.modal.held arrives and returns the wait of the answer, which returns
+// when the window holds a modal content answer or the hold ends. It fails when the window does not hold answers.
+func (set *modalHoldSet) heldWait(s *Surfaces) (func(), error) {
+	set.mu.Lock()
+	hold := set.windows[s]
+	set.mu.Unlock()
 	if hold == nil {
 		return nil, errors.New("modal content answers are not held in this window")
 	}
-	select {
-	case <-hold.held:
-	case <-hold.release:
-	}
-	return nil, nil
+	return func() {
+		select {
+		case <-hold.held:
+		case <-hold.release:
+		}
+	}, nil
 }
 
 // diagnosticPageCollect makes the WebContent process of the app page of the window collect JavaScript objects. It is called before a memory check measures so that
