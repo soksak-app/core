@@ -88,12 +88,34 @@ static CGError sendRecord(pid_t service, CGWindowID window, CGEventRef event) {
     return postEventRecordTo(&process, record);
 }
 
-static NSRect accessibleButton(id element, NSString *title) {
-    if ([[element accessibilityRole] isEqualToString:NSAccessibilityButtonRole]
-        && ([[element accessibilityTitle] isEqualToString:title] || [[element accessibilityLabel] isEqualToString:title])) {
-        return [element accessibilityFrame];
+// An attribute of an accessibility element. The content of a panel of the system answers through an element of the remote view
+// (NSAccessibilityRemoteUIElement), which answers only the attribute protocol (-accessibilityAttributeValue:), not the methods of
+// NSAccessibility.
+static id attribute(id element, NSAccessibilityAttributeName name) {
+    if ([element respondsToSelector:@selector(accessibilityAttributeValue:)]) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+        return [element accessibilityAttributeValue:name];
+#pragma clang diagnostic pop
     }
-    for (id child in [element accessibilityChildren] ?: @[]) {
+    return nil;
+}
+
+// The screen frame (bottom-left origin) of the button titled title among element and its descendants, or an empty rect.
+static NSRect accessibleButton(id element, NSString *title) {
+    if ([attribute(element, NSAccessibilityRoleAttribute) isEqual:NSAccessibilityButtonRole]
+        && ([attribute(element, NSAccessibilityTitleAttribute) isEqual:title]
+            || [attribute(element, NSAccessibilityDescriptionAttribute) isEqual:title])) {
+        NSValue *position = attribute(element, NSAccessibilityPositionAttribute);
+        NSValue *size = attribute(element, NSAccessibilitySizeAttribute);
+        if (![position isKindOfClass:NSValue.class] || ![size isKindOfClass:NSValue.class]) return NSZeroRect;
+        // The position of the attribute protocol has its origin at the top left of the primary screen.
+        CGFloat top = NSMaxY(NSScreen.screens.firstObject.frame);
+        NSPoint origin = position.pointValue;
+        return NSMakeRect(origin.x, top - origin.y - size.sizeValue.height, size.sizeValue.width, size.sizeValue.height);
+    }
+    id children = attribute(element, NSAccessibilityChildrenAttribute);
+    for (id child in [children isKindOfClass:NSArray.class] ? children : @[]) {
         NSRect found = accessibleButton(child, title);
         if (!NSIsEmptyRect(found)) return found;
     }
