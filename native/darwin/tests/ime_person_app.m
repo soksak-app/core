@@ -5,15 +5,23 @@
 //
 // Usage: ime_person_app <process identifier of the application to return the front to>
 // Commands on standard input, one per line:
-//   compose  types g and k of Korean 2-Set into its own key window through -[NSApplication sendEvent:], which composes 하
-//   state    reports the state of the text view
+//   compose   ends any composition with Escape, empties the text view, and types g and k of Korean 2-Set into its own key window
+//             through -[NSApplication sendEvent:], which composes 하
+//   continue  types s the same way, which continues a composition of 하 that the input method still holds into 한, and appends ㄴ
+//             to a 하 that it no longer holds
+//   state     reports the state of the text view
 //   quit     discards the composition, returns the front to the given application and exits
 // The end of standard input, which the end of the test causes, quits in the same way. Each report is one JSON line on standard
 // output: {"kind", "marked", "text", "source", "front", "alpha", "current"}, where current states whether the input context of the
-// text view is the current input context of the application; kind is ready, composed, state, or for a change of the text view by the
-// input method mark, insert or unmark.
+// text view is the current input context of the application; kind is ready, composed, continued, state, or for a change of the text
+// view by the input method mark, insert or unmark. A change also names the replaced range, "range". The reports composed and continued
+// also name, as "keys", the CGEvent field 76 and the synthesized flag of each key event, by which -[NSTextInputContext handleEvent:]
+// tells a key of a person from a made one.
+// The Korean 2-Set input method of macOS composes in a text view without marked text: it inserts ㅎ and then 하 in place of ㅎ, and
+// keeps the composition itself. So the text of the view, not its marked text, shows the composition.
 #import <Cocoa/Cocoa.h>
 #import <Carbon/Carbon.h>
+#import <objc/message.h>
 #include <stdlib.h>
 
 static NSTextView *personView;
@@ -28,7 +36,7 @@ static NSString *currentSource(void) {
     return identifier ?: @"";
 }
 
-static void report(NSString *kind) {
+static void report(NSString *kind, NSDictionary *extra) {
     NSString *marked = personView.hasMarkedText ? [personView.string substringWithRange:personView.markedRange] : @"";
     NSDictionary *line = @{
         @"kind": kind,
@@ -39,6 +47,11 @@ static void report(NSString *kind) {
         @"alpha": @(personView.window.alphaValue),
         @"current": @(NSTextInputContext.currentInputContext == personView.inputContext),
     };
+    if (extra) {
+        NSMutableDictionary *joined = [[line mutableCopy] autorelease];
+        [joined addEntriesFromDictionary:extra];
+        line = joined;
+    }
     NSData *json = [NSJSONSerialization dataWithJSONObject:line options:0 error:NULL];
     fwrite(json.bytes, 1, json.length, stdout);
     fputc('\n', stdout);
@@ -50,27 +63,39 @@ static void report(NSString *kind) {
 @implementation SPPersonTextView
 - (void)setMarkedText:(id)string selectedRange:(NSRange)selectedRange replacementRange:(NSRange)replacementRange {
     [super setMarkedText:string selectedRange:selectedRange replacementRange:replacementRange];
-    report(@"mark");
+    report(@"mark", @{@"range": NSStringFromRange(replacementRange)});
 }
 - (void)insertText:(id)string replacementRange:(NSRange)replacementRange {
     [super insertText:string replacementRange:replacementRange];
-    report(@"insert");
+    report(@"insert", @{@"range": NSStringFromRange(replacementRange)});
 }
 - (void)unmarkText {
     [super unmarkText];
-    report(@"unmark");
+    report(@"unmark", nil);
+}
+// Escape that the input method passes on asks the text view for completions, whose panel this application does not open.
+- (void)doCommandBySelector:(SEL)selector {
+    if (selector == @selector(cancelOperation:) || selector == @selector(complete:)) return;
+    [super doCommandBySelector:selector];
 }
 @end
 
 // A key of this application while it is in front, as the key of a person arrives: -[NSApplication sendEvent:] gives it to the
 // key window, whose text view passes it to its input context.
-static void sendKey(CGKeyCode code) {
+// Returns, per key event, its CGEvent field 76 and whether AppKit counts it as synthesized.
+static NSArray *sendKey(CGKeyCode code) {
+    NSMutableArray *kinds = [NSMutableArray array];
     for (int down = 1; down >= 0; down--) {
         CGEventRef raw = CGEventCreateKeyboardEvent(NULL, code, down);
         if (!raw) continue;
-        [NSApp sendEvent:[NSEvent eventWithCGEvent:raw]];
+        NSEvent *event = [NSEvent eventWithCGEvent:raw];
+        SEL synthesized = NSSelectorFromString(@"_isSynthesizedKeyEvent");
+        BOOL made = [event respondsToSelector:synthesized] && ((BOOL (*)(id, SEL))objc_msgSend)(event, synthesized);
+        [kinds addObject:[NSString stringWithFormat:@"%lld/%d", CGEventGetIntegerValueField(event.CGEvent, (CGEventField)76), made]];
+        [NSApp sendEvent:event];
         CFRelease(raw);
     }
+    return kinds;
 }
 
 static void quit(void) {
@@ -83,16 +108,23 @@ static void quit(void) {
 static void reportReadyOnce(void) {
     if (readyReported || !NSRunningApplication.currentApplication.isActive || !personView.window.isKeyWindow) return;
     readyReported = YES;
-    report(@"ready");
+    report(@"ready", nil);
 }
 
 static void command(NSString *line) {
+    // The input method answers a key of the key window of the active application within -[NSApplication sendEvent:]: the text
+    // view has changed when sendKey returns.
     if ([line isEqual:@"compose"]) {
-        sendKey(5);   // g: ㅎ
-        sendKey(40);  // k: ㅏ
-        report(@"composed");
+        NSMutableArray *keys = [NSMutableArray array];
+        [keys addObjectsFromArray:sendKey(53)];  // Escape: ends a composition
+        personView.string = @"";
+        [keys addObjectsFromArray:sendKey(5)];   // g: ㅎ
+        [keys addObjectsFromArray:sendKey(40)];  // k: ㅏ
+        report(@"composed", @{@"keys": keys});
+    } else if ([line isEqual:@"continue"]) {
+        report(@"continued", @{@"keys": sendKey(1)});  // s: ㄴ
     } else if ([line isEqual:@"state"]) {
-        report(@"state");
+        report(@"state", nil);
     } else if ([line isEqual:@"quit"]) {
         quit();
     }

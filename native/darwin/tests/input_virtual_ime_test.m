@@ -7,7 +7,9 @@
 // pass, and composes 하 in its own text view; at its end it returns the front to the application that held it. This
 // application stays behind and is never active: a text view in its covered window takes g k s and Space, Backspace or Escape
 // through input.key, which makes that window the virtual key window. A person's input method composes those keys as 한 Space,
-// 하 and 한 (the AppKit reference of image_region_ime_test). After each sequence the composition of the person must stay as it was.
+// 하 and 한 (the AppKit reference of image_region_ime_test). After each sequence the composition of the person must stay as it was:
+// the input method composes in the person's text view without marked text, so the composition shows in s of the person, which
+// continues a composition the input method still holds into 한 and appends ㄴ to a 하 it no longer holds.
 //
 // The same run measures, without judging, whether the input method composes those keys once the input context of the text view is
 // activated (-[NSTextInputContext activate]), and what that does to the composition of the person. It changes the input source of
@@ -242,21 +244,51 @@ static NSString *describe(SPRecordingTextView *view) {
         [view.calls componentsJoinedByString:@"; "]];
 }
 
-// Whether the composition of the person stayed as it was: no change by the input method since index from, and 하 still marked
-// in an empty text.
+static NSString *oneLine(id value) {
+    return [[value description] stringByReplacingOccurrencesOfString:@"\n" withString:@" "];
+}
+
+// The person composes 하 again in an emptied text view. The Korean 2-Set input method composes without marked text, so the text
+// 하 from g and k shows the composition: without one the keys would leave ㅎㅏ.
+static NSDictionary *personComposes(void) {
+    NSUInteger from = personReports.count;
+    tellPerson(@"compose");
+    return awaitPerson(@"composed", from);
+}
+
+static BOOL composing(NSDictionary *composed) {
+    return [composed[@"text"] isEqual:@"하"] && ([composed[@"marked"] isEqual:@""] || [composed[@"marked"] isEqual:@"하"]);
+}
+
+// The key s of the person after the composition 하: the input method continues a composition it still holds into 한, and appends
+// ㄴ after a 하 it no longer holds.
+static NSDictionary *personContinues(void) {
+    NSUInteger from = personReports.count;
+    tellPerson(@"continue");
+    return awaitPerson(@"continued", from);
+}
+
+// Whether the composition of the person stayed as it was: no change by the input method since index from, the text still 하, and
+// the next key of the person continuing it into 한. The person then composes 하 again for the next keys of this application.
 static void checkPersonKept(NSUInteger from, NSString *after) {
     NSArray *changes = personChangesFrom(from);
     NSDictionary *state = personState();
-    check(changes.count == 0 && [state[@"marked"] isEqual:@"하"] && [state[@"text"] isEqual:@"하"],
-        [NSString stringWithFormat:@"the composition of the person stays 하 after %@ (changes %@, state %@)", after, changes, state]);
+    NSDictionary *continued = personContinues();
+    check(changes.count == 0 && [state[@"text"] isEqual:@"하"] && [continued[@"text"] isEqual:@"한"],
+        [NSString stringWithFormat:@"the composition of the person stays 하 after %@, and s of the person continues it into 한 (changes %@, "
+            @"state %@, after s %@)", after, oneLine(changes), oneLine(state), oneLine(continued)]);
+    NSDictionary *again = personComposes();
+    check(composing(again), [NSString stringWithFormat:@"the person composes 하 again (%@)", oneLine(again)]);
 }
 
 static void measurePerson(NSUInteger from, NSString *after) {
     NSArray *changes = personChangesFrom(from);
     NSDictionary *state = personState();
-    printf("MEASURE: the person's text view after %s: changes %s, state %s\n", after.UTF8String,
-        [changes.description stringByReplacingOccurrencesOfString:@"\n" withString:@" "].UTF8String,
-        [state.description stringByReplacingOccurrencesOfString:@"\n" withString:@" "].UTF8String);
+    NSDictionary *continued = personContinues();
+    printf("MEASURE: the person's text view after %s: changes %s, state %s, after s of the person %s\n", after.UTF8String,
+        oneLine(changes).UTF8String, oneLine(state).UTF8String, oneLine(continued).UTF8String);
+    NSDictionary *again = personComposes();
+    check(composing(again), [NSString stringWithFormat:@"the person composes 하 again (%@)", oneLine(again)]);
 }
 
 // Whether this process stayed behind: it is not the frontmost application and the system does not hold it as active.
@@ -298,13 +330,15 @@ int main(void) { @autoreleasepool {
     check([ready[@"front"] boolValue] && NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier == personProcess
         && [ready[@"source"] isEqual:KOREAN_2SET], [NSString stringWithFormat:@"the person's application is in front with Korean 2-Set (%@)", ready]);
     if (!ready) return finish();
-    tellPerson(@"compose");
-    NSDictionary *composed = awaitPerson(@"composed", 0);
-    printf("NOTE: the window of the person shows nothing (alpha %s) and is its key window (%s); its input context is current (%s), "
-        "and the input method composes in it: %s\n", [composed[@"alpha"] description].UTF8String, [composed[@"front"] description].UTF8String,
-        [composed[@"current"] description].UTF8String, [composed[@"marked"] isEqual:@"하"] ? "yes" : "no");
-    check([composed[@"marked"] isEqual:@"하"], [NSString stringWithFormat:@"the person composes 하 (%@)", composed]);
-    if (![composed[@"marked"] isEqual:@"하"]) return finish();
+    NSUInteger composeFrom = personReports.count;
+    NSDictionary *composed = personComposes();
+    printf("NOTE: the window of the person shows nothing (alpha %s) and is its key window (%s); its input context is current (%s); "
+        "its keys have field 76/synthesized %s; the input method changes its text view by %s and leaves text %s, marked %s\n",
+        oneLine(composed[@"alpha"]).UTF8String, oneLine(composed[@"front"]).UTF8String, oneLine(composed[@"current"]).UTF8String,
+        oneLine(composed[@"keys"]).UTF8String, oneLine(personChangesFrom(composeFrom)).UTF8String, oneLine(composed[@"text"]).UTF8String,
+        oneLine(composed[@"marked"]).UTF8String);
+    check(composing(composed), [NSString stringWithFormat:@"the person composes 하 (%@)", oneLine(composed)]);
+    if (!composing(composed)) return finish();
 
     // The covered window of this application, with a text view as its first responder.
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(240, 240, 360, 120)
