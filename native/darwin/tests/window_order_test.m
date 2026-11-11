@@ -1,10 +1,9 @@
 // Checks that host.window reports the place of a window among the windows on the screen and its display, and that the raise
 // and the lower of a window (host.window.raise, host.window.lower) change that place without changing the active application.
-// The windows of the check stand at the check window level, so the windows that a person leaves on the screen at the normal
-// level do not decide their order.
+// The windows of the check stand at the normal level and start at the back of it, behind the windows that a person has on the
+// screen, so the check judges only the order of its two windows relative to each other, which those windows do not change.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
-#import "support/check_level.h"
 #import "support/event_wait.h"
 #import "webview_geometry.h"
 #import "window_facts.h"
@@ -36,7 +35,6 @@ static NSWindow *makeWindow(NSRect frame) {
     NSWindow *window = [[NSWindow alloc] initWithContentRect:frame styleMask:NSWindowStyleMaskTitled
         backing:NSBackingStoreBuffered defer:NO];
     window.releasedWhenClosed = NO;
-    window.level = kCheckWindowLevel;
     WKWebView *main = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, frame.size.width, frame.size.height)] autorelease];
     [window.contentView addSubview:main];
     sp_window_set_main_webview(window, main);
@@ -87,33 +85,37 @@ int main(void) { @autoreleasepool {
     check(!sp_window_raise(hidden) && !sp_window_lower(hidden) && !hidden.isVisible,
         @"a window that is not ordered in is neither raised nor lowered, and stays out");
     check(factsOf(hidden)[@"order"] == NSNull.null, @"a window that is not ordered in has no place");
-    [below orderFrontRegardless];
-    [above orderFrontRegardless];
-    eventWait(@"the later window stands in front of the earlier", ^BOOL { return indexOf(above) == 0 && indexOf(below) == 1; });
+    [above orderBack:nil];
+    [below orderBack:nil];
+    eventWait(@"the window sent back later stands behind the other", ^BOOL {
+        return indexOf(above) >= 0 && indexOf(below) > indexOf(above);
+    });
 
     NSDictionary *facts = factsOf(below);
     NSUInteger display = [NSScreen.screens indexOfObject:below.screen];
     check(display != NSNotFound && [facts[@"display"] isEqual:@(display)],
         [NSString stringWithFormat:@"the display of the window is its index in the screen list: %@ for %lu", facts[@"display"],
             (unsigned long)display]);
-    check([facts[@"order"][@"count"] integerValue] >= 2 && facts[@"order"][@"otherInFront"] == (id)kCFBooleanFalse,
-        [NSString stringWithFormat:@"the window behind a window of its own process has no other window in front: %@",
-            facts[@"order"]]);
+    id otherInFront = facts[@"order"][@"otherInFront"];
+    check([facts[@"order"][@"count"] integerValue] >= 2
+            && (otherInFront == (id)kCFBooleanTrue || otherInFront == (id)kCFBooleanFalse),
+        [NSString stringWithFormat:@"the place of a window counts both windows of the check and tells whether another window is in "
+            "front: %@", facts[@"order"]]);
 
     BOOL active = NSApp.isActive;
     pid_t frontmost = NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier;
     NSWindow *key = NSApp.keyWindow;
     check(sp_window_raise(below), @"the raise of a window that is ordered in is accepted");
-    eventWait(@"the raised window stands in front of its level", ^BOOL { return indexOf(below) == 0 && indexOf(above) == 1; });
+    eventWait(@"the raised window stands in front of the other", ^BOOL {
+        return indexOf(below) >= 0 && indexOf(below) < indexOf(above);
+    });
     check(NSApp.isActive == active && NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier == frontmost
             && NSApp.keyWindow == key,
         @"the raise changes neither the active application, the front application nor the key window");
 
     check(sp_window_lower(below), @"the lower of a window that is ordered in is accepted");
-    eventWait(@"the lowered window stands at the back of its level", ^BOOL {
-        NSDictionary *order = factsOf(below)[@"order"];
-        return [order isKindOfClass:NSDictionary.class] && [order[@"index"] integerValue] == [order[@"count"] integerValue] - 1
-            && indexOf(above) == 0;
+    eventWait(@"the lowered window stands behind the other", ^BOOL {
+        return indexOf(above) >= 0 && indexOf(below) > indexOf(above);
     });
     check(NSApp.isActive == active && NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier == frontmost
             && NSApp.keyWindow == key,

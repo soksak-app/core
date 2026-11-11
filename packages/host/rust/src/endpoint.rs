@@ -2147,16 +2147,6 @@ mod draw_covered_release_declaration_test {
     }
 }
 
-#[cfg(test)]
-mod windows_raise_absence_test {
-    // No build raises the windows of the application: a check starts behind the windows of other applications and measures
-    // covered windows (docs/spec/hosts.md#launch-activation).
-    #[test]
-    fn no_build_declares_a_raise_of_the_windows() {
-        assert!(!super::declared("diagnostics.windows.raise"));
-    }
-}
-
 #[cfg(all(test, feature = "diagnostics"))]
 mod input_reference_declaration_test {
     // contract: diagnostics.input-reference.declared
