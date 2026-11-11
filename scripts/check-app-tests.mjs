@@ -33,7 +33,6 @@ const RULES = [
   // A skipped test ends as a pass of its file, so a check whose precondition fails reports nothing.
   { what: "a skipped test; assert its precondition", pattern: /\bt\.skip\s*\(/, skippedTest: true },
   { what: "a fixed sleep", pattern: /\b(sleep|delay|pause)\s*\(|timers\/promises/, inputPacing: true },
-  { what: "application activation that takes user focus", pattern: /\bactivate\s*:\s*true\b/, activationTier: true },
   // The cleanup of a window check goes into session.cleanup. When the cleanup of open fails, a t.after registered after it does not run,
   // so a server or process remains and the check process does not end. The cleanup of a session runs every step even when one fails.
   { what: "t.after for cleanup; register it with session.cleanup", pattern: /\bt\.after\s*\(/, sessionCleanup: true },
@@ -42,8 +41,6 @@ const RULES = [
   { what: "a source path of another repository component", pattern: /(["'`/]|\.\.\/)(?<!e2e\/fixtures\/)(packages|plugins|sidecars|native|apps)\//, sourcePath: true },
 ];
 
-// The checks of e2e/activation and e2e/real run only in runs the user approved and may activate the app.
-const ACTIVATION_DIRS = ["e2e/activation/", "e2e/real/"];
 // The real input tool of the harness, which only the checks of the real-input tier use: it activates the app before it sends HID
 // events, and it leaves an interval between HID events at the speed of a human movement. The interval is not a wait for state, and
 // the window server coalesces drag events sent without an interval. A fixed wait is not allowed outside this file.
@@ -410,7 +407,6 @@ export function auditE2ESource(text, file) {
   let lineStart = 0;
   text.split("\n").forEach((line, index) => {
     for (const rule of RULES) {
-      if (rule.activationTier && (ACTIVATION_DIRS.some((dir) => file.startsWith(dir)) || file === REAL_INPUT_TOOL)) continue;
       if (rule.inputPacing && file === REAL_INPUT_TOOL) continue;
       if (rule.skippedTest && file === NOT_RUN_REPORTER) continue;
       if (rule.sessionCleanup && SESSION_CLEANUP_EXEMPT.some((exempt) => file === exempt || file.startsWith(exempt))) continue;

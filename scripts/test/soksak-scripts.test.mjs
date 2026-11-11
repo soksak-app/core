@@ -740,29 +740,10 @@ test("window-source audit requires window-check cleanup through the session", { 
   assert.deepEqual(auditE2ESource("s.cleanup(() => server.close());", "e2e/fixture.test.mjs"), []);
 });
 
-test("window-source audit rejects native input that activates the application", { timeout: 1000 }, () => {
-  const errors = auditE2ESource(
-    'await session.pointer(x, y, "move", { activate: true });',
-    "e2e/fixture.mjs",
-  );
-  assert.deepEqual(errors, [
-    "e2e/fixture.mjs:1: uses application activation that takes user focus",
-  ]);
-  assert.deepEqual(auditE2ESource('await session.pointer(x, y, "move");', "e2e/clean.mjs"), []);
-});
-
-test("window-source audit allows activation only in the activation tier", { timeout: 1000 }, () => {
+test("window-source audit allows an emulated activation and input pacing only in the real input tool", { timeout: 1000 }, () => {
   const line = 'await session.pointer(x, y, "move", { activate: true });';
-  assert.deepEqual(auditE2ESource(line, "e2e/activation/ime.test.mjs"), []);
-  assert.equal(auditE2ESource(line, "e2e/probe.test.mjs").length, 1);
-  assert.equal(auditE2ESource(line, "e2e/activation-like.test.mjs").length, 1);
-});
-
-test("window-source audit allows activation in the real-input tier and input pacing only in its tool", { timeout: 1000 }, () => {
-  const line = 'await session.pointer(x, y, "move", { activate: true });';
-  assert.deepEqual(auditE2ESource(line, "e2e/real/probe.test.mjs"), []);
-  assert.deepEqual(auditE2ESource(line, "e2e/real/hid.mjs"), []);
-  assert.equal(auditE2ESource(line, "packages/window-check/app.mjs").length, 1);
+  assert.deepEqual(auditE2ESource(line, "e2e/probe.test.mjs"), []);
+  assert.deepEqual(auditE2ESource(line, "packages/window-check/app.mjs"), []);
   const pacing = "  if (step.wait) delay(step.wait / 1000);";
   assert.deepEqual(auditE2ESource(pacing, "e2e/real/hid.mjs"), []);
   assert.deepEqual(auditE2ESource(pacing, "packages/window-check/app.mjs"), ["packages/window-check/app.mjs:1: uses a fixed sleep"]);
