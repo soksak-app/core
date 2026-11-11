@@ -11,6 +11,7 @@ import test from "node:test";
 
 import { APPS, holdCovered, open, requiresAll } from "@soksak/window-check/app.mjs";
 import { DESIGN_TOLERANCE, designDifferences } from "@soksak/window-check/design-rects.mjs";
+import workbench from "@soksak/workbench/workbench.json" with { type: "json" };
 import { cardSidebar, fresh, replacePlaceholders, startTab } from "./fixture.mjs";
 import { retainDesignStateCapture } from "./still-capture.mjs";
 
@@ -18,7 +19,7 @@ const DEBUG_ENTRIES = JSON.parse(readFileSync(new URL("./fixtures/design-debug-e
 
 const SIZE = { width: 1200, height: 760 };
 
-const CHROME = JSON.parse(readFileSync(new URL("../packages/workbench/workbench.json", import.meta.url), "utf8")).chrome;
+const CHROME = workbench.chrome;
 
 /** The scroller style that the run gave every host through SOKSAK_DEFAULTS, or null when the hosts have the style of the computer. */
 function requestedScrollerStyle(env) {
