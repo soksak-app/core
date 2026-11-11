@@ -37,3 +37,14 @@ test("the stop of a recording ends its hold of the covered drawing, also when th
   assert.deepEqual(requests, ["diagnostics.window.draw-covered true", "diagnostics.capture.start", "diagnostics.capture.stop",
     "diagnostics.window.draw-covered false"]);
 });
+
+// A recording of a new window (newWindow) reads a window that the application creates after the start answers, so the covered
+// drawing of the requesting window is not its concern: the start goes to the host without that hold, and the stop ends nothing.
+test("a recording of a new window starts without a hold of the covered drawing of the requesting window", async () => {
+  const { s, requests } = session();
+  const recording = await s.record({ newWindow: true });
+  assert.equal(recording.frames, "/unused/frames");
+  assert.deepEqual(requests, ["diagnostics.capture.start"]);
+  await assert.rejects(recording.stop({ after: 0 }), /unexpected request diagnostics.capture.stop/);
+  assert.deepEqual(requests, ["diagnostics.capture.start", "diagnostics.capture.stop"]);
+});
