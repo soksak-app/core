@@ -8,10 +8,11 @@
 #   make          build/libsoksak-darwin.a, build/soksak-darwin.pc
 #   make test             runs the checks for input injection, the emulated activation, mouse button observation, window state, window button layout,
 #                         title bar height display inside a layout transaction, the start transaction of a re-read, display wait,
-#                         webview focus, the web inspector, view focus, document region, image region, release of a closed window, and window object count.
+#                         webview focus, the web inspector, overlapping webview input (baseline run and registered run), view focus,
+#                         document region, image region, release of a closed window, and window object count.
 #                         It does not activate the application
-#   make test-app-activation  runs the overlapping webview input check (baseline run and
-#                         registered run), the fullscreen check, and the Korean input method composition check of the image region.
+#   make test-app-activation  runs the overlapping webview input check through the local monitor of an application that is
+#                         really active, the fullscreen check, and the Korean input method composition check of the image region.
 #                         It activates the application and takes the focus
 #   make benchmark        measures the calling thread cost of one record (the current text record and the event ring). It prints numbers and asserts nothing
 #   make benchmark-document
@@ -387,6 +388,8 @@ NATIVE_TESTS = observe_test \
   presentation_order_test \
   webview_focus_test \
   webview_inspector_test \
+  webview_input_test,--baseline \
+  webview_input_test \
   webview_geometry_test \
   webview_geometry_test,-AppleShowScrollBars,Always \
   webview_process_test \
@@ -508,7 +511,7 @@ test-pressure: $(BUILD)/document_pressure_test
 	@$(BUILD)/document_pressure_test
 
 test-app-activation: $(BUILD)/webview_input_test $(BUILD)/window_fullscreen_test $(BUILD)/image_region_ime_test
-	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) window_fullscreen_test webview_input_test,--baseline webview_input_test image_region_ime_test
+	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) window_fullscreen_test webview_input_test,--monitor image_region_ime_test
 
 # Runs only the focused AppKit reference input-context readiness case and restores the outer input source and application.
 test-app-input-reference-readiness: $(BUILD)/input_reference_test
