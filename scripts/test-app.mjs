@@ -1,7 +1,7 @@
 // Runs the end-to-end checks of core on this computer (docs/operations/examples.md#end-to-end-run):
 //   node scripts/test-app.mjs --script <name> [--native <target>] [--only <file>] [--defaults Name=Value]...
 // The e2e targets of the Makefile build the three debug applications, and then run this script with the window-check script of their
-// tier (`verify`, `test-app:activation`, `test-app:person`) and the native end-to-end target of that tier. Each run
+// tier (`verify`, `test-app:activation`) and the native end-to-end target of that tier. Each run
 // makes a new configuration root under target/e2e, prepares the registry certificates in it and installs every plugin of the fixture
 // registry of the core fixtures (`make build-fixture-registry`, target/fixture-registry; a candidate or prebuilt run builds it from its
 // checkout into the root with `make build-fixture-registry-from-sok` and the `sok` of an application artifact under test) into the
