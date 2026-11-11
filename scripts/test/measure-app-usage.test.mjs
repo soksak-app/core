@@ -1053,7 +1053,7 @@ test("a pointer output holds the keys of one trace state: the cpu and footprint 
   assert.deepEqual(Object.keys(records.measurements), B3_MEASUREMENTS["frame-records"]);
   assert.deepEqual(records, {
     measurements: { pointerMoveP90Ms: 6 },
-    conditions: { refreshRate: 120, backingScale: 2, traceState: false, logPolicy: POLICY, window: { width: 1200, height: 760 }, occluded: false, active: true },
+    conditions: { refreshRate: 120, refreshRates: { w1: 120, w2: 120 }, backingScale: 2, traceState: false, logPolicy: POLICY, window: { width: 1200, height: 760 }, occluded: false, active: true },
   });
   assert.throws(() => usageOutput({ options: { trace: "frame-records", step: "pointer" }, measurement, gesture: null }),
     /the pointer output under the trace state frame-records is pointerMoveP90Ms, which a window with a main page has not/);
@@ -1074,7 +1074,7 @@ test("the B3 output of app-usage takes its conditions from b3-out with the perfo
     },
   };
   const output = usageOutput({ options: { trace: 0 }, measurement, faultLines: undefined, gesture: undefined });
-  assert.deepEqual(output.conditions, { refreshRate: 120, backingScale: 2, traceState: false, logPolicy: POLICY, window: { width: 1200, height: 760 }, occluded: false, active: true });
+  assert.deepEqual(output.conditions, { refreshRate: 120, refreshRates: { w1: 120, w2: 120 }, backingScale: 2, traceState: false, logPolicy: POLICY, window: { width: 1200, height: 760 }, occluded: false, active: true });
   assert.equal(output.measurements.hostCpuSeconds, 0.12);
   assert.equal(usageOutput({ options: { trace: 1 }, measurement }).conditions.traceState, true);
   const covered = { ...measurement, marks: { ...measurement.marks, after: [{ ...measurement.marks.after[0], windows: marksOfTwo().after.map((window) => ({ ...window, occluded: true })) }] } };
@@ -1091,5 +1091,5 @@ test("the B3 output of app-usage takes its conditions from b3-out with the perfo
     rmSync(folder, { recursive: true, force: true });
   }
   const mixed = { ...measurement, marks: { ...measurement.marks, before: [{ ...measurement.marks.before[0], windows: [marksOfTwo().before[0], { ...marksOfTwo().before[1], scale: 1 }] }] } };
-  assert.throws(() => usageOutput({ options: { trace: 0 }, measurement: mixed }), /window w2 reports refreshRate 120 and scale 1, not refreshRate 120 and scale 2 of window w1/);
+  assert.throws(() => usageOutput({ options: { trace: 0 }, measurement: mixed }), /window w2 reports scale 1, not scale 2 of window w1/);
 });

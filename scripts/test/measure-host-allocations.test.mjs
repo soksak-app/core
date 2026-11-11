@@ -64,7 +64,7 @@ test("B3_MEASUREMENTS declares hostFootprintKb, the settled footprint in KB that
   const output = b3Output({ settledBytes: 81 * 1024 * 1024 + 512, windows, trace: 0, policy });
   assert.deepEqual(output, {
     measurements: { hostFootprintKb: 81 * 1024 + 0.5 },
-    conditions: { refreshRate: 120, backingScale: 2, traceState: false, logPolicy: policy, window: { width: 1200, height: 760 }, occluded: false, active: true },
+    conditions: { refreshRate: 120, refreshRates: { w1: 120, w2: 120 }, backingScale: 2, traceState: false, logPolicy: policy, window: { width: 1200, height: 760 }, occluded: false, active: true },
   });
   assert.deepEqual(Object.keys(output.measurements), B3_MEASUREMENTS);
   assert.equal(b3Output({ settledBytes: 1024, windows, trace: 1, policy }).conditions.traceState, true);

@@ -395,9 +395,10 @@ test("the B3 output of object-counts states the performance switch that TRACE se
   const on = counts.b3Output({ entries: run30(() => 5, () => 1), window: "w1", status, trace: 1, policy });
   assert.deepEqual(on, {
     measurements: { changedCounts: 0, growingFigures: 0 },
-    conditions: { refreshRate: 120, backingScale: 2, traceState: true, logPolicy: policy, window: { width: 1200, height: 760 }, occluded: false, active: true },
+    conditions: { refreshRate: 120, refreshRates: { w1: 120 }, backingScale: 2, traceState: true, logPolicy: policy, window: { width: 1200, height: 760 }, occluded: false, active: true },
   });
   assert.equal(counts.b3Output({ entries: run30(() => 5, () => 1), window: "w1", status, trace: 0, policy }).conditions.traceState, false);
-  assert.throws(() => counts.b3Output({ entries: run30(() => 5, () => 1), window: "w1", status: { ...status, refreshRate: null }, trace: 0, policy }),
-    /window w1 reports the refresh rate null, so it is on no screen/);
+  // A window on no screen records the refresh rate null, and the judge fails each period bound that it cannot judge.
+  const offScreen = counts.b3Output({ entries: run30(() => 5, () => 1), window: "w1", status: { ...status, refreshRate: null }, trace: 0, policy }).conditions;
+  assert.deepEqual([offScreen.refreshRate, offScreen.refreshRates], [null, { w1: null }]);
 });

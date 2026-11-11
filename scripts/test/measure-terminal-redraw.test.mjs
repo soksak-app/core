@@ -270,10 +270,11 @@ test("the B3 output of the redraw takes its conditions from b3-out with the perf
   const policy = { lifecycle: "error", input: "error", call: "debug", io: "error", frame: "debug" };
   const status = redrawWindow({ scale: 2, refreshRate: 120 });
   const conditions = redrawConditions({ status, window: "w2", trace: 1, policy });
-  assert.deepEqual(conditions, { refreshRate: 120, backingScale: 2, traceState: true, logPolicy: policy, window: { width: 760, height: 614 }, occluded: false, active: true });
+  assert.deepEqual(conditions, { refreshRate: 120, refreshRates: { w2: 120 }, backingScale: 2, traceState: true, logPolicy: policy, window: { width: 760, height: 614 }, occluded: false, active: true });
   assert.equal(redrawConditions({ status, window: "w2", trace: 0, policy }).traceState, false);
-  assert.throws(() => redrawConditions({ status: redrawWindow({ scale: 2, refreshRate: null }), window: "w2", trace: 0, policy }),
-    /window w2 reports the refresh rate null, so it is on no screen/);
+  // A window on no screen records the refresh rate null, and the judge fails each period bound that it cannot judge.
+  const offScreen = redrawConditions({ status: redrawWindow({ scale: 2, refreshRate: null }), window: "w2", trace: 0, policy });
+  assert.deepEqual([offScreen.refreshRate, offScreen.refreshRates], [null, { w2: null }]);
   const rows = [{ role: "host", pid: 10, cpuSeconds: 0.9 }];
   const totals = { application: { cpuSeconds: 0.9 }, sidecars: { cpuSeconds: 0 }, total: { cpuSeconds: 0.9 } };
   const output = { measurements: redrawMeasurements(frameCost({ rows, totals, presented: 300, seconds: 10 })), conditions };
