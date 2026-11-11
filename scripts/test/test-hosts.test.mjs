@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
-import { auditDeclarations, auditHostContract, parseContractCases, GO_RUNS, groupResults, goTestSourceFilesForRun, parseDeclarations, selectRustDeclarations, uncoveredCases } from '../test-hosts.mjs';
+import { auditDeclarations, auditHostContract, parseContractCases, GO_RUNS, RUST_RUNS, groupResults, goTestSourceFilesForRun, parseDeclarations, selectRustDeclarations, uncoveredCases } from '../test-hosts.mjs';
 
 const SPEC = `# Hosts
 
@@ -185,6 +185,22 @@ test('Go host run profiles preserve shared coverage with CGO0 for every mygo run
   assert.ok(GO_RUNS.mygo().every((run) => run.env.CGO_ENABLED === '0' && !run.ldflags));
   assert.throws(() => GO_RUNS.mygo('-legacy'), /options.*object/);
   assert.throws(() => GO_RUNS.wailsv3(null), /options.*object/);
+});
+
+test('every Rust run of the host tauriv2 builds each test target of its package, with the features that the target requires', { timeout: 60000 }, () => {
+  // A cargo test target whose required features a run does not enable is skipped by cargo without a message, so its tests never run.
+  const metadata = spawnSync('cargo', ['metadata', '--locked', '--no-deps', '--format-version', '1'], { cwd: fileURLToPath(new URL('../../', import.meta.url)), encoding: 'utf8' });
+  assert.equal(metadata.status, 0, metadata.stderr);
+  const packages = new Map(JSON.parse(metadata.stdout).packages.map((item) => [item.name, item]));
+  const missing = [];
+  for (const run of RUST_RUNS) {
+    const enabled = new Set((run.features ?? '').split(',').filter(Boolean));
+    for (const target of packages.get(run.packageName).targets) {
+      const absent = (target['required-features'] ?? []).filter((feature) => !enabled.has(feature));
+      if (absent.length > 0) missing.push(`${run.id} skips ${target.name} without ${absent.join(', ')}`);
+    }
+  }
+  assert.deepEqual(missing, []);
 });
 
 test('the audit of the host mygo counts a case of the scope all that only a test of the Go language host library declares', { timeout: 1000 }, () => {

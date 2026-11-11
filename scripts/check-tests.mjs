@@ -12841,7 +12841,7 @@ const FEATURE_LINKS = [
   {
     id: "F313",
     implementation: [
-      { file: "packages/host/go/tests/platform/darwin/standalone/handled_crash_nocgo.go", symbol: "func SpawnHandledCrashChild(" },
+      { file: "packages/host/go/tests/platform/darwin/standalone/handled_crash.go", symbol: "func SpawnHandledCrashChild(" },
       { file: "packages/host/rust/tests/support/crash_child.rs", symbol: "pub fn spawn(" },
     ],
     tests: [

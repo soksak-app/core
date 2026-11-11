@@ -413,9 +413,10 @@ export const GO_RUNS = {
   mygo: goRuns('mygo', './packages/host/mygo/...', ['mygo']),
 };
 
-const RUST_RUNS = [
-  { id: 'tauriv2-tests', packageName: 'soksak-host' },
-  { id: 'tauriv2-diagnostics-tests', packageName: 'soksak-host', features: 'diagnostics' },
+// The feature host-test links the native host test library into the tests that start a child whose crash exception they serve.
+export const RUST_RUNS = [
+  { id: 'tauriv2-tests', packageName: 'soksak-host', features: 'host-test' },
+  { id: 'tauriv2-diagnostics-tests', packageName: 'soksak-host', features: 'diagnostics,host-test' },
   { id: 'tauriv2-adapter-tests', packageName: 'soksak-host-tauriv2' },
   { id: 'tauriv2-adapter-diagnostics-tests', packageName: 'soksak-host-tauriv2', features: 'diagnostics' },
   { id: 'tauriv2-sok-tests', packageName: 'soksak-sok' },

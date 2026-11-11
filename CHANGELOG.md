@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F754: A check that crashes a child on purpose serves the crash exception of the child, so the system writes no crash report, and judges the crash file or the error line, the end by `SIGABRT` and the answered exception; the watch of system crash reports is removed, the Go check builds with and without cgo, and the Rust runs of `make test-hosts` enable `host-test`, which the two Rust checks need.
 - F758: A new window opens centered in the work area of the display of the frontmost window of the application, through `sp_window_place_new` before the show in every host, not on the display of the key window of another application.
 - F757: A placement that removes a surface waits for the keyboard calls to that surface that the workbench sent before it, in the page and in the mygo workbench, so the host no longer refuses such a call as a surface that the window does not hold.
 - F726: `document_throttle_test` judges a hidden and a covered document region by the `visibilitychange` events of its page: each hidden state runs no animation frame until the next visible state, its timer turns are reported and not judged, and every wait of the check ends by its event instead of a rate over a fixed time.

@@ -1,4 +1,4 @@
-//go:build darwin && !cgo
+//go:build darwin
 
 package standalone
 
@@ -13,7 +13,8 @@ import (
 // the inherited environment. Its standard output and standard error go to output. Its crash exceptions are answered by a test
 // service, so the system writes no crash report for them. It returns the child's pid and the handle for WaitHandledCrashChild.
 func SpawnHandledCrashChild(executable, arguments, environment string, output *os.File) (int, uintptr, error) {
-	if err := InstallTestSupport(); err != nil {
+	functions, err := testSupport()
+	if err != nil {
 		return 0, 0, err
 	}
 	path := nulTerminated(executable)
@@ -21,7 +22,7 @@ func SpawnHandledCrashChild(executable, arguments, environment string, output *o
 	env := nulTerminated(environment)
 	var pid int32
 	var handle uintptr
-	failure := supportFunctions.SpHostTestSpawnHandledCrash(&path[0], &argv[0], &env[0], int32(output.Fd()), &pid, &handle)
+	failure := functions.SpHostTestSpawnHandledCrash(&path[0], &argv[0], &env[0], int32(output.Fd()), &pid, &handle)
 	runtime.KeepAlive(path)
 	runtime.KeepAlive(argv)
 	runtime.KeepAlive(env)
@@ -34,11 +35,12 @@ func SpawnHandledCrashChild(executable, arguments, environment string, output *o
 // WaitHandledCrashChild waits for the child of SpawnHandledCrashChild and returns its raw wait status and the number of
 // crash exceptions that the test service answered.
 func WaitHandledCrashChild(handle uintptr) (int32, int, error) {
-	if err := InstallTestSupport(); err != nil {
+	functions, err := testSupport()
+	if err != nil {
 		return 0, 0, err
 	}
 	var status, handled int32
-	failure := supportFunctions.SpHostTestWaitHandledCrash(handle, &status, &handled)
+	failure := functions.SpHostTestWaitHandledCrash(handle, &status, &handled)
 	if err := testlibrary.Error(failure); err != nil {
 		return 0, 0, err
 	}

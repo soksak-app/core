@@ -618,7 +618,7 @@ test-hosts: check-cargo build-native-mygo build-native-tests copy-frontend-wails
 test-wailsv3: check-host-callbacks check-host-api build-native build-native-tests copy-frontend-wailsv3
 	@$(call go-env) node scripts/test-hosts.mjs --host wailsv3 --cgo-ldflags="$(GO_LINK)"
 
-test-tauriv2: check-cargo build-native copy-frontend-tauriv2
+test-tauriv2: check-cargo build-native build-native-tests copy-frontend-tauriv2
 	@$(CARGO_ENV) node scripts/test-hosts.mjs --host tauriv2
 
 # The contract run of the mygo host, and the unit tests of its workbench and of its application.

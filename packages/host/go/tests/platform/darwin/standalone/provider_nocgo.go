@@ -100,6 +100,14 @@ func InstallTestSupport() error {
 	return supportError
 }
 
+// testSupport returns the functions of the test library that InstallTestSupport loaded.
+func testSupport() (testabi.NativeFunctions, error) {
+	if err := InstallTestSupport(); err != nil {
+		return testabi.NativeFunctions{}, err
+	}
+	return supportFunctions, nil
+}
+
 func TestOnlyRunDirectly() uintptr {
 	if err := InstallTestSupport(); err != nil {
 		panic(err)

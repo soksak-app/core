@@ -40,6 +40,14 @@ func InstallTestSupport() error {
 	return supportError
 }
 
+// Functions returns the functions of the statically linked test library after InstallTestSupport installed them.
+func Functions() (testabi.NativeFunctions, error) {
+	if err := InstallTestSupport(); err != nil {
+		return testabi.NativeFunctions{}, err
+	}
+	return supportFunctions, nil
+}
+
 // DirectRunnerAddress returns the native direct runner for standalone test dispatch.
 func DirectRunnerAddress() (uintptr, error) {
 	if err := InstallTestSupport(); err != nil {
