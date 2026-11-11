@@ -364,6 +364,28 @@ func isFinite(v float64) bool {
 	return !math.IsNaN(v) && !math.IsInf(v, 0)
 }
 
+// DocumentRead reads the value of an operable element of a frame of a region under the value-read grant of the origin
+// of that frame; without the grant the reply names the refusal and its request identifier.
+func (h *Host) DocumentRead(ctx context.Context, reqJSON json.RawMessage) (DocumentReadValue, error) {
+	req, err := argument[DocumentRequest]("request", reqJSON)
+	if err != nil {
+		return DocumentReadValue{}, err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return DocumentReadValue{}, err
+	}
+	var frame struct {
+		Frame string `json:"frame"`
+		Ref   int    `json:"ref"`
+	}
+	if err := json.Unmarshal(reqJSON, &frame); err != nil || frame.Frame == "" || frame.Ref < 1 {
+		return DocumentReadValue{}, fmt.Errorf("read requires a frame path and a positive ref")
+	}
+	value, err := s.readDocument(uint64(s.window.ID()), req, h.approvals, frame.Frame, frame.Ref)
+	return value, DocumentCallError("documentRead", err)
+}
+
 // DocumentScrollTo scrolls the main document of a region to the CSS pixel position and returns the settled position.
 func (h *Host) DocumentScrollTo(ctx context.Context, reqJSON json.RawMessage) (DocumentScrollPoint, error) {
 	req, err := argument[DocumentRequest]("request", reqJSON)

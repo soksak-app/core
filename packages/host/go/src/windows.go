@@ -85,6 +85,8 @@ type Host struct {
 	notifications NotificationState
 	// deepLinks holds the deep links that arrived before the first window was ready.
 	deepLinks DeepLinkQueue
+	// approvals is the session table of the grants of the gated operations of the document regions of every window.
+	approvals *Approvals
 }
 
 // errNoWindow is returned when this application has no window. Every call here lays out or reads something of that window,
@@ -127,7 +129,7 @@ func nativeError(code int, err error) error {
 
 func newHost(directory string, quit *Quit) (*Host, error) {
 	h := &Host{quit: quit, workspace: NewWorkspace(directory), configDir: directory, windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{},
-		relay: NewRelay[relayTarget]()}
+		relay: NewRelay[relayTarget](), approvals: NewApprovals()}
 	// apply applies an operation to the sidecars: a changed sidecar is replaced and a removed one stopped, so a page that
 	// reloads uses the installed executables (docs/spec/installation.md#applying-a-change).
 	apply := func() error {

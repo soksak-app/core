@@ -193,6 +193,16 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
       if (!Number.isFinite(x) || !Number.isFinite(y)) return Promise.reject(new Error(`scrollTo requires finite x and y, not ${x}, ${y}`));
       return queue(() => port.scrollTo(name, x, y));
     },
+    /**
+     * Reads the value of the operable element ref of the frame at path and resolves to {value}, or to
+     * {refusal, request} when the origin of the frame holds no value-read grant for this session. A sensitive element
+     * resolves to a null value.
+     */
+    read(frame, ref) {
+      if (typeof frame !== "string" || frame === "") return Promise.reject(new Error(`read requires a frame path, not ${JSON.stringify(frame)}`));
+      if (!Number.isInteger(ref) || ref < 1) return Promise.reject(new Error(`read requires a positive ref, not ${JSON.stringify(ref)}`));
+      return queue(() => port.read(name, frame, ref));
+    },
     back() { return this.go("back"); },
     forward() { return this.go("forward"); },
     reload() { return this.go("reload"); },

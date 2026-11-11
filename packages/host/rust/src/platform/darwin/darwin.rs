@@ -418,6 +418,17 @@ impl Platform for Darwin {
         document::query(document, reply);
         Ok(())
     }
+    fn read_document(
+        &self,
+        document: Handle,
+        path: &str,
+        ref_: i32,
+        granted: bool,
+        reply: Box<dyn FnOnce(String) + Send>,
+    ) -> Result<(), String> {
+        document::read(document, path, ref_, granted, reply);
+        Ok(())
+    }
     fn scroll_document(
         &self,
         document: Handle,

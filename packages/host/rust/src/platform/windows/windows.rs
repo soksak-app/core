@@ -307,6 +307,16 @@ impl Platform for Windows {
     ) -> Result<(), String> {
         unsupported::query_document(document, reply)
     }
+    fn read_document(
+        &self,
+        document: Handle,
+        path: &str,
+        ref_: i32,
+        granted: bool,
+        reply: Box<dyn FnOnce(String) + Send>,
+    ) -> Result<(), String> {
+        unsupported::read_document(document, path, ref_, granted, reply)
+    }
     fn scroll_document(
         &self,
         document: Handle,

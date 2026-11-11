@@ -126,7 +126,7 @@ function viewShortcuts(shortcuts) {
 // (docs/spec/native-surfaces.md#view-surfaces, regions).
 export const REGION_HOST_CALLS = new Set([
   "compositionDeclare", "compositionPlace",
-  "documentAttach", "documentLoad", "documentZoom", "documentGo", "documentScrollTo", "documentDetach", "documentSubscribe", "documentUnsubscribe",
+  "documentAttach", "documentLoad", "documentZoom", "documentGo", "documentScrollTo", "documentRead", "documentDetach", "documentSubscribe", "documentUnsubscribe",
   "documentPost", "documentQuery", "documentInteractionState",
   "imageAttach", "imageFocus", "imageCaret", "imageText", "imageDetach",
 ]);

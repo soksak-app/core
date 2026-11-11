@@ -293,6 +293,36 @@ extern "C" fn scrolled(context: *mut c_void, value: *const c_char) {
     (receiver.0)(value);
 }
 
+unsafe extern "C" {
+    fn sp_document_read(
+        document: *mut c_void,
+        path: *const c_char,
+        ref_: i32,
+        granted: bool,
+        reply: Event,
+        context: *mut c_void,
+    );
+}
+
+/// The receiver of one read reply. Native calls it once.
+struct ReadReceiver(Box<dyn FnOnce(String) + Send>);
+
+extern "C" fn read_replied(context: *mut c_void, value: *const c_char) {
+    let receiver = unsafe { Box::from_raw(context as *mut ReadReceiver) };
+    let value = unsafe { CStr::from_ptr(value) }
+        .to_string_lossy()
+        .into_owned();
+    (receiver.0)(value);
+}
+
+/// Reads the value of the operable element ref of the frame at path; without the grant the reply names the origin of
+/// the frame alone, with the grant it names the value and the origin.
+pub fn read(document: Handle, path: &str, ref_: i32, granted: bool, reply: Box<dyn FnOnce(String) + Send>) {
+    let receiver = Box::into_raw(Box::new(ReadReceiver(reply)));
+    let path = std::ffi::CString::new(path).unwrap_or_default();
+    unsafe { sp_document_read(document as *mut c_void, path.as_ptr(), ref_, granted, read_replied, receiver as *mut c_void) };
+}
+
 /// Scrolls the main document of the region to the CSS pixel position; reply receives the settled position once.
 pub fn scroll_to(document: Handle, x: f64, y: f64, reply: Box<dyn FnOnce(String) + Send>) {
     let receiver = Box::into_raw(Box::new(ScrollReceiver(reply)));

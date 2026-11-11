@@ -89,6 +89,7 @@ const METHOD = {
   documentGo: "DocumentGo",
   documentQuery: "DocumentQuery",
   documentScrollTo: "DocumentScrollTo",
+  documentRead: "DocumentRead",
   documentInteractionState: "DocumentInteractionState",
   documentPost: "DocumentPost",
   viewEvent: "ViewEvent", viewReply: "ViewReply", viewRequest: "ViewRequest",
@@ -240,6 +241,7 @@ export const page = (() => {
       zoom: (document, zoom) => call("documentZoom", { surface, document, zoom }),
       go: (document, action, offset) => call("documentGo", offset === undefined ? { surface, document, action } : { surface, document, action, offset }),
       scrollTo: (document, x, y) => call("documentScrollTo", { surface, document, x, y }),
+      read: (document, frame, ref) => call("documentRead", { surface, document, frame, ref }),
       detach: (document) => call("documentDetach", { surface, document }),
       onState: (fn) => listen("document-state", (sent) => {
         if (sent.surface === surface) fn(sent.document, sent.state);

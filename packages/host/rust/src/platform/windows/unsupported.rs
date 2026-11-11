@@ -282,6 +282,16 @@ pub fn query_document(
     missing("document query")
 }
 
+pub fn read_document(
+    _document: Handle,
+    _path: &str,
+    _ref_: i32,
+    _granted: bool,
+    _reply: Box<dyn FnOnce(String) + Send>,
+) -> Result<(), String> {
+    missing("document read")
+}
+
 pub fn scroll_document(
     _document: Handle,
     _x: f64,

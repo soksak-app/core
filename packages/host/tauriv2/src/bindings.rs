@@ -748,6 +748,18 @@ async fn document_query(webview: Webview, request: Argument<documents::Request>)
     .await
 }
 
+/// Reads the value of an operable element of a frame of a region; without the grant the reply names the origin.
+#[tauri::command]
+async fn document_read(
+    webview: Webview,
+    request: Argument<documents::Request>,
+    frame: String,
+    ref_: i32,
+) -> Result<documents::ReadValue, String> {
+    let Argument(request) = request;
+    blocking(move || documents::read(&webview, request, frame, ref_, false)).await
+}
+
 /// Scrolls the main document of a region to the CSS pixel position and returns the settled position.
 #[tauri::command]
 async fn document_scroll_to(

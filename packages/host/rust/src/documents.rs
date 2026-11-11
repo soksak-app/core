@@ -2776,6 +2776,56 @@ fn parse_scroll_point(document: &str, reply: &str) -> Result<ScrollPoint, String
     Ok(ScrollPoint { x: both.x, y: both.y })
 }
 
+/// The answer of one read of an operable element: the value, or the origin that the grant gates on.
+#[derive(Debug, Default, PartialEq, Serialize)]
+pub struct ReadValue {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub origin: Option<String>,
+}
+
+/// Reads the value of the operable element ref of the frame at path; without the grant the reply names the origin of
+/// the frame alone, with the grant it names the value and the origin.
+pub fn read(webview: &Webview, request: Request, path: String, ref_: i32, granted: bool) -> Result<ReadValue, String> {
+    if path.is_empty() || ref_ < 1 {
+        return Err("read requires a frame path and a positive ref".to_string());
+    }
+    let platform = platform::current()?;
+    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+    with_document(webview, &request, move |handle| {
+        platform.read_document(
+            handle,
+            &path,
+            ref_,
+            granted,
+            Box::new(move |reply| {
+                if sender.send(reply).is_err() {
+                    log_error("document read", "the caller stopped waiting for the reply");
+                }
+            }),
+        )
+    })?;
+    let reply = receiver
+        .recv()
+        .map_err(|_| format!("document {} gave no read reply", request.document))?;
+    #[derive(Deserialize)]
+    struct Both {
+        #[serde(default)]
+        value: Option<String>,
+        #[serde(default)]
+        origin: Option<String>,
+        #[serde(default)]
+        error: Option<String>,
+    }
+    let both: Both = serde_json::from_str(&reply)
+        .map_err(|_| format!("document {} read reply is not JSON: {reply}", request.document))?;
+    if let Some(error) = both.error {
+        return Err(format!("document {} read failed: {error}", request.document));
+    }
+    Ok(ReadValue { value: both.value, origin: both.origin })
+}
+
 /// Scrolls the main document of the region to the CSS pixel position and returns the settled position.
 pub fn scroll_to(webview: &Webview, request: Request, x: f64, y: f64) -> Result<ScrollPoint, String> {
     if x.is_nan() || x.is_infinite() || y.is_nan() || y.is_infinite() {
