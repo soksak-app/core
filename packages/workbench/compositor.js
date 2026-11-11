@@ -439,7 +439,9 @@ export function publishAhead(rects, seated, titlebar) {
   aheadComplete = true;
   const seats = [];
   // The kept sections of a window sidebar that its switch hides stand in no card (docs/spec/plugins.md#sections). Their slots are
-  // hidden in every layout, so the prediction measures the same hidden frame as the drawn commit, and they are no card seat.
+  // hidden in every layout that keeps the side hidden, so the prediction measures the same hidden frame as the drawn commit, and they
+  // are no card seat. A layout that holds the card of the side again draws them into that card at seats that the document before the
+  // draw does not show, so that layout is no prediction and the commit after its draw measures them.
   let unseated = 0;
   // The device pixel scale that this layout was made on, which every card seat of seated carries (plane.js). Each surface of the
   // prediction names it (verify V7c), a kept section as well.
@@ -450,6 +452,7 @@ export function publishAhead(rects, seated, titlebar) {
     const el = cardEl(slot);
     if (!el && slot.closest("[hidden]")) {
       unseated++;
+      if (rects.has(slot.closest(".kept-sidebar")?.dataset.sideOf)) aheadComplete = false;
       seats.push({
         id,
         layer: Number(slot.dataset.nativeLayer),

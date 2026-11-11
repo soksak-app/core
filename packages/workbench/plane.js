@@ -203,6 +203,8 @@ function keepHiddenSidebars() {
     if (!holder) {
       holder = document.createElement("div");
       holder.className = "kept-sidebar";
+      // The side names the card that a show draws the sections into again (publishAhead of compositor.js).
+      holder.dataset.sideOf = side;
       holder.hidden = true;
       holder.innerHTML = '<div class="set"></div>';
       plane.appendChild(holder);

@@ -46,3 +46,44 @@ test("a prediction names the grid of its layout for a kept section of a hidden w
   await bare;
   dom.window.close();
 });
+
+test("a layout that shows a hidden window sidebar again is no prediction of its kept sections", async () => {
+  const dom = new JSDOM(`<div id="plane"><div data-card-id="card">
+    <div data-native-surface data-native-surface-id="surface" data-native-plugin="returning" data-native-layer="0"></div>
+  </div><div class="kept-sidebar" data-side-of="left" hidden>
+    <div data-native-surface data-native-surface-id="kept" data-native-plugin="returning" data-native-layer="0"></div>
+  </div></div>`, { url: "https://example.test/", pretendToBeVisual: true });
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.location = dom.window.location;
+  globalThis.requestAnimationFrame = dom.window.requestAnimationFrame.bind(dom.window);
+  const card = document.querySelector("[data-card-id]");
+  const [slot, kept] = document.querySelectorAll("[data-native-surface]");
+  card.getBoundingClientRect = () => ({ left: 0, top: 0, width: 200, height: 150 });
+  slot.getBoundingClientRect = () => ({ left: 2, top: 30, width: 196, height: 100 });
+  const { registerPlugin } = await import("../registry.js");
+  registerPlugin({ id: "returning", surface: () => ({ module: "returning.js", composition: { kind: "dom" } }) });
+  const { ahead, onCommit, publishAhead, setSlotSurface } = await import("../compositor.js?kept-section-return");
+  setSlotSurface(slot, { surfaceId: "surface", pluginId: "returning", composition: { kind: "dom" } });
+  setSlotSurface(kept, { surfaceId: "kept", pluginId: "returning", composition: { kind: "dom" } });
+  let answer;
+  onCommit((record) => new Promise((resolve) => {
+    answer = () => resolve({ placements: record.surfaces.map((surface) => ({ id: surface.id, ...surface.applied })), deferred: [] });
+  }));
+  const seated = new Map([["card", { id: "surface", dim: false, inset: { left: 2, top: 30, width: 4, height: 50 }, grid: 2 }]]);
+
+  // The next layout holds the card of the side: its draw places the kept section into that card, at a seat that the document
+  // before the draw does not show, so the record measures no place of it.
+  const shown = publishAhead(new Map([["card", { x: 20, y: 0, w: 180, h: 150 }], ["left", { x: 0, y: 0, w: 20, h: 150 }]]), seated);
+  assert.equal(ahead(), null, "a layout that shows the sidebar of a kept section again is published as a prediction");
+  answer();
+  await shown;
+
+  // A layout that keeps the side hidden keeps the section hidden, so it stays a prediction.
+  const hidden = publishAhead(new Map([["card", { x: 20, y: 0, w: 180, h: 150 }]]), seated);
+  assert.deepEqual(ahead()?.surfaces.map((surface) => [surface.id, surface.visible]), [["surface", true], ["kept", false]],
+    "a layout that keeps the sidebar hidden is no prediction");
+  answer();
+  await hidden;
+  dom.window.close();
+});
