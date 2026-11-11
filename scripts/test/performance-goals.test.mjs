@@ -23,7 +23,6 @@ const WORDS = {
   en: {
     conditions: {
       runs: (n) => ["Runs of each application in a session", `${n}`],
-      refreshRate: (n) => ["Refresh rate of the display mode", `${n} Hz`],
       backingScale: (n) => ["Backing scale of each window", `${n}`],
       swapUseBelow: (n) => ["Swap use at the start of a run", `below ${n} of the swap total`],
       fseventsdCoreBelow: (n) => ["CPU share of `fseventsd` at the start of a run", `below ${n} of a core`],
@@ -37,13 +36,13 @@ const WORDS = {
       atMost: (n, unit) => `at most ${n} ${unit}`,
       atLeast: (n, unit) => `at least ${n} ${unit}`,
       below: (n, unit) => `below ${n} ${unit}`,
+      "periods.atMost": (n) => `at most ${n} display period`,
     },
     relative: "each other host and baseline host",
   },
   ko: {
     conditions: {
       runs: (n) => ["session에서 각 application의 run 수", `${n}`],
-      refreshRate: (n) => ["display mode의 refresh rate", `${n} Hz`],
       backingScale: (n) => ["각 window의 backing scale", `${n}`],
       swapUseBelow: (n) => ["run 시작 시 swap 사용량", `swap 전체의 ${n} 미만`],
       fseventsdCoreBelow: (n) => ["run 시작 시 `fseventsd`의 CPU 비율", `core 하나의 ${n} 미만`],
@@ -57,6 +56,7 @@ const WORDS = {
       atMost: (n, unit) => `${n} ${unit} 이하`,
       atLeast: (n, unit) => `${n} ${unit} 이상`,
       below: (n, unit) => `${n} ${unit} 미만`,
+      "periods.atMost": (n) => `${n} display period 이하`,
     },
     relative: "각 other host와 baseline host",
   },
@@ -73,11 +73,12 @@ function renderedRows(goals, lang) {
   };
   const conditions = [...condition("runs", goals.runs), ...Object.entries(goals.conditions).flatMap(([key, n]) => condition(key, n))];
   const values = goals.values.map((value) => {
-    const entries = Object.entries(value.bound ?? {});
+    const entries = Object.entries(value.periods ?? value.bound ?? {});
     assert.ok(entries.length <= 1, `${value.id} has ${entries.length} bounds`);
     const bound = entries.map(([kind, n]) => {
-      const render = words.bound[kind];
-      assert.ok(render, `${value.id} has the bound ${kind}, which the test does not render`);
+      const key = value.periods === undefined ? kind : `periods.${kind}`;
+      const render = words.bound[key];
+      assert.ok(render, `${value.id} has the bound ${key}, which the test does not render`);
       return `${render(n, value.unit)}${value.constant === undefined ? "" : ` (\`${value.constant}\`)`}`;
     })[0] ?? "—";
     const compared = value.relative ? words.relative : value.against === undefined ? "—" : `\`${value.against}\``;
