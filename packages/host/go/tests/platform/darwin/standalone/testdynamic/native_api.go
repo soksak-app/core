@@ -241,5 +241,25 @@ func Functions(library uintptr) (abi.NativeFunctions, error) {
 		}
 		purego.RegisterFunc(&functions.SpHostTestFrameRelease, address)
 	}
+	{
+		address, err := purego.Dlsym(library, "sp_host_test_spawn_handled_crash")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_spawn_handled_crash: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_spawn_handled_crash: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.SpHostTestSpawnHandledCrash, address)
+	}
+	{
+		address, err := purego.Dlsym(library, "sp_host_test_wait_handled_crash")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_wait_handled_crash: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_wait_handled_crash: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.SpHostTestWaitHandledCrash, address)
+	}
 	return functions, nil
 }

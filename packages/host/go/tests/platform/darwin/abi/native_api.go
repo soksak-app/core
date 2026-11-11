@@ -48,6 +48,8 @@ type NativeFunctions struct {
 	SpHostTestFrameId                  func(unsafe.Pointer) uint32
 	SpHostTestFrameInUse               func(unsafe.Pointer) bool
 	SpHostTestFrameRelease             func(unsafe.Pointer)
+	SpHostTestSpawnHandledCrash        func(*byte, *byte, *byte, int32, *int32, *uintptr) *byte
+	SpHostTestWaitHandledCrash         func(uintptr, *int32, *int32) *byte
 }
 
 func (functions NativeFunctions) Validate() error {
@@ -119,6 +121,12 @@ func (functions NativeFunctions) Validate() error {
 	}
 	if functions.SpHostTestFrameRelease == nil {
 		return fmt.Errorf("native API function is missing: sp_host_test_frame_release")
+	}
+	if functions.SpHostTestSpawnHandledCrash == nil {
+		return fmt.Errorf("native API function is missing: sp_host_test_spawn_handled_crash")
+	}
+	if functions.SpHostTestWaitHandledCrash == nil {
+		return fmt.Errorf("native API function is missing: sp_host_test_wait_handled_crash")
 	}
 	return nil
 }

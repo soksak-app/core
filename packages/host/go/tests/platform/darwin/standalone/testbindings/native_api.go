@@ -46,5 +46,11 @@ func Functions() abi.NativeFunctions {
 		SpHostTestFrameId:      func(a0 unsafe.Pointer) uint32 { return uint32(C.sp_host_test_frame_id(a0)) },
 		SpHostTestFrameInUse:   func(a0 unsafe.Pointer) bool { return bool(C.sp_host_test_frame_in_use(a0)) },
 		SpHostTestFrameRelease: func(a0 unsafe.Pointer) { C.sp_host_test_frame_release(a0) },
+		SpHostTestSpawnHandledCrash: func(a0 *byte, a1 *byte, a2 *byte, a3 int32, a4 *int32, a5 *uintptr) *byte {
+			return (*byte)(unsafe.Pointer(C.sp_host_test_spawn_handled_crash((*C.char)(unsafe.Pointer(a0)), (*C.char)(unsafe.Pointer(a1)), (*C.char)(unsafe.Pointer(a2)), C.int(a3), (*C.int)(unsafe.Pointer(a4)), (*C.uintptr_t)(unsafe.Pointer(a5)))))
+		},
+		SpHostTestWaitHandledCrash: func(a0 uintptr, a1 *int32, a2 *int32) *byte {
+			return (*byte)(unsafe.Pointer(C.sp_host_test_wait_handled_crash(C.uintptr_t(a0), (*C.int)(unsafe.Pointer(a1)), (*C.int)(unsafe.Pointer(a2)))))
+		},
 	}
 }
