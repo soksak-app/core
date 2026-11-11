@@ -1,18 +1,22 @@
-// Judges whether the input method of the system composes the keys of the virtual key window (docs/spec/exposure.md#virtual-key-window)
-// and whether those keys take the composition of the application that a person uses.
+// Judges that the keys of the virtual key window do not reach the input method of the system (docs/spec/exposure.md#virtual-key-window)
+// and that they do not take the composition of the application that a person uses.
 //
 // The test selects Korean 2-Set as the input source of the system for its run and restores the previous source at its end, also
 // when it fails, ends by an uncaught exception or ends by a signal that a process can catch. It starts ime_person_app
 // (SOKSAK_IME_PERSON_APP), which takes the front as the application of a person, with a window that shows nothing and lets clicks
 // pass, and composes 하 in its own text view; at its end it returns the front to the application that held it. This
 // application stays behind and is never active: a text view in its covered window takes g k s and Space, Backspace or Escape
-// through input.key, which makes that window the virtual key window. A person's input method composes those keys as 한 Space,
-// 하 and 한 (the AppKit reference of image_region_ime_test). After each sequence the composition of the person must stay as it was:
+// through input.key, which makes that window the virtual key window. A person's input method would compose those keys as 한 Space,
+// 하 and 한 (the AppKit reference of image_region_ime_test); the input method serves only the current input context, which is the
+// one of the key window of the front application, so the text view of this window receives no call of it and no text: its input
+// context accepts each key and nothing answers. After each sequence the composition of the person must stay as it was:
 // the input method composes in the person's text view without marked text, so the composition shows in s of the person, which
 // continues a composition the input method still holds into 한 and appends ㄴ to a 하 it no longer holds.
 //
 // The same run measures, without judging, whether the input method composes those keys once the input context of the text view is
-// activated (-[NSTextInputContext activate]), and what that does to the composition of the person. It changes the input source of
+// activated (-[NSTextInputContext activate]), and what that does to the composition of the person. Measured on 2026-11-12: the
+// activation does not make the context current, the keys then reach the text view as the characters of the keyboard layout
+// (ㅎㅏㄴ and a space) without the input method, and the composition of the person stays. It changes the input source of
 // the system and the front, so it runs only in make test-app-activation.
 //
 // -[NSTextInputContext handleEvent:] reads the answer of the input method when the call that it makes to the input method returns,
@@ -355,22 +359,22 @@ int main(void) { @autoreleasepool {
     // The keys of the virtual key window, as input.key gives them.
     NSUInteger from = personReports.count;
     check(typeKeys(window, @[@"g", @"k", @"s", @"Space"]) && sp_input_virtual_is(window), @"g k s Space of the virtual key window are delivered");
-    check([view.string isEqual:@"한 "] && !view.hasMarkedText,
-        [NSString stringWithFormat:@"the input method composes g k s Space of the virtual key window into 한 and a space (%@)", describe(view)]);
+    check(view.calls.count == 0 && view.string.length == 0,
+        [NSString stringWithFormat:@"g k s Space of the virtual key window reach no input method and the text view receives nothing (%@)", describe(view)]);
     checkPersonKept(from, @"g k s Space");
 
     clearView(view);
     from = personReports.count;
-    typeKeys(window, @[@"g", @"k", @"s", @"Backspace"]);
-    check([view.string isEqual:@"하"],
-        [NSString stringWithFormat:@"Backspace of the virtual key window during a composition reaches the input method and leaves 하 (%@)", describe(view)]);
+    check(typeKeys(window, @[@"g", @"k", @"s", @"Backspace"]), @"g k s Backspace of the virtual key window are delivered");
+    check(view.calls.count == 0 && view.string.length == 0,
+        [NSString stringWithFormat:@"g k s Backspace of the virtual key window reach no input method and the text view receives nothing (%@)", describe(view)]);
     checkPersonKept(from, @"g k s Backspace");
 
     clearView(view);
     from = personReports.count;
-    typeKeys(window, @[@"g", @"k", @"s", @"Escape"]);
-    check([view.string isEqual:@"한"] && !view.hasMarkedText,
-        [NSString stringWithFormat:@"Escape of the virtual key window during a composition ends it and leaves 한 (%@)", describe(view)]);
+    check(typeKeys(window, @[@"g", @"k", @"s", @"Escape"]), @"g k s Escape of the virtual key window are delivered");
+    check(view.calls.count == 0 && view.string.length == 0,
+        [NSString stringWithFormat:@"g k s Escape of the virtual key window reach no input method and the text view receives nothing (%@)", describe(view)]);
     checkPersonKept(from, @"g k s Escape");
 
     // Measurement: the input context of the text view activated as AppKit activates the context of the key window of an active
