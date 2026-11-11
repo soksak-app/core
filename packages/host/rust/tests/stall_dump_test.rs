@@ -1,5 +1,6 @@
-//! The stall dumps: `diagnostics.stall.dump` stores the path of a dump as an event and names the position `(boot, seq)` of the
-//! line. The same cases run in the Go host.
+//! The stall dumps: `diagnostics.stall.dump` stores the path of a dump and the running host calls of every window as an event,
+//! and names the position `(boot, seq)` of the line with the running calls of the window of the request. The same cases run in
+//! the Go host, which also writes the stacks of its goroutines; a Rust host has no goroutines, and its threads are in the sample.
 #![cfg(feature = "diagnostics")]
 
 #[path = "support/folder.rs"]
@@ -10,10 +11,12 @@ mod records;
 
 use std::fs;
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 use soksak_host::event_record::use_host_event_log;
-use soksak_host::stall_dump::{emit_stall_dump, parse_stall_dump};
+use soksak_host::running_calls::RunningCalls;
+use soksak_host::stall_dump::{parse_stall_dump, stall_dump};
 
 /// The records of the host are process-wide, so the tests of this file run one at a time.
 static SERIAL: Mutex<()> = Mutex::new(());
@@ -61,25 +64,48 @@ fn a_stall_dump_names_an_existing_file_by_its_absolute_path() {
     }
 }
 
-// contract: diagnostics.stall-dump.event-carries-path
+// contract: diagnostics.stall-dump.event-carries-path, diagnostics.stall-dump.names-running-calls
 #[test]
-fn a_stall_dump_is_an_event_and_the_reply_names_its_position() {
+fn a_stall_dump_is_an_event_that_names_the_running_calls_and_the_reply_names_its_position() {
     let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let config = folder::Folder::new();
     let log = records::start_writer(config.path());
-    let (boot, seq) = emit_stall_dump("/x/logs/stall-10-7.txt").unwrap();
+    let calls = RunningCalls::default();
+    let at = Instant::now();
+    calls.begin("main", "wait_presented", at);
+    calls.begin("main", "surface_focus", at + Duration::from_secs(1));
+    calls.begin("project-window-1", "workspace", at + Duration::from_secs(2));
+    let now = at + Duration::from_millis(3500);
+    let reply = stall_dump("/x/logs/stall-10-7.txt", "main", &calls, now).unwrap();
+    let empty = stall_dump(
+        "/x/logs/stall-10-7.txt",
+        "main",
+        &RunningCalls::default(),
+        now,
+    )
+    .unwrap();
     log.flush().unwrap();
     let events: Vec<Value> = records::read_events(log.path())
         .into_iter()
         .filter(|event| event["event"] == "host.stall.dump")
         .collect();
     use_host_event_log(None);
-    assert_eq!(boot, log.boot());
-    assert_eq!(events.len(), 1, "{events:?}");
-    assert_eq!(events[0]["seq"], json!(seq));
+    assert_eq!(events.len(), 2, "{events:?}");
     assert_eq!(events[0]["level"], "warn");
     assert_eq!(
         events[0]["fields"],
-        json!({"path": "/x/logs/stall-10-7.txt"})
+        json!({"path": "/x/logs/stall-10-7.txt", "running": {
+            "main": "wait_presented 3.5s, surface_focus 2.5s",
+            "project-window-1": "workspace 1.5s",
+        }})
     );
+    assert_eq!(
+        reply,
+        json!({"boot": log.boot(), "seq": events[0]["seq"], "running": "wait_presented 3.5s, surface_focus 2.5s"})
+    );
+    assert_eq!(
+        events[1]["fields"],
+        json!({"path": "/x/logs/stall-10-7.txt", "running": {}})
+    );
+    assert_eq!(empty["running"], "none");
 }

@@ -167,13 +167,21 @@ test("a page process that already ended does not cost the records of the host an
   ]);
 });
 
-test("the path of the dump of the host is stored as an event and its position is named", async () => {
+test("the path of the dump of the host is stored as an event, and its position and the running host calls of the window are named", async () => {
   const { announceStall } = await import("../stall-sample.mjs");
   const calls = [];
-  const text = await announceStall(async (method, params) => { calls.push([method, params]); return { boot: "b1", seq: 9 }; }, "main",
-    ["/x/logs/stall-10-7.txt", "page 12 not sampled: gone", "/x/logs/stall-10-7-page-13.txt"]);
+  const text = await announceStall(async (method, params) => {
+    calls.push([method, params]);
+    return { boot: "b1", seq: 9, running: "wait_presented 3.5s, surface_focus 2.5s" };
+  }, "main", ["/x/logs/stall-10-7.txt", "page 12 not sampled: gone", "/x/logs/stall-10-7-page-13.txt"]);
   assert.deepEqual(calls, [["diagnostics.stall.dump", { window: "main", path: "/x/logs/stall-10-7.txt" }]]);
-  assert.equal(text, "host.stall.dump at b1:9");
+  assert.equal(text, "host.stall.dump at b1:9; running host calls of main: wait_presented 3.5s, surface_focus 2.5s");
+});
+
+test("a dump reply without the running calls of the window is named as a broken reply", async () => {
+  const { announceStall } = await import("../stall-sample.mjs");
+  const text = await announceStall(async () => ({ boot: "b1", seq: 9 }), "main", ["/x/logs/stall-10-7.txt"]);
+  assert.equal(text, "host.stall.dump at b1:9; the reply names no running host calls: {\"boot\":\"b1\",\"seq\":9}");
 });
 
 test("a host that refuses the dump event is named in the message instead of hiding it", async () => {
