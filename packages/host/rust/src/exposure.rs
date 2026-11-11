@@ -87,7 +87,7 @@ fn host_declarations() -> Value {
                     "installed": {"type": ["string", "null"]}, "sessions": {"type": "integer"}}}}}},
         }, {
             "name": "host.window",
-            "description": "Window frame and system pointer location in screen coordinates, content size, backing scale, the maximum refresh rate of its screen (null when the window is on no screen), maximized, key and application active state, whether other windows cover the whole window, child window count, the sheet attached to the window with its kind and frame (null without one), the WebContent process of the app page (0 before it starts), the WebContent processes that held a page of the application and hold none while they live, with whether WebKit ends each (null on a platform that does not report them), whether the application is quitting, window buttons, webview frames, native surfaces, document regions, image regions with the number of frames that the host marked presented for each, the open native modal, and the frames and command buffers of the workbench and whether it settled after its last frame, null on a host whose workbench WebKit draws.",
+            "description": "Window frame and system pointer location in screen coordinates, content size, backing scale, the maximum refresh rate of its screen (null when the window is on no screen), maximized, key and application active state, whether other windows cover the whole window, child window count, the sheet attached to the window with its kind, frame, the folder of a panel and the name of a save panel (null without one), the WebContent process of the app page (0 before it starts), the WebContent processes that held a page of the application and hold none while they live, with whether WebKit ends each (null on a platform that does not report them), whether the application is quitting, window buttons, webview frames, native surfaces, document regions, image regions with the number of frames that the host marked presented for each, the open native modal, and the frames and command buffers of the workbench and whether it settled after its last frame, null on a host whose workbench WebKit draws.",
             "schema": {"type": "object", "properties": {
                 "frame": rect,
                 "pointer": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}}},
@@ -110,7 +110,8 @@ fn host_declarations() -> Value {
                     "index": {"type": "integer"}, "count": {"type": "integer"}, "otherInFront": {"type": "boolean"}}},
                 "children": {"type": "integer"},
                 "sheet": {"type": ["object", "null"], "required": ["kind", "frame"], "properties": {
-                    "kind": {"type": "string", "enum": WINDOW_SHEET_KINDS}, "frame": rect}},
+                    "kind": {"type": "string", "enum": WINDOW_SHEET_KINDS}, "frame": rect,
+                    "directory": {"type": ["string", "null"]}, "name": {"type": ["string", "null"]}}},
                 "pagelessProcesses": {"type": ["array", "null"], "items": {"type": "object",
                     "required": ["pid", "ending"],
                     "properties": {"pid": {"type": "integer"}, "ending": {"type": "boolean"}}}},
@@ -2121,13 +2122,19 @@ fn window_cursor(facts: &Value) -> Result<Value, String> {
 /// The kinds of the sheet of host.window: an open panel, a save panel, the window of an alert, or another sheet.
 const WINDOW_SHEET_KINDS: [&str; 4] = ["save", "open", "alert", "other"];
 
-/// The sheet attached to the window in the native facts: {kind, frame} with a kind of WINDOW_SHEET_KINDS and a frame of four
-/// numbers in screen coordinates, or null without one and when the facts of the platform do not report sheets. A sheet of
-/// another shape is an error.
+/// The sheet attached to the window in the native facts: {kind, frame, directory, name} with a kind of WINDOW_SHEET_KINDS, a frame
+/// of four numbers in screen coordinates, the folder of an open or save panel and the name of a save panel, each a string or
+/// null (null also when the facts do not give it), or null without a sheet and when the facts of the platform do not report
+/// sheets. A sheet of another shape is an error.
 fn window_sheet(facts: &Value) -> Result<Value, String> {
     let sheet = match facts.get("sheet") {
         None | Some(Value::Null) => return Ok(Value::Null),
         Some(sheet) => sheet,
+    };
+    let text = |field: &str| match sheet.get(field) {
+        None | Some(Value::Null) => Some(Value::Null),
+        Some(Value::String(value)) => Some(Value::String(value.clone())),
+        Some(_) => None,
     };
     let kind = sheet["kind"]
         .as_str()
@@ -2135,8 +2142,9 @@ fn window_sheet(facts: &Value) -> Result<Value, String> {
     let framed = ["x", "y", "width", "height"]
         .iter()
         .all(|field| sheet["frame"][field].is_number());
-    match kind {
-        Some(_) if framed => Ok(sheet.clone()),
+    match (kind, text("directory"), text("name")) {
+        (Some(kind), Some(directory), Some(name)) if framed => Ok(json!({
+            "kind": kind, "frame": sheet["frame"], "directory": directory, "name": name})),
         _ => Err(format!(
             "window facts have a sheet of another shape: {sheet}"
         )),
