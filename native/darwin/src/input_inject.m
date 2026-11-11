@@ -218,6 +218,50 @@ static NSWindow *keyWindowOf(NSWindow *window) {
     return window;
 }
 
+// The open or save panel that window is, or nil. The content of such a panel is a view of a service of the system
+// (NSRemoteView), which takes no forwarded key other than a command equivalent and no forwarded press
+// (-[ViewService keyboardEventHitRemoteView:from:reply:], -[NSRemoteView mouseDown:]); a person's typing reaches it only through
+// the keyboard focus that the window server gives the service of the key window of an active application. The input of the panel
+// is therefore taken by the panel object of this process, as a browser automation answers a file chooser through its API: the
+// name, Return and Escape.
+static NSSavePanel *systemPanelOf(NSWindow *window) {
+    return [window isKindOfClass:NSSavePanel.class] ? (NSSavePanel *)window : nil;
+}
+
+static const char *const systemPanelRefusal =
+    "the panel content runs in a system service; only the name, Return and Escape are taken";
+
+// Appends text to the name of panel, as typing at the end of its name field does.
+static void systemPanelType(NSSavePanel *panel, NSString *text) {
+    panel.nameFieldStringValue = [panel.nameFieldStringValue stringByAppendingString:text];
+}
+
+// Removes the last character of the name of panel, as Backspace at the end of its name field does.
+static void systemPanelBackspace(NSSavePanel *panel) {
+    NSString *name = panel.nameFieldStringValue;
+    if (!name.length) return;
+    panel.nameFieldStringValue = [name substringToIndex:[name rangeOfComposedCharacterSequenceAtIndex:name.length - 1].location];
+}
+
+// A key of a panel of the system: Return saves or opens (-ok:), Escape cancels (-cancel:), Backspace removes the last character of
+// the name and a key with a stated text types it at the end of the name. Shift is the only modifier of such a key. Any other key is
+// refused in its turn with why.
+static sp_input_result systemPanelKey(NSSavePanel *panel, const char *key, const char *text, unsigned modifiers, bool down,
+    const char **why) {
+    BOOL enter = strcmp(key, "Enter") == 0, escape = strcmp(key, "Escape") == 0, backspace = strcmp(key, "Backspace") == 0;
+    BOOL typed = text && *text && !enter && !escape && !backspace;
+    if ((!enter && !escape && !backspace && !typed) || (modifiers & ~1u) || ((enter || escape || backspace) && modifiers)) {
+        *why = systemPanelRefusal;
+        return SP_INPUT_REJECTED;
+    }
+    if (!down) return SP_INPUT_DELIVERED;
+    if (enter) [panel ok:nil];
+    else if (escape) [panel cancel:nil];
+    else if (backspace) systemPanelBackspace(panel);
+    else systemPanelType(panel, [NSString stringWithUTF8String:text]);
+    return SP_INPUT_DELIVERED;
+}
+
 static NSEventModifierFlags flags(unsigned modifiers) {
     NSEventModifierFlags result = 0;
     if (modifiers & 1) result |= NSEventModifierFlagShift;
@@ -764,6 +808,7 @@ static sp_input_result pointerInput(SPPointer *pointer, void *handle, double x, 
         // press of a person does and a control that tracks it reads the rest of the gesture from the event queue.
         if (phase == 1 && window != named && window.canBecomeKeyWindow) enterVirtual(window);
     }
+    if (systemPanelOf(window)) { held->why = systemPanelRefusal; return SP_INPUT_REJECTED; }
     SPPointer *previous = deliveringPointer;
     deliveringPointer = pointer;
     @try {
@@ -1442,6 +1487,8 @@ static sp_input_result keyInput(void *handle, const char *key, const char *text,
     *typed = false;
     if (!window || !key || !NSThread.isMainThread) { *why = "no window, no key or not the main thread"; return SP_INPUT_REJECTED; }
     window = keyWindowOf(window);
+    NSSavePanel *panel = systemPanelOf(window);
+    if (panel) return systemPanelKey(panel, key, text, modifiers, down, why);
     NSString *name = [NSString stringWithUTF8String:key];
     unsigned short code = USHRT_MAX;
     for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
@@ -1537,6 +1584,14 @@ sp_input_result sp_input_text(void *handle, sp_input_text_phase phase, const cha
         return SP_INPUT_REJECTED;
     }
     if (replacementStart >= 0 && replacementLength < 0) return SP_INPUT_REJECTED;
+    // The name of a panel of the system takes a committed text at its end; a composition or a replacement has no field of this
+    // process to show it in.
+    NSSavePanel *panel = systemPanelOf(keyWindowOf(window));
+    if (panel) {
+        if (phase != SP_INPUT_TEXT_INSERT || replacementStart >= 0) return SP_INPUT_REJECTED;
+        systemPanelType(panel, string);
+        return SP_INPUT_DELIVERED;
+    }
     // The window takes the keyboard as for a key: in an application that is not really active it becomes the virtual key window, so
     // the page holds its focus; in an application that is really active the step goes to the window whether it is key or not.
     if (!keyForInput(window)) enterVirtual(window);

@@ -9,7 +9,8 @@
 // ran, read before the test ends what the input left. A sheet answers NOT_ENDED until its completion runs, so a sheet that the
 // input did not end is told from one that it cancelled (NSModalResponseCancel is 0). An alert sheet or a menu that the input
 // did not reach is ended by the test after the input has been handled, so the next case runs. The open and save panel cases come
-// last: the service of the panel answers their completion through a connection, so they wait for it.
+// last: the content of such a panel runs in a service of the system, so the panel object of the application takes its name,
+// Return and Escape and refuses any other input, and the service answers the completion through a connection, so they wait for it.
 #import <Cocoa/Cocoa.h>
 #import <OSLog/OSLog.h>
 #import <objc/runtime.h>
@@ -43,29 +44,6 @@ static void noteLog(NSDate *since, NSPredicate *predicate, NSString *source, NSS
     }
     note([NSString stringWithFormat:@"%@: %lu %@ log entries of the process", what, (unsigned long)count, source]);
 }
-// Writes the log of the process pid since since, as `log show` reads it from the log store, so the reasons that a process of the
-// system wrote for an event it ignored are in the output of the case. Only the subsystems of ViewBridge and AppKit are read.
-static void noteProcessLog(pid_t pid, NSDate *since, NSString *what) {
-    NSTask *task = [[[NSTask alloc] init] autorelease];
-    task.executableURL = [NSURL fileURLWithPath:@"/usr/bin/log"];
-    NSDateFormatter *format = [[[NSDateFormatter alloc] init] autorelease];
-    format.dateFormat = @"yyyy-MM-dd HH:mm:ss";
-    task.arguments = @[@"show", @"--style", @"compact", @"--start", [format stringFromDate:since], @"--predicate",
-        [NSString stringWithFormat:@"processID == %d AND (subsystem == 'com.apple.ViewBridge' OR subsystem == 'com.apple.AppKit')",
-            pid]];
-    NSPipe *pipe = [NSPipe pipe];
-    task.standardOutput = pipe;
-    NSError *error = nil;
-    if (![task launchAndReturnError:&error]) { note([NSString stringWithFormat:@"%@: log show cannot run: %@", what, error]); return; }
-    NSData *output = [pipe.fileHandleForReading readDataToEndOfFile];
-    [task waitUntilExit];
-    NSString *text = [[[NSString alloc] initWithData:output encoding:NSUTF8StringEncoding] autorelease];
-    NSArray *lines = [text componentsSeparatedByString:@"\n"];
-    note([NSString stringWithFormat:@"%@: log show of pid %d exited %d with %lu lines", what, pid, task.terminationStatus,
-        (unsigned long)lines.count]);
-    for (NSString *line in lines) if (line.length) note([NSString stringWithFormat:@"%@: pid %d: %@", what, pid, line]);
-}
-
 static void noteMenuTracking(NSDate *since, NSString *what) {
     noteLog(since, [NSPredicate predicateWithFormat:@"subsystem == 'com.apple.AppKit' AND category CONTAINS[c] 'Menu'"], @"AppKit",
         what);
@@ -166,21 +144,6 @@ static BOOL traceWindowKeyEquivalent(NSWindow *self, SEL selector, NSEvent *even
         taken, eventKind(event)]);
     return taken;
 }
-// The view of a panel of the system (NSRemoteView of ViewBridge) forwards a key equivalent to the service of the panel and answers
-// what the service answers; the trace writes that answer. ViewBridge loads with the first panel, so it is traced from then on.
-static BOOL (*viewBridgeKeyEquivalent)(id, SEL, NSEvent *);
-static BOOL traceRemoteKeyEquivalent(NSView *self, SEL selector, NSEvent *event) {
-    BOOL taken = viewBridgeKeyEquivalent(self, selector, event);
-    if (tracing) note([NSString stringWithFormat:@"trace: -[NSRemoteView performKeyEquivalent:] answers %d for %@", taken,
-        eventKind(event)]);
-    return taken;
-}
-static void installRemoteTrace(void) {
-    Class remote = NSClassFromString(@"NSRemoteView");
-    if (viewBridgeKeyEquivalent || !remote) return;
-    viewBridgeKeyEquivalent = (BOOL (*)(id, SEL, NSEvent *))method_setImplementation(
-        class_getInstanceMethod(remote, @selector(performKeyEquivalent:)), (IMP)traceRemoteKeyEquivalent);
-}
 static void installTrace(void) {
     appKitWindowSendEvent = (void (*)(id, SEL, NSEvent *))method_setImplementation(
         class_getInstanceMethod(NSWindow.class, @selector(sendEvent:)), (IMP)traceWindowSendEvent);
@@ -198,38 +161,14 @@ static void key(NSWindow *window, const char *name, NSString *what) {
     note([NSString stringWithFormat:@"%@: key %s down %s, up %s", what, name, resultText(down), resultText(up)]);
 }
 
-// An attribute of an accessibility element. The content of a panel of the system answers through an element of the remote view
-// (NSAccessibilityRemoteUIElement), which answers only the attribute protocol (-accessibilityAttributeValue:), not the methods of
-// NSAccessibility.
-static id attribute(id element, NSAccessibilityAttributeName name) {
-    if ([element respondsToSelector:@selector(accessibilityAttributeValue:)]) {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-        return [element accessibilityAttributeValue:name];
-#pragma clang diagnostic pop
+// Gives a key down and up of name with text to window and answers whether both were delivered.
+static BOOL panelKey(NSWindow *window, const char *name, const char *text, unsigned modifiers) {
+    sp_input_result down = sp_input_key(window, name, text, modifiers, true);
+    sp_input_result up = sp_input_key(window, name, text, modifiers, false);
+    if (down != SP_INPUT_DELIVERED || up != SP_INPUT_DELIVERED) {
+        note([NSString stringWithFormat:@"panel key %s: down %s, up %s", name, resultText(down), resultText(up)]);
     }
-    return nil;
-}
-
-// The screen frame (bottom-left origin) of the button titled title among element and its descendants, or an empty rect.
-static NSRect accessibleButton(id element, NSString *title) {
-    if ([attribute(element, NSAccessibilityRoleAttribute) isEqual:NSAccessibilityButtonRole]
-        && ([attribute(element, NSAccessibilityTitleAttribute) isEqual:title]
-            || [attribute(element, NSAccessibilityDescriptionAttribute) isEqual:title])) {
-        NSValue *position = attribute(element, NSAccessibilityPositionAttribute);
-        NSValue *size = attribute(element, NSAccessibilitySizeAttribute);
-        if (![position isKindOfClass:NSValue.class] || ![size isKindOfClass:NSValue.class]) return NSZeroRect;
-        // The position of the attribute protocol has its origin at the top left of the primary screen.
-        CGFloat top = NSMaxY(NSScreen.screens.firstObject.frame);
-        NSPoint origin = position.pointValue;
-        return NSMakeRect(origin.x, top - origin.y - size.sizeValue.height, size.sizeValue.width, size.sizeValue.height);
-    }
-    id children = attribute(element, NSAccessibilityChildrenAttribute);
-    for (id child in [children isKindOfClass:NSArray.class] ? children : @[]) {
-        NSRect found = accessibleButton(child, title);
-        if (!NSIsEmptyRect(found)) return found;
-    }
-    return NSZeroRect;
+    return down == SP_INPUT_DELIVERED && up == SP_INPUT_DELIVERED;
 }
 
 // The facts of a panel: its class, whether the application holds its window, the process that owns its window in the window
@@ -309,8 +248,7 @@ static void whileTracking(NSMenu *menu, NSString *what, BOOL *tracked, void (^at
 
 int main(void) { @autoreleasepool {
     setvbuf(stdout, NULL, _IOLBF, 0);
-    // ViewBridge writes its log only while this default holds (VBShouldLogFirst reads NSViewBridgeBoolShouldLog).
-    [NSUserDefaults.standardUserDefaults registerDefaults:@{@"NSMenuTrackingLoggingEnabled": @YES, @"NSViewBridgeBoolShouldLog": @YES}];
+    [NSUserDefaults.standardUserDefaults registerDefaults:@{@"NSMenuTrackingLoggingEnabled": @YES}];
     [NSApplication sharedApplication];
     [NSApp finishLaunching];
     installMarks();
@@ -416,58 +354,56 @@ int main(void) { @autoreleasepool {
         @"Down Arrow and Return in the menu of a pop-up button choose the next item (chosen %@, selected %ld)", target.chosen,
         (long)popup.indexOfSelectedItem]);
 
-    // The open and save panels show their content from a service of the system (NSRemoteView), which answers the panel of the
-    // application through a connection, so a panel case waits for the completion of its sheet, with no limit: the limit of the
-    // test ends a wait whose input did not reach the panel, and these cases come last.
+    // The open and save panels show their content from a service of the system (NSRemoteView), which takes no forwarded key other
+    // than a command equivalent and no forwarded press, so the panel object of the application takes their input: the name, Return
+    // and Escape. Any other key and any pointer input of such a panel is refused in its turn. A panel case waits for the completion
+    // of its sheet, which the service answers through a connection, with no limit: the limit of the test ends a wait whose input
+    // did not end the panel, and these cases come last.
     NSString *folder = temporaryFolder(@"soksak-input-panels-");
 
-    // A save panel sheet takes a typed file name, and Return saves under it.
+    // A save panel sheet: Backspace removes the end of its name, a stated text and typed letters append to it, and Return saves
+    // under the name in the folder of the panel, as a person's Save does.
     NSSavePanel *save = [NSSavePanel savePanel];
     save.directoryURL = [NSURL fileURLWithPath:folder];
     save.nameFieldStringValue = @"untitled";
     __block NSModalResponse saved = NOT_ENDED;
     [save beginSheetModalForWindow:window completionHandler:^(NSModalResponse returned) { saved = returned; }];
-    NSDate *saveStart = NSDate.date;
     eventWait(@"the save panel sheet shows", ^BOOL { return window.attachedSheet != nil && window.attachedSheet.isVisible; });
-    note([@"save panel: " stringByAppendingString:panelFacts(window.attachedSheet)]);
-    installRemoteTrace();
-    tracing = YES;
-    // The panel selects the name when it shows, so the typed name replaces it.
-    for (NSString *letter in @[@"t", @"y", @"p", @"e", @"d"]) key(window, letter.UTF8String, @"save panel name");
-    settle(@"the typed name is handled");
-    note([NSString stringWithFormat:@"save panel: the panel names %@ after the typed name, the key window answers %@",
-        save.nameFieldStringValue, NSApp.keyWindow.class]);
-    // The log of ViewBridge in this process states how the panel view judged the keyness of its window and what it forwarded.
-    noteLog(saveStart, [NSPredicate predicateWithFormat:@"subsystem == 'com.apple.ViewBridge'"], @"ViewBridge", @"save panel");
-    SEL serviceSelector = NSSelectorFromString(@"viewServiceProcessIdentifier");
-    NSView *remote = window.attachedSheet.contentView;
-    if ([remote respondsToSelector:serviceSelector]) {
-        noteProcessLog(((pid_t (*)(id, SEL))[remote methodForSelector:serviceSelector])(remote, serviceSelector), saveStart,
-            @"save panel service");
-    }
-    key(window, "Enter", @"save panel");
+    NSWindow *sheet = window.attachedSheet;
+    note([@"save panel: " stringByAppendingString:panelFacts(sheet)]);
+    BOOL taken = YES;
+    for (int i = 0; i < 8; i++) taken = taken && panelKey(window, "Backspace", NULL, 0);
+    check(taken && [save.nameFieldStringValue isEqualToString:@""], [NSString stringWithFormat:
+        @"Backspace removes the end of the name of a save panel (name '%@')", save.nameFieldStringValue]);
+    check(sp_input_text(window, SP_INPUT_TEXT_INSERT, "ty", 0, 0, -1, 0) == SP_INPUT_DELIVERED,
+        @"a stated text is delivered to a save panel");
+    for (NSString *letter in @[@"p", @"e", @"d"]) taken = taken && panelKey(window, letter.UTF8String, letter.UTF8String, 0);
+    check(taken && [save.nameFieldStringValue isEqualToString:@"typed"], [NSString stringWithFormat:
+        @"a stated text and typed letters append to the name of a save panel (name '%@')", save.nameFieldStringValue]);
+    // The content of the panel takes no other input: a press, a key without a text and a key with Command are refused.
+    NSPoint middle = pointOfScreenRect(window, sheet.frame);
+    check(sp_input_pointer_clicks(window, middle.x, middle.y, 1, 0, 1) == SP_INPUT_REJECTED,
+        @"a press of the content of a save panel is refused");
+    check(sp_input_key(window, "Tab", NULL, 0, true) == SP_INPUT_REJECTED, @"Tab in a save panel is refused");
+    check(sp_input_key(window, "a", "a", 8, true) == SP_INPUT_REJECTED, @"a key with Command in a save panel is refused");
+    check(sp_input_text(window, SP_INPUT_TEXT_MARK, "t", 0, 1, -1, 0) == SP_INPUT_REJECTED,
+        @"a composition in a save panel is refused");
+    check(panelKey(window, "Enter", NULL, 0), @"Return is delivered to a save panel");
     eventWait(@"the save panel ends", ^BOOL { return saved != NOT_ENDED; });
-    check(saved == NSModalResponseOK && [save.URL.lastPathComponent isEqualToString:@"typed"], [NSString stringWithFormat:
-        @"a typed name and Return end a save panel sheet with OK and that name (response %ld, URL %@)", (long)saved, save.URL]);
+    NSURL *expected = [[NSURL fileURLWithPath:folder] URLByAppendingPathComponent:@"typed"];
+    check(saved == NSModalResponseOK && [save.URL.URLByStandardizingPath.path isEqualToString:expected.URLByStandardizingPath.path],
+        [NSString stringWithFormat:@"Return ends a save panel sheet with OK and the URL of its folder and name (response %ld, URL %@)",
+            (long)saved, save.URL]);
 
-    // A press of the Cancel button of a save panel sheet cancels it. The button is found through the accessibility of the panel,
-    // which the service of the panel serves for its content.
+    // A save panel sheet: Escape cancels it.
     save = [NSSavePanel savePanel];
     save.directoryURL = [NSURL fileURLWithPath:folder];
     saved = NOT_ENDED;
     [save beginSheetModalForWindow:window completionHandler:^(NSModalResponse returned) { saved = returned; }];
     eventWait(@"the save panel sheet shows again", ^BOOL { return window.attachedSheet != nil && window.attachedSheet.isVisible; });
-    NSRect cancel = accessibleButton(window.attachedSheet, @"Cancel");
-    note([NSString stringWithFormat:@"save panel: its Cancel button %@", NSIsEmptyRect(cancel) ? @"is not found"
-        : [@"is at " stringByAppendingString:NSStringFromRect(cancel)]]);
-    check(!NSIsEmptyRect(cancel), @"the Cancel button of a save panel sheet is found through its accessibility");
-    if (!NSIsEmptyRect(cancel)) {
-        click(window, pointOfScreenRect(window, cancel), 0, @"save panel");
-        eventWait(@"the pressed save panel ends", ^BOOL { return saved != NOT_ENDED; });
-        check(saved == NSModalResponseCancel,
-            [NSString stringWithFormat:@"a press of the Cancel button of a save panel sheet cancels it (response %ld)", (long)saved]);
-    }
-    endSheet(window, @"save panel press");
+    check(panelKey(window, "Escape", NULL, 0), @"Escape is delivered to a save panel");
+    eventWait(@"the cancelled save panel ends", ^BOOL { return saved != NOT_ENDED; });
+    check(saved == NSModalResponseCancel, [NSString stringWithFormat:@"Escape cancels a save panel sheet (response %ld)", (long)saved]);
 
     // An open panel sheet: Escape cancels it.
     NSOpenPanel *open = [NSOpenPanel openPanel];
@@ -476,11 +412,12 @@ int main(void) { @autoreleasepool {
     [open beginSheetModalForWindow:window completionHandler:^(NSModalResponse returned) { opened = returned; }];
     eventWait(@"the open panel sheet shows", ^BOOL { return window.attachedSheet != nil && window.attachedSheet.isVisible; });
     note([@"open panel: " stringByAppendingString:panelFacts(window.attachedSheet)]);
-    key(window, "Escape", @"open panel");
+    check(panelKey(window, "Escape", NULL, 0), @"Escape is delivered to an open panel");
     eventWait(@"the open panel ends", ^BOOL { return opened != NOT_ENDED; });
     tracing = NO;
     check(opened == NSModalResponseCancel,
         [NSString stringWithFormat:@"Escape cancels an open panel sheet (response %ld)", (long)opened]);
+    removeTemporaryFolder(folder);
 
     check(!NSRunningApplication.currentApplication.active, @"the input left the application inactive");
     [cover close];
