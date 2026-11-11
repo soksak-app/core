@@ -9214,12 +9214,14 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "scripts/node-tests.mjs", symbol: "const { tests: all, before } = discoverNodeTests(" },
       { file: "scripts/test-app.mjs", symbol: "args: argv, strict: true, options: { script: { type: 'string' }, native: { type: 'string' }, candidate: { type: 'string' }," },
+      { file: "packages/window-check/app.mjs", symbol: "async function dragOnce(s, plan, capture, frameIdentity) {" },
     ],
     tests: [
       { file: "scripts/test/node-tests.test.mjs", id: "a run starts each file without waiting for the person, and the runner has no idle option" },
       { file: "scripts/test/test-app.test.mjs", id: "a window run waits for no idle time of the person: the runner and the make targets have no idle option" },
+      { file: "packages/window-check/test/drag-covered.test.mjs", id: "a drag of an active window is measured" },
     ],
-    expected: "No window run waits for the idle time of the person: the runners and the make targets have no idle option.",
+    expected: "No window run waits for the idle time of the person, and a drag of a check measures an active window like an inactive one.",
     levels: ["unit"],
   },
   {
@@ -15284,7 +15286,8 @@ const MOVED_COMPLETIONS = new Set(["F6", "F596","F239-170", "F239-197", "F239-24
 // the HWP startup and view checks (F556, F239-239, F212.14-5-32), the terminal input document and observer tests (F239-60,
 // F239-141, F239-152, F239-173, F239-177, F239-179 and F239-47-15 to F239-47-35), the editor save check (F212.12-2-1-1), the
 // real terminal wheel and text pointer checks (F94, F95) and the terminal selection follow check (F428).
-const REMOVED_COMPLETIONS = new Set(["F239-98", "F239-98-1", "F239-98-1-1", "F239-98-2", "F239-98-3", "F239-98-4", "F239-47-17",
+// F756 removes the idle gate of the window runs whose poll F160.26 recorded, so that completion has no implementation left.
+const REMOVED_COMPLETIONS = new Set(["F160.26", "F239-98", "F239-98-1", "F239-98-1-1", "F239-98-2", "F239-98-3", "F239-98-4", "F239-47-17",
   "F239-47-19", "F239-134", "F239-158", "F239-175", "F239-47-10", "F239-47-12", "F239-47-13", "F239-47-14", "F212.12-1-15-5", "F212.9-3-1", "F212.9a-1", "F239-107-1", "F239-220", "F239-40", "F239-43",
   "F249", "F292-7", "F68", "F60", "F91", "F114", "F116", "F125", "F239-269", "F55", "F239-47-24", "F239-182", "F239-68", "F278",
   "F278-1", "F280", "F283-1", "F283-2", "F286", "F290", "F292-26-3", "F226", "F239-39", "F239-41", "F239-41-1", "F239-42",

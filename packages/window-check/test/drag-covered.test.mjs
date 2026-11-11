@@ -4,7 +4,7 @@ import { drag, holdCovered } from "../app.mjs";
 
 // A covered window draws its image regions only while the check asks for it (docs/spec/native-surfaces.md#image-regions),
 // and the drag measures the page and the regions of that window, so the drag asks for it around the gesture and does not
-// refuse a covered window. It still refuses an active window.
+// refuse a covered window. The host emulates the drag inside the application, so the drag does not refuse an active window either.
 function session(window, calls) {
   return {
     app: { name: "wailsv3" },
@@ -47,10 +47,11 @@ test("a drag that fails still ends the drawing of the covered window", { timeout
   assert.deepEqual(calls.at(-1), { method: "diagnostics.window.draw-covered", params: { draw: false } });
 });
 
-test("a drag of an active window is refused before anything is requested", { timeout: 5000 }, async (t) => {
+test("a drag of an active window is measured", { timeout: 5000 }, async (t) => {
   const calls = [];
-  await assert.rejects(drag(session({ active: true, occluded: false, pointer: {}, frame: {} }, calls), plan), /host\.window\.active is true/);
-  assert.deepEqual(calls, []);
+  const result = await drag(session({ active: true, occluded: false, pointer: {}, frame: {} }, calls), plan);
+  assert.equal(result.took, 100);
+  assert.deepEqual(calls.map(({ method }) => method).filter((method) => method === "diagnostics.drag"), ["diagnostics.drag"]);
 });
 
 // The covered drawing is one state of the window (diagnostics.window.draw-covered), so the holds of a check and of a drag share it:
