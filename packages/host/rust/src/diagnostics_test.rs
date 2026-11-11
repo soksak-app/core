@@ -515,19 +515,21 @@ fn native_drag_delivers_the_press_the_steps_and_the_release_of_each_round_trip()
         assert_eq!(error.message, "native must be a boolean", "native {value}");
     }
 
-    // Two round trips of two steps out and two steps back from the boundary at 100,50.
+    // Two round trips of two legs of two steps each from the boundary at 100,50. Each step takes 10 ms of the clock, so a
+    // leg of 20 ms ends at its second step.
     let plan = NativeDragPlan {
         dx: 20.0,
         dy: -8.0,
-        per: 2,
+        ms: 20.0,
         times: 2,
     };
     let delivered = RefCell::new(Vec::new());
-    let ticks = Cell::new(0);
+    let now = Cell::new(Duration::ZERO);
+    let ticks = Cell::new(0u32);
     let result = native_drag(
         &plan,
         (100.0, 50.0),
-        stopped_clock,
+        || now.get(),
         |pointer| {
             assert!(
                 !pointer.activate && pointer.button == 0,
@@ -547,7 +549,11 @@ fn native_drag_delivers_the_press_the_steps_and_the_release_of_each_round_trip()
             ));
             Ok(())
         },
-        || ticks.set(ticks.get() + 1),
+    || {
+        now.set(now.get() + Duration::from_millis(10));
+        ticks.set(ticks.get() + 1);
+        Ok(())
+    },
         || Ok(()),
     )
     .expect("native drag");
@@ -566,7 +572,7 @@ fn native_drag_delivers_the_press_the_steps_and_the_release_of_each_round_trip()
     assert_eq!(*delivered.borrow(), want, "native drag inputs");
     assert_eq!(result["from"], json!({"x": 100.0, "y": 50.0}));
     assert_eq!(result["steps"], json!(8));
-    assert_eq!(result["asked"], json!(128));
+    assert_eq!(result["asked"], json!(80));
     assert!(
         result["took"].is_u64(),
         "native drag result took {}",
@@ -579,7 +585,7 @@ fn native_drag_delivers_the_press_the_steps_and_the_release_of_each_round_trip()
         &NativeDragPlan {
             dx: 20.0,
             dy: 0.0,
-            per: 2,
+            ms: 20.0,
             times: 1,
         },
         (100.0, 50.0),
@@ -591,7 +597,7 @@ fn native_drag_delivers_the_press_the_steps_and_the_release_of_each_round_trip()
             }
             Ok(())
         },
-        || {},
+        || Ok(()),
         || Ok(()),
     )
     .expect_err("a failing step");
@@ -600,6 +606,96 @@ fn native_drag_delivers_the_press_the_steps_and_the_release_of_each_round_trip()
         "native drag step 1: the window did not accept the input"
     );
     assert_eq!(*phases.borrow(), [1, 2, 3], "down, drag and the release up");
+}
+
+// contract: diagnostics.drag.native-delivers-pointer-gesture
+#[test]
+fn step_period_follows_the_refresh_rate_and_assumes_none() {
+    assert_eq!(
+        step_period(Some(120)).expect("120 Hz"),
+        Duration::from_nanos(8_333_333)
+    );
+    assert_eq!(
+        step_period(Some(60)).expect("60 Hz"),
+        Duration::from_nanos(16_666_666)
+    );
+    for rate in [None, Some(0)] {
+        let error = step_period(rate).expect_err("no refresh rate");
+        assert_eq!(
+            error.message,
+            "the window is on no display with a refresh rate",
+            "rate {rate:?}"
+        );
+    }
+}
+
+// contract: diagnostics.drag.native-delivers-pointer-gesture
+#[test]
+fn send_legs_paces_each_step_by_the_refresh_rate_read_at_that_step() {
+    let rates = RefCell::new(std::collections::VecDeque::from([
+        Some(120),
+        Some(60),
+        Some(60),
+        Some(60),
+    ]));
+    let now = Cell::new(Duration::ZERO);
+    let waits = RefCell::new(Vec::new());
+    let sends = RefCell::new(Vec::new());
+    send_legs(
+        1,
+        20.0,
+        || Ok(rates.borrow_mut().pop_front().expect("a rate for each step")),
+        |period| {
+            waits.borrow_mut().push(period);
+            now.set(now.get() + period);
+        },
+        || now.get(),
+        |step| {
+            sends.borrow_mut().push(step);
+            true
+        },
+    );
+    assert_eq!(
+        *waits.borrow(),
+        [
+            Duration::from_nanos(8_333_333),
+            Duration::from_nanos(16_666_666),
+            Duration::from_nanos(16_666_666),
+            Duration::from_nanos(16_666_666),
+        ],
+        "each step waits the period of the rate read at that step"
+    );
+    let lasts: Vec<bool> = sends
+        .borrow()
+        .iter()
+        .map(|step| step.as_ref().expect("a step").1)
+        .collect();
+    assert_eq!(lasts, [false, true, false, true], "the last step of each leg");
+
+    let rates = RefCell::new(std::collections::VecDeque::from([Some(120), None]));
+    let now = Cell::new(Duration::ZERO);
+    let waits = RefCell::new(Vec::new());
+    let sends = RefCell::new(Vec::new());
+    send_legs(
+        1,
+        20.0,
+        || Ok(rates.borrow_mut().pop_front().expect("a rate for each step")),
+        |period| {
+            waits.borrow_mut().push(period);
+            now.set(now.get() + period);
+        },
+        || now.get(),
+        |step| {
+            sends.borrow_mut().push(step);
+            true
+        },
+    );
+    assert_eq!(*waits.borrow(), [Duration::from_nanos(8_333_333)]);
+    assert_eq!(
+        sends.borrow()[1],
+        Err("the window is on no display with a refresh rate".to_string()),
+        "a missing rate sends one error and ends the drag"
+    );
 }
 
 // contract: diagnostics.drag.native-delivers-pointer-gesture
@@ -614,7 +710,7 @@ fn a_native_drag_presses_only_after_the_window_presented_its_layout() {
     let plan = NativeDragPlan {
         dx: 20.0,
         dy: 0.0,
-        per: 2,
+        ms: 20.0,
         times: 3,
     };
     let phase = |pointer: platform::Pointer| match pointer.phase {
@@ -631,7 +727,10 @@ fn a_native_drag_presses_only_after_the_window_presented_its_layout() {
             events.borrow_mut().push(phase(pointer));
             Ok(())
         },
-        || {},
+        || {
+            now.set(now.get() + Duration::from_millis(10));
+            Ok(())
+        },
         || {
             now.set(now.get() + late);
             answers.set(answers.get() + 1);
@@ -661,8 +760,8 @@ fn a_native_drag_presses_only_after_the_window_presented_its_layout() {
     }
     assert_eq!(
         result["took"].as_u64(),
-        Some(0),
-        "native drag took with steps that do not wait, want 0 without the waits"
+        Some(120),
+        "native drag took with steps of 10 ms, want 120 without the waits",
     );
 
     // A wait that fails delivers no press.
@@ -671,16 +770,19 @@ fn a_native_drag_presses_only_after_the_window_presented_its_layout() {
         &NativeDragPlan {
             dx: 20.0,
             dy: 0.0,
-            per: 2,
+            ms: 20.0,
             times: 2,
         },
         (100.0, 50.0),
-        stopped_clock,
+        || now.get(),
         |pointer| {
             events.borrow_mut().push(phase(pointer));
             Ok(())
         },
-        || {},
+        || {
+            now.set(now.get() + Duration::from_millis(10));
+            Ok(())
+        },
         || {
             if events.borrow().is_empty() {
                 Ok(())
