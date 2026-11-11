@@ -51,13 +51,21 @@ test("the page drag presses at the point that diagnostics.drag.boundary answers"
   assert.equal(typeof boundary, "function", "the page registers no diagnostics.drag.boundary");
   inputs.length = 0;
   const drag = methods.get("diagnostics.drag")({ axis: "x", line: 3, dx: 20, dy: 0, ms: 16, times: 1 });
-  // One step out and one step back, each on a host tick.
-  hostEvents.get("diagnostics-tick")();
-  hostEvents.get("diagnostics-tick")();
+  // One leg out and one leg back, each ended by a host tick that is marked last.
+  hostEvents.get("diagnostics-tick")({ fraction: 1, last: true });
+  hostEvents.get("diagnostics-tick")({ fraction: 1, last: true });
   const result = await drag;
   const from = boundary({ axis: "x", line: 3 });
   assert.deepEqual(result.from, from);
+  assert.equal(result.steps, 2, "each leg ends at the step that the host marks last");
+  assert.equal(result.asked, 32, "asked is times × 2 × ms");
   assert.deepEqual(inputs[0], { phase: 0, ...from });
   assert.deepEqual(inputs.at(-1), { phase: 2, ...from });
 });
 
+test("a host tick that reports a step it could not pace rejects the page drag", async () => {
+  inputs.length = 0;
+  const drag = methods.get("diagnostics.drag")({ axis: "x", line: 3, dx: 20, dy: 0, ms: 16, times: 1 });
+  hostEvents.get("diagnostics-tick")({ error: "the window is on no display with a refresh rate" });
+  await assert.rejects(drag, { message: "the window is on no display with a refresh rate" });
+});
