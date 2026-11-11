@@ -106,8 +106,8 @@ for (const app of Object.values(APPS)) {
     // The divider rectangle is in document coordinates and the grid lines are in board coordinates.
     const current = await s.get("core.grid");
     const moveFrom = current.lines.x;
-    const center = vertical.x + vertical.width / 2 - current.plane.x;
-    const index = moveFrom.findIndex((position) => Math.abs(position - center) <= 4);
+    const dividerLine = vertical.x + vertical.width / 2 - current.plane.x;
+    const index = moveFrom.findIndex((position) => Math.abs(position - dividerLine) <= 4);
     assert.ok(index > 0, `the hovered divider is not a grid line: ${JSON.stringify({ lines: moveFrom, vertical, line })}`);
     await s.run("core.boundary.move", { axis: "x", line: index, position: moveFrom[index] + 80 });
     await s.presented();
