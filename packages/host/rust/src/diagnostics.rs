@@ -1631,7 +1631,7 @@ fn drag(
         None
     };
     let recorded = sent.clone();
-    let gesture = || match from {
+    let result = match from {
         Some(from) => {
             let plan = NativeDragPlan {
                 dx: params["dx"]
@@ -1679,38 +1679,12 @@ fn drag(
     };
     let (result, layouts) = stop_after_settled(
         || {
-            // While the drag runs, the window takes only the pointer input of the drag
-            // (docs/spec/endpoint.md#diagnostic-builds).
-            driven_drag(
-                || {
-                    let platform = platform::current().map_err(internal)?;
-                    crate::windows::with_native_owner(window, move |handle| {
-                        platform.drive_input(handle)
-                    })
-                    .map_err(exposure::native_failure(
-                        window.label(),
-                        crate::endpoint::HANDLER_FAILED,
-                    ))
-                },
-                || {
-                    let platform = platform::current().map_err(internal)?;
-                    crate::windows::with_native_owner(window, move |handle| {
-                        platform.end_input(handle)
-                    })
-                    .map_err(exposure::native_failure(
-                        window.label(),
-                        crate::endpoint::HANDLER_FAILED,
-                    ))
-                },
-                || {
-                    let result = gesture()?;
-                    // Waits until the last placement is committed and presented. Waiting for one next presentation
-                    // could end at a presentation before the commit of the last step.
-                    exposure::window_presented(host, window, None)?;
-                    exposure::note(window, "diagnostics: drag presented");
-                    Ok(result)
-                },
-            )
+            let result = result?;
+            // Waits until the last placement is committed and presented. Waiting for one next presentation could end
+            // at a presentation before the commit of the last step.
+            exposure::window_presented(host, window, None)?;
+            exposure::note(window, "diagnostics: drag presented");
+            Ok(result)
         },
         || {
             if frames.is_some() {
@@ -1724,7 +1698,7 @@ fn drag(
         },
     );
     let finished = (|| -> Result<Value, Failure> {
-        let ((result, dropped), layouts) = match (result, layouts) {
+        let (result, layouts) = match (result, layouts) {
             (Ok(result), Ok(layouts)) => (result, layouts),
             (Err(error), Ok(_)) | (Ok(_), Err(error)) => return Err(error),
             (Err(error), Err(trace)) => {
@@ -1739,7 +1713,6 @@ fn drag(
             Value::Null => Map::new(),
             _ => return Err(internal("the page drag result is not an object")),
         };
-        merged.insert("dropped".into(), Value::from(dropped));
         if let Some(frames) = &frames {
             merged.insert(
                 "frames".into(),
@@ -1775,34 +1748,6 @@ fn drag(
         return Err(error);
     }
     finished
-}
-
-/// Runs `settle`, a drag of a check, while `begin` holds the window to the pointer input of the check, and ends the drive with
-/// `end` also when the drag fails. Answers the result of the drag with the number of pointer events of a person that the window
-/// did not take, so a drag that a person moved the pointer over reports them instead of mixing them with its steps.
-fn driven_drag<T>(
-    begin: impl FnOnce() -> Result<(), Failure>,
-    end: impl FnOnce() -> Result<u64, Failure>,
-    settle: impl FnOnce() -> Result<T, Failure>,
-) -> Result<(T, u64), Failure> {
-    begin().map_err(|error| {
-        internal(format!(
-            "the drag cannot drive the window: {}",
-            error.message
-        ))
-    })?;
-    let settled = settle();
-    let ended = end().map_err(|error| {
-        internal(format!(
-            "the drag cannot end the drive of the window: {}",
-            error.message
-        ))
-    });
-    match (settled, ended) {
-        (Ok(result), Ok(dropped)) => Ok((result, dropped)),
-        (Err(error), Ok(_)) | (Ok(_), Err(error)) => Err(error),
-        (Err(error), Err(ended)) => Err(internal(format!("{}; {}", error.message, ended.message))),
-    }
 }
 
 /// Runs settle, which waits until the last placement of a drag is committed and presented, and then stop, which ends the

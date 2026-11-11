@@ -84,9 +84,6 @@ mod stall_sample;
 #[path = "standard_error.rs"]
 mod standard_error;
 pub(crate) use standard_error::end_on_exception;
-#[cfg(feature = "diagnostics")]
-#[path = "input_check.rs"]
-mod input_check;
 #[path = "system.rs"]
 mod system;
 #[path = "termination.rs"]
@@ -454,14 +451,6 @@ impl Platform for Darwin {
     fn raise_windows(&self, raise: bool) -> Result<(), String> {
         windows_raise::raise(raise);
         Ok(())
-    }
-    #[cfg(feature = "diagnostics")]
-    fn drive_input(&self, window: Handle) -> Result<(), String> {
-        input_check::begin(window)
-    }
-    #[cfg(feature = "diagnostics")]
-    fn end_input(&self, window: Handle) -> Result<u64, String> {
-        Ok(input_check::end(window))
     }
     #[cfg(feature = "diagnostics")]
     fn document_viewport_marker(

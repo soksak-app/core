@@ -4,8 +4,6 @@
 #import "surface_layout.h"
 #import "application_log.h"
 #import "event_ring.h"
-#import "input_check.h"
-#import "input_inject.h"
 #import "observe.h"
 #import "window_controls.h"
 #import "window_facts.h"
@@ -40,8 +38,6 @@
 @property(nonatomic, copy) void (^dropped)(void);
 @property(nonatomic, assign) BOOL key;
 @property(nonatomic, assign) BOOL press;
-// The event was synthetic: input_inject.h delivered it (sp_input_delivering) when the wait kept it.
-@property(nonatomic, assign) BOOL synthetic;
 @end
 @implementation SPHeldInput
 - (void)dealloc { [_event release]; [_call release]; [_dropped release]; [super dealloc]; }
@@ -203,7 +199,6 @@ static SPHeldInput *heldPiece(void *owner, NSEvent *event, void (^call)(void), B
     input.call = call;
     input.key = key;
     input.press = press;
-    input.synthetic = event && sp_input_delivering();
     return input;
 }
 
@@ -394,9 +389,6 @@ static void sendEventAfterLayout(id application, SEL selector, NSEvent *event) {
         runHeldTurn(event.data1);
         return;
     }
-    // A window that a check drives takes no pointer event of a person (input_check.h); the drop comes before every observer, wait,
-    // monitor and view.
-    if (!sp_input_check_admits(event)) return;
     // Every press and key event that reaches the application, a synthetic one sent through -[NSApplication sendEvent:] included,
     // is told to each observer of the actions of the user before any monitor, gate or view sees it.
     // The end of the layout hold is one of these observers. When input of the window of the event waits for the hold, the event
@@ -435,11 +427,6 @@ static void discardAfterLayout(id application, SEL selector, NSEventMask mask, N
 }
 
 static void watchInput(void);
-
-void surfaceLayoutWatchInput(void) {
-    NSCAssert(NSThread.isMainThread, @"the input of the application belongs to the UI thread");
-    watchInput();
-}
 
 void surfaceInputActionObserve(void (^observer)(NSEvent *event)) {
     NSCAssert(NSThread.isMainThread, @"the actions of the user belong to the UI thread");
@@ -488,8 +475,6 @@ static void returnInput(void *owner, NSArray<SPHeldInput *> *pieces) {
         if (input.event) {
             // Each press and key event was told when it first reached the application; its return is not told again.
             if (endsHold(input.event)) markReturnedAction(owner, input.event);
-            // A synthetic event of a window that a check drives passes the drive when it comes back.
-            if (input.synthetic) sp_input_check_returning(input.event);
             [NSApp postEvent:input.event atStart:YES];
         } else {
             postHeldTurn(input);

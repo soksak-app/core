@@ -843,59 +843,6 @@ fn a_native_drag_asks_for_its_boundary_after_the_window_presented_it() {
     assert_eq!(error.message, "the window did not present");
 }
 
-// A drag drives its window for the time of its gesture: the drive begins before the gesture and ends after it, also when the
-// gesture fails, a window that a check already drives fails the drag before its gesture, and the result names the pointer
-// events of a person that the window did not take.
-// contract: diagnostics.drag.drives-the-window
-#[test]
-fn a_drag_drives_its_window_for_the_time_of_its_gesture() {
-    let order = RefCell::new(Vec::<&str>::new());
-    let begin = || {
-        order.borrow_mut().push("begin");
-        Ok(())
-    };
-    let end = || {
-        order.borrow_mut().push("end");
-        Ok(3)
-    };
-    let driven = driven_drag(begin, end, || {
-        order.borrow_mut().push("gesture");
-        Ok(serde_json::json!({ "steps": 4 }))
-    });
-    assert_eq!(*order.borrow(), ["begin", "gesture", "end"]);
-    let (result, dropped) = driven.expect("the drag of a window that no check drives runs");
-    assert_eq!(result, serde_json::json!({ "steps": 4 }));
-    assert_eq!(dropped, 3, "the drag names the dropped events of a person");
-
-    order.borrow_mut().clear();
-    let failed = driven_drag(begin, end, || -> Result<Value, Failure> {
-        order.borrow_mut().push("gesture");
-        Err(internal("the page refused the drag"))
-    });
-    assert_eq!(*order.borrow(), ["begin", "gesture", "end"]);
-    assert_eq!(failed.unwrap_err().message, "the page refused the drag");
-
-    order.borrow_mut().clear();
-    let refused = driven_drag(
-        || {
-            order.borrow_mut().push("begin");
-            Err(internal("a check already drives the window"))
-        },
-        end,
-        || -> Result<Value, Failure> {
-            order.borrow_mut().push("gesture");
-            Ok(Value::Null)
-        },
-    );
-    assert_eq!(*order.borrow(), ["begin"]);
-    assert!(
-        refused
-            .unwrap_err()
-            .message
-            .contains("a check already drives the window")
-    );
-}
-
 // contract: recording.drag.layout-trace-after-settle
 #[test]
 fn a_recorded_drag_stops_its_layout_trace_after_the_last_placement_is_presented() {

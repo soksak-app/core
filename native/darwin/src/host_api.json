@@ -178,8 +178,6 @@
     "listDeliveredNotifications",
     "main_sp_document_draw_covered",
     "main_sp_document_viewport_marker",
-    "main_sp_input_check_begin",
-    "main_sp_input_check_end",
     "main_sp_input_source_current",
     "main_sp_windows_raise",
     "main_surfaceLayoutTracePresented",

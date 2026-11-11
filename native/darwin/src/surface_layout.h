@@ -74,10 +74,6 @@ void surfaceLayoutBegin(void *owner, uint64_t ticket, void (^ready)(int));
 // (docs/spec/native-surfaces.md#layout-transaction). An observer stays for the life of the process.
 void surfaceInputActionObserve(void (^observer)(NSEvent *event));
 #endif
-// Places the library in front of -[NSApplication sendEvent:] of the application, as the first layout transaction and the first
-// observer of the actions of the user do, so that the drive of a window by a check (input_check.h) sees every event that reaches
-// the application. Main thread.
-void surfaceLayoutWatchInput(void);
 // Keeps an injected pointer call behind the input of owner that waits and returns true, or returns false when it runs now. A press
 // at the point, in window coordinates, waits as surfaceLayoutPressWaits says, and a press ends the wait of the keys for the
 // decision and runs after the keys that waited. The event loop of the application runs the call in its turn.

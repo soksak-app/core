@@ -43,8 +43,6 @@ func DiagnosticFunctions() abi.DiagnosticFunctions {
 		MainSpDocumentViewportMarker: func(a0 unsafe.Pointer, a1 bool, a2 *uint8, a3 *float64, a4 **byte) bool {
 			return bool(C.main_sp_document_viewport_marker(a0, C.bool(a1), (*C.uint8_t)(unsafe.Pointer(a2)), (*C.double)(unsafe.Pointer(a3)), (**C.char)(unsafe.Pointer(a4))))
 		},
-		MainSpInputCheckBegin:           func(a0 uintptr) bool { return bool(C.main_sp_input_check_begin(C.uintptr_t(a0))) },
-		MainSpInputCheckEnd:             func(a0 uintptr) uint64 { return uint64(C.main_sp_input_check_end(C.uintptr_t(a0))) },
 		MainSpInputSourceCurrent:        func() *byte { return (*byte)(unsafe.Pointer(C.main_sp_input_source_current())) },
 		MainSpWindowsRaise:              func(a0 bool) { C.main_sp_windows_raise(C.bool(a0)) },
 		MainSurfaceLayoutTracePresented: func(a0 uint64) { C.main_surfaceLayoutTracePresented(C.uint64_t(a0)) },
