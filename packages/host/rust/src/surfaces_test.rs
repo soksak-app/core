@@ -562,7 +562,6 @@ fn a_replacement_generation_is_not_committed_without_its_own_join() {
     let result = commit_layout_after_root_joins(
         &placed,
         vec![("tab-recreated".into(), joined_generation)],
-        41,
         |_| Some(current_generation),
         |_, _, _| true,
         |missing| {
@@ -570,7 +569,6 @@ fn a_replacement_generation_is_not_committed_without_its_own_join() {
             assert_eq!(missing[0].id, "tab-recreated");
             join_stages.lock().unwrap().push("join-generation-13");
             Ok(super::documents::ViewJoinOutcome {
-                required: vec![("tab-recreated".into(), current_generation)],
                 joined: vec![("tab-recreated".into(), current_generation)],
             })
         },
@@ -629,9 +627,12 @@ fn presentation_state_does_not_commit_an_unjoined_visible_generation() {
     assert!(!hidden_updates[0].2.visible);
 }
 
-// contract: surface-layout.joins-root-views-before-awaiting-app-dom
+// A press or key event that ends the transaction while the presentation waits commits what the joined views presented, so a
+// generation that replaced a root view meanwhile joins nothing and the commit of the ticket answers the committed state
+// (docs/spec/native-surfaces.md#layout-transaction).
+// contract: surface-layout.input-ended-ticket-joins-no-replaced-root
 #[test]
-fn a_required_replacement_join_failure_stops_before_native_commit() {
+fn a_replaced_root_of_a_transaction_that_input_ended_joins_nothing_and_does_not_fail_the_commit() {
     let placed = [super::Placement {
         id: "tab-recreated".into(),
         x: 30.0,
@@ -641,34 +642,42 @@ fn a_required_replacement_join_failure_stops_before_native_commit() {
         visible: true,
         scale: Some(2.0),
     }];
+    let mut joins = 0;
     let mut commit_called = false;
 
-    let error = commit_layout_after_root_joins(
+    let (committed, joined) = commit_layout_after_root_joins(
         &placed,
         vec![("tab-recreated".into(), 12)],
-        41,
         |_| Some(13),
         |_, _, _| true,
-        |_| {
-            Ok(super::documents::ViewJoinOutcome {
-                required: vec![("tab-recreated".into(), 13)],
-                joined: Vec::new(),
-            })
+        |missing| {
+            assert_eq!(missing.len(), 1);
+            assert_eq!(missing[0].id, "tab-recreated");
+            joins += 1;
+            // The input ended the transaction of the ticket, so the native join finds none open.
+            Ok(super::documents::ViewJoinOutcome::default())
         },
         || {
             commit_called = true;
+            // The native commit of a ticket whose transaction input ended answers that it committed.
             Ok(true)
         },
     )
-    .expect_err("an unjoined replacement generation cannot be committed");
+    .expect("a replaced root of a transaction that input ended failed the commit");
 
     assert_eq!(
-        error,
-        "view tab-recreated generation 13 could not join layout ticket 41"
+        joins, 1,
+        "the replaced root was asked to join {joins} times"
     );
+    assert!(commit_called, "the commit of the ticket did not run");
     assert!(
-        !commit_called,
-        "native commit ran after a required root-view join failed"
+        committed,
+        "the commit answered that the ticket did not commit"
+    );
+    assert_eq!(
+        joined,
+        [("tab-recreated".to_string(), 12)],
+        "the replaced generation was recorded as joined"
     );
 }
 
@@ -688,7 +697,6 @@ fn an_unchanged_committed_root_does_not_join_again() {
     let (committed, joined) = commit_layout_after_root_joins(
         &placed,
         Vec::new(),
-        42,
         |_| Some(13),
         |_, _, placement| placement.frame != [30.0, 20.0, 300.0, 200.0],
         |_| {

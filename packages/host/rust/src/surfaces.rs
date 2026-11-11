@@ -1047,7 +1047,6 @@ fn committed_view_updates(
 fn commit_layout_after_root_joins(
     placed: &[Placement],
     mut joined: Vec<(String, u64)>,
-    ticket: u64,
     mut generation: impl FnMut(&str) -> Option<u64>,
     mut needs_join: impl FnMut(&str, u64, ViewPlacement) -> bool,
     mut join_missing: impl FnMut(&[Placement]) -> Result<documents::ViewJoinOutcome, String>,
@@ -1064,19 +1063,9 @@ fn commit_layout_after_root_joins(
             break;
         }
         let outcome = join_missing(&missing)?;
-        for (surface, generation) in &outcome.required {
-            if !outcome
-                .joined
-                .iter()
-                .any(|(joined_surface, joined_generation)| {
-                    joined_surface == surface && joined_generation == generation
-                })
-            {
-                return Err(format!(
-                    "view {surface} generation {generation} could not join layout ticket {ticket}"
-                ));
-            }
-        }
+        // A view that joins nothing found no open transaction of the ticket: a press or key event that ended the transaction
+        // while the presentation waited committed what its joined views had presented, and the commit of the ticket answers
+        // that state; a ticket that a cancel ended fails its commit (docs/spec/native-surfaces.md#layout-transaction).
         if outcome.joined.is_empty() {
             break;
         }
@@ -2259,7 +2248,6 @@ pub async fn present(window: Window, request: PresentRequest) -> Result<Vec<Plac
                 let (committed, joined_generations) = match commit_layout_after_root_joins(
                     &placed,
                     std::mem::take(&mut joined_generations),
-                    ticket,
                     |surface| context.documents.views().generation(surface),
                     |surface, generation, placement| {
                         context

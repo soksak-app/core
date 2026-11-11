@@ -3567,7 +3567,6 @@ pub(crate) fn join_shown_views(
         let Ok(view) = data.documents.get(&key) else {
             continue;
         };
-        outcome.required.push((surface.to_string(), generation));
         if !data
             .documents
             .presentation()
@@ -3669,7 +3668,7 @@ pub(crate) fn join_shown_views(
 
 #[derive(Default)]
 pub(crate) struct ViewJoinOutcome {
-    pub required: Vec<(String, u64)>,
+    /// The generations that joined the open transaction of the ticket.
     pub joined: Vec<(String, u64)>,
 }
 
