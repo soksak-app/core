@@ -618,6 +618,45 @@ const FEATURE_LINKS = [
     levels: ["native", "unit"],
   },
   {
+    id: "F747",
+    implementation: [
+      { file: "native/darwin/src/window_reveal.m", symbol: "void sp_windows_raise(bool raise) {" },
+      { file: "e2e/fixture.mjs", symbol: "await session.request(\"diagnostics.windows.raise\", { raise: true });" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/windows_raise_test.m", id: "the raise changes no activation and no key window" },
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestWindowsRaiseSetsTheLevelOfTheWindowsInAStepOfTheMainThread" },
+      { file: "e2e/test/placement-fixture.test.mjs", id: "the check raises its windows, so a window of another application in front of them covers none of them" },
+      { file: "e2e/placement.test.mjs", id: "a check window that another window covers reports occluded to its watchers" },
+      { file: "e2e/window-occlusion.test.mjs", id: "a covered window is occluded and hides the document of its tab" },
+    ],
+    expected: "A window check whose subject is the occlusion of a window raises the windows of its applications above the normal windows of other applications for its run without an activation, so the windows that a person leaves on the screen do not decide its result.",
+    levels: ["native", "unit", "application"],
+  },
+  {
+    id: "F748",
+    implementation: [
+      { file: "Cargo.toml", symbol: "wry = { git = \"https://github.com/min-0-max/wry\", tag = \"wry-v0.57.0-soksak.1\" }" },
+    ],
+    tests: [
+      { file: "e2e/placement.test.mjs", id: "a check window that another window covers reports occluded to its watchers" },
+      { file: "e2e/window-first-frames.test.mjs", id: "a new window shows its complete first screen from its first frame" },
+    ],
+    expected: "A Tauri host that creates a window or a view while no other application is active stays inactive, because the creation of a webview makes no activation call.",
+    levels: ["application"],
+  },
+  {
+    id: "F749",
+    implementation: [
+      { file: "e2e/fixture.mjs", symbol: "const x = session === target ? area.x : area.x + area.width - frame.width, y = area.y;" },
+    ],
+    tests: [
+      { file: "e2e/test/placement-fixture.test.mjs", id: "a cohort window that stands on another display is parked in the work area of the target and restored there" },
+    ],
+    expected: "The occlusion fixture parks every window of the check applications at the top of the work area of the target, also a window on another display, and restores every recorded frame.",
+    levels: ["unit"],
+  },
+  {
     id: "F741",
     implementation: [
       { file: "native/darwin/tests/support/run_until.h", symbol: "static inline void sp_run_until(const char *what, BOOL (^done)(void)) {" },
