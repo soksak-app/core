@@ -397,15 +397,17 @@ static NSEvent *mouseEvent(NSWindow *window, NSEventType type, NSPoint point, NS
 // The tracking areas of a window that hold the pointer of its last move, so a move crosses their enter and exit.
 static char enteredAreasKey;
 
-// The rect of area in view by which AppKit decides whether a point is inside the area: the private -[NSTrackingArea
-// _effectiveRectInView:] answers the rect of the area, or for NSTrackingInVisibleRect the bounds of the view within its visible
-// rect, its enclosing scroll views and the safe area (docs/operations/private-native-apis.md). The visible rect of a view that does
-// not clip to its bounds reaches beyond them, so it alone is not the rect of such an area.
+// The rect of area in view by which AppKit decides whether a point is inside the area, as its direct method
+// -[NSTrackingArea _effectiveRectInView:] answers it: the rect of the area, or for NSTrackingInVisibleRect the private
+// -[NSView _interactiveBounds], the bounds of the view within its visible rect, its enclosing scroll views and the safe area
+// (docs/operations/private-native-apis.md). The visible rect of a view that does not clip to its bounds reaches beyond them, so it
+// alone is not the rect of such an area.
 static NSRect areaRect(NSTrackingArea *area, NSView *view) {
-    SEL selector = NSSelectorFromString(@"_effectiveRectInView:");
-    Method method = class_getInstanceMethod(object_getClass(area), selector);
-    NSCAssert(method, @"-[NSTrackingArea _effectiveRectInView:] is unavailable");
-    return ((NSRect (*)(id, SEL, NSView *))method_getImplementation(method))(area, selector, view);
+    if (!(area.options & NSTrackingInVisibleRect)) return area.rect;
+    SEL selector = NSSelectorFromString(@"_interactiveBounds");
+    Method method = class_getInstanceMethod(object_getClass(view), selector);
+    NSCAssert(method, @"-[NSView _interactiveBounds] is unavailable");
+    return ((NSRect (*)(id, SEL))method_getImplementation(method))(view, selector);
 }
 
 static bool areaHolds(NSView *view, NSTrackingArea *area, NSPoint point) {
