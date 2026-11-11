@@ -6,9 +6,9 @@
 // Usage: ime_person_app <process identifier of the application to return the front to>
 // Commands on standard input, one per line:
 //   compose   ends any composition with Escape, empties the text view, and types g and k of Korean 2-Set into its own key window
-//             through -[NSApplication sendEvent:], which composes 하
-//   continue  types s the same way, which continues a composition of 하 that the input method still holds into 한, and appends ㄴ
-//             to a 하 that it no longer holds
+//             through -[NSApplication sendEvent:], which composes "ha"
+//   continue  types s the same way, which continues a composition of "ha" that the input method still holds into "han", and appends "n"
+//             to a "ha" that it no longer holds
 //   state     reports the state of the text view
 //   quit     discards the composition, returns the front to the given application and exits
 // The end of standard input, which the end of the test causes, quits in the same way. Each report is one JSON line on standard
@@ -17,7 +17,7 @@
 // view by the input method mark, insert or unmark. A change also names the replaced range, "range". The reports composed and continued
 // also name, as "keys", the CGEvent field 76 and the synthesized flag of each key event, by which -[NSTextInputContext handleEvent:]
 // tells a key of a person from a made one.
-// The Korean 2-Set input method of macOS composes in a text view without marked text: it inserts ㅎ and then 하 in place of ㅎ, and
+// The Korean 2-Set input method of macOS composes in a text view without marked text: it inserts "h" and then "ha" in place of "h", and
 // keeps the composition itself. So the text of the view, not its marked text, shows the composition.
 #import <Cocoa/Cocoa.h>
 #import <Carbon/Carbon.h>
@@ -137,6 +137,7 @@ int main(int argc, const char *argv[]) {
         [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
         NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(200, 200, 360, 120)
             styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+        window.releasedWhenClosed = NO;
         window.title = @"input_virtual_ime_test person";
         // The person does not see the window and clicks through it: it covers nothing of the screen, and it can still be the key
         // window whose text view is the client of the input method.

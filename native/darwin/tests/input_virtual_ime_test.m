@@ -4,14 +4,14 @@
 // The test selects Korean 2-Set as the input source of the system for its run and restores the previous source at its end, also
 // when it fails, ends by an uncaught exception or ends by a signal that a process can catch. It starts ime_person_app
 // (SOKSAK_IME_PERSON_APP), which takes the front as the application of a person, with a window that shows nothing and lets clicks
-// pass, and composes 하 in its own text view; at its end it returns the front to the application that held it. This
+// pass, and composes "ha" in its own text view; at its end it returns the front to the application that held it. This
 // application stays behind and is never active: a text view in its covered window takes g k s and Space, Backspace or Escape
-// through input.key, which makes that window the virtual key window. A person's input method would compose those keys as 한 Space,
-// 하 and 한 (the AppKit reference of image_region_ime_test); the input method serves only the current input context, which is the
+// through input.key, which makes that window the virtual key window. A person's input method would compose those keys as "han" Space,
+// "ha" and "han" (the AppKit reference of image_region_ime_test); the input method serves only the current input context, which is the
 // one of the key window of the front application, so the text view of this window receives no call of it and no text: its input
 // context accepts each key and nothing answers. After each sequence the composition of the person must stay as it was:
 // the input method composes in the person's text view without marked text, so the composition shows in s of the person, which
-// continues a composition the input method still holds into 한 and appends ㄴ to a 하 it no longer holds.
+// continues a composition the input method still holds into "han" and appends "n" to a "ha" it no longer holds.
 //
 // The same run measures, without judging, whether the input method composes those keys once the input context of the text view is
 // activated (-[NSTextInputContext activate]), and what that does to the composition of the person. Measured on 2026-11-12: the
@@ -252,8 +252,8 @@ static NSString *oneLine(id value) {
     return [[value description] stringByReplacingOccurrencesOfString:@"\n" withString:@" "];
 }
 
-// The person composes 하 again in an emptied text view. The Korean 2-Set input method composes without marked text, so the text
-// 하 from g and k shows the composition: without one the keys would leave ㅎㅏ.
+// The person composes "ha" again in an emptied text view. The Korean 2-Set input method composes without marked text, so the text
+// "ha" from g and k shows the composition: without one the keys would leave "h a".
 static NSDictionary *personComposes(void) {
     NSUInteger from = personReports.count;
     tellPerson(@"compose");
@@ -264,16 +264,16 @@ static BOOL composing(NSDictionary *composed) {
     return [composed[@"text"] isEqual:@"하"] && ([composed[@"marked"] isEqual:@""] || [composed[@"marked"] isEqual:@"하"]);
 }
 
-// The key s of the person after the composition 하: the input method continues a composition it still holds into 한, and appends
-// ㄴ after a 하 it no longer holds.
+// The key s of the person after the composition "ha": the input method continues a composition it still holds into "han", and appends
+// "n" after a "ha" it no longer holds.
 static NSDictionary *personContinues(void) {
     NSUInteger from = personReports.count;
     tellPerson(@"continue");
     return awaitPerson(@"continued", from);
 }
 
-// Whether the composition of the person stayed as it was: no change by the input method since index from, the text still 하, and
-// the next key of the person continuing it into 한. The person then composes 하 again for the next keys of this application.
+// Whether the composition of the person stayed as it was: no change by the input method since index from, the text still "ha", and
+// the next key of the person continuing it into "han". The person then composes "ha" again for the next keys of this application.
 static void checkPersonKept(NSUInteger from, NSString *after) {
     NSArray *changes = personChangesFrom(from);
     NSDictionary *state = personState();
@@ -328,7 +328,7 @@ int main(void) { @autoreleasepool {
     check(selectAndAwait(KOREAN_2SET), @"Korean 2-Set is the input source of the system for the run");
     if (![currentSource() isEqual:KOREAN_2SET]) return finish();
 
-    // The person's application takes the front and composes 하 in its own text view.
+    // The person's application takes the front and composes "ha" in its own text view.
     startPerson(personPath);
     NSDictionary *ready = awaitPerson(@"ready", 0);
     check([ready[@"front"] boolValue] && NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier == personProcess
