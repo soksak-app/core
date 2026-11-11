@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F733: mygo 워크벤치의 library 는 project card 를 scroll container 를 채우는 grid 에 배치하므로, classic scroller style 에서 card 가 bar 에 자리를 주고, 각 preview 의 pane 은 그려진 위치와 `core.library` 가 알리는 위치 모두 좁아진 card 가 배치하는 곳에 선다.
 - F754: child 를 일부러 crash 시키는 check 는 child 의 crash exception 을 처리해 시스템이 crash report 를 쓰지 않게 하고, crash 파일 또는 error 줄, `SIGABRT` 종료, 응답한 exception 으로 판정한다. 시스템 crash report 감시는 지웠고, Go check 는 cgo 유무 모두에서 build 되며, `make test-hosts` 의 Rust run 은 두 Rust check 가 필요로 하는 `host-test` 를 켠다.
 - F758: 새 window 는 모든 host 에서 show 전에 `sp_window_place_new` 를 거쳐, 다른 애플리케이션의 key window 가 있는 display 가 아니라 애플리케이션의 가장 앞 window 가 있는 display 의 작업 영역 가운데에 열린다.
 - F757: surface 를 제거하는 배치는 페이지와 mygo 워크벤치 모두에서 워크벤치가 그보다 먼저 보낸, 그 surface 로 가는 키보드 call 을 기다리므로, 호스트가 그런 call 을 창이 쥐지 않은 surface 로 거부하지 않는다.

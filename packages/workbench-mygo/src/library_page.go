@@ -31,11 +31,12 @@ type previewPane struct {
 	H    float32 `json:"h"`
 }
 
-// readPreviews places the panes of the previews that the last frame drew where that frame drew them, as the page reads the rectangles
+// readPreviews places the panes of the previews that the last frame drew where that frame laid them out, as the page reads the rectangles
 // of its panes after it laid them out. A pane lies inside the open control of its project card, which the element tree reports in place
-// of its content, so a pane stands at the place of that control in the tree of the frame and at the offset in the control that the
-// frame laid out. The tree gives the laid out box of the control moved by the scroll, not clipped to the visible area, as the page
-// gives the rectangle of a pane. The tree of a frame cannot be read while the frame builds, so the step after the frame reads it.
+// of its content, so a pane stands at the place of that control in the tree of the frame and at the place in the control that the grid
+// of the preview gives it in the width that the frame laid the control out at (previewPanes). The tree gives the laid out box of the
+// control moved by the scroll, not clipped to the visible area, as the page gives the rectangle of a pane. The tree of a frame cannot be
+// read while the frame builds, so the step after the frame reads it.
 func (s *Shell) readPreviews() error {
 	previews := make(map[string][]previewPane, len(s.library.drawnPreviews))
 	if len(s.library.drawnPreviews) > 0 {
@@ -47,12 +48,16 @@ func (s *Shell) readPreviews() error {
 		walk = func(nodes []ui.ElementNode) {
 			for _, node := range nodes {
 				if exposed, ok := node.Key.(Exposed); ok && exposed.Name == "core.library.open" {
-					if panes, drawn := s.library.drawnPreviews[exposed.Item]; drawn {
-						placed := make([]previewPane, len(panes))
-						for i, pane := range panes {
-							placed[i] = previewPane{Card: pane.Card, X: node.Bounds.X + pane.X, Y: node.Bounds.Y + pane.Y, W: pane.W, H: pane.H}
+					if state, drawn := s.library.drawnPreviews[exposed.Item]; drawn {
+						panes := []previewPane{}
+						if state != nil {
+							panes = s.previewPanes(*state, node.Bounds.W)
 						}
-						previews[exposed.Item] = placed
+						for i := range panes {
+							panes[i].X += node.Bounds.X
+							panes[i].Y += node.Bounds.Y
+						}
+						previews[exposed.Item] = panes
 					}
 				}
 				walk(node.Children)
@@ -265,7 +270,9 @@ func (s *Shell) drawLibraryEmpty(c *ui.Context) {
 	})
 }
 
-// drawProjectGrid draws the cards of the shown projects and the card that adds one, in as many columns of the least card width as width takes.
+// drawProjectGrid draws the cards of the shown projects and the card that adds one in as many columns of the least card width as the
+// library holds, the grid of .library-grid of packages/workbench/library.css, in the room its scroll container gives it beside a classic
+// bar. width is the width of the library less its padding, which only chooses the least card width of a narrow window.
 func (s *Shell) drawProjectGrid(c *ui.Context, width float32) {
 	m := s.metrics
 	shown := s.shownProjects()
@@ -278,34 +285,22 @@ func (s *Shell) drawProjectGrid(c *ui.Context, width float32) {
 	if width+2*m.space3 < m.libraryNarrowW {
 		least = m.libraryCardMinWNarrow
 	}
-	gap := 2 * s.palette.Gap
-	columns := max(1, int((width+gap)/(least+gap)))
-	cardWidth := (width - float32(columns-1)*gap) / float32(columns)
-	drawn := map[string][]previewPane{}
+	drawn := map[string]*layout.State{}
 	errors := map[string]string{}
-	count := len(shown) + 1
-	ui.Column(c).FillWidth().Gap(gap).Children(func() {
-		for start := 0; start < count; start += columns {
-			ui.Row(c.Key(start)).FillWidth().Gap(gap).AlignItems(ui.Stretch).Children(func() {
-				for index := start; index < min(start+columns, count); index++ {
-					if index == len(shown) {
-						s.drawLibraryAdd(c, cardWidth)
-						continue
-					}
-					project := shown[index]
-					panes, failure := s.drawProjectCard(c, &project, cardWidth)
-					drawn[project.ID] = panes
-					if failure != "" {
-						errors[project.ID] = failure
-					}
-				}
-			})
+	ui.Grid(c).ColumnTracks(ui.Fr(1).Min(least).AutoFill()).FillWidth().Gap(2 * s.palette.Gap).Children(func() {
+		for _, project := range shown {
+			state, failure := s.drawProjectCard(c, &project)
+			drawn[project.ID] = state
+			if failure != "" {
+				errors[project.ID] = failure
+			}
 		}
+		s.drawLibraryAdd(c)
 	})
 	s.library.drawnPreviews, s.library.previewErrors = drawn, errors
 }
 
-func (s *Shell) drawLibraryAdd(c *ui.Context, width float32) {
+func (s *Shell) drawLibraryAdd(c *ui.Context) {
 	m := s.metrics
 	const label = "＋ 프로젝트 만들기"
 	button := s.binder.Press(c, "core.library.add", "core.library.form.open", "", map[string]string{"mode": "create"})
@@ -314,21 +309,21 @@ func (s *Shell) drawLibraryAdd(c *ui.Context, width float32) {
 		color = s.palette.Fg
 		button.Background(faded(s.palette.Fg, m.chipHoverMix))
 	}
-	button.Width(width).MinHeight(m.libraryAddH).Padding(m.space3).Center().Radius(s.palette.Radius).BorderStyle(ui.BorderDashed).
+	button.MinHeight(m.libraryAddH).Padding(m.space3).Center().Radius(s.palette.Radius).BorderStyle(ui.BorderDashed).
 		Border(s.palette.BorderWidth, s.palette.Edge).Label(label).Children(func() {
 		ui.Text(c, label).LineHeight(s.metrics.lineHeight).FontSize(s.textControl()).TextColor(color)
 	})
 }
 
-// drawProjectCard draws the card of project, and returns the panes of its preview, at their offsets in the open control of the card,
-// and the reason its stored layout cannot be opened.
-func (s *Shell) drawProjectCard(c *ui.Context, project *projectRecord, width float32) ([]previewPane, string) {
+// drawProjectCard draws the card of project in the cell of the grid, and returns the layout of its preview, nil for a preview without
+// panes, and the reason its stored layout cannot be opened.
+func (s *Shell) drawProjectCard(c *ui.Context, project *projectRecord) (*layout.State, string) {
 	m := s.metrics
-	panes := []previewPane{}
+	var state *layout.State
 	failure := ""
 	_, folderFailed := s.library.folderErrors[project.Root]
 	open := s.isOpen(project.ID)
-	card := ui.Box(c.Key("library-" + project.ID)).Width(width).Radius(s.palette.Radius).Clip().Background(s.palette.Card)
+	card := ui.Box(c.Key("library-" + project.ID)).Radius(s.palette.Radius).Clip().Background(s.palette.Card)
 	edge := s.palette.Edge
 	switch {
 	case card.Hovered() && !folderFailed:
@@ -339,7 +334,7 @@ func (s *Shell) drawProjectCard(c *ui.Context, project *projectRecord, width flo
 	card.Border(s.palette.BorderWidth, edge).Children(func() {
 		choose := s.binder.Press(c, "core.library.open", "core.library.open", project.ID, idParam{project.ID})
 		choose.FillWidth().Column().Disabled(folderFailed).Label(project.Title + " 열기").Tooltip(project.Root).Children(func() {
-			panes, failure = s.drawPreview(c, project, width-2*s.palette.BorderWidth)
+			state, failure = s.drawPreview(c, project)
 			ui.Column(c).FillWidth().Padding(m.space2, m.space3, m.space2, m.space3).BorderWidth(s.palette.BorderWidth, 0, 0, 0).
 				BorderColor(s.palette.Edge).Children(func() {
 				ui.Text(c, project.Title).SingleLine().Ellipsis("…").LineHeight(s.metrics.lineHeight).FontSize(s.textControl()).TextColor(s.palette.Fg).Margin(0, 0, m.space1, 0)
@@ -369,7 +364,7 @@ func (s *Shell) drawProjectCard(c *ui.Context, project *projectRecord, width flo
 				"star", title, title, project.Pinned)
 		})
 	})
-	return panes, failure
+	return state, failure
 }
 
 // libraryIcons are the stroke icons of a card, as packages/workbench/icons.js holds them.
@@ -395,52 +390,53 @@ func (s *Shell) libraryAct(c *ui.Context, button ui.Element, icon, label, title 
 	})
 }
 
-// drawPreview draws the stored layout of the active space of project as a grid of panes. A column that holds only window sidebars is narrower, and a
-// layout that cannot be opened by the check that opens it shows the reason.
-func (s *Shell) drawPreview(c *ui.Context, project *projectRecord, width float32) ([]previewPane, string) {
+// drawPreview draws the stored layout of the active space of project as a grid of panes in the width of the open control of its card, the
+// grid of .library-preview of packages/workbench/library-preview.js. A column that holds only window sidebars is narrower, and a layout
+// that cannot be opened by the check that opens it shows the reason. It returns the layout whose panes it drew, nil for none, and that
+// reason.
+func (s *Shell) drawPreview(c *ui.Context, project *projectRecord) (*layout.State, string) {
 	m := s.metrics
 	margin := s.palette.Gap
-	height := m.libraryPreviewH
+	// The frame takes the width of the control less its margins, as a block of the page does.
+	frame := ui.Box(c).AlignSelf(ui.Stretch).Height(m.libraryPreviewH).Margin(margin).Radius(s.radiusSmall()).Clip().Background(s.palette.Bg)
+	space, err := layout.SpaceIn(&project.Project, project.ActiveSpaceID)
+	if err != nil {
+		return nil, ""
+	}
 	padX, padY := 2*m.space4, m.space4
-	panes := []previewPane{}
-	failure := ""
-	frame := ui.Box(c).Size(width-2*margin, height).Margin(margin).Radius(s.radiusSmall()).Clip().Background(s.palette.Bg)
-	frame.Children(func() {
-		space, err := layout.SpaceIn(&project.Project, project.ActiveSpaceID)
-		if err != nil {
-			return
-		}
-		if err := layout.CheckStoredLayout(space.Layout, s.pluginUnits()); err != nil {
-			failure = fmt.Sprintf("projects.json: project %s space %s: %s", project.Root, project.ActiveSpaceID, err)
+	if err := layout.CheckStoredLayout(space.Layout, s.pluginUnits()); err != nil {
+		failure := fmt.Sprintf("projects.json: project %s space %s: %s", project.Root, project.ActiveSpaceID, err)
+		frame.Children(func() {
 			ui.Text(c, failure).Wrap().LineHeight(s.metrics.lineHeight).FontSize(s.textCaption()).TextColor(s.palette.No).Margin(padY, padX, padY, padX)
-			return
-		}
-		var stored storedLayout
-		if err := json.Unmarshal(space.Layout, &stored); err != nil {
-			failure = err.Error()
-			return
-		}
-		columns, rows := previewTracks(stored.State, width-2*margin-2*padX, height-2*padY, m.space2)
+		})
+		return nil, failure
+	}
+	var stored storedLayout
+	if err := json.Unmarshal(space.Layout, &stored); err != nil {
+		return nil, err.Error()
+	}
+	shares := previewShares(stored.State)
+	columns := make([]ui.Track, len(shares))
+	for i, share := range shares {
+		columns[i] = ui.Fr(share)
+	}
+	rows := make([]ui.Track, len(stored.State.Ys)-1)
+	for i := range rows {
+		rows[i] = ui.Fr(1)
+	}
+	frame.Grid().ColumnTracks(columns...).RowTracks(rows...).Gap(m.space2).Padding(padY, padX, padY, padX).Children(func() {
 		for _, card := range stored.State.Cards {
-			x, y := padX+columns[card.C0].at, padY+rows[card.R0].at
-			w := columns[card.C1-1].at + columns[card.C1-1].size - columns[card.C0].at
-			h := rows[card.R1-1].at + rows[card.R1-1].size - rows[card.R0].at
-			s.drawPreviewPane(c, card, x, y, w, h)
-			// The frame stands at its margin in the open control, and the pane at its place in the frame.
-			panes = append(panes, previewPane{Card: card.ID, X: margin + x, Y: margin + y, W: w, H: h})
+			s.drawPreviewPane(c, card)
 		}
 	})
-	return panes, failure
+	return &stored.State, ""
 }
 
-// previewTrack is a column or a row of a preview.
-type previewTrack struct{ at, size float32 }
-
-// previewTracks shares length among the columns of state, where a column with only window sidebars takes less, and height among its rows.
-func previewTracks(state layout.State, length, height, gap float32) (columns, rows []previewTrack) {
+// previewShares are the shares of the columns of state in the grid of a preview, where a column with only window sidebars takes less, as
+// minmax(0,1fr) and minmax(0,.22fr) of the page.
+func previewShares(state layout.State) []float32 {
 	const sidebarShare = .22
 	shares := make([]float32, len(state.Xs)-1)
-	total := float32(0)
 	for column := range shares {
 		shares[column] = sidebarShare
 		for _, card := range state.Cards {
@@ -448,26 +444,51 @@ func previewTracks(state layout.State, length, height, gap float32) (columns, ro
 				shares[column] = 1
 			}
 		}
-		total += shares[column]
 	}
-	room := length - gap*float32(len(shares)-1)
-	at := float32(0)
+	return shares
+}
+
+// previewPanes are the panes of a preview of state at their places in an open control that is width wide, where the grid of drawPreview
+// lays them out: the frame at its margin, and in it the columns sharing the room less the padding and the gaps by previewShares, and the
+// rows sharing the height.
+func (s *Shell) previewPanes(state layout.State, width float32) []previewPane {
+	m := s.metrics
+	margin, gap := s.palette.Gap, m.space2
+	padX, padY := 2*m.space4, m.space4
+	shares := previewShares(state)
+	total := float32(0)
 	for _, share := range shares {
-		size := room * share / total
-		columns = append(columns, previewTrack{at, size})
-		at += size + gap
+		total += share
+	}
+	room := width - 2*margin - 2*padX - gap*float32(len(shares)-1)
+	columns := make([]previewTrack, len(shares))
+	at := float32(0)
+	for i, share := range shares {
+		columns[i] = previewTrack{at, room * share / total}
+		at += columns[i].size + gap
 	}
 	count := len(state.Ys) - 1
-	size := (height - gap*float32(count-1)) / float32(count)
+	size := (m.libraryPreviewH - 2*padY - gap*float32(count-1)) / float32(count)
+	rows := make([]previewTrack, count)
 	for row := range count {
-		rows = append(rows, previewTrack{float32(row) * (size + gap), size})
+		rows[row] = previewTrack{float32(row) * (size + gap), size}
 	}
-	return columns, rows
+	panes := make([]previewPane, 0, len(state.Cards))
+	for _, card := range state.Cards {
+		x, y := columns[card.C0].at, rows[card.R0].at
+		w := columns[card.C1-1].at + columns[card.C1-1].size - x
+		h := rows[card.R1-1].at + rows[card.R1-1].size - y
+		panes = append(panes, previewPane{Card: card.ID, X: margin + padX + x, Y: margin + padY + y, W: w, H: h})
+	}
+	return panes
 }
+
+// previewTrack is a column or a row of a preview.
+type previewTrack struct{ at, size float32 }
 
 // drawPreviewPane draws a pane: the mark of the plugin of its active tab and two lines, or a line for a window sidebar. A tab of a plugin that is not
 // loaded has no mark.
-func (s *Shell) drawPreviewPane(c *ui.Context, card layout.Card, x, y, w, h float32) {
+func (s *Shell) drawPreviewPane(c *ui.Context, card layout.Card) {
 	m := s.metrics
 	ink := s.palette.Muted
 	var mark *ui.SVG
@@ -488,7 +509,8 @@ func (s *Shell) drawPreviewPane(c *ui.Context, card layout.Card, x, y, w, h floa
 		padding = m.space1
 	}
 	color := mixed(ink, s.palette.Card, m.previewInkMix)
-	pane := ui.Column(c.Key(card.ID)).Absolute().Left(x).Top(y).Size(w, h).Clip().Padding(padding).Radius(s.radiusSmall()).
+	pane := ui.Column(c.Key(card.ID)).ColumnStart(card.C0+1).ColumnSpan(card.C1-card.C0).RowStart(card.R0+1).RowSpan(card.R1-card.R0).Clip().
+		Padding(padding).Radius(s.radiusSmall()).
 		Border(s.palette.BorderWidth, mixed(ink, s.palette.Card, m.previewBorderMix)).Background(mixed(ink, s.palette.Card, m.previewFillMix))
 	pane.Children(func() {
 		if aside {
@@ -498,7 +520,7 @@ func (s *Shell) drawPreviewPane(c *ui.Context, card layout.Card, x, y, w, h floa
 			ui.Icon(c, mark).Size(m.libraryMark, m.libraryMark).TextColor(color)
 		}
 		line := func(top float32) {
-			ui.Box(c).Width((w-2*padding)*m.previewLineW).Height(m.previewLineH).Margin(top, 0, 0, 0).Radius(s.radiusSmall()).Background(faded(color, m.previewLineOpacity))
+			ui.Box(c).WidthPercent(100*m.previewLineW).Height(m.previewLineH).Margin(top, 0, 0, 0).Radius(s.radiusSmall()).Background(faded(color, m.previewLineOpacity))
 		}
 		line(m.space2)
 		line(m.previewLineStep - m.previewLineH)

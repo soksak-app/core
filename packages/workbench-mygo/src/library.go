@@ -9,6 +9,8 @@ import (
 
 	"golang.org/x/text/collate"
 	"golang.org/x/text/language"
+
+	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
 // The library: the screen of the saved projects and the form that adds one, as packages/workbench/library.js draws them. The plugin
@@ -28,10 +30,10 @@ type libraryState struct {
 	checks       map[string]int
 	checkCount   int
 	foldersFor   string
-	// drawnPreviews holds the panes of each preview that the last frame drew at their offsets in the open control of the card, previews
-	// the panes where that frame drew them, which the step after the frame reads (readPreviews), and previewErrors the reason of each
-	// project whose stored layout cannot be opened.
-	drawnPreviews map[string][]previewPane
+	// drawnPreviews holds the layout of each preview that the last frame drew in the grid of its card, nil for a preview without panes,
+	// previews the panes where that frame laid them out, which the step after the frame reads (readPreviews), and previewErrors the
+	// reason of each project whose stored layout cannot be opened.
+	drawnPreviews map[string]*layout.State
 	previews      map[string][]previewPane
 	previewErrors map[string]string
 }

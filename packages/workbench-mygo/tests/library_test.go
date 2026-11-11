@@ -610,3 +610,80 @@ func TestTheProjectListSelectsTheProjectPage(t *testing.T) {
 		t.Fatalf("core.projects.browse in the library keeps the page %q", got.Page)
 	}
 }
+
+// Under the classic scroller style the library, whose project cards overflow it, lays its grid out beside the bar, as the grid of
+// .library-grid of the page: the columns share the width less 17 points, each card 17/columns narrower, and the panes of a preview
+// stand where the narrower card lays them out, as the page reads the rectangles of its panes.
+func TestTheLibraryGivesAClassicBarItsRoom(t *testing.T) {
+	f, alpha, beta := twoProjects(t)
+	for i := range 10 {
+		f.run("core.library.form.open", map[string]string{"mode": "open"})
+		f.run("core.library.form.set", map[string]string{"field": "parent", "value": fmt.Sprintf("/work/more%d", i)})
+		f.run("core.library.form.submit", nil)
+		f.settle()
+	}
+	f.run("core.projects.browse", nil)
+	f.settle()
+	first, second := f.box("core.library.open", alpha), f.box("core.library.open", beta)
+	if second.Y != first.Y {
+		t.Fatalf("the first two cards stand at %v and %v, want one row", first, second)
+	}
+	columns := float32(0)
+	for _, project := range f.host.projects {
+		if f.box("core.library.open", project["id"].(string)).Y == first.Y {
+			columns++
+		}
+	}
+	// The right edge of the last pane of a preview, from the right edge of its card.
+	inset := func(card ui.Rect) float64 {
+		panes := status[libraryRead](t, f, "core.library").Previews[alpha]
+		if len(panes) == 0 {
+			t.Fatalf("the preview of %s has no pane", alpha)
+		}
+		right := 0.0
+		for _, pane := range panes {
+			right = max(right, pane.X+pane.W)
+		}
+		return float64(card.X+card.W) - right
+	}
+	before := inset(first)
+	f.tester.SetPreferences(ui.Preferences{ClassicScrollbars: true, ClassicScrollbarWidth: 17, ThinClassicScrollbarWidth: 13})
+	f.settle()
+	got, next := f.box("core.library.open", alpha), f.box("core.library.open", beta)
+	narrower := 17 / columns
+	if got.X != first.X || math.Abs(float64(got.W-(first.W-narrower))) > 0.01 || math.Abs(float64(next.X-(second.X-narrower))) > 0.01 {
+		t.Fatalf("the cards are at x %v, %v wide, and x %v beside the classic bar, at x %v, %v wide, and x %v without; want each of %v cards %v narrower",
+			got.X, got.W, next.X, first.X, first.W, second.X, columns, narrower)
+	}
+	if after := inset(got); math.Abs(after-before) > 0.01 {
+		t.Fatalf("the last pane of the preview ends %v before the right edge of its card beside the classic bar and %v without", after, before)
+	}
+	// Each pane that core.library gives is where the grid of the preview drew it: the background of the preview lies just outside each
+	// of its edges, and the pane just inside, except where the actions of the card stand over the preview.
+	background := opaque(f.palette().Bg)
+	actions := []ui.Rect{f.box("core.library.remove", alpha), f.box("core.library.pin", alpha)}
+	covered := func(point [2]float32) bool {
+		for _, box := range actions {
+			if point[0] >= box.X && point[0] <= box.X+box.W && point[1] >= box.Y && point[1] <= box.Y+box.H {
+				return true
+			}
+		}
+		return false
+	}
+	for _, pane := range status[libraryRead](t, f, "core.library").Previews[alpha] {
+		x, y, w, h := float32(pane.X), float32(pane.Y), float32(pane.W), float32(pane.H)
+		for _, edge := range []struct{ outside, inside [2]float32 }{
+			{[2]float32{x - 1.5, y + h/2}, [2]float32{x + 1.5, y + h/2}},
+			{[2]float32{x + w + 1.5, y + h/2}, [2]float32{x + w - 1.5, y + h/2}},
+			{[2]float32{x + w/2, y - 1.5}, [2]float32{x + w/2, y + 1.5}},
+			{[2]float32{x + w/2, y + h + 1.5}, [2]float32{x + w/2, y + h - 1.5}},
+		} {
+			if covered(edge.outside) || covered(edge.inside) {
+				continue
+			}
+			if out, in := f.pixelOf(edge.outside[0], edge.outside[1]), f.pixelOf(edge.inside[0], edge.inside[1]); out != background || in == background {
+				t.Fatalf("the pane %+v has %v outside its edge at %v and %v inside at %v, want the background %v only outside", pane, out, edge.outside, in, edge.inside, background)
+			}
+		}
+	}
+}
