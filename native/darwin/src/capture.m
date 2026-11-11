@@ -1446,7 +1446,8 @@ static SCStreamConfiguration *recordingConfiguration(size_t width, size_t height
     config.colorSpaceName = kCGColorSpaceSRGB;
     config.showsCursor = NO;
     config.captureResolution = SCCaptureResolutionBest;
-    config.minimumFrameInterval = CMTimeMake(1, 120);
+    // kCMTimeZero asks for every refresh of the display that shows the window, so the rate follows the display.
+    config.minimumFrameInterval = kCMTimeZero;
     config.queueDepth = 8;
     return config;
 }

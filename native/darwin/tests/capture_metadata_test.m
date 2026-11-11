@@ -166,6 +166,10 @@ static void beginSequence(SPCapture **used) {
 int main(void) { @autoreleasepool {
     CFTimeInterval began = CACurrentMediaTime();
     fprintf(stderr, "START: native capture frame metadata validation\n");
+    // The recording follows the display's own refresh rate: a zero minimum frame interval asks for every refresh.
+    SCStreamConfiguration *recording = recordingConfiguration(1, 1);
+    check(CMTimeCompare(recording.minimumFrameInterval, kCMTimeZero) == 0,
+        @"the recording stream asks for every display refresh instead of a fixed frame interval");
     sp_image_capture_match_result mismatch = { .state = SP_IMAGE_CAPTURE_UNMATCHED,
         .display_time = 123456789, .has_pixel_difference = true, .different_pixels = 2,
         .first_difference_x = 3, .first_difference_y = 4,
