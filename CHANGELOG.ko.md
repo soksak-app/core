@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F756: 실제 입력 tier 와 `make test-app-real` 이 없어졌다. card chrome 의 cursor check 는 emulate 한 이동 아래에서 창의 cursor 를 읽고, picker 를 닫는 press 와 key 가 된 창의 registry 읽기는 virtual key window 에서 기본 run 으로 돌며, marked text 의 끝은 `input.text` 로 조합 단계를 input client 에 주어 기본 run 에서 돈다. `make check-app-tests` 는 system input method 와 save panel 의 check 밖에서 window server 에 입력을 보내거나 실제 pointer 를 옮기거나 실제 활성화를 기다리는 window check 를 거부한다.
 - F526: window check 의 stall sample 은 load 가 높은 기계에서 늦게 답하는 Spotlight symbol lookup 없이 `sample` 을 돌리므로, load 와 상관없이 멈춘 process 의 stack 을 남긴다.
 - F753: 시험 목록 검사는 host contract 에 없는 contract case 를 선언한 host·`sok` test 에서 platform 에 상관없이 실패하고, 두 표 어디에도 없는 case 를 선언한 page test 에서도 실패한다. page drag 의 leg 가 각 단계에서 읽은 refresh rate 로 걸음을 맞추는 동작은 Wails·Tauri host 의 contract case `diagnostics.drag.page-legs-follow-the-refresh-rate` 다.
 - F755: 늦게 보인 변화로 window check 가 실패하면 기다림 안의 display link 침묵을 display 의 refresh 주기로 바쁜 main thread 와 창에 오지 않은 display refresh 로 나눠 적고, 기다림 안에서 commit 한 각 layout 의 commit 시각을 적는다. 녹화는 그 layout 을 `layouts.json` 에 남긴다.

@@ -1,18 +1,28 @@
-// Real-input-tier check of the card chrome of core: the cursors of the dividers and the card icons. The system cursor follows the
-// pointer of the window server, which the input that the host emulates inside the application does not move, so this check keeps
-// real input (docs/operations/examples.md#end-to-end-run). The views are those of the raster probe, whose image region the sidecar
-// redraws on command.
-// Run it only with `make test-app-real` in a run that the user approved.
+// Cursor check of the card chrome of core: the cursors of the dividers and the card icons. The pointer of the check is the pointer
+// that the host emulates inside the application: a move makes the window the virtual key window, the page or the cursor rect under
+// the injected point sets the cursor of the window, and host.window reports it as `cursor` without changing the cursor of the person
+// (docs/spec/exposure.md#virtual-key-window). The views are those of the raster probe, whose image region the sidecar redraws on
+// command.
 import assert from "node:assert/strict";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { fresh } from "../fixture.mjs";
-import { imageRect, rasterProbeTab } from "../input-probe.mjs";
-import { bringFront, post, requireTrusted, screenCenter, systemCursor } from "./hid.mjs";
+import { fresh } from "./fixture.mjs";
+import { imageRect, rasterProbeTab } from "./input-probe.mjs";
 
 /** The colours that the raster probe repaints its image region in while a check reads the cursor over a divider. */
 const REDRAW_COLOURS = Object.freeze(["#204060", "#602040", "#406020"]);
+
+/** The center of a rect of s.rect in the coordinates of the window that the emulated pointer takes. */
+const center = (rect) => ({ x: rect.document.x + rect.x + rect.width / 2, y: rect.document.y + rect.y + rect.height / 2 });
+
+/** Moves the emulated pointer through each point in order. */
+async function move(s, points) {
+  for (const point of points) await s.pointer(point.x, point.y, "move");
+}
+
+/** The cursor that the window holds now (host.window.cursor). */
+const windowCursor = async (s) => (await s.get("host.window")).cursor;
 
 /** Opens raster probe tabs in `count` cards split from the focused card, and returns them as `{surface, card}`. */
 async function rasterCards(s, count) {
@@ -29,13 +39,15 @@ async function rasterCards(s, count) {
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: dividers and card icons show their cursors after moves, focus changes, and view redraws`, { timeout: 180000 }, async (t) => {
-    requireTrusted();
     const s = await open(t, app);
     await fresh(s);
     const [view] = await rasterCards(s, 2);
     const surface = view.surface;
     const content = await imageRect(s, surface);
-    await bringFront(s, app, content);
+    const inside = center(content);
+    // A move that presses nothing makes the window the virtual key window, whose cursor follows the injected point.
+    await move(s, [inside]);
+    await s.until("host.window", (window) => window.virtualKey, "the window did not become the virtual key window");
     const grid = await s.get("core.grid");
     const dividers = [];
     for (let index = 0; ; index++) {
@@ -45,24 +57,23 @@ for (const app of Object.values(APPS)) {
     }
     const vertical = dividers.find((rect) => rect.height > rect.width * 4);
     assert.ok(vertical, `no vertical divider in ${JSON.stringify(dividers)}`);
-    const divider = await screenCenter(s, vertical);
-    const close = await screenCenter(s, await s.rect("core.card.close", 0));
-    const inside = await screenCenter(s, content);
+    const divider = center(vertical);
+    const close = center(await s.rect("core.card.close", 0));
     const read = async (point) => {
-      post([{ type: "move", x: inside.x, y: inside.y }, { type: "move", x: point.x, y: point.y }]);
+      await move(s, [inside, point]);
       await s.presented();
-      return systemCursor();
+      return windowCursor(s);
     };
     const seen = {};
     seen.dividerAfterView = await read(divider);
     seen.closeAfterView = await read(close);
     // While the sidecar repaints the image region (while the native surface is updated), reads the cursor over the divider several times.
-    post([{ type: "move", x: divider.x, y: divider.y }]);
+    await move(s, [divider]);
     seen.dividerDuringRedraw = [];
     for (const color of [...REDRAW_COLOURS, ...REDRAW_COLOURS.slice(0, 2)]) {
       await s.run("rasterprobe.color", { color }, surface);
       await s.presented();
-      seen.dividerDuringRedraw.push(systemCursor());
+      seen.dividerDuringRedraw.push(await windowCursor(s));
     }
     // Gives focus to another card while the pointer stays on the divider. Each card records its kind and responder together.
     seen.focus = [];
@@ -70,11 +81,12 @@ for (const app of Object.values(APPS)) {
       await s.run("core.card.focus", { card: card.id });
       await s.presented();
       const plugin = card.tabs.find((tab) => tab.id === card.active)?.plugin;
-      seen.focus.push({ card: card.id, plugin, cursor: systemCursor(), responder: (await s.get("host.window")).responder });
+      const window = await s.get("host.window");
+      seen.focus.push({ card: card.id, plugin, cursor: window.cursor, responder: window.responder });
     }
     seen.dividerAfterFocus = seen.focus.find((item) => item.cursor !== "resizeLeftRight")?.cursor ?? "resizeLeftRight";
     // Gives focus to each card while the pointer stays on the icon.
-    post([{ type: "move", x: close.x - 3, y: close.y }, { type: "move", x: close.x, y: close.y }]);
+    await move(s, [{ x: close.x - 3, y: close.y }, close]);
     await s.presented();
     // When focus changes the card width, the icon can leave from under the pointer. The cursor must be a hand if the icon stays under the pointer
     // and must not be a hand if it left.
@@ -83,12 +95,12 @@ for (const app of Object.values(APPS)) {
       await s.run("core.card.focus", { card: card.id });
       await s.presented();
       const now = await s.rect("core.card.close", 0);
-      const at = await screenCenter(s, now);
+      const at = center(now);
       const under = Math.abs(at.x - close.x) <= now.width / 2 && Math.abs(at.y - close.y) <= now.height / 2;
-      seen.closeAfterFocus.push({ card: card.id, under, cursor: systemCursor() });
+      seen.closeAfterFocus.push({ card: card.id, under, cursor: await windowCursor(s) });
     }
     // When the divider leaves while the pointer stays on the divider, the resize cursor must leave too.
-    post([{ type: "move", x: divider.x, y: divider.y - 3 }, { type: "move", x: divider.x, y: divider.y }]);
+    await move(s, [{ x: divider.x, y: divider.y - 3 }, divider]);
     await s.presented();
     const line = (await s.get("core.grid")).cards.find((card) => card.active === surface)?.c1;
     // The divider rectangle is in document coordinates and the grid lines are in board coordinates.
@@ -100,7 +112,7 @@ for (const app of Object.values(APPS)) {
     await s.run("core.boundary.move", { axis: "x", line: index, position: moveFrom[index] + 80 });
     await s.presented();
     await s.presented();
-    seen.afterDividerLeft = systemCursor();
+    seen.afterDividerLeft = await windowCursor(s);
     await s.run("core.boundary.move", { axis: "x", line: index, position: moveFrom[index] });
     t.diagnostic(`${app.name}: ${JSON.stringify(seen)}`);
     assert.ok(seen.closeAfterFocus.every((item) => (item.cursor === "pointingHand") === item.under),

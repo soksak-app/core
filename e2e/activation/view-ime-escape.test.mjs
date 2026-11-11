@@ -16,7 +16,7 @@ import { compareAppKitReference } from "./ime-reference-steps.mjs";
 import { assertReceivedUnchanged, inputDocument, lastTransaction, presentedStage, rasterProbeTab, receivedAfter,
   untilDocument } from "../input-probe.mjs";
 import { focusImageActive } from "./image-focus.mjs";
-import { NATIVE_INPUT_LOG, NATIVE_INPUT_READS, nativeInputDelivered, nativeInputStart } from "./native-input-trace.mjs";
+import { NATIVE_INPUT_LOG, NATIVE_INPUT_READS, nativeInputDelivered, nativeInputStart } from "../native-input-trace.mjs";
 
 const REGISTRY_COMMAND = "workbench.command";
 const MODAL_ANSWER = "workbench.trace.modal.answer";

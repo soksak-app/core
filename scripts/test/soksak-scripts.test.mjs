@@ -734,21 +734,39 @@ test("window-source audit requires window-check cleanup through the session", { 
   assert.deepEqual(auditE2ESource(line, "e2e/fixture.test.mjs"), [
     "e2e/fixture.test.mjs:1: uses t.after for cleanup; register it with session.cleanup",
   ]);
-  assert.deepEqual(auditE2ESource(line, "e2e/real/fixture.test.mjs").length, 1);
+  assert.deepEqual(auditE2ESource(line, "e2e/person/fixture.test.mjs").length, 1);
   assert.deepEqual(auditE2ESource(line, "packages/window-check/app.mjs"), []);
   assert.deepEqual(auditE2ESource(line, "e2e/test/fixture.test.mjs"), []);
   assert.deepEqual(auditE2ESource("s.cleanup(() => server.close());", "e2e/fixture.test.mjs"), []);
 });
 
-test("window-source audit allows an emulated activation and input pacing only in the real input tool", { timeout: 1000 }, () => {
+test("window-source audit allows an emulated activation and no input pacing", { timeout: 1000 }, () => {
   const line = 'await session.pointer(x, y, "move", { activate: true });';
   assert.deepEqual(auditE2ESource(line, "e2e/probe.test.mjs"), []);
   assert.deepEqual(auditE2ESource(line, "packages/window-check/app.mjs"), []);
   const pacing = "  if (step.wait) delay(step.wait / 1000);";
-  assert.deepEqual(auditE2ESource(pacing, "e2e/real/hid.mjs"), []);
+  assert.deepEqual(auditE2ESource(pacing, "e2e/real/hid.mjs"), ["e2e/real/hid.mjs:1: uses a fixed sleep"]);
   assert.deepEqual(auditE2ESource(pacing, "packages/window-check/app.mjs"), ["packages/window-check/app.mjs:1: uses a fixed sleep"]);
-  assert.deepEqual(auditE2ESource(pacing, "e2e/real/probe.test.mjs"), ["e2e/real/probe.test.mjs:1: uses a fixed sleep"]);
   assert.deepEqual(auditE2ESource(pacing, "e2e/probe.test.mjs"), ["e2e/probe.test.mjs:1: uses a fixed sleep"]);
+});
+
+test("window-source audit refuses the real input, the real pointer and a wait for the real activation", { timeout: 1000 }, () => {
+  const hid = 'import { post, systemCursor } from "./hid.mjs";';
+  assert.deepEqual(auditE2ESource(hid, "e2e/card.test.mjs"), ["e2e/card.test.mjs:1: uses the real input of the window server; use input.pointer, input.key and input.text"]);
+  const post = "const ok = $.CGEventPost($.kCGHIDEventTap, event);";
+  assert.deepEqual(auditE2ESource(post, "e2e/hid.mjs"), ["e2e/hid.mjs:1: uses the real input of the window server; use input.pointer, input.key and input.text"]);
+  const pointer = "  await s.keepPointerOutside();";
+  assert.deepEqual(auditE2ESource(pointer, "e2e/probe.test.mjs"), ["e2e/probe.test.mjs:1: uses the real pointer of the window server"]);
+  for (const wait of ['await s.until("host.window", (state) => state.active && state.key, "x");',
+    "await s.until(\"host.window\", (host) => host.active === true && host.key === true, \"x\");",
+    'await s.until("host.window", (state) => state.virtualKey || (state.active && state.key), "x");']) {
+    assert.deepEqual(auditE2ESource(wait, "e2e/probe.test.mjs"),
+      ["e2e/probe.test.mjs:1: uses a wait for the real activation; wait for virtualKey of host.window"], wait);
+  }
+  assert.deepEqual(auditE2ESource('await s.until("host.window", (state) => state.virtualKey, "x");', "e2e/probe.test.mjs"), []);
+  // The checks of the input method of the system and of the save panel keep the real activation and the person (F756).
+  assert.deepEqual(auditE2ESource(pointer, "e2e/activation/ime.test.mjs"), []);
+  assert.deepEqual(auditE2ESource(pointer, "packages/window-check/app.mjs"), []);
 });
 
 test("exposure audit verifies every declared core entry", { timeout: TREE_AUDIT_LIMIT_MS }, async () => {

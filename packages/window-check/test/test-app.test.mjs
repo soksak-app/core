@@ -61,12 +61,12 @@ test("--index names the registry index of the run, as a file URL or a path, and 
 
 test("the checks are the test files under e2e/ outside e2e/fixtures/", (t) => {
   const root = folder(t);
-  for (const file of ["e2e/a.test.mjs", "e2e/start.mjs", "e2e/test/helper.mjs", "e2e/real/b.test.mjs", "e2e/fixtures/p/test.mjs",
+  for (const file of ["e2e/a.test.mjs", "e2e/start.mjs", "e2e/test/helper.mjs", "e2e/person/b.test.mjs", "e2e/fixtures/p/test.mjs",
     "e2e/node_modules/x/c.test.mjs", "e2e/bench/test-d.mjs"]) {
     mkdirSync(join(root, file, ".."), { recursive: true });
     writeFileSync(join(root, file), "");
   }
-  assert.deepEqual(checkFiles(root), ["e2e/a.test.mjs", "e2e/bench/test-d.mjs", "e2e/real/b.test.mjs", "e2e/test/helper.mjs"]);
+  assert.deepEqual(checkFiles(root), ["e2e/a.test.mjs", "e2e/bench/test-d.mjs", "e2e/person/b.test.mjs", "e2e/test/helper.mjs"]);
   assert.throws(() => checkFiles(folder(t)), /no test file under e2e\//);
 });
 

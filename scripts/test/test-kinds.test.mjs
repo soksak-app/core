@@ -171,7 +171,12 @@ test("a future shared or Wails Go E2E test fails ownership until the maintained 
 
 test("the root make targets are the only entry points of the window checks", { timeout: 1000 }, () => {
   const root = rules(read("Makefile"));
-  for (const target of ["test-app", "test-app-activation", "test-app-real", "test-app-person", "benchmark-b3"]) assert.ok(root.some((rule) => rule.target === target), `the Makefile has no target ${target}`);
+  for (const target of ["test-app", "test-app-activation", "test-app-person", "benchmark-b3"]) assert.ok(root.some((rule) => rule.target === target), `the Makefile has no target ${target}`);
+  // The checks of the real-input tier read the system cursor under HID events; the emulated pointer and the cursor of host.window
+  // reach the same judgment, so no target or script runs a check with the real input of the window server.
+  assert.equal(root.some((rule) => rule.target === "test-app-real"), false, "the Makefile still has the real-input target test-app-real");
+  assert.deepEqual(Object.keys(JSON.parse(read("e2e/package.json")).scripts).filter((name) => name === "test-app:real"), [],
+    "e2e/package.json still declares the real-input script test-app:real");
   assert.match(root.find((rule) => rule.target === "test-app").recipe, /node scripts\/test-app\.mjs/, "make test-app does not run scripts/test-app.mjs");
   assert.deepEqual(misnamedRootTargets(read("Makefile"), read), [], "a root target runs end-to-end checks outside the test-app targets");
   const scripts = Object.keys(JSON.parse(read("package.json")).scripts ?? {}).filter((name) => name.startsWith("test-app"));

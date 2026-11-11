@@ -14,7 +14,7 @@ import { compareAppKitReference } from "./ime-reference-steps.mjs";
 import { assertReceivedUnchanged, inputDocument, insertedText, lastTransaction, presentedStage, rasterProbeTab,
   receivedAfter, transactionMatchesKey, typedText, untilDocument } from "../input-probe.mjs";
 import { focusImageActive } from "./image-focus.mjs";
-import { NATIVE_INPUT_LOG, NATIVE_INPUT_READS, nativeInputDelivered, nativeInputStart } from "./native-input-trace.mjs";
+import { NATIVE_INPUT_LOG, NATIVE_INPUT_READS, nativeInputDelivered, nativeInputStart } from "../native-input-trace.mjs";
 
 const JAMO = /[ㄱ-ㅣ]/;
 

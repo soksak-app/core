@@ -32,19 +32,27 @@ const RULES = [
   { what: "a repeating timer", pattern: /\bsetInterval\s*\(/ },
   // A skipped test ends as a pass of its file, so a check whose precondition fails reports nothing.
   { what: "a skipped test; assert its precondition", pattern: /\bt\.skip\s*\(/, skippedTest: true },
-  { what: "a fixed sleep", pattern: /\b(sleep|delay|pause)\s*\(|timers\/promises/, inputPacing: true },
+  { what: "a fixed sleep", pattern: /\b(sleep|delay|pause)\s*\(|timers\/promises/ },
   // The cleanup of a window check goes into session.cleanup. When the cleanup of open fails, a t.after registered after it does not run,
   // so a server or process remains and the check process does not end. The cleanup of a session runs every step even when one fails.
   { what: "t.after for cleanup; register it with session.cleanup", pattern: /\bt\.after\s*\(/, sessionCleanup: true },
   // A window check does not read source paths of other components and receives values through declared status entries. The
   // fixtures of core under e2e/fixtures, its fake sidecars included, belong to the checks themselves.
   { what: "a source path of another repository component", pattern: /(["'`/]|\.\.\/)(?<!e2e\/fixtures\/)(packages|plugins|sidecars|native|apps)\//, sourcePath: true },
+  // A window check drives the application with the input that its host emulates inside the application, in a covered window of an
+  // application that is not active (docs/spec/exposure.md#virtual-key-window): the HID events of the window server move the pointer
+  // and the keyboard of the person, the real pointer decides nothing of the emulated input, and an emulated activation makes the
+  // window the virtual key window, not the key window of an application that the system holds as active.
+  { what: "the real input of the window server; use input.pointer, input.key and input.text", pattern: /\bCGEventPost\b|\bhid\.mjs\b/, realState: true },
+  { what: "the real pointer of the window server", pattern: /\bkeepPointerOutside\s*\(/, realState: true },
+  { what: "a wait for the real activation; wait for virtualKey of host.window", pattern: /\.active(\s*===\s*true)?\s*&&\s*\w+\.key\b/, realState: true },
 ];
 
-// The real input tool of the harness, which only the checks of the real-input tier use: it activates the app before it sends HID
-// events, and it leaves an interval between HID events at the speed of a human movement. The interval is not a wait for state, and
-// the window server coalesces drag events sent without an interval. A fixed wait is not allowed outside this file.
-const REAL_INPUT_TOOL = "e2e/real/hid.mjs";
+// The checks that keep the real activation and the person (F756): the composition of the input method of the system, which serves only
+// the key window of the application that the system holds as active, and the save panel, which the emulated input does not reach.
+// The session defines the helper of the real pointer for them.
+const REAL_STATE_EXEMPT = ["e2e/activation/", "e2e/person/", "packages/window-check/app.mjs", "packages/window-check/test/pointer-outside.test.mjs"];
+
 // app.mjs of the harness reports a check of an application whose host process exited as not run: the check that found the exit
 // failed with it and its log records, so the skip hides no failure, and starting the application again would hide the exit.
 const NOT_RUN_REPORTER = "packages/window-check/app.mjs";
@@ -407,7 +415,7 @@ export function auditE2ESource(text, file) {
   let lineStart = 0;
   text.split("\n").forEach((line, index) => {
     for (const rule of RULES) {
-      if (rule.inputPacing && file === REAL_INPUT_TOOL) continue;
+      if (rule.realState && REAL_STATE_EXEMPT.some((exempt) => file === exempt || file.startsWith(exempt))) continue;
       if (rule.skippedTest && file === NOT_RUN_REPORTER) continue;
       if (rule.sessionCleanup && SESSION_CLEANUP_EXEMPT.some((exempt) => file === exempt || file.startsWith(exempt))) continue;
       if (rule.sourcePath) {

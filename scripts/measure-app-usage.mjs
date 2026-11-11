@@ -91,7 +91,7 @@ const COVER_MARGIN = 60;
 const FAULT_RESIZE = 40;
 /** The text of the layout fault that diagnostics.layout.fail causes (docs/spec/endpoint.md). */
 const LAYOUT_FAULT = "diagnostic layout fault";
-/** The HID moves of the pointer step across the window. */
+/** The moves of the pointer step across the window. */
 const POINTER_MOVES = 60;
 /** The plugins of the tabs of S1. */
 /** The states that start from S1, which require the plugins of its two tabs. */

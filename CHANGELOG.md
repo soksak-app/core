@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F756: The real-input tier and `make test-app-real` are gone: the cursor check of the card chrome reads the cursor of the window under emulated moves, the press that closes a picker and the registry read of a window that becomes key run in the default run on the virtual key window, and the end of marked text gives the input client its composition steps with `input.text` in the default run. `make check-app-tests` refuses a window check that posts input to the window server, moves the real pointer or waits for the real activation, outside the checks of the input method of the system and of the save panel.
 - F526: The stall sample of a window check runs `sample` without the Spotlight lookup of symbols, which a loaded machine answers late, so it keeps the stacks of a stalled process at any load.
 - F753: The test inventory check fails a host or `sok` test, of any platform, that declares a contract case that the host contract does not have, and a page test that declares a case of neither table; the pacing of the legs of a page drag by the refresh rate read at each step is the contract case `diagnostics.drag.page-legs-follow-the-refresh-rate` of the Wails and Tauri hosts.
 - F755: The failure of a window check for a change shown late names each silence of the display link in the wait as a busy main thread or as display refreshes that did not reach the window, by the refresh period of the display, and names the commit time of each layout committed in the wait; the recording keeps those layouts in `layouts.json`.

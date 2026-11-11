@@ -1,10 +1,10 @@
-// Checks the delivery check of the IME checks (e2e/activation/native-input-trace.mjs) on records in the form that core writes:
+// Checks the delivery check of the composition checks (e2e/native-input-trace.mjs) on records in the form that core writes:
 // `native.input.report` of the native library with the JSON report of an input transaction, `host.sidecar.request` of the host, and
 // the input log of the raster probe.
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { assertNativeInputDelivered, nativeInputTransactions } from "../../activation/native-input-trace.mjs";
+import { assertNativeInputDelivered, nativeInputTransactions } from "../native-input-trace.mjs";
 
 const SURFACE = "tab-1";
 const SIDECAR = "@sok-check/sidecar-rasterprobe";

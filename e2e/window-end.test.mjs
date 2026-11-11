@@ -1,8 +1,8 @@
 // The ordinary ends of a window and the Edit items of the application menu: the item Close Window and its key equivalent end a
 // window and leave the application open, a window whose project core.project.close closed ends the same way, and the
 // items Select All, Cut and Paste reach the focused text field (docs/spec/hosts.md#mygo-host). Every input is the input of the
-// endpoint; no check activates the application. The press of the close button takes the path of a person's pointer
-// (e2e/real/window-close.test.mjs).
+// endpoint; no check activates the application. The close button of the title bar is drawn and pressed by the system, which no
+// check judges (F756).
 import assert from "node:assert/strict";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";

@@ -9,7 +9,6 @@
     "test-app:capture-input-close": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs '--test-name-pattern=consecutive captures preserve finalized recordings|an image region draws its frame after the window is resized from outside|a click gives native focus to the clicked image region and its card|save replies that retain modified state keep the native tab open' capture-lifecycle.test.mjs view-surfaces.test.mjs save-close.test.mjs",
     "test-app:activation": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs 'activation/*.test.mjs'",
     "test-app:person": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs 'person/*.test.mjs'",
-    "test-app:real": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs 'real/*.test.mjs'",
     "repeat": "sok-repeat --setup ./setup.mjs",
     "test": "node --test test/",
     "test-app:section-design": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs observation/section-design.test.mjs",

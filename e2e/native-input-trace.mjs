@@ -1,5 +1,5 @@
-// The delivery of the native input transactions of an image region to its sidecar, as the event log records it, for the IME checks
-// of e2e/activation. The native library records each report of a region to the page as `native.input.report` with the identifier
+// The delivery of the native input transactions of an image region to its sidecar, as the event log records it, for the composition
+// checks. The native library records each report of a region to the page as `native.input.report` with the identifier
 // of its input (docs/spec/logging.md#correlation-identifier); an input transaction is the report of type `input` with its actions,
 // its final preedit, its callback errors and its `cids` (docs/spec/native-surfaces.md#image-regions). The host records each request
 // that it queued for a sidecar with the identifiers of the request line as `host.sidecar.request`. The image region is that of the
@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { isDeepStrictEqual } from "node:util";
 
 import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
-import { RASTER_SIDECAR } from "../raster-probe.mjs";
+import { RASTER_SIDECAR } from "./raster-probe.mjs";
 
 /** The records below error that a check of the delivery reads, and the log policy that stores them. */
 export const NATIVE_INPUT_READS = Object.freeze(["native.input.report", "host.sidecar.request"]);

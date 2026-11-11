@@ -151,6 +151,20 @@ export async function imagePoint(s, surface) {
 }
 
 /**
+ * Gives the native keyboard of the virtual key window to the image region of the raster probe `surface` as a person does: a move
+ * over the region makes the window the virtual key window, a press gives it the region, and the probe focuses its region
+ * (docs/spec/exposure.md#virtual-key-window). The window stays covered and the application inactive.
+ */
+export async function focusImage(s, surface) {
+  const point = await imagePoint(s, surface);
+  await pressInKeyWindow(s, point);
+  await s.run("rasterprobe.focus", {}, surface);
+  await s.until("host.window", (host) => host.virtualKey && imageFocused(host, surface) && host.responder?.surface === surface,
+    "the image region did not become the focused view of the virtual key window");
+  await s.until("rasterprobe.input", (input) => input.focused, "the image region did not report its focus", { surface });
+}
+
+/**
  * Whether the image region row `region` of `host.window` presents the frame of the input transaction `entry` of the raster probe or
  * a later frame of the same generation and raster: the frame that the sidecar drew first after it handled the transaction
  * (`entry.frame`), so the region shows the state after that transaction.

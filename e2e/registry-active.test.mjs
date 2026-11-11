@@ -11,8 +11,8 @@ import test from "node:test";
 import { pathToFileURL } from "node:url";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
-import { buildFixtureRegistry, fixtureRegistry, nextPatch, readIndex } from "../../scripts/fixture-registry.mjs";
-import { fresh, restoreRegistry, useRegistry } from "../fixture.mjs";
+import { buildFixtureRegistry, fixtureRegistry, nextPatch, readIndex } from "../scripts/fixture-registry.mjs";
+import { fresh, restoreRegistry, useRegistry } from "./fixture.mjs";
 
 /** The fixture plugin that the registry later lists in a newer version. */
 const PLUGIN = "probeplain";
@@ -27,8 +27,8 @@ for (const app of Object.values(APPS)) {
     // first, as a person who switches to it does (docs/spec/installation.md#plugin-operations-in-the-application).
     const content = (await s.get("host.window")).content;
     await s.pointer(content.width / 2, content.height / 2, "move", { activate: true });
-    await s.until("host.window", (state) => state.virtualKey || (state.active && state.key),
-      "the window did not become the key window of an application that answers as active");
+    await s.until("host.window", (state) => state.virtualKey,
+      "the window did not become the virtual key window of an application that answers as active");
     const before = await s.get("core.plugins");
     const installed = before.plugins.find((row) => row.id === PLUGIN).installed.version;
     const newer = nextPatch(installed);

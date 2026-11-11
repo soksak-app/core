@@ -16,7 +16,7 @@ import { compareAppKitReference } from "../ime-reference-steps.mjs";
 import { assertReceivedUnchanged, focusedCard, imageRegion, inputDocument, insertedText, lastTransaction,
   presentedStage, rasterProbeTab, receivedAfter, transactionMatchesKey, untilDocument } from "../../input-probe.mjs";
 import { focusImageActive } from "../image-focus.mjs";
-import { NATIVE_INPUT_LOG, NATIVE_INPUT_READS, nativeInputDelivered, nativeInputStart } from "../native-input-trace.mjs";
+import { NATIVE_INPUT_LOG, NATIVE_INPUT_READS, nativeInputDelivered, nativeInputStart } from "../../native-input-trace.mjs";
 
 /** The log policy and the records of the checks of this file: the input records of the native library and the sidecar requests. */
 const READS = ["native.input.key_down", "native.input.callback", ...NATIVE_INPUT_READS];
