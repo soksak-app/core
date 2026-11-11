@@ -19,3 +19,16 @@ export async function firstWindowPlace(s, { frontmostApp = frontApp, windowPlace
   const behind = windowsBehind(pid, runProcesses().filter((item) => item !== pid));
   return { pid, front, first, behind };
 }
+
+/**
+ * Reads the number of windows of other applications behind the front window of process pid after it showed a new window, without
+ * the windows of the other applications of the run, and the front application for the diagnostic. A person who brings another
+ * application forward or opens windows only puts windows in front of the windows of the check, so neither the front application nor
+ * the place of a window is a criterion; a new window that the process ordered over the windows of other applications leaves windows
+ * of them behind it.
+ */
+export async function newWindowPlace(pid, { frontmostApp = frontApp, windowsBehind = behindOf,
+  runProcesses = runningCheckProcesses } = {}) {
+  const behind = windowsBehind(pid, runProcesses().filter((item) => item !== pid));
+  return { behind, front: frontmostApp() };
+}
