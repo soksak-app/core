@@ -62,5 +62,19 @@ int main(void) { @autoreleasepool {
     }
     ok = check("an uncaught exception writes one fatal line",
         [fatal isEqualToArray:@[@"error native fatal: uncaught exception TestException: boom"]], written, signalNumber) && ok;
+    // The Rust host catches an exception where its thread starts and hands it on, because Rust ends the thread with an abort
+    // that names no exception.
+    written = run(^{
+        @try {
+            @throw [NSException exceptionWithName:@"CaughtException" reason:@"line one\nline two" userInfo:nil];
+        } @catch (NSException *exception) {
+            sp_log_fatal_exception(exception);
+        }
+    }, &signalNumber);
+    ok = check("an exception handed to the fatal end writes one fatal line and ends by the abort",
+        [withoutTime([written stringByTrimmingCharactersInSet:NSCharacterSet.newlineCharacterSet]) isEqualToString:@"error native fatal: uncaught exception CaughtException: line one\\nline two"] && [written componentsSeparatedByString:@"\n"].count == 2 && signalNumber == SIGABRT, written, signalNumber) && ok;
+    written = run(^{ sp_log_fatal_exception(NULL); }, &signalNumber);
+    ok = check("a nil exception handed to the fatal end writes one fatal line and ends by the abort",
+        [withoutTime([written stringByTrimmingCharactersInSet:NSCharacterSet.newlineCharacterSet]) isEqualToString:@"error native fatal: uncaught exception nil: nil"] && [written componentsSeparatedByString:@"\n"].count == 2 && signalNumber == SIGABRT, written, signalNumber) && ok;
     return ok ? 0 : 1;
 }}

@@ -40,7 +40,8 @@ static WRITER: (Mutex<WriterState>, Condvar) = (
 /// The thread that waits for the writer after a panic and ends the process; the hook wakes it with the record of the panic.
 static ENDER: OnceLock<Mutex<Sender<String>>> = OnceLock::new();
 
-/// Runs `body` in a thread called `name`. A panic of `body` is recorded by the panic hook with that name.
+/// Runs `body` in a thread called `name`. A panic of `body` is recorded by the panic hook with that name, and an Objective-C
+/// exception that leaves `body` ends the process with its record (`platform::end_on_exception`).
 pub fn spawn_named<T, F>(name: &str, body: F) -> JoinHandle<T>
 where
     F: FnOnce() -> T + Send + 'static,
@@ -48,7 +49,7 @@ where
 {
     std::thread::Builder::new()
         .name(name.to_string())
-        .spawn(body)
+        .spawn(move || crate::platform::end_on_exception(body))
         // default: a thread that cannot start ends the process by a panic, which the panic hook records.
         .unwrap_or_else(|error| panic!("cannot start the thread {name}: {error}"))
 }
