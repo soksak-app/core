@@ -41,3 +41,17 @@ bool sp_window_place_new(void *window, char **error);
 // Call it on the main thread (docs/spec/hosts.md#launch-activation).
 void sp_window_show(void *window);
 
+
+// Holds the next show of a window that is not on screen, for a diagnostic recording of a new window that starts before the
+// window goes on screen (sp_capture_hold_new_window). The next sp_window_show of a window that is not visible leaves that window
+// off the screen and calls held with it once; every other show is unchanged. Returns false while a hold is set or a show is
+// held. Only a diagnostic recording sets a hold, so a show of an application that records nothing never meets one.
+//
+// Call it on the main thread.
+bool sp_window_show_hold_next(void (^held)(void *window));
+
+// Ends the hold: shows the held window as sp_window_show does and commits the order to the window server, so the window is
+// listed with its bounds when this returns, or drops a hold that no show took. A call without a hold changes nothing.
+//
+// Call it on the main thread.
+void sp_window_show_release_held(void);

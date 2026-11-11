@@ -14,6 +14,17 @@
 // is larger than the token of every earlier call. No limit ends such a wait: it ends when its event comes or when
 // sp_capture_end_wait ends the wait of its token, and an ended wait fails with `<what did not come> before <reason>`.
 bool sp_capture_open(long windowNumber, bool display, uint64_t token, char **error);
+// The diagnostic recording of a new window from its first frame (docs/spec/endpoint.md, diagnostics.capture.start newWindow).
+// sp_capture_hold_new_window, on the main thread, holds the next show of a window that is not on screen (sp_window_show_hold_next)
+// and fails while a recording runs or a hold is set. sp_capture_wait_new_window waits, off the main thread, until a show was held
+// and returns the number of that window; the end of the wait of token (sp_capture_end_wait) ends the hold, puts a held window on
+// screen and fails the wait with `no new window was shown before <reason>` in sp_capture_error, returning -1.
+// sp_capture_open of the held window sizes the recording from the window, which the window server does not list yet, and the
+// completion of the stream start of its recording, successful or not, puts the window on screen. sp_capture_release_new_window,
+// from any thread, ends the hold at once: the caller calls it on every failure before the stream start.
+bool sp_capture_hold_new_window(char **error);
+long sp_capture_wait_new_window(uint64_t token);
+void sp_capture_release_new_window(void);
 // Starts a recording in directory. frame_identity is an opt-in diagnostic request and fails explicitly until the
 // capture identity session is installed. false preserves the ordinary recorded-frame path.
 bool sp_capture_start(const char *directory, bool frame_identity, char **error);

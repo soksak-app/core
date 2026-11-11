@@ -12,6 +12,7 @@
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
 #import "capture.h"
+#import "window_reveal.h"
 #import "image_capture_match.h"
 #import "image_region.h"
 #import "application_log.h"
@@ -1543,6 +1544,102 @@ void sp_capture_end_wait(uint64_t token, const char *reason) {
     }
 }
 
+// The recording of a new window from its first frame (sp_capture_hold_new_window). The window that the hold took is not on screen
+// until the stream of its recording started, so the window server has no bounds for it and the shareable content has no frame;
+// the preparation sizes its recording from the window itself, which the held show reports on the main thread.
+static pthread_mutex_t heldWindowLock = PTHREAD_MUTEX_INITIALIZER;
+static dispatch_semaphore_t heldWindowShown;
+static long heldWindowNumber = -1;
+static CGSize heldWindowPoints;
+static CGFloat heldWindowScale;
+
+// The size of the held window when windowNumber is the held window, or false for any other window.
+static bool heldWindowSize(long windowNumber, CGSize *points, CGFloat *scale) {
+    pthread_mutex_lock(&heldWindowLock);
+    bool held = heldWindowNumber >= 0 && heldWindowNumber == windowNumber;
+    if (held) {
+        *points = heldWindowPoints;
+        *scale = heldWindowScale;
+    }
+    pthread_mutex_unlock(&heldWindowLock);
+    return held;
+}
+
+// Ends the hold on the main thread: the held window goes on screen and the hold is dropped.
+static void releaseHeldWindowOnMain(void) {
+    sp_window_show_release_held();
+    pthread_mutex_lock(&heldWindowLock);
+    heldWindowNumber = -1;
+    if (heldWindowShown) dispatch_release(heldWindowShown);
+    heldWindowShown = NULL;
+    pthread_mutex_unlock(&heldWindowLock);
+}
+
+bool sp_capture_hold_new_window(char **errorOut) {
+    NSCAssert(NSThread.isMainThread, @"the hold of a new window requires the UI thread");
+    if (errorOut == NULL) {
+        sp_log_error("capture hold", "an error output is required");
+        return false;
+    }
+    *errorOut = NULL;
+    if (captureStream != nil) return captureOperationFailure(errorOut, @"capture is already running");
+    dispatch_semaphore_t shown = dispatch_semaphore_create(0);
+    bool set = sp_window_show_hold_next(^(void *handle) {
+        NSWindow *window = (NSWindow *)handle;
+        pthread_mutex_lock(&heldWindowLock);
+        heldWindowNumber = window.windowNumber;
+        heldWindowPoints = NSSizeToCGSize(window.frame.size);
+        heldWindowScale = window.backingScaleFactor;
+        pthread_mutex_unlock(&heldWindowLock);
+        dispatch_semaphore_signal(shown);
+    });
+    if (!set) {
+        dispatch_release(shown);
+        return captureOperationFailure(errorOut, @"a new window is already held for a recording");
+    }
+    pthread_mutex_lock(&heldWindowLock);
+    if (heldWindowShown) dispatch_release(heldWindowShown);
+    heldWindowShown = shown;
+    heldWindowNumber = -1;
+    pthread_mutex_unlock(&heldWindowLock);
+    return true;
+}
+
+long sp_capture_wait_new_window(uint64_t token) {
+    pthread_mutex_lock(&heldWindowLock);
+    dispatch_semaphore_t shown = heldWindowShown;
+    if (shown) dispatch_retain(shown);
+    pthread_mutex_unlock(&heldWindowLock);
+    if (!shown) {
+        setCaptureError(@"no new window is held for a recording");
+        forgetCaptureEnd(token);
+        return -1;
+    }
+    NSString *ended = awaitCaptureSignal(shown, token, @"no new window was shown");
+    forgetCaptureEnd(token);
+    if (ended) {
+        dispatch_release(shown);
+        setCaptureError(ended);
+        sp_capture_release_new_window();
+        return -1;
+    }
+    // A later wait for the same window passes too.
+    dispatch_semaphore_signal(shown);
+    dispatch_release(shown);
+    pthread_mutex_lock(&heldWindowLock);
+    long number = heldWindowNumber;
+    pthread_mutex_unlock(&heldWindowLock);
+    return number;
+}
+
+void sp_capture_release_new_window(void) {
+    if (NSThread.isMainThread) {
+        releaseHeldWindowOnMain();
+        return;
+    }
+    dispatch_async(dispatch_get_main_queue(), ^{ releaseHeldWindowOnMain(); });
+}
+
 bool sp_capture_open(long windowNumber, bool display, uint64_t token, char **errorOut) {
     if (errorOut == NULL) {
         sp_log_error("capture open", "an error output is required");
@@ -1589,6 +1686,19 @@ bool sp_capture_open(long windowNumber, bool display, uint64_t token, char **err
             }
             CGSize points = filter.contentRect.size;
             CGRect bounds = CGRectNull;
+            CGSize heldPoints;
+            CGFloat heldScale;
+            if (!display && heldWindowSize(windowNumber, &heldPoints, &heldScale)) {
+                // A held window is off the screen until the stream starts: the window server lists no bounds for it, so the
+                // recording takes the size of the window itself.
+                points = heldPoints;
+                SCStreamConfiguration *config = recordingConfiguration(
+                    (size_t)(points.width * heldScale), (size_t)(points.height * heldScale));
+                sp_log_info("capture", [NSString stringWithFormat:@"prepared held window %ld size %@ scale %g output %zux%zu",
+                    windowNumber, NSStringFromSize(NSSizeFromCGSize(points)), heldScale, config.width, config.height].UTF8String);
+                [result completeWithFilter:filter configuration:config error:nil];
+                return;
+            }
             if (!display) {
                 // The shareable content is a snapshot that can still hold the frame of the window before its last
                 // setFrame. The window server answers on the connection of the process that changed the frame, after
@@ -1806,6 +1916,11 @@ bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut
         dispatch_semaphore_signal(startDone);
         requestCaptureStopAfterStart(stream, attempt);
         dispatch_release(startDone);
+        // The stream of a held window has started, or failed to start: the window goes on screen, so its first frame is the
+        // first frame of the recording, and a failed recording does not keep the window off the screen.
+        CGSize heldPoints;
+        CGFloat heldScale;
+        if (heldWindowSize(attempt.windowNumber, &heldPoints, &heldScale)) sp_capture_release_new_window();
     }];
     [attempt release];
     return true;

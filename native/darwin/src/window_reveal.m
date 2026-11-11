@@ -1,5 +1,6 @@
 // Shows a new window after its first screen is presented (window_reveal.h).
 #import <Cocoa/Cocoa.h>
+#import <QuartzCore/QuartzCore.h>
 #import <WebKit/WebKit.h>
 #import "observe.h"
 #import "window_facts.h"
@@ -139,9 +140,7 @@ static void keepFrame(NSWindow *window, BOOL wasVisible, NSRect given) {
     if (!wasVisible && !NSEqualRects(window.frame, given)) [window setFrame:given display:YES];
 }
 
-void sp_window_show(void *handle) {
-    NSCAssert(NSThread.isMainThread, @"window show requires the UI thread");
-    NSWindow *window = (NSWindow *)handle;
+static void showWindow(NSWindow *window) {
     BOOL wasVisible = window.isVisible;
     NSRect given = window.frame;
     if (NSRunningApplication.currentApplication.active) {
@@ -163,4 +162,44 @@ void sp_window_show(void *handle) {
     }
     keepFrame(window, wasVisible, given);
     [window makeKeyWindow];
+}
+
+// The hold of the next show of a window that is not on screen (sp_window_show_hold_next): the call that the held show reports
+// to while no show took the hold, and the held window until its release.
+static void (^showHold)(void *window);
+static NSWindow *heldShow;
+
+void sp_window_show(void *handle) {
+    NSCAssert(NSThread.isMainThread, @"window show requires the UI thread");
+    NSWindow *window = (NSWindow *)handle;
+    if (showHold && !window.isVisible) {
+        void (^held)(void *) = showHold;
+        showHold = nil;
+        heldShow = [window retain];
+        held(window);
+        [held release];
+        return;
+    }
+    showWindow(window);
+}
+
+bool sp_window_show_hold_next(void (^held)(void *window)) {
+    NSCAssert(NSThread.isMainThread, @"window show hold requires the UI thread");
+    if (showHold || heldShow) return false;
+    showHold = [held copy];
+    return true;
+}
+
+void sp_window_show_release_held(void) {
+    NSCAssert(NSThread.isMainThread, @"window show release requires the UI thread");
+    [showHold release];
+    showHold = nil;
+    NSWindow *window = heldShow;
+    heldShow = nil;
+    if (!window) return;
+    showWindow(window);
+    // The order waits in the open Core Animation transaction of the thread until the run loop commits it; the commit sends it to the
+    // window server, so the window is listed with its bounds once the release returns.
+    [CATransaction flush];
+    [window release];
 }
