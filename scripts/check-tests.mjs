@@ -2763,7 +2763,7 @@ const FEATURE_LINKS = [
       { file: "scripts/check-host-callbacks.mjs", symbol: "export function createHostCallbacks(" },
     ],
     tests: [
-      { file: "native/darwin/tests/host_callbacks_test.m", id: "the native ABI declares 38 base and 8 diagnostic callbacks" },
+      { file: "native/darwin/tests/host_callbacks_test.m", id: "the native ABI declares 39 base and 8 diagnostic callbacks" },
       { file: "native/darwin/tests/host_callbacks_test.m", id: "the native owner copies the table and passes the owner and pointer arguments" },
       { file: "native/darwin/tests/host_callbacks_test.m", id: "the diagnostic owner copies its table and dispatches the registered callback" },
       { file: "native/darwin/tests/host_callbacks_test.m", id: "a rejected diagnostic replacement preserves its installed callback" },
