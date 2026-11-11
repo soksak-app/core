@@ -11,8 +11,7 @@
 #                         webview focus, view focus, document region, image region, release of a closed window, and window object count.
 #                         It does not activate the application
 #   make test-app-activation  runs the overlapping webview input check (baseline run and
-#                         registered run), the web inspector check, the OS event queue click and key check of the document region,
-#                         and the Korean input method composition check of the image region.
+#                         registered run), the web inspector check, and the Korean input method composition check of the image region.
 #                         It activates the application and takes the focus
 #   make benchmark        measures the calling thread cost of one record (the current text record and the event ring). It prints numbers and asserts nothing
 #   make benchmark-document
@@ -395,6 +394,7 @@ NATIVE_TESTS = observe_test \
   application_end_processes_test \
   webview_responsiveness_test \
   document_view_test \
+  document_view_test,--activation \
   document_viewport_marker_test \
   document_menu_key_equivalent_test \
   document_throttle_test \
@@ -505,8 +505,8 @@ test-capture-stop-intake: $(BUILD)/capture_stop_intake_test
 test-pressure: $(BUILD)/document_pressure_test
 	@$(BUILD)/document_pressure_test
 
-test-app-activation: $(BUILD)/webview_input_test $(BUILD)/webview_inspector_test $(BUILD)/window_fullscreen_test $(BUILD)/document_view_test $(BUILD)/image_region_test $(BUILD)/image_region_ime_test
-	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) webview_inspector_test window_fullscreen_test webview_input_test,--baseline webview_input_test document_view_test,--activation image_region_test,--activation image_region_ime_test
+test-app-activation: $(BUILD)/webview_input_test $(BUILD)/webview_inspector_test $(BUILD)/window_fullscreen_test $(BUILD)/image_region_test $(BUILD)/image_region_ime_test
+	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) webview_inspector_test window_fullscreen_test webview_input_test,--baseline webview_input_test image_region_test,--activation image_region_ime_test
 
 # Runs only the focused AppKit reference input-context readiness case and restores the outer input source and application.
 test-app-input-reference-readiness: $(BUILD)/input_reference_test

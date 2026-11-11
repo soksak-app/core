@@ -1,5 +1,7 @@
-// Checks navigation, history, status reporting, placement, and isolation of the document region web view. The default run does not activate the application and
-// confirms at the end that it was not activated. The --activation run activates the application and checks clicks and keys of the OS event queue.
+// Checks navigation, history, status reporting, placement, and isolation of the document region web view. No run activates the application, and
+// tests/support/no_activation.m confirms at the end that it was not activated. The --activation run makes the window key with the emulated activation
+// of sp_input_activate, which makes it the virtual key window of an application that answers as active (input_virtual.h), and checks clicks and keys
+// of the OS event queue.
 //
 // This process serves the test documents on a loopback address.
 #import <Cocoa/Cocoa.h>
@@ -10,6 +12,7 @@
 #import "document_view.h"
 #import "support/records.h"
 #import "input_inject.h"
+#import "input_virtual.h"
 #import "private/webkit.h"
 #import "webview_geometry.h"
 #import "window_facts.h"
@@ -170,13 +173,20 @@ static void settle(NSString *what, BOOL (^condition)(NSDictionary *state)) {
 
 static id closedViews[2];
 
-// tests/support/no_activation.m: this check activates the application in make test-app-activation.
-void sp_test_declare_activation(void);
+static BOOL activateAnswered;
+static sp_activate_result activateResult;
+
+static void activated(void *context, sp_activate_result result, const char *frontmost) {
+    (void)context;
+    (void)frontmost;
+    activateResult = result;
+    activateAnswered = YES;
+    eventWake();
+}
 
 int main(int argc, char **argv) { @autoreleasepool {
-    // activation activates the application and checks clicks and keys of the OS event queue. Used only by make test-app-activation.
+    // activation makes the window key with the emulated activation and checks clicks and keys of the OS event queue.
     BOOL activation = argc > 1 && strcmp(argv[1], "--activation") == 0;
-    if (activation) sp_test_declare_activation();
     [NSApplication sharedApplication];
     // The records that this test reads are info events, which the default policy refuses (docs/spec/logging.md#policy):
     // the policy that stores every level is set here, and the default policy is tested in event_ring_test.
@@ -311,8 +321,12 @@ int main(int argc, char **argv) { @autoreleasepool {
             evaluate(view, @"window.nativeClicks=0; document.getElementById('field').value=''; null");
             sp_document_set_event(document, event, NULL);
             nativeEvents = 0;
-            [NSApp activateIgnoringOtherApps:YES];
-            [window makeKeyAndOrderFront:nil];
+            activateAnswered = NO;
+            sp_input_activate(window, activated, NULL);
+            eventWait(@"the emulated activation answers", ^BOOL { return activateAnswered; });
+            check(activateResult == SP_ACTIVATE_DONE && sp_input_virtual_is(window) && window.isKeyWindow && NSApp.isActive,
+                [NSString stringWithFormat:@"the window becomes the virtual key window of an application that answers as active (activation %d, virtual %d)",
+                    activateResult, (int)sp_input_virtual_is(window)]);
             NSPoint windowPoint = NSMakePoint(25, NSHeight(window.contentView.bounds) - 35);
             NSEvent *down = [NSEvent mouseEventWithType:NSEventTypeLeftMouseDown location:windowPoint
                 modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
