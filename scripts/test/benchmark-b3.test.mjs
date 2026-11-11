@@ -35,7 +35,7 @@ const s1Goals = () => {
     { id: "G2-S1-footprint-before-pointer", goal: "G2", scenario: "S1", target: `${S1} STEP=pointer`, measurement: "applicationFootprintKb", unit: "KB", over: "median" },
     { id: "G3-S1-footprint", goal: "G3", scenario: "S1", target: S1, measurement: "applicationFootprintKb", unit: "KB", over: "median", relative: true },
     { id: "G8-S1-pointer-cpu", goal: "G8", scenario: "S1", target: `${S1} STEP=pointer`, measurement: "applicationCpuSeconds", unit: "s", over: "median", relative: true },
-    { id: "G8-S1-pointer-move-p90", goal: "G8", scenario: "S1", target: `${S1} STEP=pointer TRACE=frame-records`, measurement: "pointerMoveP90Ms", unit: "ms", over: "median", bound: { atMost: 8.33 } },
+    { id: "G8-S1-pointer-move-p90", goal: "G8", scenario: "S1", target: `${S1} STEP=pointer TRACE=frame-records`, measurement: "pointerMoveP90Ms", unit: "ms", over: "median", periods: { atMost: 1 } },
   ] };
   return readGoals(JSON.stringify(goals), "goals.json with S1");
 };
@@ -225,6 +225,7 @@ const policyOf = (state) => policyOfSetting(traceSettings(state)["diagnostics.lo
 
 /** The conditions that a target reports for a run on the display and the window of the run conditions in the trace state `state`. */
 const targetConditions = (state = 0) => ({
+  refreshRates: { main: 120 },
   refreshRate: 120, backingScale: 2, traceState: traceSettings(state)["diagnostics.performance"], logPolicy: policyOf(state), window: { width: 1200, height: 760 }, occluded: false, active: true,
 });
 
@@ -254,6 +255,7 @@ const BENCHMARKS = {
 
 /** The conditions that an e2e benchmark reports on the display and the window of the run conditions under the settings `settings`. */
 const settingsConditions = (settings) => ({
+  refreshRates: { main: 120 },
   refreshRate: 120, backingScale: 2, traceState: settings["diagnostics.performance"], logPolicy: policyOfSetting(settings["diagnostics.log"]).classes,
   window: { width: 1200, height: 760 }, occluded: false, active: true,
 });
@@ -286,12 +288,12 @@ test("a target writes its measurements under its own keys, and the run records e
   assert.deepEqual(run(missing, 2), ["make measure-app-usage STATE=S0 IDLE=1 INTERVAL=240 exited with code 2"], "a target with an error writes no output");
 });
 
-test("a target reports the conditions of its measurement, and a display, a window or a trace state other than the run gave fails the run", { timeout: 1000 }, (t) => {
+test("a target reports the conditions of its measurement, and a backing scale, a window or a trace state other than the run gave fails the run; a refresh rate is recorded, not required", { timeout: 1000 }, (t) => {
   const goals = fixtureGoals();
   const read = (target, conditions, trace = 0) => readTargetOutput(outputFile(t, { measurements: { frames: 0, hostCpuSeconds: 0.05, hostFootprintKb: 1 }, conditions }),
     { goals, scenario: target.includes("S1") ? "S1" : "S0", target, application: { host: "mygo" }, trace, code: 0, benchmarks: BENCHMARKS }).failures;
   const idle = "make measure-app-usage STATE=S0 IDLE=1 INTERVAL=240";
-  assert.deepEqual(read(idle, { ...targetConditions(), refreshRate: 60 }), [`${idle}: the display mode runs at 60 Hz, expected 120 Hz`]);
+  assert.deepEqual(read(idle, { ...targetConditions(), refreshRate: 60, refreshRates: { main: 60 } }), []);
   assert.deepEqual(read(idle, { ...targetConditions(), backingScale: 1 }), [`${idle}: the backing scale of the window is 1, expected 2`]);
   assert.deepEqual(read(idle, targetConditions(1)), [`${idle}: reports traceState true, expected false of TRACE=0`,
     `${idle}: reports logPolicy ${JSON.stringify(policyOf(1))}, expected ${JSON.stringify(policyOf(0))} of TRACE=0`]);
@@ -459,8 +461,8 @@ function fixtureContext(t, { refreshRate = 120, backingScale = 2, exit = false, 
   return { context, application, lines, targets, session };
 }
 
-test("a run of a fixture application fails on a display at another refresh rate or backing scale and quits the application, and no process of it remains", { timeout: 30000 }, async (t) => {
-  for (const [refreshRate, backingScale, expected] of [[60, 2, "the display mode runs at 60 Hz, expected 120 Hz"], [120, 1, "the backing scale of the window is 1, expected 2"]]) {
+test("a run of a fixture application fails on a display at another backing scale and quits the application, and no process of it remains", { timeout: 30000 }, async (t) => {
+  for (const [refreshRate, backingScale, expected] of [[120, 1, "the backing scale of the window is 1, expected 2"]]) {
     const { context, application, lines, targets, session } = fixtureContext(t, { refreshRate, backingScale });
     const records = await runUnit({ scenarios: ["S0"], run: 1, application }, context);
     assert.deepEqual(records.map((record) => record.failures), [[expected]], lines.join("\n"));

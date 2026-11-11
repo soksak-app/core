@@ -19,7 +19,7 @@ test("a bound of the performance goals is read by the constant of its value", { 
   const path = goalsFile(t, [
     { id: "G6-S6-idle-tab-cost", constant: "IDLE_TAB_BOUND_KB", bound: { atMost: 51200 } },
     { id: "G3-S10-host-growth", constant: "SPLIT_LOAD_GROWTH_BOUND_KB", bound: { below: 131072 } },
-    { id: "G8-S5-drag-frame-p90", bound: { atMost: 8.33 } },
+    { id: "G8-S5-drag-frame-p90", periods: { atMost: 1 } },
   ]);
   assert.equal(performanceGoalBound("IDLE_TAB_BOUND_KB", "atMost", path), 51200);
   assert.equal(performanceGoalBound("SPLIT_LOAD_GROWTH_BOUND_KB", "below", path), 131072);

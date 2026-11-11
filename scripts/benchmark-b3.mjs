@@ -14,8 +14,8 @@
 // fails the run when the sidecar releases that it installed differ from the sidecars of the baseline record, so all five run the same
 // sidecar builds, and a baseline host also when its plugin releases differ from the plugins of the record.
 // S0b runs in the application that S3 leaves. A run starts only while swap use is below its share of the swap total and
-// fseventsd uses less than its share of a core, and fails when the display mode or the backing scale of a window differs from the run
-// conditions of docs/spec/performance-goals.json. It runs the targets of each value of the scenario in the order of the goals, the
+// fails the run when the backing scale of a window differs from the run
+// conditions of docs/spec/performance-goals.json; the refresh rate of each measurement is the one its window reports, so no display mode is required. It runs the targets of each value of the scenario in the order of the goals, the
 // STEP=pointer readings last, each in the checkout of its application with `APP`, `CONFIG`, `CONFIG_DIR`, `SOK`, `PLUGINS` (the
 // installed surface plugins), `B3_OUT` and, for a target that takes the trace state of the run, `TRACE`, and with the environment of
 // the window checks. Before the first target it activates the first window through input.pointer, because a window opens behind the front
@@ -37,7 +37,7 @@
 // other run variables. It writes into that file one JSON object, whose form writeB3Out and readB3Out of scripts/b3-out.mjs hold and
 // through which the run reads it:
 //   {"measurements": {<key>: <number> | "passed" | "failed", ...},
-//    "conditions": {"refreshRate": <Hz>, "backingScale": <scale>, "traceState": <diagnostics.performance over the measured interval>,
+//    "conditions": {"refreshRate": <Hz of the window of the state, or null>, "refreshRates": {<window>: <Hz or null>, ...}, "backingScale": <scale>, "traceState": <diagnostics.performance over the measured interval>,
 //                   "logPolicy": {<class>: <level>, ...}, "window": {"width": <points>, "height": <points>},
 //                   "occluded": <whether that window is covered>, "active": <whether its application is active>}}
 // The keys of "measurements" are the flat camelCase names of the measurements of the target, which its B3_MEASUREMENTS declares; a
@@ -471,7 +471,7 @@ export function readTargetOutput(file, { goals, scenario, target, application, t
   return { values, conditions, failures };
 }
 
-/** The refresh rate and the backing scale of the windows of the application of `configDir`, which every window shares. */
+/** The refresh rate of the first window, the window of the state, and the backing scale that the windows of the application of `configDir` share. Each window can move between displays, so their refresh rates may differ. */
 export async function readDisplay(configDir) {
   const client = await connect({ configDir });
   const displays = [];
@@ -485,8 +485,8 @@ export async function readDisplay(configDir) {
   }
   if (displays.length === 0) throw new Error('the application lists no window');
   const [first] = displays;
-  if (displays.some((display) => display.refreshRate !== first.refreshRate || display.backingScale !== first.backingScale)) {
-    throw new Error(`the windows of the application report different displays: ${JSON.stringify(displays)}`);
+  if (displays.some((display) => display.backingScale !== first.backingScale)) {
+    throw new Error(`the windows of the application report different backing scales: ${JSON.stringify(displays)}`);
   }
   return first;
 }

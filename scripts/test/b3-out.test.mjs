@@ -11,18 +11,19 @@ const POLICY = { lifecycle: "error", input: "error", call: "debug", io: "error",
 /** A host.window reply of the window `window` with the members that the conditions read; the caller adds the window id it read the reply for. */
 const reply = (window, members = {}) => ({ window, refreshRate: 120, scale: 2, content: { width: 1200, height: 760 }, pageProcess: null, occluded: false, active: true, ...members });
 
-test("the conditions of a run are the refresh rate and the backing scale that every window shares, the content size of the first window, the performance switch and the policy", () => {
+test("the conditions of a run are the refresh rate of the window of the state, the refresh rate that every window reported, the backing scale that every window shares, the content size of the first window, the performance switch and the policy", () => {
   assert.deepEqual(b3Conditions({ windows: [reply("w1")], performance: true, policy: POLICY }),
-    { refreshRate: 120, backingScale: 2, traceState: true, logPolicy: POLICY, window: { width: 1200, height: 760 }, occluded: false, active: true });
+    { refreshRate: 120, refreshRates: { w1: 120 }, backingScale: 2, traceState: true, logPolicy: POLICY, window: { width: 1200, height: 760 }, occluded: false, active: true });
   const two = b3Conditions({ windows: [reply("w1"), reply("w2", { content: { width: 600, height: 400 } })], performance: false, policy: POLICY });
   assert.equal(two.traceState, false);
   assert.deepEqual(two.window, { width: 1200, height: 760 }, "the window of the conditions is the first window, the window of the state");
   assert.throws(() => b3Conditions({ windows: [reply("w1"), reply("w2", { scale: 1 })], performance: false, policy: POLICY }),
-    /window w2 reports refreshRate 120 and scale 1, not refreshRate 120 and scale 2 of window w1/);
-  assert.throws(() => b3Conditions({ windows: [reply("w1"), reply("w2", { refreshRate: 60 })], performance: false, policy: POLICY }),
-    /window w2 reports refreshRate 60 and scale 2, not refreshRate 120 and scale 2 of window w1/);
-  assert.throws(() => b3Conditions({ windows: [reply("w1", { refreshRate: null })], performance: false, policy: POLICY }),
-    /window w1 reports the refresh rate null, so it is on no screen/);
+    /window w2 reports scale 1, not scale 2 of window w1/);
+  const mixed = b3Conditions({ windows: [reply("w1"), reply("w2", { refreshRate: 60 })], performance: false, policy: POLICY });
+  assert.equal(mixed.refreshRate, 120, "the refresh rate of the conditions is that of the window of the state, which the judge compares");
+  assert.deepEqual(mixed.refreshRates, { w1: 120, w2: 60 }, "every window records the refresh rate it reported, because a window can move between displays");
+  const offScreen = b3Conditions({ windows: [reply("w1", { refreshRate: null })], performance: false, policy: POLICY });
+  assert.equal(offScreen.refreshRate, null, "a window on no screen records a null rate, which the judge fails for a period bound");
   assert.throws(() => b3Conditions({ windows: [reply("w1", { scale: 0 })], performance: false, policy: POLICY }),
     /window w1 reports scale 0, not a backing scale/);
   assert.throws(() => b3Conditions({ windows: [{ refreshRate: 120, scale: 2, content: { width: 1200, height: 760 } }], performance: false, policy: POLICY }),
@@ -71,10 +72,10 @@ test("the reader returns what the writer wrote and refuses a file outside the fo
   refused({ measurements: { a: 1 }, conditions: { ...conditions, traceState: 0 } }, /B3 condition traceState must be true or false, not 0/);
   refused({ measurements: { a: 1 }, conditions: { ...conditions, backingScale: 0 } }, /B3 condition backingScale must be a positive number, not 0/);
   refused({ measurements: { a: 1 }, conditions: { ...conditions, screen: 1 } },
-    /B3 conditions must be refreshRate, backingScale, traceState, logPolicy, window, occluded, active, not refreshRate, backingScale, traceState, logPolicy, window, occluded, active, screen/);
+    /B3 conditions must be refreshRate, refreshRates, backingScale, traceState, logPolicy, window, occluded, active, not refreshRate, refreshRates, backingScale, traceState, logPolicy, window, occluded, active, screen/);
   const { logPolicy, ...withoutPolicy } = conditions;
   refused({ measurements: { a: 1 }, conditions: withoutPolicy },
-    /B3 conditions must be refreshRate, backingScale, traceState, logPolicy, window, occluded, active, not refreshRate, backingScale, traceState, window, occluded, active/);
+    /B3 conditions must be refreshRate, refreshRates, backingScale, traceState, logPolicy, window, occluded, active, not refreshRate, refreshRates, backingScale, traceState, window, occluded, active/);
   refused({ measurements: { a: 1 }, conditions: { ...conditions, logPolicy: { ...POLICY, frame: "loud" } } },
     /B3 condition logPolicy: .*the level "loud" of the class frame is not one of off, error, warn, info, debug, trace/);
   refused({ measurements: { a: 1 }, conditions: { ...conditions, logPolicy: { frame: "debug" } } },
