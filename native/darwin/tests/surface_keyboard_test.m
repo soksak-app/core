@@ -422,6 +422,8 @@ int main(void) { @autoreleasepool {
     NSWindow *closing = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 800, 500)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
     closing.releasedWhenClosed = NO;
+    // A press reaches only a window on the screen; the window stands behind the windows of the person until it closes.
+    [closing orderBack:nil];
     WKWebView *closingMain = [[[WKWebView alloc] initWithFrame:closing.contentView.bounds] autorelease];
     [closing.contentView addSubview:closingMain];
     void *closingObservation = sp_window_observe_responder(closing, ^{});
@@ -446,8 +448,9 @@ int main(void) { @autoreleasepool {
     check(sp_input_pointer(closing, 600, 250, 1, 0, 0, 0) == SP_INPUT_DELIVERED, "a press in the second window is delivered");
     sp_surface_focus(ownedHost);
     check(closing.firstResponder == otherPage, "the press keeps the keyboard where it is");
+    // The close ends the open press, and the closed window, no longer shown, refuses the release.
     [closing close];
-    sp_input_pointer(closing, 600, 250, 3, 0, 0, 0);
+    check(sp_input_pointer(closing, 600, 250, 3, 0, 0, 0) == SP_INPUT_REJECTED, "the release in the closed window is refused");
     sp_surface_press_released(closing);
     check(closing.firstResponder == otherPage, "a call that waited for the release of a press does not move in a closed window");
     sp_surface_focus(ownedHost);
