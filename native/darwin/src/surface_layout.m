@@ -392,12 +392,15 @@ static void sendEventAfterLayout(id application, SEL selector, NSEvent *event) {
     // Every press and key event that reaches the application, a synthetic one sent through -[NSApplication sendEvent:] included,
     // is told to each observer of the actions of the user before any monitor, gate or view sees it.
     // The end of the layout hold is one of these observers. When input of the window of the event waits for the hold, the event
-    // takes its place behind that input, which the end of the hold gives back in its order.
+    // takes its place behind that input, which the end of the hold gives back in its order. While a release of the window returns,
+    // the event is in its turn, as holdInput reads it: a returned call sends its event in its turn, ahead of the input that arrived
+    // during the return and waits.
     // An event that a release gave back comes through this method again; its action was already told, so it is told once.
     BOOL action = endsHold(event) && !takeReturnedAction(event);
     if (action) {
         NSWindow *window = event.window;
-        BOOL behind = holdOpen && window && !passesHold(event) && inputHeld(window);
+        BOOL behind = holdOpen && window && !passesHold(event) && inputHeld(window)
+            && ![returning containsObject:[NSValue valueWithPointer:window]];
         if (behind) keepInput(heldPiece(window, event, nil, NO, NO));
         for (void (^observer)(NSEvent *) in [[actionObservers copy] autorelease]) observer(event);
         if (behind) return;
