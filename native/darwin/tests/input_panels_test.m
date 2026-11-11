@@ -110,7 +110,8 @@ static NSString *eventKind(NSEvent *event) {
     switch (event.type) {
         case NSEventTypeLeftMouseDown: return @"left down";
         case NSEventTypeLeftMouseUp: return @"left up";
-        case NSEventTypeKeyDown: return [@"key down " stringByAppendingString:event.charactersIgnoringModifiers ?: @""];
+        case NSEventTypeKeyDown: return [NSString stringWithFormat:@"key down %hu flags %#lx", event.keyCode,
+            (unsigned long)(event.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask)];
         case NSEventTypeKeyUp: return @"key up";
         default: return nil;
     }
@@ -156,9 +157,12 @@ static void installTrace(void) {
     appKitWindowKeyEquivalent = (BOOL (*)(id, SEL, NSEvent *))method_setImplementation(
         class_getInstanceMethod(NSWindow.class, @selector(performKeyEquivalent:)), (IMP)traceWindowKeyEquivalent);
 }
+// A key with no stated text types the character of the key in the input source of the person, which need not be a latin one, so a
+// letter states its text, as the endpoint does for a typed letter.
 static void key(NSWindow *window, const char *name, NSString *what) {
-    sp_input_result down = sp_input_key(window, name, NULL, 0, true);
-    sp_input_result up = sp_input_key(window, name, NULL, 0, false);
+    const char *text = strlen(name) == 1 ? name : NULL;
+    sp_input_result down = sp_input_key(window, name, text, 0, true);
+    sp_input_result up = sp_input_key(window, name, text, 0, false);
     note([NSString stringWithFormat:@"%@: key %s down %s, up %s", what, name, resultText(down), resultText(up)]);
 }
 
@@ -278,6 +282,8 @@ int main(void) { @autoreleasepool {
     NSModalResponse response = 0;
     NSAlert *alert = showAlert(window, &response);
     note([@"alert sheet: " stringByAppendingString:panelFacts(alert.window)]);
+    note([NSString stringWithFormat:@"alert sheet: the window server order of the application holds the sheet %d",
+        [[NSWindow windowNumbersWithOptions:0] containsObject:@(alert.window.windowNumber)]]);
     click(window, pointOf(window, alert.buttons[0]), 0, @"alert sheet");
     settle(@"the press of the alert is handled");
     check(response == NSAlertFirstButtonReturn,
@@ -286,6 +292,10 @@ int main(void) { @autoreleasepool {
 
     // Return presses the default button of the alert sheet, and Escape its cancel button.
     alert = showAlert(window, &response);
+    NSButton *first = alert.buttons[0];
+    note([NSString stringWithFormat:@"alert sheet: first button key equivalent %@ modifiers %lu, default button %@, first responder %@",
+        [first.keyEquivalent isEqualToString:@"\r"] ? @"Return" : first.keyEquivalent, (unsigned long)first.keyEquivalentModifierMask,
+        alert.window.defaultButtonCell.title, alert.window.firstResponder.class]);
     key(window, "Enter", @"alert sheet");
     settle(@"the key of the alert is handled");
     check(response == NSAlertFirstButtonReturn,
