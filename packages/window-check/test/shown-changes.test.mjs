@@ -1,7 +1,7 @@
 // The judgment of a recording by the changes of the screen that its check asked for (judgeShownChanges) and the clock that a
 // check reads before it asks for a change (owe).
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -10,7 +10,8 @@ import { judgeShownChanges, owe } from "../app.mjs";
 
 /**
  * A stop reply whose recording holds complete frames displayed at `frames` and display-link callbacks at `mainThread` (ms on the
- * clock of the recording, a timebase of nanoseconds), with the transactions `layouts`.
+ * clock of the recording, a timebase of nanoseconds), with the transactions `layouts`. A callback is its time, which runs 0.5ms
+ * after its refresh, or {at, refresh}; the display refreshes every 8.333ms.
  */
 function stopReply(t, { frames, mainThread = [], layouts = [] }) {
   const directory = mkdtempSync(join(tmpdir(), "soksak-shown-changes-"));
@@ -21,8 +22,12 @@ function stopReply(t, { frames, mainThread = [], layouts = [] }) {
     machTimebaseDenominator: 1 })).join("\n") + "\n");
   const displayLink = join(directory, "display-link.json");
   writeFileSync(displayLink, JSON.stringify({ state: "available", reason: "", omittedObservations: 0,
-    observations: mainThread.map((ms, index) => ({ sequence: index + 1, callbackTime: String(Math.round(ms * 1e6)),
-      machTimebaseNumerator: 1, machTimebaseDenominator: 1 })) }));
+    observations: mainThread.map((callback, index) => {
+      const { at, refresh = at - 0.5 } = typeof callback === "number" ? { at: callback } : callback;
+      return { sequence: index + 1, callbackTime: String(Math.round(at * 1e6)), callbackMediaTime: at / 1000,
+        timestamp: refresh / 1000, targetTimestamp: (refresh + 8.333) / 1000, duration: 0.008333, machTimebaseNumerator: 1,
+        machTimebaseDenominator: 1 };
+    }) }));
   const longestGap = Math.max(...frames.slice(1).map((ms, i) => ms - frames[i]));
   return { frames: directory, callbackStatus, displayLink, count: frames.length, limited: false, longestGap, layouts };
 }
@@ -35,17 +40,47 @@ test("a recording whose changes are each shown within the limit passes however l
   judgeShownChanges(stopped, [{ from: 200, to: 238 }, { from: 610, to: 648 }]);
 });
 
+// The main thread runs the callback of the refresh at 42ms only at 120ms: the main thread was busy.
 test("a change that the application shows later than the limit fails as a defect of the application", (t) => {
   const stopped = stopReply(t, {
     frames: [0, 8, 16, 230],
-    mainThread: [2, 10, 18, 26, 34, 120, 128, 136, 144, 152, 160, 168, 176, 184, 192, 200, 208, 216, 224],
-    layouts: [{ ticket: 4, begun: 22, requested: 23, presented: null, committed: 232 }],
+    mainThread: [2, 10, 18, 26, 34, { at: 120, refresh: 42 }, 128, 136, 144, 152, 160, 168, 176, 184, 192, 200, 208, 216, 224],
+    layouts: [{ ticket: 4, begun: 22, requested: 23, presented: 95, committed: 100.25 },
+      { ticket: 5, begun: 101, requested: 102, presented: null, committed: 232 }],
   });
   assert.throws(() => judgeShownChanges(stopped, [{ from: 20 }], { what: "click" }), new RegExp("^Error: the application did " +
     "not show click 1 of 1 \\(asked at 20\\.0ms on the clock of the recording\\) without waiting longer than 100ms for a frame: " +
-    "after 20\\.0ms the next frame was displayed 210ms later, at 230\\.0ms; in that time the check asked for 1 clicks, the host began 1 layouts \\[4\\] and committed 0 \\[\\], and the " +
-    "main thread of the host ran no display-link callback for 86ms of it; recording .*soksak-shown-changes-[^;]*; 1-minute " +
-    "load average \\d+\\.\\d\\d$"));
+    "after 20\\.0ms the next frame was displayed 210ms later, at 230\\.0ms; in that time the check asked for 1 clicks, the host " +
+    "began 2 layouts \\[4,5\\] and committed 1 \\[4 at 100\\.3ms\\], and the display link of the window was silent for longer " +
+    "than two refreshes once: after its callback at 34\\.0ms the main thread ran the display-link callback 78\\.0ms after its " +
+    "refresh, at 120\\.0ms \\(busy main thread\\); recording .*soksak-shown-changes-[^;]*; 1-minute load average \\d+\\.\\d\\d$"));
+});
+
+// The next callback after 34ms runs 0.5ms after its refresh at 119.5ms: no refresh came in between, whatever the main thread did.
+test("a silence of the display link in which no refresh reached the window is told from a busy main thread", (t) => {
+  const stopped = stopReply(t, { frames: [0, 8, 16, 230], mainThread: [2, 10, 18, 26, 34, 120, 128, 136, 224] });
+  assert.throws(() => judgeShownChanges(stopped, [{ from: 20 }]), new RegExp("and committed 0 \\[\\], and the display link of " +
+    "the window was silent for longer than two refreshes 2 times: after its callback at 34\\.0ms no display refresh reached the " +
+    "window for 86ms \\(the display link received no vsync\\); after its callback at 136\\.0ms no display refresh reached the " +
+    "window for 88ms \\(the display link received no vsync\\); recording "));
+});
+
+test("a display link that calls back at every refresh of the wait is named so", (t) => {
+  const mainThread = Array.from({ length: 28 }, (_, i) => 2 + 8 * i);
+  const stopped = stopReply(t, { frames: [0, 8, 16, 230], mainThread });
+  assert.throws(() => judgeShownChanges(stopped, [{ from: 20 }]),
+    /and the display link of the window called back at every refresh of it; recording /);
+});
+
+// The layouts of a drag come with its reply and not with the stop reply, so the recording keeps those that it was judged by.
+test("a judged recording keeps the layouts that it was judged by", (t) => {
+  const layouts = [{ ticket: 9, begun: 3, requested: 4, presented: 6, committed: 7 }];
+  const stopped = stopReply(t, { frames: [0, 8, 16], layouts: [] });
+  judgeShownChanges(stopped, [{ from: 2 }], { layouts });
+  assert.deepEqual(JSON.parse(readFileSync(join(stopped.frames, "layouts.json"), "utf8")), { layouts });
+  const failed = stopReply(t, { frames: [0, 300], layouts });
+  assert.throws(() => judgeShownChanges(failed, [{ from: 2 }]));
+  assert.deepEqual(JSON.parse(readFileSync(join(failed.frames, "layouts.json"), "utf8")), { layouts });
 });
 
 // A transition that the window shows through several frames: its first frame comes 20ms after the request, and then the

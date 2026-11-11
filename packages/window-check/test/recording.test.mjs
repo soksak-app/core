@@ -257,6 +257,7 @@ function gapSession(t, { frames: times, ticks, layouts = [], mainThread = [] }) 
   const displayLink = join(frames, "display-link.json");
   writeFileSync(displayLink, JSON.stringify({ state: "available", reason: "", omittedObservations: 0,
     observations: mainThread.map((ms, index) => ({ sequence: index + 1, callbackTime: String(Math.round(ms * 1e6)),
+      callbackMediaTime: ms / 1000, timestamp: (ms - 0.5) / 1000, targetTimestamp: (ms + 7.833) / 1000, duration: 0.008333,
       machTimebaseNumerator: 1, machTimebaseDenominator: 1 })) }));
   const longestGap = Math.max(...times.slice(1).map((ms, i) => ms - times[i]));
   s.get = async () => ({ active: false, occluded: false });
@@ -299,8 +300,9 @@ test("a drag step that waits longer than the limit for a frame fails and names w
   await assert.rejects(drag(s, gapPlan, { capture: true }), new RegExp("^Error: the application did not show drag step 13 of 38 " +
     "\\(asked at 100\\.0ms on the clock of the recording\\) without waiting longer than 100ms for a frame: after 100\\.0ms the " +
     "next frame was displayed 160ms later, at 260\\.0ms; " +
-    "in that time the check asked for 20 drag steps, the host began 2 layouts \\[7,8\\] and committed 1 \\[7\\], and the " +
-    "main thread of the host ran no display-link callback for 120ms of it; recording .*drag-1; 1-minute load average " +
+    "in that time the check asked for 20 drag steps, the host began 2 layouts \\[7,8\\] and committed 1 \\[7 at 150\\.0ms\\], and " +
+    "the display link of the window was silent for longer than two refreshes once: after its callback at 114\\.0ms no display " +
+    "refresh reached the window for 120ms \\(the display link received no vsync\\); recording .*drag-1; 1-minute load average " +
     "\\d+\\.\\d\\d$"));
 });
 

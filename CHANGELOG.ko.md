@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F755: 늦게 보인 변화로 window check 가 실패하면 기다림 안의 display link 침묵을 display 의 refresh 주기로 바쁜 main thread 와 창에 오지 않은 display refresh 로 나눠 적고, 기다림 안에서 commit 한 각 layout 의 commit 시각을 적는다. 녹화는 그 layout 을 `layouts.json` 에 남긴다.
 - F757: mygo 워크벤치의 frame 은 앞선 frame 이 열고 포기한 layout 의 cancel 에 호스트가 답하지 않은 동안 layout 을 열지 않으므로, 키보드 call 다음 frame 이 더는 preparation 이 넘겨받지 않은 layout 으로 실패하지 않는다. cancel 의 답 다음 frame 이 line 을 배치한다.
 - F733: mygo 워크벤치의 library 는 project card 를 scroll container 를 채우는 grid 에 배치하므로, classic scroller style 에서 card 가 bar 에 자리를 주고, 각 preview 의 pane 은 그려진 위치와 `core.library` 가 알리는 위치 모두 좁아진 card 가 배치하는 곳에 선다.
 - F754: child 를 일부러 crash 시키는 check 는 child 의 crash exception 을 처리해 시스템이 crash report 를 쓰지 않게 하고, crash 파일 또는 error 줄, `SIGABRT` 종료, 응답한 exception 으로 판정한다. 시스템 crash report 감시는 지웠고, Go check 는 cgo 유무 모두에서 build 되며, `make test-hosts` 의 Rust run 은 두 Rust check 가 필요로 하는 `host-test` 를 켠다.

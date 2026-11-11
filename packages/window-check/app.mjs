@@ -1325,7 +1325,44 @@ function displayLinkTimes(path) {
   if (typeof path !== "string") return { unavailable: `missing from the stop reply (displayLink ${JSON.stringify(path)})` };
   const trace = JSON.parse(readFileSync(path, "utf8"));
   if (trace.state !== "available") return { unavailable: `${trace.state}${trace.reason ? ` (${trace.reason})` : ""}` };
-  return { times: trace.observations.map((row) => machMs(row.callbackTime, row.machTimebaseNumerator, row.machTimebaseDenominator)) };
+  return {
+    callbacks: trace.observations.map((row) => {
+      if (![row.callbackMediaTime, row.timestamp, row.duration].every(Number.isFinite) || !(row.duration > 0)) {
+        throw new Error(`the display-link observation ${row.sequence} of ${path} has no refresh time, callback media time ` +
+          "and refresh period, so its lateness cannot be told");
+      }
+      return { at: machMs(row.callbackTime, row.machTimebaseNumerator, row.machTimebaseDenominator),
+        late: (row.callbackMediaTime - row.timestamp) * 1000, period: row.duration * 1000 };
+    }),
+  };
+}
+
+/**
+ * The silences of the display link of a window within the wait from `at` to `end` (ms, Infinity for a wait without its frame):
+ * each time between two of its callbacks, or after its last callback, that overlaps the wait and is longer than two refresh
+ * periods of the display. A silence whose closing callback ran at least two refresh periods after its refresh tells a busy main
+ * thread; a silence whose closing callback ran sooner tells that no display refresh reached the window. The refresh period is
+ * the one that the display link reports, so no rate is assumed.
+ */
+function displayLinkSilences(callbacks, at, end) {
+  const told = [];
+  callbacks.forEach((callback, index) => {
+    const next = callbacks[index + 1];
+    if (callback.at >= end || (next ? next.at : Infinity) <= at) return;
+    if (!next) {
+      if (end - callback.at > 2 * callback.period) {
+        told.push(`after its callback at ${callback.at.toFixed(1)}ms the recording holds no display-link callback`);
+      }
+      return;
+    }
+    if (next.at - callback.at <= 2 * next.period) return;
+    told.push(next.late >= 2 * next.period
+      ? `after its callback at ${callback.at.toFixed(1)}ms the main thread ran the display-link callback ` +
+        `${next.late.toFixed(1)}ms after its refresh, at ${next.at.toFixed(1)}ms (busy main thread)`
+      : `after its callback at ${callback.at.toFixed(1)}ms no display refresh reached the window for ` +
+        `${(next.at - callback.at).toFixed(0)}ms (the display link received no vsync)`);
+  });
+  return told;
 }
 
 /**
@@ -1370,10 +1407,12 @@ function longestWait(changes, frames) {
  * final state, no wait is longer than `limit` (ms, GAP by default). The times outside the changes owe no frame, so the window
  * may stay unchanged there and the longest gap of the whole recording does not judge it. A longer wait is a defect of the
  * application, which did not show the change: the failure names the change, the wait, the changes asked for in it, the layouts
- * that the host began and committed in it (`layouts`, by default those of the stop reply) and the longest time in which the main
- * thread of the host ran no display-link callback, so it tells a main thread that stopped from a transaction that waited for its
- * commit and from committed layouts whose frames did not come. `what` names one change. A recording in which the check asked
- * for no change owes no frame.
+ * that the host began in it and the commit time of each layout committed in it (`layouts`, by default those of the stop reply),
+ * and each silence of the display link of the window in it, told as a busy main thread or as refreshes that did not reach the
+ * window, so it tells a main thread that stopped from a transaction that waited for its commit and from committed layouts whose
+ * frames did not come. The recording keeps the layouts that it was judged by in layouts.json, because the layouts of a drag
+ * come with its reply and not with the stop reply. `what` names one change. A recording in which the check asked for no change
+ * owes no frame.
  */
 export function judgeShownChanges(stopped, changes, { layouts = stopped.layouts, what = "change", limit = GAP } = {}) {
   if (!Array.isArray(changes) || !changes.every((change) => Number.isFinite(change?.from)
@@ -1381,23 +1420,26 @@ export function judgeShownChanges(stopped, changes, { layouts = stopped.layouts,
     throw new Error(`the recording has no times of the changes that it shows (${what} times ${JSON.stringify(changes)}), so ` +
       "its frames cannot be judged against them");
   }
+  writeFileSync(join(stopped.frames, "layouts.json"), JSON.stringify({ layouts: layouts ?? [] }));
   const worst = longestWait(changes, recordedFrameTimes(stopped.callbackStatus));
   if (worst === null || worst.wait <= limit) return;
   const change = changes[worst.index - 1];
   const end = worst.next ?? Infinity;
   const asked = changes.filter(({ from }) => from >= worst.at && from < end).length;
   const inSpan = (stage) => (layouts ?? []).filter((layout) => typeof layout[stage] === "number"
-    && layout[stage] >= worst.at && layout[stage] < end).map((layout) => layout.ticket);
-  const begun = inSpan("begun");
-  const committed = inSpan("committed");
+    && layout[stage] >= worst.at && layout[stage] < end);
+  const begun = inSpan("begun").map((layout) => layout.ticket);
+  const committed = inSpan("committed").map((layout) => `${layout.ticket} at ${layout.committed.toFixed(1)}ms`);
   const displayLink = displayLinkTimes(stopped.displayLink);
   let mainThread;
   if (displayLink.unavailable) {
     mainThread = `the display-link observation of the main thread is ${displayLink.unavailable}`;
   } else {
-    const points = [worst.at, ...displayLink.times.filter((at) => at > worst.at && at < end), ...(worst.next === null ? [] : [worst.next])];
-    const silence = Math.max(0, ...points.slice(1).map((at, i) => at - points[i]));
-    mainThread = `the main thread of the host ran no display-link callback for ${silence.toFixed(0)}ms of it`;
+    const silences = displayLinkSilences(displayLink.callbacks, worst.at, end);
+    mainThread = silences.length === 0
+      ? "the display link of the window called back at every refresh of it"
+      : `the display link of the window was silent for longer than two refreshes ` +
+        `${silences.length === 1 ? "once" : `${silences.length} times`}: ${silences.join("; ")}`;
   }
   const final = change.to === undefined ? "" : `, its final state displayed at ${change.to.toFixed(1)}ms`;
   const shown = worst.next === null
@@ -1406,7 +1448,7 @@ export function judgeShownChanges(stopped, changes, { layouts = stopped.layouts,
   throw new Error(`the application did not show ${what} ${worst.index} of ${changes.length} (asked at ${change.from.toFixed(1)}ms` +
     `${final} on the clock of the recording) without waiting longer than ${limit}ms for a frame: ${shown}; in that time the ` +
     `check asked for ${asked} ${what}s, the host began ${begun.length} layouts ${JSON.stringify(begun)} and committed ` +
-    `${committed.length} ${JSON.stringify(committed)}, and ${mainThread}; recording ${stopped.frames}; 1-minute load average ` +
+    `${committed.length} [${committed.join(", ")}], and ${mainThread}; recording ${stopped.frames}; 1-minute load average ` +
     `${loadavg()[0].toFixed(2)}`);
 }
 
