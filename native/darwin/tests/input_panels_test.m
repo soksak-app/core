@@ -17,6 +17,7 @@
 #import "input_inject.h"
 #import "input_virtual.h"
 #import "support/event_wait.h"
+#import "support/records.h"
 #import "support/temporary_folder.h"
 
 static int failures;
@@ -246,6 +247,51 @@ static void whileTracking(NSMenu *menu, NSString *what, BOOL *tracked, void (^at
         }];
 }
 
+// A delegate of a save panel that refuses the name (panel:userEnteredFilename:confirmed:) or the URL
+// (panel:validateURL:error:) when it is told to, and counts what it was asked.
+@interface RefusingPanelDelegate : NSObject <NSOpenSavePanelDelegate>
+@property BOOL refuseName, refuseURL;
+@property NSInteger names, urls;
+@end
+
+@implementation RefusingPanelDelegate
+- (NSString *)panel:(id)sender userEnteredFilename:(NSString *)filename confirmed:(BOOL)okFlag {
+    self.names++;
+    return self.refuseName ? nil : filename;
+}
+- (BOOL)panel:(id)sender validateURL:(NSURL *)url error:(NSError **)outError {
+    self.urls++;
+    if (!self.refuseURL) return YES;
+    if (outError) {
+        *outError = [NSError errorWithDomain:@"input_panels_test" code:1
+            userInfo:@{NSLocalizedDescriptionKey: @"the test delegate refuses this URL"}];
+    }
+    return NO;
+}
+@end
+
+// Replaces the name of the save panel over window by Backspace for each of its characters and text through input.text, and
+// answers whether every input was delivered.
+static BOOL typeName(NSWindow *window, NSSavePanel *panel, NSString *name) {
+    BOOL taken = YES;
+    for (NSUInteger i = panel.nameFieldStringValue.length; i > 0; i--) {
+        taken = sp_input_key(window, "Backspace", NULL, 0, true) == SP_INPUT_DELIVERED
+            && sp_input_key(window, "Backspace", NULL, 0, false) == SP_INPUT_DELIVERED && taken;
+    }
+    if (name.length) taken = sp_input_text(window, SP_INPUT_TEXT_INSERT, name.UTF8String, 0, 0, -1, 0) == SP_INPUT_DELIVERED && taken;
+    return taken && [panel.nameFieldStringValue isEqualToString:name];
+}
+
+// Gives Return to the save panel over window, which must refuse it, and answers the records of the key.
+static NSString *refusedReturn(NSWindow *window, NSString *what) {
+    __block sp_input_result down = SP_INPUT_DELIVERED;
+    NSString *records = capturedRecords(^{ down = sp_input_key(window, "Enter", NULL, 0, true); });
+    sp_input_key(window, "Enter", NULL, 0, false);
+    check(down == SP_INPUT_REJECTED, [NSString stringWithFormat:@"Return of a save panel with %@ is refused (result %s)", what,
+        resultText(down)]);
+    return records;
+}
+
 int main(void) { @autoreleasepool {
     setvbuf(stdout, NULL, _IOLBF, 0);
     [NSUserDefaults.standardUserDefaults registerDefaults:@{@"NSMenuTrackingLoggingEnabled": @YES}];
@@ -362,12 +408,14 @@ int main(void) { @autoreleasepool {
     NSString *folder = temporaryFolder(@"soksak-input-panels-");
 
     // A save panel sheet: Backspace removes the end of its name, a stated text and typed letters append to it, and Return saves
-    // under the name in the folder of the panel, as a person's Save does.
+    // under the name in the folder of the panel, as a person's Save does. A name that the service of the panel does not take
+    // and the name of an existing file are refused, and the panel stays.
     NSSavePanel *save = [NSSavePanel savePanel];
     save.directoryURL = [NSURL fileURLWithPath:folder];
     save.nameFieldStringValue = @"untitled";
     __block NSModalResponse saved = NOT_ENDED;
-    [save beginSheetModalForWindow:window completionHandler:^(NSModalResponse returned) { saved = returned; }];
+    __block int completions = 0;
+    [save beginSheetModalForWindow:window completionHandler:^(NSModalResponse returned) { saved = returned; completions++; }];
     eventWait(@"the save panel sheet shows", ^BOOL { return window.attachedSheet != nil && window.attachedSheet.isVisible; });
     NSWindow *sheet = window.attachedSheet;
     note([@"save panel: " stringByAppendingString:panelFacts(sheet)]);
@@ -375,6 +423,7 @@ int main(void) { @autoreleasepool {
     for (int i = 0; i < 8; i++) taken = taken && panelKey(window, "Backspace", NULL, 0);
     check(taken && [save.nameFieldStringValue isEqualToString:@""], [NSString stringWithFormat:
         @"Backspace removes the end of the name of a save panel (name '%@')", save.nameFieldStringValue]);
+    refusedReturn(window, @"an empty name");
     check(sp_input_text(window, SP_INPUT_TEXT_INSERT, "ty", 0, 0, -1, 0) == SP_INPUT_DELIVERED,
         @"a stated text is delivered to a save panel");
     for (NSString *letter in @[@"p", @"e", @"d"]) taken = taken && panelKey(window, letter.UTF8String, letter.UTF8String, 0);
@@ -388,12 +437,62 @@ int main(void) { @autoreleasepool {
     check(sp_input_key(window, "a", "a", 8, true) == SP_INPUT_REJECTED, @"a key with Command in a save panel is refused");
     check(sp_input_text(window, SP_INPUT_TEXT_MARK, "t", 0, 1, -1, 0) == SP_INPUT_REJECTED,
         @"a composition in a save panel is refused");
+    check(typeName(window, save, @"a/b"), @"the name a/b is typed into a save panel");
+    refusedReturn(window, @"a name with '/'");
+    check(typeName(window, save, @"a:b"), @"the name a:b is typed into a save panel");
+    refusedReturn(window, @"a name with ':'");
+    check(typeName(window, save, @".hidden"), @"the name .hidden is typed into a save panel");
+    refusedReturn(window, @"a name that starts with '.'");
+    NSString *existing = [folder stringByAppendingPathComponent:@"existing"];
+    [@"kept" writeToFile:existing atomically:NO encoding:NSUTF8StringEncoding error:NULL];
+    check(typeName(window, save, @"existing"), @"the name of an existing file is typed into a save panel");
+    NSString *existingRecords = refusedReturn(window, @"the name of an existing file");
+    check([existingRecords containsString:existing], [NSString stringWithFormat:
+        @"the refusal of an existing file names its path (%@)", existingRecords]);
+    check([[NSString stringWithContentsOfFile:existing encoding:NSUTF8StringEncoding error:NULL] isEqualToString:@"kept"],
+        @"a refused Return leaves the existing file as it was");
+    settle(@"the refused Returns are handled");
+    check(saved == NOT_ENDED && window.attachedSheet == sheet, [NSString stringWithFormat:
+        @"a refused Return leaves the save panel open (response %ld)", (long)saved]);
+    check(typeName(window, save, @"typed"), @"the name typed is typed into a save panel");
     check(panelKey(window, "Enter", NULL, 0), @"Return is delivered to a save panel");
     eventWait(@"the save panel ends", ^BOOL { return saved != NOT_ENDED; });
     NSURL *expected = [[NSURL fileURLWithPath:folder] URLByAppendingPathComponent:@"typed"];
     check(saved == NSModalResponseOK && [save.URL.URLByStandardizingPath.path isEqualToString:expected.URLByStandardizingPath.path],
         [NSString stringWithFormat:@"Return ends a save panel sheet with OK and the URL of its folder and name (response %ld, URL %@)",
             (long)saved, save.URL]);
+    // The service is told that the panel ended, and its answer does not complete the panel again.
+    settle(@"the service answers the end of the panel");
+    check(completions == 1, [NSString stringWithFormat:@"the completion of a saved panel runs once (%d)", completions]);
+    check(window.attachedSheet == nil, @"a saved save panel sheet is gone");
+
+    // A save panel sheet whose delegate refuses the name, then the URL: Return is refused with the error of the delegate, and the
+    // panel stays until Escape.
+    RefusingPanelDelegate *refusing = [RefusingPanelDelegate new];
+    refusing.refuseName = YES;
+    save = [NSSavePanel savePanel];
+    save.directoryURL = [NSURL fileURLWithPath:folder];
+    save.nameFieldStringValue = @"refused";
+    save.delegate = refusing;
+    saved = NOT_ENDED;
+    [save beginSheetModalForWindow:window completionHandler:^(NSModalResponse returned) { saved = returned; }];
+    eventWait(@"the delegated save panel sheet shows", ^BOOL { return window.attachedSheet != nil && window.attachedSheet.isVisible; });
+    refusedReturn(window, @"a delegate that refuses the name");
+    check(refusing.names == 1, [NSString stringWithFormat:@"the delegate is asked for the name once (%ld)", (long)refusing.names]);
+    refusing.refuseName = NO;
+    refusing.refuseURL = YES;
+    NSString *delegateRecords = refusedReturn(window, @"a delegate that refuses the URL");
+    check(refusing.urls == 1, [NSString stringWithFormat:@"the delegate is asked for the URL once (%ld)", (long)refusing.urls]);
+    check([delegateRecords containsString:@"the test delegate refuses this URL"], [NSString stringWithFormat:
+        @"the refusal of the delegate states its error (%@)", delegateRecords]);
+    settle(@"the refusals of the delegate are handled");
+    check(saved == NOT_ENDED, @"a save panel whose delegate refuses stays open");
+    check(panelKey(window, "Escape", NULL, 0), @"Escape is delivered to the delegated save panel");
+    eventWait(@"the delegated save panel ends", ^BOOL { return saved != NOT_ENDED; });
+    check(saved == NSModalResponseCancel, [NSString stringWithFormat:@"Escape cancels the delegated save panel (response %ld)",
+        (long)saved]);
+    check(![NSFileManager.defaultManager fileExistsAtPath:[folder stringByAppendingPathComponent:@"refused"]],
+        @"a refused save writes no file");
 
     // A save panel sheet: Escape cancels it.
     save = [NSSavePanel savePanel];
@@ -412,6 +511,8 @@ int main(void) { @autoreleasepool {
     [open beginSheetModalForWindow:window completionHandler:^(NSModalResponse returned) { opened = returned; }];
     eventWait(@"the open panel sheet shows", ^BOOL { return window.attachedSheet != nil && window.attachedSheet.isVisible; });
     note([@"open panel: " stringByAppendingString:panelFacts(window.attachedSheet)]);
+    check(sp_input_key(window, "Enter", NULL, 0, true) == SP_INPUT_REJECTED, @"Return of an open panel is refused");
+    check(sp_input_text(window, SP_INPUT_TEXT_INSERT, "a", 0, 0, -1, 0) == SP_INPUT_REJECTED, @"a text in an open panel is refused");
     check(panelKey(window, "Escape", NULL, 0), @"Escape is delivered to an open panel");
     eventWait(@"the open panel ends", ^BOOL { return opened != NOT_ENDED; });
     tracing = NO;
