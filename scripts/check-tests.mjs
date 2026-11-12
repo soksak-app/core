@@ -1005,7 +1005,6 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/window_pageless_processes_test.go", id: "TestWindowReportsTheProcessesWithoutAPage" },
       { file: "packages/host/rust/src/window_pageless_processes_test.rs", id: "host_window_reports_the_processes_without_a_page" },
       { file: "packages/window-check/test/view-metrics-collection.test.mjs", id: "the end of a reclaim exit wait fails the close with its reason" },
-      { file: "native/darwin/tests/capture_preparation_test.m", id: "held preparation returns its owned end" },
       { file: "native/darwin/tests/capture_stop_late_test.m", id: "the stop whose wait ended reports that end" },
       { file: "native/darwin/tests/capture_callback_test.m", id: "a pending start reports the end of its wait" },
       { file: "native/darwin/tests/input_source_test.m", id: "the end of another key leaves the selection waiting" },

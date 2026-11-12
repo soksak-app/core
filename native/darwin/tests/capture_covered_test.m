@@ -1,20 +1,23 @@
 // A window behind another window is captured with the pixels of its three kinds of layers: a web view registered as a
 // host registers it, a Metal layer and an IOSurface layer, and with its child window, as a modal stands over it. Each
 // layer changes while the window stays covered, and the capture shows the change. The check uses no activation, no real input and no window position outside the screen.
-// A failure of ScreenCaptureKit keeps its error code, because its text depends on the language of the person.
+// A recording of the covered window takes a still every refresh for three seconds while a marker changes every refresh, and each
+// frame shows what the window server showed between the request of its still and its completion (docs/spec/diagnostics.md).
+// The capture asks the window server for the windows of its own process, so it needs no screen recording permission: the check
+// prints whether the process has it, and with --without-screen-recording, which a launch of its bundle by LaunchServices gives
+// (make test-capture-without-screen-recording), it requires that the process has it not.
 #import <Cocoa/Cocoa.h>
 #import <IOSurface/IOSurface.h>
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
 #import <QuartzCore/QuartzCore.h>
-#import <ScreenCaptureKit/ScreenCaptureKit.h>
 #import <WebKit/WebKit.h>
-#import <objc/runtime.h>
 #import "capture.h"
 #import "window_facts.h"
 #import "private/webkit.h"
 #import "support/run_until.h"
 #import "support/temporary_folder.h"
+#import "support/capture_frame.m"
 
 @interface WKWebView (Presentation)
 - (void)_doAfterNextPresentationUpdate:(void (^)(void))update;
@@ -32,63 +35,14 @@ static void until(NSString *what, BOOL (^done)(void)) {
     sp_run_until(what.UTF8String, done);
 }
 
-// The system paths are observed, and one failure is injected at a time. The general content query is never forwarded:
-// it is the path that asks the person for the screen recording permission.
-static NSUInteger generalContentQueries;
-static NSUInteger stillRequests, stillRequestsWithCursor;
-static NSError *contentFailure, *stillFailure, *startFailure;
-static IMP realCurrentContent, realStill, realStart;
-// Set on the main queue after the injected start failure has answered the start request.
-static BOOL startFailureAnswered;
-
-static void observedGeneralContent(id self, SEL _cmd, void (^reply)(SCShareableContent *, NSError *)) {
-    generalContentQueries++;
-    reply(nil, [NSError errorWithDomain:SCStreamErrorDomain code:SCStreamErrorUserDeclined userInfo:nil]);
-}
-static void observedCurrentContent(id self, SEL _cmd, void (^reply)(SCShareableContent *, NSError *)) {
-    if (contentFailure != nil) { reply(nil, contentFailure); return; }
-    ((void (*)(id, SEL, id))realCurrentContent)(self, _cmd, reply);
-}
-static void observedStill(id self, SEL _cmd, SCContentFilter *filter, SCStreamConfiguration *config,
-    void (^reply)(CGImageRef, NSError *)) {
-    stillRequests++;
-    if (config.showsCursor) stillRequestsWithCursor++;
-    if (stillFailure != nil) { reply(NULL, stillFailure); return; }
-    ((void (*)(id, SEL, id, id, id))realStill)(self, _cmd, filter, config, reply);
-}
-static void observedStart(id self, SEL _cmd, void (^reply)(NSError *)) {
-    if (startFailure != nil) {
-        reply(startFailure);
-        dispatch_async(dispatch_get_main_queue(), ^{ startFailureAnswered = YES; });
-        return;
-    }
-    ((void (*)(id, SEL, id))realStart)(self, _cmd, reply);
-}
-static void observeSystemPaths(void) {
-    Class content = SCShareableContent.class;
-    method_setImplementation(class_getClassMethod(content, @selector(getShareableContentWithCompletionHandler:)),
-        (IMP)observedGeneralContent);
-    realCurrentContent = method_setImplementation(
-        class_getClassMethod(content, @selector(getCurrentProcessShareableContentWithCompletionHandler:)),
-        (IMP)observedCurrentContent);
-    realStill = method_setImplementation(class_getClassMethod(SCScreenshotManager.class,
-        @selector(captureImageWithFilter:configuration:completionHandler:)), (IMP)observedStill);
-    realStart = method_setImplementation(class_getInstanceMethod(SCStream.class,
-        @selector(startCaptureWithCompletionHandler:)), (IMP)observedStart);
-}
-
 typedef struct { size_t width, height; uint8_t *bytes; } Image;
 static NSUInteger captures;
 
 static Image capture(NSWindow *window, NSString *directory, NSString *name) {
     NSString *path = [directory stringByAppendingPathComponent:[name stringByAppendingString:@".png"]];
     char *error = NULL;
-    // The window first, then its child windows, as a host lists them.
-    NSMutableArray<NSNumber *> *listed = [NSMutableArray arrayWithObject:@(window.windowNumber)];
-    for (NSWindow *child in window.childWindows) [listed addObject:@(child.windowNumber)];
-    long numbers[listed.count];
-    for (NSUInteger index = 0; index < listed.count; index++) numbers[index] = listed[index].longValue;
-    bool written = sp_capture_still(numbers, (int)listed.count, path.fileSystemRepresentation, 0, &error);
+    // The capture finds the child windows of the window itself.
+    bool written = sp_capture_still(window.windowNumber, path.fileSystemRepresentation, &error);
     captures++;
     check(written && error == NULL, [NSString stringWithFormat:@"the %@ capture has no error (%s)", name, error ?: ""]);
     free(error);
@@ -213,23 +167,84 @@ static id evaluate(WKWebView *web, NSString *script) {
     [failure release];
     return [value autorelease];
 }
-// The system gives a failure a description of its own, in the language of the person, that names no code.
-static NSError *systemFailure(long code) {
-    return [NSError errorWithDomain:SCStreamErrorDomain code:code
-        userInfo:@{NSLocalizedDescriptionKey: @"the stream failed"}];
+// The marker of the recording: from x 360 at y 20 to 28 of the content view, a white and a black square of 8 points, then twelve
+// squares that hold the step from its highest bit, white for 1. Black and white read the same in any color space.
+static const CGFloat kMarkerX = 360, kMarkerY = 20;
+static const int kMarkerBits = 12;
+// The step of a frame, -1 when its guard squares do not read. The frame holds the window with its title bar, and the content
+// view is its bottom kHeight points.
+static long markerStep(NSData *frame) {
+    const uint8_t *bytes = frame.bytes;
+    uint32_t dimensions[3];
+    memcpy(dimensions, bytes, sizeof dimensions);
+    double scale;
+    memcpy(&scale, bytes + 12 + 5 * sizeof(double), sizeof scale);
+    const uint8_t *pixels = bytes + kCaptureFrameHeader;
+    size_t top = dimensions[1] - (size_t)llround(kHeight * scale), stride = dimensions[2];
+    long (^green)(CGFloat) = ^long(CGFloat x) {
+        const uint8_t *p = pixels + (top + (size_t)((kMarkerY + 4) * scale)) * stride + (size_t)(x * scale) * 4;
+        return p[1];
+    };
+    if (green(kMarkerX + 4) < 200 || green(kMarkerX + 12) > 55) return -1;
+    long step = 0;
+    for (int bit = 0; bit < kMarkerBits; bit++) step = step << 1 | (green(kMarkerX + 20 + bit * 8) >= 128 ? 1 : 0);
+    return step;
 }
-static void expectError(char *error, NSString *what, long code) {
-    NSString *text = error == NULL ? @"" : [NSString stringWithUTF8String:error];
-    NSString *want = [NSString stringWithFormat:@"%@ %ld", SCStreamErrorDomain, code];
-    check([text containsString:want], [NSString stringWithFormat:@"%@ keeps the error code %@ (got \"%@\")", what, want, text]);
+// The BGRA pixel of a frame at a point of the content view, as 0xRRGGBB.
+static uint32_t framePixel(NSData *frame, CGFloat x, CGFloat y) {
+    const uint8_t *bytes = frame.bytes;
+    uint32_t dimensions[3];
+    memcpy(dimensions, bytes, sizeof dimensions);
+    double scale;
+    memcpy(&scale, bytes + 12 + 5 * sizeof(double), sizeof scale);
+    size_t top = dimensions[1] - (size_t)llround(kHeight * scale);
+    const uint8_t *p = bytes + kCaptureFrameHeader + (top + (size_t)(y * scale)) * dimensions[2] + (size_t)(x * scale) * 4;
+    return (uint32_t)p[2] << 16 | (uint32_t)p[1] << 8 | p[0];
 }
 
-int main(void) { @autoreleasepool {
+// Changes the marker at every refresh of the window, on the main thread, and keeps when each step began and when its commit was
+// sent to the window server, on the clock of the recorded frames.
+@interface MarkerDriver : NSObject
+@property (nonatomic, retain) NSArray<NSView *> *bits;
+@property (nonatomic) long step;
+@property (nonatomic) BOOL changing;
+@property (nonatomic, retain) NSMutableArray<NSNumber *> *began, *sent, *refreshes;
+@end
+@implementation MarkerDriver
+- (void)refresh:(CADisplayLink *)link {
+    [self.refreshes addObject:@(link.timestamp * 1000)];
+    if (!self.changing) return;
+    long step = self.step + 1;
+    double begin = sp_capture_clock();
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    for (int bit = 0; bit < kMarkerBits; bit++) self.bits[bit].layer.backgroundColor = CGColorGetConstantColor(
+        (step >> (kMarkerBits - 1 - bit)) & 1 ? kCGColorWhite : kCGColorBlack);
+    [CATransaction commit];
+    [CATransaction flush];
+    self.step = step;
+    [self.began addObject:@(begin)];
+    [self.sent addObject:@(sp_capture_clock())];
+}
+@end
+
+static double median(NSArray<NSNumber *> *values) {
+    NSArray<NSNumber *> *sorted = [values sortedArrayUsingSelector:@selector(compare:)];
+    return sorted.count == 0 ? 0 : sorted[sorted.count / 2].doubleValue;
+}
+static double ticksToMilliseconds(id value, double numerator, double denominator) {
+    return [value isKindOfClass:NSString.class] ? strtoull([value UTF8String], NULL, 10) * numerator / denominator / 1e6 : NAN;
+}
+
+int main(int argc, char **argv) { @autoreleasepool {
     fprintf(stderr, "START: covered window capture\n");
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
-    observeSystemPaths();
+    BOOL permitted = CGPreflightScreenCaptureAccess();
+    fprintf(stderr, "screen recording permission: %s\n", permitted ? "granted" : "not granted");
+    if (argc > 1 && strcmp(argv[1], "--without-screen-recording") == 0)
+        check(!permitted, @"the process runs without the screen recording permission");
     NSString *directory = temporaryFolder(@"soksak-capture-covered-");
 
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(160, 160, kWidth, kHeight)
@@ -390,36 +405,132 @@ int main(void) { @autoreleasepool {
         expectPixel(changed, scale, 180, 280, 0x28c850, @"the child window after the change");
         check(pixelsOfColor(changed, 0xff00ff) == 0, @"no pixel of the cover is in the changed capture");
     }
-    check(generalContentQueries == 0, @"the capture does not query the content that needs the screen recording permission");
-    check(stillRequests == captures && stillRequestsWithCursor == 0,
-        [NSString stringWithFormat:@"the %lu captures ask for no cursor (%lu requests, %lu with one)", (unsigned long)captures,
-            (unsigned long)stillRequests, (unsigned long)stillRequestsWithCursor]);
 
-    // A failure of the system keeps its code at each entry point.
-    NSString *path = [directory stringByAppendingPathComponent:@"failed.png"];
+    // A recording of the covered window: a still every refresh for three seconds, while the marker changes at every refresh.
+    NSView *marker = [[[NSView alloc] initWithFrame:NSMakeRect(kMarkerX, kHeight - kMarkerY - 8, 8 * (kMarkerBits + 2), 8)] autorelease];
+    marker.wantsLayer = YES;
+    NSMutableArray<NSView *> *bits = [NSMutableArray array];
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    for (int index = 0; index < kMarkerBits + 2; index++) {
+        NSView *square = [[[NSView alloc] initWithFrame:NSMakeRect(index * 8, 0, 8, 8)] autorelease];
+        square.wantsLayer = YES;
+        square.layer.backgroundColor = CGColorGetConstantColor(index == 0 ? kCGColorWhite : kCGColorBlack);
+        [marker addSubview:square];
+        if (index >= 2) [bits addObject:square];
+    }
+    [content addSubview:marker positioned:NSWindowAbove relativeTo:nil];
+    [CATransaction commit];
+    [CATransaction flush];
+    waitForPresentation(web);
+    MarkerDriver *driver = [[MarkerDriver new] autorelease];
+    driver.bits = bits;
+    driver.began = [NSMutableArray array];
+    driver.sent = [NSMutableArray array];
+    driver.refreshes = [NSMutableArray array];
+    CADisplayLink *link = [window displayLinkWithTarget:driver selector:@selector(refresh:)];
+    [link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
+    // The refresh period of the display of the window, as the window observes it, is the gap of the recording.
+    until(@"the window observes 13 refreshes", ^BOOL { return driver.refreshes.count >= 13; });
+    NSMutableArray<NSNumber *> *periods = [NSMutableArray array];
+    for (NSUInteger index = 1; index < driver.refreshes.count; index++)
+        [periods addObject:@(driver.refreshes[index].doubleValue - driver.refreshes[index - 1].doubleValue)];
+    double period = median(periods);
+    fprintf(stderr, "refresh period %.3f ms\n", period);
+    driver.changing = YES;
+    until(@"the marker changes", ^BOOL { return driver.step >= 2; });
+    NSString *recorded = [directory stringByAppendingPathComponent:@"recording"];
+    [NSFileManager.defaultManager createDirectoryAtPath:recorded withIntermediateDirectories:NO attributes:nil error:NULL];
     char *error = NULL;
-    stillFailure = systemFailure(SCStreamErrorInternalError);
-    check(!sp_capture_still((long[]){window.windowNumber}, 1, path.fileSystemRepresentation, 0, &error), @"a failed still capture reports failure");
-    expectError(error, @"a failed still capture", SCStreamErrorInternalError);
+    check(sp_capture_open(window.windowNumber, false, &error), [NSString stringWithFormat:@"the covered window opens for a recording (%s)", error ?: ""]);
     free(error); error = NULL;
-    stillFailure = nil;
-    contentFailure = systemFailure(SCStreamErrorNoWindowList);
-    check(!sp_capture_still((long[]){window.windowNumber}, 1, path.fileSystemRepresentation, 0, &error), @"a failed content query reports failure");
-    expectError(error, @"the content query of a still capture", SCStreamErrorNoWindowList);
+    double length = 3000, beforeStart = sp_capture_clock();
+    bool started = sp_capture_start(recorded.fileSystemRepresentation, period, length / 1000, 0, false, 1, &error);
+    check(started, [NSString stringWithFormat:@"the recording of the covered window starts (%s)", error ?: ""]);
     free(error); error = NULL;
-    check(!sp_capture_open(window.windowNumber, false, 0, &error), @"a failed content query fails a recording");
-    expectError(error, @"the content query of a recording", SCStreamErrorNoWindowList);
-    free(error); error = NULL;
-    contentFailure = nil;
-    startFailure = systemFailure(SCStreamErrorFailedToStart);
-    check(sp_capture_open(window.windowNumber, false, 0, &error), @"a recording opens the covered window");
-    free(error); error = NULL;
-    check(sp_capture_start(directory.fileSystemRepresentation, false, &error), @"the start request of a recording is sent");
-    free(error); error = NULL;
-    until(@"the injected start failure answers", ^BOOL { return startFailureAnswered; });
-    expectError((char *)sp_capture_error(), @"a failed recording start", SCStreamErrorFailedToStart);
-    sp_capture_stop(0, 0);
-    startFailure = nil;
+    // The last still is planned at or after this time, so the stop waits for the whole plan.
+    double after = beforeStart + length - period;
+    if (started) until(@"the plan of the recording reaches its last still", ^BOOL { return sp_capture_clock() >= after; });
+    int count = started ? sp_capture_stop(after, 2) : 0;
+    driver.changing = NO;
+    [link invalidate];
+    const char *stopped = sp_capture_error();
+    check(started && stopped != NULL && strlen(stopped) == 0, [NSString stringWithFormat:@"the recording stops without error (%s)", stopped ?: ""]);
+    NSUInteger planned = (NSUInteger)ceil(length / period);
+    check(count == (int)planned && sp_capture_missed() == 0 && sp_capture_late() == 0,
+        [NSString stringWithFormat:@"the covered window gives every planned still: %lu planned, %d written, %d missed, %d late",
+            (unsigned long)planned, count, sp_capture_missed(), sp_capture_late()]);
+
+    NSString *rowsText = [NSString stringWithContentsOfFile:[recorded stringByAppendingPathComponent:@"stills.jsonl"]
+        encoding:NSUTF8StringEncoding error:NULL];
+    NSMutableArray<NSDictionary *> *rows = [NSMutableArray array];
+    for (NSString *line in [rowsText componentsSeparatedByString:@"\n"]) {
+        if (line.length == 0) continue;
+        NSDictionary *row = [NSJSONSerialization JSONObjectWithData:[line dataUsingEncoding:NSUTF8StringEncoding] options:0 error:NULL];
+        if ([row isKindOfClass:NSDictionary.class]) [rows addObject:row];
+    }
+    check(rows.count == planned, [NSString stringWithFormat:@"stills.jsonl holds a row for each planned still (%lu rows)", (unsigned long)rows.count]);
+    // Each frame shows a step that had begun by the completion of its still, and no step older than the last one whose commit was
+    // sent two refresh periods before the request: the window server shows a commit at the latest at the second refresh after it.
+    // A step sent shortly before the request may or may not be in the frame, which is what the window server showed then.
+    NSUInteger unread = 0, future = 0, stale = 0, behind = 0, wrongChild = 0, coverPixels = 0, wrongWindows = 0, missing = 0, longGaps = 0;
+    double previousRequest = NAN, longestRequestGap = 0;
+    NSMutableString *firstFailures = [NSMutableString string];
+    for (NSDictionary *row in rows) {
+        double numerator = [row[@"machTimebaseNumerator"] doubleValue], denominator = [row[@"machTimebaseDenominator"] doubleValue];
+        double requested = ticksToMilliseconds(row[@"requested"], numerator, denominator);
+        double completed = ticksToMilliseconds(row[@"completed"], numerator, denominator);
+        NSArray *windows = row[@"windows"];
+        if (![windows isKindOfClass:NSArray.class] || windows.count != 2 || [windows[0] longValue] != child.windowNumber
+            || [windows[1] longValue] != window.windowNumber) wrongWindows++;
+        if (!isnan(previousRequest) && requested - previousRequest > 2 * period) longGaps++;
+        if (!isnan(previousRequest)) longestRequestGap = MAX(longestRequestGap, requested - previousRequest);
+        previousRequest = requested;
+        NSData *frame = [row[@"frame"] isKindOfClass:NSString.class]
+            ? readCaptureFrame([NSData dataWithContentsOfFile:[recorded stringByAppendingPathComponent:row[@"frame"]]]) : nil;
+        if (frame == nil) { missing++; continue; }
+        if (framePixel(frame, 180, 280) != 0x28c850) wrongChild++;
+        {
+            uint32_t dimensions[3];
+            memcpy(dimensions, frame.bytes, sizeof dimensions);
+            const uint8_t *pixels = (const uint8_t *)frame.bytes + kCaptureFrameHeader;
+            for (size_t y = 0; y < dimensions[1]; y++)
+                for (size_t x = 0; x < dimensions[0]; x++) {
+                    const uint8_t *p = pixels + y * dimensions[2] + x * 4;
+                    if (p[2] == 0xff && p[1] == 0 && p[0] == 0xff) coverPixels++;
+                }
+        }
+        long step = markerStep(frame);
+        if (step < 1 || step > (long)driver.began.count) { unread++; continue; }
+        NSUInteger latest = 0;
+        for (NSUInteger index = 0; index < driver.sent.count; index++)
+            if (driver.sent[index].doubleValue <= requested - 2 * period) latest = index + 1;
+        NSUInteger shownBefore = 0;
+        for (NSUInteger index = 0; index < driver.sent.count; index++)
+            if (driver.sent[index].doubleValue <= requested) shownBefore = index + 1;
+        BOOL early = driver.began[step - 1].doubleValue > completed, old = (NSUInteger)step < latest;
+        if (early) future++;
+        if (old) stale++;
+        if ((NSUInteger)step < shownBefore) behind++;
+        if ((early || old) && firstFailures.length < 600)
+            [firstFailures appendFormat:@" [still %@ requested %.2f completed %.2f shows step %ld begun %.2f; step %lu sent at %.2f]",
+                row[@"index"], requested, completed, step, driver.began[step - 1].doubleValue, (unsigned long)latest,
+                latest ? driver.sent[latest - 1].doubleValue : NAN];
+    }
+    check(missing == 0, [NSString stringWithFormat:@"every row names a frame that reads (%lu do not)", (unsigned long)missing]);
+    check(wrongWindows == 0, [NSString stringWithFormat:@"every still holds the child window, then the window (%lu do not)", (unsigned long)wrongWindows]);
+    check(longGaps == 0, [NSString stringWithFormat:@"no two stills are requested more than two refresh periods apart (%lu are; longest %.2f ms)",
+        (unsigned long)longGaps, longestRequestGap]);
+    check(unread == 0, [NSString stringWithFormat:@"the marker reads in every frame (%lu do not)", (unsigned long)unread]);
+    check(future == 0 && stale == 0, [NSString stringWithFormat:
+        @"every frame shows what the window showed between the request and the completion of its still (%lu later, %lu older)%@",
+        (unsigned long)future, (unsigned long)stale, firstFailures]);
+    fprintf(stderr, "frames that show a step older than the last one sent before the request: %lu of %lu\n", (unsigned long)behind,
+        (unsigned long)rows.count);
+    check(wrongChild == 0 && coverPixels == 0, [NSString stringWithFormat:
+        @"every frame holds the child window and no pixel of the cover (%lu without the child, %lu with the cover)",
+        (unsigned long)wrongChild, (unsigned long)coverPixels]);
+    [marker removeFromSuperview];
 
     check(!NSApp.isActive, @"the capture does not activate the application");
     // Which other application is in front belongs to the other processes, so the check judges only this process.

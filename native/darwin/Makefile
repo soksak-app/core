@@ -128,7 +128,7 @@ endif
 
 CFLAGS     := -arch $(ARCH) -fblocks -fmodules -Wall -Werror -O2 $(MINIMUM)
 
-.PHONY: build-host-callback-worker build-host-callback-abi build fetch test test-app benchmark-site-cost test-capture-frame-identity test-capture-stop-intake test-app-activation test-app-virtual-ime test-app-input-reference-readiness test-app-activation-backspace test-app-activation-backspace-repeat build-ime-activation-target test-ime-cli test-app-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost benchmark-webview-resize-cadence build-test repeat repeat-suite clean pkgconfig-current
+.PHONY: build-host-callback-worker build-host-callback-abi build fetch test test-app benchmark-site-cost test-capture-frame-identity test-capture-stop-intake test-capture-without-screen-recording test-app-activation test-app-virtual-ime test-app-input-reference-readiness test-app-activation-backspace test-app-activation-backspace-repeat build-ime-activation-target test-ime-cli test-app-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost benchmark-webview-resize-cadence build-test repeat repeat-suite clean pkgconfig-current
 
 build: fetch $(LIBRARY) $(PKGCONFIG)
 
@@ -282,6 +282,13 @@ $(BUILD)/capture_checker_test $(BUILD)/capture_file_checker_test $(BUILD)/captur
 $(BUILD)/notifications_test.app/Contents/MacOS/notifications_test: $(BUILD)/notifications_test tests/support/notifications_test.plist
 	@mkdir -p $(dir $@)
 	@cp tests/support/notifications_test.plist $(BUILD)/notifications_test.app/Contents/Info.plist
+	@cp $< $@
+
+# The covered capture without the screen recording permission: LaunchServices starts the bundle as a process of its own, which
+# holds no permission, so the capture of its own windows is checked without it (tests/capture_covered_test.m).
+$(BUILD)/capture_covered_test.app/Contents/MacOS/capture_covered_test: $(BUILD)/capture_covered_test tests/support/capture_covered_test.plist
+	@mkdir -p $(dir $@)
+	@cp tests/support/capture_covered_test.plist $(BUILD)/capture_covered_test.app/Contents/Info.plist
 	@cp $< $@
 
 $(BUILD)/capture_file_checker_test: tests/capture_test.m
@@ -504,6 +511,15 @@ benchmark-webview-resize-cadence: $(BUILD)/webview_resize_cadence_test
 
 test-capture-frame-identity: $(BUILD)/capture_frame_identity_test
 	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) capture_frame_identity_test
+
+# open -g starts the bundle without bringing it to the front, and -W returns when it ends; the run passes when the check wrote its
+# pass line.
+test-capture-without-screen-recording: $(BUILD)/capture_covered_test.app/Contents/MacOS/capture_covered_test
+	@rm -f $(BUILD)/capture_covered_test.out $(BUILD)/capture_covered_test.err
+	@open -g -n -W --stdout $(BUILD)/capture_covered_test.out --stderr $(BUILD)/capture_covered_test.err \
+	  $(BUILD)/capture_covered_test.app --args --without-screen-recording
+	@cat $(BUILD)/capture_covered_test.out $(BUILD)/capture_covered_test.err
+	@grep -q '^PASS: covered window capture$$' $(BUILD)/capture_covered_test.err
 
 test-capture-stop-intake: $(BUILD)/capture_stop_intake_test
 	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) capture_stop_intake_test
