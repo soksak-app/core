@@ -4697,169 +4697,63 @@
           },
           "phase": {
             "enum": [
-              "start-request",
-              "start-completion",
-              "first-sample",
-              "delegate-stop",
-              "failed",
-              "sample-discarded"
+              "start",
+              "first-still",
+              "still-failed",
+              "stop",
+              "end"
             ],
             "type": "string"
           },
           "windowNumber": {
+            "type": "number"
+          },
+          "display": {
+            "type": "boolean"
+          },
+          "gap": {
+            "type": "number"
+          },
+          "plannedStills": {
+            "type": "number"
+          },
+          "index": {
             "type": [
               "number",
               "null"
             ]
           },
-          "requestMachTicks": {
+          "plannedMachTicks": {
             "type": [
               "string",
               "null"
             ]
           },
-          "callbackMachTicks": {
+          "requestedMachTicks": {
             "type": [
               "string",
               "null"
             ]
           },
-          "elapsedMachTicks": {
+          "completedMachTicks": {
             "type": [
               "string",
               "null"
             ]
           },
           "machTimebaseNumerator": {
-            "type": [
-              "number",
-              "null"
-            ]
+            "type": "number"
           },
           "machTimebaseDenominator": {
-            "type": [
-              "number",
-              "null"
-            ]
+            "type": "number"
           },
-          "sampleType": {
-            "type": [
-              "number",
-              "null"
-            ]
+          "written": {
+            "type": "number"
           },
-          "statusPresent": {
-            "type": "boolean"
-          },
-          "status": {
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "displayTimePresent": {
-            "type": "boolean"
-          },
-          "displayTimeMachTicks": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "errorDomain": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "errorCode": {
-            "type": [
-              "number",
-              "null"
-            ]
+          "settled": {
+            "type": "number"
           },
           "reason": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "factsObservedMachTicks": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "visible": {
-            "type": [
-              "boolean",
-              "null"
-            ]
-          },
-          "occluded": {
-            "type": [
-              "boolean",
-              "null"
-            ]
-          },
-          "displayID": {
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "applicationActive": {
-            "type": [
-              "boolean",
-              "null"
-            ]
-          },
-          "startCompletionSeen": {
-            "type": "boolean"
-          },
-          "firstSampleSeen": {
-            "type": "boolean"
-          },
-          "delegateStopSeen": {
-            "type": "boolean"
-          },
-          "stopAfterMilliseconds": {
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "stopTargetMachTicks": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "stopRegistrationMachTicks": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "latestSampleCallbackMachTicks": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "latestSampleStatusPresent": {
-            "type": "boolean"
-          },
-          "latestSampleStatus": {
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "latestSampleDisplayTimePresent": {
-            "type": "boolean"
-          },
-          "latestSampleDisplayTimeMachTicks": {
             "type": [
               "string",
               "null"
@@ -4870,38 +4764,21 @@
           "session",
           "phase",
           "windowNumber",
-          "requestMachTicks",
-          "callbackMachTicks",
-          "elapsedMachTicks",
+          "display",
+          "gap",
+          "plannedStills",
+          "index",
+          "plannedMachTicks",
+          "requestedMachTicks",
+          "completedMachTicks",
           "machTimebaseNumerator",
           "machTimebaseDenominator",
-          "sampleType",
-          "statusPresent",
-          "status",
-          "displayTimePresent",
-          "displayTimeMachTicks",
-          "errorDomain",
-          "errorCode",
-          "reason",
-          "factsObservedMachTicks",
-          "visible",
-          "occluded",
-          "displayID",
-          "applicationActive",
-          "startCompletionSeen",
-          "firstSampleSeen",
-          "delegateStopSeen",
-          "stopAfterMilliseconds",
-          "stopTargetMachTicks",
-          "stopRegistrationMachTicks",
-          "latestSampleCallbackMachTicks",
-          "latestSampleStatusPresent",
-          "latestSampleStatus",
-          "latestSampleDisplayTimePresent",
-          "latestSampleDisplayTimeMachTicks"
+          "written",
+          "settled",
+          "reason"
         ]
       },
-      "description": "A bounded ScreenCaptureKit attempt trace. Debug records describe start request, start completion, first sample, delegate stop and each sample discarded because its stream was replaced or intake closed; discarded records retain the originating attempt and contain no sample bytes. The error-level failed record is emitted once per failed attempt and preserves whether start completion or a sample was observed. Stop diagnostics preserve the host's after value in milliseconds, its computed Mach target and registration tick, and the latest callback's status and display time. Time fields are raw Mach ticks with the captured timebase; display facts are null until a timestamped main-thread observation exists."
+      "description": "The trace of one still recording. Debug records describe the start, the written still 0 (first-still) and the stop; an error-level still-failed record is emitted for each still that failed, with its error as reason. The end record closes the recording at error level when the recording has an error, which is its reason. A still record carries the index of the still and its planned, requested and completed raw Mach ticks, null where the still has none; records without a still carry null there. gap is the interval in ms between planned requests, plannedStills the planned count, written the written frames and settled the stills with an outcome at the time of the record. The stop record's reason holds the host's after value in ms, null for a stop that requests no later still. Time fields are raw Mach ticks with the recorded timebase."
     },
     "native.input.key_down": {
       "layer": "native",
