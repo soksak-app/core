@@ -40,6 +40,13 @@ fn arguments_are_refused_with_the_shared_messages() {
     assert_eq!(
         refusal::<SyncRequest>(
             "request",
+            json!({"settled": true, "declarations": [], "surfaces": [], "titlebar": 40})
+        ),
+        "argument request.viewport is missing"
+    );
+    assert_eq!(
+        refusal::<SyncRequest>(
+            "request",
             json!({"settled": true, "declarations": [], "surfaces": [surface]})
         ),
         "argument request.surfaces[0].h is missing"

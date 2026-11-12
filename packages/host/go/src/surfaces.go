@@ -333,6 +333,34 @@ type SyncRequest struct {
 	// The height (pt) of the first row that the next draw will show. Inside a layout transaction, the window title bar is set to this height
 	// (docs/spec/native-surfaces.md#title-bar-height).
 	Titlebar float64 `json:"titlebar"`
+	// The size of the window that the page made the layout at. The layout trace keeps it with the layout transaction of the preparation
+	// (docs/spec/native-surfaces.md#layout-transaction).
+	Viewport LayoutViewport `json:"viewport"`
+}
+
+// LayoutViewport is the size (pt) of the window that the page made a layout at.
+type LayoutViewport struct {
+	Width  float64 `json:"width"`
+	Height float64 `json:"height"`
+}
+
+// layoutViewports holds, while a layout trace of a diagnostic build runs, the viewport of each preparation that began its layout
+// transaction since the start of the trace, by its ticket, and nil while no trace runs. A preparation notes its viewport in the
+// main-thread step that begins its transaction, and a stop waits for its own main-thread step while it holds the lock of the
+// layout trace, so the viewports have a lock of their own.
+var layoutViewports struct {
+	mu       sync.Mutex
+	byTicket map[uint64]LayoutViewport
+}
+
+// noteLayoutViewport keeps viewport, the size of the window that the page made the layout of the preparation ticket at, for the
+// layout trace that runs; without a trace it keeps nothing.
+func noteLayoutViewport(ticket uint64, viewport LayoutViewport) {
+	layoutViewports.mu.Lock()
+	defer layoutViewports.mu.Unlock()
+	if layoutViewports.byTicket != nil {
+		layoutViewports.byTicket[ticket] = viewport
+	}
 }
 
 type syncRequestWire struct {
@@ -340,6 +368,7 @@ type syncRequestWire struct {
 	Surfaces     []syncSurfaceWire      `json:"surfaces"`
 	Overlays     []WindowOverlayRequest `json:"overlays,omitempty"`
 	Titlebar     float64                `json:"titlebar"`
+	Viewport     LayoutViewport         `json:"viewport"`
 	Declarations []json.RawMessage      `json:"declarations"`
 }
 
@@ -413,7 +442,9 @@ func decodeSyncRequest(raw json.RawMessage) (SyncRequest, error) {
 			return SyncRequest{}, fmt.Errorf("argument request.declarations[%d] is unused", i)
 		}
 	}
-	return SyncRequest{Settled: wire.Settled, Surfaces: surfaces, Overlays: wire.Overlays, Titlebar: wire.Titlebar}, nil
+	return SyncRequest{
+		Settled: wire.Settled, Surfaces: surfaces, Overlays: wire.Overlays, Titlebar: wire.Titlebar, Viewport: wire.Viewport,
+	}, nil
 }
 
 type WindowOverlayRequest struct {
@@ -1174,6 +1205,7 @@ func (s *Surfaces) syncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 		}, func() error {
 			s.lastPreparation++
 			prepared.Ticket = s.lastPreparation
+			noteLayoutViewport(prepared.Ticket, req.Viewport)
 			queued, trace := surfaceDispatchClock()
 			return system.BeginLayout(win.NativeWindow(), prepared.Ticket, func(allowed bool) {
 				observeSurfaceCallback(win.Name(), &prepared.Ticket, "sync", "sync-layout-ready-callback", queued, trace, func() {

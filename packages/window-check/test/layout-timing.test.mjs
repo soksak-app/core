@@ -133,17 +133,23 @@ test("the layout of the last input of a drag follows the layout pipeline", () =>
 });
 
 test("a maximise or restore catches up with the window within 150 ms of its first resize", () => {
-  const layouts = [layout(1, 5, 20), layout(2, 60, 80), layout(3, 101, 130), layout(4, 140, 400)];
-  const resize = (at, width, height = 800) => ({ at, width, height });
+  const at = (width, height = 800) => ({ width, height });
+  const laid = (ticket, begun, committed, viewport) => ({ ...layout(ticket, begun, committed), viewport });
+  const layouts = [laid(1, 5, 20, at(1000)), laid(2, 60, 80, at(1200)), laid(3, 101, 130, at(1360)), laid(4, 140, 400, at(1360))];
+  const resize = (time, width, height = 800) => ({ at: time, width, height });
   const gesture = [resize(0, 1000), resize(50, 1200), resize(100, 1360)];
-  assert.deepEqual(catchUp(layouts, gesture), { took: 130, limit: 150, ticket: 3, last: 100, failures: [] });
-  // A resize that keeps the size of the resize before it changes nothing, so the layout that began after the last change is at
-  // the window size.
-  assert.deepEqual(catchUp(layouts, [resize(0, 1000), resize(55, 1360), resize(120, 1360)]),
-    { took: 80, limit: 150, ticket: 2, last: 55, failures: [] });
-  assert.deepEqual(catchUp(layouts.slice(0, 2).concat(layout(3, 101, 160)), gesture).failures,
+  assert.deepEqual(catchUp(layouts, gesture), { took: 130, limit: 150, ticket: 3, size: at(1360), failures: [] });
+  // The page can lay out the final size before the host reads it from the window: the layout at the final size began before the
+  // last resize event, which recorded the content size later (the order of a wailsv3 maximise).
+  const early = [laid(220, 1.2, 37, at(1800, 1081))];
+  assert.deepEqual(catchUp(early, [resize(0, 1200, 760), resize(0.2, 1200, 760), resize(7.1, 1800, 1081)]),
+    { took: 37, limit: 150, ticket: 220, size: at(1800, 1081), failures: [] });
+  // A layout without a viewport, or one not sent, is not at the window size.
+  assert.deepEqual(catchUp([laid(1, 101, 120, null), laid(2, 102, null, at(1360)), laid(3, 103, 125, at(1360))], gesture),
+    { took: 125, limit: 150, ticket: 3, size: at(1360), failures: [] });
+  assert.deepEqual(catchUp(layouts.slice(0, 2).concat(laid(3, 101, 160, at(1360))), gesture).failures,
     ["the layout at the window size was sent 160 ms after the first resize, more than 150 ms"]);
-  assert.deepEqual(catchUp(layouts.slice(0, 2), gesture).failures, ["no layout began after the last size change at 100 ms"]);
+  assert.deepEqual(catchUp(layouts.slice(0, 2), gesture).failures, ["no layout was laid out at the window size 1360 x 800"]);
   assert.deepEqual(catchUp(layouts, [resize(0, 1000), { at: 50, width: null, height: null }]).failures,
     ["the window resize at 50 ms recorded no content size"]);
   assert.deepEqual(catchUp(layouts, []).failures, ["the gesture has no window resize"]);

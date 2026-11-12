@@ -221,7 +221,7 @@ func TestCaptureStopPayloadReportsStills(t *testing.T) {
 
 // contract: diagnostics.layout-trace.reply-reports-layouts
 func TestALayoutTraceWithoutTransactionsReportsAnEmptyList(t *testing.T) {
-	encoded, err := json.Marshal(map[string]any{"layouts": layoutTrace(nil)})
+	encoded, err := json.Marshal(map[string]any{"layouts": layoutTrace(nil, nil)})
 	if err != nil || string(encoded) != `{"layouts":[]}` {
 		t.Fatalf("the layout trace of no transaction is %s (%v), want an empty list", encoded, err)
 	}
@@ -234,10 +234,12 @@ func TestALayoutTraceKeepsTheStagesOfEachTransaction(t *testing.T) {
 		{Ticket: 8, Begun: 40, Requested: math.NaN(), Presented: math.NaN(), Committed: math.NaN(), OpenAtCommit: math.NaN(), Flushed: math.NaN(), Displayed: math.NaN()},
 	}
 	want := []map[string]any{
-		{"ticket": uint64(7), "begun": float64(10), "requested": float64(15), "presented": float64(20), "committed": float64(30), "commitPath": "view-join", "openAtCommit": float64(1), "flushed": float64(35), "displayed": float64(41.6)},
-		{"ticket": uint64(8), "begun": float64(40), "requested": nil, "presented": nil, "committed": nil, "commitPath": nil, "openAtCommit": nil, "flushed": nil, "displayed": nil},
+		{"ticket": uint64(7), "begun": float64(10), "requested": float64(15), "presented": float64(20), "committed": float64(30), "commitPath": "view-join", "openAtCommit": float64(1), "flushed": float64(35), "displayed": float64(41.6),
+			"viewport": map[string]any{"width": float64(1800), "height": float64(1081)}},
+		{"ticket": uint64(8), "begun": float64(40), "requested": nil, "presented": nil, "committed": nil, "commitPath": nil, "openAtCommit": nil, "flushed": nil, "displayed": nil, "viewport": nil},
 	}
-	if layouts := layoutTrace(records); !reflect.DeepEqual(layouts, want) {
+	// The transaction of ticket 8 began without a preparation of the trace, so it has no viewport.
+	if layouts := layoutTrace(records, map[uint64]LayoutViewport{7: {Width: 1800, Height: 1081}}); !reflect.DeepEqual(layouts, want) {
 		t.Fatalf("layout entries = %#v, want %#v", layouts, want)
 	}
 }
@@ -274,9 +276,9 @@ func TestTheLayoutTraceHasOneRunAtATime(t *testing.T) {
 	if _, err := stopLayoutTrace(trace, other); err == nil || err.Error() != "no layout trace is running" {
 		t.Fatalf("a stop of a run that does not hold the trace answered %v", err)
 	}
-	records, err := stopLayoutTrace(trace, drag)
-	if err != nil || len(records) != 1 || native.starts != 1 || native.stops != 1 {
-		t.Fatalf("the stop answered %v, %v after %d starts and %d stops", records, err, native.starts, native.stops)
+	layouts, err := stopLayoutTrace(trace, drag)
+	if err != nil || len(layouts) != 1 || native.starts != 1 || native.stops != 1 {
+		t.Fatalf("the stop answered %v, %v after %d starts and %d stops", layouts, err, native.starts, native.stops)
 	}
 	ended := false
 	other.forget = func() { ended = true }
@@ -285,6 +287,76 @@ func TestTheLayoutTraceHasOneRunAtATime(t *testing.T) {
 	}
 	if _, err := stopLayoutTrace(trace, other); err != nil || !ended || layoutTraces.run != nil {
 		t.Fatalf("the stop of an endpoint run answered %v, removed its connection end %t, left %v", err, ended, layoutTraces.run)
+	}
+}
+
+// viewportPlatform is a layoutOrderPlatform whose begin records, for each layout, whether it began in a main-thread step and whether
+// the layout trace held the viewport of its preparation then.
+type viewportPlatform struct {
+	*layoutOrderPlatform
+	inStep *bool
+	begins []string
+}
+
+func (p *viewportPlatform) BeginLayout(window platform.Window, ticket uint64, ready func(bool)) error {
+	layoutViewports.mu.Lock()
+	_, noted := layoutViewports.byTicket[ticket]
+	layoutViewports.mu.Unlock()
+	p.begins = append(p.begins, fmt.Sprintf("begin %d in step %t noted %t", ticket, *p.inStep, noted))
+	return p.layoutOrderPlatform.BeginLayout(window, ticket, ready)
+}
+
+// The layout trace keeps the viewport of each preparation that began its layout during the trace with the transaction of its ticket.
+// The preparation notes it in the main-thread step that begins its transaction, before the begin, and a stop ends the trace in a
+// main-thread step of its own, so the stop finds the viewport of every transaction that it reports. A preparation outside a trace
+// keeps nothing (docs/spec/native-surfaces.md#layout-transaction).
+// contract: diagnostics.layout-trace.reply-carries-layout-viewport
+func TestTheLayoutTraceKeepsTheViewportOfEachPreparation(t *testing.T) {
+	inStep := false
+	fake := &viewportPlatform{layoutOrderPlatform: &layoutOrderPlatform{frames: map[unsafe.Pointer]platform.Rect{}}, inStep: &inStep}
+	saved, savedFramework := system, framework
+	system, framework = fake, steppingFramework{inStep: &inStep}
+	t.Cleanup(func() { system, framework = saved, savedFramework })
+	s := &Surfaces{window: &noticeFrontend{notices: make(chan func(error), 1)}, invoke: func(task func()) { task() },
+		views: map[string]*nativeWebview{}, named: map[uintptr]string{}, compositions: map[string]SurfaceComposition{},
+		surfacePlugins: map[string]string{}, images: NewImages(), documents: NewDocuments(), sidecars: &Sidecars{},
+		sourceOrigins: newSourceOrigins()}
+	// The page of the window is ready, so the preparation emits no page-ready.
+	s.first.Do(func() {})
+	prepare := func(width, height float64) uint64 {
+		t.Helper()
+		prepared, err := s.SyncSurfaces(SyncRequest{Titlebar: 40, Settled: true, Viewport: LayoutViewport{Width: width, Height: height}})
+		if err != nil {
+			t.Fatalf("the preparation failed: %v", err)
+		}
+		return prepared.Ticket
+	}
+	before := prepare(1200, 760)
+	native := &traceCapturer{}
+	trace := platformCapture{Capturer: native}
+	run := &layoutTraceRun{}
+	if err := startLayoutTrace(trace, run); err != nil {
+		t.Fatal(err)
+	}
+	during := prepare(1800, 1081)
+	native.records = []platform.LayoutRecord{{Ticket: before}, {Ticket: during}}
+	layouts, err := stopLayoutTrace(trace, run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{fmt.Sprintf("begin %d in step true noted false", before), fmt.Sprintf("begin %d in step true noted true", during)}
+	if !reflect.DeepEqual(fake.begins, want) {
+		t.Fatalf("the preparations began %v, want %v", fake.begins, want)
+	}
+	if len(layouts) != 2 {
+		t.Fatalf("the layout trace reports %d transactions, want 2", len(layouts))
+	}
+	viewports := []any{layouts[0]["viewport"], layouts[1]["viewport"]}
+	if want := []any{nil, map[string]any{"width": float64(1800), "height": float64(1081)}}; !reflect.DeepEqual(viewports, want) {
+		t.Fatalf("the layout trace reports the viewports %v, want %v", viewports, want)
+	}
+	if after := prepare(1200, 760); len(fake.begins) != 3 || fake.begins[2] != fmt.Sprintf("begin %d in step true noted false", after) {
+		t.Fatalf("a preparation after the stop began %v, want no viewport kept", fake.begins)
 	}
 }
 

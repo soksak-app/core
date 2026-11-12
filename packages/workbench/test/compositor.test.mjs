@@ -30,6 +30,9 @@ test("a layout published before drawing waits for the host's placement answer", 
   assert.equal(typeof pending?.then, "function", "the caller needs the host's promise before it draws");
   // Verify V7c judges the prediction on the grid that its layout was made on, which the display can leave before the check.
   assert.equal(prepared.surfaces[0].grid, 2, "the prediction does not carry the grid of its layout");
+  // The record carries the viewport that its layout was made at, which the host keeps with the layout transaction of the preparation
+  // (docs/spec/native-surfaces.md#layout-transaction).
+  assert.deepEqual(prepared.viewport, { width: 1024, height: 768 }, "the prediction does not carry the viewport of its layout");
   assert.equal(placementPending(), true, "the current DOM commit is waiting for the host placement answer");
   let drawn = false;
   pending.then(() => { drawn = true; });

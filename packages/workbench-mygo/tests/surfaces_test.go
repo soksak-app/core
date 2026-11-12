@@ -1925,6 +1925,23 @@ func TestEachPlacementGivesTheFirstRowOfItsFrame(t *testing.T) {
 	}
 }
 
+// Each placement gives the host the size of the window that its frame laid out, as the page gives the viewport of its layout with
+// each preparation (host.js of packages/workbench), and the host keeps it with the layout transaction of the preparation
+// (docs/spec/native-surfaces.md#layout-transaction).
+func TestEachPlacementGivesTheSizeItsFrameLaidOut(t *testing.T) {
+	f, stored := surfaceShell(t)
+	f.tester.SetSize(1100, 800)
+	f.tester.Frame()
+	f.settle()
+	if len(stored.requests) == 0 {
+		t.Fatal("the workbench placed nothing")
+	}
+	viewport, _ := stored.requests[len(stored.requests)-1]["viewport"].(map[string]any)
+	if len(viewport) != 2 || viewport["width"] != 1100.0 || viewport["height"] != 800.0 {
+		t.Fatalf("the placement at the window size 1100 x 800 gives the viewport %v, want width 1100 and height 800", viewport)
+	}
+}
+
 // A placement that the answer of a running placement makes, outside a frame, places the lines of the frame that drew them, and so
 // gives the first row of that frame: the host sets the title bar in the layout transaction that frame opened, which commits it with
 // the frame. A frame factor that changed after the frame shows with the next frame, which places its own row.

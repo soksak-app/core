@@ -68,6 +68,10 @@ func TestArgumentRefusalMessages(t *testing.T) {
 			_, err := h.SyncSurfaces(background, raw(`{"settled":true,"declarations":[],"surfaces":[]}`))
 			return err
 		}, "argument request.titlebar is missing"},
+		{"missing viewport", func() error {
+			_, err := h.SyncSurfaces(background, raw(`{"settled":true,"declarations":[],"surfaces":[],"titlebar":40}`))
+			return err
+		}, "argument request.viewport is missing"},
 		{"null field", func() error {
 			_, err := h.SyncSurfaces(background, raw(`{"settled":true,"declarations":[],"surfaces":[`+surface+`]}`))
 			return err

@@ -8,9 +8,10 @@ const surface = (id, y, w, h, start) => ({
   x: 210, y, w, h, ...(start ? { start } : {}),
 });
 
-const sync = (settled, w, { start, declarations = [] } = {}) =>
+const sync = (settled, w, { start, declarations = [], viewport = { width: 1200, height: 760 } } = {}) =>
   `info workbench workbench: host syncSurfaces ${JSON.stringify({
     settled, overlays: [], surfaces: [surface("tab-a", 116, w, 286.5, start), surface("tab-b", 470.5, w, 259.5)], titlebar: 40, declarations,
+    viewport,
   })} -> {}`;
 
 const present = (ticket, settled, w) => {
@@ -46,6 +47,14 @@ test("the start values that a settled preparation carries are not part of its la
   const earlier = atRest([sync(false, 760, { start, declarations: [{}] }), present(1, false, 760), sync(true, 560), present(2, true, 560)]);
   assert.equal(carried.request, earlier.request);
   assert.equal(carried.answer, earlier.answer);
+});
+
+test("the viewport of a settled preparation is not part of its layout", () => {
+  // The viewport is the size that the page made the layout at, and it places nothing.
+  const wide = atRest([sync(true, 560, { viewport: { width: 1800, height: 1081 } }), present(1, true, 560)]);
+  const narrow = atRest([sync(true, 560), present(1, true, 560)]);
+  assert.equal(wide.request, narrow.request);
+  assert.equal("viewport" in JSON.parse(wide.request), false);
 });
 
 test("a layout rests at the last settled presentation that no preparation follows", () => {

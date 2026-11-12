@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use crate::framework::{Manager, Webview, Window};
 use serde::de::{self, MapAccess, Visitor};
@@ -596,6 +596,41 @@ pub struct SyncRequest {
     /// the placement transaction.
     /// (docs/spec/native-surfaces.md#title-bar-height).
     titlebar: f64,
+    /// The size of the window that the page made the layout at. The layout trace of a diagnostic build keeps it with the
+    /// placement transaction of the preparation (docs/spec/native-surfaces.md#layout-transaction).
+    viewport: LayoutViewport,
+}
+
+/// The size (pt) of the window that the page made a layout at.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[cfg_attr(not(feature = "diagnostics"), allow(dead_code))]
+pub struct LayoutViewport {
+    pub width: f64,
+    pub height: f64,
+}
+
+/// The viewport of each preparation that began its placement transaction since the start of the layout trace of a
+/// diagnostic build that runs, by its ticket, and none while no trace runs. A preparation notes its viewport in the
+/// main-thread turn that begins its transaction, and the trace starts and stops in main-thread turns of its own
+/// (start_traced_layouts and stop_traced_layouts of diagnostics.rs), so a stop finds the viewport of every transaction
+/// that it reports.
+static LAYOUT_VIEWPORTS: Mutex<Option<HashMap<u64, LayoutViewport>>> = Mutex::new(None);
+
+/// The viewports that the layout trace keeps (LAYOUT_VIEWPORTS).
+pub(crate) fn held_layout_viewports() -> MutexGuard<'static, Option<HashMap<u64, LayoutViewport>>> {
+    LAYOUT_VIEWPORTS
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the viewports, which are only inserted and taken
+        // here; the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+}
+
+/// Keeps viewport, the size of the window that the page made the layout of the preparation ticket at, for the layout trace
+/// that runs; without a trace it keeps nothing.
+pub(crate) fn note_layout_viewport(ticket: u64, viewport: LayoutViewport) {
+    if let Some(viewports) = held_layout_viewports().as_mut() {
+        viewports.insert(ticket, viewport);
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -604,6 +639,7 @@ struct ResolvedSyncRequest {
     overlays: Vec<WindowOverlayRequest>,
     surfaces: Vec<Surface>,
     titlebar: f64,
+    viewport: LayoutViewport,
 }
 
 impl SyncRequest {
@@ -674,6 +710,7 @@ impl SyncRequest {
             overlays: self.overlays,
             surfaces,
             titlebar: self.titlebar,
+            viewport: self.viewport,
         })
     }
 }
@@ -1777,6 +1814,10 @@ pub fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurfaces, S
     let turn_window = window.clone();
     let turn_context = Arc::clone(&context);
     exposure::on_main(window, move || {
+        // The layout trace keeps the viewport of the preparation with its transaction. It is noted in the turn that begins the
+        // transaction, before the begin, and the trace starts and stops in turns of its own, so a stop finds the viewport of
+        // every transaction that it reports.
+        note_layout_viewport(ticket, request.viewport);
         surface_dispatch_result(dispatch, || {
             let scale = backing_scale(turn_window.scale_factor().map_err(|e| e.to_string())?)?;
             let main = crate::windows::root_view(&turn_window)

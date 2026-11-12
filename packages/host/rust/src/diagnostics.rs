@@ -30,6 +30,7 @@ use crate::platform::{DocumentViewportMarker, Handle};
 use crate::recording::{
     Capture, NewWindowCapture, Plan, Recording, StillCounts, Target, layout_trace,
 };
+use crate::surfaces::{LayoutViewport, held_layout_viewports};
 use crate::workspace::Workspace;
 
 /// A recording in progress.
@@ -1442,7 +1443,10 @@ fn drag(
         let clock = platform::current().map_err(internal)?;
         let run = Arc::new(LayoutTraceRun { endpoint: false });
         start_layout_trace(&run, || {
-            on_main(window, move || clock.layout_trace_start()).map_err(internal)
+            on_main(window, move || {
+                start_traced_layouts(|| clock.layout_trace_start())
+            })
+            .map_err(internal)
         })?;
         Ok::<_, Failure>((clock, run))
     })();
@@ -1522,13 +1526,16 @@ fn drag(
         || {
             stop_layout_trace(&run, || {
                 let platform = platform::current().map_err(internal)?;
-                on_main(window, move || platform.layout_trace_stop()).map_err(internal)
+                on_main(window, move || {
+                    stop_traced_layouts(|| platform.layout_trace_stop())
+                })
+                .map_err(internal)
             })
         },
     );
     let finished = (|| -> Result<Value, Failure> {
         let (result, layouts) = match (result, layouts) {
-            (Ok(result), Ok(layouts)) => (result, layout_trace(&layouts)),
+            (Ok(result), Ok(layouts)) => (result, layouts),
             (Err(error), Ok(_)) | (Ok(_), Err(error)) => return Err(error),
             (Err(error), Err(trace)) => {
                 return Err(internal(format!(
@@ -1618,6 +1625,25 @@ fn held_layout_trace() -> MutexGuard<'static, Option<Arc<LayoutTraceRun>>> {
     LAYOUT_TRACE.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
+/// Starts the native layout trace with start and keeps, from then on, the viewport of each preparation that begins its
+/// transaction. Call it in a main-thread turn.
+fn start_traced_layouts(start: impl FnOnce() -> Result<(), String>) -> Result<(), String> {
+    *held_layout_viewports() = Some(HashMap::new());
+    start()
+}
+
+/// Stops the native layout trace with stop and answers its transactions (layout_trace) with the viewports kept since the
+/// start. Call it in a main-thread turn.
+fn stop_traced_layouts(
+    stop: impl FnOnce() -> Result<Vec<platform::LayoutRecord>, String>,
+) -> Result<Value, String> {
+    let records = stop();
+    let viewports = held_layout_viewports()
+        .take()
+        .ok_or_else(|| "the layout trace kept no viewports".to_string())?;
+    Ok(layout_trace(&records?, &viewports))
+}
+
 /// Starts the layout trace for run with start; it fails while another run holds the trace.
 fn start_layout_trace(
     run: &Arc<LayoutTraceRun>,
@@ -1660,7 +1686,10 @@ fn layout_trace_request(
     let stop = |window: Window| {
         move || {
             let platform = platform::current().map_err(internal)?;
-            on_main(&window, move || platform.layout_trace_stop()).map_err(internal)
+            on_main(&window, move || {
+                stop_traced_layouts(|| platform.layout_trace_stop())
+            })
+            .map_err(internal)
         }
     };
     if !on {
@@ -1668,13 +1697,16 @@ fn layout_trace_request(
             .clone()
             .filter(|run| run.endpoint)
             .ok_or_else(|| internal("no layout trace of diagnostics.layout.trace is running"))?;
-        let records = stop_layout_trace(&run, stop(window.clone()))?;
-        return Ok(json!({"layouts": layout_trace(&records)}));
+        let layouts = stop_layout_trace(&run, stop(window.clone()))?;
+        return Ok(json!({"layouts": layouts}));
     }
     let run = Arc::new(LayoutTraceRun { endpoint: true });
     start_layout_trace(&run, || {
         let platform = platform::current().map_err(internal)?;
-        on_main(window, move || platform.layout_trace_start()).map_err(internal)
+        on_main(window, move || {
+            start_traced_layouts(|| platform.layout_trace_start())
+        })
+        .map_err(internal)
     })?;
     let ended = window.clone();
     connection.on_close(move || {

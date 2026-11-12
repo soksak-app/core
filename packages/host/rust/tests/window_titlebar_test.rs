@@ -10,7 +10,8 @@ use soksak_host::windows::validate_titlebar_height;
 /// A surface synchronization request in the form that the page sends. JSON cannot hold NaN and infinity.
 fn titlebar_request(titlebar: f64) -> SyncRequest {
     serde_json::from_value(
-        serde_json::json!({"settled": true, "declarations": [], "surfaces": [], "titlebar": titlebar}),
+        serde_json::json!({"settled": true, "declarations": [], "surfaces": [], "titlebar": titlebar,
+            "viewport": {"width": 800.0, "height": 600.0}}),
     )
     .expect("the sync request fixture is a valid request")
 }

@@ -4,12 +4,14 @@
 //! fails. A stop ends the native recording also when it fails, so finish then transfers the folder to its requester and
 //! abort removes it. A remaining recording or cleanup folder blocks another start.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError, mpsc};
 
 use serde_json::{Value, json};
 
 use crate::platform::LayoutRecord;
+use crate::surfaces::LayoutViewport;
 
 /// What the native capture reports of the recording stopped last: the planned stills without a written frame, the stills
 /// requested more than one gap late, and the longest interval (ms) between the request times of two consecutive written
@@ -36,8 +38,10 @@ pub fn stop_payload(
 }
 
 /// Converts the placement transaction records into {ticket, begun, requested, presented, committed, commitPath,
-/// openAtCommit, flushed, displayed}. A value that did not happen is null.
-pub fn layout_trace(records: &[LayoutRecord]) -> Value {
+/// openAtCommit, flushed, displayed, viewport}. A value that did not happen is null, and viewport, the size {width, height}
+/// of the window that the page made the layout at (viewports, by ticket), is null for a transaction that no preparation of
+/// the trace began.
+pub fn layout_trace(records: &[LayoutRecord], viewports: &HashMap<u64, LayoutViewport>) -> Value {
     let stage = |value: f64| {
         if value.is_nan() {
             Value::Null
@@ -59,6 +63,9 @@ pub fn layout_trace(records: &[LayoutRecord]) -> Value {
                     "openAtCommit": stage(record.open_at_commit),
                     "flushed": stage(record.flushed),
                     "displayed": stage(record.displayed),
+                    "viewport": viewports.get(&record.ticket).map_or(Value::Null, |size| {
+                        serde_json::json!({"width": size.width, "height": size.height})
+                    }),
                 })
             })
             .collect(),

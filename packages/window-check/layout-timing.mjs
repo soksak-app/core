@@ -1,7 +1,7 @@
 // Judgments of the timing of layouts and of the content frames of views, from the numbers that the host and the views report: the
 // layout transactions of the layout trace ({ticket, begun, requested, presented, committed, commitPath, openAtCommit, flushed,
-// displayed}, ms on the host monotonic clock), the times of the steps of a drag, the window resize events and the content frames
-// that a view traces (viewContentFrameEvents of view-metrics-collection.mjs). No judgment reads a recorded frame. Each judgment
+// displayed, viewport}, ms on the host monotonic clock), the times of the steps of a drag, the window resize events and the content
+// frames that a view traces (viewContentFrameEvents of view-metrics-collection.mjs). No judgment reads a recorded frame. Each judgment
 // returns its measured values with `failures`, the requirements that the values miss, which is empty when they meet them.
 import assert from "node:assert/strict";
 
@@ -153,30 +153,31 @@ const sameSize = (a, b) => a.width === b.width && a.height === b.height;
 
 /**
  * A maximise or restore keeps the layout at the window size within `limit` ms (150): the time from the first window resize of the
- * gesture to the sending of the first layout that began at or after the last resize that changed the content size, which is laid
- * out at the final window size. `resizes` are the window resize events of the gesture, `{at, width, height}`: the time (ms) and the
- * content size (points) that the event recorded. The first resize changes the size; a later one changes it when its size differs
- * from that of the resize before it. A resize that recorded no size is a failure.
+ * gesture to the sending of the first layout that the page laid out at the final content size. `resizes` are the window resize
+ * events of the gesture, `{at, width, height}`: the time (ms) and the content size (points) that the event recorded; the final size
+ * is that of the last one. The viewport of a layout is the size that the page laid it out at, which the page gave with its
+ * preparation; the page can lay out the final size before the host reads it from the window, so the layout can begin before the
+ * last resize event. A resize that recorded no size is a failure.
  */
 export function catchUp(layouts, resizes, { limit = 150 } = {}) {
-  if (resizes.length === 0) return { took: null, limit, ticket: null, last: null, failures: ["the gesture has no window resize"] };
+  if (resizes.length === 0) return { took: null, limit, ticket: null, size: null, failures: ["the gesture has no window resize"] };
   const sorted = [...resizes].sort((a, b) => a.at - b.at);
   const unsized = sorted.filter(({ width, height }) => !Number.isFinite(width) || !Number.isFinite(height));
   if (unsized.length > 0) {
-    return { took: null, limit, ticket: null, last: null,
+    return { took: null, limit, ticket: null, size: null,
       failures: unsized.map(({ at }) => `the window resize at ${at} ms recorded no content size`) };
   }
-  const changed = sorted.filter((resize, index) => index === 0 || !sameSize(resize, sorted[index - 1]));
   const first = sorted[0].at;
-  const last = changed.at(-1).at;
-  const caught = layouts.filter((layout) => layout.begun !== null && layout.begun >= last && sentAt(layout) !== null)
-    .sort((a, b) => a.begun - b.begun)[0];
+  const size = { width: sorted.at(-1).width, height: sorted.at(-1).height };
+  const caught = layouts.filter((layout) => layout.begun !== null && layout.viewport && sameSize(layout.viewport, size)
+    && sentAt(layout) !== null).sort((a, b) => a.begun - b.begun)[0];
   if (caught === undefined) {
-    return { took: null, limit, ticket: null, last, failures: [`no layout began after the last size change at ${last} ms`] };
+    return { took: null, limit, ticket: null, size,
+      failures: [`no layout was laid out at the window size ${size.width} x ${size.height}`] };
   }
   const took = sentAt(caught) - first;
   const failures = took > limit ? [`the layout at the window size was sent ${took} ms after the first resize, more than ${limit} ms`] : [];
-  return { took, limit, ticket: caught.ticket, last, failures };
+  return { took, limit, ticket: caught.ticket, size, failures };
 }
 
 /** The content frames of `frames` whose mapped time meets the time from `from` to `to` (ms). */

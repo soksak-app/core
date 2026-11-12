@@ -732,7 +732,10 @@ export const surfaces = native ? {
           titlebar: record.titlebar,
         };
         const normalized = surfaceSyncRequestWithDeclarationTable(fullRequest, heldStarts);
-        const request = normalized.request;
+        // The viewport is the size of the window that the layout was made at, which the host keeps with the layout transaction of this
+        // preparation (docs/spec/native-surfaces.md#layout-transaction). It places nothing, so it is not part of the layout that tells
+        // whether the request changed.
+        const request = { ...normalized.request, viewport: record.viewport };
         const key = JSON.stringify({ layout: normalized.layout, deferredViews });
         const carriedStarts = request.surfaces.filter(({ start }) => start).map(({ id }) => `surfaces.${id}.start`);
         // A release while a preparation is open changes only settled. The host starts a run from a preparation and ends it from a

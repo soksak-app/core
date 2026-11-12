@@ -6,6 +6,7 @@
 mod folder;
 
 use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Mutex;
 
@@ -17,6 +18,7 @@ use soksak_host::platform::LayoutRecord;
 use soksak_host::recording::{
     Capture, Plan, Recording, StillCounts, Target, layout_trace, stop_payload,
 };
+use soksak_host::surfaces::LayoutViewport;
 
 /// The records of the host are process-wide, so the tests of this file that attach a writer run one at a time: a test reads
 /// only the errors that its own recording wrote.
@@ -526,41 +528,52 @@ fn the_stop_payload_reports_the_stills() {
 // contract: diagnostics.layout-trace.reply-reports-layouts
 #[test]
 fn a_layout_trace_without_transactions_reports_an_empty_list() {
-    assert_eq!(layout_trace(&[]), serde_json::json!([]));
+    assert_eq!(layout_trace(&[], &HashMap::new()), serde_json::json!([]));
 }
 
 // contract: diagnostics.layout-trace.reply-preserves-layout-stages
 #[test]
 fn a_layout_trace_keeps_the_stages_of_each_transaction() {
-    let layouts = layout_trace(&[
-        LayoutRecord {
-            ticket: 7,
-            begun: 10.0,
-            requested: 15.0,
-            presented: 20.0,
-            committed: 30.0,
-            commit_path: Some("view-join"),
-            open_at_commit: 1.0,
-            flushed: 35.0,
-            displayed: 41.6,
+    // The transaction of ticket 8 began without a preparation of the trace, so it has no viewport.
+    let viewports = HashMap::from([(
+        7,
+        LayoutViewport {
+            width: 1800.0,
+            height: 1081.0,
         },
-        LayoutRecord {
-            ticket: 8,
-            begun: 40.0,
-            requested: f64::NAN,
-            presented: f64::NAN,
-            committed: f64::NAN,
-            commit_path: None,
-            open_at_commit: f64::NAN,
-            flushed: f64::NAN,
-            displayed: f64::NAN,
-        },
-    ]);
+    )]);
+    let layouts = layout_trace(
+        &[
+            LayoutRecord {
+                ticket: 7,
+                begun: 10.0,
+                requested: 15.0,
+                presented: 20.0,
+                committed: 30.0,
+                commit_path: Some("view-join"),
+                open_at_commit: 1.0,
+                flushed: 35.0,
+                displayed: 41.6,
+            },
+            LayoutRecord {
+                ticket: 8,
+                begun: 40.0,
+                requested: f64::NAN,
+                presented: f64::NAN,
+                committed: f64::NAN,
+                commit_path: None,
+                open_at_commit: f64::NAN,
+                flushed: f64::NAN,
+                displayed: f64::NAN,
+            },
+        ],
+        &viewports,
+    );
     assert_eq!(
         layouts,
         serde_json::json!([
-            {"ticket":7,"begun":10.0,"requested":15.0,"presented":20.0,"committed":30.0,"commitPath":"view-join","openAtCommit":1.0,"flushed":35.0,"displayed":41.6},
-            {"ticket":8,"begun":40.0,"requested":null,"presented":null,"committed":null,"commitPath":null,"openAtCommit":null,"flushed":null,"displayed":null}
+            {"ticket":7,"begun":10.0,"requested":15.0,"presented":20.0,"committed":30.0,"commitPath":"view-join","openAtCommit":1.0,"flushed":35.0,"displayed":41.6,"viewport":{"width":1800.0,"height":1081.0}},
+            {"ticket":8,"begun":40.0,"requested":null,"presented":null,"committed":null,"commitPath":null,"openAtCommit":null,"flushed":null,"displayed":null,"viewport":null}
         ])
     );
 }

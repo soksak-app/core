@@ -587,7 +587,11 @@ func (s *Shell) surfaceRequest() (map[string]any, error) {
 			"start": map[string]any{"params": tabMember(held.tab, "params", "null"), "origin": tabMember(held.tab, "origin", `{"directory":null}`),
 				"project": held.project, "declarations": index, "diagnostics": rawOrNull(unit.Diagnostics), "section": held.section}})
 	}
-	return map[string]any{"settled": s.held == nil, "surfaces": surfaces, "titlebar": s.surfaces.row, "declarations": table}, nil
+	// viewport is the size of the window that the frame laid out, which the host keeps with the layout transaction of the preparation
+	// (docs/spec/native-surfaces.md#layout-transaction), as the page gives it.
+	viewport := map[string]any{"width": s.drawnSize[0], "height": s.drawnSize[1]}
+	return map[string]any{"settled": s.held == nil, "surfaces": surfaces, "titlebar": s.surfaces.row, "declarations": table,
+		"viewport": viewport}, nil
 }
 
 // surfaceDimmed tells whether the setting dims the surface: a card has one surface shown, and the card without focus dims it.

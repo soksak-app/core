@@ -543,7 +543,10 @@ export function publishAhead(rects, seated, titlebar) {
  * the most recent one.
  */
 function commit(mine, snapshot, final, titlebar) {
-  const record = { seq: mine, settled: final, drawn: mine !== aheadSeq, titlebar, surfaces: [], deferred: [] };
+  // viewport is the size of the window that this layout was made at, which the host keeps with the layout transaction of the
+  // preparation (docs/spec/native-surfaces.md#layout-transaction).
+  const viewport = { width: window.innerWidth, height: window.innerHeight };
+  const record = { seq: mine, settled: final, drawn: mine !== aheadSeq, titlebar, viewport, surfaces: [], deferred: [] };
   // A drawn commit runs in the draw of a layout, which follows the acknowledgement of the presentation before it.
   if (record.drawn) writeAcknowledgedHoles();
   const kinds = app.kinds;

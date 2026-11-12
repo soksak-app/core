@@ -1,4 +1,5 @@
 use super::*;
+use crate::surfaces::note_layout_viewport;
 use std::cell::{Cell, RefCell};
 use std::sync::mpsc;
 use std::time::Duration;
@@ -489,6 +490,52 @@ fn a_recorded_drag_tells_what_failed_of_its_recording() {
         )),
         json!({"took": 100, "ticks": [1.0], "layouts": [{"ticket": 1}], "frames": "/frames", "window": 7})
     );
+}
+
+/// A transaction of ticket that began at begun and has no other stage.
+fn begun_record(ticket: u64, begun: f64) -> platform::LayoutRecord {
+    platform::LayoutRecord {
+        ticket,
+        begun,
+        requested: f64::NAN,
+        presented: f64::NAN,
+        committed: f64::NAN,
+        commit_path: None,
+        open_at_commit: f64::NAN,
+        flushed: f64::NAN,
+        displayed: f64::NAN,
+    }
+}
+
+// The layout trace keeps the viewport of each preparation that began its transaction during the trace with the transaction of
+// its ticket: the start keeps the viewports from then on and the stop takes them with the records, each in its own main-thread
+// turn, as a preparation notes its viewport in the turn that begins its transaction. A preparation outside a trace keeps
+// nothing (docs/spec/native-surfaces.md#layout-transaction).
+// contract: diagnostics.layout-trace.reply-carries-layout-viewport
+#[test]
+fn the_layout_trace_keeps_the_viewport_of_each_preparation() {
+    let size = |width, height| LayoutViewport { width, height };
+    note_layout_viewport(1, size(1200.0, 760.0));
+    start_traced_layouts(|| Ok(())).unwrap();
+    note_layout_viewport(2, size(1800.0, 1081.0));
+    let layouts =
+        stop_traced_layouts(|| Ok(vec![begun_record(1, 10.0), begun_record(2, 20.0)])).unwrap();
+    assert_eq!(
+        [&layouts[0]["viewport"], &layouts[1]["viewport"]],
+        [&Value::Null, &json!({"width": 1800.0, "height": 1081.0})]
+    );
+    note_layout_viewport(3, size(1200.0, 760.0));
+    start_traced_layouts(|| Ok(())).unwrap();
+    let layouts = stop_traced_layouts(|| Ok(vec![begun_record(3, 30.0)])).unwrap();
+    assert_eq!(layouts[0]["viewport"], Value::Null);
+    // A failed stop of the native trace still ends the keeping of the viewports.
+    start_traced_layouts(|| Ok(())).unwrap();
+    assert_eq!(
+        stop_traced_layouts(|| Err("the trace failed".to_string())).unwrap_err(),
+        "the trace failed"
+    );
+    note_layout_viewport(4, size(1200.0, 760.0));
+    assert!(held_layout_viewports().is_none());
 }
 
 // One run holds the layout trace at a time, because a native start discards what the trace recorded; only the run that holds

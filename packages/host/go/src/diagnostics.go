@@ -787,8 +787,8 @@ func diagnosticDrag(e *Endpoint, c *endpointConn, params json.RawMessage, reply 
 	}
 	var layouts []map[string]any
 	result, err := stopAfterSettled(settle, func() error {
-		records, err := stopLayoutTrace(trace, run)
-		layouts = layoutTrace(records)
+		var err error
+		layouts, err = stopLayoutTrace(trace, run)
 		return err
 	})
 	if err != nil {
@@ -852,12 +852,18 @@ func startLayoutTrace(trace platformCapture, run *layoutTraceRun) error {
 		return errors.New("the layout trace is already running")
 	}
 	layoutTraces.run = run
-	mainThreadStep(trace.LayoutTraceStart)
+	mainThreadStep(func() {
+		layoutViewports.mu.Lock()
+		layoutViewports.byTicket = map[uint64]LayoutViewport{}
+		layoutViewports.mu.Unlock()
+		trace.LayoutTraceStart()
+	})
 	return nil
 }
 
-// stopLayoutTrace stops the layout trace of run and returns its records; it fails when run does not hold the trace.
-func stopLayoutTrace(trace platformCapture, run *layoutTraceRun) ([]platform.LayoutRecord, error) {
+// stopLayoutTrace stops the layout trace of run and returns its layout transactions (layoutTrace); it fails when run does not hold
+// the trace.
+func stopLayoutTrace(trace platformCapture, run *layoutTraceRun) ([]map[string]any, error) {
 	layoutTraces.mu.Lock()
 	defer layoutTraces.mu.Unlock()
 	if layoutTraces.run != run {
@@ -868,9 +874,15 @@ func stopLayoutTrace(trace platformCapture, run *layoutTraceRun) ([]platform.Lay
 		run.forget()
 	}
 	var records []platform.LayoutRecord
+	var viewports map[uint64]LayoutViewport
 	var err error
-	mainThreadStep(func() { records, err = trace.LayoutTraceStop() })
-	return records, err
+	mainThreadStep(func() {
+		records, err = trace.LayoutTraceStop()
+		layoutViewports.mu.Lock()
+		viewports, layoutViewports.byTicket = layoutViewports.byTicket, nil
+		layoutViewports.mu.Unlock()
+	})
+	return layoutTrace(records, viewports), err
 }
 
 // diagnosticLayoutTrace starts the layout trace with on set, and with on unset stops the trace that it started and answers
@@ -901,11 +913,11 @@ func diagnosticLayoutTrace(e *Endpoint, c *endpointConn, params json.RawMessage,
 		if run == nil || !run.endpoint {
 			return nil, errors.New("no layout trace of diagnostics.layout.trace is running")
 		}
-		records, err := stopLayoutTrace(trace, run)
+		layouts, err := stopLayoutTrace(trace, run)
 		if err != nil {
 			return nil, err
 		}
-		return map[string]any{"layouts": layoutTrace(records)}, nil
+		return map[string]any{"layouts": layouts}, nil
 	}
 	run := &layoutTraceRun{endpoint: true}
 	if err := startLayoutTrace(trace, run); err != nil {
@@ -1091,8 +1103,9 @@ func nativeDragPresented(ctx context.Context, h *Host, s *Surfaces, plan dragPla
 }
 
 // layoutTrace converts the layout transaction records to {ticket, begun, requested, presented, committed, commitPath,
-// openAtCommit, flushed, displayed}. A value that did not happen is null.
-func layoutTrace(records []platform.LayoutRecord) []map[string]any {
+// openAtCommit, flushed, displayed, viewport}. A value that did not happen is null, and viewport, the size {width, height} of the
+// window that the page made the layout at, is null for a transaction that no preparation of the trace began.
+func layoutTrace(records []platform.LayoutRecord, viewports map[uint64]LayoutViewport) []map[string]any {
 	layouts := make([]map[string]any, 0, len(records))
 	stage := func(value float64) any {
 		if math.IsNaN(value) {
@@ -1105,10 +1118,14 @@ func layoutTrace(records []platform.LayoutRecord) []map[string]any {
 		if record.CommitPath != "" {
 			commitPath = record.CommitPath
 		}
+		var viewport any
+		if size, ok := viewports[record.Ticket]; ok {
+			viewport = map[string]any{"width": size.Width, "height": size.Height}
+		}
 		layouts = append(layouts, map[string]any{
 			"ticket": record.Ticket, "begun": stage(record.Begun), "requested": stage(record.Requested), "presented": stage(record.Presented),
 			"committed": stage(record.Committed), "commitPath": commitPath, "openAtCommit": stage(record.OpenAtCommit),
-			"flushed": stage(record.Flushed), "displayed": stage(record.Displayed),
+			"flushed": stage(record.Flushed), "displayed": stage(record.Displayed), "viewport": viewport,
 		})
 	}
 	return layouts

@@ -87,13 +87,13 @@ test("the preparation carries the title bar height and the presented chrome is t
     },
   } } });
   const { chrome, surfaces } = await import("../host.js");
-  const record = (titlebar, drawn) => ({
+  const record = (titlebar, drawn, viewport = { width: 800, height: 600 }) => ({
     surfaces: [{
       id: "surface", dim: false, visible: true,
       surface: { module: "surface-module", composition: { kind: "dom" } },
       applied: { x: 1, y: 2, w: 3, h: 4 },
     }],
-    settled: true, drawn, titlebar,
+    settled: true, drawn, titlebar, viewport,
   });
   try {
     assert.equal("titlebar" in chrome, false, "the page has no title bar request apart from the preparation");
@@ -104,6 +104,7 @@ test("the preparation carries the title bar height and the presented chrome is t
       "the answer keeps the scale whose device pixels the host fitted the surface to");
     assert.deepEqual(calls.map((c) => c.name), ["syncSurfaces"]);
     assert.equal(calls[0].request.titlebar, 54, "the preparation carries the row of the next draw");
+    assert.deepEqual(calls[0].request.viewport, { width: 800, height: 600 }, "the preparation carries the viewport of its layout");
     assert.deepEqual(calls[0].request.declarations, [], "a request without views must carry its empty declaration table");
     assert.equal(chrome.presented(), null, "a preparation is not the committed state before its presentation");
 
@@ -126,6 +127,9 @@ test("the preparation carries the title bar height and the presented chrome is t
     calls.length = 0;
     await surfaces.place(record(40, false));
     assert.deepEqual(calls, [], "an unchanged request was sent");
+    // The viewport tells the host the size that the layout was made at; a layout at another size that places the same is no change.
+    await surfaces.place(record(40, false, { width: 900, height: 600 }));
+    assert.deepEqual(calls, [], "a request that changed only its viewport was sent");
     surfaces.forget();
     await surfaces.place(record(40, false));
     await surfaces.place(record(40, true));

@@ -31,7 +31,8 @@ export function transcript(lines) {
  * synchronization (docs/spec/native-surfaces.md), so a settled layout is the preparation before a settled presentation, with settled
  * true. A view sends its start values with the first preparation after they changed, which can be the settled one or an earlier one,
  * so the layout leaves out the start values of its surfaces and their declaration table, as the layout of the page does
- * (surfaceSyncRequestWithDeclarationTable). followed tells that a preparation came after the presentation: the layout moved on.
+ * (surfaceSyncRequestWithDeclarationTable), and the viewport, which places nothing. followed tells that a preparation came after the
+ * presentation: the layout moved on.
  */
 export function settledLayouts(lines) {
   const same = sameText(orderNames());
@@ -42,7 +43,7 @@ export function settledLayouts(lines) {
       prepared = JSON.parse(request);
       if (layouts.length) layouts.at(-1).followed = true;
     } else if (name === "presentSurfaces" && JSON.parse(request).settled === true && prepared) {
-      const { declarations: _table, ...rest } = prepared;
+      const { declarations: _table, viewport: _viewport, ...rest } = prepared;
       const layout = { ...rest, settled: true, surfaces: prepared.surfaces.map(({ start: _start, ...item }) => item) };
       layouts.push({ layout, request: same(JSON.stringify(layout)), answer: same(answer), followed: false });
     }

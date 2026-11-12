@@ -124,7 +124,7 @@ func TestSyncRequestValidatesTheStartValuesOfAView(t *testing.T) {
 func TestSyncRequestRequiresAndResolvesItsDeclarationTable(t *testing.T) {
 	const surface = `"id":"probe","visible":true,"dim":false,"plugin":"probe","composition":{"kind":"view","page":"ui/page.html"},"x":0,"y":0,"w":10,"h":10,"start":{"params":{"path":"/work/one"},"origin":{"directory":"/work/one"},"project":{"id":"prj-one","root":"/work/one"},"diagnostics":null,"section":null`
 	request := func(table, index string) json.RawMessage {
-		return json.RawMessage(`{"settled":true,"titlebar":40,"declarations":` + table + `,"surfaces":[{` + surface + `,"declarations":` + index + `}}]}`)
+		return json.RawMessage(`{"settled":true,"titlebar":40,"viewport":{"width":800,"height":600},"declarations":` + table + `,"surfaces":[{` + surface + `,"declarations":` + index + `}}]}`)
 	}
 	valid := request(`[{"commands":[{"name":"probe.command","params":{"path":"/work/one"}}]}]`, `0`)
 	decoded, err := decodeSyncRequest(valid)
@@ -151,7 +151,7 @@ func TestSyncRequestRequiresAndResolvesItsDeclarationTable(t *testing.T) {
 	}
 
 	second := strings.Replace(surface, `"id":"probe"`, `"id":"probe-two"`, 1)
-	paired := json.RawMessage(`{"settled":true,"titlebar":40,"declarations":[{"commands":[{"name":"probe.first"}]},{"commands":[{"name":"probe.second"}]}],"surfaces":[{` + surface + `,"declarations":0}},{` + second + `,"declarations":1}}]}`)
+	paired := json.RawMessage(`{"settled":true,"titlebar":40,"viewport":{"width":800,"height":600},"declarations":[{"commands":[{"name":"probe.first"}]},{"commands":[{"name":"probe.second"}]}],"surfaces":[{` + surface + `,"declarations":0}},{` + second + `,"declarations":1}}]}`)
 	pairedDecoded, err := decodeSyncRequest(paired)
 	if err != nil || string(pairedDecoded.Surfaces[0].Start.Declarations) != `{"commands":[{"name":"probe.first"}]}` ||
 		string(pairedDecoded.Surfaces[1].Start.Declarations) != `{"commands":[{"name":"probe.second"}]}` {
@@ -162,24 +162,24 @@ func TestSyncRequestRequiresAndResolvesItsDeclarationTable(t *testing.T) {
 	if err != nil || string(changedDecoded.Surfaces[0].Start.Declarations) != `{"commands":[{"name":"probe.changed"}]}` {
 		t.Fatalf("new request declarations resolved as %+v, error %v", changedDecoded.Surfaces, err)
 	}
-	empty, err := decodeSyncRequest(json.RawMessage(`{"settled":true,"titlebar":40,"declarations":[],"surfaces":[]}`))
+	empty, err := decodeSyncRequest(json.RawMessage(`{"settled":true,"titlebar":40,"viewport":{"width":800,"height":600},"declarations":[],"surfaces":[]}`))
 	if err != nil || len(empty.Surfaces) != 0 {
 		t.Fatalf("empty declaration table without view starts was refused: %+v, error %v", empty, err)
 	}
 	for _, raw := range []json.RawMessage{
-		json.RawMessage(`{"settled":true,"titlebar":40,"surfaces":[]}`),
-		json.RawMessage(`{"settled":true,"titlebar":40,"declarations":null,"surfaces":[]}`),
+		json.RawMessage(`{"settled":true,"titlebar":40,"viewport":{"width":800,"height":600},"surfaces":[]}`),
+		json.RawMessage(`{"settled":true,"titlebar":40,"viewport":{"width":800,"height":600},"declarations":null,"surfaces":[]}`),
 	} {
 		if _, err := (&Host{}).SyncSurfaces(context.Background(), raw); err == nil || !strings.Contains(err.Error(), "declarations") {
 			t.Errorf("no-view request without a non-null declaration table returned %v", err)
 		}
 	}
 	nonView := strings.Replace(surface, `"composition":{"kind":"view"`, `"composition":{"kind":"other"`, 1)
-	if _, err := decodeSyncRequest(json.RawMessage(`{"settled":true,"titlebar":40,"declarations":[{"commands":[]}],"surfaces":[{` + nonView + `,"declarations":0}}]}`)); err == nil || !strings.Contains(err.Error(), "non-view composition") {
+	if _, err := decodeSyncRequest(json.RawMessage(`{"settled":true,"titlebar":40,"viewport":{"width":800,"height":600},"declarations":[{"commands":[]}],"surfaces":[{` + nonView + `,"declarations":0}}]}`)); err == nil || !strings.Contains(err.Error(), "non-view composition") {
 		t.Fatalf("non-view start values were not rejected explicitly: %v", err)
 	}
 
-	missingTable := json.RawMessage(`{"settled":true,"titlebar":40,"surfaces":[{` + surface + `,"declarations":0}}]}`)
+	missingTable := json.RawMessage(`{"settled":true,"titlebar":40,"viewport":{"width":800,"height":600},"surfaces":[{` + surface + `,"declarations":0}}]}`)
 	cases := []struct {
 		name, table, index, want string
 	}{
@@ -202,7 +202,7 @@ func TestSyncRequestRequiresAndResolvesItsDeclarationTable(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var raw json.RawMessage
 			if tc.name == "missing index" {
-				raw = json.RawMessage(`{"settled":true,"titlebar":40,"declarations":` + tc.table + `,"surfaces":[{` + surface + `}}]}`)
+				raw = json.RawMessage(`{"settled":true,"titlebar":40,"viewport":{"width":800,"height":600},"declarations":` + tc.table + `,"surfaces":[{` + surface + `}}]}`)
 			} else {
 				raw = request(tc.table, tc.index)
 			}
@@ -267,7 +267,7 @@ func checkViewSurface(t *testing.T, surface string) error {
 // present raw values, which the start checks accept.
 // contract: view.start-values.keeps-null-members
 func TestSyncRequestDecoderKeepsTheNullStartValues(t *testing.T) {
-	request, err := decodeSyncRequest(json.RawMessage(`{"settled":true,"titlebar":40,"declarations":[{"commands":[]}],
+	request, err := decodeSyncRequest(json.RawMessage(`{"settled":true,"titlebar":40,"viewport":{"width":800,"height":600},"declarations":[{"commands":[]}],
 		"surfaces":[{"id":"spc-aaaaaa/left/probe.tree","x":0,"y":0,"w":10,"h":10,"visible":true,"dim":false,"plugin":"probe",
 		"composition":{"kind":"view","page":"tree.html"},
 		"start":{"params":null,"origin":{"directory":null},"project":null,"declarations":0,"diagnostics":null,"section":null}}]}`))
@@ -398,7 +398,7 @@ func TestAViewWithoutStartKeepsTheValuesThatTheHostHolds(t *testing.T) {
 	if want := `surface "other": view start is missing`; err == nil || err.Error() != want {
 		t.Fatalf("a view without held start values: %v, want %q", err, want)
 	}
-	decoded, err := decodeSyncRequest(json.RawMessage(`{"settled":true,"titlebar":40,"declarations":[],"surfaces":[{"id":"probe","visible":true,"dim":false,"plugin":"probe","composition":{"kind":"view","page":"ui/page.html"},"x":0,"y":0,"w":10,"h":10}]}`))
+	decoded, err := decodeSyncRequest(json.RawMessage(`{"settled":true,"titlebar":40,"viewport":{"width":800,"height":600},"declarations":[],"surfaces":[{"id":"probe","visible":true,"dim":false,"plugin":"probe","composition":{"kind":"view","page":"ui/page.html"},"x":0,"y":0,"w":10,"h":10}]}`))
 	if err != nil {
 		t.Fatalf("a request without start values: %v", err)
 	}

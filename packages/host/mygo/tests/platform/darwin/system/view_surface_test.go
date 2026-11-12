@@ -231,7 +231,8 @@ func (s *viewSession) layout(t *testing.T, surfaces ...host.Surface) []host.Plac
 			shown = append(shown, surface.ID)
 		}
 	}
-	request, err := json.Marshal(map[string]any{"settled": true, "surfaces": wire, "declarations": declarations, "titlebar": 36})
+	request, err := json.Marshal(map[string]any{"settled": true, "surfaces": wire, "declarations": declarations, "titlebar": 36,
+		"viewport": map[string]any{"width": 800, "height": 600}})
 	if err != nil {
 		t.Fatal(err)
 	}

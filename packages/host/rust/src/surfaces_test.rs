@@ -70,7 +70,7 @@ fn a_view_without_start_keeps_the_values_that_the_host_holds() {
     use crate::view_lifecycle::ViewLifecycle;
     let surface = |start: &str| {
         format!(
-            r#"{{"settled":true,"titlebar":40,"declarations":[{{}}],"surfaces":[{{"id":"probe","visible":true,"dim":false,"plugin":"probe","composition":{{"kind":"view","page":"ui/page.html"}},"x":0,"y":0,"w":10,"h":10{start}}}]}}"#
+            r#"{{"settled":true,"titlebar":40,"viewport":{{"width":800,"height":600}},"declarations":[{{}}],"surfaces":[{{"id":"probe","visible":true,"dim":false,"plugin":"probe","composition":{{"kind":"view","page":"ui/page.html"}},"x":0,"y":0,"w":10,"h":10{start}}}]}}"#
         )
     };
     let request = |text: String| {
@@ -130,7 +130,7 @@ mod declaration_table {
     fn the_host_call_decoder_keeps_the_null_start_values_of_a_view() {
         let request: SyncRequest = crate::arguments::decode("request", &serde_json::json!({
             "settled": true,
-            "titlebar": 40.0,
+            "titlebar": 40.0, "viewport": {"width": 800.0, "height": 600.0},
             "declarations": [{"commands": []}],
             "surfaces": [{"id":"spc-aaaaaa/left/probe.tree","x":0.0,"y":0.0,"w":10.0,"h":10.0,"visible":true,"dim":false,
                           "plugin":"probe","composition":{"kind":"view","page":"tree.html"},
@@ -153,7 +153,7 @@ mod declaration_table {
     fn resolving_declaration_indices_preserves_each_complete_start_and_is_request_local() {
         let first: SyncRequest = serde_json::from_value(serde_json::json!({
             "settled": true,
-            "titlebar": 40.0,
+            "titlebar": 40.0, "viewport": {"width": 800.0, "height": 600.0},
             "declarations": [{"commands": ["open"], "element": ["alpha"], "nested": {"keep": true}}],
             "surfaces": [
                 {"id":"one","x":0.0,"y":0.0,"w":10.0,"h":10.0,"visible":true,"dim":false,
@@ -206,7 +206,7 @@ mod declaration_table {
 
         let next: SyncRequest = serde_json::from_value(serde_json::json!({
             "settled": true,
-            "titlebar": 40.0,
+            "titlebar": 40.0, "viewport": {"width": 800.0, "height": 600.0},
             "declarations": [{"commands": ["save"]}],
             "surfaces": [{"id":"three","x":0.0,"y":0.0,"w":10.0,"h":10.0,"visible":true,"dim":false,
                           "plugin":"page","composition":{"kind":"view","page":"three.html"},
