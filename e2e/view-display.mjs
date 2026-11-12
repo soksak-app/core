@@ -1,5 +1,6 @@
 // Measures view display through the declared window-check session interface.
 import assert from "node:assert/strict";
+import { recordingSummary } from "@soksak/window-check/app.mjs";
 
 const PRESENTATION_PHASES = new Set(["requested", "result", "presented", "abandoned"]);
 
@@ -166,7 +167,7 @@ export async function observeViewDisplay(s, t, verifyContent, paramsForPlugin = 
       assert.deepEqual((await s.get("core.surface.document", tab)).unbound, [],
         `${view.id}: ready view document controls without a command or element name`);
       if (verifyShown) await verifyShown();
-      t.diagnostic(`${view.id}: recording ${stopped.frames}, ${stopped.count} written, ${stopped.missed} missed and ${stopped.late} late stills`);
+      t.diagnostic(`${view.id}: ${recordingSummary(stopped)}`);
     } finally {
       if (tab) {
         await s.run("core.tab.close", { tab });

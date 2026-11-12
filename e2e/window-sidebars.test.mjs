@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
-import { APPS, MAIN_PAGE_APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { APPS, MAIN_PAGE_APPS, keepCommonSettings, open, recordingSummary } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { turnOffCardSidebars } from "./card-sidebar-choices.mjs";
 /** The plugin without a window sidebar override. */
@@ -132,10 +132,10 @@ for (const app of Object.values(APPS))
         `${plugin} override was not measured`,
       );
       t.diagnostic(
-        `fixed windows=${windows.map((card) => card.id)}; selections=${observations.map((item) => `${item.plugin}:${item.rail.groups.length}`)}; recording ${recording.frames}: stills=${stop.count}; missed=${stop.missed}; late=${stop.late}; longest gap=${stop.longestGap}ms`,
+        `fixed windows=${windows.map((card) => card.id)}; selections=${observations.map((item) => `${item.plugin}:${item.rail.groups.length}`)}; ${recordingSummary(stop)}`,
       );
     } finally {
-      rmSync(recording.frames, { recursive: true, force: true });
+      if (recording.frames) rmSync(recording.frames, { recursive: true, force: true });
     }
   });
 

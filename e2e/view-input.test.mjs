@@ -2,7 +2,7 @@
 // reports its focus and its value.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { APPS, keepCommonSettings, open, recordingSummary } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { fieldPoint, inputProbeTab, pressInKeyWindow } from "./input-probe.mjs";
 
@@ -90,6 +90,6 @@ for (const app of Object.values(APPS)) {
     assert.ok(windows.length > 0 && windows.every(window => window.active === false),
       "the native gesture activated the application");
     assert.deepEqual((await s.get("core.workbench.audit")).unbound, []);
-    t.diagnostic(`native focus round trip and picker Escape: ${stopped.count} frames, ${stopped.missed} missed and ${stopped.late} late stills`);
+    t.diagnostic(`native focus round trip and picker Escape: ${recordingSummary(stopped)}`);
   });
 }

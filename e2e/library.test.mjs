@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { APPS, failure, open } from "@soksak/window-check/app.mjs";
+import { APPS, failure, open, recordingSummary } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { processTable } from "@soksak/window-check/process-table.mjs";
 import { previewGaps, startPreviewPanes } from "./library-preview.mjs";
@@ -236,7 +236,7 @@ for (const app of Object.values(APPS)) {
     await s.presented();
     phase("first-presentation");
     const stopped = await recording.stop({ after: 0 });
-    t.diagnostic(`project return recording ${stopped.frames}`);
+    t.diagnostic(`project return: ${recordingSummary(stopped)}`);
     const returned = await s.get("host.window");
     const expectedRasters = (await s.surfaces(RASTER)).filter((surface) => surface.visible);
     for (const surface of expectedRasters) {

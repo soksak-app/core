@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
-import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { APPS, keepCommonSettings, open, recordingSummary } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 
 for (const app of Object.values(APPS)) test(`${app.name}: rail groups follow adjacent, detached, fullscreen and restored cards`, { timeout: 90000 }, async (t) => {
@@ -21,7 +21,6 @@ for (const app of Object.values(APPS)) test(`${app.name}: rail groups follow adj
   // Records while the state changes, as the evidence of the change, and checks the rail that the application reports.
   const record = async (label, change, loops) => {
     const recording = await s.record();
-    const directory = recording.frames;
     await change();
     const { displayed } = await s.presented();
     const stopped = await recording.stop({ after: displayed });
@@ -32,10 +31,9 @@ for (const app of Object.values(APPS)) test(`${app.name}: rail groups follow adj
       if (loops > 0) assert.equal(rail.groups[0].loops.length, loops, `${label}: ${rail.groups[0].loops.length} rail loops, expected ${loops}`);
       const verify = (await s.get("core.verify")).rows.filter((row) => !row.ok);
       assert.deepEqual(verify, [], `${label}: layout verification failed`);
-      t.diagnostic(`${label}: recording ${directory}: ${stopped.count} stills, ${stopped.missed} missed, ${stopped.late} late, ` +
-        `longest gap ${stopped.longestGap}ms, ${loops} loop(s)`);
+      t.diagnostic(`${label}: ${recordingSummary(stopped)}, ${loops} loop(s)`);
     } finally {
-      rmSync(directory, { recursive: true, force: true });
+      if (recording.frames) rmSync(recording.frames, { recursive: true, force: true });
     }
   };
 

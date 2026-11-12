@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, open, recordingSummary } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { imageRect, readyInputProbe, rasterProbeTab } from "./input-probe.mjs";
 
@@ -54,7 +54,6 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(host.regions.filter((region) => region.focused).map((region) => region.surface), [second.surface],
       `the last pressed image region does not hold the focus: responder ${JSON.stringify(host.responder)}, regions ` +
       JSON.stringify(host.regions.map(({ surface, focused, visible }) => ({ surface, focused, visible }))));
-    t.diagnostic(`core.focus values ${JSON.stringify(values)}; recording ${stopped.frames}: ${stopped.count} stills, ${stopped.missed} missed, ` +
-      `${stopped.late} late, longest gap ${stopped.longestGap}ms`);
+    t.diagnostic(`core.focus values ${JSON.stringify(values)}; ${recordingSummary(stopped)}`);
   });
 }

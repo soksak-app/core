@@ -69,37 +69,64 @@ const newSession = (directory, client) => {
 const cleanUp = async (s, diagnostics = []) => finishSession({ name: "recording test", passed: true,
   diagnostic(line) { diagnostics.push(line); } }, s, () => {});
 
-test("a recording whose stop fails fails finalization, sends no second stop and preserves its folder", async (t) => {
+// A recording is the log of a check: a stop that fails is told, the check passes and removes the folder, and only the judgment
+// of the recording fails on the stop.
+test("a recording whose stop fails is told, sends no second stop and fails only its judgment", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "soksak-record-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const client = fakeClient(directory, { stopFails: true });
   const s = newSession(directory, client);
   const recording = await s.record({ display: true });
   assert.equal(client.requests.find((request) => request.method === "diagnostics.capture.start").display, true);
-  await assert.rejects(recording.stop({ after: 5 }), /layout trace failed/);
-  await assert.rejects(cleanUp(s), /1 recording failed: .*layout trace failed/);
+  assert.equal(await recording.stop({ after: 5 }), null);
+  assert.throws(() => recording.judge(), /layout trace failed/);
+  const diagnostics = [];
+  await cleanUp(s, diagnostics);
+  assert.ok(diagnostics.some((line) => /^recording: .*: the stop of the recording failed: layout trace failed$/.test(line)),
+    `the stop failure was not told: ${diagnostics.join("; ")}`);
   assert.equal(stops(client).length, 1, "the cleanup sent another stop after one was sent");
-  assert.equal(existsSync(recording.frames), true, "the failed recording folder was not preserved");
+  assert.equal(existsSync(recording.frames), false, "the recording of a passed check stayed");
 });
 
-test("a stop failure remains visible when the host removes its recording folder", { timeout: 30000 }, async (t) => {
+test("a recording whose start fails is told, has no frames, answers no stop and fails only its judgment", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "soksak-record-start-fails-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const client = fakeClient(directory);
+  const request = client.request;
+  client.request = async (method, params) => {
+    if (method === "diagnostics.capture.start") {
+      client.requests.push({ method, ...params });
+      throw new Error("the capture did not start");
+    }
+    return request(method, params);
+  };
+  const s = newSession(directory, client);
+  const recording = await s.record();
+  assert.equal(recording.frames, null);
+  assert.equal(await recording.stop({ after: 0 }), null);
+  recording.keep("poses", []);
+  assert.throws(() => recording.judge(), /the capture did not start/);
+  const diagnostics = [];
+  await cleanUp(s, diagnostics);
+  assert.ok(diagnostics.includes("recording: the recording did not start: the capture did not start"),
+    `the start failure was not told: ${diagnostics.join("; ")}`);
+  assert.deepEqual(stops(client), [], "a stop was sent for a recording that did not start");
+  assert.deepEqual(client.requests.filter((request) => request.method === "diagnostics.window.draw-covered").map(({ draw }) => draw),
+    [true, false], "the hold of the covered drawing was not ended");
+});
+
+test("a stop failure is told when the host removes its recording folder", { timeout: 30000 }, async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "soksak-record-removed-after-stop-error-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const client = fakeClient(directory, { stopFails: true, removeFramesOnStopFailure: true });
   const s = newSession(directory, client);
   const recording = await s.record();
-  const identity = realpathSync(recording.frames);
-  let stopError;
-  try {
-    await recording.stop({ after: 0 });
-  } catch (error) {
-    stopError = error;
-  }
-  await cleanUp(s);
+  assert.equal(await recording.stop({ after: 0 }), null);
+  const diagnostics = [];
+  await cleanUp(s, diagnostics);
 
-  assert.match(stopError?.message ?? "", /layout trace failed/);
-  assert.equal(s.failedRecordings.get(identity), stopError,
-    "the stop error was not recorded under the identity captured when recording started");
+  assert.ok(diagnostics.some((line) => /the stop of the recording failed: layout trace failed$/.test(line)),
+    `the stop failure was not told: ${diagnostics.join("; ")}`);
   assert.equal(stops(client).length, 1, "cleanup retried stop after the host removed the folder");
   assert.equal(existsSync(recording.frames), false, "the host fixture did not remove the recording folder");
 });
@@ -167,13 +194,16 @@ test("a recording asks for one still each refresh of the display of its window a
   await cleanUp(s);
 });
 
-test("a recording of a window on no display fails before it starts", async (t) => {
+test("a recording of a window on no display is told and does not start", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "soksak-record-no-display-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const client = fakeClient(directory, { refreshRate: null });
   const s = newSession(directory, client);
-  await assert.rejects(s.record(), /^Error: a recording takes one still each refresh, and host\.window\.refreshRate is null$/);
+  const recording = await s.record();
+  assert.throws(() => recording.judge(), /^Error: a recording takes one still each refresh, and host\.window\.refreshRate is null$/);
   assert.equal(client.requests.some((request) => request.method === "diagnostics.capture.start"), false);
+  assert.deepEqual(s.recordingNotes,
+    ["the recording did not start: a recording takes one still each refresh, and host.window.refreshRate is null"]);
   await cleanUp(s);
 });
 
@@ -190,19 +220,6 @@ test("a tracked recording is finalized when its frame path has an equivalent fil
 
   await cleanUp(s);
   assert.equal(existsSync(frames), false, "the tracked recording was not removed after successful finalization");
-});
-
-test("a failed stop remains failed when its frame path uses an equivalent filesystem spelling", async (t) => {
-  const directory = mkdtempSync(join(tmpdir(), "soksak-record-failed-path-"));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
-  const framePath = (path) => `${path.slice(0, path.lastIndexOf("/"))}/./${path.slice(path.lastIndexOf("/") + 1)}`;
-  const client = fakeClient(directory, { stopFails: true, framePath });
-  const s = newSession(directory, client);
-  const recording = await s.record();
-  await assert.rejects(recording.stop(), /layout trace failed/);
-
-  await assert.rejects(cleanUp(s), /1 recording failed: .*layout trace failed/);
-  assert.equal(existsSync(recording.frames), true, "the failed recording was removed during finalization");
 });
 
 test("finalization tolerates a tracked recording folder already removed", async (t) => {
@@ -487,6 +504,31 @@ test("a captured drag whose recording lost a still tells it", async (t) => {
   assert.equal(s.recordingNotes.length, 1);
   assert.match(s.recordingNotes[0],
     /: the recording lost 1 stills of the drag: still 5 planned at 40\.0ms failed \(the window server returned no image\)$/);
+});
+
+test("a captured drag whose stop fails tells it and returns the drag", async (t) => {
+  const s = dragSession(t, { until: 104, ticks: every(4, 92, 8) });
+  const request = s.request;
+  s.request = async (method, params) => {
+    if (method === "diagnostics.capture.stop") throw new Error("the capture failed");
+    return request(method, params);
+  };
+  const result = await drag(s, gapPlan, { capture: true });
+  assert.equal(result.took, 100);
+  assert.equal(result.count, undefined);
+  assert.deepEqual(s.recordingNotes.map((note) => note.replace(/^.*: the stop/, "the stop")),
+    ["the stop of the recording of the drag failed: the capture failed"]);
+});
+
+test("a captured drag of a window on no display runs without a recording and tells it", async (t) => {
+  const s = dragSession(t, { until: 104, ticks: every(4, 92, 8) });
+  s.get = async () => ({ active: false, occluded: false, refreshRate: null });
+  const result = await drag(s, gapPlan, { capture: true });
+  assert.equal(s.requests.find((request) => request.method === "diagnostics.drag").capture, false);
+  assert.equal(s.requests.some((request) => request.method === "diagnostics.capture.stop"), false);
+  assert.equal(result.took, 100);
+  assert.deepEqual(s.recordingNotes,
+    ["the recording of the drag did not start: a recording takes one still each refresh, and host.window.refreshRate is null"]);
 });
 
 test("a captured drag whose reply names no recorded window tells it", async (t) => {

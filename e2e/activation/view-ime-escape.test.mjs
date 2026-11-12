@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
-import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { APPS, keepCommonSettings, open, recordingSummary } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
 import { compareAppKitReference } from "./ime-reference-steps.mjs";
 import { assertReceivedUnchanged, inputDocument, lastTransaction, presentedStage, rasterProbeTab, receivedAfter,
@@ -83,7 +83,6 @@ for (const app of Object.values(APPS)) {
     assert.equal(events.filter((event) => event.event === "workbench.input.shortcut.failed").length, 0,
       "composition Escape must not forward a workbench shortcut command");
     assert.deepEqual((await s.get("core.workbench.audit")).unbound, []);
-    t.diagnostic(`${app.name}: recorded the g/k/s/Escape gesture in ${stopped.count} frames, ${stopped.missed} missed ` +
-      `and ${stopped.late} late stills`);
+    t.diagnostic(`${app.name}: the g/k/s/Escape gesture: ${recordingSummary(stopped)}`);
   });
 }

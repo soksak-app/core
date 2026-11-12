@@ -38,7 +38,7 @@ test("a recording holds the covered drawing of its window from before the captur
 test("the stop of a recording ends its hold of the covered drawing, also when the stop fails", async () => {
   const { s, requests } = session({ stopFails: true });
   const recording = await s.record();
-  await assert.rejects(recording.stop({ after: 0 }), /the capture failed/);
+  assert.equal(await recording.stop({ after: 0 }), null);
   assert.deepEqual(requests, ["status.get", "diagnostics.window.draw-covered true", "diagnostics.capture.start",
     "diagnostics.capture.stop", "diagnostics.window.draw-covered false"]);
 });
@@ -50,6 +50,6 @@ test("a recording of a new window starts without a hold of the covered drawing o
   const recording = await s.record({ newWindow: true });
   assert.equal(recording.frames, "/unused/frames");
   assert.deepEqual(requests, ["status.get", "diagnostics.capture.start"]);
-  await assert.rejects(recording.stop({ after: 0 }), /unexpected request diagnostics.capture.stop/);
+  assert.equal(await recording.stop({ after: 0 }), null);
   assert.deepEqual(requests, ["status.get", "diagnostics.capture.start", "diagnostics.capture.stop"]);
 });

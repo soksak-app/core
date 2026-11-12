@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, open, recordingSummary } from "@soksak/window-check/app.mjs";
 
 for (const app of Object.values(APPS))
   test(`${app.name}: current card right sidebar follows saved plugin settings`, { timeout: 90000 }, async (t) => {
@@ -69,9 +69,9 @@ for (const app of Object.values(APPS))
     } finally {
       try {
         stop = await recording.stop({ after: displayed ? displayed + 100 : 0 });
-        t.diagnostic(`recording ${recording.frames}: frames=${stop.count}; missed=${stop.missed}; late=${stop.late}; gap=${stop.longestGap}ms`);
+        t.diagnostic(recordingSummary(stop));
       } finally {
-        rmSync(recording.frames, { recursive: true, force: true });
+        if (recording.frames) rmSync(recording.frames, { recursive: true, force: true });
       }
     }
   });

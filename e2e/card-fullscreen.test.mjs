@@ -1,7 +1,7 @@
 // Checks the display geometry of card full screen and the restoration of the original layout through the public contract.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { APPS, keepCommonSettings, open, recordingSummary } from "@soksak/window-check/app.mjs";
 import { fresh, probeSidebarSets } from "./fixture.mjs";
 import { tabElementIndex } from "./input-probe.mjs";
 
@@ -19,8 +19,7 @@ async function clickFullscreen(t, s, card, expected) {
     await s.until("core.grid", grid => grid.fullscreen === expected, "fullscreen button did not toggle its card");
     ({ displayed } = await s.presented());
   } finally { stopped = await recording.stop({ after: displayed ? displayed + 100 : 0 }); }
-  t.diagnostic(`fullscreen=${expected}: recording ${stopped.frames}: ${stopped.count} stills, ${stopped.missed} missed and ` +
-    `${stopped.late} late stills, gap=${stopped.longestGap}ms`);
+  t.diagnostic(`fullscreen=${expected}: ${recordingSummary(stopped)}`);
 }
 
 for (const app of Object.values(APPS)) {
@@ -188,8 +187,7 @@ for (const app of Object.values(APPS)) {
           "the selected native view has no presented area");
       }
     } finally { stopped = await recording.stop({ after: displayed ? displayed + 100 : 0 }); }
-    t.diagnostic(`two tab presentation waits completed: recording ${stopped.frames}: ${stopped.count} stills, ${stopped.missed} missed and ` +
-      `${stopped.late} late stills`);
+    t.diagnostic(`two tab presentation waits completed: ${recordingSummary(stopped)}`);
     await s.run("core.card.fullscreen", { card: own });
     await s.until("core.grid", grid => grid.fullscreen === null, "fullscreen did not end");
   });

@@ -3,7 +3,7 @@
 // application and the input source of the person stay as they are (docs/spec/exposure.md#virtual-key-window).
 import assert from "node:assert/strict";
 import test from "node:test";
-import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { APPS, keepCommonSettings, open, recordingSummary } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { fieldPoint, inputProbeTab } from "./input-probe.mjs";
 
@@ -51,6 +51,6 @@ for (const app of Object.values(APPS)) {
     const { displayed } = await s.presented();
     const stopped = await recording.stop({ after: displayed + 100 });
     assert.deepEqual((await s.get("core.workbench.audit")).unbound, []);
-    t.diagnostic(`native menu shortcut: ${stopped.count} frames, ${stopped.missed} missed and ${stopped.late} late stills`);
+    t.diagnostic(`native menu shortcut: ${recordingSummary(stopped)}`);
   });
 }

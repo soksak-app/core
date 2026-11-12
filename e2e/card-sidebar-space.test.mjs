@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
-import { APPS, holdCovered, open } from "@soksak/window-check/app.mjs";
+import { APPS, holdCovered, open, recordingSummary } from "@soksak/window-check/app.mjs";
 import { fresh, joinedFailure } from "./fixture.mjs";
 import { requireContentWidth } from "./card-panel-checks.mjs";
 const sides = ["top", "bottom", "left", "right"];
@@ -197,9 +197,8 @@ for (const app of Object.values(APPS))
         ({ displayed } = await s.presented());
         const stop = await recording.stop({ after: displayed + 100 });
         recordingStopped = true;
-        t.diagnostic(`${label}: recording ${recording.frames}: ${stop.count} stills, ${stop.missed} missed and ${stop.late} late stills, maximum gap ` +
-          `${stop.longestGap}ms`);
-        rmSync(recording.frames, { recursive: true, force: true });
+        t.diagnostic(`${label}: ${recordingSummary(stop)}`);
+        if (recording.frames) rmSync(recording.frames, { recursive: true, force: true });
         recording = null;
         t.diagnostic(`${label}: ${JSON.stringify(surface.applied)}, bands ${JSON.stringify(bands)}`);
         console.info(`PASS ${app.name}: ${label} (${Math.round(performance.now() - began)}ms)`);
@@ -269,7 +268,7 @@ for (const app of Object.values(APPS))
             errors.push(error);
           }
           try {
-            rmSync(recording.frames, { recursive: true, force: true });
+            if (recording.frames) rmSync(recording.frames, { recursive: true, force: true });
           } catch (error) {
             errors.push(error);
           }

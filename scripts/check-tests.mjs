@@ -650,7 +650,7 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/test/frame.test.mjs", id: "frames refuse a name that is not the four digits of a still index" },
       { file: "packages/window-check/test/recording.test.mjs", id: "a recording that the check did not stop tells a still that it lost as a diagnostic" },
       { file: "packages/window-check/test/recording.test.mjs", id: "a recording asks for one still each refresh of the display of its window and the most stills a recording holds" },
-      { file: "packages/window-check/test/recording.test.mjs", id: "a recording of a window on no display fails before it starts" },
+      { file: "packages/window-check/test/recording.test.mjs", id: "a recording of a window on no display is told and does not start" },
       { file: "packages/window-check/test/recording.test.mjs", id: "a recording stop for a plan of more stills than a recording holds fails" },
       { file: "packages/window-check/test/recording.test.mjs", id: "a recording whose plan ends before the time that it is stopped after fails" },
       { file: "packages/window-check/test/recording.test.mjs", id: "a captured drag whose recording lost a still tells it" },
@@ -9015,7 +9015,7 @@ const FEATURE_LINKS = [
       { file: "native/darwin/src/capture.m", symbol: "long sp_capture_wait_new_window(uint64_t token) {" },
       { file: "packages/host/go/src/recording.go", symbol: "func (r *Recording) StartNewWindow(capture NewWindowCapture, directory string, plan CapturePlan) error {" },
       { file: "packages/host/rust/src/recording.rs", symbol: "pub fn start_new_window(" },
-      { file: "packages/window-check/app.mjs", symbol: "const release = params.newWindow === true ? async () => {} : await holdCovered(this);" },
+      { file: "packages/window-check/app.mjs", symbol: "const end = await holdCovered(this);" },
     ],
     tests: [
       { file: "native/darwin/tests/document_draw_covered_test.m", id: "the region of the covered window shows its document when the state was set before the cover" },
@@ -9963,9 +9963,9 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/app.mjs", symbol: "async record(params = {})" },
     ],
     tests: [
-      { file: "packages/window-check/test/recording.test.mjs", id: "a recording whose stop fails fails finalization, sends no second stop and preserves its folder" },
+      { file: "packages/window-check/test/recording.test.mjs", id: "a recording whose stop fails is told, sends no second stop and fails only its judgment" },
     ],
-    expected: "A window check sends one stop for each recording and keeps that stop's error; failed recordings remain available for diagnosis.",
+    expected: "A window check sends one stop for each recording and tells that stop's error as a diagnostic; only the judgment of the recording fails on it, and the recordings of a failed check remain available for diagnosis.",
     levels: ["unit", "application"],
   },
   {
@@ -12261,7 +12261,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/mygo/tests/support/support.go", symbol: "func HostTemporary() (end func() error, err error)" },
       { file: "native/darwin/src/webview_geometry.m", symbol: "sp_window_focus_workbench" },
       { file: "native/darwin/src/window_reveal.m", symbol: "sp_window_after_reveal" },
-      { file: "packages/window-check/app.mjs", symbol: "writeFileSync(join(frames, \"stop.json\"), JSON.stringify(result));" },
+      { file: "packages/window-check/app.mjs", symbol: "writeFileSync(join(frames, \"stop.json\"), JSON.stringify(result))" },
       { file: "native/darwin/src/surface_layout.m", symbol: "traceValue(ticket, 6, openTransactions - (holdOpen ? 1 : 0));" },
       { file: "native/darwin/src/surface_layout.m", symbol: "finishDeferredCommit(owner, SURFACE_LAYOUT_COMMIT_VIEW_JOIN);" },
       { file: "packages/host/go/src/platform/darwin/capture.go", symbol: "func layoutRecords(values []float64, count int) ([]platform.LayoutRecord, error) {" },
@@ -13187,8 +13187,8 @@ const FEATURE_LINKS = [
   {
     id: "F239-131",
     implementation: [{ file: "packages/window-check/app.mjs", symbol: "async record(params = {})" }],
-    tests: [{ file: "packages/window-check/test/recording.test.mjs", id: "a stop failure remains visible when the host removes its recording folder" }],
-    expected: "A recording stop failure remains reported when the host removes the recording folder.",
+    tests: [{ file: "packages/window-check/test/recording.test.mjs", id: "a stop failure is told when the host removes its recording folder" }],
+    expected: "A recording stop failure is told as a diagnostic when the host removes the recording folder.",
     levels: ["unit"],
   },
   {

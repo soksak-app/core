@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
-import { APPS, holdCovered, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { APPS, holdCovered, keepCommonSettings, open, recordingSummary } from "@soksak/window-check/app.mjs";
 import { fresh, joinedFailure } from "./fixture.mjs";
 import { turnOffCardSidebars } from "./card-sidebar-choices.mjs";
 
@@ -181,8 +181,7 @@ for (const app of Object.values(APPS))
           ({ displayed } = await s.presented());
           stopAttempted = true;
           const stop = await recording.stop({ after: displayed + 100 });
-          t.diagnostic(`${label}: recording ${recording.frames}: ${stop.count} stills; ${stop.missed} missed; ${stop.late} late; ` +
-            `longest gap ${stop.longestGap}ms`);
+          t.diagnostic(`${label}: ${recordingSummary(stop)}`);
           console.info(`PASS ${app.name}: ${label} (${Math.round(performance.now() - began)}ms)`);
         } catch (error) {
           errors.push(error);
@@ -193,7 +192,7 @@ for (const app of Object.values(APPS))
             errors.push(error);
           }
           try {
-            rmSync(recording.frames, { recursive: true, force: true });
+            if (recording.frames) rmSync(recording.frames, { recursive: true, force: true });
           } catch (error) {
             errors.push(error);
           }

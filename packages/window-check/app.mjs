@@ -480,23 +480,16 @@ async function finishSessionAudit(t, session, close, pendingDisposal) {
       }
     }
     // A failed check keeps every recording that its cleanups left so the frames remain available for diagnosis. A
-    // recording left by an otherwise successful check is itself a failure; preserve it for the same reason.
+    // recording that the check did not track is no recording of the check, so a successful check that leaves one fails and
+    // preserves it.
     const left = recordingFolders(session.app.configDir).filter((name) => !session.recordingsBefore.includes(name))
       .map((name) => join(session.app.configDir, "logs", "captures", name));
     const remaining = left.map((folder) => ({ folder, identity: realpathSync(folder) }));
     const untracked = remaining.filter(({ identity }) => !session.recordings.has(identity)).map(({ folder }) => folder);
-    const failedRecordings = remaining.filter(({ identity }) => session.failedRecordings.has(identity));
-    if (left.length && (!t.passed || failures.length || untracked.length || failedRecordings.length)) {
+    if (left.length && (!t.passed || failures.length || untracked.length)) {
       if (untracked.length && t.passed && failures.length === 0) {
         const error = new Error(`${session.app.name}: the check left ${untracked.length} untracked recording${untracked.length === 1 ? "" : "s"}: ` +
           `${untracked.join(", ")}; the recordings were preserved`);
-        failures.push(error);
-        t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
-      }
-      if (failedRecordings.length && t.passed && failures.length === 0) {
-        const details = failedRecordings.map(({ folder, identity }) => `${folder}: ${session.failedRecordings.get(identity)}`);
-        const error = new Error(`${session.app.name}: ${failedRecordings.length} recording${failedRecordings.length === 1 ? "" : "s"} failed: ` +
-          `${details.join(", ")}; the recordings were preserved`);
         failures.push(error);
         t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
       }
@@ -559,7 +552,6 @@ export class Session {
     this.window = "main";
     this.cleanups = [];
     this.recordings = new Set();
-    this.failedRecordings = new Map();
     this.recordingNotes = [];
     this.inputSourceRestore = { original: null, capture: null, requester: this };
     // The location of the application log that the check starts reading and the format of the errors that the check
@@ -696,7 +688,6 @@ export class Session {
     other.cleanups = this.cleanups;
     other.inputSourceRestore = this.inputSourceRestore;
     other.recordings = this.recordings;
-    other.failedRecordings = this.failedRecordings;
     other.recordingNotes = this.recordingNotes;
     other.expectedErrors = this.expectedErrors;
     other.testName = this.testName;
@@ -813,15 +804,16 @@ export class Session {
   }
 
   /**
-   * Starts a recording. The returned stop sends diagnostics.capture.stop once and returns its result or error. When
-   * stop fails, the host may already have ended the recording, so a second stop is not sent. The cleanup sends stop only
-   * if none was sent. finishSession removes the folder only after every cleanup and the error audit succeed.
-   * The folder of a failed check is its evidence: stop writes its whole reply, every layout transaction included, to
-   * stop.json, and keep(name, value) writes a value that the check judged, such as its displayed states, to <name>.json.
-   * A recording is the log of a check: what is wrong with its stills (requireStillsArtifact) and the stills that it lost
-   * (requireNoLostStills) are told as a diagnostic of the check (noteRecording), and the check does not fail on them. A check
-   * of the recording itself judges it with judge(), which throws what is wrong with the stills of the stopped recording and
-   * returns their rows.
+   * Starts a recording. A recording is the log of a check, and a check that is not a check of the recording does not fail on
+   * it: a start, a stop or a cleanup stop that fails, what is wrong with the stills (requireStillsArtifact) and the stills that
+   * the recording lost (requireNoLostStills) are told as a diagnostic of the check (noteRecording). A recording that did not
+   * start has no frames, its stop answers null and keep writes nothing. The returned stop sends diagnostics.capture.stop once
+   * and answers its result, or null when it fails; when stop fails, the host may already have ended the recording, so a second
+   * stop is not sent. The cleanup sends stop only if none was sent. finishSession removes the folder of a check that passes and
+   * keeps it with a check that fails: the folder is the evidence of the failure. Stop writes its whole reply, every layout
+   * transaction included, to stop.json, and keep(name, value) writes a value that the check judged, such as its displayed
+   * states, to <name>.json. A check of the recording itself judges it with judge(), which throws what failed or is wrong with
+   * the stills of the stopped recording and returns their rows.
    */
   async record(params = {}) {
     // A recording reads the pixels of the window, whatever the windows of other applications in front of it: the capture reads
@@ -829,35 +821,48 @@ export class Session {
     // document regions of a covered window draw as they do on the screen and the window keeps its place in the window order.
     // A recording of a new window (newWindow) reads a window that the application creates after the start answers, so it holds
     // nothing of the requesting window.
-    const asked = await recordingOf(this, params);
-    const plan = plannedStills(asked);
-    const release = params.newWindow === true ? async () => {} : await holdCovered(this);
-    this.cleanup(release);
+    let release = async () => {};
+    let asked;
     let started;
     try {
+      asked = await recordingOf(this, params);
+      if (params.newWindow !== true) {
+        const end = await holdCovered(this);
+        // The end of the hold belongs to the recording, so an end that fails is told with it.
+        release = () => end().catch((error) => { this.recordingNotes.push(`the hold of the covered drawing did not end: ${error.message}`); });
+        this.cleanup(release);
+      }
       started = await this.request("diagnostics.capture.start", asked);
+      this.trackRecording(started.frames);
     } catch (error) {
       await release();
-      throw error;
+      this.recordingNotes.push(`the recording did not start: ${error.message}`);
+      return {
+        frames: null,
+        stop: async () => null,
+        judge: () => { throw error; },
+        keep: () => {},
+      };
     }
     const { frames } = started;
     let sent = false;
     let window;
     let startError;
-    const identity = this.trackRecording(frames);
+    let stopError;
     this.cleanup(async () => {
+      if (sent) return;
+      sent = true;
+      let result;
       try {
-        if (sent) return;
-        sent = true;
-        const result = await this.request("diagnostics.capture.stop", { after: 0 });
-        // A recording whose start named no recorded window was told at its start.
-        if (startError) return;
-        this.noteRecording(() => requireNoLostStills(requireStillsArtifact(result, frames, asked, 0, stoppedWindow(result)),
-          "the recording that the check did not stop"), frames);
+        result = await this.request("diagnostics.capture.stop", { after: 0 });
       } catch (error) {
-        this.failedRecordings.set(identity, error);
-        throw error;
+        this.recordingNotes.push(`${frames}: the stop of the recording that the check did not stop failed: ${error.message}`);
+        return;
       }
+      // A recording whose start named no recorded window was told at its start.
+      if (startError) return;
+      this.noteRecording(() => requireNoLostStills(requireStillsArtifact(result, frames, asked, 0, stoppedWindow(result)),
+        "the recording that the check did not stop"), frames);
     });
     // The window that the start names is part of the log of the recording: a start that names no recorded window is told,
     // and judge() fails on it.
@@ -872,28 +877,34 @@ export class Session {
     let stopped;
     return {
       frames,
-      stop: (options = {}) => {
-        if (sent) return Promise.reject(new Error(`the stop was already sent for the recording ${frames}`));
+      stop: async (options = {}) => {
+        if (sent) throw new Error(`the stop was already sent for the recording ${frames}`);
         sent = true;
-        return this.request("diagnostics.capture.stop", options).finally(release).then((result) => {
-          stopped = { result, after: options.after ?? 0 };
-          writeFileSync(join(frames, "stop.json"), JSON.stringify(result));
-          if (!startError) this.noteRecording(() => requireNoLostStills(requireStillsArtifact(result, frames, asked, stopped.after,
-            stoppedWindow(result)), "the recording"), frames);
-          return result;
-        }).catch((error) => {
-          this.failedRecordings.set(identity, error);
-          throw error;
-        });
+        let result;
+        try {
+          result = await this.request("diagnostics.capture.stop", options);
+        } catch (error) {
+          stopError = error;
+          this.recordingNotes.push(`${frames}: the stop of the recording failed: ${error.message}`);
+          return null;
+        } finally {
+          await release();
+        }
+        stopped = { result, after: options.after ?? 0 };
+        this.noteRecording(() => writeFileSync(join(frames, "stop.json"), JSON.stringify(result)), frames);
+        if (!startError) this.noteRecording(() => requireNoLostStills(requireStillsArtifact(result, frames, asked, stopped.after,
+          stoppedWindow(result)), "the recording"), frames);
+        return result;
       },
       judge: () => {
         if (startError) throw startError;
+        if (stopError) throw stopError;
         if (!stopped) throw new Error(`the recording ${frames} was not stopped, so its stills cannot be judged`);
         return requireStillsArtifact(stopped.result, frames, asked, stopped.after, stoppedWindow(stopped.result));
       },
       keep: (name, value) => {
         if (!/^[a-z][a-z-]*$/.test(name)) throw new Error(`a kept value needs a plain name, not ${JSON.stringify(name)}`);
-        writeFileSync(join(frames, `${name}.json`), JSON.stringify(value));
+        this.noteRecording(() => writeFileSync(join(frames, `${name}.json`), JSON.stringify(value)), frames);
       },
     };
   }
@@ -1342,6 +1353,16 @@ export const TRACE = { undefined: false, "1": true }[process.env.SOKSAK_PERFORMA
 if (TRACE === undefined) throw new Error(`SOKSAK_PERFORMANCE_TRACE must be unset or 1, not ${process.env.SOKSAK_PERFORMANCE_TRACE}`);
 
 /**
+ * One line of a diagnostic that tells the stop reply `stopped` of a recording: its folder, its stills and its longest gap, or that
+ * the recording has no reply because it did not start or did not stop, which the recording diagnostics of the check tell.
+ */
+export function recordingSummary(stopped) {
+  if (!stopped) return "no recording reply (the recording diagnostics tell why)";
+  return `recording ${stopped.frames}: ${stopped.count} stills, ${stopped.missed} missed and ${stopped.late} late stills, ` +
+    `longest gap ${stopped.longestGap}ms`;
+}
+
+/**
  * Runs a boundary drag with the host clock. With capture, it records the window and returns the frame folder. The
  * recording is removed when the check passes and kept when the check fails.
  *
@@ -1555,14 +1576,32 @@ async function dragOnce(s, plan, capture) {
 }
 
 async function dragDrawing(s, plan, capture) {
-  const recording = capture ? await recordingOf(s, {}) : null;
+  // The recording of a drag is its log: a recording that cannot be planned, tracked or stopped and what is wrong with it are
+  // told, and a check of the drag does not fail on them. A drag whose recording cannot be planned runs without one.
+  let recording = null;
+  if (capture) {
+    try {
+      recording = await recordingOf(s, {});
+    } catch (error) {
+      s.recordingNotes.push(`the recording of the drag did not start: ${error.message}`);
+    }
+  }
   const result = await s.request("diagnostics.drag", { ...plan, capture: recording ?? false });
-  if (!capture) return result;
-  s.trackRecording(result.frames);
+  if (!recording) return result;
+  try {
+    s.trackRecording(result.frames);
+  } catch (error) {
+    s.recordingNotes.push(`${result.frames}: the recording of the drag is not tracked: ${error.message}`);
+  }
   // Records until the time when the last screen of the drag is displayed.
   const { displayed } = await s.presented();
-  const stopped = await s.request("diagnostics.capture.stop", { after: displayed });
-  // The recording of a drag is its log: what is wrong with it is told, and a check of the drag does not fail on it.
+  let stopped;
+  try {
+    stopped = await s.request("diagnostics.capture.stop", { after: displayed });
+  } catch (error) {
+    s.recordingNotes.push(`${result.frames}: the stop of the recording of the drag failed: ${error.message}`);
+    return { ...result, displayed };
+  }
   s.noteRecording(() => requireNoLostStills(requireStillsArtifact(stopped, result.frames, recording, displayed,
     recordedWindow(result, recording, "drag")), "the drag"), result.frames);
   return {

@@ -2,7 +2,7 @@
 // raster probe logs the pointer events of its image region (rasterprobe.input pointer) and focuses its region on a primary press.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, open, recordingSummary } from "@soksak/window-check/app.mjs";
 import { RASTER, REGION } from "../raster-probe.mjs";
 
 for (const app of Object.values(APPS)) {
@@ -38,7 +38,7 @@ for (const app of Object.values(APPS)) {
     const document = after.documents.find((item) => item.surface === surface && item.document === "");
     const region = after.regions.find((item) => item.surface === surface && item.name === REGION);
     t.diagnostic(JSON.stringify({ surface, point, view: document, region, responder: after.responder, input: input.pointer,
-      recording: captured.frames, frames: captured.count, missed: captured.missed, late: captured.late, longestGap: captured.longestGap,
+      recording: recordingSummary(captured),
       endpoint: s.client.endpoint }));
     assert.deepEqual((await s.get("core.layout")).state, layout, "click observation changed the layout");
     assert.equal(after.active, false, "the click activated the application");

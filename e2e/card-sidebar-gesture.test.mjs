@@ -1,7 +1,7 @@
 // Checks the native pointer input of the card four-side handles. The recording of each gesture is its evidence.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, open, recordingSummary } from "@soksak/window-check/app.mjs";
 import { fresh, joinedFailure } from "./fixture.mjs";
 
 const sides = ["top", "bottom", "left", "right"];
@@ -145,17 +145,14 @@ for (const app of Object.values(APPS)) {
               } catch (error) {
                 gestureErrors.push(error);
               }
-              try {
-                stopped = await recording.stop({ after: displayed === undefined ? 0 : displayed + 100 });
-                recording.keep("poses", poses);
-              } catch (error) {
-                gestureErrors.push(error);
-              }
+              // The recording is the log of the gesture: a stop that fails is told, and the check does not fail on it.
+              stopped = await recording.stop({ after: displayed === undefined ? 0 : displayed + 100 });
+              recording.keep("poses", poses);
             }
             if (gestureErrors.length)
-              throw joinedFailure(`${side}: pointer input or capture failed`, gestureErrors);
+              throw joinedFailure(`${side}: pointer input failed`, gestureErrors);
             t.diagnostic(
-              `${side}: 120 -> 160 -> 120 points, recording ${stopped.frames}: ${stopped.count} stills, ${stopped.missed} missed and ${stopped.late} late stills, ${stopped.layouts?.length} layout transactions, gap ${stopped.longestGap}ms, input/presentation steps ${elapsed.join(",")}ms`,
+              `${side}: 120 -> 160 -> 120 points, ${recordingSummary(stopped)}, ${stopped?.layouts?.length} layout transactions, input/presentation steps ${elapsed.join(",")}ms`,
             );
             console.info(`PASS ${app.name}: ${side} sidebar gesture (${Math.round(performance.now() - began)}ms)`);
           }

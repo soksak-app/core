@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, open, recordingSummary } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
 import { fresh, joinedFailure } from "../fixture.mjs";
 import { EVERY_LEVEL } from "@soksak/window-check/log-policy.mjs";
@@ -201,18 +201,17 @@ async function recordGesture(s, t, name, action) {
     actionError = error;
   }
   let result;
-  let captureError;
+  let presentError;
   try {
     const { displayed } = await s.presented();
+    // The recording is the evidence of the gesture: its counts are told, and the check does not judge it.
     result = await capture.stop({ after: displayed + 100 });
   } catch (error) {
-    captureError = error;
+    presentError = error;
   }
-  if (actionError && captureError) throw joinedFailure(`${name}: action and capture stop failed`, [actionError, captureError]);
-  if (captureError) throw captureError;
-  // The recording is the evidence of the gesture: its counts are told, and the check does not judge it.
-  t.diagnostic(`${name}: ${JSON.stringify({ frames: result.count, missed: result.missed, late: result.late,
-    longestGap: result.longestGap, folder: capture.frames })}`);
+  if (actionError && presentError) throw joinedFailure(`${name}: action and presentation failed`, [actionError, presentError]);
+  if (presentError) throw presentError;
+  t.diagnostic(`${name}: ${recordingSummary(result)}`);
   if (actionError) throw actionError;
   return actionResult;
 }

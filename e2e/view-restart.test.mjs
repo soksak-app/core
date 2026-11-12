@@ -39,8 +39,8 @@ async function ready(s, surface, url, { restored = true } = {}) {
 async function stopRecording(s, recording) {
   const { displayed } = await s.presented();
   const result = await recording.stop({ after: displayed });
-  // The recording is the evidence of the lifecycle; the check does not judge it.
-  return { frames: result.frames, count: result.count, missed: result.missed, late: result.late };
+  // The recording is the evidence of the lifecycle; the check does not judge it, and a recording without a reply is null.
+  return result && { frames: result.frames, count: result.count, missed: result.missed, late: result.late };
 }
 
 for (const app of Object.values(APPS)) {

@@ -40,6 +40,9 @@ for (const app of Object.values(APPS)) {
       await s.until("core.text", (value) => value.frame === textSize, "text size did not reach the requested state");
       const { displayed } = await s.presented();
       const stopped = await recording.stop({ after: displayed });
+      // The recording is judged as the host wrote it, and every still of it is written: a still that it lost is a moment of the
+      // window that no record holds. A recording that did not start or stop fails here with its own error.
+      const rows = recording.judge();
       await s.flushLog();
       // The trace of one still recording (native.capture.lifecycle of docs/spec/events.json): one start, one first-still
       // record for the written still 0, one stop and one end, all of one session, no still-failed record, and an end that
@@ -69,9 +72,6 @@ for (const app of Object.values(APPS)) {
       const count = frames(recording.frames).length;
       assert.ok(count > 0, "the recording contains no frames");
       assert.equal(stopped.count, count, "the stop count differs from finalized frame files");
-      // The recording is judged as the host wrote it, and every still of it is written: a still that it lost is a moment of the
-      // window that no record holds.
-      const rows = recording.judge();
       requireNoLostStills(rows, "the consecutive recording");
       const written = rows.filter((row) => row.outcome === "written");
       assert.equal(written.length, count, "the written rows of stills.jsonl differ from the finalized frame files");

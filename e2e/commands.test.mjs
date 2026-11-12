@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { rmSync } from "node:fs";
 import test from "node:test";
 
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, open, recordingSummary } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { retainDesignStateCapture } from "./still-capture.mjs";
 
@@ -267,13 +267,9 @@ for (const app of Object.values(APPS)) {
     for (const width of samples) {
       let capture = null;
       if (width === maxWidth) {
-        try {
-          // The session stops a recording that the check did not stop and keeps it with a failed check (Session.record).
-          capture = await s.record();
-        } catch (error) {
-          failures.push({ width, name: "diagnostics.capture.start", error: error.message });
-          t.diagnostic(`recording start failed at ${width}: ${error.message}`);
-        }
+        // The session stops a recording that the check did not stop and keeps it with a failed check; a recording that does not
+        // start is told, and the check does not fail on it (Session.record).
+        capture = await s.record();
       }
       await s.run("host.window.resize", { width, height: initialWindow.content.height });
       const resized = await s.until("host.window", (window) => window.content.width === width,
@@ -294,10 +290,9 @@ for (const app of Object.values(APPS)) {
       if (capture) {
         const { displayed } = await s.presented();
         const stopped = await capture.stop({ after: displayed });
-        s.cleanup(() => rmSync(stopped.frames, { recursive: true, force: true }));
+        if (stopped) s.cleanup(() => rmSync(stopped.frames, { recursive: true, force: true }));
         // The clicks and their effects below judge the controls at this width; the recording is their evidence.
-        t.diagnostic(`complete resize-and-project-click recording ${JSON.stringify({ width, count: stopped.count,
-          missed: stopped.missed, late: stopped.late, longestGap: stopped.longestGap, frames: stopped.frames })}`);
+        t.diagnostic(`resize-and-project-click at ${width}: ${recordingSummary(stopped)}`);
       }
       projects.before = projectBefore;
       await clickEffect(projects.owner, "core.screen", (value) => value.screen === "library", `projects icon did not open the library at ${width}`);
