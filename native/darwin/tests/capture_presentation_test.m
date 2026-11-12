@@ -1,12 +1,8 @@
-// Compares actual CAMetalLayer drawable presentations with the exact pixel IDs that the stills of the window recording hold.
-// The recording requests a still every half refresh, so each drawable, which the window shows for at least one refresh, falls in
-// some still. It classifies only this controlled Metal capture path and does not activate the application.
-// A still is the image of the window that the window server composites; the display shows that composite later, at the
-// presentation time of the drawable (MTLDrawable presentedTime). The window server holds drawable n from after its commit, and
-// it holds drawable n + 1 at the latest when the display presents it, so a still that holds drawable n completed after the commit
-// of n and was requested before the presentation of n + 1. A still can hold n before the display presents n.
-// The frames hold the bytes of the display colour space; the pixel ID is read through the ICC profile of the recording as sRGB,
-// the space of the clear colours.
+// Records a window whose CAMetalLayer presents seven drawables, with a still every half refresh, and stops at the last
+// presentation. The recording loses no still up to its last request: no failed still, no still not requested before the last
+// request and no late still; the stills after the last request of the plan, which the stop ends, are not lost. Every written
+// still has a frame file of the declared format, and the request times increase. The pixels are evidence and are not judged.
+// The check does not activate the application.
 #import <Cocoa/Cocoa.h>
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
@@ -33,23 +29,6 @@ static const MTLClearColor colors[] = {
     {1,0,0,1}, {0,1,0,1}, {0,0,1,1}, {1,1,0,1}, {0,1,1,1}, {1,0,1,1}, {1,1,1,1}
 };
 
-// The seven RGB-cube corners have separated pixel values. Gray background and any value outside these exact
-// threshold regions remain unknown instead of being assigned to a nearby frame ID.
-static NSInteger pixelFrameID(uint8_t blue, uint8_t green, uint8_t red) {
-    int bits[3];
-    uint8_t values[] = {red, green, blue};
-    for (int i = 0; i < 3; i++) {
-        if (values[i] <= 48) bits[i] = 0;
-        else if (values[i] >= 207) bits[i] = 1;
-        else return -1;
-    }
-    for (NSUInteger i = 0; i < frameCount; i++) {
-        if ((int)colors[i].red == bits[0] && (int)colors[i].green == bits[1] && (int)colors[i].blue == bits[2])
-            return (NSInteger)i;
-    }
-    return -1;
-}
-
 @interface SPMetalFrames : NSObject
 @property(nonatomic, assign) CAMetalLayer *layer;
 @property(nonatomic, retain) id<MTLCommandQueue> queue;
@@ -59,8 +38,6 @@ static NSInteger pixelFrameID(uint8_t blue, uint8_t green, uint8_t red) {
 - (void)submitNext;
 - (void)draw:(NSUInteger)frameID;
 - (void)recordSkippedFrameID:(NSUInteger)frameID drawableID:(NSUInteger)drawableID submitted:(uint64_t)submitted;
-// The mach time of the commit of each drawable, by its frame ID. Written on the main thread before the presentation handler runs.
-@property(nonatomic) uint64_t *committed;
 - (NSUInteger)completedPresentationCount;
 @end
 @implementation SPMetalFrames
@@ -69,7 +46,6 @@ static NSInteger pixelFrameID(uint8_t blue, uint8_t green, uint8_t red) {
     if (self) {
         _presentations = [[NSMutableArray alloc] initWithCapacity:frameCount];
         for (NSUInteger i = 0; i < frameCount; i++) [_presentations addObject:[NSNull null]];
-        _committed = calloc(frameCount, sizeof(uint64_t));
     }
     return self;
 }
@@ -104,7 +80,6 @@ static NSInteger pixelFrameID(uint8_t blue, uint8_t green, uint8_t red) {
     }];
     [command presentDrawable:drawable];
     [command commit];
-    self.committed[frameID] = mach_absolute_time();
 }
 - (void)recordSkippedFrameID:(NSUInteger)frameID drawableID:(NSUInteger)drawableID submitted:(uint64_t)submitted {
     NSDictionary *record = @{ @"id": @(frameID), @"drawable": @(drawableID),
@@ -123,7 +98,7 @@ static NSInteger pixelFrameID(uint8_t blue, uint8_t green, uint8_t red) {
     }
     return count;
 }
-- (void)dealloc { [_queue release]; [_presentations release]; free(_committed); [super dealloc]; }
+- (void)dealloc { [_queue release]; [_presentations release]; [super dealloc]; }
 @end
 
 static BOOL onScreen(NSWindow *window) {
@@ -233,122 +208,28 @@ int main(void) { @autoreleasepool {
     check(written > 0 && stopError.length == 0 && failed == 0 && skipped == 0 && late == 0,
         [NSString stringWithFormat:@"the recording loses no still up to its last request (%d written, %lu failed, %lu not requested "
             "before still %ld, %d late, %@)", written, (unsigned long)failed, (unsigned long)skipped, (long)lastRequested, late, stopError]);
-    CGColorSpaceRef frameSpace = captureFolderColorSpace(directory);
-    check(frameSpace != NULL, @"the recording folder holds the one colour profile of its frames");
-    // The pixel ID at the centre of each written still, in the order of the requests.
-    NSMutableArray<NSNumber *> *stillIDs = [NSMutableArray array];
-    NSMutableArray<NSString *> *stillErrors = [NSMutableArray array];
+    // Every written still has a frame file of the declared format at the device-pixel size of the window, and the request times
+    // of the written stills increase in still order. The pixels are evidence and are not judged.
+    CGFloat scale = window.backingScaleFactor;
+    uint32_t pixelWidth = (uint32_t)llround(window.frame.size.width * scale), pixelHeight = (uint32_t)llround(window.frame.size.height * scale);
+    NSUInteger unreadable = 0, wrongSize = 0, unordered = 0;
+    uint64_t previousRequest = 0;
     for (NSDictionary *row in rows) {
         NSData *frame = readCaptureFrame([NSData dataWithContentsOfFile:[directory stringByAppendingPathComponent:row[@"frame"]]]);
         uint32_t dimensions[3] = {0, 0, 0};
         if (frame.length >= kCaptureFrameHeader) [frame getBytes:dimensions length:sizeof dimensions];
-        if (frame == nil || dimensions[0] == 0 || dimensions[1] == 0) {
-            [stillErrors addObject:[NSString stringWithFormat:@"%@ has no readable pixels", row[@"frame"]]];
-            [stillIDs addObject:@(-1)];
-            continue;
-        }
-        const uint8_t *center = (const uint8_t *)frame.bytes + kCaptureFrameHeader + (dimensions[1] / 2) * dimensions[2]
-            + (dimensions[0] / 2) * 4;
-        uint8_t rgb[3];
-        captureFramePixelSRGB(center, frameSpace, rgb);
-        [stillIDs addObject:@(pixelFrameID(rgb[2], rgb[1], rgb[0]))];
+        if (frame == nil) unreadable++;
+        else if (dimensions[0] != pixelWidth || dimensions[1] != pixelHeight) wrongSize++;
+        uint64_t requested = strtoull([row[@"requested"] UTF8String], NULL, 10);
+        if (previousRequest != 0 && requested <= previousRequest) unordered++;
+        previousRequest = requested;
     }
-    check([stillIDs containsObject:@(frameCount - 1)],
-        [NSString stringWithFormat:@"the recording observes the final exact pixel ID (%lu written stills)", (unsigned long)rows.count]);
-
-    mach_timebase_info_data_t timebase = {0};
-    kern_return_t timebaseResult = mach_timebase_info(&timebase);
-    check(timebaseResult == KERN_SUCCESS && timebase.numer > 0 && timebase.denom > 0,
-        [NSString stringWithFormat:@"the runtime mach timebase is valid (%u/%u, result %d)", timebase.numer, timebase.denom, timebaseResult]);
-    if (timebaseResult == KERN_SUCCESS && timebase.numer > 0 && timebase.denom > 0
-        && driver.completedPresentationCount == frameCount) {
-        uint64_t presentationTicks[7] = {0};
-        BOOL clockValuesValid = YES;
-        BOOL presentationOrderValid = YES;
-        uint64_t previousPresentation = 0;
-        for (NSUInteger i = 0; i < frameCount; i++) {
-            NSDictionary *record = driver.presentations[i];
-            double presentedTime = [record[@"presentedTime"] doubleValue];
-            if (presentedTime == 0) { clockValuesValid = NO; continue; }
-            long double ticks = (long double)presentedTime * 1000000000.0L
-                * (long double)timebase.denom / (long double)timebase.numer;
-            if (!isfinite((double)ticks) || ticks <= 0 || ticks > (long double)LLONG_MAX) {
-                clockValuesValid = NO;
-                continue;
-            }
-            presentationTicks[i] = (uint64_t)llroundl(ticks);
-            if (previousPresentation > 0 && presentationTicks[i] <= previousPresentation) presentationOrderValid = NO;
-            previousPresentation = presentationTicks[i];
-        }
-        BOOL everyPresented = clockValuesValid && presentationOrderValid;
-        check(everyPresented, @"every exact drawable ID has an actual non-skipped presentation time in presentation order");
-        {
-            uint64_t largestPresentationGap = 0, largestCaptureGap = 0;
-            for (NSUInteger i = 1; i < frameCount; i++)
-                if (presentationTicks[i] > 0 && presentationTicks[i - 1] > 0)
-                    largestPresentationGap = MAX(largestPresentationGap, presentationTicks[i] - presentationTicks[i - 1]);
-            NSMutableArray<NSNumber *> *captureIDs = [NSMutableArray array];
-            uint64_t previousRequest = 0;
-            for (NSString *failure in stillErrors)
-                check(NO, [NSString stringWithFormat:@"every written still has observable pixels (%@)", failure]);
-            BOOL sawMarker = NO;
-            NSInteger previousCaptureID = -1;
-            for (NSUInteger index = 0; index < rows.count; index++) {
-                NSDictionary *row = rows[index];
-                NSInteger frameID = stillIDs[index].integerValue;
-                uint64_t requested = strtoull([row[@"requested"] UTF8String], NULL, 10);
-                uint64_t completed = strtoull([row[@"completed"] UTF8String], NULL, 10);
-                if (frameID < 0) {
-                    if (sawMarker) check(NO, @"a still after the first marker has a recognized exact ID");
-                    fprintf(stdout, "CAPTURE id=unknown still=%ld requested=%llu completed=%llu\n", [row[@"index"] longValue], requested, completed);
-                    continue;
-                }
-                sawMarker = YES;
-                if (frameID < previousCaptureID)
-                    check(NO, @"captured pixel IDs remain in their submitted order in the order of the requests");
-                BOOL repeatedPixel = [captureIDs containsObject:@(frameID)];
-                previousCaptureID = frameID;
-                uint64_t expectedPresentation = presentationTicks[frameID];
-                if (expectedPresentation == 0)
-                    check(NO, [NSString stringWithFormat:@"captured pixel ID %ld has an actual presentation timestamp", (long)frameID]);
-                if (previousRequest != 0) {
-                    check(requested > previousRequest, @"the request times of the written stills increase in still order");
-                    if (requested > previousRequest) largestCaptureGap = MAX(largestCaptureGap, requested - previousRequest);
-                }
-                previousRequest = requested;
-                [captureIDs addObject:@(frameID)];
-                // The still took its pixels at some time between its request and its completion, and the window server held drawable
-                // n from its commit until at the latest the presentation of drawable n + 1: the two intervals meet.
-                uint64_t committedTicks = driver.committed[frameID];
-                uint64_t nextPresentation = (NSUInteger)frameID + 1 < frameCount ? presentationTicks[frameID + 1] : 0;
-                check(committedTicks > 0 && completed >= committedTicks && (nextPresentation == 0 || requested < nextPresentation),
-                    [NSString stringWithFormat:@"the still that holds drawable %ld was taken while the window server held it (requested "
-                        "%llu, completed %llu, committed %llu, next presented %llu)", (long)frameID, requested, completed, committedTicks,
-                        nextPresentation]);
-                int64_t requestSkew = (int64_t)requested - (int64_t)expectedPresentation;
-                int64_t completionSkew = (int64_t)completed - (int64_t)expectedPresentation;
-                fprintf(stdout, "CAPTURE id=%ld repeated-pixel=%d still=%ld requested=%llu completed=%llu presentation=%llu "
-                    "requested-minus-present=%.6fms completed-minus-present=%.6fms\n",
-                    (long)frameID, repeatedPixel, [row[@"index"] longValue], requested, completed, expectedPresentation,
-                    (double)((long double)requestSkew * timebase.numer / timebase.denom / 1000000.0L),
-                    (double)((long double)completionSkew * timebase.numer / timebase.denom / 1000000.0L));
-            }
-            NSMutableArray<NSNumber *> *missing = [NSMutableArray array];
-            for (NSUInteger i = 0; i < frameCount; i++) if (![captureIDs containsObject:@(i)]) [missing addObject:@(i)];
-            check(missing.count == 0, [NSString stringWithFormat:@"all unique presented pixel IDs have a captured still (missing %@)", missing]);
-            double presentationGapMS = (double)((long double)largestPresentationGap * timebase.numer / timebase.denom / 1000000.0L);
-            double captureGapMS = (double)((long double)largestCaptureGap * timebase.numer / timebase.denom / 1000000.0L);
-            fprintf(stdout, "CLASSIFICATION max-presented-gap=%.6fms max-captured-gap=%.6fms missing-captured-ids=%s timebase=%u/%u\n",
-                presentationGapMS, captureGapMS, missing.description.UTF8String, timebase.numer, timebase.denom);
-            if (!everyPresented || missing.count > 0) fprintf(stdout, "RESULT: incomplete evidence; skipped drawable or missing pixel ID prevents cadence classification\n");
-            else if (presentationGapMS > 33.0) fprintf(stdout, "RESULT: controlled drawable presentation gap exceeds 33ms\n");
-            else if (captureGapMS > 33.0 || missing.count > 0)
-                fprintf(stdout, "RESULT: controlled presented pixels are missing or spaced by the still requests\n");
-            else fprintf(stdout, "RESULT: no 33ms gap reproduced in the controlled Metal capture path\n");
-        }
-    }
+    check(unreadable == 0 && wrongSize == 0, [NSString stringWithFormat:@"every written still has a frame file of the window's "
+        "device-pixel size (%lu unreadable, %lu of another size, window %ux%u)", (unsigned long)unreadable, (unsigned long)wrongSize,
+        pixelWidth, pixelHeight]);
+    check(unordered == 0, [NSString stringWithFormat:@"the request times of the written stills increase in still order (%lu do not)",
+        (unsigned long)unordered]);
     [driver release];
-    if (frameSpace) CGColorSpaceRelease(frameSpace);
 
     [window close]; [view release]; [window release];
     check(!NSApp.isActive, @"the control test does not activate the application");

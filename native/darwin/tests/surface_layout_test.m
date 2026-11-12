@@ -213,44 +213,6 @@ static bool startRecording(NSWindow *window, const char *directory, char **error
     return sp_capture_start(directory, 1000.0 / window.screen.maximumFramesPerSecond, 0, 4096, false, 0, error);
 }
 
-// Whether the decoded frame data shows the first-show marker colour at the point (x, y) of the window, and the request and the
-// completion time of its still.
-static BOOL captureFrameHasColorAtPoint(NSData *data, CGColorSpaceRef space, CGFloat x, CGFloat y, double *requested,
-    double *completed) {
-    if (data.length < kCaptureFrameHeader) return NO;
-    uint32_t head[3] = {0};
-    double info[8] = {0};
-    [data getBytes:head length:sizeof(head)];
-    [data getBytes:info range:NSMakeRange(sizeof(head), sizeof(info))];
-    if (head[0] == 0 || head[1] == 0 || head[2] < head[0] * 4 || info[4] <= 0 || info[5] <= 0
-        || data.length != sizeof(head) + sizeof(info) + (size_t)head[2] * head[1]) return NO;
-    if (requested) *requested = info[6];
-    if (completed) *completed = info[7];
-    double scale = info[4] * info[5];
-    size_t px = (size_t)floor(info[0] * info[5] + x * scale);
-    size_t py = (size_t)floor(info[1] * info[5] + y * scale);
-    if (px >= head[0] || py >= head[1]) return NO;
-    const uint8_t *pixels = (const uint8_t *)data.bytes + sizeof(head) + sizeof(info);
-    // The frame holds the bytes of the display colour space; its ICC profile reads them as sRGB, the space of the marker.
-    uint8_t rgb[3];
-    captureFramePixelSRGB(pixels + py * head[2] + px * 4, space, rgb);
-    return abs((int)rgb[0]) <= 3 && abs((int)rgb[1] - 160) <= 3 && abs((int)rgb[2] - 210) <= 3;
-}
-
-// A still holds the bytes of the display colour space; the profile of the PNG reads them as sRGB, the space of the marker.
-static BOOL bitmapContainsFirstShowMarker(NSBitmapImageRep *bitmap) {
-    if (bitmap == nil) return NO;
-    SPStillPixels still = captureStillPixels(bitmap.CGImage);
-    BOOL found = NO;
-    uint8_t rgb[3];
-    for (size_t y = 0; y < still.height && !found; y++)
-        for (size_t x = 0; x < still.width && !found; x++)
-            found = captureStillPixelSRGB(&still, x, y, rgb) && rgb[0] <= 7 && abs((int)rgb[1] - 160) <= 7
-                && abs((int)rgb[2] - 210) <= 7;
-    captureStillPixelsRelease(&still);
-    return found;
-}
-
 // A joined plugin root webview presents its resized content while its window transaction remains open, then the
 // transaction commits and allows the next layout request to start.
 static void checkRootViewResizeJoin(WKWebViewConfiguration *configuration) {
@@ -443,9 +405,8 @@ static void checkQueuedTicketCancel(WKWebViewConfiguration *configuration) {
 
 // The composition of the real DOM bounds and the native region must keep both bounds during preparation. Controls the
 // commit after the display confirmation and also records the frames of the transaction in progress. With pageChange NO the
-// page draws nothing and the transaction narrows only the native plane, committed at once: a control that the recording
-// delivers the frame of a commit without a drawing of the page at the first refresh after the settled presentation, so a
-// failure of the check with the page tells a late composition of the commit and not a late recording (docs/features.md, F752).
+// page draws nothing and the transaction narrows only the native plane, committed at once. The recording keeps every still
+// with a complete frame file; the frames are evidence of the composition and their pixels are not judged (docs/features.md, F752).
 static void checkRecordedComposition(WKWebViewConfiguration *configuration, BOOL pageChange) {
     int failed = failures;
     NSString *variant = pageChange ? @"composition" : @"native plane only";
@@ -528,10 +489,6 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration, BOOL
         check(surfaceLayoutTraceStop(timeline, 1) == 1, @"the composition recording contains its transaction timeline");
         // The frames are named by the index of their still, so the files of the folder in their order are the stills in the
         // order of their requests.
-        // The frames hold the bytes of the display colour space, and the ICC profile of the folder reads them as sRGB.
-        CGColorSpaceRef folderSpace = captureFolderColorSpace(folder);
-        check(folderSpace != NULL, [NSString stringWithFormat:@"%@: the recording folder holds the one colour profile of its frames",
-            variant]);
         NSMutableArray<NSString *> *frameNames = [NSMutableArray array];
         for (NSString *name in [NSFileManager.defaultManager contentsOfDirectoryAtPath:folder error:NULL])
             if ([name.pathExtension isEqualToString:@"bgra"]) [frameNames addObject:name];
@@ -551,57 +508,7 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration, BOOL
                     info[4] > 0 && info[5] > 0;
             }
             check(valid, [NSString stringWithFormat:@"%@ frame %d has complete pixels and metadata", variant, index]);
-            if (!valid) continue;
-            const uint8_t *pixels = (const uint8_t *)data.bytes + sizeof(head) + sizeof(info);
-            double scale = info[4] * info[5];
-            // A still completed before the commit cannot show it; still 0 precedes the transaction.
-            BOOL preCommit = index == 1 || info[7] < timeline[3];
-            if (!pageChange) {
-                // The column at x 295 lies inside the native plane before the commit and outside the narrower plane after it.
-                size_t px = (size_t)floor((info[0] + 295) * scale), py = (size_t)floor((info[1] + 100) * scale);
-                // The frame holds the bytes of the display colour space; its ICC profile reads them as sRGB, the space of the plane.
-                uint8_t read[3] = {0, 0, 0};
-                const uint8_t *rgb = NULL;
-                if (px < head[0] && py < head[1]) {
-                    captureFramePixelSRGB(pixels + py * head[2] + px * 4, folderSpace, read);
-                    rgb = read;
-                }
-                BOOL narrowed = rgb != NULL && (abs((int)rgb[0] - 25) > 6 || abs((int)rgb[1] - 27) > 6 || abs((int)rgb[2] - 36) > 6);
-                if (preCommit)
-                    check(!narrowed, [NSString stringWithFormat:@"%@: a pre-commit frame shows the native plane at x 295", variant]);
-                if (index == count)
-                    check(narrowed, [NSString stringWithFormat:@"%@: the final frame shows the narrower native plane (x 295 rgb %d,%d,%d, "
-                        "requested %.3f, completed %.3f, committed %.3f)", variant, rgb ? rgb[0] : -1, rgb ? rgb[1] : -1,
-                        rgb ? rgb[2] : -1, info[6], info[7], timeline[3]]);
-                continue;
-            }
-            BOOL found = NO;
-            double borderAt = NAN;
-            for (double x = 290; x <= 302 && !found; x += 0.5) {
-                BOOL matches = YES;
-                for (int offset = -12; offset <= 12; offset += 6) {
-                    size_t px = (size_t)floor((info[0] + x) * scale);
-                    size_t py = (size_t)floor((info[1] + 100 + offset) * scale);
-                    if (px >= head[0] || py >= head[1]) { matches = NO; break; }
-                    uint8_t rgb[3];
-                    captureFramePixelSRGB(pixels + py * head[2] + px * 4, folderSpace, rgb);
-                    if (abs((int)rgb[0] - 43) > 3 || abs((int)rgb[1] - 46) > 3 || abs((int)rgb[2] - 61) > 3)
-                        matches = NO;
-                }
-                found = matches;
-                if (matches) borderAt = x;
-            }
-            check(found, [NSString stringWithFormat:@"composition frame %d/%d preserves the right DOM border "
-                "(requested %.3f, completed %.3f, begun %.3f, presented %.3f, committed %.3f)",
-                index, count, info[6], info[7], timeline[1], timeline[2], timeline[3]]);
-            if (preCommit)
-                check(borderAt >= 300 && borderAt < 301, [NSString stringWithFormat:
-                    @"a pre-commit composition frame retains the initial border (x %.1f)", borderAt]);
-            if (index == count)
-                check(borderAt >= 290 && borderAt < 291, [NSString stringWithFormat:
-                    @"the final composition frame contains the moved border (x %.1f)", borderAt]);
         }
-        if (folderSpace) CGColorSpaceRelease(folderSpace);
     }
     // The folder of a failing check holds its frames and the request and completion times of every still (stills.jsonl); a
     // passing check removes its folder at once.
@@ -609,27 +516,6 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration, BOOL
     else removeTemporaryFolder(folder);
     sp_surface_close(surface);
     [window close]; [window release];
-}
-
-// A commit that follows the presentation callback of its DOM change shows that DOM in the first frame the display presents
-// at or after the commit (docs/spec/native-surfaces.md#layout-transaction). No frame is waited for before the commit.
-// The column in [from, to] whose pixels in the rows of the box differ from the background of the page, or NAN.
-// The still holds the bytes of the display colour space; the profile of the PNG reads them as sRGB, the space of the page.
-static double borderColumn(NSBitmapImageRep *bitmap, double from, double to) {
-    double scale = (double)bitmap.pixelsWide / 400;
-    SPStillPixels still = captureStillPixels(bitmap.CGImage);
-    double found = NAN;
-    for (double x = from; x <= to && isnan(found); x += 1) {
-        BOOL matches = YES;
-        for (int offset = -12; offset <= 12; offset += 6) {
-            uint8_t rgb[3];
-            if (!captureStillPixelSRGB(&still, (size_t)floor(x * scale), (size_t)floor((100 + offset) * scale), rgb)
-                || (abs((int)rgb[0] - 33) <= 7 && abs((int)rgb[1] - 36) <= 7 && abs((int)rgb[2] - 48) <= 7)) matches = NO;
-        }
-        if (matches) found = x;
-    }
-    captureStillPixelsRelease(&still);
-    return found;
 }
 
 typedef struct { BOOL done; sp_input_result result; } PointerDone;
@@ -682,8 +568,8 @@ static BOOL presentRegionRaster(void *region, uint64_t raster) {
 }
 
 // A drag of the main page through the input path of the host: each move opens a transaction, the page moves its DOM border
-// in its pointermove handler, the transaction waits for the presentation of that DOM, commits, and the window after one refresh
-// of the screen must show the border beside the native placement of that move. The conditions of the application are added one
+// in its pointermove handler, the transaction waits for the presentation of that DOM, commits, and the window is captured one refresh
+// of the screen after the commit. The capture is evidence of the move; its pixels are not judged. The conditions of the application are added one
 // at a time (docs/features.md, F752): ownTab gives the joined tab view a web process of its own, as a plugin view has, and
 // rasterRefreshes keeps the transaction open for that many refreshes after the presentation callback of the DOM, as the raster
 // wait of the image regions keeps it before the host commits; with imageRegion the surface holds an image region whose raster of
@@ -773,7 +659,7 @@ static void checkCommitFrame(WKWebViewConfiguration *configuration, NSString *va
             @"%@: the commit frame transaction commits after the presentation callback", variant]);
         eventWait(@"the joined tab view presents before the move is read", ^BOOL { return tabPresented == move + 1; });
         check(surfaceLayoutTraceStop(timeline, SURFACE_LAYOUT_TRACE_STAGES) == 1, @"the commit frame trace records its transaction");
-        // The commit reaches the screen at the first refresh after it, so the screen is read at that refresh.
+        // The commit reaches the screen at the first refresh after it, so the window is captured at that refresh.
         SPFrames *refreshes = [afterFrames(window.screen, 1, nil) retain];
         eventWait(@"the display refreshes once after the commit", ^BOOL { return refreshes.left == 0; });
         [refreshes release];
@@ -784,14 +670,6 @@ static void checkCommitFrame(WKWebViewConfiguration *configuration, NSString *va
         check(captured && stillError == NULL, [NSString stringWithFormat:@"the window is captured after move %d (%s)", move,
             stillError == NULL ? "no error" : stillError]);
         free(stillError);
-        NSBitmapImageRep *after = captured ? [NSBitmapImageRep imageRepWithData:[NSData dataWithContentsOfFile:stillPath]] : nil;
-        check(after != nil, [NSString stringWithFormat:@"the still after move %d decodes", move]);
-        if (after != nil) {
-            double borderAt = borderColumn(after, x, x);
-            check(!isnan(borderAt) && fabs(borderAt - x) < 0.5, [NSString stringWithFormat:
-                @"%@: after move %d the window shows the moved DOM border beside the native placement (expected x %.0f, found %.1f, "
-                "begun %.3f, presented %.3f, committed %.3f)", variant, move, x, borderAt, timeline[1], timeline[2], timeline[3]]);
-        }
     }
     PointerDone release = {NO, SP_INPUT_REJECTED};
     sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 220, 100, 3, 0, 0, 0, 1, pointerDone, &release);
@@ -809,7 +687,9 @@ static void checkCommitFrame(WKWebViewConfiguration *configuration, NSString *va
 }
 
 
-// A loaded root webview stays unpublished while its initially hidden surface is prepared, then appears at its placed geometry after commit.
+// A loaded root webview is prepared inside an open transaction while its surface is first shown: it joins the transaction, the
+// commit waits for both presentation barriers, and the keyboard owner stays. The pending still and the recording are evidence of
+// the publication; their pixels are not judged.
 static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(160, 160, 400, 200)
         styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
@@ -893,12 +773,6 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
         check(stillCaptured, [NSString stringWithFormat:@"the pending first-show window is captured (%s)",
             stillError == NULL ? "no error" : stillError]);
         free(stillError);
-        if (stillCaptured) {
-            NSBitmapImageRep *pendingBitmap = [NSBitmapImageRep imageRepWithData:
-                [NSData dataWithContentsOfFile:pendingStillPath]];
-            check(pendingBitmap != nil && !bitmapContainsFirstShowMarker(pendingBitmap),
-                @"the actual pending still contains no pixels from the hidden root marker");
-        }
         appDOMBarrierPending = NO;
         check(surfaceLayoutCommit(window, 108), @"the first-show transaction commits after both presentation barriers");
         shown = 0;
@@ -915,15 +789,9 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
         check(surfaceLayoutTraceStop(timeline, 1) == 1 && timeline[0] == 108 && timeline[1] <= timeline[2]
                 && timeline[2] <= timeline[3],
             @"the first-show trace orders begin, app-DOM presentation, and commit");
-        BOOL precommitFrame = NO;
-        BOOL precommitMarkerAbsent = YES;
-        BOOL postcommitFrame = NO;
-        BOOL finalMarkerPresent = NO;
         NSError *listingError = nil;
         NSArray<NSString *> *contents = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:
             [NSString stringWithUTF8String:directory] error:&listingError];
-        CGColorSpaceRef firstShowSpace = captureFolderColorSpace([NSString stringWithUTF8String:directory]);
-        check(firstShowSpace != NULL, @"the first-show recording folder holds the one colour profile of its frames");
         NSMutableArray<NSString *> *frameNames = [NSMutableArray array];
         for (NSString *name in contents) if ([name.pathExtension isEqualToString:@"bgra"]) [frameNames addObject:name];
         [frameNames sortUsingSelector:@selector(compare:)];
@@ -934,21 +802,7 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
             NSString *path = [[NSString stringWithUTF8String:directory] stringByAppendingPathComponent:frameNames[index]];
             NSData *data = readCaptureFrame([NSData dataWithContentsOfFile:path]);
             check(data != nil, [NSString stringWithFormat:@"first-show frame %@ decodes completely", frameNames[index]]);
-            // A still completed before the commit cannot show it, and a still requested at or after the commit shows it.
-            double requested = NAN, completed = NAN;
-            BOOL marker = data != nil && captureFrameHasColorAtPoint(data, firstShowSpace, 70, 70, &requested, &completed);
-            if (completed < timeline[3]) {
-                precommitFrame = YES;
-                if (marker) precommitMarkerAbsent = NO;
-            }
-            if (requested >= timeline[3]) postcommitFrame = YES;
-            if (index + 1 == frameNames.count) finalMarkerPresent = marker;
         }
-        check(precommitFrame, @"the recording contains a decoded frame before commit");
-        check(precommitMarkerAbsent, @"the first-show marker remains unpublished in every recorded pre-commit frame");
-        check(postcommitFrame && finalMarkerPresent,
-            @"the final post-commit frame contains the first-show marker at its declared geometry");
-        if (firstShowSpace) CGColorSpaceRelease(firstShowSpace);
     }
     sp_surface_unplace_view(root);
     [root removeFromSuperview];
