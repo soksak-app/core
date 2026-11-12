@@ -3665,7 +3665,7 @@ const FEATURE_LINKS = [
   {
     id: "F638",
     implementation: [
-      { file: "packages/window-check/app.mjs", symbol: "export async function drag(s, plan, { capture = false } = {})" },
+      { file: "packages/window-check/app.mjs", symbol: "export async function drag(s, plan, { capture = false, frameIdentity } = {})" },
     ],
     tests: [
       { file: "packages/window-check/test/drag-pace.test.mjs", id: "a drag that is not paced fails at once with its took, asked, press waits, range and load" },
@@ -9003,7 +9003,7 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "scripts/node-tests.mjs", symbol: "const { tests: all, before } = discoverNodeTests(" },
       { file: "scripts/test-app.mjs", symbol: "args: argv, strict: true, options: { script: { type: 'string' }, native: { type: 'string' }, candidate: { type: 'string' }," },
-      { file: "packages/window-check/app.mjs", symbol: "async function dragOnce(s, plan, capture) {" },
+      { file: "packages/window-check/app.mjs", symbol: "async function dragOnce(s, plan, capture, frameIdentity) {" },
     ],
     tests: [
       { file: "scripts/test/node-tests.test.mjs", id: "a run starts each file without waiting for the person, and the runner has no idle option" },
