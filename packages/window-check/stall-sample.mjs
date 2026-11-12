@@ -98,6 +98,21 @@ export function runProcess(command, args, { limitMs = 10000, atLimit = systemSta
 export const STALL_AFTER = 3000;
 
 /**
+ * The milliseconds that request `method` with `params` is planned to take, after which its STALL_AFTER starts. A request is
+ * stalled when it is pending beyond its expected length: a drag asks for `times` round trips of `ms` out and `ms` back, and the
+ * stop of a recording waits for a still at `after`, a display time, which lies `after - displayed` beyond `displayed`, the
+ * display time that the session read last. A sample during that time would stop the processes whose pace the request measures.
+ * Every other request, and one whose plan cannot be read, has no planned length.
+ */
+export function plannedLength(method, params, displayed) {
+  const finite = (value) => typeof value === "number" && Number.isFinite(value) && value > 0;
+  if (method === "diagnostics.drag" && finite(params?.ms) && finite(params?.times)) return params.times * 2 * params.ms;
+  if (method === "diagnostics.capture.stop" && finite(params?.after) && typeof displayed === "number" && Number.isFinite(displayed))
+    return Math.max(0, params.after - displayed);
+  return 0;
+}
+
+/**
  * Writes the thread stacks of process pid to file and returns file. It fails with the reason when sample fails, and a
  * sample that stalls leaves the stacks of its own process next to file.
  *

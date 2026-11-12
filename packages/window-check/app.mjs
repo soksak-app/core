@@ -9,7 +9,7 @@ import { loadavg, tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { connect, EndpointError } from "@soksak/client";
-import { STALL_AFTER, announceStall, pageProcesses, sampleStall } from "./stall-sample.mjs";
+import { STALL_AFTER, announceStall, pageProcesses, plannedLength, sampleStall } from "./stall-sample.mjs";
 import { untilEndpoint } from "./endpoint-wait.mjs";
 import { joinedFailure } from "./failure.mjs";
 import { endWatches } from "./folder-wait.mjs";
@@ -566,6 +566,8 @@ export class Session {
     // The stall samples that requests of the session started after STALL_AFTER, each as a promise of {line} or {error}.
     // finishSession waits for each one and reports it, so no sample process outlives the check.
     this.stallSamples = new Set();
+    // The display time that presented() read last; the planned length of a stop of a recording counts from it.
+    this.displayed = undefined;
     // The requests of the session that have no answer yet, by a key of each request, with the text that names it. checkEnded reads
     // them when the test runner ends the check (F351).
     this.unanswered = new Map();
@@ -728,7 +730,8 @@ export class Session {
       throw error;
     }).finally(() => this.unanswered.delete(key));
     return whilePending(answer, what, sample, (text) => this.step(text),
-      (started) => this.stallSamples.add(started.then((line) => ({ line }), (error) => ({ error }))));
+      (started) => this.stallSamples.add(started.then((line) => ({ line }), (error) => ({ error }))),
+      plannedLength(method, params, this.displayed));
   }
 
   get(name, surface) {
@@ -1146,8 +1149,11 @@ export class Session {
    * Waits until the main page and the visible application document show the current layout. The result is the display
    * time { displayed } of that screen.
    */
-  presented() {
-    return this.run("host.window.presented");
+  async presented() {
+    const presented = await this.run("host.window.presented");
+    // The planned length of a stop of a recording counts from the display time that the session read last.
+    this.displayed = presented.displayed;
+    return presented;
   }
 
   /** Waits until host.windows reports count windows and the page of every window is ready. */
@@ -1212,16 +1218,20 @@ function compact(object) {
 }
 
 /**
- * Returns the promise unchanged and records the host threads when it is still pending at STALL_AFTER (F69). The record ends no
- * wait. A request still pending at STALL_AFTER starts the host and page samples in the same turn, so a stall keeps its stacks.
+ * Returns the promise unchanged and records the host threads when it is still pending STALL_AFTER after its planned length
+ * `planned` (F69), the milliseconds that plannedLength gives the request. The record ends no wait. A request still pending then
+ * starts the host and page samples in the same turn, so a stall keeps its stacks, and a request that runs as planned, as a drag
+ * whose pace a check measures, is never sampled while it runs.
  * The sample goes on after the promise answers, so hold receives its promise, which resolves to the reported line or rejects
  * with the reason of the failed sample; the session waits for it. The line also goes to report.
  */
-export function whilePending(promise, what, sample, report, hold) {
+export function whilePending(promise, what, sample, report, hold, planned = 0) {
   if (typeof report !== "function") throw new Error("whilePending needs a report function");
   if (typeof hold !== "function") throw new Error("whilePending needs a hold function");
+  if (typeof planned !== "number" || !Number.isFinite(planned) || planned < 0) throw new Error("whilePending needs a planned length of 0 or more ms");
   const stall = setTimeout(() => {
-    const pending = `${what} still pending after ${STALL_AFTER} ms`;
+    const pending = planned === 0 ? `${what} still pending after ${STALL_AFTER} ms`
+      : `${what} still pending ${STALL_AFTER} ms after its planned ${planned} ms`;
     hold(sample().then(
       (text) => {
         const line = `${pending}; the host's threads at that moment: ${text}`;
@@ -1234,7 +1244,7 @@ export function whilePending(promise, what, sample, report, hold) {
         throw new Error(line);
       },
     ));
-  }, STALL_AFTER);
+  }, planned + STALL_AFTER);
   return promise.finally(() => clearTimeout(stall));
 }
 

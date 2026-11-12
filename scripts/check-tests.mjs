@@ -651,8 +651,12 @@ const FEATURE_LINKS = [
       { file: "native/darwin/src/host_api_window.m", symbol: "    void *read = ON_MAIN(void *, sp_window_facts_begin((void *)window, sp_window_composition((void *)window), &orderWindow));" },
       { file: "packages/host/rust/src/surfaces.rs", symbol: "fn commit_presentation<T>(" },
       { file: "native/darwin/src/image_region.m", symbol: "static void spRecordPagePress(NSWindow *window, int button, uint64_t token, NSPoint windowPoint) {" },
+      { file: "packages/window-check/stall-sample.mjs", symbol: "export function plannedLength(method, params, displayed) {" },
     ],
     tests: [
+      { file: "packages/window-check/test/stall-sample.test.mjs", id: "a drag being measured is not sampled: its stall counts 3 s from the end of its planned length" },
+      { file: "packages/window-check/test/stall-sample.test.mjs", id: "a session request of a drag takes the planned length of the drag before its stall" },
+      { file: "packages/window-check/test/stall-sample.test.mjs", id: "the planned length of a request is the length of its drag or the wait of its stop, and none for any other" },
       { file: "native/darwin/tests/press_release_test.m", id: "a release of a press that a boundary over a region took waits for no receipt of the page " },
       { file: "packages/window-check/test/recording.test.mjs", id: "a recording whose start names no recorded window is told, and its judgment fails" },
       { file: "packages/window-check/test/recording.test.mjs", id: "a recording of the display takes no recorded window" },

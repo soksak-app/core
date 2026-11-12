@@ -218,6 +218,52 @@ test("a request pending past 3 s starts the host and page samples in the same tu
   assert.deepEqual(reports, ["wailsv3 status.get host.windows still pending after 3000 ms; the host's threads at that moment: /x/logs/stall-10-7.txt, /x/logs/stall-10-7-page-12.txt, /x/logs/stall-10-7-page-13.txt"]);
 });
 
+test("the planned length of a request is the length of its drag or the wait of its stop, and none for any other", async () => {
+  const { plannedLength } = await import("../stall-sample.mjs");
+  assert.equal(plannedLength("diagnostics.drag", { axis: "x", line: 2, dx: -250, dy: 0, ms: 48, times: 15 }), 1440);
+  assert.equal(plannedLength("diagnostics.capture.stop", { after: 5100 }, 5000), 100);
+  assert.equal(plannedLength("diagnostics.capture.stop", { after: 4000 }, 5000), 0);
+  assert.equal(plannedLength("diagnostics.capture.stop", { after: 5100 }, undefined), 0);
+  assert.equal(plannedLength("diagnostics.capture.stop", {}, 5000), 0);
+  assert.equal(plannedLength("diagnostics.drag", { ms: 48 }), 0);
+  assert.equal(plannedLength("status.get", { name: "core.verify" }, 5000), 0);
+});
+
+test("a drag being measured is not sampled: its stall counts 3 s from the end of its planned length", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { plannedLength } = await import("../stall-sample.mjs");
+  const plan = { axis: "x", line: 2, dx: -250, dy: 0, ms: 48, times: 15 };
+  const planned = plannedLength("diagnostics.drag", plan);
+  let sampled = 0;
+  const reports = [];
+  void whilePending(new Promise(() => {}), "mygo diagnostics.drag", async () => { sampled++; return "stacks"; },
+    (text) => reports.push(text), () => {}, planned);
+  // The drag runs its 1440 ms and 3 s beyond them without a sample: no sample overlaps the steps that the drag measures.
+  t.mock.timers.tick(planned + 2999);
+  assert.equal(sampled, 0);
+  t.mock.timers.tick(1);
+  assert.equal(sampled, 1);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(reports, ["mygo diagnostics.drag still pending 3000 ms after its planned 1440 ms; the host's threads at that moment: stacks"]);
+});
+
+test("a session request of a drag takes the planned length of the drag before its stall", async (t) => {
+  const { mkdtempSync, rmSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { tmpdir } = await import("node:os");
+  const { Session } = await import("../app.mjs");
+  const configDir = mkdtempSync(join(tmpdir(), "soksak-stall-plan-"));
+  t.after(() => rmSync(configDir, { recursive: true }));
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const s = new Session({ name: "mygo", configDir }, { endpoint: { pid: ABSENT_HOST }, request: () => new Promise(() => {}) });
+  void s.request("diagnostics.drag", { axis: "x", line: 2, dx: -250, dy: 0, ms: 48, times: 15 });
+  t.mock.timers.tick(3000);
+  assert.equal(s.stallSamples.size, 0, "the drag was sampled at 3 s, inside its planned 1440 ms and 3 s");
+  t.mock.timers.tick(1440);
+  assert.equal(s.stallSamples.size, 1, "the drag was not sampled 3 s after its planned length");
+  await Promise.all([...s.stallSamples]);
+});
+
 test("a request that answers before 3 s does not start a sample", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   let sampled = 0;

@@ -44,6 +44,8 @@ function fixture(settings) {
         statuses["core.window.workbench"] = { start: `start-${reloads.length + 1}`, startedAt: 2 + reloads.length, readyState: "complete" };
       }
       if (method === "command.run" && params.name === "core.settings.set") Object.assign(settings, params.params.patch);
+      // host.window.presented answers the display time of the screen that shows the current layout.
+      if (method === "command.run" && params.name === "host.window.presented") return { displayed: 16 };
       if (method === "diagnostics.fixture") {
         Object.assign(settings, params.settings);
         const classes = Object.fromEntries(levels.map((kind) => [kind, params.settings["diagnostics.log"][kind] ?? "error"]));
