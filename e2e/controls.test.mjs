@@ -1,12 +1,11 @@
-// Checks that the window buttons are at the center of the first row, and still there after maximize, record, move, resize, and title change.
+// Checks that the window buttons are at the center of the first row, and still there after maximize, the stop of a recording, move,
+// resize, and title change.
 import assert from "node:assert/strict";
 import test from "node:test";
 
 
-import { APPS, drag, open } from "@soksak/window-check/app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
-
-const PLAN = { axis: "x", line: 2, dx: -250, dy: 0, ms: 48, times: 3 };
 
 /** The number of times the window change is repeated. */
 const ROUNDS = 6;
@@ -46,7 +45,10 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: stopping a window recording leaves the native buttons centred`, async (t) => {
     const s = await open(t, app);
     await fresh(s);
-    await drag(s, PLAN, { capture: true });
+    // The check is of the stop of a recording, so a recording that does not start or stop leaves nothing to check and fails it.
+    const recording = await s.record();
+    assert.ok(recording.frames, "the recording did not start (the recording diagnostics tell why)");
+    assert.ok(await recording.stop(), `the recording ${recording.frames} did not stop (the recording diagnostics tell why)`);
     // When the window title or the recording indicator changes, AppKit takes the buttons back, and the library puts them again before the next run loop
     // turn. A request that is processed in the same turn can read the position in between, so the next
     // position after the display is measured.

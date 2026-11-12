@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 
-import { frames } from "./frame.mjs";
 import { joinedFailure } from "./failure.mjs";
 import { currentEventOffsets, readEvents } from "./event-log.mjs";
 import { policyOfSetting, untilPolicy } from "./log-policy.mjs";
@@ -8,7 +7,6 @@ import { valueProof } from "./view-content.mjs";
 import { allViewRootProcessPids, measureProcessGroup, physicalFootprintBytes, processGroupReclaimEvidence,
   viewDocumentHistoryInventory, viewProcessGroup, viewProcessPids, viewProcessSurfaces,
   viewRootProcessPids } from "./view-process-footprint.mjs";
-import { readStills } from "./stills.mjs";
 
 const PROCESS_REQUEST = "host.trace.view.process-request";
 const PROCESS_READY = "host.trace.view.process-ready";
@@ -418,29 +416,10 @@ export async function waitForViewReadiness(s, surface, descriptor) {
 }
 
 /**
- * The first recorded still that shows the content of a view: the first still requested at or after `displayed`, the display
- * time of the first presentation after the content value was observed. A still shows the window at a moment after its request,
- * so it shows that presentation; that time is no earlier than the first frame that showed the content, so a first-display
- * criterion measured from it is at least as strict (docs/features.md F696-4). `captured` are the written still rows of
- * readStills: the content frame is chosen by the request times of the stills, not by their pixels.
- */
-export function recordedContentFrame(captured, displayed, proof) {
-  assert.ok(Array.isArray(captured) && captured.length > 0, "the content frame requires recorded frames");
-  assert.ok(Number.isFinite(displayed) && displayed >= 0, `the content presentation has an invalid display time ${JSON.stringify(displayed)}`);
-  let previousTime = -Infinity;
-  for (const [index, frame] of captured.entries()) {
-    assert.ok(Number.isFinite(frame?.requested) && frame.requested >= 0 && frame.requested > previousTime,
-      `recorded still ${index} has no increasing request time`);
-    previousTime = frame.requested;
-  }
-  const frameIndex = captured.findIndex((frame) => frame.requested >= displayed);
-  assert.ok(frameIndex >= 0, `no recorded still is requested at or after the content presentation at ${displayed} ms`);
-  return { frameIndex, frameCount: captured.length, timeMs: captured[frameIndex].requested, displayedAtMs: displayed, proof };
-}
-
-/**
- * Opens a view under a live recording. The content value is read and the window presented while the view is open; the content
- * frame is taken from the recording before return unless its caller defers that analysis.
+ * Opens a view under a live recording, which is the log of the open. The content value is read and the window presented while the
+ * view is open; the content frame is `{timeMs, proof}`: the display time that host.window.presented reports for the first
+ * presentation after the value held the expected content, which is no earlier than the first frame that showed it, and the proof of
+ * that value. No still of the recording is read.
  */
 export async function openRecordedView(t, s, { card, plugin, placement, params, readiness, readinessStatus, expectedContent,
   readContent, captureObservationWindowMs, deferContentVerification = false } = {}) {
@@ -475,7 +454,6 @@ export async function openRecordedView(t, s, { card, plugin, placement, params, 
     const { displayed } = await s.presented();
     capture = await recording.stop({ after: displayed + (captureObservationWindowMs ?? 0) });
     stopped = true;
-    const paths = frames(capture.frames);
     const events = readEvents(s.app.configDir, offsets).events;
     const starts = processStartSamples(events, [tab], plugin);
     assert.equal(starts.length, 1, `${plugin} view ${tab} has no unique process request event`);
@@ -495,17 +473,10 @@ export async function openRecordedView(t, s, { card, plugin, placement, params, 
       readinessEvidence,
       openedPid: pids[0],
       processGroupPids,
-      recording: { directory: capture.frames, frameCount: paths.length, files: paths, missed: capture.missed, late: capture.late },
+      recording: { directory: capture?.frames ?? null },
       verifyContent: async () => {
-        if (contentProof) return contentProof;
-        try {
-          const written = readStills(capture.stills).filter((row) => row.outcome === "written");
-          contentProof = { contentFrame: recordedContentFrame(written, displayed, proof) };
-          return contentProof;
-        } catch (error) {
-          t.diagnostic(`offline view content frame selection failed; recording retained at ${capture.frames}`);
-          throw error;
-        }
+        contentProof ??= { contentFrame: { timeMs: displayed, proof } };
+        return contentProof;
       },
       events,
     };
@@ -522,8 +493,6 @@ export async function openRecordedView(t, s, { card, plugin, placement, params, 
     }
     if (capture?.frames) {
       t.diagnostic(`failed view recording retained at ${capture.frames}`);
-      t.diagnostic(`failed view recording result: ${JSON.stringify({ count: capture.count, missed: capture.missed,
-        late: capture.late })}`);
     }
     throw error;
   }
@@ -674,8 +643,8 @@ export async function collectViewStartAndMemory(t, s, descriptor, { viewCount = 
 }
 
 /**
- * Selects the content frame of each recorded view (verifyOpenedViewContent) and then runs the measured close `closeGroup`, so the
- * offline frame decoding does not fall within the close and footprint interval.
+ * Keeps the content frame of each opened view (verifyOpenedViewContent) and then runs the measured close `closeGroup`, so every
+ * view of the close holds its content proof before the close and footprint interval.
  */
 export async function closeVerifiedRecordedViewGroup(views, closeGroup) {
   assert.ok(Array.isArray(views) && views.length > 0, "reclaim content verification requires recorded views");

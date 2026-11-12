@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
@@ -21,6 +21,8 @@ for (const app of Object.values(APPS)) {
     const listing = await s.until("core.debug", (debug) => debug.open && debug.entries.some(isEventLog),
       "the debug view did not list the event log of the host");
     s.cleanup(() => s.run("core.debug.close"));
+    // Opening the view writes a still capture of each window into logs/captures; the check removes the folders it caused.
+    for (const path of listing.captures) s.trackRecording(dirname(path));
     const entry = listing.entries.find(isEventLog).path;
     const name = entry.split("/").at(-1);
     const source = readFileSync(join(app.configDir, entry));

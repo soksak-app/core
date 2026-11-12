@@ -561,3 +561,29 @@ test("a captured drag whose stop names another window than its reply tells it", 
       new RegExp(`: the stop reply names the recorded window ${window}, not the window 7 that the recording records$`));
   }
 });
+
+/** A session whose requests of the layout trace are listed in `calls`; the stop answers `layouts` or fails with `stopFails`. */
+function traceSession({ layouts = [], stopFails = null } = {}) {
+  const s = Object.create(Session.prototype);
+  s.calls = [];
+  s.request = async (method, params) => {
+    s.calls.push(`${method} ${params.on}`);
+    if (!params.on && stopFails) throw new Error(stopFails);
+    return params.on ? null : { layouts };
+  };
+  return s;
+}
+
+test("an action under the layout trace answers its result with the layouts of the trace", async () => {
+  const s = traceSession({ layouts: [{ ticket: 1 }] });
+  assert.deepEqual(await s.traceLayouts(async () => "moved"), { result: "moved", layouts: [{ ticket: 1 }] });
+  assert.deepEqual(s.calls, ["diagnostics.layout.trace true", "diagnostics.layout.trace false"]);
+});
+
+test("an action under the layout trace that fails stops the trace and fails with both failures", async () => {
+  const s = traceSession();
+  await assert.rejects(s.traceLayouts(async () => { throw new Error("the action failed"); }), /^Error: the action failed$/);
+  assert.deepEqual(s.calls, ["diagnostics.layout.trace true", "diagnostics.layout.trace false"]);
+  await assert.rejects(traceSession({ stopFails: "no trace" }).traceLayouts(async () => { throw new Error("the action failed"); }),
+    /the trace did not stop: the action failed; no trace/);
+});

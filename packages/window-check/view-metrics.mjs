@@ -94,22 +94,15 @@ function processFootprints(value, path, { allowEmpty = false } = {}) {
   return { processes, ids, totalBytes };
 }
 
-function frameAt(value, path, { recordedFrameCount, requireProof = false } = {}) {
+/**
+ * The content frame of a view: `timeMs`, the display time (ms, host clock) of the first presentation after the content value of the
+ * view held the expected content, which the host reports (host.window.presented), and with `requireProof` the proof of that value.
+ */
+function frameAt(value, path, { requireProof = false } = {}) {
   objectAt(value, path);
-  const frameIndex = numberAt(value.frameIndex, `${path}.frameIndex`, { integer: true });
-  if (recordedFrameCount !== undefined && frameIndex >= recordedFrameCount) {
-    fail(`${path}.frameIndex`, `less than recordedFrameCount ${recordedFrameCount}`, frameIndex);
-  }
-  if (value.frameCount !== undefined) {
-    const frameCount = numberAt(value.frameCount, `${path}.frameCount`, { minimum: 1, integer: true });
-    if (frameIndex >= frameCount) fail(`${path}.frameIndex`, `less than frameCount ${frameCount}`, frameIndex);
-    if (recordedFrameCount !== undefined) sameValue(frameCount, recordedFrameCount, `${path}.frameCount`);
-  } else if (requireProof) {
-    fail(`${path}.frameCount`, "the recorded frame count of the content frame", value.frameCount);
-  }
   const timeMs = numberAt(value.timeMs, `${path}.timeMs`);
   if (requireProof) contentProofAt(value.proof, `${path}.proof`);
-  return { frameIndex, timeMs };
+  return { timeMs };
 }
 
 function contentProofAt(value, path) {

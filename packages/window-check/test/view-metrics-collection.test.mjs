@@ -673,19 +673,20 @@ function recordedViewSession(t, { frameTimes, displayed, missed = 0, calls = [] 
   return s;
 }
 
-test("direct recorded views return the content frame of the value before resolving", { timeout: 5000 }, async (t) => {
+test("direct recorded views take the display time of the presentation of the value as the content frame", { timeout: 5000 }, async (t) => {
   const s = recordedViewSession(t, { frameTimes: [4, 6], displayed: 5 });
   const result = await openRecordedView({ diagnostic() {} }, s, {
     card: "card-1", plugin: "fixture", placement: TAB_PLACEMENT, readinessStatus: "fixture.ready", readiness: async () => {},
     expectedContent: "target content", readContent: async () => "the target content line", captureObservationWindowMs: 1,
   });
-  assert.deepEqual(result.contentFrame, { frameIndex: 1, frameCount: 2, timeMs: 6, displayedAtMs: 5,
+  // The content frame is a number that the host reports, the display time of the presentation after the value holds the content; the
+  // recording is the log of the open and no time of a still is read.
+  assert.deepEqual(result.contentFrame, { timeMs: 5,
     proof: { method: "value", expected: "target content", actual: "the target content line" } });
   assert.equal("anchor" in result, false, "the recorded view still reports an anchor");
-  assert.equal(result.recording.frameCount, 2);
+  assert.deepEqual(Object.keys(result.recording), ["directory"]);
 });
 
-// The content frame is the first still that shows the content, so a still that the recording lost could have shown it first.
 test("a recorded view whose value lacks the expected content stops its recording and fails", { timeout: 5000 }, async (t) => {
   const calls = [];
   const s = recordedViewSession(t, { frameTimes: [4, 6], displayed: 5, calls });
@@ -695,20 +696,6 @@ test("a recorded view whose value lacks the expected content stops its recording
   }), /fixture view view-1 does not show "target content": "loading"/);
   assert.equal(calls.includes("presented"), false, "the window presentation was read for a view without its content");
   assert.ok(calls.includes("stop after 0"), `the failed view left its recording running: ${calls}`);
-});
-
-test("the content frame is the first recorded still requested at or after the presentation of the value", { timeout: 5000 }, () => {
-  const proof = { method: "value", expected: "x", actual: "x" };
-  const still = (requested) => ({ requested, completed: requested + 0.5 });
-  // A still requested at or after the presentation shows what was presented; one requested before it may not.
-  assert.deepEqual(viewMetrics.recordedContentFrame([still(1), still(4.75), still(5), still(9)], 5, proof),
-    { frameIndex: 2, frameCount: 4, timeMs: 5, displayedAtMs: 5, proof });
-  assert.throws(() => viewMetrics.recordedContentFrame([still(1), still(4)], 5, proof),
-    /no recorded still is requested at or after the content presentation at 5 ms/);
-  assert.throws(() => viewMetrics.recordedContentFrame([still(4), still(4)], 1, proof),
-    /recorded still 1 has no increasing request time/);
-  assert.throws(() => viewMetrics.recordedContentFrame([], 1, proof), /requires recorded frames/);
-  assert.throws(() => viewMetrics.recordedContentFrame([still(1)], Number.NaN, proof), /invalid display time/);
 });
 
 test("one recording reads the content value after readiness and defers the content frame past the footprint sample", { timeout: 5000 }, async (t) => {
@@ -744,7 +731,7 @@ test("one recording reads the content value after readiness and defers the conte
   assert.equal(at("record"), calls.lastIndexOf("record"), "one view lifecycle started multiple recordings");
   assert.equal(result.surface, "view-1");
   assert.equal(result.openedPid, 3141);
-  assert.deepEqual(result.contentFrame, { frameIndex: 3, frameCount: 4, timeMs: 13, displayedAtMs: 12,
+  assert.deepEqual(result.contentFrame, { timeMs: 12,
     proof: { method: "value", expected: "SOKSAK FIXTURE", actual: "SOKSAK FIXTURE" } });
   assert.equal(s.cleanups.length, 1, "the opened view had no cleanup owner");
   await s.cleanups[0]();

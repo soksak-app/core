@@ -36,12 +36,14 @@ for (const app of Object.values(APPS)) {
     const offsets = currentEventOffsets(app.configDir);
     const run = await drag(s, PLAN, { capture: true });
     t.diagnostic(`page handling per step (ms): ${JSON.stringify(run.handled)}`);
+    // A drag whose recording failed answers without the display time of its last layout, which the next presentation gives.
+    const displayed = run.displayed ?? (await s.presented()).displayed;
     await s.flushLog();
     let supplierFrames = [];
     await untilEventLines(app.configDir, offsets, () => {
       supplierFrames = readEvents(app.configDir, offsets).events.filter((event) =>
         event.event === "sidecar.rasterprobe.frame" && event.surface === raster.surface
-        && event.mono_ns / 1e6 >= run.ticks[0] && event.mono_ns / 1e6 <= run.displayed);
+        && event.mono_ns / 1e6 >= run.ticks[0] && event.mono_ns / 1e6 <= displayed);
       return supplierFrames.length > 0;
     }, { ...reading(app, ["sidecar.rasterprobe.frame"]), ended: s.client.ended });
     const { draw } = supplierDrawDurations(supplierFrames);

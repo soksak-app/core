@@ -28,12 +28,11 @@ pub fn stop_payload(
     directory: &Path,
     count: i32,
     stills: StillCounts,
-    layouts: &[LayoutRecord],
     window: Option<isize>,
 ) -> Value {
     let still_record = directory.join("stills.jsonl");
     let display_link = directory.join("display-link.json");
-    json!({"frames": directory.to_string_lossy(), "stills": still_record.to_string_lossy(), "displayLink": display_link.to_string_lossy(), "count": count, "missed": stills.missed, "late": stills.late, "longestGap": stills.longest_gap, "layouts": layout_trace(layouts), "window": window})
+    json!({"frames": directory.to_string_lossy(), "stills": still_record.to_string_lossy(), "displayLink": display_link.to_string_lossy(), "count": count, "missed": stills.missed, "late": stills.late, "longestGap": stills.longest_gap, "window": window})
 }
 
 /// Converts the placement transaction records into {ticket, begun, requested, presented, committed, commitPath,

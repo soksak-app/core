@@ -804,14 +804,37 @@ export class Session {
   }
 
   /**
+   * Runs `action` under the layout trace of the host (diagnostics.layout.trace) and returns `{result, layouts}`: what `action`
+   * returned and the layout transactions from the start of the trace to the end of `action`, in milliseconds on the clock of
+   * diagnostics.clock, the clock of the event records. The trace stops also when `action` fails; that failure is the failure of
+   * the call, with the failure of the stop joined to it.
+   */
+  async traceLayouts(action) {
+    await this.request("diagnostics.layout.trace", { on: true });
+    let result;
+    try {
+      result = await action();
+    } catch (error) {
+      try {
+        await this.request("diagnostics.layout.trace", { on: false });
+      } catch (stopError) {
+        throw joinedFailure("the action under the layout trace failed and the trace did not stop", [error, stopError]);
+      }
+      throw error;
+    }
+    const { layouts } = await this.request("diagnostics.layout.trace", { on: false });
+    return { result, layouts };
+  }
+
+  /**
    * Starts a recording. A recording is the log of a check, and a check that is not a check of the recording does not fail on
    * it: a start, a stop or a cleanup stop that fails, what is wrong with the stills (requireStillsArtifact) and the stills that
    * the recording lost (requireNoLostStills) are told as a diagnostic of the check (noteRecording). A recording that did not
    * start has no frames, its stop answers null and keep writes nothing. The returned stop sends diagnostics.capture.stop once
    * and answers its result, or null when it fails; when stop fails, the host may already have ended the recording, so a second
    * stop is not sent. The cleanup sends stop only if none was sent. finishSession removes the folder of a check that passes and
-   * keeps it with a check that fails: the folder is the evidence of the failure. Stop writes its whole reply, every layout
-   * transaction included, to stop.json, and keep(name, value) writes a value that the check judged, such as its displayed
+   * keeps it with a check that fails: the folder is the evidence of the failure. Stop writes its whole reply to stop.json, and
+   * keep(name, value) writes a value that the check judged, such as its displayed
    * states, to <name>.json. A check of the recording itself judges it with judge(), which throws what failed or is wrong with
    * the stills of the stopped recording and returns their rows.
    */
@@ -1363,8 +1386,9 @@ export function recordingSummary(stopped) {
 }
 
 /**
- * Runs a boundary drag with the host clock. With capture, it records the window and returns the frame folder. The
- * recording is removed when the check passes and kept when the check fails.
+ * Runs a boundary drag with the host clock. Every drag answers `ticks`, the time of each step, and `layouts`, its layout
+ * transactions, on the clock of diagnostics.clock. With capture, it also records the window and returns the frame folder. The
+ * recording is the log of the drag: it is removed when the check passes and kept when the check fails.
  *
  * Fails when the drag does not run at the requested rate. A pass of a slow drag is not a pass, and a second drag that
  * runs at the rate would make the check pass by chance, so the first drag that is not paced fails the check.

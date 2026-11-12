@@ -1,5 +1,6 @@
-// Records a maximise and a restore (cases/resize.mjs), each of which ends with the layout at the window size; the recordings are their
-// evidence. On a window whose host.window reports pageProcess null it then runs a maximise and restore without capture under the trace
+// Records a maximise and a restore (cases/resize.mjs), each of which ends with the layout at the window size, and reports the catch-up
+// of each (catchUp of @soksak/window-check/layout-timing.mjs) as a diagnostic: e2e/resize.test.mjs judges it. The recordings are
+// their log. On a window whose host.window reports pageProcess null it then runs a maximise and restore without capture under the trace
 // state of the frame records, whose U7 records must be complete.
 // Each state asserts the settings of B3_SETTINGS before it measures. B3 output (SOKSAK_B3_OUT and SOKSAK_B3_TRACE, cases/b3-run.mjs):
 // the keys of resize-catch-up in B3_MEASUREMENTS of measurements.mjs for the state; the state captured writes the verdict with the
@@ -7,7 +8,8 @@
 // with its conditions.
 import test from "node:test";
 
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, open, recordingSummary } from "@soksak/window-check/app.mjs";
+import { catchUp } from "@soksak/window-check/layout-timing.mjs";
 import { applyTrace, FRAME_RECORDS } from "../../scripts/measure-trace.mjs";
 import { b3Conditions, b3Target, withB3Out } from "./cases/b3-run.mjs";
 import { recordGesture } from "./cases/gesture-records.mjs";
@@ -18,8 +20,12 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: maximising and restoring keep the layout at the window size`, async (t) => {
     const s = await open(t, app);
     await withB3Out(b3Target(process.env, B3_MEASUREMENTS["resize-catch-up"]), async (run) => {
-      const { pageProcess } = await recordMaximiseAndRestore(s, (gesture, { frames, missed, late }) => {
-        t.diagnostic(`${app.name} ${gesture}: recording ${frames}, ${missed} missed and ${late} late stills`);
+      const { pageProcess } = await recordMaximiseAndRestore(s, (gesture, { stopped, layouts, resizes }) => {
+        t.diagnostic(`${app.name} ${gesture}: ${recordingSummary(stopped)}`);
+        const caught = catchUp(layouts, resizes);
+        t.diagnostic(`${app.name} ${gesture}: ${resizes.length} window resizes, ${layouts.length} layout transactions, the layout ` +
+          `of ticket ${caught.ticket} at the window size ${caught.took} ms after the first resize; misses ` +
+          `${JSON.stringify(caught.failures)}`);
       }, {
         started: async () => {
           const conditions = await b3Conditions(s, B3_SETTINGS["resize-catch-up"].captured);

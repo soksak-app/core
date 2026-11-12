@@ -149,9 +149,10 @@ fn invalid_json_closes_connection() {
 | `diagnostics.input-source.selects-a-role` | `diagnostics.input.source`는 role `latin`, `korean`, `japanese`가 아닌 `select`, `restore`와 함께 온 `select`, 빈 `restore`를 각각 invalid-params 오류로 거부한다. Role은 role 그대로 platform에 전달되며, 응답은 platform이 보고한 role을 `current`(role이 없는 input source는 null)로, 그 platform 식별자를 `source`로 담는다. | all |
 | `endpoint.diagnostics-clock.real-jsonrpc-returns-monotonic-decimal` | diagnostics build에서 `{window}`을 담은 실제 endpoint JSON-RPC `diagnostics.clock` 요청은 host event-record clock의 `{mono_ns}`를 양수 canonical uint64 십진 문자열로 반환하고, 같은 연결의 두 번째 요청은 첫 값보다 작지 않은 값을 반환한다. | all |
 | `endpoint.diagnostics-clock.absent-without-diagnostics` | diagnostics build 옵션이 없으면 endpoint는 `diagnostics.clock`을 선언하지 않으며 해당 요청의 연결을 닫는다. | all |
-| `diagnostics.capture-stop.payload-reports-stills` | 녹화 중지 페이로드는 정확히 `frames`, `stills`(녹화 폴더 안에 있는, 계획한 모든 still의 `stills.jsonl` 기록 경로), `displayLink`, `count`, `missed`, `late`, `longestGap`, `layouts`, 그리고 녹화한 창의 window server 번호 `window`를 보고한다. display 녹화의 `window`는 `null`이다. | all |
-| `diagnostics.capture-stop.payload-reports-layout-timeline` | 녹화 중지 페이로드는 기록된 layout transaction이 없어도 항상 `layouts` 배열을 보고한다. | all |
-| `diagnostics.capture-stop.payload-preserves-layout-stages` | 각 `layouts` 항목은 기록된 ticket, begun, requested, presented, committed, flushed 값을 유지한다. | all |
+| `diagnostics.capture-stop.payload-reports-stills` | capture stop payload는 정확히 `frames`, `stills`(녹화 폴더 안에서 계획된 모든 still의 `stills.jsonl` 기록 경로), `displayLink`, `count`, `missed`, `late`, `longestGap`, `window`를 보고한다. `window`는 녹화한 창의 window server 번호이며 display 녹화에서는 `null`이다. | all |
+| `diagnostics.layout-trace.reply-reports-layouts` | layout trace의 `layouts`는 기록된 layout transaction이 없어도 언제나 배열이다. | all |
+| `diagnostics.layout-trace.reply-preserves-layout-stages` | layout trace의 각 `layouts` 항목은 기록된 ticket, begun, requested, presented, committed, commit path, `openAtCommit`, flushed 값을 유지하며, 일어나지 않은 단계는 null이다. | all |
+| `diagnostics.layout-trace.one-run-at-a-time` | layout trace는 한 번에 한 run, 즉 drag 하나나 `diagnostics.layout.trace` 하나가 가진다. run이 가진 동안의 시작은 `the layout trace is already running`으로 실패하고 네이티브 trace에 닿지 않으며, trace를 가진 run만 그것을 멈춘다(`no layout trace is running`). | all |
 | `diagnostics.layout-trace.native-record-names-its-commit` | host는 layout transaction의 각 native record를 ticket, begun, presented, committed, requested, commit path code, `openAtCommit`, `flushed`로 읽고, 각 commit path code를 그 path의 이름(`present`, `start`, `view-join`, `view-abandon`, `cancel`)으로 바꾼다. commit하지 않은 transaction에는 commit path, `openAtCommit`, `flushed`가 없다([endpoint](endpoint.ko.md)). | all |
 | `diagnostics.layout-trace.unknown-commit-path-fails` | native code가 선언하지 않은 commit path code의 native layout record는 path 없는 record가 되지 않고 layout record 읽기를 실패시킨다. | all |
 | `diagnostics.capture-start.preserves-display-option-parsing` | `diagnostics.capture.start`는 `display`를 선택적 boolean으로 읽는다. 없거나 `null`이면 false이고 다른 값은 거부한다. | all |
@@ -726,9 +727,8 @@ fn invalid_json_closes_connection() {
 | `recording.finish.keeps-folder-and-reports-frames` | 녹화를 마치면 폴더를 유지하고 프레임 수와 녹화한 창의 window server 번호를 보고하며, 두 번째 마침은 실패한다. | all |
 | `recording.finish.reports-the-recorded-window` | 창 녹화를 마치면 그 창의 window server 번호를 보고하고, display 녹화를 마치면 보고하지 않는다. | all |
 | `recording.finish.retired-stop-failure-releases-owner` | capture stop이 실패하면 native 녹화는 끝난 상태다. finish는 stop 오류를 보고하고 start가 반환한 폴더를 그대로 두며, 다른 녹화를 시작할 수 있도록 녹화 소유권을 해제한다. | all |
-| `recording.finish.layout-trace-failure-preserves-folder` | capture stop 뒤 layout trace finalization이 실패하면 finish는 해당 오류를 반환하고 start가 이미 반환한 frame 폴더를 보존한다. | all |
-| `recording.drag.layout-trace-after-settle` | 기록하는 drag는 마지막 layout이 commit되고 표시된 뒤에 layout trace를 끝내므로, trace가 마지막 layout의 presentation과 commit을 가진다. drag나 그 대기가 실패해도 trace는 끝난다. | all |
-| `recording.drag.recording-failure-is-told` | 기록하는 drag는 기록이 실패해도 결과를 답한다. 기록은 drag의 log이기 때문이다. `captureError`가 무엇이 실패했는지 알리고, 시작하지 못한 기록은 `frames`, `window`, `ticks`를 더하지 않으며, 끝나지 못한 layout trace는 `layouts`를 더하지 않는다. | all |
+| `recording.drag.layout-trace-after-settle` | drag는 마지막 layout이 commit되고 표시된 뒤에 layout trace를 끝내므로, trace가 마지막 layout의 presentation과 commit을 가진다. drag나 그 대기가 실패해도 trace는 끝난다. | all |
+| `recording.drag.recording-failure-is-told` | drag는 모든 결과에 `ticks`와 `layouts`를 답하고, 기록하는 drag는 기록이 시작하지 못해도 결과를 답한다. 기록은 drag의 log이기 때문이다. `captureError`가 무엇이 실패했는지 알리고 결과에는 `frames`와 `window`가 없다. | all |
 | `recording.start.failed-open-removes-folder` | 캡처 열기에 실패한 녹화는 폴더를 제거하고 실행 중인 것을 남기지 않는다. | all |
 | `recording.start.failed-start-removes-folder` | 캡처 시작에 실패한 녹화는 폴더를 제거하고 실행 중인 것을 남기지 않는다. | all |
 | `recording.start.no-first-still-removes-folder` | Still 0이 실패한 녹화, 곧 native 녹화가 기록을 폴더에 쓴 뒤 끝난 녹화는 그 still의 오류를 반환하고, 그 기록과 함께 폴더를 제거하며, stop을 요청하지 않고 실행 중인 것을 남기지 않아 다음 start가 실행된다. | all |

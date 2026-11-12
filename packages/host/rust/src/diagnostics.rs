@@ -195,36 +195,17 @@ pub(crate) fn call(
     match method {
         "diagnostics.fixture" => fixture(host, window, params),
         "diagnostics.drag" => drag(host, window, params, &connection),
+        "diagnostics.layout.trace" => layout_trace_request(window, &params, &connection),
         "diagnostics.document.viewport-marker" => document_viewport_marker(window, &params),
         "diagnostics.capture.start" => {
             let options = parse_capture_start_options(&params)?;
             if options.new_window {
                 let frames = capture_start_new_window(window, &connection, options.plan)?;
-                let platform = platform::current().map_err(internal)?;
-                on_main(window, move || platform.layout_trace_start()).map_err(internal)?;
                 // The held window is known once the application shows it, after this reply; the stop reply names it.
                 return Ok(json!({"frames": frames.to_string_lossy(), "window": null}));
             }
             let display = options.display;
-            let (frames, recorded) = (|| {
-                let started = capture_start(window, &connection, display, options.plan)?;
-                let traced = (|| -> Result<(), Failure> {
-                    let platform = platform::current().map_err(internal)?;
-                    on_main(window, move || platform.layout_trace_start()).map_err(internal)
-                })();
-                if let Err(error) = traced {
-                    if let Err(cleanup) = recorder(window, &connection)
-                        .and_then(|capture| RECORDING.abort(&capture).map_err(internal))
-                    {
-                        return Err(internal(format!(
-                            "{}; abort capture: {}",
-                            error.message, cleanup.message
-                        )));
-                    }
-                    return Err(error);
-                }
-                Ok(started)
-            })()?;
+            let (frames, recorded) = capture_start(window, &connection, display, options.plan)?;
             Ok(json!({"frames": frames.to_string_lossy(), "window": recorded}))
         }
         "diagnostics.capture.stop" => {
@@ -1397,8 +1378,8 @@ fn drag(
         None
     };
 
-    // The recording of a drag is its log: a recording that does not start or whose layout trace does not start or end is told in
-    // the result (recorded_drag_result), and the drag runs and answers without it.
+    // The recording of a drag is its log: a recording that does not start is told in the result (recorded_drag_result), and
+    // the drag runs and answers without it.
     let mut capture_error: Option<String> = None;
     let frames = if capture_options.capture {
         match capture_start(window, connection, false, capture_options.plan) {
@@ -1411,19 +1392,6 @@ fn drag(
     } else {
         None
     };
-    let tracing = frames.is_some()
-        && match platform::current().map_err(internal).and_then(|platform| {
-            on_main(window, move || platform.layout_trace_start()).map_err(internal)
-        }) {
-            Ok(()) => true,
-            Err(error) => {
-                capture_error = Some(format!(
-                    "the layout trace of the recording did not start: {}",
-                    error.message
-                ));
-                false
-            }
-        };
 
     exposure::note(
         window,
@@ -1437,14 +1405,34 @@ fn drag(
         ),
     );
     let ticking = window.clone();
-    // When recording, the time at which the step was sent is kept on the same clock as the frames, so that the delay
-    // from the step to the screen can be measured.
+    // The layout trace and the time of each step are the record of every drag, on the clock of diagnostics.clock, so a check
+    // judges the drag by them. A trace that does not start or end fails the drag.
     let sent = std::sync::Arc::new(std::sync::Mutex::new(Vec::<f64>::new()));
-    let clock = if frames.is_some() {
-        Some(platform::current().map_err(internal)?)
-    } else {
-        None
+    let traced = (|| {
+        let clock = platform::current().map_err(internal)?;
+        let run = Arc::new(LayoutTraceRun { endpoint: false });
+        start_layout_trace(&run, || {
+            on_main(window, move || clock.layout_trace_start()).map_err(internal)
+        })?;
+        Ok::<_, Failure>((clock, run))
+    })();
+    let (clock, run) = match traced {
+        Ok(traced) => traced,
+        Err(error) => {
+            if frames.is_some() {
+                let cleanup = recorder(window, connection)
+                    .and_then(|capture| RECORDING.abort(&capture).map_err(internal));
+                if let Err(cleanup) = cleanup {
+                    return Err(internal(format!(
+                        "{}; abort capture: {}",
+                        error.message, cleanup.message
+                    )));
+                }
+            }
+            return Err(error);
+        }
     };
+    let clock = Some(clock);
     let recorded = sent.clone();
     let result = match from {
         Some(from) => {
@@ -1502,26 +1490,21 @@ fn drag(
             Ok(result)
         },
         || {
-            if tracing {
+            stop_layout_trace(&run, || {
                 let platform = platform::current().map_err(internal)?;
-                on_main(window, move || platform.layout_trace_stop())
-                    .map(Some)
-                    .map_err(internal)
-            } else {
-                Ok(None)
-            }
+                on_main(window, move || platform.layout_trace_stop()).map_err(internal)
+            })
         },
     );
     let finished = (|| -> Result<Value, Failure> {
-        let result = result?;
-        let layouts = match layouts {
-            Ok(layouts) => layouts.as_deref().map(layout_trace),
-            Err(trace) => {
-                capture_error = Some(format!(
-                    "the layout trace of the recording did not end: {}",
-                    trace.message
-                ));
-                None
+        let (result, layouts) = match (result, layouts) {
+            (Ok(result), Ok(layouts)) => (result, layout_trace(&layouts)),
+            (Err(error), Ok(_)) | (Ok(_), Err(error)) => return Err(error),
+            (Err(error), Err(trace)) => {
+                return Err(internal(format!(
+                    "{}; layout trace: {}",
+                    error.message, trace.message
+                )));
             }
         };
         let merged = match result {
@@ -1535,11 +1518,11 @@ fn drag(
         let recording = frames.as_ref().map(|(frames, recorded)| DragRecording {
             frames: frames.to_string_lossy().into_owned(),
             window: json!(recorded),
-            ticks,
-            layouts,
         });
         Ok(Value::Object(recorded_drag_result(
             merged,
+            ticks,
+            layouts,
             recording,
             capture_error.take(),
         )))
@@ -1561,35 +1544,118 @@ fn drag(
     finished
 }
 
-/// The recording of a recorded drag that started: its frame folder, its recorded window, the time of each step and the layouts of
-/// its layout trace, or none when the trace did not run to its end.
+/// The recording of a drag that started: its frame folder and its recorded window.
 struct DragRecording {
     frames: String,
     window: Value,
-    ticks: Vec<f64>,
-    layouts: Option<Value>,
 }
 
-/// Adds the recording of a recorded drag to the result of the drag. A recording that started adds frames, window and ticks, and
-/// layouts when its trace ended; captureError tells what failed of the recording. The recording is the log of the drag, so the
-/// drag does not fail on it.
+/// Adds to the result of a drag the time of each step, its layout trace and its recording: a recording that started adds frames
+/// and window, and captureError tells what failed of the recording. The recording is the log of the drag, so the drag does not
+/// fail on it.
 fn recorded_drag_result(
     mut result: Map<String, Value>,
+    ticks: Vec<f64>,
+    layouts: Value,
     recording: Option<DragRecording>,
     capture_error: Option<String>,
 ) -> Map<String, Value> {
+    result.insert("ticks".into(), json!(ticks));
+    result.insert("layouts".into(), layouts);
     if let Some(recording) = recording {
         result.insert("frames".into(), Value::String(recording.frames));
         result.insert("window".into(), recording.window);
-        result.insert("ticks".into(), json!(recording.ticks));
-        if let Some(layouts) = recording.layouts {
-            result.insert("layouts".into(), layouts);
-        }
     }
     if let Some(error) = capture_error {
         result.insert("captureError".into(), Value::String(error));
     }
     result
+}
+
+/// One run of the layout trace of the host. The native layout trace records the transactions of the application and a start
+/// discards what it recorded, so one run holds it at a time: a drag, or diagnostics.layout.trace, whose run is an endpoint run
+/// and ends also with the close of the endpoint connection that started it.
+struct LayoutTraceRun {
+    endpoint: bool,
+}
+
+/// The run that holds the layout trace, none when no trace runs.
+static LAYOUT_TRACE: Mutex<Option<Arc<LayoutTraceRun>>> = Mutex::new(None);
+
+fn held_layout_trace() -> MutexGuard<'static, Option<Arc<LayoutTraceRun>>> {
+    // default: a lock that a panicking thread poisoned still names the run that holds the trace; the panic hook records the
+    // panic.
+    LAYOUT_TRACE.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// Starts the layout trace for run with start; it fails while another run holds the trace.
+fn start_layout_trace(
+    run: &Arc<LayoutTraceRun>,
+    start: impl FnOnce() -> Result<(), Failure>,
+) -> Result<(), Failure> {
+    let mut held = held_layout_trace();
+    if held.is_some() {
+        return Err(internal("the layout trace is already running"));
+    }
+    start()?;
+    *held = Some(run.clone());
+    Ok(())
+}
+
+/// Stops the layout trace of run with stop and returns its records; it fails when run does not hold the trace.
+fn stop_layout_trace<T>(
+    run: &Arc<LayoutTraceRun>,
+    stop: impl FnOnce() -> Result<T, Failure>,
+) -> Result<T, Failure> {
+    let mut held = held_layout_trace();
+    if !held.as_ref().is_some_and(|holder| Arc::ptr_eq(holder, run)) {
+        return Err(internal("no layout trace is running"));
+    }
+    *held = None;
+    stop()
+}
+
+/// Starts the layout trace with on set, and with on unset stops the trace that it started and answers {layouts}, the layout
+/// transactions recorded since its start on the clock of diagnostics.clock in milliseconds. The trace also ends with the close
+/// of the endpoint connection that started it (docs/spec/endpoint.md).
+fn layout_trace_request(
+    window: &Window,
+    params: &Map<String, Value>,
+    connection: &crate::endpoint::ConnectionEnd,
+) -> Result<Value, Failure> {
+    let on = params
+        .get("on")
+        .and_then(Value::as_bool)
+        .ok_or_else(|| Failure::params("on must be a boolean"))?;
+    let stop = |window: Window| {
+        move || {
+            let platform = platform::current().map_err(internal)?;
+            on_main(&window, move || platform.layout_trace_stop()).map_err(internal)
+        }
+    };
+    if !on {
+        let run = held_layout_trace()
+            .clone()
+            .filter(|run| run.endpoint)
+            .ok_or_else(|| internal("no layout trace of diagnostics.layout.trace is running"))?;
+        let records = stop_layout_trace(&run, stop(window.clone()))?;
+        return Ok(json!({"layouts": layout_trace(&records)}));
+    }
+    let run = Arc::new(LayoutTraceRun { endpoint: true });
+    start_layout_trace(&run, || {
+        let platform = platform::current().map_err(internal)?;
+        on_main(window, move || platform.layout_trace_start()).map_err(internal)
+    })?;
+    let ended = window.clone();
+    connection.on_close(move || {
+        if stop_layout_trace(&run, stop(ended.clone())).is_ok() {
+            exposure::note(
+                &ended,
+                "diagnostics: the layout trace ended with its endpoint connection",
+            );
+        }
+    });
+    Ok(Value::Null)
 }
 
 /// Runs settle, which waits until the last placement of a drag is committed and presented, and then stop, which ends the
@@ -1770,40 +1836,20 @@ fn capture_stop(
         after,
         ..recorder(window, connection)?
     };
-    let platform = recorder.platform;
-    let (directory, count, recorded_window) = match RECORDING.finish(&recorder) {
-        Ok(finished) => finished,
-        Err(error) => {
-            let mut failures = vec![format!("stop capture: {error}")];
-            if let Err(layout_error) = on_main(window, move || platform.layout_trace_stop()) {
-                failures.push(format!("stop layout trace: {layout_error}"));
-            }
-            return Err(internal(failures.join("; ")));
-        }
+    let (directory, count, recorded_window) = RECORDING
+        .finish(&recorder)
+        .map_err(|error| internal(format!("stop capture: {error}")))?;
+    let stills = StillCounts {
+        missed: recorder.platform.capture_missed().map_err(internal)?,
+        late: recorder.platform.capture_late().map_err(internal)?,
+        longest_gap: recorder.platform.capture_longest_gap().map_err(internal)?,
     };
-    finish_capture_stop(&directory, count, recorded_window, || {
-        let layouts = on_main(window, move || platform.layout_trace_stop()).map_err(internal)?;
-        let stills = StillCounts {
-            missed: recorder.platform.capture_missed().map_err(internal)?,
-            late: recorder.platform.capture_late().map_err(internal)?,
-            longest_gap: recorder.platform.capture_longest_gap().map_err(internal)?,
-        };
-        Ok((layouts, stills))
-    })
-}
-
-fn finish_capture_stop(
-    directory: &Path,
-    count: i32,
-    window: Option<isize>,
-    finalize: impl FnOnce() -> Result<(Vec<crate::platform::LayoutRecord>, StillCounts), Failure>,
-) -> Result<Value, Failure> {
-    match finalize() {
-        Ok((layouts, stills)) => Ok(crate::recording::stop_payload(
-            directory, count, stills, &layouts, window,
-        )),
-        Err(error) => Err(error),
-    }
+    Ok(crate::recording::stop_payload(
+        &directory,
+        count,
+        stills,
+        recorded_window,
+    ))
 }
 
 /// The modal content replies that were held for one window.

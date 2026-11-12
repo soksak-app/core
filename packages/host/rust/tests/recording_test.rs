@@ -14,7 +14,9 @@ mod records;
 
 use soksak_host::event_record::use_host_event_log;
 use soksak_host::platform::LayoutRecord;
-use soksak_host::recording::{Capture, Plan, Recording, StillCounts, Target, stop_payload};
+use soksak_host::recording::{
+    Capture, Plan, Recording, StillCounts, Target, layout_trace, stop_payload,
+};
 
 /// The records of the host are process-wide, so the tests of this file that attach a writer run one at a time: a test reads
 /// only the errors that its own recording wrote.
@@ -510,61 +512,50 @@ fn the_stop_payload_reports_the_stills() {
             late: 5,
             longest_gap: 42.5,
         },
-        &[],
         Some(31),
     );
     assert_eq!(
         payload,
-        serde_json::json!({"frames": "/tmp/frames", "stills": "/tmp/frames/stills.jsonl", "displayLink": "/tmp/frames/display-link.json", "count": 598, "missed": 2, "late": 5, "longestGap": 42.5, "layouts": [], "window": 31})
+        serde_json::json!({"frames": "/tmp/frames", "stills": "/tmp/frames/stills.jsonl", "displayLink": "/tmp/frames/display-link.json", "count": 598, "missed": 2, "late": 5, "longestGap": 42.5, "window": 31})
     );
     // A display recording has no window of its own: the member is null, not absent.
-    let display = stop_payload(Path::new("/tmp/frames"), 3, STILLS, &[], None);
+    let display = stop_payload(Path::new("/tmp/frames"), 3, STILLS, None);
     assert_eq!(display.get("window"), Some(&serde_json::Value::Null));
 }
 
-// contract: diagnostics.capture-stop.payload-reports-layout-timeline
+// contract: diagnostics.layout-trace.reply-reports-layouts
 #[test]
-fn the_stop_payload_requires_a_layout_timeline() {
-    let payload = stop_payload(Path::new("/tmp/frames"), 3, STILLS, &[], None);
-    assert!(
-        payload["layouts"].is_array(),
-        "capture stop omitted layouts: {payload}"
-    );
+fn a_layout_trace_without_transactions_reports_an_empty_list() {
+    assert_eq!(layout_trace(&[]), serde_json::json!([]));
 }
 
-// contract: diagnostics.capture-stop.payload-preserves-layout-stages
+// contract: diagnostics.layout-trace.reply-preserves-layout-stages
 #[test]
-fn the_stop_payload_preserves_layout_stages() {
-    let payload = stop_payload(
-        Path::new("/tmp/frames"),
-        3,
-        STILLS,
-        &[
-            LayoutRecord {
-                ticket: 7,
-                begun: 10.0,
-                requested: 15.0,
-                presented: 20.0,
-                committed: 30.0,
-                commit_path: Some("view-join"),
-                open_at_commit: 1.0,
-                flushed: 35.0,
-            },
-            LayoutRecord {
-                ticket: 8,
-                begun: 40.0,
-                requested: f64::NAN,
-                presented: f64::NAN,
-                committed: f64::NAN,
-                commit_path: None,
-                open_at_commit: f64::NAN,
-                flushed: f64::NAN,
-            },
-        ],
-        None,
-    );
+fn a_layout_trace_keeps_the_stages_of_each_transaction() {
+    let layouts = layout_trace(&[
+        LayoutRecord {
+            ticket: 7,
+            begun: 10.0,
+            requested: 15.0,
+            presented: 20.0,
+            committed: 30.0,
+            commit_path: Some("view-join"),
+            open_at_commit: 1.0,
+            flushed: 35.0,
+        },
+        LayoutRecord {
+            ticket: 8,
+            begun: 40.0,
+            requested: f64::NAN,
+            presented: f64::NAN,
+            committed: f64::NAN,
+            commit_path: None,
+            open_at_commit: f64::NAN,
+            flushed: f64::NAN,
+        },
+    ]);
     assert_eq!(
-        payload["layouts"],
+        layouts,
         serde_json::json!([
             {"ticket":7,"begun":10.0,"requested":15.0,"presented":20.0,"committed":30.0,"commitPath":"view-join","openAtCommit":1.0,"flushed":35.0},
             {"ticket":8,"begun":40.0,"requested":null,"presented":null,"committed":null,"commitPath":null,"openAtCommit":null,"flushed":null}

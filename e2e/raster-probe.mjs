@@ -21,8 +21,9 @@ export const RASTER_ENTRIES = Object.freeze(["status rasterprobe.view", "status 
   "status rasterprobe.input", "command rasterprobe.color", "command rasterprobe.rows", "command rasterprobe.kill"]);
 
 /**
- * The color that a check paints the frames in to find the raster in captured pixels: it differs from the card (--card), the plane
- * (--bg) and the borders of every theme, so only the places that the native raster painted take this color.
+ * The color that a check paints the frames in, which the frame records of the raster probe (rasterprobe.frame) name: it differs from
+ * the card (--card), the plane (--bg) and the borders of every theme, so a recording, the log of a failed check, shows the places
+ * that the native raster painted.
  */
 export const MEASURED = [30, 30, 30];
 export const MEASURED_HEX = `#${MEASURED.map((value) => value.toString(16).padStart(2, "0")).join("")}`;
@@ -130,7 +131,7 @@ export async function ensureRasters(s, count) {
 
 /**
  * Waits until the image region of `surface` presents the last frame that the sidecar sent ({generation, raster, sequence} of
- * rasterprobe.frame), so a pixel read after it shows that frame and not an earlier one. `accept` narrows the frame (for example
+ * rasterprobe.frame), so a read after it reads that frame and not an earlier one. `accept` narrows the frame (for example
  * its color). Returns the frame.
  */
 export async function presentedFrame(s, surface, accept = () => true, what = "the expected frame") {

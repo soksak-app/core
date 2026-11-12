@@ -1,7 +1,8 @@
 // The view drag benchmark of B3 (docs/operations/examples.md, S5 and S16; cases/view-drag.mjs holds the order of its steps). It opens
 // the floor page fixture view as the active tab of the focused card (cases/floor-page.mjs), prepares the layout of its drag, and runs
 // under that layout a drag without capture through `diagnostics.drag` with `native: true`, the captured
-// drag with the performance trace off, whose recording is its evidence, and, after `frames` of host.window has not
+// drag with the performance trace off, whose recording is its log and whose layout trace it reports with the judgments of
+// e2e/workbench-capture.test.mjs (commitCadence and stepCommitDelays) as a diagnostic, and, after `frames` of host.window has not
 // changed for 3 seconds, a drag without capture under the policy that stores the class `frame` at `debug`, whose U7 records it reads on a
 // window whose host.window reports pageProcess null. It reads the CPU time and the peak footprint of each process of the application
 // before and after the first drag. SOKSAK_ACCESSIBILITY=1 reads the elements of the window through the accessibility API before the
@@ -51,9 +52,11 @@ for (const app of Object.values(APPS)) {
             const { report } = result;
             const path = join(result.directory, "result.json");
             writeFileSync(path, JSON.stringify(report, null, 2) + "\n");
-            t.diagnostic(`benchmark report ${path}: recording ${report.recording}, ${report.frameCount} written, ` +
-              `${report.missed} missed and ${report.late} late stills`);
+            t.diagnostic(`benchmark report ${path}: recording ${report.recording}`);
             t.diagnostic(`transaction cadence (ms): ${JSON.stringify(report.transactionCadence)}`);
+            t.diagnostic(`at ${report.refreshRate} Hz: commit intervals ${JSON.stringify(report.commits.intervals)} ms, step delays ` +
+              `median ${report.stepDelays.median}, p90 ${report.stepDelays.p90}, longest ${report.stepDelays.longest} display periods; ` +
+              `misses ${JSON.stringify([...report.commits.failures, ...report.stepDelays.failures])}`);
             return result;
           },
           untilFramesQuiet: () => untilFramesQuiet({ frames: async () => [(await s.get("host.window")).frames] }),

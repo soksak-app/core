@@ -1,7 +1,9 @@
 // The maximise and restore gesture of the resize window check (e2e/resize.test.mjs) and of its benchmark
-// (e2e/benchmark/resize-catch-up.test.mjs). Each change is recorded; the recording is the evidence of the change. After the captured
-// maximise and restore the benchmark runs a maximise and restore without capture under the trace state of the frame records and reads
-// their U7 records (gesture-records.mjs).
+// (e2e/benchmark/resize-catch-up.test.mjs). Each change runs under the layout trace of the host and is recorded; the layout trace and
+// the window resize events of the event log are its numbers, and the recording is its log. After the captured maximise and restore the
+// benchmark runs a maximise and restore without capture under the trace state of the frame records and reads their U7 records
+// (gesture-records.mjs).
+import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
 import { FRAME_RECORDS } from "../../../scripts/measure-trace.mjs";
 import { B3_SETTINGS } from "../measurements.mjs";
 import { fixtureSettings } from "./b3-run.mjs";
@@ -18,28 +20,38 @@ const margin = (w) => w.content.width - right(w);
 
 /**
  * Records the change that resizes the window until the layout at the new size is displayed: the window reaches the size of `sized`
- * and the surfaces keep their distance to the right edge of the window. Returns `{displayed, frames, missed, late, layouts}` of the
- * recording, which is the evidence of the change.
+ * and the surfaces keep their distance to the right edge of the window. Returns `{displayed, stopped, layouts, resizes}`: the display
+ * time of the layout, the stop reply of the recording, which is the log of the change, or null when the recording failed (the
+ * recording diagnostics tell why), the layout transactions of the change (Session.traceLayouts) and the times of its window resize
+ * events (`host.window.event` of kind `resize`), all in milliseconds on the clock of diagnostics.clock.
  */
 async function record(s, change, sized) {
   const kept = margin(await s.get("host.window"));
+  const offsets = currentEventOffsets(s.app.configDir);
   const recording = await s.record();
   // The recording covers the screen up to this display time. A screen that the app committed is displayed after the display wait ends.
   let displayed = 0;
+  let layouts = null;
   let failure;
   try {
-    await change();
-    // Waits until the window reaches the new size, the surface moves to the layout of that size and that layout is displayed.
-    await s.until("host.window", (w) => sized(w) && Math.abs(margin(w) - kept) < 1,
-      "the surfaces did not follow the window");
-    ({ displayed } = await s.presented());
+    ({ layouts } = await s.traceLayouts(async () => {
+      await change();
+      // Waits until the window reaches the new size, the surface moves to the layout of that size and that layout is displayed.
+      await s.until("host.window", (w) => sized(w) && Math.abs(margin(w) - kept) < 1,
+        "the surfaces did not follow the window");
+      ({ displayed } = await s.presented());
+    }));
   } catch (error) {
     failure = error;
   }
   // Covers the interval in which the layout follows after the window reaches the new size. The recording is stopped even when the change failed.
-  const { frames, layouts, missed, late } = await recording.stop({ after: displayed ? displayed + SETTLE : 0 });
+  const stopped = await recording.stop({ after: displayed ? displayed + SETTLE : 0 });
   if (failure) throw failure;
-  return { displayed, frames, missed, late, layouts };
+  await s.flushLog();
+  const resizes = readEvents(s.app.configDir, offsets).events
+    .filter((event) => event.event === "host.window.event" && event.fields?.kind === "resize")
+    .map((event) => event.mono_ns / 1e6);
+  return { displayed, stopped, layouts, resizes };
 }
 
 /**
@@ -79,8 +91,7 @@ async function maximiseAndRestore(s) {
 
 /**
  * Maximises the window of `s` and restores it, recording each change. `judge(gesture, recorded)` runs after each recorded change
- * with `{displayed, frames, missed, late, layouts}` (`missed` and `late`: the stills that the recording did not write and those that
- * it requested late) and may throw. `started()` runs after the preparation, right before the first gesture. The window is restored
+ * with `{displayed, stopped, layouts, resizes}` of record and may throw. `started()` runs after the preparation, right before the first gesture. The window is restored
  * when the check ends and it was maximised. Returns the recorded gestures and pageProcess of host.window.
  */
 export async function recordMaximiseAndRestore(s, judge = () => {}, { started = async () => {} } = {}) {

@@ -152,7 +152,7 @@ for (const app of Object.values(APPS)) {
             if (gestureErrors.length)
               throw joinedFailure(`${side}: pointer input failed`, gestureErrors);
             t.diagnostic(
-              `${side}: 120 -> 160 -> 120 points, ${recordingSummary(stopped)}, ${stopped?.layouts?.length} layout transactions, input/presentation steps ${elapsed.join(",")}ms`,
+              `${side}: 120 -> 160 -> 120 points, ${recordingSummary(stopped)}, input/presentation steps ${elapsed.join(",")}ms`,
             );
             console.info(`PASS ${app.name}: ${side} sidebar gesture (${Math.round(performance.now() - began)}ms)`);
           }

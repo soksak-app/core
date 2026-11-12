@@ -50,6 +50,7 @@ func init() {
 	diagnosticMethods["diagnostics.drag"] = diagnosticDrag
 	diagnosticMethods["diagnostics.capture.start"] = diagnosticCaptureStart
 	diagnosticMethods["diagnostics.capture.stop"] = diagnosticCaptureStop
+	diagnosticMethods["diagnostics.layout.trace"] = diagnosticLayoutTrace
 	diagnosticMethods["diagnostics.modal.hold"] = onModalWebViews(diagnosticModalHold)
 	diagnosticMethods["diagnostics.modal.held"] = onModalWebViews(diagnosticModalHeld)
 	diagnosticMethods["diagnostics.presentation.failure"] = diagnosticPresentationFailure
@@ -647,7 +648,7 @@ type captureStatus interface {
 
 // captureStopPayload is the reply of the stop of a recording; window is the window server number of the recorded window, nil
 // (JSON null) for a display recording.
-func captureStopPayload(c captureStatus, directory string, count int, records []platform.LayoutRecord, window *int) map[string]any {
+func captureStopPayload(c captureStatus, directory string, count int, window *int) map[string]any {
 	payload := map[string]any{
 		"window":      windowNumberValue(window),
 		"frames":      directory,
@@ -657,7 +658,6 @@ func captureStopPayload(c captureStatus, directory string, count int, records []
 		"missed":      c.Missed(),
 		"late":        c.Late(),
 		"longestGap":  c.LongestGap(),
-		"layouts":     layoutTrace(records),
 	}
 	return payload
 }
@@ -723,33 +723,33 @@ func diagnosticDrag(e *Endpoint, c *endpointConn, params json.RawMessage, reply 
 			return nil, err
 		}
 	}
-	// The recording of a drag is its log: a recording that does not start or whose layout trace does not end is told in the
-	// result (recordedDragResult), and the drag runs and answers without it.
+	// The layout trace and the time of each step are the record of every drag, on the clock of diagnostics.clock, so a check
+	// judges the drag by them. A trace that does not start or end fails the drag.
+	trace, err := recorder(s, c)
+	if err != nil {
+		return nil, err
+	}
+	run := &layoutTraceRun{}
+	if err := startLayoutTrace(trace, run); err != nil {
+		return nil, err
+	}
+	// The recording of a drag is its log: a recording that does not start is told in the result (recordedDragResult), and the
+	// drag runs and answers without it.
 	var recorded dragRecording
-	// When recording, the time at which the step was sent is recorded on the same clock as the frames. This allows measuring the delay from a step to the screen.
-	var clock func() float64
 	if captureOptions.capture {
 		var startErr error
 		recorded.frames, recorded.window, startErr = startCapture(h, s, c, false, captureOptions.plan)
 		if startErr != nil {
 			recorded.failure = fmt.Sprintf("the recording did not start: %v", startErr)
-		} else if capture, captureErr := recorder(s, c); captureErr != nil {
-			recorded.failure = fmt.Sprintf("the recording has no recorder: %v", captureErr)
-		} else {
-			clock = capture.CaptureClock
-			mainThreadStep(capture.LayoutTraceStart)
 		}
 	}
-	tracing := clock != nil
 	var tickMu sync.Mutex
 	sent := []float64{}
 	s.note(fmt.Sprintf("diagnostics: drag %s:%d by %g,%g for %d ms, %d times, native %t", plan.Axis, plan.Line, plan.DX, plan.DY, plan.MS, plan.Times, native))
 	stepped := func() {
-		if clock != nil {
-			tickMu.Lock()
-			sent = append(sent, clock())
-			tickMu.Unlock()
-		}
+		tickMu.Lock()
+		sent = append(sent, trace.CaptureClock())
+		tickMu.Unlock()
 	}
 	// Each drag path answers after its last layout is displayed, so the layout trace stops after that presentation.
 	settle := func() (map[string]any, error) {
@@ -764,67 +764,148 @@ func diagnosticDrag(e *Endpoint, c *endpointConn, params json.RawMessage, reply 
 			return pageDrag(ctx, h, s, plan, stepped)
 		}
 	}
+	var layouts []map[string]any
 	result, err := stopAfterSettled(settle, func() error {
-		if !tracing {
-			return nil
-		}
-		capture, err := recorder(s, c)
-		if err == nil {
-			var records []platform.LayoutRecord
-			mainThreadStep(func() { records, err = capture.LayoutTraceStop() })
-			recorded.layouts = layoutTrace(records)
-		}
-		if err != nil {
-			recorded.layouts = nil
-			recorded.failure = fmt.Sprintf("the layout trace of the recording did not end: %v", err)
-		}
-		return nil
+		records, err := stopLayoutTrace(trace, run)
+		layouts = layoutTrace(records)
+		return err
 	})
 	if err != nil {
 		// When the requester does not receive the frame folder, the recording stops and the folder is deleted.
 		if recorded.frames != "" {
-			if capture, captureErr := recorder(s, c); captureErr == nil {
-				if abortErr := recording.Abort(capture); abortErr != nil {
-					err = fmt.Errorf("%w; abort capture: %v", err, abortErr)
-				}
-			} else {
-				err = errors.Join(err, captureErr)
+			if abortErr := recording.Abort(trace); abortErr != nil {
+				err = fmt.Errorf("%w; abort capture: %v", err, abortErr)
 			}
 		}
 		return nil, err
 	}
 	tickMu.Lock()
-	recorded.ticks = append([]float64(nil), sent...)
+	ticks := append([]float64(nil), sent...)
 	tickMu.Unlock()
-	return recordedDragResult(result, recorded), nil
+	return recordedDragResult(result, ticks, layouts, recorded), nil
 }
 
-// dragRecording is the recording of a recorded drag: its frame folder and recorded window when it started, the time of each step,
-// the layouts of its layout trace, or nil when the trace did not end, and failure, what failed of it.
+// dragRecording is the recording of a recorded drag: its frame folder and recorded window when it started, and failure, what
+// failed of it.
 type dragRecording struct {
 	frames  string
 	window  *int
-	ticks   []float64
-	layouts []map[string]any
 	failure string
 }
 
-// recordedDragResult adds the recording of a recorded drag to the result of the drag. A recording that started adds frames,
-// window and ticks, and layouts when its trace ended; captureError tells what failed of the recording. The recording is the log
-// of the drag, so the drag does not fail on it.
-func recordedDragResult(result map[string]any, recorded dragRecording) map[string]any {
+// recordedDragResult adds to the result of a drag the time of each step, its layout trace and its recording: a recording that
+// started adds frames and window, and captureError tells what failed of the recording. The recording is the log of the drag,
+// so the drag does not fail on it.
+func recordedDragResult(result map[string]any, ticks []float64, layouts []map[string]any, recorded dragRecording) map[string]any {
+	result["ticks"] = ticks
+	result["layouts"] = layouts
 	if recorded.frames != "" {
 		result["frames"] = recorded.frames
 		result["window"] = windowNumberValue(recorded.window)
-		result["ticks"] = recorded.ticks
-		if recorded.layouts != nil {
-			result["layouts"] = recorded.layouts
-		}
 	}
 	if recorded.failure != "" {
 		result["captureError"] = recorded.failure
 	}
 	return result
+}
+
+// layoutTraceRun is one run of the layout trace of the host. The native layout trace records the transactions of the application
+// and a start discards what it recorded, so one run holds it at a time: a drag, or diagnostics.layout.trace, whose run has
+// endpoint set and ends also with the close of the endpoint connection that started it (forget removes that end).
+type layoutTraceRun struct {
+	endpoint bool
+	forget   func()
+}
+
+// layoutTraces holds the run of the layout trace that is running, nil when none is.
+var layoutTraces struct {
+	mu  sync.Mutex
+	run *layoutTraceRun
+}
+
+// startLayoutTrace starts the layout trace for run; it fails while another run holds the trace.
+func startLayoutTrace(trace platformCapture, run *layoutTraceRun) error {
+	layoutTraces.mu.Lock()
+	defer layoutTraces.mu.Unlock()
+	if layoutTraces.run != nil {
+		return errors.New("the layout trace is already running")
+	}
+	layoutTraces.run = run
+	mainThreadStep(trace.LayoutTraceStart)
+	return nil
+}
+
+// stopLayoutTrace stops the layout trace of run and returns its records; it fails when run does not hold the trace.
+func stopLayoutTrace(trace platformCapture, run *layoutTraceRun) ([]platform.LayoutRecord, error) {
+	layoutTraces.mu.Lock()
+	defer layoutTraces.mu.Unlock()
+	if layoutTraces.run != run {
+		return nil, errors.New("no layout trace is running")
+	}
+	layoutTraces.run = nil
+	if run.forget != nil {
+		run.forget()
+	}
+	var records []platform.LayoutRecord
+	var err error
+	mainThreadStep(func() { records, err = trace.LayoutTraceStop() })
+	return records, err
+}
+
+// diagnosticLayoutTrace starts the layout trace with on set, and with on unset stops the trace that it started and answers
+// {layouts}, the layout transactions recorded since its start on the clock of diagnostics.clock in milliseconds. The trace also
+// ends with the close of the endpoint connection c that started it (docs/spec/endpoint.md).
+func diagnosticLayoutTrace(e *Endpoint, c *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
+	_, s, err := diagnosticHost(e, params)
+	if err != nil {
+		return nil, err
+	}
+	var p struct {
+		On *bool `json:"on"`
+	}
+	if err := decode(params, &p); err != nil {
+		return nil, err
+	}
+	if p.On == nil {
+		return nil, rpcError(codeInvalidParams, "on must be a boolean")
+	}
+	trace, err := recorder(s, c)
+	if err != nil {
+		return nil, err
+	}
+	if !*p.On {
+		layoutTraces.mu.Lock()
+		run := layoutTraces.run
+		layoutTraces.mu.Unlock()
+		if run == nil || !run.endpoint {
+			return nil, errors.New("no layout trace of diagnostics.layout.trace is running")
+		}
+		records, err := stopLayoutTrace(trace, run)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"layouts": layoutTrace(records)}, nil
+	}
+	run := &layoutTraceRun{endpoint: true}
+	if err := startLayoutTrace(trace, run); err != nil {
+		return nil, err
+	}
+	if c != nil {
+		// The end runs in the close of c, before the close returns, or here when c closed already.
+		forget := c.onClose(func() {
+			if _, err := stopLayoutTrace(trace, run); err == nil {
+				s.note("diagnostics: the layout trace ended with its endpoint connection")
+			}
+		})
+		layoutTraces.mu.Lock()
+		if layoutTraces.run == run {
+			run.forget = forget
+		} else {
+			forget()
+		}
+		layoutTraces.mu.Unlock()
+	}
+	return nil, nil
 }
 
 // dragTick is one step of a drag that the page performs. Fraction is how far its leg has reached, from 0 to 1, and Last ends the
@@ -1167,7 +1248,6 @@ func diagnosticCaptureStart(e *Endpoint, c *endpointConn, params json.RawMessage
 		if err != nil {
 			return nil, err
 		}
-		mainThreadStep(capture.LayoutTraceStart)
 		// The held window is known once the application shows it, after this reply; the stop reply names it.
 		return map[string]any{"frames": directory, "window": nil}, nil
 	}
@@ -1175,7 +1255,6 @@ func diagnosticCaptureStart(e *Endpoint, c *endpointConn, params json.RawMessage
 	if err != nil {
 		return nil, err
 	}
-	mainThreadStep(capture.LayoutTraceStart)
 	return map[string]any{"frames": directory, "window": windowNumberValue(window)}, nil
 }
 
@@ -1290,25 +1369,11 @@ func diagnosticCaptureStop(e *Endpoint, c *endpointConn, params json.RawMessage,
 		}
 		capture.after = *p.After
 	}
-	directory, count, window, stopErr := recording.Finish(capture)
-	var records []platform.LayoutRecord
-	var layoutErr error
-	mainThreadStep(func() { records, layoutErr = capture.LayoutTraceStop() })
-	if stopErr != nil {
-		return nil, errors.Join(stopErr, layoutErr)
-	}
-	if layoutErr != nil {
-		return nil, layoutErr
-	}
-	return finishCaptureStop(captureStatusAdapter{capture}, directory, count, window, func() ([]platform.LayoutRecord, error) { return records, nil })
-}
-
-func finishCaptureStop(c captureStatus, directory string, count int, window *int, layoutTrace func() ([]platform.LayoutRecord, error)) (any, error) {
-	records, err := layoutTrace()
+	directory, count, window, err := recording.Finish(capture)
 	if err != nil {
 		return nil, err
 	}
-	return captureStopPayload(c, directory, count, records, window), nil
+	return captureStopPayload(captureStatusAdapter{capture}, directory, count, window), nil
 }
 
 type captureStatusAdapter struct{ platformCapture }

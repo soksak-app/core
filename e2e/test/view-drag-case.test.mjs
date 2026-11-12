@@ -27,7 +27,7 @@ test("the first drag is the captured drag without capture, delivered as native i
   assert.deepEqual(NATIVE_DRAG_PLAN, { ...VIEW_DRAG_PLAN, native: true });
 });
 
-const CAPTURED = { directory: "captured", report: { frameCount: 50 } };
+const CAPTURED = { directory: "captured", report: { recording: "captured/frames" } };
 /** The steps of a view drag that record their calls in `calls`; `fail` names a step that throws. */
 function recordingSteps(calls, fail = new Set()) {
   const step = (name, value) => async (...args) => {

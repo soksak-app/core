@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -17,24 +16,6 @@ import (
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
-
-// contract: recording.finish.layout-trace-failure-preserves-folder
-func TestCaptureStopLayoutFailurePreservesStartedFolder(t *testing.T) {
-	directory := filepath.Join(t.TempDir(), "frames")
-	if err := os.MkdirAll(directory, 0o700); err != nil {
-		t.Fatal(err)
-	}
-
-	_, err := finishCaptureStop(fakeCaptureStatus{}, directory, 1, nil, func() ([]platform.LayoutRecord, error) {
-		return nil, errors.New("layout trace stop failed")
-	})
-	if err == nil || err.Error() != "layout trace stop failed" {
-		t.Fatalf("finishCaptureStop error = %v", err)
-	}
-	if info, statErr := os.Stat(directory); statErr != nil || !info.IsDir() {
-		t.Fatalf("failed capture directory was not preserved: stat=%v info=%v", statErr, info)
-	}
-}
 
 // contract: diagnostics.capture-start.preserves-display-option-parsing
 func TestCaptureStartOptionsPreserveDisplayParsing(t *testing.T) {
@@ -210,7 +191,7 @@ func (c fakeCaptureStatus) LongestGap() float64 { return c.gap }
 // contract: diagnostics.capture-stop.payload-reports-stills
 func TestCaptureStopPayloadReportsStills(t *testing.T) {
 	window := 31
-	payload := captureStopPayload(fakeCaptureStatus{missed: 2, late: 1, gap: 42.5}, "/tmp/frames", 598, nil, &window)
+	payload := captureStopPayload(fakeCaptureStatus{missed: 2, late: 1, gap: 42.5}, "/tmp/frames", 598, &window)
 	want := map[string]any{
 		"window":      31,
 		"frames":      "/tmp/frames",
@@ -227,42 +208,83 @@ func TestCaptureStopPayloadReportsStills(t *testing.T) {
 		}
 	}
 	for key := range payload {
-		if _, ok := want[key]; !ok && key != "layouts" {
+		if _, ok := want[key]; !ok {
 			t.Errorf("payload has the member %q, which the stop does not report", key)
 		}
 	}
-	if _, ok := payload["layouts"]; !ok || len(payload) != len(want)+1 {
-		t.Errorf("payload has the members %v, want those of %v and layouts", payload, want)
-	}
 	// A display recording has no window of its own: the member is null, not absent.
-	display := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, nil, nil)
+	display := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, nil)
 	if value, ok := display["window"]; !ok || value != nil {
 		t.Errorf("the stop of a display recording reports window %#v (present %t), want null", value, ok)
 	}
 }
 
-// contract: diagnostics.capture-stop.payload-reports-layout-timeline
-func TestCaptureStopPayloadRequiresLayoutTimeline(t *testing.T) {
-	payload := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, nil, nil)
-	if _, ok := payload["layouts"]; !ok {
-		t.Fatalf("capture stop omitted layouts: %#v", payload)
+// contract: diagnostics.layout-trace.reply-reports-layouts
+func TestALayoutTraceWithoutTransactionsReportsAnEmptyList(t *testing.T) {
+	encoded, err := json.Marshal(map[string]any{"layouts": layoutTrace(nil)})
+	if err != nil || string(encoded) != `{"layouts":[]}` {
+		t.Fatalf("the layout trace of no transaction is %s (%v), want an empty list", encoded, err)
 	}
 }
 
-// contract: diagnostics.capture-stop.payload-preserves-layout-stages
-func TestCaptureStopPayloadPreservesLayoutStages(t *testing.T) {
+// contract: diagnostics.layout-trace.reply-preserves-layout-stages
+func TestALayoutTraceKeepsTheStagesOfEachTransaction(t *testing.T) {
 	records := []platform.LayoutRecord{
 		{Ticket: 7, Begun: 10, Requested: 15, Presented: 20, Committed: 30, CommitPath: "view-join", OpenAtCommit: 1, Flushed: 35},
 		{Ticket: 8, Begun: 40, Requested: math.NaN(), Presented: math.NaN(), Committed: math.NaN(), OpenAtCommit: math.NaN(), Flushed: math.NaN()},
 	}
-	payload := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, records, nil)
-	layouts := payload["layouts"].([]map[string]any)
 	want := []map[string]any{
 		{"ticket": uint64(7), "begun": float64(10), "requested": float64(15), "presented": float64(20), "committed": float64(30), "commitPath": "view-join", "openAtCommit": float64(1), "flushed": float64(35)},
 		{"ticket": uint64(8), "begun": float64(40), "requested": nil, "presented": nil, "committed": nil, "commitPath": nil, "openAtCommit": nil, "flushed": nil},
 	}
-	if !reflect.DeepEqual(layouts, want) {
+	if layouts := layoutTrace(records); !reflect.DeepEqual(layouts, want) {
 		t.Fatalf("layout entries = %#v, want %#v", layouts, want)
+	}
+}
+
+// traceCapturer is a platform whose layout trace counts its starts and stops and answers records.
+type traceCapturer struct {
+	platform.Capturer
+	starts, stops int
+	records       []platform.LayoutRecord
+}
+
+func (c *traceCapturer) LayoutTraceStart() { c.starts++ }
+func (c *traceCapturer) LayoutTraceStop() ([]platform.LayoutRecord, error) {
+	c.stops++
+	return c.records, nil
+}
+
+// One run holds the layout trace at a time, because a native start discards what the trace recorded; only the run that holds
+// the trace stops it, and the end of the connection that started a trace of diagnostics.layout.trace stops it.
+// contract: diagnostics.layout-trace.one-run-at-a-time
+func TestTheLayoutTraceHasOneRunAtATime(t *testing.T) {
+	previous := framework
+	framework = pagelessFramework{window: &elementWindow{}}
+	t.Cleanup(func() { framework = previous })
+	native := &traceCapturer{records: []platform.LayoutRecord{{Ticket: 1}}}
+	trace := platformCapture{Capturer: native}
+	drag, other := &layoutTraceRun{}, &layoutTraceRun{endpoint: true}
+	if err := startLayoutTrace(trace, drag); err != nil {
+		t.Fatal(err)
+	}
+	if err := startLayoutTrace(trace, other); err == nil || err.Error() != "the layout trace is already running" {
+		t.Fatalf("a second start answered %v", err)
+	}
+	if _, err := stopLayoutTrace(trace, other); err == nil || err.Error() != "no layout trace is running" {
+		t.Fatalf("a stop of a run that does not hold the trace answered %v", err)
+	}
+	records, err := stopLayoutTrace(trace, drag)
+	if err != nil || len(records) != 1 || native.starts != 1 || native.stops != 1 {
+		t.Fatalf("the stop answered %v, %v after %d starts and %d stops", records, err, native.starts, native.stops)
+	}
+	ended := false
+	other.forget = func() { ended = true }
+	if err := startLayoutTrace(trace, other); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := stopLayoutTrace(trace, other); err != nil || !ended || layoutTraces.run != nil {
+		t.Fatalf("the stop of an endpoint run answered %v, removed its connection end %t, left %v", err, ended, layoutTraces.run)
 	}
 }
 
@@ -627,28 +649,27 @@ func TestRecordedDragStopsItsLayoutTraceAfterTheLastLayoutIsPresented(t *testing
 	}
 }
 
-// A recorded drag answers whatever happened to its recording: the recording is the log of the drag, so what failed of it is told
-// in captureError, and a recording that started keeps its frames, window and steps.
+// A drag answers whatever happened to its recording: the recording is the log of the drag, so what failed of it is told in
+// captureError, and the steps and the layout trace are in every result.
 // contract: recording.drag.recording-failure-is-told
 func TestARecordedDragTellsWhatFailedOfItsRecording(t *testing.T) {
 	window := 7
 	traced := []map[string]any{{"ticket": 1}}
+	ticks := []float64{1, 2}
 	cases := []struct {
 		name     string
 		recorded dragRecording
 		want     map[string]any
 	}{
+		{"a drag without a recording", dragRecording{},
+			map[string]any{"took": 100, "ticks": ticks, "layouts": traced}},
 		{"a recording that did not start", dragRecording{failure: "the recording did not start: no window"},
-			map[string]any{"took": 100, "captureError": "the recording did not start: no window"}},
-		{"a layout trace that did not end", dragRecording{frames: "/frames", window: &window, ticks: []float64{1, 2},
-			failure: "the layout trace of the recording did not end: no trace"},
-			map[string]any{"took": 100, "frames": "/frames", "window": 7, "ticks": []float64{1, 2},
-				"captureError": "the layout trace of the recording did not end: no trace"}},
-		{"a recording without a failure", dragRecording{frames: "/frames", window: &window, ticks: []float64{1}, layouts: traced},
-			map[string]any{"took": 100, "frames": "/frames", "window": 7, "ticks": []float64{1}, "layouts": traced}},
+			map[string]any{"took": 100, "ticks": ticks, "layouts": traced, "captureError": "the recording did not start: no window"}},
+		{"a recording that started", dragRecording{frames: "/frames", window: &window},
+			map[string]any{"took": 100, "ticks": ticks, "layouts": traced, "frames": "/frames", "window": 7}},
 	}
 	for _, c := range cases {
-		got := recordedDragResult(map[string]any{"took": 100}, c.recorded)
+		got := recordedDragResult(map[string]any{"took": 100}, ticks, traced, c.recorded)
 		if !reflect.DeepEqual(got, c.want) {
 			t.Fatalf("%s: result %#v, want %#v", c.name, got, c.want)
 		}

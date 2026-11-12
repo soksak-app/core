@@ -265,6 +265,16 @@ for (const app of MAIN_PAGE_APPS) {
       modalHit.view.frame.y <= point.y && point.y < modalHit.view.frame.y + modalHit.view.frame.height,
     `the settings hit view frame must contain ${JSON.stringify(point)}: ${JSON.stringify(modalHit.view)}`);
 
+    // A wheel over the view of the probe goes to the settings webview and not to the view behind it. The point is in the margin of
+    // 8 pt that the layout probe keeps around its document region, so the view document itself records the wheels that reach it
+    // (core.surface.input). After settings closes, a wheel at a second point of that margin reaches the view; it follows the first
+    // wheel in the input of the window, so once it arrived, the first wheel was handled too.
+    const margin = (offset) => ({ x: frame.x + 4, y: frame.y + frame.h / 2 + offset });
+    const blocked = margin(-40);
+    const reached = margin(40);
+    const wheelsBefore = (await s.get("core.surface.input", surface)).at(-1)?.sequence ?? 0;
+    await s.pointer(blocked.x, blocked.y, "scroll", { deltaY: 120 });
+
     // Presses inside the modal to put the keyboard focus on the modal document, then sends Escape.
     const card = await s.rect("core.settings-modal.card");
     await s.click(card.x + card.width / 2, card.y + card.height - 8);
@@ -292,6 +302,13 @@ for (const app of MAIN_PAGE_APPS) {
     await s.presented();
     assert.deepEqual(await s.run("host.hit", point), { kind: "document", surface, document: "page" },
       "closing settings must restore native input to the probe document");
+    await s.pointer(reached.x, reached.y, "scroll", { deltaY: 120 });
+    const wheels = (await s.until("core.surface.input",
+      (events) => events.some((event) => event.sequence > wheelsBefore && event.type === "wheel" && Math.abs(event.y - (reached.y - frame.y)) < 2),
+      "a wheel over the probe view did not reach it after settings closed", { surface }))
+      .filter((event) => event.sequence > wheelsBefore && event.type === "wheel");
+    assert.deepEqual(wheels.filter((event) => Math.abs(event.y - (blocked.y - frame.y)) < 2), [],
+      `a wheel over the probe view reached it while settings was open: ${JSON.stringify(wheels)}`);
   });
 
   test(`${app.name}: add and split menus are transparent and have no backdrop`, { timeout: 30000 }, async (t) => {

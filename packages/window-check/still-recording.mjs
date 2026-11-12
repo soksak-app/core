@@ -44,10 +44,10 @@ export function stillFields(written, completed) {
  * ms later for the indices in `lateBy`, and completes `took` ms after its request. The stills of
  * `failed` fail and those of `notRequested`, and every still from the index `stoppedAt` on (a recording stopped before the end
  * of its plan), are not requested; neither writes a frame. `windows` is the window list of each still. Returns the stop reply of
- * the host, which names the recorded window `window` (null for a recording of the display), with `layouts` when given.
+ * the host, which names the recorded window `window` (null for a recording of the display).
  */
 export function writeStillRecording(frames, { gap = 8, until, took = 0.5, failed = [], notRequested = [],
-  stoppedAt = Infinity, lateBy = {}, windows = [7], window = 7, layouts = [] } = {}) {
+  stoppedAt = Infinity, lateBy = {}, windows = [7], window = 7 } = {}) {
   mkdirSync(frames, { recursive: true });
   const rows = [];
   for (let index = 0; index * gap <= until; index++) {
@@ -78,5 +78,5 @@ export function writeStillRecording(frames, { gap = 8, until, took = 0.5, failed
   if (written.length > 0) writeFileSync(join(frames, FIXTURE_PROFILE_FILE), FIXTURE_PROFILE);
   const longestGap = Math.max(0, ...written.slice(1).map((row, i) => Number(BigInt(row.requested) - BigInt(written[i].requested)) / 1e6));
   return { frames, stills, window, count: written.length, missed: rows.length - written.length,
-    late: Object.keys(lateBy).filter((index) => lateBy[index] > gap).length, longestGap, layouts };
+    late: Object.keys(lateBy).filter((index) => lateBy[index] > gap).length, longestGap };
 }

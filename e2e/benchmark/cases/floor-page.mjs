@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 
 import { drag, keepCommonSettings } from "@soksak/window-check/app.mjs";
 import { transactionCadence } from "@soksak/window-check/drag-measurement.mjs";
+import { commitCadence, displayPeriod, stepCommitDelays } from "@soksak/window-check/layout-timing.mjs";
 
 /** The floor page plugin: its id and its folder. */
 export const FLOOR_PAGE = Object.freeze({
@@ -73,11 +74,16 @@ export async function prepareFloorDrag(t, s, { surface, card }, configDir) {
 
 /**
  * Runs the captured drag that prepareFloorDrag prepared and returns its evidence: the folder of its report and the report, which holds
- * the figures of the drag that the host reported (steps, boundary positions, layout transactions and their cadence) and the counts of
- * its recording.
+ * the figures of the drag that the host reported (steps, boundary positions, layout transactions and their cadence), the folder of
+ * its recording, which is its log, and the judgments of its layout trace with the display period of the window: `commits`, the intervals between
+ * the commits of the view drag (commitCadence), and `stepDelays`, the delay of each layout of the divider drag from its begin to its
+ * commit (stepCommitDelays) (docs/spec/native-surfaces.md).
  */
 async function captureFloorDrag(s, configDir) {
+  const { refreshRate } = await s.get("host.window");
+  const period = displayPeriod(refreshRate);
   const run = await drag(s, VIEW_DRAG_PLAN, { capture: true });
+  const during = { from: run.ticks[0], to: run.ticks.at(-1), period };
   mkdirSync(join(configDir, "logs"), { recursive: true });
   const directory = mkdtempSync(join(configDir, "logs", "view-drag-benchmark-"));
   writeDragLayouts(directory, run.layouts);
@@ -87,13 +93,13 @@ async function captureFloorDrag(s, configDir) {
     load: loadavg(),
     processors: availableParallelism(),
     recording: run.frameDir,
-    frameCount: run.count,
-    missed: run.missed,
-    late: run.late,
     ticks: run.ticks,
     boundary: run.boundary,
     layouts: run.layouts,
     transactionCadence: transactionCadence(run.layouts),
+    refreshRate,
+    commits: commitCadence(run.layouts, during),
+    stepDelays: stepCommitDelays(run.layouts, during),
   };
   return { directory, report };
 }

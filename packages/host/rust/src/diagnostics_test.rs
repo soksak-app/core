@@ -3,21 +3,6 @@ use std::cell::{Cell, RefCell};
 use std::sync::mpsc;
 use std::time::Duration;
 
-// contract: recording.finish.layout-trace-failure-preserves-folder
-#[test]
-fn a_layout_trace_failure_keeps_the_started_capture_folder() {
-    let parent = tempfile::tempdir().unwrap();
-    let folder = parent.path().join("frames");
-    std::fs::create_dir_all(&folder).unwrap();
-
-    let result = finish_capture_stop(&folder, 1, None, || {
-        Err(internal("layout trace stop failed"))
-    });
-
-    assert_eq!(result.unwrap_err().message, "layout trace stop failed");
-    assert!(folder.is_dir(), "failed capture evidence was removed");
-}
-
 /// A clock of the host that does not move, for the native drags of a check whose waits take no time.
 fn stopped_clock() -> Duration {
     Duration::ZERO
@@ -384,8 +369,8 @@ fn a_native_drag_asks_for_its_boundary_after_the_window_presented_it() {
     assert_eq!(error.message, "the window did not present");
 }
 
-// A recorded drag answers whatever happened to its recording: the recording is the log of the drag, so what failed of it is
-// told in captureError, and a recording that started keeps its frames, window and steps.
+// A drag answers whatever happened to its recording: the recording is the log of the drag, so what failed of it is told in
+// captureError, and the steps and the layout trace are in every result.
 // contract: recording.drag.recording-failure-is-told
 #[test]
 fn a_recorded_drag_tells_what_failed_of_its_recording() {
@@ -394,37 +379,79 @@ fn a_recorded_drag_tells_what_failed_of_its_recording() {
         result.insert("took".into(), json!(100));
         result
     };
-    let recording = |layouts: Option<Value>| DragRecording {
-        frames: "/frames".into(),
-        window: json!(7),
-        ticks: vec![1.0, 2.0],
-        layouts,
-    };
+    let traced = || json!([{"ticket": 1}]);
     assert_eq!(
         Value::Object(recorded_drag_result(
             took(),
+            vec![1.0, 2.0],
+            traced(),
+            None,
+            None
+        )),
+        json!({"took": 100, "ticks": [1.0, 2.0], "layouts": [{"ticket": 1}]})
+    );
+    assert_eq!(
+        Value::Object(recorded_drag_result(
+            took(),
+            vec![1.0, 2.0],
+            traced(),
             None,
             Some("the recording did not start: no window".into())
         )),
-        json!({"took": 100, "captureError": "the recording did not start: no window"})
+        json!({"took": 100, "ticks": [1.0, 2.0], "layouts": [{"ticket": 1}],
+            "captureError": "the recording did not start: no window"})
     );
     assert_eq!(
         Value::Object(recorded_drag_result(
             took(),
-            Some(recording(None)),
-            Some("the layout trace of the recording did not end: no trace".into())
-        )),
-        json!({"took": 100, "frames": "/frames", "window": 7, "ticks": [1.0, 2.0],
-            "captureError": "the layout trace of the recording did not end: no trace"})
-    );
-    assert_eq!(
-        Value::Object(recorded_drag_result(
-            took(),
-            Some(recording(Some(json!([{"ticket": 1}])))),
+            vec![1.0],
+            traced(),
+            Some(DragRecording {
+                frames: "/frames".into(),
+                window: json!(7)
+            }),
             None
         )),
-        json!({"took": 100, "frames": "/frames", "window": 7, "ticks": [1.0, 2.0], "layouts": [{"ticket": 1}]})
+        json!({"took": 100, "ticks": [1.0], "layouts": [{"ticket": 1}], "frames": "/frames", "window": 7})
     );
+}
+
+// One run holds the layout trace at a time, because a native start discards what the trace recorded; only the run that holds
+// the trace stops it.
+// contract: diagnostics.layout-trace.one-run-at-a-time
+#[test]
+fn the_layout_trace_has_one_run_at_a_time() {
+    let starts = Cell::new(0);
+    let drag = Arc::new(LayoutTraceRun { endpoint: false });
+    let other = Arc::new(LayoutTraceRun { endpoint: true });
+    start_layout_trace(&drag, || {
+        starts.set(starts.get() + 1);
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(
+        start_layout_trace(&other, || {
+            starts.set(starts.get() + 1);
+            Ok(())
+        })
+        .unwrap_err()
+        .message,
+        "the layout trace is already running"
+    );
+    assert_eq!(
+        stop_layout_trace(&other, || Ok(())).unwrap_err().message,
+        "no layout trace is running"
+    );
+    assert_eq!(stop_layout_trace(&drag, || Ok(3)).unwrap(), 3);
+    assert_eq!(
+        starts.get(),
+        1,
+        "a start while the trace runs reached the native trace"
+    );
+    // A start that fails leaves the trace to the next run.
+    assert!(start_layout_trace(&other, || Err(internal("no trace"))).is_err());
+    start_layout_trace(&other, || Ok(())).unwrap();
+    stop_layout_trace(&other, || Ok(())).unwrap();
 }
 
 // contract: recording.drag.layout-trace-after-settle

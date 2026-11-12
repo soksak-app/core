@@ -35,8 +35,6 @@ function metrics() {
       openedPid: 81,
       requestAtMs: 10,
       contentFrame: {
-        frameIndex: 2,
-        frameCount: 8,
         timeMs: 320,
         proof: { method: "value", expected: "fixture text", actual: "fixture text" },
       },
@@ -49,8 +47,6 @@ function metrics() {
       firstDisplays: [0, 1, 2].map((index) => ({
         requestAtMs: index * 1000,
         contentFrame: {
-          frameIndex: 3,
-          frameCount: 9,
           timeMs: index * 1000 + 340,
           proof: { method: "value", expected: "fixture text", actual: "fixture text" },
         },
