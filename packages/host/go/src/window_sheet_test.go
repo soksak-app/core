@@ -2,6 +2,7 @@ package host
 
 import (
 	"encoding/json"
+	"maps"
 	"slices"
 	"testing"
 
@@ -22,8 +23,9 @@ func (p *sheetFactsPlatform) WindowFacts(platform.Window) (string, error) {
 	return `{"pageProcess":0,` + member + `"nativeSurfaces":[],"webviews":[],"activationObservation":{"registered":false,"count":"0"}}`, nil
 }
 
-// host.window carries the sheet attached to the window as the native facts report it, with the folder and the name of a panel,
-// null without one or when the platform does not report sheets, and refuses a sheet of an unknown kind.
+// host.window carries the kind and the frame of the sheet attached to the window as the native facts report them, null without
+// one or when the platform does not report sheets, and refuses a sheet of an unknown kind. A panel is the person's, and a check
+// answers the dialogs of a window through host.dialog, so the sheet carries no folder and no name of a panel.
 // contract: window.facts.sheet
 func TestWindowReportsItsSheet(t *testing.T) {
 	savedFramework, savedSystem := framework, system
@@ -32,15 +34,13 @@ func TestWindowReportsItsSheet(t *testing.T) {
 	window.native = platform.Window(1)
 	surfaces := &Surfaces{host: &Host{quit: &Quit{}}, window: window, images: NewImages(), documents: NewDocuments(), invoke: func(task func()) { task() }}
 	const frame = `"frame":{"x":10,"y":20,"width":370,"height":182}`
-	const save = `{"kind":"save",` + frame + `,"directory":"/Users/check/Documents","name":"host.jsonl"}`
-	const open = `{"kind":"open",` + frame + `,"directory":"/Users/check/Documents","name":null}`
-	const alert = `{"kind":"alert",` + frame + `,"directory":null,"name":null}`
 	for _, c := range []struct{ sheet, want string }{
-		{sheet: save, want: save},
-		{sheet: open, want: open},
-		{sheet: alert, want: alert},
-		// Facts without a folder and a name report both as null.
-		{sheet: `{"kind":"other",` + frame + `}`, want: `{"kind":"other",` + frame + `,"directory":null,"name":null}`},
+		{sheet: `{"kind":"save",` + frame + `}`, want: `{"kind":"save",` + frame + `}`},
+		{sheet: `{"kind":"open",` + frame + `}`, want: `{"kind":"open",` + frame + `}`},
+		{sheet: `{"kind":"alert",` + frame + `}`, want: `{"kind":"alert",` + frame + `}`},
+		{sheet: `{"kind":"other",` + frame + `}`, want: `{"kind":"other",` + frame + `}`},
+		// A field that the facts give beyond the kind and the frame is not reported.
+		{sheet: `{"kind":"save",` + frame + `,"directory":"/Users/check","name":"host.jsonl"}`, want: `{"kind":"save",` + frame + `}`},
 		{sheet: `null`, want: `null`},
 		{want: `null`},
 	} {
@@ -65,18 +65,12 @@ func TestWindowReportsItsSheet(t *testing.T) {
 	if _, err := surfaces.windowState(); err == nil {
 		t.Fatal("host.window accepted a sheet of the kind panel")
 	}
-	framework, system = stepFramework{}, &sheetFactsPlatform{sheet: `{"kind":"save",` + frame + `,"directory":3,"name":null}`}
-	if _, err := surfaces.windowState(); err == nil {
-		t.Fatal("host.window accepted a sheet whose folder is not a string")
-	}
 	declared, _ := hostStatus["host.window"].Schema["properties"].(map[string]any)["sheet"].(map[string]any)
 	kinds, _ := declared["properties"].(map[string]any)["kind"].(map[string]any)["enum"].([]string)
 	if !slices.Equal(kinds, []string{"save", "open", "alert", "other"}) {
 		t.Fatalf("host.window declares the sheet %v", declared)
 	}
-	for _, field := range []string{"directory", "name"} {
-		if _, ok := declared["properties"].(map[string]any)[field]; !ok {
-			t.Fatalf("host.window declares no %s of the sheet: %v", field, declared)
-		}
+	if properties := slices.Sorted(maps.Keys(declared["properties"].(map[string]any))); !slices.Equal(properties, []string{"frame", "kind"}) {
+		t.Fatalf("host.window declares the sheet fields %v, want frame and kind", properties)
 	}
 }

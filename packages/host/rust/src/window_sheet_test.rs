@@ -1,28 +1,22 @@
-//! The sheet of `host.window`: the sheet that the native facts report passes through with the folder and the name of a panel,
-//! null for a folder or a name that the facts do not give, a missing or null sheet gives null, and a sheet of an unknown kind,
-//! without a frame or with a folder or a name that is not a string is refused. The same cases run in the Go host.
+//! The sheet of `host.window`: the kind and the frame of the sheet that the native facts report pass through, a field beyond
+//! them is not reported, a missing or null sheet gives null, and a sheet of an unknown kind or without a frame is refused. A
+//! panel is the person's, and a check answers the dialogs of a window through host.dialog, so the sheet carries no folder and
+//! no name of a panel. The same cases run in the Go host.
 use super::*;
 
 // contract: window.facts.sheet
 #[test]
 fn host_window_reports_its_sheet() {
     let frame = json!({"x": 10.0, "y": 20.0, "width": 370.0, "height": 182.0});
-    for sheet in [
-        json!({"kind": "save", "frame": frame, "directory": "/Users/check/Documents", "name": "host.jsonl"}),
-        json!({"kind": "open", "frame": frame, "directory": "/Users/check/Documents", "name": null}),
-        json!({"kind": "alert", "frame": frame, "directory": null, "name": null}),
-    ] {
+    for kind in ["save", "open", "alert", "other"] {
+        let sheet = json!({"kind": kind, "frame": frame});
         assert_eq!(window_sheet(&json!({ "sheet": sheet })).unwrap(), sheet);
     }
     assert_eq!(
-        window_sheet(&json!({"sheet": {"kind": "other", "frame": frame}})).unwrap(),
-        json!({"kind": "other", "frame": frame, "directory": null, "name": null})
-    );
-    assert!(
-        window_sheet(
-            &json!({"sheet": {"kind": "save", "frame": frame, "directory": 3, "name": null}})
-        )
-        .is_err()
+        window_sheet(&json!({"sheet": {"kind": "save", "frame": frame, "directory": "/Users/check", "name": "host.jsonl"}}))
+            .unwrap(),
+        json!({"kind": "save", "frame": frame}),
+        "a field beyond the kind and the frame is not reported"
     );
     assert_eq!(window_sheet(&json!({"sheet": null})).unwrap(), Value::Null);
     assert_eq!(window_sheet(&json!({})).unwrap(), Value::Null);
@@ -41,12 +35,11 @@ fn host_window_reports_its_sheet() {
         declared["properties"]["kind"]["enum"],
         json!(["save", "open", "alert", "other"])
     );
+    let mut fields: Vec<&String> = declared["properties"].as_object().unwrap().keys().collect();
+    fields.sort();
     assert_eq!(
-        declared["properties"]["directory"],
-        json!({"type": ["string", "null"]})
-    );
-    assert_eq!(
-        declared["properties"]["name"],
-        json!({"type": ["string", "null"]})
+        fields,
+        ["frame", "kind"],
+        "host.window declares the fields of the sheet"
     );
 }
