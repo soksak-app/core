@@ -46,9 +46,11 @@ int main(void) { @autoreleasepool {
             (CGWindowID)window.windowNumber) autorelease];
         return info.count == 1 && [info[0][(id)kCGWindowIsOnscreen] boolValue];
     };
-    // Does not change the window until the window server has composited its first frame, when its occlusion state becomes
-    // visible (same as capture_cycles_test).
-    until(@"the window is visible", ^BOOL { return (window.occlusionState & NSWindowOcclusionStateVisible) != 0; });
+    // A capture reads the window from the window server whatever covers it, so the check does not wait until no other window
+    // covers it: a window of another application can cover it for as long as that window stays. The display and the flush commit
+    // the order and the first frame of the window to the window server, which lists the window on screen from then on.
+    [window displayIfNeeded];
+    [CATransaction flush];
     check(onScreen(), @"the window server shows the capture window");
     double scale = window.backingScaleFactor;
 

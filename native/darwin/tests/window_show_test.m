@@ -134,8 +134,19 @@ int main(void) { @autoreleasepool {
         bool placed = sp_window_place_new(window, &error);
         check(placed, [NSString stringWithFormat:@"%@: the placement failed with %s", placements[i].what, error ? error : "no error"]);
         free(error);
-        check(NSEqualPoints(window.frame.origin, want), [NSString stringWithFormat:@"%@: the window is at %@, want %@, the center of the work area %@",
-            placements[i].what, NSStringFromPoint(window.frame.origin), NSStringFromPoint(want), NSStringFromRect(within)]);
+        // The facts that the placement reads: the other windows that the application lists, the window that each number names
+        // and its frame, the displays and the main screen, which the placement takes only when it finds no other window.
+        NSMutableArray<NSString *> *read = [NSMutableArray array];
+        for (NSNumber *number in placements[i].others) {
+            NSWindow *named = [NSApp windowWithWindowNumber:number.integerValue];
+            [read addObject:[NSString stringWithFormat:@"window %@ names %@ at %@", number, named ? NSStringFromClass(named.class) : @"nothing",
+                named ? NSStringFromRect(named.frame) : @"-"]];
+        }
+        for (NSScreen *each in NSScreen.screens) [read addObject:[NSString stringWithFormat:@"display %@%@", NSStringFromRect(each.frame),
+            each == NSScreen.mainScreen ? @" (main screen)" : @""]];
+        check(NSEqualPoints(window.frame.origin, want), [NSString stringWithFormat:@"%@: the window is at %@, want %@, the center of the work area %@ (%@)",
+            placements[i].what, NSStringFromPoint(window.frame.origin), NSStringFromPoint(want), NSStringFromRect(within),
+            [read componentsJoinedByString:@"; "]]);
         check(!window.isVisible, [NSString stringWithFormat:@"%@: the placement put the window on the screen", placements[i].what]);
         [window release];
     }
