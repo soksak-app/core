@@ -8,6 +8,8 @@ const machMs = (ticks, numerator, denominator) => Number(BigInt(ticks) * BigInt(
 
 const OUTCOMES = ["written", "failed", "not-requested"];
 const DECIMAL = /^\d+$/;
+/** The file of the ICC profile of a colour space in a recording folder: color-<first 16 hex digits of its SHA-256>.icc. */
+export const PROFILE_FILE = /^color-[0-9a-f]{16}\.icc$/;
 
 /**
  * The stage times of a still row (docs/spec/diagnostics.md, stills.jsonl), each a raw mach time or null for a stage that did
@@ -44,7 +46,8 @@ const lateRow = (row) => row.requested !== null && Number(BigInt(row.requested) 
  * request, the frame of its index exactly for a written still, an error exactly for a failed still, a positive gap, a positive
  * timebase equal to the first row's, and stage times (STAGES) that are exact decimal mach times or null, each stage of
  * WRITTEN_STAGES for a written still and none for a still that took no image, bracketed (BRACKETS) and in order (ORDER), with
- * no decode time (DECODE_TIMES).
+ * no decode time (DECODE_TIMES), and the colour of its image: a colour space that is a name or null and a profile file
+ * (PROFILE_FILE), which a written still names and a still that took no image does not.
  */
 function requireStillRow(row, place, path, first) {
   const fail = (what) => { throw new Error(`still row ${place} of ${path} ${what}`); };
@@ -113,6 +116,17 @@ function requireStillRow(row, place, path, first) {
       fail(`has its ${later} time before its ${earlier} time`);
     }
   }
+  if (!(row.colorSpace === null || (typeof row.colorSpace === "string" && row.colorSpace.length > 0))) {
+    fail(`has the colour space ${JSON.stringify(row.colorSpace)}, not a name or null`);
+  }
+  if (row.outcome === "written" && row.colorProfile === null) fail("is written without its colour profile");
+  if (!(row.colorProfile === null || (typeof row.colorProfile === "string" && PROFILE_FILE.test(row.colorProfile)))) {
+    fail(`has the colour profile ${JSON.stringify(row.colorProfile)}, not color-<16 hex digits>.icc`);
+  }
+  if (!taken) {
+    if (row.colorSpace !== null) fail(`took no image and has the colour space ${JSON.stringify(row.colorSpace)}`);
+    if (row.colorProfile !== null) fail(`took no image and has the colour profile ${JSON.stringify(row.colorProfile)}`);
+  }
 }
 
 /** The rows of the still recording file `path` (stills.jsonl) as the host wrote them. */
@@ -122,7 +136,8 @@ const rawStills = (path) => readFileSync(path, "utf8").split("\n").filter(Boolea
  * The rows of the still recording file `path` (stills.jsonl), one per planned still in the order of the plan, with the times of
  * each still in ms on the clock of the recording: `planned`, `requested` and `completed` (null for a still that was not
  * requested), `gap` (the requested gap), `outcome`, `error`, `frame` (the path of its frame file, null for a still that wrote
- * none), `windows` and `late`, whether it was requested later than one gap after its plan. A row whose fields contradict each
+ * none), `windows`, `late`, whether it was requested later than one gap after its plan, `colorSpace` and `colorProfile` (the
+ * path of the ICC profile of its image, null for a still without one). A row whose fields contradict each
  * other or its outcome is refused (requireStillRow).
  */
 export function readStills(path) {
@@ -134,7 +149,8 @@ export function readStills(path) {
     const planned = ms(row.planned);
     const requested = ms(row.requested);
     return { index: row.index, planned, requested, completed: ms(row.completed), gap: row.requestedGap, outcome: row.outcome,
-      error: row.error, frame: row.frame === null ? null : join(directory, row.frame), windows: row.windows, late: lateRow(row) };
+      error: row.error, frame: row.frame === null ? null : join(directory, row.frame), windows: row.windows, late: lateRow(row),
+      colorSpace: row.colorSpace, colorProfile: row.colorProfile === null ? null : join(directory, row.colorProfile) };
   });
 }
 

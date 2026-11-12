@@ -3,9 +3,10 @@
 // The checks do not launch the application. The application must already run with `--config-dir
 // <tmpdir>/soksak-check-<app>`, and the harness connects through the endpoint.json of that folder. The specification is
 // in docs/spec/endpoint.md and docs/spec/exposure.md.
+import { createHash } from "node:crypto";
 import { appendFileSync, closeSync, existsSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { loadavg, tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { connect, EndpointError } from "@soksak/client";
 import { STALL_AFTER, announceStall, pageProcesses, sampleStall } from "./stall-sample.mjs";
@@ -15,7 +16,7 @@ import { endWatches } from "./folder-wait.mjs";
 import { readEventErrors, sessionEventBoot, sessionEventStart } from "./event-log.mjs";
 import { exitEvidence } from "./host-exit.mjs";
 import { frames as listFrames, samePixels } from "./frame.mjs";
-import { lostStills, readStills, requireNoLostStills, stillCounts, toldStill } from "./stills.mjs";
+import { lostStills, PROFILE_FILE, readStills, requireNoLostStills, stillCounts, toldStill } from "./stills.mjs";
 import { policyFile, policyOfSetting, readPolicy, requireStored, untilPolicy } from "./log-policy.mjs";
 import { policyAllows } from "@soksak/log-contract";
 import { readPasteboard, restorableItems, restoreFailure, writePasteboard } from "./pasteboard.mjs";
@@ -1653,6 +1654,21 @@ export function requireStillsArtifact(result, frames, asked, after, window) {
   const stray = listFrames(frames).find((path) => !named.has(path));
   if (stray) {
     throw new Error(`the still recording ${expected} has ${stray.slice(frames.length + 1)}, the frame file of no written still`);
+  }
+  // The bytes of a frame are those of the colour space of its still, whose ICC profile the first still in that space wrote into
+  // the recording folder under the start of its SHA-256; a profile of no still is a colour space that the rows do not tell.
+  const unprofiled = written.find((row) => !existsSync(row.colorProfile));
+  if (unprofiled) {
+    throw new Error(`the still recording ${expected} has no ${basename(unprofiled.colorProfile)} for its written still ` +
+      `${unprofiled.index}`);
+  }
+  const profiles = new Set(rows.filter((row) => row.colorProfile !== null).map((row) => basename(row.colorProfile)));
+  for (const name of readdirSync(frames).filter((name) => PROFILE_FILE.test(name)).sort()) {
+    if (!profiles.has(name)) throw new Error(`the still recording ${expected} has ${name}, the colour profile of no still`);
+    const digest = createHash("sha256").update(readFileSync(join(frames, name))).digest("hex").slice(0, 16);
+    if (name !== `color-${digest}.icc`) {
+      throw new Error(`the still recording ${expected} has ${name}, whose SHA-256 begins with ${digest}`);
+    }
   }
   return rows;
 }

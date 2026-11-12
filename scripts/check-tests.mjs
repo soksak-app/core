@@ -674,6 +674,7 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/stills.mjs", symbol: "export function requireNoLostStills(rows, what, { from = -Infinity, to = Infinity } = {}) {" },
       { file: "packages/window-check/stills.mjs", symbol: "export function stillCounts(path) {" },
       { file: "packages/window-check/stills.mjs", symbol: "export function requireDecodedStills(decoded, path, what) {" },
+      { file: "packages/window-check/stills.mjs", symbol: "export const PROFILE_FILE = /^color-[0-9a-f]{16}\\.icc$/;" },
       { file: "packages/window-check/app.mjs", symbol: "async function recordingOf(s, params) {" },
       { file: "packages/window-check/app.mjs", symbol: "export function recordedWindow(reply, asked, which) {" },
       { file: "packages/window-check/app.mjs", symbol: "export function requireStillsArtifact(result, frames, asked, after, window) {" },
