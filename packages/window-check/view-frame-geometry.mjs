@@ -126,7 +126,7 @@ function cardRectangle(frame, content, { planeColor, cardColor, borderColors, co
   };
   const fail = (message, failedEdge, point, candidateBounds = measuredBounds) => {
     const diagnostic = {
-      frame: { width: frame.width, height: frame.height, timeMs: frame.time },
+      frame: { width: frame.width, height: frame.height, timeMs: frame.requested, completedMs: frame.completed },
       targetRect: targetRect ?? null,
       targetSeed: targetSeed ?? { x, y },
       contentAnchor: { x, y },
@@ -281,7 +281,11 @@ export function declaredSlotInsets({ grid, surfaces, card: cardId, surface: surf
   return insets;
 }
 
-/** Finds the first recorded card change after a pre-request baseline and the first frame matching a declared slot. */
+/**
+ * Finds the first recorded card change after a pre-request baseline and the first frame matching a declared slot. Each geometry
+ * frame is a measured still with the time of its request (timeMs) and of its completion (completedMs): a still shows the window
+ * at a moment between them, so the baseline is the last still completed before the request of the change.
+ */
 export function findFirstChangedSlotFrame(geometryFrames, { beforeChangeTimeMs, slotInsetsPt, tolerancePt = 2 } = {}) {
   if (!Array.isArray(geometryFrames) || geometryFrames.length < 2) {
     throw new Error("layout transition requires a baseline and subsequent measured frames");
@@ -300,11 +304,14 @@ export function findFirstChangedSlotFrame(geometryFrames, { beforeChangeTimeMs, 
     if (!Number.isFinite(frame?.timeMs) || frame.timeMs <= previousTime) {
       throw new Error(`layout geometry frame ${index} has a non-increasing timestamp`);
     }
+    if (!Number.isFinite(frame.completedMs) || frame.completedMs < frame.timeMs) {
+      throw new Error(`layout geometry frame ${index} has no completion time at or after its request`);
+    }
     previousTime = frame.timeMs;
     if (!validMeasuredRect(frame.cardRectPt) || !validMeasuredRect(frame.nativeRectPt)) {
       throw new Error(`layout geometry frame ${index} has an invalid measured rectangle`);
     }
-    if (frame.timeMs < beforeChangeTimeMs) baselineFrameIndex = index;
+    if (frame.completedMs < beforeChangeTimeMs) baselineFrameIndex = index;
   }
   if (baselineFrameIndex < 0 || baselineFrameIndex === geometryFrames.length - 1) {
     throw new Error("layout recording does not contain both a pre-change baseline and later frames");
@@ -362,7 +369,10 @@ export function measureViewFrameGeometry(frame, {
       !frame.content || !Number.isFinite(frame.content.x) || !Number.isFinite(frame.content.y)) {
     throw new Error("recorded frame scale or content origin is invalid");
   }
-  if (!Number.isFinite(frame.time) || frame.time < 0) throw new Error("recorded frame time is invalid");
+  if (!Number.isFinite(frame.requested) || frame.requested < 0 || !Number.isFinite(frame.completed)
+      || frame.completed < frame.requested) {
+    throw new Error("recorded still request or completion time is invalid");
+  }
   if (!Number.isInteger(colorTolerance) || colorTolerance < 0 || colorTolerance > 255) {
     throw new Error("color tolerance must be an integer from 0 through 255");
   }
@@ -403,7 +413,8 @@ export function measureViewFrameGeometry(frame, {
   };
   const cardRectPx = targetCardRectPx ?? cardRectangle(frame, nativeRectPx, options);
   return {
-    timeMs: frame.time,
+    timeMs: frame.requested,
+    completedMs: frame.completed,
     scale: frame.scale,
     contentScale: frame.contentScale,
     nativeRectPx,

@@ -206,7 +206,10 @@ export function viewContentFrameEvents(events, plugin, surface, startBracket) {
   });
 }
 
-/** Maps every source ResizeObserver→rAF row to the first later capture frame without coalescing source events. */
+/**
+ * Maps every source ResizeObserver→rAF row to the first still requested at or after the end of its interval, without coalescing
+ * source events: a still shows the window at a moment after its request, so it shows a frame that the page drew before it.
+ */
 export function mapViewContentFramesToCapture(contentFrames, captured) {
   assert.ok(Array.isArray(contentFrames), "view content frames must be an array");
   assert.ok(Array.isArray(captured) && captured.length > 0, "view capture frames must be a nonempty array");
@@ -215,10 +218,10 @@ export function mapViewContentFramesToCapture(contentFrames, captured) {
   let priorSourceUpper = -Infinity;
   let priorCaptureTime = -Infinity;
   for (const [index, frame] of captured.entries()) {
-    assert.ok(Number.isFinite(frame?.time) && frame.time >= 0,
-      `capture frame ${index} has an invalid display time`);
-    assert.ok(frame.time > priorCaptureTime, `capture frame ${index} time does not increase`);
-    priorCaptureTime = frame.time;
+    assert.ok(Number.isFinite(frame?.requested) && frame.requested >= 0,
+      `capture still ${index} has an invalid request time`);
+    assert.ok(frame.requested > priorCaptureTime, `capture still ${index} request time does not increase`);
+    priorCaptureTime = frame.requested;
   }
   return contentFrames.map((source, index) => {
     assert.ok(Number.isSafeInteger(source?.sequence) && source.sequence >= 0 && source.sequence > priorSequence,
@@ -230,8 +233,8 @@ export function mapViewContentFramesToCapture(contentFrames, captured) {
     priorSequence = source.sequence;
     priorSourceLower = lowerMs;
     priorSourceUpper = upperMs;
-    const frameIndex = lowerMs > captured.at(-1).time
-      ? -1 : captured.findIndex((frame) => frame.time >= upperMs);
+    const frameIndex = lowerMs > captured.at(-1).requested
+      ? -1 : captured.findIndex((frame) => frame.requested >= upperMs);
     return { ...source, sourceSequence: source.sequence, frameIndex: frameIndex < 0 ? null : frameIndex };
   });
 }
@@ -615,22 +618,23 @@ export async function waitForViewReadiness(s, surface, descriptor) {
 }
 
 /**
- * The first recorded frame that shows the content of a view: the first frame at or after `displayed`, the display time of the
- * first presentation after the content value was observed. That time is no earlier than the first frame that showed the
- * content, so a first-display criterion measured from it is at least as strict (docs/features.md F696-4).
+ * The first recorded still that shows the content of a view: the first still requested at or after `displayed`, the display
+ * time of the first presentation after the content value was observed. A still shows the window at a moment after its request,
+ * so it shows that presentation; that time is no earlier than the first frame that showed the content, so a first-display
+ * criterion measured from it is at least as strict (docs/features.md F696-4). `captured` are the frames of readFrame.
  */
 export function recordedContentFrame(captured, displayed, proof) {
   assert.ok(Array.isArray(captured) && captured.length > 0, "the content frame requires recorded frames");
   assert.ok(Number.isFinite(displayed) && displayed >= 0, `the content presentation has an invalid display time ${JSON.stringify(displayed)}`);
   let previousTime = -Infinity;
   for (const [index, frame] of captured.entries()) {
-    assert.ok(Number.isFinite(frame?.time) && frame.time >= 0 && frame.time > previousTime,
-      `recorded frame ${index} has no increasing display time`);
-    previousTime = frame.time;
+    assert.ok(Number.isFinite(frame?.requested) && frame.requested >= 0 && frame.requested > previousTime,
+      `recorded still ${index} has no increasing request time`);
+    previousTime = frame.requested;
   }
-  const frameIndex = captured.findIndex((frame) => frame.time >= displayed);
-  assert.ok(frameIndex >= 0, `no recorded frame is at or after the content presentation at ${displayed} ms`);
-  return { frameIndex, frameCount: captured.length, timeMs: captured[frameIndex].time, displayedAtMs: displayed, proof };
+  const frameIndex = captured.findIndex((frame) => frame.requested >= displayed);
+  assert.ok(frameIndex >= 0, `no recorded still is requested at or after the content presentation at ${displayed} ms`);
+  return { frameIndex, frameCount: captured.length, timeMs: captured[frameIndex].requested, displayedAtMs: displayed, proof };
 }
 
 /**
@@ -670,7 +674,6 @@ export async function openRecordedView(t, s, { card, plugin, placement, params, 
     const { displayed } = await s.presented();
     capture = await recording.stop({ after: displayed + (captureObservationWindowMs ?? 0) });
     stopped = true;
-    assert.equal(capture.limited, false, `${plugin} first-content recording reached its bounded frame limit`);
     const paths = frames(capture.frames);
     assert.equal(paths.length, capture.count, `${plugin} first-content recording omitted captured frames`);
     assert.ok(paths.length > 0, `${plugin} first-content recording contains no frames`);
@@ -693,7 +696,8 @@ export async function openRecordedView(t, s, { card, plugin, placement, params, 
       readinessEvidence,
       openedPid: pids[0],
       processGroupPids,
-      recording: { directory: capture.frames, frameCount: paths.length, files: paths },
+      // The content frame is a final state, judged whatever stills the recording lost; the lost stills are reported with it.
+      recording: { directory: capture.frames, frameCount: paths.length, files: paths, missed: capture.missed, late: capture.late },
       verifyContent: async () => {
         if (contentProof) return contentProof;
         try {
@@ -719,7 +723,8 @@ export async function openRecordedView(t, s, { card, plugin, placement, params, 
     }
     if (capture?.frames) {
       t.diagnostic(`failed view recording retained at ${capture.frames}`);
-      t.diagnostic(`failed view recording result: ${JSON.stringify({ count: capture.count, limited: capture.limited })}`);
+      t.diagnostic(`failed view recording result: ${JSON.stringify({ count: capture.count, missed: capture.missed,
+        late: capture.late })}`);
     }
     throw error;
   }

@@ -105,9 +105,10 @@ function viewDocumentRow(host, surface, owner) {
 
 /**
  * The layout observation (v) of the view `surface` of the card `card`: core.grid.size makes the card 80 larger on `axis`
- * (x or y) while the content trace of `descriptor` runs. The content frame is the first captured frame whose pixels match the
- * declared slot at or after the source frame of the new size, and the content value that `descriptor.readContent` reads holds
- * `descriptor.expectedContent`.
+ * (x or y) while the content trace of `descriptor` runs. The content frame is the first still whose pixels match the declared
+ * slot requested at or after the source frame of the new size, and the content value that `descriptor.readContent` reads holds
+ * `descriptor.expectedContent`. Each time of a frame is the request time of its still; the content frame is a final state,
+ * judged whatever stills the recording lost, and the lost stills are reported with it (missed, late).
  */
 export async function markerLayoutObservation(t, s, descriptor, surface, card, { owner, theme, cornerRadiusPt, axis }) {
   const dimension = AXIS[axis];
@@ -122,7 +123,6 @@ export async function markerLayoutObservation(t, s, descriptor, surface, card, {
     await s.run("core.grid.size", { card, axis, size: pane[dimension.size] + 80 });
     const { displayed } = await s.presented();
     const result = await recording.stop({ after: displayed });
-    assert.equal(result.limited, false, `${owner} layout recording reached its bounded frame limit`);
     const files = frames(result.frames);
     assert.equal(files.length, result.count, `${owner} layout recording omitted finalized frame files`);
     assert.ok(files.length > 0, `${owner} layout recording contains no frames`);
@@ -146,33 +146,35 @@ export async function markerLayoutObservation(t, s, descriptor, surface, card, {
   const measured = captured.map((frame) => measureViewFrameGeometry(frame, { ...palette, targetRect }));
   const transition = findFirstChangedSlotFrame(measured, { beforeChangeTimeMs, slotInsetsPt });
   const captureAfter = Math.max(displayed, source.timeRange.upperMs);
-  const candidates = transition.slotMatchFrameIndices.filter((index) => captured[index].time >= captureAfter);
+  const candidates = transition.slotMatchFrameIndices.filter((index) => captured[index].requested >= captureAfter);
   assert.ok(candidates.length > 0, `${owner} layout has no declared-slot pixel match at or after ${captureAfter} ms`);
   const frameIndex = candidates[0];
   const proof = valueProof(descriptor.expectedContent, await descriptor.readContent(s, surface), owner);
   const geometry = measured[frameIndex];
   return {
     changeFrame: { frameIndex: transition.changeFrameIndex, frameCount: captured.length,
-      timeMs: captured[transition.changeFrameIndex].time },
-    contentFrame: { frameIndex, frameCount: captured.length, timeMs: captured[frameIndex].time,
+      timeMs: captured[transition.changeFrameIndex].requested },
+    contentFrame: { frameIndex, frameCount: captured.length, timeMs: captured[frameIndex].requested,
       requestAtMs: beforeChangeTimeMs, displayedAtMs: displayed, sourceTimeRange: source.timeRange,
       width: source.width, height: source.height, nativePlacement,
       surfaceEvents: traced.events.filter((event) => event?.event === "host.trace.surface" && event.fields?.surface === surface),
       proof },
     sourceFrame: source,
     slotInsetsPt,
-    initialGeometry: { frameIndex, timeMs: captured[frameIndex].time, cardRectPt: geometry.cardRectPt,
+    initialGeometry: { frameIndex, timeMs: captured[frameIndex].requested, cardRectPt: geometry.cardRectPt,
       nativeRectPt: geometry.nativeRectPt, slotInsetsPt },
     pixelPalette: palette,
     events: traced.events,
     captureDirectory: result.frames,
+    missed: result.missed,
+    late: result.late,
   };
 }
 
 /**
  * The drag observation (viii) of the view `surface` of the card `card`: the drag `plan` (diagnostics.drag) runs with capture
- * while the content trace of `descriptor` runs, and each captured frame is measured with `palette` and the marker color of
- * that trace start.
+ * while the content trace of `descriptor` runs, and each still is measured with `palette` and the marker color of that trace
+ * start. The time of each frame is the request time of its still.
  */
 export async function markerDragObservation(t, s, descriptor, surface, card, palette, { owner, plan }) {
   await s.presented();
@@ -184,8 +186,8 @@ export async function markerDragObservation(t, s, descriptor, surface, card, pal
   assert.equal(files.length, run.count, `${owner} drag recording omitted finalized frame files`);
   const captured = files.map(readFrame);
   assert.ok(captured.length > 2, `${owner} drag recording contains too few frames`);
-  const firstGestureFrameIndex = captured.findIndex((frame) => frame.time >= run.ticks[0]);
-  const gestureEndedFrameIndex = captured.findIndex((frame) => frame.time >= run.ticks.at(-1));
+  const firstGestureFrameIndex = captured.findIndex((frame) => frame.requested >= run.ticks[0]);
+  const gestureEndedFrameIndex = captured.findIndex((frame) => frame.requested >= run.ticks.at(-1));
   assert.ok(firstGestureFrameIndex >= 0 && gestureEndedFrameIndex >= firstGestureFrameIndex,
     `${owner} drag capture does not cover the complete requested gesture`);
   const grid = await s.get("core.grid");
@@ -197,22 +199,22 @@ export async function markerDragObservation(t, s, descriptor, surface, card, pal
   const geometryFrames = [];
   for (let frameIndex = firstGestureFrameIndex; frameIndex <= gestureEndedFrameIndex; frameIndex++) {
     const measured = measureViewFrameGeometry(captured[frameIndex], { ...dragPalette, targetRect });
-    geometryFrames.push({ frameIndex, timeMs: captured[frameIndex].time,
+    geometryFrames.push({ frameIndex, timeMs: captured[frameIndex].requested,
       cardRectPt: measured.cardRectPt, nativeRectPt: measured.nativeRectPt, slotInsetsPt });
   }
   const tailGeometryFrames = [];
   for (let frameIndex = gestureEndedFrameIndex + 1; frameIndex < captured.length; frameIndex++) {
     const measured = measureViewFrameGeometry(captured[frameIndex], { ...dragPalette, targetRect });
     tailGeometryFrames.push(dragTailGeometryFrame(frameIndex, { ...measured,
-      timeMs: captured[frameIndex].time }, slotInsetsPt, owner));
+      timeMs: captured[frameIndex].requested }, slotInsetsPt, owner));
   }
   const mapped = requireViewContentFrameCoverage(mapViewContentFramesToCapture(traced.contentFrames, captured), {
     gestureStartedAtMs: run.ticks[0], gestureEndedAtMs: run.ticks.at(-1),
   });
   const contentFrames = mapped.map((source) => {
-    const displayCaptureIndex = captured.findIndex((frame) => frame.time >= Math.max(run.displayed, source.timeRange.upperMs));
-    return sourceContentFrame(source, source.frameIndex === null ? null : captured[source.frameIndex].time,
-      displayCaptureIndex < 0 ? null : { frameIndex: displayCaptureIndex, timeMs: captured[displayCaptureIndex].time }, owner);
+    const displayCaptureIndex = captured.findIndex((frame) => frame.requested >= Math.max(run.displayed, source.timeRange.upperMs));
+    return sourceContentFrame(source, source.frameIndex === null ? null : captured[source.frameIndex].requested,
+      displayCaptureIndex < 0 ? null : { frameIndex: displayCaptureIndex, timeMs: captured[displayCaptureIndex].requested }, owner);
   });
   const finalRoot = viewDocumentRow(await s.get("host.window"), surface, owner);
   return {
@@ -236,5 +238,7 @@ export async function markerDragObservation(t, s, descriptor, surface, card, pal
     ticks: run.ticks,
     events: traced.events,
     captureDirectory: run.frames,
+    missed: run.missed,
+    late: run.late,
   };
 }
