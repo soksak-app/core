@@ -1523,6 +1523,13 @@ static sp_input_result keyInput(void *handle, const char *key, const char *text,
     // named key or with a stated text goes to a web view without its input context: a stated text is typed through the text
     // input of the web view, and a named key runs the command of its key binding.
     if (enterVirtual(window)) {
+        // While the delivery of a press runs the event loop of the pressed view (a pop-up button tracks its menu there), a key
+        // reaches that loop only through the event queue, as the key of a person does and as the release of the press does: the
+        // loop reads it in its order after the events queued before it.
+        if (pressesDelivering > 0) {
+            [NSApp postEvent:event atStart:NO];
+            return SP_INPUT_DELIVERED;
+        }
         if (down && (event.modifierFlags & (NSEventModifierFlagCommand | NSEventModifierFlagControl))) {
             *equivalent = [NSApp.mainMenu performKeyEquivalent:event] || [window performKeyEquivalent:event];
         }
