@@ -77,6 +77,12 @@ static void observeSystemPaths(void) {
         @selector(startCaptureWithCompletionHandler:)), (IMP)observedStart);
 }
 
+// Diagnostic: the occlusion state and the visibility of window before the capture named name.
+static void occlusionNote(NSWindow *window, NSString *name) {
+    fprintf(stderr, "DIAGNOSTIC: before the %s capture the window is %s, %s\n", name.UTF8String,
+        (window.occlusionState & NSWindowOcclusionStateVisible) ? "partly shown" : "occluded", window.isVisible ? "visible" : "not visible");
+}
+
 typedef struct { size_t width, height; uint8_t *bytes; } Image;
 static NSUInteger captures;
 
@@ -293,9 +299,15 @@ int main(void) { @autoreleasepool {
     [CATransaction flush];
     waitForPresentation(web);
 
+    // Diagnostic: draws the window, title bar included, and commits before the first capture, and states the occlusion of the
+    // window before each capture, to tell whether the window controls appear late because the window was not drawn.
+    [window displayIfNeeded];
+    [CATransaction flush];
     // The window controls of a window that has just appeared can still change: the state before the cover is the first
     // capture that equals the capture before it.
+    occlusionNote(window, @"first");
     Image first = capture(window, directory, @"first");
+    occlusionNote(window, @"back");
     Image back = capture(window, directory, @"back");
     for (;;) {
         fprintf(stderr, "two captures before the cover: %s\n", differences(first, back, scale).UTF8String);
@@ -304,6 +316,7 @@ int main(void) { @autoreleasepool {
         if (same || first.bytes == NULL || back.bytes == NULL) break;
         free(first.bytes);
         first = back;
+        occlusionNote(window, @"back");
         back = capture(window, directory, @"back");
     }
     if (back.bytes != NULL) expectPixel(back, scale, 180, 280, 0x28c850, @"the child window");
@@ -342,6 +355,7 @@ int main(void) { @autoreleasepool {
     check(!web._windowOcclusionDetectionEnabled, @"the registered web view does not detect the occlusion of its window");
     check([evaluate(web, @"document.visibilityState") isEqual:@"visible"], @"the document of the covered window stays visible");
 
+    occlusionNote(window, @"covered");
     Image covered = capture(window, directory, @"covered");
     check(back.bytes != NULL && covered.bytes != NULL && back.width == covered.width && back.height == covered.height
         && memcmp(back.bytes, covered.bytes, back.width * back.height * 4) == 0,
