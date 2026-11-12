@@ -125,6 +125,19 @@ static NSWindow *makeWindow(CGFloat shift) {
     [super sendEvent:event];
 }
 @end
+// A view that asks AppKit for the moves of the pointer over it in an application that is not active, as a page of a covered window
+// does: -[NSApplication sendEvent:] gives a real move to the window of the event only for such an area.
+@interface SPMovedView : NSView
+@end
+@implementation SPMovedView
+- (void)updateTrackingAreas {
+    for (NSTrackingArea *area in [[self.trackingAreas copy] autorelease]) [self removeTrackingArea:area];
+    [self addTrackingArea:[[[NSTrackingArea alloc] initWithRect:NSZeroRect
+        options:NSTrackingMouseMoved | NSTrackingMouseEnteredAndExited | NSTrackingActiveAlways | NSTrackingInVisibleRect
+        owner:self userInfo:nil] autorelease]];
+    [super updateTrackingAreas];
+}
+@end
 // Gives window a real move through the application, as a move of a person arrives.
 static void realMove(NSWindow *window) {
     [NSApp sendEvent:[NSEvent mouseEventWithType:NSEventTypeMouseMoved location:NSMakePoint(200, 40) modifierFlags:0
@@ -621,6 +634,11 @@ int main(void) { @autoreleasepool {
     // A tracking area hears each injected move, which a window without one refuses.
     [driven.contentView addSubview:[[[SPCursorUpdateView alloc] initWithFrame:NSMakeRect(0, 0, 420, 300)] autorelease]];
     [next.contentView addSubview:[[[SPCursorUpdateView alloc] initWithFrame:NSMakeRect(0, 0, 420, 300)] autorelease]];
+    // The real moves of a person reach a window of an application that is not active through an area that asks for them always.
+    driven.acceptsMouseMovedEvents = YES;
+    SPMovedView *moved = [[[SPMovedView alloc] initWithFrame:NSMakeRect(0, 0, 420, 300)] autorelease];
+    [driven.contentView addSubview:moved];
+    [moved updateTrackingAreas];
     [driven orderBack:nil];
     [next orderBack:nil];
     realMove(driven);
