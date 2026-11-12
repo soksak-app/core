@@ -44,16 +44,22 @@ for (const app of Object.values(APPS)) {
     const file = join(folder, "index.json");
     writeFileSync(file, JSON.stringify(index));
     s.cleanup(() => rmSync(folder, { recursive: true, force: true }));
-    s.cleanup(async () => {
-      for (const window of await s.get("host.windows")) {
-        if (window.window !== s.window) await s.on(window.window).close();
-      }
-      await s.windows(1, "the check left an extra window");
-      for (const project of await s.get("core.projects")) {
-        if (project.root.startsWith(folder)) await s.run("core.project.close", { id: project.id });
-      }
-      await restoreRegistry(s);
-    });
+    s.cleanupSteps(
+      async () => {
+        for (const window of await s.get("host.windows")) {
+          if (window.window !== s.window) await s.on(window.window).close();
+        }
+        await s.windows(1, "the check left an extra window");
+      },
+      async () => {
+        for (const project of await s.get("core.projects")) {
+          if (project.root.startsWith(folder)) await s.run("core.project.close", { id: project.id });
+        }
+      },
+      async () => {
+        await restoreRegistry(s);
+      },
+    );
     await useRegistry(s, pathToFileURL(file).href);
     await s.until("core.plugins", (value) => value.registry === pathToFileURL(file).href && value.error === null,
       "the registry did not change");

@@ -637,6 +637,15 @@ export class Session {
     this.cleanups.push(fn);
   }
 
+  /**
+   * Registers steps as separate cleanups that run in the given order. Each step runs also when a step before it failed, and the
+   * failures are reported together with those of the other cleanups, so a step that fails leaves no later restoration undone
+   * for the checks that follow.
+   */
+  cleanupSteps(...steps) {
+    for (const step of [...steps].reverse()) this.cleanup(step);
+  }
+
   /** Registers a capture folder so the session removes it only after the whole check succeeds. */
   /**
    * Tells what `judge` throws about the recording in `frames` as a diagnostic of the check (finishSession) and returns

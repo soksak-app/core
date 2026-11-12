@@ -34,16 +34,20 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-window-close-")));
     s.cleanup(() => rmSync(root, { recursive: true, force: true }));
-    s.cleanup(async () => {
-      for (const window of await s.get("host.windows")) {
-        if (window.window !== s.window) await s.on(window.window).close();
-      }
-      await s.windows(1, "the check left an extra window");
-      for (const project of await s.get("core.projects")) {
-        if (project.root.startsWith(root)) await s.run("core.project.close", { id: project.id });
-      }
-      await s.run("core.projects.flush");
-    });
+    s.cleanupSteps(
+      async () => {
+        for (const window of await s.get("host.windows")) {
+          if (window.window !== s.window) await s.on(window.window).close();
+        }
+        await s.windows(1, "the check left an extra window");
+      },
+      async () => {
+        for (const project of await s.get("core.projects")) {
+          if (project.root.startsWith(root)) await s.run("core.project.close", { id: project.id });
+        }
+        await s.run("core.projects.flush");
+      },
+    );
     await s.run("core.settings.set", { patch: { projectOpening: "windows" }, scope: "common" });
     const opened = await s.run("core.project.open", { root, color: "#7fe3b0" });
     const windows = await s.windows(2, "the project window did not open");
@@ -138,16 +142,20 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-project-remove-")));
     s.cleanup(() => rmSync(root, { recursive: true, force: true }));
-    s.cleanup(async () => {
-      for (const window of await s.get("host.windows")) {
-        if (window.window !== s.window) await s.on(window.window).close();
-      }
-      await s.windows(1, "the check left an extra window");
-      for (const project of await s.get("core.projects")) {
-        if (project.root.startsWith(root)) await s.run("core.project.close", { id: project.id });
-      }
-      await s.run("core.projects.flush");
-    });
+    s.cleanupSteps(
+      async () => {
+        for (const window of await s.get("host.windows")) {
+          if (window.window !== s.window) await s.on(window.window).close();
+        }
+        await s.windows(1, "the check left an extra window");
+      },
+      async () => {
+        for (const project of await s.get("core.projects")) {
+          if (project.root.startsWith(root)) await s.run("core.project.close", { id: project.id });
+        }
+        await s.run("core.projects.flush");
+      },
+    );
     await s.run("core.settings.set", { patch: { projectOpening: "windows" }, scope: "common" });
     const opened = await s.run("core.project.open", { root, color: "#7db4ff" });
     const windows = await s.windows(2, "the project window did not open");
@@ -177,16 +185,20 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-project-remote-remove-")));
     s.cleanup(() => rmSync(root, { recursive: true, force: true }));
-    s.cleanup(async () => {
-      for (const window of await s.get("host.windows")) {
-        if (window.window !== s.window) await s.on(window.window).close();
-      }
-      await s.windows(1, "the check left an extra window");
-      for (const project of await s.get("core.projects")) {
-        if (project.root.startsWith(root)) await s.run("core.project.close", { id: project.id });
-      }
-      await s.run("core.projects.flush");
-    });
+    s.cleanupSteps(
+      async () => {
+        for (const window of await s.get("host.windows")) {
+          if (window.window !== s.window) await s.on(window.window).close();
+        }
+        await s.windows(1, "the check left an extra window");
+      },
+      async () => {
+        for (const project of await s.get("core.projects")) {
+          if (project.root.startsWith(root)) await s.run("core.project.close", { id: project.id });
+        }
+        await s.run("core.projects.flush");
+      },
+    );
     await s.run("core.settings.set", { patch: { projectOpening: "windows" }, scope: "common" });
     const opened = await s.run("core.project.open", { root, color: "#7db4ff" });
     const windows = await s.windows(2, "the project window did not open");

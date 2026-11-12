@@ -24,17 +24,23 @@ for (const app of Object.values(APPS)) {
     const root = join(temporary, "project");
     mkdirSync(root);
     s.cleanup(() => rmSync(temporary, { recursive: true, force: true }));
-    s.cleanup(async () => {
-      for (const window of await s.get("host.windows")) {
-        if (window.window !== s.window) await s.on(window.window).close();
-      }
-      await s.windows(1, "project-view cleanup left an extra window");
-      for (const project of await s.get("core.projects")) {
-        if (project.root === root) await s.run("core.project.close", { id: project.id });
-      }
-      await s.run("core.projects.flush");
-      assert.equal(await s.get("core.workbench.error"), null, "project-view cleanup reported an application error");
-    });
+    s.cleanupSteps(
+      async () => {
+        for (const window of await s.get("host.windows")) {
+          if (window.window !== s.window) await s.on(window.window).close();
+        }
+        await s.windows(1, "project-view cleanup left an extra window");
+      },
+      async () => {
+        for (const project of await s.get("core.projects")) {
+          if (project.root === root) await s.run("core.project.close", { id: project.id });
+        }
+        await s.run("core.projects.flush");
+      },
+      async () => {
+        assert.equal(await s.get("core.workbench.error"), null, "project-view cleanup reported an application error");
+      },
+    );
 
     await s.run("core.settings.set", {
       patch: { memorySaver: true, memorySaverDelay: 720, projectOpening: "windows" }, scope: "common",

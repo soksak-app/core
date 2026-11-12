@@ -90,16 +90,20 @@ for (const app of Object.values(APPS)) {
     mkdirSync(firstRoot);
     mkdirSync(secondRoot);
     s.cleanup(() => rmSync(root, { recursive: true, force: true }));
-    s.cleanup(async () => {
-      for (const window of await s.get("host.windows")) {
-        if (window.window !== s.window) await s.on(window.window).close();
-      }
-      await s.windows(1, "V4 cleanup left an extra window");
-      for (const project of await s.get("core.projects")) {
-        if (project.root.startsWith(root)) await s.run("core.project.close", { id: project.id });
-      }
-      await s.run("core.projects.flush");
-    });
+    s.cleanupSteps(
+      async () => {
+        for (const window of await s.get("host.windows")) {
+          if (window.window !== s.window) await s.on(window.window).close();
+        }
+        await s.windows(1, "V4 cleanup left an extra window");
+      },
+      async () => {
+        for (const project of await s.get("core.projects")) {
+          if (project.root.startsWith(root)) await s.run("core.project.close", { id: project.id });
+        }
+        await s.run("core.projects.flush");
+      },
+    );
 
     await settings(s, { projectOpening: "windows" }, "common");
     const openAndUse = async (projectRoot, color, label) => {
@@ -148,19 +152,25 @@ for (const app of Object.values(APPS)) {
     const alias = join(temporary, "alias"); symlinkSync(secondRoot, alias);
     // The deletion of the folder runs last, separately from the cleanup of the application (the cleanup runs in the reverse order of registration).
     s.cleanup(() => rmSync(temporary, { recursive: true, force: true }));
-    s.cleanup(async () => {
-      for (const window of await s.get("host.windows")) {
-        if (window.window !== s.window) await s.on(window.window).close();
-      }
-      await s.windows(1, "project window did not close");
-      for (const item of await s.get("core.projects")) {
-        if (item.root.startsWith(temporary)) await s.run("core.project.close", { id: item.id });
-      }
-      const remaining = await s.get("core.projects");
-      if (!(await s.get("core.project")) && remaining.length) await s.run("core.project.activate", { id: remaining[0].id });
-      await s.run("core.projects.flush");
-      assert.equal(await s.get("core.workbench.error") ?? "", "");
-    });
+    s.cleanupSteps(
+      async () => {
+        for (const window of await s.get("host.windows")) {
+          if (window.window !== s.window) await s.on(window.window).close();
+        }
+        await s.windows(1, "project window did not close");
+      },
+      async () => {
+        for (const item of await s.get("core.projects")) {
+          if (item.root.startsWith(temporary)) await s.run("core.project.close", { id: item.id });
+        }
+        const remaining = await s.get("core.projects");
+        if (!(await s.get("core.project")) && remaining.length) await s.run("core.project.activate", { id: remaining[0].id });
+        await s.run("core.projects.flush");
+      },
+      async () => {
+        assert.equal(await s.get("core.workbench.error") ?? "", "");
+      },
+    );
 
     const first = await s.get("core.project");
     const config = dirname(first.root);
@@ -376,17 +386,23 @@ for (const app of Object.values(APPS)) {
     const root = join(temporary, "project");
     mkdirSync(root);
     s.cleanup(() => rmSync(temporary, { recursive: true, force: true }));
-    s.cleanup(async () => {
-      for (const window of await s.get("host.windows")) {
-        if (window.window !== s.window) await s.on(window.window).close();
-      }
-      await s.windows(1, "project view cleanup left an extra window");
-      for (const project of await s.get("core.projects")) {
-        if (project.root === root) await s.run("core.project.close", { id: project.id });
-      }
-      await s.run("core.projects.flush");
-      assert.equal(await s.get("core.workbench.error"), null);
-    });
+    s.cleanupSteps(
+      async () => {
+        for (const window of await s.get("host.windows")) {
+          if (window.window !== s.window) await s.on(window.window).close();
+        }
+        await s.windows(1, "project view cleanup left an extra window");
+      },
+      async () => {
+        for (const project of await s.get("core.projects")) {
+          if (project.root === root) await s.run("core.project.close", { id: project.id });
+        }
+        await s.run("core.projects.flush");
+      },
+      async () => {
+        assert.equal(await s.get("core.workbench.error"), null);
+      },
+    );
 
     await settings(s, { projectOpening: "windows" }, "common");
     const opened = await s.run("core.project.open", { root, color: "#7fe3b0" });
@@ -440,13 +456,17 @@ for (const app of Object.values(APPS)) {
     await keepCommonSettings(s);
     const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-unknown-")));
     s.cleanup(() => rmSync(root, { recursive: true, force: true }));
-    s.cleanup(async () => {
-      await s.windows(1, "project window did not close");
-      for (const item of await s.get("core.projects")) {
-        if (item.root === root) await s.run("core.project.close", { id: item.id });
-      }
-      await s.run("core.projects.flush");
-    });
+    s.cleanupSteps(
+      async () => {
+        await s.windows(1, "project window did not close");
+      },
+      async () => {
+        for (const item of await s.get("core.projects")) {
+          if (item.root === root) await s.run("core.project.close", { id: item.id });
+        }
+        await s.run("core.projects.flush");
+      },
+    );
     const first = await s.get("core.project");
     const config = dirname(first.root);
     // Opens and closes the saved project in another window, so that it stays as a saved record that is not open.

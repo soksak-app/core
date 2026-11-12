@@ -43,6 +43,55 @@ test("a cleanup failure is reported when the check body already failed", { timeo
   assert.match(result.stdout, /# cleanup failed: Error: probe press stayed open/);
 });
 
+// Runs a passing check whose cleanup steps fail in the first and the third step, in a separate node:test run, and prints the
+// order in which the steps ran.
+function runSteps(t) {
+  const dir = mkdtempSync(join(tmpdir(), "soksak-session-cleanup-steps-"));
+  t.after(() => rmSync(dir, { recursive: true }));
+  const file = join(dir, "probe.test.mjs");
+  writeFileSync(file, `import test from "node:test";
+import { Session, finishSession } from ${JSON.stringify(app)};
+test("probe body passes", async (t) => {
+  const session = {
+    app: { name: "probe" },
+    cleanups: [],
+    cleanup: Session.prototype.cleanup,
+    cleanupSteps: Session.prototype.cleanupSteps,
+    checkEnded: async () => {},
+    stallSamples: new Set(),
+    expectedErrors: [],
+    recordingNotes: [],
+    markTest: async () => null,
+  };
+  const ran = [];
+  // A cleanup registered before the steps runs after them, in the reverse order of registration.
+  session.cleanups.push(async () => { ran.push("earlier"); });
+  session.cleanupSteps(
+    async () => { ran.push("first"); throw new Error("probe first step failed"); },
+    async () => { ran.push("second"); },
+    async () => { ran.push("third"); throw new Error("probe third step failed"); });
+  t.after(async () => {
+    try {
+      await finishSession(t, session, () => {});
+    } finally {
+      process.stdout.write("steps ran: " + ran.join(" ") + "\\n");
+    }
+  });
+});
+`);
+  const { NODE_TEST_CONTEXT, ...environment } = process.env;
+  return spawnSync(process.execPath, ["--test", "--test-reporter=tap", file],
+    { encoding: "utf8", timeout: 20000, env: { ...environment, FORCE_COLOR: "0" } });
+}
+
+test("cleanup steps run in their order after a failed step and every failure is reported", { timeout: 30000 }, (t) => {
+  const result = runSteps(t);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, /steps ran: first second third earlier/);
+  assert.match(result.stdout, /# cleanup failed: Error: probe first step failed/);
+  assert.match(result.stdout, /# cleanup failed: Error: probe third step failed/);
+});
+
 /**
  * A fake endpoint answer of diagnostics.input.source: the role of the selected input source, or null for a source without a role, and
  * its opaque platform `source`. The person's source `person-source` has no role.

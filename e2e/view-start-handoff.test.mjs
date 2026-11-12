@@ -31,13 +31,17 @@ for (const app of Object.values(APPS)) {
     await project.until("core.grid", (value) => value?.cards?.length > 0,
       "the opened project window did not render its grid");
 
-    main.cleanup(async () => {
-      const current = await main.get("host.windows");
-      if (current.some((item) => item.window === owner.window) && owner.window !== main.window) await project.close();
-      const projects = await main.get("core.projects");
-      if (projects.some((item) => item.id === opened.id)) await main.run("core.project.close", { id: opened.id });
-      await main.run("core.projects.flush");
-    });
+    main.cleanupSteps(
+      async () => {
+        const current = await main.get("host.windows");
+        if (current.some((item) => item.window === owner.window) && owner.window !== main.window) await project.close();
+      },
+      async () => {
+        const projects = await main.get("core.projects");
+        if (projects.some((item) => item.id === opened.id)) await main.run("core.project.close", { id: opened.id });
+        await main.run("core.projects.flush");
+      },
+    );
 
     // Two files of the type that the layout probe opens each reach their own tab with their own path.
     for (const path of ["alpha.lprobe", "beta.lprobe"]) {

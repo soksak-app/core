@@ -23,14 +23,20 @@ async function openProbe(t, app, options) {
   const s = await open(t, app, { ...options, inactive: true });
   await fresh(s, { performanceTrace: true, log: { input: "info", lifecycle: "info", call: "debug" }, reads: READS });
   await keepCommonSettings(s);
-  s.cleanup(async () => {
-    if ((await s.get("core.modal"))?.id === "settings") await s.run("core.settings.close");
-    if ((await s.get("core.picker")).open) await s.run("core.picker.close");
-    if ((await s.get("core.screen")).screen === "library") {
-      await s.run("core.library.page", { page: "projects" });
-      await s.run("core.library.return");
-    }
-  });
+  s.cleanupSteps(
+    async () => {
+      if ((await s.get("core.modal"))?.id === "settings") await s.run("core.settings.close");
+    },
+    async () => {
+      if ((await s.get("core.picker")).open) await s.run("core.picker.close");
+    },
+    async () => {
+      if ((await s.get("core.screen")).screen === "library") {
+        await s.run("core.library.page", { page: "projects" });
+        await s.run("core.library.return");
+      }
+    },
+  );
   return s;
 }
 

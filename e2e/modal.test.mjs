@@ -40,11 +40,15 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: reloading under settings leaves successor raster images and documents unblurred`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
     const { surface: start } = await fresh(s);
-    s.cleanup(async () => {
-      // Capture a failed native state before cleanup can close its dialog.
-      if (!t.passed) await readStillCapture(s, t);
-      await s.run("core.settings.close");
-    });
+    s.cleanupSteps(
+      async () => {
+        // Capture a failed native state before cleanup can close its dialog.
+        if (!t.passed) await readStillCapture(s, t);
+      },
+      async () => {
+        await s.run("core.settings.close");
+      },
+    );
     // A raster probe tab on the start card gives the window a native image region. The saved layout keeps it through the reload.
     s.cleanup(async () => {
       for (const card of (await s.get("core.grid")).cards) {

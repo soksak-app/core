@@ -26,15 +26,19 @@ for (const app of Object.values(APPS)) {
     await keepCommonSettings(s);
     const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-release-")));
     s.cleanup(() => rmSync(root, { recursive: true, force: true }));
-    s.cleanup(async () => {
-      for (const window of await s.get("host.windows")) {
-        if (window.window !== s.window) await s.on(window.window).close();
-      }
-      await s.windows(1, "a project window did not close");
-      for (const project of await s.get("core.projects")) {
-        if (project.root === root) await s.run("core.project.close", { id: project.id });
-      }
-    });
+    s.cleanupSteps(
+      async () => {
+        for (const window of await s.get("host.windows")) {
+          if (window.window !== s.window) await s.on(window.window).close();
+        }
+        await s.windows(1, "a project window did not close");
+      },
+      async () => {
+        for (const project of await s.get("core.projects")) {
+          if (project.root === root) await s.run("core.project.close", { id: project.id });
+        }
+      },
+    );
     await s.run("core.settings.set", { patch: { projectOpening: "windows" }, scope: "common" });
 
     const before = await counts(s);

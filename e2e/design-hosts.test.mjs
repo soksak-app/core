@@ -103,10 +103,14 @@ async function walk(t, s, states) {
   // provider afterwards, preserving the public settings of that preparation.
   const settings = (await s.get("core.settings")).common;
   await s.request("diagnostics.fixture", { settings, debugEntries: DEBUG_ENTRIES });
-  s.cleanup(async () => {
-    await s.run("core.debug.close");
-    await s.request("diagnostics.fixture", { settings });
-  });
+  s.cleanupSteps(
+    async () => {
+      await s.run("core.debug.close");
+    },
+    async () => {
+      await s.request("diagnostics.fixture", { settings });
+    },
+  );
   // The fixture opened the project again on the new-space layout, whose tabs are placeholders, so the walk puts the layout probe
   // tabs back as fresh does: the card sidebar state puts its sidebar on the cards of the layout probe.
   await replacePlaceholders(s);

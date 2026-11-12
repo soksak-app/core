@@ -46,16 +46,22 @@ for (const app of Object.values(APPS)) {
     const registry = await serveFixtureRegistry((await s.get("core.plugins")).registry);
     // Restores the state so that the next check starts from the same registry and installation even if the check fails midway. The cleanup runs in the reverse order of the registration.
     s.cleanup(registry.close);
-    s.cleanup(async () => {
-      // A failure can leave the page reloading after the last operation; the host answers that the page is ready again.
-      await s.windows(1, "the page was not ready for the cleanup");
-      await restoreRegistry(s);
-      const now = await s.get("core.plugins");
-      if (now.plugins.find((row) => row.id === PLUGIN)?.installed) return;
-      const offsets = currentEventOffsets(s.app.configDir);
-      await s.run("core.plugins.install", { plugin: PLUGIN });
-      await pluginChangeApplied(s, offsets, "the installation of the cleanup");
-    });
+    s.cleanupSteps(
+      async () => {
+        // A failure can leave the page reloading after the last operation; the host answers that the page is ready again.
+        await s.windows(1, "the page was not ready for the cleanup");
+        await restoreRegistry(s);
+      },
+      async () => {
+        // The installation waits for the ready page itself, because the step before it can fail before the page was ready.
+        await s.windows(1, "the page was not ready for the cleanup");
+        const now = await s.get("core.plugins");
+        if (now.plugins.find((row) => row.id === PLUGIN)?.installed) return;
+        const offsets = currentEventOffsets(s.app.configDir);
+        await s.run("core.plugins.install", { plugin: PLUGIN });
+        await pluginChangeApplied(s, offsets, "the installation of the cleanup");
+      },
+    );
     const use = async (path) => {
       const index = `${registry.base}${path}`;
       await useRegistry(s, index);

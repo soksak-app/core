@@ -115,18 +115,22 @@ for (const app of Object.values(APPS)) {
     const temporary = realpathSync(mkdtempSync(join(tmpdir(), "soksak-library-")));
     // The deletion of the folder runs last, separately from the cleanup of the application (the cleanup runs in the reverse order of registration).
     s.cleanup(() => rmSync(temporary, { recursive: true, force: true }));
-    s.cleanup(async () => {
-      for (const window of await s.get("host.windows")) {
-        if (window.window !== s.window) await s.on(window.window).close();
-      }
-      await s.windows(1, "extra windows did not close");
-      for (const item of await s.get("core.projects")) {
-        if (item.root.startsWith(temporary)) await s.run("core.project.close", { id: item.id });
-      }
-      const remaining = await s.get("core.projects");
-      if (remaining.length) await s.run("core.project.activate", { id: remaining[0].id });
-      await s.run("core.projects.flush");
-    });
+    s.cleanupSteps(
+      async () => {
+        for (const window of await s.get("host.windows")) {
+          if (window.window !== s.window) await s.on(window.window).close();
+        }
+        await s.windows(1, "extra windows did not close");
+      },
+      async () => {
+        for (const item of await s.get("core.projects")) {
+          if (item.root.startsWith(temporary)) await s.run("core.project.close", { id: item.id });
+        }
+        const remaining = await s.get("core.projects");
+        if (remaining.length) await s.run("core.project.activate", { id: remaining[0].id });
+        await s.run("core.projects.flush");
+      },
+    );
 
     const grid = await s.until("core.grid", (value) => value?.cards?.length > 0, "the project grid did not render");
     const geometry = grid.cards.map(({ id, x, y, w, h }) => ({ id, x, y, w, h }));

@@ -37,11 +37,15 @@ for (const app of Object.values(APPS)) test(`${app.name}: rail groups follow adj
   const { tab } = await s.run("core.card.split", { card: own, side: "right", plugin });
   const split = (await s.get("core.grid")).cards.find((card) => card.tabs.some((item) => item.id === tab));
   assert.ok(split, "the split card is missing");
-  s.cleanup(async () => {
-    if ((await s.get("core.grid")).fullscreen !== null) await s.run("core.card.fullscreen", { card: own });
-    await s.run("core.tab.close", { tab });
-    await s.presented();
-  });
+  s.cleanupSteps(
+    async () => {
+      if ((await s.get("core.grid")).fullscreen !== null) await s.run("core.card.fullscreen", { card: own });
+    },
+    async () => {
+      await s.run("core.tab.close", { tab });
+      await s.presented();
+    },
+  );
   // The split right card stands between them, so the left card of the start tab is apart from the sidebar.
   await record("detached", () => s.run("core.card.focus", { card: own }), 2);
   await record("adjacent split", () => s.run("core.card.focus", { card: split.id }), 1);

@@ -154,13 +154,17 @@ for (const app of Object.values(APPS)) {
     const { plugin } = await fresh(s);
     await keepCommonSettings(s);
     await s.run("core.settings.open");
-    s.cleanup(async () => {
-      if ((await s.get("core.settings-modal")).open) await s.run("core.settings.close");
-      if ((await s.get("core.screen")).screen === "library") {
-        await s.run("core.library.page", { page: "projects" });
-        await s.run("core.library.return");
-      }
-    });
+    s.cleanupSteps(
+      async () => {
+        if ((await s.get("core.settings-modal")).open) await s.run("core.settings.close");
+      },
+      async () => {
+        if ((await s.get("core.screen")).screen === "library") {
+          await s.run("core.library.page", { page: "projects" });
+          await s.run("core.library.return");
+        }
+      },
+    );
     await section(s, "plugins");
     await press(s, "core.settings-modal.plugin", `plugin:${plugin}`);
     const page = await s.until("core.settings-modal", (modal) => modal.plugin === plugin, `the ${plugin} page did not open`);
@@ -451,10 +455,14 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     await fresh(s);
     const dim = (await s.get("core.settings")).values.dim;
-    s.cleanup(async () => {
-      await s.run("core.settings.set", { patch: { dim }, scope: "common" });
-      await s.run("core.settings.close");
-    });
+    s.cleanupSteps(
+      async () => {
+        await s.run("core.settings.set", { patch: { dim }, scope: "common" });
+      },
+      async () => {
+        await s.run("core.settings.close");
+      },
+    );
     await s.run("core.settings.open");
     const { card } = await s.until("core.settings-modal", (modal) => modal.open && modal.scroll === 0,
       "the settings window did not open at its top");

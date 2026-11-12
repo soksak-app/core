@@ -17,12 +17,17 @@ const MODIFIED_PLUGIN = "probeclose";
 
 /** Shows the plugin page and, when the check ends, returns to the project page and the work screen. */
 async function showPlugins(s) {
-  s.cleanup(async () => {
-    if ((await s.get("core.screen")).screen !== "library") return;
-    await s.run("core.library.plugins.search", { query: "" });
-    await s.run("core.library.page", { page: "projects" });
-    await s.run("core.library.return");
-  });
+  s.cleanupSteps(
+    async () => {
+      if ((await s.get("core.screen")).screen !== "library") return;
+      await s.run("core.library.plugins.search", { query: "" });
+    },
+    async () => {
+      if ((await s.get("core.screen")).screen !== "library") return;
+      await s.run("core.library.page", { page: "projects" });
+      await s.run("core.library.return");
+    },
+  );
   await s.run("core.plugins.browse");
   await s.until("core.screen", (screen) => screen.screen === "library", "core.plugins.browse did not show the library");
   return s.until("core.library", (library) => library.page === "plugins" && library.plugins.shown.length > 0,

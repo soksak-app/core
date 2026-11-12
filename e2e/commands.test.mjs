@@ -180,11 +180,15 @@ for (const app of Object.values(APPS)) {
         await s.run("core.settings.reset", { key });
       }
     };
-    s.cleanup(async () => {
-      for (const key of ["left", "right", "mode"]) await writeInitial(key);
-      await s.run("host.window.maximize", { on: false });
-      await s.run("host.window.resize", { width: initialWindow.content.width, height: initialWindow.content.height });
-    });
+    s.cleanupSteps(
+      async () => {
+        for (const key of ["left", "right", "mode"]) await writeInitial(key);
+      },
+      async () => {
+        await s.run("host.window.maximize", { on: false });
+        await s.run("host.window.resize", { width: initialWindow.content.width, height: initialWindow.content.height });
+      },
+    );
 
     const chromeViewport = async (geometry) => {
       const workbench = await s.get("core.window.workbench");

@@ -74,16 +74,20 @@ for (const app of Object.values(APPS)) {
     const projectRoot = join(root, "project");
     mkdirSync(projectRoot);
     s.cleanup(() => rmSync(root, { recursive: true, force: true }));
-    s.cleanup(async () => {
-      for (const window of await s.get("host.windows")) {
-        if (window.window !== s.window) await s.on(window.window).close();
-      }
-      await s.windows(1, "the chains check left an extra window");
-      for (const project of await s.get("core.projects")) {
-        if (project.root.startsWith(root)) await s.run("core.project.close", { id: project.id });
-      }
-      await s.run("core.projects.flush");
-    });
+    s.cleanupSteps(
+      async () => {
+        for (const window of await s.get("host.windows")) {
+          if (window.window !== s.window) await s.on(window.window).close();
+        }
+        await s.windows(1, "the chains check left an extra window");
+      },
+      async () => {
+        for (const project of await s.get("core.projects")) {
+          if (project.root.startsWith(root)) await s.run("core.project.close", { id: project.id });
+        }
+        await s.run("core.projects.flush");
+      },
+    );
     const added = (list, known) => list.find((item) => !known.includes(item.window)).window;
     let since = await tailOf(s);
     const opened = await s.run("core.project.open", { root: projectRoot, color: "#7fe3b0" });
@@ -119,13 +123,17 @@ for (const app of Object.values(APPS)) {
     writeFileSync(join(folder, "index.json"), JSON.stringify(index));
     const address = pathToFileURL(join(folder, "index.json")).href;
     s.cleanup(() => rmSync(folder, { recursive: true, force: true }));
-    s.cleanup(async () => {
-      if ((await s.get("core.screen")).screen === "library") {
-        await s.run("core.library.page", { page: "projects" });
-        await s.run("core.library.return");
-      }
-      await restoreRegistry(s);
-    });
+    s.cleanupSteps(
+      async () => {
+        if ((await s.get("core.screen")).screen === "library") {
+          await s.run("core.library.page", { page: "projects" });
+          await s.run("core.library.return");
+        }
+      },
+      async () => {
+        await restoreRegistry(s);
+      },
+    );
     await useRegistry(s, address);
     await s.until("core.app", (value) => value.available?.version === NEWER, "the registry with a newer core did not list an update");
     await s.run("core.plugins.show-updates");

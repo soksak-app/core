@@ -34,13 +34,17 @@ for (const app of Object.values(APPS)) {
     mkdirSync(join(folder, "variant"));
     writeFileSync(join(folder, "variant", "index.json"), JSON.stringify(withWrongHash(index, PLUGIN, newer)));
     const address = pathToFileURL(join(folder, "variant", "index.json")).href;
-    s.cleanup(async () => {
-      if ((await s.get("core.screen")).screen === "library") {
-        await s.run("core.library.page", { page: "projects" });
-        await s.run("core.library.return");
-      }
-      await restoreRegistry(s);
-    });
+    s.cleanupSteps(
+      async () => {
+        if ((await s.get("core.screen")).screen === "library") {
+          await s.run("core.library.page", { page: "projects" });
+          await s.run("core.library.return");
+        }
+      },
+      async () => {
+        await restoreRegistry(s);
+      },
+    );
 
     await useRegistry(s, address);
     const listed = await s.until("core.plugins", (value) => value.registry === address && value.error === null && value.updates.length > 0,

@@ -31,13 +31,17 @@ for (const app of Object.values(APPS)) {
     writeFileSync(join(folder, "index.json"), JSON.stringify(index));
     const address = pathToFileURL(join(folder, "index.json")).href;
     s.cleanup(() => rmSync(folder, { recursive: true, force: true }));
-    s.cleanup(async () => {
-      if ((await s.get("core.screen")).screen === "library") {
-        await s.run("core.library.page", { page: "projects" });
-        await s.run("core.library.return");
-      }
-      await restoreRegistry(s);
-    });
+    s.cleanupSteps(
+      async () => {
+        if ((await s.get("core.screen")).screen === "library") {
+          await s.run("core.library.page", { page: "projects" });
+          await s.run("core.library.return");
+        }
+      },
+      async () => {
+        await restoreRegistry(s);
+      },
+    );
     await useRegistry(s, address);
     return s.until("core.app", (value) => value.available?.version === NEWER, "the registry with a newer core did not list an update");
   }

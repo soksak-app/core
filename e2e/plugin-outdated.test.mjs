@@ -48,26 +48,39 @@ for (const app of Object.values(APPS)) {
     assert.notEqual(folder, running.path, `the path of ${SIDECAR} does not hold its version: ${running.path}`);
     // The cleanup returns the installed version, applies it, and removes the copy only after the host stopped declaring
     // it and the service that runs its executable ended: a host that still declares a folder that is gone fails to start
-    // its service, and a service whose executable is gone fails to start the process of each new session.
-    s.cleanup(async () => {
-      replaceFile(file, original);
-      await change(s, "enable");
-      await s.until("core.plugins", (value) => value.outdated.length === 0, "the restored version still shows an outdated service");
+    // its service, and a service whose executable is gone fails to start the process of each new session. Each step runs
+    // also when a step before it failed, because a copy or a service of the copy that stays poisons the checks after this
+    // one: an install prunes the copy that installed.json no longer names, and the service that still runs it starts no
+    // session process.
+    s.cleanupSteps(
+      async () => {
+        replaceFile(file, original);
+        await change(s, "enable");
+        await s.until("core.plugins", (value) => value.outdated.length === 0, "the restored version still shows an outdated service");
+      },
       // The running service reports the installed version, so only a sidecar that no plugin declares makes the host end
       // it; with no surface holding the sidecar, the host ends it after the list of the layouts.
-      for (const card of (await s.get("core.grid")).cards) {
-        for (const tab of card.tabs) if (tab.plugin === RASTER) await s.run("core.tab.close", { tab: tab.id });
-      }
-      const ending = currentEventOffsets(app.configDir);
-      await change(s, "disable", RASTER);
-      await untilEventLine(app.configDir, ending, (line) => line.includes(`service ${running.version} ended; the sidecar is not declared`), { ...reading(app, ["host.record.info"]), ended: s.client.ended });
-      await change(s, "enable", RASTER);
-      await s.until("core.plugins", (value) => value.outdated.length === 0, "the enabled raster probe shows an outdated service");
-      rmSync(join(app.configDir, folder, ".."), { recursive: true, force: true });
+      async () => {
+        for (const card of (await s.get("core.grid")).cards) {
+          for (const tab of card.tabs) if (tab.plugin === RASTER) await s.run("core.tab.close", { tab: tab.id });
+        }
+      },
+      async () => {
+        const ending = currentEventOffsets(app.configDir);
+        await change(s, "disable", RASTER);
+        await untilEventLine(app.configDir, ending, (line) => line.includes(`service ${running.version} ended; the sidecar is not declared`), { ...reading(app, ["host.record.info"]), ended: s.client.ended });
+      },
+      async () => {
+        await change(s, "enable", RASTER);
+        await s.until("core.plugins", (value) => value.outdated.length === 0, "the enabled raster probe shows an outdated service");
+      },
+      async () => rmSync(join(app.configDir, folder, ".."), { recursive: true, force: true }),
       // The next raster probe starts the service of the installed folder, which opens sessions.
-      const { surface } = await addRasterTab(s);
-      await s.run("core.tab.close", { tab: surface });
-    });
+      async () => {
+        const { surface } = await addRasterTab(s);
+        await s.run("core.tab.close", { tab: surface });
+      },
+    );
     cpSync(join(app.configDir, running.path), join(app.configDir, folder), { recursive: true });
     installed.sidecars[SIDECAR] = { version: newer, path: folder };
     // The raster probe names the range that it was installed with, which the other version must satisfy.
