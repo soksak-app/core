@@ -567,7 +567,8 @@ static BOOL presentRegionRaster(void *region, uint64_t raster) {
 // A drag of the main page through the input path of the host: each move opens a transaction, the page moves its DOM border
 // in its pointermove handler, the transaction waits for the presentation of that DOM, commits, and the window is captured one refresh
 // of the screen after the commit. The layout trace of each move judges it: its ticket, its begin, its commit and the time it was
-// sent to the render server. The recording and the captures are evidence of the move and are not judged. The conditions of the application are added one
+// sent to the render server; the surface host read back at its commit judges its clip: the slot of the move, its mask and its native
+// plane. The recording and the captures are evidence of the move and are not judged. The conditions of the application are added one
 // at a time (docs/features.md, F752): ownTab gives the joined tab view a web process of its own, as a plugin view has, and
 // rasterRefreshes keeps the transaction open for that many refreshes after the presentation callback of the DOM, as the raster
 // wait of the image regions keeps it before the host commits; with imageRegion the surface holds an image region whose raster of
@@ -658,6 +659,20 @@ static void checkCommitFrame(WKWebViewConfiguration *configuration, NSString *va
             @"the image region presents its raster of move %d inside the transaction", move]);
         check(surfaceLayoutCommit(window, ticket), [NSString stringWithFormat:
             @"%@: the commit frame transaction commits after the presentation callback", variant]);
+        // The surface host is the clip of the native content of the surface: at the commit that changes its geometry it stands on
+        // the slot of the move and masks its content to its bounds, and the native plane, which holds the clip view of each image
+        // region, fills it (docs/spec/surface-composition.md#acceptance).
+        double placed[4] = {0};
+        webviewGetFrame(surface, placed);
+        NSView *host = region.superview;
+        NSRect clip = image ? ((NSView *)image).superview.frame : region.bounds;
+        BOOL onSlot = fabs(placed[0] - 40) < 1e-6 && fabs(placed[1] - 40) < 1e-6 && fabs(placed[2] - (x - 40)) < 1e-6
+            && fabs(placed[3] - 120) < 1e-6;
+        check(onSlot && host.layer.masksToBounds && NSEqualRects(region.frame, host.bounds) && NSContainsRect(region.bounds, clip),
+            [NSString stringWithFormat:@"%@: the surface host of move %d clips its content to the slot of the move at its commit "
+                "(frame %.3f,%.3f %.3fx%.3f, slot 40,40 %.0fx120, masks %d, plane %@ in %@, region clip %@)", variant, move,
+                placed[0], placed[1], placed[2], placed[3], x - 40, (int)host.layer.masksToBounds, NSStringFromRect(region.frame),
+                NSStringFromRect(host.bounds), NSStringFromRect(clip)]);
         eventWait(@"the joined tab view presents before the move is read", ^BOOL { return tabPresented == move + 1; });
         // The commit reaches the screen at the first refresh after it, so the window is captured at that refresh.
         SPFrames *refreshes = [afterFrames(window.screen, 1, nil) retain];

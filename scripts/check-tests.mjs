@@ -637,7 +637,9 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/app.mjs", symbol: "async function recordingOf(s, params) {" },
       { file: "packages/window-check/app.mjs", symbol: "export function recordedWindow(reply, asked, which) {" },
       { file: "packages/window-check/app.mjs", symbol: "export function requireStillsArtifact(result, frames, asked, after, window) {" },
-      { file: "packages/window-check/app.mjs", symbol: "s.noteRecording(() => requireNoLostStills(requireStillsArtifact(stopped, result.frames, recording, displayed," }
+      { file: "packages/window-check/app.mjs", symbol: "s.noteRecording(() => requireNoLostStills(requireStillsArtifact(stopped, result.frames, recording, displayed," },
+      { file: "native/darwin/src/webview_geometry.m", symbol: "void webviewSetFrame(void *handle, double x, double y, double width, double height) {" },
+      { file: "native/darwin/src/webview_geometry.m", symbol: "self.layer.masksToBounds = YES;" },
     ],
     tests: [
       { file: "packages/window-check/test/recording.test.mjs", id: "a recording whose start names no recorded window is told, and its judgment fails" },
@@ -682,8 +684,9 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/test/recording.test.mjs", id: "[\"whose stills were taken at another gap\"," },
       { file: "packages/window-check/test/recording.test.mjs", id: "[\"without the frame of a written still\"," },
       { file: "packages/window-check/test/recording.test.mjs", id: "[\"with a frame file of no written still\"," },
+      { file: "native/darwin/tests/surface_layout_test.m", id: "clips its content to the slot of the move at its commit" },
     ],
-    expected: "A window recording is a still of the window and its child windows at each multiple of its gap: a check reads the request and completion time of each still, judges a state shown no later than the completion of the first still requested at or after it, checks the still rows of the stop against the plan and each row against its own fields, and fails a recording that lost a still in the time that its judgment sees, naming the lost stills.",
+    expected: "A window recording is a still of the window and its child windows at each multiple of its gap: a check reads the request and completion time of each still, judges a state shown no later than the completion of the first still requested at or after it, checks the still rows of the stop against the plan and each row against its own fields, and fails a recording that lost a still in the time that its judgment sees, naming the lost stills. In place of a judgment on the pixels of a recording, at the commit of each move of a drag the surface host stands on the slot of the move, masks its content to its bounds and holds the clip view of its image region in its native plane.",
     levels: ["unit"],
   },
   {

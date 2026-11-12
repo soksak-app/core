@@ -401,10 +401,10 @@ Terminal의 `terminal.screen` status는 rows를 담고 JSON 값이 같으면 not
 - 배치는 입력 도착, 앞 배치의 프레임, WebKit 렌더링 갱신, 화면 갱신의 네 프레임 경계를 지나 화면에 나온다. 배치는 앱 DOM 웹뷰의 다음 표시를 기다리므로, 그 웹뷰는 WebKit 기본값인 60fps 근처 렌더링 대신 화면의 갱신 주기로 렌더링한다. 같은 이유로 앱 DOM 웹뷰는 창이 가려져도 문서를 visible로 유지하고 animation frame을 계속 실행한다. 그렇지 않으면 배치와 그 배치를 기다리는 모든 command가 창이 드러날 때까지 끝나지 않는다. Plugin root view와 attached document region도 app DOM과 같은 화면 갱신 주기를 따르도록 생성 시 near-60fps rendering preference를 끈다. 제한된 region은 주변 layout이 진행한 뒤에도 이전 paint 폭을 유지할 수 있다. Document region은 계속 독립적으로 렌더링하며 root presentation 대기에 join하지 않는다. 붙인 surface 웹뷰는 가려진 동안에도 문서를 visible로 유지하므로 그 비활성 capture와 paint 확인이 끝난다. Modal 웹뷰도 창이 가려진 동안 문서를 visible로 유지하고 렌더링을 계속한다. Modal은 렌더링한 뒤에야 올라온다. Modal 웹뷰, 등록된 main 웹뷰, surface에 놓인 view page는 WebKit의 occlusion 감지를 끈다(`native/darwin/tests/webview_render_occluded_test.m`). Document region은 WebKit의 occlusion 감지를 유지하므로 가려진 창의 region은 문서를 숨기고 throttle한다. 단 그 창에 `diagnostics.window.draw-covered`가 켜져 있는 동안은 예외다([문서 영역](#문서-영역)).
 - 이 그리기는 요소의 상자에 맞춰지는 좌표계를 쓰지 않는다. 그 좌표계는 이전 그림을 새 상자에 맞추므로 그림이 카드보다 먼저 움직인다.
 - 표시되기 전에 대신된 배치는 화면에 나오지 않으므로, 빠른 두 왕복 사이의 시작 위치처럼 포인터가 한 번의 표시보다 짧게 머문 위치는 녹화에 없을 수 있다. 드래그는 시작 위치에서 시작하고 끝나며, 왕복마다 먼 끝에 도달한다. 왕복마다 한 번 누르고, 단계마다 움직이고, 한 번 뗀다(`each round trip of a native drag presses once, moves at each step and releases once`, `e2e/native-drag.test.mjs`).
-- 드래그 입력은 요청한 속도로 완료되어야 한다. 요청한 시간의 1.25배보다 길거나 1/1.25보다 짧게 걸린 드래그는 실패한다(`a drag that is not paced fails at once with its took, asked, press waits, range and load`, `packages/window-check/test/drag-pace.test.mjs`). 녹화는 드래그 전체를 포함해야 한다. 입력 전에 녹화를 시작한다. 제어 검사는 캡처에서 최종 좌표를 확인한 뒤 녹화를 종료한다. 표시 콜백이나 프레임 시각만으로 종료하지 않는다.
+- 드래그 입력은 요청한 속도로 완료되어야 한다. 요청한 시간의 1.25배보다 길거나 1/1.25보다 짧게 걸린 드래그는 실패한다(`a drag that is not paced fails at once with its took, asked, press waits, range and load`, `packages/window-check/test/drag-pace.test.mjs`). 녹화는 실패한 check의 증거로 남고, 녹화의 계약(쓴 still, 시각, gap, 잃은 still)은 capture check가 판정한다(`packages/window-check/app.mjs`의 `requireStillsArtifact`, `packages/window-check/stills.mjs`의 `requireNoLostStills`). 드래그 검사는 녹화를 판정하지 않는다.
 - 마지막 drag 입력 후 두 번째 complete capture frame까지 기록된 content edge와 card edge가 2 pt 이내로 일치하고 이후에도 일치해야 한다. 입력 후 측정 frame 두 개 이상을 요구하며 content geometry 누락은 실패다.
-- View drag 녹화는 geometry를 측정할 수 없는 frame을 포함하여 모든 decode frame timestamp를 검사한다. Timestamp는 유한하고 엄격히 증가한다. Capture 간격과 입력-표시 지연은 기능 정렬과 별도로 측정한다.
-- 녹화 프레임이 부족하거나 대부분의 프레임에서 표면과 카드를 식별하지 못하면 검사는 실패해야 한다. Drag latency에는 유한한 capture 시각과 위치 및 첫 입력 이후의 측정 frame이 적어도 하나 필요하다. 측정 누락은 지연 0이 아니라 오류다.
+- View drag 검사는 녹화의 still을 판정하지 않는다. 녹화는 실패한 check의 증거로 남고, 녹화의 계약(쓴 still, 시각, gap, 잃은 still)은 capture check가 판정한다. Capture 간격과 입력-표시 지연은 기능 정렬과 별도로 측정한다.
+- 드래그 검사는 녹화가 쓴 still의 수나 still에 보이는 것으로 실패하지 않는다. Drag latency는 still로 재지 않는다. 측정 누락은 지연 0이 아니라 오류다.
 - 연속 입력 중에도 화면 배치가 갱신되어야 한다. 입력 종료까지 모든 렌더링을 연기하는 구현은 이 명세를 충족하지 않는다.
 - 표면 생성, 교체, 숨김, 창 크기 변경, 문서 다시 로드 중에도 이 요구사항을 유지해야 한다.
 - 창의 최대화 또는 복원 후 레이아웃은 150 ms 안에 창 크기와 맞아야 한다. 시간은 첫 기록 프레임부터, 오른쪽 또는 아래쪽 레이아웃 간격이 첫 프레임의 간격과 12 pt보다 많이 다른 마지막 프레임까지 잰다. 이 한계는 두 호스트의 단축된 zoom 애니메이션 지속 시간이며, 측정값은 최대 116 ms였다. window check `maximising and restoring settle with the layout at the window size`(`e2e/resize.test.mjs`)와 benchmark `maximising and restoring keep the layout at the window size`(`e2e/benchmark/resize-catch-up.test.mjs`)는 변경마다 `host.window`가 읽은 창이 그 크기에 이르고 surface가 창 오른쪽 가장자리와의 거리를 유지하는지 판정하고, 그 layout의 표시를 기다린다(`e2e/benchmark/cases/resize.mjs`). 실패한 check의 녹화가 증거로 남는다. event log는 창 크기를 따라잡은 layout의 단계를 보존한다: 그 layout이 시작되기 전 마지막 window resize event, 그 layout transaction의 begin, presentation request, DOM presentation, commit, 그 ticket의 root-view join과 commit 전에 마지막으로 present한 join의 view, gesture 동안의 host stall 기록이다. 마지막 정착 프레임이 창보다 늦은 경우 실패는 이 단계를 밝힌다.
@@ -416,7 +416,7 @@ Terminal의 `terminal.screen` status는 rows를 담고 JSON 값이 같으면 not
 
 ## 성능 목표
 
-기능 window 검사는 cadence 및 latency 측정값과 목표 초과 여부를 보존한다. 개발 완료 후 전용 benchmark가 이 목표를 판정한다. 측정 누락이나 잘못된 값, 불완전한 recording, geometry 실패 및 멈춘 rendering은 계속 기능 실패다.
+기능 window 검사는 cadence 및 latency 측정값과 목표 초과 여부를 보존한다. 개발 완료 후 전용 benchmark가 이 목표를 판정한다. 측정 누락이나 잘못된 값, geometry 실패 및 멈춘 rendering은 계속 기능 실패다. 녹화는 실패한 check의 증거로 남고, 녹화의 계약(쓴 still, 시각, gap, 잃은 still)은 capture check가 판정한다.
 
 성능 acceptance는 로컬에서 최적화한 diagnostic binary를 사용한다. 양 core host와 설치된 sidecar는 diagnostic 지원을 켠 release compile profile을 사용한다. Source revision, executable hash, profile, display mode와 system load를 기록한다. Debug-profile 관측은 별도로 보존하며 통과는 측정한 profile만 증명한다. Compiler 최적화로 목표를 바꾸지 않는다.
 

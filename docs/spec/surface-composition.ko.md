@@ -148,8 +148,8 @@ mygo host에서는 답을 기다리는 placement가 3 s 동안 그런 상태다.
 
 ## 인수 기준
 
-- 분할 드래그, 창 크기 변경, 숨김·표시, 순서 변경, 탐색, 다시 불러오기, 교체, 닫기의 모든 녹화 프레임에서 네이티브 콘텐츠가 `SurfaceHost` 안에 클리핑된다.
-- 녹화는 네이티브 입력 전에 시작하고 전체 제스처를 포함하며, 제스처 입력은 요청한 속도로 진행한다. 속도를 지키지 못한 드래그는 실패한다(`a drag that is not paced fails at once with its took, asked, press waits, range and load`, `packages/window-check/test/drag-pace.test.mjs`). 빠진 프레임이나 플랫폼 기본 픽셀이 하나라도 있으면 검사는 실패한다.
+- 분할 드래그, 창 크기 변경, 숨김·표시, 순서 변경, 탐색, 다시 불러오기, 교체, 닫기 동안 네이티브 콘텐츠가 `SurfaceHost` 안에 클리핑된다. `SurfaceHost`는 콘텐츠를 자기 경계로 자르고, 각 image region이 clip view를 두는 native plane을 담는다(`native/darwin/tests/image_region_test.m`의 TEST 18). geometry가 바뀌는 모든 commit에서 `SurfaceHost`는 그 commit의 slot 위에 서고 native plane이 그것을 채운다. 드래그의 이동마다 commit 뒤 `SurfaceHost`의 frame은 그 이동의 slot이고, 그 layer가 콘텐츠를 자르며, image region의 clip view는 native plane 안에 있다(`the surface host of move`, `native/darwin/tests/surface_layout_test.m`).
+- 녹화는 네이티브 입력 전에 시작하고 전체 제스처를 포함하며, 제스처 입력은 요청한 속도로 진행한다. 속도를 지키지 못한 드래그는 실패한다(`a drag that is not paced fails at once with its took, asked, press waits, range and load`, `packages/window-check/test/drag-pace.test.mjs`). 녹화는 실패한 check의 증거로 남고, 녹화의 계약(쓴 still, 시각, gap, 잃은 still)은 capture check가 판정한다. 플랫폼 기본 픽셀이 하나라도 있으면 검사는 실패한다.
 - 검사는 합성 스냅샷, 설정 이벤트, 그림 프레임을 지연하고 순서를 바꾼다. 오래된 세대·리비전·시퀀스는 절대 표시되지 않는다.
 - view 표면은 소수점 좌표와 backing 배율 변경 후에도 네이티브/DOM 쌓임과 히트 소유권을 유지한다.
 - 커밋되는 모든 프레임은 정확한 현재 래스터를 사용한다. 새 래스터가 소비될 때까지 이전 완전한 프레임을 유지한다.
