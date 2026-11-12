@@ -26,7 +26,7 @@ async function runDrag(t, options) {
     request: async (method, params) => {
       if (method === "diagnostics.window.draw-covered") return null;
       calls.push({ method, params });
-      if (method === "diagnostics.drag") return { frames, took: 100, asked: 100, ticks: [4, 12], layouts: [] };
+      if (method === "diagnostics.drag") return { frames, took: 100, asked: 100, ticks: [4, 12], layouts: [], window: 7 };
       if (method === "diagnostics.capture.stop") return { ...stopped, frameIdentity: stoppedIdentity };
       throw new Error(`unexpected method ${method}`);
     },
