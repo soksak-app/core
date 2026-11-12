@@ -26,8 +26,12 @@ bool main_windowSetTitlebarHeight(uintptr_t window, double height, char **failur
     return ON_MAIN(bool, windowSetTitlebarHeight((void *)window, height, failure));
 }
 void main_windowControls(uintptr_t window, double *out) { hostRunOnMain(^{ windowControls((void *)window, out); }); }
+// The AppKit facts are read on the main thread and the order of the window is asked of the window server on the calling thread,
+// so the main thread does not wait for the window server.
 char *main_sp_window_facts(uintptr_t window) {
-    return ON_MAIN(char *, sp_window_facts((void *)window, sp_window_composition((void *)window)));
+    __block long orderWindow = 0;
+    void *read = ON_MAIN(void *, sp_window_facts_begin((void *)window, sp_window_composition((void *)window), &orderWindow));
+    return sp_window_facts_finish(read, orderWindow);
 }
 bool main_sp_window_on_screen(uintptr_t window) { return ON_MAIN(bool, sp_window_on_screen((void *)window)); }
 char *main_sp_window_color_space_facts(uintptr_t window) { return ON_MAIN(char *, sp_window_color_space_facts((void *)window)); }

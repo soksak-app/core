@@ -246,12 +246,13 @@ NSArray<NSDictionary *> *sp_window_in_front(NSInteger number) {
     return sp_window_in_front_in(windows, number);
 }
 
-// The place of the window among the windows on the screen, or null when the window server does not show it.
-static id orderFact(NSWindow *window) {
-    if (!window.isVisible) return NSNull.null;
+// The place of window number among the windows on the screen, or null when the window server does not show it or number is 0 (a
+// window that AppKit does not show). It reads the window list of the window server, on any thread.
+static id orderFact(long number) {
+    if (number <= 0) return NSNull.null;
     NSArray *windows = CFBridgingRelease(CGWindowListCopyWindowInfo(
         kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, kCGNullWindowID));
-    return sp_window_order_in(windows, window.windowNumber, getpid()) ?: (id)NSNull.null;
+    return sp_window_order_in(windows, number, getpid()) ?: (id)NSNull.null;
 }
 
 // The index of the display of the window in the list of sp_screens, or null when no display holds it.
@@ -281,12 +282,15 @@ static id sheetFact(NSWindow *window) {
     return @{ @"kind": kind, @"frame": screenRect(sheet.frame) };
 }
 
-char *sp_window_facts(void *handle, void *surfaceView) {
+void *sp_window_facts_begin(void *handle, void *surfaceView, long *orderWindow) {
+    NSCAssert(NSThread.isMainThread, @"the window facts read AppKit on the main thread");
     NSWindow *window = (NSWindow *)handle;
+    *orderWindow = 0;
     if (!window || !window.contentView || ((NSView *)surfaceView).window != window) {
         sp_log_error("window facts", "the window has no content view or the view that holds its surfaces is not in it");
         return NULL;
     }
+    if (window.isVisible) *orderWindow = window.windowNumber;
     NSView *content = window.contentView;
     NSMutableArray *controls = [NSMutableArray array];
     for (NSUInteger kind = NSWindowCloseButton; kind <= NSWindowZoomButton; kind++) {
@@ -346,11 +350,10 @@ char *sp_window_facts(void *handle, void *surfaceView) {
         @"surface": @((unsigned long long)(uintptr_t)surface),
         @"main": owner != nil && owner == mainWebview(window) ? @YES : @NO,
     };
-    return copyJSON(@{
+    return [[NSMutableDictionary alloc] initWithDictionary:@{
         @"responder": responder,
         @"frame": screenRect(window.frame),
         @"display": displayFact(window),
-        @"order": orderFact(window),
         @"pointer": pointerFact(window),
         @"content": @{ @"width": @(content.bounds.size.width), @"height": @(content.bounds.size.height) },
         @"scale": @(window.backingScaleFactor),
@@ -381,7 +384,22 @@ char *sp_window_facts(void *handle, void *surfaceView) {
         @"pagelessProcesses": pagelessProcesses(mainWebview(window) ?: views.firstObject),
         @"appDomWebviews": @(views.count - documents),
         @"documentWebviews": @(documents),
-    });
+    }];
+}
+
+char *sp_window_facts_finish(void *read, long orderWindow) {
+    if (!read) return NULL;
+    NSMutableDictionary *facts = (NSMutableDictionary *)read;
+    facts[@"order"] = orderFact(orderWindow);
+    char *text = copyJSON(facts);
+    [facts release];
+    return text;
+}
+
+char *sp_window_facts(void *handle, void *surfaceView) {
+    long orderWindow = 0;
+    void *read = sp_window_facts_begin(handle, surfaceView, &orderWindow);
+    return sp_window_facts_finish(read, orderWindow);
 }
 
 char *sp_window_color_space_facts(void *handle) {

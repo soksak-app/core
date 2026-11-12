@@ -1,8 +1,8 @@
 #include <stdbool.h>
 
 // Returns the state of windows and screens as a JSON string. Free the returned string with sp_facts_free.
-// Call every function on the main thread. Screen coordinates are point values relative to the top left of
-// the primary display with y increasing downward, and window coordinates are relative to the top left of
+// Call every function on the main thread, except sp_window_facts_finish. Screen coordinates are point values relative to the
+// top left of the primary display with y increasing downward, and window coordinates are relative to the top left of
 // the content area.
 
 // Registers the app DOM web view of a window explicitly and makes the window composition around it. The main view is
@@ -36,7 +36,15 @@ void *sp_window_main_webview(void *window);
 //   documentWebviews   the web views of document regions
 //   appDomWebviews     every other web view: the app DOM and one web view for each view surface
 // view is the view that holds the container of the surface hosts. Returns NULL when there is no window or view is not in it.
+// It is sp_window_facts_begin and sp_window_facts_finish on the calling thread.
 char *sp_window_facts(void *window, void *view);
+
+// The two parts of sp_window_facts, so that the main thread does not wait for the window server. sp_window_facts_begin reads on
+// the main thread every fact but order and sets orderWindow to the window number whose order the window server holds, 0 when
+// AppKit does not show the window; it returns NULL as sp_window_facts does. sp_window_facts_finish reads order from the window
+// server on any thread, takes the result of sp_window_facts_begin and returns the JSON string, NULL for a NULL result.
+void *sp_window_facts_begin(void *window, void *view, long *orderWindow);
+char *sp_window_facts_finish(void *facts, long orderWindow);
 
 // Returns {name, iccSHA256} for the window's current AppKit backing color space. Both values are null when
 // the window has no backing color space; iccSHA256 is null when AppKit supplies no ICC profile data.
