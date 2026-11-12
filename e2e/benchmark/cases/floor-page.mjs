@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 
 import { drag, keepCommonSettings } from "@soksak/window-check/app.mjs";
 import { transactionCadence } from "@soksak/window-check/drag-measurement.mjs";
-import { commitCadence, displayPeriod, stepCommitDelays } from "@soksak/window-check/layout-timing.mjs";
+import { commitCadence, displayPeriod, dragTrips, stepCommitDelays } from "@soksak/window-check/layout-timing.mjs";
 
 /** The floor page plugin: its id and its folder. */
 export const FLOOR_PAGE = Object.freeze({
@@ -98,7 +98,7 @@ async function captureFloorDrag(s, configDir) {
     layouts: run.layouts,
     transactionCadence: transactionCadence(run.layouts),
     refreshRate,
-    commits: commitCadence(run.layouts, during),
+    commits: commitCadence(run.layouts, { ...during, trips: dragTrips(run) }),
     stepDelays: stepCommitDelays(run.layouts, during),
   };
   return { directory, report };

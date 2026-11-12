@@ -1199,8 +1199,9 @@ struct NativeDragPlan {
 /// of the step before it, and answers that time, and presented returns when the window has presented its
 /// current layout; it runs before each press, because a press goes where the last frame drew. A failed input after a press
 /// releases the button at the last point, so no press stays open in the window. The reply is {from, steps, took, asked,
-/// pressWaits}: took is the time from the first press to the last release without the waits before the presses, asked the
-/// time that the steps ask (times × 2 × ms), and pressWaits the wait before each press, all in milliseconds.
+/// pressWaits, tripSteps}: took is the time from the first press to the last release without the waits before the presses,
+/// asked the time that the steps ask (times × 2 × ms), and pressWaits the wait before each press, all in milliseconds, and
+/// tripSteps the number of steps of each round trip.
 fn native_drag(
     plan: &NativeDragPlan,
     from: (f64, f64),
@@ -1225,8 +1226,10 @@ fn native_drag(
     let began = clock();
     let mut waited = Duration::ZERO;
     let mut press_waits = Vec::with_capacity(plan.times as usize);
+    let mut trip_steps = Vec::with_capacity(plan.times as usize);
     let mut steps: u64 = 0;
     for turn in 0..plan.times {
+        let trip_start = steps;
         let waiting = clock();
         presented().map_err(|error| {
             Failure::new(
@@ -1301,6 +1304,7 @@ fn native_drag(
                 ),
             )
         })?;
+        trip_steps.push(steps - trip_start);
     }
     Ok(json!({
         "from": {"x": from.0, "y": from.1},
@@ -1308,6 +1312,7 @@ fn native_drag(
         "took": (clock() - began - waited).as_millis() as u64,
         "asked": ((plan.times * 2) as f64 * plan.ms).round() as u64,
         "pressWaits": press_waits,
+        "tripSteps": trip_steps,
     }))
 }
 

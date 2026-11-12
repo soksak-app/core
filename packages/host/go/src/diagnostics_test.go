@@ -516,6 +516,9 @@ func TestNativeDragDeliversThePressTheStepsAndTheReleaseOfEachRoundTrip(t *testi
 	if took, ok := result["took"].(int64); !ok || took < 0 {
 		t.Fatalf("native drag result took %#v, want a non-negative number of milliseconds", result["took"])
 	}
+	if trips, ok := result["tripSteps"].([]int); !ok || !reflect.DeepEqual(trips, []int{4, 4}) {
+		t.Fatalf("native drag result tripSteps %#v, want the 4 steps of each of the 2 round trips", result["tripSteps"])
+	}
 
 	// A step that fails releases the press that is open, and the error names both.
 	delivered = nil

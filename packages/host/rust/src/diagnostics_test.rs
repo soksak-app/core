@@ -164,6 +164,11 @@ fn native_drag_delivers_the_press_the_steps_and_the_release_of_each_round_trip()
     assert_eq!(result["from"], json!({"x": 100.0, "y": 50.0}));
     assert_eq!(result["steps"], json!(8));
     assert_eq!(result["asked"], json!(80));
+    assert_eq!(
+        result["tripSteps"],
+        json!([4, 4]),
+        "the 4 steps of each of the 2 round trips"
+    );
     assert!(
         result["took"].is_u64(),
         "native drag result took {}",

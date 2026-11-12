@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  catchUp, commitCadence, contentAfterChange, contentCadence, contentConvergence, displayPeriod, lastInputLatency, sentAt,
+  catchUp, commitCadence, contentAfterChange, contentCadence, contentConvergence, displayPeriod, dragTrips, lastInputLatency, sentAt,
   stepCommitDelays,
 } from "../layout-timing.mjs";
 
@@ -53,6 +53,31 @@ test("view-drag commits follow one another within two display refreshes", () => 
   // A cancelled layout and a layout that did not commit sent nothing to the screen.
   assert.equal(commitCadence([shown(1, 0, 5, 1), layout(2, 8, 9, { commitPath: "cancel" }), layout(3, 9, null), shown(4, 16, 22, 3)],
     { from: 0, to: 40, period }).count, 2);
+});
+
+test("the round trips of a native drag run from the first to the last step of each, and a page drag is one", () => {
+  assert.deepEqual(dragTrips({ ticks: [1, 2, 3, 10, 11] }), [{ from: 1, to: 11 }]);
+  assert.deepEqual(dragTrips({ ticks: [1, 2, 3, 10, 11], tripSteps: [3, 2] }), [{ from: 1, to: 3 }, { from: 10, to: 11 }]);
+  assert.throws(() => dragTrips({ ticks: [1, 2, 3], tripSteps: [2, 2] }), /are not the 3 step times of the drag/);
+  assert.throws(() => dragTrips({ ticks: [1, 2, 3], tripSteps: [3, 0] }), /are not the 3 step times of the drag/);
+  assert.throws(() => dragTrips({ ticks: [] }), /has no step times/);
+});
+
+test("view-drag commits follow within two display refreshes inside each round trip, and none spans the press between two", () => {
+  const period = 10;
+  const shown = (ticket, begun, committed, refresh) => layout(ticket, begun, committed, { displayed: 1000 + refresh * period });
+  const layouts = [shown(1, 0, 5, 1), shown(2, 8, 13, 3), shown(3, 60, 65, 8), shown(4, 68, 73, 10)];
+  const trips = [{ from: 0, to: 10 }, { from: 60, to: 70 }];
+  const passed = commitCadence(layouts, { from: 0, to: 70, period, trips });
+  assert.deepEqual(passed.refreshes, [2, 2]);
+  assert.equal(passed.count, 4);
+  assert.deepEqual(passed.failures, []);
+  // Inside a round trip the same gap fails.
+  assert.deepEqual(commitCadence(layouts, { from: 0, to: 70, period }).failures,
+    [`the commit displayed at ${1000 + 8 * period} ms followed the commit before it after 5 display refreshes, more than 2`]);
+  // A round trip with fewer than two commits fails on its own.
+  assert.deepEqual(commitCadence(layouts.slice(0, 3), { from: 0, to: 70, period, trips }).failures,
+    ["the drag committed 1 layouts from 60 to 70 ms, fewer than 2"]);
 });
 
 test("a divider drag commits each step within four display periods, with a median of 2.5 and a 90th percentile of 3", () => {

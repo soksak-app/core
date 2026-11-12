@@ -456,9 +456,9 @@ func parseDragNative(params json.RawMessage) (bool, error) {
 // after previous, the host time of the step before it, and answers that time, and presented returns when
 // the window has presented its current layout; it runs before each press, because a press goes where the last frame
 // drew. A failed input after a press releases the button at the last point, so no press stays open in the window. The
-// reply is {from, steps, took, asked, pressWaits}: took is the time from the first press to the last release without the
-// waits before the presses, on clock, the clock of the host, asked the time that the steps ask, and pressWaits the wait before
-// each press, all in milliseconds.
+// reply is {from, steps, took, asked, pressWaits, tripSteps}: took is the time from the first press to the last release without
+// the waits before the presses, on clock, the clock of the host, asked the time that the steps ask, and pressWaits the wait before
+// each press, all in milliseconds, and tripSteps the number of steps of each round trip.
 func nativeDrag(plan dragPlan, from point, clock func() time.Duration, deliver func(PointerInput) error, step func(previous time.Duration) (time.Duration, error), presented func() error) (map[string]any, error) {
 	span := float64(plan.MS) * float64(time.Millisecond)
 	at := func(fraction float64) point {
@@ -470,8 +470,10 @@ func nativeDrag(plan dragPlan, from point, clock func() time.Duration, deliver f
 	began := clock()
 	var waited time.Duration
 	pressWaits := make([]int64, 0, plan.Times)
+	tripSteps := make([]int, 0, plan.Times)
 	steps := 0
 	for turn := 0; turn < plan.Times; turn++ {
+		tripStart := steps
 		waiting := clock()
 		if err := presented(); err != nil {
 			return nil, fmt.Errorf("native drag wait before the press of round trip %d: %w", turn+1, err)
@@ -522,9 +524,10 @@ func nativeDrag(plan dragPlan, from point, clock func() time.Duration, deliver f
 		if err := deliver(input("up", from)); err != nil {
 			return nil, fmt.Errorf("native drag release of round trip %d: %w", turn+1, err)
 		}
+		tripSteps = append(tripSteps, steps-tripStart)
 	}
 	return map[string]any{"from": from, "steps": steps, "took": (clock() - began - waited).Milliseconds(),
-		"asked": plan.Times * 2 * plan.MS, "pressWaits": pressWaits}, nil
+		"asked": plan.Times * 2 * plan.MS, "pressWaits": pressWaits, "tripSteps": tripSteps}, nil
 }
 
 // nextStep waits with sleep until one period after previous, the host time of the step before, and answers the host time of

@@ -13,7 +13,7 @@ import test from "node:test";
 
 import { APPS, drag, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
-import { commitCadence, displayPeriod, stepCommitDelays } from "@soksak/window-check/layout-timing.mjs";
+import { commitCadence, displayPeriod, dragTrips, stepCommitDelays } from "@soksak/window-check/layout-timing.mjs";
 import { fresh, joinedFailure } from "./fixture.mjs";
 import { openFloorPage, prepareFloorDrag, VIEW_DRAG_PLAN } from "./benchmark/cases/floor-page.mjs";
 import { dragProcesses, NATIVE_DRAG_PLAN } from "./benchmark/cases/view-drag.mjs";
@@ -73,7 +73,7 @@ for (const app of Object.values(APPS)) {
       const period = displayPeriod((await s.get("host.window")).refreshRate);
       const run = await drag(s, VIEW_DRAG_PLAN);
       const during = { from: run.ticks[0], to: run.ticks.at(-1), period };
-      const commits = commitCadence(run.layouts, during);
+      const commits = commitCadence(run.layouts, { ...during, trips: dragTrips(run) });
       const delays = stepCommitDelays(run.layouts, during);
       t.diagnostic(`${app.name}: display period ${period} ms, ${commits.count} commits, refreshes between them ` +
         `${JSON.stringify(commits.refreshes)}; delays median ${delays.median}, p90 ${delays.p90}, longest ${delays.longest} display ` +

@@ -27,26 +27,56 @@ const at = (sorted, fraction) => sorted[Math.min(sorted.length - 1, Math.floor(s
 const begunIn = (layouts, from, to) => layouts.filter((layout) => layout.begun !== null && layout.begun >= from && layout.begun <= to);
 
 /**
- * The commits of a view drag follow one another within two display refreshes: the number of refreshes between the display
- * refreshes that carried consecutive commits (`displayed`) of the layouts that began from the first step `from` to the last step
- * `to` of the drag, which is the interval between those refreshes in display periods (`period`, ms), rounded to the refresh. Two
- * commits on one refresh are 0 refreshes apart. Fewer than two such commits, and a commit with no display refresh, are failures.
+ * The round trips of the drag `run` ({ticks, tripSteps}) as {from, to} (ms), from the first to the last step of each: a native drag
+ * answers `tripSteps`, the number of steps of each round trip, and waits between a release and the next press until the window has
+ * presented, so the pointer moves nothing there; a drag of the page runs its round trips without a pause, so it is one.
  */
-export function commitCadence(layouts, { from, to, period }) {
-  const limit = 2;
-  const committed = begunIn(layouts, from, to).filter((layout) => sentAt(layout) !== null);
-  const failures = committed.filter((layout) => layout.displayed === null)
-    .map((layout) => `the commit of ticket ${layout.ticket} has no display refresh`);
-  const displayed = committed.map((layout) => layout.displayed).filter((time) => time !== null).sort((a, b) => a - b);
-  const refreshes = displayed.slice(1).map((time, index) => Math.round((time - displayed[index]) / period));
-  if (committed.length < 2) failures.push(`the drag committed ${committed.length} layouts from ${from} to ${to} ms, fewer than 2`);
-  refreshes.forEach((count, index) => {
-    if (count > limit) {
-      failures.push(`the commit displayed at ${displayed[index + 1]} ms followed the commit before it after ${count} display refreshes, ` +
-        `more than ${limit}`);
-    }
+export function dragTrips({ ticks, tripSteps }) {
+  assert.ok(Array.isArray(ticks) && ticks.length > 0, `the drag has no step times: ${JSON.stringify(ticks)}`);
+  if (tripSteps === undefined) return [{ from: ticks[0], to: ticks.at(-1) }];
+  const total = tripSteps.reduce((sum, count) => sum + count, 0);
+  assert.ok(tripSteps.every((count) => Number.isInteger(count) && count > 0) && total === ticks.length,
+    `the steps of the round trips ${JSON.stringify(tripSteps)} are not the ${ticks.length} step times of the drag`);
+  let first = 0;
+  return tripSteps.map((count) => {
+    const trip = { from: ticks[first], to: ticks[first + count - 1] };
+    first += count;
+    return trip;
   });
-  return { count: committed.length, displayed, refreshes, limit, failures };
+}
+
+/**
+ * The commits of a view drag follow one another within two display refreshes: the number of refreshes between the display
+ * refreshes that carried consecutive commits (`displayed`) of the layouts that began from the first step to the last step of each
+ * round trip of `trips` ({from, to}, ms; the whole drag from `from` to `to` when absent), which is the interval between those
+ * refreshes in display periods (`period`, ms), rounded to the refresh. Two commits on one refresh are 0 refreshes apart. Between
+ * two round trips the pointer is up, so no interval spans them. Fewer than two such commits in a round trip, and a commit with no
+ * display refresh, are failures.
+ */
+export function commitCadence(layouts, { from, to, period, trips = [{ from, to }] }) {
+  const limit = 2;
+  const failures = [];
+  const displayed = [];
+  const refreshes = [];
+  let count = 0;
+  for (const trip of trips) {
+    const committed = begunIn(layouts, trip.from, trip.to).filter((layout) => sentAt(layout) !== null);
+    count += committed.length;
+    failures.push(...committed.filter((layout) => layout.displayed === null)
+      .map((layout) => `the commit of ticket ${layout.ticket} has no display refresh`));
+    const times = committed.map((layout) => layout.displayed).filter((time) => time !== null).sort((a, b) => a - b);
+    if (committed.length < 2) failures.push(`the drag committed ${committed.length} layouts from ${trip.from} to ${trip.to} ms, fewer than 2`);
+    times.slice(1).forEach((time, index) => {
+      const between = Math.round((time - times[index]) / period);
+      refreshes.push(between);
+      if (between > limit) {
+        failures.push(`the commit displayed at ${time} ms followed the commit before it after ${between} display refreshes, ` +
+          `more than ${limit}`);
+      }
+    });
+    displayed.push(...times);
+  }
+  return { count, displayed, refreshes, limit, failures };
 }
 
 /**
