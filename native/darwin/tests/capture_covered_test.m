@@ -314,6 +314,9 @@ int main(void) { @autoreleasepool {
     cover.animationBehavior = NSWindowAnimationBehaviorNone;
     cover.backgroundColor = [NSColor colorWithSRGBRed:1 green:0 blue:1 alpha:1];
     [cover orderWindow:NSWindowAbove relativeTo:window.windowNumber];
+    // AppKit keeps the order in the open Core Animation transaction of the thread until the run loop commits it, so the window
+    // server lists the cover only after this commit.
+    [CATransaction flush];
     // A window behind other windows is occluded already, so the place of the cover in the window list says that it covers.
     __block NSInteger targetIndex = -1, childIndex = -1, coverIndex = -1;
     BOOL (^coverIsOver)(void) = ^BOOL {
@@ -328,7 +331,7 @@ int main(void) { @autoreleasepool {
         }
         return coverIndex >= 0 && targetIndex > coverIndex && childIndex > coverIndex;
     };
-    // The order request returns after the window server has placed the cover.
+    // The commit of the order returns after the window server has placed the cover.
     BOOL coverOver = coverIsOver();
     check(coverOver && NSContainsRect(cover.frame, window.frame) && NSContainsRect(cover.frame, child.frame),
         [NSString stringWithFormat:@"the cover is over the whole window and its child (cover %ld, window %ld, child %ld)",

@@ -215,6 +215,9 @@ int main(void) { @autoreleasepool {
         styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
     window.releasedWhenClosed = NO; window.animationBehavior = NSWindowAnimationBehaviorNone;
     [window orderFrontRegardless];
+    // AppKit keeps the order in the open Core Animation transaction of the thread until the run loop commits it, so the window
+    // server lists the window with its bounds only after this commit.
+    [CATransaction flush];
     SPCapture *linkFixture = [[SPCapture alloc] init];
     linkFixture.displayWindow = window;
     CADisplayLink *staleLink = [[window displayLinkWithTarget:linkFixture selector:@selector(displayLinkDidRefresh:)] retain];
