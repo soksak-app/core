@@ -1357,7 +1357,8 @@ function displayLinkTimes(path) {
           "and refresh period, so its lateness cannot be told");
       }
       return { at: machMs(row.callbackTime, row.machTimebaseNumerator, row.machTimebaseDenominator),
-        late: (row.callbackMediaTime - row.timestamp) * 1000, period: row.duration * 1000, occluded: row.occluded === true };
+        late: (row.callbackMediaTime - row.timestamp) * 1000, period: row.duration * 1000, occluded: row.occluded === true,
+        inFront: Array.isArray(row.inFront) ? row.inFront : undefined };
     }),
   };
 }
@@ -1392,15 +1393,25 @@ function displayLinkSilences(callbacks, at, end) {
 
 /**
  * The display-link callbacks within the wait from `at` to `end` at which no part of the window showed (`occluded`, read from
- * NSWindow.occlusionState at the callback), told with their count among the callbacks of the wait and the first of them, or
- * an empty text when the window showed at each of them.
+ * NSWindow.occlusionState at the callback), told with their count among the callbacks of the wait, the first of them and the
+ * windows in front of the window, or an empty text when the window showed at each of them. The first callback of a covered
+ * stretch reads the windows in front of the window from the window list of the window server (`inFront` of display-link.json),
+ * so the windows named are those of the last callback at or before the first covered one of the wait that read them: the
+ * stretch that holds it began there.
  */
 function coveredCallbacks(callbacks, at, end) {
   const inWait = callbacks.filter((callback) => callback.at >= at && callback.at < end);
   const covered = inWait.filter((callback) => callback.occluded);
   if (covered.length === 0) return "";
+  const read = callbacks.filter((callback) => callback.at <= covered[0].at && callback.inFront !== undefined).at(-1);
+  const named = (window) => `${window.owner} (pid ${window.pid}, window ${window.number}, level ${window.layer}) at ` +
+    `${window.x},${window.y} ${window.width}x${window.height}`;
+  const front = read === undefined
+    ? ", and the recording read no list of the windows in front of it"
+    : `, with in front of it, as read at ${read.at.toFixed(1)}ms: ` +
+      (read.inFront.length === 0 ? "no window" : `[${read.inFront.map(named).join(", ")}]`);
   return `, and no part of the window showed (NSWindow occlusion) at ${covered.length} of its ${inWait.length} display-link ` +
-    `callbacks in that time, the first at ${covered[0].at.toFixed(1)}ms`;
+    `callbacks in that time, the first at ${covered[0].at.toFixed(1)}ms${front}`;
 }
 
 /**
@@ -1448,8 +1459,8 @@ function longestWait(changes, frames) {
  * that the host began in it and the commit time of each layout committed in it (`layouts`, by default those of the stop reply),
  * and each silence of the display link of the window in it, told as a busy main thread or as refreshes that did not reach the
  * window, so it tells a main thread that stopped from a transaction that waited for its commit and from committed layouts whose
- * frames did not come, and the display-link callbacks in it at which no part of the window showed, so it tells a covered window
- * from one in front. The recording keeps the layouts that it was judged by in layouts.json, because the layouts of a drag
+ * frames did not come, and the display-link callbacks in it at which no part of the window showed with the windows in front of
+ * it, so it tells a covered window from one in front and names what covered it. The recording keeps the layouts that it was judged by in layouts.json, because the layouts of a drag
  * come with its reply and not with the stop reply. `what` names one change. A recording in which the check asked for no change
  * owes no frame.
  */

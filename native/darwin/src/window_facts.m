@@ -210,6 +210,39 @@ NSDictionary *sp_window_order_in(NSArray<NSDictionary *> *windows, NSInteger num
     return @{ @"index": @(index), @"count": @(count), @"otherInFront": @(otherInFront) };
 }
 
+NSArray<NSDictionary *> *sp_window_in_front_in(NSArray<NSDictionary *> *windows, NSInteger number) {
+    NSUInteger own = NSNotFound;
+    for (NSUInteger at = 0; at < windows.count; at++) {
+        if ([windows[at][(id)kCGWindowNumber] integerValue] == number) { own = at; break; }
+    }
+    if (own == NSNotFound) return nil;
+    CGRect bounds = CGRectNull;
+    if (!CGRectMakeWithDictionaryRepresentation((CFDictionaryRef)windows[own][(id)kCGWindowBounds], &bounds)) return nil;
+    NSMutableArray<NSDictionary *> *front = [NSMutableArray array];
+    for (NSUInteger at = 0; at < own; at++) {
+        NSDictionary *row = windows[at];
+        if (row[(id)kCGWindowAlpha] && [row[(id)kCGWindowAlpha] doubleValue] <= 0) continue;
+        CGRect other = CGRectNull;
+        if (!CGRectMakeWithDictionaryRepresentation((CFDictionaryRef)row[(id)kCGWindowBounds], &other)) continue;
+        if (CGRectIsEmpty(CGRectIntersection(bounds, other))) continue;
+        [front addObject:@{
+            @"number": row[(id)kCGWindowNumber] ?: (id)NSNull.null,
+            @"owner": row[(id)kCGWindowOwnerName] ?: (id)NSNull.null,
+            @"pid": row[(id)kCGWindowOwnerPID] ?: (id)NSNull.null,
+            @"layer": row[(id)kCGWindowLayer] ?: (id)NSNull.null,
+            @"x": @(CGRectGetMinX(other)), @"y": @(CGRectGetMinY(other)),
+            @"width": @(CGRectGetWidth(other)), @"height": @(CGRectGetHeight(other)),
+        }];
+    }
+    return front;
+}
+
+NSArray<NSDictionary *> *sp_window_in_front(NSInteger number) {
+    NSArray *windows = CFBridgingRelease(CGWindowListCopyWindowInfo(
+        kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, kCGNullWindowID));
+    return sp_window_in_front_in(windows, number);
+}
+
 // The place of the window among the windows on the screen, or null when the window server does not show it.
 static id orderFact(NSWindow *window) {
     if (!window.isVisible) return NSNull.null;

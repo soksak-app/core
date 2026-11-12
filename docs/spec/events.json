@@ -4485,6 +4485,51 @@
           },
           "visible": {
             "type": "boolean"
+          },
+          "inFront": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "number": {
+                  "type": "number"
+                },
+                "owner": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "pid": {
+                  "type": "number"
+                },
+                "layer": {
+                  "type": "number"
+                },
+                "x": {
+                  "type": "number"
+                },
+                "y": {
+                  "type": "number"
+                },
+                "width": {
+                  "type": "number"
+                },
+                "height": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "number",
+                "owner",
+                "pid",
+                "layer",
+                "x",
+                "y",
+                "width",
+                "height"
+              ]
+            }
           }
         },
         "required": [
@@ -4492,7 +4537,7 @@
           "visible"
         ]
       },
-      "description": "The occlusion state of a window changed."
+      "description": "The occlusion state of a window changed. A covered window (visible false) names in inFront the windows in front of it over a part of it, from front to back, as the window list of the window server holds them: their window number, owning application, process, window level and bounds in screen coordinates."
     },
     "native.surface.key_kept": {
       "layer": "native",

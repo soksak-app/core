@@ -73,11 +73,44 @@ static void checkOrderOfAList(void) {
         @"a window that shows nothing or is not in the list has no place");
 }
 
+// The windows in front of a window over a part of it, from front to back: of every level and every process, the own process
+// included, and not a window beside it, behind it or showing nothing; each with its owner, process, level and bounds.
+static void checkWindowsInFrontOfAList(void) {
+    pid_t own = 100, other = 200;
+    CGRect bounds = CGRectMake(300, 39, 1200, 760);
+    NSDictionary *(^named)(NSInteger, NSInteger, pid_t, CGRect, double, NSString *) =
+        ^NSDictionary *(NSInteger number, NSInteger layer, pid_t pid, CGRect at, double alpha, NSString *owner) {
+            NSMutableDictionary *entry = [[row(number, layer, pid, at, alpha) mutableCopy] autorelease];
+            entry[(id)kCGWindowOwnerName] = owner;
+            return entry;
+        };
+    NSArray *list = @[
+        named(1, 25, other, CGRectMake(0, 0, 1800, 25), 1, @"Menu"),
+        named(2, 0, other, CGRectMake(200, 30, 1400, 900), 1, @"Cover"),
+        named(3, 0, other, CGRectMake(1600, 30, 100, 100), 1, @"Beside"),
+        named(4, 0, own, CGRectMake(400, 100, 50, 20), 1, @"Self"),
+        named(5, 3, other, CGRectMake(300, 39, 1200, 760), 0, @"Clear"),
+        named(6, 0, own, bounds, 1, @"Self"),
+        named(7, 0, other, bounds, 1, @"Behind"),
+    ];
+    NSArray *expected = @[
+        @{ @"number": @2, @"owner": @"Cover", @"pid": @(other), @"layer": @0, @"x": @200, @"y": @30, @"width": @1400,
+            @"height": @900 },
+        @{ @"number": @4, @"owner": @"Self", @"pid": @(own), @"layer": @0, @"x": @400, @"y": @100, @"width": @50, @"height": @20 },
+    ];
+    NSArray *front = sp_window_in_front_in(list, 6);
+    check([front isEqual:expected], [NSString stringWithFormat:@"the windows in front of a window are those over a part of it, of "
+        "any process, from front to back, with their owner, level and bounds: %@", front]);
+    check([sp_window_in_front_in(list, 1) isEqual:@[]], @"the front window has no window in front of it");
+    check(sp_window_in_front_in(list, 9) == nil, @"a window that is not in the list has no windows in front of it");
+}
+
 int main(void) { @autoreleasepool {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     [NSApp finishLaunching];
     checkOrderOfAList();
+    checkWindowsInFrontOfAList();
 
     NSWindow *below = makeWindow(NSMakeRect(200, 200, 300, 200));
     NSWindow *above = makeWindow(NSMakeRect(260, 240, 300, 200));
