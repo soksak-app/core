@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  catchUp, commitCadence, contentAfterChange, contentCadence, contentConvergence, displayPeriod, lastInputConvergence, sentAt,
+  catchUp, commitCadence, contentAfterChange, contentCadence, contentConvergence, displayPeriod, lastInputLatency, sentAt,
   stepCommitDelays,
 } from "../layout-timing.mjs";
 
@@ -64,16 +64,35 @@ test("a divider drag commits each step within four display periods, with a media
     ["no layout began from 0 to 30 ms"]);
 });
 
-test("the last layout of a drag is sent within two display periods after the last input", () => {
+test("the layout of the last input of a drag follows the layout pipeline", () => {
   const period = 10;
-  assert.deepEqual(lastInputConvergence([layout(1, 0, 10), layout(2, 92, 115)], { lastInput: 100, period }),
-    { settled: 115, delay: 15, limit: 20, failures: [] });
-  // A last step that changes nothing leaves the layout that was sent before it.
-  assert.deepEqual(lastInputConvergence([layout(1, 0, 10)], { lastInput: 100, period }).failures, []);
-  assert.deepEqual(lastInputConvergence([layout(1, 0, 10), layout(2, 101, 125)], { lastInput: 100, period }).failures,
-    ["the last layout was sent 25 ms after the last input, more than 20 ms"]);
-  assert.deepEqual(lastInputConvergence([layout(1, 0, null)], { lastInput: 100, period }).failures,
-    ["the drag sent no layout"]);
+  // Ticket 2 was in flight at the last input and presented at 104; ticket 3, the layout of the last input, began at the next animation
+  // frame and was sent 5 display periods after that presentation.
+  const inFlight = { ...layout(2, 92, 112), presented: 104 };
+  assert.deepEqual(lastInputLatency([layout(1, 0, 10), inFlight, layout(3, 114, 154)], { lastInput: 100, period }),
+    { inFlight: 2, from: 104, ticket: 3, begun: 114, sent: 154, delay: 50, limit: 50, failures: [] });
+  // With no layout in flight the pipeline starts at the input.
+  assert.deepEqual(lastInputLatency([layout(1, 0, 10), layout(2, 108, 140)], { lastInput: 100, period }),
+    { inFlight: null, from: 100, ticket: 2, begun: 108, sent: 140, delay: 40, limit: 50, failures: [] });
+  // A last input that began no layout keeps the layout in flight, or the one sent before the input.
+  assert.deepEqual(lastInputLatency([layout(1, 0, 10), layout(2, 92, 115)], { lastInput: 100, period }).failures, []);
+  assert.deepEqual(lastInputLatency([layout(1, 0, 10)], { lastInput: 100, period }).failures, []);
+  // A cancelled layout was replaced and is not the layout of the last input.
+  const replaced = [layout(1, 101, 105, { commitPath: "cancel" }), layout(2, 106, 130)];
+  assert.equal(lastInputLatency(replaced, { lastInput: 100, period }).ticket, 2);
+
+  assert.deepEqual(lastInputLatency([layout(1, 0, 10), layout(2, 112, 151)], { lastInput: 100, period }).failures,
+    ["the layout of the last input was sent 51 ms after the last input, more than 50 ms"]);
+  assert.deepEqual(lastInputLatency([inFlight, layout(3, 116, 155)], { lastInput: 100, period }).failures,
+    ["the layout of the last input was sent 51 ms after the presentation of ticket 2 in flight at the last input, more than 50 ms"]);
+  assert.deepEqual(lastInputLatency([layout(1, 0, 10), layout(2, 101, 145)], { lastInput: 100, period }).failures,
+    ["the layout of ticket 2 was sent 4.4 display periods after it began, more than 4"]);
+  assert.deepEqual(lastInputLatency([layout(1, 0, 10), layout(2, 60, 105)], { lastInput: 100, period }).failures,
+    ["the layout of ticket 2 was sent 4.5 display periods after it began, more than 4"]);
+  assert.deepEqual(lastInputLatency([layout(1, 0, 10), layout(2, 101, null)], { lastInput: 100, period }).failures,
+    ["the layout of ticket 2 began at 101 ms and was not sent"]);
+  assert.deepEqual(lastInputLatency([layout(1, 0, null)], { lastInput: 100, period }).failures,
+    ["the drag sent no layout", "the layout of ticket 1 began at 0 ms and was not sent"]);
 });
 
 test("a maximise or restore catches up with the window within 150 ms of its first resize", () => {

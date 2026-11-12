@@ -75,18 +75,43 @@ export function stepCommitDelays(layouts, { from, to, period }) {
 }
 
 /**
- * The last layout of a drag is sent within two display periods (`period`, ms) after its last input `lastInput` (ms): the layout
- * that the window keeps after the drag is the last one the trace sent, and a last step that changes nothing keeps the layout sent
- * before it.
+ * The layout of the last input `lastInput` (ms) of a drag follows the layout pipeline, in display periods (`period`, ms): one
+ * preparation runs at a time, so that layout, the first layout that began at or after the last input, begins at the first animation
+ * frame after the presentation of the layout that was in flight at the input (its `presented`, or its sending when it records no
+ * presentation), or after the input when none was in flight. It is sent at most five display periods after that presentation or input,
+ * one for the animation frame and four for the layout, and the layout in flight and the layout of the last input are each sent within
+ * four display periods after they began. A last input that began no layout changed nothing: the window keeps the layout in
+ * flight, or the one sent before the input. A cancelled layout was replaced and is not counted.
  */
-export function lastInputConvergence(layouts, { lastInput, period }) {
-  const limit = 2 * period;
-  const sent = layouts.map(sentAt).filter((time) => time !== null);
-  if (sent.length === 0) return { settled: null, delay: null, limit, failures: ["the drag sent no layout"] };
-  const settled = Math.max(...sent);
-  const delay = settled - lastInput;
-  const failures = delay > limit ? [`the last layout was sent ${delay} ms after the last input, more than ${limit} ms`] : [];
-  return { settled, delay, limit, failures };
+export function lastInputLatency(layouts, { lastInput, period }) {
+  const limit = 5 * period;
+  const live = layouts.filter((layout) => layout.begun !== null && layout.commitPath !== "cancel").sort((a, b) => a.begun - b.begun);
+  const failures = [];
+  if (!live.some((layout) => sentAt(layout) !== null)) failures.push("the drag sent no layout");
+  const ended = (layout) => layout.presented ?? sentAt(layout);
+  const open = (layout) => layout.begun < lastInput && (ended(layout) === null || ended(layout) > lastInput);
+  const inFlight = live.filter(open).at(-1);
+  const last = live.find((layout) => layout.begun >= lastInput);
+  for (const layout of [inFlight, last]) {
+    if (layout === undefined) continue;
+    const sent = sentAt(layout);
+    if (sent === null) {
+      failures.push(`the layout of ticket ${layout.ticket} began at ${layout.begun} ms and was not sent`);
+    } else if (sent - layout.begun > 4 * period) {
+      const periods = (sent - layout.begun) / period;
+      failures.push(`the layout of ticket ${layout.ticket} was sent ${periods} display periods after it began, more than 4`);
+    }
+  }
+  const from = inFlight === undefined ? lastInput : ended(inFlight);
+  const sent = last === undefined ? null : sentAt(last);
+  const delay = from === null || sent === null ? null : sent - from;
+  if (delay !== null && delay > limit) {
+    const after = inFlight === undefined ? "the last input" : `the presentation of ticket ${inFlight.ticket} in flight at the last input`;
+    failures.push(`the layout of the last input was sent ${delay} ms after ${after}, more than ${limit} ms`);
+  }
+  return {
+    inFlight: inFlight?.ticket ?? null, from, ticket: last?.ticket ?? null, begun: last?.begun ?? null, sent, delay, limit, failures,
+  };
 }
 
 /**
