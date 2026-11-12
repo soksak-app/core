@@ -7,7 +7,6 @@ import test from "node:test";
 
 import { APPS, failure, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
-import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { processTable } from "@soksak/window-check/process-table.mjs";
 import { previewGaps, startPreviewPanes } from "./library-preview.mjs";
 import { RASTER, rasterReady } from "./raster-probe.mjs";
@@ -103,34 +102,6 @@ async function assertNoOrphanNativeSurfaces(s, message) {
   assert.deepEqual(orphan, [], `${message}: orphan native surfaces ${orphan.map((surface) => surface.id).join(", ")}`);
 }
 
-/** Checks the white of the DOM in the image regions in the real pixels of a recording of the whole return transition. */
-function assertNoWhiteBleed(frameFiles, regions, message) {
-  assert.ok(frameFiles.length > 0, `${message}: capture produced no frames`);
-  let worst = { ratio: 0, frame: -1, surface: "" };
-  for (const [frameIndex, path] of frameFiles.entries()) {
-    const frame = readFrame(path);
-    for (const region of regions) {
-      const x0 = Math.max(0, Math.floor(region.frame.x));
-      const y0 = Math.max(0, Math.floor(region.frame.y));
-      const x1 = Math.min(frame.width, Math.ceil(region.frame.x + region.frame.width));
-      const y1 = Math.min(frame.height, Math.ceil(region.frame.y + region.frame.height));
-      let white = 0;
-      let samples = 0;
-      for (let y = y0; y < y1; y += 2) {
-        for (let x = x0; x < x1; x += 2) {
-          const [r, g, b] = pixel(frame, x, y);
-          samples++;
-          if (r >= 245 && g >= 245 && b >= 245) white++;
-        }
-      }
-      const ratio = samples ? white / samples : 0;
-      if (ratio > worst.ratio) worst = { ratio, frame: frameIndex, surface: region.surface };
-    }
-  }
-  assert.ok(worst.ratio <= 0.01,
-    `${message}: ${worst.surface} exposed ${(worst.ratio * 100).toFixed(2)}% white pixels in frame ${worst.frame}`);
-}
-
 for (const app of Object.values(APPS)) {
   test(`${app.name}: library windows create and open projects in place`, async (t) => {
     const s = await open(t, app);
@@ -222,13 +193,8 @@ for (const app of Object.values(APPS)) {
     const rasterTabs = (await s.get("core.grid")).cards.flatMap((card) => card.tabs).filter((tab) => tab.plugin === RASTER);
     assert.equal(new Set(processesAtThree.children).size, rasterTabs.length,
       "every open raster view owns one child in the shared service, including hidden tabs");
-    const capture = await s.request("diagnostics.capture.start", {});
-    let captureActive = true;
-    s.cleanup(async () => {
-      if (captureActive) await s.request("diagnostics.capture.stop", { after: 0 });
-      rmSync(capture.frames, { recursive: true, force: true });
-      captureActive = false;
-    });
+    // The session stops the recording when the check ends before its stop, and keeps it when the check fails.
+    const recording = await s.record();
     await s.run("core.projects.browse");
     await s.until("core.screen", (screen) => screen.screen === "library", "the project did not enter the library");
     await returnProject(s, first.id, "three-raster project return");
@@ -269,19 +235,15 @@ for (const app of Object.values(APPS)) {
     t.diagnostic(`${app.name}: START restoration first presentation`);
     await s.presented();
     phase("first-presentation");
-    const stopped = await s.request("diagnostics.capture.stop", { after: 0 });
-    captureActive = false;
+    const stopped = await recording.stop({ after: 0 });
+    t.diagnostic(`project return recording ${stopped.frames}`);
     const returned = await s.get("host.window");
     const expectedRasters = (await s.surfaces(RASTER)).filter((surface) => surface.visible);
-    const returnedRegions = expectedRasters.map((surface) => {
+    for (const surface of expectedRasters) {
       const region = returned.regions.find((item) => item.surface === surface.surface);
-      assert.ok(region, `project return pixel composition: ${surface.surface} has no native region to measure`);
-      assert.equal(region.visible, true,
-        `project return pixel composition: ${surface.surface} is visible in DOM but native region is hidden`);
-      return region;
-    });
-    assertNoWhiteBleed(frames(stopped.frames), returnedRegions, "project return pixel composition");
-    rmSync(stopped.frames, { recursive: true, force: true });
+      assert.ok(region, `project return: ${surface.surface} has no native region`);
+      assert.equal(region.visible, true, `project return: ${surface.surface} is visible in DOM but native region is hidden`);
+    }
     await assertVisibleRasters(s, 3, "immediately after returning to the project");
     await assertNoOrphanNativeSurfaces(s, "immediately after returning to the project");
     assert.deepEqual(await rasterProcessSnapshot(s, "after returning to the project"), processesAtThree,

@@ -24,7 +24,7 @@
     "commands": [
       {
         "name": "probeplain.view.frames",
-        "description": "Starts or stops the observation of the content frames of the section view document. Start paints the document root with the marker color until stop and answers the source clock and the marker color.",
+        "description": "Starts or stops the observation of the content frames of the section view document. Start answers the source clock.",
         "params": {
           "type": "object",
           "properties": {
@@ -55,12 +55,6 @@
                 "sourceResolutionMs": {
                   "type": "number"
                 }
-              }
-            },
-            "markerColor": {
-              "type": "array",
-              "items": {
-                "type": "integer"
               }
             }
           }

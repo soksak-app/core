@@ -24,6 +24,7 @@ test("probe body fails", async (t) => {
     checkEnded: async () => {},
     stallSamples: new Set(),
     expectedErrors: [],
+    recordingNotes: [],
     markTest: async () => null,
   };
   t.after(() => finishSession(t, session, () => {}));
@@ -164,6 +165,7 @@ test("probe body passes", async (t) => {
     eventStart: { "host-1-1.jsonl": { offset: ${started}, inode: ${JSON.stringify(String(statSync(join(dir, "logs", "host-1-1.jsonl"), { bigint: true }).ino))} } },
     expectedErrors: ${expected},
     recordings: new Set(),
+    recordingNotes: [],
     markTest: async () => null,
   };
   t.after(() => finishSession(t, session, () => {}));
@@ -213,7 +215,7 @@ import { finishSession, recordingFolders } from ${JSON.stringify(app)};
 test("probe body passes", async (t) => {
   const configDir = ${JSON.stringify(dir)};
   const session = { app: { name: "probe", configDir }, cleanups: [], checkEnded: async () => {}, stallSamples: new Set(), eventStart: {}, expectedErrors: [], markTest: async () => null,
-    recordingsBefore: recordingFolders(configDir), recordings: new Set(), failedRecordings: new Map() };
+    recordingsBefore: recordingFolders(configDir), recordings: new Set(), failedRecordings: new Map(), recordingNotes: [] };
   mkdirSync(join(configDir, "logs", "captures", "left"));
   writeFileSync(join(configDir, "logs", "captures", "left", "frame-0001.bgra"), "x");
   t.after(() => finishSession(t, session, () => {}));
@@ -245,12 +247,13 @@ test("probe body fails", async (t) => {
   let activeFrames;
   const client = { endpoint: { pid: process.pid }, request: async (method) => {
     if (method === "diagnostics.window.draw-covered") return null;
+    if (method === "status.get") return { refreshRate: 120 };
     if (method === "diagnostics.capture.start") {
       activeFrames = join(captures, "capture-1");
       mkdirSync(activeFrames);
-      return { frames: activeFrames };
+      return { frames: activeFrames, window: 7 };
     }
-    if (method === "diagnostics.capture.stop") return { frames: activeFrames };
+    if (method === "diagnostics.capture.stop") return { frames: activeFrames, window: 7 };
     throw new Error("unexpected request " + method);
   } };
   const session = new Session({ name: "probe", configDir }, client);

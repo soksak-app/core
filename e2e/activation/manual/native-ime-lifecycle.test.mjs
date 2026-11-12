@@ -10,7 +10,6 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { fresh } from "../../fixture.mjs";
 import { compareAppKitReference } from "../ime-reference-steps.mjs";
 import { assertReceivedUnchanged, focusedCard, imageRegion, inputDocument, insertedText, lastTransaction,
@@ -33,9 +32,6 @@ async function preserveGestureCapture(s, artifactDir, label) {
   let preserved = false;
   const persist = () => {
     if (preserved || !result) return;
-    const recordedFrames = frames(capture.frames);
-    assert.equal(recordedFrames.length, result.count, `${label}: capture frame files are missing`);
-    for (const file of recordedFrames) readFrame(file);
     const destination = join(artifactDir, label);
     cpSync(capture.frames, destination, { recursive: true });
     writeFileSync(join(artifactDir, `${label}.json`), JSON.stringify({
@@ -53,8 +49,6 @@ async function preserveGestureCapture(s, artifactDir, label) {
   return async () => {
     const { displayed } = await s.presented();
     result = await capture.stop({ after: displayed + 100 });
-    assert.ok(result.count > 0, `${label}: the full-gesture capture contains no frames`);
-    assert.equal(result.limited, false, `${label}: the full-gesture capture reached its frame limit`);
     persist();
     return result;
   };

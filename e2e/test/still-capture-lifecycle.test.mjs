@@ -1,5 +1,5 @@
 // Integration ownership belongs to e2e: the public window-check SDK owns
-// session disposal, and this layer owns decoding the acquired still artifact.
+// session disposal, and this layer owns acquiring the still artifact, which is evidence.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
@@ -30,13 +30,13 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { Session, finishSession, recordingFolders } from ${JSON.stringify(app)};
 import { readStillCapture } from ${JSON.stringify(stillCapture)};
-test("probe decoder fails after capture acquisition", async t => {
+test("probe acquires a still", async t => {
   const configDir = ${JSON.stringify(dir)};
   const path = join(configDir, "logs", "captures", "still-main-1", "window.png");
   const client = { endpoint: { pid: process.pid }, request: async method => {
     assert.equal(method, "diagnostics.capture.still");
     mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, "original failing PNG bytes");
+    writeFileSync(path, "original PNG bytes");
     return { path };
   } };
   const session = new Session({ name: "probe", configDir }, client);
@@ -44,18 +44,18 @@ test("probe decoder fails after capture acquisition", async t => {
   session.markTest = async () => null;
   session.recordingsBefore = recordingFolders(configDir);
   t.after(() => finishSession(t, session, () => {}));
-  await assert.rejects(() => readStillCapture(session, t), /PNG|png|signature/i);
-  ${failed ? 'throw new Error("probe keeps the original decode failure evidence");' : ''}
+  assert.equal((await readStillCapture(session, t)).path, path);
+  ${failed ? 'throw new Error("probe keeps the evidence of a failed check");' : ''}
 });
 `);
   const { NODE_TEST_CONTEXT, ...environment } = process.env;
   const result = spawnSync(process.execPath, ["--test", "--test-reporter=tap", file],
     { encoding: "utf8", timeout: 20000, env: { ...environment, FORCE_COLOR: "0" } });
   assert.equal(result.status, failed ? 1 : 0, result.stdout + result.stderr);
-  if (failed) assert.match(result.stdout, /probe keeps the original decode failure evidence/, result.stdout + result.stderr);
+  if (failed) assert.match(result.stdout, /probe keeps the evidence of a failed check/, result.stdout + result.stderr);
   const path = join(dir, "logs", "captures", "still-main-1", "window.png");
   if (failed) {
-    assert.equal(readFileSync(path, "utf8"), "original failing PNG bytes");
+    assert.equal(readFileSync(path, "utf8"), "original PNG bytes");
     assert.match(result.stdout, /kept recording: .*captures\/still-main-1/);
   } else assert.deepEqual(readdirSync(join(dir, "logs", "captures")), []);
 });

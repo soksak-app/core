@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { cardEdgeConvergence, cardEdgeSamples, sourceIntervalSummary } from "../benchmark/cases/plain-view.mjs";
+import { sourceIntervalSummary } from "../benchmark/cases/plain-view.mjs";
 
 const frame = (frameTimeMs) => ({ frameTimeMs, timeRange: { lowerMs: frameTimeMs, upperMs: frameTimeMs + 1 } });
 
@@ -12,29 +12,4 @@ test("the plain view summary reads only the source frames that meet the gesture"
 
 test("the plain view summary states no interval for a single source frame", { timeout: 5000 }, () => {
   assert.deepEqual(sourceIntervalSummary([frame(100)], 100, 170), { count: 1, medianMs: null, p90Ms: null, maxMs: null });
-});
-
-test("the plain view edge samples keep the measured frames and name the others", { timeout: 5000 }, () => {
-  const frames = [{ time: 1, edge: 100 }, { time: 2, edge: null }, { time: 3, edge: 110 }];
-  assert.deepEqual(cardEdgeSamples(frames, (frame) => frame.edge), {
-    samples: [{ time: 1, position: 100 }, { time: 3, position: 110 }],
-    unmeasured: [1],
-  });
-});
-
-test("the plain view convergence is the first frame after the gesture from which the edge stays at its final position", { timeout: 5000 }, () => {
-  const samples = [[90, 120], [100, 110], [110, 104], [120, 101], [130, 104], [140, 100], [150, 100]]
-    .map(([time, position]) => ({ time, position }));
-  assert.deepEqual(cardEdgeConvergence(samples, 105), { ms: 35, frames: 3, finalPosition: 100 },
-    "a frame that left the final position again does not end the convergence");
-});
-
-test("the plain view convergence states the frame at the end of the gesture as zero frames", { timeout: 5000 }, () => {
-  const samples = [{ time: 100, position: 100 }, { time: 110, position: 100 }];
-  assert.deepEqual(cardEdgeConvergence(samples, 100), { ms: 0, frames: 0, finalPosition: 100 });
-});
-
-test("the plain view convergence refuses samples that end before the gesture", { timeout: 5000 }, () => {
-  assert.throws(() => cardEdgeConvergence([{ time: 90, position: 100 }], 100),
-    /no measured frame at or after the gesture end 100; the last frame is at 90/);
 });

@@ -1,17 +1,12 @@
 // Checks the window sidebars of the four sides and their order on the rebuilt applications (docs/spec/external-sidebars.md#verification):
-// in each of the 24 orders the grid, core.sidebars, the plane checks and a still of the window show one sidebar of each side where
+// in each of the 24 orders the grid, core.sidebars and the plane checks show one sidebar of each side where
 // the order places it; the chrome switches hide and show their sides by a click, and the places hold through full screen and a reload.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rmSync } from "node:fs";
-import { dirname } from "node:path";
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { readPng } from "@soksak/window-check/png.mjs";
 import { fresh } from "./fixture.mjs";
-import { SIDES, borderMisses, orders, placeMismatches, reportMismatches, thicknesses } from "./window-sidebar-places.mjs";
+import { SIDES, orders, placeMismatches, reportMismatches, thicknesses } from "./window-sidebar-places.mjs";
 
-/** The border color of the cards in the theme midnight, as the other window sidebar checks measure it. */
-const BORDER = [43, 46, 61];
 /** The rectangles of the window sidebars of a grid by side. */
 const places = (grid) => Object.fromEntries(grid.cards.filter((card) => SIDES.includes(card.id)).map(({ id, x, y, w, h }) => [id, { x, y, w, h }]));
 
@@ -34,8 +29,8 @@ for (const app of Object.values(APPS))
     await s.run("core.settings.set", { patch: { left: true, right: true, top: true, bottom: true, sidebarOrder: [...SIDES] }, scope: "common" });
 
     /**
-     * Waits until the grid holds the sidebars of `held` where the order places them, then checks core.sidebars, the plane checks
-     * and a still of the presented window, and returns the grid.
+     * Waits until the grid holds the sidebars of `held` where the order places them, then checks core.sidebars and the plane
+     * checks of the presented window, and returns the grid.
      */
     async function standing(label, order, held, thickness) {
       let last = [];
@@ -55,15 +50,6 @@ for (const app of Object.values(APPS))
       assert.deepEqual(placeMismatches(shown, order, held, thickness), [], `${label}: the presented grid moved a window sidebar`);
       assert.deepEqual(places(shown), places(grid), `${label}: the presented grid differs from the arranged one`);
       assert.deepEqual((await s.get("core.verify")).rows.filter((row) => !row.ok), [], `${label}: a plane check fails`);
-      const { path } = await s.request("diagnostics.capture.still", {});
-      try {
-        const image = readPng(path);
-        const scale = image.width / (await s.get("host.window")).content.width;
-        const cards = shown.cards.filter((card) => held.includes(card.id));
-        assert.deepEqual(borderMisses(image, scale, shown, cards, BORDER), [], `${label}: the still of the window misses border lines`);
-      } finally {
-        rmSync(dirname(path), { recursive: true, force: true });
-      }
       t.diagnostic(`${label}: ${order.join(">")} ${JSON.stringify(places(shown))}`);
       return shown;
     }

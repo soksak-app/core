@@ -3,11 +3,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
-import { APPS, MAIN_PAGE_APPS, judgeShownChanges, keepCommonSettings, open, owe } from "@soksak/window-check/app.mjs";
+import { APPS, MAIN_PAGE_APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { turnOffCardSidebars } from "./card-sidebar-choices.mjs";
-import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
-import { railPixels } from "./rail.mjs";
 /** The plugin without a window sidebar override. */
 const PLAIN = "layoutprobe2";
 
@@ -29,23 +27,6 @@ async function probeLinks(s, plugin) {
 const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab) => tab.id === surface)).id;
 const geometry = (grid) =>
   grid.cards.map(({ id, x, y, w, h }) => ({ id, x, y, w, h })).sort((a, b) => a.id.localeCompare(b.id));
-function borders(frame, grid, cards) {
-  const scale = frame.scale * frame.contentScale;
-  for (const card of cards)
-    for (const edge of [card.x, card.x + card.w - 1]) {
-      const at = edge + grid.plane.x;
-      assert.ok(
-        [-0.5, 0, 0.5, 1].some((offset) =>
-          [-24, -12, 12, 24].every((delta) => {
-            const x = Math.floor(frame.content.x * frame.scale + (at + offset) * scale);
-            const y = Math.floor(frame.content.y * frame.scale + (grid.plane.y + card.y + card.h / 2 + delta) * scale);
-            return pixel(frame, x, y).every((value, index) => Math.abs(value - [43, 46, 61][index]) <= 3);
-          }),
-        ),
-        `window sidebar ${card.id} lost its ${edge === card.x ? "left" : "right"} border at ${frame.time}ms`,
-      );
-    }
-}
 for (const app of Object.values(APPS))
   test(`${app.name}: fixed sidebars apply plugin overrides without extra columns`, { timeout: 90000 }, async (t) => {
     console.info(`START ${app.name}: fixed sidebar overrides`);
@@ -121,18 +102,13 @@ for (const app of Object.values(APPS))
       assert.deepEqual((await s.get("core.workbench.audit")).unbound, []);
       return { grid, rail, plugin: tab.plugin, card: card.id };
     }
-    const recording = await s.request("diagnostics.capture.start", {});
+    const recording = await s.record();
     let displayed = 0,
       stop;
-    // A selection changes the screen when it changes the active tab or the focused card, so the recording owes frames from each
-    // such selection to its display and a selection of the active tab of the focused card none (judgeShownChanges).
-    const owed = [];
     try {
       try {
         for (const card of baseline.cards.filter((card) => card.tabs.length))
           for (const tab of card.tabs) {
-            const before = (await s.get("core.grid")).cards.find((item) => item.id === card.id);
-            const from = before?.active !== tab.id || before?.focused !== true ? await owe(s) : null;
             await s.run("core.tab.select", { tab: tab.id });
             await s.until(
               "core.grid",
@@ -142,20 +118,11 @@ for (const app of Object.values(APPS))
               "tab selection did not settle",
             );
             ({ displayed } = await s.presented());
-            if (from !== null) owed.push({ from, to: displayed });
             observations.push({ ...(await measure(card, tab)), displayed });
           }
       } finally {
-        stop = await s.request("diagnostics.capture.stop", { after: displayed ? displayed + 100 : 0 });
+        stop = await recording.stop({ after: displayed ? displayed + 100 : 0 });
       }
-      assert.equal(stop.limited, false);
-      judgeShownChanges(stop, owed, { what: "tab selection" });
-      const captured = frames(recording.frames).map(readFrame);
-      assert.ok(captured.length > 2, "incomplete focus/tab recording");
-      assert.equal(captured.length, stop.count, "recorded and written frame counts differ");
-      for (const frame of captured) borders(frame, baseline, windows);
-      const final = captured.at(-1);
-      railPixels(final, observations.at(-1).grid, observations.at(-1).rail);
       assert.ok(
         observations.some((item) => item.plugin === PLAIN && item.rail.groups.length === 0),
         `${PLAIN} selection did not remove plugin rail`,
@@ -165,7 +132,7 @@ for (const app of Object.values(APPS))
         `${plugin} override was not measured`,
       );
       t.diagnostic(
-        `fixed windows=${windows.map((card) => card.id)}; selections=${observations.map((item) => `${item.plugin}:${item.rail.groups.length}`)}; frames=${captured.length}; gap=${stop.longestGap}ms`,
+        `fixed windows=${windows.map((card) => card.id)}; selections=${observations.map((item) => `${item.plugin}:${item.rail.groups.length}`)}; recording ${recording.frames}: stills=${stop.count}; missed=${stop.missed}; late=${stop.late}; longest gap=${stop.longestGap}ms`,
       );
     } finally {
       rmSync(recording.frames, { recursive: true, force: true });

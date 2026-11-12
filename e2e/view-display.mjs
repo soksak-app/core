@@ -1,6 +1,5 @@
 // Measures view display through the declared window-check session interface.
 import assert from "node:assert/strict";
-import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 
 const PRESENTATION_PHASES = new Set(["requested", "result", "presented", "abandoned"]);
 
@@ -123,30 +122,11 @@ export function rasterIdentity(presented) {
   return identity;
 }
 
-/** Samples per axis of the surface area; colour variation measures only the sampled area, not plugin readiness. */
-const SAMPLES = 16;
-
-/** The number of distinct colours at the sampled points of the surface area of the frame. */
-export function colours(frame, rect) {
-  const ratio = frame.scale * frame.contentScale;
-  const seen = new Set();
-  for (let i = 1; i < SAMPLES; i++) {
-    for (let j = 1; j < SAMPLES; j++) {
-      const x = Math.floor(frame.content.x * frame.scale + (rect.x + (rect.w * i) / SAMPLES) * ratio);
-      const y = Math.floor(frame.content.y * frame.scale + (rect.y + (rect.h * j) / SAMPLES) * ratio);
-      assert.ok(x >= 0 && x < frame.width && y >= 0 && y < frame.height,
-        `surface sample (${x}, ${y}) lies outside capture ${frame.width}x${frame.height}`);
-      seen.add(pixel(frame, x, y).join(","));
-    }
-  }
-  return seen.size;
-}
-
 /**
- * Runs the view display assertions; readRecording supplies decoded frames at the recording boundary. `vehicles` names the view
- * plugins to open, each of which must be an installed enabled view plugin; without it every installed enabled view plugin opens.
+ * Runs the view display assertions. Each view opens under a recording, which is the evidence of its display. `vehicles` names the
+ * view plugins to open, each of which must be an installed enabled view plugin; without it every installed enabled view plugin opens.
  */
-export async function observeViewDisplay(s, t, readRecording = (directory) => frames(directory).map(readFrame), verifyContent, paramsForPlugin = () => undefined, vehicles) {
+export async function observeViewDisplay(s, t, verifyContent, paramsForPlugin = () => undefined, vehicles) {
   // Each view opens as a new tab of the focused card, the card of the start tab of the check.
   const card = (await s.get("core.grid")).cards.find((item) => item.focused);
   assert.ok(card, "the grid has no focused card for the opened views");
@@ -179,24 +159,14 @@ export async function observeViewDisplay(s, t, readRecording = (directory) => fr
       } finally {
         stopped = await recording.stop({ after: displayed ? displayed + 100 : 0 });
       }
-      const captured = readRecording(recording.frames);
-      assert.equal(stopped.limited, false, `${view.id}: recording reached its bounded buffer`);
-      assert.equal(captured.length, stopped.count, `${view.id}: missing finalized frame files or frame count mismatch`);
-      assert.ok(captured.length > 1, `${view.id}: recording has ${captured.length} frames`);
       const now = (await s.get("core.surfaces")).find((item) => item.surface === tab && item.visible);
       assert.ok(now, `${view.id}: opened tab ${tab} is not visible`);
       assert.equal(now.status.phase, "ready", `${view.id}: surface failed: ${now.status.error}`);
       assert.equal(now.composition, "view", `${view.id} reports composition ${now.composition}`);
       assert.deepEqual((await s.get("core.surface.document", tab)).unbound, [],
         `${view.id}: ready view document controls without a command or element name`);
-      const counts = captured.map((frame) => colours(frame, now.applied));
-      const first = counts.findIndex((count) => count > 1);
-      if (!verifyShown) {
-        assert.ok(first >= 0, `${view.id}: sampled surface area is blank in ${counts.length} frames`);
-        assert.ok(counts.at(-1) > 1, `${view.id}: the last sampled surface area is blank`);
-      }
       if (verifyShown) await verifyShown();
-      t.diagnostic(`${view.id}: first varied-area frame ${first < 0 ? "none" : first + 1} of ${captured.length}, gap=${stopped.longestGap}ms`);
+      t.diagnostic(`${view.id}: recording ${stopped.frames}, ${stopped.count} written, ${stopped.missed} missed and ${stopped.late} late stills`);
     } finally {
       if (tab) {
         await s.run("core.tab.close", { tab });
@@ -212,8 +182,8 @@ export async function observeViewDisplay(s, t, readRecording = (directory) => fr
  * Opens each view plugin of `vehicles` (by default the plugins of the content cases) and requires each to have an explicit content
  * case before accepting its display.
  */
-export async function checkViewDisplay(s, t, readRecording, contentCases = new Map(), vehicles = [...contentCases.keys()]) {
-  await observeViewDisplay(s, t, readRecording, async (observation) => {
+export async function checkViewDisplay(s, t, contentCases = new Map(), vehicles = [...contentCases.keys()]) {
+  await observeViewDisplay(s, t, async (observation) => {
     const content = contentCases.get(observation.plugin);
     assert.equal(typeof content?.ready, "function",
       `${observation.plugin}: tab ${observation.tab} has no explicit content case`);

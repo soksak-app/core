@@ -3,8 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
-import { APPS, judgeShownChanges, open, owe } from "@soksak/window-check/app.mjs";
-import { frames, readFrame } from "@soksak/window-check/frame.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
 
 for (const app of Object.values(APPS))
   test(`${app.name}: current card right sidebar follows saved plugin settings`, { timeout: 90000 }, async (t) => {
@@ -21,11 +20,10 @@ for (const app of Object.values(APPS))
     const link = linkOf(target);
     assert.equal(target.sidebars.right?.set, link.set, `saved ${link.plugin} setting is suppressed by the card selection`);
     const original = (await s.get("core.layout")).state;
-    const recording = await s.request("diagnostics.capture.start", {});
+    // A recording takes a still each refresh of the display of the window and is the evidence of the toggles.
+    const recording = await s.record();
     let stop,
       displayed = 0;
-    // The times of the changes of the screen during the recording (judgeShownChanges).
-    const owed = [];
     async function measure(mode) {
       const bars = await s.until(
         "core.sidebars",
@@ -53,22 +51,16 @@ for (const app of Object.values(APPS))
         [],
       );
       ({ displayed } = await s.presented());
-      // The toggles asked for before this measurement are shown by this display.
-      for (const change of owed) change.to ??= displayed;
       t.diagnostic(
         `${mode}: card=${JSON.stringify({ x: card.x, y: card.y, w: card.w, h: card.h })}; right=${JSON.stringify(bar.rect)}; native=${JSON.stringify(native.applied)}; sections=${bar.sections.map((section) => section.id)}; endpoint=${s.client.endpoint.pid}`,
       );
     }
     try {
       await measure("normal");
-      // Each full screen toggle changes the screen: the recording owes frames from the toggle to the display that the next
-      // measurement waits for (judgeShownChanges).
-      owed.push({ from: await owe(s) });
       await s.run("core.card.fullscreen", { card: target.id });
       try {
         await measure("fullscreen");
       } finally {
-        owed.push({ from: await owe(s) });
         await s.run("core.card.fullscreen", { card: target.id });
       }
       await measure("restored");
@@ -76,13 +68,8 @@ for (const app of Object.values(APPS))
       assert.deepEqual((await s.get("core.layout")).state, original, "observation changed saved cards or tabs");
     } finally {
       try {
-        stop = await s.request("diagnostics.capture.stop", { after: displayed ? displayed + 100 : 0 });
-        const captured = frames(recording.frames).map(readFrame);
-        assert.equal(captured.length, stop.count);
-        assert.ok(captured.length > 2);
-        assert.equal(stop.limited, false);
-        judgeShownChanges(stop, owed, { what: "full screen toggle" });
-        t.diagnostic(`frames=${stop.count}; gap=${stop.longestGap}ms`);
+        stop = await recording.stop({ after: displayed ? displayed + 100 : 0 });
+        t.diagnostic(`recording ${recording.frames}: frames=${stop.count}; missed=${stop.missed}; late=${stop.late}; gap=${stop.longestGap}ms`);
       } finally {
         rmSync(recording.frames, { recursive: true, force: true });
       }

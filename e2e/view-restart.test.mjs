@@ -8,7 +8,6 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { readEventLines } from "@soksak/window-check/event-log.mjs";
 import { fresh, START_PLUGIN } from "./fixture.mjs";
 
@@ -40,16 +39,8 @@ async function ready(s, surface, url, { restored = true } = {}) {
 async function stopRecording(s, recording) {
   const { displayed } = await s.presented();
   const result = await recording.stop({ after: displayed });
-  assert.equal(result.limited, false, "the lifecycle recording reached its frame limit");
-  const files = frames(result.frames);
-  assert.ok(files.length > 0, "the lifecycle recording contains no frames");
-  assert.equal(files.length, result.count, "the lifecycle recording omitted frame files");
-  const measured = [];
-  for (const file of files) {
-    const frame = readFrame(file);
-    measured.push({ time: frame.time, width: frame.width, height: frame.height });
-  }
-  return { frames: result.frames, samples: measured };
+  // The recording is the evidence of the lifecycle; the check does not judge it.
+  return { frames: result.frames, count: result.count, missed: result.missed, late: result.late };
 }
 
 for (const app of Object.values(APPS)) {

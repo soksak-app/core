@@ -33,7 +33,7 @@ for (const app of Object.values(APPS)) {
     // preparation restores the setting when the check ends (keepCommonSettings).
     const offsets = currentEventOffsets(s.app.configDir);
     await untilViewReady(s, offsets, () => fresh(s, { log: { call: "debug" }, reads: ["workbench.view.call", "workbench.view.reply"] }));
-    await checkViewDisplay(s, t, undefined, await viewContentCases(s, message => t.diagnostic(message)));
+    await checkViewDisplay(s, t, await viewContentCases(s, message => t.diagnostic(message)));
   });
 }
 

@@ -58,8 +58,8 @@ const VIEW = settings(true, { call: "debug", frame: "trace" });
 export const B3_SETTINGS = Object.freeze({
   "view-drag": Object.freeze({ "0": trace(0), [FRAME_RECORDS]: trace(FRAME_RECORDS) }),
   "resize-catch-up": Object.freeze({
-    // lagStages names the stages of a late layout from the window events, the view joins and the layout phases (F292-41), which the
-    // performance trace stores in the classes lifecycle, call and frame at debug.
+    // The window events, the view joins and the layout phases of the captured gestures (F292-41), which the performance trace stores
+    // in the classes lifecycle, call and frame at debug.
     captured: settings(true, { lifecycle: "debug", call: "debug", frame: "debug" }),
     [FRAME_RECORDS]: trace(FRAME_RECORDS),
   }),

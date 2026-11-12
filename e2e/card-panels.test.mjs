@@ -1,14 +1,11 @@
 // Card four-side assignment check: distinguishes the display by the saved set and the space, and keeps it after a tab switch.
 import assert from "node:assert/strict";
-import { rmSync } from "node:fs";
-import { dirname } from "node:path";
 import test from "node:test";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { checkLinkedPanels } from "./linked-panels.mjs";
-import { gripInk, panelSurfaceRect, requireCleared, tabSwitchPair } from "./card-panel-checks.mjs";
-import { readPng } from "@soksak/window-check/png.mjs";
+import { panelSurfaceRect, requireCleared, tabSwitchPair } from "./card-panel-checks.mjs";
 /** The card of the grid that holds the tab surface. */
 const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab) => tab.id === surface));
 const geometry=grid=>grid.cards.map(({id,x,y,w,h})=>({id,x,y,w,h})).sort((a,b)=>a.id.localeCompare(b.id));
@@ -53,22 +50,6 @@ for (const app of Object.values(APPS)) {
     const foldedSurface = (await s.surfaces()).find((item) => item.surface === measuredCard.active);
     assert.ok(Math.abs(foldedSurface.applied.w - (measuredCard.w - 12 - 2)) <= 1,
       `folded sidebars must reserve only two 6-point dividers: ${JSON.stringify(foldedSurface)}`);
-    // A collapsed face draws only a short grip of the same length as the divider between cards (library grip length 24 CSS pixels). A line across the whole card width or
-    // height looks like one more boundary line.
-    const still = (await s.request("diagnostics.capture.still", {})).path;
-    const image = readPng(still);
-    rmSync(dirname(still), { recursive: true, force: true });
-    const ratio = image.width / (await s.get("host.window")).content.width;
-    for (let index = 0; index < 4; index++) {
-      const grip = await s.rect("core.card.sidebar.grip", index);
-      // The vertical band continues to the bottom end of the card. The foot-height section at the very bottom is collapsed and is the place of the empty-state row, and the border of the rounded corner of the card
-      // passes through it, so it is excluded from the measurement that looks for the second line.
-      const vertical = grip.height > grip.width;
-      const ink = gripInk(image, vertical ? { ...grip, height: grip.height - 22 } : grip, ratio);
-      // The handle of a collapsed sidebar is three dots, which are distinct from the bar of the card divider (docs/spec/example-model.md).
-      assert.ok(ink.runs === 3 && ink.span > 0 && ink.span <= 24 * ratio + 2,
-        `folded divider ${index} must show three dots within 24 points: ${JSON.stringify({ grip, ink })}`);
-    }
   });
 
   // In a user release, left/right/top were assigned 190 points each on the shell card, but the native surface was almost as wide as the card

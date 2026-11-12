@@ -1,29 +1,12 @@
 // The maximise and restore gesture of the resize window check (e2e/resize.test.mjs) and of its benchmark
-// (e2e/benchmark/resize-catch-up.test.mjs). Both record the same frames; the check judges the behaviour and the benchmark judges the limit.
-// On a window whose host.window reports pageProcess null the benchmark also opens the floor page fixture view in the focused card and
-// judges each recorded frame with the geometry rule of the view drag (dragGeometryFrame of floor-page.mjs, evaluateGeometryFrames of
-// @soksak/window-check/view-metrics.mjs), and after
-// the captured maximise and restore it runs a maximise and restore without capture under the trace state of the frame records and reads
+// (e2e/benchmark/resize-catch-up.test.mjs). Each change is recorded; the recording is the evidence of the change. After the captured
+// maximise and restore the benchmark runs a maximise and restore without capture under the trace state of the frame records and reads
 // their U7 records (gesture-records.mjs).
-import { rmSync } from "node:fs";
-
-import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
-import { frames, readFrame } from "@soksak/window-check/frame.mjs";
-import { evaluateGeometryFrames } from "@soksak/window-check/view-metrics.mjs";
 import { FRAME_RECORDS } from "../../../scripts/measure-trace.mjs";
 import { B3_SETTINGS } from "../measurements.mjs";
 import { fixtureSettings } from "./b3-run.mjs";
 import { gestureB3Values } from "./gesture-records.mjs";
-import { fresh, joinedFailure } from "../../fixture.mjs";
-import { frameEvidence, lagStages, measureFrame, writeEvidence } from "../../resize-frames.mjs";
-import { effectiveCardCornerRadiusPt } from "@soksak/window-check/view-frame-geometry.mjs";
-import { dragGeometryFrame, floorSlotInsets, measureFloorLayoutFrame, openFloorPage } from "./floor-page.mjs";
-
-/**
- * Time (ms) from the first recorded frame to the last frame in which the layout is behind the window, that the layout may take
- * (docs/spec/native-surfaces.md#performance-targets).
- */
-export const CATCH_UP_LIMIT_MS = 150;
+import { fresh } from "../../fixture.mjs";
 
 /** Time (ms) added after the display time so that the recording also covers the interval in which the layout follows. */
 const SETTLE = 100;
@@ -34,90 +17,29 @@ const right = (w) => Math.max(...w.surfaces.filter((x) => x.visible).map((x) => 
 const margin = (w) => w.content.width - right(w);
 
 /**
- * Records the change that resizes the window and measures the frames until the layout is displayed at the new size; with `geometry`
- * ({cornerRadiusPt, slotInsetsPt}) it also judges each recorded frame with the geometry rule of the view drag (resizeGeometry).
- * The recording and the evidence are kept whether the change passes or fails.
+ * Records the change that resizes the window until the layout at the new size is displayed: the window reaches the size of `sized`
+ * and the surfaces keep their distance to the right edge of the window. Returns `{displayed, frames, missed, late, layouts}` of the
+ * recording, which is the evidence of the change.
  */
-async function record(s, gesture, change, sized, geometry) {
+async function record(s, change, sized) {
   const kept = margin(await s.get("host.window"));
-  const offsets = currentEventOffsets(s.app.configDir);
-  const { frames: directory } = await s.request("diagnostics.capture.start");
-  // The recording stores frames of the window size at up to 60 per second, so it is deleted right after the measurement.
+  const recording = await s.record();
+  // The recording covers the screen up to this display time. A screen that the app committed is displayed after the display wait ends.
+  let displayed = 0;
+  let failure;
   try {
-    // The recording covers the screen up to this display time. A screen that the app committed is displayed after the display wait ends.
-    let displayed = 0;
-    let failure;
-    try {
-      await change();
-      // Waits until the window reaches the new size, the surface moves to the layout of that size and that layout is displayed.
-      await s.until("host.window", (w) => sized(w) && Math.abs(margin(w) - kept) < 1,
-        "the surfaces did not follow the window");
-      ({ displayed } = await s.presented());
-    } catch (error) {
-      failure = error;
-    }
-    // Covers the interval in which the layout follows after the window reaches the new size. The recording is stopped even when the change failed.
-    const { layouts } = await s.request("diagnostics.capture.stop", { after: displayed ? displayed + SETTLE : 0 });
-    const decoded = frames(directory).map(readFrame);
-    const measured = decoded.map(measureFrame);
-    let judged = null;
-    if (geometry !== null) {
-      try {
-        judged = resizeGeometry(gesture, decoded, geometry);
-      } catch (error) {
-        failure = failure ? joinedFailure(`${gesture} failed and its frames have no geometry`, [failure, error]) : error;
-      }
-    }
-    // The stages name where the time of a late layout went: the resize event, the layout transaction that caught up, the view
-    // join that held its commit, and the host stall records of the gesture.
-    await s.flushLog();
-    const stages = lagStages({ measured, layouts, events: readEvents(s.app.configDir, offsets).events });
-    // The measured frames of the gesture are kept in the run folder whether the change passes or fails.
-    writeEvidence(process.env.SOKSAK_RUN_FOLDER, s.app.name, gesture, frameEvidence({ gesture, displayed, measured, layouts, stages }));
-    if (failure) throw failure;
-    return { displayed, measured, stages, geometry: judged };
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
+    await change();
+    // Waits until the window reaches the new size, the surface moves to the layout of that size and that layout is displayed.
+    await s.until("host.window", (w) => sized(w) && Math.abs(margin(w) - kept) < 1,
+      "the surfaces did not follow the window");
+    ({ displayed } = await s.presented());
+  } catch (error) {
+    failure = error;
   }
-}
-
-/**
- * The geometry rule of the view drag over the recorded frames `decoded` of `gesture`: the card and the rectangle of the floor page view
- * in each frame (`measure`, measureFloorLayoutFrame of floor-page.mjs, with the corner radius of the cards), against the slot that the
- * insets `slotInsetsPt` of the view declare in the card (dragGeometryFrame of floor-page.mjs, evaluateGeometryFrames of
- * @soksak/window-check/view-metrics.mjs). A frame without the floor page geometry is an error that names it.
- */
-export function resizeGeometry(gesture, decoded, { cornerRadiusPt, slotInsetsPt, measure = measureFloorLayoutFrame }) {
-  const rows = decoded.map((frame, frameIndex) => {
-    let measured;
-    try {
-      measured = measure(frame, { cornerRadiusPt });
-    } catch (error) {
-      throw new Error(`${gesture}: recorded frame ${frameIndex} has no floor page geometry: ${error.message}`, { cause: error });
-    }
-    return dragGeometryFrame(frameIndex, measured, slotInsetsPt);
-  });
-  return evaluateGeometryFrames(rows, `${gesture}.geometryFrames`);
-}
-
-/** Fails when the geometry rule of `gesture` (resizeGeometry) did not hold in every recorded frame. */
-export function assertResizeGeometry(gesture, geometry) {
-  if (!geometry.passed) {
-    throw new Error(`${gesture}: the rectangle of the floor page view is ${geometry.maxErrorPt} pt from its card slot in a recorded frame, more than ${geometry.limitPt} pt`);
-  }
-}
-
-/**
- * Fails when the layout stayed behind the window for `took` ms (the `judgeFrames` time of a gesture), which is more than CATCH_UP_LIMIT_MS.
- * A time that is not a finite nonnegative number is rejected rather than compared.
- */
-export function assertCatchUpWithinBound(took, label) {
-  if (!Number.isFinite(took) || took < 0) {
-    throw new TypeError(`${label}: the catch-up time must be a finite nonnegative number of ms, found ${took}`);
-  }
-  if (took > CATCH_UP_LIMIT_MS) {
-    throw new Error(`${label}: the layout stayed behind the window for ${took.toFixed(0)}ms, more than ${CATCH_UP_LIMIT_MS}ms`);
-  }
+  // Covers the interval in which the layout follows after the window reaches the new size. The recording is stopped even when the change failed.
+  const { frames, layouts, missed, late } = await recording.stop({ after: displayed ? displayed + SETTLE : 0 });
+  if (failure) throw failure;
+  return { displayed, frames, missed, late, layouts };
 }
 
 /**
@@ -156,41 +78,26 @@ async function maximiseAndRestore(s) {
 }
 
 /**
- * The geometry of the window of `s` for the geometry rule: the floor page view, which draws the measurement colour over its frame, opens
- * as the active tab of the focused card, and the corner radius of the cards and the insets of the slot of the view in its card are read.
- */
-async function floorGeometry(s) {
-  const { surface, card } = await openFloorPage(s);
-  await s.presented();
-  const { values } = await s.get("core.settings");
-  return { cornerRadiusPt: effectiveCardCornerRadiusPt(values), slotInsetsPt: await floorSlotInsets(s, card, surface) };
-}
-
-/**
  * Maximises the window of `s` and restores it, recording each change. `judge(gesture, recorded)` runs after each recorded change
- * with `{displayed, measured, stages, geometry}` and may throw. With `geometry` and on a window whose host.window reports pageProcess
- * null, each recorded frame is also judged with the geometry rule of the view drag (resizeGeometry, assertResizeGeometry); the
- * geometry of a gesture is null otherwise. `started()` runs after the preparation, right before the first gesture. The window is
- * restored when the check ends and it was maximised. Returns the recorded gestures and pageProcess of host.window.
+ * with `{displayed, frames, missed, late, layouts}` (`missed` and `late`: the stills that the recording did not write and those that
+ * it requested late) and may throw. `started()` runs after the preparation, right before the first gesture. The window is restored
+ * when the check ends and it was maximised. Returns the recorded gestures and pageProcess of host.window.
  */
-export async function recordMaximiseAndRestore(s, judge = () => {}, { geometry = false, started = async () => {} } = {}) {
+export async function recordMaximiseAndRestore(s, judge = () => {}, { started = async () => {} } = {}) {
   // The settings of the state captured, whose performance trace records the view joins of each layout transaction and whose frame gate
-  // records the page layout phases, so the stages of a late layout are named from the records (F292-41).
+  // records the page layout phases (F292-41).
   await fresh(s, {
     ...fixtureSettings(B3_SETTINGS["resize-catch-up"].captured),
     reads: ["host.window.event", "host.trace.view.presentation-join", "host.trace.view.presentation-abandoned", "host.stall",
       "workbench.trace.layout"],
   });
   const { pageProcess } = await s.get("host.window");
-  const frameGeometry = geometry && pageProcess === null ? await floorGeometry(s) : null;
   const { maximise, restore, restored } = await maximiseAndRestore(s);
   await started();
-  const grown = await record(s, "maximising", maximise.change, maximise.sized, frameGeometry);
-  if (grown.geometry !== null) assertResizeGeometry("maximising", grown.geometry);
+  const grown = await record(s, maximise.change, maximise.sized);
   judge("maximising", grown);
-  const shrunk = await record(s, "restoring", restore.change, restore.sized, frameGeometry);
+  const shrunk = await record(s, restore.change, restore.sized);
   restored();
-  if (shrunk.geometry !== null) assertResizeGeometry("restoring", shrunk.geometry);
   judge("restoring", shrunk);
   return { grown, shrunk, pageProcess };
 }

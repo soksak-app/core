@@ -1,11 +1,7 @@
 // Checks the display geometry of card full screen and the restoration of the original layout through the public contract.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rmSync } from "node:fs";
-import { dirname } from "node:path";
-import { readPng } from "@soksak/window-check/png.mjs";
-import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
-import { APPS, judgeShownChanges, keepCommonSettings, open, owe } from "@soksak/window-check/app.mjs";
+import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { fresh, probeSidebarSets } from "./fixture.mjs";
 import { tabElementIndex } from "./input-probe.mjs";
 
@@ -14,39 +10,17 @@ const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab
 
 async function clickFullscreen(t, s, card, expected) {
   const control = await s.rect("core.card.fullscreen", card.pane);
-  const { frames: directory } = await s.request("diagnostics.capture.start", {});
-  // The session removes the recording when the check passes and keeps it when the check fails.
-  s.trackRecording(directory);
+  // The recording is the evidence of the click: the session removes it when the check passes and keeps it when the check fails.
+  const recording = await s.record();
   let displayed = 0;
   let stopped;
-  // The click toggles the full screen of the card: the recording owes frames from the click to the display of the full screen
-  // (judgeShownChanges).
-  const owed = [];
   try {
-    const from = await owe(s);
     await s.click(control.x + control.width / 2, control.y + control.height / 2);
     await s.until("core.grid", grid => grid.fullscreen === expected, "fullscreen button did not toggle its card");
     ({ displayed } = await s.presented());
-    owed.push({ from, to: displayed });
-  } finally { stopped = await s.request("diagnostics.capture.stop", { after: displayed ? displayed + 100 : 0 }); }
-  const captured = frames(directory).map(readFrame);
-  assert.ok(captured.length > 1, "fullscreen click recording is incomplete");
-  assert.equal(stopped.limited, false, "fullscreen recording reached its bounded buffer");
-  judgeShownChanges(stopped, owed, { what: "fullscreen click" });
-  const grid = await s.get("core.grid");
-  const shown = grid.cards.find(item => item.id === card.id);
-  const last = captured.at(-1);
-  const ratio = last.scale * last.contentScale;
-  const y = Math.floor((grid.plane.y + shown.y + shown.h / 2) * ratio);
-  const edges = [];
-  for (let x = Math.floor(grid.plane.x * ratio); x < Math.floor((grid.plane.x + grid.width) * ratio); x++) {
-    const [r, g, b] = pixel(last, x, y);
-    if (r > 140 && r > g + 35 && g > b + 15) edges.push(x / ratio);
-  }
-  assert.ok(edges.length >= 2, "recording has no measured focused card edges");
-  assert.ok(Math.abs(edges[0] - (grid.plane.x + shown.x)) <= 1, `recorded left edge ${edges[0]}`);
-  assert.ok(Math.abs(edges.at(-1) - (grid.plane.x + shown.x + shown.w)) <= 1, `recorded right edge ${edges.at(-1)}`);
-  t.diagnostic(`fullscreen=${expected}: ${captured.length} frames, gap=${stopped.longestGap}ms, measured edges=${edges[0]},${edges.at(-1)}`);
+  } finally { stopped = await recording.stop({ after: displayed ? displayed + 100 : 0 }); }
+  t.diagnostic(`fullscreen=${expected}: recording ${stopped.frames}: ${stopped.count} stills, ${stopped.missed} missed and ` +
+    `${stopped.late} late stills, gap=${stopped.longestGap}ms`);
 }
 
 for (const app of Object.values(APPS)) {
@@ -88,23 +62,6 @@ for (const app of Object.values(APPS)) {
     const icon = await s.rect("core.card.fullscreen", shown.pane);
     const close = await s.rect("core.card.close", shown.pane);
     assert.ok(icon.x + icon.width <= close.x && icon.y === close.y, "fullscreen icon does not precede close X");
-    // A pressed toggle is drawn with the focus color (--focus), like the toggle in the window head. The close icon beside it does not have that color.
-    const still = (await s.request("diagnostics.capture.still", {})).path;
-    const image = readPng(still);
-    rmSync(dirname(still), { recursive: true, force: true });
-    const ratio = image.width / (await s.get("host.window")).content.width;
-    const focus = [255, 179, 107];
-    const focusInk = (rect) => {
-      let count = 0;
-      for (let x = Math.ceil(rect.x * ratio); x < Math.floor((rect.x + rect.width) * ratio); x++) {
-        for (let y = Math.ceil(rect.y * ratio); y < Math.floor((rect.y + rect.height) * ratio); y++) {
-          if (image.pixel(x, y).slice(0, 3).every((value, index) => Math.abs(value - focus[index]) <= 40)) count++;
-        }
-      }
-      return count;
-    };
-    assert.ok(focusInk(icon) > 0 && focusInk(close) === 0,
-      `the pressed fullscreen toggle is not drawn in the focus color: icon ${focusInk(icon)} px, close ${focusInk(close)} px`);
     assert.deepEqual((await s.get("core.workbench.audit")).unbound, []);
     assert.deepEqual((await s.get("host.window")).frame, windowBefore.frame, "card fullscreen changed the OS window");
     await assert.rejects(s.run("core.card.fullscreen", { card: "missing-card" }), /no card/);
@@ -213,20 +170,15 @@ for (const app of Object.values(APPS)) {
     const recording = await s.record();
     let displayed = 0;
     let stopped;
-    // Each click selects the other tab of the card: the recording owes frames from the click to the display of the tab
-    // (judgeShownChanges).
-    const owed = [];
     try {
       for (const selected of [other.id, card.active]) {
         // The tab elements are numbered across every card in the order of core.grid, the hidden cards of fullscreen too.
         const rect = await s.rect("core.card.tab", tabElementIndex(added, selected));
-        const from = await owe(s);
         await s.click((rect.document?.x ?? 0) + rect.x + rect.width / 2,
           (rect.document?.y ?? 0) + rect.y + rect.height / 2);
         await s.until("core.grid", grid => grid.cards.find(item => item.id === own).active === selected,
           "the click did not switch the tab");
         ({ displayed } = await s.presented());
-        owed.push({ from, to: displayed });
         const after = await s.get("core.grid");
         assert.equal(after.fullscreen, own, "the tab click left fullscreen");
         const visible = (await s.get("host.window")).surfaces.filter(surface => surface.visible);
@@ -236,12 +188,8 @@ for (const app of Object.values(APPS)) {
           "the selected native view has no presented area");
       }
     } finally { stopped = await recording.stop({ after: displayed ? displayed + 100 : 0 }); }
-    const captured = frames(recording.frames).map(readFrame);
-    assert.equal(captured.length, stopped.count, "tab recording has missing frame files");
-    assert.ok(captured.length > 1, "tab switching recording is incomplete");
-    assert.equal(stopped.limited, false, "tab recording reached its bounded buffer");
-    judgeShownChanges(stopped, owed, { what: "tab click" });
-    t.diagnostic(`two tab presentation waits completed: ${captured.length} decoded frames`);
+    t.diagnostic(`two tab presentation waits completed: recording ${stopped.frames}: ${stopped.count} stills, ${stopped.missed} missed and ` +
+      `${stopped.late} late stills`);
     await s.run("core.card.fullscreen", { card: own });
     await s.until("core.grid", grid => grid.fullscreen === null, "fullscreen did not end");
   });

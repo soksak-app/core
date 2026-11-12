@@ -14,30 +14,3 @@ export function sourceIntervalSummary(sourceFrames, gestureStartedAtMs, gestureE
     maxMs: intervals.at(-1),
   };
 }
-
-/** The times and the positions (points) of the frames whose moved card edge measure reads, and the indexes of the other frames. */
-export function cardEdgeSamples(frames, measure) {
-  const samples = [];
-  const unmeasured = [];
-  frames.forEach((frame, index) => {
-    const position = measure(frame);
-    if (position === null) unmeasured.push(index);
-    else samples.push({ time: frame.time, position });
-  });
-  return { samples, unmeasured };
-}
-
-/**
- * The time (ms) and the captured frames from the end of the gesture to the first frame from which the measured edge stays
- * within 2 points of its final position, and that position.
- */
-export function cardEdgeConvergence(samples, gestureEndedAtMs) {
-  const ended = samples.findIndex(({ time }) => time >= gestureEndedAtMs);
-  if (ended < 0) {
-    throw new Error(`no measured frame at or after the gesture end ${gestureEndedAtMs}; the last frame is at ${samples.at(-1)?.time}`);
-  }
-  const finalPosition = samples.at(-1).position;
-  let settled = samples.length - 1;
-  while (settled > ended && Math.abs(samples[settled - 1].position - finalPosition) <= 2) settled -= 1;
-  return { ms: samples[settled].time - gestureEndedAtMs, frames: settled - ended, finalPosition };
-}

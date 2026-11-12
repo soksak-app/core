@@ -4,6 +4,7 @@ import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh, joinedFailure } from "./fixture.mjs";
 import { preserveDisplayLinkArtifact } from "./display-link-artifact.mjs";
+import { requireNoLostStills } from "@soksak/window-check/stills.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: capture stop preserves its display-link metadata`, { timeout: 120000 }, async (t) => {
@@ -26,6 +27,7 @@ for (const app of Object.values(APPS)) {
       const { displayed } = await s.presented();
       stopAttempted = true;
       stop = await recording.stop({ after: displayed });
+      requireNoLostStills(recording.judge(), "the display-link recording");
     } catch (error) {
       failures.push(error);
     }

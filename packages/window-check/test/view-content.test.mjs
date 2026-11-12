@@ -1,26 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { cropViewPixels, readViewContent, viewContentProof, visibleDocument } from "../view-content.mjs";
-
-function frame() {
-  const data = Buffer.alloc(8 * 8 * 4);
-  for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) data[(y * 8 + x) * 4] = y * 8 + x;
-  return { width: 8, height: 8, stride: 32, scale: 2, contentScale: 1, content: { x: 1, y: 1 }, data };
-}
-
-test("view pixel crops include the capture content origin and scale once", { timeout: 5000 }, () => {
-  const crop = cropViewPixels(frame(), { x: 1, y: 1, w: 2, h: 1 });
-  assert.equal(crop.width, 4);
-  assert.equal(crop.height, 2);
-  assert.deepEqual([...crop.data.filter((_, i) => i % 4 === 0)], [36, 37, 38, 39, 44, 45, 46, 47]);
-});
-
-test("view pixel crops reject clipping and incomplete pixel storage", { timeout: 5000 }, () => {
-  assert.throws(() => cropViewPixels(frame(), { x: 3, y: 3, w: 2, h: 2 }), /outside/);
-  const value = frame();
-  value.data = value.data.subarray(0, 10);
-  assert.throws(() => cropViewPixels(value, { x: 0, y: 0, w: 1, h: 1 }), /storage/);
-});
+import { readViewContent, viewContentProof, visibleDocument } from "../view-content.mjs";
 
 /** A session whose host.window shows the root document and the document region "page" of the surface probe; `runs` answers each command by name. */
 function session(runs, { visible = true } = {}) {

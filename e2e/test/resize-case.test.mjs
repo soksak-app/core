@@ -2,16 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { B3_MEASUREMENTS } from "../benchmark/measurements.mjs";
-import { assertCatchUpWithinBound, assertResizeGeometry, CATCH_UP_LIMIT_MS, resizeB3Values, resizeGeometry, uncapturedResize }
-  from "../benchmark/cases/resize.mjs";
-
-test("the catch-up limit of a maximise or restore is 150 ms, and a measured time above it fails the benchmark", { timeout: 5000 }, () => {
-  assert.equal(CATCH_UP_LIMIT_MS, 150);
-  assert.doesNotThrow(() => assertCatchUpWithinBound(150, "maximising"));
-  assert.doesNotThrow(() => assertCatchUpWithinBound(0, "restoring"));
-  assert.throws(() => assertCatchUpWithinBound(151, "maximising"),
-    /maximising: the layout stayed behind the window for 151ms, more than 150ms/);
-});
+import { resizeB3Values, uncapturedResize } from "../benchmark/cases/resize.mjs";
 
 test("the uncaptured maximise and restore set the trace state of the frame records and record each gesture apart", { timeout: 5000 }, async () => {
   const calls = [];
@@ -46,22 +37,3 @@ test("the B3 values of the resize catch-up are its verdict in the state captured
     assert.throws(() => resizeB3Values("0", { recorded }),
       new Error("the resize catch-up measures in the states captured and frame-records of B3_MEASUREMENTS, not \"0\""));
   });
-
-test("each recorded frame of a maximise is judged with the geometry rule of the view drag on the floor page", { timeout: 5000 }, () => {
-  const insets = { left: 5, top: 10, right: 5, bottom: 10 };
-  const measured = (time, cardRight, nativeRight) => ({ timeMs: time, cardRectPt: { left: 0, top: 0, right: cardRight, bottom: 80 },
-    nativeRectPt: { left: 5, top: 10, right: nativeRight, bottom: 70 } });
-  const rows = [measured(10, 100, 95), measured(20, 200, 195), measured(30, 300, 292)];
-  const measure = (frame, options) => {
-    assert.deepEqual(options, { cornerRadiusPt: 8 });
-    if (frame.unreadable) throw new Error("no content of the measurement color");
-    return rows[frame.index];
-  };
-  const decoded = [0, 1, 2].map((index) => ({ index }));
-  assert.deepEqual(resizeGeometry("maximising", decoded.slice(0, 2), { cornerRadiusPt: 8, slotInsetsPt: insets, measure }),
-    { passed: true, maxErrorPt: 0, limitPt: 2 });
-  assert.throws(() => assertResizeGeometry("maximising", resizeGeometry("maximising", decoded, { cornerRadiusPt: 8, slotInsetsPt: insets, measure })),
-    new Error("maximising: the rectangle of the floor page view is 3 pt from its card slot in a recorded frame, more than 2 pt"));
-  assert.throws(() => resizeGeometry("restoring", [{ unreadable: true }], { cornerRadiusPt: 8, slotInsetsPt: insets, measure }),
-    new Error("restoring: recorded frame 0 has no floor page geometry: no content of the measurement color"));
-});

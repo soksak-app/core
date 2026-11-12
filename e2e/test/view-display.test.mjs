@@ -4,9 +4,12 @@ import {
   checkViewDisplay as acceptViewDisplay, expectedPresentations, observeViewDisplay as checkViewDisplay, rasterIdentity,
   appDomWebviews, viewPresentationJoins, viewWebviews,
 } from "../view-display.mjs";
+/** The stop reply of a recording of `count` written stills. */
+const stopReply = (count) => ({ frames: "fixture-recording", stills: "fixture-recording/stills.jsonl", count, missed: 0, late: 0,
+  longestGap: 16 });
 
-/** A window with two installed views but only one open card, and decoded frames of that card. */
-function fixture({ blank = false, offset = 0, openedOnly = false } = {}) {
+/** A window with two installed views but only one open card. */
+function fixture({ openedOnly = false } = {}) {
   const applied = { x: 20, y: 40, w: 120, h: 80 };
   const card = { id: "probe-card", x: 0, y: 0, w: 160, h: 140, focused: true, tabs: [{ id: "probe-original", plugin: "layoutprobe" }] };
   const surface = (id, plugin) => ({ surface: id, plugin, visible: true, composition: "view", applied, declared: applied,
@@ -14,14 +17,6 @@ function fixture({ blank = false, offset = 0, openedOnly = false } = {}) {
   const original = surface("probe-original", "layoutprobe");
   let current = null;
   const opened = [];
-  const frame = { width: 400, height: 400, stride: 1600, scale: 1, contentScale: 1,
-    content: { x: offset, y: offset, width: 160, height: 140 }, time: 200, data: Buffer.alloc(640000, 255) };
-  const paint = (x, y, value) => {
-    const at = (y + offset) * frame.stride + (x + offset) * 4;
-    frame.data[at] = value; frame.data[at + 1] = value; frame.data[at + 2] = value;
-  };
-  if (blank) for (let y = 0; y < 30; y++) for (let x = 0; x < 160; x++) paint(x, y, x < 80 ? 0 : 160);
-  else for (let y = 40; y < 120; y++) for (let x = 20; x < 80; x++) paint(x, y, 0);
   const plugins = (openedOnly ? ["layoutprobe"] : ["layoutprobe", "probe-unopened"]).map((id) => ({ id, composition: "view", state: "loaded",
     installed: { enabled: true, version: "0.0.1" } }));
   const s = {
@@ -57,43 +52,33 @@ function fixture({ blank = false, offset = 0, openedOnly = false } = {}) {
       return value;
     },
     async presented() { return { displayed: 150 }; },
-    async record() { return { frames: "fixture-recording", stop: async () => ({ count: 2, limited: false, longestGap: 16 }) }; },
+    async record() { return { frames: "fixture-recording", stop: async () => stopReply(2) }; },
   };
-  return { s, opened, readRecording: () => [frame, { ...frame, time: 216 }] };
+  return { s, opened };
 }
 
 test("the view display checker covers an installed view that has no open card", { timeout: 5000 }, async (t) => {
   const f = fixture();
-  await checkViewDisplay(f.s, t, f.readRecording);
+  await checkViewDisplay(f.s, t);
   assert.deepEqual(f.opened, ["layoutprobe", "probe-unopened"], "an installed view without a card was omitted");
-});
-
-test("the view display checker rejects a blank view surrounded by coloured card chrome", { timeout: 5000 }, async (t) => {
-  const f = fixture({ blank: true });
-  await assert.rejects(checkViewDisplay(f.s, t, f.readRecording), /blank|no recorded frame.*content/);
-});
-
-test("the view display checker measures content at a nonzero capture offset", { timeout: 5000 }, async (t) => {
-  const f = fixture({ offset: 200 });
-  await checkViewDisplay(f.s, t, f.readRecording);
 });
 
 test("the view display checker rejects a missing plugin content case with its opened tab", { timeout: 5000 }, async (t) => {
   const f = fixture();
-  await assert.rejects(acceptViewDisplay(f.s, t, f.readRecording, new Map(), ["layoutprobe"]), /layoutprobe.*probe-tab-1.*content case/);
+  await assert.rejects(acceptViewDisplay(f.s, t, new Map(), ["layoutprobe"]), /layoutprobe.*probe-tab-1.*content case/);
 });
 
 test("the view display check opens only the view plugins of its content cases", { timeout: 5000 }, async (t) => {
   const f = fixture();
-  await acceptViewDisplay(f.s, t, f.readRecording, new Map([["layoutprobe", { ready: async () => async () => {} }]]));
+  await acceptViewDisplay(f.s, t, new Map([["layoutprobe", { ready: async () => async () => {} }]]));
   assert.deepEqual(f.opened, ["layoutprobe"], "the check opened an installed view that has no content case");
 });
 
 test("the view display check refuses a vehicle that is not an installed enabled view and a check without a vehicle", { timeout: 5000 }, async (t) => {
   const f = fixture();
-  await assert.rejects(acceptViewDisplay(f.s, t, f.readRecording, new Map([["probe-missing", { ready: async () => async () => {} }]])),
+  await assert.rejects(acceptViewDisplay(f.s, t, new Map([["probe-missing", { ready: async () => async () => {} }]])),
     /probe-missing is not an installed enabled view plugin/);
-  await assert.rejects(acceptViewDisplay(f.s, t, f.readRecording, new Map()), /names no view plugin to open/);
+  await assert.rejects(acceptViewDisplay(f.s, t, new Map()), /names no view plugin to open/);
   assert.deepEqual(f.opened, [], "a refused check opened a view");
 });
 
@@ -102,9 +87,9 @@ test("view content readiness is verified before the recording stops", { timeout:
   let stopped = false;
   f.s.record = async () => ({ frames: "fixture-recording", stop: async () => {
     stopped = true;
-    return { count: 2, limited: false, longestGap: 16 };
+    return stopReply(2);
   } });
-  await acceptViewDisplay(f.s, t, f.readRecording, new Map([["layoutprobe", { ready: async () => {
+  await acceptViewDisplay(f.s, t, new Map([["layoutprobe", { ready: async () => {
     assert.equal(stopped, false, "recording ended before content readiness");
     return async () => {};
   } }]]));
@@ -122,14 +107,14 @@ test("a failed view readiness check closes the opened tab", { timeout: 5000 }, a
     }
     return until(...args);
   };
-  await assert.rejects(acceptViewDisplay(f.s, t, f.readRecording, new Map(), ["layoutprobe"]), /forced surface readiness failure/);
+  await assert.rejects(acceptViewDisplay(f.s, t, new Map(), ["layoutprobe"]), /forced surface readiness failure/);
   assert.deepEqual((await f.s.get("core.surfaces")).map(item => item.surface), ["probe-original"],
     "failed view preparation left its opened tab in the next check");
 });
 
 test("view display rejects a readiness-only case without a content verifier", { timeout: 5000 }, async (t) => {
   const f = fixture({ openedOnly: true });
-  await assert.rejects(acceptViewDisplay(f.s, t, f.readRecording,
+  await assert.rejects(acceptViewDisplay(f.s, t,
     new Map([["layoutprobe", { ready: async () => undefined }]])), /content verifier/);
 });
 
@@ -138,21 +123,15 @@ test("view display runs the content verifier of the case after the recording sto
   let stopped = false;
   f.s.record = async () => ({ frames: "fixture-recording", stop: async () => {
     stopped = true;
-    return { count: 2, limited: false, longestGap: 16 };
+    return stopReply(2);
   } });
   let verified = false;
-  await acceptViewDisplay(f.s, t, f.readRecording, new Map([["layoutprobe", { ready: async () => async (...args) => {
+  await acceptViewDisplay(f.s, t, new Map([["layoutprobe", { ready: async () => async (...args) => {
     assert.deepEqual(args, [], "the content verifier received recorded pixels");
     assert.equal(stopped, true, "the content verifier ran before the recording stopped");
     verified = true;
   } }]]));
   assert.equal(verified, true, "the content verifier was never executed");
-});
-
-test("view display rejects missing finalized frame files", { timeout: 5000 }, async (t) => {
-  const f = fixture({ openedOnly: true });
-  f.s.record = async () => ({ frames: "fixture-recording", stop: async () => ({ count: 3, limited: false, longestGap: 16 }) });
-  await assert.rejects(checkViewDisplay(f.s, t, f.readRecording), /frame.*count|missing.*frame/);
 });
 
 test("view display audits controls after its declared content readiness", { timeout: 5000 }, async (t) => {
@@ -164,18 +143,18 @@ test("view display audits controls after its declared content readiness", { time
     if (args[0] === "core.surface.document" && !ready) return { ...value, unbound: [{ role: "button" }] };
     return value;
   };
-  await acceptViewDisplay(f.s, t, f.readRecording, new Map([["layoutprobe", { ready: async () => {
+  await acceptViewDisplay(f.s, t, new Map([["layoutprobe", { ready: async () => {
     ready = true;
     return async () => {};
   } }]]));
 });
 
-test("a content verifier decides the content of a view whose sampled colours are blank", { timeout: 5000 }, async (t) => {
-  const f = fixture({ openedOnly: true, blank: true });
-  await assert.rejects(acceptViewDisplay(f.s, t, f.readRecording, new Map([["layoutprobe", { ready: async () => async () => {
+test("a content verifier decides the content of a view", { timeout: 5000 }, async (t) => {
+  const f = fixture({ openedOnly: true });
+  await assert.rejects(acceptViewDisplay(f.s, t, new Map([["layoutprobe", { ready: async () => async () => {
     throw new Error("layoutprobe probe-tab-1 does not show the expected text");
   } }]])), /does not show the expected text/);
-  await acceptViewDisplay(f.s, t, f.readRecording, new Map([["layoutprobe", { ready: async () => async () => {} }]]));
+  await acceptViewDisplay(f.s, t, new Map([["layoutprobe", { ready: async () => async () => {} }]]));
 });
 
 const traceRow = (event, fields) => ({ layer: "host", event, ts: "2026-10-29T00:00:00.000Z", ...fields });

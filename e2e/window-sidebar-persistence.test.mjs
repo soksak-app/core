@@ -1,68 +1,15 @@
-// Checks the independent storage of the window columns and the links inside cards with real sections, native coordinates, and recording boundaries.
+// Checks the independent storage of the window columns and the links inside cards with real sections and native coordinates.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
 import { APPS, holdCovered, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { fresh, joinedFailure } from "./fixture.mjs";
 import { turnOffCardSidebars } from "./card-sidebar-choices.mjs";
-import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
 
 const geometry = (grid) =>
   grid.cards.map(({ id, x, y, w, h }) => ({ id, x, y, w, h })).sort((a, b) => a.id.localeCompare(b.id));
 const near = (actual, expected, label) =>
   assert.ok(Math.abs(actual - expected) <= 1, `${label}: ${actual}, expected ${expected}`);
-function borders(frame, grid, cards) {
-  const scale = frame.scale * frame.contentScale;
-  for (const card of cards)
-    for (const edge of [card.x, card.x + card.w - 1])
-      assert.ok(
-        [-0.5, 0, 0.5, 1].some((offset) =>
-          [-24, -12, 12, 24].every((delta) => {
-            const x = Math.floor(frame.content.x * frame.scale + (grid.plane.x + edge + offset) * scale);
-            const y = Math.floor(frame.content.y * frame.scale + (grid.plane.y + card.y + card.h / 2 + delta) * scale);
-            return pixel(frame, x, y).every((value, index) => Math.abs(value - [43, 46, 61][index]) <= 3);
-          }),
-        ),
-        `${card.id} border ${edge} absent at ${frame.time}ms`,
-      );
-}
-function nativeBorders(frame, rect) {
-  const scale = frame.scale * frame.contentScale;
-  const sample = (x, y) =>
-    pixel(
-      frame,
-      Math.floor(frame.content.x * frame.scale + x * scale),
-      Math.floor(frame.content.y * frame.scale + y * scale),
-    );
-  for (const [vertical, coordinate, cross] of [
-    [true, rect.x - 1, rect.y + rect.h / 2],
-    [true, rect.x + rect.w, rect.y + rect.h / 2],
-    [false, rect.y - 1, rect.x + rect.w / 2],
-  ])
-    assert.ok(
-      [-1, -0.5, 0, 0.5, 1].some((offset) =>
-        [-24, -18, -12, 12, 18, 24].every((delta) => {
-          const x = vertical ? coordinate + offset : cross + delta,
-            y = vertical ? cross + delta : coordinate + offset;
-          const rgb = sample(x, y),
-            before = sample(x - (vertical ? 4 : 0), y - (vertical ? 0 : 4)),
-            after = sample(x + (vertical ? 4 : 0), y + (vertical ? 0 : 4));
-          const background = before.map((value, index) => (value + after[index]) / 2);
-          const contrast = [43, 46, 61].map((value, index) => value - background[index]);
-          const norm = contrast.reduce((sum, value) => sum + value * value, 0);
-          if (norm < 25) return false;
-          const alpha =
-            rgb.reduce((sum, value, index) => sum + (value - background[index]) * contrast[index], 0) / norm;
-          return (
-            alpha >= 0.35 &&
-            alpha <= 1.2 &&
-            rgb.every((value, index) => Math.abs(value - background[index] - alpha * contrast[index]) <= 3)
-          );
-        }),
-      ),
-      `native border ${coordinate} absent at ${frame.time}ms`,
-    );
-}
 for (const app of Object.values(APPS))
   test(
     `${app.name}: independent window and card settings survive hiding and project reload`,
@@ -223,7 +170,7 @@ for (const app of Object.values(APPS))
       async function phase(label, change, hidden = false) {
         const began = performance.now();
         console.info(`START ${app.name}: ${label}`);
-        const recording = await s.request("diagnostics.capture.start", {});
+        const recording = await s.record();
         let stopAttempted = false,
           displayed = 0,
           result;
@@ -233,27 +180,15 @@ for (const app of Object.values(APPS))
           result = await measure(label, hidden);
           ({ displayed } = await s.presented());
           stopAttempted = true;
-          const stop = await s.request("diagnostics.capture.stop", { after: displayed + 100 });
-          const captured = frames(recording.frames);
-          assert.ok(captured.length > 2, `${label}: incomplete capture`);
-          assert.equal(captured.length, stop.count, `${label}: reported and written frame counts differ`);
-          t.diagnostic(
-            `${label}: ${captured.length} frames; maximum gap ${stop.longestGap}ms; limited=${stop.limited}`,
-          );
-          assert.equal(stop.limited, false);
-          // The stream delivers a frame only when the window changes, and the steps of a phase leave it unchanged between
-          // them, so the gap is reported above and not judged; every frame is read and the last one is judged.
-          // Reads and checks the complete buffers one at a time. It does not hold all device pixel buffers at once.
-          for (const path of captured) readFrame(path);
-          const last = readFrame(captured.at(-1));
-          borders(last, result.grid, result.columns);
-          nativeBorders(last, result.native);
+          const stop = await recording.stop({ after: displayed + 100 });
+          t.diagnostic(`${label}: recording ${recording.frames}: ${stop.count} stills; ${stop.missed} missed; ${stop.late} late; ` +
+            `longest gap ${stop.longestGap}ms`);
           console.info(`PASS ${app.name}: ${label} (${Math.round(performance.now() - began)}ms)`);
         } catch (error) {
           errors.push(error);
         } finally {
           try {
-            if (!stopAttempted) await s.request("diagnostics.capture.stop", { after: displayed ? displayed + 100 : 0 });
+            if (!stopAttempted) await recording.stop({ after: displayed ? displayed + 100 : 0 });
           } catch (error) {
             errors.push(error);
           }

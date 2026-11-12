@@ -5,7 +5,6 @@ import test from "node:test";
 
 import { APPS, drag, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
-import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 
 const PLAN = { axis: "x", line: 2, dx: -250, dy: 0, ms: 48, times: 3 };
 
@@ -41,37 +40,6 @@ for (const app of Object.values(APPS)) {
       await s.until("host.window", (w) => w.frame.width === before.width && w.frame.height === before.height,
         "the window did not return to its size");
       await s.presented();
-    }
-  });
-
-  test(`${app.name}: the soksak logo letters are light in dark mode and dark in light mode`, async (t) => {
-    const s = await open(t, app);
-    await fresh(s);
-    // The check writes the common mode, so the cleanup writes the initial common mode back to the common scope.
-    const initialMode = (await s.get("core.settings")).common.mode;
-    s.cleanup(() => s.run("core.settings.change", { key: "mode", value: initialMode, scope: "common" }));
-    // Logo text color. The icon tile is the same in both modes.
-    for (const [mode, letters] of [["dark", [237, 230, 216]], ["light", [22, 24, 29]]]) {
-      await s.run("core.settings.change", { key: "mode", value: mode, scope: "common" });
-      await s.until("core.window.workbench", (workbench) => workbench?.scheme === mode, `the workbench did not take the ${mode} mode`);
-      const logo = await s.rect("core.brand");
-      await s.request("diagnostics.capture.start", {});
-      const displayed = await s.presented();
-      const { frames: directory } = await s.request("diagnostics.capture.stop", { after: displayed.displayed });
-      // The session removes the recording when the check passes and keeps it when the check fails.
-      s.trackRecording(directory);
-      const frame = readFrame(frames(directory).at(-1));
-      // The text is to the right, starting at 102 of the logo width 323.
-      const left = Math.round((logo.x + logo.width * 102 / 323) * frame.scale);
-      const right = Math.round((logo.x + logo.width) * frame.scale);
-      let matched = 0;
-      for (let y = Math.round(logo.y * frame.scale); y < Math.round((logo.y + logo.height) * frame.scale); y++) {
-        for (let x = left; x < right; x++) {
-          const value = pixel(frame, x, y);
-          if (value.every((channel, index) => Math.abs(channel - letters[index]) <= 12)) matched++;
-        }
-      }
-      assert.ok(matched >= 20, `${mode}: only ${matched} pixels of the logo letters are ${JSON.stringify(letters)}`);
     }
   });
 

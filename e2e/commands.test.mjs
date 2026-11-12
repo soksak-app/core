@@ -186,14 +186,6 @@ for (const app of Object.values(APPS)) {
       await s.run("host.window.maximize", { on: false });
       await s.run("host.window.resize", { width: initialWindow.content.width, height: initialWindow.content.height });
     });
-    let captureActive = false;
-    s.cleanup(async () => {
-      if (!captureActive) return;
-      const stopped = await s.request("diagnostics.capture.stop", { after: 0 });
-      captureActive = false;
-      s.trackRecording(stopped.frames);
-      if (stopped.limited) throw new Error("the aborted chrome width capture reached its frame limit");
-    });
 
     const chromeViewport = async (geometry) => {
       const workbench = await s.get("core.window.workbench");
@@ -276,13 +268,13 @@ for (const app of Object.values(APPS)) {
       let capture = null;
       if (width === maxWidth) {
         try {
-          capture = await s.request("diagnostics.capture.start", {});
+          // The session stops a recording that the check did not stop and keeps it with a failed check (Session.record).
+          capture = await s.record();
         } catch (error) {
           failures.push({ width, name: "diagnostics.capture.start", error: error.message });
           t.diagnostic(`recording start failed at ${width}: ${error.message}`);
         }
       }
-      captureActive = Boolean(capture);
       await s.run("host.window.resize", { width, height: initialWindow.content.height });
       const resized = await s.until("host.window", (window) => window.content.width === width,
         `the window did not reach test width ${width}`);
@@ -301,16 +293,11 @@ for (const app of Object.values(APPS)) {
       const projects = await clickChrome("core.chrome.projects");
       if (capture) {
         const { displayed } = await s.presented();
-        const stopped = await s.request("diagnostics.capture.stop", { after: displayed });
-        captureActive = false;
+        const stopped = await capture.stop({ after: displayed });
         s.cleanup(() => rmSync(stopped.frames, { recursive: true, force: true }));
-        assert.equal(stopped.limited, false, `the complete resize-and-project-click recording reached its frame limit at ${width}`);
-        assert.ok(stopped.count > 0, `the resize-and-project-click recording has no frames at ${width}`);
-        // The stream delivers a complete frame only when the screen changes, so the longest gap of this recording is the
-        // longest time without a change between the steps of the check, which the load of the machine lengthens; it is
-        // reported and not judged. The clicks and their effects below judge the controls at this width.
+        // The clicks and their effects below judge the controls at this width; the recording is their evidence.
         t.diagnostic(`complete resize-and-project-click recording ${JSON.stringify({ width, count: stopped.count,
-          longestGap: stopped.longestGap, frames: stopped.frames })}`);
+          missed: stopped.missed, late: stopped.late, longestGap: stopped.longestGap, frames: stopped.frames })}`);
       }
       projects.before = projectBefore;
       await clickEffect(projects.owner, "core.screen", (value) => value.screen === "library", `projects icon did not open the library at ${width}`);
