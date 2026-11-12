@@ -114,9 +114,14 @@ int main(void) { @autoreleasepool {
     NSScreen *last = NSScreen.screens.lastObject;
     check(last != nil, @"the check found no display");
     NSRect area = last.visibleFrame;
-    NSWindow *front = [[NSWindow alloc] initWithContentRect:NSMakeRect(NSMinX(area) + 10, NSMinY(area) + 10, 200, 150)
+    // -initWithContentRect: moved a content rect on a display left of the main screen onto the main screen ({-1430, 559} came out
+    // at {810, 559}), so the frame is set after the window is made, and the check reads that the window is on the last display.
+    NSWindow *front = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 200, 150)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
     front.releasedWhenClosed = NO;
+    [front setFrame:NSMakeRect(NSMinX(area) + 10, NSMinY(area) + 10, NSWidth(front.frame), NSHeight(front.frame)) display:NO];
+    check(NSContainsRect(last.frame, front.frame), [NSString stringWithFormat:@"the other window of the check is on the last display %@ (%@)",
+        NSStringFromRect(last.frame), NSStringFromRect(front.frame)]);
     struct { NSString *what; NSArray<NSNumber *> *others; NSScreen *screen; } placements[] = {
         {@"a new window beside another window of the application", @[@(front.windowNumber)], last},
         {@"the first window of the application", @[], NSScreen.mainScreen},
