@@ -1327,7 +1327,13 @@ static bool finalizeCaptureArtifacts(SPCaptureRecording *recording) {
 // Ends the recording: no later still is requested, every requested still settles, the artifacts are written, and the counts of
 // the recording become those of sp_capture_missed, sp_capture_late and sp_capture_longest_gap.
 static int finishRecording(SPCaptureRecording *recording) {
-    closeRequests(recording, nil);
+    // Every still whose planned time has come is requested before the close, also when the strict timer that requests it has not
+    // fired yet: on the queue of the timer, so no request of the timer comes between them. A still requested here after its
+    // planned time is late.
+    dispatch_sync(captureRequests, ^{ @autoreleasepool {
+        requestDueStills(recording);
+        closeRequests(recording, nil);
+    } });
     dispatch_group_wait(recording.inflight, DISPATCH_TIME_FOREVER);
     // The writer settles every queued frame before the record is written.
     dispatch_sync(captureWriter, ^{});
