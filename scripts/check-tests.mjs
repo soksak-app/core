@@ -711,6 +711,7 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/test/stills.test.mjs", id: "a failed still row without its error, or another row with one, is refused" },
       { file: "packages/window-check/test/stills.test.mjs", id: "a requested still row without its window list, or an unrequested one with one, is refused" },
       { file: "packages/window-check/test/stills.test.mjs", id: "a still row whose gap or timebase is invalid, or whose timebase differs from the first row, is refused" },
+      { file: "packages/window-check/test/stills.test.mjs", id: "a failed still row whose windows could not be taken has no completion time and an empty window list" },
       { file: "packages/window-check/test/view-frame-geometry.test.mjs", id: "a still completed before its request is no recorded frame" },
       { file: "packages/window-check/test/view-metrics-collection.test.mjs", id: "a recorded view whose recording lost a still fails and names it" },
       { file: "packages/window-check/test/view-metrics-collection.test.mjs", id: "the content frame is the first recorded still requested at or after the presentation of the value" },

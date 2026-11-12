@@ -11,8 +11,9 @@ const DECIMAL = /^\d+$/;
 
 /**
  * Checks row `row` at place `place` of the still recording `path` against its own fields and the timebase of the first row
- * `first`: a known outcome, exact decimal mach times, a request and completion time and a window list exactly for a requested
- * still, a request no earlier than the plan and a completion no earlier than the request, the frame of its index exactly for a
+ * `first`: a known outcome, exact decimal mach times, a request time exactly for a requested still, a completion time and a
+ * window list for a written still and for a failed one whose windows were taken (a failed still whose windows could not be
+ * taken has no completion time and the window list []), a request no earlier than the plan and a completion no earlier than the request, the frame of its index exactly for a
  * written still, an error exactly for a failed still, a positive gap and a positive timebase equal to the first row's.
  */
 function requireStillRow(row, place, path, first) {
@@ -25,8 +26,11 @@ function requireStillRow(row, place, path, first) {
   };
   exact("planned", row.planned);
   const requested = row.outcome !== "not-requested";
+  // A failed still whose windows could not be taken has no completion time (docs/spec/diagnostics.md, stills.jsonl).
+  const taken = row.outcome === "written" || (row.outcome === "failed" && row.completed !== null);
   for (const name of ["requested", "completed"]) {
-    if (requested && row[name] === null) fail(`is ${row.outcome} without its ${name} time`);
+    const owed = name === "requested" ? requested : taken;
+    if (owed && row[name] === null) fail(`is ${row.outcome} without its ${name} time`);
     if (!requested && row[name] !== null) fail(`is not-requested with a ${name} time`);
     if (row[name] !== null) exact(name, row[name]);
   }
@@ -39,17 +43,20 @@ function requireStillRow(row, place, path, first) {
       `${first.machTimebaseDenominator} of the first row`);
   }
   if (requested && BigInt(row.requested) < BigInt(row.planned)) fail("was requested before its planned time");
-  if (requested && BigInt(row.completed) < BigInt(row.requested)) fail("completed before its request");
+  if (taken && BigInt(row.completed) < BigInt(row.requested)) fail("completed before its request");
   const frame = `frame-${String(row.index).padStart(4, "0")}.bgra`;
   if (row.outcome === "written" && row.frame !== frame) fail(`names the frame ${JSON.stringify(row.frame)}, not ${frame}`);
   if (row.outcome !== "written" && row.frame !== null) fail(`is ${row.outcome} and names the frame ${JSON.stringify(row.frame)}`);
   if (row.outcome === "failed" && !(typeof row.error === "string" && row.error.length > 0)) fail("failed without its error");
   if (row.outcome !== "failed" && row.error !== null) fail(`is ${row.outcome} with the error ${JSON.stringify(row.error)}`);
-  if (requested && !(Array.isArray(row.windows) && row.windows.length > 0
+  if (taken && !(Array.isArray(row.windows) && row.windows.length > 0
     && row.windows.every((window) => Number.isSafeInteger(window) && window > 0))) {
     fail(`has the window list ${JSON.stringify(row.windows)}, not window numbers`);
   }
   if (!requested && row.windows !== null) fail("is not-requested with a window list");
+  if (requested && !taken && !(Array.isArray(row.windows) && row.windows.length === 0)) {
+    fail(`failed before its windows were taken and has the window list ${JSON.stringify(row.windows)}, not []`);
+  }
   if (!(Number.isFinite(row.requestedGap) && row.requestedGap > 0)) {
     fail(`has the gap ${JSON.stringify(row.requestedGap)}, not a positive number of ms`);
   }
