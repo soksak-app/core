@@ -68,6 +68,24 @@ pub fn observe_sheet(_window: Handle, _changed: Box<dyn Fn()>) -> Result<Handle,
 
 pub fn end_sheet_observation(_observation: Handle) {}
 
+pub fn hold_dialogs(
+    _window: Handle,
+    _requested: Box<dyn Fn(u64, String)>,
+) -> Result<Handle, String> {
+    missing("dialog hold")
+}
+
+pub fn release_dialogs(_hold: Handle) {}
+
+pub fn answer_dialog(
+    _request: u64,
+    _paths: Vec<String>,
+    _cancel: bool,
+    answered: Box<dyn FnOnce(Result<(), String>) + Send>,
+) {
+    answered(missing("dialog answer"))
+}
+
 pub fn titlebar_height(_window: Handle) -> Result<f64, String> {
     missing("window title bar")
 }

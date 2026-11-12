@@ -813,6 +813,10 @@ func (s *Surfaces) close() {
 		s.cursorObservation = nil
 		system.EndSheetObservation(s.sheetObservation)
 		s.sheetObservation = nil
+		if s.dialogHold != nil {
+			system.ReleaseDialogs(s.dialogHold)
+			s.dialogHold = nil
+		}
 		if s.monitor != 0 {
 			system.UnwatchInput(s.monitor)
 		}

@@ -1,6 +1,6 @@
 //! Window settings, window buttons and window numbers.
 
-use std::ffi::{CStr, c_char, c_void};
+use std::ffi::{CStr, CString, c_char, c_void};
 
 use block2::{Block, RcBlock};
 
@@ -196,6 +196,83 @@ pub fn end_sheet_observation(observation: Handle) {
         fn sp_window_end_sheet_observation(observation: *mut c_void);
     }
     unsafe { sp_window_end_sheet_observation(observation as *mut c_void) }
+}
+
+/// Holds the dialogs of the pages of the window (webview_dialogs.h): each request goes to requested with its number and its
+/// JSON, and release_dialogs ends the hold. It fails when the window holds its dialogs already.
+pub fn hold_dialogs(window: Handle, requested: Box<dyn Fn(u64, String)>) -> Result<Handle, String> {
+    unsafe extern "C" {
+        fn sp_window_hold_dialogs(
+            window: *mut c_void,
+            requested: &Block<dyn Fn(u64, *const c_char)>,
+        ) -> *mut c_void;
+    }
+    let requested = RcBlock::new(move |request: u64, json: *const c_char| {
+        // The JSON is borrowed for the call.
+        requested(
+            request,
+            unsafe { CStr::from_ptr(json) }
+                .to_string_lossy()
+                .into_owned(),
+        )
+    });
+    let hold = unsafe { sp_window_hold_dialogs(window as *mut c_void, &requested) };
+    if hold.is_null() {
+        Err("the dialogs of the window are held already".into())
+    } else {
+        Ok(hold as Handle)
+    }
+}
+
+/// Ends the hold of hold_dialogs: each of its requests that waits is answered as cancelled.
+pub fn release_dialogs(hold: Handle) {
+    unsafe extern "C" {
+        fn sp_window_release_dialogs(hold: *mut c_void);
+    }
+    unsafe { sp_window_release_dialogs(hold as *mut c_void) }
+}
+
+/// Answers the request with paths, or cancels it; answered receives once whether the answer was applied, for a download
+/// when the file was written.
+pub fn answer_dialog(
+    request: u64,
+    paths: Vec<String>,
+    cancel: bool,
+    answered: Box<dyn FnOnce(Result<(), String>) + Send>,
+) {
+    unsafe extern "C" {
+        fn sp_dialog_answer(
+            request: u64,
+            paths: *const *const c_char,
+            count: usize,
+            cancel: bool,
+            answered: &Block<dyn Fn(*const c_char)>,
+        );
+    }
+    let texts: Vec<CString> = match paths
+        .iter()
+        .map(|path| CString::new(path.as_str()))
+        .collect::<Result<_, _>>()
+    {
+        Ok(texts) => texts,
+        Err(error) => return answered(Err(format!("a path holds a NUL byte: {error}"))),
+    };
+    let pointers: Vec<*const c_char> = texts.iter().map(|text| text.as_ptr()).collect();
+    // The native layer calls the block once; the cell hands answered to that call.
+    let once = std::cell::Cell::new(Some(answered));
+    let block = RcBlock::new(move |error: *const c_char| {
+        let Some(answered) = once.take() else {
+            return;
+        };
+        answered(if error.is_null() {
+            Ok(())
+        } else {
+            Err(unsafe { CStr::from_ptr(error) }
+                .to_string_lossy()
+                .into_owned())
+        })
+    });
+    unsafe { sp_dialog_answer(request, pointers.as_ptr(), pointers.len(), cancel, &block) }
 }
 
 /// Returns the title bar height of the window. It returns an error for a window that cannot have a title bar.

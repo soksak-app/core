@@ -11,6 +11,7 @@
 #import "window_fullscreen.h"
 #import "input_virtual.h"
 #import "window_facts.h"
+#import "webview_dialogs.h"
 #import "main_thread.h"
 #import "private/webkit.h"
 #include "host_callbacks.h"
@@ -367,4 +368,24 @@ void *nativeWindowObserveCursor(uintptr_t handle, uintptr_t callback) {
 }
 void *nativeWindowObserveSheet(uintptr_t handle, uintptr_t callback) {
     return ON_MAIN(void *, nativeWindowObserveSheetOnMain((void *)handle, callback));
+}
+// The JSON of a request is copied for the worker, which reads it after the main thread went on.
+void *nativeWindowHoldDialogs(uintptr_t handle, uintptr_t callback) {
+    return ON_MAIN(void *, sp_window_hold_dialogs((void *)handle, ^(uint64_t request, const char *json) {
+        char *copied = strdup(json);
+        hostRunOnWorker(^{ sp_host_callback_native_dialog_requested(callback, request, copied); });
+        free(copied);
+    }));
+}
+void main_sp_window_release_dialogs(void *hold) {
+    hostRunOnMain(^{ sp_window_release_dialogs(hold); });
+}
+void nativeDialogAnswer(unsigned long long request, char **paths, size_t count, bool cancel, uintptr_t callback) {
+    hostRunOnMain(^{
+        sp_dialog_answer(request, (const char *const *)paths, count, cancel, ^(const char *error) {
+            char *copied = error ? strdup(error) : NULL;
+            hostRunOnWorker(^{ sp_host_callback_native_dialog_answered(callback, copied); });
+            free(copied);
+        });
+    });
 }

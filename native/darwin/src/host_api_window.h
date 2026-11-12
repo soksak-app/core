@@ -9,6 +9,11 @@ bool nativeWindowFullscreen(uintptr_t window, bool on, uintptr_t callback);
 void *nativeWindowObserveResponder(uintptr_t window, uintptr_t callback);
 void *nativeWindowObserveCursor(uintptr_t window, uintptr_t callback);
 void *nativeWindowObserveSheet(uintptr_t window, uintptr_t callback);
+// The dialogs of the pages of a window (webview_dialogs.h): the hold gives each request to the callback context, and an answer
+// gives its end to its callback context, each on the worker.
+void *nativeWindowHoldDialogs(uintptr_t window, uintptr_t callback);
+void main_sp_window_release_dialogs(void *hold);
+void nativeDialogAnswer(unsigned long long request, char **paths, size_t count, bool cancel, uintptr_t callback);
 void nativeWindowPrepare(uintptr_t window);
 void main_sp_window_end_responder_observation(void *observation);
 void main_sp_input_virtual_end_cursor_observation(void *observation);

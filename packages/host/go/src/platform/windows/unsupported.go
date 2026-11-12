@@ -54,6 +54,16 @@ func (implementation) ObserveSheet(platform.Window, func()) (unsafe.Pointer, err
 
 func (implementation) EndSheetObservation(unsafe.Pointer) {}
 
+func (implementation) HoldDialogs(platform.Window, func(uint64, string)) (unsafe.Pointer, error) {
+	return nil, unsupported("dialog hold")
+}
+
+func (implementation) ReleaseDialogs(unsafe.Pointer) {}
+
+func (implementation) AnswerDialog(_ uint64, _ []string, _ bool, answered func(string)) {
+	answered(unsupported("dialog answer").Error())
+}
+
 func (implementation) TitlebarHeight(platform.Window) (float64, error) {
 	return 0, unsupported("window title bar")
 }

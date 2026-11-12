@@ -109,6 +109,62 @@ func goHost_native_sheet_changed(value uintptr) {
 	handles.Handle(value).Value().(func())()
 }
 
+// The request callbacks of the dialog holds by hold. They are read and changed only in main-thread steps.
+var dialogHolds = map[unsafe.Pointer]handles.Handle{}
+
+func (implementation) HoldDialogs(window platform.Window, requested func(request uint64, json string)) (unsafe.Pointer, error) {
+	handle := handles.NewHandle(requested)
+	hold := native.NativeWindowHoldDialogs(uintptr(window), uintptr(handle))
+	if hold == nil {
+		handle.Delete()
+		return nil, errors.New("the dialogs of the window are held already")
+	}
+	dialogHolds[hold] = handle
+	return hold, nil
+}
+
+func (implementation) ReleaseDialogs(hold unsafe.Pointer) {
+	native.MainSpWindowReleaseDialogs(hold)
+	if handle, ok := dialogHolds[hold]; ok {
+		handle.Delete()
+		delete(dialogHolds, hold)
+	}
+}
+
+func goHost_native_dialog_requested(value uintptr, request uint64, json *byte) {
+	handles.Handle(value).Value().(func(uint64, string))(request, native.GoString(json))
+}
+
+func (implementation) AnswerDialog(request uint64, paths []string, cancel bool, answered func(failure string)) {
+	handle := handles.NewHandle(answered)
+	var list **byte
+	if len(paths) > 0 {
+		list = (**byte)(native.Calloc(uint64(len(paths)), uint64(unsafe.Sizeof(uintptr(0)))))
+		items := unsafe.Slice(list, len(paths))
+		for index, path := range paths {
+			items[index] = native.CString(path)
+		}
+		defer func() {
+			for _, item := range items {
+				native.Free(unsafe.Pointer(item))
+			}
+			native.Free(unsafe.Pointer(list))
+		}()
+	}
+	native.NativeDialogAnswer(request, list, uint64(len(paths)), cancel, uintptr(handle))
+}
+
+func goHost_native_dialog_answered(value uintptr, failure *byte) {
+	handle := handles.Handle(value)
+	answered := handle.Value().(func(string))
+	handle.Delete()
+	text := ""
+	if failure != nil {
+		text = native.GoString(failure)
+	}
+	answered(text)
+}
+
 // goHost_native_fullscreen_done answers a full screen request with its result (window_fullscreen.h, whose values are the
 // platform.FullscreenResult values) and its static message, nil for a finished transition.
 func goHost_native_fullscreen_done(value uintptr, result int32, message *byte) {

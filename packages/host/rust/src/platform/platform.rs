@@ -585,6 +585,27 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// Ends an observation of observe_sheet once, so its changed is not called again. It does not use the window, so it may
     /// run after the window was released. Call it on the UI thread.
     fn end_sheet_observation(&self, observation: Handle);
+    /// Holds the dialogs of the pages of the window (docs/spec/exposure.md#dialogs): the open panel of a file input and the
+    /// place of a download of a page of the window show no panel and go to requested on the UI thread, as the number and the
+    /// JSON {kind, suggestedName, directory, multiple, directories, url} of the request, until release_dialogs. Call it on
+    /// the UI thread.
+    fn hold_dialogs(
+        &self,
+        window: Handle,
+        requested: Box<dyn Fn(u64, String)>,
+    ) -> Result<Handle, String>;
+    /// Ends a hold of hold_dialogs once: each of its requests that waits is answered as cancelled. Call it on the UI thread.
+    fn release_dialogs(&self, hold: Handle);
+    /// Answers request with paths, or cancels it, and calls answered on the UI thread with Ok when the answer was applied,
+    /// for a download when the file was written, or with the reason it was not. A cancel of a request that waits no more,
+    /// which the end of its hold cancelled, is applied. Call it on the UI thread.
+    fn answer_dialog(
+        &self,
+        request: u64,
+        paths: Vec<String>,
+        cancel: bool,
+        answered: Box<dyn FnOnce(Result<(), String>) + Send>,
+    );
 
     /// Returns the title bar height (pt) of the window. It is 0 while the title bar is not shown, as in full screen,
     /// and it returns an error when the window has no buttons. Call it on the UI thread.

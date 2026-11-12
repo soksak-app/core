@@ -1166,10 +1166,21 @@ func (b hostBackend) Key(window string, input KeyInput) error {
 	return delivered(result == platform.PointerDelivered, nil)
 }
 
-// HostWatched holds the dialogs of window while a client watches its host.dialog.
+// HostWatched holds the dialogs of window, those of the host and those of its pages, while a client watches its host.dialog.
+// The requests of the host wait from the start of the watch, before the pages are held, and the end of the watch answers them
+// before it releases the pages.
 func (b hostBackend) HostWatched(window, name string, on bool) {
-	if name == "host.dialog" {
-		b.h.dialogs.Watched(window, on)
+	if name != "host.dialog" {
+		return
+	}
+	if on {
+		b.h.dialogs.Watched(window, true)
+	}
+	if s := b.h.byName(window); s != nil {
+		s.holdDialogs(on)
+	}
+	if !on {
+		b.h.dialogs.Watched(window, false)
 	}
 }
 

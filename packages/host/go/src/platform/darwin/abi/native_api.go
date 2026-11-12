@@ -191,6 +191,7 @@ type NativeFunctions struct {
 	MainSpWindowEndResponderObservation    func(unsafe.Pointer)
 	MainSpInputVirtualEndCursorObservation func(unsafe.Pointer)
 	MainSpWindowEndSheetObservation        func(unsafe.Pointer)
+	MainSpWindowReleaseDialogs             func(unsafe.Pointer)
 	MainSpWindowFacts                      func(uintptr) *byte
 	MainSpWindowFocusWorkbench             func(uintptr)
 	MainSpWindowHit                        func(uintptr, float64, float64) *byte
@@ -247,6 +248,8 @@ type NativeFunctions struct {
 	NativeWindowObserveResponder           func(uintptr, uintptr) unsafe.Pointer
 	NativeWindowObserveCursor              func(uintptr, uintptr) unsafe.Pointer
 	NativeWindowObserveSheet               func(uintptr, uintptr) unsafe.Pointer
+	NativeDialogAnswer                     func(uint64, **byte, uint64, bool, uintptr)
+	NativeWindowHoldDialogs                func(uintptr, uintptr) unsafe.Pointer
 	NativeWindowPrepare                    func(uintptr)
 	NativeWindowSetMainWebview             func(uintptr) bool
 	NativeWindowStartPage                  func(uintptr, uint64, float64, uintptr)
@@ -529,6 +532,9 @@ func (functions NativeFunctions) Validate() error {
 	if functions.MainSpWindowEndSheetObservation == nil {
 		return fmt.Errorf("native API function is missing: main_sp_window_end_sheet_observation")
 	}
+	if functions.MainSpWindowReleaseDialogs == nil {
+		return fmt.Errorf("native API function is missing: main_sp_window_release_dialogs")
+	}
 	if functions.MainSpWindowFacts == nil {
 		return fmt.Errorf("native API function is missing: main_sp_window_facts")
 	}
@@ -696,6 +702,12 @@ func (functions NativeFunctions) Validate() error {
 	}
 	if functions.NativeWindowObserveSheet == nil {
 		return fmt.Errorf("native API function is missing: nativeWindowObserveSheet")
+	}
+	if functions.NativeDialogAnswer == nil {
+		return fmt.Errorf("native API function is missing: nativeDialogAnswer")
+	}
+	if functions.NativeWindowHoldDialogs == nil {
+		return fmt.Errorf("native API function is missing: nativeWindowHoldDialogs")
 	}
 	if functions.NativeWindowPrepare == nil {
 		return fmt.Errorf("native API function is missing: nativeWindowPrepare")

@@ -35,6 +35,8 @@
     X(V, void, native_responder_changed, (uintptr_t context), (context)) \
     X(V, void, native_cursor_changed, (uintptr_t context), (context)) \
     X(V, void, native_sheet_changed, (uintptr_t context), (context)) \
+    X(V, void, native_dialog_requested, (uintptr_t context, unsigned long long request, char *json), (context, request, json)) \
+    X(V, void, native_dialog_answered, (uintptr_t context, char *error), (context, error)) \
     X(V, void, native_fullscreen_done, (uintptr_t context, int result, char *message), (context, result, message)) \
     X(V, void, surface_pressed, (uintptr_t owner, void *view), (owner, view)) \
     X(V, void, surface_point, (uintptr_t owner, int phase, double x, double y), (owner, phase, x, y)) \

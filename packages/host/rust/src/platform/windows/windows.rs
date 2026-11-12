@@ -106,6 +106,25 @@ impl Platform for Windows {
     fn end_sheet_observation(&self, observation: Handle) {
         unsupported::end_sheet_observation(observation)
     }
+    fn hold_dialogs(
+        &self,
+        window: Handle,
+        requested: Box<dyn Fn(u64, String)>,
+    ) -> Result<Handle, String> {
+        unsupported::hold_dialogs(window, requested)
+    }
+    fn release_dialogs(&self, hold: Handle) {
+        unsupported::release_dialogs(hold)
+    }
+    fn answer_dialog(
+        &self,
+        request: u64,
+        paths: Vec<String>,
+        cancel: bool,
+        answered: Box<dyn FnOnce(Result<(), String>) + Send>,
+    ) {
+        unsupported::answer_dialog(request, paths, cancel, answered)
+    }
 
     fn fullscreen(
         &self,

@@ -486,6 +486,9 @@ type Surfaces struct {
 	// sheetObservation is the observation of the sheets of the window, which close ends. It is read and changed only on the UI
 	// thread.
 	sheetObservation unsafe.Pointer
+	// dialogHold holds the dialogs of the pages of the window while a client watches its host.dialog, and close ends it. It is
+	// read and changed only on the UI thread.
+	dialogHold unsafe.Pointer
 	// readied holds a channel for each reload that waits for the new page: WindowReady sends nil, and the close of the window and a
 	// start of the new page that fails send the error that ends the reload. Host.mu protects it.
 	readied []chan error

@@ -189,6 +189,25 @@ impl Platform for Darwin {
     fn end_sheet_observation(&self, observation: Handle) {
         window::end_sheet_observation(observation)
     }
+    fn hold_dialogs(
+        &self,
+        window: Handle,
+        requested: Box<dyn Fn(u64, String)>,
+    ) -> Result<Handle, String> {
+        window::hold_dialogs(window, requested)
+    }
+    fn release_dialogs(&self, hold: Handle) {
+        window::release_dialogs(hold)
+    }
+    fn answer_dialog(
+        &self,
+        request: u64,
+        paths: Vec<String>,
+        cancel: bool,
+        answered: Box<dyn FnOnce(Result<(), String>) + Send>,
+    ) {
+        window::answer_dialog(request, paths, cancel, answered)
+    }
 
     fn fullscreen(
         &self,

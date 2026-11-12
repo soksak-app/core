@@ -842,6 +842,16 @@ func Functions(library uintptr) (abi.NativeFunctions, error) {
 		purego.RegisterFunc(&functions.MainSpWindowEndSheetObservation, address)
 	}
 	{
+		address, err := purego.Dlsym(library, "main_sp_window_release_dialogs")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_window_release_dialogs: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_window_release_dialogs: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.MainSpWindowReleaseDialogs, address)
+	}
+	{
 		address, err := purego.Dlsym(library, "main_sp_window_facts")
 		if err != nil {
 			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_window_facts: %w", err)
@@ -1400,6 +1410,26 @@ func Functions(library uintptr) (abi.NativeFunctions, error) {
 			return abi.NativeFunctions{}, fmt.Errorf("native API nativeWindowObserveSheet: symbol has a null address")
 		}
 		purego.RegisterFunc(&functions.NativeWindowObserveSheet, address)
+	}
+	{
+		address, err := purego.Dlsym(library, "nativeDialogAnswer")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API nativeDialogAnswer: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API nativeDialogAnswer: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.NativeDialogAnswer, address)
+	}
+	{
+		address, err := purego.Dlsym(library, "nativeWindowHoldDialogs")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API nativeWindowHoldDialogs: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API nativeWindowHoldDialogs: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.NativeWindowHoldDialogs, address)
 	}
 	{
 		address, err := purego.Dlsym(library, "nativeWindowPrepare")

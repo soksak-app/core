@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{SyncSender, sync_channel};
+use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use crate::application_log::log_error;
@@ -20,6 +20,8 @@ pub const DOWNLOAD: &str = "download";
 /// A dialog that a window asks for while a client watches its host.dialog.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Request {
+    /// The host gives each request its id; the request of a page comes without one.
+    #[serde(default)]
     pub id: String,
     pub kind: String,
     #[serde(rename = "suggestedName")]
@@ -42,10 +44,30 @@ pub struct Answer {
     pub replace: bool,
 }
 
-/// A request that waits for its answer. answered receives the chosen paths once, None for a cancel.
+/// A request that waits for its answer. answered receives the answer once.
 struct Held {
     request: Request,
-    answered: SyncSender<Option<Vec<String>>>,
+    answered: SyncSender<Answered>,
+}
+
+/// The answer of a request: the chosen paths, None for a cancel, and applied, which receives once whether the asker applied
+/// them; the answer of a client waits for it. The end of a watch waits for no result, so it gives no applied.
+struct Answered {
+    paths: Option<Vec<String>>,
+    applied: Option<SyncSender<Result<(), String>>>,
+}
+
+impl Answered {
+    /// Reports to the answer of the client whether the asker applied the paths.
+    fn applied(self, result: Result<(), String>) {
+        if let Some(applied) = self.applied
+            && let Err(error) = applied.try_send(result)
+        {
+            // Each answer receives one result, so the channel is not full; the send fails only when the answer of the
+            // client ended with a panic, which the panic hook records.
+            log_error("dialog applied", error.to_string());
+        }
+    }
 }
 
 #[derive(Default)]
@@ -102,7 +124,13 @@ impl Dialogs {
             return;
         };
         for dialog in held {
-            deliver(&dialog, None);
+            deliver(
+                &dialog,
+                Answered {
+                    paths: None,
+                    applied: None,
+                },
+            );
         }
         (self.changed)(window, state.value(window));
     }
@@ -112,9 +140,24 @@ impl Dialogs {
         self.state().value(window)
     }
 
-    /// Answers the request answer.id of window. An answer that the request does not take is refused with the rule and
-    /// the path, and the request keeps waiting.
+    /// Answers the request answer.id of window and returns when the asker applied the answer, with the error of applying
+    /// it. An answer that the request does not take is refused with the rule and the path, and the request keeps waiting.
     pub fn answer(&self, window: &str, answer: Answer) -> Result<(), String> {
+        let id = answer.id.clone();
+        let (applied, result) = sync_channel(1);
+        self.take(window, answer, applied)?;
+        // The asker sends the result once it applied the answer; a receive fails only when the asker ended with a panic.
+        result.recv().map_err(|_| {
+            format!("dialog: the request {id} of {window} ended without applying its answer")
+        })?
+    }
+
+    fn take(
+        &self,
+        window: &str,
+        answer: Answer,
+        applied: SyncSender<Result<(), String>>,
+    ) -> Result<(), String> {
         let mut state = self.state();
         let held = state.held.get_mut(window);
         let Some((index, held)) = held.and_then(|held| {
@@ -136,7 +179,13 @@ impl Dialogs {
         if held.is_empty() {
             state.held.remove(window);
         }
-        deliver(&dialog, paths);
+        deliver(
+            &dialog,
+            Answered {
+                paths,
+                applied: Some(applied),
+            },
+        );
         (self.changed)(window, state.value(window));
         Ok(())
     }
@@ -147,50 +196,90 @@ impl Dialogs {
     pub fn ask(
         &self,
         window: &str,
-        mut request: Request,
+        request: Request,
         panel: impl FnOnce() -> Result<Option<Vec<String>>, String>,
     ) -> Result<Option<Vec<String>>, String> {
-        let (answered, answer) = sync_channel(1);
-        {
+        let answer = {
             let mut state = self.state();
             if !state.watched.contains(window) {
                 drop(state);
                 return panel();
             }
-            state.next += 1;
-            request.id = format!("dialog-{}", state.next);
-            state
-                .held
-                .entry(window.to_string())
-                .or_default()
-                .push(Held { request, answered });
-            (self.changed)(window, state.value(window));
-        }
-        // The sender lives in the request until its answer is sent, so the receive ends with that answer.
+            self.add(&mut state, window, request)
+        };
+        let answered = wait(window, answer)?;
+        let paths = answered.paths.clone();
+        answered.applied(Ok(()));
+        Ok(paths)
+    }
+
+    /// Gives request an id of its own, lets it wait in window and announces it. It returns the receiver of its answer.
+    fn add(&self, state: &mut State, window: &str, mut request: Request) -> Receiver<Answered> {
+        let (answered, answer) = sync_channel(1);
+        state.next += 1;
+        request.id = format!("dialog-{}", state.next);
+        state
+            .held
+            .entry(window.to_string())
+            .or_default()
+            .push(Held { request, answered });
+        (self.changed)(window, state.value(window));
         answer
-            .recv()
-            .map_err(|_| format!("dialog: the request of {window} ended without an answer"))
+    }
+
+    /// Holds request, a request that a page of window gives the host: the open panel of a file input or the place of a
+    /// download. While a client watches host.dialog of window, it waits until it is answered, and apply applies the chosen
+    /// paths to the page, None for a cancel; the answer of the client returns the error of apply, so the answer of a
+    /// download returns when the download ended. Without a watch the request is cancelled at once. hold returns after apply.
+    pub fn hold(
+        &self,
+        window: &str,
+        request: Request,
+        apply: impl FnOnce(Option<Vec<String>>) -> Result<(), String>,
+    ) {
+        let answer = {
+            let mut state = self.state();
+            if !state.watched.contains(window) {
+                drop(state);
+                if let Err(error) = apply(None) {
+                    log_error("dialog cancel", error);
+                }
+                return;
+            }
+            self.add(&mut state, window, request)
+        };
+        let answered = match wait(window, answer) {
+            Ok(answered) => answered,
+            Err(error) => {
+                log_error("dialog", error);
+                if let Err(error) = apply(None) {
+                    log_error("dialog cancel", error);
+                }
+                return;
+            }
+        };
+        let result = apply(answered.paths.clone());
+        if answered.paths.is_none()
+            && let Err(error) = &result
+        {
+            log_error("dialog cancel", error.clone());
+        }
+        answered.applied(result);
     }
 }
 
-impl Dialogs {
-    /// Holds request, a request of a page of window that the window gives the host. apply applies the answer to the page.
-    pub fn hold(
-        &self,
-        _window: &str,
-        _request: Request,
-        apply: impl FnOnce(Option<Vec<String>>) -> Result<(), String>,
-    ) {
-        if let Err(error) = apply(None) {
-            log_error("dialog", error);
-        }
-    }
+/// Waits for the answer of a request of window. The sender lives in the request until its answer is sent, so the receive
+/// ends with that answer.
+fn wait(window: &str, answer: Receiver<Answered>) -> Result<Answered, String> {
+    answer
+        .recv()
+        .map_err(|_| format!("dialog: the request of {window} ended without an answer"))
 }
 
 /// Sends the answer of a request that was taken out of the requests. Each request receives one answer, so the channel is
 /// not full; a send fails only when the call that asked ended with a panic, which the panic hook records.
-fn deliver(dialog: &Held, paths: Option<Vec<String>>) {
-    if let Err(error) = dialog.answered.try_send(paths) {
+fn deliver(dialog: &Held, answered: Answered) {
+    if let Err(error) = dialog.answered.try_send(answered) {
         log_error("dialog answer", format!("{}: {error}", dialog.request.id));
     }
 }

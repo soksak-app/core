@@ -390,6 +390,18 @@ type Platform interface {
 	// EndSheetObservation ends an observation of ObserveSheet once, so its changed is not called again. It does not use the
 	// window, so it may run after the window was released. Call it on the UI thread.
 	EndSheetObservation(observation unsafe.Pointer)
+	// HoldDialogs holds the dialogs of the pages of the window (docs/spec/exposure.md#dialogs): the open panel of a file input
+	// and the place of a download of a page of the window show no panel and go to requested on the UI thread, as the number and
+	// the JSON {kind, suggestedName, directory, multiple, directories, url} of the request, until ReleaseDialogs. Call it on the
+	// UI thread.
+	HoldDialogs(window Window, requested func(request uint64, json string)) (unsafe.Pointer, error)
+	// ReleaseDialogs ends a hold of HoldDialogs once: each of its requests that waits is answered as cancelled. Call it on the
+	// UI thread.
+	ReleaseDialogs(hold unsafe.Pointer)
+	// AnswerDialog answers request with paths, or cancels it, and calls answered on the UI thread with "" when the answer was
+	// applied, for a download when the file was written, or with the reason it was not. A cancel of a request that waits no
+	// more, which the end of its hold cancelled, is applied. Call it on the UI thread.
+	AnswerDialog(request uint64, paths []string, cancel bool, answered func(failure string))
 
 	// TitlebarHeight returns the title bar height (pt) of the window. It is 0 while the title bar is not shown, as in full screen, and
 	// it returns an error when the window has no buttons. Call it on the UI thread.

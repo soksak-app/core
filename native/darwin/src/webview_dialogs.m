@@ -26,7 +26,8 @@
 }
 @end
 
-// The hold of a window. The window keeps it as an associated object; the requests keep its address only.
+// The hold of a window. The window keeps it as an associated object, and it keeps the window, so the address that the host
+// holds stays valid after the window closed, until sp_window_release_dialogs ends the hold; the requests keep its address only.
 @interface SPDialogHold : NSObject {
 @public
     NSWindow *window;
@@ -324,8 +325,9 @@ void *sp_window_hold_dialogs(void *handle, SPDialogRequested requested) {
     NSCAssert(NSThread.isMainThread, @"sp_window_hold_dialogs requires the main thread");
     NSWindow *window = (NSWindow *)handle;
     if (!window || holdOf(window)) return NULL;
-    SPDialogHold *hold = [[SPDialogHold new] autorelease];
-    hold->window = window;
+    // The host owns the new hold until sp_window_release_dialogs.
+    SPDialogHold *hold = [SPDialogHold new];
+    hold->window = [window retain];
     hold->requested = [requested copy];
     objc_setAssociatedObject(window, &holdKey, hold, OBJC_ASSOCIATION_RETAIN);
     return hold;
@@ -341,7 +343,6 @@ void sp_window_release_dialogs(void *handle) {
     NSCAssert(NSThread.isMainThread, @"sp_window_release_dialogs requires the main thread");
     SPDialogHold *hold = handle;
     if (!hold) return;
-    [hold retain];
     if (holdOf(hold->window) == hold) objc_setAssociatedObject(hold->window, &holdKey, nil, OBJC_ASSOCIATION_RETAIN);
     for (NSNumber *number in waiting.allKeys) {
         SPDialogRequest *request = waiting[number];
@@ -352,12 +353,19 @@ void sp_window_release_dialogs(void *handle) {
         cancel(request);
         [request release];
     }
+    [hold->window release];
+    hold->window = nil;
     [hold release];
 }
 
 void sp_dialog_answer(uint64_t number, const char *const *paths, size_t count, bool cancelled, SPDialogAnswered answered) {
     NSCAssert(NSThread.isMainThread, @"sp_dialog_answer requires the main thread");
     SPDialogRequest *request = [[waiting[@(number)] retain] autorelease];
+    // A request that waits no more was cancelled or answered, so its cancel changes nothing.
+    if (cancelled && !request) {
+        answered(NULL);
+        return;
+    }
     if (!request || request->answered) {
         answered([NSString stringWithFormat:@"no request %llu waits", (unsigned long long)number].UTF8String);
         return;

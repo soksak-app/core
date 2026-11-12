@@ -87,6 +87,12 @@ func Bind(callbacks abi.Callbacks) (abi.CallbackTable, error) {
 	if callbacks.NativeSheetChanged == nil {
 		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: native_sheet_changed")
 	}
+	if callbacks.NativeDialogRequested == nil {
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: native_dialog_requested")
+	}
+	if callbacks.NativeDialogAnswered == nil {
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: native_dialog_answered")
+	}
 	if callbacks.NativeFullscreenDone == nil {
 		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: native_fullscreen_done")
 	}
@@ -161,6 +167,8 @@ func Bind(callbacks abi.Callbacks) (abi.CallbackTable, error) {
 		purego.NewCallback(callbacks.NativeResponderChanged),
 		purego.NewCallback(callbacks.NativeCursorChanged),
 		purego.NewCallback(callbacks.NativeSheetChanged),
+		purego.NewCallback(callbacks.NativeDialogRequested),
+		purego.NewCallback(callbacks.NativeDialogAnswered),
 		purego.NewCallback(callbacks.NativeFullscreenDone),
 		purego.NewCallback(callbacks.SurfacePressed),
 		purego.NewCallback(callbacks.SurfacePoint),

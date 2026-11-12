@@ -20,7 +20,8 @@ typedef void (^SPDialogAnswered)(const char *error);
 void sp_webview_route_dialogs(WKWebView *view);
 
 /// Holds the dialogs of window: a request of a routed web view of the window shows no panel and goes to requested. It returns
-/// the hold, which sp_window_release_dialogs ends, or NULL when the window already has one. Main thread.
+/// the hold, which sp_window_release_dialogs ends, or NULL when the window already has one. The hold keeps the window until it
+/// ends, so it ends also after the window closed. Main thread.
 void *sp_window_hold_dialogs(void *window, SPDialogRequested requested);
 
 /// Ends a hold of sp_window_hold_dialogs: each request of it that waits for its answer is answered as cancelled. Main thread.
@@ -28,7 +29,7 @@ void sp_window_release_dialogs(void *hold);
 
 /// Answers request with the count paths, or cancels it when cancel is true. An open receives the files; a download is
 /// written to the one path, an existing file there is replaced, and answered runs when the download ended. answered runs once,
-/// also for a request that waits no more. Main thread.
+/// also for a request that waits no more, whose cancel changes nothing and is applied. Main thread.
 void sp_dialog_answer(uint64_t request, const char *const *paths, size_t count, bool cancel, SPDialogAnswered answered);
 
 /// Sets the folder of the downloads of a web view whose framework places none. Without it they go into the folder of downloads

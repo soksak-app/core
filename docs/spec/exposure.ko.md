@@ -260,7 +260,7 @@ window check 는 이것을 쓰지 않는다. check 는 사람의 창 뒤에서 �
 - client 가 하나라도 창의 `host.dialog` 를 watch 하는 동안, 창이 요청한 dialog 는 panel 을 띄우지 않는다. 그 요청은 `pending` 에서 `{id, kind, suggestedName, directory, multiple, directories, url}` 로 기다리고, watcher 는 새 값을 받는다. `kind` 는 host 의 save panel 과 folder panel(debug view 의 저장, project 안 파일 배치, project 폴더 선택)에 대해 `save` 나 `folder`, page 의 file input(`<input type=file>`)의 open panel 에 대해 `open`, page 의 다운로드 위치에 대해 `download` 다. `suggestedName` 은 panel 이 제안하는 이름, `directory` 는 panel 이 여는 폴더, `multiple` 과 `directories` 는 file input 이 받는 것, `url` 은 다운로드의 주소이며, 그 kind 에 없는 것은 `null` 이다.
 - `input.dialog.answer` 는 `paths` 로 고르고 `cancel: true` 로 취소한다. 호출자는 panel 의 선택이나 취소를 받듯 그 답을 받으므로, panel 뒤의 검사(파일이 project 안에 놓이는지 등)가 그대로 적용된다. 답은 사람의 panel 과 같은 검사를 거친다. `save` 와 `download` 는 있는 폴더 안의 절대 경로 하나를 받는다. 그 이름은 비지 않고 `:` 를 담지 않으며 `.` 로 시작하지 않고, 폴더를 가리키지 않으며, `replace` 가 true 가 아니면 있는 파일을 가리키지 않는다. `folder` 는 있는 폴더 하나를 받는다. `open` 은 있는 경로를 하나 이상 받고, `multiple` 이 아니면 하나만, `directories` 가 아니면 파일만 받는다. file input 의 `accept` type 은 답을 제한하지 않는다. WebKit 은 그것을 private interface 로만 panel 에 주기 때문이다. 거부된 답은 규칙과 경로를 말하고, 요청은 그대로 기다린다. `download` 의 답은 다운로드가 끝날 때 돌아오고, 실패한 다운로드는 그 오류와 함께 돌아온다.
 - 마지막 watch 의 끝(`status.unwatch` 또는 연결의 닫힘)과 창의 닫힘은 그 창에서 기다리는 모든 요청에 cancel 로 답한다. Wails 와 mygo host 에서는 요청한 page call 의 끝도 그 요청을 지운다.
-- watch 가 없으면 panel 은 사람에게 뜨고 사람의 것이다. 흉내 입력은 그것을 움직이지 않는다([virtual key window](#virtual-key-window)).
+- watch 가 없으면 panel 은 사람에게 뜨고 사람의 것이다. 흉내 입력은 그것을 움직이지 않는다([virtual key window](#virtual-key-window)). watch 가 없는 page 의 다운로드는 framework 가 두는 곳에 가고, framework 가 두지 않는 web view 에서는 사람의 다운로드 폴더에 그 폴더의 어떤 파일도 갖지 않은 이름으로 간다(`report.txt` 다음은 `report 2.txt`). 세 host 의 모든 web view 가 다운로드한다.
 
 ## 메서드
 

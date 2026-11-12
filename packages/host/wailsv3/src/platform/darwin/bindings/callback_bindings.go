@@ -28,6 +28,8 @@ extern void goHost_native_ui_run(uintptr_t arg0);
 extern void goHost_native_responder_changed(uintptr_t arg0);
 extern void goHost_native_cursor_changed(uintptr_t arg0);
 extern void goHost_native_sheet_changed(uintptr_t arg0);
+extern void goHost_native_dialog_requested(uintptr_t arg0, unsigned long long arg1, char * arg2);
+extern void goHost_native_dialog_answered(uintptr_t arg0, char * arg1);
 extern void goHost_native_fullscreen_done(uintptr_t arg0, int arg1, char * arg2);
 extern void goHost_surface_pressed(uintptr_t arg0, void * arg1);
 extern void goHost_surface_point(uintptr_t arg0, int arg1, double arg2, double arg3);
@@ -133,6 +135,12 @@ func InstallCallbacks(callbacks abi.Callbacks) error {
 	if callbacks.NativeSheetChanged == nil {
 		return fmt.Errorf("native callback is missing: native_sheet_changed")
 	}
+	if callbacks.NativeDialogRequested == nil {
+		return fmt.Errorf("native callback is missing: native_dialog_requested")
+	}
+	if callbacks.NativeDialogAnswered == nil {
+		return fmt.Errorf("native callback is missing: native_dialog_answered")
+	}
 	if callbacks.NativeFullscreenDone == nil {
 		return fmt.Errorf("native callback is missing: native_fullscreen_done")
 	}
@@ -207,6 +215,8 @@ func InstallCallbacks(callbacks abi.Callbacks) error {
 	native.native_responder_changed = (*[0]byte)(C.goHost_native_responder_changed)
 	native.native_cursor_changed = (*[0]byte)(C.goHost_native_cursor_changed)
 	native.native_sheet_changed = (*[0]byte)(C.goHost_native_sheet_changed)
+	native.native_dialog_requested = (*[0]byte)(C.goHost_native_dialog_requested)
+	native.native_dialog_answered = (*[0]byte)(C.goHost_native_dialog_answered)
 	native.native_fullscreen_done = (*[0]byte)(C.goHost_native_fullscreen_done)
 	native.surface_pressed = (*[0]byte)(C.goHost_surface_pressed)
 	native.surface_point = (*[0]byte)(C.goHost_surface_point)
@@ -340,6 +350,16 @@ func goHost_native_cursor_changed(arg0 C.uintptr_t) {
 //export goHost_native_sheet_changed
 func goHost_native_sheet_changed(arg0 C.uintptr_t) {
 	callbackHandlers.NativeSheetChanged(uintptr(arg0))
+}
+
+//export goHost_native_dialog_requested
+func goHost_native_dialog_requested(arg0 C.uintptr_t, arg1 C.ulonglong, arg2 *C.char) {
+	callbackHandlers.NativeDialogRequested(uintptr(arg0), uint64(arg1), (*byte)(unsafe.Pointer(arg2)))
+}
+
+//export goHost_native_dialog_answered
+func goHost_native_dialog_answered(arg0 C.uintptr_t, arg1 *C.char) {
+	callbackHandlers.NativeDialogAnswered(uintptr(arg0), (*byte)(unsafe.Pointer(arg1)))
 }
 
 //export goHost_native_fullscreen_done

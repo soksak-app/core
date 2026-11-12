@@ -1422,7 +1422,8 @@ pub(crate) fn window_closed(window: &Window) {
     if let Some(endpoint) = state.endpoint.get() {
         endpoint.notifier().ended(&main, None, "window-closed");
     }
-    // The dialogs that the window asked for end as cancelled (docs/spec/exposure.md#dialogs).
+    // The dialogs that the window and its pages asked for end as cancelled (docs/spec/exposure.md#dialogs).
+    hold_page_dialogs(window, false);
     window
         .state::<crate::dialog::Dialogs>()
         .watched(&main, false);
@@ -1522,6 +1523,7 @@ pub(crate) fn hold_dialogs(app: &AppHandle) {
         }
     });
     let send = Mutex::new(send);
+    app.manage(PageHolds::default());
     app.manage(crate::dialog::Dialogs::new(move |window, value| {
         let sender = send.lock();
         // default: a lock that a panicking thread poisoned still holds the sender, which has no state a panic can leave
@@ -1531,6 +1533,107 @@ pub(crate) fn hold_dialogs(app: &AppHandle) {
             log_error("host.dialog change", error);
         }
     }));
+}
+
+/// The native holds of the dialogs of the pages of the windows whose host.dialog a client watches, by window. They are read
+/// and changed only on the main thread.
+#[derive(Default)]
+struct PageHolds(Mutex<HashMap<String, platform::Handle>>);
+
+/// Holds (on) or releases the dialogs of the pages of window: while held, the open panel of a file input and the place of a
+/// download of a page are requests of host.dialog (docs/spec/exposure.md#dialogs). The release does not use the window, so
+/// it runs also after the window closed.
+fn hold_page_dialogs(window: &Window, on: bool) {
+    let app = window.app_handle().clone();
+    let label = window.label().to_string();
+    let platform = match platform::current() {
+        Ok(platform) => platform,
+        Err(error) => return log_error("dialog hold", error),
+    };
+    if !on {
+        let result = on_main(window, move || {
+            let holds = app.state::<PageHolds>();
+            // default: a lock that a panicking thread poisoned still holds the holds, each of which is added or removed
+            // whole; the panic hook records the panic.
+            let hold = holds
+                .0
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .remove(&label);
+            if let Some(hold) = hold {
+                platform.release_dialogs(hold);
+            }
+            Ok(())
+        });
+        if let Err(error) = result {
+            log_error("dialog release", error);
+        }
+        return;
+    }
+    let asker = window.clone();
+    let result = with_native_owner(window, move |owner| {
+        let holds = app.state::<PageHolds>();
+        // default: as above.
+        let mut holds = holds.0.lock().unwrap_or_else(PoisonError::into_inner);
+        if holds.contains_key(&label) {
+            return Ok(());
+        }
+        let hold = platform.hold_dialogs(
+            owner,
+            Box::new(move |number, fields| {
+                let asker = asker.clone();
+                crate::routine::spawn_named("dialog-request", move || {
+                    page_dialog(&asker, number, &fields)
+                });
+            }),
+        )?;
+        holds.insert(label, hold);
+        Ok(())
+    });
+    if let Err(error) = result {
+        log_error("dialog hold", error);
+    }
+}
+
+/// Holds the request number of a page of window, whose fields the native layer gives, and applies its answer to the page.
+fn page_dialog(window: &Window, number: u64, fields: &str) {
+    let applying = window.clone();
+    let apply = move |paths: Option<Vec<String>>| -> Result<(), String> {
+        let platform = platform::current()?;
+        let (send, receive) = mpsc::sync_channel::<Result<(), String>>(1);
+        let cancel = paths.is_none();
+        on_main(&applying, move || {
+            platform.answer_dialog(
+                number,
+                paths.unwrap_or_default(),
+                cancel,
+                Box::new(move |result| {
+                    // The native layer answers once, so the channel is not full; a send fails only when the request
+                    // ended with a panic, which the panic hook records.
+                    if let Err(error) = send.try_send(result) {
+                        log_error("dialog applied", error);
+                    }
+                }),
+            );
+            Ok(())
+        })?;
+        receive
+            .recv()
+            .map_err(|_| format!("dialog: request {number} ended without its end"))?
+    };
+    match serde_json::from_str::<crate::dialog::Request>(fields) {
+        Ok(request) => {
+            window
+                .state::<crate::dialog::Dialogs>()
+                .hold(window.label(), request, apply)
+        }
+        Err(error) => {
+            log_error("dialog request", format!("{fields}: {error}"));
+            if let Err(error) = apply(None) {
+                log_error("dialog cancel", error);
+            }
+        }
+    }
 }
 
 /// Installs the watch of host.buttons. A changed value is sent to the watching connections by one thread in the order
@@ -2938,9 +3041,17 @@ impl Host {
                 .state::<crate::dialog::Dialogs>()
                 .value(window.label())),
             ("status.watch" | "status.unwatch", "host.dialog") => {
-                window
-                    .state::<crate::dialog::Dialogs>()
-                    .watched(window.label(), method == "status.watch");
+                // The requests of the host wait from the start of the watch, before the pages are held, and the end of
+                // the watch answers them before it releases the pages.
+                let on = method == "status.watch";
+                let dialogs = window.state::<crate::dialog::Dialogs>();
+                if on {
+                    dialogs.watched(window.label(), true);
+                }
+                hold_page_dialogs(window, on);
+                if !on {
+                    dialogs.watched(window.label(), false);
+                }
                 Ok(Value::Null)
             }
             ("status.get", "host.log") => self

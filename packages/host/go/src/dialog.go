@@ -2,6 +2,7 @@ package host
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -9,6 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/soksak-app/core/packages/host/go/src/platform"
+	"github.com/soksak-app/core/packages/host/go/src/routine"
 )
 
 // The kinds of a dialog request (docs/spec/exposure.md#dialogs).
@@ -38,10 +42,17 @@ type DialogAnswer struct {
 	Replace bool     `json:"replace"`
 }
 
-// heldDialog is a request that waits for its answer. answered receives the chosen paths once, nil for a cancel.
+// heldDialog is a request that waits for its answer. answered receives the answer once.
 type heldDialog struct {
 	request  DialogRequest
-	answered chan []string
+	answered chan dialogAnswered
+}
+
+// dialogAnswered is the answer of a request: the chosen paths, nil for a cancel, and applied, which receives once whether the
+// asker applied them. The answer of a client returns the result of applied.
+type dialogAnswered struct {
+	paths   []string
+	applied chan error
 }
 
 // Dialogs holds the dialog requests of the windows whose host.dialog a client watches. While a window is watched, a dialog that
@@ -77,7 +88,7 @@ func (d *Dialogs) Watched(window string, on bool) {
 	}
 	delete(d.held, window)
 	for _, dialog := range held {
-		dialog.answered <- nil
+		dialog.answered <- dialogAnswered{applied: make(chan error, 1)}
 	}
 	d.changed(window, d.value(window))
 }
@@ -106,15 +117,12 @@ func (d *Dialogs) Ask(ctx context.Context, window string, request DialogRequest,
 		d.mu.Unlock()
 		return panel()
 	}
-	d.next++
-	request.ID = fmt.Sprintf("dialog-%d", d.next)
-	dialog := &heldDialog{request: request, answered: make(chan []string, 1)}
-	d.held[window] = append(d.held[window], dialog)
-	d.changed(window, d.value(window))
+	dialog := d.add(window, request)
 	d.mu.Unlock()
 	select {
-	case paths := <-dialog.answered:
-		return paths, nil
+	case answer := <-dialog.answered:
+		answer.applied <- nil
+		return answer.paths, nil
 	case <-ctx.Done():
 	}
 	d.mu.Lock()
@@ -126,16 +134,44 @@ func (d *Dialogs) Ask(ctx context.Context, window string, request DialogRequest,
 	if !removed {
 		// An answer or the end of the watch took the request before the end of the call, and the client holds the result of
 		// its answer, so the call goes on with it.
-		return <-dialog.answered, nil
+		answer := <-dialog.answered
+		answer.applied <- nil
+		return answer.paths, nil
 	}
 	return nil, ctx.Err()
 }
 
-// Hold holds request, a request of a page of window that the window gives the host. apply applies the answer to the page.
+// add gives request an id of its own, lets it wait in window and announces it. d.mu is held.
+func (d *Dialogs) add(window string, request DialogRequest) *heldDialog {
+	d.next++
+	request.ID = fmt.Sprintf("dialog-%d", d.next)
+	dialog := &heldDialog{request: request, answered: make(chan dialogAnswered, 1)}
+	d.held[window] = append(d.held[window], dialog)
+	d.changed(window, d.value(window))
+	return dialog
+}
+
+// Hold holds request, a request that a page of window gives the host: the open panel of a file input or the place of a
+// download. While a client watches host.dialog of window, it waits until it is answered, and apply applies the chosen paths to
+// the page, nil for a cancel; the answer of the client returns the error of apply, so the answer of a download returns when the
+// download ended. Without a watch the request is cancelled at once. Hold returns after apply.
 func (d *Dialogs) Hold(window string, request DialogRequest, apply func(paths []string) error) {
-	if err := apply(nil); err != nil {
-		LogError("dialog", err)
+	d.mu.Lock()
+	if !d.watched[window] {
+		d.mu.Unlock()
+		if err := apply(nil); err != nil {
+			LogError("dialog cancel", err)
+		}
+		return
 	}
+	dialog := d.add(window, request)
+	d.mu.Unlock()
+	answer := <-dialog.answered
+	err := apply(answer.paths)
+	if err != nil && answer.paths == nil {
+		LogError("dialog cancel", err)
+	}
+	answer.applied <- err
 }
 
 // remove takes the request id out of the requests of window. d.mu is held.
@@ -156,9 +192,17 @@ func (d *Dialogs) remove(window, id string) *heldDialog {
 	return nil
 }
 
-// Answer answers the request answer.ID of window. An answer that the request does not take is refused with the rule and the
-// path, and the request keeps waiting.
+// Answer answers the request answer.ID of window and returns when the asker applied the answer, with the error of applying
+// it. An answer that the request does not take is refused with the rule and the path, and the request keeps waiting.
 func (d *Dialogs) Answer(window string, answer DialogAnswer) error {
+	applied := make(chan error, 1)
+	if err := d.answer(window, answer, applied); err != nil {
+		return err
+	}
+	return <-applied
+}
+
+func (d *Dialogs) answer(window string, answer DialogAnswer, applied chan error) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	var dialog *heldDialog
@@ -179,7 +223,7 @@ func (d *Dialogs) Answer(window string, answer DialogAnswer) error {
 		paths = chosen
 	}
 	d.remove(window, answer.ID)
-	dialog.answered <- paths
+	dialog.answered <- dialogAnswered{paths: paths, applied: applied}
 	d.changed(window, d.value(window))
 	return nil
 }
@@ -318,4 +362,57 @@ func chosenPath(path string, err error) ([]string, error) {
 		return nil, err
 	}
 	return []string{path}, nil
+}
+
+// holdDialogs holds (on) or releases the dialogs of the pages of the window of s: while held, the open panel of a file input
+// and the place of a download of a page are requests of host.dialog (docs/spec/exposure.md#dialogs).
+func (s *Surfaces) holdDialogs(on bool) {
+	if !on {
+		// The release does not use the window, so it runs also after the window closed.
+		mainThreadStep(func() {
+			if s.dialogHold != nil {
+				system.ReleaseDialogs(s.dialogHold)
+				s.dialogHold = nil
+			}
+		})
+		return
+	}
+	err := s.useWindow(func(window platform.Window) error {
+		if s.dialogHold != nil {
+			return nil
+		}
+		hold, err := system.HoldDialogs(window, func(request uint64, fields string) {
+			routine.Go("dialog-request", func() { s.pageDialog(request, fields) })
+		})
+		if err != nil {
+			return err
+		}
+		s.dialogHold = hold
+		return nil
+	})
+	if err != nil {
+		LogError("dialog hold", err)
+	}
+}
+
+// pageDialog holds the request number of a page of the window of s, whose fields the native layer gives, and applies its
+// answer to the page.
+func (s *Surfaces) pageDialog(number uint64, fields string) {
+	var request DialogRequest
+	apply := func(paths []string) error {
+		answered := make(chan string, 1)
+		mainThreadStep(func() { system.AnswerDialog(number, paths, paths == nil, func(failure string) { answered <- failure }) })
+		if failure := <-answered; failure != "" {
+			return errors.New(failure)
+		}
+		return nil
+	}
+	if err := json.Unmarshal([]byte(fields), &request); err != nil {
+		LogError("dialog request", fmt.Errorf("%s: %w", fields, err))
+		if err := apply(nil); err != nil {
+			LogError("dialog cancel", err)
+		}
+		return
+	}
+	s.host.dialogs.Hold(s.name, request, apply)
 }
