@@ -10,11 +10,41 @@ const OUTCOMES = ["written", "failed", "not-requested"];
 const DECIMAL = /^\d+$/;
 
 /**
+ * The stage times of a still row (docs/spec/diagnostics.md, stills.jsonl), each a raw mach time or null for a stage that did
+ * not run: the processing of the still after its completion, the image match and the identity enqueue in it, and the write of
+ * its frame. A written still ran each stage of WRITTEN_STAGES.
+ */
+const STAGES = ["writeStartTime", "writeCompleteTime", "imageMatchStartTime", "imageMatchCompleteTime",
+  "identityDecodeEnqueueStartTime", "identityDecodeEnqueueCompleteTime", "writerEnqueuedTime", "writerStartTime", "writerCompleteTime"];
+const WRITTEN_STAGES = ["writeStartTime", "writeCompleteTime", "imageMatchStartTime", "imageMatchCompleteTime", "writerEnqueuedTime",
+  "writerStartTime", "writerCompleteTime"];
+/** The stages that have both of their times or neither. */
+const BRACKETS = [["writeStartTime", "writeCompleteTime"], ["imageMatchStartTime", "imageMatchCompleteTime"],
+  ["identityDecodeEnqueueStartTime", "identityDecodeEnqueueCompleteTime"], ["writerStartTime", "writerCompleteTime"]];
+/**
+ * The order of the times of a still: the processing starts at or after its completion and holds the image match and the
+ * identity enqueue, and the frame write is enqueued after the processing ends.
+ */
+const ORDER = [["completed", "writeStartTime"], ["writeStartTime", "imageMatchStartTime"], ["imageMatchStartTime", "imageMatchCompleteTime"],
+  ["imageMatchCompleteTime", "writeCompleteTime"], ["writeStartTime", "identityDecodeEnqueueStartTime"],
+  ["identityDecodeEnqueueStartTime", "identityDecodeEnqueueCompleteTime"], ["identityDecodeEnqueueCompleteTime", "writeCompleteTime"],
+  ["writeCompleteTime", "writerEnqueuedTime"], ["writerEnqueuedTime", "writerStartTime"], ["writerStartTime", "writerCompleteTime"]];
+/** The QR decoder runs after the still, so a still row holds none of its times (decoded-frames.jsonl does). */
+const DECODE_TIMES = ["frameIdentityDecodeStartTime", "frameIdentityDecodeCompleteTime"];
+
+/** Whether still row `row` (stills.jsonl) was requested more than one gap after its plan, on the raw mach clock of the row. */
+const lateRow = (row) => row.requested !== null && Number(BigInt(row.requested) - BigInt(row.planned))
+  > row.requestedGap * 1e6 * row.machTimebaseDenominator / row.machTimebaseNumerator;
+
+/**
  * Checks row `row` at place `place` of the still recording `path` against its own fields and the timebase of the first row
  * `first`: a known outcome, exact decimal mach times, a request time exactly for a requested still, a completion time and a
  * window list for a written still and for a failed one whose windows were taken (a failed still whose windows could not be
- * taken has no completion time and the window list []), a request no earlier than the plan and a completion no earlier than the request, the frame of its index exactly for a
- * written still, an error exactly for a failed still, a positive gap and a positive timebase equal to the first row's.
+ * taken has no completion time and the window list []), a request no earlier than the plan and a completion no earlier than the
+ * request, the frame of its index exactly for a written still, an error exactly for a failed still, a positive gap, a positive
+ * timebase equal to the first row's, and stage times (STAGES) that are exact decimal mach times or null, each stage of
+ * WRITTEN_STAGES for a written still and none for a still that took no image, bracketed (BRACKETS) and in order (ORDER), with
+ * no decode time (DECODE_TIMES).
  */
 function requireStillRow(row, place, path, first) {
   const fail = (what) => { throw new Error(`still row ${place} of ${path} ${what}`); };
@@ -60,6 +90,29 @@ function requireStillRow(row, place, path, first) {
   if (!(Number.isFinite(row.requestedGap) && row.requestedGap > 0)) {
     fail(`has the gap ${JSON.stringify(row.requestedGap)}, not a positive number of ms`);
   }
+  for (const name of STAGES) {
+    if (!(row[name] === null || (typeof row[name] === "string" && DECIMAL.test(row[name])))) {
+      fail(`has the ${name} time ${JSON.stringify(row[name])}, not an exact decimal mach time or null`);
+    }
+    if (!taken && row[name] !== null) fail(`took no image and has the ${name} time ${JSON.stringify(row[name])}`);
+  }
+  for (const name of DECODE_TIMES) {
+    if (row[name] !== null) fail(`has the ${name} time ${JSON.stringify(row[name])}, which a still row does not hold`);
+  }
+  if (row.outcome === "written") {
+    for (const name of WRITTEN_STAGES) if (row[name] === null) fail(`is written without its ${name} time`);
+  }
+  for (const [start, end] of BRACKETS) {
+    if ((row[start] === null) !== (row[end] === null)) {
+      const [held, missing] = row[start] === null ? [end, start] : [start, end];
+      fail(`has the ${held} time without its ${missing} time`);
+    }
+  }
+  for (const [earlier, later] of ORDER) {
+    if (row[earlier] !== null && row[later] !== null && BigInt(row[later]) < BigInt(row[earlier])) {
+      fail(`has its ${later} time before its ${earlier} time`);
+    }
+  }
 }
 
 /**
@@ -78,9 +131,21 @@ export function readStills(path) {
     const planned = ms(row.planned);
     const requested = ms(row.requested);
     return { index: row.index, planned, requested, completed: ms(row.completed), gap: row.requestedGap, outcome: row.outcome,
-      error: row.error, frame: row.frame === null ? null : join(directory, row.frame), windows: row.windows,
-      late: requested !== null && requested - planned > row.requestedGap };
+      error: row.error, frame: row.frame === null ? null : join(directory, row.frame), windows: row.windows, late: lateRow(row) };
   });
+}
+
+/**
+ * The counts of the still recording file `path` (stills.jsonl, read by readStills) that its stop reply tells: `late`, the stills
+ * requested more than one gap after their plan, and `longestGap`, the longest interval in ms between the request times of two
+ * consecutive written stills (0 for fewer than two), each on the raw mach clock of the recording.
+ */
+export function stillCounts(path) {
+  const raw = readFileSync(path, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line));
+  const written = raw.filter((row) => row.outcome === "written");
+  const longestGap = Math.max(0, ...written.slice(1).map((row, i) => Number(BigInt(row.requested) - BigInt(written[i].requested))
+    * row.machTimebaseNumerator / row.machTimebaseDenominator / 1e6));
+  return { late: raw.filter(lateRow).length, longestGap };
 }
 
 /**

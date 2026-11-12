@@ -15,7 +15,7 @@ import { endWatches } from "./folder-wait.mjs";
 import { readEventErrors, sessionEventBoot, sessionEventStart } from "./event-log.mjs";
 import { exitEvidence } from "./host-exit.mjs";
 import { frames as listFrames, samePixels } from "./frame.mjs";
-import { lostStills, readStills, requireNoLostStills, toldStill } from "./stills.mjs";
+import { lostStills, readStills, requireNoLostStills, stillCounts, toldStill } from "./stills.mjs";
 import { policyFile, policyOfSetting, readPolicy, requireStored, untilPolicy } from "./log-policy.mjs";
 import { policyAllows } from "@soksak/log-contract";
 import { readPasteboard, restorableItems, restoreFailure, writePasteboard } from "./pasteboard.mjs";
@@ -1624,6 +1624,14 @@ export function requireStillsArtifact(result, frames, asked, after, window) {
   if (written.length !== result.count) {
     throw new Error(`the still recording ${expected} counts ${result.count} written stills, and stills.jsonl has ` +
       `${written.length} written rows`);
+  }
+  const counts = stillCounts(expected);
+  if (result.late !== counts.late) {
+    throw new Error(`the still recording ${expected} counts ${result.late} late stills, and stills.jsonl has ${counts.late} late rows`);
+  }
+  if (result.longestGap !== counts.longestGap) {
+    throw new Error(`the still recording ${expected} names the longest gap ${result.longestGap}ms, and the request times of its ` +
+      `written stills have the longest gap ${counts.longestGap}ms`);
   }
   const untaken = window === null ? undefined : written.find((row) => !row.windows.includes(window));
   if (untaken) {
