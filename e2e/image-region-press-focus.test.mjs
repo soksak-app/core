@@ -60,7 +60,10 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(transitions, [], `focus moved to the view text field during the image region presses: ${JSON.stringify(values)}`);
     const host = await s.get("host.window");
     assert.equal(host.responder?.surface, second.surface, "the last pressed image region is not the native first responder");
-    assert.deepEqual(host.regions.filter((region) => region.focused).map((region) => region.surface), [second.surface]);
+    // The responder names the class that holds the keyboard: the region, or the surface that waits for its region.
+    assert.deepEqual(host.regions.filter((region) => region.focused).map((region) => region.surface), [second.surface],
+      `the last pressed image region does not hold the focus: responder ${JSON.stringify(host.responder)}, regions ` +
+      JSON.stringify(host.regions.map(({ surface, focused, visible }) => ({ surface, focused, visible }))));
     t.diagnostic(`core.focus values ${JSON.stringify(values)}; ${stopped.count} frames, maximum gap ${stopped.longestGap}ms`);
   });
 }
