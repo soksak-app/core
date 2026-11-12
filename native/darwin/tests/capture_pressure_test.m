@@ -1,11 +1,12 @@
 // Injects writer capacity, window server and file write faults into the real still recording, and checks the ends of its waits. A
 // still whose encoded frame would pass the 128 MiB byte limit of the writer fails without holding its request, and one whose
-// encoded bytes fit is written and gives them back; a still requested while 8 stills wait for their image fails at its request;
-// the last still of the largest plan is written; a still 0 without an image fails the start; the stills after a slow still 0 are
-// requested before it completes; the end of a wait from another thread ends the wait of its token only; the close of the recorded
-// window ends a stop with its own reason while the main thread stays free; a scheduled stop answers its context once when another
-// window's close ends its wait; a request during a recording keeps the recording, its error and its prepared window; a still
-// request fails with its own error; and a stop keeps the earlier write error of the recording with its own.
+// encoded bytes fit is written and gives them back; a still requested while 8 stills are in flight, waiting for their image or
+// compressing their pixels, fails at its request; the last still of the largest plan is written; a still 0 without an image fails
+// the start; the stills after a slow still 0 are requested before it completes; the end of a wait from another thread ends the
+// wait of its token only; the close of the recorded window ends a stop with its own reason while the main thread stays free; a
+// scheduled stop answers its context once when another window's close ends its wait; a request during a recording keeps the
+// recording, its error and its prepared window; a still request fails with its own error; and a stop keeps the earlier write
+// error of the recording with its own.
 // Capture internal state is read only by the ownership checks.
 #import "../src/capture.m"
 #import "../src/host_api_capture.m"
@@ -87,6 +88,16 @@ static CGImageRef heldImage(CGRect rect, CFArrayRef windows, CGWindowImageOption
 }
 static void *lookupHeldImage(void *handle, const char *name) {
     return strcmp(name, "CGWindowListCreateImageFromArray") == 0 ? (void *)heldImage : dlsym(handle, name);
+}
+
+// An LZ4 encoder that holds every compression while the test holds them, until the test releases it, as a compression that has
+// not finished: a still whose compression is held has its image and its pixels and stays in flight.
+static atomic_bool encodesHeld;
+static dispatch_semaphore_t encodeRelease;
+static size_t heldEncode(uint8_t *destination, size_t capacity, const uint8_t *source, size_t length, void *scratch,
+    compression_algorithm algorithm) {
+    if (atomic_load(&encodesHeld)) dispatch_semaphore_wait(encodeRelease, DISPATCH_TIME_FOREVER);
+    return compression_encode_buffer(destination, capacity, source, length, scratch, algorithm);
 }
 
 static NSWindow *makeWindow(void) {
@@ -316,6 +327,52 @@ int main(void) { @autoreleasepool {
     }
     captureLookup = lookupTestWindowImage;
     dispatch_release(heldRelease);
+    clearCaptureError();
+
+    // A still stays in flight until it has released its pixels after their compression: once the compressions are held after
+    // still 0, 8 stills that have their image compress and the next request fails at once. The memory of the stills before
+    // compression is so at most 8 frames of pixels.
+    encodeRelease = dispatch_semaphore_create(0);
+    atomic_store(&encodesHeld, false);
+    captureEncode = heldEncode;
+    if (startRecording(window, folder(root, @"in-flight-compression"), 10, 4096, 42)) {
+        SPCaptureRecording *current = nil;
+        @synchronized ([SPCaptureRecording class]) { current = [captureRecording retain]; }
+        atomic_store(&encodesHeld, true);
+        NSString *want = [NSString stringWithFormat:@"capture in-flight capacity exceeded (%lu stills)", (unsigned long)kCaptureInFlight];
+        // 8 stills hold their image and their pixels, and a request after them is refused.
+        sp_run_until("a still is refused while 8 compressions are held", ^BOOL {
+            @synchronized (current) {
+                NSUInteger compressing = 0;
+                BOOL refused = NO;
+                for (NSDictionary *row in current.rows) {
+                    if ([row[@"completed"] isKindOfClass:NSString.class] && [row[@"outcome"] isEqual:@"not-requested"]) compressing++;
+                    if ([row[@"error"] isEqual:want]) refused = YES;
+                }
+                return compressing == kCaptureInFlight && refused;
+            }
+        });
+        NSUInteger held = 0, inFlight = 0;
+        @synchronized (current) {
+            inFlight = current.stillsInFlight;
+            for (NSDictionary *row in current.rows) {
+                if ([row[@"completed"] isKindOfClass:NSString.class] && [row[@"outcome"] isEqual:@"not-requested"]) held++;
+            }
+        }
+        check(inFlight == 8 && held == 8,
+            [NSString stringWithFormat:@"a still stays in flight until its compression ends: a request fails while 8 stills with their image compress (%lu with their image unsettled, %lu in flight)",
+                (unsigned long)held, (unsigned long)inFlight]);
+        atomic_store(&encodesHeld, false);
+        for (NSUInteger index = 0; index < kCaptureInFlight; index++) dispatch_semaphore_signal(encodeRelease);
+        int written = sp_capture_stop(0, 43);
+        NSUInteger left = 0;
+        @synchronized (current) { left = current.stillsInFlight; }
+        check(written >= 9 && left == 0, [NSString stringWithFormat:@"the released stills are written and leave the limit (%d, %lu, %@)",
+            written, (unsigned long)left, errorText()]);
+        [current release];
+    }
+    captureEncode = compression_encode_buffer;
+    dispatch_release(encodeRelease);
     clearCaptureError();
 
     fprintf(stderr, "START: the ends of the capture waits\n");

@@ -43,6 +43,8 @@ static SPWindowImage windowImageFunction(void) {
 // values and with a reader that fails.
 static uint64_t (*captureRawClock)(void) = mach_absolute_time;
 static kern_return_t (*captureReadTimebase)(mach_timebase_info_t) = mach_timebase_info;
+// The LZ4 encoder of a still, which a test replaces with one that holds the compression until the test releases it.
+static size_t (*captureEncode)(uint8_t *, size_t, const uint8_t *, size_t, void *, compression_algorithm) = compression_encode_buffer;
 
 static uint64_t captureTicks(void) { return captureRawClock(); }
 
@@ -350,9 +352,12 @@ static bool pendingFull(void) {
 static NSString *pendingFailure(void) {
     return [NSString stringWithFormat:@"capture pending writer capacity exceeded (%zu bytes)", kCapturePendingBytes];
 }
-// The upper limit of stills whose image the window server has not given yet. A still takes a median of 0.5 ms, so only a still
-// that takes longer than 8 gaps reaches it; a still requested at the limit fails instead of adding a request to a window server
-// that has not answered the earlier ones.
+// The upper limit of stills in flight: from the request of the image to the window server until the still has released its pixels
+// after their compression, so the image that the window server is asked for, the copied image and the frame of pixels of each
+// still are all within it, and the memory of the stills before compression is at most 8 frames of pixels (the writer limit
+// bounds the encoded frames after it). A still takes a median of 0.5 ms from the window server and a few ms to compress, so only
+// a still that takes longer than 8 gaps reaches it; a still requested at the limit fails instead of adding a request to a window
+// server or a compression that has not finished the earlier ones.
 static const NSUInteger kCaptureInFlight = 8;
 // The queue whose strict timer requests the stills at their planned times, and the queue on which each still is taken. Neither
 // is the main queue, so a busy main thread does not move a request.
@@ -394,8 +399,8 @@ static void prepareCaptureQueues(void) {
 @property (nonatomic, retain) NSMutableSet<NSString *> *profiles;
 @property (nonatomic) NSUInteger nextIndex;
 @property (nonatomic) NSUInteger completedCount;
-// The stills requested on the workers whose image the window server has not given yet. Guarded by the recording.
-@property (nonatomic) NSUInteger awaitingImages;
+// The stills requested on the workers that have not released their pixels yet (kCaptureInFlight). Guarded by the recording.
+@property (nonatomic) NSUInteger stillsInFlight;
 @property (nonatomic) NSUInteger outcomes;
 @property (nonatomic) int written;
 @property (nonatomic) BOOL closed;
@@ -903,8 +908,7 @@ static uint8_t *encodeFrame(const uint8_t *frame, size_t pixels, size_t *bytes, 
     if (encoded != NULL) {
         memcpy(encoded, frame, kFrameHeader);
         memcpy(encoded + kFrameHeader, "LZ4S", 4);
-        compressed = compression_encode_buffer(encoded + kFrameEncodedHeader, capacity, frame + kFrameHeader, pixels, NULL,
-            COMPRESSION_LZ4_RAW);
+        compressed = captureEncode(encoded + kFrameEncodedHeader, capacity, frame + kFrameHeader, pixels, NULL, COMPRESSION_LZ4_RAW);
         uint32_t count = (uint32_t)compressed;
         uint32_t checksum = (uint32_t)crc32(0, frame + kFrameHeader, (uInt)pixels);
         memcpy(encoded + kFrameHeader + 4, &count, sizeof count);
@@ -1038,7 +1042,7 @@ static void takeStill(SPCaptureRecording *recording, NSUInteger index, SPCapture
     uint64_t requested = captureTicks();
     if (target.error != nil) {
         @synchronized (recording) {
-            recording.awaitingImages--;
+            recording.stillsInFlight--;
             recording.rows[index][@"requested"] = tickString(requested);
             recording.rows[index][@"windows"] = @[];
         }
@@ -1050,7 +1054,6 @@ static void takeStill(SPCaptureRecording *recording, NSUInteger index, SPCapture
     uint64_t completed = captureTicks();
     BOOL reached = NO;
     @synchronized (recording) {
-        recording.awaitingImages--;
         NSMutableDictionary *row = recording.rows[index];
         row[@"requested"] = tickString(requested);
         row[@"completed"] = tickString(completed);
@@ -1060,12 +1063,14 @@ static void takeStill(SPCaptureRecording *recording, NSUInteger index, SPCapture
         if (reached) recording.stopReached = YES;
     }
     if (reached) dispatch_semaphore_signal(recording.stopSignal);
+    // Every way out of processStill has unmapped the pixels of the still, so the still leaves the in-flight limit with its image.
     processStill(recording, index, target, image, requested, completed);
     if (image) CGImageRelease(image);
+    @synchronized (recording) { recording.stillsInFlight--; }
 }
 
-// Fails still index at its request because kCaptureInFlight stills wait for their image: it takes no window, as a still whose
-// windows could not be taken.
+// Fails still index at its request because kCaptureInFlight stills are in flight: it takes no window, as a still whose windows
+// could not be taken.
 static void refuseStill(SPCaptureRecording *recording, NSUInteger index, uint64_t requested) {
     @synchronized (recording) {
         recording.rows[index][@"requested"] = tickString(requested);
@@ -1076,7 +1081,7 @@ static void refuseStill(SPCaptureRecording *recording, NSUInteger index, uint64_
 }
 
 // Requests on the worker queue every still whose planned time has come, then sets the strict timer for the next planned still. A
-// still whose request finds kCaptureInFlight stills waiting for their image fails at once (refuseStill): it does not wait, so the
+// still whose request finds kCaptureInFlight stills in flight fails at once (refuseStill): it does not wait, so the
 // requests after it keep their planned times.
 static void requestDueStills(SPCaptureRecording *recording) {
     uint64_t now = captureTicks();
@@ -1086,13 +1091,13 @@ static void requestDueStills(SPCaptureRecording *recording) {
         while (!recording.closed && recording.nextIndex < recording.planned && [recording plannedTicks:recording.nextIndex] <= now) {
             NSUInteger index = recording.nextIndex;
             recording.nextIndex = index + 1;
-            if (recording.awaitingImages >= kCaptureInFlight) {
+            if (recording.stillsInFlight >= kCaptureInFlight) {
                 // The stop waits for the group, so it also waits for the refusal, which settles the still after the lock.
                 dispatch_group_enter(recording.inflight);
                 [refused addObject:@(index)];
                 continue;
             }
-            recording.awaitingImages++;
+            recording.stillsInFlight++;
             dispatch_group_async(recording.inflight, captureWorkers, ^{
                 @autoreleasepool { takeStill(recording, index, [recording currentTarget]); }
             });
