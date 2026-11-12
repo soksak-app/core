@@ -501,10 +501,12 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 		s.prepareNative()
 	}
 	// Tells the connections that watch host.window about changes of the window position, size, key state and occlusion state. A framework sends the occlusion
-	// state change of macOS as WindowShow (visible) and WindowHide (completely covered).
-	changed := func() {
+	// state change of macOS as WindowShow (visible) and WindowHide (completely covered). read runs in the main-thread step of the
+	// change, where the window state can be read, before the step reads the on-screen state.
+	changed := func(read func()) {
 		// An occluded or minimized window draws no image region (docs/spec/native-surfaces.md#image-regions).
 		mainThreadStep(func() {
+			read()
 			// A window that closes still reports changes, and it has no state left to read.
 			if win.NativeWindow() != 0 {
 				if err := s.readOnScreen(); err != nil {
@@ -525,13 +527,17 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 		WindowFocusLost: "lost_focus", WindowShow: "show", WindowHide: "hide",
 	} {
 		win.OnWindowEvent(event, func() {
-			if kind == "resize" {
+			if kind != "resize" {
+				RecordWindowEvent(s.name, kind)
+				changed(func() {})
+				return
+			}
+			// The listener runs outside the main thread, so the resize is recorded in the main-thread step of the change, which reads
+			// the content size of the window. A window that closed has no content and records no size.
+			changed(func() {
 				width, height, err := system.WindowContentSize(win.NativeWindow())
 				RecordWindowResize(s.name, width, height, err == nil)
-			} else {
-				RecordWindowEvent(s.name, kind)
-			}
-			changed()
+			})
 		})
 	}
 	// The page reads state that no event announces, such as the registry index, when its window becomes active

@@ -383,3 +383,50 @@ func TestTheEndOfThePageProcessCancelsTheLayoutOfItsWindow(t *testing.T) {
 		t.Fatalf("the end of the page process cancelled the layouts of %v, want window 7 once", fake.cancelled)
 	}
 }
+
+// steppingFramework is a framework without a main page that tells whether a main-thread step runs.
+type steppingFramework struct {
+	pagelessFramework
+	inStep *bool
+}
+
+func (f steppingFramework) Step(task func()) {
+	*f.inStep = true
+	defer func() { *f.inStep = false }()
+	task()
+}
+
+// contentSizePlatform records, for each read of the content size of a window, whether it ran in a main-thread step.
+type contentSizePlatform struct {
+	pagelessPlatform
+	inStep *bool
+	reads  []bool
+}
+
+func (p *contentSizePlatform) WindowContentSize(platform.Window) (float64, float64, error) {
+	p.reads = append(p.reads, *p.inStep)
+	return 0, 0, errors.New("window content size: the window is gone")
+}
+
+// A framework calls the listener of a window event outside the main thread, and the window state can be read only in a
+// main-thread step: a read of the content size outside it ends the process, as the start of the Wails host did. The resize
+// reads the content size that it records in the main-thread step of its change.
+// contract: windows.events.resize-size-read-in-main-thread-step
+func TestAResizeReadsTheContentSizeInAMainThreadStep(t *testing.T) {
+	window := &eventWindow{pagelessWindow: pagelessWindow{native: platform.Window(1)}, listeners: map[WindowEvent][]func(){}}
+	inStep := false
+	previousFramework, previousSystem := framework, system
+	fake := &contentSizePlatform{inStep: &inStep}
+	framework, system = steppingFramework{pagelessFramework: pagelessFramework{window: window}, inStep: &inStep}, fake
+	t.Cleanup(func() { framework, system = previousFramework, previousSystem })
+	host := &Host{windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{}}
+	host.newWindow("main", "")
+	// A window that closed reads no on-screen state in the step, so the step holds only the read of the content size.
+	window.native = 0
+	for _, listener := range window.listeners[WindowResize] {
+		listener()
+	}
+	if !reflect.DeepEqual(fake.reads, []bool{true}) {
+		t.Fatalf("the resize read the content size %d times, in a main-thread step %v, want once in a step", len(fake.reads), fake.reads)
+	}
+}
