@@ -14,6 +14,7 @@ import { joinedFailure } from "./failure.mjs";
 import { endWatches } from "./folder-wait.mjs";
 import { readEventErrors, sessionEventBoot, sessionEventStart } from "./event-log.mjs";
 import { exitEvidence } from "./host-exit.mjs";
+import { samePixels } from "./frame.mjs";
 import { policyFile, policyOfSetting, readPolicy, requireStored, untilPolicy } from "./log-policy.mjs";
 import { policyAllows } from "@soksak/log-contract";
 import { readPasteboard, restorableItems, restoreFailure, writePasteboard } from "./pasteboard.mjs";
@@ -806,11 +807,13 @@ export class Session {
     // document regions of a covered window draw as they do on the screen and the window keeps its place in the window order.
     // A recording of a new window (newWindow) reads a window that the application creates after the start answers, so it holds
     // nothing of the requesting window.
+    const asked = await recordingOf(this, params);
+    const plan = plannedStills(asked);
     const release = params.newWindow === true ? async () => {} : await holdCovered(this);
     this.cleanup(release);
     let started;
     try {
-      started = await this.request("diagnostics.capture.start", params);
+      started = await this.request("diagnostics.capture.start", asked);
     } catch (error) {
       await release();
       throw error;
@@ -832,7 +835,7 @@ export class Session {
         if (sent) return Promise.reject(new Error(`the stop was already sent for the recording ${frames}`));
         sent = true;
         return this.request("diagnostics.capture.stop", options).finally(release).then((result) => {
-          requireCallbackStatusArtifact(result, frames);
+          requireStillsArtifact(result, frames, asked, options.after ?? 0);
           writeFileSync(join(frames, "stop.json"), JSON.stringify(result));
           return result;
         }).catch((error) => {
@@ -1331,15 +1334,40 @@ const paced = ({ took, asked }) => took <= asked * MARGIN && took >= asked / MAR
 const machMs = (ticks, numerator, denominator) => Number(BigInt(ticks) * BigInt(numerator) / BigInt(denominator)) / 1e6;
 
 /**
- * The display times (ms) of the complete frames that the callback status file `path` names, in their order. ScreenCaptureKit
- * delivers a complete frame of a window stream when the window server updates the window; while the window stays as it is,
- * it delivers idle frames for some refreshes and often no callback at all, so neither idle frames nor their absence tell a
- * window that stayed as it was from a frame that the recorder lost.
+ * The rows of the still recording file `path` (stills.jsonl), one per planned still in the order of the plan, with the times of
+ * each still in ms on the clock of the recording: `planned`, `requested` and `completed` (null for a still that was not
+ * requested), `gap` (the requested gap), `outcome`, `error`, `frame` (the path of its frame file, null for a still that wrote
+ * none), `windows` and `late`, whether it was requested later than one gap after its plan.
  */
-function recordedFrameTimes(path) {
-  return readFileSync(path, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line))
-    .filter((row) => row.status === 0 && typeof row.frame === "string")
-    .map((row) => machMs(row.displayTime, row.machTimebaseNumerator, row.machTimebaseDenominator));
+export function readStills(path) {
+  const directory = path.slice(0, path.lastIndexOf("/"));
+  return readFileSync(path, "utf8").split("\n").filter(Boolean).map((line) => {
+    const row = JSON.parse(line);
+    const ms = (ticks) => ticks === null ? null : machMs(ticks, row.machTimebaseNumerator, row.machTimebaseDenominator);
+    const planned = ms(row.planned);
+    const requested = ms(row.requested);
+    return { index: row.index, planned, requested, completed: ms(row.completed), gap: row.requestedGap, outcome: row.outcome,
+      error: row.error, frame: row.frame === null ? null : join(directory, row.frame), windows: row.windows,
+      late: requested !== null && requested - planned > row.requestedGap };
+  });
+}
+
+/** Whether a still row is lost to the recording: it wrote no frame, or it was requested later than one gap after its plan. */
+const lostStill = (row) => row.outcome !== "written" || row.late;
+
+/** One lost still row, told by its index, its plan and what lost it. */
+const toldStill = (row) => `still ${row.index} planned at ${row.planned.toFixed(1)}ms ` + (row.outcome === "not-requested"
+  ? "was not requested"
+  : row.outcome === "failed" ? `failed (${row.error})` : `was requested ${(row.requested - row.planned).toFixed(1)}ms late`);
+
+/**
+ * The written stills of the still recording file `path` that show a change: each still whose pixels differ from those of the
+ * written still before it, as {requested, completed} (ms). Every still is taken at its planned time whether the window changed
+ * or not, so a still with the pixels of the one before it shows the window as it stayed.
+ */
+function changedStills(rows) {
+  const written = rows.filter((row) => row.outcome === "written");
+  return written.filter((row, index) => index > 0 && !samePixels(written[index - 1].frame, row.frame));
 }
 
 /**
@@ -1425,23 +1453,25 @@ export async function owe(s) {
 }
 
 /**
- * The longest wait for a recorded frame within the changes: `changes` are {from, to?}, the time at which the screen was asked
- * to change and the display time of its final state (absent for a change shown by one frame), and `frames` the display times
- * of the recorded frames, all in ms on the clock of the recording. A change waits from its request to the first frame after it
- * and from each frame to the next until the first frame at or after its final state. Returns {index, at, next, wait} with the
- * 1-based index of the change, the start of the wait, the frame that ends it (null when the recording has none) and its length
- * (Infinity without a frame), or null without changes.
+ * The longest wait for a recorded still that shows a change within the changes: `changes` are {from, to?}, the time at which
+ * the screen was asked to change and the display time of its final state (absent for a change shown by one still), and `stills`
+ * the stills that show a change ({requested, completed}), all in ms on the clock of the recording. A still shows the window at one
+ * moment between its request and its completion, so a still requested after a time can show what was shown then, and what it
+ * shows was shown no later than its completion. A change waits from its request to the completion of the first such still
+ * requested after it, and from each such still to the next until the first one requested at or after its final state. Returns
+ * {index, at, next, wait} with the 1-based index of the change, the start of the wait, the still that ends it (null when the
+ * recording has none) and its length (Infinity without a still), or null without changes.
  */
-function longestWait(changes, frames) {
+function longestWait(changes, stills) {
   let worst = null;
   changes.forEach(({ from, to = from }, index) => {
     let at = from;
     let ended = false;
-    for (const frame of frames) {
-      if (frame <= from) continue;
-      if (!worst || frame - at > worst.wait) worst = { index: index + 1, at, next: frame, wait: frame - at };
-      at = frame;
-      if (frame >= to) { ended = true; break; }
+    for (const still of stills) {
+      if (still.requested <= from) continue;
+      if (!worst || still.completed - at > worst.wait) worst = { index: index + 1, at, next: still, wait: still.completed - at };
+      at = still.completed;
+      if (still.requested >= to) { ended = true; break; }
     }
     if (!ended && (!worst || worst.wait !== Infinity)) worst = { index: index + 1, at, next: null, wait: Infinity };
   });
@@ -1471,10 +1501,14 @@ export function judgeShownChanges(stopped, changes, { layouts = stopped.layouts,
       "its frames cannot be judged against them");
   }
   writeFileSync(join(stopped.frames, "layouts.json"), JSON.stringify({ layouts: layouts ?? [] }));
-  const worst = longestWait(changes, recordedFrameTimes(stopped.callbackStatus));
+  const rows = readStills(stopped.stills);
+  const worst = longestWait(changes, changedStills(rows));
   if (worst === null || worst.wait <= limit) return;
   const change = changes[worst.index - 1];
-  const end = worst.next ?? Infinity;
+  const end = worst.next?.completed ?? Infinity;
+  // The stills after the last requested one were not requested because the recording stopped: they are its end, not a loss.
+  const stoppedAt = rows.findLastIndex((row) => row.requested !== null) + 1;
+  const lost = rows.slice(0, stoppedAt).filter((row) => lostStill(row) && row.planned >= worst.at && row.planned < end);
   const asked = changes.filter(({ from }) => from >= worst.at && from < end).length;
   const inSpan = (stage) => (layouts ?? []).filter((layout) => typeof layout[stage] === "number"
     && layout[stage] >= worst.at && layout[stage] < end);
@@ -1494,21 +1528,95 @@ export function judgeShownChanges(stopped, changes, { layouts = stopped.layouts,
   }
   const final = change.to === undefined ? "" : `, its final state displayed at ${change.to.toFixed(1)}ms`;
   const shown = worst.next === null
-    ? `the recording has no frame after ${worst.at.toFixed(1)}ms`
-    : `after ${worst.at.toFixed(1)}ms the next frame was displayed ${worst.wait.toFixed(0)}ms later, at ${worst.next.toFixed(1)}ms`;
-  throw new Error(`the application did not show ${what} ${worst.index} of ${changes.length} (asked at ${change.from.toFixed(1)}ms` +
-    `${final} on the clock of the recording) without waiting longer than ${limit}ms for a frame: ${shown}; in that time the ` +
+    ? `the recording shows no change after ${worst.at.toFixed(1)}ms`
+    : `after ${worst.at.toFixed(1)}ms the first still that shows a change completed ${worst.wait.toFixed(0)}ms later, at ` +
+      `${worst.next.completed.toFixed(1)}ms (requested at ${worst.next.requested.toFixed(1)}ms)`;
+  const named = `${what} ${worst.index} of ${changes.length} (asked at ${change.from.toFixed(1)}ms${final} on the clock of the ` +
+    "recording)";
+  // A still that the recording lost in the wait may have shown the change: the wait is then a loss of the recording.
+  const judged = lost.length > 0
+    ? `the recording lost ${lost.length} stills while ${named} waited longer than ${limit}ms for a frame: ` +
+      `${lost.map(toldStill).join(", ")};`
+    : `the application did not show ${named} without waiting longer than ${limit}ms for a frame:`;
+  throw new Error(`${judged} ${shown}; in that time the ` +
     `check asked for ${asked} ${what}s, the host began ${begun.length} layouts ${JSON.stringify(begun)} and committed ` +
     `${committed.length} [${committed.join(", ")}], and ${mainThread}; recording ${stopped.frames}; 1-minute load average ` +
     `${loadavg()[0].toFixed(2)}`);
 }
 
-function requireCallbackStatusArtifact(result, frames) {
-  const expected = join(frames, "callback-status.jsonl");
-  if (result.callbackStatus !== expected || !existsSync(expected)) {
-    throw new Error(`capture stop callback status artifact is missing or has the wrong path: expected ${expected}, got ${result.callbackStatus}`);
+/** The most stills that one recording plans (docs/spec/endpoint.md, diagnostics.capture.start). */
+const MOST_STILLS = 4096;
+
+/**
+ * The start arguments of a recording of session `s` asked for with `params`: a recording takes a still each refresh of the
+ * display of its window, read from host.window when it starts, unless `params` asks for its own `gap`, and plans as many stills
+ * as a recording holds unless `params` asks for its own `seconds` or `frames`, so it records until the check stops it. The
+ * refresh rate sets only the gap: the judgments read the refresh period of each time from the display link of the recording.
+ */
+async function recordingOf(s, params) {
+  const asked = { ...params };
+  if (asked.gap === undefined) {
+    const { refreshRate } = await s.get("host.window");
+    if (!(Number.isFinite(refreshRate) && refreshRate > 0)) {
+      throw new Error(`a recording takes one still each refresh, and host.window.refreshRate is ${JSON.stringify(refreshRate)}`);
+    }
+    asked.gap = 1000 / refreshRate;
   }
-  return expected;
+  if (asked.seconds === undefined && asked.frames === undefined) asked.frames = MOST_STILLS;
+  return asked;
+}
+
+/**
+ * The number of stills that a recording started with `{gap, seconds}` or `{gap, frames}` plans: `frames`, or one still at each
+ * multiple of `gap` (ms) before the end of `seconds`.
+ */
+export function plannedStills({ gap, seconds, frames }) {
+  return frames ?? Math.ceil(seconds * 1000 / gap);
+}
+
+/**
+ * Checks the still recording that a stop reply `result` of the recording in `frames`, started with `asked` ({gap, seconds} or
+ * {gap, frames}) and stopped after the time `after` (ms), names: stills.jsonl in `frames`, with one row for each planned still in
+ * the order of the plan, each taken at the gap asked for, a plan that reaches `after`, the written and missed stills of the reply
+ * making the plan, the written stills of the reply being the written rows, and the frame file of each written row. Returns the
+ * rows (readStills).
+ */
+export function requireStillsArtifact(result, frames, asked, after) {
+  const plan = plannedStills(asked);
+  const expected = join(frames, "stills.jsonl");
+  if (result.stills !== expected) throw new Error(`the stop reply names the stills ${result.stills}, not ${expected}`);
+  if (!existsSync(expected)) throw new Error(`the still recording ${expected} is missing`);
+  const rows = readStills(expected);
+  if (rows.length !== plan) throw new Error(`the still recording ${expected} has ${rows.length} rows for a plan of ${plan} stills`);
+  const misplaced = rows.findIndex((row, index) => row.index !== index);
+  if (misplaced >= 0) {
+    throw new Error(`the still recording ${expected} has the row of still ${rows[misplaced].index} at the place of still ${misplaced}`);
+  }
+  const regapped = rows.find((row) => row.gap !== asked.gap);
+  if (regapped) {
+    throw new Error(`the still recording ${expected} took still ${regapped.index} at a gap of ${regapped.gap}ms, not the ` +
+      `${asked.gap}ms that the recording asked for`);
+  }
+  // A recording stopped after a time that its plan does not reach took no still of the screens up to that time.
+  if (rows.at(-1).planned < after) {
+    throw new Error(`the still recording ${expected} planned its last still at ${rows.at(-1).planned.toFixed(1)}ms, before ` +
+      `${after.toFixed(1)}ms, the time that it was stopped after`);
+  }
+  if (result.count + result.missed !== plan) {
+    throw new Error(`the still recording ${expected} counts ${result.count} written and ${result.missed} missed stills for a ` +
+      `plan of ${plan} stills`);
+  }
+  const written = rows.filter((row) => row.outcome === "written");
+  if (written.length !== result.count) {
+    throw new Error(`the still recording ${expected} counts ${result.count} written stills, and stills.jsonl has ` +
+      `${written.length} written rows`);
+  }
+  const unwritten = written.find((row) => !existsSync(row.frame));
+  if (unwritten) {
+    throw new Error(`the still recording ${expected} has no ${unwritten.frame.slice(frames.length + 1)} for its written still ` +
+      `${unwritten.index}`);
+  }
+  return rows;
 }
 
 /** The holds of the covered drawing, by the connection of a session and its window. */
@@ -1560,9 +1668,10 @@ async function dragOnce(s, plan, capture, frameIdentity) {
 }
 
 async function dragDrawing(s, plan, capture, frameIdentity) {
+  const recording = capture ? await recordingOf(s, {}) : null;
   const result = await s.request("diagnostics.drag", {
     ...plan,
-    capture,
+    capture: recording ?? false,
     ...(frameIdentity ? { frameIdentity: true } : {}),
   });
   if (!capture) return result;
@@ -1570,19 +1679,18 @@ async function dragDrawing(s, plan, capture, frameIdentity) {
   // Records until the time when the last screen of the drag is displayed.
   const { displayed } = await s.presented();
   const stopped = await s.request("diagnostics.capture.stop", { after: displayed });
-  const callbackStatus = requireCallbackStatusArtifact(stopped, result.frames);
-  if (stopped.limited) {
-    throw new Error("the recording reached its finite frame limit before the gesture completed");
-  }
-  // A drag changes the screen with every step, so each step (ticks of the reply) is owed the next recorded frame.
+  requireStillsArtifact(stopped, result.frames, recording, displayed);
+  // A drag changes the screen with every step, so each step (ticks of the reply) is owed a still that shows a change.
   // A drag without steps changed nothing, so a reply without step times cannot be judged.
   const steps = !Array.isArray(result.ticks) ? result.ticks : result.ticks.length > 0 ? result.ticks.map((from) => ({ from })) : null;
   judgeShownChanges(stopped, steps, { layouts: result.layouts, what: "drag step" });
   return {
     ...result,
-    callbackStatus,
+    stills: stopped.stills,
     displayed,
     count: stopped.count,
+    missed: stopped.missed,
+    late: stopped.late,
     longestGap: stopped.longestGap,
     frameDir: stopped.frames,
     ...(frameIdentity ? { frameIdentity: stopped.frameIdentity } : {}),
