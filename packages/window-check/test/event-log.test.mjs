@@ -8,11 +8,21 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { finishSession } from "../app.mjs";
+import { joinedFailure } from "../failure.mjs";
+import { endWatches } from "../folder-wait.mjs";
 import { currentEventOffsets, eventLine, sessionEventBoot, sessionEventStart, readEvents, traceRows, readEventErrors, readEventLines, untilEventLine, untilEventLines } from "../event-log.mjs";
 
 function configDir(t) {
   const dir = mkdtempSync(join(tmpdir(), "soksak-event-log-"));
-  t.after(() => rmSync(dir, { recursive: true }));
+  // The watches that the waits of the test started end before the folder is removed, and a failed end fails the test: on Linux
+  // the removal of a watched folder ends its inotify watch, so an end that comes after it fails with EINVAL, and the error would
+  // be reported by whichever check next reads the ends of the watches.
+  t.after(async () => {
+    const ended = await endWatches();
+    rmSync(dir, { recursive: true });
+    if (ended.length === 1) throw ended[0];
+    if (ended.length > 1) throw joinedFailure(`${ended.length} watch ends failed`, ended);
+  });
   mkdirSync(join(dir, "logs"));
   return dir;
 }

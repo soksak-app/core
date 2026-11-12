@@ -52,10 +52,20 @@ mock.module("@parcel/watcher", {
 const { untilEndpoint } = await import("../endpoint-wait.mjs");
 const { untilPolicy, policyOfSetting, EVERY_LEVEL } = await import("../log-policy.mjs");
 const { untilEventLines } = await import("../event-log.mjs");
+const { endWatches } = await import("../folder-wait.mjs");
+const { joinedFailure } = await import("../failure.mjs");
 
 function folder(t) {
   const dir = fs.mkdtempSync(join(tmpdir(), "folder-wait-"));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  // The watches that the waits of the test started end before the folder is removed, and a failed end fails the test: on Linux
+  // the removal of a watched folder ends its inotify watch, so an end that comes after it fails with EINVAL, and the error would
+  // be reported by whichever check next reads the ends of the watches.
+  t.after(async () => {
+    const ended = await endWatches();
+    fs.rmSync(dir, { recursive: true, force: true });
+    if (ended.length === 1) throw ended[0];
+    if (ended.length > 1) throw joinedFailure(`${ended.length} watch ends failed`, ended);
+  });
   return dir;
 }
 
