@@ -87,10 +87,11 @@ func (d *Dialogs) Watched(window string, on bool) {
 		return
 	}
 	delete(d.held, window)
+	// The watchers hear the change before the askers go on, so a change is announced before the call that it answered returns.
+	d.changed(window, d.value(window))
 	for _, dialog := range held {
 		dialog.answered <- dialogAnswered{applied: make(chan error, 1)}
 	}
-	d.changed(window, d.value(window))
 }
 
 // Value is the value of host.dialog of window: {pending}, the requests that wait in the order they were asked.
@@ -223,8 +224,9 @@ func (d *Dialogs) answer(window string, answer DialogAnswer, applied chan error)
 		paths = chosen
 	}
 	d.remove(window, answer.ID)
-	dialog.answered <- dialogAnswered{paths: paths, applied: applied}
+	// The watchers hear the change before the asker goes on, so a change is announced before the call that it answered returns.
 	d.changed(window, d.value(window))
+	dialog.answered <- dialogAnswered{paths: paths, applied: applied}
 	return nil
 }
 

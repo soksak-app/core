@@ -123,6 +123,9 @@ impl Dialogs {
         let Some(held) = state.held.remove(window) else {
             return;
         };
+        // The watchers hear the change before the askers go on, so a change is announced before the call that it answered
+        // returns.
+        (self.changed)(window, state.value(window));
         for dialog in held {
             deliver(
                 &dialog,
@@ -132,7 +135,6 @@ impl Dialogs {
                 },
             );
         }
-        (self.changed)(window, state.value(window));
     }
 
     /// The value of host.dialog of window: {pending}, the requests that wait in the order they were asked.
@@ -179,6 +181,9 @@ impl Dialogs {
         if held.is_empty() {
             state.held.remove(window);
         }
+        // The watchers hear the change before the asker goes on, so a change is announced before the call that it answered
+        // returns.
+        (self.changed)(window, state.value(window));
         deliver(
             &dialog,
             Answered {
@@ -186,7 +191,6 @@ impl Dialogs {
                 applied: Some(applied),
             },
         );
-        (self.changed)(window, state.value(window));
         Ok(())
     }
 
