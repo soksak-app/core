@@ -28,6 +28,7 @@
     "./session.mjs": "./session.mjs",
     "./shutdown-wait.mjs": "./shutdown-wait.mjs",
     "./stall-sample.mjs": "./stall-sample.mjs",
+    "./stills.mjs": "./stills.mjs",
     "./text-difference.mjs": "./text-difference.mjs",
     "./catalog.mjs": "./catalog.mjs",
     "./start.mjs": "./start.mjs",

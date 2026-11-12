@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { lostStills, toldStill } from "./stills.mjs";
 
 /** Measures every view-drag frame interval, including frames whose geometry cannot be measured. */
 export function measureDragFrameCadence(times) {
@@ -29,10 +30,24 @@ function gapsExceed(times, refreshes) {
 }
 
 /**
- * Applies the view-drag cadence target: no recording gap longer than two periods of the display at the gap's end.
+ * The stills (toldStill) that the recording lost between the first and the last of the shown frames `times` (request times,
+ * ms), read from the still rows `stills` (readStills). A still lost at a gap of one refresh leaves an interval of two refreshes,
+ * which the bound of two periods passes, so a cadence reads the rows of its span and not only the intervals.
  */
-export function assertDragFrameCadence(times, refreshes) {
+function lostInSpan(times, stills) {
+  assert.ok(Array.isArray(stills), "the still rows of the recording are missing, so its cadence cannot be judged");
+  return lostStills(stills, times[0], times.at(-1)).map(toldStill);
+}
+
+/**
+ * Applies the view-drag cadence target: no still lost between the first and the last shown frame (`times`, the request times of
+ * the shown stills), and no interval longer than two periods of the display at the interval's end.
+ */
+export function assertDragFrameCadence(times, refreshes, stills) {
   const longest = measureDragFrameCadence(times);
+  const lost = lostInSpan(times, stills);
+  assert.ok(lost.length === 0, `view drag recording lost ${lost.length} stills between ${times[0].toFixed(1)}ms and ` +
+    `${times.at(-1).toFixed(1)}ms: ${lost.join(", ")}`);
   for (let index = 1; index < times.length; index++) {
     const gap = times[index] - times[index - 1];
     const target = 2 * periodAt(refreshes, times[index]);
@@ -73,18 +88,20 @@ export function assertRoundTrips(positions, times) {
 /**
  * Measures, for each recorded frame, how late (ms) the card position was behind the pointer.
  *
- * samples is a list of { time, position } (points) whose first item is the position before the drag. ticks are
+ * samples is a list of { time, completed, position } (points) whose first item is the position before the drag: a still of
+ * the recording and the position that it shows. A still shows the window at one moment between its request (time) and its
+ * completion (completed), so the layout that it shows was left no later than its completion. ticks are
  * the times at which the host sent the steps, on the same clock as the frames. boundary is the boundary position
  * that the page reported, whose first value is before the drag and whose (k+1)th value is after step k. The boundary sticks to a neighboring line or
  * stops at the minimum size, so this value, not the pointer offset, matches the layout of a frame to a step.
- * The lag is the time from the last time the grid left the layout that the frame showed to the display time
- * of that frame. If the grid is still in that layout, the lag is 0. A position that matches no step
+ * The lag is the time from the last time the grid left the layout that the still showed to the completion of that still. If
+ * the grid is still in that layout, the lag is 0. A position that matches no step
  * cannot be measured and fails.
  */
 export function pointerLag(samples, ticks, boundary) {
   assert.ok(Array.isArray(samples) && samples.length > 0 && samples.every((sample) =>
-    sample && Number.isFinite(sample.time) && Number.isFinite(sample.position)),
-  "drag samples are missing or contain non-finite time or position");
+    sample && Number.isFinite(sample.completed) && Number.isFinite(sample.position)),
+  "drag samples are missing or contain a non-finite completion time or position");
   assert.ok(Array.isArray(ticks) && ticks.length > 0, "the host reported no step times");
   assert.equal(boundary?.length, ticks.length + 1,
     `the page reported ${boundary?.length} boundary positions for ${ticks.length} steps`);
@@ -92,7 +109,7 @@ export function pointerLag(samples, ticks, boundary) {
   const base = samples[0].position;
   let worst = { lag: 0, time: null, shown: null, step: null, sent: null };
   const lags = [];
-  for (const { time, position } of samples) {
+  for (const { completed: time, position } of samples) {
     if (time < ticks[0]) continue;
     const shown = position - base;
     let k = ticks.length - 1;
@@ -120,7 +137,7 @@ export function pointerLag(samples, ticks, boundary) {
  * Divides the lag of the latest frame into the stages of the layout transaction.
  *
  * lag is the result of pointerLag and layouts is the list of { ticket, begun, presented, committed } recorded by the host (ms, on the same clock as the frames).
- * For each transaction that was open between the time of the step at which the grid left that layout and the display time of that frame,
+ * For each transaction that was open between the time of the step at which the grid left that layout and the completion of that still,
  * it records the time from the leaving time to each stage. The page starts the next preparation after it receives the answer of the earlier transaction
  * (docs/spec/native-surfaces.md), so a transaction that was already open at that time is included.
  */
@@ -146,10 +163,13 @@ const HOLD = 34;
  *
  * The page displays only the newest of the layouts that are waiting (docs/spec/native-surfaces.md), so a position held briefly can be
  * replaced. From boundary and ticks it computes the time the boundary stayed at each step, and a position held for HOLD or longer (including the positions before the drag and after the end)
- * must appear in the recorded frames after it was entered. samples are { time, position } and the first item is
- * the position before the drag.
+ * must appear in a still requested after it was entered. samples are { time, position }, the request time of a still and the
+ * position that it shows, and the first item is the position before the drag. When a layout is missing, the failure names the
+ * stills that the recording lost in the time of the missing layouts (stills, the still rows of readStills): a layout held in a
+ * still that the recording lost is missing all the same.
  */
-export function assertHeldStatesShown(samples, ticks, boundary, hold = HOLD) {
+export function assertHeldStatesShown(samples, ticks, boundary, stills, hold = HOLD) {
+  assert.ok(Array.isArray(stills), "the still rows of the recording are missing, so a missing layout cannot be told");
   assert.ok(Array.isArray(ticks) && ticks.length > 0, "the host reported no step times");
   assert.equal(boundary?.length, ticks.length + 1,
     `the page reported ${boundary?.length} boundary positions for ${ticks.length} steps`);
@@ -168,9 +188,13 @@ export function assertHeldStatesShown(samples, ticks, boundary, hold = HOLD) {
     !samples.some(({ time, position }) => time >= segment.start && Math.abs(position - base - segment.value) <= 1));
   // The step times and the frame times are on the clock of the layout trace, so the message can be laid over the transactions.
   const ms = (value) => value.toFixed(1);
+  const lost = missing.length === 0 ? [] : lostStills(stills, Math.min(...missing.map(({ start }) => start)),
+    Math.max(...missing.map(({ end }) => end))).map(toldStill);
   assert.deepEqual(missing.map(({ value, start, end }) => ({ value, held: end - start })), [],
     `layouts held for ${hold}ms or longer are missing from the recording: ` +
     `${missing.map(({ value, start, end }) => `${value.toFixed(0)} held ${ms(start)}..${ms(end)}`).join(", ")}; ` +
+    (lost.length === 0 ? "the recording lost no still in that time; "
+      : `the recording lost ${lost.length} stills in that time: ${lost.join(", ")}; `) +
     `steps at ${ticks.map(ms).join(",")}; boundary ${boundary.map((value) => String(Math.round(value * 10) / 10)).join(",")}; ` +
     `recorded ${samples.map(({ time, position }) => `${ms(time)}:${(position - base).toFixed(0)}`).join(",")}`);
 }
@@ -217,7 +241,10 @@ export function transactionCadence(layouts) {
 }
 
 
-/** Requires final raster edges within 2 pt by the second complete frame after the last drag input. */
+/**
+ * Requires final raster edges within 2 pt by the second still requested after the last drag input. samples are the stills with
+ * their request time (time).
+ */
 export function assertFinalContentSize(samples, ended) {
   assert.ok(Number.isFinite(ended), "final content input time is invalid");
   assert.ok(Array.isArray(samples) && samples.every((sample, index) =>
@@ -238,10 +265,10 @@ export function assertFinalContentSize(samples, ended) {
 
 /**
  * The times of the shown frames of the drag, which measureDragPerformance judges: from the first input to the first shown frame
- * after the last step. samples are the frames whose pixels differ from the frame before them: a capture also delivers a frame
- * with the pixels of the frame before it, so the number of such frames changes between runs, and a repeated frame neither shows
- * a layout nor ends a gap between two layouts. After the display of the last step the window has nothing to show, so the time
- * until the recording stops is no gap of the drag.
+ * after the last step. samples are the stills whose pixels differ from the still before them, with the request time of each: a
+ * recording takes a still at each gap whether the window changed or not, and a repeated still neither shows a layout nor ends a
+ * gap between two layouts. After the display of the last step the window has nothing to show, so the time until the recording
+ * stops is no gap of the drag.
  */
 export function shownTimes(samples, ticks) {
   assert.ok(Array.isArray(ticks) && ticks.length > 0, "the host reported no step times");
@@ -252,10 +279,13 @@ export function shownTimes(samples, ticks) {
 
 /**
  * Records the cadence and latency targets. Each gap and each latency value is judged against the display period
- * at its own time, so a window that moved between displays keeps each judgment on the display it was shown on.
+ * at its own time, so a window that moved between displays keeps each judgment on the display it was shown on. `times` are the
+ * request times of the shown stills, and `stills` the still rows of the recording (readStills): a still lost between the first
+ * and the last shown still misses the target `stills` and is named in `lost`.
  */
-export function measureDragPerformance(times, lag, refreshes) {
+export function measureDragPerformance(times, lag, refreshes, stills) {
   const longest = measureDragFrameCadence(times);
+  const lost = lostInSpan(times, stills);
   const latency = { median: lag?.median, p90: lag?.p90, worst: lag?.lag };
   assert.ok(Object.values(latency).every((value) => Number.isFinite(value) && value >= 0),
     "drag latency measurements are missing or invalid");
@@ -264,19 +294,19 @@ export function measureDragPerformance(times, lag, refreshes) {
   assert.ok(Object.keys(latency).every((key) => latency[key] === 0 || Number.isFinite(latencyTime[key])),
     "drag latency times are missing or invalid");
   const factors = { median: 2.5, p90: 3, worst: 4 };
-  const exceeded = gapsExceed(times, refreshes) ? ["cadence"] : [];
+  const exceeded = [...(lost.length > 0 ? ["stills"] : []), ...(gapsExceed(times, refreshes) ? ["cadence"] : [])];
   for (const key of Object.keys(factors)) {
     if (latency[key] > 0 && latency[key] > factors[key] * periodAt(refreshes, latencyTime[key])) exceeded.push(key);
   }
   // The interval of the shown frames follows the interval of the input while a layout takes less than that interval.
   const intervals = times.slice(1).map((time, index) => time - times[index]).sort((a, b) => a - b);
   const frameInterval = intervals[Math.floor(intervals.length / 2)];
-  return { cadence: { measured: longest }, frameInterval, latency, exceeded, targetsMet: exceeded.length === 0 };
+  return { cadence: { measured: longest }, frameInterval, latency, lost, exceeded, targetsMet: exceeded.length === 0 };
 }
 
 /** Applies the unchanged targets in a dedicated performance benchmark. */
-export function assertDragPerformance(times, lag, refreshes) {
-  const report = measureDragPerformance(times, lag, refreshes);
+export function assertDragPerformance(times, lag, refreshes, stills) {
+  const report = measureDragPerformance(times, lag, refreshes, stills);
   assert.ok(report.targetsMet, `drag performance targets exceeded: ${JSON.stringify(report)}`);
   return report;
 }

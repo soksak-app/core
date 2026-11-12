@@ -15,6 +15,7 @@ import { endWatches } from "./folder-wait.mjs";
 import { readEventErrors, sessionEventBoot, sessionEventStart } from "./event-log.mjs";
 import { exitEvidence } from "./host-exit.mjs";
 import { samePixels } from "./frame.mjs";
+import { lostStills, readStills, toldStill } from "./stills.mjs";
 import { policyFile, policyOfSetting, readPolicy, requireStored, untilPolicy } from "./log-policy.mjs";
 import { policyAllows } from "@soksak/log-contract";
 import { readPasteboard, restorableItems, restoreFailure, writePasteboard } from "./pasteboard.mjs";
@@ -1334,33 +1335,6 @@ const paced = ({ took, asked }) => took <= asked * MARGIN && took >= asked / MAR
 const machMs = (ticks, numerator, denominator) => Number(BigInt(ticks) * BigInt(numerator) / BigInt(denominator)) / 1e6;
 
 /**
- * The rows of the still recording file `path` (stills.jsonl), one per planned still in the order of the plan, with the times of
- * each still in ms on the clock of the recording: `planned`, `requested` and `completed` (null for a still that was not
- * requested), `gap` (the requested gap), `outcome`, `error`, `frame` (the path of its frame file, null for a still that wrote
- * none), `windows` and `late`, whether it was requested later than one gap after its plan.
- */
-export function readStills(path) {
-  const directory = path.slice(0, path.lastIndexOf("/"));
-  return readFileSync(path, "utf8").split("\n").filter(Boolean).map((line) => {
-    const row = JSON.parse(line);
-    const ms = (ticks) => ticks === null ? null : machMs(ticks, row.machTimebaseNumerator, row.machTimebaseDenominator);
-    const planned = ms(row.planned);
-    const requested = ms(row.requested);
-    return { index: row.index, planned, requested, completed: ms(row.completed), gap: row.requestedGap, outcome: row.outcome,
-      error: row.error, frame: row.frame === null ? null : join(directory, row.frame), windows: row.windows,
-      late: requested !== null && requested - planned > row.requestedGap };
-  });
-}
-
-/** Whether a still row is lost to the recording: it wrote no frame, or it was requested later than one gap after its plan. */
-const lostStill = (row) => row.outcome !== "written" || row.late;
-
-/** One lost still row, told by its index, its plan and what lost it. */
-const toldStill = (row) => `still ${row.index} planned at ${row.planned.toFixed(1)}ms ` + (row.outcome === "not-requested"
-  ? "was not requested"
-  : row.outcome === "failed" ? `failed (${row.error})` : `was requested ${(row.requested - row.planned).toFixed(1)}ms late`);
-
-/**
  * The written stills of the still recording file `path` that show a change: each still whose pixels differ from those of the
  * written still before it, as {requested, completed} (ms). Every still is taken at its planned time whether the window changed
  * or not, so a still with the pixels of the one before it shows the window as it stayed.
@@ -1506,9 +1480,7 @@ export function judgeShownChanges(stopped, changes, { layouts = stopped.layouts,
   if (worst === null || worst.wait <= limit) return;
   const change = changes[worst.index - 1];
   const end = worst.next?.completed ?? Infinity;
-  // The stills after the last requested one were not requested because the recording stopped: they are its end, not a loss.
-  const stoppedAt = rows.findLastIndex((row) => row.requested !== null) + 1;
-  const lost = rows.slice(0, stoppedAt).filter((row) => lostStill(row) && row.planned >= worst.at && row.planned < end);
+  const lost = lostStills(rows, worst.at, end);
   const asked = changes.filter(({ from }) => from >= worst.at && from < end).length;
   const inSpan = (stage) => (layouts ?? []).filter((layout) => typeof layout[stage] === "number"
     && layout[stage] >= worst.at && layout[stage] < end);
