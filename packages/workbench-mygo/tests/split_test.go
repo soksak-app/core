@@ -1043,3 +1043,24 @@ func TestThePressedFullscreenToolIsDrawnInTheFocusColor(t *testing.T) {
 		t.Fatalf("the pressed fullscreen tool is not drawn in the focus color: icon %d px, close %d px", icon, closing)
 	}
 }
+
+// A button of a card head shows the hand over it, as the page gives its card buttons cursor: pointer, and a button that waits for the
+// restore of a full screen card shows that it refuses, as the page gives a disabled card button cursor: not-allowed.
+func TestAHeadButtonShowsTheHandAndAWaitingOneRefuses(t *testing.T) {
+	f, left, _ := splitShell(t)
+	at := func(name, item string) ui.Cursor {
+		t.Helper()
+		box := f.box(name, item)
+		f.tester.Move(box.X+box.W/2, box.Y+box.H/2)
+		f.tester.Frame()
+		return f.tester.Cursor()
+	}
+	if got, want := at("core.card.close", left), ui.CursorPointer; got != want {
+		t.Fatalf("the cursor over the close button is %v, want %v", got, want)
+	}
+	f.run("core.card.fullscreen", map[string]string{"card": left})
+	f.settle()
+	if got, want := at("core.card.split-x", left), ui.CursorNotAllowed; got != want {
+		t.Fatalf("the cursor over the split button of a full screen card is %v, want %v", got, want)
+	}
+}
