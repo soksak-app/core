@@ -268,10 +268,9 @@ static NSDictionary *pointerFact(NSWindow *window) {
     return @{ @"x": @(at.x), @"y": @(primaryTop() - at.y) };
 }
 
-// The sheet attached to the window: null without one, else its kind, its frame in screen coordinates, the folder that an open or
-// save panel shows and the name in the name field of a save panel, each null for a sheet that has none. An open panel is a save
-// panel too, so it is judged first; an alert sheet is the window of an NSAlert, which is its delegate. The folder is the one where
-// Return saves (input_inject.m).
+// The sheet attached to the window: null without one, else its kind and its frame in screen coordinates. An open panel is a save
+// panel too, so it is judged first; an alert sheet is the window of an NSAlert, which is its delegate. A panel is the person's,
+// and a check answers the dialogs of a window through host.dialog, so the facts carry no folder and no name of a panel.
 static id sheetFact(NSWindow *window) {
     NSWindow *sheet = window.attachedSheet;
     if (!sheet) return NSNull.null;
@@ -279,11 +278,7 @@ static id sheetFact(NSWindow *window) {
         : [sheet isKindOfClass:NSSavePanel.class] ? @"save"
         : [(id)sheet.delegate isKindOfClass:NSAlert.class] ? @"alert"
         : @"other";
-    NSSavePanel *panel = [sheet isKindOfClass:NSSavePanel.class] ? (NSSavePanel *)sheet : nil;
-    NSString *directory = panel.directoryURL.path;
-    NSString *name = [kind isEqual:@"save"] ? panel.nameFieldStringValue : nil;
-    return @{ @"kind": kind, @"frame": screenRect(sheet.frame), @"directory": directory ?: (id)NSNull.null,
-        @"name": name ?: (id)NSNull.null };
+    return @{ @"kind": kind, @"frame": screenRect(sheet.frame) };
 }
 
 char *sp_window_facts(void *handle, void *surfaceView) {
