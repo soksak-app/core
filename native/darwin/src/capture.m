@@ -271,6 +271,10 @@ static void stillOutcome(SPCaptureRecording *recording, NSUInteger index, NSStri
 static dispatch_queue_t captureWriter;
 static dispatch_semaphore_t capturePending;
 static const long kCapturePending = 64;
+// The upper limit of stills whose image the window server has not given yet. A still takes a median of 0.5 ms, so only a still
+// that takes longer than 8 gaps reaches it; a still requested at the limit fails instead of adding a request to a window server
+// that has not answered the earlier ones.
+static const NSUInteger kCaptureInFlight = 8;
 // The queue whose strict timer requests the stills at their planned times, and the queue on which each still is taken. Neither
 // is the main queue, so a busy main thread does not move a request.
 static dispatch_queue_t captureRequests;
@@ -307,6 +311,8 @@ static void prepareCaptureQueues(void) {
 @property (nonatomic, retain) NSMutableSet<NSString *> *profiles;
 @property (nonatomic) NSUInteger nextIndex;
 @property (nonatomic) NSUInteger completedCount;
+// The stills requested on the workers whose image the window server has not given yet. Guarded by the recording.
+@property (nonatomic) NSUInteger awaitingImages;
 @property (nonatomic) NSUInteger outcomes;
 @property (nonatomic) int written;
 @property (nonatomic) BOOL closed;
@@ -873,6 +879,7 @@ static void takeStill(SPCaptureRecording *recording, NSUInteger index, SPCapture
     uint64_t requested = captureTicks();
     if (target.error != nil) {
         @synchronized (recording) {
+            recording.awaitingImages--;
             recording.rows[index][@"requested"] = tickString(requested);
             recording.rows[index][@"windows"] = @[];
         }
@@ -884,6 +891,7 @@ static void takeStill(SPCaptureRecording *recording, NSUInteger index, SPCapture
     uint64_t completed = captureTicks();
     BOOL reached = NO;
     @synchronized (recording) {
+        recording.awaitingImages--;
         NSMutableDictionary *row = recording.rows[index];
         row[@"requested"] = tickString(requested);
         row[@"completed"] = tickString(completed);
@@ -897,14 +905,35 @@ static void takeStill(SPCaptureRecording *recording, NSUInteger index, SPCapture
     if (image) CGImageRelease(image);
 }
 
-// Requests on the worker queue every still whose planned time has come, then sets the strict timer for the next planned still.
+// Fails still index at its request because kCaptureInFlight stills wait for their image: it takes no window, as a still whose
+// windows could not be taken.
+static void refuseStill(SPCaptureRecording *recording, NSUInteger index, uint64_t requested) {
+    @synchronized (recording) {
+        recording.rows[index][@"requested"] = tickString(requested);
+        recording.rows[index][@"windows"] = @[];
+    }
+    stillOutcome(recording, index, @"failed",
+        [NSString stringWithFormat:@"capture in-flight capacity exceeded (%lu stills)", (unsigned long)kCaptureInFlight], nil);
+}
+
+// Requests on the worker queue every still whose planned time has come, then sets the strict timer for the next planned still. A
+// still whose request finds kCaptureInFlight stills waiting for their image fails at once (refuseStill): it does not wait, so the
+// requests after it keep their planned times.
 static void requestDueStills(SPCaptureRecording *recording) {
     uint64_t now = captureTicks();
     BOOL done = NO;
+    NSMutableArray<NSNumber *> *refused = [NSMutableArray array];
     @synchronized (recording) {
         while (!recording.closed && recording.nextIndex < recording.planned && [recording plannedTicks:recording.nextIndex] <= now) {
             NSUInteger index = recording.nextIndex;
             recording.nextIndex = index + 1;
+            if (recording.awaitingImages >= kCaptureInFlight) {
+                // The stop waits for the group, so it also waits for the refusal, which settles the still after the lock.
+                dispatch_group_enter(recording.inflight);
+                [refused addObject:@(index)];
+                continue;
+            }
+            recording.awaitingImages++;
             dispatch_group_async(recording.inflight, captureWorkers, ^{
                 @autoreleasepool { takeStill(recording, index, [recording currentTarget]); }
             });
@@ -922,6 +951,10 @@ static void requestDueStills(SPCaptureRecording *recording) {
             int64_t nanoseconds = (int64_t)((double)ticks * timebase.numer / timebase.denom);
             dispatch_source_set_timer(recording.timer, dispatch_time(DISPATCH_TIME_NOW, nanoseconds), DISPATCH_TIME_FOREVER, 0);
         }
+    }
+    for (NSNumber *index in refused) {
+        refuseStill(recording, index.unsignedIntegerValue, now);
+        dispatch_group_leave(recording.inflight);
     }
     // Every planned still was requested and every one settled already: a stop that waits for a later request learns the end.
     if (done) dispatch_semaphore_signal(recording.stopSignal);

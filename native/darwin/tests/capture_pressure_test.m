@@ -1,10 +1,10 @@
-// Injects writer capacity, window server and file write faults into the real still recording, and checks the ends of its waits.
-// A full writer fails the still without holding its request; the last still of the largest plan is written; a still 0 without an
-// image fails the start; the stills after a slow still 0 are requested before it completes; the end of a wait from another
-// thread ends the wait of its token only; the close of the recorded window ends a stop with its own reason while the main thread
-// stays free; a scheduled stop answers its context once when another window's close ends its wait; a request during a recording
-// keeps the recording, its error and its prepared window; a still request fails with its own error; and a stop keeps the
-// earlier write error of the recording with its own.
+// Injects writer capacity, window server and file write faults into the real still recording, and checks the ends of its waits. A
+// full writer fails the still without holding its request; a still requested while 8 stills wait for their image fails at its
+// request; the last still of the largest plan is written; a still 0 without an image fails the start; the stills after a slow
+// still 0 are requested before it completes; the end of a wait from another thread ends the wait of its token only; the close of
+// the recorded window ends a stop with its own reason while the main thread stays free; a scheduled stop answers its context once
+// when another window's close ends its wait; a request during a recording keeps the recording, its error and its prepared window;
+// a still request fails with its own error; and a stop keeps the earlier write error of the recording with its own.
 // Capture internal state is read only by the ownership checks.
 #import "../src/capture.m"
 #import "../src/host_api_capture.m"
@@ -73,6 +73,19 @@ static CGImageRef slowFirstImage(CGRect rect, CFArrayRef windows, CGWindowImageO
 }
 static void *lookupSlowFirstImage(void *handle, const char *name) {
     return strcmp(name, "CGWindowListCreateImageFromArray") == 0 ? (void *)slowFirstImage : dlsym(handle, name);
+}
+
+// A window server that gives still 0 and then holds every image until the test releases it, as a window server that does not
+// answer: the stills requested after still 0 wait for their image.
+static atomic_int heldCalls;
+static atomic_bool imagesHeld;
+static dispatch_semaphore_t heldRelease;
+static CGImageRef heldImage(CGRect rect, CFArrayRef windows, CGWindowImageOption options) {
+    if (atomic_fetch_add(&heldCalls, 1) > 0 && atomic_load(&imagesHeld)) dispatch_semaphore_wait(heldRelease, DISPATCH_TIME_FOREVER);
+    return testWindowImage(rect, windows, options);
+}
+static void *lookupHeldImage(void *handle, const char *name) {
+    return strcmp(name, "CGWindowListCreateImageFromArray") == 0 ? (void *)heldImage : dlsym(handle, name);
 }
 
 static NSWindow *makeWindow(void) {
@@ -228,6 +241,45 @@ int main(void) { @autoreleasepool {
     }
     captureLookup = lookupTestWindowImage;
     dispatch_release(slowRelease);
+
+    // While the window server holds the images of stills 1 to 8, still 9 finds 8 stills waiting for their image and fails at its
+    // request; it does not wait for them.
+    heldRelease = dispatch_semaphore_create(0);
+    atomic_store(&heldCalls, 0);
+    atomic_store(&imagesHeld, true);
+    captureLookup = lookupHeldImage;
+    clearCaptureError();
+    if (startRecording(window, folder(root, @"in-flight"), 10, 4096, 7)) {
+        SPCaptureRecording *current = nil;
+        @synchronized ([SPCaptureRecording class]) { current = [captureRecording retain]; }
+        NSString *want = [NSString stringWithFormat:@"capture in-flight capacity exceeded (%lu stills)", (unsigned long)kCaptureInFlight];
+        sp_run_until("still 9 settles", ^BOOL {
+            @synchronized (current) { return ![current.rows[9][@"outcome"] isEqual:@"not-requested"]; }
+        });
+        NSDictionary *ninth = nil;
+        NSUInteger completedBefore = 0;
+        @synchronized (current) {
+            ninth = [[current.rows[9] copy] autorelease];
+            for (NSUInteger index = 1; index <= 8; index++) {
+                if ([current.rows[index][@"completed"] isKindOfClass:NSString.class]) completedBefore++;
+            }
+        }
+        check(kCaptureInFlight == 8 && [ninth[@"outcome"] isEqual:@"failed"] && [ninth[@"error"] isEqual:want]
+            && [ninth[@"requested"] isKindOfClass:NSString.class] && [ninth[@"completed"] isEqual:NSNull.null]
+            && [ninth[@"windows"] isEqual:@[]] && completedBefore == 0,
+            [NSString stringWithFormat:@"still 9 fails at its request while stills 1 to 8 wait for their image (%@, %lu of them completed)",
+                ninth, (unsigned long)completedBefore]);
+        atomic_store(&imagesHeld, false);
+        for (int index = 0; index < 8; index++) dispatch_semaphore_signal(heldRelease);
+        int written = sp_capture_stop(0, 8);
+        check(written >= 9 && strstr(sp_capture_error(), [NSString stringWithFormat:@"still 9: %@", want].UTF8String) != NULL,
+            [NSString stringWithFormat:@"the refused still is an error of the recording, and the held stills are written (%d, %@)",
+                written, errorText()]);
+        [current release];
+    }
+    captureLookup = lookupTestWindowImage;
+    dispatch_release(heldRelease);
+    clearCaptureError();
 
     fprintf(stderr, "START: the ends of the capture waits\n");
     // A stop that waits for a still after the plan's last request: the end from another thread ends the wait, whether it comes
