@@ -17,7 +17,7 @@ View display acceptance는 content case마다 설치되고 활성화되어 있�
 
 view의 content verifier는 녹화가 끝난 뒤, view가 자기 namespace에 노출하고 view가 보이는 text를 답하는 content read에서 고정된 예상 콘텐츠를 읽는다. 검사가 command와 document region의 이름을 정하며, 그 값은 그 region이 보이는 동안 읽는다. core 검사는 plain view probe fixture의 `probeplain.content.read`를 읽으며, 그것은 document region `page`의 줄 `Plain view probe content`를 답한다. 전체 녹화를 decode하고 확정 frame count를 확인한다. Content verifier 없이 readiness만 제공하는 case는 거부한다.
 
-Terminal background sample은 같은 view crop 변환을 사용하며 buffer coordinate에 capture content origin, display scale과 content scale을 포함한다. 작은 크기에서도 sample은 crop 내부에 있다. Unit fixture는 각 변환에서 요청한 pixel과 주변 pixel을 독립적으로 구분한다. 멈춘 capture folder는 session finalization까지 성공한 뒤에만 제거하며 decoding, geometry 또는 finalization이 실패하면 보존한다.
+Terminal background sample은 같은 view crop 변환을 사용하며 buffer coordinate에 capture content origin, display scale과 content scale을 포함한다. 작은 크기에서도 sample은 crop 내부에 있다. Unit fixture는 각 변환에서 요청한 pixel과 주변 pixel을 독립적으로 구분한다. 실패한 check의 녹화가 증거로 남는다. 검사는 session finalization까지 성공한 뒤에만 멈춘 녹화를 제거한다.
 
 작업 상태 정본은 [기능 상태](../features.ko.md)다. 소스 파일 목록은 구조적 증거일 뿐 기능 동등성이나 애플리케이션의 정상 동작을 판정하지 않는다.
 
@@ -104,7 +104,7 @@ E2E 실행기는 시험 child를 시작하기 전에 비어 있지 않은 `SOKSA
 
 조합은 어느 창에서나, 비활성 애플리케이션의 가려진 창에서도 입력기의 단계를 text input client에 주는 `input.text`([메서드](exposure.ko.md#메서드))로 검증한다. 각 검사는 같은 창의 AppKit 텍스트 뷰에도 같은 단계를 주며, 그 대조군이 기대한 문서를 만들 때만 결과를 증거로 인정한다.
 
-네이티브 좌표·픽셀 검사는 요청한 캡처 속도로 전체 제스처를 포함한다. 녹화 상한 도달은 실제 프레임 수와 `limited: true`를 갖는 정상 결과지만 끝을 기록하지 못한 제스처를 검증할 수 없다. cleanup과 application error audit를 포함한 session finalization이 성공한 뒤에만 녹화를 제거하고, 검사나 finalization이 실패하면 녹화를 보존한다. 독립된 초기 상태 두 번과 같은 인스턴스의 생성·사용·종료·재생성을 반복한다. 전체 구현을 마친 뒤 필수 스위트를 실행하며 단언을 완화하거나 이전 빌드 결과를 대입하지 않는다.
+제스처 검사는 입력을 요청한 속도로 실행하며, 속도를 지키지 못한 드래그는 곧바로 실패한다(`a drag that is not paced fails at once with its took, asked, press waits, range and load`, `packages/window-check/test/drag-pace.test.mjs`). 녹화는 창이 있는 display의 refresh마다 still 하나를 계획하고, 녹화 하나가 담는 still 수를 넘지 않는다(`a recording asks for one still each refresh of the display of its window and the most stills a recording holds`). 검사가 녹화를 멈추는 시각 전에 계획이 끝나는 녹화의 판정은 실패한다. 그런 녹화는 끝을 계획하지 않은 제스처를 대신할 수 없다(`the judgment of a recording whose plan ends before the time that it is stopped after fails`, `packages/window-check/test/recording.test.mjs`). 실패한 check의 녹화가 증거로 남는다. 검사는 cleanup과 application error audit를 포함한 session finalization이 성공한 뒤에만 녹화를 제거한다(`a capture is preserved when the final application error audit fails`). 독립된 초기 상태 두 번과 같은 인스턴스의 생성·사용·종료·재생성을 반복한다. 전체 구현을 마친 뒤 필수 스위트를 실행하며 단언을 완화하거나 이전 빌드 결과를 대입하지 않는다.
 
 IME 기능 acceptance는 승인된 전체 입력 gesture, 동일 window의 일치하는 AppKit reference document, 일관된 terminal 상태 및 각 입력 단계의 녹화된 glyph와 underline 증거를 요구한다. Capture cadence는 별도 성능 측정으로 기록한다. 녹화의 `late`와 `missed` 수가 보고하듯 still은 늦게 요청되거나 실패할 수 있으므로 고정 still-gap 목표는 기능 acceptance 기준이 아니다. 잘린 recording, frame 누락, decode하지 못한 identity, 필요한 단계 증거 누락 및 잘못된 입력은 계속 실패한다.
 

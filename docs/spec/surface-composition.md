@@ -150,7 +150,7 @@ A failed preparation or presentation rejects its requesting operation and appear
 ## Acceptance
 
 - Native content remains clipped to its `SurfaceHost` on every recorded frame during split drag, window resize, hide/show, reorder, navigation, reload, replacement, and close.
-- A recording starts before native input, includes the complete gesture at the requested rate, and fails on missing frames or any platform-default pixels.
+- A recording starts before native input and includes the complete gesture, whose input runs at the requested rate: a drag that is not paced fails (`a drag that is not paced fails at once with its took, asked, press waits, range and load`, `packages/window-check/test/drag-pace.test.mjs`). The check fails on missing frames or any platform-default pixels.
 - Tests delay and reorder composition snapshots, configure events, and image frames. Stale generations, revisions, and sequences never become visible.
 - A view surface preserves native/DOM stacking and hit ownership at fractional coordinates and after backing-scale changes.
 - Every committed frame uses an exact current raster; a pending raster holds the previous complete frame until the new raster is consumed.

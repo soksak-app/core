@@ -13567,7 +13567,7 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/test/display-refresh.test.mjs", id: "display refreshes are the observed refreshes in milliseconds" },
       { file: "packages/window-check/test/display-refresh.test.mjs", id: "a recording's refresh times are read from its display-link.json" },
     ],
-    expected: "The dedicated view-drag performance check includes every decoded frame and rejects gaps above two display periods of the window's observed refresh.",
+    expected: "The display refreshes of a recording are the refreshes that its display link observed, read in milliseconds from its display-link.json, and a recording whose display link is not available is refused.",
     levels: ["unit"],
   },
   {

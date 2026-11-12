@@ -19,7 +19,7 @@ mygo host는 modal web view를 만들지 않는다: 그 workbench의 modal은 na
 
 열기, 닫기, 표면 생성, 표면 탐색에 현재 배경 상태를 적용해야 한다. 닫을 때 페이지의 기존 스타일을 변경하지 않고 적용한 스타일시트를 제거한다. 메인 문서를 다시 로드하면 해당 모달과 배경 효과를 제거한다. 모달 웹뷰와 해당 초기 문서는 투명하고 카드는 자체 배경을 그린다. 별도의 OS 창이나 플랫폼 시각 효과 뷰는 필요하지 않다.
 
-인수 기준은 캡처 픽셀에서 확인되는 블러와 반투명 색상, 선명한 대화상자 내용, 배경 클릭과 스크롤 차단, 설정의 × 버튼 전용 닫기, 닫은 후 표시와 입력 복원이다. 카드 이동, 내용 갱신, 표면 교체와 탐색, 부모 창 크기 변경, 메인 문서 다시 로드에서도 이를 유지해야 한다. 추가 및 분할 메뉴는 두 배경 효과를 적용하지 않는다.
+인수 기준은 블러와 반투명 색상, 선명한 대화상자 내용, 배경 클릭과 스크롤 차단, 설정의 × 버튼 전용 닫기, 닫은 후 표시와 입력 복원이다. `e2e/modal.test.mjs`는 이를 host와 문서가 보고하는 값으로 판정한다: `host.window`에서 view surface의 각 문서와 image region의 `blurred`, module surface 문서의 CSS filter, 대화상자 문서의 scrim 배경과 filter 없음, 대화상자 뒤 지점의 네이티브 hit와 뒤 요소의 거부, 닫은 뒤 블러 해제와 문서의 네이티브 hit 복원이다(`settings blocks background input and closes only through its close button`, `an open modal's document receives the content the page updates`). 카드 이동, 내용 갱신, 표면 교체와 탐색, 부모 창 크기 변경, 메인 문서 다시 로드에서도 이를 유지해야 한다. 추가 및 분할 메뉴는 두 배경 효과를 적용하지 않는다.
 
 시각 효과 정의는 공통 웹 코드다. 각 플랫폼에는 작동하는 네이티브 웹뷰 호스트와 동작 검증이 필요하다. 현재 Wails의 추가 웹뷰 생성은 macOS에만 구현되어 있다. Windows와 Linux 실행은 미검증이다.
 
