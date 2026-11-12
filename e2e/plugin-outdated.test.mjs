@@ -8,14 +8,16 @@
 // the running version that differs from the installed one. The replacement starts the executable of the copy, so the
 // cleanup ends that service before it removes the copy: a service whose executable is gone starts no session process.
 import assert from "node:assert/strict";
-import { cpSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, untilEventLine } from "@soksak/window-check/event-log.mjs";
+import { processTable } from "@soksak/window-check/process-table.mjs";
 import { fresh, pluginChangeStarted, reading } from "./fixture.mjs";
 import { addRasterTab, RASTER, RASTER_SIDECAR as SIDECAR } from "./raster-probe.mjs";
+import { processRows, rowsRunningFrom } from "./service-processes.mjs";
 
 /** A fixture plugin that does not name the sidecar: disabling and enabling it makes the host read installed.json again. */
 const OTHER = "layoutprobe2";
@@ -25,6 +27,30 @@ function replaceFile(file, text) {
   const temporary = `${file}.check`;
   writeFileSync(temporary, text);
   renameSync(temporary, file);
+}
+
+/** The processes that run an executable inside the folder root, by its path as given and as resolved. */
+function runningFrom(root) {
+  const roots = existsSync(root) ? [...new Set([root, realpathSync(root)])] : [root];
+  return rowsRunningFrom(processRows(processTable("pid=,ppid=,stat=,command=")), roots);
+}
+
+/**
+ * Ends each process that runs from the folder root with SIGTERM, on which the service of the raster probe ends its sessions and
+ * exits, waits for the exit of each (diagnostics.process.exit) and returns their PIDs.
+ */
+async function endRunningFrom(s, root) {
+  const running = runningFrom(root).map(({ pid }) => pid);
+  for (const pid of running) {
+    try {
+      process.kill(pid, "SIGTERM");
+    } catch (error) {
+      // A process that exited after the table was read has ended already.
+      if (error.code !== "ESRCH") throw error;
+    }
+  }
+  for (const pid of running) await s.request("diagnostics.process.exit", { pid });
+  return running;
 }
 
 /** Runs a plugin change, which starts the workbench of the window again, and waits until the new start is ready (pluginChangeStarted). */
@@ -46,12 +72,15 @@ for (const app of Object.values(APPS)) {
     const newer = running.version.replace(/\d+$/, (patch) => String(Number(patch) + 1));
     const folder = running.path.replace(`/${running.version}/`, `/${newer}/`);
     assert.notEqual(folder, running.path, `the path of ${SIDECAR} does not hold its version: ${running.path}`);
+    const copy = join(app.configDir, folder, "..");
     // The cleanup returns the installed version, applies it, and removes the copy only after the host stopped declaring
     // it and the service that runs its executable ended: a host that still declares a folder that is gone fails to start
     // its service, and a service whose executable is gone fails to start the process of each new session. Each step runs
     // also when a step before it failed, because a copy or a service of the copy that stays poisons the checks after this
     // one: an install prunes the copy that installed.json no longer names, and the service that still runs it starts no
-    // session process.
+    // session process. A service of the copy that the host did not end is ended by the check, and a copy that a process
+    // still runs from is kept: a folder left behind is pruned by a later install, while a removed executable that a
+    // running service starts its sessions from fails every later session.
     s.cleanupSteps(
       async () => {
         replaceFile(file, original);
@@ -67,14 +96,23 @@ for (const app of Object.values(APPS)) {
       },
       async () => {
         const ending = currentEventOffsets(app.configDir);
-        await change(s, "disable", RASTER);
-        await untilEventLine(app.configDir, ending, (line) => line.includes(`service ${running.version} ended; the sidecar is not declared`), { ...reading(app, ["host.record.info"]), ended: s.client.ended });
+        try {
+          await change(s, "disable", RASTER);
+          await untilEventLine(app.configDir, ending, (line) => line.includes(`service ${running.version} ended; the sidecar is not declared`), { ...reading(app, ["host.record.info"]), ended: s.client.ended });
+        } catch (error) {
+          const ended = await endRunningFrom(s, copy);
+          throw new Error(`the host did not end the service of the copy (${error.message}); the check ended the processes that ran from ${copy}: ${ended.join(", ") || "none"}`, { cause: error });
+        }
       },
       async () => {
         await change(s, "enable", RASTER);
         await s.until("core.plugins", (value) => value.outdated.length === 0, "the enabled raster probe shows an outdated service");
       },
-      async () => rmSync(join(app.configDir, folder, ".."), { recursive: true, force: true }),
+      async () => {
+        const left = runningFrom(copy).map(({ pid }) => pid);
+        if (left.length) throw new Error(`the copy ${copy} is kept: processes ${left.join(", ")} still run from it`);
+        rmSync(copy, { recursive: true, force: true });
+      },
       // The next raster probe starts the service of the installed folder, which opens sessions.
       async () => {
         const { surface } = await addRasterTab(s);

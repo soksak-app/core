@@ -10,3 +10,11 @@ export function processRows(text) {
     return { pid: Number(match[1]), parent: Number(match[2]), state: match[3], command: match[4] };
   });
 }
+
+/**
+ * The rows of processRows whose executable lies inside one of the folders `roots`, the command starting with the folder and a
+ * slash; an exited process that its parent has not reaped (state Z) runs no executable and is not counted.
+ */
+export function rowsRunningFrom(rows, roots) {
+  return rows.filter((row) => !row.state.includes("Z") && roots.some((root) => row.command.startsWith(`${root}/`)));
+}
