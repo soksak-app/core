@@ -218,6 +218,7 @@ func crashOutputEndInChild() bool {
 
 // A normal exit removes the crash file of its run when no fatal error wrote it, so the logs folder keeps a crash file only for a run
 // that crashed; the standard error file stays (docs/spec/logging.md#files).
+// contract: log.crash-file.normal-exit-removes-an-empty-file
 func TestANormalExitRemovesTheEmptyCrashFileOfItsRun(t *testing.T) {
 	if crashOutputEndInChild() {
 		return
@@ -233,6 +234,7 @@ func TestANormalExitRemovesTheEmptyCrashFileOfItsRun(t *testing.T) {
 	}
 }
 
+// contract: log.crash-file.normal-exit-keeps-a-file-with-output
 func TestANormalExitKeepsACrashFileThatHoldsOutput(t *testing.T) {
 	if crashOutputEndInChild() {
 		return
