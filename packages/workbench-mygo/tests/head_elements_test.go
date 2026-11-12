@@ -250,3 +250,29 @@ func TestTheInkOfTheNameOfATabIsAsWideAsTheName(t *testing.T) {
 		t.Fatalf("the ink of %q ends at %v, its measured width ends at %v", node.Label, end, want)
 	}
 }
+
+// The pointer over a tool of a card head is a hand, and over a tool that the head refuses it is the not-allowed cursor, as
+// .chrome__act and .chrome__act:disabled of packages/workbench/app.css give the page.
+func TestAToolOfACardHeadShowsItsCursor(t *testing.T) {
+	f, left, _ := splitShell(t)
+	cursorOver := func(name, item string) ui.Cursor {
+		t.Helper()
+		box := f.box(name, item)
+		f.tester.Move(box.X+box.W/2, box.Y+box.H/2)
+		f.tester.Frame()
+		return f.tester.Cursor()
+	}
+	for _, name := range []string{"core.card.add", "core.card.split-x", "core.card.split-y", "core.card.fullscreen", "core.card.close"} {
+		if got := cursorOver(name, left); got != ui.CursorPointer {
+			t.Errorf("the cursor over %s is %v, want the hand %v", name, got, ui.CursorPointer)
+		}
+	}
+	f.run("core.card.fullscreen", map[string]string{"card": left})
+	f.settle()
+	if got := cursorOver("core.card.close", left); got != ui.CursorNotAllowed {
+		t.Errorf("the cursor over the close of a full screen card is %v, want the not-allowed cursor %v", got, ui.CursorNotAllowed)
+	}
+	if got := cursorOver("core.card.fullscreen", left); got != ui.CursorPointer {
+		t.Errorf("the cursor over the restore of a full screen card is %v, want the hand %v", got, ui.CursorPointer)
+	}
+}
