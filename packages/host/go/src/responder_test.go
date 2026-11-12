@@ -50,15 +50,15 @@ func TestTheFirstResponderInTheViewOfAViewSurfaceIsOwnerSurface(t *testing.T) {
 	named := map[uint64]string{10: "tab-view"}
 	documents := map[uint64]DocumentKey{20: {Surface: "tab-view", Name: viewRegionName}, 30: {Surface: "tab-view", Name: "page"}}
 	text := func(value string) *string { return &value }
-	view := windowResponder("WKWebView", 20, 10, false, named, documents, 0)
+	view := windowResponder("WKWebView", 20, 10, false, false, named, documents, 0)
 	if want := (WindowResponder{Class: "WKWebView", Owner: "surface", Surface: text("tab-view")}); !reflect.DeepEqual(view, want) {
 		t.Fatalf("view responder %+v, want %+v", view, want)
 	}
-	region := windowResponder("WKWebView", 30, 10, false, named, documents, 0)
+	region := windowResponder("WKWebView", 30, 10, false, false, named, documents, 0)
 	if want := (WindowResponder{Class: "WKWebView", Owner: "document", Surface: text("tab-view"), Document: text("page")}); !reflect.DeepEqual(region, want) {
 		t.Fatalf("region responder %+v, want %+v", region, want)
 	}
-	workbench := windowResponder("WKWebView", 40, 0, true, named, documents, 0)
+	workbench := windowResponder("WKWebView", 40, 0, true, false, named, documents, 0)
 	if want := (WindowResponder{Class: "WKWebView", Owner: "workbench"}); !reflect.DeepEqual(workbench, want) {
 		t.Fatalf("main web view responder %+v, want %+v", workbench, want)
 	}

@@ -315,8 +315,8 @@ func TestAWindowWithoutAMainPageSetsNoWindowOverlays(t *testing.T) {
 }
 
 // A window without a main page draws the workbench in its content view, so a first responder outside every web view and surface host
-// is the owner workbench. A native view of a surface stays the owner native with its surface, and in a window with a main page a view
-// outside the web views is a native view.
+// is the owner workbench, except the diagnostic input reference, a view of the host that stays a native view. A native view of a
+// surface stays the owner native with its surface, and in a window with a main page a view outside the web views is a native view.
 // contract: window.responder.outside-the-web-views-follows-the-main-page
 func TestTheFirstResponderOutsideTheWebViewsFollowsTheMainPage(t *testing.T) {
 	previous := framework
@@ -324,14 +324,17 @@ func TestTheFirstResponderOutsideTheWebViewsFollowsTheMainPage(t *testing.T) {
 	named := map[uint64]string{10: "tab-view"}
 	surface := "tab-view"
 	framework = pagelessFramework{}
-	if content, want := windowResponder("ContentView", 0, 0, false, named, nil, 0), (WindowResponder{Class: "ContentView", Owner: "workbench"}); !reflect.DeepEqual(content, want) {
+	if content, want := windowResponder("ContentView", 0, 0, false, false, named, nil, 0), (WindowResponder{Class: "ContentView", Owner: "workbench"}); !reflect.DeepEqual(content, want) {
 		t.Fatalf("content view responder %+v, want %+v", content, want)
 	}
-	if view, want := windowResponder("NativeRegion", 0, 10, false, named, nil, 0), (WindowResponder{Class: "NativeRegion", Owner: "native", Surface: &surface}); !reflect.DeepEqual(view, want) {
+	if reference, want := windowResponder("NSTextView", 0, 0, false, true, named, nil, 0), (WindowResponder{Class: "NSTextView", Owner: "native"}); !reflect.DeepEqual(reference, want) {
+		t.Fatalf("input reference responder %+v, want %+v", reference, want)
+	}
+	if view, want := windowResponder("NativeRegion", 0, 10, false, false, named, nil, 0), (WindowResponder{Class: "NativeRegion", Owner: "native", Surface: &surface}); !reflect.DeepEqual(view, want) {
 		t.Fatalf("surface view responder %+v, want %+v", view, want)
 	}
 	framework = pagedFramework{}
-	if view, want := windowResponder("NSWindow", 0, 0, false, named, nil, 0), (WindowResponder{Class: "NSWindow", Owner: "native"}); !reflect.DeepEqual(view, want) {
+	if view, want := windowResponder("NSWindow", 0, 0, false, false, named, nil, 0), (WindowResponder{Class: "NSWindow", Owner: "native"}); !reflect.DeepEqual(view, want) {
 		t.Fatalf("responder of a window with a main page %+v, want %+v", view, want)
 	}
 }

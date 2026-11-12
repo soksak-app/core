@@ -19,6 +19,7 @@
 #import "webview_navigation.h"
 #import "webview_dialogs.h"
 #import "document_view.h"
+#import "input_reference.h"
 
 static const char mainWebviewKey;
 
@@ -355,6 +356,8 @@ void *sp_window_facts_begin(void *handle, void *surfaceView, long *orderWindow) 
         @"webview": @((unsigned long long)(uintptr_t)owner),
         @"surface": @((unsigned long long)(uintptr_t)surface),
         @"main": owner != nil && owner == mainWebview(window) ? @YES : @NO,
+        // The diagnostic input reference is a view of the host outside the workbench (docs/spec/endpoint.md).
+        @"reference": @(sp_input_reference_holds(window, first)),
     };
     return [[NSMutableDictionary alloc] initWithDictionary:@{
         @"responder": responder,

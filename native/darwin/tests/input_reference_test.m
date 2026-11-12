@@ -224,6 +224,8 @@ int main(int argc, const char *argv[]) {
     check([focused.value[@"inputContextCurrent"] isEqual:@(referenceContextCurrent)],
         @"read distinguishes first-responder focus from the current text input context");
     check([focused.json containsString:@"\"focused\":true"], @"the serialized focus state is a JSON boolean");
+    check(sp_input_reference_holds(window, window.firstResponder) && !sp_input_reference_holds(window, window.contentView),
+        @"the focused reference holds the first responder and the content view is not the reference");
     SPReferenceReply *waiting = request(window, "wait", "done");
     check(waiting.count == 0, @"wait remains pending before the expected document");
     [view setString:@"done"];
@@ -242,6 +244,7 @@ int main(int argc, const char *argv[]) {
     check(marked.count == 1 && marked.failure == nil, @"unmark without a document change completes the wait");
     SPReferenceReply *cancelled = request(window, "wait", "later");
     check([request(window, "close", NULL).value[@"open"] isEqual:@NO] && reference(window) == nil, @"close removes the reference");
+    check(!sp_input_reference_holds(window, view), @"a closed reference holds no responder");
     check(window.firstResponder != view, @"close removes the reference from the responder chain");
     check(cancelled.count == 1 && [cancelled.failure containsString:@"closed"], @"close cancels the pending wait exactly once");
     check([request(window, "close", NULL).value[@"open"] isEqual:@NO], @"close is idempotent");

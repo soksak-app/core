@@ -183,6 +183,14 @@ void sp_input_reference(void *pointer, const char *action, const char *expected,
     }
 }
 
+bool sp_input_reference_holds(void *pointer, void *responder) {
+    NSCAssert(NSThread.isMainThread, @"sp_input_reference_holds requires the main thread");
+    NSWindow *window = pointer;
+    NSView *view = window ? ((SPInputReference *)objc_getAssociatedObject(window, &referenceKey)).view : nil;
+    id first = responder;
+    return view && [first isKindOfClass:NSView.class] && [(NSView *)first isDescendantOf:view];
+}
+
 void sp_input_reference_end(void *pointer, const char *reason) {
     @autoreleasepool {
         NSCAssert(NSThread.isMainThread, @"sp_input_reference_end requires the main thread");
