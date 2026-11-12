@@ -217,19 +217,17 @@ Rust: `src/platform/platform.rs`는 각 운영체제 모듈을 `#[cfg(target_os 
 | 비공개 파일 | 현재 사용자만 접근할 수 있는 파일과 디렉터리: 경로에서 없는 디렉터리 만들기(macOS에서 mode 0700), 파일을 덧붙이기로 열고 없으면 만들기(mode 0600), 있으면 안 되는 새 파일 만들기(mode 0600), 파일 내용을 바꾸고 없으면 만들기(mode 0600), 영구 service 디렉터리 제한, 진단 build에서 확인을 거치는 비공개 디렉터리. 공용 host 코드는 이런 파일과 디렉터리를 이 연산으로만 만들고 권한 mode를 직접 정하지 않는다. 이미 있는 파일과 디렉터리는 mode를 유지한다. Windows에서는 구현하지 않는다 |
 | 엔드포인트 | [로컬 엔드포인트](endpoint.ko.md) 전송: macOS는 Unix 소켓, Windows는 미구현 |
 
-캡처 첫 프레임 준비는 완전한 프레임이 기록되고 준비 검사 시 알려진 녹화 오류가 없을 때만 성공한다. 비동기 시작 또는 스트림 실패가 이미 알려져 있으면 프레임이 있어도 준비 성공을 거부하며 호출자가 원래 오류를 확인할 수 있어야 한다.
+녹화 시작은 still 0이 기록된 뒤에만 성공한다. 실패한 still 0, 만들지 못한 still 요청 timer, still 0 대기의 끝은 그 오류로 시작을 실패시키고 녹화를 끝낸다.
 
-정지 캡처는 녹화 오류와 분리된 호출자 소유 오류 문자열을 반환하며 호출자는 free()로 해제한다. 정지 캡처 실패는 기존 녹화 오류를 지우거나 정상 녹화를 실패하게 만들지 않는다. 잘못된 UTF-8 경로는 플랫폼 API 호출 전에 거부한다. 늦은 정지 캡처 콜백은 자기 호출 상태만 보존하며 녹화 결과를 바꿀 수 없다. 네이티브 sp_capture_still 오류 출력 포인터는 필수이며 성공은 그 값을 NULL로 설정하고 실패는 UTF-8 오류 문자열을 할당한다. 두 호스트는 sp_capture_error 대신 호출별 출력을 읽고 해제한다.
+정지 캡처는 녹화 오류와 분리된 호출자 소유 오류 문자열을 반환하며 호출자는 free()로 해제한다. 정지 캡처 실패는 기존 녹화 오류를 지우거나 정상 녹화를 실패하게 만들지 않는다. 잘못된 UTF-8 경로는 플랫폼 API 호출 전에 거부한다. 네이티브 sp_capture_still 오류 출력 포인터는 필수이며 성공은 그 값을 NULL로 설정하고 실패는 UTF-8 오류 문자열을 할당한다. 두 호스트는 sp_capture_error 대신 호출별 출력을 읽고 해제한다.
 
 macOS에서 정지 캡처와 녹화는 세 host 모두 window server에서 창을 읽는다. application은 `CGWindowListCreateImageFromArray`로 자기 창의 image, 곧 window server가 합성한 image를 장치 픽셀 해상도로 요청한다. Still은 window server가 화면에 있다고 나열하는 창과 그 child window를 그 앞뒤 순서대로 받고, `display`가 있는 녹화에서는 창의 중심이 있는 display에 있는 process의 화면 위 모든 창을 받는다. macOS 15 SDK가 이 함수를 obsolete로 표시하므로 capture는 실행 시 함수를 찾고, 함수가 없는 macOS에서는 open과 still이 `CGWindowListCreateImageFromArray is not available on this macOS`로 실패한다([private native API](../operations/private-native-apis.ko.md)). Capture는 자기 process의 창만 요청한다. 이것에 화면 기록 권한이 필요한지는 확인되지 않았다. Apple은 [WWDC19 session 701, Advances in macOS Security](https://developer.apple.com/videos/play/wwdc2019/701/)의 화면 기록 부분(macOS 10.15)에서 app이 자기 창의 내용, menu bar, desktop 배경 image를 자유롭게 기록할 수 있다고 말했지만, 이를 적은 reference 문서는 없다([private native API](../operations/private-native-apis.ko.md)). 캡처는 cursor를 받지 않고 아무것도 활성화하지 않는다. 다른 창 아래에 있는 창은 web view, WebGL canvas, composited layer, Metal layer, IOSurface layer까지 가리기 전과 같은 byte로 캡처되고, 가려진 동안의 변경은 다음 캡처에 나타난다. 이는 host가 main web view, view page, modal web view의 occlusion 감지를 끄기 때문이다. 켜져 있으면 가려진 캡처에서 web layer가 빠지고, 가려진 창에서 연 modal은 올라오지 않는다. Document region은 감지를 유지하므로 가려진 region의 문서는 숨고 animation frame을 그리지 않는다. 그 창에 `diagnostics.window.draw-covered`가 켜져 있는 동안은 host가 그 창의 document region의 감지도 끄므로, 가려진 창의 still capture가 그 문서와 가려진 동안의 변경을 담는다([문서 영역](native-surfaces.ko.md#문서-영역)). layer를 직접 읽는 경로는 이 pixel을 내지 못해 쓰지 않는다. `takeSnapshot`에는 Metal과 IOSurface layer가 없고, `renderInContext:`에는 Metal layer와 창 배경이 없고, `cacheDisplayInRect:`에는 Metal layer가 없고 값이 1 다르며, `takeSnapshot`, Metal readback, IOSurface의 합성은 title bar가 없고 글자와 둥근 모서리가 다르다.
 
 녹화 대상 준비·시작은 이미 활성 녹화가 있으면 대상·프레임 계수·녹화 오류 변경 전에 거부한다. 각 open/start 호출은 필수 출력 포인터로 별도의 호출자 소유 UTF-8 오류를 반환한다(성공은 NULL, 실패는 free()로 해제). 거부된 중첩 작업은 정상 녹화 준비를 무효화하거나 이전 녹화 실패를 지울 수 없다.
 
-대상 준비는 자기 조회가 그 대기가 끝나기 전에 성공 완료했을 때만 필터·설정을 게시한다. 그 대기는 어떤 제한으로도 끝나지 않고 그 요청의 끝으로 끝난다([endpoint](endpoint.ko.md)). 대기가 끝난 조회는 자기 콜백 상태만 보존하고 늦은 실패는 보고하며 늦은 성공은 이후 대상을 덮어쓸 수 없다. 준비는 쓰지 않는 객체를 유지하지 않고 비활성 이전 대상/설정 소유를 해제한다. 준비 오류는 호출별 출력으로 반환하며 녹화 오류를 바꾸지 않는다. 성공한 준비를 게시하기 전에 녹화가 활성화되면 게시를 거부하고 활성 녹화를 유지한다.
+대상 준비는 호출될 때 실행된다. window server가 창을 화면에 나열하는지 확인하고(보류한 새 창은 제외), 다음 시작을 위해 창 번호와 display 선택을 보존한다. 실패한 준비는 창을 보존하지 않는다. 준비 오류는 호출별 출력으로 반환하며 녹화 오류를 바꾸지 않는다. 녹화가 실행 중인 동안의 준비는 거부하고 활성 녹화를 유지한다.
 
 실패한 프레임 파일 열기·쓰기·닫기·커밋은 각 작업·프레임 경로·저장한 시스템 오류를 보고한다. 부분 파일 삭제 실패는 원래 실패를 대체하지 않고 추가 녹화 오류로 보고한다. 쓰기 실패 뒤에도 닫기를 시도하고 닫기 실패를 따로 보고한다. 쓰기가 파일 열기에 성공한 경우에만 삭제를 시도하며 열기 실패로 기존 경로를 삭제하지 않는다. 실패한 프레임은 기록 수를 증가시키거나 첫 프레임 준비를 알리지 않는다.
-
-비동기 시작·대리자 종료 실패는 현재 스트림을 식별할 때만 녹화 오류를 바꾼다. 이전 스트림의 지연 실패는 스트림 동일성과 함께 보고하며 이후 녹화 오류·첫 프레임 준비를 바꾸지 않는다. 시작 완료는 전달될 때까지 원래 스트림 동일성을 유지하며 교체된 스트림의 동일성을 자신의 것으로 읽지 않는다.
 
 문서 연산은 view page의 웹뷰를 창의 공통 표면 컨테이너에 직접 두지 않고 그 표면의 `SurfaceHost` 안, 그 호스트 네이티브 평면 아래에 배치한다. 메인 웹뷰를 빼면 어느 표면에도 속하지 않는 웹뷰는 창을 채우는 모달뿐이다. 문서 영역과 그림 영역은 그 호스트 네이티브 평면의 하위 뷰다. 플랫폼 인터페이스는 영역을 `SurfaceHost`의 형제로 배치하는 연산을 노출하지 않는다. 두 언어 호스트는 플랫폼 코드를 호출하기 전에 [표면 합성](surface-composition.ko.md)을 검증한다.
 

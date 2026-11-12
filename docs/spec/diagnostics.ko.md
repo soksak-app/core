@@ -8,7 +8,7 @@
 
 Recording은 still을 최대 4096장까지 계획하고, 그보다 많은 계획의 start는 거부된다. Pending frame write는 최대 64개를 수락한다. Writer가 가득 찬 때의 still은 명시적 recording 오류인 `capture pending writer capacity exceeded (64 frames)`로 실패하고, 그 뒤의 still은 그대로 요청된다.
 
-Diagnostic recording은 native stream 소유권이 퇴역한 뒤 finish가 넘기거나 abort가 삭제할 때까지 출력 directory를 소유한다. Stop 오류와 native 소유권은 별개다. 소유권 조회는 현재 native stream transaction이 남아 있는지를 보고하며 모든 OS callback의 완료를 뜻하지 않는다. 정상 stop은 intake를 닫고 artifact writer를 drain한 뒤 stream을 퇴역시킨다. 기존 attempt가 늦은 완료를 소유하므로 host에 별도 callback 대기 구조를 추가하지 않는다. Finish는 directory를 보존하고 finalization 오류를 보고하면서 퇴역한 소유권을 해제한다. 퇴역하지 않은 stream 또는 directory 삭제 실패는 cleanup 소유권을 유지하고 다음 start를 차단한다. 삭제 재시도는 퇴역한 stream을 다시 stop하지 않는다. Rust recording owner는 start panic을 다시 전달하기 전에 cleanup을 시도하며 host panic 정책은 여전히 프로세스를 종료하고 crash artifact가 남을 수 있다. Directory 생성 실패는 요청한 path의 소유권을 얻거나 삭제하지 않는다. Poison된 document-frame lifecycle 및 pending-start lock은 불확실한 상태로 진행하지 않고 명시적 오류를 반환한다.
+Diagnostic recording은 native recording이 끝난 뒤 finish가 넘기거나 abort가 삭제할 때까지 출력 directory를 소유한다. Stop은 실패해도 native recording을 끝내므로 stop 오류와 recording의 끝은 별개다. Stop은 요청을 닫고, 요청한 모든 still과 frame writer를 기다리고, 기록을 쓴 뒤 돌아오므로 그 뒤에 완료되는 것이 없다. Finish는 directory를 보존하고 finalization 오류를 보고하면서 끝난 recording의 소유권을 해제한다. Directory 삭제 실패는 cleanup 소유권을 유지하고 다음 start를 차단한다. 삭제 재시도는 끝난 recording을 다시 stop하지 않는다. Rust recording owner는 start panic을 다시 전달하기 전에 cleanup을 시도하며 host panic 정책은 여전히 프로세스를 종료하고 crash artifact가 남을 수 있다. Directory 생성 실패는 요청한 path의 소유권을 얻거나 삭제하지 않는다. Poison된 document-frame lifecycle 및 pending-start lock은 불확실한 상태로 진행하지 않고 명시적 오류를 반환한다.
 
 ## 폴더
 
