@@ -1,7 +1,6 @@
 // Checks the real display, the storage, and the recording coordinates of the space condition, the manual collapse, and the set combination.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rmSync } from "node:fs";
 import { APPS, holdCovered, open, recordingSummary } from "@soksak/window-check/app.mjs";
 import { fresh, joinedFailure } from "./fixture.mjs";
 import { requireContentWidth } from "./card-panel-checks.mjs";
@@ -198,7 +197,6 @@ for (const app of Object.values(APPS))
         const stop = await recording.stop({ after: displayed + 100 });
         recordingStopped = true;
         t.diagnostic(`${label}: ${recordingSummary(stop)}`);
-        if (recording.frames) rmSync(recording.frames, { recursive: true, force: true });
         recording = null;
         t.diagnostic(`${label}: ${JSON.stringify(surface.applied)}, bands ${JSON.stringify(bands)}`);
         console.info(`PASS ${app.name}: ${label} (${Math.round(performance.now() - began)}ms)`);
@@ -264,11 +262,6 @@ for (const app of Object.values(APPS))
           try {
             if (!recordingStopped)
               await recording.stop({ after: displayed === undefined ? 0 : displayed + 100 });
-          } catch (error) {
-            errors.push(error);
-          }
-          try {
-            if (recording.frames) rmSync(recording.frames, { recursive: true, force: true });
           } catch (error) {
             errors.push(error);
           }

@@ -2,7 +2,6 @@
 // tabs and settings of the current window. The observed card is the first card whose active tab has a saved card-right link of its plugin.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rmSync } from "node:fs";
 import { APPS, open, recordingSummary } from "@soksak/window-check/app.mjs";
 
 for (const app of Object.values(APPS))
@@ -67,11 +66,7 @@ for (const app of Object.values(APPS))
       assert.deepEqual((await s.get("core.settings")).values, settings);
       assert.deepEqual((await s.get("core.layout")).state, original, "observation changed saved cards or tabs");
     } finally {
-      try {
-        stop = await recording.stop({ after: displayed ? displayed + 100 : 0 });
-        t.diagnostic(recordingSummary(stop));
-      } finally {
-        if (recording.frames) rmSync(recording.frames, { recursive: true, force: true });
-      }
+      stop = await recording.stop({ after: displayed ? displayed + 100 : 0 });
+      t.diagnostic(recordingSummary(stop));
     }
   });

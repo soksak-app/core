@@ -1,7 +1,6 @@
 // Checks the independent storage of the window columns and the links inside cards with real sections and native coordinates.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rmSync } from "node:fs";
 import { APPS, holdCovered, keepCommonSettings, open, recordingSummary } from "@soksak/window-check/app.mjs";
 import { fresh, joinedFailure } from "./fixture.mjs";
 import { turnOffCardSidebars } from "./card-sidebar-choices.mjs";
@@ -188,11 +187,6 @@ for (const app of Object.values(APPS))
         } finally {
           try {
             if (!stopAttempted) await recording.stop({ after: displayed ? displayed + 100 : 0 });
-          } catch (error) {
-            errors.push(error);
-          }
-          try {
-            if (recording.frames) rmSync(recording.frames, { recursive: true, force: true });
           } catch (error) {
             errors.push(error);
           }

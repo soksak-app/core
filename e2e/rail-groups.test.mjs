@@ -2,7 +2,6 @@
 // the same rule (docs/spec/external-sidebars.md). The full screen hides the fixed sidebars, so there is no rail.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rmSync } from "node:fs";
 import { APPS, keepCommonSettings, open, recordingSummary } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 
@@ -24,17 +23,13 @@ for (const app of Object.values(APPS)) test(`${app.name}: rail groups follow adj
     await change();
     const { displayed } = await s.presented();
     const stopped = await recording.stop({ after: displayed });
-    try {
-      const rail = await s.get("core.rail");
-      // The full screen hides the fixed sidebars together with the other cards, so there is no rail (loops 0).
-      assert.equal(rail.groups.length, loops === 0 ? 0 : 1, `${label}: ${rail.groups.length} rail groups`);
-      if (loops > 0) assert.equal(rail.groups[0].loops.length, loops, `${label}: ${rail.groups[0].loops.length} rail loops, expected ${loops}`);
-      const verify = (await s.get("core.verify")).rows.filter((row) => !row.ok);
-      assert.deepEqual(verify, [], `${label}: layout verification failed`);
-      t.diagnostic(`${label}: ${recordingSummary(stopped)}, ${loops} loop(s)`);
-    } finally {
-      if (recording.frames) rmSync(recording.frames, { recursive: true, force: true });
-    }
+    const rail = await s.get("core.rail");
+    // The full screen hides the fixed sidebars together with the other cards, so there is no rail (loops 0).
+    assert.equal(rail.groups.length, loops === 0 ? 0 : 1, `${label}: ${rail.groups.length} rail groups`);
+    if (loops > 0) assert.equal(rail.groups[0].loops.length, loops, `${label}: ${rail.groups[0].loops.length} rail loops, expected ${loops}`);
+    const verify = (await s.get("core.verify")).rows.filter((row) => !row.ok);
+    assert.deepEqual(verify, [], `${label}: layout verification failed`);
+    t.diagnostic(`${label}: ${recordingSummary(stopped)}, ${loops} loop(s)`);
   };
 
   // In the default layout, the card of the start tab adjoins the right fixed sidebar.

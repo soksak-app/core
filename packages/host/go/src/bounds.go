@@ -24,7 +24,15 @@ const (
 	RecordPlaceBytes = 1024
 	// EndpointTopicChanges bounds the subscription changes that wait for the page for one topic of the endpoint.
 	EndpointTopicChanges = 256
+	// EndpointTopicReplies is the most replies to one connection that one answer of the page releases at once. The page holds
+	// one change of a topic, and the changes that follow wait in the queue of the topic until that answer releases them in
+	// order. A watch enters the queue only while fewer than EndpointTopicChanges changes wait, and after the last watch of a
+	// connection the connection can queue one unwatch only, because an unwatch enters only after a watch. The released replies
+	// are therefore the held change, EndpointTopicChanges waiting changes and one unwatch.
+	EndpointTopicReplies = 1 + EndpointTopicChanges + 1
 	// EndpointOutputFrames and EndpointOutputBytes bound the frames that wait for the socket of one connection.
-	EndpointOutputFrames = 256
+	// EndpointOutputFrames equals EndpointTopicReplies, so the replies that one answer of the page releases fit in the queue
+	// even before the writer sends one of them.
+	EndpointOutputFrames = EndpointTopicReplies
 	EndpointOutputBytes  = 16 << 20
 )

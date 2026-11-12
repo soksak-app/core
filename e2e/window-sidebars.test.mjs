@@ -2,7 +2,6 @@
 // has a window-right override and the second layout probe has none, so a tab of each shows the override and the general choice.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rmSync } from "node:fs";
 import { APPS, MAIN_PAGE_APPS, keepCommonSettings, open, recordingSummary } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { turnOffCardSidebars } from "./card-sidebar-choices.mjs";
@@ -106,37 +105,33 @@ for (const app of Object.values(APPS))
     let displayed = 0,
       stop;
     try {
-      try {
-        for (const card of baseline.cards.filter((card) => card.tabs.length))
-          for (const tab of card.tabs) {
-            await s.run("core.tab.select", { tab: tab.id });
-            await s.until(
-              "core.grid",
-              (grid) =>
-                grid.cards.find((item) => item.id === card.id)?.active === tab.id &&
-                grid.cards.find((item) => item.id === card.id)?.focused === true,
-              "tab selection did not settle",
-            );
-            ({ displayed } = await s.presented());
-            observations.push({ ...(await measure(card, tab)), displayed });
-          }
-      } finally {
-        stop = await recording.stop({ after: displayed ? displayed + 100 : 0 });
-      }
-      assert.ok(
-        observations.some((item) => item.plugin === PLAIN && item.rail.groups.length === 0),
-        `${PLAIN} selection did not remove plugin rail`,
-      );
-      assert.ok(
-        observations.some((item) => item.plugin === plugin && item.rail.groups.length === 1),
-        `${plugin} override was not measured`,
-      );
-      t.diagnostic(
-        `fixed windows=${windows.map((card) => card.id)}; selections=${observations.map((item) => `${item.plugin}:${item.rail.groups.length}`)}; ${recordingSummary(stop)}`,
-      );
+      for (const card of baseline.cards.filter((card) => card.tabs.length))
+        for (const tab of card.tabs) {
+          await s.run("core.tab.select", { tab: tab.id });
+          await s.until(
+            "core.grid",
+            (grid) =>
+              grid.cards.find((item) => item.id === card.id)?.active === tab.id &&
+              grid.cards.find((item) => item.id === card.id)?.focused === true,
+            "tab selection did not settle",
+          );
+          ({ displayed } = await s.presented());
+          observations.push({ ...(await measure(card, tab)), displayed });
+        }
     } finally {
-      if (recording.frames) rmSync(recording.frames, { recursive: true, force: true });
+      stop = await recording.stop({ after: displayed ? displayed + 100 : 0 });
     }
+    assert.ok(
+      observations.some((item) => item.plugin === PLAIN && item.rail.groups.length === 0),
+      `${PLAIN} selection did not remove plugin rail`,
+    );
+    assert.ok(
+      observations.some((item) => item.plugin === plugin && item.rail.groups.length === 1),
+      `${plugin} override was not measured`,
+    );
+    t.diagnostic(
+      `fixed windows=${windows.map((card) => card.id)}; selections=${observations.map((item) => `${item.plugin}:${item.rail.groups.length}`)}; ${recordingSummary(stop)}`,
+    );
   });
 
 // Even when a tab is moved or closed, the fixed sidebar sets its context from the active tab of the focused card and does not move its own column.

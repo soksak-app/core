@@ -3,7 +3,6 @@
 // The controls that a person presses run the same commands (docs/spec/exposure.md), so when the result of a command
 // appears in status, the result of the control is the same.
 import assert from "node:assert/strict";
-import { rmSync } from "node:fs";
 import test from "node:test";
 
 import { APPS, open, recordingSummary } from "@soksak/window-check/app.mjs";
@@ -290,7 +289,6 @@ for (const app of Object.values(APPS)) {
       if (capture) {
         const { displayed } = await s.presented();
         const stopped = await capture.stop({ after: displayed });
-        if (stopped) s.cleanup(() => rmSync(stopped.frames, { recursive: true, force: true }));
         // The clicks and their effects below judge the controls at this width; the recording is their evidence.
         t.diagnostic(`resize-and-project-click at ${width}: ${recordingSummary(stopped)}`);
       }
