@@ -37,7 +37,7 @@ test("B3_SETTINGS names the settings of each state of each benchmark, a trace st
       captured: { "diagnostics.performance": true, "diagnostics.log": { lifecycle: "debug", call: "debug", frame: "debug" } },
       "frame-records": traceSettings(FRAME_RECORDS),
     },
-    "split-load": { "diagnostics.performance": false, "diagnostics.log": { call: "debug" } },
+    "split-load": traceSettings(0),
     "idle-tab": { "diagnostics.performance": true, "diagnostics.log": { call: "debug" } },
     "section-view": view,
     "input-latency": traceSettings(0),

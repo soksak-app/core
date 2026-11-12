@@ -5,11 +5,10 @@
 import assert from "node:assert/strict";
 import { realpathSync } from "node:fs";
 
-import { currentEventOffsets } from "@soksak/window-check/event-log.mjs";
 import { hostProcess } from "../../../scripts/measure-app-usage.mjs";
 import { fresh } from "../../fixture.mjs";
 import { processTable } from "@soksak/window-check/process-table.mjs";
-import { failureWithSlowestPhase, readPhases } from "../../reload-phases.mjs";
+import { failureWithSlowestPhase, phasedSession } from "../../reload-phases.mjs";
 import { b3Conditions, fixtureSettings } from "./b3-run.mjs";
 import { B3_SETTINGS } from "../measurements.mjs";
 import { performanceGoalBound } from "./performance-goals.mjs";
@@ -61,14 +60,16 @@ function gridCards(grid) {
 
 /**
  * The fixture options (fresh of e2e/fixture.mjs) of the stress: the settings of split-load in B3_SETTINGS, whose performance trace is off
- * whatever SOKSAK_PERFORMANCE_TRACE holds, and the endpoint call records that the phases of each round are read from.
+ * whatever SOKSAK_PERFORMANCE_TRACE holds. The check times the phases of each round itself (phasedSession), so the stress stores no
+ * event class of the application for them.
  */
-export const STRESS_FIXTURE = Object.freeze({ ...fixtureSettings(B3_SETTINGS["split-load"]), reads: Object.freeze(["host.endpoint.call"]) });
+export const STRESS_FIXTURE = Object.freeze(fixtureSettings(B3_SETTINGS["split-load"]));
 
 /**
  * Resets the fixture and reads the start state of the stress: the card that holds the start tab, which each round splits, the window,
- * the card grid, the document inventory, the host RSS before the stress, the position of the event log from which the phases of each
- * round are read, and the B3 conditions of the prepared window.
+ * the card grid, the document inventory, the host RSS before the stress, and the B3 conditions of the prepared window. The phases of
+ * the rounds are timed through `requests` (phasedSession), and each phase is written to the output of the check when it ends, so a
+ * timeout still names the last phase.
  */
 export async function startStress(s, app) {
   const start = await fresh(s, STRESS_FIXTURE);
@@ -79,10 +80,14 @@ export async function startStress(s, app) {
   assert.ok(source, `the start tab ${start.surface} is in no card of the stress layout`);
   const baseline = hostRssKb(app.configDir);
   assert.ok(Number.isInteger(baseline), "host RSS was not measurable before stress");
-  // The records of the requests before the stress are written first, so the first read starts at the stress.
-  await s.flushLog();
+  const phases = [];
+  const requests = phasedSession(s, (phase) => {
+    phases.push(phase);
+    s.step(`phase ${phase.phase} ${Math.round(phase.micros / 1000)} ms ${phase.ok ? "ok" : "failed"}`);
+  });
   return {
     app,
+    requests,
     source,
     conditions,
     initialWindow,
@@ -90,76 +95,56 @@ export async function startStress(s, app) {
     before: inventory(initialWindow),
     samples: [baseline],
     created: [],
-    phases: [],
-    position: currentEventOffsets(app.configDir),
+    phases,
   };
 }
 
 /**
- * Reads the phases of the requests since the last read from the event log and writes each one to the output of the check at once,
- * so a timeout still names the last round.
- */
-export async function recordPhases(s, ctx) {
-  await s.flushLog();
-  const read = readPhases(ctx.app.configDir, ctx.position);
-  ctx.position = read.offsets;
-  for (const phase of read.phases) {
-    ctx.phases.push(phase);
-    s.step(`phase ${phase.phase} ${Math.round(phase.micros / 1000)} ms ${phase.ok ? "ok" : "failed"}`);
-  }
-}
-
-/**
  * One round: a split of the source card with a card of the tabs STRESS_TABS, a resize, three reloads, the close of the split card, and
- * the host RSS before and after the close.
+ * the host RSS before and after the close. Each request of the round is a phase (phasedSession of reload-phases.mjs).
  */
-export async function stressRound(s, ctx, round) {
-  const { initialWindow } = ctx;
-  const before = await s.get("core.grid");
+export async function stressRound(ctx, round) {
+  const { initialWindow, requests } = ctx;
+  const before = await requests.get("core.grid");
   const source = gridCards(before).find((card) => card.id === ctx.source);
   assert.ok(source, `stress layout has no source card ${ctx.source}`);
-  await s.run("core.card.focus", { card: source.id });
-  await s.until("core.grid", (grid) => grid.cards.find((card) => card.id === source.id)?.focused === true,
+  await requests.run("core.card.focus", { card: source.id });
+  await requests.until("core.grid", (grid) => grid.cards.find((card) => card.id === source.id)?.focused === true,
     `stress source card ${source.id} did not focus`);
   const [first, ...more] = STRESS_TABS;
-  const result = await s.run("core.card.split", { card: source.id, side: "right", plugin: first });
+  const result = await requests.run("core.card.split", { card: source.id, side: "right", plugin: first });
   const made = [result.card];
   ctx.created.push(result.card);
-  await s.until("core.grid", (grid) => grid.cards.some((card) => card.id === result.card),
+  await requests.until("core.grid", (grid) => grid.cards.some((card) => card.id === result.card),
     `split ${result.card} did not appear`);
-  for (const plugin of more) await s.run("core.card.add-tab", { card: result.card, plugin });
-  await s.until("core.grid", (grid) => grid.cards.find((card) => card.id === result.card)?.tabs?.length === STRESS_TABS.length,
+  for (const plugin of more) await requests.run("core.card.add-tab", { card: result.card, plugin });
+  await requests.until("core.grid", (grid) => grid.cards.find((card) => card.id === result.card)?.tabs?.length === STRESS_TABS.length,
     `split ${result.card} did not hold the tabs ${STRESS_TABS.join(", ")}`);
   const width = round % 2 === 0 ? Math.max(640, initialWindow.content.width - 240) : initialWindow.content.width + 160;
-  await s.run("host.window.resize", { width, height: initialWindow.content.height });
-  await s.until("host.window", (window) => window.content.width === width, `stress resize did not reach ${width}`);
-  await s.presented();
+  await requests.run("host.window.resize", { width, height: initialWindow.content.height });
+  await requests.until("host.window", (window) => window.content.width === width, `stress resize did not reach ${width}`);
+  await requests.presented();
   for (let reload = 0; reload < 3; reload++) {
-    await s.run("host.window.reload");
-    await s.presented();
+    await requests.run("host.window.reload");
+    await requests.presented();
   }
   ctx.samples.push(hostRssKb(ctx.app.configDir));
   for (const card of made.reverse()) {
-    await s.run("core.card.close", { card });
-    await s.until("core.grid", (grid) => !grid.cards.some((entry) => entry.id === card), `stress close did not remove ${card}`);
+    await requests.run("core.card.close", { card });
+    await requests.until("core.grid", (grid) => !grid.cards.some((entry) => entry.id === card), `stress close did not remove ${card}`);
   }
-  await s.presented();
+  await requests.presented();
   ctx.samples.push(hostRssKb(ctx.app.configDir));
-  await recordPhases(s, ctx);
 }
 
 /**
- * Runs `count` rounds from the round index 0. A failing round records the phases of the rounds that ran, and the error names the slowest phase.
+ * Runs `count` rounds from the round index 0. The error of a failing round names the slowest phase of the rounds that ran, the failed
+ * request among them.
  */
-export async function runStressRounds(s, ctx, count) {
+export async function runStressRounds(ctx, count) {
   try {
-    for (let round = 0; round < count; round++) await stressRound(s, ctx, round);
+    for (let round = 0; round < count; round++) await stressRound(ctx, round);
   } catch (error) {
-    try {
-      await recordPhases(s, ctx);
-    } catch (readError) {
-      throw new Error(`${error.message}; the phases of the stress could not be read: ${readError.message}`, { cause: error });
-    }
     throw failureWithSlowestPhase(error, ctx.phases);
   }
 }

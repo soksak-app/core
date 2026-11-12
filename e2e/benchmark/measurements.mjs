@@ -63,8 +63,9 @@ export const B3_SETTINGS = Object.freeze({
     captured: settings(true, { lifecycle: "debug", call: "debug", frame: "debug" }),
     [FRAME_RECORDS]: trace(FRAME_RECORDS),
   }),
-  // The endpoint calls of the stress (host.endpoint.call) are stored in the class call at debug; the performance trace stays off.
-  "split-load": settings(false, { call: "debug" }),
+  // The stress needs no event of the application: the check times the phases of its rounds itself (phasedSession of
+  // reload-phases.mjs), so the performance trace stays off and every class keeps its default level, the settings of the trace state 0.
+  "split-load": trace(0),
   // The memory readings of the sampler of the performance trace (host.sampler.memory) are stored in the class call at debug.
   "idle-tab": settings(true, { call: "debug" }),
   "section-view": VIEW,
