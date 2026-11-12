@@ -30,9 +30,11 @@ function stopReply(t, { changes, until = Math.max(0, ...changes) + 16, mainThrea
 }
 
 // A click recording: the window stays unchanged before the first click, between the clicks and after the last one is shown,
-// for 400ms between them; each click is shown about 30ms after it was asked for and its final state 8ms later.
+// for 400ms between them; each click is shown about 30ms after it was asked for and its final state 8ms later. The recording
+// writes every still, also while the window stays as it is, so its longest gap is one gap of 8ms.
 test("a recording whose changes are each shown within the limit passes however long the window stays unchanged between them", (t) => {
   const stopped = stopReply(t, { changes: [230, 238, 640, 648], until: 1100 });
+  assert.equal(stopped.longestGap, 8);
   judgeShownChanges(stopped, [{ from: 200, to: 238 }, { from: 610, to: 648 }]);
 });
 

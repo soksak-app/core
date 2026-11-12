@@ -454,6 +454,8 @@ test("a drag whose window stays unchanged before its first step, between its rou
   const result = await drag(s, gapPlan, { capture: true });
   assert.deepEqual(s.requests.find((request) => request.method === "diagnostics.drag").capture, { gap: 8, frames: 4096 });
   assert.equal(result.count, 113);
+  // Each still up to the stop is written, also while the window stays as it is, so the longest gap is one gap of 8ms.
+  assert.equal(result.longestGap, 8);
   assert.equal(result.stills, join(result.frameDir, "stills.jsonl"));
 });
 
