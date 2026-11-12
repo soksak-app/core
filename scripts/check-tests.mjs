@@ -12351,7 +12351,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/shell_statuses_test.go", id: "TestFullscreenCoversThePlaneAndKeepsTheLayout" },
       { file: "e2e/test/fixture.test.mjs", id: "the sidebar sets of the configuration take the sections of the layout probe set of their layout and keep their ids" },
       { file: "e2e/test/fixture.test.mjs", id: "the settings dialog is shown when the modal web view of a main page shows it, and on the mygo host when core.modal names it" },
-      { file: "e2e/test/fixture.test.mjs", id: "a plugin change waits for the new start in the event log and reads the workbench only when the page is ready again" },
+      { file: "e2e/test/fixture.test.mjs", id: "a plugin change waits for the new start in the event log, reads the workbench only when the page is ready again and waits until that start is complete" },
       { file: "packages/workbench-mygo/tests/shell_sidebars_test.go", id: "TestAProjectWithAnUnknownSectionInItsSetsDoesNotOpen" },
       { file: "packages/workbench-mygo/tests/fixture_test.go", id: "TestTheTraceRecordsAFocusedCardWhileItIsOn" },
       { file: "packages/workbench-mygo/tests/picker_test.go", id: "TestASaveThatLeavesTheTabModifiedIsTheErrorOfTheTab" },

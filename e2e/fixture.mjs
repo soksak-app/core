@@ -135,16 +135,20 @@ export async function pluginChangeApplied(s, offsets, action) {
  * Runs `change`, a plugin change that starts the workbench of the window again, and returns `{workbench, result}`: core.window.workbench
  * of the new start and the result of `change`. The command answers before the new start (docs/spec/installation.md#applying-a-change),
  * and a page status refuses requests while the page starts again, so the wait reads the start from the event log
- * (pluginChangeApplied) and reads the workbench only after the host reports the page ready.
+ * (pluginChangeApplied) and reads the workbench only after the host reports the page ready. A ready page answers requests
+ * (`ready` of windows.list), which does not make its ready state complete: the mygo workbench reports its window ready before
+ * the frame that draws its first screen, so the wait reads that start until it is complete, as the reload of a check does.
  */
 export async function pluginChangeStarted(s, change, action) {
   const before = (await s.get("core.window.workbench")).start;
   const offsets = currentEventOffsets(s.app.configDir);
   const result = await change();
   await pluginChangeApplied(s, offsets, action);
-  const workbench = await s.get("core.window.workbench");
-  if (workbench.start === before) throw new Error(`${action} did not start the workbench again`);
-  if (workbench.readyState !== "complete") throw new Error(`${action}: the new workbench is ${workbench.readyState}, not complete`);
+  const started = await s.get("core.window.workbench");
+  if (started.start === before) throw new Error(`${action} did not start the workbench again`);
+  const workbench = await s.until("core.window.workbench",
+    (value) => value.start === started.start && value.readyState === "complete",
+    `${action}: the new workbench did not become complete`);
   return { workbench, result };
 }
 

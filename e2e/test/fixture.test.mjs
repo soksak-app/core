@@ -290,7 +290,7 @@ test("the document region of a layout probe tab is painted after its document re
     /probe-1 did not paint its document region rgb\(250, 250, 250\)/);
 });
 
-test("a plugin change waits for the new start in the event log and reads the workbench only when the page is ready again", async (t) => {
+test("a plugin change waits for the new start in the event log, reads the workbench only when the page is ready again and waits until that start is complete", async (t) => {
   const configDir = mkdtempSync(join(tmpdir(), "check-plugin-change-"));
   t.after(() => rmSync(configDir, { recursive: true, force: true }));
   mkdirSync(join(configDir, "logs"));
@@ -317,13 +317,26 @@ test("a plugin change waits for the new start in the event log and reads the wor
       if (!ready) throw notReady();
       return workbench;
     },
-    until: async (name) => { calls.push(["until", name]); throw notReady(); },
+    // A watch before the page is ready ends with the refusal; after it, the watch reads the values of the new start in turn
+    // until one satisfies the predicate.
+    until: async (name, predicate) => {
+      calls.push(["until", name]);
+      if (!ready) throw notReady();
+      for (;;) {
+        if (predicate(workbench)) return workbench;
+        workbench = later.shift() ?? assert.fail(`no value of ${name} satisfies the wait`);
+      }
+    },
+    // The mygo host reports the page ready before the frame that draws the first screen of the new start, so the first value
+    // after ready is loading and a later one complete.
     windows: async () => {
       calls.push(["windows"]);
-      workbench = { start: "new", readyState: "complete" };
+      workbench = { start: "new", readyState: "loading" };
+      later.push({ start: "new", readyState: "complete" });
       ready = true;
     },
   };
+  const later = [];
   const change = async () => {
     calls.push(["run"]);
     ready = false;
@@ -333,7 +346,8 @@ test("a plugin change waits for the new start in the event log and reads the wor
   const { workbench: started, result } = await pluginChangeStarted(s, change, "disabling probe");
   assert.deepEqual(started, { start: "new", readyState: "complete" });
   assert.deepEqual(result, { reloaded: true });
-  assert.deepEqual(calls, [["get", "core.window.workbench"], ["run"], ["windows"], ["get", "core.window.workbench"]]);
+  assert.deepEqual(calls, [["get", "core.window.workbench"], ["run"], ["windows"], ["get", "core.window.workbench"],
+    ["until", "core.window.workbench"]]);
 
   // A change that does not start the workbench again fails with its action.
   workbench = { start: "same", readyState: "complete" };
