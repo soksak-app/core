@@ -557,7 +557,7 @@ func (s *Shell) registerStatuses() {
 			s.failWindowRead(err)
 			return nil
 		}
-		ready, visibility := "interactive", "hidden"
+		ready, visibility := "loading", "hidden"
 		if s.drawn {
 			ready = "complete"
 		}
