@@ -34,6 +34,10 @@ for (const app of Object.values(APPS)) {
     s.cleanup(async () => {
       await s.run("core.settings.set", { patch: { textSize: 1 }, scope: "common" });
     });
+    // A key of a text size command that comes before a view of the window presented ends the hold of its layout, and the host
+    // logs that end (docs/spec/native-surfaces.md#layout-transaction, docs/spec/diagnostics.md); whether a key comes first
+    // depends on how fast the view presents.
+    s.expectError(/^error host view presentation: surface \S+ had not presented when input ended the hold$/);
     // A tab of the second layout probe draws a line of text at 13 points times the text size of its surface and reports its height.
     const start = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === surface));
     const { tab: probe } = await s.run("core.card.add-tab", { card: start.id, plugin: "layoutprobe2" });
