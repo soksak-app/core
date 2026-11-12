@@ -18,7 +18,7 @@ for (const app of Object.values(APPS)) {
         const ctx = await startStress(session, app);
         run.conditions = ctx.conditions;
         session.cleanup(() => restoreStress(session, ctx));
-        await runStressRounds(session, ctx, SPLIT_LOAD_ROUNDS);
+        await runStressRounds(ctx, SPLIT_LOAD_ROUNDS);
         const growth = hostGrowthKb(ctx.samples);
         Object.assign(run.measurements, splitLoadB3Values(ctx.samples));
         t.diagnostic(`${app.name}: rounds ${SPLIT_LOAD_ROUNDS}; host RSS samples ${ctx.samples.join(" ")} KB; growth ${growth} KB; phases ${ctx.phases.length}`);

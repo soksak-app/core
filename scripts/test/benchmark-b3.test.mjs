@@ -248,7 +248,7 @@ const BENCHMARKS = {
       captured: { "diagnostics.performance": true, "diagnostics.log": { lifecycle: "debug", call: "debug", frame: "debug" } },
       "frame-records": traceSettings("frame-records"),
     },
-    "split-load": { "diagnostics.performance": false, "diagnostics.log": { call: "debug" } },
+    "split-load": traceSettings(0),
     "plain-view": { "diagnostics.performance": false, "diagnostics.log": {} },
   },
 };
@@ -325,8 +325,9 @@ test("an e2e benchmark reports the settings that B3_SETTINGS declares for it in 
   assert.deepEqual(read(split, settingsConditions(BENCHMARKS.settings["split-load"]), "S10"), []);
   assert.deepEqual(read(captured, settingsConditions(capturedSettings)), []);
   assert.deepEqual(read(probeplain, settingsConditions(BENCHMARKS.settings["plain-view"]), "S7"), []);
-  assert.deepEqual(read(split, targetConditions(0), "S10"), [
-    `${split}: reports logPolicy ${JSON.stringify(policyOf(0))}, expected ${JSON.stringify(policyOfSetting({ call: "debug" }).classes)} of split-load`,
+  assert.deepEqual(read(split, targetConditions(1), "S10"), [
+    `${split}: reports traceState true, expected false of split-load`,
+    `${split}: reports logPolicy ${JSON.stringify(policyOf(1))}, expected ${JSON.stringify(policyOf(0))} of split-load`,
   ], "a benchmark without TRACE is compared with the settings of its one state");
   assert.deepEqual(read(probeplain, targetConditions(1), "S7"), [
     `${probeplain}: reports traceState true, expected false of plain-view`,
@@ -376,7 +377,7 @@ test("B3_SETTINGS of a benchmark has the shape of its B3_MEASUREMENTS, and a mis
   ], "a settings object in place of the states of an object of B3_MEASUREMENTS fails on each state");
   const split = "make benchmark-split-load";
   assert.deepEqual(read(split, { "split-load": { 0: BENCHMARKS.settings["split-load"] } }, "S10"),
-    [`${split}: B3_SETTINGS of split-load is {"0":{"diagnostics.performance":false,"diagnostics.log":{"call":"debug"}}}, expected one settings object {"diagnostics.performance": boolean, "diagnostics.log": {class: level}} for the list of keys of B3_MEASUREMENTS of split-load`]);
+    [`${split}: B3_SETTINGS of split-load is ${JSON.stringify({ 0: BENCHMARKS.settings["split-load"] })}, expected one settings object {"diagnostics.performance": boolean, "diagnostics.log": {class: level}} for the list of keys of B3_MEASUREMENTS of split-load`]);
 });
 
 test("a benchmark records its verdict as a measurement, and a target that exits with another code than 0 fails the run", { timeout: 1000 }, (t) => {

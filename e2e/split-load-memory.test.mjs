@@ -12,7 +12,7 @@ for (const app of Object.values(APPS)) {
     session.cleanup(() => restoreStress(session, ctx));
     // One round of the stress (cases/split-load.mjs). The host RSS samples of the round are recorded and not judged here; the benchmark
     // e2e/benchmark/split-load.test.mjs runs the rounds and judges their growth.
-    await runStressRounds(session, ctx, 1);
+    await runStressRounds(ctx, 1);
     // All created cards were closed, so the window holds the same documents as at the start.
     const settled = await session.until("host.window", (window) => inventory(window) === ctx.before,
       `the window documents differ from ${ctx.before} after the stress`);
