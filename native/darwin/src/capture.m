@@ -12,6 +12,7 @@
 // and its still could not follow a refresh of 8.3 ms (docs/features.md, F746).
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
+#import <CommonCrypto/CommonDigest.h>
 #import "capture.h"
 #import "window_reveal.h"
 #import "image_capture_match.h"
@@ -215,13 +216,30 @@ static CGImageRef takeImage(SPWindowImage function, SPCaptureTarget *target) {
     return copied;
 }
 
-// The pixels of image as sRGB BGRA (premultiplied alpha first, little endian) into pixels with stride bytes per row. The
-// recording and the still draw every image the same way, so two frames of the same content hold the same bytes.
-static BOOL drawSRGB(CGImageRef image, uint8_t *pixels, size_t width, size_t height, size_t stride) {
-    CGColorSpaceRef srgb = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
-    CGContextRef context = srgb ? CGBitmapContextCreate(pixels, width, height, 8, stride, srgb,
-        (CGBitmapInfo)kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little) : NULL;
-    if (srgb) CGColorSpaceRelease(srgb);
+// The pixels of image in its own colour space as BGRA (premultiplied alpha first, little endian) into pixels with stride bytes
+// per row: no colour is converted. The window server composites every layer into the 8-bit colour space of the display, and a
+// conversion of those values to another space changes some of them by 1 to 3 (sRGB 32c8c8 came back as 31c8c9), so a frame
+// holds the bytes that the window server gave and the recording names their colour space. An image in that layout gives its
+// bytes as they are; another layout is drawn into its own colour space, which changes the layout and no colour.
+static BOOL drawOwnSpace(CGImageRef image, uint8_t *pixels, size_t width, size_t height, size_t stride) {
+    CGColorSpaceRef space = CGImageGetColorSpace(image);
+    if (space == NULL || CGColorSpaceGetModel(space) != kCGColorSpaceModelRGB) return NO;
+    CGBitmapInfo info = CGImageGetBitmapInfo(image);
+    if (CGImageGetBitsPerComponent(image) == 8 && CGImageGetBitsPerPixel(image) == 32
+        && (info & kCGBitmapByteOrderMask) == kCGBitmapByteOrder32Little && (info & kCGBitmapFloatComponents) == 0
+        && CGImageGetAlphaInfo(image) == kCGImageAlphaPremultipliedFirst && CGImageGetBytesPerRow(image) >= stride) {
+        CFDataRef data = CGDataProviderCopyData(CGImageGetDataProvider(image));
+        size_t row = CGImageGetBytesPerRow(image);
+        BOOL whole = data != NULL && (size_t)CFDataGetLength(data) >= row * (height - 1) + stride;
+        if (whole) {
+            const uint8_t *bytes = CFDataGetBytePtr(data);
+            for (size_t y = 0; y < height; y++) memcpy(pixels + y * stride, bytes + y * row, stride);
+        }
+        if (data) CFRelease(data);
+        return whole;
+    }
+    CGContextRef context = CGBitmapContextCreate(pixels, width, height, 8, stride, space,
+        (CGBitmapInfo)kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little);
     if (context == NULL) return NO;
     CGContextSetBlendMode(context, kCGBlendModeCopy);
     CGContextDrawImage(context, CGRectMake(0, 0, width, height), image);
@@ -342,6 +360,8 @@ static void prepareCaptureQueues(void) {
 @property (nonatomic) SPWindowImage function;
 // The rows of stills.jsonl, one per planned still, and the counts of their outcomes. Guarded by the recording.
 @property (nonatomic, retain) NSMutableArray<NSMutableDictionary *> *rows;
+// The names of the ICC profile files that the stills of the recording wrote. Guarded by the recording.
+@property (nonatomic, retain) NSMutableSet<NSString *> *profiles;
 @property (nonatomic) NSUInteger nextIndex;
 @property (nonatomic) NSUInteger completedCount;
 @property (nonatomic) NSUInteger outcomes;
@@ -426,6 +446,7 @@ static void emitLifecycle(SPCaptureRecording *recording, NSString *phase, uint8_
     self = [super init];
     if (self) {
         _rows = [[NSMutableArray alloc] init];
+        _profiles = [[NSMutableSet alloc] init];
         _displayLinkObservations = [[NSMutableArray alloc] init];
         _displayLinkState = [@"unavailable" copy];
         _displayLinkReason = [@"no display-link callback was delivered during the capture" copy];
@@ -440,6 +461,7 @@ static void emitLifecycle(SPCaptureRecording *recording, NSString *phase, uint8_
     [_session release];
     [_directory release];
     [_rows release];
+    [_profiles release];
     [_target release];
     [_displayLinkObservations release];
     [_displayLink release];
@@ -848,8 +870,35 @@ static void writeFrame(SPCaptureRecording *recording, NSUInteger index, uint8_t 
     });
 }
 
-// Processes the image of still index after its completion: its pixels as sRGB BGRA with the header, the image match, the
-// identity decode, and the frame write. image is released by the caller.
+// The name of the ICC profile file of space inside the recording folder, color-<first 16 hex digits of its SHA-256>.icc, which
+// the first still in that space writes; nil with reason when the space has no profile or the file cannot be written.
+static NSString *colorProfileFile(SPCaptureRecording *recording, CGColorSpaceRef space, NSString **reason) {
+    NSData *profile = space ? [(NSData *)CGColorSpaceCopyICCData(space) autorelease] : nil;
+    if (profile.length == 0) {
+        *reason = @"the colour space of the image has no ICC profile";
+        return nil;
+    }
+    unsigned char digest[CC_SHA256_DIGEST_LENGTH];
+    CC_SHA256(profile.bytes, (CC_LONG)profile.length, digest);
+    NSMutableString *name = [NSMutableString stringWithString:@"color-"];
+    for (int index = 0; index < 8; index++) [name appendFormat:@"%02x", digest[index]];
+    [name appendString:@".icc"];
+    @synchronized (recording) {
+        if ([recording.profiles containsObject:name]) return name;
+        NSError *error = nil;
+        NSString *path = [recording.directory stringByAppendingPathComponent:name];
+        if (![profile writeToFile:path options:NSDataWritingAtomic error:&error]) {
+            *reason = [NSString stringWithFormat:@"the colour profile %@ could not be written: %@", name,
+                error.localizedDescription ?: @"no write error was provided"];
+            return nil;
+        }
+        [recording.profiles addObject:name];
+    }
+    return name;
+}
+
+// Processes the image of still index after its completion: its pixels as BGRA in the colour space of the image with the header,
+// the ICC profile of that space, the image match, the identity decode, and the frame write. image is released by the caller.
 static void processStill(SPCaptureRecording *recording, NSUInteger index, SPCaptureTarget *target, CGImageRef image,
     uint64_t requested, uint64_t completed) {
     uint64_t processStarted = captureTicks();
@@ -870,11 +919,25 @@ static void processStill(SPCaptureRecording *recording, NSUInteger index, SPCapt
     }
     size_t stride = width * 4, pixels = stride * height;
     uint8_t *frame = pixels / height == stride ? malloc(kFrameHeader + pixels) : NULL;
-    if (frame == NULL || !drawSRGB(image, frame + kFrameHeader, width, height, stride)) {
+    if (frame == NULL || !drawOwnSpace(image, frame + kFrameHeader, width, height, stride)) {
         free(frame);
         stillOutcome(recording, index, @"failed", [NSString stringWithFormat:@"the image of %zux%zu pixels could not be drawn",
             width, height], nil);
         return;
+    }
+    CGColorSpaceRef space = CGImageGetColorSpace(image);
+    NSString *profileFailure = nil;
+    NSString *profile = colorProfileFile(recording, space, &profileFailure);
+    if (profile == nil) {
+        free(frame);
+        stillOutcome(recording, index, @"failed", profileFailure, nil);
+        return;
+    }
+    // A named colour space keeps its name, which the sources of the image match carry; another one is named by its profile.
+    NSString *spaceName = [(NSString *)CGColorSpaceCopyName(space) autorelease];
+    @synchronized (recording) {
+        recording.rows[index][@"colorSpace"] = spaceName ?: (id)NSNull.null;
+        recording.rows[index][@"colorProfile"] = profile;
     }
     CGRect content = CGRectMake(0, 0, width / scale, height / scale);
     mach_timebase_info_data_t timebase = recording.timebase;
@@ -883,7 +946,7 @@ static void processStill(SPCaptureRecording *recording, NSUInteger index, SPCapt
         ticksToMilliseconds(requested, timebase), ticksToMilliseconds(completed, timebase) };
     memcpy(frame, head, sizeof head);
     memcpy(frame + sizeof head, info, sizeof info);
-    const char *colorName = "kCGColorSpaceSRGB";
+    const char *colorName = (spaceName ?: profile).UTF8String;
     uint64_t matchStarted = captureTicks();
     CFTimeInterval matchBegan = CACurrentMediaTime();
     sp_image_capture_match_result match = sp_image_capture_match_sample(frame + kFrameHeader, width, height, stride, content,
@@ -896,12 +959,10 @@ static void processStill(SPCaptureRecording *recording, NSUInteger index, SPCapt
     NSString *identityFailure = nil;
     if (sp_image_capture_match_identity_session_active()) {
         char *identityError = NULL;
-        CGColorSpaceRef srgb = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
         enqueueStarted = captureTicks();
-        BOOL enqueued = sp_image_capture_match_identity_enqueue_frame(frame + kFrameHeader, width, height, stride, srgb, content,
+        BOOL enqueued = sp_image_capture_match_identity_enqueue_frame(frame + kFrameHeader, width, height, stride, space, content,
             screen, 1, scale, (uint64_t)index, requested, completed, &identityError);
         enqueueCompleted = captureTicks();
-        if (srgb) CGColorSpaceRelease(srgb);
         if (!enqueued) {
             identityFailure = [NSString stringWithUTF8String:identityError ?: "captured still identity decode could not be queued"];
             free(identityError);
@@ -1422,7 +1483,7 @@ bool sp_capture_start(const char *directory, double gap, double seconds, int fra
         [recording.rows addObject:[NSMutableDictionary dictionaryWithDictionary:@{
             @"index": @(index), @"planned": NSNull.null, @"requested": NSNull.null, @"completed": NSNull.null,
             @"outcome": @"not-requested", @"error": NSNull.null, @"frame": NSNull.null, @"windows": NSNull.null,
-            @"requestedGap": @(gap), @"machTimebaseNumerator": @(timebase.numer), @"machTimebaseDenominator": @(timebase.denom),
+            @"colorSpace": NSNull.null, @"colorProfile": NSNull.null, @"requestedGap": @(gap), @"machTimebaseNumerator": @(timebase.numer), @"machTimebaseDenominator": @(timebase.denom),
             @"writeStartTime": NSNull.null, @"writeCompleteTime": NSNull.null, @"writerEnqueuedTime": NSNull.null,
             @"writerStartTime": NSNull.null, @"writerCompleteTime": NSNull.null,
             @"imageMatchStartTime": NSNull.null, @"imageMatchCompleteTime": NSNull.null,
@@ -1577,18 +1638,16 @@ bool sp_capture_still(long windowNumber, const char *path, char **errorOut) {
         return captureOperationFailure(errorOut, [NSString stringWithFormat:@"the window server gave no image of window %ld",
             windowNumber]);
     }
-    size_t width = CGImageGetWidth(image), height = CGImageGetHeight(image);
-    // The context owns its pixels, so the image made from it stays valid after the context is released.
-    CGColorSpaceRef srgb = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
-    CGContextRef context = srgb && width && height ? CGBitmapContextCreate(NULL, width, height, 8, 0, srgb,
-        (CGBitmapInfo)kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little) : NULL;
-    if (srgb) CGColorSpaceRelease(srgb);
+    size_t width = CGImageGetWidth(image), height = CGImageGetHeight(image), stride = width * 4;
+    // The still holds the pixels as a frame does: BGRA in the colour space of the image, which the PNG names by its ICC profile.
+    NSMutableData *pixels = width && height && stride / 4 == width ? [NSMutableData dataWithLength:stride * height] : nil;
     CGImageRef converted = NULL;
-    if (context) {
-        CGContextSetBlendMode(context, kCGBlendModeCopy);
-        CGContextDrawImage(context, CGRectMake(0, 0, width, height), image);
-        converted = CGBitmapContextCreateImage(context);
-        CGContextRelease(context);
+    if (pixels && drawOwnSpace(image, pixels.mutableBytes, width, height, stride)) {
+        CGDataProviderRef provider = CGDataProviderCreateWithCFData((CFDataRef)pixels);
+        converted = provider ? CGImageCreate(width, height, 8, 32, stride, CGImageGetColorSpace(image),
+            (CGBitmapInfo)kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little, provider, NULL, false,
+            kCGRenderingIntentDefault) : NULL;
+        if (provider) CGDataProviderRelease(provider);
     }
     CGImageRelease(image);
     if (converted == NULL) {
