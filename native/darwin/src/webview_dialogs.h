@@ -31,6 +31,6 @@ void sp_window_release_dialogs(void *hold);
 /// also for a request that waits no more. Main thread.
 void sp_dialog_answer(uint64_t request, const char *const *paths, size_t count, bool cancel, SPDialogAnswered answered);
 
-/// Sets the folder of the downloads of a web view whose framework places none, which the host takes from the system. A
-/// download that has no folder is cancelled. Main thread.
+/// Sets the folder of the downloads of a web view whose framework places none. Without it they go into the folder of downloads
+/// of the user, and a native check that downloads sets a folder of its own. Main thread.
 void sp_dialogs_set_download_folder(const char *folder);

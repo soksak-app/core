@@ -12,6 +12,7 @@
 // drag input. The AppKit hit test selects the web view that receives those events.
 #import "private/webkit.h"
 #import "webview_geometry.h"
+#import "webview_dialogs.h"
 #import "window_objects.h"
 
 static NSHashTable *inputViews;
@@ -487,6 +488,8 @@ BOOL webviewInputRegister(WKWebView *view) {
     }
     [inputViews addObject:view];
     installReceipts(view);
+    // The file inputs and the downloads of every web view of the application go through the dialogs of its window.
+    sp_webview_route_dialogs(view);
     return YES;
 }
 

@@ -17,6 +17,7 @@
 #import "private/webkit.h"
 #import "surface_layout.h"
 #import "webview_navigation.h"
+#import "webview_dialogs.h"
 #import "document_view.h"
 
 static const char mainWebviewKey;
@@ -53,6 +54,8 @@ void *sp_window_set_main_webview(void *handle, void *mainHandle) {
         sp_log_error("window facts", "the main web view cannot open its documents in a new process");
         return NULL;
     }
+    // The main web view of a host is registered for input only when its first modal opens, so its dialogs are routed here.
+    sp_webview_route_dialogs(main);
     void *composition = sp_webview_window_composition(main);
     if (!composition) return NULL;
     objc_setAssociatedObject(window, &mainWebviewKey, [NSValue valueWithNonretainedObject:main], OBJC_ASSOCIATION_RETAIN);
