@@ -1118,7 +1118,14 @@ func (s *Surfaces) cancelOpenedLayout(ticket uint64, failure error) error {
 		return failure
 	}
 	done := make(chan error, 1)
-	if err := system.EnqueueUI(func() { done <- s.cancelLayoutPresentation(win.NativeWindow(), ticket) }); err != nil {
+	if err := system.EnqueueUI(func() {
+		// The close of the window cancelled every layout of the window, and the framework may have released its native window.
+		if s.closed {
+			done <- nil
+			return
+		}
+		done <- s.cancelLayoutPresentation(win.NativeWindow(), ticket)
+	}); err != nil {
 		return fmt.Errorf("%w; cancelling the opened layout: %v", failure, err)
 	}
 	if err := <-done; err != nil {
@@ -1583,7 +1590,14 @@ func (s *Surfaces) CancelSurfaces(req CancelRequest) error {
 	}
 	done := make(chan error, 1)
 	window := s.window.NativeWindow()
-	if err := system.EnqueueUI(func() { done <- s.cancelLayoutPresentation(window, req.Ticket) }); err != nil {
+	if err := system.EnqueueUI(func() {
+		// The close of the window cancelled every layout of the window, and the framework may have released its native window.
+		if s.closed {
+			done <- nil
+			return
+		}
+		done <- s.cancelLayoutPresentation(window, req.Ticket)
+	}); err != nil {
 		return err
 	}
 	return <-done
@@ -1612,6 +1626,12 @@ func (s *Surfaces) FocusSurface(req FocusRequest) error {
 	done := make(chan error, 1)
 	window := s.window.NativeWindow()
 	if err := system.EnqueueUI(func() {
+		// A window that closed takes no keyboard, and its close dropped the keys that waited (docs/spec/native-surfaces.md#keyboard-of-a-surface).
+		// A call of its workbench that arrives after the close reaches no native window, which the framework may have released.
+		if s.closed {
+			done <- nil
+			return
+		}
 		// A refused surface still gives the keys: they wait for no later decision of this call.
 		if req.Decided {
 			defer system.KeysDecided(window)
@@ -1690,6 +1710,10 @@ func (s *Surfaces) mainPageEnded() {
 	}
 	window := s.window.NativeWindow()
 	if err := system.EnqueueUI(func() {
+		// The close of the window dropped its keys and cancelled its layouts, and the framework may have released its native window.
+		if s.closed {
+			return
+		}
 		system.KeysPageEnded(window)
 		if err := s.cancelAllLayoutPresentations(window); err != nil {
 			LogError("surface layout cancel", err)
