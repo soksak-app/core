@@ -6,6 +6,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
+// The judgments that were not made are read from the module at the call, so a module without them fails those tests and no other.
+import * as harness from "../app.mjs";
 import { judgeShownChanges, owe } from "../app.mjs";
 
 /**
@@ -105,6 +107,72 @@ test("a wait in which the window showed at every display-link callback names no 
   const mainThread = Array.from({ length: 28 }, (_, i) => 2 + 8 * i);
   const stopped = stopReply(t, { frames: [0, 8, 16, 230], mainThread });
   assert.throws(() => judgeShownChanges(stopped, [{ from: 20 }]), (error) => !/no part of the window showed/.test(error.message));
+});
+
+// The judgment of a wait stands on the premise that the window showed: a failing wait in which the display link found the window
+// covered at a callback is not judged (NotJudged), and one in which the window showed at every callback fails
+// (docs/spec/diagnostics.md#judgments-of-a-covered-window).
+const cover = [{ number: 9, owner: "Cover", pid: 300, layer: 0, x: 200, y: 30, width: 1400, height: 900 }];
+
+test("a failing wait in which the window was covered at a display-link callback is not judged and names the owners in front", (t) => {
+  const mainThread = Array.from({ length: 28 }, (_, i) => ({ at: 2 + 8 * i, occluded: i === 10, ...(i === 10 ? { inFront: cover } : {}) }));
+  const stopped = stopReply(t, { frames: [0, 8, 16, 230], mainThread });
+  assert.throws(() => judgeShownChanges(stopped, [{ from: 20 }], { what: "click" }), (error) => error.name === "NotJudged"
+    && error.code === "not-judged" && JSON.stringify(error.owners) === JSON.stringify(["Cover (pid 300)"])
+    && error.span.at === 20 && error.span.end === 230
+    && /^not judged: click 1 of 1: the window was covered at 1 of its 25 display-link callbacks from 20\.0ms to 230\.0ms, in front of it Cover \(pid 300\); the judgment over that span would have failed: the application did not show click 1 of 1 /.test(error.message));
+});
+
+test("a failing wait in which the window showed at every display-link callback fails and is not a judgment that was not made", (t) => {
+  const mainThread = Array.from({ length: 28 }, (_, i) => ({ at: 2 + 8 * i, occluded: false }));
+  const stopped = stopReply(t, { frames: [0, 8, 16, 230], mainThread });
+  assert.throws(() => judgeShownChanges(stopped, [{ from: 20 }]), (error) => error.name !== "NotJudged"
+    && error.code !== "not-judged" && /^the application did not show change 1 of 1 /.test(error.message));
+});
+
+test("a window covered only outside the failing wait leaves the failure standing", (t) => {
+  // The callbacks at 2 and 10 found the window covered; the wait runs from 20 to the frame at 230.
+  const mainThread = Array.from({ length: 28 }, (_, i) => ({ at: 2 + 8 * i, occluded: i < 2, ...(i === 0 ? { inFront: cover } : {}) }));
+  const stopped = stopReply(t, { frames: [0, 8, 16, 230], mainThread });
+  assert.throws(() => judgeShownChanges(stopped, [{ from: 20 }]), (error) => error.name !== "NotJudged"
+    && /^the application did not show change 1 of 1 /.test(error.message));
+});
+
+test("a failing wait of a recording without a display-link observation fails", (t) => {
+  const stopped = { ...stopReply(t, { frames: [0, 8, 16, 230] }), displayLink: undefined };
+  assert.throws(() => judgeShownChanges(stopped, [{ from: 20 }]), (error) => error.name !== "NotJudged"
+    && /the display-link observation of the main thread is missing from the stop reply/.test(error.message));
+});
+
+test("a judgment of a span that fails while the window was covered in that span is not judged", async (t) => {
+  const mainThread = Array.from({ length: 28 }, (_, i) => ({ at: 2 + 8 * i, occluded: i >= 20, ...(i === 20 ? { inFront: cover } : {}) }));
+  const { frames } = stopReply(t, { frames: [0, 8, 16, 230], mainThread });
+  await assert.rejects(harness.judgedWhileShown(frames, { spans: [{ at: 100, end: Infinity }], what: "the first screen" }, () => assert.fail("the frame shows no card")),
+    (error) => error.name === "NotJudged" && error.code === "not-judged" && /^not judged: the first screen: the window was covered at 8 of its 15 display-link callbacks from 100\.0ms to the end of the recording, in front of it Cover \(pid 300\); the judgment over that span would have failed: the frame shows no card$/.test(error.message));
+});
+
+test("a judgment of a span that fails while the window showed at every callback of that span fails", async (t) => {
+  const mainThread = Array.from({ length: 28 }, (_, i) => ({ at: 2 + 8 * i, occluded: i >= 20 }));
+  const { frames } = stopReply(t, { frames: [0, 8, 16, 230], mainThread });
+  await assert.rejects(harness.judgedWhileShown(frames, { spans: [{ at: 0, end: 150 }], what: "the first screen" }, () => assert.fail("the frame shows no card")),
+    (error) => error.name !== "NotJudged" && error.message === "the frame shows no card");
+});
+
+test("a judgment of several spans fails when the window showed at every callback of one of them", async (t) => {
+  // The window was covered from 162ms on: the span from 170ms is covered, the span from 20 to 60ms is not.
+  const mainThread = Array.from({ length: 28 }, (_, i) => ({ at: 2 + 8 * i, occluded: i >= 20, ...(i === 20 ? { inFront: cover } : {}) }));
+  const { frames } = stopReply(t, { frames: [0, 8, 16, 230], mainThread });
+  await assert.rejects(harness.judgedWhileShown(frames, { spans: [{ at: 20, end: 60 }, { at: 170, end: 200 }], what: "displayed states" },
+    () => assert.fail("two states are missing")), (error) => error.name !== "NotJudged" && error.message === "two states are missing");
+  await assert.rejects(harness.judgedWhileShown(frames, { spans: [{ at: 165, end: 180 }, { at: 190, end: 210 }], what: "displayed states" },
+    () => assert.fail("two states are missing")), (error) => error.name === "NotJudged" && error.span.at === 165 && error.span.end === 210
+    && /covered at 4 of its 4 display-link callbacks from 165\.0ms to 210\.0ms, in front of it Cover \(pid 300\)/.test(error.message));
+});
+
+test("a judgment of a span that passes returns its value whatever covered the window", async (t) => {
+  const mainThread = Array.from({ length: 28 }, (_, i) => ({ at: 2 + 8 * i, occluded: true }));
+  const { frames } = stopReply(t, { frames: [0, 8, 16, 230], mainThread });
+  assert.equal(await harness.judgedWhileShown(frames, { spans: [{ at: 0, end: Infinity }], what: "the first screen" }, () => 7), 7);
 });
 
 // The layouts of a drag come with its reply and not with the stop reply, so the recording keeps those that it was judged by.
