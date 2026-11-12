@@ -37,8 +37,12 @@ for (const app of Object.values(APPS)) {
     for (const region of regions) {
       const point = center(await imageRect(s, region.surface));
       await s.click(...point);
-      await s.until("host.window", (window) => window.responder?.surface === region.surface,
-        `${region.surface} did not become the native first responder after its click`);
+      // The press reaches the page through the region, and the page gives the region the focus with a view call that it makes
+      // in its pointerdown handler. The answer of the release follows the receipt of the press in the document, not that call,
+      // and the web view of the surface holds the first responder until the call arrives; the region holds the focus once it ran.
+      await s.until("host.window", (window) => window.responder?.surface === region.surface &&
+        window.regions.some((shown) => shown.surface === region.surface && shown.focused),
+        `${region.surface} did not take the focus after its click`);
     }
     const { displayed } = await s.presented();
     const stopped = await recording.stop({ after: displayed });
