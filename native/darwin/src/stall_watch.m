@@ -17,8 +17,10 @@ static dispatch_semaphore_t runLoopWoke;
 static _Atomic uint64_t heartbeatsSent;
 static _Atomic uint64_t heartbeatsSentInWait;
 static _Atomic uint64_t heartbeatsAnswered;
-// Set by sp_stall_set_send_in_next_wait_for_test until the next sp_stall_await_awake that finds the run loop waiting.
+// Set by sp_stall_set_send_in_next_wait_for_test until a send of sp_stall_await_awake reaches a wait of the run loop. Each call of
+// the setter takes the next generation, so an injected send that missed its wait sets the injection again only for its own setting.
 static atomic_bool sendInNextWait;
+static _Atomic uint64_t sendInNextWaitSetting;
 typedef void (*blocked_hook)(void);
 // The hook of sp_stall_set_blocked_hook_for_test, or none.
 static _Atomic(blocked_hook) blockedHook;
@@ -47,16 +49,18 @@ static void observeRunLoop(void) {
 }
 
 // Sends the block of a heartbeat to the main run loop and wakes it. The state of the run loop is read again right before the wake,
-// so a wake that reaches a wait is counted.
-static void sendHeartbeat(void) {
+// so a wake that reaches a wait is counted, and the send returns whether it reached one.
+static bool sendHeartbeat(void) {
     CFRunLoopRef loop = CFRunLoopGetMain();
     CFRunLoopPerformBlock(loop, kCFRunLoopCommonModes, ^{
         atomic_store(&lastAnswer, sp_mono_ns());
         atomic_fetch_add(&heartbeatsAnswered, 1);
     });
     atomic_fetch_add(&heartbeatsSent, 1);
-    if (atomic_load(&runLoopWaits)) atomic_fetch_add(&heartbeatsSentInWait, 1);
+    bool inWait = atomic_load(&runLoopWaits);
+    if (inWait) atomic_fetch_add(&heartbeatsSentInWait, 1);
     CFRunLoopWakeUp(loop);
+    return inWait;
 }
 
 void sp_stall_heartbeat(uint64_t *now, uint64_t *answered) {
@@ -77,8 +81,14 @@ void sp_stall_heartbeat(uint64_t *now, uint64_t *answered) {
 
 void sp_stall_await_awake(void) {
     observeRunLoop();
+    uint64_t setting = atomic_load(&sendInNextWaitSetting);
     if (atomic_load(&runLoopWaits) && atomic_exchange(&sendInNextWait, false)) {
-        sendHeartbeat();
+        // Another source can wake the run loop between the state read above and the send, and the send then reaches no wait: the
+        // fault was not made, so the injection stays set for the next wait unless the checks changed it meanwhile.
+        if (!sendHeartbeat()) {
+            bool cleared = false;
+            if (atomic_load(&sendInNextWaitSetting) == setting) atomic_compare_exchange_strong(&sendInNextWait, &cleared, true);
+        }
         return;
     }
     while (atomic_load(&runLoopWaits)) {
@@ -101,4 +111,7 @@ void sp_stall_counts(uint64_t *sent, uint64_t *sent_in_wait, uint64_t *answered)
     *answered = atomic_load(&heartbeatsAnswered);
 }
 
-void sp_stall_set_send_in_next_wait_for_test(bool send) { atomic_store(&sendInNextWait, send); }
+void sp_stall_set_send_in_next_wait_for_test(bool send) {
+    atomic_fetch_add(&sendInNextWaitSetting, 1);
+    atomic_store(&sendInNextWait, send);
+}

@@ -23,7 +23,8 @@ void sp_stall_await_awake(void);
 void sp_stall_counts(uint64_t *sent, uint64_t *sent_in_wait, uint64_t *answered);
 
 // The fault injection of the checks: while it is set, the next sp_stall_await_awake that finds the run loop waiting sends a heartbeat
-// into that wait and returns instead of blocking, as a watch that does not block through a wait does, and clears it.
+// into that wait and returns instead of blocking, as a watch that does not block through a wait does, and clears it. A send that
+// another wake of the run loop overtook reaches no wait and leaves it set for the next wait.
 void sp_stall_set_send_in_next_wait_for_test(bool send);
 
 // The hook of the checks that hears that a thread blocks in sp_stall_await_awake, which no event of the system tells: the thread
