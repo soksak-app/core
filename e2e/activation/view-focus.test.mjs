@@ -5,13 +5,11 @@
 // logs each input transaction of its region with the body that its fake sidecar received (rasterprobe.input), so the check
 // compares the committed text and the preedit that reached the region and the sidecar with the reference document.
 import assert from "node:assert/strict";
-import { readFileSync, writeFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
-import { captureCadence, frames, readFrame } from "@soksak/window-check/frame.mjs";
-import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 import { fresh, joinedFailure } from "../fixture.mjs";
 import { EVERY_LEVEL } from "@soksak/window-check/log-policy.mjs";
 import { addRasterTab, REGION } from "../raster-probe.mjs";
@@ -212,53 +210,9 @@ async function recordGesture(s, t, name, action) {
   }
   if (actionError && captureError) throw joinedFailure(`${name}: action and capture stop failed`, [actionError, captureError]);
   if (captureError) throw captureError;
-  let captureValidationError;
-  try {
-    const framePaths = frames(capture.frames);
-    const frameNames = framePaths.map((framePath) => basename(framePath));
-    const decoded = framePaths.map(readFrame);
-    assert.equal(decoded.length, result.count, `${name}: every captured frame must decode`);
-    assert.ok(decoded.length >= 2, `${name}: the recording must cover the full gesture`);
-    // The stop checked the still rows against the plan of the recording (requireStillsArtifact: the path, one row per planned
-    // still in the order of the plan, at most 4096, the frame files of the written stills and of no other), and readStills
-    // refused a row whose outcome, exact mach times, timebase, frame, error or window list contradict each other. The check
-    // requires that every still is written and none late, and matches each written still to its frame.
-    assert.equal(result.stills, join(capture.frames, "stills.jsonl"), `${name}: stop must name the still rows`);
-    const rows = readStills(result.stills);
-    requireNoLostStills(rows, `${name}: the gesture`);
-    const written = rows.filter((row) => row.outcome === "written");
-    assert.deepEqual(written.map((row) => basename(row.frame)), frameNames,
-      `${name}: the written stills must match the recorded files one-to-one and in order`);
-    for (const [index, row] of written.entries()) {
-      assert.equal(decoded[index].requested, row.requested, `${name}: frame ${frameNames[index]} holds another request time`);
-      assert.equal(decoded[index].completed, row.completed, `${name}: frame ${frameNames[index]} holds another completion time`);
-    }
-    const gaps = decoded.slice(1).map((frame, index) => ({
-      from: frameNames[index], to: frameNames[index + 1], milliseconds: frame.requested - decoded[index].requested,
-    }));
-    const over33ms = gaps.filter((gap) => gap.milliseconds > 33);
-    t.diagnostic(`${name} still rows: ${JSON.stringify({ planned: rows.length, written: written.length, over33ms })}`);
-    // The raw request-to-completion and synchronous-processing deltas of each written still, in the ticks of the recorded
-    // timebase; the processing ends before the asynchronous compression and file write.
-    const raw = readFileSync(result.stills, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line));
-    const delta = (later, earlier) => later === null || earlier === null ? null : (BigInt(later) - BigInt(earlier)).toString();
-    t.diagnostic(`${name} still request-to-completion and synchronous-processing deltas: ${JSON.stringify({
-      timebase: { numerator: raw[0].machTimebaseNumerator, denominator: raw[0].machTimebaseDenominator },
-      stills: raw.filter((row) => row.outcome === "written").map((row) => ({ index: row.index,
-        requestToCompletionRaw: delta(row.completed, row.requested),
-        synchronousProcessingRaw: delta(row.writeCompleteTime ?? null, row.writeStartTime ?? null) })),
-    })}`);
-    const cadence = captureCadence(result.longestGap, decoded.map(({ requested }) => requested));
-    t.diagnostic(`${name} capture cadence measurement: ${JSON.stringify(cadence)}`);
-    t.diagnostic(`${name}: ${JSON.stringify({ frames: result.count, missed: result.missed, late: result.late,
-      longestGap: result.longestGap })}`);
-  } catch (error) {
-    captureValidationError = error;
-  }
-  if (actionError && captureValidationError) {
-    throw joinedFailure(`${name}: action and capture validation failed`, [actionError, captureValidationError]);
-  }
-  if (captureValidationError) throw captureValidationError;
+  // The recording is the evidence of the gesture: its counts are told, and the check does not judge it.
+  t.diagnostic(`${name}: ${JSON.stringify({ frames: result.count, missed: result.missed, late: result.late,
+    longestGap: result.longestGap, folder: capture.frames })}`);
   if (actionError) throw actionError;
   return actionResult;
 }

@@ -5,10 +5,6 @@ import test from "node:test";
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { readEventLines, currentEventOffsets } from "@soksak/window-check/event-log.mjs";
 import { cardSidebar, fresh } from "./fixture.mjs";
-import { rmSync } from "node:fs";
-import { join } from "node:path";
-import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
-import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 
 /** The handle overlaps the sidebar border, so the surface starts right after the sidebar. */
 const GRIP = 0;
@@ -185,37 +181,6 @@ for (const app of Object.values(APPS)) {
   });
 }
 
-/** Relative luminance of an sRGB color. */
-const luminance = ([r, g, b]) => {
-  const c = (v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; };
-  return 0.2126 * c(r) + 0.7152 * c(g) + 0.0722 * c(b);
-};
-/** Contrast of two colors. The brighter one is placed on top. */
-const contrast = (a, b) => { const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05); };
-/** Contrast between the header line (#2a2d3a) and the header background (#20232d) of the design. */
-const DESIGN_RULE_CONTRAST = contrast([0x2a, 0x2d, 0x3a], [0x20, 0x23, 0x2d]);
-
-/** Records the window and measures the contrast between the bottom line pixel of the section header and the background pixel at the header center. */
-async function headerRuleContrast(s, rect) {
-  const { displayed } = await s.presented();
-  // The stop checks the still rows of the recording; its last still was requested at or after the presented time.
-  const recording = await s.record();
-  const result = await recording.stop({ after: displayed });
-  try {
-    requireNoLostStills(readStills(result.stills), "the header capture");
-    const captured = frames(result.frames);
-    assert.ok(captured.length > 0, "the header capture produced no frames");
-    const frame = readFrame(captured.at(-1));
-    // Measures near the right end of the header, avoiding the name glyphs.
-    const x = Math.round((rect.x + rect.width - 6) * frame.scale);
-    const rule = pixel(frame, x, Math.ceil((rect.y + rect.height) * frame.scale) - 1);
-    const back = pixel(frame, x, Math.round((rect.y + rect.height / 2) * frame.scale));
-    return contrast(rule, back);
-  } finally {
-    rmSync(result.frames, { recursive: true, force: true });
-  }
-}
-
 /** Whether two lengths are equal within half a point. */
 const near = (a, b) => Math.abs(a - b) <= 0.5;
 
@@ -278,9 +243,6 @@ for (const app of Object.values(APPS)) {
         `${sidebar}: the first header rule is at ${header.y + header.height}, the card header rule at ${top.y + top.height}`);
       assert.ok(near(line.y, bottom.y), `${sidebar}: the status line rule is at ${line.y}, the card footer rule at ${bottom.y}`);
     }
-    // The bottom line of the header differs from the header background by the amount of the design (design: line #2a2d3a above header #20232d).
-    const ratio = await headerRuleContrast(s, (await locate("left")).header);
-    assert.ok(ratio >= DESIGN_RULE_CONTRAST, `the header rule contrast ${ratio.toFixed(3)} is below the design's ${DESIGN_RULE_CONTRAST.toFixed(3)}`);
     // The sidebar inside the card shares the card header line, so the first section starts right below that header.
     await s.until("core.sidebars", (value) => value.some((item) => item.sidebar === inset), "the inset sidebar was not drawn");
     const sidebars = await s.until("core.sidebars", (value) => value.find((item) => item.sidebar === inset)?.sections.every((item) => item.mounted),

@@ -4,12 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { readFrame } from "../frame.mjs";
 import { stillFrame, stillFields } from "../still-recording.mjs";
 import { policyOfSetting, readPolicy } from "../log-policy.mjs";
 import * as viewMetrics from "../view-metrics-collection.mjs";
 import { closeViewGroup, collectViewProcessGroups, collectViewReclaimMeasurements, collectViewStartAndMemory, openRecordedView,
-  processStartSamples, TAB_PLACEMENT, viewContentFrameEvents, mapViewContentFramesToCapture, viewCardWithDifferentPluginTab,
+  processStartSamples, TAB_PLACEMENT, viewContentFrameEvents, viewCardWithDifferentPluginTab,
   viewStartClockBracket, waitForViewReadiness, withDragTraceMode, withViewContentTrace } from "../view-metrics-collection.mjs";
 
 const event = (name, surface, ts_us, mono_ns) => ({ event: name, ts_us, mono_ns,
@@ -57,7 +56,7 @@ const CLOCK_READS = Array.from({ length: 5 }, () => ["clock", "read", "clock"]).
 
 /** Writes still `index` of a recording, requested at `time` (ms) and completed 0.5ms later. */
 function writeCapturedFrame(directory, index, time) {
-  writeFileSync(join(directory, `frame-${String(index).padStart(4, "0")}.bgra`), stillFrame(1, time, time + 0.5));
+  writeFileSync(join(directory, `frame-${String(index).padStart(4, "0")}.bgra`), stillFrame(time, time + 0.5));
 }
 
 test("generic view process samples preserve both event clocks and pair the first ready event", { timeout: 5000 }, () => {
@@ -309,99 +308,6 @@ test("view cadence uses source frame times instead of variable host IPC arrival 
   assert.equal(frames[1].frameTimeMs - frames[0].frameTimeMs, 16);
   assert.equal(frames[1].timeRange.lowerMs - frames[0].timeRange.lowerMs, 16);
   assert.equal(frames[1].source.eventMonoNs - frames[0].source.eventMonoNs, 100_000_000);
-});
-
-test("generic source-frame mapping preserves multiple events per capture frame", { timeout: 5000 }, () => {
-  const source = [
-    { sequence: 0, timeRange: { lowerMs: 7, upperMs: 8 }, width: 299, height: 200 },
-    { sequence: 1, timeRange: { lowerMs: 9, upperMs: 10 }, width: 300, height: 200 },
-    { sequence: 2, timeRange: { lowerMs: 10, upperMs: 11 }, width: 301, height: 200 },
-    { sequence: 3, timeRange: { lowerMs: 11, upperMs: 12 }, width: 302, height: 200 },
-    { sequence: 4, timeRange: { lowerMs: 20, upperMs: 21 }, width: 303, height: 200 },
-  ];
-  // Each still is requested at its time and completed 0.5ms later: a source frame maps to the first still requested at or after
-  // the end of its interval.
-  const captured = [{ requested: 9, completed: 9.5 }, { requested: 15, completed: 15.5 }, { requested: 20, completed: 20.5 }];
-  assert.deepEqual(mapViewContentFramesToCapture(source, captured), [
-    { ...source[0], sourceSequence: 0, frameIndex: 0 },
-    { ...source[1], sourceSequence: 1, frameIndex: 1 },
-    { ...source[2], sourceSequence: 2, frameIndex: 1 },
-    { ...source[3], sourceSequence: 3, frameIndex: 1 },
-    { ...source[4], sourceSequence: 4, frameIndex: null },
-  ]);
-});
-
-test("one-shot capture selects the latest applied root placement before display", { timeout: 5000 }, () => {
-  const baseline = { surface: "view-1", timeMs: 5, monoNs: "5000000", visible: true,
-    framePt: { x: 12.5, y: 20, width: 700.5, height: 286.5 } };
-  const placed = { event: "host.trace.surface", ts_us: 10_000, mono_ns: 10_000_000,
-    fields: { phase: "placed", surface: "view-1", x: 14.5, y: 20, w: 785.5, h: 286.5, visible: true } };
-  const later = { ...placed, ts_us: 12_000, mono_ns: 12_000_000,
-    fields: { ...placed.fields, x: 18.5, w: 800.5 } };
-  const afterDisplay = { ...later, mono_ns: 20_000_000, fields: { ...later.fields, w: 900.5 } };
-  const displayedPlacement = viewMetrics.rootNativePlacementBeforeCapture([placed, afterDisplay], "view-1", 15,
-    { afterMs: 8, baseline });
-  assert.equal(displayedPlacement.timeMs, 10,
-    "one-shot layout selects the final applied placement before the recorded display time");
-  assert.deepEqual(displayedPlacement.webKitViewport, { width: 785, height: 286 });
-  assert.throws(() => viewMetrics.rootNativePlacementBeforeCapture([placed], "view-1", 15, { afterMs: 10 }),
-    /no applied native placement after/);
-});
-
-test("one-shot layout selects the exact-size source after request and before later placement readback", { timeout: 5000 }, () => {
-  const beforeRequest = { sequence: 0, timeRange: { lowerMs: 97, upperMs: 99 }, width: 453, height: 286 };
-  const requestedFrame = { sequence: 1, timeRange: { lowerMs: 103, upperMs: 105 }, width: 453, height: 286 };
-  const afterReadbackWrongSize = { sequence: 2, timeRange: { lowerMs: 116, upperMs: 118 }, width: 454, height: 286 };
-  const nativePlacement = { surface: "view-1", timeMs: 112,
-    framePt: { x: 500, y: 100, width: 453, height: 286.5 },
-    webKitViewport: { width: 453, height: 286 } };
-  const selection = viewMetrics.selectOneShotViewSourceFrame(
-    [beforeRequest, requestedFrame, afterReadbackWrongSize], { requestAtMs: 100, nativePlacement });
-
-  assert.equal(selection.frame, requestedFrame,
-    "the first exact-size source after the request must not wait for a later native placement readback");
-  assert.equal(selection.failure, null);
-});
-
-test("one-shot layout preserves a boundary interval and selects a later guaranteed post-request frame", { timeout: 5000 }, () => {
-  const nativePlacement = { surface: "view-1", timeMs: 112,
-    framePt: { x: 500, y: 100, width: 453, height: 286.5 },
-    webKitViewport: { width: 453, height: 286 } };
-  const ambiguous = { sequence: 1, timeRange: { lowerMs: 99, upperMs: 101 }, width: 453, height: 286 };
-  const guaranteed = { sequence: 2, timeRange: { lowerMs: 102, upperMs: 104 }, width: 453, height: 286 };
-  const selection = viewMetrics.selectOneShotViewSourceFrame([ambiguous, guaranteed],
-    { requestAtMs: 100, nativePlacement });
-  assert.equal(selection.frame, guaranteed);
-  assert.deepEqual(selection.candidates.map(({ sequence, requestRelation }) => ({ sequence, requestRelation })), [
-    { sequence: 1, requestRelation: "ambiguous" },
-    { sequence: 2, requestRelation: "post-request" },
-  ]);
-});
-
-test("one-shot layout retains the target and every post-request candidate when no frame matches", { timeout: 5000 }, () => {
-  const nativePlacement = { surface: "view-1", timeMs: 112,
-    framePt: { x: 500, y: 100, width: 453, height: 286.5 },
-    webKitViewport: { width: 453, height: 286 } };
-  const selection = viewMetrics.selectOneShotViewSourceFrame([
-    { sequence: 0, timeRange: { lowerMs: 97, upperMs: 99 }, width: 453, height: 286 },
-    { sequence: 1, timeRange: { lowerMs: 108, upperMs: 110 }, width: 454, height: 286 },
-    { sequence: 2, timeRange: { lowerMs: 116, upperMs: 118 }, width: 453, height: 287 },
-  ], { requestAtMs: 100, nativePlacement });
-
-  assert.equal(selection.frame, null);
-  assert.deepEqual(selection.failure, {
-    requestAtMs: 100,
-    target: {
-      surface: "view-1", placementAtMs: 112,
-      framePt: { x: 500, y: 100, width: 453, height: 286.5 },
-      webKitViewport: { width: 453, height: 286 },
-    },
-    candidates: [
-      { sequence: 0, timeRange: { lowerMs: 97, upperMs: 99 }, width: 453, height: 286, requestRelation: "pre-request" },
-      { sequence: 1, timeRange: { lowerMs: 108, upperMs: 110 }, width: 454, height: 286, requestRelation: "post-request" },
-      { sequence: 2, timeRange: { lowerMs: 116, upperMs: 118 }, width: 453, height: 287, requestRelation: "post-request" },
-    ],
-  });
 });
 
 test("generic content trace brackets the successful start command with native clock reads", { timeout: 5000 }, async (t) => {
@@ -780,14 +686,6 @@ test("direct recorded views return the content frame of the value before resolvi
 });
 
 // The content frame is the first still that shows the content, so a still that the recording lost could have shown it first.
-test("a recorded view whose recording lost a still fails and names it", { timeout: 5000 }, async (t) => {
-  const s = recordedViewSession(t, { frameTimes: [4, 6], displayed: 5, missed: 1 });
-  await assert.rejects(openRecordedView({ diagnostic() {} }, s, {
-    card: "card-1", plugin: "fixture", placement: TAB_PLACEMENT, readinessStatus: "fixture.ready", readiness: async () => {},
-    expectedContent: "target content", readContent: async () => "the target content line", captureObservationWindowMs: 1,
-  }), /^Error: the recording lost 1 stills of the fixture first content: still 2 planned at 7\.0ms failed \(the window server returned no image\)$/);
-});
-
 test("a recorded view whose value lacks the expected content stops its recording and fails", { timeout: 5000 }, async (t) => {
   const calls = [];
   const s = recordedViewSession(t, { frameTimes: [4, 6], displayed: 5, calls });
@@ -968,29 +866,6 @@ test("the end of a reclaim exit wait fails the close with its reason", { timeout
   { message: "process 4101 did not exit before the endpoint connection of the request closed" });
 });
 
-test("source events inside the gesture require a recorded capture frame", { timeout: 5000 }, async () => {
-  const { requireViewContentFrameCoverage } = await import("../view-metrics-collection.mjs");
-  assert.deepEqual(requireViewContentFrameCoverage([
-    { sequence: 0, sourceSequence: 0, timeRange: { lowerMs: 7, upperMs: 8 }, frameIndex: null },
-    { sequence: 1, sourceSequence: 1, timeRange: { lowerMs: 10, upperMs: 11 }, frameIndex: 1 },
-    { sequence: 2, sourceSequence: 2, timeRange: { lowerMs: 21, upperMs: 22 }, frameIndex: null },
-  ], { gestureStartedAtMs: 9, gestureEndedAtMs: 20 }), [
-    { sequence: 0, sourceSequence: 0, timeRange: { lowerMs: 7, upperMs: 8 }, frameIndex: null },
-    { sequence: 1, sourceSequence: 1, timeRange: { lowerMs: 10, upperMs: 11 }, frameIndex: 1 },
-    { sequence: 2, sourceSequence: 2, timeRange: { lowerMs: 21, upperMs: 22 }, frameIndex: null },
-  ]);
-  assert.throws(() => requireViewContentFrameCoverage([
-    { sequence: 1, sourceSequence: 1, timeRange: { lowerMs: 10, upperMs: 11 }, frameIndex: null },
-  ], { gestureStartedAtMs: 9, gestureEndedAtMs: 20 }), /inside the gesture has no capture frame/);
-  assert.throws(() => requireViewContentFrameCoverage([
-    { sequence: 1, sourceSequence: 1, timeRange: { lowerMs: 8, upperMs: 10 }, frameIndex: null },
-  ], { gestureStartedAtMs: 9, gestureEndedAtMs: 20 }), /inside the gesture has no capture frame/);
-  const boundary = { sequence: 1, sourceSequence: 1, timeRange: { lowerMs: 8, upperMs: 10 }, frameIndex: 1 };
-  const next = { sequence: 2, sourceSequence: 2, timeRange: { lowerMs: 11, upperMs: 12 }, frameIndex: 2 };
-  assert.deepEqual(requireViewContentFrameCoverage([boundary, next], { gestureStartedAtMs: 9, gestureEndedAtMs: 20 }),
-    [boundary, next], "a captured source row that may be inside the gesture is retained without false rejection");
-});
-
 test("a view descriptor without a placement is refused by every collector with an error that names the descriptor", { timeout: 5000 }, async (t) => {
   const descriptor = { plugin: "fixture", readinessStatus: "fixture.ready", readiness: async () => {}, expectedContent: "fixture",
     language: "en-US" };
@@ -1034,14 +909,6 @@ test("the tab placement chooses a card with a tab of another plugin, adds the vi
   s.run = async () => ({ closed: false });
   await assert.rejects(TAB_PLACEMENT.close(s, "view-1", { cleanup: true }), { message: /^view view-1 did not close during cleanup\n/ });
   assert.ok(Object.isFrozen(TAB_PLACEMENT));
-});
-
-test("every source frame after the gesture stays, because the final viewport can arrive in a later frame than the first", { timeout: 5000 }, async () => {
-  const { requireViewContentFrameCoverage } = await import("../view-metrics-collection.mjs");
-  const during = { sequence: 1, sourceSequence: 1, timeRange: { lowerMs: 10, upperMs: 11 }, frameIndex: 1 };
-  const first = { sequence: 2, sourceSequence: 2, width: 455, timeRange: { lowerMs: 21, upperMs: 22 }, frameIndex: 2 };
-  const final = { sequence: 3, sourceSequence: 3, width: 453, timeRange: { lowerMs: 38, upperMs: 39 }, frameIndex: 3 };
-  assert.deepEqual(requireViewContentFrameCoverage([during, first, final], { gestureStartedAtMs: 9, gestureEndedAtMs: 20 }), [during, first, final]);
 });
 
 function dragTraceModeSession(t, { performanceTrace, logPolicy }) {

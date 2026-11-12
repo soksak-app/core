@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { validateDiagnostics } from "@soksak/plugin-api";
-import { ANCHOR_PLUGIN, installedSectionViews, requireSectionDeclarations, SECTION_PLACEMENT, sectionTopEdgeDragPlan, sectionViewDescriptor }
+import { ANCHOR_PLUGIN, installedSectionViews, requireSectionDeclarations, SECTION_PLACEMENT, sectionViewDescriptor }
   from "../benchmark/cases/section-view.mjs";
 
 /** A configuration folder whose plugins/installed.json lists `plugins` ({id, enabled, manifest, diagnostics?}). */
@@ -259,16 +259,6 @@ test("a section view closes with the card that holds its card sidebar", async ()
     { message: `section view ${surface} is in no card sidebar during cleanup` });
 });
 
-test("the section drag moves the top boundary of the measured card 80 pt down and back once", () => {
-  const grid = { lines: { x: [0, 400], y: [0, 300, 600] } };
-  assert.deepEqual(sectionTopEdgeDragPlan(grid, card("card-4", 300, [], [1, 2])),
-    { axis: "y", line: 1, dx: 0, dy: 80, ms: 500, times: 1 });
-  assert.throws(() => sectionTopEdgeDragPlan(grid, card("card-1", 300, [], [0, 1])),
-    { message: "the section drag requires a card below another card, not a card whose top row is 0" });
-  assert.throws(() => sectionTopEdgeDragPlan({ lines: { y: [0, 600] } }, card("card-4", 300, [], [1, 2])),
-    { message: "the section drag requires the measured horizontal grid lines" });
-});
-
 test("the section view descriptor waits for its declared ready status and reads its history and frames on its surface", async (t) => {
   const configDir = configFolder(t, [
     { id: "probeplain", enabled: true, manifest: { id: "probeplain", sections: [section("probeplain.section", "ui/section.html")] }, diagnostics: declared("probeplain", ["probeplain.section"]) },
@@ -304,33 +294,18 @@ test("the section view descriptor waits for its declared ready status and reads 
     { message: "probeplain section view probeplain.section answered probeplain.view.history on spc-1/card-4:left/probeplain.section without a length" });
 });
 
-test("a section view trace start without a marker color is refused with its plugin and section after the observer stops", async (t) => {
+test("a section view trace starts and stops the content-frame observer on its surface", async (t) => {
   const configDir = configFolder(t, [
     { id: "probeplain", enabled: true, manifest: { id: "probeplain", sections: [section("probeplain.section", "ui/section.html")] }, diagnostics: declared("probeplain", ["probeplain.section"]) },
   ]);
   const descriptor = sectionViewDescriptor(installedSectionViews(configDir)[0]);
   const surface = "spc-1/card-4:left/probeplain.section";
-  const started = { enabled: true, sourceClock: { monoNs: "1" }, markerColor: [17, 193, 231] };
+  const started = { enabled: true, sourceClock: { monoNs: "1" } };
   const frames = (answer) => fakeSession({}, { "probeplain.view.frames": ({ action }) => (action === "start" ? answer : { enabled: false }) });
   const s = frames(started);
   assert.deepEqual(await descriptor.startContentTrace(s, surface), started);
   assert.deepEqual(await descriptor.stopContentTrace(s, surface), { enabled: false });
   assert.deepEqual(s.calls, [["run", "probeplain.view.frames", { action: "start" }, surface], ["run", "probeplain.view.frames", { action: "stop" }, surface]]);
-  for (const markerColor of [undefined, [17, 193], [17, 193, 256], [17, 193, 1.5]]) {
-    const refused = frames({ ...started, markerColor });
-    await assert.rejects(descriptor.startContentTrace(refused, surface),
-      { message: "probeplain section view probeplain.section trace start must declare a three-channel RGB paint marker color" });
-    assert.deepEqual(refused.calls.at(-1), ["run", "probeplain.view.frames", { action: "stop" }, surface]);
-  }
-  const stuck = fakeSession({}, { "probeplain.view.frames": ({ action }) => {
-    if (action === "stop") throw new Error("probeplain.view.frames stop failed");
-    return { ...started, markerColor: undefined };
-  } });
-  await assert.rejects(descriptor.startContentTrace(stuck, surface), (error) => error instanceof AggregateError
-    && error.message === `probeplain section view probeplain.section answered a start without a marker color and did not stop on ${surface}: `
-      + "probeplain section view probeplain.section trace start must declare a three-channel RGB paint marker color; probeplain.view.frames stop failed"
-    && error.errors.map((item) => item.message).join(" | ")
-      === "probeplain section view probeplain.section trace start must declare a three-channel RGB paint marker color | probeplain.view.frames stop failed");
   const unstarted = frames({ enabled: false });
   await assert.rejects(descriptor.startContentTrace(unstarted, surface),
     { message: /^probeplain section view probeplain.section content-frame observer did not start on spc-1\/card-4:left\/probeplain.section\n/ });

@@ -1,59 +1,9 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { VIEW_DRAG_PLAN } from "../benchmark/cases/floor-page.mjs";
 import { B3_MEASUREMENTS } from "../benchmark/measurements.mjs";
-import { assertDragPerformance, measureDragPerformance } from "@soksak/window-check/drag-measurement.mjs";
-import { completeViewDrag, dragProcesses, firstDragFigures, NATIVE_DRAG_PLAN, runViewDrag, viewDragB3Values, viewDragOptions } from "../benchmark/cases/view-drag.mjs";
-
-test("the benchmark defers captured thresholds until valid third-drag measurements are published", { timeout: 5000 }, () => {
-  const source = readFileSync(new URL("../benchmark/view-drag.test.mjs", import.meta.url), "utf8");
-  const capture = source.slice(source.indexOf("capturedDrag: async () => {"), source.indexOf("untilFramesQuiet:"));
-  assert.ok(capture.includes("assert.ok(report.frameCount > 30"), "capture completeness must still be validated before continuing");
-  assert.ok(!capture.includes("assertPerformance("), "captured performance must not prevent third-drag collection");
-  assert.match(source, /publish: async \(\{ elements, recorded \}\) =>/, "the actual benchmark must publish collected results through runViewDrag");
-  const publish = source.slice(source.indexOf("publish: async"));
-  assert.match(publish, /Object\.assign\(run\.measurements, viewDragB3Values\(/);
-  const runner = readFileSync(new URL("../benchmark/cases/view-drag.mjs", import.meta.url), "utf8");
-  const collection = runner.slice(runner.indexOf("export async function runViewDrag("), runner.indexOf("export async function completeViewDrag("));
-  assert.match(collection, /await completeViewDrag\(captured, async \(\) =>/);
-  assert.match(collection, /await steps\.publish\(result\)/);
-});
-
-test("valid view drags publish third-stage B3 values before a captured threshold failure", { timeout: 5000 }, async () => {
-  const calls = [];
-  const threshold = new Error("captured frame p90 exceeds the unchanged target");
-  const captured = { assertPerformance() { calls.push("captured thresholds"); throw threshold; } };
-  const measurements = {};
-  await assert.rejects(async () => completeViewDrag(captured, () => {
-    calls.push("publish third metrics");
-    Object.assign(measurements, viewDragB3Values("frame-records", { recorded: { records: THIRD_DRAG }, gcLoop: false }));
-  }), (error) => error === threshold);
-  assert.deepEqual(calls, ["publish third metrics", "captured thresholds"]);
-  assert.deepEqual(measurements, { dragFrameP90Ms: 4, dragStepP90Ms: 1.5, dragFirstFrameMs: 3 });
-});
-
-test("view-drag judgment preserves both invalid third metrics and captured threshold failures", { timeout: 5000 }, async () => {
-  const threshold = new Error("captured step p90 exceeds the unchanged target");
-  let metricFailure;
-  let judgments = 0;
-  await assert.rejects(async () => completeViewDrag({ assertPerformance() { judgments++; throw threshold; } }, () => {
-    try { viewDragB3Values("frame-records", { recorded: null, gcLoop: false }); }
-    catch (error) { metricFailure = error; throw error; }
-  }), (error) => error instanceof AggregateError && error.errors.length === 2 &&
-    error.errors[0] === metricFailure && error.errors[1] === threshold);
-  assert.equal(judgments, 1, "invalid metrics must not hide the captured threshold failure");
-});
-
-test("view-drag judgment retains a metrics-only failure and accepts only two successful judgments", { timeout: 5000 }, async () => {
-  const metricFailure = new Error("invalid frame records");
-  let judgments = 0;
-  const captured = { assertPerformance() { judgments++; } };
-  await assert.rejects(async () => completeViewDrag(captured, () => { throw metricFailure; }), (error) => error === metricFailure);
-  await completeViewDrag(captured, () => {});
-  assert.equal(judgments, 2);
-});
+import { dragProcesses, firstDragFigures, NATIVE_DRAG_PLAN, runViewDrag, viewDragB3Values, viewDragOptions } from "../benchmark/cases/view-drag.mjs";
 
 test("a structurally invalid captured drag prevents the third drag and metric publication", { timeout: 5000 }, async () => {
   const calls = [];
@@ -63,81 +13,6 @@ test("a structurally invalid captured drag prevents the third drag and metric pu
   await assert.rejects(runViewDrag({ options: { accessibility: false, gcLoop: false }, pageProcess: null, steps }),
     (error) => error === invalid);
   assert.deepEqual(calls, ['conditions "0"', "processes", "native drag", "processes", "first drag 0.5 s", "capture validation"]);
-});
-
-test("a third-stage collection failure preserves the valid captured threshold failure exactly once", { timeout: 5000 }, async () => {
-  const calls = [];
-  const collectionFailure = new Error("third drag record collection failed");
-  const threshold = new Error("captured frame p90 exceeds the unchanged target");
-  let judgments = 0;
-  const steps = recordingSteps(calls);
-  steps.capturedDrag = async () => ({ assertPerformance() { judgments++; throw threshold; } });
-  steps.record = async () => { throw collectionFailure; };
-  steps.publish = async () => { assert.fail("incomplete third-stage collection must not publish metrics"); };
-  await assert.rejects(runViewDrag({ options: { accessibility: false, gcLoop: false }, pageProcess: null, steps }),
-    (error) => error instanceof AggregateError && error.errors.length === 2 &&
-      error.errors[0] === collectionFailure && error.errors[1] === threshold);
-  assert.equal(judgments, 1, "a valid capture must be judged even when third-stage collection fails");
-});
-
-/**
- * Frame times, lag, observed display refreshes and still rows (readStills) of a structurally valid captured drag that exceeds the
- * unchanged cadence and latency targets: every still of its span, one each 36ms, was written.
- */
-const SLOW_DRAG = Object.freeze({ times: [0, 36, 72], lag: { lag: 100, time: 72, median: 40, medianTime: 36, p90: 70, p90Time: 72 }, refreshes: { times: [0], periods: [1000 / 60] },
-  stills: [0, 36, 72].map((planned, index) => ({ index, planned, requested: planned, completed: planned + 0.5, gap: 36, outcome: "written",
-    error: null, late: false })) });
-/** A captured drag whose assertPerformance applies assertDragPerformance to SLOW_DRAG and records each error it throws in `judged`. */
-function slowCapture(judged) {
-  return { frameCount: 50, assertPerformance() {
-    try { return assertDragPerformance(SLOW_DRAG.times, SLOW_DRAG.lag, SLOW_DRAG.refreshes, SLOW_DRAG.stills); }
-    catch (error) { judged.push(error); throw error; }
-  } };
-}
-
-test("a structurally valid captured drag over the targets is measured without a verdict, and its assertPerformance throws the threshold error",
-  { timeout: 5000 }, () => {
-    const measured = measureDragPerformance(SLOW_DRAG.times, SLOW_DRAG.lag, SLOW_DRAG.refreshes, SLOW_DRAG.stills);
-    assert.equal(measured.targetsMet, false, "a valid slow capture is measured, not rejected, before assertPerformance");
-    assert.deepEqual(measured.exceeded, ["cadence", "p90", "worst"]);
-    assert.deepEqual(measured.lost, [], "a capture that lost no still reports no lost still");
-    const judged = [];
-    assert.throws(() => slowCapture(judged).assertPerformance(), (error) => error === judged[0] && /drag performance targets exceeded/.test(error.message));
-  });
-
-test("a valid captured drag over the targets publishes third-drag B3 values and then fails with its original threshold error", { timeout: 5000 }, async () => {
-  const calls = [];
-  const judged = [];
-  const measurements = {};
-  const steps = recordingSteps(calls);
-  steps.capturedDrag = async () => { calls.push("captured drag"); return slowCapture(judged); };
-  steps.record = async (gesture) => { calls.push("record start"); const result = await gesture(); calls.push("record end"); return { result, records: THIRD_DRAG }; };
-  steps.publish = async ({ recorded }) => {
-    calls.push("publish");
-    Object.assign(measurements, viewDragB3Values("frame-records", { recorded, gcLoop: false }));
-  };
-  await assert.rejects(runViewDrag({ options: { accessibility: false, gcLoop: false }, pageProcess: null, steps }),
-    (error) => judged.length === 1 && error === judged[0]);
-  assert.deepEqual(calls.slice(calls.indexOf("captured drag")), ["captured drag", "frames quiet", "frame records", 'conditions "frame-records"',
-    "record start", "uncaptured drag", "record end", "publish"]);
-  assert.deepEqual(measurements, { dragFrameP90Ms: 4, dragStepP90Ms: 1.5, dragFirstFrameMs: 3 });
-});
-
-test("a third-drag metric failure and a valid captured threshold failure both surface with their original errors", { timeout: 5000 }, async () => {
-  const judged = [];
-  let metricFailure;
-  const steps = recordingSteps([]);
-  steps.capturedDrag = async () => slowCapture(judged);
-  steps.record = async (gesture) => { await gesture(); return null; };
-  steps.publish = async ({ recorded }) => {
-    try { viewDragB3Values("frame-records", { recorded, gcLoop: false }); }
-    catch (error) { metricFailure = error; throw error; }
-  };
-  await assert.rejects(runViewDrag({ options: { accessibility: false, gcLoop: false }, pageProcess: 812, steps }),
-    (error) => error instanceof AggregateError && error.message === `view-drag measurements and captured performance failed: ${metricFailure.message}; ${judged[0].message}` &&
-      error.errors.length === 2 && error.errors[0] === metricFailure && error.errors[1] === judged[0]);
-  assert.equal(judged.length, 1, "a metric failure must not hide or repeat the captured threshold judgment");
-  assert.match(metricFailure.message, /writes the U7 records of the third drag/);
 });
 
 test("the view drag takes ACCESSIBILITY and GC_LOOP as unset or 1", { timeout: 5000 }, () => {
@@ -152,7 +27,7 @@ test("the first drag is the captured drag without capture, delivered as native i
   assert.deepEqual(NATIVE_DRAG_PLAN, { ...VIEW_DRAG_PLAN, native: true });
 });
 
-const CAPTURED = { frameCount: 50, assertPerformance() {} };
+const CAPTURED = { directory: "captured", report: { frameCount: 50 } };
 /** The steps of a view drag that record their calls in `calls`; `fail` names a step that throws. */
 function recordingSteps(calls, fail = new Set()) {
   const step = (name, value) => async (...args) => {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { frames, readFrame } from "./frame.mjs";
+import { frames } from "./frame.mjs";
 import { joinedFailure } from "./failure.mjs";
 import { currentEventOffsets, readEvents } from "./event-log.mjs";
 import { policyOfSetting, untilPolicy } from "./log-policy.mjs";
@@ -8,7 +8,7 @@ import { valueProof } from "./view-content.mjs";
 import { allViewRootProcessPids, measureProcessGroup, physicalFootprintBytes, processGroupReclaimEvidence,
   viewDocumentHistoryInventory, viewProcessGroup, viewProcessPids, viewProcessSurfaces,
   viewRootProcessPids } from "./view-process-footprint.mjs";
-import { readStills, requireNoLostStills } from "./stills.mjs";
+import { readStills } from "./stills.mjs";
 
 const PROCESS_REQUEST = "host.trace.view.process-request";
 const PROCESS_READY = "host.trace.view.process-ready";
@@ -207,180 +207,6 @@ export function viewContentFrameEvents(events, plugin, surface, startBracket) {
   });
 }
 
-/**
- * Maps every source ResizeObserver→rAF row to the first still requested at or after the end of its interval, without coalescing
- * source events: a still shows the window at a moment after its request, so it shows a frame that the page drew before it.
- */
-export function mapViewContentFramesToCapture(contentFrames, captured) {
-  assert.ok(Array.isArray(contentFrames), "view content frames must be an array");
-  assert.ok(Array.isArray(captured) && captured.length > 0, "view capture frames must be a nonempty array");
-  let priorSequence = -1;
-  let priorSourceLower = -Infinity;
-  let priorSourceUpper = -Infinity;
-  let priorCaptureTime = -Infinity;
-  for (const [index, frame] of captured.entries()) {
-    assert.ok(Number.isFinite(frame?.requested) && frame.requested >= 0,
-      `capture still ${index} has an invalid request time`);
-    assert.ok(frame.requested > priorCaptureTime, `capture still ${index} request time does not increase`);
-    priorCaptureTime = frame.requested;
-  }
-  return contentFrames.map((source, index) => {
-    assert.ok(Number.isSafeInteger(source?.sequence) && source.sequence >= 0 && source.sequence > priorSequence,
-      `source content frame ${index} sequence must be nonnegative and strictly increasing`);
-    const { lowerMs, upperMs } = source.timeRange ?? {};
-    assert.ok(Number.isFinite(lowerMs) && Number.isFinite(upperMs) && lowerMs <= upperMs
-      && lowerMs > priorSourceLower && upperMs > priorSourceUpper,
-    `source content frame ${index} time interval must be finite, ordered and strictly increasing`);
-    priorSequence = source.sequence;
-    priorSourceLower = lowerMs;
-    priorSourceUpper = upperMs;
-    const frameIndex = lowerMs > captured.at(-1).requested
-      ? -1 : captured.findIndex((frame) => frame.requested >= upperMs);
-    return { ...source, sourceSequence: source.sequence, frameIndex: frameIndex < 0 ? null : frameIndex };
-  });
-}
-
-/** Selects the one-shot source frame for a requested final viewport. */
-export function selectOneShotViewSourceFrame(contentFrames, { requestAtMs, nativePlacement }) {
-  assert.ok(Array.isArray(contentFrames), "one-shot source frames must be an array");
-  assert.ok(Number.isFinite(requestAtMs) && requestAtMs >= 0, "one-shot resize request has an invalid timestamp");
-  assert.ok(Number.isFinite(nativePlacement?.timeMs) && nativePlacement.timeMs >= 0,
-    "one-shot source selection requires the final placement timestamp");
-  assert.ok(typeof nativePlacement?.surface === "string" && nativePlacement.surface.length > 0,
-    "one-shot source selection requires the final placement surface");
-  assert.ok(nativePlacement.webKitViewport && Number.isInteger(nativePlacement.webKitViewport.width)
-    && nativePlacement.webKitViewport.width > 0 && Number.isInteger(nativePlacement.webKitViewport.height)
-    && nativePlacement.webKitViewport.height > 0, "one-shot source selection requires the projected viewport");
-
-  for (const candidate of contentFrames) {
-    const lowerMs = candidate?.timeRange?.lowerMs;
-    const upperMs = candidate?.timeRange?.upperMs;
-    assert.ok(Number.isFinite(lowerMs) && Number.isFinite(upperMs) && lowerMs <= upperMs,
-      "one-shot source frame has an invalid mapped time interval");
-  }
-  const candidates = contentFrames.map((frame) => ({
-    sequence: frame.sequence, timeRange: frame.timeRange, width: frame.width, height: frame.height,
-    requestRelation: frame.timeRange.lowerMs >= requestAtMs ? "post-request"
-      : frame.timeRange.upperMs < requestAtMs ? "pre-request" : "ambiguous",
-  }));
-  const frame = contentFrames.find((candidate) => candidate.timeRange.lowerMs >= requestAtMs
-    && candidate.width === nativePlacement.webKitViewport.width
-    && candidate.height === nativePlacement.webKitViewport.height);
-  return {
-    frame: frame ?? null,
-    candidates,
-    failure: frame ? null : {
-      requestAtMs,
-      target: {
-        surface: nativePlacement.surface,
-        placementAtMs: nativePlacement.timeMs,
-        framePt: nativePlacement.framePt,
-        webKitViewport: nativePlacement.webKitViewport,
-      },
-      candidates,
-    },
-  };
-}
-
-/** Selects the final applied root placement before an exact recorded display time. */
-export function rootNativePlacementBeforeCapture(events, surface, displayedAtMs, { afterMs } = {}) {
-  assert.ok(Number.isFinite(displayedAtMs) && displayedAtMs >= 0,
-    "root placement capture bound has an invalid display timestamp");
-  return rootNativePlacementInWindow(events, surface, { lowerMs: displayedAtMs, upperMs: displayedAtMs }, { afterMs });
-}
-
-function rootNativePlacementInWindow(events, surface, sourceTimeRange, { baseline, afterMs } = {}) {
-  assert.ok(Array.isArray(events), "root native placement events must be an array");
-  assert.ok(typeof surface === "string" && surface.length > 0, "root native placement requires a surface");
-  const { lowerMs, upperMs } = sourceTimeRange ?? {};
-  assert.ok(Number.isFinite(lowerMs) && Number.isFinite(upperMs) && lowerMs >= 0 && lowerMs <= upperMs,
-    "root placement boundary has an invalid monotonic time interval");
-  if (afterMs !== undefined) {
-    assert.ok(Number.isFinite(afterMs) && afterMs >= 0, "root placement request has an invalid timestamp");
-  }
-
-  const rows = [];
-  if (baseline !== undefined) {
-    assert.equal(baseline.surface, surface, "root native placement baseline belongs to another surface");
-    assert.ok(Number.isFinite(baseline.timeMs) && baseline.timeMs >= 0,
-      "root native placement baseline has an invalid timestamp");
-    assert.ok(typeof baseline.monoNs === "string" && /^\d+$/u.test(baseline.monoNs),
-      "root native placement baseline has no raw mono_ns clock");
-    assert.equal(Number(BigInt(baseline.monoNs)) / 1_000_000, baseline.timeMs,
-      "root native placement baseline time does not match mono_ns");
-    assert.equal(baseline.visible, true, "root native placement baseline is not visible");
-    rows.push({
-      phase: "settled",
-      surface,
-      visible: true,
-      timeMs: baseline.timeMs,
-      framePt: nativeFrameAt(baseline.framePt, "root native placement baseline"),
-      placement: baseline,
-    });
-  }
-
-  for (const event of events) {
-    if (event?.event !== "host.trace.surface" || event.fields?.surface !== surface) continue;
-    const monoNs = event.mono_ns;
-    assert.ok(Number.isInteger(monoNs) && monoNs > 0,
-      `host.trace.surface for ${surface} has invalid mono_ns ${JSON.stringify(monoNs)}`);
-    const fields = event.fields;
-    const row = {
-      phase: fields.phase,
-      surface,
-      visible: fields.visible,
-      timeMs: monoNs / 1_000_000,
-      placement: event,
-    };
-    if (fields.phase === "placed") {
-      assert.equal(typeof fields.visible, "boolean",
-        `host.trace.surface placement for ${surface} has no visibility state`);
-      row.framePt = nativeFrameAt({ x: fields.x, y: fields.y, width: fields.w, height: fields.h },
-        `host.trace.surface placement for ${surface}`);
-    } else if (!["created", "destroyed"].includes(fields.phase)) {
-      assert.fail(`host.trace.surface for ${surface} has unknown phase ${JSON.stringify(fields.phase)}`);
-    }
-    rows.push(row);
-  }
-
-  const ambiguous = rows.filter((row) => row.timeMs >= lowerMs && row.timeMs <= upperMs);
-  if (ambiguous.length > 0) {
-    assert.fail(`native placement for ${surface} overlaps source-frame interval [${lowerMs}, ${upperMs}] ms`);
-  }
-  const eligible = rows.filter((row) => row.timeMs < lowerMs
-    && (afterMs === undefined || row.timeMs > afterMs));
-  if (eligible.length === 0) {
-    if (afterMs !== undefined) {
-      assert.fail(`no applied native placement after ${afterMs} ms and before source-frame interval [${lowerMs}, ${upperMs}] ms for ${surface}`);
-    }
-    assert.fail(`no native placement before source-frame interval [${lowerMs}, ${upperMs}] ms for ${surface}`);
-  }
-  eligible.sort((left, right) => left.timeMs - right.timeMs
-    || placementSequence(left.placement) - placementSequence(right.placement));
-  const latest = eligible.at(-1);
-  const tied = eligible.filter((row) => row.timeMs === latest.timeMs);
-  const state = (row) => JSON.stringify({ phase: row.phase, surface: row.surface,
-    visible: row.visible, framePt: row.framePt });
-  if (tied.some((row) => state(row) !== state(latest))) {
-    assert.fail(`ambiguous native placement state at ${latest.timeMs} ms for ${surface}`);
-  }
-  assert.ok(latest.phase === "placed" || latest.phase === "settled",
-    `latest native placement state for ${surface} is ${latest.phase}, not placed or settled`);
-  assert.equal(latest.visible, true, `latest native placement for ${surface} is not visible`);
-  if (afterMs !== undefined) {
-    assert.ok(latest.timeMs > afterMs,
-      `latest native placement for ${surface} is not after request ${afterMs} ms`);
-  }
-  const webKitViewport = {
-    width: Math.trunc(latest.framePt.width),
-    height: Math.trunc(latest.framePt.height),
-  };
-  assert.ok(webKitViewport.width > 0 && webKitViewport.height > 0,
-    `root native placement for ${surface} projects to a nonpositive WebKit viewport`);
-  return { surface, timeMs: latest.timeMs, phase: latest.phase, visible: latest.visible,
-    framePt: latest.framePt, webKitViewport, placement: latest.placement };
-}
-
 function nativeFrameAt(frame, label) {
   assert.ok(frame !== null && typeof frame === "object" && !Array.isArray(frame), `${label} has no frame`);
   const { x, y, width, height } = frame;
@@ -394,33 +220,6 @@ function nativeFrameAt(frame, label) {
 function placementSequence(event) {
   if (event?.phase === "settled") return -1;
   return Number.isSafeInteger(event?.seq) ? event.seq : 0;
-}
-
-/** Keeps capture-backed events and rejects any source event during the gesture that recording missed. */
-export function requireViewContentFrameCoverage(mappedFrames, { gestureStartedAtMs, gestureEndedAtMs }) {
-  assert.ok(Number.isFinite(gestureStartedAtMs) && Number.isFinite(gestureEndedAtMs)
-    && gestureStartedAtMs <= gestureEndedAtMs, "view gesture source interval is invalid");
-  assert.ok(Array.isArray(mappedFrames), "mapped view content frames must be an array");
-  const possiblyInGesture = [];
-  const definitelyBefore = [];
-  for (const [index, frame] of mappedFrames.entries()) {
-    const lowerMs = frame?.timeRange?.lowerMs;
-    const upperMs = frame?.timeRange?.upperMs;
-    assert.ok(Number.isFinite(lowerMs) && Number.isFinite(upperMs) && lowerMs <= upperMs,
-      `source content frame ${frame?.sourceSequence} has an invalid mapped time interval`);
-    if (lowerMs <= gestureEndedAtMs && upperMs >= gestureStartedAtMs) {
-      possiblyInGesture.push(frame);
-    } else if (upperMs < gestureStartedAtMs) {
-      definitelyBefore.push(frame);
-    }
-    if (lowerMs <= gestureEndedAtMs && upperMs >= gestureStartedAtMs && frame.frameIndex === null) {
-      assert.fail(`source content frame ${frame.sourceSequence} inside the gesture has no capture frame`);
-    }
-  }
-  assert.ok(possiblyInGesture.length > 0, "source frames do not cover any possible part of the recorded gesture");
-  // Convergence reads every frame after the gesture, because the final viewport can arrive in a later frame than the first.
-  const left = new Set(definitelyBefore.slice(0, -1));
-  return mappedFrames.filter((frame) => !left.has(frame));
 }
 
 // The mapping of document times to the native clock is as wide as the round trip that read the document clock, and the start
@@ -622,7 +421,8 @@ export async function waitForViewReadiness(s, surface, descriptor) {
  * The first recorded still that shows the content of a view: the first still requested at or after `displayed`, the display
  * time of the first presentation after the content value was observed. A still shows the window at a moment after its request,
  * so it shows that presentation; that time is no earlier than the first frame that showed the content, so a first-display
- * criterion measured from it is at least as strict (docs/features.md F696-4). `captured` are the frames of readFrame.
+ * criterion measured from it is at least as strict (docs/features.md F696-4). `captured` are the written still rows of
+ * readStills: the content frame is chosen by the request times of the stills, not by their pixels.
  */
 export function recordedContentFrame(captured, displayed, proof) {
   assert.ok(Array.isArray(captured) && captured.length > 0, "the content frame requires recorded frames");
@@ -675,10 +475,7 @@ export async function openRecordedView(t, s, { card, plugin, placement, params, 
     const { displayed } = await s.presented();
     capture = await recording.stop({ after: displayed + (captureObservationWindowMs ?? 0) });
     stopped = true;
-    requireNoLostStills(readStills(capture.stills), `the ${plugin} first content`);
     const paths = frames(capture.frames);
-    assert.equal(paths.length, capture.count, `${plugin} first-content recording omitted captured frames`);
-    assert.ok(paths.length > 0, `${plugin} first-content recording contains no frames`);
     const events = readEvents(s.app.configDir, offsets).events;
     const starts = processStartSamples(events, [tab], plugin);
     assert.equal(starts.length, 1, `${plugin} view ${tab} has no unique process request event`);
@@ -702,7 +499,8 @@ export async function openRecordedView(t, s, { card, plugin, placement, params, 
       verifyContent: async () => {
         if (contentProof) return contentProof;
         try {
-          contentProof = { contentFrame: recordedContentFrame(paths.map(readFrame), displayed, proof) };
+          const written = readStills(capture.stills).filter((row) => row.outcome === "written");
+          contentProof = { contentFrame: recordedContentFrame(written, displayed, proof) };
           return contentProof;
         } catch (error) {
           t.diagnostic(`offline view content frame selection failed; recording retained at ${capture.frames}`);

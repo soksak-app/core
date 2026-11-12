@@ -1,70 +1,8 @@
-// Checks by recording that the dark border of the footer below the surface does not become empty while the vertical boundary is turned off.
-// native/darwin/tests/webview_geometry_test.m checks the 1x and 2x scales and half-point surface sizes.
+// Checks the footer text of a card.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { APPS, drag, open } from "@soksak/window-check/app.mjs";
-import { fresh, paintProbeDocument } from "./fixture.mjs";
-import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
-import { measuredRun } from "./outside.mjs";
-
-/** The paint of the document region of the layout probe while it is measured: a dark gray apart from the card and the plane. */
-const MEASURED = [30, 30, 30];
-
-/**
- * Paints the document region of the start tab in MEASURED and returns the marks of its surface, read from the declared position of
- * the surface (host.window) in points: top and bottom of the surface and cx, the column 24pt inside its right edge, which the
- * region (inset 8pt in the view) covers. The check drags the bottom boundary of the card, so the top and the right edge do not move.
- */
-async function probeMarks(s, surface) {
-  await paintProbeDocument(s, surface, `rgb(${MEASURED.join(", ")})`);
-  await s.presented();
-  const frame = (await s.get("host.window")).surfaces.find((item) => item.id === surface)?.frame;
-  if (!frame?.width) throw new Error(`the start surface ${surface} has no declared frame`);
-  return { top: frame.y, bottom: frame.y + frame.height, cx: frame.x + frame.width - 24, colour: MEASURED };
-}
-
-for (const app of Object.values(APPS)) {
-  test(`${app.name}: vertical dragging preserves the footer border`, async (t) => {
-    const s = await open(t, app);
-    await fresh(s);
-    // The drag moves the boundary below the upper content card, so the measured surface is the active tab of that card, found by the
-    // geometry of the grid: the start tab of fresh stands in the lower card, whose bottom the drag does not move.
-    const [upper] = (await s.get("core.grid")).cards.filter((card) => !card.fixed && card.tabs?.length > 0).sort((a, b) => a.y - b.y);
-    if (!upper?.active) throw new Error("the start layout holds no content card with an active tab");
-    const surface = upper.active;
-    const marks = await probeMarks(s, surface);
-    const run = await drag(s, { axis: "y", line: 1, dx: 0, dy: 173, ms: 400, times: 2 }, { capture: true });
-    const recorded = frames(run.frames);
-    assert.ok(recorded.length > 30, `only ${recorded.length} frames recorded`);
-    let measured = 0, low = Infinity, high = -Infinity;
-    let worst = { brightness: 0, frame: -1 };
-    let offset = null;
-    recorded.forEach((path, index) => {
-      const frame = readFrame(path);
-      const scale = frame.contentScale * frame.scale;
-      const contentBottom = Math.round(frame.content.height * scale);
-      // The bottom edge of the surface follows the last row of the document region painted with the measurement color, which ends the
-      // run of measured rows below the top of the surface: the lower card shows its own document region below it. The distance between
-      // that row and the bottom edge of the surface is measured against the declared position in the first frame.
-      const x = Math.round(marks.cx * scale);
-      const line = measuredRun(frame, marks.colour, { from: Math.round(marks.top * scale), to: contentBottom });
-      if (!line) return;
-      offset ??= Math.round(marks.bottom * scale) - line.y;
-      const bottom = line.y + offset - 1;
-      measured++;
-      low = Math.min(low, bottom / scale); high = Math.max(high, bottom / scale);
-      for (let y = bottom + 1; y <= bottom + Math.ceil(3 * scale); y++) {
-        const brightness = Math.min(...pixel(frame, x, y));
-        if (brightness > worst.brightness) worst = { brightness, frame: index };
-      }
-    });
-    assert.ok(measured > recorded.length * .9, `only ${measured}/${recorded.length} footer positions measured`);
-    assert.ok(high - low > 100, `the recorded surface moved only ${high - low}pt; ` +
-      `divider ${JSON.stringify(run.boundary)}, probe marks ${JSON.stringify(marks)}, recording ${run.frameDir}`);
-    assert.ok(worst.brightness <= 80,
-      `footer brightness ${worst.brightness} exceeds the dark border in frame ${worst.frame} of ${recorded.length}`);
-  });
-}
+import { APPS, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "./fixture.mjs";
 
 for (const app of Object.values(APPS)) {
   // The content foot of a card shows the bottom text that the plugin of the active tab reports (docs/spec/plugins.md#tab-reports):

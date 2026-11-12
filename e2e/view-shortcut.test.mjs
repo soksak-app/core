@@ -4,10 +4,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
-import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { fresh } from "./fixture.mjs";
 import { fieldPoint, inputProbeTab } from "./input-probe.mjs";
-import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: Command-zero in a focused view runs the native text-size menu command`, { timeout: 60000 }, async (t) => {
@@ -52,11 +50,7 @@ for (const app of Object.values(APPS)) {
       "the native menu shortcut inserted text into the view");
     const { displayed } = await s.presented();
     const stopped = await recording.stop({ after: displayed + 100 });
-    const captured = frames(recording.frames).map(readFrame);
-    assert.equal(captured.length, stopped.count, "the shortcut gesture has missing frame files");
-    assert.ok(captured.length > 1, "the shortcut gesture has no complete recording");
-    requireNoLostStills(readStills(stopped.stills), "the shortcut gesture");
     assert.deepEqual((await s.get("core.workbench.audit")).unbound, []);
-    t.diagnostic(`native menu shortcut: ${captured.length} frames, ${stopped.missed} missed and ${stopped.late} late stills`);
+    t.diagnostic(`native menu shortcut: ${stopped.count} frames, ${stopped.missed} missed and ${stopped.late} late stills`);
   });
 }

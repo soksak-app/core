@@ -1,8 +1,8 @@
-// Checks the measures of the window check of the four sides against grids, sidebar reports and images whose places are known
+// Checks the measures of the window check of the four sides against grids and sidebar reports whose places are known
 // (docs/spec/external-sidebars.md#verification).
 import assert from "node:assert/strict";
 import test from "node:test";
-import { SIDES, borderMisses, orders, placeMismatches, reportMismatches, thicknesses } from "../window-sidebar-places.mjs";
+import { SIDES, orders, placeMismatches, reportMismatches, thicknesses } from "../window-sidebar-places.mjs";
 
 const card = (id, x, y, w, h) => ({ id, x, y, w, h, tabs: [] });
 const content = card("main", 196, 196, 608, 408);
@@ -54,33 +54,6 @@ test("a sidebar whose thickness changed is named with both thicknesses", () => {
   assert.deepEqual(placeMismatches(topFirst, ["top", "left", "right", "bottom"], SIDES, thick), []);
   const thinner = grid(card("left", 0, 0, 150, 800), card("right", 810, 0, 190, 800), card("top", 156, 0, 648, 190), card("bottom", 156, 610, 648, 190));
   assert.deepEqual(placeMismatches(thinner, SIDES, SIDES, thick), ["left is 150 thick on x, expected 190"]);
-});
-
-// The image of a window whose content scale is 2: the border color on the four border lines of each card of the grid, the
-// background elsewhere.
-const BORDER = [43, 46, 61];
-function image(source, skip = () => false) {
-  const scale = 2;
-  const lines = source.cards.filter((item) => SIDES.includes(item.id)).map((item) => ({
-    item, x0: source.plane.x + item.x, x1: source.plane.x + item.x + item.w - 1, y0: source.plane.y + item.y, y1: source.plane.y + item.y + item.h - 1,
-  }));
-  return {
-    width: (source.plane.x + source.width) * scale, height: (source.plane.y + source.height) * scale,
-    pixel(px, py) {
-      const x = Math.floor(px / scale), y = Math.floor(py / scale);
-      const on = lines.some(({ item, x0, x1, y0, y1 }) =>
-        (((x === x0 && !skip(item.id, "left")) || (x === x1 && !skip(item.id, "right"))) && y >= y0 && y <= y1) ||
-        (((y === y0 && !skip(item.id, "top")) || (y === y1 && !skip(item.id, "bottom"))) && x >= x0 && x <= x1));
-      return on ? BORDER : [20, 22, 30];
-    },
-  };
-}
-
-test("the border lines of each sidebar card are found in the image, and a missing line is named", () => {
-  const sidebars = ordered.cards.filter((item) => SIDES.includes(item.id));
-  assert.deepEqual(borderMisses(image(ordered), 2, ordered, sidebars, BORDER), []);
-  assert.deepEqual(borderMisses(image(ordered, (id, line) => id === "top" && line === "bottom"), 2, ordered, sidebars, BORDER),
-    ["top has no bottom border line at y 229"]);
 });
 
 // The report of a window sidebar inside its card, as both workbenches report it.

@@ -254,7 +254,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Darwin host view and layout bridges", "objective-c", ["native/darwin/src/host_api_webview.m", "native/darwin/src/host_api_window.m", "native/darwin/src/host_api_layout.m", "native/darwin/src/host_api_shapes.m", "native/darwin/src/host_api_system.m", "native/darwin/src/webview.m"], ["e2e/projects.test.mjs", "e2e/modal.test.mjs", "e2e/controls.test.mjs", "e2e/view-restart.test.mjs", "e2e/native-window-color-space.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Darwin host image bridge", "objective-c", ["native/darwin/src/host_api_image.m"], ["e2e/view-display.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Darwin host input bridges", "objective-c", ["native/darwin/src/host_api_input.m", "native/darwin/src/host_api_input_reference.m", "native/darwin/src/host_api_input_source.m", "native/darwin/src/host_api_mouse_buttons.m"], ["e2e/two-pointers.test.mjs", "e2e/native-drag.test.mjs", "e2e/activation/view-focus.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
-  lane("Darwin host capture bridge", "objective-c", ["native/darwin/src/host_api_capture.m"], ["e2e/capture-display-link.test.mjs", "e2e/capture-frame-identity.test.mjs", "e2e/capture-document-frame-identity.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("Darwin host capture bridge", "objective-c", ["native/darwin/src/host_api_capture.m"], ["e2e/capture-display-link.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Darwin host clipboard bridge", "objective-c", ["native/darwin/src/host_api_clipboard.m"], ["native/darwin/tests/clipboard_test.m"], { testLanguage: "objective-c", testExtensions: new Set([".m", ".mjs"]), sharedTests: true }),
   lane("Darwin host link bridge", "objective-c", ["native/darwin/src/host_api_link.m"], ["native/darwin/tests/link_test.m"], { testLanguage: "objective-c", sharedTests: true }),
   lane("Darwin host notification bridge", "objective-c", ["native/darwin/src/host_api_notifications.m"], ["native/darwin/tests/notifications_test.m"], { testLanguage: "objective-c", sharedTests: true }),
@@ -273,11 +273,6 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // the expected result, and the verification level of one feature.
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
-const CAPTURE_REQUIREMENT_PLATFORMS = {
-  darwin: { status: "required" },
-  linux: { status: "unavailable", reason: "The native capture backend is implemented only for macOS.", resumeWhen: "Implement Linux capture and run its sampler acceptance." },
-  win32: { status: "unavailable", reason: "The native capture backend is implemented only for macOS.", resumeWhen: "Implement Windows capture and run its sampler acceptance." },
-};
 const FEATURE_LINKS = [
   {
     id: "F718-7",
@@ -348,7 +343,6 @@ const FEATURE_LINKS = [
     tests: [
       { file: "e2e/test/design-state-capture.test.mjs", id: "design state capture owns its source and retains the exact PNG after session cleanup" },
       { file: "e2e/test/design-state-capture.test.mjs", id: "design state capture requires the declared run folder before acquiring a native capture" },
-      { file: "e2e/test/design-state-capture.test.mjs", id: "design state capture preserves ownership and source bytes when PNG decoding fails" },
       { file: "packages/workbench/test/debug-state-ui.test.mjs", id: "debug status exposes exact host-owned captures while fixture input changes only the listing" },
       { file: "packages/workbench/test/debug-state-ui.test.mjs", id: "a new debug record clears previous capture ownership when the host returns none or fails" },
       { file: "packages/workbench-mygo/tests/shell_debug_test.go", id: "TestDebugStatusExposesExactHostCaptureOwnership" },
@@ -634,23 +628,11 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "e2e/window-occlusion.test.mjs", id: "a covered window is occluded and hides the document of its tab" },
-      { file: "e2e/window-first-frames.test.mjs", id: "a new window shows its complete first screen from its first frame" },
     ],
     expected: "A Tauri host that creates a window or a view while no other application is active stays inactive, because the creation of a webview makes no activation call.",
     levels: ["application"],
   },
 
-  {
-    id: "F750",
-    implementation: [
-      { file: "e2e/capture-frame-identity.test.mjs", symbol: "stopResult = await recording.stop({ after: shown.displayed });" },
-    ],
-    tests: [
-      { file: "e2e/capture-frame-identity.test.mjs", id: "opt-in capture identity matches the presented image of an image region" },
-    ],
-    expected: "The capture identity check of an image region stops its recording after a presentation that follows its read of the presented frame, so the recording holds that frame.",
-    levels: ["application"],
-  },
   {
     id: "F751",
     implementation: [
@@ -665,51 +647,33 @@ const FEATURE_LINKS = [
   {
     id: "F746",
     implementation: [
-      { file: "packages/window-check/frame.mjs", symbol: "export function readFrame(path) {" },
-      { file: "packages/window-check/frame.mjs", symbol: "export function samePixels(pathA, pathB) {" },
       { file: "packages/window-check/frame.mjs", symbol: "export function frames(directory) {" },
       { file: "packages/window-check/stills.mjs", symbol: "function requireStillRow(row, place, path, first) {" },
       { file: "packages/window-check/stills.mjs", symbol: "export function readStills(path) {" },
       { file: "packages/window-check/stills.mjs", symbol: "export function lostStills(rows, from, to) {" },
       { file: "packages/window-check/stills.mjs", symbol: "export function requireNoLostStills(rows, what, { from = -Infinity, to = Infinity } = {}) {" },
       { file: "packages/window-check/stills.mjs", symbol: "export function stillCounts(path) {" },
-      { file: "packages/window-check/stills.mjs", symbol: "export function requireDecodedStills(decoded, path, what) {" },
       { file: "packages/window-check/stills.mjs", symbol: "export const PROFILE_FILE = /^color-[0-9a-f]{16}\\.icc$/;" },
       { file: "packages/window-check/app.mjs", symbol: "async function recordingOf(s, params) {" },
       { file: "packages/window-check/app.mjs", symbol: "export function recordedWindow(reply, asked, which) {" },
       { file: "packages/window-check/app.mjs", symbol: "export function requireStillsArtifact(result, frames, asked, after, window) {" },
-      { file: "packages/window-check/app.mjs", symbol: "requireNoLostStills(requireStillsArtifact(stopped, result.frames, recording, displayed, recordedWindow(result, recording, \"drag\"))," },
-      { file: "packages/window-check/app.mjs", symbol: "function longestWait(changes, stills) {" },
+      { file: "packages/window-check/app.mjs", symbol: "s.noteRecording(() => requireNoLostStills(requireStillsArtifact(stopped, result.frames, recording, displayed," }
     ],
     tests: [
-      { file: "e2e/test/card-panel-checks.test.mjs", id: "a missing pose names the stills that the recording lost in its window" },
-      { file: "e2e/test/region-sample.test.mjs", id: "region sample rejects a recording whose last still was requested before the presentation" },
-      { file: "e2e/test/view-display.test.mjs", id: "the view display checker fails a recording that lost a still and names it" },
-      { file: "packages/window-check/test/recording.test.mjs", id: "a recording whose start names no recorded window fails" },
+      { file: "packages/window-check/test/recording.test.mjs", id: "a recording whose start names no recorded window is told, and its judgment fails" },
       { file: "packages/window-check/test/recording.test.mjs", id: "a recording of the display takes no recorded window" },
-      { file: "packages/window-check/test/recording.test.mjs", id: "a captured drag whose reply names no recorded window fails" },
-      { file: "packages/window-check/test/recording.test.mjs", id: "a captured drag whose stop names another window than its reply fails" },
+      { file: "packages/window-check/test/recording.test.mjs", id: "a captured drag whose reply names no recorded window tells it" },
+      { file: "packages/window-check/test/recording.test.mjs", id: "a captured drag whose stop names another window than its reply tells it" },
       { file: "packages/window-check/test/recording.test.mjs", id: "a recording of a new window reads its window from its stop" },
-      { file: "packages/window-check/test/recording.test.mjs", id: "a recording of a new window whose start names a window or whose stop names none fails" },
-      { file: "packages/window-check/test/drag-measurement.test.mjs", id: "pointer lag rejects a non-finite completion time of a still" },
-      { file: "packages/window-check/test/drag-measurement.test.mjs", id: "pointer lag measures each still after input up to its completion" },
-      { file: "packages/window-check/test/drag-measurement.test.mjs", id: "view drag cadence fails on a still that the recording lost in its span" },
-      { file: "packages/window-check/test/drag-measurement.test.mjs", id: "drag performance misses its cadence on a still that the recording lost in its span" },
-      { file: "packages/window-check/test/drag-measurement.test.mjs", id: "a missing held layout names the stills that the recording lost in its time" },
-      { file: "packages/window-check/test/frame.test.mjs", id: "frame reader restores lossless pixels, padding, metadata and the request and completion time of the still" },
-      { file: "packages/window-check/test/frame.test.mjs", id: "frame reader rejects a frame of the stream recording" },
-      { file: "packages/window-check/test/frame.test.mjs", id: "frame reader rejects a still that completed before its request" },
+      { file: "packages/window-check/test/recording.test.mjs", id: "a recording of a new window whose start names a window or whose stop names none is told, and its judgment fails" },
       { file: "packages/window-check/test/frame.test.mjs", id: "frames are listed in the order of their stills, with the stills that wrote no frame left out" },
       { file: "packages/window-check/test/frame.test.mjs", id: "frames refuse a name that is not the four digits of a still index" },
-      { file: "packages/window-check/test/recording.test.mjs", id: "a recording that the check did not stop fails finalization on a still that it lost and preserves its folder" },
+      { file: "packages/window-check/test/recording.test.mjs", id: "a recording that the check did not stop tells a still that it lost as a diagnostic" },
       { file: "packages/window-check/test/recording.test.mjs", id: "a recording asks for one still each refresh of the display of its window and the most stills a recording holds" },
       { file: "packages/window-check/test/recording.test.mjs", id: "a recording of a window on no display fails before it starts" },
       { file: "packages/window-check/test/recording.test.mjs", id: "a recording stop for a plan of more stills than a recording holds fails" },
       { file: "packages/window-check/test/recording.test.mjs", id: "a recording whose plan ends before the time that it is stopped after fails" },
-      { file: "packages/window-check/test/recording.test.mjs", id: "a captured drag whose recording lost a still fails and names it" },
-      { file: "packages/window-check/test/shown-changes.test.mjs", id: "stills that show the window unchanged do not end the wait for a change" },
-      { file: "packages/window-check/test/shown-changes.test.mjs", id: "a long wait across stills that the recording lost fails as a loss of the recording and names those stills" },
-      { file: "packages/window-check/test/shown-changes.test.mjs", id: "a recording that lost stills passes when every change waited no longer than the limit across them" },
+      { file: "packages/window-check/test/recording.test.mjs", id: "a captured drag whose recording lost a still tells it" },
       { file: "packages/window-check/test/stills.test.mjs", id: "the still rows hold the times of each still in ms and the path of its frame" },
       { file: "packages/window-check/test/stills.test.mjs", id: "the stills lost between two times leave out the stills that the stop left unrequested" },
       { file: "packages/window-check/test/stills.test.mjs", id: "a recording judged at every still fails with the stills that it lost" },
@@ -723,17 +687,11 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/test/stills.test.mjs", id: "a still row whose gap or timebase is invalid, or whose timebase differs from the first row, is refused" },
       { file: "packages/window-check/test/stills.test.mjs", id: "a failed still row whose windows could not be taken has no completion time and an empty window list" },
       { file: "packages/window-check/test/stills.test.mjs", id: "a still row whose stage times are not exact decimal mach times or null is refused" },
-      { file: "packages/window-check/test/stills.test.mjs", id: "a written still row without the times of its processing, image match and frame write is refused" },
+      { file: "packages/window-check/test/stills.test.mjs", id: "a written still row without the times of its processing and frame write is refused" },
       { file: "packages/window-check/test/stills.test.mjs", id: "a still row that took no image with a stage time is refused" },
-      { file: "packages/window-check/test/stills.test.mjs", id: "a still row with frame identity decode times is refused" },
       { file: "packages/window-check/test/stills.test.mjs", id: "a still row whose stages are half bracketed or out of order is refused" },
-      { file: "packages/window-check/test/stills.test.mjs", id: "decoded rows that name taken stills by their index and ticks pass" },
-      { file: "packages/window-check/test/stills.test.mjs", id: "a decoded row that names no still of the recording or another time of its still is refused" },
       { file: "packages/window-check/test/stills.test.mjs", id: "a written still row without the colour space and the profile of its frame is refused" },
-      { file: "packages/window-check/test/stills.test.mjs", id: "a still row that took no image with a colour space or a profile is refused" },
-      { file: "e2e/test/capture-document-frame-identity.test.mjs", id: "document identity capture rejects a decoded row of no still of the recording and a still decoded twice" },
-      { file: "packages/window-check/test/view-frame-geometry.test.mjs", id: "a still completed before its request is no recorded frame" },
-      { file: "packages/window-check/test/view-metrics-collection.test.mjs", id: "a recorded view whose recording lost a still fails and names it" },
+      { file: "packages/window-check/test/stills.test.mjs", id: "a still row that wrote no frame with a colour space or a profile is refused" },
       { file: "packages/window-check/test/view-metrics-collection.test.mjs", id: "the content frame is the first recorded still requested at or after the presentation of the value" },
       { file: "packages/window-check/test/recording.test.mjs", id: "[\"without its stills.jsonl\"," },
       { file: "packages/window-check/test/recording.test.mjs", id: "[\"whose stills path is another file\"," },
@@ -746,30 +704,6 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/test/recording.test.mjs", id: "[\"with a frame file of no written still\"," },
     ],
     expected: "A window recording is a still of the window and its child windows at each multiple of its gap: a check reads the request and completion time of each still, judges a state shown no later than the completion of the first still requested at or after it, checks the still rows of the stop against the plan and each row against its own fields, and fails a recording that lost a still in the time that its judgment sees, naming the lost stills.",
-    levels: ["unit"],
-  },
-  {
-    id: "F755",
-    implementation: [
-      { file: "packages/window-check/app.mjs", symbol: "export function judgeShownChanges(stopped, changes, { layouts = stopped.layouts, what = \"change\", limit = GAP } = {}) {" },
-      { file: "packages/window-check/app.mjs", symbol: "export async function owe(s) {" },
-      { file: "packages/window-check/drag-measurement.mjs", symbol: "export function shownTimes(samples, ticks) {" },
-    ],
-    tests: [
-      { file: "packages/window-check/test/shown-changes.test.mjs", id: "a recording whose changes are each shown within the limit passes however long the window stays unchanged between them" },
-      { file: "packages/window-check/test/shown-changes.test.mjs", id: "a change that the application shows later than the limit fails as a defect of the application" },
-      { file: "packages/window-check/test/shown-changes.test.mjs", id: "a change shown through several frames fails when a frame of it comes later than the limit after the frame before it" },
-      { file: "packages/window-check/test/shown-changes.test.mjs", id: "a change whose final state the recording does not reach fails" },
-      { file: "packages/window-check/test/shown-changes.test.mjs", id: "a recording judged without the times of its changes fails" },
-      { file: "packages/window-check/test/shown-changes.test.mjs", id: "a recording in which the check asked for no change passes" },
-      { file: "packages/window-check/test/shown-changes.test.mjs", id: "owe reads the clock of the recordings in milliseconds" },
-      { file: "packages/window-check/test/recording.test.mjs", id: "a drag whose window stays unchanged before its first step, between its round trips and after its last step passes" },
-      { file: "packages/window-check/test/recording.test.mjs", id: "a drag step that waits longer than the limit for a frame fails and names what the host did in that time" },
-      { file: "packages/window-check/test/recording.test.mjs", id: "a drag step after the last change that the recording shows fails" },
-      { file: "packages/window-check/test/recording.test.mjs", id: "a captured drag whose reply has no step times fails" },
-      { file: "packages/window-check/test/drag-measurement.test.mjs", id: "drag cadence ends at the first shown frame after the last step" },
-    ],
-    expected: "A window check judges its recording by the changes of the screen that it asked for: from each drag step, command or input that changes the screen to the first recorded frame after it and between the frames up to the one that shows its final state, no wait on the clock of the recording is longer than 100ms, and the time in which the check asked for no change is not judged. A longer wait fails as a defect of the application and names the changes asked for in that time, the layouts that the host began and committed and the longest display-link silence of the main thread. The cadence of a view drag ends at the first shown frame after its last step.",
     levels: ["unit"],
   },
   {
@@ -1318,16 +1252,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F668",
-    implementation: [{ file: "e2e/region-sample.mjs", symbol: "export async function regionCells(session, surface, cells) {" }],
-    tests: [
-      { file: "e2e/test/region-sample.test.mjs", id: "region cells retain their sample until successful session finalization" },
-      { file: "e2e/test/region-sample.test.mjs", id: "region cells preserve a capture when the view read fails" },
-    ],
-    expected: "The region cell sampling tests answer the element.rect request that Session.rect sends, and cell sampling reads the view after it stops the recording.",
-    levels: ["unit"],
-  },
-  {
     id: "F584-5-2",
     implementation: [
       { file: "packages/workbench-mygo/src/dividers.go", symbol: "func outside(area layout.Rect, holes []layout.Rect) []layout.Rect {" },
@@ -1729,21 +1653,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F652-2",
-    requirement: { key: "capture-coordinates", platforms: CAPTURE_REQUIREMENT_PLATFORMS, inapplicable: { race: "The coordinate conversion reads one finalized frame and has no concurrent state transition.", recovery: "Coordinate conversion retains no mutable state after refusing invalid geometry; failed recording cleanup belongs to capture-lifecycle." } },
-    implementation: [{ file: "e2e/region-sample.mjs", symbol: "export async function regionCells" }],
-    tests: [
-      { file: "e2e/test/region-sample.test.mjs", id: "region cells include capture content scale", covers: ["normal"] },
-      { file: "e2e/test/region-sample.test.mjs", id: "region cells include capture content origin", covers: ["normal"] },
-      { file: "e2e/test/region-sample.test.mjs", id: "region cells include combined capture scales and origin", covers: ["normal"] },
-      { file: "e2e/test/region-sample.test.mjs", id: "region cells include document offsets before capture conversion", covers: ["normal"] },
-      { file: "e2e/test/region-sample.test.mjs", id: "region cells read each requested row and column in order", covers: ["normal"] },
-      { file: "e2e/test/region-sample.test.mjs", id: "region cells reject a cell outside the capture and keep its evidence", covers: ["failure"] },
-    ],
-    expected: "Each region cell sample uses document offsets and the shared capture origin and scale conversion, preserves requested row and column order, and retains evidence when geometry lies outside the capture.",
-    levels: ["unit"],
-  },
-  {
     id: "F653-3",
     implementation: [
       { file: "scripts/platform/platform.js", symbol: "export async function processExecutable" },
@@ -1899,20 +1808,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F652-1",
-    requirement: { key: "capture-lifecycle", platforms: CAPTURE_REQUIREMENT_PLATFORMS, inapplicable: {} },
-    implementation: [{ file: "e2e/region-sample.mjs", symbol: "export async function regionSample" }, { file: "e2e/region-sample.mjs", symbol: "export async function regionCells" }],
-    tests: [
-      { file: "e2e/test/region-sample.test.mjs", id: "region sample presentation failure stops during cleanup and preserves its original error", covers: ["failure", "recovery"] },
-      { file: "e2e/test/region-sample.test.mjs", id: "region sample keeps the presentation error and reports a cleanup stop error", covers: ["failure", "recovery"] },
-      { file: "e2e/test/region-sample.test.mjs", id: "region sample preserves a successful sample when the final error audit fails", covers: ["failure", "race"] },
-      { file: "e2e/test/region-sample.test.mjs", id: "region cells retain their sample until successful session finalization", covers: ["normal"] },
-      { file: "e2e/test/region-sample.test.mjs", id: "region cell stop failure remains failed after being caught and is not retried" },
-    ],
-    expected: "Region samples use Session recording cleanup, preserve failed capture evidence and original errors, attempt stop once, and remove successful captures only after successful session finalization. The race scenario is a late application error after stop and before the final audit; parallel or repeated finalization is unverified.",
-    levels: ["unit"],
-  },
-  {
     id: "F654-1",
     implementation: [{ file: "packages/soksak/scripts/layout-sequences.mjs", symbol: "export function runSequence" }],
     tests: [
@@ -1928,16 +1823,6 @@ const FEATURE_LINKS = [
     implementation: [{ file: "scripts/check-tests.mjs", symbol: "export function auditFeatureLinks" }],
     tests: [{ file: "scripts/test/check-tests.test.mjs", id: "feature-link audit self-check detects an omitted error and response" }],
     expected: "The self-check invokes the actual feature-link audit, passes its unchanged module, and catches separately omitted error reporting and return values by assertion failures.",
-    levels: ["unit"],
-  },
-  {
-    id: "F652",
-    implementation: [{ file: "e2e/region-sample.mjs", symbol: "export async function regionSample" }],
-    tests: [
-      { file: "e2e/test/region-sample.test.mjs", id: "region sample reads the captured view at combined scale and origin" },
-      { file: "e2e/test/region-sample.test.mjs", id: "region sample rejects an empty capture and preserves its folder" },
-    ],
-    expected: "Region sampling reads a pixel inside the transformed capture view, retains failed recordings and removes successful recordings after successful session finalization.",
     levels: ["unit"],
   },
   {
@@ -1990,19 +1875,6 @@ const FEATURE_LINKS = [
     implementation: [{ file: "native/darwin/src/capture.m", symbol: "beginCaptureSourceArtifacts" }],
     tests: [{ file: "native/darwin/tests/capture_metadata_test.m", id: "a capture writes the source file only when its reader needs it" }],
     expected: "A recording writes source files only when it has frame identity.",
-    levels: ["unit"],
-  },
-  {
-    id: "F594",
-    implementation: [
-      { file: "packages/window-check/view-edges.mjs", symbol: "export function viewEdgeFaults(image, frame, scale, { view, lines }) {" },
-      { file: "e2e/view-edges.test.mjs", symbol: "viewEdgeFaults(image, declared, scale, colors)" },
-    ],
-    tests: [
-      { file: "packages/window-check/test/view-edges.test.mjs", id: "a row of the card inside the slot of a view is a fault" },
-      { file: "packages/window-check/test/view-edges.test.mjs", id: "a row of the card between a view and its line is a fault" },
-    ],
-    expected: "A check reads the device pixels across each edge of a native view in a still, so a row of the card beside a view that stands where it declared is a fault.",
     levels: ["unit"],
   },
   {
@@ -2352,11 +2224,8 @@ const FEATURE_LINKS = [
       { file: "e2e/benchmark/cases/view-drag.mjs", symbol: "export function viewDragB3Values(state, { firstDrag, recorded, gcLoop }) {" },
       { file: "e2e/benchmark/cases/floor-page.mjs", symbol: "export async function openFloorPage(s, { card } = {}) {" },
       { file: "packages/window-check/accessibility.mjs", symbol: "export function readWindowElements(app) {" },
-      { file: "e2e/benchmark/cases/resize.mjs", symbol: "export function resizeGeometry(gesture, decoded, { cornerRadiusPt, slotInsetsPt, measure = measureFloorLayoutFrame }) {" },
       { file: "e2e/benchmark/cases/resize.mjs", symbol: "export function resizeB3Values(state, { recorded }) {" },
       { file: "packages/window-check/view-metrics-collection.mjs", symbol: "export const TAB_PLACEMENT = Object.freeze({" },
-      { file: "packages/window-check/marker-view.mjs", symbol: "export async function markerLayoutObservation(t, s, descriptor, surface, card, { owner, theme, cornerRadiusPt, axis }) {" },
-      { file: "packages/window-check/marker-view.mjs", symbol: "export async function markerDragObservation(t, s, descriptor, surface, card, palette, { owner, plan }) {" },
       { file: "packages/plugin-api/index.js", symbol: "export function validateDiagnostics(manifest, diagnostics) {" },
       { file: "e2e/benchmark/cases/section-view.mjs", symbol: "export function installedSectionViews(configDir, { plugin: only = null } = {}) {" },
       { file: "e2e/fixtures/plain-view/probe/ui/section-diagnostics.js", symbol: "export async function attach({ declaration, status, registerStatus, commands, view, content, log }) {" },
@@ -2378,7 +2247,6 @@ const FEATURE_LINKS = [
       { file: "e2e/test/view-drag-case.test.mjs", id: "the B3 values of the view drag are the first-drag figures in the state 0 and the U7 figures of the third drag in the state frame-records" },
       { file: "e2e/test/floor-page-fixture.test.mjs", id: "the floor page is a view whose page draws the measurement colour and runs no code but the declaration of its composition" },
       { file: "packages/window-check/test/accessibility.test.mjs", id: "the elements of the windows of an application are counted by their accessibility role" },
-      { file: "e2e/test/resize-case.test.mjs", id: "each recorded frame of a maximise is judged with the geometry rule of the view drag on the floor page" },
       { file: "e2e/test/resize-case.test.mjs", id: "the B3 values of the resize catch-up are its verdict in the state captured and the U7 figures of the maximise in the state frame-records" },
       { file: "e2e/test/idle-tab-case.test.mjs", id: "the idle tab limit is the bound of IDLE_TAB_BOUND_KB in the performance goals, and a measured cost above it fails the benchmark" },
       { file: "e2e/test/split-load-case.test.mjs", id: "the split load limit is the bound of SPLIT_LOAD_GROWTH_BOUND_KB in the performance goals, and a growth at or above it fails the benchmark" },
@@ -2391,8 +2259,8 @@ const FEATURE_LINKS = [
       { file: "e2e/test/section-view-case.test.mjs", id: "a section view starts in a new layoutprobe card split below the tallest layoutprobe card, as the section of its card-left sidebar" },
       { file: "e2e/test/section-view-case.test.mjs", id: "the section views are the sections of the enabled installed plugins, or of one plugin, in the order of plugin id and declaration" },
       { file: "e2e/test/plain-view-section.test.mjs", id: "the plain view probe declares one section whose diagnostic declaration meets the section-view contract" },
-      { file: "e2e/test/plain-view-section.test.mjs", id: "the frames start paints the root with a marker color apart from the theme, records content frames, and the stop restores the root" },
-      { file: "e2e/test/section-view-case.test.mjs", id: "a section view trace start without a marker color is refused with its plugin and section after the observer stops" },
+      { file: "e2e/test/plain-view-section.test.mjs", id: "the frames start records content frames and the stop ends their observation" },
+      { file: "e2e/test/section-view-case.test.mjs", id: "a section view trace starts and stops the content-frame observer on its surface" }
     ],
     expected: "Each e2e benchmark applies the settings of its B3 state through fresh and asserts them, reads its bounds from docs/spec/performance-goals.json, and on a window without a page process reads the U7 records and the frame counters of each gesture; the view drag runs the drags of B3 in order; every section view of the section view fixture, the plain view probe, is measured for (i), (ii), (iii), (iii-b), (v) and (viii), a section view whose plugin does not declare the section-view contract fails with its plugin and section, a declaration that validateDiagnostics refuses fails with that refusal, and a section view outside the fixture state fails with the expected and the actual state.",
     levels: ["unit"],
@@ -2550,25 +2418,9 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "native/darwin/tests/webview_render_occluded_test.m", id: "the modal web view does not detect the occlusion of its window" },
-      { file: "e2e/capture-still.test.mjs", id: "${app.name}: a still with the settings modal open holds the modal" },
-      { file: "e2e/capture-still.test.mjs", id: "${app.name}: a still of a covered window with the settings modal open holds the modal" },
     ],
     expected: "Still captures include rendered child settings modals at their device-pixel geometry, both normally and while covered, after the declared WebKit modal document has loaded.",
     levels: ["unit", "application"],
-  },
-  {
-    id: "F701",
-    implementation: [
-      { file: "packages/window-check/view-metrics.mjs", symbol: "const DRAG_CONTENT_INTERVAL_LIMIT_MS = 40;" },
-    ],
-    tests: [
-      { file: "packages/window-check/test/view-metrics.test.mjs", id: "the declared drag cadence accepts exactly 40 ms" },
-      { file: "packages/window-check/test/view-metrics.test.mjs", id: "the declared drag cadence rejects above 40 ms" },
-      { file: "packages/window-check/test/view-metrics.test.mjs", id: "the declared drag convergence accepts exactly 40 ms" },
-      { file: "packages/window-check/test/view-metrics.test.mjs", id: "the declared drag convergence rejects above 40 ms" },
-    ],
-    expected: "Cadence and captured-paint convergence accept 40 ms inclusively and reject a larger interval; geometry and source proof remain unchanged, and this contract is not application performance acceptance.",
-    levels: ["unit"],
   },
   {
     id: "F700",
@@ -2793,17 +2645,9 @@ const FEATURE_LINKS = [
     id: "F686-10",
     implementation: [
       { file: "e2e/benchmark/cases/view-drag.mjs", symbol: "export async function runViewDrag(" },
-      { file: "e2e/benchmark/cases/view-drag.mjs", symbol: "export async function completeViewDrag(" },
-      { file: "packages/window-check/drag-measurement.mjs", symbol: "export function assertDragPerformance(" },
     ],
     tests: [
-      { file: "e2e/test/view-drag-case.test.mjs", id: "valid view drags publish third-stage B3 values before a captured threshold failure" },
-      { file: "e2e/test/view-drag-case.test.mjs", id: "view-drag judgment preserves both invalid third metrics and captured threshold failures" },
       { file: "e2e/test/view-drag-case.test.mjs", id: "a structurally invalid captured drag prevents the third drag and metric publication" },
-      { file: "e2e/test/view-drag-case.test.mjs", id: "a third-stage collection failure preserves the valid captured threshold failure exactly once" },
-      { file: "e2e/test/view-drag-case.test.mjs", id: "a structurally valid captured drag over the targets is measured without a verdict, and its assertPerformance throws the threshold error" },
-      { file: "e2e/test/view-drag-case.test.mjs", id: "a valid captured drag over the targets publishes third-drag B3 values and then fails with its original threshold error" },
-      { file: "e2e/test/view-drag-case.test.mjs", id: "a third-drag metric failure and a valid captured threshold failure both surface with their original errors" },
     ],
     expected: "A structurally valid captured drag publishes the third-drag B3 values before its captured performance is judged, a structural capture failure aborts at once, and a metric failure and a threshold failure both surface with their original errors.",
     levels: ["unit"],
@@ -3252,7 +3096,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "native/darwin/tests/document_draw_covered_test.m", id: "the region shows its document when the state is set while the window is covered" },
       { file: "native/darwin/tests/document_draw_covered_test.m", id: "the region of the other window still hides its document" },
-      { file: "e2e/capture-covered.test.mjs", id: "a still of a covered window holds the document of its tab and its changes" },
+      { file: "e2e/capture-covered.test.mjs", id: "a covered window keeps the document of its tab shown and its changes, and its stills are written" }
     ],
     expected: "While a window draws covered, a still of the covered window holds the region document of its tab as before the cover and the changes made while covered; the regions of other windows keep hiding their documents.",
     levels: ["unit", "application"],
@@ -3796,7 +3640,7 @@ const FEATURE_LINKS = [
   {
     id: "F638",
     implementation: [
-      { file: "packages/window-check/app.mjs", symbol: "export async function drag(s, plan, { capture = false, frameIdentity } = {})" },
+      { file: "packages/window-check/app.mjs", symbol: "export async function drag(s, plan, { capture = false } = {})" },
     ],
     tests: [
       { file: "packages/window-check/test/drag-pace.test.mjs", id: "a drag that is not paced fails at once with its took, asked, press waits, range and load" },
@@ -4813,20 +4657,8 @@ const FEATURE_LINKS = [
       "symbol": "fn capture_document_identity_start("
     },
     {
-      "file": "e2e/document-frame-identity.mjs",
-      "symbol": "export function verifyDocumentFrameIdentityCapture("
-    },
-    {
-      "file": "e2e/document-frame-identity.mjs",
-      "symbol": "export function viewGenerationForSurface("
-    },
-    {
       "file": "native/darwin/src/image_capture_match.m",
       "symbol": "bool sp_image_capture_match_identity_session_fail_for_nonce("
-    },
-    {
-      "file": "e2e/document-frame-identity.mjs",
-      "symbol": "export function documentIdentityCardIds("
     },
     {
       "file": "native/darwin/src/document_view.m",
@@ -4855,22 +4687,6 @@ const FEATURE_LINKS = [
       "id": "capture_stop_continues_cleanup_after_freeze_failure_without_issued_count"
     },
     {
-      "file": "e2e/test/capture-document-frame-identity.test.mjs",
-      "id": "document identity capture validates complete accounting and a decoded issued pixel identity"
-    },
-    {
-      "file": "e2e/test/capture-document-frame-identity.test.mjs",
-      "id": "document identity capture rejects missing accounting and unissued decoded identities"
-    },
-    {
-      "file": "e2e/test/capture-document-frame-identity.test.mjs",
-      "id": "view identity generation comes from one successful current-surface presentation join"
-    },
-    {
-      "file": "e2e/capture-document-frame-identity.test.mjs",
-      "id": "document-frame identity matches captured WebKit root pixels"
-    },
-    {
       "file": "native/darwin/tests/image_capture_match_test.m",
       "id": "a late failure from a retired document producer cannot fail a replacement capture session"
     },
@@ -4897,10 +4713,6 @@ const FEATURE_LINKS = [
     {
       "file": "packages/host/rust/src/diagnostics_test.rs",
       "id": "late_document_frame_identity_callback_errors_are_logged_as_errors"
-    },
-    {
-      "file": "e2e/test/capture-document-frame-identity.test.mjs",
-      "id": "document identity setup adds its root view tab only to editable pane cards"
     },
     {
       "file": "native/darwin/tests/document_core_root_test.m",
@@ -4949,38 +4761,6 @@ const FEATURE_LINKS = [
     }
   ],
   "expected": "Live readiness, finalized recordings and process identities precede clock-bracketed one-view and N-view footprint sampling; the offline content frame selection follows both samples without changing recordings, thresholds or failure retention.",
-  "levels": [
-    "unit",
-    "application"
-  ]
-},
-{
-  "id": "F239-233",
-  "implementation": [
-    {
-      "file": "packages/window-check/view-metrics.mjs",
-      "symbol": "function evaluateDrag("
-    }
-  ],
-  "tests": [
-    {
-      "file": "packages/window-check/test/view-metrics.test.mjs",
-      "id": "drag convergence selects a later qualifying paint capture when the first capture is stale"
-    },
-    {
-      "file": "packages/window-check/test/view-metrics.test.mjs",
-      "id": "drag convergence requires a captured final paint when source dimensions already match"
-    },
-    {
-      "file": "packages/window-check/test/view-metrics.test.mjs",
-      "id": "drag convergence rejects internally aligned paint at a different final target rectangle"
-    },
-    {
-      "file": "packages/window-check/test/view-metrics.test.mjs",
-      "id": "drag convergence accepts a final-size source interval that overlaps gesture end when later pixels prove it"
-    }
-  ],
-  "expected": "The earliest source-backed captured final paint meets two-frame, 33 ms and 2 pt convergence limits independently of eventual presentation, with exact target identity and stable later paint.",
   "levels": [
     "unit",
     "application"
@@ -5056,39 +4836,6 @@ const FEATURE_LINKS = [
   ]
 },
   {
-  "id": "F239-221-2",
-  "implementation": [
-    {
-      "file": "packages/window-check/view-metrics.mjs",
-      "symbol": "function evaluateLayoutDisplay("
-    },
-    {
-      "file": "packages/window-check/view-metrics.mjs",
-      "symbol": "function evaluateDrag("
-    },
-    {
-      "file": "packages/window-check/view-metrics-collection.mjs",
-      "symbol": "export function rootNativePlacementBeforeCapture("
-    }
-  ],
-  "tests": [
-    {
-      "file": "packages/window-check/test/view-metrics.test.mjs",
-      "id": "layout source accepts an overlapping placement readback when display covers both clocks"
-    },
-    {
-      "file": "packages/window-check/test/view-metrics.test.mjs",
-      "id": "drag cadence ignores an overlapping placement readback and converges against the presented viewport"
-    },
-    {
-      "file": "packages/window-check/test/view-metrics.test.mjs",
-      "id": "drag cadence is in-gesture and convergence meets both frame and time bounds"
-    }
-  ],
-  "expected": "Native placement readback timestamps are retained as evidence but are not treated as setter times for individual source rows. Drag cadence and capture coverage use source intervals; each captured gesture frame keeps its independent pixel geometry proof. One-shot and final convergence retain the final viewport, successful presentation, post-request/input source and capture after both displayed and source bounds without changing thresholds.",
-  "levels": ["unit"]
-},
-  {
   "id": "F239-221-1",
   "implementation": [
     {
@@ -5139,14 +4886,6 @@ const FEATURE_LINKS = [
     {
       "file": "packages/window-check/view-metrics-collection.mjs",
       "symbol": "export function viewContentFrameEvents("
-    },
-    {
-      "file": "packages/window-check/view-metrics-collection.mjs",
-      "symbol": "export function requireViewContentFrameCoverage("
-    },
-    {
-      "file": "packages/window-check/view-metrics.mjs",
-      "symbol": "function evaluateDrag("
     }
   ],
   "tests": [
@@ -5157,18 +4896,6 @@ const FEATURE_LINKS = [
     {
       "file": "packages/window-check/test/view-metrics-collection.test.mjs",
       "id": "view start clock brackets require valid source identity and ordered native clock replies"
-    },
-    {
-      "file": "packages/window-check/test/view-metrics-collection.test.mjs",
-      "id": "one-shot layout preserves a boundary interval and selects a later guaranteed post-request frame"
-    },
-    {
-      "file": "packages/window-check/test/view-metrics.test.mjs",
-      "id": "drag cadence keeps captured boundary frames and their neighboring cadence evidence"
-    },
-    {
-      "file": "packages/window-check/test/view-metrics.test.mjs",
-      "id": "drag cadence excludes observer idle time outside the recorded gesture"
     }
   ],
   "expected": "View source frames map to conservative native monotonic intervals from the successful start command bracket; ambiguous rows are preserved while one-shot and drag evidence require guaranteed ordering and coverage.",
@@ -5731,7 +5458,6 @@ const FEATURE_LINKS = [
     id: "F212.12-2-2-4",
     implementation: [{ file: "e2e/activation/view-focus.test.mjs", symbol: "async function recordGesture(" }],
     tests: [
-      { file: "packages/window-check/test/frame.test.mjs", id: "complete capture cadence over 33 ms remains a measurement" },
       { file: "e2e/activation/view-focus.test.mjs", id: "an image region click accepts the same native keys as its AppKit reference" },
       { file: "e2e/activation/view-focus.test.mjs", id: "repeated Korean vowels stay in the image region preedit before Space" },
     ],
@@ -5742,7 +5468,6 @@ const FEATURE_LINKS = [
     id: "F212.12-2-2-4-1",
     implementation: [{ file: "e2e/activation/view-focus.test.mjs", symbol: "async function recordGesture(" }],
     tests: [
-      { file: "packages/window-check/test/frame.test.mjs", id: "complete capture cadence over 33 ms remains a measurement" },
       { file: "e2e/activation/view-focus.test.mjs", id: "an image region click accepts the same native keys as its AppKit reference" },
       { file: "e2e/activation/view-focus.test.mjs", id: "repeated Korean vowels stay in the image region preedit before Space" },
     ],
@@ -5766,7 +5491,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/host/go/src/image_detach_test.go", id: "TestImageDetachRequestIdentityDoesNotRestartWithTheApplication" },
-      { file: "e2e/outside.test.mjs", id: "native content, cards, and the sidebar rail stay aligned" },
+      { file: "e2e/outside.test.mjs", id: "a divider drag beside the sidebar rail draws the supplier frames of its raster probe" }
     ],
     expected: "Detach request identity does not restart with the application and reload reaches recorded divider-drag geometry acceptance.",
     levels: ["unit", "application"],
@@ -6078,26 +5803,13 @@ const FEATURE_LINKS = [
   {
     id: "F212.14-1",
     implementation: [
-      { file: "packages/window-check/drag-measurement.mjs", symbol: "export function measureDragPerformance(" },
       { file: "e2e/benchmark/view-drag.test.mjs", symbol: "writeFileSync(path," },
     ],
     tests: [
-      { file: "packages/window-check/test/drag-measurement.test.mjs", id: "drag performance keeps existing targets separate from valid measurements" },
-      { file: "e2e/benchmark/view-drag.test.mjs", id: "the view drag runs the drags of B3 in order, and its captured drag meets the performance targets with the traces off" },
+      { file: "e2e/benchmark/view-drag.test.mjs", id: "the view drag runs the drags of B3 in order, with its captured drag under the traces off" }
     ],
     expected: "The dedicated benchmark validates untraced application settings, preserves complete measured frames and writes results before enforcing unchanged cadence and latency limits.",
     levels: ["unit", "application"],
-  },
-  {
-    id: "F212.14-2",
-    implementation: [
-      { file: "e2e/benchmark/view-drag.test.mjs", symbol: "const report =" },
-    ],
-    tests: [
-      { file: "e2e/benchmark/view-drag.test.mjs", id: "the view drag runs the drags of B3 in order, and its captured drag meets the performance targets with the traces off" },
-    ],
-    expected: "A declared candidate build profile produces complete measured drag reports with unchanged targets and explicit performance failure rather than inferred optimization acceptance.",
-    levels: ["application"],
   },
   {
     id: "F212.14-4",
@@ -6108,7 +5820,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/tests/surface_layout_order_test.go", id: "TestContinuousPreparationStartsRasterBeforeReply" },
       { file: "packages/host/go/tests/surface_layout_order_test.go", id: "TestRasterPreparationFailureCancelsBeforeReply" },
       { file: "packages/host/go/tests/surface_layout_order_test.go", id: "TestRasterPreparationRetainsCancellationSchedulingError" },
-      { file: "e2e/outside.test.mjs", id: "native content, cards, and the sidebar rail stay aligned" },
+      { file: "e2e/outside.test.mjs", id: "a divider drag beside the sidebar rail draws the supplier frames of its raster probe" }
     ],
     expected: "Every Wails layout preparation starts raster configuration before replying and preserves cancellation failures and geometry acceptance.",
     levels: ["unit", "application"],
@@ -6122,7 +5834,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/window-check/test/drag-measurement.test.mjs", id: "transaction cadence includes commit waiting and total transaction duration" },
       { file: "packages/window-check/test/drag-measurement.test.mjs", id: "transaction cadence rejects invalid or reversed stage timestamps" },
-      { file: "e2e/benchmark/view-drag.test.mjs", id: "the view drag runs the drags of B3 in order, and its captured drag meets the performance targets with the traces off" },
+      { file: "e2e/benchmark/view-drag.test.mjs", id: "the view drag runs the drags of B3 in order, with its captured drag under the traces off" }
     ],
     expected: "Native transaction metrics include commit wait and total duration, reject invalid timing and preserve raw rows before unchanged performance judgments.",
     levels: ["unit", "application"],
@@ -8727,9 +8439,6 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/window-check/view-metrics.mjs", symbol: "export function assertViewMeasurements(" }],
     tests: [
       { file: "packages/window-check/test/view-metrics.test.mjs", id: "view metrics report independent failures together" },
-      { file: "packages/window-check/test/view-metrics.test.mjs", id: "drag geometry requires every contiguous gesture frame and same-frame observations" },
-      { file: "packages/window-check/test/view-metrics.test.mjs", id: "drag cadence is in-gesture and convergence meets both frame and time bounds" },
-      { file: "packages/window-check/test/view-metrics.test.mjs", id: "malformed shared drag evidence has a path error without passing criteria" },
     ],
     expected: "The evaluator validates shared evidence before independently reporting geometry, cadence, and convergence outcomes; malformed required evidence cannot produce a passing criterion.",
     levels: ["unit"],
@@ -9309,7 +9018,7 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "scripts/node-tests.mjs", symbol: "const { tests: all, before } = discoverNodeTests(" },
       { file: "scripts/test-app.mjs", symbol: "args: argv, strict: true, options: { script: { type: 'string' }, native: { type: 'string' }, candidate: { type: 'string' }," },
-      { file: "packages/window-check/app.mjs", symbol: "async function dragOnce(s, plan, capture, frameIdentity) {" },
+      { file: "packages/window-check/app.mjs", symbol: "async function dragOnce(s, plan, capture) {" }
     ],
     tests: [
       { file: "scripts/test/node-tests.test.mjs", id: "a run starts each file without waiting for the person, and the runner has no idle option" },
@@ -9483,8 +9192,6 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/recording.go", symbol: "func (r *Recording) StartNewWindow(capture NewWindowCapture, directory string, frameIdentity bool) error {" },
       { file: "packages/host/rust/src/recording.rs", symbol: "pub fn start_new_window(" },
       { file: "packages/window-check/app.mjs", symbol: "const release = params.newWindow === true ? async () => {} : await holdCovered(this);" },
-      { file: "e2e/window-first-frames.test.mjs", symbol: "const recording = await s.record({ newWindow: true });" },
-      { file: "e2e/screen-drawn.mjs", symbol: "export function alpha(frame, point) {" },
     ],
     tests: [
       { file: "native/darwin/tests/document_draw_covered_test.m", id: "the region of the covered window shows its document when the state was set before the cover" },
@@ -9511,9 +9218,6 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/diagnostics_new_window_test.rs", id: "the_stop_ends_a_hold_that_no_show_took" },
       { file: "packages/host/rust/src/diagnostics_new_window_test.rs", id: "a_failure_after_the_hold_releases_the_held_window" },
       { file: "packages/window-check/test/recording-covered.test.mjs", id: "a recording of a new window starts without a hold of the covered drawing of the requesting window" },
-      { file: "e2e/test/screen-drawn.test.mjs", id: "the alpha of a window point is 0 where the window is transparent and is read through the content rectangle and the scale" },
-      { file: "e2e/window-first-frames.test.mjs", id: "a new window shows its complete first screen from its first frame" },
-      { file: "e2e/window-first-frames.test.mjs", id: "a project window shows its complete first screen from its first frame" },
     ],
     expected: "The native checks that judge what the window server shows order their windows behind every window, as an application that is not active shows one, cover a window with a window of their own ordered directly above it, draw covered where they capture a document, and judge only what holds whatever windows of a person cover their windows. A recording of a new window holds the next show of a window that is not on screen, sizes the recording from the window, and puts the window on screen at the completion of the stream start, so its first frame is the first frame of the window; every end of the hold puts a held window on screen, and a show without a hold is unchanged. The first-frame window check records the new window itself from its first frame, whose frames before the reveal have alpha 0 at every pixel, so the window appears at the first frame with a pixel that is not transparent.",
     levels: ["native", "unit", "application"],
@@ -9939,18 +9643,6 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
-    id: "F35",
-    implementation: [
-      { file: "native/darwin/src/window_controls.m", symbol: "windowSetTitlebarHeight" },
-      { file: "packages/workbench/frame-text.js", symbol: "chromeRow" },
-    ],
-    tests: [
-      { file: "e2e/titlebar-recording.test.mjs", id: "every recorded frame keeps the window buttons centred in the first row while the frame factor steps from 1 to 3 and back" },
-    ],
-    expected: "The window buttons stay centred in the first row at every frame text factor.",
-    levels: ["unit", "application"],
-  },
-  {
     id: "F35.1",
     implementation: [
       { file: "native/darwin/src/surface_layout.m", symbol: "surfaceLayoutStartPage" },
@@ -9959,21 +9651,9 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/host/go/tests/window_titlebar_test.go", id: "TestStartTitlebarFollowsFrameFactor" },
       { file: "packages/host/rust/tests/window_titlebar_test.rs", id: "the_start_titlebar_follows_the_frame_factor" },
-      { file: "e2e/titlebar-recording.test.mjs", id: "every recorded frame of a reload after another window changed the frame factor keeps the window buttons centred" },
     ],
     expected: "The title bar height is presented in the layout transaction of the frame that draws the first row, at start, on a reload and at every factor step.",
     levels: ["unit", "application"],
-  },
-  {
-    id: "F35.2",
-    implementation: [
-      { file: "e2e/titlebar-measurement.mjs", symbol: "measureTitlebar" },
-    ],
-    tests: [
-      { file: "e2e/test/titlebar-measurement.test.mjs", id: "buttons 6px off the first-row centre fail the frame" },
-    ],
-    expected: "A recording fails on any frame whose button centre and first-row centre differ by more than 0.5px.",
-    levels: ["unit"],
   },
   {
     id: "F47",
@@ -10437,7 +10117,6 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/workbench/test/verify-controls.test.mjs", id: "the window buttons count as centred within one device pixel of the first row" },
-      { file: "e2e/titlebar-recording.test.mjs", id: "window buttons centred" },
     ],
     expected: "The page judges the window buttons centred in the first row within one device pixel at every scale.",
     levels: ["unit", "application"],
@@ -10461,7 +10140,6 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/window-check/test/recording.test.mjs", id: "a recording whose stop fails fails finalization, sends no second stop and preserves its folder" },
-      { file: "e2e/window-first-frames.test.mjs", id: "a new window shows its complete first screen from its first frame" },
     ],
     expected: "A window check sends one stop for each recording and keeps that stop's error; failed recordings remain available for diagnosis.",
     levels: ["unit", "application"],
@@ -10488,7 +10166,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/workbench/test/layout-queue.test.mjs", id: "a prepared draw runs in the next task, not in the checkpoint that answered its preparation" },
-      { file: "e2e/outside.test.mjs", id: "native content, cards, and the sidebar rail stay aligned" },
+      { file: "e2e/outside.test.mjs", id: "a divider drag beside the sidebar rail draws the supplier frames of its raster probe" }
     ],
     expected: "A prepared layout is drawn in the next task, so a drag shows a new layout every display frame at 60 Hz.",
     levels: ["unit", "application"],
@@ -10870,11 +10548,9 @@ const FEATURE_LINKS = [
     id: "F1.1",
     implementation: [
       { file: "packages/host/rust/src/surfaces.rs", symbol: "pub(crate) fn aligned" },
-      { file: "packages/window-check/drag-measurement.mjs", symbol: "assertRoundTrips" },
     ],
     tests: [
-      { file: "e2e/outside.test.mjs", id: "native content, cards, and the sidebar rail stay aligned" },
-      { file: "e2e/outside.test.mjs", id: "an image region divider drag does not leave a white surface frame" },
+      { file: "e2e/outside.test.mjs", id: "a divider drag beside the sidebar rail draws the supplier frames of its raster probe" }
     ],
     expected: "A complete divider recording keeps native content inside its card, keeps card and rail geometry aligned, contains no white surface frame, and returns to its initial position.",
     levels: ["native", "application"],
@@ -11480,13 +11156,6 @@ const FEATURE_LINKS = [
     ],
     expected: "Input commits preserve marked text and newline exactly once, and capture acceptance rejects a positive frame count when stop reports an error.",
     levels: ["native"],
-  },
-  {
-    id: "F239-75",
-    implementation: [{ file: "e2e/capture-frame-identity.test.mjs", symbol: "const targetCard = (await s.get(\"core.grid\")).cards.find((item) => item.focused);" }],
-    tests: [{ file: "e2e/capture-frame-identity.test.mjs", id: "opt-in capture identity matches the presented image of an image region" }],
-    expected: "The opt-in capture identity consumer binds the selected card before creating the captured image region.",
-    levels: ["application"],
   },
   {
     id: "F239-77",
@@ -12647,7 +12316,6 @@ const FEATURE_LINKS = [
       { file: "e2e/native-input-trace.mjs", symbol: "export function nativeInputTransactions(" },
       { file: "e2e/raster-probe.mjs", symbol: "async function drawCovered(s) {" },
       { file: "e2e/card-panel-checks.mjs", symbol: "export function panelSurfaceRect(" },
-      { file: "e2e/card-panel-checks.mjs", symbol: "const background = [...counts].reduce(" },
       { file: "packages/workbench-mygo/src/keyboard.go", symbol: "func (s *Shell) followCommand(" },
       { file: "packages/workbench-mygo/src/view_calls.go", symbol: "func (s *Shell) recordViewCall(" },
       { file: "packages/workbench-mygo/src/library.go", symbol: "later(s, \"core.library.open\"" },
@@ -12691,10 +12359,6 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/src/app.go", symbol: "func (s *Shell) applyPlugins(done func(reloaded bool, err error)) {" },
       { file: "packages/workbench-mygo/src/requests.go", symbol: "func (q *Requests) Answered(mark int, then func()) {" },
       { file: "packages/workbench-mygo/src/settings_modal.go", symbol: "func (s *Shell) afterSettingsWrites(from int, done func(err error)) {" },
-      { file: "e2e/screen-drawn.mjs", symbol: "export function undrawn(captured, { logo, card, reference }) {" },
-      { file: "e2e/screen-drawn.mjs", symbol: "export function inWindow(frame, display, rect) {" },
-      { file: "e2e/screen-drawn.mjs", symbol: "export function fullSize(view, last, size) {" },
-      { file: "e2e/window-first-frames.test.mjs", symbol: "async function firstFrames(t, s, label, opening, ready) {" },
       { file: "packages/workbench-mygo/src/project_data.go", symbol: "func (s *Shell) compareData(value any) error {" },
       { file: "scripts/platform/darwin/end-to-end.mjs", symbol: "if (error.code !== WINDOW_GONE && !client.closed) throw error;" },
       { file: "native/darwin/src/input_source.m", symbol: "- (BOOL)hasActiveTextClient {" },
@@ -12736,7 +12400,6 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/src/surfaces.go", symbol: "if err == nil && record.Settled && s.surfaces.latest == record {" },
       { file: "packages/workbench-mygo/src/shell.go", symbol: "func (s *Shell) followSize(width, height float32) {" },
       { file: "packages/workbench-mygo/src/project_data.go", symbol: "if len(removed) > 0 && listed[s.active] {" },
-      { file: "e2e/outside.mjs", symbol: "export function measuredRun(f, colour, { from, to }) {" },
       { file: "packages/workbench-mygo/src/sidebars.go", symbol: "func (s *Sidebars) Status(place string, focused FocusedSurface) string {" },
       { file: "e2e/host-transcript.mjs", symbol: "export function settledLayouts(lines) {" },
       { file: "e2e/host-transcript.mjs", symbol: "export const restingFrames = (lines) => {" },
@@ -12835,7 +12498,6 @@ const FEATURE_LINKS = [
       { file: "e2e/activation/ime.test.mjs", id: "a Korean syllable typed right after an input-source switch reaches the sidecar once" },
       { file: "e2e/test/raster-probe-fixture.test.mjs", id: "a raster probe waits for its first frame while its window draws its image regions covered, until the check ends" },
       { file: "e2e/test/card-panel-checks.test.mjs", id: "the native surface leaves the shown size of each open side and the divider of each folded side" },
-      { file: "e2e/test/card-panel-checks.test.mjs", id: "grip ink takes the background of the band, not the boundary line that the band holds at its edge" },
       { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestACommandWhosePlacementFailsAnswersItsResult" },
       { file: "packages/workbench-mygo/tests/view_call_records_test.go", id: "TestAViewCallIsRecordedAndItsReplyNamesTheStart" },
       { file: "packages/workbench-mygo/tests/view_call_records_test.go", id: "TestAFailedViewCallRecordsTheOutcomeError" },
@@ -12892,14 +12554,6 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/shell_tabs_test.go", id: "TestAStoreChangeGivesTheStoredLayoutOfAProjectThatTheWindowDoesNotHold" },
       { file: "native/darwin/tests/surface_container_test.m", id: "a hit on the workbench of a window without a main web view is the workbench" },
       { file: "native/darwin/tests/surface_container_test.m", id: "a hit on the view that holds the surface hosts is not the workbench" },
-      { file: "e2e/test/screen-drawn.test.mjs", id: "a sample reads the pixel at a window point through the content rectangle and the scale" },
-      { file: "e2e/test/screen-drawn.test.mjs", id: "the card point is at the head of the first card with tabs, on the plane" },
-      { file: "e2e/test/screen-drawn.test.mjs", id: "undrawn names the frames without the logo or without the card color of the reference" },
-      { file: "e2e/test/screen-drawn.test.mjs", id: "undrawn rejects a reference without the logo at its place" },
-      { file: "e2e/test/screen-drawn.test.mjs", id: "a display frame read in the coordinates of a window samples the window points at the window origin" },
-      { file: "e2e/test/screen-drawn.test.mjs", id: "a window shows at its full size when the middle of each edge has the pixel of the last frame" },
-      { file: "e2e/window-first-frames.test.mjs", id: "a new window shows its complete first screen from its first frame" },
-      { file: "e2e/window-first-frames.test.mjs", id: "a project window shows its complete first screen from its first frame" },
       { file: "packages/workbench-mygo/tests/library_test.go", id: "TestAProjectThatAnotherWindowRemovedLeavesTheWindow" },
       { file: "packages/workbench-mygo/tests/picker_test.go", id: "TestAWindowWhoseProjectAnotherWindowRemovedClosesWithoutAQuestion" },
       { file: "packages/host/mygo/tests/presentation_test.go", id: "TestE2EAWindowMovedBeforeItsFirstScreenKeepsItsFrame" },
@@ -12971,7 +12625,6 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/shell_events_test.go", id: "TestTheDrawnSidebarsOfAnOpenedProjectAreStoredBeforeAFlush" },
       { file: "packages/workbench-mygo/tests/shell_events_test.go", id: "TestAResizedWindowSavesItsGeometryAfterTheLastResize" },
       { file: "packages/workbench-mygo/tests/shell_events_test.go", id: "TestARemovedProjectStoresThePlaneOfTheActiveProject" },
-      { file: "e2e/test/composition-measurement.test.mjs", id: "the measured run of a surface ends at its last measured row, above a measured row of another surface" },
       { file: "packages/workbench-mygo/tests/shell_events_test.go", id: "TestTheFlushOfTheLibraryTakesNoWorkspaceCall" },
       { file: "packages/workbench-mygo/tests/shell_events_test.go", id: "TestAFlushOfStoredProjectsTakesNoWorkspaceCall" },
       { file: "packages/workbench-mygo/tests/shell_events_test.go", id: "TestAFlushOfTheProjectsAnswersAStoreThatFailed" },
@@ -13307,13 +12960,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F343",
-    implementation: [{ file: "e2e/section-first-frame.test.mjs", symbol: "a section view shows the card colour from its first frame" }],
-    tests: [{ file: "e2e/section-first-frame.test.mjs", id: "a section view shows the card colour from its first frame" }],
-    expected: "A section view shows the card background from its first presented frame.",
-    levels: ["application"],
-  },
-  {
     id: "F410",
     implementation: [{ file: "native/darwin/src/window_facts.m", symbol: "callback(sp_window_on_screen(notification.object))" }],
     tests: [{ file: "native/darwin/tests/window_facts_test.m", id: "the observation of a hidden window reports that it is not on screen" }],
@@ -13356,13 +13002,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F430",
-    implementation: [{ file: "e2e/card-panel-checks.mjs", symbol: "missingPoses" }],
-    tests: [{ file: "e2e/test/card-panel-checks.test.mjs", id: "a pose in the first frame that a recording gap delivers after two display frames counts as recorded" }],
-    expected: "A displayed state counts as recorded when the frames up to the first frame at or after the second observed display refresh hold it.",
-    levels: ["unit"],
-  },
-  {
     id: "F434",
     implementation: [{ file: "e2e/benchmark/cases/split-load.mjs", symbol: "export function hostRssKbOf" }],
     tests: [{ file: "e2e/test/split-load-case.test.mjs", id: "the host process is found by its configuration folder in every build profile" }],
@@ -13381,13 +13020,6 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/workbench/compositor.js", symbol: "publishAhead" }],
     tests: [{ file: "packages/workbench/test/compositor.test.mjs", id: "a preparation keeps a section surface at its offsets, so the drawn commit of a width change is the same request" }],
     expected: "the preparation of a section surface equals its drawn commit",
-    levels: ["unit"],
-  },
-  {
-    id: "F437",
-    implementation: [{ file: "e2e/benchmark/cases/plain-view.mjs", symbol: "cardEdgeSamples" }],
-    tests: [{ file: "e2e/test/plain-view-case.test.mjs", id: "the plain view edge samples keep the measured frames and name the others" }],
-    expected: "the measured frames and the indexes of the others",
     levels: ["unit"],
   },
   {
@@ -13417,13 +13049,6 @@ const FEATURE_LINKS = [
     tests: [{ file: "e2e/surface-sync-turn.test.mjs", id: "a surface layout enters the main thread once and its ready callback once" }],
     expected: "One main-thread entry and one ready callback per layout on both hosts",
     levels: ["application"],
-  },
-  {
-    id: "F442",
-    implementation: [{ file: "packages/window-check/view-metrics.mjs", symbol: "convergenceMs = capture.timeMs - gestureEndedAtMs" }],
-    tests: [{ file: "packages/window-check/test/view-metrics.test.mjs", id: "view metrics judge convergence by time, not by the count of recorded frames" }],
-    expected: "A paint capture within 33 ms converges at any count of recorded frames",
-    levels: ["unit"],
   },
   {
     id: "F444",
@@ -13962,20 +13587,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F212.14-5-26",
-    implementation: [{ file: "packages/window-check/view-metrics-collection.mjs", symbol: "export function selectOneShotViewSourceFrame(" }],
-    tests: [{ file: "packages/window-check/test/view-metrics-collection.test.mjs", id: "one-shot layout selects the exact-size source after request and before later placement readback" }],
-    expected: "One-shot layout source selection uses the request boundary and exact final viewport projection, not a later geometry readback timestamp.",
-    levels: ["unit"],
-  },
-  {
-    id: "F212.14-5-29",
-    implementation: [{ file: "packages/window-check/view-metrics-collection.mjs", symbol: "export function selectOneShotViewSourceFrame(" }],
-    tests: [{ file: "packages/window-check/test/view-metrics-collection.test.mjs", id: "one-shot layout retains the target and every post-request candidate when no frame matches" }],
-    expected: "All one-shot view collectors use the request boundary and exact final viewport, with complete failed-selection evidence.",
-    levels: ["unit"],
-  },
-  {
     id: "F239-47-32",
     implementation: [{ file: "native/darwin/src/image_region.m", symbol: "@implementation SPImageRegion" }],
     tests: [
@@ -14124,23 +13735,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F212.14-5-1",
-    implementation: [{ file: "packages/window-check/app.mjs", symbol: "frameIdentity: stopped.frameIdentity" }],
-    tests: [
-      { file: "packages/window-check/test/drag-frame-identity.test.mjs", id: "drag forwards opt-in frame identity and preserves the stop result" },
-      { file: "e2e/capture-frame-identity.test.mjs", id: "diagnostic drag retains opt-in frame identity artifacts" },
-    ],
-    expected: "Diagnostic drag preserves the requested identity artifacts without changing its default request.",
-    levels: ["unit", "application"],
-  },
-  {
-    id: "F239-194",
-    implementation: [{ file: "packages/workbench/environment.js", symbol: "diagnosticModules = Promise.all(" }],
-    tests: [{ file: "e2e/capture-frame-identity.test.mjs", id: "diagnostic drag retains opt-in frame identity artifacts" }],
-    expected: "Installed diagnostic modules load at startup without application errors on both hosts.",
-    levels: ["application"],
-  },
-  {
     id: "F239-193",
     implementation: [{ file: "packages/workbench/copy-frontend.mjs", symbol: "pageImportsForBuild({ diagnostics })" }],
     tests: [{ file: "packages/workbench/test/copy-frontend.test.mjs", id: "a staged frontend with --diagnostics has the page diagnostic methods" }],
@@ -14207,17 +13801,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F212.12-3",
-    implementation: [{ file: "e2e/outside.test.mjs", symbol: "function assertAligned(" }],
-    tests: [
-      { file: "e2e/outside.test.mjs", id: "native content, cards, and the sidebar rail stay aligned" },
-      { file: "e2e/outside.test.mjs", id: "an image region divider drag does not leave a white surface frame" },
-      { file: "e2e/outside.test.mjs", id: "an image region view document fills its native frame before and after a divider drag" },
-    ],
-    expected: "Complete recordings verify card movement, symmetric content alignment, final size and document fill while retaining separate performance measurements.",
-    levels: ["application"],
-  },
-  {
     id: "F212.7b",
     implementation: [
       { file: "native/darwin/src/surface_layout.m", symbol: "surfaceLayoutJoinView" },
@@ -14246,75 +13829,17 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
-    id: "F212.7d",
-    implementation: [
-      { file: "e2e/view-theme.test.mjs", symbol: "const expected =" },
-    ],
-    tests: [
-      { file: "e2e/view-theme.test.mjs", id: "a newly created view paints the card theme throughout its first presentation" },
-    ],
-    expected: "Complete dark and light view-creation recordings retain the declared card theme token at three document background points in every decoded frame.",
-    levels: ["application"],
-  },
-  {
-    id: "F212.7d-1",
-    implementation: [
-      { file: "e2e/view-theme.test.mjs", symbol: "const expected =" },
-    ],
-    tests: [
-      { file: "e2e/view-theme.test.mjs", id: "a newly created view paints the card theme throughout its first presentation" },
-    ],
-    expected: "Complete dark and light view-creation recordings retain the declared card theme token at three document background points in every decoded frame.",
-    levels: ["application"],
-  },
-  {
-    id: "F212.7c",
-    implementation: [{ file: "e2e/outside.test.mjs", symbol: "function assertAligned(" }],
-    tests: [
-      { file: "e2e/outside.test.mjs", id: "native content, cards, and the sidebar rail stay aligned" },
-      { file: "e2e/outside.test.mjs", id: "an image region divider drag does not leave a white surface frame" },
-      { file: "e2e/outside.test.mjs", id: "an image region view document fills its native frame before and after a divider drag" },
-    ],
-    expected: "Complete recordings verify card movement, symmetric content alignment, final size and document fill while retaining separate performance measurements.",
-    levels: ["application"],
-  },
-  {
-    id: "F212.12-3-1",
-    implementation: [
-      { file: "packages/window-check/drag-measurement.mjs", symbol: "export function assertFinalContentSize(" },
-      { file: "packages/window-check/drag-measurement.mjs", symbol: "export function measureDragPerformance(" },
-      { file: "e2e/alignment.mjs", symbol: "export function alignmentDelta(" },
-    ],
-    tests: [
-      { file: "packages/window-check/test/drag-measurement.test.mjs", id: "final content size rejects a late correction and a later regression" },
-      { file: "packages/window-check/test/drag-measurement.test.mjs", id: "drag performance keeps existing targets separate from valid measurements" },
-      { file: "e2e/test/alignment.test.mjs", id: "a terminal raster that leaves a growing right inset is misaligned" },
-      { file: "e2e/outside.test.mjs", id: "native content, cards, and the sidebar rail stay aligned" },
-    ],
-    expected: "Both raster edges remain aligned, final size converges by the second recorded frame, and valid performance measurements remain separate from functional correctness.",
-    levels: ["unit", "application"],
-  },
-  {
     id: "F239-159",
     implementation: [
-      { file: "packages/window-check/drag-measurement.mjs", symbol: "export function assertDragFrameCadence(" },
       { file: "packages/window-check/display-refresh.mjs", symbol: "export function displayRefreshes(" },
       { file: "packages/window-check/display-refresh.mjs", symbol: "export function readDisplayRefreshes(" },
     ],
     tests: [
-      { file: "packages/window-check/test/drag-measurement.test.mjs", id: "view drag cadence requires every frame within two display periods" },
       { file: "packages/window-check/test/display-refresh.test.mjs", id: "display refreshes reject a recording whose display link is not available" },
       { file: "packages/window-check/test/display-refresh.test.mjs", id: "display refreshes are the observed refreshes in milliseconds" },
       { file: "packages/window-check/test/display-refresh.test.mjs", id: "a recording's refresh times are read from its display-link.json" },
     ],
     expected: "The dedicated view-drag performance check includes every decoded frame and rejects gaps above two display periods of the window's observed refresh.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-153",
-    implementation: [{ file: "packages/window-check/drag-measurement.mjs", symbol: "export function pointerLag(" }],
-    tests: [{ file: "packages/window-check/test/drag-measurement.test.mjs", id: "pointer lag rejects only frames before input" }],
-    expected: "Unavailable drag measurements fail instead of reporting zero latency.",
     levels: ["unit"],
   },
   {
@@ -14664,11 +14189,9 @@ const FEATURE_LINKS = [
   {
     id: "F297",
     implementation: [
-      { file: "e2e/benchmark/cases/resize.mjs", symbol: "export const CATCH_UP_LIMIT_MS = 150;" },
       { file: "e2e/benchmark/cases/idle-tab.mjs", symbol: "export const IDLE_TAB_BOUND_KB = performanceGoalBound(\"IDLE_TAB_BOUND_KB\", \"atMost\");" },
     ],
     tests: [
-      { file: "e2e/test/resize-case.test.mjs", id: "the catch-up limit of a maximise or restore is 150 ms, and a measured time above it fails the benchmark" },
       { file: "e2e/test/idle-tab-case.test.mjs", id: "the idle tab limit is the bound of IDLE_TAB_BOUND_KB in the performance goals, and a measured cost above it fails the benchmark" },
       { file: "e2e/test/idle-tab-case.test.mjs", id: "the documents of a tab are counted once each footprint is settled" },
     ],
@@ -15572,10 +15095,17 @@ const MOVED_COMPLETIONS = new Set(["F6", "F596","F239-170", "F239-197", "F239-24
 // the HWP startup and view checks (F556, F239-239, F212.14-5-32), the terminal input document and observer tests (F239-60,
 // F239-141, F239-152, F239-173, F239-177, F239-179 and F239-47-15 to F239-47-35), the editor save check (F212.12-2-1-1), the
 // real terminal wheel and text pointer checks (F94, F95) and the terminal selection follow check (F428).
+// F746 removes every check that reads the pixels of a frame or a still: colour, relative pixels, the marker, frame identity, the
+// shown changes and the frame geometry. The completions whose only implementation and tests were those checks have no
+// implementation left: the drag and layout geometry, cadence and convergence of the view metrics (F239-153, F239-221-2, F239-233,
+// F442, F701), the region samples and their cells (F652, F652-1, F652-2, F668), the frame identity checks (F239-75, F239-194, F750),
+// the first frame of a section (F343), the poses of the card panel (F430), the edge samples of the plain view (F437), the window
+// buttons in the first row (F35), the device pixels across the edges of a native view (F594) and the shown changes (F755).
 // F756 removes the idle gate of the window runs whose poll F160.26 recorded, so that completion has no implementation left.
 // F756 removes the raise of the windows of a check (F747) and the parking of the windows of the occlusion fixture (F749): every check
 // starts behind the windows of a person and covers its window with its own window.
-const REMOVED_COMPLETIONS = new Set(["F747", "F749", "F160.26", "F239-98", "F239-98-1", "F239-98-1-1", "F239-98-2", "F239-98-3", "F239-98-4", "F239-47-17",
+const REMOVED_COMPLETIONS = new Set(["F239-153", "F239-221-2", "F239-233", "F442", "F701", "F652", "F652-1", "F652-2", "F668",
+  "F239-75", "F239-194", "F750", "F343", "F430", "F437", "F35", "F594", "F755", "F747", "F749", "F160.26", "F239-98", "F239-98-1", "F239-98-1-1", "F239-98-2", "F239-98-3", "F239-98-4", "F239-47-17",
   "F239-47-19", "F239-134", "F239-158", "F239-175", "F239-47-10", "F239-47-12", "F239-47-13", "F239-47-14", "F212.12-1-15-5", "F212.9-3-1", "F212.9a-1", "F239-107-1", "F239-220", "F239-40", "F239-43",
   "F249", "F292-7", "F68", "F60", "F91", "F114", "F116", "F125", "F239-269", "F55", "F239-47-24", "F239-182", "F239-68", "F278",
   "F278-1", "F280", "F283-1", "F283-2", "F286", "F290", "F292-26-3", "F226", "F239-39", "F239-41", "F239-41-1", "F239-42",

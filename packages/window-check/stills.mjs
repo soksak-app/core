@@ -13,26 +13,14 @@ export const PROFILE_FILE = /^color-[0-9a-f]{16}\.icc$/;
 
 /**
  * The stage times of a still row (docs/spec/diagnostics.md, stills.jsonl), each a raw mach time or null for a stage that did
- * not run: the processing of the still after its completion, the image match and the identity enqueue in it, and the write of
- * its frame. A written still ran each stage of WRITTEN_STAGES.
+ * not run: the processing of the still after its completion and the write of its frame. A written still ran each stage.
  */
-const STAGES = ["writeStartTime", "writeCompleteTime", "imageMatchStartTime", "imageMatchCompleteTime",
-  "identityDecodeEnqueueStartTime", "identityDecodeEnqueueCompleteTime", "writerEnqueuedTime", "writerStartTime", "writerCompleteTime"];
-const WRITTEN_STAGES = ["writeStartTime", "writeCompleteTime", "imageMatchStartTime", "imageMatchCompleteTime", "writerEnqueuedTime",
-  "writerStartTime", "writerCompleteTime"];
+const STAGES = ["writeStartTime", "writeCompleteTime", "writerEnqueuedTime", "writerStartTime", "writerCompleteTime"];
 /** The stages that have both of their times or neither. */
-const BRACKETS = [["writeStartTime", "writeCompleteTime"], ["imageMatchStartTime", "imageMatchCompleteTime"],
-  ["identityDecodeEnqueueStartTime", "identityDecodeEnqueueCompleteTime"], ["writerStartTime", "writerCompleteTime"]];
-/**
- * The order of the times of a still: the processing starts at or after its completion and holds the image match and the
- * identity enqueue, and the frame write is enqueued after the processing ends.
- */
-const ORDER = [["completed", "writeStartTime"], ["writeStartTime", "imageMatchStartTime"], ["imageMatchStartTime", "imageMatchCompleteTime"],
-  ["imageMatchCompleteTime", "writeCompleteTime"], ["writeStartTime", "identityDecodeEnqueueStartTime"],
-  ["identityDecodeEnqueueStartTime", "identityDecodeEnqueueCompleteTime"], ["identityDecodeEnqueueCompleteTime", "writeCompleteTime"],
-  ["writeCompleteTime", "writerEnqueuedTime"], ["writerEnqueuedTime", "writerStartTime"], ["writerStartTime", "writerCompleteTime"]];
-/** The QR decoder runs after the still, so a still row holds none of its times (decoded-frames.jsonl does). */
-const DECODE_TIMES = ["frameIdentityDecodeStartTime", "frameIdentityDecodeCompleteTime"];
+const BRACKETS = [["writeStartTime", "writeCompleteTime"], ["writerStartTime", "writerCompleteTime"]];
+/** The order of the times of a still: the processing starts at or after its completion, and the frame write is enqueued after it ends. */
+const ORDER = [["completed", "writeStartTime"], ["writeStartTime", "writeCompleteTime"], ["writeCompleteTime", "writerEnqueuedTime"],
+  ["writerEnqueuedTime", "writerStartTime"], ["writerStartTime", "writerCompleteTime"]];
 
 /** Whether still row `row` (stills.jsonl) was requested more than one gap after its plan, on the raw mach clock of the row. */
 const lateRow = (row) => row.requested !== null && Number(BigInt(row.requested) - BigInt(row.planned))
@@ -44,10 +32,10 @@ const lateRow = (row) => row.requested !== null && Number(BigInt(row.requested) 
  * window list for a written still and for a failed one whose windows were taken (a failed still whose windows could not be
  * taken has no completion time and the window list []), a request no earlier than the plan and a completion no earlier than the
  * request, the frame of its index exactly for a written still, an error exactly for a failed still, a positive gap, a positive
- * timebase equal to the first row's, and stage times (STAGES) that are exact decimal mach times or null, each stage of
- * WRITTEN_STAGES for a written still and none for a still that took no image, bracketed (BRACKETS) and in order (ORDER), with
- * no decode time (DECODE_TIMES), and the colour of its image: a colour space that is a name or null and a profile file
- * (PROFILE_FILE), which a written still names and a still that took no image does not.
+ * timebase equal to the first row's, and stage times (STAGES) that are exact decimal mach times or null, each stage for a
+ * written still and none for a still that took no image, bracketed (BRACKETS) and in order (ORDER), and the colour of its
+ * image: a colour space that is a name or null and a profile file (PROFILE_FILE), which a written still names and a still
+ * that wrote no frame does not, with no colour space either.
  */
 function requireStillRow(row, place, path, first) {
   const fail = (what) => { throw new Error(`still row ${place} of ${path} ${what}`); };
@@ -99,11 +87,8 @@ function requireStillRow(row, place, path, first) {
     }
     if (!taken && row[name] !== null) fail(`took no image and has the ${name} time ${JSON.stringify(row[name])}`);
   }
-  for (const name of DECODE_TIMES) {
-    if (row[name] !== null) fail(`has the ${name} time ${JSON.stringify(row[name])}, which a still row does not hold`);
-  }
   if (row.outcome === "written") {
-    for (const name of WRITTEN_STAGES) if (row[name] === null) fail(`is written without its ${name} time`);
+    for (const name of STAGES) if (row[name] === null) fail(`is written without its ${name} time`);
   }
   for (const [start, end] of BRACKETS) {
     if ((row[start] === null) !== (row[end] === null)) {
@@ -123,9 +108,9 @@ function requireStillRow(row, place, path, first) {
   if (!(row.colorProfile === null || (typeof row.colorProfile === "string" && PROFILE_FILE.test(row.colorProfile)))) {
     fail(`has the colour profile ${JSON.stringify(row.colorProfile)}, not color-<16 hex digits>.icc`);
   }
-  if (!taken) {
-    if (row.colorSpace !== null) fail(`took no image and has the colour space ${JSON.stringify(row.colorSpace)}`);
-    if (row.colorProfile !== null) fail(`took no image and has the colour profile ${JSON.stringify(row.colorProfile)}`);
+  if (row.outcome !== "written") {
+    if (row.colorSpace !== null) fail(`is ${row.outcome} and has the colour space ${JSON.stringify(row.colorSpace)}`);
+    if (row.colorProfile !== null) fail(`is ${row.outcome} and has the colour profile ${JSON.stringify(row.colorProfile)}`);
   }
 }
 
@@ -191,28 +176,4 @@ export const toldStill = (row) => `still ${row.index} planned at ${row.planned.t
 export function requireNoLostStills(rows, what, { from = -Infinity, to = Infinity } = {}) {
   const lost = lostStills(rows, from, to).map(toldStill);
   if (lost.length > 0) throw new Error(`the recording lost ${lost.length} stills of ${what}: ${lost.join(", ")}`);
-}
-
-/**
- * Checks the decoded rows `decoded` of the frame identity of a recording (decoded-frames.jsonl, `what` names them) against its
- * still recording file `path` (stills.jsonl, read by readStills): each row names the still whose pixels it decoded by its index
- * and the exact decimal mach times of its request and completion, which are those of that still in the recording.
- */
-export function requireDecodedStills(decoded, path, what) {
-  const raw = rawStills(path);
-  decoded.forEach((row, place) => {
-    const fail = (told) => { throw new Error(`${what}: decoded row ${place} ${told}`); };
-    if (!(Number.isSafeInteger(row.index) && row.index >= 0)) fail(`names the still ${JSON.stringify(row.index)}, not a still index`);
-    for (const name of ["requested", "completed"]) {
-      if (!(typeof row[name] === "string" && DECIMAL.test(row[name]))) {
-        fail(`has the ${name} time ${JSON.stringify(row[name])}, not an exact decimal mach time`);
-      }
-    }
-    const still = raw[row.index];
-    if (!still) fail(`names still ${row.index}, which ${path} does not plan`);
-    if (still.requested !== row.requested || still.completed !== row.completed) {
-      fail(`names still ${row.index} requested at ${row.requested} and completed at ${row.completed}, and ${path} has it ` +
-        `requested at ${still.requested} and completed at ${still.completed}`);
-    }
-  });
 }

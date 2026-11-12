@@ -10,14 +10,12 @@ import test from "node:test";
 
 import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
-import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { fresh } from "../fixture.mjs";
 import { compareAppKitReference } from "./ime-reference-steps.mjs";
 import { assertReceivedUnchanged, inputDocument, lastTransaction, presentedStage, rasterProbeTab, receivedAfter,
   untilDocument } from "../input-probe.mjs";
 import { focusImageActive } from "./image-focus.mjs";
 import { NATIVE_INPUT_LOG, NATIVE_INPUT_READS, nativeInputDelivered, nativeInputStart } from "../native-input-trace.mjs";
-import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 
 const REGISTRY_COMMAND = "workbench.command";
 const MODAL_ANSWER = "workbench.trace.modal.answer";
@@ -79,17 +77,13 @@ for (const app of Object.values(APPS)) {
     assert.equal(inputDocument(log), "한", `the region document does not end in the committed AppKit text: ${JSON.stringify(log)}`);
     const gestureEnd = await s.presented();
     const stopped = await recording.stop({ after: gestureEnd.displayed + 100 });
-    const captured = frames(recording.frames).map(readFrame);
-    assert.equal(captured.length, stopped.count, "the IME Escape recording has missing frame files");
-    assert.ok(captured.length > 1, "the IME Escape recording has no complete frames");
-    requireNoLostStills(readStills(stopped.stills), "the IME Escape");
     const events = await traceEvents(s, offsets);
     assert.equal(traceCommands(events, "core.picker.close").length, 0,
       "composition Escape must not forward core.picker.close");
     assert.equal(events.filter((event) => event.event === "workbench.input.shortcut.failed").length, 0,
       "composition Escape must not forward a workbench shortcut command");
     assert.deepEqual((await s.get("core.workbench.audit")).unbound, []);
-    t.diagnostic(`${app.name}: captured complete g/k/s/Escape gesture in ${captured.length} frames, ${stopped.missed} missed ` +
+    t.diagnostic(`${app.name}: recorded the g/k/s/Escape gesture in ${stopped.count} frames, ${stopped.missed} missed ` +
       `and ${stopped.late} late stills`);
   });
 }

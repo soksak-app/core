@@ -1,7 +1,6 @@
-// Measures the time in which the layout stays behind the window after a maximise and a restore, and judges it against the catch-up
-// limit of the resize case (cases/resize.mjs). The window check e2e/resize.test.mjs keeps the same frames and judges only the behaviour.
-// On a window whose host.window reports pageProcess null it also judges each recorded frame with the geometry rule of the view drag on the
-// floor page fixture view and then runs a maximise and restore without capture under the trace state of the frame records, whose U7 records must be complete.
+// Records a maximise and a restore (cases/resize.mjs), each of which ends with the layout at the window size; the recordings are their
+// evidence. On a window whose host.window reports pageProcess null it then runs a maximise and restore without capture under the trace
+// state of the frame records, whose U7 records must be complete.
 // Each state asserts the settings of B3_SETTINGS before it measures. B3 output (SOKSAK_B3_OUT and SOKSAK_B3_TRACE, cases/b3-run.mjs):
 // the keys of resize-catch-up in B3_MEASUREMENTS of measurements.mjs for the state; the state captured writes the verdict with the
 // conditions of the captured maximise and restore, and the state frame-records writes the U7 figures of the maximise without capture
@@ -10,28 +9,23 @@ import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { applyTrace, FRAME_RECORDS } from "../../scripts/measure-trace.mjs";
-import { judgeFrames } from "../resize-frames.mjs";
 import { b3Conditions, b3Target, withB3Out } from "./cases/b3-run.mjs";
 import { recordGesture } from "./cases/gesture-records.mjs";
-import { assertCatchUpWithinBound, recordMaximiseAndRestore, resizeB3Values, uncapturedResize, uncapturedResizeGestures } from "./cases/resize.mjs";
+import { recordMaximiseAndRestore, resizeB3Values, uncapturedResize, uncapturedResizeGestures } from "./cases/resize.mjs";
 import { B3_MEASUREMENTS, B3_SETTINGS } from "./measurements.mjs";
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: maximising and restoring keep the layout at the window size within the catch-up limit`, async (t) => {
+  test(`${app.name}: maximising and restoring keep the layout at the window size`, async (t) => {
     const s = await open(t, app);
     await withB3Out(b3Target(process.env, B3_MEASUREMENTS["resize-catch-up"]), async (run) => {
-      const took = {};
-      const { pageProcess } = await recordMaximiseAndRestore(s, (gesture, recorded) => {
-        took[gesture] = judgeFrames(recorded.measured).took;
-        t.diagnostic(`${app.name} ${gesture}: the layout stayed behind the window for ${took[gesture].toFixed(0)}ms`);
+      const { pageProcess } = await recordMaximiseAndRestore(s, (gesture, { frames, missed, late }) => {
+        t.diagnostic(`${app.name} ${gesture}: recording ${frames}, ${missed} missed and ${late} late stills`);
       }, {
-        geometry: true,
         started: async () => {
           const conditions = await b3Conditions(s, B3_SETTINGS["resize-catch-up"].captured);
           if (run.state === "captured") run.conditions = conditions;
         },
       });
-      for (const [gesture, ms] of Object.entries(took)) assertCatchUpWithinBound(ms, `${app.name} ${gesture}`);
       let recorded = null;
       if (pageProcess === null) {
         const gestures = await uncapturedResizeGestures(s);

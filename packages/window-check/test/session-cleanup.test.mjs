@@ -24,6 +24,7 @@ test("probe body fails", async (t) => {
     checkEnded: async () => {},
     stallSamples: new Set(),
     expectedErrors: [],
+    recordingNotes: [],
     markTest: async () => null,
   };
   t.after(() => finishSession(t, session, () => {}));
@@ -164,6 +165,7 @@ test("probe body passes", async (t) => {
     eventStart: { "host-1-1.jsonl": { offset: ${started}, inode: ${JSON.stringify(String(statSync(join(dir, "logs", "host-1-1.jsonl"), { bigint: true }).ino))} } },
     expectedErrors: ${expected},
     recordings: new Set(),
+    recordingNotes: [],
     markTest: async () => null,
   };
   t.after(() => finishSession(t, session, () => {}));
@@ -213,7 +215,7 @@ import { finishSession, recordingFolders } from ${JSON.stringify(app)};
 test("probe body passes", async (t) => {
   const configDir = ${JSON.stringify(dir)};
   const session = { app: { name: "probe", configDir }, cleanups: [], checkEnded: async () => {}, stallSamples: new Set(), eventStart: {}, expectedErrors: [], markTest: async () => null,
-    recordingsBefore: recordingFolders(configDir), recordings: new Set(), failedRecordings: new Map() };
+    recordingsBefore: recordingFolders(configDir), recordings: new Set(), failedRecordings: new Map(), recordingNotes: [] };
   mkdirSync(join(configDir, "logs", "captures", "left"));
   writeFileSync(join(configDir, "logs", "captures", "left", "frame-0001.bgra"), "x");
   t.after(() => finishSession(t, session, () => {}));

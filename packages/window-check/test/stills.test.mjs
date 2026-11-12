@@ -6,7 +6,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import * as stills from "../stills.mjs";
 import { lostStills, readStills, requireNoLostStills } from "../stills.mjs";
 import { writeStillRecording } from "../still-recording.mjs";
 
@@ -103,8 +102,7 @@ test("a failed still row whose windows could not be taken has no completion time
   assert.throws(changedRow(t, (list) => { list[0].completed = null; }), /^Error: still row 0 of .* is written without its completed time$/);
 });
 
-// The stage times of a still row bracket the processing of the still after its completion, its image match, its identity
-// enqueue and the write of its frame (docs/spec/diagnostics.md, stills.jsonl): each is an exact decimal mach time or null for a
+// The stage times of a still row bracket the processing of the still after its completion and the write of its frame (docs/spec/diagnostics.md, stills.jsonl): each is an exact decimal mach time or null for a
 // stage that did not run.
 test("a still row whose stage times are not exact decimal mach times or null is refused", (t) => {
   assert.throws(changedRow(t, (list) => { list[0].writeStartTime = 500000; }),
@@ -113,9 +111,8 @@ test("a still row whose stage times are not exact decimal mach times or null is 
     /^Error: still row 0 of .* has the writerStartTime time undefined, not an exact decimal mach time or null$/);
 });
 
-test("a written still row without the times of its processing, image match and frame write is refused", (t) => {
-  for (const name of ["writeStartTime", "writeCompleteTime", "imageMatchStartTime", "imageMatchCompleteTime", "writerEnqueuedTime",
-    "writerStartTime", "writerCompleteTime"]) {
+test("a written still row without the times of its processing and frame write is refused", (t) => {
+  for (const name of ["writeStartTime", "writeCompleteTime", "writerEnqueuedTime", "writerStartTime", "writerCompleteTime"]) {
     assert.throws(changedRow(t, (list) => { list[0][name] = null; }),
       new RegExp(`^Error: still row 0 of .* is written without its ${name} time$`));
   }
@@ -128,61 +125,15 @@ test("a still row that took no image with a stage time is refused", (t) => {
     /^Error: still row 1 of .* took no image and has the writerEnqueuedTime time "9000000"$/);
 });
 
-// The QR decoder runs after the still, so its times are those of the decoded rows and never of a still row.
-test("a still row with frame identity decode times is refused", (t) => {
-  for (const name of ["frameIdentityDecodeStartTime", "frameIdentityDecodeCompleteTime"]) {
-    assert.throws(changedRow(t, (list) => { list[0][name] = "500000"; }),
-      new RegExp(`^Error: still row 0 of .* has the ${name} time "500000", which a still row does not hold$`));
-  }
-});
-
 test("a still row whose stages are half bracketed or out of order is refused", (t) => {
-  assert.throws(changedRow(t, (list) => { list[0].identityDecodeEnqueueStartTime = "500000"; }),
-    /^Error: still row 0 of .* has the identityDecodeEnqueueStartTime time without its identityDecodeEnqueueCompleteTime time$/);
-  assert.throws(changedRow(t, (list) => { list[0].identityDecodeEnqueueCompleteTime = "500000"; }),
-    /^Error: still row 0 of .* has the identityDecodeEnqueueCompleteTime time without its identityDecodeEnqueueStartTime time$/);
-  for (const [later, earlier] of [["writeStartTime", "completed"], ["imageMatchStartTime", "writeStartTime"],
-    ["imageMatchCompleteTime", "imageMatchStartTime"], ["writeCompleteTime", "imageMatchCompleteTime"],
+  assert.throws(changedRow(t, (list) => { list[1].writeStartTime = "9000000"; }),
+    /^Error: still row 1 of .* has the writeStartTime time without its writeCompleteTime time$/);
+  assert.throws(changedRow(t, (list) => { list[1].writerCompleteTime = "9000000"; }),
+    /^Error: still row 1 of .* has the writerCompleteTime time without its writerStartTime time$/);
+  for (const [later, earlier] of [["writeStartTime", "completed"], ["writeCompleteTime", "writeStartTime"],
     ["writerEnqueuedTime", "writeCompleteTime"], ["writerStartTime", "writerEnqueuedTime"], ["writerCompleteTime", "writerStartTime"]]) {
     assert.throws(changedRow(t, (list) => { list[0][later] = "499999"; }),
       new RegExp(`^Error: still row 0 of .* has its ${later} time before its ${earlier} time$`));
-  }
-  assert.throws(changedRow(t, (list) => {
-    list[0].identityDecodeEnqueueStartTime = "499999"; list[0].identityDecodeEnqueueCompleteTime = "500000";
-  }), /^Error: still row 0 of .* has its identityDecodeEnqueueStartTime time before its writeStartTime time$/);
-  assert.throws(changedRow(t, (list) => {
-    list[0].identityDecodeEnqueueStartTime = "500000"; list[0].identityDecodeEnqueueCompleteTime = "500001";
-  }), /^Error: still row 0 of .* has its writeCompleteTime time before its identityDecodeEnqueueCompleteTime time$/);
-});
-
-// A decoded row of the frame identity of a recording (decoded-frames.jsonl) names the still whose pixels it decoded by its index
-// and its raw request and completion ticks, which are those of the still in stills.jsonl.
-function decodedOf(t) {
-  const directory = mkdtempSync(join(tmpdir(), "soksak-decoded-"));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
-  return writeStillRecording(directory, { gap: 8, until: 16, stoppedAt: 2 }).stills;
-}
-
-test("decoded rows that name taken stills by their index and ticks pass", (t) => {
-  const path = decodedOf(t);
-  stills.requireDecodedStills([{ index: 0, requested: "0", completed: "500000" }, { index: 1, requested: "8000000",
-    completed: "8500000" }, { index: 1, requested: "8000000", completed: "8500000" }], path, "the identity");
-});
-
-test("a decoded row that names no still of the recording or another time of its still is refused", (t) => {
-  const path = decodedOf(t);
-  for (const [row, error] of [
-    [{ index: -1, requested: "0", completed: "500000" }, /^Error: the identity: decoded row 0 names the still -1, not a still index$/],
-    [{ index: "0", requested: "0", completed: "500000" }, /^Error: the identity: decoded row 0 names the still "0", not a still index$/],
-    [{ index: 0, requested: 0, completed: "500000" }, /^Error: the identity: decoded row 0 has the requested time 0, not an exact decimal mach time$/],
-    [{ index: 0, requested: "0", completed: null }, /^Error: the identity: decoded row 0 has the completed time null, not an exact decimal mach time$/],
-    [{ index: 3, requested: "24000000", completed: "24500000" }, /^Error: the identity: decoded row 0 names still 3, which .*stills\.jsonl does not plan$/],
-    [{ index: 1, requested: "8000001", completed: "8500000" }, new RegExp("^Error: the identity: decoded row 0 names still 1 " +
-      "requested at 8000001 and completed at 8500000, and .*stills\\.jsonl has it requested at 8000000 and completed at 8500000$")],
-    [{ index: 2, requested: "16000000", completed: "16500000" }, new RegExp("^Error: the identity: decoded row 0 names still 2 " +
-      "requested at 16000000 and completed at 16500000, and .*stills\\.jsonl has it requested at null and completed at null$")],
-  ]) {
-    assert.throws(() => stills.requireDecodedStills([row], path, "the identity"), error);
   }
 });
 
@@ -203,9 +154,12 @@ test("a written still row without the colour space and the profile of its frame 
   assert.equal(named[0].colorSpace, "kCGColorSpaceDisplayP3");
 });
 
-test("a still row that took no image with a colour space or a profile is refused", (t) => {
-  assert.throws(changedRow(t, (list) => { list[2].colorProfile = "color-0123456789abcdef.icc"; }),
-    /^Error: still row 2 of .* took no image and has the colour profile "color-0123456789abcdef\.icc"$/);
-  assert.throws(changedRow(t, (list) => { list[2].colorSpace = "kCGColorSpaceSRGB"; }),
-    /^Error: still row 2 of .* took no image and has the colour space "kCGColorSpaceSRGB"$/);
+// A still that wrote no frame names no colour, also a failed still that took an image (docs/spec/diagnostics.md, stills.jsonl).
+test("a still row that wrote no frame with a colour space or a profile is refused", (t) => {
+  for (const [index, outcome] of [[1, "failed"], [2, "not-requested"]]) {
+    assert.throws(changedRow(t, (list) => { list[index].colorProfile = "color-0123456789abcdef.icc"; }),
+      new RegExp(`^Error: still row ${index} of .* is ${outcome} and has the colour profile "color-0123456789abcdef\\.icc"$`));
+    assert.throws(changedRow(t, (list) => { list[index].colorSpace = "kCGColorSpaceSRGB"; }),
+      new RegExp(`^Error: still row ${index} of .* is ${outcome} and has the colour space "kCGColorSpaceSRGB"$`));
+  }
 });

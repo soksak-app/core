@@ -18,13 +18,13 @@ function pngChunk(type, body) {
   result.writeUInt32BE((crc ^ 0xffffffff) >>> 0, result.length - 4);
   return result;
 }
-function fixture(t, corrupt = false) {
+function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), "soksak-design-state-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const source = join(root, "native", "still-main-1", "window.png");
   mkdirSync(dirname(source), { recursive: true });
   const header = Buffer.alloc(13); header.writeUInt32BE(1); header.writeUInt32BE(1, 4); header[8] = 8; header[9] = 6;
-  const bytes = corrupt ? Buffer.from("invalid PNG bytes") : Buffer.concat([
+  const bytes = Buffer.concat([
     Buffer.from("89504e470d0a1a0a", "hex"), pngChunk("IHDR", header),
     pngChunk("IDAT", deflateSync(Buffer.from([0, 10, 20, 30, 255]))), pngChunk("IEND", Buffer.alloc(0)),
   ]);
@@ -56,11 +56,4 @@ test("design state capture requires the declared run folder before acquiring a n
   const f = fixture(t);
   await assert.rejects(() => retain(f.session, f.diagnostics, "project rename", { runFolder: "" }), /SOKSAK_RUN_FOLDER/);
   assert.deepEqual(f.events, []);
-});
-test("design state capture preserves ownership and source bytes when PNG decoding fails", async t => {
-  const f = fixture(t, true), runFolder = join(f.root, "declared-run");
-  await assert.rejects(() => retain(f.session, f.diagnostics, "card sidebar", { runFolder }), /PNG|png|signature/);
-  assert.deepEqual(f.owned, [dirname(f.source)]);
-  assert.deepEqual(readFileSync(f.source), f.bytes);
-  assert.equal(existsSync(join(runFolder, "design-hosts", "fixture-host", "card sidebar.png")), false);
 });

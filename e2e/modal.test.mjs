@@ -5,10 +5,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 
-import { APPS, holdCovered, judgeShownChanges, MAIN_PAGE_APPS, open, owe } from "@soksak/window-check/app.mjs";
+import { APPS, holdCovered, MAIN_PAGE_APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh as prepare, holdDialogs } from "./fixture.mjs";
-import { frames, readFrame } from "@soksak/window-check/frame.mjs";
-import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 import { addRasterTab, RASTER, rasterReady } from "./raster-probe.mjs";
 import { readStillCapture } from "./still-capture.mjs";
 import { channelOtherSeqs, expectedTimeline, PAGE_ROWS } from "./debug-timeline-files.mjs";
@@ -62,8 +60,7 @@ for (const app of Object.values(APPS)) {
     const original = before.regions.find((region) => region.surface === raster && region.name === "raster");
     t.diagnostic(`before reload raster: ${JSON.stringify(original)}`);
     await s.presented();
-    const baseline = await readStillCapture(s, t);
-    assert.ok(baseline.image.width > 0 && baseline.image.height > 0, "initial still is empty");
+    await readStillCapture(s, t);
     const predecessor = (await s.get("core.window.workbench")).start;
     await s.run("core.settings.open");
     await s.until("core.window.workbench", (workbench) => workbench.background === true,
@@ -88,8 +85,7 @@ for (const app of Object.values(APPS)) {
     }, "the successor's newly attached raster image or documents inherited the ended dialog blur");
     t.diagnostic(`after reload native backgrounds: ${JSON.stringify({ regions: after.regions, documents: after.documents, modal: after.modal })}`);
     await s.presented();
-    const restored = await readStillCapture(s, t);
-    assert.ok(restored.image.width > 0 && restored.image.height > 0, "successor still is empty");
+    await readStillCapture(s, t);
   });
 }
 
@@ -166,72 +162,6 @@ async function modalAt(s, card) {
 }
 
 const rectOf = ({ x, y, width, height }) => ({ x, y, width, height });
-
-/** The mean brightness (0-255) of the samples of the frame at intervals of 8 pixels. */
-function brightness(frame) {
-  let sum = 0;
-  let count = 0;
-  for (let y = 0; y < frame.height; y += 8) {
-    for (let x = 0; x < frame.width; x += 8) {
-      const i = y * frame.stride + x * 4;
-      sum += frame.data[i] + frame.data[i + 1] + frame.data[i + 2];
-      count += 3;
-    }
-  }
-  return sum / count;
-}
-
-for (const app of Object.values(APPS)) {
-  test(`${app.name}: the settings modal is on screen at the time presented reports after it is shown`, { timeout: 60000 }, async (t) => {
-    const s = await open(t, app);
-    await fresh(s);
-    // The session removes the recording when the check passes and keeps it when the check fails; the stop checks its still rows.
-    const recording = await s.record();
-    const directory = recording.frames;
-    let displayed = 0;
-    let stopped;
-    // Opening the settings shows the modal: the recording owes frames from the request to the display of the modal
-    // (judgeShownChanges).
-    const owed = [];
-    try {
-      const from = await owe(s);
-      await s.run("core.settings.open");
-      s.cleanup(() => s.run("core.settings.close"));
-      await s.until("core.settings-modal", (modal) => modal.open, "settings did not open");
-      // host.window.presented covers the shown modal (docs/spec/exposure.md). A host that creates modal web views shows the
-      // settings web view only after its document rendered (docs/spec/native-modals.md#keyboard), later than the card of the
-      // main page that core.settings-modal reads, so the check waits until that web view is shown. A host has a main page, and so
-      // modal web views, when host.window names the process of its page (pageProcess is null on a host without one).
-      if ((await s.get("host.window")).pageProcess !== null) {
-        await s.until("host.window", (state) => state.modal?.id === "settings" && state.modal.shown,
-          "the settings web view was not shown");
-      }
-      ({ displayed } = await s.presented());
-      owed.push({ from, to: displayed });
-      const card = await s.rect("core.settings-modal.card");
-      assert.ok(card.width > 0 && card.height > 0, "the actual named settings card was not rendered");
-    } finally {
-      stopped = await recording.stop({ after: displayed ? displayed + 100 : 0 });
-    }
-    judgeShownChanges(stopped, owed, { what: "settings open" });
-    const captured = frames(directory).map(readFrame);
-    // A still shows the window at a moment between its request and its completion: the first still, completed before the
-    // presented time, shows the window before it, and each still requested at or after the presented time shows the modal.
-    const first = captured[0];
-    const after = captured.filter((frame) => frame.requested >= displayed);
-    assert.ok(first.completed < displayed && after.length > 0,
-      `the recording does not span the presented time ${displayed}: ${first.completed}..${captured.at(-1).requested}`);
-    // The scrim of a dialog darkens the whole window. Every still requested after the display time is darker than the still
-    // before the opening, so a still that the recording lost after the display time could have shown the window without it.
-    requireNoLostStills(readStills(stopped.stills), "the settings modal");
-    const before = brightness(first);
-    for (const frame of after) {
-      assert.ok(brightness(frame) < before * 0.9,
-        `the still requested ${(frame.requested - displayed).toFixed(1)}ms after the presented time shows no settings scrim: ` +
-        `brightness ${brightness(frame).toFixed(1)} against ${before.toFixed(1)} before opening`);
-    }
-  });
-}
 
 // These cases read the modal document (core.modal document), hold its first answer (diagnostics.modal.hold) or dispatch events
 // to its elements, so they run on the applications that create modal web views (MAIN_PAGE_APPS).

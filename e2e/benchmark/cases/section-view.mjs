@@ -1,5 +1,5 @@
 // The section views of the view benchmark (docs/operations/examples.md, S7): each section view of the section view fixture, the plain view
-// probe (SECTION_VIEW_PLUGIN), is measured for (i), (ii), (iii), (iii-b), (v) and (viii) of plugin processes, through the section-view
+// probe (SECTION_VIEW_PLUGIN), is measured for (i), (ii), (iii) and (iii-b) of plugin processes, through the section-view
 // contract of docs/spec/plugin-processes.md#section-views. A section view whose plugin does not declare that contract fails with its
 // plugin and section.
 import assert from "node:assert/strict";
@@ -7,10 +7,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 
 import { validateDiagnostics } from "@soksak/plugin-api";
-import { joinedFailure, START_PLUGIN } from "../../fixture.mjs";
-import { effectiveCardCornerRadiusPt } from "@soksak/window-check/view-frame-geometry.mjs";
-import { collectViewReclaimMeasurements, collectViewStartAndMemory, waitForViewReadiness } from "@soksak/window-check/view-metrics-collection.mjs";
-import { activeCoreTheme, markerDragObservation, markerLayoutObservation, requireMarkerColor } from "@soksak/window-check/marker-view.mjs";
+import { START_PLUGIN } from "../../fixture.mjs";
+import { collectViewReclaimMeasurements, collectViewStartAndMemory } from "@soksak/window-check/view-metrics-collection.mjs";
 
 const INSTALLED_FORMAT = 3;
 
@@ -173,22 +171,11 @@ export const SECTION_PLACEMENT = Object.freeze({
   },
 });
 
-/** The drag (viii) of a section view: the top boundary of its card `card` (core.grid) moves 80 pt down and back once. */
-export function sectionTopEdgeDragPlan(grid, card) {
-  if (!Array.isArray(grid?.lines?.y) || grid.lines.y.length <= 2) {
-    throw new Error("the section drag requires the measured horizontal grid lines");
-  }
-  if (!(Number.isInteger(card?.r0) && card.r0 > 0 && card.r0 < grid.lines.y.length - 1)) {
-    throw new Error(`the section drag requires a card below another card, not a card whose top row is ${card?.r0}`);
-  }
-  return { axis: "y", line: card.r0, dx: 0, dy: 80, ms: 500, times: 1 };
-}
-
 /**
  * The view descriptor of the section view `view` (installedSectionViews), whose plugin declares the section-view contract
  * (requireSectionDeclarations). Its readiness waits for `<section id>.view.ready` with `ready` true, requires the declared `content` and
  * a history of one entry; a section view holds no document region, so its region history is 0. Its content trace
- * runs `<plugin>.view.frames`, and a start answer without a marker color stops the observer and fails with the plugin and section.
+ * runs `<plugin>.view.frames`.
  */
 export function sectionViewDescriptor(view) {
   const { plugin, section, content } = requireSectionDeclarations(view);
@@ -222,16 +209,6 @@ export function sectionViewDescriptor(view) {
     startContentTrace: async (s, surface) => {
       const result = await s.run(`${plugin}.view.frames`, { action: "start" }, surface);
       assert.equal(result?.enabled, true, `${owner} content-frame observer did not start on ${surface}`);
-      try {
-        requireMarkerColor(result.markerColor, owner);
-      } catch (error) {
-        try {
-          await s.run(`${plugin}.view.frames`, { action: "stop" }, surface);
-        } catch (stopError) {
-          throw joinedFailure(`${owner} answered a start without a marker color and did not stop on ${surface}`, [error, stopError]);
-        }
-        throw error;
-      }
       return result;
     },
     stopContentTrace: async (s, surface) => {
@@ -245,25 +222,12 @@ export function sectionViewDescriptor(view) {
 /**
  * Collects the measurements of the section view of `descriptor` (sectionViewDescriptor) in the window of `s`, which shows the section
  * alone in the card-left sidebar of every ANCHOR_PLUGIN card: the process starts, first displays, warm reuse, total and reclaim of
- * @soksak/window-check/view-metrics-collection.mjs, then the layout (v) on the y axis and the drag (viii) of the top boundary of a new section card,
- * measured with the palette of the active core theme and the marker color of each trace start.
+ * @soksak/window-check/view-metrics-collection.mjs.
  */
 export async function collectSectionViewMeasurements(t, s, descriptor) {
   const start = await collectViewStartAndMemory(t, s, descriptor);
   const evidence = { events: [...start.events], recordings: [...start.recordings] };
   const reclaim = await collectViewReclaimMeasurements(t, s, descriptor, start.opened, evidence);
-  const theme = await activeCoreTheme(s);
-  const cornerRadiusPt = effectiveCardCornerRadiusPt((await s.get("core.settings")).values);
-  const owner = `${descriptor.plugin} section view ${descriptor.section}`;
-  const surface = await SECTION_PLACEMENT.open(s, { card: start.card, plugin: descriptor.plugin, params: descriptor.params });
-  const readinessEvidence = await waitForViewReadiness(s, surface, descriptor);
-  const card = sidebarOfSurface(await s.get("core.sidebars"), surface)?.card;
-  assert.ok(card, `${owner} measurement surface ${surface} is in no card sidebar`);
-  const layout = await markerLayoutObservation(t, s, descriptor, surface, card, { owner, theme, cornerRadiusPt, axis: "y" });
-  const grid = await s.get("core.grid");
-  const plan = sectionTopEdgeDragPlan(grid, grid.cards.find((item) => item.id === card));
-  const drag = await markerDragObservation(t, s, descriptor, surface, card, layout.pixelPalette, { owner, plan });
-  await SECTION_PLACEMENT.close(s, surface, { cleanup: false });
   return {
     plugin: descriptor.plugin,
     host: s.app.name,
@@ -271,10 +235,6 @@ export async function collectSectionViewMeasurements(t, s, descriptor) {
     reclaim,
     warmDisplay: start.warmDisplay,
     newProcess: { processStarts: start.processStarts, firstDisplays: start.firstDisplays },
-    layoutDisplay: [layout],
-    drag,
-    _evidence: { events: [...evidence.events, ...layout.events, ...drag.events],
-      recordings: [...evidence.recordings, { directory: layout.captureDirectory }, { directory: drag.captureDirectory }],
-      scratch: { surface, readinessEvidence }, pixelPalette: layout.pixelPalette },
+    _evidence: evidence,
   };
 }

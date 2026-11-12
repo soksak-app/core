@@ -1,41 +1,5 @@
 // Verdicts of the card panel window check. test/card-panel-checks.test.mjs checks that the verdicts reject invalid input.
 import assert from "node:assert/strict";
-import { refreshAfter } from "@soksak/window-check/display-refresh.mjs";
-import { lostStills, toldStill } from "@soksak/window-check/stills.mjs";
-
-/**
- * Display states that are missing from the recording. frames are { time, edges } (the request time of a still in ms, boundary
- * coordinates measured in that still) and poses are { displayed, at } (display time in ms, boundary coordinates of that state).
- * Refresh times are the display refreshes of the window (ms). A state is missing when it is absent from the stills up to the
- * first still requested at or after the second observed refresh after its display, or when no such still exists. The limit is
- * that still and not a time; each check bounds the recording gap itself. stills are the still rows of the recording
- * (readStills): each missing state carries in `lost` the stills that the recording lost from the display of the state before it
- * to the end of its window (toldStill). A state is missing whatever lost it; `lost` tells a loss of the recording from a state
- * never shown.
- */
-export function missingPoses(frames, poses, refreshes, stills) {
-  assert.ok(Array.isArray(refreshes) && refreshes.length > 0, "the display refresh times are missing");
-  assert.ok(Array.isArray(stills), "the still rows of the recording are missing, so a missing pose cannot be told");
-  // There is no frame before the recording starts. A state that was displayed before the recording started and did not change until the first frame is counted from the first frame.
-  // A state that changed to the next state before the recording started cannot be recorded, so it is counted from its original time.
-  const first = Math.min(...frames.map((frame) => frame.time));
-  const start = (pose, index) => {
-    const next = poses[index + 1];
-    const replaced = next !== undefined && next.displayed < first;
-    return pose.displayed < first && !replaced ? first : pose.displayed;
-  };
-  // The reported display time can be later than the refresh in which the state first appeared on screen (host.window.presented is the refresh
-  // after the reply). So the check looks at the frames from the display of the previous state to two screen frames after the display of this state. Frames before the previous state
-  // was displayed record an earlier state.
-  const after = (index) => (index === 0 ? -Infinity : poses[index - 1].displayed - 1);
-  const until = (pose, index) => {
-  const settled = refreshAfter(refreshes, start(pose, index), 2);
-    return Math.min(...frames.filter((frame) => frame.time >= settled).map((frame) => frame.time), Infinity);
-  };
-  return poses.flatMap((pose, index) => frames.some((frame) => frame.time >= after(index) &&
-    frame.time <= until(pose, index) && frame.edges.some((edge) => Math.abs(edge - pose.at) <= 1))
-    ? [] : [{ ...pose, lost: lostStills(stills, after(index), until(pose, index)).map(toldStill) }]);
-}
 
 /** Fails when a panel remains after all panels are turned off. A remaining default panel fails as well. */
 export function requireCleared(sidebars) {
@@ -66,43 +30,6 @@ export function requireContentWidth(rect, card, border, divider, side) {
   const column = card.w - 2 * border - extent(card.sidebars?.left) - extent(card.sidebars?.right);
   assert.ok(Math.abs(rect.width - column) <= 1, `${side} panel is ${rect.width} wide, not the card's content column width ${column}`);
 }
-
-/**
- * Inside the collapsed card panel grip rectangle (CSS pixels), along the center line of the long axis, the longest run of pixels that differ from the background inside the band,
- * its pixel count, the number of continuous runs (runs), and the length from the first ink to the last ink (span) (device pixels).
- * image is the result of readPng and ratio is device pixels / CSS pixels. The background is the colour that most pixels of the band show:
- * the band can hold the boundary line with the content at its edge and overlap the card border at its outer end, and a band at a
- * fractional device position puts that line within 2 points of the middle.
- */
-export function gripInk(image, rect, ratio, threshold = 16) {
-  const vertical = rect.height > rect.width;
-  const from = Math.ceil((vertical ? rect.y : rect.x) * ratio);
-  const to = Math.floor(((vertical ? rect.y + rect.height : rect.x + rect.width)) * ratio);
-  const middle = Math.floor(((vertical ? rect.x + rect.width / 2 : rect.y + rect.height / 2)) * ratio);
-  const across = [Math.ceil((vertical ? rect.x : rect.y) * ratio), Math.floor((vertical ? rect.x + rect.width : rect.y + rect.height) * ratio)];
-  const counts = new Map();
-  for (let at = from; at < to; at++) {
-    for (let side = across[0]; side < across[1]; side++) {
-      const key = (vertical ? image.pixel(side, at) : image.pixel(at, side)).join(",");
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-  }
-  const background = [...counts].reduce((best, entry) => (entry[1] > best[1] ? entry : best))[0].split(",").map(Number);
-  let run = 0, longest = 0, total = 0, runs = 0, first = -1, last = -1;
-  for (let at = from; at < to; at++) {
-    const ink = (vertical ? image.pixel(middle, at) : image.pixel(at, middle)).some((value, index) => Math.abs(value - background[index]) > threshold);
-    if (ink && run === 0) runs++;
-    run = ink ? run + 1 : 0;
-    longest = Math.max(longest, run);
-    if (ink) {
-      total++;
-      if (first < 0) first = at;
-      last = at;
-    }
-  }
-  return { longest, total, runs, span: first < 0 ? 0 : last - first + 1, length: to - from };
-}
-
 
 /**
  * The rectangle that the native surface of a card's active tab must take in the window: the card inside its border, below the head and

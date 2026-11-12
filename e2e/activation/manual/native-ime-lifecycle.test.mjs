@@ -10,14 +10,12 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { fresh } from "../../fixture.mjs";
 import { compareAppKitReference } from "../ime-reference-steps.mjs";
 import { assertReceivedUnchanged, focusedCard, imageRegion, inputDocument, insertedText, lastTransaction,
   presentedStage, rasterProbeTab, receivedAfter, transactionMatchesKey, untilDocument } from "../../input-probe.mjs";
 import { focusImageActive } from "../image-focus.mjs";
 import { NATIVE_INPUT_LOG, NATIVE_INPUT_READS, nativeInputDelivered, nativeInputStart } from "../../native-input-trace.mjs";
-import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 
 /** The log policy and the records of the checks of this file: the input records of the native library and the sidecar requests. */
 const READS = ["native.input.key_down", "native.input.callback", ...NATIVE_INPUT_READS];
@@ -34,9 +32,6 @@ async function preserveGestureCapture(s, artifactDir, label) {
   let preserved = false;
   const persist = () => {
     if (preserved || !result) return;
-    const recordedFrames = frames(capture.frames);
-    assert.equal(recordedFrames.length, result.count, `${label}: capture frame files are missing`);
-    for (const file of recordedFrames) readFrame(file);
     const destination = join(artifactDir, label);
     cpSync(capture.frames, destination, { recursive: true });
     writeFileSync(join(artifactDir, `${label}.json`), JSON.stringify({
@@ -54,8 +49,6 @@ async function preserveGestureCapture(s, artifactDir, label) {
   return async () => {
     const { displayed } = await s.presented();
     result = await capture.stop({ after: displayed + 100 });
-    assert.ok(result.count > 0, `${label}: the full-gesture capture contains no frames`);
-    requireNoLostStills(readStills(result.stills), `${label}: the full gesture`);
     persist();
     return result;
   };

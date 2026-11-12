@@ -3,28 +3,6 @@
 import assert from "node:assert/strict";
 import { normalizeViewText } from "./view-metrics.mjs";
 
-/** Copies one applied view's exact opaque BGRA crop without resizing or changing channels. */
-export function cropViewPixels(frame, rect) {
-  assert.ok(frame.data instanceof Uint8Array && frame.data.length === frame.stride * frame.height,
-    "capture pixel storage does not match its declared stride and height");
-  const ratio = frame.scale * frame.contentScale;
-  assert.ok([ratio, rect.x, rect.y, rect.w, rect.h, frame.content.x, frame.content.y].every(Number.isFinite)
-    && ratio > 0 && rect.w > 0 && rect.h > 0, "invalid captured view geometry");
-  const x = Math.floor(frame.content.x * frame.scale + rect.x * ratio);
-  const y = Math.floor(frame.content.y * frame.scale + rect.y * ratio);
-  const width = Math.ceil(frame.content.x * frame.scale + (rect.x + rect.w) * ratio) - x;
-  const height = Math.ceil(frame.content.y * frame.scale + (rect.y + rect.h) * ratio) - y;
-  assert.ok(x >= 0 && y >= 0 && x + width <= frame.width && y + height <= frame.height,
-    "the applied view crop lies outside its recorded frame");
-  assert.ok(width * height * 4 <= 64 * 1024 * 1024, "the view crop exceeds 64 MiB");
-  const data = Buffer.alloc(width * height * 4);
-  for (let row = 0; row < height; row++) {
-    data.set(frame.data.subarray((y + row) * frame.stride + x * 4,
-      (y + row) * frame.stride + (x + width) * 4), row * width * 4);
-  }
-  return { width, height, data };
-}
-
 /**
  * The row of host.window of the visible document region `document` of surface (the root document "" by default), or a failure that
  * names what the row holds. A check whose view answers its content in another form than text reads the region with it.

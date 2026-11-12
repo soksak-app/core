@@ -1,13 +1,12 @@
 import { copyFileSync, mkdirSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
-import { readPng } from "@soksak/window-check/png.mjs";
 
-/** Acquires and decodes a still without changing the caller's readiness timing. */
+/** Acquires a still without changing the caller's readiness timing. The still is evidence: its path is told, not its pixels. */
 export async function readStillCapture(session, t) {
   const { path } = await session.request("diagnostics.capture.still", {});
   session.trackRecording(dirname(path));
   t.diagnostic(`still capture: ${path}`);
-  return { path, image: readPng(path) };
+  return { path };
 }
 
 /** Retains the original state PNG outside session-owned capture cleanup. */

@@ -5,9 +5,9 @@ import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { crc32 } from "node:zlib";
 
-/** The bytes of a frame of one pixel whose blue channel is `shade`, requested and completed at those times (ms). */
-export function stillFrame(shade, requested, completed) {
-  const pixels = Buffer.from([shade & 255, 0, 0, 255]);
+/** The bytes of a frame of one black pixel, requested and completed at those times (ms). */
+export function stillFrame(requested, completed) {
+  const pixels = Buffer.from([0, 0, 0, 255]);
   // An LZ4 block of one literal run of four bytes.
   const block = Buffer.concat([Buffer.from([0x40]), pixels]);
   const header = Buffer.alloc(88);
@@ -20,9 +20,8 @@ export function stillFrame(shade, requested, completed) {
 const ns = (ms) => String(Math.round(ms * 1e6));
 
 /** The stage times of a still row (docs/spec/diagnostics.md, stills.jsonl), each null: no stage ran. */
-const NO_STAGES = Object.fromEntries(["writeStartTime", "writeCompleteTime", "imageMatchStartTime", "imageMatchCompleteTime",
-  "identityDecodeEnqueueStartTime", "identityDecodeEnqueueCompleteTime", "writerEnqueuedTime", "writerStartTime",
-  "writerCompleteTime", "frameIdentityDecodeStartTime", "frameIdentityDecodeCompleteTime"].map((name) => [name, null]));
+const NO_STAGES = Object.fromEntries(["writeStartTime", "writeCompleteTime", "writerEnqueuedTime", "writerStartTime",
+  "writerCompleteTime"].map((name) => [name, null]));
 
 /** The ICC profile of the frames of the fixture recordings, and its file name in a recording folder. */
 export const FIXTURE_PROFILE = Buffer.from("soksak fixture ICC profile");
@@ -30,27 +29,25 @@ export const FIXTURE_PROFILE_FILE = `color-${createHash("sha256").update(FIXTURE
 
 /**
  * The fields of a still row that the processing of its image writes: for a written still completed at the raw mach time
- * `completed`, its processing, image match and frame write, all at that time, and the colour space of its frame, a display
+ * `completed`, its processing and frame write, all at that time, and the colour space of its frame, a display
  * space without a name and the profile FIXTURE_PROFILE_FILE; for another still, none.
  */
 export function stillFields(written, completed) {
-  return written ? { ...NO_STAGES, writeStartTime: completed, writeCompleteTime: completed, imageMatchStartTime: completed,
-    imageMatchCompleteTime: completed, writerEnqueuedTime: completed, writerStartTime: completed, writerCompleteTime: completed,
+  return written ? { ...NO_STAGES, writeStartTime: completed, writeCompleteTime: completed, writerEnqueuedTime: completed,
+    writerStartTime: completed, writerCompleteTime: completed,
     colorSpace: null, colorProfile: FIXTURE_PROFILE_FILE }
     : { ...NO_STAGES, colorSpace: null, colorProfile: null };
 }
 
 /**
  * Writes a recording into `frames`: still i is planned at i·gap from 0 until `until` (ms) and requested at its plan, or `late`
- * ms later for the indices in `lateBy`, and completes `took` ms after its request. A still shows the number of times in
- * `changes` at or before its request, so a change is first held by the first still requested at or after it. The stills of
+ * ms later for the indices in `lateBy`, and completes `took` ms after its request. The stills of
  * `failed` fail and those of `notRequested`, and every still from the index `stoppedAt` on (a recording stopped before the end
  * of its plan), are not requested; neither writes a frame. `windows` is the window list of each still. Returns the stop reply of
- * the host, which names the recorded window `window` (null for a recording of the display), with `layouts` and the display link
- * `displayLink` when given.
+ * the host, which names the recorded window `window` (null for a recording of the display), with `layouts` when given.
  */
-export function writeStillRecording(frames, { gap = 8, until, changes = [], took = 0.5, failed = [], notRequested = [],
-  stoppedAt = Infinity, lateBy = {}, windows = [7], window = 7, layouts = [], displayLink } = {}) {
+export function writeStillRecording(frames, { gap = 8, until, took = 0.5, failed = [], notRequested = [],
+  stoppedAt = Infinity, lateBy = {}, windows = [7], window = 7, layouts = [] } = {}) {
   mkdirSync(frames, { recursive: true });
   const rows = [];
   for (let index = 0; index * gap <= until; index++) {
@@ -69,7 +66,7 @@ export function writeStillRecording(frames, { gap = 8, until, changes = [], took
       continue;
     }
     const frame = `frame-${String(index).padStart(4, "0")}.bgra`;
-    writeFileSync(join(frames, frame), stillFrame(changes.filter((at) => at <= requested).length, requested, completed));
+    writeFileSync(join(frames, frame), stillFrame(requested, completed));
     rows.push({ index, planned: ns(planned), requested: ns(requested), completed: ns(completed), outcome: "written",
       error: null, frame, windows, requestedGap: gap, machTimebaseNumerator: 1, machTimebaseDenominator: 1,
       ...stillFields(true, ns(completed)) });
@@ -80,11 +77,6 @@ export function writeStillRecording(frames, { gap = 8, until, changes = [], took
   // The first written still writes the profile of its colour space.
   if (written.length > 0) writeFileSync(join(frames, FIXTURE_PROFILE_FILE), FIXTURE_PROFILE);
   const longestGap = Math.max(0, ...written.slice(1).map((row, i) => Number(BigInt(row.requested) - BigInt(written[i].requested)) / 1e6));
-  let link;
-  if (displayLink !== undefined) {
-    link = join(frames, "display-link.json");
-    writeFileSync(link, JSON.stringify(displayLink));
-  }
-  return { frames, stills, window, ...(link ? { displayLink: link } : {}), count: written.length, missed: rows.length - written.length,
+  return { frames, stills, window, count: written.length, missed: rows.length - written.length,
     late: Object.keys(lateBy).filter((index) => lateBy[index] > gap).length, longestGap, layouts };
 }

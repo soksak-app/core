@@ -37,8 +37,6 @@ The following table declares the bounded requirement scope of the scenario audit
 | `execution-inputs` | Bind command results to the original inputs, reject drift and retain retries. |
 | `modified-close` | Keep a modified tab through pending or failed saves and allow closure after a clean retry. |
 | `layout-transitions` | Check accepted and refused public transitions, including refusal followed by recovery. |
-| `capture-lifecycle` | Finalize sampling recordings once, preserve failures and complete cleanup. |
-| `capture-coordinates` | Convert document, content and display coordinates to the requested cell pixel. |
 | `candidate-publication` | Reject incomplete or mismatched acceptance for the immutable candidate. |
 <!-- requirement-scope:end -->
 

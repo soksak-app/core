@@ -15,8 +15,8 @@ import { joinedFailure } from "./failure.mjs";
 import { endWatches } from "./folder-wait.mjs";
 import { readEventErrors, sessionEventBoot, sessionEventStart } from "./event-log.mjs";
 import { exitEvidence } from "./host-exit.mjs";
-import { frames as listFrames, samePixels } from "./frame.mjs";
-import { lostStills, PROFILE_FILE, readStills, requireNoLostStills, stillCounts, toldStill } from "./stills.mjs";
+import { frames as listFrames } from "./frame.mjs";
+import { PROFILE_FILE, readStills, requireNoLostStills, stillCounts } from "./stills.mjs";
 import { policyFile, policyOfSetting, readPolicy, requireStored, untilPolicy } from "./log-policy.mjs";
 import { policyAllows } from "@soksak/log-contract";
 import { readPasteboard, restorableItems, restoreFailure, writePasteboard } from "./pasteboard.mjs";
@@ -445,6 +445,8 @@ async function finishSessionAudit(t, session, close, pendingDisposal) {
         t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
       }
     }
+    // The cleanups stop the recordings that the check left, so their notes are told after them.
+    for (const note of session.recordingNotes) t.diagnostic(`recording: ${note}`);
     // The cleanups may start stall samples too, so the samples are awaited after them and before the error audit.
     await settleStallSamples(t, session, failures);
     // Every error line written to the application log during the check is kept as a diagnostic, and an error that the
@@ -558,6 +560,7 @@ export class Session {
     this.cleanups = [];
     this.recordings = new Set();
     this.failedRecordings = new Map();
+    this.recordingNotes = [];
     this.inputSourceRestore = { original: null, capture: null, requester: this };
     // The location of the application log that the check starts reading and the format of the errors that the check
     // declares it causes. finishSession uses them.
@@ -641,6 +644,18 @@ export class Session {
   }
 
   /** Registers a capture folder so the session removes it only after the whole check succeeds. */
+  /**
+   * Tells what `judge` throws about the recording in `frames` as a diagnostic of the check (finishSession) and returns
+   * nothing: a recording is the log of a check, and a check that is not a check of the recording does not fail on it.
+   */
+  noteRecording(judge, frames) {
+    try {
+      judge();
+    } catch (error) {
+      this.recordingNotes.push(`${frames}: ${error.message}`);
+    }
+  }
+
   trackRecording(frames) {
     if (typeof frames !== "string" || frames === "") throw new Error("trackRecording requires a frame folder");
     const identity = realpathSync(frames);
@@ -682,6 +697,7 @@ export class Session {
     other.inputSourceRestore = this.inputSourceRestore;
     other.recordings = this.recordings;
     other.failedRecordings = this.failedRecordings;
+    other.recordingNotes = this.recordingNotes;
     other.expectedErrors = this.expectedErrors;
     other.testName = this.testName;
     other.presses = this.presses;
@@ -802,6 +818,10 @@ export class Session {
    * if none was sent. finishSession removes the folder only after every cleanup and the error audit succeed.
    * The folder of a failed check is its evidence: stop writes its whole reply, every layout transaction included, to
    * stop.json, and keep(name, value) writes a value that the check judged, such as its displayed states, to <name>.json.
+   * A recording is the log of a check: what is wrong with its stills (requireStillsArtifact) and the stills that it lost
+   * (requireNoLostStills) are told as a diagnostic of the check (noteRecording), and the check does not fail on them. A check
+   * of the recording itself judges it with judge(), which throws what is wrong with the stills of the stopped recording and
+   * returns their rows.
    */
   async record(params = {}) {
     // A recording reads the pixels of the window, whatever the windows of other applications in front of it: the capture reads
@@ -823,44 +843,53 @@ export class Session {
     const { frames } = started;
     let sent = false;
     let window;
+    let startError;
     const identity = this.trackRecording(frames);
     this.cleanup(async () => {
       try {
         if (sent) return;
         sent = true;
         const result = await this.request("diagnostics.capture.stop", { after: 0 });
-        // A recording whose start named no recorded window failed at its start, which kept it.
-        if (window === undefined) return;
-        // A recording that the check did not stop is judged as a stopped one: a still that it lost is a moment of the window
-        // that no check saw.
-        requireNoLostStills(requireStillsArtifact(result, frames, asked, 0, stoppedWindow(result)),
-          "the recording that the check did not stop");
+        // A recording whose start named no recorded window was told at its start.
+        if (startError) return;
+        this.noteRecording(() => requireNoLostStills(requireStillsArtifact(result, frames, asked, 0, stoppedWindow(result)),
+          "the recording that the check did not stop"), frames);
       } catch (error) {
         this.failedRecordings.set(identity, error);
         throw error;
       }
     });
+    // The window that the start names is part of the log of the recording: a start that names no recorded window is told,
+    // and judge() fails on it.
     try {
       window = recordedWindow(started, asked, "start");
     } catch (error) {
-      this.failedRecordings.set(identity, error);
-      throw error;
+      startError = error;
+      this.recordingNotes.push(`${frames}: ${error.message}`);
     }
     // A recording of a new window starts before the window is shown, so its stop names the window that it recorded.
     const stoppedWindow = (result) => asked.newWindow === true ? recordedWindow(result, asked, "stop") : window;
+    let stopped;
     return {
       frames,
       stop: (options = {}) => {
         if (sent) return Promise.reject(new Error(`the stop was already sent for the recording ${frames}`));
         sent = true;
         return this.request("diagnostics.capture.stop", options).finally(release).then((result) => {
-          requireStillsArtifact(result, frames, asked, options.after ?? 0, stoppedWindow(result));
+          stopped = { result, after: options.after ?? 0 };
           writeFileSync(join(frames, "stop.json"), JSON.stringify(result));
+          if (!startError) this.noteRecording(() => requireNoLostStills(requireStillsArtifact(result, frames, asked, stopped.after,
+            stoppedWindow(result)), "the recording"), frames);
           return result;
         }).catch((error) => {
           this.failedRecordings.set(identity, error);
           throw error;
         });
+      },
+      judge: () => {
+        if (startError) throw startError;
+        if (!stopped) throw new Error(`the recording ${frames} was not stopped, so its stills cannot be judged`);
+        return requireStillsArtifact(stopped.result, frames, asked, stopped.after, stoppedWindow(stopped.result));
       },
       keep: (name, value) => {
         if (!/^[a-z][a-z-]*$/.test(name)) throw new Error(`a kept value needs a plain name, not ${JSON.stringify(name)}`);
@@ -1319,14 +1348,8 @@ if (TRACE === undefined) throw new Error(`SOKSAK_PERFORMANCE_TRACE must be unset
  * Fails when the drag does not run at the requested rate. A pass of a slow drag is not a pass, and a second drag that
  * runs at the rate would make the check pass by chance, so the first drag that is not paced fails the check.
  */
-export async function drag(s, plan, { capture = false, frameIdentity } = {}) {
-  if (frameIdentity !== undefined && typeof frameIdentity !== "boolean") {
-    throw new TypeError("frameIdentity must be a boolean");
-  }
-  if (frameIdentity === true && capture !== true) {
-    throw new TypeError("frameIdentity requires capture to be true");
-  }
-  const result = await dragOnce(s, plan, capture, frameIdentity === true);
+export async function drag(s, plan, { capture = false } = {}) {
+  const result = await dragOnce(s, plan, capture);
   if (!paced(result)) {
     // The waits before the presses are not in took; they and the load of the machine tell a late host from a busy one.
     throw new Error(
@@ -1342,197 +1365,7 @@ export async function drag(s, plan, { capture = false, frameIdentity } = {}) {
 
 const MARGIN = 1.25;
 
-/**
- * The allowed limit (ms) of the time that a change of the screen which a check asked for waits for the next recorded frame.
- */
-const GAP = 100;
-
 const paced = ({ took, asked }) => took <= asked * MARGIN && took >= asked / MARGIN;
-
-/** A raw mach time of a capture record, as milliseconds on the clock of the recording (sp_capture_clock). */
-const machMs = (ticks, numerator, denominator) => Number(BigInt(ticks) * BigInt(numerator) / BigInt(denominator)) / 1e6;
-
-/**
- * The written stills of the still recording file `path` that show a change: each still whose pixels differ from those of the
- * written still before it, as {requested, completed} (ms). Every still is taken at its planned time whether the window changed
- * or not, so a still with the pixels of the one before it shows the window as it stayed.
- */
-function changedStills(rows) {
-  const written = rows.filter((row) => row.outcome === "written");
-  return written.filter((row, index) => index > 0 && !samePixels(written[index - 1].frame, row.frame));
-}
-
-/**
- * The callback times (ms) of the display link that the recording observed on the main thread of the host
- * (display-link.json), or the state and reason of the observation when it is not available.
- */
-function displayLinkTimes(path) {
-  if (typeof path !== "string") return { unavailable: `missing from the stop reply (displayLink ${JSON.stringify(path)})` };
-  const trace = JSON.parse(readFileSync(path, "utf8"));
-  if (trace.state !== "available") return { unavailable: `${trace.state}${trace.reason ? ` (${trace.reason})` : ""}` };
-  return {
-    callbacks: trace.observations.map((row) => {
-      if (![row.callbackMediaTime, row.timestamp, row.duration].every(Number.isFinite) || !(row.duration > 0)) {
-        throw new Error(`the display-link observation ${row.sequence} of ${path} has no refresh time, callback media time ` +
-          "and refresh period, so its lateness cannot be told");
-      }
-      return { at: machMs(row.callbackTime, row.machTimebaseNumerator, row.machTimebaseDenominator),
-        late: (row.callbackMediaTime - row.timestamp) * 1000, period: row.duration * 1000, occluded: row.occluded === true,
-        inFront: Array.isArray(row.inFront) ? row.inFront : undefined };
-    }),
-  };
-}
-
-/**
- * The silences of the display link of a window within the wait from `at` to `end` (ms, Infinity for a wait without its frame):
- * each time between two of its callbacks, or after its last callback, that overlaps the wait and is longer than two refresh
- * periods of the display. A silence whose closing callback ran at least two refresh periods after its refresh tells a busy main
- * thread; a silence whose closing callback ran sooner tells that no display refresh reached the window. The refresh period is
- * the one that the display link reports, so no rate is assumed.
- */
-function displayLinkSilences(callbacks, at, end) {
-  const told = [];
-  callbacks.forEach((callback, index) => {
-    const next = callbacks[index + 1];
-    if (callback.at >= end || (next ? next.at : Infinity) <= at) return;
-    if (!next) {
-      if (end - callback.at > 2 * callback.period) {
-        told.push(`after its callback at ${callback.at.toFixed(1)}ms the recording holds no display-link callback`);
-      }
-      return;
-    }
-    if (next.at - callback.at <= 2 * next.period) return;
-    told.push(next.late >= 2 * next.period
-      ? `after its callback at ${callback.at.toFixed(1)}ms the main thread ran the display-link callback ` +
-        `${next.late.toFixed(1)}ms after its refresh, at ${next.at.toFixed(1)}ms (busy main thread)`
-      : `after its callback at ${callback.at.toFixed(1)}ms no display refresh reached the window for ` +
-        `${(next.at - callback.at).toFixed(0)}ms (the display link received no vsync)`);
-  });
-  return told;
-}
-
-/**
- * The display-link callbacks within the wait from `at` to `end` at which no part of the window showed (`occluded`, read from
- * NSWindow.occlusionState at the callback), told with their count among the callbacks of the wait, the first of them and the
- * windows in front of the window, or an empty text when the window showed at each of them. The first callback of a covered
- * stretch reads the windows in front of the window from the window list of the window server (`inFront` of display-link.json),
- * so the windows named are those of the last callback at or before the first covered one of the wait that read them: the
- * stretch that holds it began there.
- */
-function coveredCallbacks(callbacks, at, end) {
-  const inWait = callbacks.filter((callback) => callback.at >= at && callback.at < end);
-  const covered = inWait.filter((callback) => callback.occluded);
-  if (covered.length === 0) return "";
-  const read = callbacks.filter((callback) => callback.at <= covered[0].at && callback.inFront !== undefined).at(-1);
-  const named = (window) => `${window.owner} (pid ${window.pid}, window ${window.number}, level ${window.layer}) at ` +
-    `${window.x},${window.y} ${window.width}x${window.height}`;
-  const front = read === undefined
-    ? ", and the recording read no list of the windows in front of it"
-    : `, with in front of it, as read at ${read.at.toFixed(1)}ms: ` +
-      (read.inFront.length === 0 ? "no window" : `[${read.inFront.map(named).join(", ")}]`);
-  return `, and no part of the window showed (NSWindow occlusion) at ${covered.length} of its ${inWait.length} display-link ` +
-    `callbacks in that time, the first at ${covered[0].at.toFixed(1)}ms${front}`;
-}
-
-/**
- * The time (ms) on the clock of the recordings of session `s` (`diagnostics.clock`, the clock of `sp_capture_clock`). A check
- * reads it right before it asks for a change of the screen and passes it to `judgeShownChanges`.
- */
-export async function owe(s) {
-  const { mono_ns: ns } = await s.request("diagnostics.clock", {});
-  if (typeof ns !== "string" || !/^[1-9][0-9]*$/.test(ns)) throw new Error(`diagnostics.clock returned an invalid mono_ns ${JSON.stringify(ns)}`);
-  return Number(BigInt(ns)) / 1e6;
-}
-
-/**
- * The longest wait for a recorded still that shows a change within the changes: `changes` are {from, to?}, the time at which
- * the screen was asked to change and the display time of its final state (absent for a change shown by one still), and `stills`
- * the stills that show a change ({requested, completed}), all in ms on the clock of the recording. A still shows the window at one
- * moment between its request and its completion, so a still requested after a time can show what was shown then, and what it
- * shows was shown no later than its completion. A change waits from its request to the completion of the first such still
- * requested after it, and from each such still to the next until the first one requested at or after its final state. Returns
- * {index, at, next, wait} with the 1-based index of the change, the start of the wait, the still that ends it (null when the
- * recording has none) and its length (Infinity without a still), or null without changes.
- */
-function longestWait(changes, stills) {
-  let worst = null;
-  changes.forEach(({ from, to = from }, index) => {
-    let at = from;
-    let ended = false;
-    for (const still of stills) {
-      if (still.requested <= from) continue;
-      if (!worst || still.completed - at > worst.wait) worst = { index: index + 1, at, next: still, wait: still.completed - at };
-      at = still.completed;
-      if (still.requested >= to) { ended = true; break; }
-    }
-    if (!ended && (!worst || worst.wait !== Infinity)) worst = { index: index + 1, at, next: null, wait: Infinity };
-  });
-  return worst;
-}
-
-/**
- * Judges a recording by the changes of the screen that the check asked for. Each change {from, to?} (ms on the clock of the
- * recording) holds the time at which the check asked for it (a step of a drag, or `owe` read before a command or an input) and,
- * for a change that the window shows through several frames, the display time of its final state (`displayed` of
- * `host.window.presented`). From the request to the first frame after it and between the frames up to the one that shows the
- * final state, no wait is longer than `limit` (ms, GAP by default). The times outside the changes owe no frame, so the window
- * may stay unchanged there and the longest gap of the whole recording does not judge it. A longer wait is a defect of the
- * application, which did not show the change: the failure names the change, the wait, the changes asked for in it, the layouts
- * that the host began in it and the commit time of each layout committed in it (`layouts`, by default those of the stop reply),
- * and each silence of the display link of the window in it, told as a busy main thread or as refreshes that did not reach the
- * window, so it tells a main thread that stopped from a transaction that waited for its commit and from committed layouts whose
- * frames did not come, and the display-link callbacks in it at which no part of the window showed with the windows in front of
- * it, so it tells a covered window from one in front and names what covered it. The recording keeps the layouts that it was judged by in layouts.json, because the layouts of a drag
- * come with its reply and not with the stop reply. `what` names one change. A recording in which the check asked for no change
- * owes no frame.
- */
-export function judgeShownChanges(stopped, changes, { layouts = stopped.layouts, what = "change", limit = GAP } = {}) {
-  if (!Array.isArray(changes) || !changes.every((change) => Number.isFinite(change?.from)
-    && (change.to === undefined || Number.isFinite(change.to)))) {
-    throw new Error(`the recording has no times of the changes that it shows (${what} times ${JSON.stringify(changes)}), so ` +
-      "its frames cannot be judged against them");
-  }
-  writeFileSync(join(stopped.frames, "layouts.json"), JSON.stringify({ layouts: layouts ?? [] }));
-  const rows = readStills(stopped.stills);
-  const worst = longestWait(changes, changedStills(rows));
-  if (worst === null || worst.wait <= limit) return;
-  const change = changes[worst.index - 1];
-  const end = worst.next?.completed ?? Infinity;
-  const lost = lostStills(rows, worst.at, end);
-  const asked = changes.filter(({ from }) => from >= worst.at && from < end).length;
-  const inSpan = (stage) => (layouts ?? []).filter((layout) => typeof layout[stage] === "number"
-    && layout[stage] >= worst.at && layout[stage] < end);
-  const begun = inSpan("begun").map((layout) => layout.ticket);
-  const committed = inSpan("committed").map((layout) => `${layout.ticket} at ${layout.committed.toFixed(1)}ms`);
-  const displayLink = displayLinkTimes(stopped.displayLink);
-  let mainThread;
-  if (displayLink.unavailable) {
-    mainThread = `the display-link observation of the main thread is ${displayLink.unavailable}`;
-  } else {
-    const silences = displayLinkSilences(displayLink.callbacks, worst.at, end);
-    mainThread = silences.length === 0
-      ? "the display link of the window called back at every refresh of it"
-      : `the display link of the window was silent for longer than two refreshes ` +
-        `${silences.length === 1 ? "once" : `${silences.length} times`}: ${silences.join("; ")}`;
-    mainThread += coveredCallbacks(displayLink.callbacks, worst.at, end);
-  }
-  const final = change.to === undefined ? "" : `, its final state displayed at ${change.to.toFixed(1)}ms`;
-  const shown = worst.next === null
-    ? `the recording shows no change after ${worst.at.toFixed(1)}ms`
-    : `after ${worst.at.toFixed(1)}ms the first still that shows a change completed ${worst.wait.toFixed(0)}ms later, at ` +
-      `${worst.next.completed.toFixed(1)}ms (requested at ${worst.next.requested.toFixed(1)}ms)`;
-  const named = `${what} ${worst.index} of ${changes.length} (asked at ${change.from.toFixed(1)}ms${final} on the clock of the ` +
-    "recording)";
-  // A still that the recording lost in the wait may have shown the change: the wait is then a loss of the recording.
-  const judged = lost.length > 0
-    ? `the recording lost ${lost.length} stills while ${named} waited longer than ${limit}ms for a frame: ` +
-      `${lost.map(toldStill).join(", ")};`
-    : `the application did not show ${named} without waiting longer than ${limit}ms for a frame:`;
-  throw new Error(`${judged} ${shown}; in that time the ` +
-    `check asked for ${asked} ${what}s, the host began ${begun.length} layouts ${JSON.stringify(begun)} and committed ` +
-    `${committed.length} [${committed.join(", ")}], and ${mainThread}; recording ${stopped.frames}; 1-minute load average ` +
-    `${loadavg()[0].toFixed(2)}`);
-}
 
 /** The most stills that one recording plans (docs/spec/endpoint.md, diagnostics.capture.start). */
 const MOST_STILLS = 4096;
@@ -1707,7 +1540,7 @@ export async function holdCovered(s) {
   };
 }
 
-async function dragOnce(s, plan, capture, frameIdentity) {
+async function dragOnce(s, plan, capture) {
   // The host emulates the drag inside the application, so the activation of the application is no condition of the drag; a
   // result that differs in an active window is a defect of the application, not a reason to refuse the measurement.
   // An inactive application shows a new window behind the frontmost window, where its image regions do not draw. The drag
@@ -1715,32 +1548,23 @@ async function dragOnce(s, plan, capture, frameIdentity) {
   // reporting its occlusion, and a covered drawing that the check holds stays on after the drag (holdCovered).
   const release = await holdCovered(s);
   try {
-    return await dragDrawing(s, plan, capture, frameIdentity);
+    return await dragDrawing(s, plan, capture);
   } finally {
     await release();
   }
 }
 
-async function dragDrawing(s, plan, capture, frameIdentity) {
+async function dragDrawing(s, plan, capture) {
   const recording = capture ? await recordingOf(s, {}) : null;
-  const result = await s.request("diagnostics.drag", {
-    ...plan,
-    capture: recording ?? false,
-    ...(frameIdentity ? { frameIdentity: true } : {}),
-  });
+  const result = await s.request("diagnostics.drag", { ...plan, capture: recording ?? false });
   if (!capture) return result;
   s.trackRecording(result.frames);
   // Records until the time when the last screen of the drag is displayed.
   const { displayed } = await s.presented();
   const stopped = await s.request("diagnostics.capture.stop", { after: displayed });
-  // A drag is judged at every still of its recording, so a still that the recording lost is a moment of the drag that no
-  // judgment saw.
-  requireNoLostStills(requireStillsArtifact(stopped, result.frames, recording, displayed, recordedWindow(result, recording, "drag")),
-    "the drag");
-  // A drag changes the screen with every step, so each step (ticks of the reply) is owed a still that shows a change.
-  // A drag without steps changed nothing, so a reply without step times cannot be judged.
-  const steps = !Array.isArray(result.ticks) ? result.ticks : result.ticks.length > 0 ? result.ticks.map((from) => ({ from })) : null;
-  judgeShownChanges(stopped, steps, { layouts: result.layouts, what: "drag step" });
+  // The recording of a drag is its log: what is wrong with it is told, and a check of the drag does not fail on it.
+  s.noteRecording(() => requireNoLostStills(requireStillsArtifact(stopped, result.frames, recording, displayed,
+    recordedWindow(result, recording, "drag")), "the drag"), result.frames);
   return {
     ...result,
     stills: stopped.stills,
@@ -1750,6 +1574,5 @@ async function dragDrawing(s, plan, capture, frameIdentity) {
     late: stopped.late,
     longestGap: stopped.longestGap,
     frameDir: stopped.frames,
-    ...(frameIdentity ? { frameIdentity: stopped.frameIdentity } : {}),
   };
 }

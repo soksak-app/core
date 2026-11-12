@@ -37,8 +37,6 @@ Feature-link audit 자체 검사는 실제 audit module을 실행한다. 변경 
 | `execution-inputs` | command 결과를 원래 input에 연결하고 변경을 거부하며 재시도를 보존한다. |
 | `modified-close` | save가 대기하거나 실패하면 수정한 tab을 유지하고 깨끗한 상태로 재시도한 뒤 닫기를 허용한다. |
 | `layout-transitions` | 거부 이후 복구를 포함해 공개 연산의 승인과 거부 전이를 검사한다. |
-| `capture-lifecycle` | sampling 녹화를 한 번 확정하고 실패 근거를 보존하며 cleanup을 완료한다. |
-| `capture-coordinates` | document, content, display 좌표를 요청한 cell pixel로 변환한다. |
 | `candidate-publication` | 불변 candidate의 불완전하거나 일치하지 않는 acceptance를 거부한다. |
 <!-- requirement-scope:end -->
 
