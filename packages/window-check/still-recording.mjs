@@ -18,6 +18,21 @@ export function stillFrame(shade, requested, completed) {
 
 const ns = (ms) => String(Math.round(ms * 1e6));
 
+/** The stage times of a still row (docs/spec/diagnostics.md, stills.jsonl), each null: no stage ran. */
+const NO_STAGES = Object.fromEntries(["writeStartTime", "writeCompleteTime", "imageMatchStartTime", "imageMatchCompleteTime",
+  "identityDecodeEnqueueStartTime", "identityDecodeEnqueueCompleteTime", "writerEnqueuedTime", "writerStartTime",
+  "writerCompleteTime", "frameIdentityDecodeStartTime", "frameIdentityDecodeCompleteTime"].map((name) => [name, null]));
+
+/**
+ * The stage times of a still row: for a written still completed at the raw mach time `completed`, its processing, image match
+ * and frame write, all at that time; for another still, none.
+ */
+export function stillStages(written, completed) {
+  return written ? { ...NO_STAGES, writeStartTime: completed, writeCompleteTime: completed, imageMatchStartTime: completed,
+    imageMatchCompleteTime: completed, writerEnqueuedTime: completed, writerStartTime: completed, writerCompleteTime: completed }
+    : NO_STAGES;
+}
+
 /**
  * Writes a recording into `frames`: still i is planned at i·gap from 0 until `until` (ms) and requested at its plan, or `late`
  * ms later for the indices in `lateBy`, and completes `took` ms after its request. A still shows the number of times in
@@ -35,7 +50,7 @@ export function writeStillRecording(frames, { gap = 8, until, changes = [], took
     const planned = index * gap;
     if (index >= stoppedAt || notRequested.includes(index)) {
       rows.push({ index, planned: ns(planned), requested: null, completed: null, outcome: "not-requested", error: null,
-        frame: null, windows: null, requestedGap: gap, machTimebaseNumerator: 1, machTimebaseDenominator: 1 });
+        frame: null, windows: null, requestedGap: gap, machTimebaseNumerator: 1, machTimebaseDenominator: 1, ...stillStages(false) });
       continue;
     }
     const requested = planned + (lateBy[index] ?? 0);
@@ -43,19 +58,19 @@ export function writeStillRecording(frames, { gap = 8, until, changes = [], took
     if (failed.includes(index)) {
       rows.push({ index, planned: ns(planned), requested: ns(requested), completed: ns(completed), outcome: "failed",
         error: "the window server returned no image", frame: null, windows, requestedGap: gap, machTimebaseNumerator: 1,
-        machTimebaseDenominator: 1 });
+        machTimebaseDenominator: 1, ...stillStages(false) });
       continue;
     }
     const frame = `frame-${String(index).padStart(4, "0")}.bgra`;
     writeFileSync(join(frames, frame), stillFrame(changes.filter((at) => at <= requested).length, requested, completed));
     rows.push({ index, planned: ns(planned), requested: ns(requested), completed: ns(completed), outcome: "written",
-      error: null, frame, windows, requestedGap: gap, machTimebaseNumerator: 1, machTimebaseDenominator: 1 });
+      error: null, frame, windows, requestedGap: gap, machTimebaseNumerator: 1, machTimebaseDenominator: 1,
+      ...stillStages(true, ns(completed)) });
   }
   const stills = join(frames, "stills.jsonl");
   writeFileSync(stills, rows.map((row) => JSON.stringify(row)).join("\n") + "\n");
   const written = rows.filter((row) => row.outcome === "written");
-  const requestedMs = written.map((row) => Number(row.requested) / 1e6);
-  const longestGap = Math.max(0, ...requestedMs.slice(1).map((ms, i) => ms - requestedMs[i]));
+  const longestGap = Math.max(0, ...written.slice(1).map((row, i) => Number(BigInt(row.requested) - BigInt(written[i].requested)) / 1e6));
   let link;
   if (displayLink !== undefined) {
     link = join(frames, "display-link.json");

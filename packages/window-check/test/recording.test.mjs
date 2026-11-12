@@ -264,6 +264,10 @@ for (const [what, damage, error] of [
     /the still recording .* has no frame-0001\.bgra for its written still 1/],
   ["with a frame file of no written still", (reply, stored) => { writeFileSync(join(stored, "frame-0005.bgra"), ""); return reply; },
     /the still recording .* has frame-0005\.bgra, the frame file of no written still/],
+  ["that counts other late stills than its rows", (reply) => ({ ...reply, late: reply.late + 1 }),
+    /the still recording .* counts 1 late stills, and stills\.jsonl has 0 late rows/],
+  ["that names another longest gap than its rows", (reply) => ({ ...reply, longestGap: reply.longestGap + 0.000001 }),
+    /the still recording .* names the longest gap 8\.33333399+ms, and the request times of its written stills have the longest gap 8\.333333ms/],
   ["that names another recorded window than its start", (reply) => ({ ...reply, window: 8 }),
     /the stop reply names the recorded window 8, and the start named 7/],
   ["whose written still did not take the recorded window", (reply, stored) => {

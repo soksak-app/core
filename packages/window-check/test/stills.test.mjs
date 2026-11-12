@@ -99,3 +99,55 @@ test("a failed still row whose windows could not be taken has no completion time
   assert.throws(changedRow(t, (list) => { list[1].windows = []; }), /^Error: still row 1 of .* has the window list \[\], not window numbers$/);
   assert.throws(changedRow(t, (list) => { list[0].completed = null; }), /^Error: still row 0 of .* is written without its completed time$/);
 });
+
+// The stage times of a still row bracket the processing of the still after its completion, its image match, its identity
+// enqueue and the write of its frame (docs/spec/diagnostics.md, stills.jsonl): each is an exact decimal mach time or null for a
+// stage that did not run.
+test("a still row whose stage times are not exact decimal mach times or null is refused", (t) => {
+  assert.throws(changedRow(t, (list) => { list[0].writeStartTime = 500000; }),
+    /^Error: still row 0 of .* has the writeStartTime time 500000, not an exact decimal mach time or null$/);
+  assert.throws(changedRow(t, (list) => { delete list[0].writerStartTime; }),
+    /^Error: still row 0 of .* has the writerStartTime time undefined, not an exact decimal mach time or null$/);
+});
+
+test("a written still row without the times of its processing, image match and frame write is refused", (t) => {
+  for (const name of ["writeStartTime", "writeCompleteTime", "imageMatchStartTime", "imageMatchCompleteTime", "writerEnqueuedTime",
+    "writerStartTime", "writerCompleteTime"]) {
+    assert.throws(changedRow(t, (list) => { list[0][name] = null; }),
+      new RegExp(`^Error: still row 0 of .* is written without its ${name} time$`));
+  }
+});
+
+test("a still row that took no image with a stage time is refused", (t) => {
+  assert.throws(changedRow(t, (list) => { list[2].writeStartTime = "16000000"; }),
+    /^Error: still row 2 of .* took no image and has the writeStartTime time "16000000"$/);
+  assert.throws(changedRow(t, (list) => { list[1].completed = null; list[1].windows = []; list[1].writerEnqueuedTime = "9000000"; }),
+    /^Error: still row 1 of .* took no image and has the writerEnqueuedTime time "9000000"$/);
+});
+
+// The QR decoder runs after the still, so its times are those of the decoded rows and never of a still row.
+test("a still row with frame identity decode times is refused", (t) => {
+  for (const name of ["frameIdentityDecodeStartTime", "frameIdentityDecodeCompleteTime"]) {
+    assert.throws(changedRow(t, (list) => { list[0][name] = "500000"; }),
+      new RegExp(`^Error: still row 0 of .* has the ${name} time "500000", which a still row does not hold$`));
+  }
+});
+
+test("a still row whose stages are half bracketed or out of order is refused", (t) => {
+  assert.throws(changedRow(t, (list) => { list[0].identityDecodeEnqueueStartTime = "500000"; }),
+    /^Error: still row 0 of .* has the identityDecodeEnqueueStartTime time without its identityDecodeEnqueueCompleteTime time$/);
+  assert.throws(changedRow(t, (list) => { list[0].identityDecodeEnqueueCompleteTime = "500000"; }),
+    /^Error: still row 0 of .* has the identityDecodeEnqueueCompleteTime time without its identityDecodeEnqueueStartTime time$/);
+  for (const [later, earlier] of [["writeStartTime", "completed"], ["imageMatchStartTime", "writeStartTime"],
+    ["imageMatchCompleteTime", "imageMatchStartTime"], ["writeCompleteTime", "imageMatchCompleteTime"],
+    ["writerEnqueuedTime", "writeCompleteTime"], ["writerStartTime", "writerEnqueuedTime"], ["writerCompleteTime", "writerStartTime"]]) {
+    assert.throws(changedRow(t, (list) => { list[0][later] = "499999"; }),
+      new RegExp(`^Error: still row 0 of .* has its ${later} time before its ${earlier} time$`));
+  }
+  assert.throws(changedRow(t, (list) => {
+    list[0].identityDecodeEnqueueStartTime = "499999"; list[0].identityDecodeEnqueueCompleteTime = "500000";
+  }), /^Error: still row 0 of .* has its identityDecodeEnqueueStartTime time before its writeStartTime time$/);
+  assert.throws(changedRow(t, (list) => {
+    list[0].identityDecodeEnqueueStartTime = "500000"; list[0].identityDecodeEnqueueCompleteTime = "500001";
+  }), /^Error: still row 0 of .* has its writeCompleteTime time before its identityDecodeEnqueueCompleteTime time$/);
+});

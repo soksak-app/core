@@ -7,6 +7,7 @@ import {
   checkViewDisplay as acceptViewDisplay, expectedPresentations, observeViewDisplay as checkViewDisplay, rasterIdentity,
   appDomWebviews, viewPresentationJoins, viewWebviews,
 } from "../view-display.mjs";
+import { stillStages } from "@soksak/window-check/still-recording.mjs";
 
 const stillsDirectory = mkdtempSync(join(tmpdir(), "view-display-stills-"));
 after(() => rmSync(stillsDirectory, { recursive: true, force: true }));
@@ -23,7 +24,7 @@ function stopReply(count, failed = 0) {
     return { index, planned: ns(index * 16), requested: ns(index * 16), completed: ns(index * 16 + 0.5),
       outcome: written ? "written" : "failed", error: written ? null : "the window server returned no image",
       frame: written ? `frame-${String(index).padStart(4, "0")}.bgra` : null, windows: [7], requestedGap: 16,
-      machTimebaseNumerator: 1, machTimebaseDenominator: 1 };
+      machTimebaseNumerator: 1, machTimebaseDenominator: 1, ...stillStages(written, ns(index * 16 + 0.5)) };
   });
   const stills = join(stillsDirectory, `stills-${++stillsFiles}.jsonl`);
   writeFileSync(stills, rows.map((row) => JSON.stringify(row)).join("\n") + "\n");
