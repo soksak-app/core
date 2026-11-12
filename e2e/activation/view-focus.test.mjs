@@ -13,6 +13,7 @@ import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.
 import { fresh, joinedFailure } from "../fixture.mjs";
 import { EVERY_LEVEL } from "@soksak/window-check/log-policy.mjs";
 import { addRasterTab, REGION } from "../raster-probe.mjs";
+import { activateApplication } from "./image-focus.mjs";
 
 const COMMAND = "echo focuscheck";
 const REPEATED_VOWEL_KEYS = ["k", "k", "k", "k"];
@@ -274,6 +275,7 @@ for (const app of Object.values(APPS)) {
     await step(t, `${app.name}: reference focus and identical keys`, () => recordGesture(s, t, "AppKit reference", () => observeInput(s, t, "AppKit reference", surface, async (requests) => {
       const read = await s.request("diagnostics.input.reference", { action: "read" });
       assert.equal(read.document, "", "the independent reference must start empty");
+      await activateApplication(s);
       await s.pointer(read.frame.x + read.frame.w / 2, read.frame.y + read.frame.h / 2,
         "move", { activate: true });
       const focused = await s.request("diagnostics.input.reference", { action: "focus" });
@@ -328,6 +330,7 @@ for (const app of Object.values(APPS)) {
         async () => {
           const read = await s.request("diagnostics.input.reference", { action: "read" });
           assert.equal(read.document, "", "the AppKit reference must start empty");
+          await activateApplication(s);
           await s.pointer(read.frame.x + read.frame.w / 2, read.frame.y + read.frame.h / 2,
             "move", { activate: true });
           const focused = await s.request("diagnostics.input.reference", { action: "focus" });

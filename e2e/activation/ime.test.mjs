@@ -19,6 +19,10 @@ import { NATIVE_INPUT_LOG, NATIVE_INPUT_READS, nativeInputDelivered, nativeInput
 const JAMO = /[ㄱ-ㅣ]/;
 
 /** Opens a raster probe tab, keeps the input source of the person for the cleanup, and gives its image region the keyboard. */
+/** An action of a transaction that is the Enter key or the newline command of an input method. */
+const isEnter = (action) => (action.type === "key" && action.key === "Enter") ||
+  (action.type === "command" && action.selector === "insertNewline:");
+
 async function focusedRegion(s) {
   const { surface } = await rasterProbeTab(s);
   const original = (await s.request("diagnostics.input.source")).source;
@@ -124,12 +128,17 @@ for (const app of Object.values(APPS)) {
       }
       assert.ok(!log.some((entry) => entry.actions.some((action) => action.type === "key" && action.key === "Backspace")),
         "Backspace during a composition reached the region as a key");
-      const enters = log.filter((entry) => entry.actions.some((action) =>
-        (action.type === "key" && action.key === "Enter") ||
-        (action.type === "command" && action.selector === "insertNewline:"))).map((entry) => entry.sequence);
-      const lastInsert = log.filter((entry) => entry.actions.some((action) => action.type === "insert")).at(-1).sequence;
+      // An Enter that ends a composition commits the syllable and then inserts the newline in the same key event, so both actions
+      // can be in one transaction: the order is that of the transaction and then that of the action in it.
+      const positions = (matches) => log.flatMap((entry) => entry.actions.flatMap((action, index) =>
+        matches(action) ? [[entry.sequence, index]] : []));
+      const after = ([sequence, index], [otherSequence, otherIndex]) => sequence > otherSequence ||
+        (sequence === otherSequence && index > otherIndex);
+      const enters = log.filter((entry) => entry.actions.some(isEnter)).map((entry) => entry.sequence);
+      const lastEnter = positions(isEnter).at(-1);
+      const lastInsert = positions((action) => action.type === "insert").at(-1);
       assert.equal(enters.length, 4, "four Enter actions were not reported");
-      assert.ok(enters[3] > lastInsert, "Enter was delivered before the committed text");
+      assert.ok(after(lastEnter, lastInsert), "Enter was delivered before the committed text");
       t.diagnostic(`${app.name}: PASS ddd한글 after an input-source switch`);
     });
 
