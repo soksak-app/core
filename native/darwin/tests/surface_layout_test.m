@@ -711,7 +711,8 @@ static void checkCommitFrame(WKWebViewConfiguration *configuration, NSString *va
         check(error == NULL, @"the initial commit frame fixture is presented"); shown = at;
     });
     eventWait(@"the settled wait of the initial commit frame fixture ends", ^BOOL { return shown != 0; });
-    const char *directory = temporaryFolder(@"soksak-commit-frame-test-").fileSystemRepresentation;
+    NSString *folder = temporaryFolder(@"soksak-commit-frame-test-");
+    const char *directory = folder.fileSystemRepresentation;
     char *operationError = NULL;
     BOOL opened = sp_capture_open(window.windowNumber, false, 0, &operationError);
     BOOL started = NO;
@@ -769,10 +770,16 @@ static void checkCommitFrame(WKWebViewConfiguration *configuration, NSString *va
         check(after != nil, [NSString stringWithFormat:@"the still after move %d decodes", move]);
         if (after != nil) {
             double borderAt = borderColumn(after, x, x);
-            check(!isnan(borderAt) && fabs(borderAt - x) < 0.5, [NSString stringWithFormat:
+            BOOL shown = !isnan(borderAt) && fabs(borderAt - x) < 0.5;
+            // A failure keeps the still and names the first border column from the place of the move before the previous one:
+            // a border at the place of an earlier move tells a composition of an earlier commit, none tells a still without it.
+            double earlierAt = shown ? borderAt : borderColumn(after, x - 40, x + 20);
+            if (!shown) keepTemporaryFolder(folder);
+            check(shown, [NSString stringWithFormat:
                 @"%@: after move %d the window shows the moved DOM border beside the native placement (expected x %.0f, found %.1f, "
-                "begun %.3f, presented %.3f, committed %.3f, flushed %.3f, still requested %.3f, completed %.3f)", variant, move, x,
-                borderAt, timeline[1], timeline[2], timeline[3], timeline[7], stillRequested, stillCompleted]);
+                "first border in %.0f..%.0f at %.1f, begun %.3f, presented %.3f, committed %.3f, flushed %.3f, still requested %.3f, "
+                "completed %.3f, still %@)", variant, move, x, borderAt, x - 40, x + 20, earlierAt, timeline[1], timeline[2], timeline[3],
+                timeline[7], stillRequested, stillCompleted, stillPath.lastPathComponent]);
         }
     }
     PointerDone release = {NO, SP_INPUT_REJECTED};
