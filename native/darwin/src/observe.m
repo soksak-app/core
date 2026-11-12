@@ -297,6 +297,27 @@ dispatch_source_t sp_observe_memory_pressure(const char *source, sp_observe_mode
     return created;
 }
 
+dispatch_source_t sp_observe_dispatch_timer(const char *source, sp_observe_mode mode, uintptr_t flags, dispatch_queue_t queue,
+    void (^handler)(void)) {
+    if (!handler) {
+        fail(source, "dispatch_timer", @"the handler is missing");
+        return NULL;
+    }
+    source_record *record = recordRegistration(source, mode, "dispatch_timer",
+        (flags & DISPATCH_TIMER_STRICT) ? @"strict" : @"not strict");
+    if (!record) return NULL;
+    dispatch_source_t created = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, flags, queue);
+    if (!created) {
+        fail(source, "dispatch_timer", @"the system refused the dispatch source");
+        return NULL;
+    }
+    dispatch_source_set_event_handler(created, ^{
+        deliver(record);
+        handler();
+    });
+    return created;
+}
+
 CFRunLoopObserverRef sp_observe_run_loop(const char *source, sp_observe_mode mode, CFRunLoopRef loop, CFRunLoopActivity activities,
     bool repeats, CFIndex order, void (^handler)(void)) {
     if (!handler || !loop) {

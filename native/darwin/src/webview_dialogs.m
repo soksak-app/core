@@ -1,5 +1,6 @@
 #import <objc/runtime.h>
 #import "application_log.h"
+#import "observe.h"
 #import "webview_dialogs.h"
 
 // A request of a held window that waits for its answer, or a download whose answer waits for its end.
@@ -90,7 +91,7 @@ static void ask(SPDialogHold *hold, SPDialogRequest *request, NSDictionary *fiel
 // The selectors that the route answers itself; for the others it responds only to what the framework delegate implements.
 - (BOOL)handles:(SEL)selector {
     (void)selector;
-    return NO;
+    return NO; // silent: the predicate answers NO because the base route answers no selector itself, so the framework delegate receives every message
 }
 
 - (BOOL)respondsToSelector:(SEL)selector {
@@ -174,6 +175,9 @@ static void downloadEnded(WKDownload *download, NSString *error) {
     [request release];
 }
 
+// The source of the deliveries of the download routes in the native entrance.
+static const char *const kDownloadSource = "webview.download";
+
 @implementation SPDownloadRoute
 - (BOOL)handles:(SEL)selector {
     return selector == @selector(download:decideDestinationUsingResponse:suggestedFilename:completionHandler:) ||
@@ -182,6 +186,7 @@ static void downloadEnded(WKDownload *download, NSString *error) {
 
 - (void)download:(WKDownload *)download decideDestinationUsingResponse:(NSURLResponse *)response
     suggestedFilename:(NSString *)name completionHandler:(void (^)(NSURL *))completionHandler {
+    sp_observe_delivered(kDownloadSource);
     SPDialogHold *hold = holdOf(view.window);
     if (hold) {
         SPDialogRequest *request = [[SPDialogRequest new] autorelease];
@@ -206,12 +211,14 @@ static void downloadEnded(WKDownload *download, NSString *error) {
 }
 
 - (void)downloadDidFinish:(WKDownload *)download {
+    sp_observe_delivered(kDownloadSource);
     downloadEnded(download, nil);
     id current = self.target;
     if ([current respondsToSelector:_cmd]) [current downloadDidFinish:download];
 }
 
 - (void)download:(WKDownload *)download didFailWithError:(NSError *)error resumeData:(NSData *)resumeData {
+    sp_observe_delivered(kDownloadSource);
     downloadEnded(download, error.localizedDescription ?: @"the download failed");
     id current = self.target;
     if ([current respondsToSelector:_cmd]) [current download:download didFailWithError:error resumeData:resumeData];
@@ -220,12 +227,15 @@ static void downloadEnded(WKDownload *download, NSString *error) {
 
 static const char downloadRouteKey;
 
-// Puts the route in front of the delegate of download, which the framework set when the navigation became the download.
+// Puts the route in front of the delegate of download, which the framework set when the navigation became the download. The
+// download references its delegate weakly, so the download keeps the route. When the entrance refuses the delegate, which it records
+// as native.observe.failed, the download keeps the delegate of the framework and drops the route.
 static void routeDownload(WKWebView *view, WKDownload *download) {
     SPDownloadRoute *route = (SPDownloadRoute *)routeTo(SPDownloadRoute.class, download.delegate);
     route->view = view;
     objc_setAssociatedObject(download, &downloadRouteKey, route, OBJC_ASSOCIATION_RETAIN);
-    download.delegate = route;
+    if (!sp_observe_delegate(kDownloadSource, SP_OBSERVE_RECORD, download, route))
+        objc_setAssociatedObject(download, &downloadRouteKey, nil, OBJC_ASSOCIATION_RETAIN);
 }
 
 // The route of the navigations of a web view: a navigation that the page asks to download, and a response that the page cannot
@@ -234,7 +244,7 @@ static void routeDownload(WKWebView *view, WKDownload *download) {
 @end
 
 static BOOL isAttachment(WKNavigationResponse *response) {
-    if (![response.response isKindOfClass:NSHTTPURLResponse.class]) return NO;
+    if (![response.response isKindOfClass:NSHTTPURLResponse.class]) return NO; // silent: the predicate answers NO for a response that is not HTTP, which has no Content-Disposition, and the caller decides by its MIME type
     NSString *disposition = [(NSHTTPURLResponse *)response.response valueForHTTPHeaderField:@"Content-Disposition"];
     return [[disposition.lowercaseString stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet] hasPrefix:@"attachment"];
 }

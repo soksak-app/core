@@ -218,31 +218,41 @@ static CGImageRef takeImage(SPWindowImage function, SPCaptureTarget *target) {
 // per row: no colour is converted. The window server composites every layer into the 8-bit colour space of the display, and a
 // conversion of those values to another space changes some of them by 1 to 3 (sRGB 32c8c8 came back as 31c8c9), so a frame
 // holds the bytes that the window server gave and the recording names their colour space. An image in that layout gives its
-// bytes as they are; another layout is drawn into its own colour space, which changes the layout and no colour.
-static BOOL drawOwnSpace(CGImageRef image, uint8_t *pixels, size_t width, size_t height, size_t stride) {
+// bytes as they are; another layout is drawn into its own colour space, which changes the layout and no colour. Returns nil, or
+// why the pixels could not be given, which the caller records as the error of the still.
+static NSString *drawOwnSpace(CGImageRef image, uint8_t *pixels, size_t width, size_t height, size_t stride) {
     CGColorSpaceRef space = CGImageGetColorSpace(image);
-    if (space == NULL || CGColorSpaceGetModel(space) != kCGColorSpaceModelRGB) return NO;
+    if (space == NULL) return @"the image names no colour space";
+    if (CGColorSpaceGetModel(space) != kCGColorSpaceModelRGB) {
+        return [NSString stringWithFormat:@"the colour space of the image has the model %d, not RGB", (int)CGColorSpaceGetModel(space)];
+    }
     CGBitmapInfo info = CGImageGetBitmapInfo(image);
     if (CGImageGetBitsPerComponent(image) == 8 && CGImageGetBitsPerPixel(image) == 32
         && (info & kCGBitmapByteOrderMask) == kCGBitmapByteOrder32Little && (info & kCGBitmapFloatComponents) == 0
         && CGImageGetAlphaInfo(image) == kCGImageAlphaPremultipliedFirst && CGImageGetBytesPerRow(image) >= stride) {
         CFDataRef data = CGDataProviderCopyData(CGImageGetDataProvider(image));
-        size_t row = CGImageGetBytesPerRow(image);
-        BOOL whole = data != NULL && (size_t)CFDataGetLength(data) >= row * (height - 1) + stride;
-        if (whole) {
+        size_t row = CGImageGetBytesPerRow(image), needed = row * (height - 1) + stride;
+        size_t length = data != NULL ? (size_t)CFDataGetLength(data) : 0;
+        NSString *failure = nil;
+        if (data == NULL) failure = @"the window server gave no bytes of the image";
+        else if (length < needed) {
+            failure = [NSString stringWithFormat:@"the window server gave %zu bytes of the image, not %zu", length, needed];
+        } else {
             const uint8_t *bytes = CFDataGetBytePtr(data);
             for (size_t y = 0; y < height; y++) memcpy(pixels + y * stride, bytes + y * row, stride);
         }
         if (data) CFRelease(data);
-        return whole;
+        return failure;
     }
     CGContextRef context = CGBitmapContextCreate(pixels, width, height, 8, stride, space,
         (CGBitmapInfo)kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little);
-    if (context == NULL) return NO;
+    if (context == NULL) {
+        return [NSString stringWithFormat:@"no BGRA bitmap of %zux%zu could be made in the colour space of the image", width, height];
+    }
     CGContextSetBlendMode(context, kCGBlendModeCopy);
     CGContextDrawImage(context, CGRectMake(0, 0, width, height), image);
     CGContextRelease(context);
-    return YES;
+    return nil;
 }
 
 // The frame file: header (12 bytes of uint32, 64 bytes of float64), marker, compressed count, checksum, then the LZ4 block.
@@ -814,10 +824,11 @@ static void processStill(SPCaptureRecording *recording, NSUInteger index, SPCapt
     }
     size_t stride = width * 4, pixels = stride * height;
     uint8_t *frame = pixels / height == stride ? malloc(kFrameHeader + pixels) : NULL;
-    if (frame == NULL || !drawOwnSpace(image, frame + kFrameHeader, width, height, stride)) {
+    NSString *drawFailure = frame == NULL ? @"no memory for the frame" : drawOwnSpace(image, frame + kFrameHeader, width, height, stride);
+    if (drawFailure != nil) {
         free(frame);
-        stillOutcome(recording, index, @"failed", [NSString stringWithFormat:@"the image of %zux%zu pixels could not be drawn",
-            width, height], nil);
+        stillOutcome(recording, index, @"failed", [NSString stringWithFormat:@"the image of %zux%zu pixels could not be drawn: %@",
+            width, height, drawFailure], nil);
         return;
     }
     CGColorSpaceRef space = CGImageGetColorSpace(image);
@@ -1367,9 +1378,13 @@ bool sp_capture_start(const char *directory, double gap, double seconds, int fra
         if (firstImage) CGImageRelease(firstImage);
     });
     // The strict timer requests stills 1 and later at their planned times.
-    recording.timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, DISPATCH_TIMER_STRICT, captureRequests);
-    dispatch_source_set_event_handler(recording.timer, ^{ @autoreleasepool { requestDueStills(recording); } });
-    dispatch_sync(captureRequests, ^{
+    // The entrance counts each request of the timer; a refused timer was recorded as native.observe.failed, no still after still 0
+    // can be requested, and the start fails once still 0 has settled.
+    recording.timer = sp_observe_dispatch_timer("capture.requests", SP_OBSERVE_COUNT, DISPATCH_TIMER_STRICT, captureRequests,
+        ^{ @autoreleasepool { requestDueStills(recording); } });
+    NSString *timerFailure = recording.timer == NULL ? @"the timer of the still requests could not be made" : nil;
+    if (timerFailure != nil) closeRequests(recording);
+    else dispatch_sync(captureRequests, ^{
         if (planned > 1) {
             uint64_t now = captureTicks(), next = [recording plannedTicks:1];
             int64_t nanoseconds = next > now ? (int64_t)((double)(next - now) * timebase.numer / timebase.denom) : 0;
@@ -1385,9 +1400,10 @@ bool sp_capture_start(const char *directory, double gap, double seconds, int fra
     @synchronized (recording) {
         if (ended == nil && ![recording.rows[0][@"outcome"] isEqual:@"written"]) firstError = recording.rows[0][@"error"];
     }
-    if (ended == nil && firstError == nil) return true;
-    NSString *failure = ended ?: [NSString stringWithFormat:@"%@", firstError];
+    if (ended == nil && firstError == nil && timerFailure == nil) return true;
+    NSString *failure = ended ?: firstError != nil ? [NSString stringWithFormat:@"%@", firstError] : timerFailure;
     if (ended) setCaptureError(ended);
+    else if (firstError == nil) setCaptureError(timerFailure);
     finishRecording(recording);
     return captureOperationFailure(errorOut, failure);
 }
@@ -1473,7 +1489,9 @@ bool sp_capture_still(long windowNumber, const char *path, char **errorOut) {
     // The still holds the pixels as a frame does: BGRA in the colour space of the image, which the PNG names by its ICC profile.
     NSMutableData *pixels = width && height && stride / 4 == width ? [NSMutableData dataWithLength:stride * height] : nil;
     CGImageRef converted = NULL;
-    if (pixels && drawOwnSpace(image, pixels.mutableBytes, width, height, stride)) {
+    NSString *drawFailure = pixels == nil ? @"the image is empty or has no memory" : drawOwnSpace(image, pixels.mutableBytes, width,
+        height, stride);
+    if (drawFailure == nil) {
         CGDataProviderRef provider = CGDataProviderCreateWithCFData((CFDataRef)pixels);
         converted = provider ? CGImageCreate(width, height, 8, 32, stride, CGImageGetColorSpace(image),
             (CGBitmapInfo)kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little, provider, NULL, false,
@@ -1482,8 +1500,8 @@ bool sp_capture_still(long windowNumber, const char *path, char **errorOut) {
     }
     CGImageRelease(image);
     if (converted == NULL) {
-        return captureOperationFailure(errorOut, [NSString stringWithFormat:@"the image of window %ld (%zux%zu) could not be drawn",
-            windowNumber, width, height]);
+        return captureOperationFailure(errorOut, [NSString stringWithFormat:@"the image of window %ld (%zux%zu) could not be drawn: %@",
+            windowNumber, width, height, drawFailure ?: @"its pixels could not be made into an image"]);
     }
     CGImageDestinationRef destination = CGImageDestinationCreateWithURL((CFURLRef)[NSURL fileURLWithPath:decoded],
         (CFStringRef)@"public.png", 1, NULL);

@@ -219,6 +219,31 @@ int main(void) { @autoreleasepool {
     check(exit != NULL && named(process, @"native.observe.registered").count == 1
         && [named(process, @"native.observe.registered")[0][@"fields"][@"kind"] isEqual:@"process_exit"], @"a process exit source is registered");
     if (exit) { dispatch_source_set_cancel_handler(exit, ^{}); dispatch_resume(exit); dispatch_source_cancel(exit); }
+    // A timer dispatch source counts each firing before its handler runs; the caller sets its time and resumes it.
+    __block int ticks = 0;
+    __block unsigned long long countAtTick = 0;
+    __block dispatch_source_t timerSource = NULL;
+    NSArray<NSDictionary *> *dispatched = capturedEvents(^{
+        timerSource = sp_observe_dispatch_timer("test.dispatch_timer", SP_OBSERVE_COUNT, DISPATCH_TIMER_STRICT,
+            dispatch_get_main_queue(), ^{
+                countAtTick = sp_observe_count("test.dispatch_timer");
+                if (++ticks == 2) dispatch_source_cancel(timerSource);
+                eventWake();
+            });
+        check(timerSource != NULL, @"a timer dispatch source is returned");
+        if (timerSource) {
+            dispatch_source_set_timer(timerSource, dispatch_time(DISPATCH_TIME_NOW, 0), NSEC_PER_MSEC, 0);
+            dispatch_resume(timerSource);
+            eventWait(@"the timer dispatch source fires twice", ^BOOL { return ticks == 2; });
+        }
+    });
+    NSArray<NSDictionary *> *timedRegistrations = named(dispatched, @"native.observe.registered");
+    check(ticks == 2 && countAtTick == 2 && sp_observe_count("test.dispatch_timer") == 2 && timedRegistrations.count == 1
+            && [timedRegistrations[0][@"fields"][@"kind"] isEqual:@"dispatch_timer"]
+            && [timedRegistrations[0][@"fields"][@"target"] isEqual:@"strict"],
+        [NSString stringWithFormat:@"a strict timer dispatch source is registered and counts each of its %d firings before its "
+            "handler (count at the last firing %llu)", ticks, countAtTick]);
+    if (timerSource) dispatch_release(timerSource);
 
     // A source whose receiver stores its own event is only counted: the entrance stores the registration and no delivery.
     __block int stored = 0;

@@ -66,6 +66,12 @@ dispatch_source_t sp_observe_process_exit(const char *source, sp_observe_mode mo
 // `native.observe.failed`, when the system refuses it or the handler is missing.
 dispatch_source_t sp_observe_memory_pressure(const char *source, sp_observe_mode mode, dispatch_queue_t queue, void (^handler)(const char *level));
 
+// Creates a timer dispatch source with `flags` (DISPATCH_TIMER_STRICT or 0) on the queue; the handler runs after the delivery is
+// counted. The caller sets its time with dispatch_source_set_timer, resumes it and cancels it. Returns NULL, after the event
+// `native.observe.failed`, when the system refuses it or the handler is missing.
+dispatch_source_t sp_observe_dispatch_timer(const char *source, sp_observe_mode mode, uintptr_t flags, dispatch_queue_t queue,
+    void (^handler)(void));
+
 // Adds a run loop observer of `activities` in the common modes of the loop. Returns the observer, or NULL, after the event
 // `native.observe.failed`, when the system refuses it or the handler is missing.
 CFRunLoopObserverRef sp_observe_run_loop(const char *source, sp_observe_mode mode, CFRunLoopRef loop, CFRunLoopActivity activities,
