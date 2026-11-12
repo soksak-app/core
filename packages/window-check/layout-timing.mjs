@@ -1,8 +1,8 @@
 // Judgments of the timing of layouts and of the content frames of views, from the numbers that the host and the views report: the
-// layout transactions of the layout trace ({ticket, begun, requested, presented, committed, commitPath, openAtCommit, flushed}, ms on
-// the host monotonic clock), the times of the steps of a drag, the window resize events and the content frames that a view traces
-// (viewContentFrameEvents of view-metrics-collection.mjs). No judgment reads a recorded frame. Each judgment returns its measured
-// values with `failures`, the requirements that the values miss, which is empty when they meet them.
+// layout transactions of the layout trace ({ticket, begun, requested, presented, committed, commitPath, openAtCommit, flushed,
+// displayed}, ms on the host monotonic clock), the times of the steps of a drag, the window resize events and the content frames
+// that a view traces (viewContentFrameEvents of view-metrics-collection.mjs). No judgment reads a recorded frame. Each judgment
+// returns its measured values with `failures`, the requirements that the values miss, which is empty when they meet them.
 import assert from "node:assert/strict";
 
 /** The time (ms) of one refresh of a display of `refreshRate` Hz (host.window.refreshRate). */
@@ -27,22 +27,26 @@ const at = (sorted, fraction) => sorted[Math.min(sorted.length - 1, Math.floor(s
 const begunIn = (layouts, from, to) => layouts.filter((layout) => layout.begun !== null && layout.begun >= from && layout.begun <= to);
 
 /**
- * The commits of a view drag follow one another within two display periods (`period`, ms): the intervals between the sending
- * times (sentAt) of the layouts that began from the first step `from` to the last step `to` of the drag. Fewer than two such
- * commits is a failure.
+ * The commits of a view drag follow one another within two display refreshes: the number of refreshes between the display
+ * refreshes that carried consecutive commits (`displayed`) of the layouts that began from the first step `from` to the last step
+ * `to` of the drag, which is the interval between those refreshes in display periods (`period`, ms), rounded to the refresh. Two
+ * commits on one refresh are 0 refreshes apart. Fewer than two such commits, and a commit with no display refresh, are failures.
  */
 export function commitCadence(layouts, { from, to, period }) {
-  const limit = 2 * period;
-  const sent = begunIn(layouts, from, to).map(sentAt).filter((time) => time !== null).sort((a, b) => a - b);
-  const intervals = sent.slice(1).map((time, index) => time - sent[index]);
-  const failures = [];
-  if (sent.length < 2) failures.push(`the drag committed ${sent.length} layouts from ${from} to ${to} ms, fewer than 2`);
-  intervals.forEach((interval, index) => {
-    if (interval > limit) {
-      failures.push(`the commit at ${sent[index + 1]} ms followed the commit before it after ${interval} ms, more than ${limit} ms`);
+  const limit = 2;
+  const committed = begunIn(layouts, from, to).filter((layout) => sentAt(layout) !== null);
+  const failures = committed.filter((layout) => layout.displayed === null)
+    .map((layout) => `the commit of ticket ${layout.ticket} has no display refresh`);
+  const displayed = committed.map((layout) => layout.displayed).filter((time) => time !== null).sort((a, b) => a - b);
+  const refreshes = displayed.slice(1).map((time, index) => Math.round((time - displayed[index]) / period));
+  if (committed.length < 2) failures.push(`the drag committed ${committed.length} layouts from ${from} to ${to} ms, fewer than 2`);
+  refreshes.forEach((count, index) => {
+    if (count > limit) {
+      failures.push(`the commit displayed at ${displayed[index + 1]} ms followed the commit before it after ${count} display refreshes, ` +
+        `more than ${limit}`);
     }
   });
-  return { count: sent.length, intervals, limit, failures };
+  return { count: committed.length, displayed, refreshes, limit, failures };
 }
 
 /**

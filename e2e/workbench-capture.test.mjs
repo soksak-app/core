@@ -2,9 +2,10 @@
 // Preserves the benchmark's fresh -> preparation -> native first drag -> captured
 // second drag order on the floor page view of the view drag benchmark. It makes no performance acceptance claim.
 // The same order judges the layouts of the second drag, a divider drag that moves the floor page view (docs/spec/native-surfaces.md):
-// the commits of the view drag follow one another within two display periods (commitCadence), and each layout of the divider drag is
-// sent at most four display periods after the grid began it, with a median of 2.5 and a 90th percentile of 3 (stepCommitDelays of
-// @soksak/window-check/layout-timing.mjs), from the steps and the layout trace that diagnostics.drag answers.
+// the commits of the view drag follow one another within two display refreshes, counted between the display refreshes that carried
+// them (commitCadence), and each layout of the divider drag is sent at most four display periods after the grid began it, with a
+// median of 2.5 and a 90th percentile of 3 (stepCommitDelays of @soksak/window-check/layout-timing.mjs), from the steps and the
+// layout trace that diagnostics.drag answers.
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -63,7 +64,7 @@ for (const app of Object.values(APPS)) {
       if (failure) throw failure;
     });
 
-  test(`${app.name}: the commits of a view drag follow within two display periods and each is sent within four`,
+  test(`${app.name}: the commits of a view drag follow within two display refreshes and each is sent within four display periods`,
     { timeout: 180000 }, async (t) => {
       const s = await open(t, app);
       await fresh(s, { measure: true });
@@ -74,8 +75,9 @@ for (const app of Object.values(APPS)) {
       const during = { from: run.ticks[0], to: run.ticks.at(-1), period };
       const commits = commitCadence(run.layouts, during);
       const delays = stepCommitDelays(run.layouts, during);
-      t.diagnostic(`${app.name}: display period ${period} ms, ${commits.count} commits, intervals ${JSON.stringify(commits.intervals)} ` +
-        `ms; delays median ${delays.median}, p90 ${delays.p90}, longest ${delays.longest} display periods`);
+      t.diagnostic(`${app.name}: display period ${period} ms, ${commits.count} commits, refreshes between them ` +
+        `${JSON.stringify(commits.refreshes)}; delays median ${delays.median}, p90 ${delays.p90}, longest ${delays.longest} display ` +
+        "periods");
       assert.deepEqual(commits.failures, [], "the commits of the view drag");
       assert.deepEqual(delays.failures, [], "the layouts of the divider drag");
     });

@@ -54,7 +54,8 @@ for (const app of Object.values(APPS)) {
             writeFileSync(path, JSON.stringify(report, null, 2) + "\n");
             t.diagnostic(`benchmark report ${path}: recording ${report.recording}`);
             t.diagnostic(`transaction cadence (ms): ${JSON.stringify(report.transactionCadence)}`);
-            t.diagnostic(`at ${report.refreshRate} Hz: commit intervals ${JSON.stringify(report.commits.intervals)} ms, step delays ` +
+            t.diagnostic(`at ${report.refreshRate} Hz: display refreshes between commits ${JSON.stringify(report.commits.refreshes)}, ` +
+              "step delays " +
               `median ${report.stepDelays.median}, p90 ${report.stepDelays.p90}, longest ${report.stepDelays.longest} display periods; ` +
               `misses ${JSON.stringify([...report.commits.failures, ...report.stepDelays.failures])}`);
             return result;

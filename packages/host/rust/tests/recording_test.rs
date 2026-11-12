@@ -542,6 +542,7 @@ fn a_layout_trace_keeps_the_stages_of_each_transaction() {
             commit_path: Some("view-join"),
             open_at_commit: 1.0,
             flushed: 35.0,
+            displayed: 41.6,
         },
         LayoutRecord {
             ticket: 8,
@@ -552,13 +553,14 @@ fn a_layout_trace_keeps_the_stages_of_each_transaction() {
             commit_path: None,
             open_at_commit: f64::NAN,
             flushed: f64::NAN,
+            displayed: f64::NAN,
         },
     ]);
     assert_eq!(
         layouts,
         serde_json::json!([
-            {"ticket":7,"begun":10.0,"requested":15.0,"presented":20.0,"committed":30.0,"commitPath":"view-join","openAtCommit":1.0,"flushed":35.0},
-            {"ticket":8,"begun":40.0,"requested":null,"presented":null,"committed":null,"commitPath":null,"openAtCommit":null,"flushed":null}
+            {"ticket":7,"begun":10.0,"requested":15.0,"presented":20.0,"committed":30.0,"commitPath":"view-join","openAtCommit":1.0,"flushed":35.0,"displayed":41.6},
+            {"ticket":8,"begun":40.0,"requested":null,"presented":null,"committed":null,"commitPath":null,"openAtCommit":null,"flushed":null,"displayed":null}
         ])
     );
 }

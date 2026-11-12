@@ -75,8 +75,8 @@ export async function prepareFloorDrag(t, s, { surface, card }, configDir) {
 /**
  * Runs the captured drag that prepareFloorDrag prepared and returns its evidence: the folder of its report and the report, which holds
  * the figures of the drag that the host reported (steps, boundary positions, layout transactions and their cadence), the folder of
- * its recording, which is its log, and the judgments of its layout trace with the display period of the window: `commits`, the intervals between
- * the commits of the view drag (commitCadence), and `stepDelays`, the delay of each layout of the divider drag from its begin to its
+ * its recording, which is its log, and the judgments of its layout trace with the display period of the window: `commits`, the
+ * display refreshes between the commits of the view drag (commitCadence), and `stepDelays`, the delay of each layout of the divider drag from its begin to its
  * commit (stepCommitDelays) (docs/spec/native-surfaces.md).
  */
 async function captureFloorDrag(s, configDir) {

@@ -6,9 +6,13 @@ import {
   stepCommitDelays,
 } from "../layout-timing.mjs";
 
-/** A layout transaction begun at `begun` and sent to the render server at `committed` (ms), with the path `commitPath`. */
-const layout = (ticket, begun, committed, { flushed = null, commitPath = committed === null ? null : "present" } = {}) =>
-  ({ ticket, begun, requested: null, presented: null, committed, commitPath, openAtCommit: committed === null ? null : 0, flushed });
+/**
+ * A layout transaction begun at `begun` and sent to the render server at `committed` (ms), with the path `commitPath`, carried to the
+ * screen by the display refresh at `displayed`.
+ */
+const layout = (ticket, begun, committed, { flushed = null, commitPath = committed === null ? null : "present", displayed = null } = {}) =>
+  ({ ticket, begun, requested: null, presented: null, committed, commitPath, openAtCommit: committed === null ? null : 0, flushed,
+    displayed });
 
 /** A content frame of a view drawn at `at` (ms on the host clock) at the size `width` x `height`. */
 const frame = (at, width, height = 300) => ({ frameTimeMs: at, width, height, timeRange: { lowerMs: at - 1, upperMs: at + 1 } });
@@ -28,19 +32,27 @@ test("a layout is sent at its commit, or at the flush of the transaction that he
   assert.equal(sentAt(layout(1, 0, 10, { commitPath: "cancel" })), null);
 });
 
-test("view-drag commits follow one another within two display periods", () => {
-  const period = 1000 / 60;
-  const passed = commitCadence([layout(1, 0, 10), layout(2, 17, 30), layout(3, 34, 60), layout(4, 200, 210)],
-    { from: 0, to: 40, period });
-  assert.deepEqual(passed.intervals, [20, 30]);
-  assert.equal(passed.limit, 2 * period);
+test("view-drag commits follow one another within two display refreshes", () => {
+  const period = 1000 / 120;
+  const shown = (ticket, begun, committed, refresh) => layout(ticket, begun, committed, { displayed: 1000 + refresh * period });
+  // The refreshes are on the grid of the display; a commit that came late within its period still counts its refresh.
+  const passed = commitCadence([shown(1, 0, 5, 1), shown(2, 8, 13.5, 3), shown(3, 16, 22, 5), shown(4, 17, 30, 5),
+    shown(5, 200, 210, 30)], { from: 0, to: 40, period });
+  assert.deepEqual(passed.refreshes, [2, 2, 0]);
+  assert.equal(passed.limit, 2);
   assert.deepEqual(passed.failures, []);
 
-  const late = commitCadence([layout(1, 0, 10), layout(2, 17, 50)], { from: 0, to: 40, period });
-  assert.deepEqual(late.failures, [`the commit at 50 ms followed the commit before it after 40 ms, more than ${2 * period} ms`]);
+  const late = commitCadence([shown(1, 0, 5, 1), shown(2, 8, 30, 4)], { from: 0, to: 40, period });
+  assert.deepEqual(late.failures,
+    [`the commit displayed at ${1000 + 4 * period} ms followed the commit before it after 3 display refreshes, more than 2`]);
 
-  assert.deepEqual(commitCadence([layout(1, 0, 10)], { from: 0, to: 40, period }).failures,
+  assert.deepEqual(commitCadence([shown(1, 0, 5, 1), layout(2, 8, 13)], { from: 0, to: 40, period }).failures,
+    ["the commit of ticket 2 has no display refresh"]);
+  assert.deepEqual(commitCadence([shown(1, 0, 5, 1)], { from: 0, to: 40, period }).failures,
     ["the drag committed 1 layouts from 0 to 40 ms, fewer than 2"]);
+  // A cancelled layout and a layout that did not commit sent nothing to the screen.
+  assert.equal(commitCadence([shown(1, 0, 5, 1), layout(2, 8, 9, { commitPath: "cancel" }), layout(3, 9, null), shown(4, 16, 22, 3)],
+    { from: 0, to: 40, period }).count, 2);
 });
 
 test("a divider drag commits each step within four display periods, with a median of 2.5 and a 90th percentile of 3", () => {

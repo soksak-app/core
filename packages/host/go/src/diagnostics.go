@@ -1088,7 +1088,7 @@ func nativeDragPresented(ctx context.Context, h *Host, s *Surfaces, plan dragPla
 }
 
 // layoutTrace converts the layout transaction records to {ticket, begun, requested, presented, committed, commitPath,
-// openAtCommit, flushed}. A value that did not happen is null.
+// openAtCommit, flushed, displayed}. A value that did not happen is null.
 func layoutTrace(records []platform.LayoutRecord) []map[string]any {
 	layouts := make([]map[string]any, 0, len(records))
 	stage := func(value float64) any {
@@ -1105,7 +1105,7 @@ func layoutTrace(records []platform.LayoutRecord) []map[string]any {
 		layouts = append(layouts, map[string]any{
 			"ticket": record.Ticket, "begun": stage(record.Begun), "requested": stage(record.Requested), "presented": stage(record.Presented),
 			"committed": stage(record.Committed), "commitPath": commitPath, "openAtCommit": stage(record.OpenAtCommit),
-			"flushed": stage(record.Flushed),
+			"flushed": stage(record.Flushed), "displayed": stage(record.Displayed),
 		})
 	}
 	return layouts

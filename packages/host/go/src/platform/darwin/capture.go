@@ -175,7 +175,8 @@ var layoutCommitPaths = map[float64]string{
 }
 
 // layoutRecords reads count native layout records of SURFACE_LAYOUT_TRACE_STAGES values each: ticket, begun, presented,
-// committed, requested, commit path code, open at commit and flushed. A code that the native code does not declare is an error.
+// committed, requested, commit path code, open at commit, flushed and displayed. A code that the native code does not declare is
+// an error.
 func layoutRecords(values []float64, count int) ([]platform.LayoutRecord, error) {
 	records := make([]platform.LayoutRecord, count)
 	for i := range records {
@@ -190,7 +191,7 @@ func layoutRecords(values []float64, count int) ([]platform.LayoutRecord, error)
 		}
 		records[i] = platform.LayoutRecord{
 			Ticket: uint64(value[0]), Begun: value[1], Presented: value[2], Committed: value[3], Requested: value[4],
-			CommitPath: path, OpenAtCommit: value[6], Flushed: value[7],
+			CommitPath: path, OpenAtCommit: value[6], Flushed: value[7], Displayed: value[8],
 		}
 	}
 	return records, nil

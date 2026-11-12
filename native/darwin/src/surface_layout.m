@@ -116,7 +116,7 @@ static bool (^pressOnWorkbench)(void *, double, double);
 
 static void releaseSettled(void);
 
-// Diagnostic trace. Records ticket, begun, presented, and committed for each transaction. The drag check uses it to divide the delay of the recording frames into stages.
+// Diagnostic trace. Records the SURFACE_LAYOUT_TRACE_STAGES values of surface_layout.h for each transaction. The drag check uses it to divide the delay of the recording frames into stages.
 static NSMutableArray<NSMutableArray<NSNumber *> *> *trace;
 // Counts the starts and stops of the trace, so a commit handler marks only the trace that ran when it was added.
 static NSUInteger traceGeneration;
@@ -156,17 +156,45 @@ static void traceMark(uint64_t ticket, NSUInteger stage) {
     traceValue(ticket, stage, CACurrentMediaTime() * 1000);
 }
 
+// SPTraceRefresh records the display refresh that carried a layout transaction to the screen: at the first refresh callback of
+// the display after the transaction was sent to the render server, the target time of the refresh that follows, which is the
+// refresh whose frame the render server composes with the content sent before that callback. It marks only a record of the trace
+// that ran when the transaction was sent.
+@interface SPTraceRefresh : NSObject
+@property(nonatomic) uint64_t ticket;
+@property(nonatomic) NSUInteger generation;
+- (void)tick:(CADisplayLink *)link;
+@end
+@implementation SPTraceRefresh
+- (void)tick:(CADisplayLink *)link {
+    double displayed = link.targetTimestamp * 1000;
+    [link invalidate];
+    if (!trace || traceGeneration != self.generation) return;
+    for (NSMutableArray<NSNumber *> *item in trace.reverseObjectEnumerator) {
+        if (item[0].unsignedLongLongValue == self.ticket) { item[8] = @(displayed); return; }
+    }
+}
+@end
+
 // Records when the outermost Core Animation transaction of the thread, which carries the commit of the layout transaction of
-// ticket, has been sent to the render server. A commit nested in another open transaction is sent only with that one. The
-// handler marks only a record of the running trace, so a handler of a stopped trace adds nothing to a later one.
-static void traceFlushed(uint64_t ticket) {
+// ticket, has been sent to the render server, and then the display refresh of screen that carried it (SPTraceRefresh). A commit
+// nested in another open transaction is sent only with that one. A window on no screen has no display refresh, and its record
+// keeps none. The handler marks only a record of the running trace, so a handler of a stopped trace adds nothing to a later one.
+static void traceFlushed(uint64_t ticket, NSScreen *screen) {
     if (!trace) return;
     NSUInteger generation = traceGeneration;
     void (^flushed)(void) = ^{
         if (!trace || traceGeneration != generation) return;
         for (NSMutableArray<NSNumber *> *item in trace.reverseObjectEnumerator) {
-            if (item[0].unsignedLongLongValue == ticket) { item[7] = @(CACurrentMediaTime() * 1000); return; }
+            if (item[0].unsignedLongLongValue == ticket) { item[7] = @(CACurrentMediaTime() * 1000); break; }
         }
+        if (!screen) return;
+        SPTraceRefresh *refresh = [[SPTraceRefresh new] autorelease];
+        refresh.ticket = ticket;
+        refresh.generation = generation;
+        // A link retains its target until it is invalidated.
+        CADisplayLink *link = [screen displayLinkWithTarget:refresh selector:@selector(tick:)];
+        [link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
     };
     [CATransaction addCommitHandler:[[flushed copy] autorelease] forPhase:kSPTransactionPhasePostCommit];
 }
@@ -581,7 +609,7 @@ static void finishTransaction(void *owner, int path) {
     [layouts removeObjectForKey:[NSValue valueWithPointer:owner]];
     traceValue(ticket, 5, path);
     traceValue(ticket, 6, openTransactions - (holdOpen ? 1 : 0));
-    traceFlushed(ticket);
+    traceFlushed(ticket, ((NSWindow *)owner).screen);
     if (holdOpen && layouts.count == 0) {
         holdOpen = NO;
         surfaceTransactionCommit();

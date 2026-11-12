@@ -490,6 +490,9 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration, BOOL
             fprintf(stdout, "%s: recording of %d frames, error %s\n", variant.UTF8String, count,
                 captureError[0] ? captureError : "none");
         }
+        // The refresh callback that records the display refresh of the commit and the one that ended the settled wait can come in
+        // either order within one refresh, so the trace stops after two more refreshes.
+        waitFrames(window.screen, 2);
         double timeline[SURFACE_LAYOUT_TRACE_STAGES] = {0};
         size_t traced = surfaceLayoutTraceStop(timeline, 1);
         check(traced == 1 && timeline[0] == 107 && began <= timeline[1] && timeline[1] <= timeline[3] && timeline[3] <= ended
@@ -500,6 +503,10 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration, BOOL
         check(traced == 1 && timeline[1] <= timeline[7] && timeline[7] <= ended, [NSString stringWithFormat:
             @"%@: the trace records when the commit of ticket 107 was sent to the render server (begun %.3f, flushed %.3f, "
             "presented by %.3f)", variant, timeline[1], timeline[7], ended]);
+        check(traced == 1 && timeline[7] <= timeline[8] && timeline[8] <= shown, [NSString stringWithFormat:
+            @"%@: the trace records the display refresh that carried the commit of ticket 107, after it was sent and not after the "
+            "refresh of the settled composition (flushed %.3f, displayed %.3f, settled refresh %.3f)", variant, timeline[7],
+            timeline[8], shown]);
     }
     // The folder of a failing check holds its frames as evidence with the request and completion times of every still
     // (stills.jsonl); a passing check removes its folder at once.

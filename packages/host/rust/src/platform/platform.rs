@@ -461,6 +461,10 @@ pub struct LayoutRecord {
     /// the render server: not later than committed when the commit closed the outermost transaction, later when it was
     /// nested in another open one. NaN when the transaction did not commit or the send was not observed.
     pub flushed: f64,
+    /// The display refresh that carried the commit to the screen: the target time of the refresh that follows the first
+    /// refresh callback of the display of the window after `flushed` (CADisplayLink targetTimestamp). NaN when the transaction
+    /// did not commit, its window was on no screen, or the trace ended before that callback.
+    pub displayed: f64,
 }
 
 /// A global overlay of the main DOM plane and its CSS coordinates.
