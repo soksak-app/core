@@ -7,6 +7,7 @@ import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { recordedEdges } from "./sidebar-gesture-recording.mjs";
 import { missingPoses } from "./card-panel-checks.mjs";
 import { readDisplayRefreshes } from "@soksak/window-check/display-refresh.mjs";
+import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 
 const sides = ["top", "bottom", "left", "right"];
 const sign = (side) => (side === "top" || side === "left" ? 1 : -1);
@@ -86,8 +87,8 @@ for (const app of Object.values(APPS)) {
           const initialPresentation = await s.presented();
           const poses = [{ phase: "initial", displayed: initialPresentation.displayed, size: 120, applied }];
           const recordingWindow = await s.get("host.window");
-          // The session removes the recording when the check passes and keeps it, with its callback status, display link, stop
-          // reply and displayed states, when the check fails.
+          // The session removes the recording when the check passes and keeps it, with its still rows, display link, stop reply
+          // and displayed states, when the check fails.
           const recording = await s.record();
           const directory = recording.frames;
           let down = false;
@@ -191,7 +192,7 @@ for (const app of Object.values(APPS)) {
               );
             });
             assert.ok(captured.length > 4, `${side}: incomplete gesture recording`);
-            assert.equal(stopped.limited, false, "recording exhausted its buffer");
+            requireNoLostStills(readStills(stopped.stills), `the ${side} gesture`);
             judgeShownChanges(stopped, owed, { what: `${side} drag step` });
             assert.ok(
               Array.isArray(stopped.layouts) && stopped.layouts.length > 0,
@@ -200,29 +201,32 @@ for (const app of Object.values(APPS)) {
             const measured = recordedEdges(captured, side, initial, cross, poses, stopped.layouts);
             assert.ok(
               measured[0].some((at) => Math.abs(at - initial) <= 1),
-              `${side}: initial border not recorded`,
+              `${side}: initial border not recorded (${stopped.missed} missed and ${stopped.late} late stills)`,
             );
             const final = initial + sign(side) * 40;
             assert.ok(
               measured.some((matches) => matches.some((at) => Math.abs(at - final) <= 1)),
-              `${side}: far border not recorded`,
+              `${side}: far border not recorded (${stopped.missed} missed and ${stopped.late} late stills)`,
             );
             assert.ok(
               measured.at(-1).some((at) => Math.abs(at - initial) <= 1),
-              `${side}: restored border not recorded`,
+              `${side}: restored border not recorded (${stopped.missed} missed and ${stopped.late} late stills)`,
             );
             assert.ok(
               measured.some((matches) =>
                 matches.some((at) => Math.abs(at - initial) >= 8 && Math.abs(at - final) >= 8),
               ),
-              `${side}: no intermediate movement frame`,
+              `${side}: no intermediate movement frame (${stopped.missed} missed and ${stopped.late} late stills)`,
             );
-            // Every displayed state must remain with its boundary in a recorded frame up to the first frame at or after two screen frames from the display.
-            const recorded = captured.map((frame, frameIndex) => ({ time: frame.time, edges: measured[frameIndex] }));
+            // Every displayed state must remain with its boundary in a recorded still up to the first still requested at or after
+            // two screen frames from the display. The time of a still is its request time; a missing state names the stills that
+            // the recording lost in its time.
+            const recorded = captured.map((frame, frameIndex) => ({ time: frame.requested, edges: measured[frameIndex] }));
             const missing = missingPoses(
               recorded,
               poses.map((pose) => ({ phase: pose.phase, displayed: pose.displayed, at: initial + sign(side) * (pose.size - 120) })),
               readDisplayRefreshes(directory).times,
+              readStills(stopped.stills),
             );
             // For each missed state it reports the frame that showed its boundary and the times of the frames before and after the display time (ms relative to the display time).
             const around = missing.map((pose) => ({
@@ -240,7 +244,7 @@ for (const app of Object.values(APPS)) {
             }));
             assert.deepEqual(missing, [], `${side}: displayed states missing from the recording: ${JSON.stringify(around)}`);
             t.diagnostic(
-              `${side}: 120 -> 160 -> 120 points, ${captured.length} frames at ${captured[0].width}x${captured[0].height}, ${stopped.layouts.length} layout transactions, gap ${stopped.longestGap}ms, input/presentation steps ${elapsed.join(",")}ms`,
+              `${side}: 120 -> 160 -> 120 points, ${captured.length} frames at ${captured[0].width}x${captured[0].height}, ${stopped.missed} missed and ${stopped.late} late stills, ${stopped.layouts.length} layout transactions, gap ${stopped.longestGap}ms, input/presentation steps ${elapsed.join(",")}ms`,
             );
             console.info(`PASS ${app.name}: ${side} sidebar gesture (${Math.round(performance.now() - began)}ms)`);
           }

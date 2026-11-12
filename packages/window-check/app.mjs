@@ -14,8 +14,8 @@ import { joinedFailure } from "./failure.mjs";
 import { endWatches } from "./folder-wait.mjs";
 import { readEventErrors, sessionEventBoot, sessionEventStart } from "./event-log.mjs";
 import { exitEvidence } from "./host-exit.mjs";
-import { samePixels } from "./frame.mjs";
-import { lostStills, readStills, toldStill } from "./stills.mjs";
+import { frames as listFrames, samePixels } from "./frame.mjs";
+import { lostStills, readStills, requireNoLostStills, toldStill } from "./stills.mjs";
 import { policyFile, policyOfSetting, readPolicy, requireStored, untilPolicy } from "./log-policy.mjs";
 import { policyAllows } from "@soksak/log-contract";
 import { readPasteboard, restorableItems, restoreFailure, writePasteboard } from "./pasteboard.mjs";
@@ -824,7 +824,12 @@ export class Session {
     const identity = this.trackRecording(frames);
     this.cleanup(async () => {
       try {
-        if (!sent) await this.request("diagnostics.capture.stop", { after: 0 });
+        if (sent) return;
+        sent = true;
+        // A recording that the check did not stop is judged as a stopped one: a still that it lost is a moment of the window
+        // that no check saw.
+        const result = await this.request("diagnostics.capture.stop", { after: 0 });
+        requireNoLostStills(requireStillsArtifact(result, frames, asked, 0), "the recording that the check did not stop");
       } catch (error) {
         this.failedRecordings.set(identity, error);
         throw error;
@@ -1556,6 +1561,9 @@ export function plannedStills({ gap, seconds, frames }) {
 export function requireStillsArtifact(result, frames, asked, after) {
   const plan = plannedStills(asked);
   const expected = join(frames, "stills.jsonl");
+  if (plan > MOST_STILLS) {
+    throw new Error(`the still recording ${expected} plans ${plan} stills, more than the ${MOST_STILLS} that a recording holds`);
+  }
   if (result.stills !== expected) throw new Error(`the stop reply names the stills ${result.stills}, not ${expected}`);
   if (!existsSync(expected)) throw new Error(`the still recording ${expected} is missing`);
   const rows = readStills(expected);
@@ -1587,6 +1595,12 @@ export function requireStillsArtifact(result, frames, asked, after) {
   if (unwritten) {
     throw new Error(`the still recording ${expected} has no ${unwritten.frame.slice(frames.length + 1)} for its written still ` +
       `${unwritten.index}`);
+  }
+  // The frame files are the frames of the written stills one to one: a frame of no written still is a still the rows do not tell.
+  const named = new Set(written.map((row) => row.frame));
+  const stray = listFrames(frames).find((path) => !named.has(path));
+  if (stray) {
+    throw new Error(`the still recording ${expected} has ${stray.slice(frames.length + 1)}, the frame file of no written still`);
   }
   return rows;
 }
@@ -1651,7 +1665,9 @@ async function dragDrawing(s, plan, capture, frameIdentity) {
   // Records until the time when the last screen of the drag is displayed.
   const { displayed } = await s.presented();
   const stopped = await s.request("diagnostics.capture.stop", { after: displayed });
-  requireStillsArtifact(stopped, result.frames, recording, displayed);
+  // A drag is judged at every still of its recording, so a still that the recording lost is a moment of the drag that no
+  // judgment saw.
+  requireNoLostStills(requireStillsArtifact(stopped, result.frames, recording, displayed), "the drag");
   // A drag changes the screen with every step, so each step (ticks of the reply) is owed a still that shows a change.
   // A drag without steps changed nothing, so a reply without step times cannot be judged.
   const steps = !Array.isArray(result.ticks) ? result.ticks : result.ticks.length > 0 ? result.ticks.map((from) => ({ from })) : null;

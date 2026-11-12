@@ -15,6 +15,7 @@ import { addRasterTabAt, RASTER } from "./raster-probe.mjs";
 import { alignment, alignmentDelta } from "./alignment.mjs";
 import { measureDragPerformance, shownTimes, assertFinalContentSize, assertHeldStatesShown, assertRoundTrips, lagStages, pointerLag, transactionCadence } from "@soksak/window-check/drag-measurement.mjs";
 import { readDisplayRefreshes } from "@soksak/window-check/display-refresh.mjs";
+import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 
 // Vertical line 1 is the boundary between the left fixed sidebar and the first card of the middle column. Dragging it moves the left
 // edge of that card.
@@ -29,6 +30,8 @@ const rasterInFirstCard = (s) => addRasterTabAt(s, 1, 0);
 function assertAligned(run, marks) {
   const files = frames(run.frames);
   assert.equal(files.length, run.count, "the drag recording omitted a saved frame");
+  // Every still of the drag is judged, so a still that the recording lost hides a moment of it.
+  requireNoLostStills(readStills(run.stills), "the drag");
   assert.ok(files.length > 30, `only ${files.length} frames were recorded`);
 
   let worst = { out: 0, frame: -1, at: null };
@@ -46,7 +49,8 @@ function assertAligned(run, marks) {
     const repeated = previous !== null && frameChange(previous, frame) === null;
     previous = frame;
     const at = outside(frame, marks);
-    sizes.push({ time: frame.time, left: at?.left ?? null, right: at?.right ?? null });
+    // The final content size is judged from stills requested after the last input.
+    sizes.push({ time: frame.requested, left: at?.left ?? null, right: at?.right ?? null });
     if (!at) return;
     const geometry = alignment(frame, at);
     assert.equal(geometry.missing, undefined, `frame ${index} of ${files.length}: could not measure the ${geometry.missing}`);
@@ -55,7 +59,8 @@ function assertAligned(run, marks) {
     if (delta > delayed.delta) delayed = { delta, frame: index, geometry };
     read++;
     positions.push(at.card.l / at.scale);
-    samples.push({ time: frame.time, position: at.card.l / at.scale });
+    // A sample is the request time of its still, the completion time of the still and the position that it shows.
+    samples.push({ time: frame.requested, completed: frame.completed, position: at.card.l / at.scale });
     if (!repeated) shown.push(samples.at(-1));
     if (at.out <= 0) return;
     broke++;
@@ -82,7 +87,8 @@ function assertAligned(run, marks) {
 
   const lag = pointerLag(shown, run.ticks, run.boundary);
   lag.stages = lagStages(lag, run.ticks, run.layouts);
-  lag.performance = measureDragPerformance(shownTimes(shown, run.ticks), lag, readDisplayRefreshes(run.frames));
+  lag.performance = measureDragPerformance(shownTimes(shown, run.ticks), lag, readDisplayRefreshes(run.frames),
+    readStills(run.stills));
 
   return lag;
 }
@@ -90,6 +96,8 @@ function assertAligned(run, marks) {
 function assertNoWhiteSurfaceBleed(run, message, marks) {
   const files = frames(run.frames);
   assert.ok(files.length > 0, `${message}: no frames were recorded`);
+  // Every still of the drag is judged, so a still that the recording lost could have shown white.
+  requireNoLostStills(readStills(run.stills), message);
   const samples = [];
   let worst = { ratio: 0, frame: -1 };
   for (const [frameIndex, path] of files.entries()) {
@@ -97,7 +105,7 @@ function assertNoWhiteSurfaceBleed(run, message, marks) {
     const measured = outside(frame, marks);
     assert.ok(measured, `${message}: surface/card geometry could not be measured in frame ${frameIndex}`);
     const { l, r } = measured.card;
-    samples.push({ time: frame.time, position: l / measured.scale });
+    samples.push({ time: frame.requested, position: l / measured.scale });
     // During the horizontal drag, the top and the bottom of the surface do not move. The check measures from the top to the bottom of the surface, between the card borders.
     const y0 = Math.round(marks.top * frame.scale);
     const y1 = Math.round(marks.bottom * frame.scale);
@@ -111,7 +119,7 @@ function assertNoWhiteSurfaceBleed(run, message, marks) {
       `within card ${worst.measured?.card?.l}..${worst.measured?.card?.r}, ` +
       `rows ${worst.y0}..${worst.y1}`);
   // Each step waits one display period of the window's display, so a return leg shorter than one display period may show no layout. The check requires only a layout that stayed for a long time.
-  assertHeldStatesShown(samples, run.ticks, run.boundary);
+  assertHeldStatesShown(samples, run.ticks, run.boundary, readStills(run.stills));
 }
 
 for (const app of Object.values(APPS)) {

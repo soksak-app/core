@@ -14,6 +14,7 @@ import { cardEdgeConvergence, cardEdgeSamples, sourceIntervalSummary } from "./c
 import { outside } from "../outside.mjs";
 import { assertRoundTrips, measureDragPerformance, pointerLag, shownTimes, transactionCadence } from "@soksak/window-check/drag-measurement.mjs";
 import { readDisplayRefreshes } from "@soksak/window-check/display-refresh.mjs";
+import { readStills } from "@soksak/window-check/stills.mjs";
 
 const descriptor = Object.freeze({
   plugin: "probeplain",
@@ -54,13 +55,15 @@ for (const app of Object.values(APPS)) {
       `surface ${JSON.stringify(frame)}, first frame scale ${first.scale}, colour at its centre ${at(frame.x + frame.width / 2, frame.y + frame.height / 2)}, ` +
       `at its head ${at(frame.x + frame.width / 2, marks.head)}`);
     assertRoundTrips(samples.map((sample) => sample.position), 2);
-    const changes = captured.slice(1).map((item, index) => ({ time: item.time, change: frameChange(captured[index], item) }));
+    // A still with the pixels of the still before it shows no new layout; each sample is keyed by the request time of its still.
+    const changes = captured.slice(1).map((item, index) => ({ time: item.requested, change: frameChange(captured[index], item) }));
     const repeated = new Set(changes.filter((item) => item.change === null).map((item) => item.time));
     const shown = samples.filter((sample) => !repeated.has(sample.time));
     const lag = pointerLag(shown, run.ticks, run.boundary);
-    const performance = measureDragPerformance(shownTimes(shown, run.ticks), lag, readDisplayRefreshes(run.frames));
+    const performance = measureDragPerformance(shownTimes(shown, run.ticks), lag, readDisplayRefreshes(run.frames),
+      readStills(run.stills));
     const convergence = cardEdgeConvergence(samples, run.ticks.at(-1));
-    const report = { load: loadavg(), performance, convergence, transactionCadence: transactionCadence(run.layouts), repeatedFrames: repeated.size, samples, ticks: run.ticks, boundary: run.boundary, layouts: run.layouts, times: captured.map((item) => item.time), unmeasured };
+    const report = { load: loadavg(), performance, convergence, transactionCadence: transactionCadence(run.layouts), repeatedFrames: repeated.size, samples, ticks: run.ticks, boundary: run.boundary, layouts: run.layouts, times: captured.map((item) => item.requested), unmeasured, missed: run.missed, late: run.late };
     const directory = join(app.configDir, "logs", "plain-view-latency");
     mkdirSync(directory, { recursive: true });
     writeFileSync(join(directory, `${process.pid}.json`), `${JSON.stringify(report)}\n`);
@@ -83,7 +86,7 @@ for (const app of Object.values(APPS)) {
     const directory = join(app.configDir, "logs", "plain-view-benchmark");
     mkdirSync(directory, { recursive: true });
     writeFileSync(join(directory, `${process.pid}.json`), `${JSON.stringify({ summary, contentFrames: traced.contentFrames, ticks: run.ticks }, null, 2)}\n`);
-    t.diagnostic(`${app.name}: source intervals ${JSON.stringify(summary)}, ${captured.length} recorded frames, longest gap ${run.longestGap} ms`);
+    t.diagnostic(`${app.name}: source intervals ${JSON.stringify(summary)}, ${captured.length} recorded frames, ${run.missed} missed and ${run.late} late stills`);
     assert.ok(summary.count > 1, "the gesture has too few source frames");
     await s.run("core.tab.close", { tab: surface });
   });

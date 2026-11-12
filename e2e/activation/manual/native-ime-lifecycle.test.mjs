@@ -17,6 +17,7 @@ import { assertReceivedUnchanged, focusedCard, imageRegion, inputDocument, inser
   presentedStage, rasterProbeTab, receivedAfter, transactionMatchesKey, untilDocument } from "../../input-probe.mjs";
 import { focusImageActive } from "../image-focus.mjs";
 import { NATIVE_INPUT_LOG, NATIVE_INPUT_READS, nativeInputDelivered, nativeInputStart } from "../../native-input-trace.mjs";
+import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 
 /** The log policy and the records of the checks of this file: the input records of the native library and the sidecar requests. */
 const READS = ["native.input.key_down", "native.input.callback", ...NATIVE_INPUT_READS];
@@ -54,7 +55,7 @@ async function preserveGestureCapture(s, artifactDir, label) {
     const { displayed } = await s.presented();
     result = await capture.stop({ after: displayed + 100 });
     assert.ok(result.count > 0, `${label}: the full-gesture capture contains no frames`);
-    assert.equal(result.limited, false, `${label}: the full-gesture capture reached its frame limit`);
+    requireNoLostStills(readStills(result.stills), `${label}: the full gesture`);
     persist();
     return result;
   };

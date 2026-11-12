@@ -9,6 +9,7 @@ import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh, probeSidebarSets } from "./fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
+import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 
 const near = (a, b, tolerance) => a.every((value, index) => Math.abs(value - b[index]) <= tolerance);
 
@@ -52,8 +53,9 @@ async function record(s, action) {
   try {
     await action();
     const shown = await s.presented();
-    const stop = await recording.stop({ after: Math.max(displayed, shown.displayed) + 100 });
-    assert.equal(stop.limited, false, "the recording reached its frame cap");
+    const stopped = await recording.stop({ after: Math.max(displayed, shown.displayed) + 100 });
+    // Every still of the reload is judged, so a still that the recording lost could have shown another colour.
+    requireNoLostStills(readStills(stopped.stills), "the reload");
     return frames(recording.frames).map(readFrame);
   } finally {
     // If the recording cannot be stopped, the session cleanup stops it (Session.record).

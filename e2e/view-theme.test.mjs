@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { APPS, judgeShownChanges, open, owe } from "@soksak/window-check/app.mjs";
 import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
+import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 import { fresh, paintProbeDocument } from "./fixture.mjs";
 
 /** The CSS color rgb(r, g, b) of a #rrggbb token, as a view reports its computed background. */
@@ -45,7 +46,8 @@ for (const app of Object.values(APPS)) {
       const captured = frames(recording.frames).map(readFrame);
       assert.equal(captured.length, stopped.count, "first-theme recording has missing frame files");
       assert.ok(captured.length > 1, "first-theme recording is incomplete");
-      assert.equal(stopped.limited, false, "first-theme recording exhausted its buffer");
+      // Every still of the view creation is judged, so a still that the recording lost could have shown another colour.
+      requireNoLostStills(readStills(stopped.stills), "the first theme");
       judgeShownChanges(stopped, owed, { what: "new tab" });
       assert.ok(empty.width > 24 && empty.height > 24, "the empty view has no sample area");
       for (const [index, frame] of captured.entries()) {

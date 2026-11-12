@@ -7,6 +7,7 @@ import { APPS, MAIN_PAGE_APPS, judgeShownChanges, keepCommonSettings, open, owe 
 import { fresh } from "./fixture.mjs";
 import { turnOffCardSidebars } from "./card-sidebar-choices.mjs";
 import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
+import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 import { railPixels } from "./rail.mjs";
 /** The plugin without a window sidebar override. */
 const PLAIN = "layoutprobe2";
@@ -42,7 +43,7 @@ function borders(frame, grid, cards) {
             return pixel(frame, x, y).every((value, index) => Math.abs(value - [43, 46, 61][index]) <= 3);
           }),
         ),
-        `window sidebar ${card.id} lost its ${edge === card.x ? "left" : "right"} border at ${frame.time}ms`,
+        `window sidebar ${card.id} lost its ${edge === card.x ? "left" : "right"} border in the still requested at ${frame.requested}ms`,
       );
     }
 }
@@ -121,7 +122,7 @@ for (const app of Object.values(APPS))
       assert.deepEqual((await s.get("core.workbench.audit")).unbound, []);
       return { grid, rail, plugin: tab.plugin, card: card.id };
     }
-    const recording = await s.request("diagnostics.capture.start", {});
+    const recording = await s.record();
     let displayed = 0,
       stop;
     // A selection changes the screen when it changes the active tab or the focused card, so the recording owes frames from each
@@ -146,15 +147,20 @@ for (const app of Object.values(APPS))
             observations.push({ ...(await measure(card, tab)), displayed });
           }
       } finally {
-        stop = await s.request("diagnostics.capture.stop", { after: displayed ? displayed + 100 : 0 });
+        stop = await recording.stop({ after: displayed ? displayed + 100 : 0 });
       }
-      assert.equal(stop.limited, false);
       judgeShownChanges(stop, owed, { what: "tab selection" });
-      const captured = frames(recording.frames).map(readFrame);
+      // A recording holds a still each refresh, so the stills are read and judged one at a time.
+      const captured = frames(recording.frames);
       assert.ok(captured.length > 2, "incomplete focus/tab recording");
       assert.equal(captured.length, stop.count, "recorded and written frame counts differ");
-      for (const frame of captured) borders(frame, baseline, windows);
-      const final = captured.at(-1);
+      // Every still is judged, so a still that the recording lost could have shown a window sidebar without its border.
+      requireNoLostStills(readStills(stop.stills), "the tab selections");
+      for (const path of captured) borders(readFrame(path), baseline, windows);
+      const final = readFrame(captured.at(-1));
+      // A still shows the window at a moment after its request, so only a still requested after the presentation shows it.
+      assert.ok(final.requested >= displayed,
+        `the last still was requested at ${final.requested}ms, before the presentation at ${displayed}ms`);
       railPixels(final, observations.at(-1).grid, observations.at(-1).rail);
       assert.ok(
         observations.some((item) => item.plugin === PLAIN && item.rail.groups.length === 0),
@@ -165,7 +171,7 @@ for (const app of Object.values(APPS))
         `${plugin} override was not measured`,
       );
       t.diagnostic(
-        `fixed windows=${windows.map((card) => card.id)}; selections=${observations.map((item) => `${item.plugin}:${item.rail.groups.length}`)}; frames=${captured.length}; gap=${stop.longestGap}ms`,
+        `fixed windows=${windows.map((card) => card.id)}; selections=${observations.map((item) => `${item.plugin}:${item.rail.groups.length}`)}; stills=${captured.length}; missed=${stop.missed}; late=${stop.late}; longest gap=${stop.longestGap}ms`,
       );
     } finally {
       rmSync(recording.frames, { recursive: true, force: true });

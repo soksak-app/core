@@ -31,8 +31,9 @@ export function measureFrame(frame) {
   for (let y = height - 1; y >= 0 && bottom < 0; y--) {
     for (let x = 0; x < width; x++) if (bright(x, y)) { bottom = y; break; }
   }
+  // A measured frame keeps the request time of its still: the still shows the layout presented by that time.
   return {
-    time: frame.time,
+    time: frame.requested,
     window: { width: frame.content.width / frame.contentScale, height: frame.content.height / frame.contentScale },
     gap: { x: frame.content.width / frame.contentScale - (right + 1) / ratio,
       y: frame.content.height / frame.contentScale - (bottom + 1) / ratio },

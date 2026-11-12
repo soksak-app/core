@@ -8,6 +8,7 @@ import test from "node:test";
 import { APPS, failure, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
+import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 import { processTable } from "@soksak/window-check/process-table.mjs";
 import { previewGaps, startPreviewPanes } from "./library-preview.mjs";
 import { RASTER, rasterReady } from "./raster-probe.mjs";
@@ -222,13 +223,8 @@ for (const app of Object.values(APPS)) {
     const rasterTabs = (await s.get("core.grid")).cards.flatMap((card) => card.tabs).filter((tab) => tab.plugin === RASTER);
     assert.equal(new Set(processesAtThree.children).size, rasterTabs.length,
       "every open raster view owns one child in the shared service, including hidden tabs");
-    const capture = await s.request("diagnostics.capture.start", {});
-    let captureActive = true;
-    s.cleanup(async () => {
-      if (captureActive) await s.request("diagnostics.capture.stop", { after: 0 });
-      rmSync(capture.frames, { recursive: true, force: true });
-      captureActive = false;
-    });
+    // The session stops the recording when the check ends before its stop, and keeps it when the check fails.
+    const recording = await s.record();
     await s.run("core.projects.browse");
     await s.until("core.screen", (screen) => screen.screen === "library", "the project did not enter the library");
     await returnProject(s, first.id, "three-raster project return");
@@ -269,8 +265,7 @@ for (const app of Object.values(APPS)) {
     t.diagnostic(`${app.name}: START restoration first presentation`);
     await s.presented();
     phase("first-presentation");
-    const stopped = await s.request("diagnostics.capture.stop", { after: 0 });
-    captureActive = false;
+    const stopped = await recording.stop({ after: 0 });
     const returned = await s.get("host.window");
     const expectedRasters = (await s.surfaces(RASTER)).filter((surface) => surface.visible);
     const returnedRegions = expectedRasters.map((surface) => {
@@ -280,6 +275,8 @@ for (const app of Object.values(APPS)) {
         `project return pixel composition: ${surface.surface} is visible in DOM but native region is hidden`);
       return region;
     });
+    // Every still of the return is judged, so a still that the recording lost could have shown white.
+    requireNoLostStills(readStills(stopped.stills), "the project return");
     assertNoWhiteBleed(frames(stopped.frames), returnedRegions, "project return pixel composition");
     rmSync(stopped.frames, { recursive: true, force: true });
     await assertVisibleRasters(s, 3, "immediately after returning to the project");

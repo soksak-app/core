@@ -7,6 +7,7 @@ import { APPS, judgeShownChanges, keepCommonSettings, open, owe } from "@soksak/
 import { fresh } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { railPixels } from "./rail.mjs";
+import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 
 for (const app of Object.values(APPS)) test(`${app.name}: rail groups follow adjacent, detached, fullscreen and restored cards`, { timeout: 90000 }, async (t) => {
   const s = await open(t, app);
@@ -34,8 +35,8 @@ for (const app of Object.values(APPS)) test(`${app.name}: rail groups follow adj
     const owed = from === null ? [] : [{ from, to: displayed }];
     const stopped = await recording.stop({ after: displayed });
     try {
-      assert.equal(stopped.limited, false, `${label}: the recording reached its frame limit`);
       assert.ok(stopped.count > 0, `${label}: the recording has no frames`);
+      requireNoLostStills(readStills(stopped.stills), label);
       judgeShownChanges(stopped, owed, { what: `${label} change` });
       const rail = await s.get("core.rail");
       // The full screen hides the fixed sidebars together with the other cards, so there is no rail (loops 0).
@@ -44,11 +45,16 @@ for (const app of Object.values(APPS)) test(`${app.name}: rail groups follow adj
       const verify = (await s.get("core.verify")).rows.filter((row) => !row.ok);
       assert.deepEqual(verify, [], `${label}: layout verification failed`);
       try {
-        railPixels(readFrame(frames(directory).at(-1)), await s.get("core.grid"), rail);
+        const last = readFrame(frames(directory).at(-1));
+        // A still shows the window at a moment after its request, so only a still requested after the display shows it.
+        assert.ok(last.requested >= displayed,
+          `the last still was requested at ${last.requested}ms, before the display at ${displayed}ms`);
+        railPixels(last, await s.get("core.grid"), rail);
       } catch (error) {
         throw new Error(`${label}: ${error.message}; loops ${JSON.stringify(rail.groups.map((group) => group.loops))}`, { cause: error });
       }
-      t.diagnostic(`${label}: ${stopped.count} frames, maximum gap ${stopped.longestGap}ms, ${loops} loop(s)`);
+      t.diagnostic(`${label}: ${stopped.count} stills, ${stopped.missed} missed, ${stopped.late} late, longest gap ` +
+        `${stopped.longestGap}ms, ${loops} loop(s)`);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

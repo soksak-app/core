@@ -8,15 +8,16 @@ import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
 import { APPS, judgeShownChanges, keepCommonSettings, open, owe } from "@soksak/window-check/app.mjs";
 import { fresh, probeSidebarSets } from "./fixture.mjs";
 import { tabElementIndex } from "./input-probe.mjs";
+import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 
 /** The card of the grid that holds the tab surface. */
 const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab) => tab.id === surface)).id;
 
 async function clickFullscreen(t, s, card, expected) {
   const control = await s.rect("core.card.fullscreen", card.pane);
-  const { frames: directory } = await s.request("diagnostics.capture.start", {});
-  // The session removes the recording when the check passes and keeps it when the check fails.
-  s.trackRecording(directory);
+  // The session removes the recording when the check passes and keeps it when the check fails; the stop checks its still rows.
+  const recording = await s.record();
+  const directory = recording.frames;
   let displayed = 0;
   let stopped;
   // The click toggles the full screen of the card: the recording owes frames from the click to the display of the full screen
@@ -28,10 +29,10 @@ async function clickFullscreen(t, s, card, expected) {
     await s.until("core.grid", grid => grid.fullscreen === expected, "fullscreen button did not toggle its card");
     ({ displayed } = await s.presented());
     owed.push({ from, to: displayed });
-  } finally { stopped = await s.request("diagnostics.capture.stop", { after: displayed ? displayed + 100 : 0 }); }
+  } finally { stopped = await recording.stop({ after: displayed ? displayed + 100 : 0 }); }
   const captured = frames(directory).map(readFrame);
   assert.ok(captured.length > 1, "fullscreen click recording is incomplete");
-  assert.equal(stopped.limited, false, "fullscreen recording reached its bounded buffer");
+  requireNoLostStills(readStills(stopped.stills), "the fullscreen click");
   judgeShownChanges(stopped, owed, { what: "fullscreen click" });
   const grid = await s.get("core.grid");
   const shown = grid.cards.find(item => item.id === card.id);
@@ -43,10 +44,12 @@ async function clickFullscreen(t, s, card, expected) {
     const [r, g, b] = pixel(last, x, y);
     if (r > 140 && r > g + 35 && g > b + 15) edges.push(x / ratio);
   }
-  assert.ok(edges.length >= 2, "recording has no measured focused card edges");
-  assert.ok(Math.abs(edges[0] - (grid.plane.x + shown.x)) <= 1, `recorded left edge ${edges[0]}`);
-  assert.ok(Math.abs(edges.at(-1) - (grid.plane.x + shown.x + shown.w)) <= 1, `recorded right edge ${edges.at(-1)}`);
-  t.diagnostic(`fullscreen=${expected}: ${captured.length} frames, gap=${stopped.longestGap}ms, measured edges=${edges[0]},${edges.at(-1)}`);
+  const lost = `${stopped.missed} missed and ${stopped.late} late stills`;
+  assert.ok(edges.length >= 2, `recording has no measured focused card edges (${lost})`);
+  assert.ok(Math.abs(edges[0] - (grid.plane.x + shown.x)) <= 1, `recorded left edge ${edges[0]} (${lost})`);
+  assert.ok(Math.abs(edges.at(-1) - (grid.plane.x + shown.x + shown.w)) <= 1, `recorded right edge ${edges.at(-1)} (${lost})`);
+  t.diagnostic(`fullscreen=${expected}: ${captured.length} frames, ${lost}, gap=${stopped.longestGap}ms, ` +
+    `measured edges=${edges[0]},${edges.at(-1)}`);
 }
 
 for (const app of Object.values(APPS)) {
@@ -239,9 +242,10 @@ for (const app of Object.values(APPS)) {
     const captured = frames(recording.frames).map(readFrame);
     assert.equal(captured.length, stopped.count, "tab recording has missing frame files");
     assert.ok(captured.length > 1, "tab switching recording is incomplete");
-    assert.equal(stopped.limited, false, "tab recording reached its bounded buffer");
+    requireNoLostStills(readStills(stopped.stills), "the tab clicks");
     judgeShownChanges(stopped, owed, { what: "tab click" });
-    t.diagnostic(`two tab presentation waits completed: ${captured.length} decoded frames`);
+    t.diagnostic(`two tab presentation waits completed: ${captured.length} decoded frames, ${stopped.missed} missed and ` +
+      `${stopped.late} late stills`);
     await s.run("core.card.fullscreen", { card: own });
     await s.until("core.grid", grid => grid.fullscreen === null, "fullscreen did not end");
   });

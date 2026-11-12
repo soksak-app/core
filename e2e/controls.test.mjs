@@ -6,6 +6,7 @@ import test from "node:test";
 import { APPS, drag, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
+import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 
 const PLAN = { axis: "x", line: 2, dx: -250, dy: 0, ms: 48, times: 3 };
 
@@ -55,12 +56,15 @@ for (const app of Object.values(APPS)) {
       await s.run("core.settings.change", { key: "mode", value: mode, scope: "common" });
       await s.until("core.window.workbench", (workbench) => workbench?.scheme === mode, `the workbench did not take the ${mode} mode`);
       const logo = await s.rect("core.brand");
-      await s.request("diagnostics.capture.start", {});
-      const displayed = await s.presented();
-      const { frames: directory } = await s.request("diagnostics.capture.stop", { after: displayed.displayed });
       // The session removes the recording when the check passes and keeps it when the check fails.
-      s.trackRecording(directory);
-      const frame = readFrame(frames(directory).at(-1));
+      const recording = await s.record();
+      const displayed = await s.presented();
+      const stopped = await recording.stop({ after: displayed.displayed });
+      requireNoLostStills(readStills(stopped.stills), `the ${mode} mode`);
+      const frame = readFrame(frames(stopped.frames).at(-1));
+      // The last still shows the presented mode only when it was requested at or after the presentation.
+      assert.ok(frame.requested >= displayed.displayed, `${mode}: the last still was requested at ${frame.requested}ms, before ` +
+        `the presentation at ${displayed.displayed}ms`);
       // The text is to the right, starting at 102 of the logo width 323.
       const left = Math.round((logo.x + logo.width * 102 / 323) * frame.scale);
       const right = Math.round((logo.x + logo.width) * frame.scale);

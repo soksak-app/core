@@ -9,6 +9,7 @@ import test from "node:test";
 import { APPS, drag, open } from "@soksak/window-check/app.mjs";
 import { fresh, joinedFailure } from "./fixture.mjs";
 import { addRasterTab, presentedFrame, presentRasterTab, REGION } from "./raster-probe.mjs";
+import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 
 const tuple = (value) => ({ generation: String(value.generation), raster: String(value.raster), sequence: value.sequence });
 
@@ -46,6 +47,7 @@ for (const app of Object.values(APPS)) {
 
       stopAttempted = true;
       stopResult = await recording.stop({ after: shown.displayed });
+      requireNoLostStills(readStills(stopResult.stills), "the frame identity recording");
       assert.deepEqual(stopResult.frameIdentity && Object.keys(stopResult.frameIdentity).sort(), ["manifest", "status"],
         "opt-in stop did not return the declared frame-identity result");
       assert.equal(stopResult.frameIdentity.status, "complete");

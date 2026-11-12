@@ -11,6 +11,7 @@ import { APPS, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, eventLine, readEvents, traceRows } from "@soksak/window-check/event-log.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { START_PLUGIN, fresh, probeSidebarSets } from "./fixture.mjs";
+import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 
 const LIGHT_DOCUMENT = [231, 233, 238];
 const DARK_DOCUMENT = [21, 28, 42];
@@ -54,6 +55,7 @@ async function documentPixel(s, surface, at = (rect) => ({ x: rect.x + rect.widt
   const recording = await s.record();
   const { displayed } = await s.presented();
   const result = await recording.stop({ after: displayed });
+  requireNoLostStills(readStills(result.stills), "the document pixel capture");
   const captured = frames(result.frames);
   assert.ok(captured.length > 0, "document pixel capture produced no frames");
   const frame = readFrame(captured.at(-1));

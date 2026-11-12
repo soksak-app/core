@@ -15,6 +15,7 @@ import { fresh, reading, START_PLUGIN } from "./fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { rasterMarks, surfaceBoxes, whitePixels } from "./outside.mjs";
 import { assertHeldStatesShown } from "@soksak/window-check/drag-measurement.mjs";
+import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 import { presentsFrame } from "@soksak/window-check/region-raster.mjs";
 import {
   acceptedCurrentViewReplies, currentPageNativeViewCalls, currentPageViewCallCoverage,
@@ -33,14 +34,18 @@ const sessionOf = (s, surface, message = `${surface} did not open a sidecar sess
   s.until("rasterprobe.session", (state) => typeof state?.session === "string" && state.connected === true, message, { surface });
 
 async function lastFrame(session) {
-  await session.request("diagnostics.capture.start", {});
-  const displayed = await session.presented();
-  const { frames: frameDir } = await session.request("diagnostics.capture.stop", { after: displayed.displayed });
   // The session removes the recording when the check passes and keeps it when the check fails.
-  session.trackRecording(frameDir);
-  const paths = frames(frameDir);
+  const recording = await session.record();
+  const displayed = await session.presented();
+  const stopped = await recording.stop({ after: displayed.displayed });
+  requireNoLostStills(readStills(stopped.stills), "the last frame capture");
+  const paths = frames(stopped.frames);
   assert.ok(paths.length > 0, "the capture produced no frames");
-  return readFrame(paths.at(-1));
+  // The last still shows the presented window only when it was requested at or after the presentation.
+  const frame = readFrame(paths.at(-1));
+  assert.ok(frame.requested >= displayed.displayed, `the last still was requested at ${frame.requested}ms, before the ` +
+    `presentation at ${displayed.displayed}ms`);
+  return frame;
 }
 
 async function assertGridFillsPlane(session, message) {
@@ -580,9 +585,11 @@ for (const app of Object.values(APPS)) {
         entry.phases.filter((phase) => phase === "presented").length).join(",") || "none"}`);
       const edgeWidths = [];
       const times = [];
+      // Every still of the drag is judged, so a still that the recording lost hides a moment of it.
+      requireNoLostStills(readStills(result.stills), `set ${set} drag`);
       const positions = frames(result.frameDir).map((file, index) => {
         const frame = readFrame(file);
-        times.push(frame.time);
+        times.push(frame.requested);
         let boxes;
         try {
           boxes = surfaceBoxes(frame, MEASURED, { expectedRow: headY }).sort((a, b) => a.card.l - b.card.l);
@@ -609,7 +616,7 @@ for (const app of Object.values(APPS)) {
       try {
         // Every placement that stayed long must appear in the recording. A position that stayed shorter than one display can be replaced.
         assertHeldStatesShown(positions.map((position, index) => ({ time: times[index], position })),
-          result.ticks, result.boundary);
+          result.ticks, result.boundary, readStills(result.stills));
       } catch (error) {
         throw new Error(`set ${set}: ${error.message}; frames ${times.length}, first frame ${times[0]}ms, ` +
           `last frame ${times.at(-1)}ms, last presentation ${result.displayed}ms, drag ${result.took}ms, ` +

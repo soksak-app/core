@@ -1,6 +1,6 @@
 // Measures by recording whether a new window draws a complete first screen from the first frame in which it is visible (docs/spec/surface-composition.md,
 // docs/spec/native-host.md). The recording of a new window (diagnostics.capture.start newWindow, docs/spec/endpoint.md) holds the show of the next window of
-// the application and puts it on screen at the start of its stream, so the recording has the first frame in which the window is on screen. A new window is
+// the application and puts it on screen after its first still, so the recording has the first frame in which the window is on screen. A new window is
 // transparent until its reveal, so its first frames are transparent, and a recording that does not show the window appear fails. Two windows are measured:
 // a new window, which shows the library, and the window of a project that opens in its own window.
 import assert from "node:assert/strict";
@@ -12,6 +12,7 @@ import test from "node:test";
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
+import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 import { alpha, cardPoint, fullSize, LOGO, sample, undrawn } from "./screen-drawn.mjs";
 
 /** The pixels seen at every grid step inside rect (window coordinates) of view. */
@@ -56,15 +57,17 @@ async function firstFrames(t, s, label, opening, ready) {
   // transparent; the presented time of a window that waits for its reveal is the frame after the reveal, so the recording ends after the window shows.
   const shown = await child.presented();
   const stop = await recording.stop({ after: shown.displayed + 100 });
-  assert.equal(stop.limited, false, `${label}: the recording reached its frame cap`);
+  // Every still of the recording is judged, so a still that the recording lost hides a frame of the window.
+  requireNoLostStills(readStills(stop.stills), `${label}: the new window`);
   const window = (await child.get("host.window")).frame;
-  // A window recording reads the window itself, so the window points of LOGO and cardPoint sample its frames.
-  const captured = frames(recording.frames).map(readFrame);
+  // A window recording reads the window itself, so the window points of LOGO and cardPoint sample its frames. A recording holds
+  // a still each refresh, so the stills are read one at a time.
+  const captured = frames(recording.frames);
   assert.ok(captured.length > 1, `${label}: the recording has ${captured.length} frames`);
   const region = { x: 0, y: 0, width: window.width, height: window.height };
   // The window opening animation starts the window slightly smaller, so the content is counted in the inner region that the window covers from the start.
   const inner = { x: region.width * 0.06, y: region.height * 0.06, width: region.width * 0.88, height: region.height * 0.88 };
-  const last = captured.at(-1);
+  const last = readFrame(captured.at(-1));
   // The background of the first screen is the color of the empty area below the library or the cards.
   const background = sample(last, { x: region.width / 2, y: region.height * 0.85 });
   const ink = (view) => grid(view, inner, 8)
@@ -73,16 +76,27 @@ async function firstFrames(t, s, label, opening, ready) {
   assert.ok(complete > 0, `${label}: the last frame shows no content in the new window`);
   // A new window is transparent until its reveal, and a window recording reads it so: every pixel of such a frame has alpha 0. The window appears at the
   // first frame with a pixel that is not transparent, and a recording whose first frame already shows the window does not show it appear.
-  const rows = captured.map((view, index) => ({ index, time: Math.round(view.time - captured[0].time),
-    opaque: opaque(view, region, 16), ink: ink(view) }));
+  // Once the window shows at its full size, each frame has the logo at its place and the card color of the last frame.
+  const rows = [];
+  const missing = [];
+  let start;
+  let whole = 0;
+  for (const [index, path] of captured.entries()) {
+    const view = readFrame(path);
+    start ??= view.requested;
+    const row = { index, requested: Math.round(view.requested - start), opaque: opaque(view, region, 16), ink: ink(view) };
+    rows.push(row);
+    if (rows.some((item) => item.opaque > 0) && fullSize(view, last, region)) {
+      whole += 1;
+      missing.push(...undrawn([view], { logo: LOGO, card, reference: last }).map((item) => ({ ...item, index })));
+    }
+  }
   const first = rows.findIndex((row) => row.opaque > 0);
   assert.ok(first > 0, `${label}: the recording does not show the new window appear: ${JSON.stringify(rows.slice(0, 3))}`);
   const empty = rows.slice(first).filter((row) => row.ink < complete / 2);
-  // Once the window shows at its full size, each frame has the logo at its place and the card color of the last frame.
-  const whole = captured.slice(first).filter((view) => fullSize(view, last, region));
-  const missing = undrawn(whole, { logo: LOGO, card, reference: last });
   t.diagnostic(`${label}: window ${JSON.stringify(window)}; appears at frame ${first} of ${rows.length}; complete ink ${complete}; ` +
-    `empty ${JSON.stringify(empty)}; ${whole.length} frames at full size, undrawn ${JSON.stringify(missing.slice(0, 6))}`);
+    `empty ${JSON.stringify(empty)}; ${whole} frames at full size, undrawn ${JSON.stringify(missing.slice(0, 6))}; ` +
+    `${stop.missed} stills missed, ${stop.late} late`);
   assert.deepEqual(empty, [], `${label}: the new window showed frames without its first screen`);
   assert.deepEqual(missing, [], `${label}: the new window showed frames without the logo at its place or without the card`);
 }

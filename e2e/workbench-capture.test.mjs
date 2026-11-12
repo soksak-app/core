@@ -2,13 +2,14 @@
 // Preserves the benchmark's fresh -> preparation -> native first drag -> captured
 // second drag order on the floor page view of the view drag benchmark. It makes no performance acceptance claim.
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import test from "node:test";
 
 import { APPS, drag, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
+import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 import { fresh, joinedFailure } from "./fixture.mjs";
 import { openFloorPage, prepareFloorDrag, VIEW_DRAG_PLAN } from "./benchmark/cases/floor-page.mjs";
 import { dragProcesses, NATIVE_DRAG_PLAN } from "./benchmark/cases/view-drag.mjs";
@@ -34,7 +35,7 @@ for (const app of Object.values(APPS)) {
       const offsets = currentEventOffsets(app.configDir);
       const evidence = { diagnostic: true, performanceAcceptance: false, control, rect,
         order: ["fresh", "prepareFloorDrag", "default policy", "process snapshot before", "native first drag", "process snapshot after", "captured second drag"],
-        capture: null, callbacks: [], samples: [], events: [] };
+        capture: null, stills: [], samples: [], events: [] };
       let failure;
       const processes = () => dragProcesses({ run: execute, rows: async () => windowApplicationRows({
         configDir: app.configDir, statuses: [{ ...(await s.get("host.window")), window: s.window }] }) });
@@ -44,24 +45,22 @@ for (const app of Object.values(APPS)) {
         evidence.processesAfter = await processes();
         const captured = await drag(s, VIEW_DRAG_PLAN, { capture: true });
         evidence.capture = captured;
-        evidence.callbacks = readFileSync(captured.callbackStatus, "utf8").trim().split("\n").filter(Boolean).map(line => JSON.parse(line));
+        evidence.stills = readStills(captured.stills);
+        // Every still of the drag is judged, so a still that the recording lost hides a moment of it.
+        requireNoLostStills(evidence.stills, "the workbench drag");
         const files = frames(captured.frames);
         assert.equal(files.length, captured.count, "the workbench recording omitted a frame file");
         assert.ok(files.length > 30, "the workbench recording has too few captured frames");
         assert.deepEqual(await s.rect(control), rect, "the observed root control moved during the drag");
         // This diagnostic detects loss of sampled contrast at one public control.
         // It does not establish correct painting of the complete root chrome.
-        // Decode every complete frame without filtering view geometry failures.
+        // Decode every written still without filtering view geometry failures.
         for (const file of files) {
           const frame = readFrame(file);
-          const callback = evidence.callbacks.find(row => row.frame === basename(file));
-          assert.ok(callback, `${basename(file)} has no callback-status record`);
-          assert.equal(callback.status, 0, `${basename(file)} is not a complete capture frame`);
-          evidence.samples.push({ frame: basename(file), timeMs: frame.time,
-            sequence: callback.sequence, displayTimeMachTicks: callback.displayTime,
-            machTimebaseNumerator: callback.machTimebaseNumerator,
-            machTimebaseDenominator: callback.machTimebaseDenominator,
-            colours: colours(frame, roi) });
+          const still = evidence.stills.find(row => row.frame === file);
+          assert.ok(still?.outcome === "written", `${basename(file)} has no written row in stills.jsonl`);
+          evidence.samples.push({ frame: basename(file), still: still.index, requestedMs: frame.requested,
+            completedMs: frame.completed, colours: colours(frame, roi) });
         }
         const blank = evidence.samples.filter(sample => sample.colours <= 1);
         assert.equal(blank.length, 0, `${control} lost painted contrast in ${JSON.stringify(blank)}`);

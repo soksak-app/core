@@ -17,6 +17,6 @@ export function railPixels(frame,grid,rail){
    const x=Math.floor(frame.content.x*frame.scale+(grid.plane.x+a.x+offset)*scale);
    const y=Math.floor(frame.content.y*frame.scale+(grid.plane.y+a.y+(b.y-a.y)*share)*scale);
    return pixel(frame,x,y).every((value,index)=>Math.abs(value-[114,121,255][index])<=5);
-  }),`rail border for ${group.card} is absent at ${share} of its edge x=${a.x} at ${frame.time}ms`);
+  }),`rail border for ${group.card} is absent at ${share} of its edge x=${a.x} in the still requested at ${frame.requested}ms`);
  }
 }

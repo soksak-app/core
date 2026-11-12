@@ -13,18 +13,19 @@ import { judgeFrames } from "./resize-frames.mjs";
  * was later than the window during the change. The window frame and the WebKit content are displayed separately (WebKit/WebKit#72971,
  * tauri-apps/tao#1207), so late frames during the change remain only as a measured value.
  */
-function assertSettled(t, { displayed, measured, stages }, label) {
+function assertSettled(t, { displayed, measured, stages, missed, late }, label) {
   assert.ok(measured.length > 1, `${label}: only ${measured.length} frames were recorded`);
   const [first] = measured;
   const last = measured.at(-1);
   const tail = measured.slice(-5).map((m) =>
     `${(m.time - first.time).toFixed(0)}ms ${m.window.width.toFixed(0)}×${m.window.height.toFixed(0)} gap ${m.gap.x.toFixed(0)},${m.gap.y.toFixed(0)}`);
+  // The recording lost no still (resizeRecording of e2e/benchmark/cases/resize.mjs fails on a lost still).
   const shown = `presented for display at ${(displayed - first.time).toFixed(0)}ms`;
   assert.ok(Math.abs(last.window.width - first.window.width) > 100,
     `${label}: the recording did not include the resized window (${first.window.width} → ${last.window.width}; ` +
     `${shown}; last frames ${tail.join(", ")})`);
   const { behind, took } = judgeFrames(measured);
-  t.diagnostic(`${label}: ${behind.filter(Boolean).length} of ${measured.length} frames show the layout behind the window, the last at ${took.toFixed(0)}ms`);
+  t.diagnostic(`${label}: ${behind.filter(Boolean).length} of ${measured.length} frames show the layout behind the window, the last at ${took.toFixed(0)}ms; ${missed} missed and ${late} late stills`);
   assert.ok(!behind.at(-1), `${label}: the settled frame shows the layout behind the window ` +
     `(window ${last.window.width.toFixed(0)}×${last.window.height.toFixed(0)}, gap ${last.gap.x.toFixed(0)},${last.gap.y.toFixed(0)}, ` +
     `base gap ${first.gap.x.toFixed(0)},${first.gap.y.toFixed(0)}; ${shown}; last frames ${tail.join(", ")}; stages ${JSON.stringify(stages)})`);

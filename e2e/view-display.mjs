@@ -1,6 +1,7 @@
 // Measures view display through the declared window-check session interface.
 import assert from "node:assert/strict";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
+import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 
 const PRESENTATION_PHASES = new Set(["requested", "result", "presented", "abandoned"]);
 
@@ -180,7 +181,7 @@ export async function observeViewDisplay(s, t, readRecording = (directory) => fr
         stopped = await recording.stop({ after: displayed ? displayed + 100 : 0 });
       }
       const captured = readRecording(recording.frames);
-      assert.equal(stopped.limited, false, `${view.id}: recording reached its bounded buffer`);
+      requireNoLostStills(readStills(stopped.stills), view.id);
       assert.equal(captured.length, stopped.count, `${view.id}: missing finalized frame files or frame count mismatch`);
       assert.ok(captured.length > 1, `${view.id}: recording has ${captured.length} frames`);
       const now = (await s.get("core.surfaces")).find((item) => item.surface === tab && item.visible);
@@ -196,7 +197,7 @@ export async function observeViewDisplay(s, t, readRecording = (directory) => fr
         assert.ok(counts.at(-1) > 1, `${view.id}: the last sampled surface area is blank`);
       }
       if (verifyShown) await verifyShown();
-      t.diagnostic(`${view.id}: first varied-area frame ${first < 0 ? "none" : first + 1} of ${captured.length}, gap=${stopped.longestGap}ms`);
+      t.diagnostic(`${view.id}: first varied-area frame ${first < 0 ? "none" : first + 1} of ${captured.length}, ${stopped.missed} missed and ${stopped.late} late stills`);
     } finally {
       if (tab) {
         await s.run("core.tab.close", { tab });

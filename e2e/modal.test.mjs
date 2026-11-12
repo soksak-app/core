@@ -8,6 +8,7 @@ import test from "node:test";
 import { APPS, holdCovered, judgeShownChanges, MAIN_PAGE_APPS, open, owe } from "@soksak/window-check/app.mjs";
 import { fresh as prepare, holdDialogs } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
+import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 import { addRasterTab, RASTER, rasterReady } from "./raster-probe.mjs";
 import { readStillCapture } from "./still-capture.mjs";
 import { channelOtherSeqs, expectedTimeline, PAGE_ROWS } from "./debug-timeline-files.mjs";
@@ -184,8 +185,9 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: the settings modal is on screen at the time presented reports after it is shown`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
-    const { frames: directory } = await s.request("diagnostics.capture.start", {});
-    s.trackRecording(directory);
+    // The session removes the recording when the check passes and keeps it when the check fails; the stop checks its still rows.
+    const recording = await s.record();
+    const directory = recording.frames;
     let displayed = 0;
     let stopped;
     // Opening the settings shows the modal: the recording owes frames from the request to the display of the modal
@@ -209,20 +211,23 @@ for (const app of Object.values(APPS)) {
       const card = await s.rect("core.settings-modal.card");
       assert.ok(card.width > 0 && card.height > 0, "the actual named settings card was not rendered");
     } finally {
-      stopped = await s.request("diagnostics.capture.stop", { after: displayed ? displayed + 100 : 0 });
+      stopped = await recording.stop({ after: displayed ? displayed + 100 : 0 });
     }
-    assert.equal(stopped.limited, false, "the recording reached its bounded buffer");
     judgeShownChanges(stopped, owed, { what: "settings open" });
     const captured = frames(directory).map(readFrame);
+    // A still shows the window at a moment between its request and its completion: the first still, completed before the
+    // presented time, shows the window before it, and each still requested at or after the presented time shows the modal.
     const first = captured[0];
-    const after = captured.filter((frame) => frame.time >= displayed);
-    assert.ok(first.time < displayed && after.length > 0,
-      `the recording does not span the presented time ${displayed}: ${first.time}..${captured.at(-1).time}`);
-    // The scrim of a dialog darkens the whole window. Every frame after the display time is darker than the frames before the opening.
+    const after = captured.filter((frame) => frame.requested >= displayed);
+    assert.ok(first.completed < displayed && after.length > 0,
+      `the recording does not span the presented time ${displayed}: ${first.completed}..${captured.at(-1).requested}`);
+    // The scrim of a dialog darkens the whole window. Every still requested after the display time is darker than the still
+    // before the opening, so a still that the recording lost after the display time could have shown the window without it.
+    requireNoLostStills(readStills(stopped.stills), "the settings modal");
     const before = brightness(first);
     for (const frame of after) {
       assert.ok(brightness(frame) < before * 0.9,
-        `the frame at ${(frame.time - displayed).toFixed(1)}ms after the presented time shows no settings scrim: ` +
+        `the still requested ${(frame.requested - displayed).toFixed(1)}ms after the presented time shows no settings scrim: ` +
         `brightness ${brightness(frame).toFixed(1)} against ${before.toFixed(1)} before opening`);
     }
   });

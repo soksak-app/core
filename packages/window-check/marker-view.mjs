@@ -9,6 +9,7 @@ import { valueProof } from "./view-content.mjs";
 import { declaredSlotInsets, findFirstChangedSlotFrame, measureViewFrameGeometry } from "./view-frame-geometry.mjs";
 import { mapViewContentFramesToCapture, monotonicTimeMs, requireViewContentFrameCoverage, rootNativePlacementBeforeCapture,
   selectOneShotViewSourceFrame, withDragTraceMode, withViewContentTrace } from "./view-metrics-collection.mjs";
+import { readStills, requireNoLostStills } from "./stills.mjs";
 
 /** The size field of a core.grid card and its name, by the axis of core.grid.size. */
 const AXIS = Object.freeze({ x: Object.freeze({ size: "w", name: "width" }), y: Object.freeze({ size: "h", name: "height" }) });
@@ -107,8 +108,8 @@ function viewDocumentRow(host, surface, owner) {
  * The layout observation (v) of the view `surface` of the card `card`: core.grid.size makes the card 80 larger on `axis`
  * (x or y) while the content trace of `descriptor` runs. The content frame is the first still whose pixels match the declared
  * slot requested at or after the source frame of the new size, and the content value that `descriptor.readContent` reads holds
- * `descriptor.expectedContent`. Each time of a frame is the request time of its still; the content frame is a final state,
- * judged whatever stills the recording lost, and the lost stills are reported with it (missed, late).
+ * `descriptor.expectedContent`. Each time of a frame is the request time of its still, and the recording must lose no
+ * still.
  */
 export async function markerLayoutObservation(t, s, descriptor, surface, card, { owner, theme, cornerRadiusPt, axis }) {
   const dimension = AXIS[axis];
@@ -123,6 +124,7 @@ export async function markerLayoutObservation(t, s, descriptor, surface, card, {
     await s.run("core.grid.size", { card, axis, size: pane[dimension.size] + 80 });
     const { displayed } = await s.presented();
     const result = await recording.stop({ after: displayed });
+    requireNoLostStills(readStills(result.stills), `the ${owner} layout`);
     const files = frames(result.frames);
     assert.equal(files.length, result.count, `${owner} layout recording omitted finalized frame files`);
     assert.ok(files.length > 0, `${owner} layout recording contains no frames`);

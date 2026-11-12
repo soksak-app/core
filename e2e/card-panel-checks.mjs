@@ -1,13 +1,21 @@
 // Verdicts of the card panel window check. test/card-panel-checks.test.mjs checks that the verdicts reject invalid input.
 import assert from "node:assert/strict";
 import { refreshAfter } from "@soksak/window-check/display-refresh.mjs";
+import { lostStills, toldStill } from "@soksak/window-check/stills.mjs";
 
 /**
- * Display states that are missing from the recording. frames are { time, edges } (display time in ms, boundary coordinates measured in that frame) and poses are
- * { displayed, at } (display time in ms, boundary coordinates of that state). Refresh times are the display refreshes of the window (ms). A state is missing when it is absent from the frames up to the first frame at or after the second observed refresh after its display, or when no such frame exists. A frame stream promises no cadence, so the limit is that frame and not a time; each check bounds the recording gap itself.
+ * Display states that are missing from the recording. frames are { time, edges } (the request time of a still in ms, boundary
+ * coordinates measured in that still) and poses are { displayed, at } (display time in ms, boundary coordinates of that state).
+ * Refresh times are the display refreshes of the window (ms). A state is missing when it is absent from the stills up to the
+ * first still requested at or after the second observed refresh after its display, or when no such still exists. The limit is
+ * that still and not a time; each check bounds the recording gap itself. stills are the still rows of the recording
+ * (readStills): each missing state carries in `lost` the stills that the recording lost from the display of the state before it
+ * to the end of its window (toldStill). A state is missing whatever lost it; `lost` tells a loss of the recording from a state
+ * never shown.
  */
-export function missingPoses(frames, poses, refreshes) {
+export function missingPoses(frames, poses, refreshes, stills) {
   assert.ok(Array.isArray(refreshes) && refreshes.length > 0, "the display refresh times are missing");
+  assert.ok(Array.isArray(stills), "the still rows of the recording are missing, so a missing pose cannot be told");
   // There is no frame before the recording starts. A state that was displayed before the recording started and did not change until the first frame is counted from the first frame.
   // A state that changed to the next state before the recording started cannot be recorded, so it is counted from its original time.
   const first = Math.min(...frames.map((frame) => frame.time));
@@ -24,8 +32,9 @@ export function missingPoses(frames, poses, refreshes) {
   const settled = refreshAfter(refreshes, start(pose, index), 2);
     return Math.min(...frames.filter((frame) => frame.time >= settled).map((frame) => frame.time), Infinity);
   };
-  return poses.filter((pose, index) => !frames.some((frame) => frame.time >= after(index) &&
-    frame.time <= until(pose, index) && frame.edges.some((edge) => Math.abs(edge - pose.at) <= 1)));
+  return poses.flatMap((pose, index) => frames.some((frame) => frame.time >= after(index) &&
+    frame.time <= until(pose, index) && frame.edges.some((edge) => Math.abs(edge - pose.at) <= 1))
+    ? [] : [{ ...pose, lost: lostStills(stills, after(index), until(pose, index)).map(toldStill) }]);
 }
 
 /** Fails when a panel remains after all panels are turned off. A remaining default panel fails as well. */

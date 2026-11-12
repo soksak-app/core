@@ -5,6 +5,7 @@ import test from "node:test";
 import { APPS, judgeShownChanges, open, owe } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { RASTER, REGION } from "../raster-probe.mjs";
+import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a current image region view receives the click and native focus`, { timeout: 30000 }, async (t) => {
@@ -39,7 +40,7 @@ for (const app of Object.values(APPS)) {
     const decoded = frames(recording.frames).map(readFrame);
     assert.equal(decoded.length, captured.count, "every captured frame must decode");
     assert.ok(decoded.length >= 2, "the recording must cover the whole click");
-    assert.equal(captured.limited, false, "the recording reached its limit");
+    requireNoLostStills(readStills(captured.stills), "the click");
     judgeShownChanges(captured, owed, { what: "click", limit: 33 });
     const after = await s.get("host.window");
     const input = await s.until("rasterprobe.input", (value) => value.pointer.some((event) => event.type === "pointerup"),
@@ -47,7 +48,8 @@ for (const app of Object.values(APPS)) {
     const document = after.documents.find((item) => item.surface === surface && item.document === "");
     const region = after.regions.find((item) => item.surface === surface && item.name === REGION);
     t.diagnostic(JSON.stringify({ surface, point, view: document, region, responder: after.responder, input: input.pointer,
-      frames: captured.count, longestGap: captured.longestGap, endpoint: s.client.endpoint }));
+      frames: captured.count, missed: captured.missed, late: captured.late, longestGap: captured.longestGap,
+      endpoint: s.client.endpoint }));
     assert.deepEqual((await s.get("core.layout")).state, layout, "click observation changed the layout");
     assert.equal(after.active, false, "the click activated the application");
     assert.equal(document?.visible, true, "the raster probe view is hidden while its card is visible");

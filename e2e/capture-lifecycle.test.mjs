@@ -7,6 +7,7 @@ import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
 import { frames } from "@soksak/window-check/frame.mjs";
+import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 import { fresh } from "./fixture.mjs";
 
 function snapshot(directory, prefix = "") {
@@ -56,7 +57,11 @@ for (const app of Object.values(APPS)) {
       const count = frames(recording.frames).length;
       assert.ok(count > 0, "the recording contains no frames");
       assert.equal(stopped.count, count, "the stop count differs from finalized frame files");
-      assert.ok(readFileSync(stopped.callbackStatus, "utf8").trim().length > 0, "callback records are missing");
+      // Every still of the recording is written: a still that it lost is a moment of the window that no record holds.
+      const rows = readStills(stopped.stills);
+      requireNoLostStills(rows, "the consecutive recording");
+      const written = rows.filter((row) => row.outcome === "written");
+      assert.equal(written.length, count, "the written rows of stills.jsonl differ from the finalized frame files");
       assert.ok(!completed.some((item) => item.directory === recording.frames), "a later recording reused a finalized directory");
       completed.push({ directory: recording.frames, files: snapshot(recording.frames) });
       for (const item of completed)

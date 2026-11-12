@@ -8,6 +8,7 @@ import { valueProof } from "./view-content.mjs";
 import { allViewRootProcessPids, measureProcessGroup, physicalFootprintBytes, processGroupReclaimEvidence,
   viewDocumentHistoryInventory, viewProcessGroup, viewProcessPids, viewProcessSurfaces,
   viewRootProcessPids } from "./view-process-footprint.mjs";
+import { readStills, requireNoLostStills } from "./stills.mjs";
 
 const PROCESS_REQUEST = "host.trace.view.process-request";
 const PROCESS_READY = "host.trace.view.process-ready";
@@ -674,6 +675,7 @@ export async function openRecordedView(t, s, { card, plugin, placement, params, 
     const { displayed } = await s.presented();
     capture = await recording.stop({ after: displayed + (captureObservationWindowMs ?? 0) });
     stopped = true;
+    requireNoLostStills(readStills(capture.stills), `the ${plugin} first content`);
     const paths = frames(capture.frames);
     assert.equal(paths.length, capture.count, `${plugin} first-content recording omitted captured frames`);
     assert.ok(paths.length > 0, `${plugin} first-content recording contains no frames`);
@@ -696,7 +698,6 @@ export async function openRecordedView(t, s, { card, plugin, placement, params, 
       readinessEvidence,
       openedPid: pids[0],
       processGroupPids,
-      // The content frame is a final state, judged whatever stills the recording lost; the lost stills are reported with it.
       recording: { directory: capture.frames, frameCount: paths.length, files: paths, missed: capture.missed, late: capture.late },
       verifyContent: async () => {
         if (contentProof) return contentProof;

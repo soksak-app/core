@@ -40,7 +40,7 @@ export function recordedEdges(captured, side, initial, cross, poses, layouts) {
       const extent = (vertical ? frame.width : frame.height) / ratio;
       for (let at = 0; at < extent; at += 0.5) if (border(frame, side, at, cross)) axisBorders.push(at);
       assert.fail(
-        `${side}: frame has no measured sidebar border ${JSON.stringify({ frameIndex, frameCount: captured.length, time: frame.time, width: frame.width, height: frame.height, content: frame.content, scale: frame.scale, contentScale: frame.contentScale, initial, cross, poses, layouts, axisBorders, samples })}`,
+        `${side}: frame has no measured sidebar border ${JSON.stringify({ frameIndex, frameCount: captured.length, requested: frame.requested, completed: frame.completed, width: frame.width, height: frame.height, content: frame.content, scale: frame.scale, contentScale: frame.contentScale, initial, cross, poses, layouts, axisBorders, samples })}`,
       );
     }
     return matches;

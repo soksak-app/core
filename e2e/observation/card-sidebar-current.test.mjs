@@ -5,6 +5,7 @@ import test from "node:test";
 import { rmSync } from "node:fs";
 import { APPS, judgeShownChanges, open, owe } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
+import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 
 for (const app of Object.values(APPS))
   test(`${app.name}: current card right sidebar follows saved plugin settings`, { timeout: 90000 }, async (t) => {
@@ -21,7 +22,8 @@ for (const app of Object.values(APPS))
     const link = linkOf(target);
     assert.equal(target.sidebars.right?.set, link.set, `saved ${link.plugin} setting is suppressed by the card selection`);
     const original = (await s.get("core.layout")).state;
-    const recording = await s.request("diagnostics.capture.start", {});
+    // A recording takes a still each refresh of the display of the window and checks its still rows when it stops.
+    const recording = await s.record();
     let stop,
       displayed = 0;
     // The times of the changes of the screen during the recording (judgeShownChanges).
@@ -76,13 +78,13 @@ for (const app of Object.values(APPS))
       assert.deepEqual((await s.get("core.layout")).state, original, "observation changed saved cards or tabs");
     } finally {
       try {
-        stop = await s.request("diagnostics.capture.stop", { after: displayed ? displayed + 100 : 0 });
+        stop = await recording.stop({ after: displayed ? displayed + 100 : 0 });
         const captured = frames(recording.frames).map(readFrame);
         assert.equal(captured.length, stop.count);
         assert.ok(captured.length > 2);
-        assert.equal(stop.limited, false);
+        requireNoLostStills(readStills(stop.stills), "the full screen toggle");
         judgeShownChanges(stop, owed, { what: "full screen toggle" });
-        t.diagnostic(`frames=${stop.count}; gap=${stop.longestGap}ms`);
+        t.diagnostic(`frames=${stop.count}; missed=${stop.missed}; late=${stop.late}; gap=${stop.longestGap}ms`);
       } finally {
         rmSync(recording.frames, { recursive: true, force: true });
       }

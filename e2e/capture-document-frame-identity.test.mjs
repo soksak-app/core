@@ -1,4 +1,4 @@
-// Checks that captured ScreenCaptureKit pixels carry the identity of a live plugin root WebKit document. The document is the root
+// Checks that the recorded stills of the window carry the identity of a live plugin root WebKit document. The document is the root
 // document of a `layoutprobe2` tab, a view without regions, so no native child region covers it.
 import assert from "node:assert/strict";
 import { cpSync, existsSync, mkdirSync, readFileSync } from "node:fs";
@@ -9,6 +9,7 @@ import { APPS, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents, traceRows } from "@soksak/window-check/event-log.mjs";
 import { fresh, joinedFailure } from "./fixture.mjs";
 import { documentIdentityCardIds, verifyDocumentFrameIdentityCapture, viewGenerationForSurface } from "./document-frame-identity.mjs";
+import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 
 /** The fixture plugin whose root document the capture identifies: a view without regions. */
 const ROOT_VIEW = "layoutprobe2";
@@ -64,6 +65,7 @@ for (const app of Object.values(APPS)) {
       const presentation = await s.presented();
       stopAttempted = true;
       result = await recording.stop({ after: presentation.displayed });
+      requireNoLostStills(readStills(result.stills), "the document identity recording");
       assert.equal(result.frameIdentity?.status, "complete", "capture did not finalize document identity evidence");
       const manifestPath = result.frameIdentity.manifest;
       assert.equal(manifestPath, join(recording.frames, "frame-identities", "manifest.json"));

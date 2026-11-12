@@ -18,6 +18,7 @@ import { fresh, joinedFailure } from "../../fixture.mjs";
 import { frameEvidence, lagStages, measureFrame, writeEvidence } from "../../resize-frames.mjs";
 import { effectiveCardCornerRadiusPt } from "@soksak/window-check/view-frame-geometry.mjs";
 import { dragGeometryFrame, floorSlotInsets, measureFloorLayoutFrame, openFloorPage } from "./floor-page.mjs";
+import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 
 /**
  * Time (ms) from the first recorded frame to the last frame in which the layout is behind the window, that the layout may take
@@ -41,8 +42,9 @@ const margin = (w) => w.content.width - right(w);
 async function record(s, gesture, change, sized, geometry) {
   const kept = margin(await s.get("host.window"));
   const offsets = currentEventOffsets(s.app.configDir);
-  const { frames: directory } = await s.request("diagnostics.capture.start");
-  // The recording stores frames of the window size at up to 60 per second, so it is deleted right after the measurement.
+  // The recording stores a still of the window size at each refresh of its display, so it is deleted right after the measurement.
+  const recording = await s.record();
+  const directory = recording.frames;
   try {
     // The recording covers the screen up to this display time. A screen that the app committed is displayed after the display wait ends.
     let displayed = 0;
@@ -57,7 +59,13 @@ async function record(s, gesture, change, sized, geometry) {
       failure = error;
     }
     // Covers the interval in which the layout follows after the window reaches the new size. The recording is stopped even when the change failed.
-    const { layouts } = await s.request("diagnostics.capture.stop", { after: displayed ? displayed + SETTLE : 0 });
+    const stopped = await recording.stop({ after: displayed ? displayed + SETTLE : 0 });
+    const { layouts, missed, late } = stopped;
+    try {
+      requireNoLostStills(readStills(stopped.stills), gesture);
+    } catch (error) {
+      failure = failure ? joinedFailure(`${gesture} failed and its recording lost stills`, [failure, error]) : error;
+    }
     const decoded = frames(directory).map(readFrame);
     const measured = decoded.map(measureFrame);
     let judged = null;
@@ -75,7 +83,7 @@ async function record(s, gesture, change, sized, geometry) {
     // The measured frames of the gesture are kept in the run folder whether the change passes or fails.
     writeEvidence(process.env.SOKSAK_RUN_FOLDER, s.app.name, gesture, frameEvidence({ gesture, displayed, measured, layouts, stages }));
     if (failure) throw failure;
-    return { displayed, measured, stages, geometry: judged };
+    return { displayed, measured, stages, geometry: judged, missed, late };
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -168,7 +176,8 @@ async function floorGeometry(s) {
 
 /**
  * Maximises the window of `s` and restores it, recording each change. `judge(gesture, recorded)` runs after each recorded change
- * with `{displayed, measured, stages, geometry}` and may throw. With `geometry` and on a window whose host.window reports pageProcess
+ * with `{displayed, measured, stages, geometry, missed, late}` (`missed` and `late`: the stills that the recording did not write and
+ * those that it requested late) and may throw. With `geometry` and on a window whose host.window reports pageProcess
  * null, each recorded frame is also judged with the geometry rule of the view drag (resizeGeometry, assertResizeGeometry); the
  * geometry of a gesture is null otherwise. `started()` runs after the preparation, right before the first gesture. The window is
  * restored when the check ends and it was maximised. Returns the recorded gestures and pageProcess of host.window.

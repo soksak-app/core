@@ -36,7 +36,8 @@ const differs = (a, b, tolerance) => a.some((value, index) => Math.abs(value - b
  * Buttons: in the middle half column of each button, from START to above the border, the center of the first and the last row that differ from the background by more than INK.
  * A vertical column through a circle is symmetric about the center of the circle, so the center is the same even if the button moves sideways.
  *
- * When it cannot measure, it returns the reason and the place as missing. A frame that cannot be measured is not a pass.
+ * When it cannot measure, it returns the reason and the place as missing. A frame that cannot be measured is not a pass. Every
+ * result carries `time`, the request time of the still.
  */
 export function measureTitlebar(frame, buttons) {
   if (!Array.isArray(buttons) || buttons.length === 0) throw new Error("the window reports no button frames");
@@ -50,19 +51,19 @@ export function measureTitlebar(frame, buttons) {
   const start = py(START);
   const limit = Math.min(frame.height, py(LIMIT));
   if (column >= frame.width || start >= limit) {
-    return { time: frame.time, missing: `the frame ${frame.width}x${frame.height} has no column ${right + GAP}pt below ${START}pt` };
+    return { time: frame.requested, missing: `the frame ${frame.width}x${frame.height} has no column ${right + GAP}pt below ${START}pt` };
   }
   const background = pixel(frame, column, start);
   let y = start;
   while (y < limit && !differs(pixel(frame, column, y), background, EDGE)) y++;
   if (y >= limit) {
-    return { time: frame.time, missing: `no first-row edge below ${START}pt in column ${right + GAP}pt (background ${background})` };
+    return { time: frame.requested, missing: `no first-row edge below ${START}pt in column ${right + GAP}pt (background ${background})` };
   }
   const edge = y;
   const line = pixel(frame, column, edge);
   while (y < limit && !differs(pixel(frame, column, y), line, EDGE)) y++;
   if ((y - edge) / scale > BORDER) {
-    return { time: frame.time, missing: `the line at ${(edge - top) / scale}pt in column ${right + GAP}pt is ${(y - edge) / scale}pt ` +
+    return { time: frame.requested, missing: `the line at ${(edge - top) / scale}pt in column ${right + GAP}pt is ${(y - edge) / scale}pt ` +
       `thick, thicker than the first-row border of every theme (${BORDER}pt), so something covers the first row` };
   }
   const row = (y - top) / scale;
@@ -79,10 +80,10 @@ export function measureTitlebar(frame, buttons) {
       last = at;
     }
   }
-  if (first < 0) return { time: frame.time, row, missing: `no window button above the first-row edge at ${(edge - top) / scale}pt` };
-  if (first === start) return { time: frame.time, row, missing: `window button ink reaches the scan start ${START}pt` };
+  if (first < 0) return { time: frame.requested, row, missing: `no window button above the first-row edge at ${(edge - top) / scale}pt` };
+  if (first === start) return { time: frame.requested, row, missing: `window button ink reaches the scan start ${START}pt` };
   const centre = ((first - top) + (last - top) + 1) / 2 / scale;
-  return { time: frame.time, row, buttons: centre, difference: centre - row / 2 };
+  return { time: frame.requested, row, buttons: centre, difference: centre - row / 2 };
 }
 
 /** A frame whose button center differs from the first-row center by more than tolerance, or that cannot be measured. */

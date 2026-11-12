@@ -6,6 +6,7 @@ import { APPS, holdCovered, keepCommonSettings, open } from "@soksak/window-chec
 import { fresh, joinedFailure } from "./fixture.mjs";
 import { turnOffCardSidebars } from "./card-sidebar-choices.mjs";
 import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
+import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 
 const geometry = (grid) =>
   grid.cards.map(({ id, x, y, w, h }) => ({ id, x, y, w, h })).sort((a, b) => a.id.localeCompare(b.id));
@@ -23,7 +24,7 @@ function borders(frame, grid, cards) {
             return pixel(frame, x, y).every((value, index) => Math.abs(value - [43, 46, 61][index]) <= 3);
           }),
         ),
-        `${card.id} border ${edge} absent at ${frame.time}ms`,
+        `${card.id} border ${edge} absent in the still requested at ${frame.requested}ms`,
       );
 }
 function nativeBorders(frame, rect) {
@@ -60,7 +61,7 @@ function nativeBorders(frame, rect) {
           );
         }),
       ),
-      `native border ${coordinate} absent at ${frame.time}ms`,
+      `native border ${coordinate} absent in the still requested at ${frame.requested}ms`,
     );
 }
 for (const app of Object.values(APPS))
@@ -223,7 +224,7 @@ for (const app of Object.values(APPS))
       async function phase(label, change, hidden = false) {
         const began = performance.now();
         console.info(`START ${app.name}: ${label}`);
-        const recording = await s.request("diagnostics.capture.start", {});
+        const recording = await s.record();
         let stopAttempted = false,
           displayed = 0,
           result;
@@ -233,19 +234,20 @@ for (const app of Object.values(APPS))
           result = await measure(label, hidden);
           ({ displayed } = await s.presented());
           stopAttempted = true;
-          const stop = await s.request("diagnostics.capture.stop", { after: displayed + 100 });
+          const stop = await recording.stop({ after: displayed + 100 });
           const captured = frames(recording.frames);
           assert.ok(captured.length > 2, `${label}: incomplete capture`);
           assert.equal(captured.length, stop.count, `${label}: reported and written frame counts differ`);
+          requireNoLostStills(readStills(stop.stills), label);
           t.diagnostic(
-            `${label}: ${captured.length} frames; maximum gap ${stop.longestGap}ms; limited=${stop.limited}`,
+            `${label}: ${captured.length} stills; ${stop.missed} missed; ${stop.late} late; longest gap ${stop.longestGap}ms`,
           );
-          assert.equal(stop.limited, false);
-          // The stream delivers a frame only when the window changes, and the steps of a phase leave it unchanged between
-          // them, so the gap is reported above and not judged; every frame is read and the last one is judged.
           // Reads and checks the complete buffers one at a time. It does not hold all device pixel buffers at once.
           for (const path of captured) readFrame(path);
           const last = readFrame(captured.at(-1));
+          // A still shows the window at a moment after its request, so only a still requested after the presentation shows it.
+          assert.ok(last.requested >= displayed,
+            `${label}: the last still was requested at ${last.requested}ms, before the presentation at ${displayed}ms`);
           borders(last, result.grid, result.columns);
           nativeBorders(last, result.native);
           console.info(`PASS ${app.name}: ${label} (${Math.round(performance.now() - began)}ms)`);
@@ -253,7 +255,7 @@ for (const app of Object.values(APPS))
           errors.push(error);
         } finally {
           try {
-            if (!stopAttempted) await s.request("diagnostics.capture.stop", { after: displayed ? displayed + 100 : 0 });
+            if (!stopAttempted) await recording.stop({ after: displayed ? displayed + 100 : 0 });
           } catch (error) {
             errors.push(error);
           }

@@ -6,6 +6,7 @@ import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
+import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 import { ensureRasters, MEASURED, setMeasuredColor } from "./raster-probe.mjs";
 
 const near = (a, b, tolerance) => a.every((value, index) => Math.abs(value - b[index]) <= tolerance);
@@ -27,7 +28,7 @@ for (const app of Object.values(APPS)) {
     const nativePoint = { x: surface.applied.x + 12, y: surface.applied.y + surface.applied.h - 12 };
     const pagePoint = { x: grid.plane.x + card.x + card.w / 2, y: grid.plane.y + card.y + 3 };
     const { displayed } = await s.presented();
-    const recording = await s.request("diagnostics.capture.start", {});
+    const recording = await s.record();
     try {
       const before = (await s.get("core.window.workbench")).start;
       await s.run("host.window.reload");
@@ -35,9 +36,11 @@ for (const app of Object.values(APPS)) {
         "the workbench did not start again");
       await ensureRasters(s, 1);
       const shown = await s.presented();
-      const stop = await s.request("diagnostics.capture.stop", { after: Math.max(displayed, shown.displayed) + 100 });
-      assert.equal(stop.limited, false, "the recording reached its frame cap");
-      const captured = frames(recording.frames).map(readFrame);
+      const after = Math.max(displayed, shown.displayed);
+      const stop = await recording.stop({ after: after + 100 });
+      // Every still of the reload is judged, so a still that the recording lost hides a moment of it.
+      requireNoLostStills(readStills(stop.stills), "the reload");
+      const captured = frames(recording.frames);
       assert.ok(captured.length > 4, `the recording has ${captured.length} frames`);
       const sample = (frame, point) => {
         const scale = frame.scale * frame.contentScale;
@@ -45,14 +48,18 @@ for (const app of Object.values(APPS)) {
           Math.floor(frame.content.y * frame.scale + point.y * scale));
       };
       // The header line color in the first frame is the color that the page drew. If the surface place has the measurement color while the header line does not, the surface was visible without the page.
-      const pageColour = sample(captured[0], pagePoint);
-      assert.ok(near(sample(captured[0], nativePoint), MEASURED, 3),
-        `the first frame does not show the probe raster at ${JSON.stringify(nativePoint)}: ${sample(captured[0], nativePoint)}`);
-      const exposed = captured.map((frame, index) => ({ index, time: frame.time, page: sample(frame, pagePoint), native: sample(frame, nativePoint) }))
-        .filter((item) => near(item.native, MEASURED, 3) && !near(item.page, pageColour, 12));
+      // A recording holds a still each refresh, so the stills are read one at a time.
+      const first = readFrame(captured[0]);
+      const pageColour = sample(first, pagePoint);
+      assert.ok(near(sample(first, nativePoint), MEASURED, 3),
+        `the first frame does not show the probe raster at ${JSON.stringify(nativePoint)}: ${sample(first, nativePoint)}`);
+      const exposed = captured.map((path, index) => {
+        const frame = readFrame(path);
+        return { index, requested: frame.requested, page: sample(frame, pagePoint), native: sample(frame, nativePoint) };
+      }).filter((item) => near(item.native, MEASURED, 3) && !near(item.page, pageColour, 12));
       assert.deepEqual(exposed.map(({ index, page, native }) => ({ index, page, native })), [],
         `native raster frames without the page (page colour ${pageColour}) in ${captured.length} recorded frames`);
-      t.diagnostic(`${captured.length} frames, page colour ${pageColour}, gap ${stop.longestGap}ms`);
+      t.diagnostic(`${captured.length} stills, ${stop.missed} missed, ${stop.late} late, page colour ${pageColour}, longest gap ${stop.longestGap}ms`);
     } finally {
       rmSync(recording.frames, { recursive: true, force: true });
     }

@@ -5,12 +5,13 @@
 // logs each input transaction of its region with the body that its fake sidecar received (rasterprobe.input), so the check
 // compares the committed text and the preedit that reached the region and the sidecar with the reference document.
 import assert from "node:assert/strict";
-import { readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
 import { captureCadence, frames, readFrame } from "@soksak/window-check/frame.mjs";
+import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 import { fresh, joinedFailure } from "../fixture.mjs";
 import { EVERY_LEVEL } from "@soksak/window-check/log-policy.mjs";
 import { addRasterTab, REGION } from "../raster-probe.mjs";
@@ -218,94 +219,29 @@ async function recordGesture(s, t, name, action) {
     const decoded = framePaths.map(readFrame);
     assert.equal(decoded.length, result.count, `${name}: every captured frame must decode`);
     assert.ok(decoded.length >= 2, `${name}: the recording must cover the full gesture`);
-    assert.equal(result.limited, false, `${name}: capture reached its limit`);
-    assert.equal(result.callbackStatus, join(capture.frames, "callback-status.jsonl"), `${name}: stop must name the callback trace`);
-    const callbackTrace = readFileSync(result.callbackStatus, "utf8");
-    assert.notEqual(callbackTrace.trim(), "", `${name}: the callback trace must not be empty`);
-    const callbackStatus = callbackTrace.trim().split("\n").map((line) => JSON.parse(line));
-    assert.ok(callbackStatus.length <= 4096, `${name}: callback trace exceeded its declared bound`);
-    for (const [index, callback] of callbackStatus.entries()) {
-    assert.equal(callback.sequence, index + 1, `${name}: callback sequence must be contiguous`);
-    assert.ok(callback.status === null || Number.isInteger(callback.status), `${name}: status must be an integer or null`);
-    assert.ok(callback.displayTime === null || (typeof callback.displayTime === "string" && /^\d+$/.test(callback.displayTime)),
-      `${name}: displayTime must be exact decimal mach time or null`);
-    for (const field of ["callbackTime", "writeStartTime", "writeCompleteTime"]) {
-      assert.ok(typeof callback[field] === "string" && /^\d+$/.test(callback[field]),
-        `${name}: ${field} must be an exact decimal mach time`);
+    // The stop checked the still rows against the plan of the recording (requireStillsArtifact: the path, one row per planned
+    // still in the order of the plan, at most 4096, the frame files of the written stills and of no other), and readStills
+    // refused a row whose outcome, exact mach times, timebase, frame, error or window list contradict each other. The check
+    // requires that every still is written and none late, and matches each written still to its frame.
+    assert.equal(result.stills, join(capture.frames, "stills.jsonl"), `${name}: stop must name the still rows`);
+    const rows = readStills(result.stills);
+    requireNoLostStills(rows, `${name}: the gesture`);
+    const written = rows.filter((row) => row.outcome === "written");
+    assert.deepEqual(written.map((row) => basename(row.frame)), frameNames,
+      `${name}: the written stills must match the recorded files one-to-one and in order`);
+    for (const [index, row] of written.entries()) {
+      assert.equal(decoded[index].requested, row.requested, `${name}: frame ${frameNames[index]} holds another request time`);
+      assert.equal(decoded[index].completed, row.completed, `${name}: frame ${frameNames[index]} holds another completion time`);
     }
-    assert.ok(BigInt(callback.callbackTime) <= BigInt(callback.writeStartTime)
-      && BigInt(callback.writeStartTime) <= BigInt(callback.writeCompleteTime),
-    `${name}: raw callback and processing times must be ordered`);
-    assert.ok(Number.isSafeInteger(callback.machTimebaseNumerator) && callback.machTimebaseNumerator > 0
-      && Number.isSafeInteger(callback.machTimebaseDenominator) && callback.machTimebaseDenominator > 0,
-    `${name}: mach timebase values must be positive integers`);
-    assert.equal(callback.machTimebaseNumerator, callbackStatus[0].machTimebaseNumerator,
-      `${name}: mach timebase numerator must remain stable during the capture`);
-    assert.equal(callback.machTimebaseDenominator, callbackStatus[0].machTimebaseDenominator,
-      `${name}: mach timebase denominator must remain stable during the capture`);
-    assert.ok(callback.frame === null || typeof callback.frame === "string",
-      `${name}: frame must name an emitted file or be null`);
-    if (callback.frame !== null) {
-      assert.equal(callback.status, 0, `${name}: only complete callbacks may identify a frame`);
-      assert.ok(typeof callback.displayTime === "string" && /^\d+$/.test(callback.displayTime),
-        `${name}: a recorded frame callback must have an exact display time`);
-      assert.ok(frameNames.includes(callback.frame), `${name}: callback names a frame that was not recorded: ${callback.frame}`);
-    }
-    }
-    const frameCallbacks = callbackStatus.flatMap((callback, index) => callback.frame === null ? [] : [{ callback, index }]);
-    assert.deepEqual(frameCallbacks.map(({ callback }) => callback.frame), frameNames,
-    `${name}: callback frame filenames must match the recorded files one-to-one and in order`);
-    assert.equal(frameCallbacks.length, decoded.length, `${name}: every decoded frame must have exactly one callback`);
     const gaps = decoded.slice(1).map((frame, index) => ({
-    from: frameNames[index], to: frameNames[index + 1], milliseconds: frame.time - decoded[index].time,
-    callbacks: callbackStatus.slice(frameCallbacks[index].index + 1, frameCallbacks[index + 1].index)
-      .map(({ sequence, status, displayTime, frame: emittedFrame }) => ({ sequence, status, displayTime, frame: emittedFrame })),
+      from: frameNames[index], to: frameNames[index + 1], milliseconds: frame.requested - decoded[index].requested,
     }));
-    const rawDifference = (later, earlier) => (BigInt(later) - BigInt(earlier)).toString();
-    const callbackTiming = frameCallbacks.map(({ callback }) => ({
-    sequence: callback.sequence,
-    frame: callback.frame,
-    arrivalAfterDisplayRaw: rawDifference(callback.callbackTime, callback.displayTime),
-    synchronousProcessingRaw: rawDifference(callback.writeCompleteTime, callback.writeStartTime),
-    }));
-    t.diagnostic(`${name} callback arrival/synchronous-processing deltas: ${JSON.stringify({
-    timebase: { numerator: callbackStatus[0].machTimebaseNumerator, denominator: callbackStatus[0].machTimebaseDenominator },
-    frames: callbackTiming,
-    })}`);
-    const missedBound = gaps.filter((gap) => gap.milliseconds > 33);
-    const overBoundTiming = missedBound.map((gap) => {
-    const index = frameNames.indexOf(gap.from);
-    const from = frameCallbacks[index].callback;
-    const to = frameCallbacks[index + 1].callback;
-    return {
-      from: gap.from,
-      to: gap.to,
-      decodedMilliseconds: gap.milliseconds,
-      displayDeltaRaw: rawDifference(to.displayTime, from.displayTime),
-      arrivalDeltaRaw: rawDifference(to.callbackTime, from.callbackTime),
-      fromArrivalAfterDisplayRaw: rawDifference(from.callbackTime, from.displayTime),
-      toArrivalAfterDisplayRaw: rawDifference(to.callbackTime, to.displayTime),
-      fromProcessingRaw: rawDifference(from.writeCompleteTime, from.writeStartTime),
-      toProcessingRaw: rawDifference(to.writeCompleteTime, to.writeStartTime),
-      timebase: { numerator: from.machTimebaseNumerator, denominator: from.machTimebaseDenominator },
-    };
-    });
-    const statusCounts = callbackStatus.reduce((counts, { status }) => {
-    const key = status === null ? "missing" : String(status);
-    counts[key] = (counts[key] ?? 0) + 1;
-    return counts;
-    }, {});
-    const noFrameCounts = callbackStatus.filter(({ frame: emittedFrame }) => emittedFrame === null)
-      .reduce((counts, { status }) => {
-      const key = status === null ? "missing" : String(status);
-      counts[key] = (counts[key] ?? 0) + 1;
-      return counts;
-      }, {});
-    t.diagnostic(`${name} callback trace: ${JSON.stringify({ callbacks: callbackStatus.length, statusCounts, noFrameCounts,
-      over33ms: missedBound, overBoundTiming })}`);
-    const cadence = captureCadence(result.longestGap, decoded.map(({ time }) => time));
+    const over33ms = gaps.filter((gap) => gap.milliseconds > 33);
+    t.diagnostic(`${name} still rows: ${JSON.stringify({ planned: rows.length, written: written.length, over33ms })}`);
+    const cadence = captureCadence(result.longestGap, decoded.map(({ requested }) => requested));
     t.diagnostic(`${name} capture cadence measurement: ${JSON.stringify(cadence)}`);
-    t.diagnostic(`${name}: ${JSON.stringify({ frames: result.count, longestGap: result.longestGap })}`);
+    t.diagnostic(`${name}: ${JSON.stringify({ frames: result.count, missed: result.missed, late: result.late,
+      longestGap: result.longestGap })}`);
   } catch (error) {
     captureValidationError = error;
   }

@@ -10,6 +10,7 @@ import { fresh } from "./fixture.mjs";
 import { missingPoses } from "./card-panel-checks.mjs";
 import { readDisplayRefreshes } from "@soksak/window-check/display-refresh.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
+import { lostStills, readStills, requireNoLostStills, toldStill } from "@soksak/window-check/stills.mjs";
 import { TOLERANCE, measureTitlebar, misaligned, rowHeight } from "./titlebar-measurement.mjs";
 
 // The scale steps that rise from 1 to 3 (docs/spec/text-size.md).
@@ -41,7 +42,7 @@ async function recordable(s) {
 
 /**
  * Runs action(displayed) while the window is recorded. action returns, in order, the states { displayed, at } displayed during the recording (display time,
- * first-row height). It measures the buttons and the first row in each frame. The session removes the recording when the check passes and keeps it, with
+ * first-row height). It measures the buttons and the first row in each still, and reads the still rows of the recording. The session removes the recording when the check passes and keeps it, with
  * its stop reply and the displayed states, when the check fails, so a failure leaves its evidence.
  */
 async function record(s, buttons, action) {
@@ -50,34 +51,38 @@ async function record(s, buttons, action) {
   const poses = await action(displayed);
   const stop = await recording.stop({ after: poses.at(-1).displayed + 100 });
   recording.keep("poses", poses);
-  assert.equal(stop.limited, false, "the recording reached its frame cap");
   // Reads and measures one frame at a time. The whole recording is not held in memory.
   const measured = frames(recording.frames).map((path, index) => ({ index, ...measureTitlebar(readFrame(path), buttons) }));
-  return { poses, stop, measured, refreshes: readDisplayRefreshes(recording.frames).times };
+  return { poses, stop, measured, refreshes: readDisplayRefreshes(recording.frames).times, stills: readStills(stop.stills) };
 }
 
 /**
  * Judges that in every frame the button center and the first-row center are within TOLERANCE, and that every displayed state
  * was recorded up to the first frame at or after two screen frames from its display.
  */
-function judge(t, label, { poses, stop, measured, refreshes }) {
+function judge(t, label, { poses, stop, measured, refreshes, stills }) {
   assert.ok(measured.length > 1, `${label}: the recording has ${measured.length} frames`);
   const off = misaligned(measured);
+  // The time of a measured still is its request time.
   const recorded = measured.filter((frame) => frame.row !== undefined).map((frame) => ({ time: frame.time, edges: [frame.row] }));
-  const missing = recorded.length ? missingPoses(recorded, poses, refreshes) : poses;
+  const missing = recorded.length ? missingPoses(recorded, poses, refreshes, stills)
+    : poses.map((pose) => ({ ...pose, lost: lostStills(stills, -Infinity, Infinity).map(toldStill) }));
   const largest = Math.max(...measured.filter((frame) => frame.difference !== undefined).map((frame) => Math.abs(frame.difference)));
   t.diagnostic(`${label}: ${measured.length} frames, rows ${[...new Set(recorded.map((frame) => frame.edges[0]))].join(",")}, ` +
-    `largest difference ${largest.toFixed(2)}px, longest gap ${stop.longestGap}ms, ${stop.layouts.length} layout transactions`);
+    `largest difference ${largest.toFixed(2)}px, ${stop.missed} missed and ${stop.late} late stills, longest gap ` +
+    `${stop.longestGap}ms, ${stop.layouts.length} layout transactions`);
   // A frame whose buttons stand off its row shows a title bar that a layout transaction set with another frame, so the failure names
   // the transactions that began, presented or committed within 50 ms before that frame, on the clock of the frames.
   const near = (frame) => stop.layouts.filter((layout) => [layout.begun, layout.presented, layout.committed]
     .some((at) => at !== null && at <= frame.time && frame.time - at <= 50));
   const traced = off.slice(0, 12).map((frame) => ({ ...frame, layouts: near(frame) }));
+  // Every still is judged, so a still that the recording lost could have shown the buttons off their row.
+  requireNoLostStills(stills, label);
   assert.equal(off.length, 0, `${label}: ${off.length} of ${measured.length} frames have the window button centre more than ` +
     `${TOLERANCE}px from the first-row centre or cannot be measured: ${JSON.stringify(traced)}`);
-  // The stream delivers a frame only when the window changes, so the longest gap includes the time between two frame factor
-  // steps; missing names every displayed first row that the recording did not hold, and the gap is only reported.
-  assert.deepEqual(missing, [], `${label}: displayed first rows missing from the recording`);
+  // missing names every displayed first row that the recording did not hold, with the stills that the recording lost in its
+  // time; the longest gap is only reported.
+  assert.deepEqual(missing, [], `${label}: displayed first rows missing from the recording: ${JSON.stringify(missing)}`);
 }
 
 for (const app of Object.values(APPS)) {

@@ -15,29 +15,35 @@ export function sourceIntervalSummary(sourceFrames, gestureStartedAtMs, gestureE
   };
 }
 
-/** The times and the positions (points) of the frames whose moved card edge measure reads, and the indexes of the other frames. */
+/**
+ * The samples of the frames (readFrame) whose moved card edge measure reads, and the indexes of the other frames. A sample is the
+ * request time of its still (time), the completion time of the still and the position (points).
+ */
 export function cardEdgeSamples(frames, measure) {
   const samples = [];
   const unmeasured = [];
   frames.forEach((frame, index) => {
     const position = measure(frame);
     if (position === null) unmeasured.push(index);
-    else samples.push({ time: frame.time, position });
+    else samples.push({ time: frame.requested, completed: frame.completed, position });
   });
   return { samples, unmeasured };
 }
 
 /**
- * The time (ms) and the captured frames from the end of the gesture to the first frame from which the measured edge stays
- * within 2 points of its final position, and that position.
+ * The time (ms) and the stills from the end of the gesture to the first still from which the measured edge stays within 2 points
+ * of its final position, and that position. The stills counted start at the first still requested at or after the end of the
+ * gesture; the edge is at its final position no later than the completion of the still from which it stays there, so the time
+ * runs to that completion.
  */
 export function cardEdgeConvergence(samples, gestureEndedAtMs) {
   const ended = samples.findIndex(({ time }) => time >= gestureEndedAtMs);
   if (ended < 0) {
-    throw new Error(`no measured frame at or after the gesture end ${gestureEndedAtMs}; the last frame is at ${samples.at(-1)?.time}`);
+    throw new Error(`no measured still requested at or after the gesture end ${gestureEndedAtMs}; the last still is requested at ` +
+      `${samples.at(-1)?.time}`);
   }
   const finalPosition = samples.at(-1).position;
   let settled = samples.length - 1;
   while (settled > ended && Math.abs(samples[settled - 1].position - finalPosition) <= 2) settled -= 1;
-  return { ms: samples[settled].time - gestureEndedAtMs, frames: settled - ended, finalPosition };
+  return { ms: samples[settled].completed - gestureEndedAtMs, frames: settled - ended, finalPosition };
 }

@@ -8,6 +8,7 @@ import { cardSidebar, fresh } from "./fixture.mjs";
 import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
+import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 
 /** The handle overlaps the sidebar border, so the surface starts right after the sidebar. */
 const GRIP = 0;
@@ -197,9 +198,11 @@ const DESIGN_RULE_CONTRAST = contrast([0x2a, 0x2d, 0x3a], [0x20, 0x23, 0x2d]);
 /** Records the window and measures the contrast between the bottom line pixel of the section header and the background pixel at the header center. */
 async function headerRuleContrast(s, rect) {
   const { displayed } = await s.presented();
-  await s.request("diagnostics.capture.start", {});
-  const result = await s.request("diagnostics.capture.stop", { after: displayed });
+  // The stop checks the still rows of the recording; its last still was requested at or after the presented time.
+  const recording = await s.record();
+  const result = await recording.stop({ after: displayed });
   try {
+    requireNoLostStills(readStills(result.stills), "the header capture");
     const captured = frames(result.frames);
     assert.ok(captured.length > 0, "the header capture produced no frames");
     const frame = readFrame(captured.at(-1));

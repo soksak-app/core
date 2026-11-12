@@ -59,7 +59,7 @@ export function documentIdentityCardIds(grid) {
   return ids;
 }
 
-/** Validates that decoded ScreenCaptureKit pixels match an identity issued to the requested root document. */
+/** Validates that the decoded pixels of the recorded stills match an identity issued to the requested root document. */
 export function verifyDocumentFrameIdentityCapture({ start, stop, manifest, decodedRows, surface, generation }) {
   if (typeof surface !== "string" || surface.length === 0) throw new TypeError("document identity surface must be nonempty");
   if (!Number.isSafeInteger(generation) || generation < 1) throw new TypeError("document identity generation must be a positive safe integer");
@@ -165,7 +165,7 @@ export function verifyDocumentFrameIdentityCapture({ start, stop, manifest, deco
   if (!Number.isSafeInteger(document.incompleteSamples) || document.incompleteSamples !== 0) {
     throw new Error(`document identity capture has incomplete samples: ${JSON.stringify(document.incompleteSamples)}`);
   }
-  if (matchedRecords === 0) throw new Error("capture contains no decoded document identity in ScreenCaptureKit pixels");
+  if (matchedRecords === 0) throw new Error("capture contains no decoded document identity in the pixels of its stills");
   return {
     generation, issuedSlots: document.issuedSlots, decodedRecords: document.decodedRecords,
     matchedRecords, unknownRecords, matchedFrames, manifest: stop.frameIdentity.manifest,

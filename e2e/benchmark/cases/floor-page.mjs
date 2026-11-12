@@ -14,6 +14,7 @@ import { frameChange, frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { assertDragPerformance, assertHeldStatesShown, assertRoundTrips, measureDragPerformance, pointerLag, shownTimes,
   transactionCadence } from "@soksak/window-check/drag-measurement.mjs";
 import { readDisplayRefreshes } from "@soksak/window-check/display-refresh.mjs";
+import { readStills } from "@soksak/window-check/stills.mjs";
 import { outside } from "../../outside.mjs";
 import { declaredSlotInsets, effectiveCardCornerRadiusPt, measureViewFrameGeometry, VIEW_GEOMETRY_COLOR_TOLERANCE }
   from "@soksak/window-check/view-frame-geometry.mjs";
@@ -167,17 +168,19 @@ async function captureFloorDrag(s, configDir, { marks, cornerRadiusPt, slotInset
       unmeasured.push(frameIndex);
       continue;
     }
-    samples.push({ time: frame.time, position: at.card.l / at.scale });
+    // A sample is the request time of its still, the completion time of the still and the position that it shows.
+    samples.push({ time: frame.requested, completed: frame.completed, position: at.card.l / at.scale });
     if (!repeated) shown.push(samples.at(-1));
   }
   assert.ok(samples.length > files.length * 0.5,
     `only ${samples.length}/${files.length} frames have measured geometry`);
   assertRoundTrips(samples.map((sample) => sample.position), 2);
-  assertHeldStatesShown(samples, run.ticks, run.boundary);
+  const stills = readStills(run.stills);
+  assertHeldStatesShown(samples, run.ticks, run.boundary, stills);
   const lag = pointerLag(shown, run.ticks, run.boundary);
   const refreshes = readDisplayRefreshes(run.frames);
   const times = shownTimes(shown, run.ticks);
-  const performance = measureDragPerformance(times, lag, refreshes);
+  const performance = measureDragPerformance(times, lag, refreshes, stills);
   const report = {
     host: s.app.name,
     performance,
@@ -186,6 +189,8 @@ async function captureFloorDrag(s, configDir, { marks, cornerRadiusPt, slotInset
     load: loadavg(),
     processors: availableParallelism(),
     frameCount: files.length,
+    missed: run.missed,
+    late: run.late,
     unmeasured,
     samples,
     times,
@@ -204,6 +209,6 @@ async function captureFloorDrag(s, configDir, { marks, cornerRadiusPt, slotInset
       layouts: run.layouts,
       ticks: run.ticks,
     },
-    assertPerformance: () => assertDragPerformance(times, lag, refreshes),
+    assertPerformance: () => assertDragPerformance(times, lag, refreshes, stills),
   };
 }

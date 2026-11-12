@@ -11,6 +11,7 @@ import { APPS, judgeShownChanges, open, owe } from "@soksak/window-check/app.mjs
 import { fresh } from "./fixture.mjs";
 import { frames } from "@soksak/window-check/frame.mjs";
 import { imageRect, readyInputProbe, rasterProbeTab } from "./input-probe.mjs";
+import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 
 /** The center of the rect `rect` of s.rect in the coordinates of the window that the emulated pointer takes. */
 const center = (rect) => [rect.document.x + rect.x + rect.width / 2, rect.document.y + rect.y + rect.height / 2];
@@ -51,8 +52,8 @@ for (const app of Object.values(APPS)) {
     const stopped = await recording.stop({ after: displayed });
     const values = await focus.stop();
 
-    assert.equal(stopped.limited, false, "the recording reached its frame limit");
     assert.ok(frames(directory).length > 0, "the recording has no frames");
+    requireNoLostStills(readStills(stopped.stills), "the image region press");
     judgeShownChanges(stopped, owed, { what: "image region press" });
     // The first value is the state (text field) when the watch starts. Every focus that enters the field again after that is a transition.
     const transitions = values.slice(1).filter((value, index) => value?.name === "probeinput.field" &&
@@ -64,6 +65,7 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(host.regions.filter((region) => region.focused).map((region) => region.surface), [second.surface],
       `the last pressed image region does not hold the focus: responder ${JSON.stringify(host.responder)}, regions ` +
       JSON.stringify(host.regions.map(({ surface, focused, visible }) => ({ surface, focused, visible }))));
-    t.diagnostic(`core.focus values ${JSON.stringify(values)}; ${stopped.count} frames, maximum gap ${stopped.longestGap}ms`);
+    t.diagnostic(`core.focus values ${JSON.stringify(values)}; ${stopped.count} stills, ${stopped.missed} missed, ` +
+      `${stopped.late} late, longest gap ${stopped.longestGap}ms`);
   });
 }

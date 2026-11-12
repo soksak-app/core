@@ -6,6 +6,7 @@ import { APPS, holdCovered, judgeShownChanges, open, owe } from "@soksak/window-
 import { fresh, joinedFailure } from "./fixture.mjs";
 import { requireContentWidth } from "./card-panel-checks.mjs";
 import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
+import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 const sides = ["top", "bottom", "left", "right"];
 const near = (a, b, label) => assert.ok(Math.abs(a - b) <= 1, `${label}: actual ${a}, expected ${b}`);
 /**
@@ -115,10 +116,11 @@ for (const app of Object.values(APPS))
         .filter((item) => item.tabs.length === 0)
         .map((item) => item.id)
         .sort();
-      // The recording follows the device pixel size of the window, so it starts at the current size (docs/spec/endpoint.md).
+      // The recording follows the device pixel size of the window, so it starts at the current size (docs/spec/endpoint.md). Each
+      // recording takes a still each refresh of the display of the window, and its stop checks its still rows.
       await s.presented();
       let recordingStopped = false;
-      let recording = await s.request("diagnostics.capture.start", {});
+      let recording = await s.record();
       // The times at which the check asked for a change of the screen during the current recording (judgeShownChanges).
       let owed = [];
       // Asks for a change of the screen: the recording owes frames from the request to the display that the next check waits for.
@@ -238,18 +240,20 @@ for (const app of Object.values(APPS))
         for (const key of Object.keys(expected)) near(surface.applied[key], expected[key], `${label} native ${key}`);
         assert.ok(surface.applied.w >= 96 && surface.applied.h >= 96, `${label}: content minimum not retained`);
         ({ displayed } = await s.presented());
-        const stop = await s.request("diagnostics.capture.stop", { after: displayed + 100 });
+        const stop = await recording.stop({ after: displayed + 100 });
         recordingStopped = true;
-        assert.equal(stop.limited, false);
+        requireNoLostStills(readStills(stop.stills), label);
         judgeShownChanges(stop, owed);
         owed = [];
         const captured = frames(recording.frames).map(readFrame);
         assert.ok(captured.length > 4, "incomplete recording");
         assert.ok(
           recorded(captured.at(-1), surface.applied).every(Boolean),
-          `${label}: measured native borders are absent from recording ${JSON.stringify(surface.applied)}`,
+          `${label}: measured native borders are absent from recording ${JSON.stringify(surface.applied)} ` +
+            `(${stop.missed} missed and ${stop.late} late stills)`,
         );
-        t.diagnostic(`${label}: ${captured.length} frames, maximum gap ${stop.longestGap}ms`);
+        t.diagnostic(`${label}: ${captured.length} frames, ${stop.missed} missed and ${stop.late} late stills, maximum gap ` +
+          `${stop.longestGap}ms`);
         rmSync(recording.frames, { recursive: true, force: true });
         recording = null;
         t.diagnostic(`${label}: ${JSON.stringify(surface.applied)}, bands ${JSON.stringify(bands)}`);
@@ -262,12 +266,12 @@ for (const app of Object.values(APPS))
         await s.until("host.window", (window) => window.content.height === 754, "window did not reach short height");
         await check("short normal");
         // Starts the recording in a small window and records the transition to a large window.
-        recording = await s.request("diagnostics.capture.start", {});
+        recording = await s.record();
         recordingStopped = false;
         await change(() => s.run("host.window.resize", { width: 1200, height: 880 }));
         await s.until("host.window", (window) => window.content.height === 880, "window did not grow");
         await check("tall normal");
-        recording = await s.request("diagnostics.capture.start", {});
+        recording = await s.record();
         recordingStopped = false;
         for (const side of ["left", "right"]) {
           await change(() => s.run("core.card.sidebar.size", { card: card.id, side, size: 480 }));
@@ -275,15 +279,15 @@ for (const app of Object.values(APPS))
           last.width = side;
         }
         await check("wide sidebars normal");
-        recording = await s.request("diagnostics.capture.start", {});
+        recording = await s.record();
         recordingStopped = false;
         await change(() => s.run("core.card.fullscreen", { card: card.id }));
         await check("wide sidebars fullscreen");
-        recording = await s.request("diagnostics.capture.start", {});
+        recording = await s.record();
         recordingStopped = false;
         await change(() => s.run("core.card.fullscreen", { card: card.id }));
         await check("wide sidebars restored");
-        recording = await s.request("diagnostics.capture.start", {});
+        recording = await s.record();
         recordingStopped = false;
         // When the left appears open, a click saves the collapse. When it appears collapsed, a click saves the expansion, so the check confirms the visible state first.
         const leftShown = (await s.get("core.grid")).cards.find((item) => item.id === card.id).sidebars.left;
@@ -294,16 +298,16 @@ for (const app of Object.values(APPS))
         // The collapsed left uses only the divider width (6), so in a 762pt card the content width is 762 - 2 (border) - 6 - 480 = 274pt, which is larger than the minimum
         // 96pt. The right request has enough space and is not collapsed automatically (docs/spec/example-model.md).
         await check("manual left fold");
-        recording = await s.request("diagnostics.capture.start", {});
+        recording = await s.record();
         recordingStopped = false;
         await change(() => s.run("host.window.resize", { width: 1220, height: 880 }));
         await s.until("host.window", (window) => window.content.width === 1220, "window did not reach wider width");
         await check("manual fold wider normal");
-        recording = await s.request("diagnostics.capture.start", {});
+        recording = await s.record();
         recordingStopped = false;
         await change(() => s.run("core.card.fullscreen", { card: card.id }));
         await check("manual fold fullscreen");
-        recording = await s.request("diagnostics.capture.start", {});
+        recording = await s.record();
         recordingStopped = false;
         await change(() => s.run("core.card.fullscreen", { card: card.id }));
         await change(() => s.run("host.window.resize", { width: 1200, height: 754 }));
@@ -316,7 +320,7 @@ for (const app of Object.values(APPS))
         if (recording) {
           try {
             if (!recordingStopped)
-              await s.request("diagnostics.capture.stop", { after: displayed === undefined ? 0 : displayed + 100 });
+              await recording.stop({ after: displayed === undefined ? 0 : displayed + 100 });
           } catch (error) {
             errors.push(error);
           }
