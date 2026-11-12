@@ -43,7 +43,7 @@ const MATRIX = [
   lane("CI workflows", "workflow", [".github/workflows/*.yml"], ["scripts/test/workflows.test.mjs", "scripts/test/test-kinds.test.mjs"], { testLanguage: "js-ts" }),
   lane("CI toolchain setup actions", "workflow", [".github/actions/setup-*/action.yml"], ["scripts/test/workflow-setup.test.mjs"], { testLanguage: "js-ts" }),
   lane("Rust workspace release profile", "build", ["Cargo.toml"], ["scripts/test/rust-release-profile.test.mjs"], { testLanguage: "js-ts" }),
-  lane("native library build and pkg-config", "build", ["native/darwin/Makefile"], ["scripts/test/native-pkgconfig.test.mjs", "scripts/test/native-offline.test.mjs", "scripts/test/native-architecture.test.mjs"], { testLanguage: "js-ts" }),
+  lane("native library build and pkg-config", "build", ["native/darwin/Makefile"], ["scripts/test/native-pkgconfig.test.mjs", "scripts/test/native-architecture.test.mjs"], { testLanguage: "js-ts" }),
   lane("workspace audit scripts", "js-ts", [
     "scripts/check-app-tests.mjs",
     "scripts/check-e2e-host-parity.mjs",
@@ -179,15 +179,12 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
     "native/darwin/src/document_view.m",
     "native/darwin/src/image_region.m",
     "native/darwin/src/declared_color_space.m",
-    "native/darwin/src/image_capture_match.m",
     "native/darwin/src/surface_layout.m",
     "native/darwin/src/webview_geometry.m",
   ], [
     "native/darwin/tests/document_view_test.m",
     "native/darwin/tests/image_region_test.m",
-    "native/darwin/tests/image_region_capture_presentation_test.m",
     "native/darwin/tests/image_nonce_ownership_test.m",
-    "native/darwin/tests/image_capture_match_test.m",
     "native/darwin/tests/presentation_order_test.m",
     "native/darwin/tests/surface_layout_test.m",
     "native/darwin/tests/webview_geometry_test.m",
@@ -234,8 +231,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Darwin process identity Node test entrypoint", "js-ts", ["native/darwin/process-identity/tests/package.test.mjs"], ["native/darwin/process-identity/tests/package.test.mjs"]),
   lane("Darwin webview navigation", "objective-c", ["native/darwin/src/webview_navigation.m"], ["native/darwin/tests/webview_navigation_test.m"], { sharedTests: true }),
   lane("Darwin webview dialogs", "objective-c", ["native/darwin/src/webview_dialogs.m"], ["native/darwin/tests/webview_dialogs_test.m"], { sharedTests: true }),
-  lane("Darwin capture", "objective-c", ["native/darwin/src/capture.m"], ["native/darwin/tests/capture_test.m", "native/darwin/tests/capture_covered_test.m", "native/darwin/tests/capture_pressure_test.m", "native/darwin/tests/capture_metadata_test.m", "native/darwin/tests/capture_resize_test.m", "native/darwin/tests/capture_checker_test.m", "native/darwin/tests/capture_file_checker_test.m", "native/darwin/tests/capture_storage_test.m", "native/darwin/tests/capture_frame_test.m", "native/darwin/tests/capture_preparation_test.m", "native/darwin/tests/capture_cleanup_test.m", "native/darwin/tests/capture_source_writer_test.m"], { sharedTests: true }),
-  lane("Darwin capture frame identity", "objective-c", ["native/darwin/src/capture_frame_identity.m"], ["native/darwin/tests/capture_frame_identity_test.m"], { sharedTests: true }),
+  lane("Darwin capture", "objective-c", ["native/darwin/src/capture.m"], ["native/darwin/tests/capture_test.m", "native/darwin/tests/capture_covered_test.m", "native/darwin/tests/capture_pressure_test.m", "native/darwin/tests/capture_metadata_test.m", "native/darwin/tests/capture_resize_test.m", "native/darwin/tests/capture_checker_test.m", "native/darwin/tests/capture_file_checker_test.m", "native/darwin/tests/capture_storage_test.m", "native/darwin/tests/capture_frame_test.m", "native/darwin/tests/capture_preparation_test.m", "native/darwin/tests/capture_cleanup_test.m"], { sharedTests: true }),
   lane("Darwin dock menu", "objective-c", ["native/darwin/src/dock_menu.m"], ["native/darwin/tests/dock_menu_test.m"], { sharedTests: true }),
   lane("Darwin appearance", "objective-c", ["native/darwin/src/appearance.m"], ["native/darwin/tests/appearance_test.m"], { sharedTests: true }),
   lane("Darwin native interfaces", "native-interface", ["native/darwin/src/**/*.h", "native/darwin/process-identity/**/*.h"], ["native/darwin/tests/**/*.m", "native/darwin/tests/support/*.h"], { testLanguage: "objective-c", sharedTests: true, testExtensions: new Set([".m", ".mm", ".h"]) }),
@@ -254,7 +250,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Darwin host view and layout bridges", "objective-c", ["native/darwin/src/host_api_webview.m", "native/darwin/src/host_api_window.m", "native/darwin/src/host_api_layout.m", "native/darwin/src/host_api_shapes.m", "native/darwin/src/host_api_system.m", "native/darwin/src/webview.m"], ["e2e/projects.test.mjs", "e2e/modal.test.mjs", "e2e/controls.test.mjs", "e2e/view-restart.test.mjs", "e2e/native-window-color-space.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Darwin host image bridge", "objective-c", ["native/darwin/src/host_api_image.m"], ["e2e/view-display.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Darwin host input bridges", "objective-c", ["native/darwin/src/host_api_input.m", "native/darwin/src/host_api_input_reference.m", "native/darwin/src/host_api_input_source.m", "native/darwin/src/host_api_mouse_buttons.m"], ["e2e/two-pointers.test.mjs", "e2e/native-drag.test.mjs", "e2e/activation/view-focus.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
-  lane("Darwin host capture bridge", "objective-c", ["native/darwin/src/host_api_capture.m"], ["e2e/capture-display-link.test.mjs", "e2e/capture-frame-identity.test.mjs", "e2e/capture-document-frame-identity.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("Darwin host capture bridge", "objective-c", ["native/darwin/src/host_api_capture.m"], ["e2e/capture-display-link.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Darwin host clipboard bridge", "objective-c", ["native/darwin/src/host_api_clipboard.m"], ["native/darwin/tests/clipboard_test.m"], { testLanguage: "objective-c", testExtensions: new Set([".m", ".mjs"]), sharedTests: true }),
   lane("Darwin host link bridge", "objective-c", ["native/darwin/src/host_api_link.m"], ["native/darwin/tests/link_test.m"], { testLanguage: "objective-c", sharedTests: true }),
   lane("Darwin host notification bridge", "objective-c", ["native/darwin/src/host_api_notifications.m"], ["native/darwin/tests/notifications_test.m"], { testLanguage: "objective-c", sharedTests: true }),
@@ -405,21 +401,6 @@ const FEATURE_LINKS = [
     ],
     expected: "sok-test-app names the application zip by the release platform of the computer that runs it and takes the application, its executables, the extraction, the quit keys, the lock wait and the process list from the platform operations of @soksak/window-check. macOS implements them with the bundle soksak.app, ditto, Command+Q, lockf and ps; on Linux and Windows each operation rejects with PlatformOperationNotImplemented, runs no program, and the run fails before any download.",
     levels: ["unit"],
-  },
-  {
-    id: "F698",
-    implementation: [
-      { file: "native/darwin/src/image_region.m", symbol: "static IOSurfaceRef copyTaggedPresentation(" },
-      { file: "native/darwin/src/image_region.m", symbol: "displayContents = (__bridge id)taggedPresentation;" },
-    ],
-    tests: [
-      { file: "native/darwin/tests/image_region_capture_presentation_test.m", id: "identity diagnostics preserve the production IOSurface layer presentation type" },
-      { file: "native/darwin/tests/image_region_capture_presentation_test.m", id: "presentation never mutates supplier pixels in copy or lease mode" },
-      { file: "native/darwin/tests/image_region_capture_presentation_test.m", id: "identity tagging changes actual QR pixels and preserves every source pixel outside the declared ROI" },
-      { file: "native/darwin/tests/image_region_capture_presentation_test.m", id: "identity presentation preserves the source sRGB profile" },
-    ],
-    expected: "Tagged diagnostic frames retain the production IOSurface presentation type, sRGB metadata and supplier immutability in copy and lease modes. Native captured pixels outside the QR remain exact; actual terminal/term recordings verify strict acquisition and retain the pre-fix color rejection. This closes the diagnostic presentation defect, not F697 or final G8 acceptance.",
-    levels: ["unit", "native"],
   },
   {
     id: "F694",
@@ -637,18 +618,6 @@ const FEATURE_LINKS = [
       { file: "e2e/window-first-frames.test.mjs", id: "a new window shows its complete first screen from its first frame" },
     ],
     expected: "A Tauri host that creates a window or a view while no other application is active stays inactive, because the creation of a webview makes no activation call.",
-    levels: ["application"],
-  },
-
-  {
-    id: "F750",
-    implementation: [
-      { file: "e2e/capture-frame-identity.test.mjs", symbol: "stopResult = await recording.stop({ after: shown.displayed });" },
-    ],
-    tests: [
-      { file: "e2e/capture-frame-identity.test.mjs", id: "opt-in capture identity matches the presented image of an image region" },
-    ],
-    expected: "The capture identity check of an image region stops its recording after a presentation that follows its read of the presented frame, so the recording holds that frame.",
     levels: ["application"],
   },
   {
@@ -943,7 +912,6 @@ const FEATURE_LINKS = [
   {
     id: "F718-8",
     implementation: [
-      { file: "native/darwin/src/document_view.m", symbol: "static void frameIdentityEnd(SPDocumentView *view, NSString *reason) {" },
       { file: "native/darwin/src/event_ring.m", symbol: "if (atomic_load_explicit(&wakePending, memory_order_seq_cst)) {" },
       { file: "packages/host/go/src/diagnostics.go", symbol: "func diagnosticSurfaceHold(e *Endpoint, c *endpointConn, params json.RawMessage, scope *ReplyScope) (any, error) {" },
       { file: "packages/host/go/src/diagnostics.go", symbol: "func endWindowHolds(s *Surfaces) {" },
@@ -967,19 +935,15 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/src/transcript.go", symbol: "func (h *SurfaceReplyHold) Released(surface string) {" },
     ],
     tests: [
-      { file: "native/darwin/tests/document_core_root_test.m", id: "a navigation that the document commits fails the start that has not answered" },
-      { file: "native/darwin/tests/document_core_root_test.m", id: "the end of the WebContent process fails the start that has not answered" },
       { file: "native/darwin/tests/event_wake_early_test.m", id: "a pipe that opens while the ring holds a record is readable" },
       { file: "packages/host/go/src/diagnostics_hold_end_test.go", id: "TestAModalHoldEndsWithTheConnectionThatTurnedItOn" },
       { file: "packages/host/go/src/diagnostics_hold_end_test.go", id: "TestTheCloseOfTheConnectionOfASurfaceHoldReleasesTheSurface" },
       { file: "packages/host/go/src/diagnostics_hold_end_test.go", id: "TestAPageDragSendsEveryStep" },
       { file: "packages/host/go/src/diagnostics_hold_end_test.go", id: "TestAFailedDragRequestStillEndsTheWorkbenchRecord" },
       { file: "packages/host/go/src/diagnostics_hold_window_test.go", id: "TestAModalHoldEndsWithItsWindow" },
-      { file: "packages/host/go/src/diagnostics_test.go", id: "TestTheFrameIdentityWaitEndsByItsCallback" },
       { file: "packages/host/rust/src/diagnostics_test.rs", id: "a_modal_hold_ends_with_the_connection_that_turned_it_on" },
       { file: "packages/host/rust/src/diagnostics_test.rs", id: "a_modal_hold_ends_with_its_window" },
       { file: "packages/host/rust/src/diagnostics_test.rs", id: "the_close_of_the_connection_of_a_surface_hold_releases_the_surface" },
-      { file: "packages/host/rust/src/diagnostics_test.rs", id: "document_frame_identity_callback_ends_the_wait" },
       { file: "packages/host/rust/src/diagnostics_test.rs", id: "unreached_window_objects_answer_the_end_of_their_wait" },
       { file: "packages/host/rust/src/diagnostics_test.rs", id: "a_process_exit_answer_names_the_end_of_its_wait" },
       { file: "packages/host/rust/src/diagnostics_test.rs", id: "a_native_wait_ends_with_the_connection_of_its_request" },
@@ -1020,7 +984,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/surface_release_test.go", id: "TestASurfaceReplyHoldSendsTheHeldRepliesAfterItsHoldEnded" },
       { file: "packages/workbench-mygo/tests/surface_release_test.go", id: "TestTheEventDiagnosticsSurfaceReleasedEndsTheHoldOfTheSurface" },
     ],
-    expected: "A diagnostic hold or recording ends with its own end, its window, its page or workbench, or the endpoint connection that opened it, and no limit ends it; the frame identity also ends with the navigation and the WebContent process of its document, the hosts wait for each native callback without a limit of their own, the waits of the native window objects, the process exit, the input source selection, the input reference and every capture operation, and the Windows still capture, end only by their event or the connection, window or page end that the request names, a page drag receives every step, a failed drag request ends the workbench record, and the wake pipe opens readable for a record that waited.",
+    expected: "A diagnostic hold or recording ends with its own end, its window, its page or workbench, or the endpoint connection that opened it, and no limit ends it; the hosts wait for each native callback without a limit of their own, the waits of the native window objects, the process exit, the input source selection, the input reference and every capture operation, and the Windows still capture, end only by their event or the connection, window or page end that the request names, a page drag receives every step, a failed drag request ends the workbench record, and the wake pipe opens readable for a record that waited.",
     levels: ["unit", "native"],
   },
   {
@@ -1489,7 +1453,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "scripts/test/macos-minimum-commands.test.mjs", id: "every Go and Rust command of a make target compiles and links for the declared macOS minimum" },
-      { file: "scripts/test/macos-minimum-commands.test.mjs", id: "the native library compiles, configures and declares in its pkg-config file the macOS minimum of the Makefile" },
+      { file: "scripts/test/macos-minimum-commands.test.mjs", id: "the native library compiles and declares in its pkg-config file the macOS minimum of the Makefile" },
       { file: "scripts/test/macos-minimum.test.mjs", id: "a linker warning of an object built for a newer macOS version than the link is a failure that names the object and both versions" },
       { file: "scripts/test/macos-minimum.test.mjs", id: "the duplicate library warning of the link of two Objective-C packages is recognized and held, not a failure" },
       { file: "scripts/test/test-runner.test.mjs", id: "a process whose output holds a linker warning of an object newer than the link fails with the object and both versions" },
@@ -1895,13 +1859,6 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestTheErrorOfTheActiveTabIsRecordedWhenItAppears" },
     ],
     expected: "The mygo workbench records the operation error of the active tab when it appears.",
-    levels: ["unit"],
-  },
-  {
-    id: "F610",
-    implementation: [{ file: "native/darwin/src/capture.m", symbol: "beginCaptureSourceArtifacts" }],
-    tests: [{ file: "native/darwin/tests/capture_metadata_test.m", id: "a capture writes the source file only when its reader needs it" }],
-    expected: "A recording writes source files only when it has frame identity.",
     levels: ["unit"],
   },
   {
@@ -3708,7 +3665,7 @@ const FEATURE_LINKS = [
   {
     id: "F638",
     implementation: [
-      { file: "packages/window-check/app.mjs", symbol: "export async function drag(s, plan, { capture = false, frameIdentity } = {})" },
+      { file: "packages/window-check/app.mjs", symbol: "export async function drag(s, plan, { capture = false } = {})" },
     ],
     tests: [
       { file: "packages/window-check/test/drag-pace.test.mjs", id: "a drag that is not paced fails at once with its took, asked, press waits, range and load" },
@@ -4340,14 +4297,14 @@ const FEATURE_LINKS = [
   {
     id: "F505",
     implementation: [
-      { file: "native/darwin/Makefile", symbol: "-DCMAKE_OSX_ARCHITECTURES=$(ARCH)" },
+      { file: "native/darwin/Makefile", symbol: "CFLAGS     := -arch $(ARCH)" },
       { file: "native/darwin/process-identity/Makefile", symbol: "CFLAGS := -arch $(ARCH)" },
     ],
     tests: [
-      { file: "scripts/test/native-architecture.test.mjs", id: "the library build compiles every object and configures ZXing for arm64 in a new build folder" },
-      { file: "scripts/test/native-architecture.test.mjs", id: "a ZXing library older than the Makefile is built again" },
+      { file: "scripts/test/native-architecture.test.mjs", id: "every clang call of the native Makefiles reads the flags that name the architecture" },
+      { file: "scripts/test/native-architecture.test.mjs", id: "the library build compiles every object for arm64" },
     ],
-    expected: "The native library builds every object and ZXing for arm64, the architecture of the release platform darwin-arm64, and configures ZXing in a new build folder whenever it builds it.",
+    expected: "The native library builds every object for arm64, the architecture of the release platform darwin-arm64.",
     levels: ["unit"],
   },
   {
@@ -4693,139 +4650,6 @@ const FEATURE_LINKS = [
     expected: "The SDK tar release contains every current file under its public contract directory, checked from the packed output rather than a mirrored manifest list.",
     levels: ["unit"],
   },
-{
-  "id": "F239-234",
-  "implementation": [
-    {
-      "file": "native/darwin/src/capture_frame_identity.m",
-      "symbol": "bool sp_capture_frame_identity_atlas("
-    },
-    {
-      "file": "native/darwin/src/image_capture_match.m",
-      "symbol": "bool sp_image_capture_match_identity_document_begin("
-    },
-    {
-      "file": "native/darwin/src/document_view.m",
-      "symbol": "bool sp_document_frame_identity_start("
-    },
-    {
-      "file": "native/darwin/src/document_view.m",
-      "symbol": "bool sp_document_frame_identity_freeze("
-    },
-    {
-      "file": "native/darwin/src/document_view.m",
-      "symbol": "bool sp_document_frame_identity_remove("
-    },
-    {
-      "file": "packages/host/go/src/diagnostics.go",
-      "symbol": "func diagnosticCaptureDocumentIdentityStart("
-    },
-    {
-      "file": "packages/host/rust/src/diagnostics.rs",
-      "symbol": "fn capture_document_identity_start("
-    },
-    {
-      "file": "e2e/document-frame-identity.mjs",
-      "symbol": "export function verifyDocumentFrameIdentityCapture("
-    },
-    {
-      "file": "e2e/document-frame-identity.mjs",
-      "symbol": "export function viewGenerationForSurface("
-    },
-    {
-      "file": "native/darwin/src/image_capture_match.m",
-      "symbol": "bool sp_image_capture_match_identity_session_fail_for_nonce("
-    },
-    {
-      "file": "e2e/document-frame-identity.mjs",
-      "symbol": "export function documentIdentityCardIds("
-    },
-    {
-      "file": "native/darwin/src/document_view.m",
-      "symbol": "void sp_document_frame_identity_after_target_update("
-    }
-  ],
-  "tests": [
-    {
-      "file": "native/darwin/tests/document_core_root_test.m",
-      "id": "freeze reports the bounded count of distinct atlas cells drawn"
-    },
-    {
-      "file": "packages/host/go/src/diagnostics_test.go",
-      "id": "TestCaptureDocumentIdentityStartIsRegistered"
-    },
-    {
-      "file": "packages/host/go/src/diagnostics_test.go",
-      "id": "TestCaptureStopPreservesCaptureModesWithoutDocumentSource"
-    },
-    {
-      "file": "packages/host/rust/src/endpoint.rs",
-      "id": "document_frame_identity_start_method_is_declared"
-    },
-    {
-      "file": "packages/host/rust/src/diagnostics_test.rs",
-      "id": "capture_stop_continues_cleanup_after_freeze_failure_without_issued_count"
-    },
-    {
-      "file": "e2e/test/capture-document-frame-identity.test.mjs",
-      "id": "document identity capture validates complete accounting and a decoded issued pixel identity"
-    },
-    {
-      "file": "e2e/test/capture-document-frame-identity.test.mjs",
-      "id": "document identity capture rejects missing accounting and unissued decoded identities"
-    },
-    {
-      "file": "e2e/test/capture-document-frame-identity.test.mjs",
-      "id": "view identity generation comes from one successful current-surface presentation join"
-    },
-    {
-      "file": "e2e/capture-document-frame-identity.test.mjs",
-      "id": "document-frame identity matches captured WebKit root pixels"
-    },
-    {
-      "file": "native/darwin/tests/image_capture_match_test.m",
-      "id": "a late failure from a retired document producer cannot fail a replacement capture session"
-    },
-    {
-      "file": "native/darwin/tests/document_core_root_test.m",
-      "id": "a repeated removal confirms the already removed generation"
-    },
-    {
-      "file": "native/darwin/tests/document_core_root_test.m",
-      "id": "an attached document does not acquire the plugin-root identity capability"
-    },
-    {
-      "file": "packages/host/go/src/diagnostics_test.go",
-      "id": "TestCaptureStartWaitsForPriorIdentityRemoval"
-    },
-    {
-      "file": "packages/host/rust/src/diagnostics_test.rs",
-      "id": "capture_start_waits_for_prior_identity_removal"
-    },
-    {
-      "file": "packages/host/rust/src/diagnostics_test.rs",
-      "id": "document_frame_identity_callback_ends_the_wait"
-    },
-    {
-      "file": "packages/host/rust/src/diagnostics_test.rs",
-      "id": "late_document_frame_identity_callback_errors_are_logged_as_errors"
-    },
-    {
-      "file": "e2e/test/capture-document-frame-identity.test.mjs",
-      "id": "document identity setup adds its root view tab only to editable pane cards"
-    },
-    {
-      "file": "native/darwin/tests/document_core_root_test.m",
-      "id": "the start reply remains pending while the target root presentation callback is held"
-    }
-  ],
-  "expected": "An opt-in current WebKit root document issues bounded non-repeating QR identities whose actual captured pixels and exact ScreenCaptureKit displayTime are retained with complete generated, issued and decoded accounting; stale and unmatched states remain unknown and cleanup preserves existing capture modes.",
-  "levels": [
-    "unit",
-    "native",
-    "application"
-  ]
-},
 {
   "id": "F239-235",
   "implementation": [
@@ -5388,25 +5212,6 @@ const FEATURE_LINKS = [
     ]
   },
   {
-    id: "F239-178",
-    implementation: [
-      {
-        file: "native/darwin/src/image_capture_match.m",
-        symbol: "kIdentityDecodePendingJobLimit = 16"
-      }
-    ],
-    tests: [
-      {
-        file: "native/darwin/tests/image_capture_match_test.m",
-        id: "the decoder admits sixteen pending jobs and reports the rejected branch with its job and byte counts"
-      }
-    ],
-    expected: "Sixteen bounded identity jobs drain in order and a seventeenth admission fails explicitly.",
-    levels: [
-      "unit"
-    ]
-  },
-  {
     id: "F239-47-6",
     implementation: [
       {
@@ -5424,16 +5229,6 @@ const FEATURE_LINKS = [
     levels: [
       "application"
     ]
-  },
-  {
-    id: "F239-146",
-    implementation: [{ file: "native/darwin/src/capture_frame_identity.m", symbol: "ZXing_ReaderOptions_new()" }],
-    tests: [
-      { file: "native/darwin/tests/capture_frame_identity_test.m", id: "multiple complete codes in the expected ROI are explicitly ambiguous" },
-      { file: "native/darwin/tests/capture_frame_identity_test.m", id: "a compact raster clipped through bottom QR modules cannot identify the source" },
-    ],
-    expected: "The bounded identity decoder preserves exact issued payload identity, rejects clipped codes and reports multiple complete codes as ambiguous.",
-    levels: ["native"],
   },
   {
     id: "F239-171",
@@ -5690,19 +5485,14 @@ const FEATURE_LINKS = [
       { file: ".github/actions/setup-go/action.yml", symbol: "name: Set up the workspace Go toolchain" },
       { file: ".github/actions/setup-rust/action.yml", symbol: "name: Set up the workspace Rust toolchain" },
       { file: ".github/actions/setup-native/action.yml", symbol: "name: Validate the runner native toolchain" },
-      { file: "native/darwin/Makefile", symbol: "fetch:" },
     ],
     tests: [
       { file: "scripts/test/workflow-setup.test.mjs", id: "setup-node uses the exact Node and pnpm versions declared by the workspace" },
       { file: "scripts/test/workflow-setup.test.mjs", id: "setup-go reads the workspace Go version and resolves a module from root" },
       { file: "scripts/test/workflow-setup.test.mjs", id: "setup-rust installs the repository toolchain with format and lint components" },
       { file: "scripts/test/workflow-setup.test.mjs", id: "setup-native validates the runner toolchain without installing packages" },
-      { file: "scripts/test/native-offline.test.mjs", id: "offline fetch reports the missing pinned release file before curl" },
-      { file: "scripts/test/native-offline.test.mjs", id: "offline fetch verifies a valid cached release file without extracting or compiling" },
-      { file: "scripts/test/native-offline.test.mjs", id: "online fetch downloads and verifies only the pinned release file" },
-      { file: "scripts/test/native-offline.test.mjs", id: "offline fetch rejects a cached release file whose hash differs" },
     ],
-    expected: "Independent workflow jobs install the declared toolchains and fetch their locked dependencies before offline checks. Native fetch verifies the pinned release file without compiling, and offline mode refuses a missing file before network access.",
+    expected: "Independent workflow jobs install the declared toolchains and fetch their locked dependencies before offline checks.",
     levels: ["unit"],
   },
   {
@@ -6042,13 +5832,12 @@ const FEATURE_LINKS = [
   {
     id: "F239-81",
     implementation: [
-      { file: "native/darwin/src/capture.m", symbol: "current = recording != nil && captureRecording == recording;" },
+      { file: "native/darwin/src/capture.m", symbol: "if (captureRecording == recording) {" },
     ],
     tests: [
-      { file: "native/darwin/tests/capture_test.m", id: "delayed cleanup from capture A preserves both capture B tags" },
       { file: "e2e/capture-lifecycle.test.mjs", id: "consecutive captures preserve finalized recordings" },
     ],
-    expected: "The cleanup that a retired recording queued keeps the tags of a newer recording, and consecutive recordings keep independent counts and finalized artifact bytes.",
+    expected: "The end of a retired recording leaves a newer recording current, and consecutive recordings keep independent counts and finalized artifact bytes.",
     levels: ["unit"],
   },
   {
@@ -8586,13 +8375,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F239-242",
-    implementation: [{ file: "native/darwin/src/capture.m", symbol: "static bool beginCaptureSourceArtifacts(" }],
-    tests: [{ file: "native/darwin/tests/capture_source_writer_test.m", id: "source artifacts and their manifest finish before the held frame writer is released" }],
-    expected: "Accepted diagnostic source artifacts progress independently of a held frame writer and both owned writers drain before recording state is released.",
-    levels: ["unit"],
-  },
-  {
     id: "F239-240",
     implementation: [
       { file: "packages/plugin-api/view.js", symbol: "const writeLog = (level, event, fields, cids) =>" },
@@ -9221,7 +9003,7 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "scripts/node-tests.mjs", symbol: "const { tests: all, before } = discoverNodeTests(" },
       { file: "scripts/test-app.mjs", symbol: "args: argv, strict: true, options: { script: { type: 'string' }, native: { type: 'string' }, candidate: { type: 'string' }," },
-      { file: "packages/window-check/app.mjs", symbol: "async function dragOnce(s, plan, capture, frameIdentity) {" },
+      { file: "packages/window-check/app.mjs", symbol: "async function dragOnce(s, plan, capture) {" },
     ],
     tests: [
       { file: "scripts/test/node-tests.test.mjs", id: "a run starts each file without waiting for the person, and the runner has no idle option" },
@@ -9392,7 +9174,7 @@ const FEATURE_LINKS = [
       { file: "native/darwin/tests/document_throttle_test.m", symbol: "[cover orderWindow:NSWindowAbove relativeTo:window.windowNumber];" },
       { file: "native/darwin/src/window_reveal.m", symbol: "bool sp_window_show_hold_next(void (^held)(void *window)) {" },
       { file: "native/darwin/src/capture.m", symbol: "long sp_capture_wait_new_window(uint64_t token) {" },
-      { file: "packages/host/go/src/recording.go", symbol: "func (r *Recording) StartNewWindow(capture NewWindowCapture, directory string, plan CapturePlan, frameIdentity bool) error {" },
+      { file: "packages/host/go/src/recording.go", symbol: "func (r *Recording) StartNewWindow(capture NewWindowCapture, directory string, plan CapturePlan) error {" },
       { file: "packages/host/rust/src/recording.rs", symbol: "pub fn start_new_window(" },
       { file: "packages/window-check/app.mjs", symbol: "const release = params.newWindow === true ? async () => {} : await holdCovered(this);" },
       { file: "e2e/window-first-frames.test.mjs", symbol: "const recording = await s.record({ newWindow: true });" },
@@ -11151,38 +10933,6 @@ const FEATURE_LINKS = [
     levels: ["native", "unit"],
   },
   {
-    id: "F239-47-40-1",
-    implementation: [
-      { file: "native/darwin/src/capture_frame_identity.m", symbol: "sp_capture_frame_identity_encode(" },
-      { file: "native/darwin/src/capture_frame_identity.m", symbol: "sp_capture_frame_identity_decode(" },
-    ],
-    tests: [
-      { file: "native/darwin/tests/capture_frame_identity_test.m", id: "local CPU decoder decodes the exact issued nonce and source identity" },
-      { file: "native/darwin/tests/capture_frame_identity_test.m", id: "a complete target code decodes when a second QR code is outside the expected ROI" },
-      { file: "native/darwin/tests/capture_frame_identity_test.m", id: "QR modules use integer pixel blocks surrounded by four white quiet modules" },
-      { file: "native/darwin/tests/capture_frame_identity_test.m", id: "an odd-sized ROI centers integer QR modules and the complete quiet zone on pixel boundaries" },
-      { file: "native/darwin/tests/capture_frame_identity_test.m", id: "mutating the returned raster cannot mutate the immutable image backing" },
-      { file: "native/darwin/tests/capture_frame_identity_test.m", id: "canonical uint64 maximum values decode without overflow or coercion" },
-    ],
-    expected: "The opt-in native helper encodes and decodes the exact issued source identity inside one top-left ROI, using integer QR modules and a four-module quiet zone, preserving bytes and color metadata, and returning immutable raster data. It does not change exact matching or capture cadence.",
-    levels: ["native"],
-  },
-  {
-    id: "F239-47-40-3",
-    implementation: [
-      { file: "native/darwin/src/capture.m", symbol: "bool sp_capture_start(const char *directory, double gap, double seconds, int frames, bool frameIdentity, uint64_t token," },
-      { file: "packages/host/go/src/diagnostics.go", symbol: "func parseCaptureStartOptions(params json.RawMessage)" },
-      { file: "packages/host/rust/src/diagnostics.rs", symbol: "frame_identity = match params.get(\"frameIdentity\")" },
-    ],
-    tests: [
-      { file: "native/darwin/tests/support/capture_boundary.m", id: "identity capture without a prepared target is rejected" },
-      { file: "packages/host/go/src/diagnostics_test.go", id: "TestCaptureStartOptionsParseFrameIdentity" },
-      { file: "packages/host/rust/tests/recording_test.rs", id: "recording_start_forwards_frame_identity" },
-    ],
-    expected: "The diagnostic start option is strictly boolean and defaults off; both hosts pass it through, and native capture rejects identity mode until its implementation is available.",
-    levels: ["native", "unit"],
-  },
-  {
     id: "F239-47-30-2",
     implementation: [{ file: "scripts/check-hosts-same.mjs", symbol: "export function goEndpointMethods(" }],
     tests: [{ file: "scripts/test/check-hosts-same.test.mjs", id: "hyphenated diagnostic endpoint methods are read from both hosts" }],
@@ -11392,13 +11142,6 @@ const FEATURE_LINKS = [
     ],
     expected: "Input commits preserve marked text and newline exactly once, and capture acceptance rejects a positive frame count when stop reports an error.",
     levels: ["native"],
-  },
-  {
-    id: "F239-75",
-    implementation: [{ file: "e2e/capture-frame-identity.test.mjs", symbol: "const targetCard = (await s.get(\"core.grid\")).cards.find((item) => item.focused);" }],
-    tests: [{ file: "e2e/capture-frame-identity.test.mjs", id: "opt-in capture identity matches the presented image of an image region" }],
-    expected: "The opt-in capture identity consumer binds the selected card before creating the captured image region.",
-    levels: ["application"],
   },
   {
     id: "F239-77",
@@ -12570,7 +12313,6 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/src/events.go", symbol: "var sidecarSends = map[string]bool{\"sidecarSend\": true, \"viewSidecarSend\": true}" },
       { file: "e2e/raster-probe.mjs", symbol: "export function reopenedSession(before) {" },
       { file: "e2e/window-events.mjs", symbol: "export async function openAndCloseWindow(s) {" },
-      { file: "native/darwin/src/image_region.m", symbol: "arc4random_buf(view->identityToken, sizeof view->identityToken);" },
       { file: "e2e/input-probe.mjs", symbol: "export function tabElementIndex(grid, tab) {" },
       { file: "e2e/raster-probe.mjs", symbol: "export async function presentRasterTab(s, card) {" },
       { file: "packages/host/mygo/src/framework.go", symbol: "func (f *Framework) layoutStarted(owner platform.Window) {" },
@@ -12760,7 +12502,6 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/events_test.go", id: "TestAViewSidecarSendCarriesTheIdentifiersOfItsArguments" },
       { file: "e2e/test/raster-probe-fixture.test.mjs", id: "a session that a respawned service opens is a new session, also when the new service names it as the dead one did" },
       { file: "e2e/test/window-events.test.mjs", id: "a window that other windows cover completely still opens, draws and leaves its close event" },
-      { file: "native/darwin/tests/image_region_test.m", id: "TEST 1B: no frame is issued under the token of the IOSurface that carried it" },
       { file: "e2e/test/input-probe.test.mjs", id: "the element index of a tab counts the tabs of the cards before its card" },
       { file: "e2e/test/raster-probe-fixture.test.mjs", id: "a raster probe tab that a check opens while it watches the window draws covered before the wait for its image" },
       { file: "packages/host/mygo/tests/framework_test.go", id: "TestAPreparationHoldsTheFramesOfItsWindowUntilItAsksForItsFrame" },
@@ -12995,7 +12736,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestTheStatusRowShowsTheErrorOfAStoppedView" },
       { file: "packages/workbench-mygo/tests/picker_test.go", id: "TestThePickThatClosesTheWindowAnswersBeforeTheClose" },
     ],
-    expected: "The raster probe sidecar draws a frame after each input that it handles and names the inputs in that frame event, reads the refusal of a frame by its member error, so a stale frame ends its wait and the due frame of the newer raster is drawn, a check counts one view web view for each loaded view surface, shown or retained, and the main page only for a window that has one, a layout whose seats no longer name the tab and the dimming that each card shows does not draw and hands its preparation to the next layout, the view keeps the identity of that frame with each logged transaction, and each IME stage waits until the image region presents that frame. Each native.input.report input transaction of an IME check is complete, sent and error free, and matches one to one in order the raster probe input log entry with the same cids, whose actions, preedit, sidecar echo and answer cids are unchanged, with one later host.sidecar.request of the sidecar under those cids. A check that waits for the first frame of a raster probe makes the image regions of its window draw while the window is covered, because a check window opens behind the windows of other applications and of the other check applications, and turns that off when the check ends. The native surface of a card leaves the shown size of each open side, which is less than its stored size only when the content is at the layout minimum, and the ink of a folded grip is measured against the colour that most of its band shows, not the boundary line at its edge. A command of the mygo workbench whose placement fails answers with the result of its run, and the failure shows once as surface presentation failed: <text>, and core.grid of the mygo workbench gives its plane as the rectangle x, y, w, h that the grid fills. The page records the viewSidecarSend that it makes for the request of a view as workbench.call with the correlation identifiers of the request, as it records sidecarSend. The mygo workbench records each accepted view call, its reply and its cancellation, and names its start as the page of each reply, and every wait for the first frame of a raster probe goes through rasterReady. A recovery check knows the session of a respawned service by the service that holds it, since a new service names its first session as the dead one did. A check that opens and closes a window judges the window by its ready page and its presented layout and not by its occlusion, so the windows of other applications do not decide it. An opt-in frame identity tags every frame of an image region with the stable token of the region, whichever IOSurface carries the frame, so the frames of a supplier that presents from several surfaces decode as one region. A mygo placement whose presented frame drew other lines seats no record, and the frame after its answer places what the window draws. A check that presses a tab finds its element by the index of the tab among the tabs of every card in the order of core.grid. A mygo project return answers when the project is shown and the placement that shows its surfaces is presented. A raster probe tab that a capture check opens while it records makes the window draw its image regions covered before the check waits for its image. A mygo surface layout preparation holds the frames of its window until it asks for the frame of the transaction, so that frame is the one frame of the window that presents with the transaction. A reloaded mygo window keeps its last frame until the new workbench shows its first screen, and a new mygo window goes on the screen with the frame of that first screen, a display recording that shows a new window or a project window appear finds each of its frames drawn and, once the window shows at its full size, the logo at its place and the card color in each frame, and a project that another window removed leaves each mygo window, so a close request of that window, as a quit sends it, closes it without asking about the tabs of that project. While a card is fullscreen the mygo core.grid reports every other card at the empty rectangle, as the page reports the rectangles it painted. A check that compares the shown sections with a set stores the sets of the layout probe as its own sets. A check that measures the display uncovers its window by parking the windows of the other check applications, which it opens inactive. A mygo project whose settings file holds a set that names a section its loaded plugin does not declare does not open, and core.project.open answers that error. While the trace is on, the mygo workbench records the focus of a card as an action marker with its card and the command that focused it with its result, and while it is off it records neither. A check whose sidebars show the sets of the configuration gives each set the sections of the layout probe set of its layout and keeps its id, title and layout. A check waits for the settings dialog in the native modal web view on a host with a main page, and on the mygo host until core.modal names it. A mygo save that leaves its tab modified keeps the tab, and its failure is the error of the tab, which core.grid reports and the card records. A check gives a field the focus with a press that first makes its window the virtual key window, and the mygo workbench answers diagnostics.transcript, diagnostics.surface.hold and diagnostics.surface.held as the main page does, writes the focus transitions of the workbench as information records, and gives keep:modified to a tab that reported unsaved changes. A post to a document region is refused until the load of a plugin document commits, because the address of the committed document decides it. While the performance trace is on, the mygo workbench writes workbench.trace.surface.registration for each registration that its registry applies and for each close of a surface. The library check finds the upper and the lower card of the start layout by the geometry of the grid and not by the focus, which the start state leaves on the lower card, a mygo window answers the removal request of its project that another window sends, and a failed library action of the mygo workbench shows and records its failure at the place library. A check that serves its own fixture registry builds it into a new folder with fixtureRegistry of the fixture registry module, which removes the folder of a failed build. A view call of the mygo workbench whose surface closes while its host call runs gets no reply, so the canceled host call does not reach the ended view as an error. core.projects.browse of the mygo workbench selects the page of the projects, also after the plugin page was shown. A plugin change of the mygo workbench asks about each modified tab with 저장하고 적용, 저장하지 않고 적용 and 적용하지 않기, keeps the workbench for a kept tab, answers core.plugins.apply with reloaded, and starts again only after the host took the reply of every running request. A command of the mygo workbench that changes the settings answers once the host wrote them, so the settings file of a project holds the change when the command answers. A change of the store gives the mygo workbench the stored record of each project that its window does not hold, so it opens the layout that another window or environment stored. host.hit of a window without a main web view reports the workbench at a point that is in no web view and outside the native view that holds the surface hosts. A key responder that conforms to the text input client protocol but has no input context, such as a web view without an editable focus, is not an active text client, so input-source selection takes the global path. The first-theme check paints the document region of its layout probe start tab in the card token before it records, so the frames before the new view presents show only the card token at its sample points. On the mygo host a surface host call runs in the lifetime of the view that made the call, so a document attach that waited for the stored session of a tab closed meanwhile makes no host call and gets no reply. The unload probe page gives html and body the height of the view, so its document region is placed at that height and the view restart check sees it visibly placed. A view declares its composition only after each place that left it out of the host request has its reply, refused or not. A preparation that keeps an unmounted view out of its host request holds the declaration of that view until the host replies to it. A recording holds the covered drawing of its window from before the capture starts until its stop, also when the stop fails, so a capture identity check measures its window also while other windows cover it; the capture identity checks uncover their window from the other check windows. On the mygo host the registrations of a view end with the process of its document, so core.surfaces lists none of them until the restarted view registers its own and a status watch reaches that view only after it subscribed. The restoration of a check that parked the windows of the other check applications gives each window back the whole frame that the preparation recorded, its content size and then its origin. A failed restoration names in its message the window and the cause of each window that it did not restore. The mark of a mygo menu item stands the item gap and the note gap after its name and the item padding before the end of the item, as .picker__item small places it on the page. A settings text control and the name of a set fill their row as every text field of the page does. The description line and each contribution line of a plugin card are the elements core.library.plugins.about and core.library.plugins.contribution on every host, and a contribution line, its state or its error, has the caption size. V7a compares no place for an invisible declaration with zero width or zero height, which has no presented area, on the page and on the mygo host, and a declaration with an area that is one point off its slot still fails it. The update control of the mygo window bar counts the application update with the plugin updates, as the page counts them, so an available core release alone shows it. core.library of the mygo workbench reports the plugin cards and their actions only on the plugin page and the project cards only on the project page, as the page empties the list of the page that it hides. A pin, a rename and an opening of the mygo workbench write their members into the stored record of the project, so core.projects and core.project report the change once the store holds it. A change of the store adds each project that another window stored to the projects of a mygo window, in the order of the store, as the page reads its projects again. core.settings.set, core.settings.change, core.settings.link, core.settings.sets.update and core.settings.sets.row of the mygo workbench answer a refused change of the settings with -32602, as the page does. core.debug reports the tail of the page that showed the timeline as start and the tail of its last read as tail, and the debug timeline check counts from the event files of the channel other that the timeline holds the newest page up to start and each row after start up to tail once, instead of assuming that no row arrives before its first look. A pressed fullscreen tool of a mygo card is drawn in the focus color, also under the pointer, as the pressed card tool of the page. A window without a main page that closes removes the native view element of each of its surfaces before the surfaces close and releases the surface host and view page that the element retained after the frame that the closed window can no longer present. Each placement of the mygo workbench gives the host the first row that its frame draws, and a change of the frame factor alone places again, also without surfaces, and each start of a workbench without a page sets the title bar at once to the first row of the common settings. The sides of a mygo card stand in the element tree in the order of the page, top, bottom, left and right, so the index of a grip or a sidebar names the same side on each host. A mygo workbench start that the host refuses, as one whose window cannot cancel its open layout, fails with that reason, is not told that it started, and shows the reason as its first screen without a host call and without a ready window. The full screen check ends with a relaunch, so the window that full screen left in front of the windows of other applications takes the place of a first show again, and the occlusion check uncovers its window from the other check windows before it waits for a visible document. A key responder with an input context in an application that the system does not hold active has no current input context, so it is not an active text client either and input-source selection takes the global path, while a client whose context is not the current one fails explicitly. The preparation of an occlusion check raises the windows of every check application above the normal windows of other applications (diagnostics.windows.raise) until the check ends, so only the moves of the check windows decide what covers its window. The mygo workbench numbers the composition placements of all its views with one increasing revision, so a view created again after its process ended places above the revisions that the host keeps for its surface. The mygo workbench breaks a plugin description at each space, also before a word that opens with a point, as the page does, so the description of the layout probe takes five lines of its card. The watch of the client ends with an error that names the status and the type of the answer when its predicate answers anything but true or false, and unwatches. A surface that hides notes the view that held the keyboard without keeping it, so a view document that closes while its surface is hidden is released with its web content process. A mygo frame that draws other surface lines than the last placement while no layout transaction of its window is open opens one before it presents, the preparation of those lines takes it over, a placement that ran meanwhile places those lines at its answer without waiting for a frame, a preparation that fails cancels the opened transaction in the host, a frame whose placement makes no preparation cancels the layout it opened before its placement decision returns, so the next frame is not held, and a frame inside a layout transaction opens none. V7c compares the drawn slot as the page paints it and the prediction as the host seats it, in device pixels of the one grid scale, so a slot that the layout measures on 1/64 of a point is not a difference. V7b accepts the applied rectangle of a prediction on thirds of a point at 3 device pixels per point. V7c still fails a surface drawn one device pixel off its prediction. core.projects.flush of the mygo workbench writes what the page flush writes for the same input: the spaces only when they differ from the spaces that the window stored last or that the store refused, the geometry only when it differs from the one stored last, and nothing in the library, and it answers after the writes that started before it without reading the store. The mygo workbench keeps what it drew once a settled placement presented and no later placement replaced it, as the page keeps after a settled render, so the sidebars that an opened project draws are stored before any flush. A resized mygo window saves its geometry 200 ms after the last resize, and a store change that removed a project first stores the plane of the active project that the store still lists, as the page does. The footer check measures the bottom of the dragged surface as the end of the run of measured rows below its top, so the measured bottom row of the document region of the lower card is not taken for it. A mygo frame that draws other surface lines than the last placement while no layout transaction of its window is open opens one before it presents, the preparation of those lines takes it over, a placement that ran meanwhile places those lines at its answer without waiting for a frame, a placement whose preparation fails cancels the opened transaction, and a frame inside a layout transaction opens none. core.grid of the mygo workbench reports the status line of a window sidebar card as the status of that card, as the page does. The hosts check takes the layout that a drag or a resize settled at from the preparation that a settled presentation presents, without the start values that the preparation carries. Every reading of a settled layout of a host transcript, a rest and a settled wait included, comes from the one module of the settled layouts. A check that covers its uncovered window with a new window of the same application waits until that window presented its layout and shows, because host.windows lists a window ready before it is on the screen. A cover that does not show fails the check with the cover as its reason. The window show check measures the place of the first window of an application right after it relaunches that application in the background. A press or release that the document of a web view does not receive within the limit is recorded at the level error with the awaited web view, the view the input reached and its page, the first responder and the key state of the window; the wait that ends at its limit records whether the document holds the receipt listener, and a receipt that comes later records its delay. A preparation that takes over the layout that a frame opened hears its own frame before its commit, so the frame does not wait for that commit for a drawable. A mygo window that closes while a layout transaction holds it ends every wait for its release, so the surface elements of a closed window hand back their surface hosts and view web views. A preparation of a window that reaches the main thread after the close of the window begins no layout transaction and fails. Each limit of the test runner decides only after the runner took the exit and the output that were pending when the limit passed, so a runner whose own process stalled past the limit of a test that already ended reports the result of that test and not a timeout, and a stacksAtLimit process that passed is a pass whenever the runner takes its exit. A mygo window that closes while its workbench start runs, as a quit closes the last window, ends that start without a failure: the title bar step after the close leaves the native window alone and names no window, and the adapter writes no error record and tells the closed workbench nothing. A document region takes the whole points inside its insets, the area that its page fills, so the half point that it leaves shows the view page and no device row of the region shows the backing of its web view. A preparation that takes over the layout that a frame of its window opened hears that frame once it presented in the transaction, and asks for no second frame that could only present after the commit. The frame that opened the layout is the frame of the transaction once it presented in it, and the window holds its frames from its frame report. The report of a frame after the end of the layout that it opened changes nothing. A layout outside the frame of its window, or of a held window, has no opening frame. The frame that opens the layout asks for no notice, so the window stays settled and draws no frame after the commit. An opening frame built for a capture leaves the layout to the next frame of the surface. A preparation that takes over a transaction whose frame an earlier preparation asked for hears that frame without asking for another, because the window has held its frames since that frame. A preparation places in its aligned box the surface that it creates in a window without a main page, which has no element in the frame of the transaction. On a display, a newer preparation after the frame of its transaction hears that frame within 2 s, also after the window changed size, and the frame of the change presents after the commit. On a display, a window whose frame opens its layout and changes nothing stays settled after that frame and after the commit. A mygo window reads the common settings and the settings of its shown project again at each change of the store, as the page does, and a refused settings file of that project is reported while the applied settings stay. V7b compares the applied rectangle of a surface with its declared rectangle fitted inward in whole device pixels, so the remainder that the window coordinates of the host leave in a point, a height of 413.0000000000001 for 413, is no difference, and an edge one device pixel off is named. Each visible placement that a host answers names the backing scale whose device pixels it fitted the surface to, in the answer and in the trace event of the placement, and a window without a backing scale fails the fit; V7b judges the applied rectangle on the grid of that seat scale and names a seat of a scale other than the devicePixelRatio of the page. A change of the devicePixelRatio aligns the plane on the new grid, forgets the last layout request and draws the plane again, so the host fits every surface to the device pixels of the new display. A tab command that names a tab no card holds is refused with no tab and the id, as the page refuses it. The mygo registry command answers after the read of the application update, so its frame shows the update control. A view web view is the root of its surface and keeps the fractional frame of the surface, so the last device pixel row of the surface takes the input of the view. The mygo workbench sends the statuses of a frame in the step after it and places the library previews from the element tree of that frame, and a command answers after them. A folded card side and the section of an unselected tab keep their elements without a place, as the page keeps them under display:none, and the seat of a section stands on its body inside the insets of its set. A scrolled library gives the panes where the card lays them out, not clipped to the visible area. The mygo workbench judges V7b the same way: it compares in whole device pixels of the seat scale that the answer of the host names, names a seat of a scale other than the scale of the window and a visible surface that the answer left without a seat, and fails the presentation of a visible placement that the answer gives without its scale. A list has a divider before each section after the first, and only a divider between two open sections of a vertical list has a place. A window that the host sized and moved before it shows goes on the screen with that frame, as a window that showed before its moves keeps them. A select of the settings keeps the width of its column whatever the length of its choice. A placement that the mygo workbench makes after its draw carries the first row of that draw, so the title bar commits with the frame that shows the row. A restarted mygo workbench reads the title bar of its window and places the row of its first screen when it differs. The start of a workbench without a main page keeps the title bar of a window that shows the last frame of its previous workbench. The mygo adapter tells that start whether the window went on the screen. The status of a surface in core.surfaces is its phase with its error, null while it has none. The holds of the covered drawing of a window share one state, so a drag inside a held covered drawing leaves it on and only the last release ends it. A check waits for the settings dialog to close in the modal web view on a host with a main page and in core.modal on the mygo host. host.window.presented and diagnostics.drag ask the workbench of the window workbench.placement.last, which the page and the mygo workbench answer once the last placement that they made or hold ended, before they wait for the end of a continuous update and the settled presentation, so a placement that waits behind a running one is presented when the wait answers; a failed placement or a workbench that does not answer fails the wait. A check that fails with several errors throws joinedFailure, whose message names the message of each error, so the test report shows every cause. The test inventory check rejects a new AggregateError in the e2e checks and the window-check package outside packages/window-check/failure.mjs. The first check of an application whose host process exited fails with the exit and the closing and error records of its log. Each later check of that application is reported as not run because of that exit. A relaunch whose process exited and that no process replaced fails its check with that exit. The window-source audit accepts that not-run report of the harness and still rejects a check that skips itself. The exit names the closing records of the host log with the source of its exit request, the crash output of the host when it is not empty, the crash report of the system for its process, and a jetsam report that names it with the reason and the largest processes; without any of them, the exit names no exit request, no crash output and no crash report with the memory pressure and swap of the machine. An exit after an error record names that record with the exit code that the record of its end names, or says that the exit code was not recorded. The record exit-request names the source of its quit: an Apple event with its sender, a signal with its sender, a quit of the host with its request, or the menu with the current event type. The Rust host records the same sources. The native quit request names the process that sent the quit Apple event and its bundle identifier or name, and 0 without a sender; the native recorder keeps the process that sent each termination signal and passes the signal on to the earlier handler. A fatal error records the exit code 1 in log.closed exit after its error record, and a panic records its exit status there, in both hosts. A session test of the harness removes the folder of its file when a selection runs none of its tests. Each process of the test runner writes to a temporary folder of its own, which the runner removes when the group of the process ended, also when the process was killed, and a process that passes and leaves an entry there fails with the names of the entries. The activation repeat keeps its evidence under target/activation-repeat of the repository or the folder that the caller names, not in the temporary folder. A mutation run keeps its evidence under target/mutation-runs of the repository or SOKSAK_MUTATION_RUN_FOLDER, not in the temporary folder. The test runner places the temporary folders of its processes, mode 0700, in /tmp with its links resolved, so the longest socket path of a host test stays under the 103 bytes of a unix socket address, and a test that starts a host gives it a short temporary folder of the test, where the host keeps its socket folder. A host that a test starts in its own process gets the same short temporary folder through HostTemporary, which sets TMPDIR of the process back and removes the folder after the host ended. A move of the keyboard to the workbench of a window that closes after its framework removed its view records no error. A wait for the presented state of a window that waits for its reveal ends after the reveal. A stopped recording keeps its whole stop reply, every layout transaction included, as stop.json, and the values that its check keeps beside it, so the folder of a failed check holds its evidence. Each layout transaction of the trace names the path that committed it, the presentation of the host, the start of a new page, the presentation or the abandon of the last joined view, or a cancel, and the number of the other CATransaction pairs of the native code that were open at that commit. The rect of a sidebar in core.sidebars on the mygo host is the rect of its set, without the inner border, the grip and the status line. The library of the mygo host shows the common settings, and a return to the project shows its stored overrides again. The status row of a mygo card shows the state of the surface of its active tab and records the error of a stopped view once. The mygo window closes after the answers it owes, so the pick that closes it answers first.",
+    expected: "The raster probe sidecar draws a frame after each input that it handles and names the inputs in that frame event, reads the refusal of a frame by its member error, so a stale frame ends its wait and the due frame of the newer raster is drawn, a check counts one view web view for each loaded view surface, shown or retained, and the main page only for a window that has one, a layout whose seats no longer name the tab and the dimming that each card shows does not draw and hands its preparation to the next layout, the view keeps the identity of that frame with each logged transaction, and each IME stage waits until the image region presents that frame. Each native.input.report input transaction of an IME check is complete, sent and error free, and matches one to one in order the raster probe input log entry with the same cids, whose actions, preedit, sidecar echo and answer cids are unchanged, with one later host.sidecar.request of the sidecar under those cids. A check that waits for the first frame of a raster probe makes the image regions of its window draw while the window is covered, because a check window opens behind the windows of other applications and of the other check applications, and turns that off when the check ends. The native surface of a card leaves the shown size of each open side, which is less than its stored size only when the content is at the layout minimum, and the ink of a folded grip is measured against the colour that most of its band shows, not the boundary line at its edge. A command of the mygo workbench whose placement fails answers with the result of its run, and the failure shows once as surface presentation failed: <text>, and core.grid of the mygo workbench gives its plane as the rectangle x, y, w, h that the grid fills. The page records the viewSidecarSend that it makes for the request of a view as workbench.call with the correlation identifiers of the request, as it records sidecarSend. The mygo workbench records each accepted view call, its reply and its cancellation, and names its start as the page of each reply, and every wait for the first frame of a raster probe goes through rasterReady. A recovery check knows the session of a respawned service by the service that holds it, since a new service names its first session as the dead one did. A check that opens and closes a window judges the window by its ready page and its presented layout and not by its occlusion, so the windows of other applications do not decide it. A mygo placement whose presented frame drew other lines seats no record, and the frame after its answer places what the window draws. A check that presses a tab finds its element by the index of the tab among the tabs of every card in the order of core.grid. A mygo project return answers when the project is shown and the placement that shows its surfaces is presented. A raster probe tab that a capture check opens while it records makes the window draw its image regions covered before the check waits for its image. A mygo surface layout preparation holds the frames of its window until it asks for the frame of the transaction, so that frame is the one frame of the window that presents with the transaction. A reloaded mygo window keeps its last frame until the new workbench shows its first screen, and a new mygo window goes on the screen with the frame of that first screen, a display recording that shows a new window or a project window appear finds each of its frames drawn and, once the window shows at its full size, the logo at its place and the card color in each frame, and a project that another window removed leaves each mygo window, so a close request of that window, as a quit sends it, closes it without asking about the tabs of that project. While a card is fullscreen the mygo core.grid reports every other card at the empty rectangle, as the page reports the rectangles it painted. A check that compares the shown sections with a set stores the sets of the layout probe as its own sets. A check that measures the display uncovers its window by parking the windows of the other check applications, which it opens inactive. A mygo project whose settings file holds a set that names a section its loaded plugin does not declare does not open, and core.project.open answers that error. While the trace is on, the mygo workbench records the focus of a card as an action marker with its card and the command that focused it with its result, and while it is off it records neither. A check whose sidebars show the sets of the configuration gives each set the sections of the layout probe set of its layout and keeps its id, title and layout. A check waits for the settings dialog in the native modal web view on a host with a main page, and on the mygo host until core.modal names it. A mygo save that leaves its tab modified keeps the tab, and its failure is the error of the tab, which core.grid reports and the card records. A check gives a field the focus with a press that first makes its window the virtual key window, and the mygo workbench answers diagnostics.transcript, diagnostics.surface.hold and diagnostics.surface.held as the main page does, writes the focus transitions of the workbench as information records, and gives keep:modified to a tab that reported unsaved changes. A post to a document region is refused until the load of a plugin document commits, because the address of the committed document decides it. While the performance trace is on, the mygo workbench writes workbench.trace.surface.registration for each registration that its registry applies and for each close of a surface. The library check finds the upper and the lower card of the start layout by the geometry of the grid and not by the focus, which the start state leaves on the lower card, a mygo window answers the removal request of its project that another window sends, and a failed library action of the mygo workbench shows and records its failure at the place library. A check that serves its own fixture registry builds it into a new folder with fixtureRegistry of the fixture registry module, which removes the folder of a failed build. A view call of the mygo workbench whose surface closes while its host call runs gets no reply, so the canceled host call does not reach the ended view as an error. core.projects.browse of the mygo workbench selects the page of the projects, also after the plugin page was shown. A plugin change of the mygo workbench asks about each modified tab with 저장하고 적용, 저장하지 않고 적용 and 적용하지 않기, keeps the workbench for a kept tab, answers core.plugins.apply with reloaded, and starts again only after the host took the reply of every running request. A command of the mygo workbench that changes the settings answers once the host wrote them, so the settings file of a project holds the change when the command answers. A change of the store gives the mygo workbench the stored record of each project that its window does not hold, so it opens the layout that another window or environment stored. host.hit of a window without a main web view reports the workbench at a point that is in no web view and outside the native view that holds the surface hosts. A key responder that conforms to the text input client protocol but has no input context, such as a web view without an editable focus, is not an active text client, so input-source selection takes the global path. The first-theme check paints the document region of its layout probe start tab in the card token before it records, so the frames before the new view presents show only the card token at its sample points. On the mygo host a surface host call runs in the lifetime of the view that made the call, so a document attach that waited for the stored session of a tab closed meanwhile makes no host call and gets no reply. The unload probe page gives html and body the height of the view, so its document region is placed at that height and the view restart check sees it visibly placed. A view declares its composition only after each place that left it out of the host request has its reply, refused or not. A preparation that keeps an unmounted view out of its host request holds the declaration of that view until the host replies to it. A recording holds the covered drawing of its window from before the capture starts until its stop, also when the stop fails, so a recording draws its window also while other windows cover it. On the mygo host the registrations of a view end with the process of its document, so core.surfaces lists none of them until the restarted view registers its own and a status watch reaches that view only after it subscribed. The restoration of a check that parked the windows of the other check applications gives each window back the whole frame that the preparation recorded, its content size and then its origin. A failed restoration names in its message the window and the cause of each window that it did not restore. The mark of a mygo menu item stands the item gap and the note gap after its name and the item padding before the end of the item, as .picker__item small places it on the page. A settings text control and the name of a set fill their row as every text field of the page does. The description line and each contribution line of a plugin card are the elements core.library.plugins.about and core.library.plugins.contribution on every host, and a contribution line, its state or its error, has the caption size. V7a compares no place for an invisible declaration with zero width or zero height, which has no presented area, on the page and on the mygo host, and a declaration with an area that is one point off its slot still fails it. The update control of the mygo window bar counts the application update with the plugin updates, as the page counts them, so an available core release alone shows it. core.library of the mygo workbench reports the plugin cards and their actions only on the plugin page and the project cards only on the project page, as the page empties the list of the page that it hides. A pin, a rename and an opening of the mygo workbench write their members into the stored record of the project, so core.projects and core.project report the change once the store holds it. A change of the store adds each project that another window stored to the projects of a mygo window, in the order of the store, as the page reads its projects again. core.settings.set, core.settings.change, core.settings.link, core.settings.sets.update and core.settings.sets.row of the mygo workbench answer a refused change of the settings with -32602, as the page does. core.debug reports the tail of the page that showed the timeline as start and the tail of its last read as tail, and the debug timeline check counts from the event files of the channel other that the timeline holds the newest page up to start and each row after start up to tail once, instead of assuming that no row arrives before its first look. A pressed fullscreen tool of a mygo card is drawn in the focus color, also under the pointer, as the pressed card tool of the page. A window without a main page that closes removes the native view element of each of its surfaces before the surfaces close and releases the surface host and view page that the element retained after the frame that the closed window can no longer present. Each placement of the mygo workbench gives the host the first row that its frame draws, and a change of the frame factor alone places again, also without surfaces, and each start of a workbench without a page sets the title bar at once to the first row of the common settings. The sides of a mygo card stand in the element tree in the order of the page, top, bottom, left and right, so the index of a grip or a sidebar names the same side on each host. A mygo workbench start that the host refuses, as one whose window cannot cancel its open layout, fails with that reason, is not told that it started, and shows the reason as its first screen without a host call and without a ready window. The full screen check ends with a relaunch, so the window that full screen left in front of the windows of other applications takes the place of a first show again, and the occlusion check uncovers its window from the other check windows before it waits for a visible document. A key responder with an input context in an application that the system does not hold active has no current input context, so it is not an active text client either and input-source selection takes the global path, while a client whose context is not the current one fails explicitly. The preparation of an occlusion check raises the windows of every check application above the normal windows of other applications (diagnostics.windows.raise) until the check ends, so only the moves of the check windows decide what covers its window. The mygo workbench numbers the composition placements of all its views with one increasing revision, so a view created again after its process ended places above the revisions that the host keeps for its surface. The mygo workbench breaks a plugin description at each space, also before a word that opens with a point, as the page does, so the description of the layout probe takes five lines of its card. The watch of the client ends with an error that names the status and the type of the answer when its predicate answers anything but true or false, and unwatches. A surface that hides notes the view that held the keyboard without keeping it, so a view document that closes while its surface is hidden is released with its web content process. A mygo frame that draws other surface lines than the last placement while no layout transaction of its window is open opens one before it presents, the preparation of those lines takes it over, a placement that ran meanwhile places those lines at its answer without waiting for a frame, a preparation that fails cancels the opened transaction in the host, a frame whose placement makes no preparation cancels the layout it opened before its placement decision returns, so the next frame is not held, and a frame inside a layout transaction opens none. V7c compares the drawn slot as the page paints it and the prediction as the host seats it, in device pixels of the one grid scale, so a slot that the layout measures on 1/64 of a point is not a difference. V7b accepts the applied rectangle of a prediction on thirds of a point at 3 device pixels per point. V7c still fails a surface drawn one device pixel off its prediction. core.projects.flush of the mygo workbench writes what the page flush writes for the same input: the spaces only when they differ from the spaces that the window stored last or that the store refused, the geometry only when it differs from the one stored last, and nothing in the library, and it answers after the writes that started before it without reading the store. The mygo workbench keeps what it drew once a settled placement presented and no later placement replaced it, as the page keeps after a settled render, so the sidebars that an opened project draws are stored before any flush. A resized mygo window saves its geometry 200 ms after the last resize, and a store change that removed a project first stores the plane of the active project that the store still lists, as the page does. The footer check measures the bottom of the dragged surface as the end of the run of measured rows below its top, so the measured bottom row of the document region of the lower card is not taken for it. A mygo frame that draws other surface lines than the last placement while no layout transaction of its window is open opens one before it presents, the preparation of those lines takes it over, a placement that ran meanwhile places those lines at its answer without waiting for a frame, a placement whose preparation fails cancels the opened transaction, and a frame inside a layout transaction opens none. core.grid of the mygo workbench reports the status line of a window sidebar card as the status of that card, as the page does. The hosts check takes the layout that a drag or a resize settled at from the preparation that a settled presentation presents, without the start values that the preparation carries. Every reading of a settled layout of a host transcript, a rest and a settled wait included, comes from the one module of the settled layouts. A check that covers its uncovered window with a new window of the same application waits until that window presented its layout and shows, because host.windows lists a window ready before it is on the screen. A cover that does not show fails the check with the cover as its reason. The window show check measures the place of the first window of an application right after it relaunches that application in the background. A press or release that the document of a web view does not receive within the limit is recorded at the level error with the awaited web view, the view the input reached and its page, the first responder and the key state of the window; the wait that ends at its limit records whether the document holds the receipt listener, and a receipt that comes later records its delay. A preparation that takes over the layout that a frame opened hears its own frame before its commit, so the frame does not wait for that commit for a drawable. A mygo window that closes while a layout transaction holds it ends every wait for its release, so the surface elements of a closed window hand back their surface hosts and view web views. A preparation of a window that reaches the main thread after the close of the window begins no layout transaction and fails. Each limit of the test runner decides only after the runner took the exit and the output that were pending when the limit passed, so a runner whose own process stalled past the limit of a test that already ended reports the result of that test and not a timeout, and a stacksAtLimit process that passed is a pass whenever the runner takes its exit. A mygo window that closes while its workbench start runs, as a quit closes the last window, ends that start without a failure: the title bar step after the close leaves the native window alone and names no window, and the adapter writes no error record and tells the closed workbench nothing. A document region takes the whole points inside its insets, the area that its page fills, so the half point that it leaves shows the view page and no device row of the region shows the backing of its web view. A preparation that takes over the layout that a frame of its window opened hears that frame once it presented in the transaction, and asks for no second frame that could only present after the commit. The frame that opened the layout is the frame of the transaction once it presented in it, and the window holds its frames from its frame report. The report of a frame after the end of the layout that it opened changes nothing. A layout outside the frame of its window, or of a held window, has no opening frame. The frame that opens the layout asks for no notice, so the window stays settled and draws no frame after the commit. An opening frame built for a capture leaves the layout to the next frame of the surface. A preparation that takes over a transaction whose frame an earlier preparation asked for hears that frame without asking for another, because the window has held its frames since that frame. A preparation places in its aligned box the surface that it creates in a window without a main page, which has no element in the frame of the transaction. On a display, a newer preparation after the frame of its transaction hears that frame within 2 s, also after the window changed size, and the frame of the change presents after the commit. On a display, a window whose frame opens its layout and changes nothing stays settled after that frame and after the commit. A mygo window reads the common settings and the settings of its shown project again at each change of the store, as the page does, and a refused settings file of that project is reported while the applied settings stay. V7b compares the applied rectangle of a surface with its declared rectangle fitted inward in whole device pixels, so the remainder that the window coordinates of the host leave in a point, a height of 413.0000000000001 for 413, is no difference, and an edge one device pixel off is named. Each visible placement that a host answers names the backing scale whose device pixels it fitted the surface to, in the answer and in the trace event of the placement, and a window without a backing scale fails the fit; V7b judges the applied rectangle on the grid of that seat scale and names a seat of a scale other than the devicePixelRatio of the page. A change of the devicePixelRatio aligns the plane on the new grid, forgets the last layout request and draws the plane again, so the host fits every surface to the device pixels of the new display. A tab command that names a tab no card holds is refused with no tab and the id, as the page refuses it. The mygo registry command answers after the read of the application update, so its frame shows the update control. A view web view is the root of its surface and keeps the fractional frame of the surface, so the last device pixel row of the surface takes the input of the view. The mygo workbench sends the statuses of a frame in the step after it and places the library previews from the element tree of that frame, and a command answers after them. A folded card side and the section of an unselected tab keep their elements without a place, as the page keeps them under display:none, and the seat of a section stands on its body inside the insets of its set. A scrolled library gives the panes where the card lays them out, not clipped to the visible area. The mygo workbench judges V7b the same way: it compares in whole device pixels of the seat scale that the answer of the host names, names a seat of a scale other than the scale of the window and a visible surface that the answer left without a seat, and fails the presentation of a visible placement that the answer gives without its scale. A list has a divider before each section after the first, and only a divider between two open sections of a vertical list has a place. A window that the host sized and moved before it shows goes on the screen with that frame, as a window that showed before its moves keeps them. A select of the settings keeps the width of its column whatever the length of its choice. A placement that the mygo workbench makes after its draw carries the first row of that draw, so the title bar commits with the frame that shows the row. A restarted mygo workbench reads the title bar of its window and places the row of its first screen when it differs. The start of a workbench without a main page keeps the title bar of a window that shows the last frame of its previous workbench. The mygo adapter tells that start whether the window went on the screen. The status of a surface in core.surfaces is its phase with its error, null while it has none. The holds of the covered drawing of a window share one state, so a drag inside a held covered drawing leaves it on and only the last release ends it. A check waits for the settings dialog to close in the modal web view on a host with a main page and in core.modal on the mygo host. host.window.presented and diagnostics.drag ask the workbench of the window workbench.placement.last, which the page and the mygo workbench answer once the last placement that they made or hold ended, before they wait for the end of a continuous update and the settled presentation, so a placement that waits behind a running one is presented when the wait answers; a failed placement or a workbench that does not answer fails the wait. A check that fails with several errors throws joinedFailure, whose message names the message of each error, so the test report shows every cause. The test inventory check rejects a new AggregateError in the e2e checks and the window-check package outside packages/window-check/failure.mjs. The first check of an application whose host process exited fails with the exit and the closing and error records of its log. Each later check of that application is reported as not run because of that exit. A relaunch whose process exited and that no process replaced fails its check with that exit. The window-source audit accepts that not-run report of the harness and still rejects a check that skips itself. The exit names the closing records of the host log with the source of its exit request, the crash output of the host when it is not empty, the crash report of the system for its process, and a jetsam report that names it with the reason and the largest processes; without any of them, the exit names no exit request, no crash output and no crash report with the memory pressure and swap of the machine. An exit after an error record names that record with the exit code that the record of its end names, or says that the exit code was not recorded. The record exit-request names the source of its quit: an Apple event with its sender, a signal with its sender, a quit of the host with its request, or the menu with the current event type. The Rust host records the same sources. The native quit request names the process that sent the quit Apple event and its bundle identifier or name, and 0 without a sender; the native recorder keeps the process that sent each termination signal and passes the signal on to the earlier handler. A fatal error records the exit code 1 in log.closed exit after its error record, and a panic records its exit status there, in both hosts. A session test of the harness removes the folder of its file when a selection runs none of its tests. Each process of the test runner writes to a temporary folder of its own, which the runner removes when the group of the process ended, also when the process was killed, and a process that passes and leaves an entry there fails with the names of the entries. The activation repeat keeps its evidence under target/activation-repeat of the repository or the folder that the caller names, not in the temporary folder. A mutation run keeps its evidence under target/mutation-runs of the repository or SOKSAK_MUTATION_RUN_FOLDER, not in the temporary folder. The test runner places the temporary folders of its processes, mode 0700, in /tmp with its links resolved, so the longest socket path of a host test stays under the 103 bytes of a unix socket address, and a test that starts a host gives it a short temporary folder of the test, where the host keeps its socket folder. A host that a test starts in its own process gets the same short temporary folder through HostTemporary, which sets TMPDIR of the process back and removes the folder after the host ended. A move of the keyboard to the workbench of a window that closes after its framework removed its view records no error. A wait for the presented state of a window that waits for its reveal ends after the reveal. A stopped recording keeps its whole stop reply, every layout transaction included, as stop.json, and the values that its check keeps beside it, so the folder of a failed check holds its evidence. Each layout transaction of the trace names the path that committed it, the presentation of the host, the start of a new page, the presentation or the abandon of the last joined view, or a cancel, and the number of the other CATransaction pairs of the native code that were open at that commit. The rect of a sidebar in core.sidebars on the mygo host is the rect of its set, without the inner border, the grip and the status line. The library of the mygo host shows the common settings, and a return to the project shows its stored overrides again. The status row of a mygo card shows the state of the surface of its active tab and records the error of a stopped view once. The mygo window closes after the answers it owes, so the pick that closes it answers first.",
     levels: ["unit", "application"],
   },
   {
@@ -13605,17 +13346,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F239-104",
-    implementation: [
-      { file: "native/darwin/src/capture.m", symbol: "sp_image_capture_match_sample(" },
-      { file: "native/darwin/src/capture.m", symbol: "sp_image_capture_match_identity_enqueue_frame(" },
-      { file: "native/darwin/src/capture_frame_identity.m", symbol: "sp_capture_frame_identity_decode(" },
-    ],
-    tests: [{ file: "native/darwin/tests/capture_metadata_test.m", id: "the still path records image-match raw bounds, absent identity-stage ticks, the timebase, request and completion times and the frame marker" }],
-    expected: "The row of each still measures raw Mach start and completion ticks around image matching and optional identity decoding.",
-    levels: ["native"],
-  },
-  {
     id: "F239-106",
     implementation: [
       { file: "packages/host/go/src/documents.go", symbol: "func validateViewMessageEnvelope(" },
@@ -13715,19 +13445,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F239-136",
-    implementation: [
-      { file: "native/darwin/src/image_capture_match.m", symbol: "sp_image_capture_match_identity_enqueue_frame(" },
-      { file: "native/darwin/src/capture_frame_identity.m", symbol: "sp_capture_frame_identity_decode(" },
-    ],
-    tests: [
-      { file: "native/darwin/tests/image_capture_match_test.m", id: "the decoder admits sixteen pending jobs and reports the rejected branch with its job and byte counts" },
-      { file: "native/darwin/tests/image_capture_match_test.m", id: "all admitted frames drain in sample order before session state is released, despite later overflow" },
-    ],
-    expected: "The bounded identity decoder accepts sixteen jobs, reports overflow without dropping admitted frames, and drains accepted work in sample order.",
-    levels: ["native"],
-  },
-  {
     id: "F239-137",
     implementation: [{ file: "packages/window-check/catalog.mjs", symbol: "export const catalogOf =" }],
     tests: [{ file: "scripts/test/check-events.test.mjs", id: "the audit composes every installed plugin manifest event catalog and its plugin layer" }],
@@ -13742,26 +13459,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F239-143",
-    implementation: [
-      { file: "native/darwin/src/image_capture_match.m", symbol: "sp_image_capture_match_identity_enqueue_frame(" },
-      { file: "native/darwin/src/image_capture_match.m", symbol: "commitIdentityDecodeJob(" },
-    ],
-    tests: [
-      { file: "native/darwin/tests/image_capture_match_test.m", id: "the second QR decode starts before the blocked first decode is released" },
-      { file: "native/darwin/tests/image_capture_match_test.m", id: "an asynchronous QR decoder exception is reported and fails manifest finalization after decoder drain" },
-    ],
-    expected: "Two bounded decode workers progress independently while results commit in sample order and decoder exceptions fail and drain explicitly.",
-    levels: ["native"],
-  },
-  {
-    id: "F239-144",
-    implementation: [{ file: "native/darwin/src/image_capture_match.m", symbol: "static NSString *identityCapacityMessage(" }],
-    tests: [{ file: "native/darwin/tests/image_capture_match_test.m", id: "the decoder admits sixteen pending jobs and reports the rejected branch with its job and byte counts" }],
-    expected: "Decoder admission errors report the exhausted job or crop-byte bound with measured counters.",
-    levels: ["native"],
-  },
-  {
     id: "F239-145",
     implementation: [{ file: "native/darwin/src/activity_observers.m", symbol: "void sp_observe_activity(void)" }],
     tests: [{ file: "native/darwin/tests/activity_observers_test.m", id: "deactivation records the event-time frontmost process" }],
@@ -13774,20 +13471,6 @@ const FEATURE_LINKS = [
     tests: [{ file: "e2e/app-update.test.mjs", id: "the update list shows the core release first and a refused release fails the operation" }],
     expected: "The update fixture declares unrelated installed versions compatible before testing the intended incompatibility.",
     levels: ["application"],
-  },
-  {
-    id: "F239-148",
-    implementation: [{ file: "native/darwin/src/image_capture_match.m", symbol: "static BOOL appendIdentityDecodeRecords(" }],
-    tests: [{ file: "native/darwin/tests/image_capture_match_test.m", id: "eight decoded JSONL rows commit in order while the shared raw/source artifact writer remains blocked" }],
-    expected: "Ordered identity rows commit on their serial lane independently of the shared raw and source artifact writer.",
-    levels: ["native"],
-  },
-  {
-    id: "F239-149",
-    implementation: [{ file: "native/darwin/src/capture_frame_identity.m", symbol: "sp_capture_frame_identity_decode(" }],
-    tests: [{ file: "native/darwin/tests/capture_frame_identity_test.m", id: "QR modules clipped at the top ROI edge are unknown" }],
-    expected: "Module-clipped QR symbols report the canonical helper reason that the matcher classifies as cropped.",
-    levels: ["native"],
   },
   {
     id: "F239-150",
@@ -14037,23 +13720,6 @@ const FEATURE_LINKS = [
     tests: [{ file: "packages/window-check/test/view-process-footprint.test.mjs", id: "an unstarted child document has no PID footprint or document-history row" }],
     expected: "Unstarted documents remain evidence without becoming measured or shared processes.",
     levels: ["unit"],
-  },
-  {
-    id: "F212.14-5-1",
-    implementation: [{ file: "packages/window-check/app.mjs", symbol: "frameIdentity: stopped.frameIdentity" }],
-    tests: [
-      { file: "packages/window-check/test/drag-frame-identity.test.mjs", id: "drag forwards opt-in frame identity and preserves the stop result" },
-      { file: "e2e/capture-frame-identity.test.mjs", id: "diagnostic drag retains opt-in frame identity artifacts" },
-    ],
-    expected: "Diagnostic drag preserves the requested identity artifacts without changing its default request.",
-    levels: ["unit", "application"],
-  },
-  {
-    id: "F239-194",
-    implementation: [{ file: "packages/workbench/environment.js", symbol: "diagnosticModules = Promise.all(" }],
-    tests: [{ file: "e2e/capture-frame-identity.test.mjs", id: "diagnostic drag retains opt-in frame identity artifacts" }],
-    expected: "Installed diagnostic modules load at startup without application errors on both hosts.",
-    levels: ["application"],
   },
   {
     id: "F239-193",
@@ -14314,13 +13980,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F239-123",
-    implementation: [{ file: "packages/host/go/src/recording.go", symbol: "func begin(capture Capture, target CaptureTarget, directory string, plan CapturePlan, frameIdentity bool) error {" }],
-    tests: [{ file: "packages/host/go/tests/recording_test.go", id: "TestFinishedRecordingKeepsItsFolderAndReportsFrames" }],
-    expected: "The finished-recording fixture expects the frame-identity option forwarded at capture start and retained at finish.",
-    levels: ["unit"],
-  },
-  {
     id: "F239-124",
     implementation: [
       { file: "packages/sok/go/src/event_log.go", symbol: "func (l *EventLog) rotate(" },
@@ -14387,20 +14046,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F239-245",
-    implementation: [
-      { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn lifecycle_lock" },
-      { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn pending_frame_identity_lock" },
-    ],
-    tests: [
-      { file: "packages/host/rust/src/diagnostics_lock_test.rs", id: "a_poisoned_lifecycle_lock_is_reported_before_the_operation_runs" },
-      { file: "packages/host/rust/src/diagnostics_lock_test.rs", id: "a_poisoned_pending_lock_is_reported_without_consuming_the_receiver" },
-      { file: "packages/host/rust/src/diagnostics_lock_test.rs", id: "a_pending_start_probe_releases_the_lock_before_receive" },
-    ],
-    expected: "The lock event source check accepts explicit error propagation while preserving findings for discarded errors and unapproved recovery defaults; poisoned identity lifecycle and pending-start locks return explicit errors, and the pending probe releases its guard before the receiving helper reacquires it.",
-    levels: ["unit"],
-  },
-  {
     id: "F239-252",
     implementation: [
       { file: "native/darwin/src/capture.m", symbol: "static bool recordingActive(void)" },
@@ -14440,20 +14085,6 @@ const FEATURE_LINKS = [
       { file: "scripts/test/event-classes.test.mjs", id: "the page table gives every declared event and family member its catalog class" },
     ],
     expected: "The generated producer tables classify the declared surface dispatch event as frame and match the canonical catalog.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-259",
-    implementation: [
-      { file: "packages/host/go/src/diagnostics.go", symbol: "func awaitDocumentFrameIdentity" },
-      { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn await_document_frame_identity_schedule_result" },
-    ],
-    tests: [
-      { file: "packages/host/go/src/diagnostics_test.go", id: "TestAwaitDocumentFrameIdentityReportsALateErrorAfterAFailedSchedule" },
-      { file: "packages/host/go/src/diagnostics_test.go", id: "TestAwaitDocumentFrameIdentityPreservesCallbackErrorWhenScheduleFails" },
-      { file: "packages/host/rust/src/diagnostics_test.rs", id: "document_frame_identity_preserves_synchronous_callback_error_when_scheduling_fails" },
-    ],
-    expected: "Identity waits report the late callback errors after a failed schedule and preserve a synchronous callback failure together with a scheduling failure.",
     levels: ["unit"],
   },
   {
@@ -15484,7 +15115,13 @@ const MOVED_COMPLETIONS = new Set(["F6", "F596","F239-170", "F239-197", "F239-24
 // F756 removes the raise of the windows of a check (F747) and the parking of the windows of the occlusion fixture (F749): every check
 // starts behind the windows of a person and covers its window with its own window.
 // F239-189 handed the stop of a ScreenCaptureKit stream to its late start; the still recording of F746 has no stream to stop.
-const REMOVED_COMPLETIONS = new Set(["F239-189", "F747", "F749", "F160.26", "F239-98", "F239-98-1", "F239-98-1-1", "F239-98-2", "F239-98-3", "F239-98-4", "F239-47-17",
+// F746 removes every judgment of a recording by its pixels with the code that served only them: the image match, the QR frame
+// identity of image regions and plugin root documents with its decoder and the ZXing dependency, and the frameIdentity option of
+// a recording and of a drag. F239-47-40-3, F239-123, F239-234, F239-75, F750, F698, F239-136, F239-143, F239-144, F239-146,
+// F239-148, F239-149, F239-178, F239-245, F239-259, F610 and F239-242 wrote those parts, so they have no implementation left.
+// F239-194 loads the diagnostic modules at startup, which stays; its only check was the drag identity check that F746 removes.
+const REMOVED_COMPLETIONS = new Set(["F239-189", "F239-47-40-3", "F239-123", "F239-234", "F239-75", "F750", "F698", "F239-136",
+  "F239-143", "F239-144", "F239-146", "F239-148", "F239-149", "F239-178", "F239-245", "F239-259", "F610", "F239-242", "F239-194", "F747", "F749", "F160.26", "F239-98", "F239-98-1", "F239-98-1-1", "F239-98-2", "F239-98-3", "F239-98-4", "F239-47-17",
   "F239-47-19", "F239-134", "F239-158", "F239-175", "F239-47-10", "F239-47-12", "F239-47-13", "F239-47-14", "F212.12-1-15-5", "F212.9-3-1", "F212.9a-1", "F239-107-1", "F239-220", "F239-40", "F239-43",
   "F249", "F292-7", "F68", "F60", "F91", "F114", "F116", "F125", "F239-269", "F55", "F239-47-24", "F239-182", "F239-68", "F278",
   "F278-1", "F280", "F283-1", "F283-2", "F286", "F290", "F292-26-3", "F226", "F239-39", "F239-41", "F239-41-1", "F239-42",

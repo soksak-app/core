@@ -154,12 +154,8 @@ fn invalid_json_closes_connection() {
 | `diagnostics.capture-stop.payload-preserves-layout-stages` | 각 `layouts` 항목은 기록된 ticket, begun, requested, presented, committed, flushed 값을 유지한다. | all |
 | `diagnostics.layout-trace.native-record-names-its-commit` | host는 layout transaction의 각 native record를 ticket, begun, presented, committed, requested, commit path code, `openAtCommit`, `flushed`로 읽고, 각 commit path code를 그 path의 이름(`present`, `start`, `view-join`, `view-abandon`, `cancel`)으로 바꾼다. commit하지 않은 transaction에는 commit path, `openAtCommit`, `flushed`가 없다([endpoint](endpoint.ko.md)). | all |
 | `diagnostics.layout-trace.unknown-commit-path-fails` | native code가 선언하지 않은 commit path code의 native layout record는 path 없는 record가 되지 않고 layout record 읽기를 실패시킨다. | all |
-| `diagnostics.capture-stop.payload-names-opt-in-frame-identity-artifact` | `frameIdentity: true`로 녹화를 시작하면 중지 페이로드는 상태가 `complete`이고 manifest 경로를 가진 `frameIdentity`를 보고한다. | all |
-| `diagnostics.capture-start.preserves-display-option-parsing` | 선택적 `frameIdentity` 매개변수를 추가해도 기존 `display` 옵션 파싱은 바뀌지 않는다. | all |
-| `diagnostics.capture-start.parses-frame-identity-option` | `diagnostics.capture.start`는 선택적 boolean `frameIdentity`를 받고 그 값을 recording capture에 전달한다. | all |
+| `diagnostics.capture-start.preserves-display-option-parsing` | `diagnostics.capture.start`는 `display`를 선택적 boolean으로 읽는다. 없거나 `null`이면 false이고 다른 값은 거부한다. | all |
 | `diagnostics.capture-start.validates-still-plan` | `diagnostics.capture.start`는 1부터 1000까지의 ms인 `gap`과, `seconds`(0 초과 600 이하)와 `frames`(1부터 4096까지의 정수) 중 정확히 하나를 받는다. 다른 값은 native start의 문구(`gap must be a number of milliseconds from 1 to 1000`, `give seconds or frames, not both`, `a recording needs seconds or frames`, `seconds must be above 0 and at most 600`, `frames must be an integer from 1 to 4096`)로, 4096장을 넘는 계획은 `the recording plans <n> stills, more than 4096`로 거부하며, `newWindow`가 창을 잡기 전에 검사한다. | all |
-| `diagnostics.capture-start.frame-identity-is-strict-boolean` | JSON boolean이 아닌 `frameIdentity` 값은 `frameIdentity must be a boolean` 오류로 거부된다. | all |
-| `diagnostics.capture-start.forwards-frame-identity` | recording 시작은 요청된 `frameIdentity` 값을 native capture 시작에 전달한다. | all |
 | `diagnostics.capture-start.new-window-is-strict-boolean` | `diagnostics.capture.start` 는 선택적 boolean `newWindow` 를 받고, 다른 값은 `newWindow must be a boolean` 으로, `display` 와 함께 쓴 `newWindow` 는 `newWindow records the new window alone and cannot be combined with display` 로 거부한다. | all |
 | `diagnostics.capture-start.new-window-answers-once-held` | `newWindow` 가 있으면 start 는 창의 다음 show 의 잡기가 설정되면 답하고, 실패한 잡기는 녹화를 시작하지 않으며, 녹화는 잡힌 창만 연다. | all |
 | `diagnostics.capture-start.new-window-hold-ends` | 어떤 show 도 잡지 못한 잡힌 창의 대기는 요청이 반환된 뒤에도 stop, 요청의 endpoint 연결의 닫힘, 요청 창의 닫힘으로 끝나고, 잡기가 창을 잡은 뒤의 실패는 그 창을 놓아 준다. | all |
@@ -168,30 +164,8 @@ fn invalid_json_closes_connection() {
 | `diagnostics.document.viewport-marker.uses-the-owning-window-document` | command는 요청한 surface와 window에 속한 연결 document만 찾는다. 해당 document 없이 시작하면 native 작업 전에 실패하고, 제거 뒤 중지는 idempotent하다. | all |
 | `diagnostics.document.viewport-marker.schedules-native-work-and-returns-native-result` | command는 UI dispatcher를 통해 marker 작업을 실행하고 native enabled 상태, kind, color, border width를 그대로 반환한다. | all |
 | `diagnostics.document.viewport-marker.reports-native-errors` | native marker 실패는 원래 text와 internal-error code로 반환하며 성공으로 보고하지 않는다. | all |
-| `diagnostics.capture.document-identity.start.is-declared` | 진단 build는 `diagnostics.capture.document-identity.start`를 선언한다. | all |
 | `diagnostics.window.draw-covered.is-declared` | 진단 build는 `diagnostics.window.draw-covered`를 선언한다. | all |
-| `diagnostics.capture-document-identity.stop-preserves-captures-without-a-document-source` | 선택된 document identity source가 없는 중지는 source freeze와 제거를 건너뛰고 capture를 한 번 중지하며 `frameIdentity` option의 두 값을 모두 보존한다. | all |
-| `diagnostics.capture-document-identity.stop-orders-freeze-capture-and-cleanup` | 선택된 source가 있으면 중지는 source를 freeze하고 capture를 중지한 뒤 같은 generation을 제거한다. `issuedSlots`는 성공한 freeze reply에서 온다. | all |
-| `diagnostics.capture-document-identity.stop-does-not-credit-unconfirmed-freeze` | source freeze에 실패하면 issued-slot count를 더하지 않지만 capture finalization과 source 제거는 계속 시도하고 오류를 보존한다. | all |
-| `diagnostics.capture-document-identity.stop-drains-late-start-before-cleanup` | 중지는 cleanup 전에 대기 중인 source start가 끝나기를 기다리며, start가 확인하지 않은 issued count는 반영하지 않는다. | all |
-| `diagnostics.capture-document-identity.start-validates-current-root-generation` | source 시작은 요청된 surface와 generation의 현재 연결된 root document만 찾고, 교체되거나 종료된 generation은 거부한다. | all |
-| `diagnostics.capture-document-identity.start-rejects-invalid-parameters` | source 시작은 document source를 선택하기 전에 없거나 비어 있거나 안전하지 않은 surface와 generation 값을 거부한다. | all |
-| `diagnostics.capture-document-identity.start-validates-native-metadata` | source 시작은 현재 generation과 측정된 유효 ROI를 가리키는 native metadata를 요구하며, 없거나 일치하지 않는 metadata는 거부한다. | all |
-| `diagnostics.capture-document-identity.stop-requires-issued-slots-field` | source-freeze reply에는 `issuedSlots`가 있어야 하며 0은 유효하고 필드 누락은 오류다. | all |
-| `diagnostics.capture-document-identity.start-selects-one-source-per-capture` | capture 하나는 document identity source를 최대 하나 선택하며 두 번째 source는 거부한다. | all |
-| `diagnostics.capture-document-identity.start-requires-explicit-capture-endpoint` | document identity source는 명시적인 capture endpoint가 필요하며 drag operation이 소유한 identity capture에는 연결할 수 없다. | all |
-| `diagnostics.capture-start.waits-for-prior-identity-removal` | 새 capture 시작은 이전에 선택한 document identity source 제거가 완료될 때까지 기다린다. | all |
 | `diagnostics.capture-wait.ends-with-the-connection` | 실행 중인 `diagnostics.capture.start`, `diagnostics.capture.stop`, `diagnostics.drag` 의 endpoint connection 이 끝나면 recording 의 still 대기가 끝난다. 요청이 돌아온 뒤에는 그 connection 의 끝이 어떤 대기도 끝내지 않는다. | all |
-| `diagnostics.capture-document-identity.callback-completion-is-single-use` | 첫 callback이 document identity 결과를 제공하며 추가 호출은 오류를 보고하고 완료된 결과를 대체하지 않는다. | wailsv3, mygo only: Go callback closure는 반복 호출이 가능하며 Rust FnOnce callback은 이를 정적으로 막는다 |
-| `diagnostics.capture-document-identity.schedule-error-preserves-callback-error` | 동기 callback이 오류를 보고한 뒤 scheduling도 실패하면 반환 오류는 두 오류를 보존한다. 성공 callback이 scheduling 실패를 대체하지 않는다. | all |
-| `diagnostics.capture-document-identity.callback-ends-the-wait` | document identity callback 대기는 그 callback으로 끝나며, library는 모든 경로에서 그 callback을 한 번 주고, 호스트의 어떤 제한도 그 대기를 끝내지 않는다. | all |
-| `diagnostics.capture-document-identity.reports-late-callback-errors` | 늦은 document identity callback 오류는 error level로 기록하고 현재 source 결과를 대체하지 않는다. | all |
-| `diagnostics.capture-document-identity.cleanup-source-survives-recording-stop` | recording 중지는 선택된 identity source의 native 제거가 완료될 때까지 소유권을 유지하며, recording finalization 오류 뒤에도 마찬가지다. | all |
-| `diagnostics.capture-start.rejects-unconfirmed-identity-cleanup` | 이전 source 제거가 확인되지 않은 동안 새 identity capture를 거부한다. | all |
-| `diagnostics.capture.poisoned-lifecycle-lock-is-reported` | poisoned document-identity lifecycle lock은 보호 작업 실행 전에 명시적인 interruption 오류를 반환한다. | tauriv2 only: Rust `Mutex` poisoning은 Rust 전용 synchronization 상태다 |
-| `diagnostics.capture.poisoned-pending-lock-is-reported` | poisoned pending-start lock은 명시적인 interruption 오류를 반환하고 저장된 receiver를 유지한다. | tauriv2 only: Rust `Mutex` poisoning은 Rust 전용 synchronization 상태다 |
-| `diagnostics.capture.pending-start-probe-does-not-reenter-lock` | pending-start probe는 receive helper가 다시 lock을 얻기 전에 기존 lock을 놓아 ready receiver가 deadlock을 일으키지 않는다. | tauriv2 only: pending receiver helper와 `Mutex`는 Rust 전용이다 |
-| `diagnostics.drag.forwards-frame-identity` | `diagnostics.drag`는 선택적 strict boolean `frameIdentity`를 받고 기본값은 false다. Identity를 켜면 녹화 계획을 요구하고(`frameIdentity requires a capture plan`) recording 시작에 전달한다. | all |
 | `diagnostics.drag.takes-a-capture-plan` | `diagnostics.drag`는 `capture`가 계획 `{gap, seconds \| frames}`일 때만 녹화하고 그 계획을 `diagnostics.capture.start`의 문구로 검사한다. `capture`가 없거나 `null` 또는 `false`이면 녹화하지 않고, drag 최상위의 계획은 읽지 않으며, 다른 `capture` 값은 `capture must be false or a plan {gap, seconds \| frames}`로 거부한다. | all |
 | `diagnostics.drag.native-delivers-pointer-gesture` | `diagnostics.drag`는 선택적 strict boolean `native`를 받고, 다른 값은 `native must be a boolean`으로 거절하며 workbench에 전달하지 않는다. `native: true`이면 경계 점을 읽기 전과 매 누름 전에 창이 현재 layout을 표시할 때까지 기다리고, 왕복마다 경계 점에서 주 버튼을 누른 뒤 나가는 구간과 돌아오는 구간을 각각 호스트 시계로 `ms`만큼 지날 때까지 이어 가며, 각 단계는 그 점에 offset과 도달한 구간 비율(돌아오는 구간은 남은 비율)을 곱한 값을 더한 위치의 끌기이고, 단계마다 이전 단계 뒤 창의 `host.window.refreshRate`에서 그 순간 읽은 한 표시 주기(`1 / refreshRate`)만큼 기다린 뒤 보내며, 경계에서 떼고, 어느 입력도 활성화하지 않는다. `{from, steps, took, asked, pressWaits}`로 응답하며 `steps`는 보낸 단계 수, `asked`는 모든 구간이 요청한 밀리초, `took`은 누름 전 대기를 뺀 값이다. 창이 어느 화면에도 없으면 `native drag step <n>: the window is on no display with a refresh rate`로 실패하고 마지막 점에서 버튼을 뗀다. 대기가 실패하면 그 누름 전에 `native drag wait before the press of round trip <n>: <error>`로 실패하고, 실패한 단계는 그 위치에서 버튼을 떼고 `native drag step <n>: <error>`로 실패한다. | all |
 | `diagnostics.drag.native-reads-boundary-after-presentation` | native drag는 창이 현재 layout을 표시할 때까지 기다린 뒤 page에 경계의 점을 묻고, 표시하지 못한 창은 그 실패로 drag를 끝내며 묻지 않는다. | all |
@@ -748,7 +722,7 @@ fn invalid_json_closes_connection() {
 | `images.present.replaced-frame-is-logged-as-invalidated` | 더는 현재가 아닌 프레임(`stale`, `notAttached`, `staleRaster native=... frame=...`)은 `stale`로 답하고 표시 실패로 기록하지 않으며 `image frame invalidated before native presentation: ... reason=<detail>`을 남긴다. | all |
 | `images.present.frame-of-undeclared-sidecar-is-invalidated` | 어떤 plugin도 선언하지 않는 사이드카의 그림은 `stale`로 답하고 native 표시, 복구, 오류 없이 기록되며, 끝난 사이드카에 대한 답은 `not sent`로 기록된다. | all |
 | `images.present.failure-line-names-the-current-frame` | 다른 표시 실패는 그 사유(알 수 없는 상세는 `presentFailed`)로 답하고 오류 줄 `error host image present: ... reason=<detail> current <frame state>`를 남긴다. | all |
-| `recording.finish.keeps-folder-and-reports-frames` | 녹화를 마치면 폴더를 유지하고 프레임 수, 시작 때 받은 `frameIdentity` 옵션, 녹화한 창의 window server 번호를 보고하며, 두 번째 마침은 실패한다. | all |
+| `recording.finish.keeps-folder-and-reports-frames` | 녹화를 마치면 폴더를 유지하고 프레임 수와 녹화한 창의 window server 번호를 보고하며, 두 번째 마침은 실패한다. | all |
 | `recording.finish.reports-the-recorded-window` | 창 녹화를 마치면 그 창의 window server 번호를 보고하고, display 녹화를 마치면 보고하지 않는다. | all |
 | `recording.finish.retired-stop-failure-releases-owner` | capture stop이 실패하면 native 녹화는 끝난 상태다. finish는 stop 오류를 보고하고 start가 반환한 폴더를 그대로 두며, 다른 녹화를 시작할 수 있도록 녹화 소유권을 해제한다. | all |
 | `recording.finish.layout-trace-failure-preserves-folder` | capture stop 뒤 layout trace finalization이 실패하면 finish는 해당 오류를 반환하고 start가 이미 반환한 frame 폴더를 보존한다. | all |

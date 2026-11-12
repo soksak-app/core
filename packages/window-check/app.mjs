@@ -1297,14 +1297,8 @@ if (TRACE === undefined) throw new Error(`SOKSAK_PERFORMANCE_TRACE must be unset
  * Fails when the drag does not run at the requested rate. A pass of a slow drag is not a pass, and a second drag that
  * runs at the rate would make the check pass by chance, so the first drag that is not paced fails the check.
  */
-export async function drag(s, plan, { capture = false, frameIdentity } = {}) {
-  if (frameIdentity !== undefined && typeof frameIdentity !== "boolean") {
-    throw new TypeError("frameIdentity must be a boolean");
-  }
-  if (frameIdentity === true && capture !== true) {
-    throw new TypeError("frameIdentity requires capture to be true");
-  }
-  const result = await dragOnce(s, plan, capture, frameIdentity === true);
+export async function drag(s, plan, { capture = false } = {}) {
+  const result = await dragOnce(s, plan, capture);
   if (!paced(result)) {
     // The waits before the presses are not in took; they and the load of the machine tell a late host from a busy one.
     throw new Error(
@@ -1545,7 +1539,7 @@ export async function holdCovered(s) {
   };
 }
 
-async function dragOnce(s, plan, capture, frameIdentity) {
+async function dragOnce(s, plan, capture) {
   // The host emulates the drag inside the application, so the activation of the application is no condition of the drag; a
   // result that differs in an active window is a defect of the application, not a reason to refuse the measurement.
   // An inactive application shows a new window behind the frontmost window, where its image regions do not draw. The drag
@@ -1553,18 +1547,14 @@ async function dragOnce(s, plan, capture, frameIdentity) {
   // reporting its occlusion, and a covered drawing that the check holds stays on after the drag (holdCovered).
   const release = await holdCovered(s);
   try {
-    return await dragDrawing(s, plan, capture, frameIdentity);
+    return await dragDrawing(s, plan, capture);
   } finally {
     await release();
   }
 }
 
-async function dragDrawing(s, plan, capture, frameIdentity) {
-  const result = await s.request("diagnostics.drag", {
-    ...plan,
-    capture,
-    ...(frameIdentity ? { frameIdentity: true } : {}),
-  });
+async function dragDrawing(s, plan, capture) {
+  const result = await s.request("diagnostics.drag", { ...plan, capture });
   if (!capture) return result;
   s.trackRecording(result.frames);
   // Records until the time when the last screen of the drag is displayed.
@@ -1585,6 +1575,5 @@ async function dragDrawing(s, plan, capture, frameIdentity) {
     count: stopped.count,
     longestGap: stopped.longestGap,
     frameDir: stopped.frames,
-    ...(frameIdentity ? { frameIdentity: stopped.frameIdentity } : {}),
   };
 }

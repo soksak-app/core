@@ -25,7 +25,7 @@ function session({ stopFails = false } = {}) {
 // drawing until it stops, so the regions of a covered window draw as they do on the screen. It reads no occlusion state.
 test("a recording holds the covered drawing of its window from before the capture starts", async () => {
   const { s, requests } = session();
-  const recording = await s.record({ frameIdentity: true });
+  const recording = await s.record();
   assert.equal(recording.frames, "/unused/frames");
   assert.deepEqual(requests, ["diagnostics.window.draw-covered true", "diagnostics.capture.start"]);
 });
