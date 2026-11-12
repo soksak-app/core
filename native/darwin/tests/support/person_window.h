@@ -32,5 +32,7 @@ int sp_person_active(void);
 /// The process identifier of the person, or 0 before it starts.
 pid_t sp_person_pid(void);
 
-/// Ends the person and waits for its exit.
-void sp_person_end(void);
+/// Ends the person by the end of its standard input and waits for its exit. Returns YES when it exited with status 0 and the
+/// window server lists no window of it, so no window of the person stays on the screen of the person who uses the machine; NO
+/// with the reason written to stderr otherwise. A check that ends without this call closes the pipe too, which ends the person.
+BOOL sp_person_end(void);

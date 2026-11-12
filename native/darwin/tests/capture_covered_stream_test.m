@@ -585,7 +585,7 @@ int main(int argc, char **argv) {
         [window release];
 
         check(!NSApp.isActive && sp_person_active() == 0, @"neither the check nor the person became active");
-        sp_person_end();
+        check(sp_person_end(), @"the person ends at the end of its input and leaves no window on the screen");
         if (failures) keepTemporaryFolder(root);
         fprintf(stderr, "%s: covered window recording\n", failures ? "FAIL" : "PASS");
     }

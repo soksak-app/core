@@ -416,7 +416,7 @@ int main(int argc, char **argv) {
     check(NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier != getpid()
         && !NSRunningApplication.currentApplication.isActive, @"the capture does not bring the application to the front");
     check(sp_person_close(coverNumber) && sp_person_active() == 0, @"the cover closes and the person never became active");
-    sp_person_end();
+    check(sp_person_end(), @"the person ends at the end of its input and leaves no window on the screen");
     [window removeChildWindow:child];
     [child close];
     [window close];
