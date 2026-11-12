@@ -30,7 +30,7 @@ use crate::platform::{DocumentViewportMarker, Handle};
 use crate::recording::{
     Capture, NewWindowCapture, Plan, Recording, StillCounts, Target, layout_trace,
 };
-use crate::surfaces::{LayoutViewport, held_layout_viewports};
+use crate::surfaces::held_layout_viewports;
 use crate::workspace::Workspace;
 
 /// A recording in progress.

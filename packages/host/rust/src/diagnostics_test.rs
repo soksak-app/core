@@ -1,5 +1,5 @@
 use super::*;
-use crate::surfaces::note_layout_viewport;
+use crate::surfaces::{LayoutViewport, note_layout_viewport};
 use std::cell::{Cell, RefCell};
 use std::sync::mpsc;
 use std::time::Duration;
