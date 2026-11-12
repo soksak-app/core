@@ -3,8 +3,10 @@
 // The windows of the check stand at the normal level and start at the back of it, behind the windows that a person has on the
 // screen, so the check judges only the order of its two windows relative to each other, which those windows do not change.
 #import <Cocoa/Cocoa.h>
+#import <QuartzCore/QuartzCore.h>
 #import <WebKit/WebKit.h>
 #import "support/event_wait.h"
+#import "support/person_window.h"
 #import "webview_geometry.h"
 #import "window_facts.h"
 #import "window_order.h"
@@ -105,7 +107,71 @@ static void checkWindowsInFrontOfAList(void) {
     check(sp_window_in_front_in(list, 9) == nil, @"a window that is not in the list has no windows in front of it");
 }
 
-int main(void) { @autoreleasepool {
+// The window numbers of the other processes on the screen from front to back, of the normal level: the windows of a person.
+static NSArray<NSNumber *> *otherWindows(void) {
+    NSMutableArray<NSNumber *> *numbers = [NSMutableArray array];
+    NSArray *rows = [(NSArray *)CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements,
+        kCGNullWindowID) autorelease];
+    for (NSDictionary *row in rows) {
+        if ([row[(id)kCGWindowOwnerPID] intValue] == getpid() || [row[(id)kCGWindowLayer] integerValue] != 0) continue;
+        [numbers addObject:row[(id)kCGWindowNumber]];
+    }
+    return numbers;
+}
+
+// The place of number among the windows on the screen from front to back, or -1.
+static NSInteger placeOf(long number) {
+    NSArray *rows = [(NSArray *)CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly, kCGNullWindowID) autorelease];
+    NSInteger index = 0;
+    for (NSDictionary *row in rows) {
+        if ([row[(id)kCGWindowNumber] longValue] == number) return index;
+        index++;
+    }
+    return -1;
+}
+
+// The lower of a window of the check, as a window check does to the windows of the other applications of its session, moves
+// only that window: the windows of a person (a second process) keep their order among themselves and among every other window
+// of other processes, and neither the check nor the person becomes active.
+static void checkLowerKeepsThePerson(const char *path) {
+    if (!sp_person_start(path)) { check(NO, @"the application of the person starts"); return; }
+    NSWindow *own = makeWindow(NSMakeRect(240, 220, 300, 200));
+    [own orderBack:nil];
+    [CATransaction flush];
+    long back = sp_person_window(NSMakeRect(200, 200, 400, 300), 0x3060c0);
+    long front = sp_person_window(NSMakeRect(220, 210, 400, 300), 0xc06030);
+    check(back >= 0 && front >= 0 && sp_person_order_above(front, back), @"the person shows two windows, one above the other");
+    // The person shows its windows behind every window, so the window of the check stands above them without a raise, as a check
+    // window of another application of the session can stand above the window that a check measures.
+    eventWait(@"the window of the check stands above the windows of the person", ^BOOL {
+        NSInteger place = placeOf(own.windowNumber);
+        return place >= 0 && place < placeOf(front) && placeOf(front) < placeOf(back);
+    });
+    NSArray<NSNumber *> *before = otherWindows();
+    BOOL active = NSApp.isActive;
+    pid_t frontmost = NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier;
+    int personActive = sp_person_active();
+    check(sp_window_lower(own), @"the lower of the window of the check is accepted");
+    eventWait(@"the lowered window of the check stands behind the windows of the person", ^BOOL {
+        return placeOf(own.windowNumber) > placeOf(back) && placeOf(back) > placeOf(front);
+    });
+    NSArray<NSNumber *> *after = otherWindows();
+    check([before isEqual:after], [NSString stringWithFormat:
+        @"the lower keeps the order of the windows of the person and of every other window of other processes (%lu windows before, %lu after)",
+        (unsigned long)before.count, (unsigned long)after.count]);
+    check(NSApp.isActive == active && NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier == frontmost
+            && personActive == 0 && sp_person_active() == 0,
+        @"the lower activates neither the check nor the person and keeps the front application");
+    sp_person_close(front);
+    sp_person_close(back);
+    sp_person_end();
+    [own close];
+}
+
+int main(int argc, char **argv) {
+    int person = sp_person_child(argc, argv);
+    if (person >= 0) return person;
+    @autoreleasepool {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     [NSApp finishLaunching];
@@ -157,6 +223,8 @@ int main(void) { @autoreleasepool {
     [above close];
     [below close];
     [hidden close];
+    checkLowerKeepsThePerson(argv[0]);
     if (failures) fprintf(stderr, "%d failure(s)\n", failures);
     return failures ? 1 : 0;
-} }
+    }
+}
