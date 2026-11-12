@@ -293,6 +293,25 @@ int main(void) { @autoreleasepool {
     [CATransaction flush];
     waitForPresentation(web);
 
+    // The window has no title bar buttons after its own appearance and its presentations: standardWindowButton: is nil, and a
+    // capture holds a title bar without them, while the capture of the covered window has them. In the window run they were
+    // there only after the cover was ordered behind the window, a still capture of the window was taken and the next
+    // presentation followed; after the order and two presentations, and right after the still, there were none. So the cover is
+    // made first and ordered behind the window, where it covers nothing of it, and this still is that capture.
+    NSWindow *cover = [[NSWindow alloc] initWithContentRect:NSMakeRect(100, 100, kWidth + 160, kHeight + 160)
+        styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
+    cover.releasedWhenClosed = NO;
+    cover.animationBehavior = NSWindowAnimationBehaviorNone;
+    cover.backgroundColor = [NSColor colorWithSRGBRed:1 green:0 blue:1 alpha:1];
+    [cover orderWindow:NSWindowBelow relativeTo:window.windowNumber];
+    [CATransaction flush];
+    Image rendered = capture(window, directory, @"rendered");
+    free(rendered.bytes);
+    waitForPresentation(web);
+    check([window standardWindowButton:NSWindowCloseButton] != nil && [window standardWindowButton:NSWindowMiniaturizeButton] != nil
+        && [window standardWindowButton:NSWindowZoomButton] != nil,
+        @"the window has its three title bar buttons before the first capture");
+
     // The window controls of a window that has just appeared can still change: the state before the cover is the first
     // capture that equals the capture before it.
     Image first = capture(window, directory, @"first");
@@ -308,11 +327,6 @@ int main(void) { @autoreleasepool {
     }
     if (back.bytes != NULL) expectPixel(back, scale, 180, 280, 0x28c850, @"the child window");
 
-    NSWindow *cover = [[NSWindow alloc] initWithContentRect:NSMakeRect(100, 100, kWidth + 160, kHeight + 160)
-        styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
-    cover.releasedWhenClosed = NO;
-    cover.animationBehavior = NSWindowAnimationBehaviorNone;
-    cover.backgroundColor = [NSColor colorWithSRGBRed:1 green:0 blue:1 alpha:1];
     [cover orderWindow:NSWindowAbove relativeTo:window.windowNumber];
     // AppKit keeps the order in the open Core Animation transaction of the thread until the run loop commits it, so the window
     // server lists the cover only after this commit.
