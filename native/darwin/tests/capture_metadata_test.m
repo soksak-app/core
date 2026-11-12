@@ -2,8 +2,9 @@
 // writer and finalizeCaptureArtifacts) with a hand-built recording and target, so it needs no window:
 // - the source artifacts of the image match: the manifest, the source files only when their reader needs them, a failed
 //   partial-file cleanup, the 512-identity bound, sources beyond 64 MiB, a multi-frame burst and the pending byte bound;
-// - the row of each still in stills.jsonl: the request and completion times, the stage ticks as decimal strings, absent stages
-//   as null, the mach timebase, the image match, the frame marker and the asynchronous writer bounds;
+// - the row of each still in stills.jsonl: the request and completion times with the read of the pixels between them, the
+//   stage ticks as decimal strings, absent stages as null, the mach timebase, the image match, the frame marker and the
+//   asynchronous writer bounds;
 // - the identity decode of an identity session, and its asynchronous failure at finalization;
 // - the display-link trace in display-link.json: unavailable without observations, ordered observations with window state,
 //   hidden and off-display observations, rejected clocks, a changed timebase and the 4096-record bound;
@@ -130,6 +131,29 @@ static void stillImage(SPCaptureRecording *recording, NSUInteger index, NSData *
 static _Atomic uint64_t fixedClockReads;
 static uint64_t fixedClock(void) { return 100 * (atomic_fetch_add(&fixedClockReads, 1) + 1); }
 static kern_return_t failingTimebase(mach_timebase_info_t info) { (void)info; return KERN_FAILURE; }
+
+// A window server image whose provider reads the capture clock at the first read of its pixels: the image that the window server
+// returns reads the window surfaces only when its pixels are read.
+static _Atomic uint64_t lazyReadTick;
+static size_t lazyBytes(void *info, void *buffer, off_t position, size_t count) {
+    uint64_t unread = 0, now = captureTicks();
+    atomic_compare_exchange_strong(&lazyReadTick, &unread, now);
+    memcpy(buffer, (const uint8_t *)((NSData *)info).bytes + position, count);
+    return count;
+}
+static void lazyRelease(void *info) { [(NSData *)info release]; }
+static CGImageRef lazyWindowImage(CGRect rect, CFArrayRef windows, CGWindowImageOption options) {
+    (void)rect; (void)windows; (void)options;
+    NSData *pixels = [opaquePixels(8, 4, 90) retain];
+    CGDataProviderDirectCallbacks callbacks = { 0, NULL, NULL, lazyBytes, lazyRelease };
+    CGDataProviderRef provider = CGDataProviderCreateDirect(pixels, (off_t)pixels.length, &callbacks);
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+    CGImageRef image = CGImageCreate(8, 4, 8, 32, 32, colorSpace,
+        (CGBitmapInfo)kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little, provider, NULL, false, kCGRenderingIntentDefault);
+    CGColorSpaceRelease(colorSpace);
+    CGDataProviderRelease(provider);
+    return image;
+}
 
 static NSArray<NSString *> *stageTicks(NSDictionary *row, NSArray<NSString *> *names) {
     NSMutableArray *values = [NSMutableArray array];
@@ -497,6 +521,35 @@ int main(void) { @autoreleasepool {
     check(finalizeCaptureArtifacts(fixedRecording), [NSString stringWithFormat:@"the fixed-clock recording finalizes (%s)",
         sp_capture_error()]);
     [fixedRecording release];
+    clearCaptureError();
+    // A still reads the pixels of its image between its request and its completion: with the clock that gives 100, 200, ...,
+    // the request is read at 200, the pixels at 300 and the completion at 400, and the frame holds the pixels.
+    NSString *lazyDirectory = subdirectory(directory, @"still-pixel-read");
+    check(beginCaptureSourceArtifacts(lazyDirectory, false), @"the pixel-read fixture starts its source artifacts");
+    SPCaptureRecording *lazyRecording = makeRecording(lazyDirectory, 1);
+    lazyRecording.function = lazyWindowImage;
+    lazyRecording.nextIndex = 1;
+    SPCaptureTarget *lazyTarget = [[[SPCaptureTarget alloc] init] autorelease];
+    lazyTarget.windows = @[@(lazyRecording.windowNumber)];
+    lazyTarget.request = CGRectNull;
+    lazyTarget.screen = CGRectMake(0, 0, 4, 2);
+    atomic_store(&lazyReadTick, 0);
+    atomic_store(&fixedClockReads, 0);
+    captureRawClock = fixedClock;
+    takeStill(lazyRecording, 0, lazyTarget);
+    dispatch_sync(captureWriter, ^{});
+    captureRawClock = mach_absolute_time;
+    NSDictionary *lazyRow = nil;
+    @synchronized (lazyRecording) { lazyRow = [[lazyRecording.rows[0] copy] autorelease]; }
+    check([lazyRow[@"requested"] isEqual:@"200"] && atomic_load(&lazyReadTick) == 300 && [lazyRow[@"completed"] isEqual:@"400"]
+        && [lazyRow[@"outcome"] isEqual:@"written"],
+        [NSString stringWithFormat:@"a still reads the pixels of its image between its request and its completion (requested %@, "
+            "pixels read %llu, completed %@, %@)", lazyRow[@"requested"], (unsigned long long)atomic_load(&lazyReadTick),
+            lazyRow[@"completed"], lazyRow[@"outcome"]]);
+    clearCaptureError();
+    check(finalizeCaptureArtifacts(lazyRecording), [NSString stringWithFormat:@"the pixel-read recording finalizes (%s)",
+        sp_capture_error()]);
+    [lazyRecording release];
     clearCaptureError();
 
     NSDictionary *unobserved = jsonFile([stillDirectory stringByAppendingPathComponent:kCaptureDisplayLinkFile]);

@@ -1,7 +1,8 @@
 // The capture asks the window server for the image of its windows through CGWindowListCreateImageFromArray, which the macOS 15
 // SDK marks obsolete, so the capture looks it up at run time (docs/operations/private-native-apis.md). On a macOS without it, the
 // open of a recording and a still fail with an error that names it, and they take nothing. With it, a window that is on screen
-// opens, and a window that the window server does not list on screen fails with its number.
+// opens, and a window that AppKit does not show fails with its number, also while the window server still lists it on screen
+// after its close; a child window ordered out is not taken.
 #import "../src/capture.m"
 #include <dlfcn.h>
 #import "support/temporary_folder.h"
@@ -70,6 +71,23 @@ int main(void) { @autoreleasepool {
     check(!sp_capture_open(number, false, &error) && error != NULL && [[NSString stringWithUTF8String:error] isEqual:message],
         [NSString stringWithFormat:@"a closed window does not open (\"%s\")", error ?: ""]);
     free(error); error = NULL;
+    // A child window that the application ordered out is not taken with its window, also while the window server still lists it
+    // on screen.
+    NSWindow *child = [[NSWindow alloc] initWithContentRect:NSMakeRect(150, 150, 40, 30)
+        styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
+    child.releasedWhenClosed = NO;
+    [window addChildWindow:child ordered:NSWindowAbove];
+    [CATransaction flush];
+    NSArray *withChild = resolveTarget(window.windowNumber, NO).windows;
+    [child orderOut:nil];
+    [CATransaction flush];
+    NSArray *withoutChild = resolveTarget(window.windowNumber, NO).windows;
+    check([withChild isEqual:(@[@(child.windowNumber), @(window.windowNumber)])]
+        && [withoutChild isEqual:(@[@(window.windowNumber)])],
+        [NSString stringWithFormat:@"a still takes a shown child window and not one ordered out (%@, then %@)", withChild, withoutChild]);
+    if (child.parentWindow) [window removeChildWindow:child];
+    [child close];
+    [child release];
     [closed release];
     [window close];
     [window release];

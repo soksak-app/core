@@ -249,6 +249,16 @@ int main(void) { @autoreleasepool {
     window.releasedWhenClosed = NO;
     window.animationBehavior = NSWindowAnimationBehaviorNone;
     window.backgroundColor = [NSColor colorWithSRGBRed:0.2 green:0.2 blue:0.25 alpha:1];
+    // The layout passes of the window, which a capture must not cause. AppKit posts NSWindowDidLayoutNotification after each
+    // layout pass of a window; the SDK declares no constant for it, so the check names it.
+    __block NSUInteger layouts = 0;
+    id layoutObserver = [NSNotificationCenter.defaultCenter addObserverForName:@"NSWindowDidLayoutNotification" object:window queue:nil
+        usingBlock:^(NSNotification *note) { (void)note; layouts++; }];
+    NSString *(^windowState)(void) = ^NSString * {
+        return [NSString stringWithFormat:@"buttons close %d miniaturize %d zoom %d, layouts %lu",
+            [window standardWindowButton:NSWindowCloseButton] != nil, [window standardWindowButton:NSWindowMiniaturizeButton] != nil,
+            [window standardWindowButton:NSWindowZoomButton] != nil, (unsigned long)layouts];
+    };
     NSView *content = window.contentView;
     content.wantsLayer = YES;
     WKWebView *web = [[WKWebView alloc] initWithFrame:content.bounds configuration:[[WKWebViewConfiguration new] autorelease]];
@@ -305,24 +315,14 @@ int main(void) { @autoreleasepool {
     [CATransaction flush];
     waitForPresentation(web);
 
-    // The window has no title bar buttons after its own appearance and its presentations: standardWindowButton: is nil, and a
-    // capture holds a title bar without them, while the capture of the covered window has them. In the window run they were
-    // there only after the cover was ordered behind the window, a still capture of the window was taken and the next
-    // presentation followed; after the order and two presentations, and right after the still, there were none. So the cover is
-    // made first and ordered behind the window, where it covers nothing of it, and this still is that capture.
+    // A capture does not change the window: its title bar buttons and its layout passes are the same before the first capture
+    // and after the covered and the changed capture.
+    NSString *beforeCaptures = windowState();
     NSWindow *cover = [[NSWindow alloc] initWithContentRect:NSMakeRect(100, 100, kWidth + 160, kHeight + 160)
         styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
     cover.releasedWhenClosed = NO;
     cover.animationBehavior = NSWindowAnimationBehaviorNone;
     cover.backgroundColor = [NSColor colorWithSRGBRed:1 green:0 blue:1 alpha:1];
-    [cover orderWindow:NSWindowBelow relativeTo:window.windowNumber];
-    [CATransaction flush];
-    Image rendered = capture(window, directory, @"rendered");
-    free(rendered.bytes);
-    waitForPresentation(web);
-    check([window standardWindowButton:NSWindowCloseButton] != nil && [window standardWindowButton:NSWindowMiniaturizeButton] != nil
-        && [window standardWindowButton:NSWindowZoomButton] != nil,
-        @"the window has its three title bar buttons before the first capture");
 
     // The window controls of a window that has just appeared can still change: the state before the cover is the first
     // capture that equals the capture before it.
@@ -369,6 +369,10 @@ int main(void) { @autoreleasepool {
     check([evaluate(web, @"document.visibilityState") isEqual:@"visible"], @"the document of the covered window stays visible");
 
     Image covered = capture(window, directory, @"covered");
+    NSString *afterCovered = windowState();
+    check([afterCovered isEqual:beforeCaptures], [NSString stringWithFormat:
+        @"the capture does not change the window: the same buttons and layouts after the covered capture (before %@, after %@)",
+        beforeCaptures, afterCovered]);
     check(back.bytes != NULL && covered.bytes != NULL && back.width == covered.width && back.height == covered.height
         && memcmp(back.bytes, covered.bytes, back.width * back.height * 4) == 0,
         [NSString stringWithFormat:@"the capture of the covered window equals its capture before the cover, byte for byte (%@)",
@@ -393,6 +397,10 @@ int main(void) { @autoreleasepool {
     showSurface(surfaceView.layer, changedSurface);
     waitForPresentation(web);
     Image changed = capture(window, directory, @"changed");
+    NSString *afterChanged = windowState();
+    check([afterChanged isEqual:beforeCaptures], [NSString stringWithFormat:
+        @"the capture does not change the window: the same buttons and layouts after the changed capture (before %@, after %@)",
+        beforeCaptures, afterChanged]);
     if (changed.bytes != NULL) {
         expectPixel(changed, scale, 240, 100, 0x3278c8, @"the changed web view");
         expectPixel(changed, scale, 250, 205, 0x1ab2e5, @"the changed WebGL canvas");
@@ -441,19 +449,35 @@ int main(void) { @autoreleasepool {
     char *error = NULL;
     check(sp_capture_open(window.windowNumber, false, &error), [NSString stringWithFormat:@"the covered window opens for a recording (%s)", error ?: ""]);
     free(error); error = NULL;
-    double length = 3000, beforeStart = sp_capture_clock();
+    double length = 3000;
     bool started = sp_capture_start(recorded.fileSystemRepresentation, period, length / 1000, 0, false, 1, &error);
     check(started, [NSString stringWithFormat:@"the recording of the covered window starts (%s)", error ?: ""]);
     free(error); error = NULL;
-    // The last still is planned at or after this time, so the stop waits for the whole plan.
-    double after = beforeStart + length - period;
-    if (started) until(@"the plan of the recording reaches its last still", ^BOOL { return sp_capture_clock() >= after; });
-    int count = started ? sp_capture_stop(after, 2) : 0;
+    NSUInteger planned = (NSUInteger)ceil(length / period);
+    // The start returns once still 0 is written, and the header of its frame holds its request time, at which the plan starts.
+    // The last still is planned at that time plus (planned - 1) gaps, and a still is requested at or after its planned time, so
+    // the stop waits for the completion of the last still. The stop waits on another thread, and the main thread changes the
+    // marker until the stop returns.
+    NSData *firstFrame = readCaptureFrame([NSData dataWithContentsOfFile:[recorded stringByAppendingPathComponent:@"frame-0000.bgra"]]);
+    double firstRequest = NAN;
+    if (firstFrame != nil) memcpy(&firstRequest, (const uint8_t *)firstFrame.bytes + 12 + 6 * sizeof(double), sizeof firstRequest);
+    check(!started || isfinite(firstRequest), @"the frame of still 0 holds its request time");
+    double after = firstRequest + (planned - 1) * period;
+    __block int count = 0;
+    __block BOOL stopReturned = NO;
+    if (started && isfinite(firstRequest)) {
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+            int stoppedCount = sp_capture_stop(after, 2);
+            dispatch_async(dispatch_get_main_queue(), ^{ count = stoppedCount; stopReturned = YES; });
+        });
+        until(@"the stop returns after the completion of the last planned still", ^BOOL { return stopReturned; });
+    } else if (started) {
+        count = sp_capture_stop(0, 2);
+    }
     driver.changing = NO;
     [link invalidate];
     const char *stopped = sp_capture_error();
     check(started && stopped != NULL && strlen(stopped) == 0, [NSString stringWithFormat:@"the recording stops without error (%s)", stopped ?: ""]);
-    NSUInteger planned = (NSUInteger)ceil(length / period);
     check(count == (int)planned && sp_capture_missed() == 0 && sp_capture_late() == 0,
         [NSString stringWithFormat:@"the covered window gives every planned still: %lu planned, %d written, %d missed, %d late",
             (unsigned long)planned, count, sp_capture_missed(), sp_capture_late()]);
@@ -536,6 +560,7 @@ int main(void) { @autoreleasepool {
     [cover close];
     [window removeChildWindow:child];
     [child close];
+    [NSNotificationCenter.defaultCenter removeObserver:layoutObserver];
     [window close];
     CFRelease(surface);
     CFRelease(changedSurface);
