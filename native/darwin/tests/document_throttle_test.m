@@ -1,8 +1,11 @@
 // Judges whether the document of a region is hidden while the region is placed as not visible or its window is covered by
 // another window, by the events of the page and not by rates over a fixed time (docs/spec/native-surfaces.md, document
 // regions). The page counts the turns of a setTimeout(0) loop and the animation frames it runs, and records each
-// visibilitychange with its state and both counts. The check waits for each change, holds each hidden state for display
-// refreshes of the screen, and judges that no animation frame ran between a hidden state and the next visible state. The
+// visibilitychange with its state and both counts, and counts the animation frames that run while the document is hidden. The
+// check waits for each change, holds each hidden state for display refreshes of the screen, and judges that no animation frame
+// ran while the document was hidden, from the last mark before the region hid to its visible state again. WebKit sets the
+// visibility state and queues visibilitychange as a task (Document::visibilityStateChanged), so a frame between the two
+// events can run with the state already visible; such a frame is reported among the frames between the events. The
 // timer throttle has no event of WebKit, so its turns are reported and not judged. Every wait ends by its event: the ready
 // state of the listener, the load state of the document, the completion handler of a page script, a display refresh and
 // NSWindowDidChangeOcclusionStateNotification. The check does not activate the application and does not focus any window:
@@ -50,14 +53,16 @@ static void until(BOOL (^done)(void)) {
 }
 
 // The page runs a setTimeout(0) loop and an animation frame loop and records each visibilitychange with its state and the
-// turns of both loops; each answer also names the number of changes so far. throttle.change(n) answers the change with
+// turns of both loops, and the frames that ran while the document was hidden; each answer also names the number of changes so far. throttle.change(n) answers the change with
 // index n once it happened; throttle.frames(n) answers after n more animation frames.
 static NSString *const kPage = @"<!doctype html><title>Throttle</title><body>throttle"
     "<script>window.throttle=(()=>{"
-    "const counts={timer:0,frame:0};const changes=[];const waiting=[];"
-    "const mark=()=>({state:document.visibilityState,timer:counts.timer,frame:counts.frame,changes:changes.length});"
+    "const counts={timer:0,frame:0,hiddenFrame:0};const changes=[];const waiting=[];"
+    "const mark=()=>({state:document.visibilityState,timer:counts.timer,frame:counts.frame,hiddenFrame:counts.hiddenFrame,"
+    "changes:changes.length});"
     "(function timerLoop(){counts.timer++;setTimeout(timerLoop,0);})();"
-    "(function frameLoop(){counts.frame++;requestAnimationFrame(frameLoop);})();"
+    "(function frameLoop(){counts.frame++;if(document.visibilityState==='hidden')counts.hiddenFrame++;"
+    "requestAnimationFrame(frameLoop);})();"
     "document.addEventListener('visibilitychange',()=>{changes.push(mark());"
     "for(const w of waiting.splice(0)){if(changes.length>w.index)w.resolve(changes[w.index]);else waiting.push(w);}});"
     "return{"
@@ -148,18 +153,22 @@ static void waitRefreshes(NSScreen *screen, int count) {
     until(^BOOL { return refreshes.left == 0; });
 }
 
-// Judges one hidden state: the change into it, the change out of it, and the animation frames between them.
-static void judgeHidden(NSString *name, NSDictionary *hidden, NSDictionary *visible) {
+// Judges one hidden state: the change into it, the change out of it, and the animation frames that ran while the document was
+// hidden, counted from before, the last mark before the region hid, to the change out of it.
+static void judgeHidden(NSString *name, NSDictionary *before, NSDictionary *hidden, NSDictionary *visible) {
     check([hidden[@"state"] isEqual:@"hidden"],
         [NSString stringWithFormat:@"a %@ region receives visibilitychange with hidden (%@)", name, hidden[@"state"]]);
     check([visible[@"state"] isEqual:@"visible"],
         [NSString stringWithFormat:@"a %@ region that shows again receives visibilitychange with visible (%@)", name,
             visible[@"state"]]);
+    long hiddenFrames = [visible[@"hiddenFrame"] longValue] - [before[@"hiddenFrame"] longValue];
     long frames = [visible[@"frame"] longValue] - [hidden[@"frame"] longValue];
     long turns = [visible[@"timer"] longValue] - [hidden[@"timer"] longValue];
-    check(hidden != nil && visible != nil && frames == 0,
-        [NSString stringWithFormat:@"a %@ region runs no animation frame between its hidden and its visible state (%ld frames)",
-            name, frames]);
+    check(before != nil && hidden != nil && visible != nil && hiddenFrames == 0,
+        [NSString stringWithFormat:@"a %@ region runs no animation frame while its document is hidden (%ld hidden frames)",
+            name, hiddenFrames]);
+    // A frame between the events that ran with the state visible is reported, not judged.
+    printf("%s: %ld animation frames between visibilitychange hidden and visible\n", name.UTF8String, frames);
     // The timer throttle has no event of WebKit, so its turns are reported and not judged.
     printf("%s: %ld timer turns during %d display refreshes while hidden\n", name.UTF8String, turns, kHiddenRefreshes);
     if (fflush(stdout) != 0) {
@@ -232,10 +241,11 @@ int main(void) { @autoreleasepool {
     waitRefreshes(window.screen, kHiddenRefreshes);
     sp_document_place(document, 10, 20, 30, 40, true);
     NSDictionary *placedVisible = change(view, next + 1);
-    judgeHidden(@"hidden", hidden, placedVisible);
+    judgeHidden(@"hidden", shown, hidden, placedVisible);
     NSDictionary *again = callPage(view, @"return await window.throttle.frames(1);");
     check([again[@"state"] isEqual:@"visible"], @"a region that shows again runs animation frames");
     next = [again[@"changes"] longValue];
+    NSDictionary *beforeCover = again;
 
     // Covered: the window ends drawing covered, another opaque window that this check creates covers it, and after the
     // refreshes the window draws covered again under the cover.
@@ -250,7 +260,7 @@ int main(void) { @autoreleasepool {
     waitRefreshes(window.screen, kHiddenRefreshes);
     check(sp_document_draw_covered(window, true), @"the covered window draws its document regions again");
     NSDictionary *drawnCovered = change(view, next + 1);
-    judgeHidden(@"covered", covered, drawnCovered);
+    judgeHidden(@"covered", beforeCover, covered, drawnCovered);
     again = callPage(view, @"return await window.throttle.frames(1);");
     check([again[@"state"] isEqual:@"visible"], @"a covered region that draws covered again runs animation frames");
     check(!NSApp.isActive, @"the application stays inactive");

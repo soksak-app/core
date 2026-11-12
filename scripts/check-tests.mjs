@@ -5459,13 +5459,13 @@ const FEATURE_LINKS = [
   },
   {
     id: "F726",
-    implementation: [{ file: "native/darwin/tests/document_throttle_test.m", symbol: "static void judgeHidden(NSString *name, NSDictionary *hidden, NSDictionary *visible) {" }],
+    implementation: [{ file: "native/darwin/tests/document_throttle_test.m", symbol: "static void judgeHidden(NSString *name, NSDictionary *before, NSDictionary *hidden, NSDictionary *visible) {" }],
     tests: [
       { file: "native/darwin/tests/document_throttle_test.m", id: "region receives visibilitychange with hidden" },
-      { file: "native/darwin/tests/document_throttle_test.m", id: "region runs no animation frame between its hidden and its visible state" },
+      { file: "native/darwin/tests/document_throttle_test.m", id: "region runs no animation frame while its document is hidden" },
       { file: "native/darwin/tests/document_throttle_test.m", id: "the shown document runs animation frames" },
     ],
-    expected: "A region placed as not visible and a region of a covered window receive visibilitychange with hidden and run no animation frame until the visibilitychange with visible, which the check judges by the changes that the page reports and not by rates over a fixed time; every wait of the check ends by its event.",
+    expected: "A region placed as not visible and a region of a covered window receive visibilitychange with hidden and run no animation frame while the document is hidden, until it is visible again, which the check judges by the state that each animation frame of the page reads and by the changes that the page reports, not by rates over a fixed time; every wait of the check ends by its event.",
     levels: ["native"],
   },
   {
