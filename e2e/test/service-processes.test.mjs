@@ -15,13 +15,13 @@ test("process measurement rejects malformed rows instead of dropping them", () =
 
 test("the processes that run from a folder are those whose executable lies inside it, without zombies", () => {
   const rows = processRows([
-    " 7 1 S /config/sidecars/probe/0.0.41/bin/probe --service-dir /config/services/probe",
-    " 8 7 S /config/sidecars/probe/0.0.41/bin/probe --session s1",
-    " 9 7 Z /config/sidecars/probe/0.0.41/bin/probe",
-    " 10 1 S /config/sidecars/probe/0.0.40/bin/probe --service-dir /config/services/probe",
-    " 11 1 S /config/sidecars/probe/0.0.410/bin/probe",
-    " 12 1 S /bin/sh -c /config/sidecars/probe/0.0.41/bin/probe",
+    " 7 1 S /copy/probe/0.0.41/bin/probe --service-dir /config/services/probe",
+    " 8 7 S /copy/probe/0.0.41/bin/probe --session s1",
+    " 9 7 Z /copy/probe/0.0.41/bin/probe",
+    " 10 1 S /copy/probe/0.0.40/bin/probe --service-dir /config/services/probe",
+    " 11 1 S /copy/probe/0.0.410/bin/probe",
+    " 12 1 S /bin/sh -c /copy/probe/0.0.41/bin/probe",
   ].join("\n"));
-  assert.deepEqual(rowsRunningFrom(rows, ["/config/sidecars/probe/0.0.41"]).map((row) => row.pid), [7, 8]);
-  assert.deepEqual(rowsRunningFrom(rows, ["/elsewhere", "/config/sidecars/probe/0.0.40"]).map((row) => row.pid), [10]);
+  assert.deepEqual(rowsRunningFrom(rows, ["/copy/probe/0.0.41"]).map((row) => row.pid), [7, 8]);
+  assert.deepEqual(rowsRunningFrom(rows, ["/elsewhere", "/copy/probe/0.0.40"]).map((row) => row.pid), [10]);
 });
