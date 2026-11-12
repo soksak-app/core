@@ -58,7 +58,9 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"the still image has the window's device-pixel size (got %ldx%ld)",
             (long)image.pixelsWide, (long)image.pixelsHigh]);
     check(!NSApp.isActive, @"the still capture does not activate the application");
-    // A recording of five stills, one every 1/60 s. The stop waits for the last planned still.
+    // A recording of five stills, one every 1/60 s. The plan starts at the request of still 0 inside the start, which answers once
+    // still 0 is written, so the clock after the start is at or after the start of the plan and the last still is planned at or
+    // before that time plus four gaps. The stop after that time requests every still of the plan.
     NSString *root = [NSString stringWithUTF8String:directory];
     NSString *(^folder)(NSString *) = ^NSString *(NSString *name) {
         NSString *path = [root stringByAppendingPathComponent:name];
@@ -68,7 +70,7 @@ int main(void) { @autoreleasepool {
     NSString *plain = folder(@"plain");
     check(sp_capture_open(window.windowNumber, false, &operationError), @"a visible inactive window opens for recording");
     free(operationError); operationError = NULL;
-    double gap = 1000.0 / 60, beforeStart = sp_capture_clock();
+    double gap = 1000.0 / 60;
     int planned = 5;
     bool recordingStarted = sp_capture_start(plain.fileSystemRepresentation, gap, 0, planned, 1, &operationError);
     check(recordingStarted, [NSString stringWithFormat:@"recording starts on an unchanged inactive window (%@)",
@@ -78,9 +80,9 @@ int main(void) { @autoreleasepool {
         // The start answers once still 0 is written.
         check([NSFileManager.defaultManager fileExistsAtPath:[plain stringByAppendingPathComponent:@"frame-0000.bgra"]],
             @"the start answers after the first still is written");
-        double after = beforeStart + (planned - 1) * gap;
-        sp_run_until("the plan reaches its last still", ^BOOL { return sp_capture_clock() >= after; });
-        int frames = sp_capture_stop(after, 2);
+        double lastPlanned = sp_capture_clock() + (planned - 1) * gap;
+        sp_run_until("the plan reaches its last still", ^BOOL { return sp_capture_clock() >= lastPlanned; });
+        int frames = sp_capture_stop(0, 2);
         const char *stopError = sp_capture_error();
         check(stopError != NULL && strlen(stopError) == 0,
             [NSString stringWithFormat:@"recording stops without error (%s)", stopError]);
