@@ -24,6 +24,20 @@ test("every layout held for two frames must appear in the recording, and shorter
     "the final layout must appear");
 });
 
+test("a missing held layout names its hold, the step times, the boundary positions and the times of the recorded frames", () => {
+  // The step times and the frame times are on the clock of the layout trace, so a failure can be laid over the transactions.
+  const ticks = [1000, 1016.25, 1032.5, 1048.75, 1065, 1081.25];
+  const boundary = [100, 90, 80, 80, 80, 90, 100];
+  const sample = (time, offset) => ({ time, position: 200 + offset });
+  assert.throws(() => assertHeldStatesShown([sample(995, 0), sample(1090.4, 0)], ticks, boundary), (error) => {
+    assert.match(error.message, /-20 held 1016\.3\.\.1065\.0/, "the missing layout names when it was held");
+    assert.match(error.message, /steps at 1000\.0,1016\.3,1032\.5,1048\.8,1065\.0,1081\.3/, "the message names the step times");
+    assert.match(error.message, /boundary 100,90,80,80,80,90,100/, "the message names the boundary positions");
+    assert.match(error.message, /recorded 995\.0:0,1090\.4:0/, "the message names the time and offset of each frame");
+    return true;
+  });
+});
+
 test("a start position held for less than one presentation may be replaced between round trips", () => {
   // The start position between round trips can be replaced by a newer layout (docs/spec/native-surfaces.md). The far end is visible in every round trip.
   assert.equal(assertRoundTrips([100, 150, 200, 150, 200, 150, 100], 2), 100);
