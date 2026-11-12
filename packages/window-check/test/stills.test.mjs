@@ -88,3 +88,14 @@ test("a still row whose gap or timebase is invalid, or whose timebase differs fr
   assert.throws(changedRow(t, (list) => { list[0].machTimebaseNumerator = 0; }), /^Error: still row 0 of .* has the mach timebase 0\/1, not positive integers$/);
   assert.throws(changedRow(t, (list) => { list[1].machTimebaseDenominator = 3; }), /^Error: still row 1 of .* has the mach timebase 1\/3, not the 1\/1 of the first row$/);
 });
+
+// A still whose windows could not be taken failed before it completed: it has no completion time and took no window.
+test("a failed still row whose windows could not be taken has no completion time and an empty window list", (t) => {
+  const rows = changedRow(t, (list) => { list[1].completed = null; list[1].windows = []; })();
+  assert.deepEqual({ completed: rows[1].completed, windows: rows[1].windows, outcome: rows[1].outcome },
+    { completed: null, windows: [], outcome: "failed" });
+  assert.throws(changedRow(t, (list) => { list[1].completed = null; list[1].windows = null; }),
+    /^Error: still row 1 of .* failed before its windows were taken and has the window list null, not \[\]$/);
+  assert.throws(changedRow(t, (list) => { list[1].windows = []; }), /^Error: still row 1 of .* has the window list \[\], not window numbers$/);
+  assert.throws(changedRow(t, (list) => { list[0].completed = null; }), /^Error: still row 0 of .* is written without its completed time$/);
+});
