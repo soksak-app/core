@@ -865,7 +865,7 @@ int main(void) { @autoreleasepool {
     [observationFixture recordDisplayLinkTimestamp:firstTimestamp targetTimestamp:firstTimestamp + 0.016 duration:0.016
         callbackTime:firstCallbackTime mediaClockTime:firstMediaTime mediaClockAfter:firstMediaClockAfter
         timebase:observationTimebase windowNumber:41 displayID:@(7)
-        visible:YES occluded:NO applicationActive:NO];
+        visible:YES occluded:NO applicationActive:NO inFront:nil];
     uint64_t secondCallbackTime = mach_absolute_time();
     double secondMediaTime = CACurrentMediaTime();
     uint64_t secondMediaClockAfter = mach_absolute_time();
@@ -873,7 +873,9 @@ int main(void) { @autoreleasepool {
     [observationFixture recordDisplayLinkTimestamp:secondTimestamp targetTimestamp:secondTimestamp + 0.016 duration:0.016
         callbackTime:secondCallbackTime mediaClockTime:secondMediaTime mediaClockAfter:secondMediaClockAfter
         timebase:observationTimebase windowNumber:41 displayID:@(7)
-        visible:YES occluded:YES applicationActive:NO];
+        visible:YES occluded:YES applicationActive:NO
+        inFront:@[@{ @"number": @9, @"owner": @"Cover", @"pid": @300, @"layer": @0, @"x": @0, @"y": @25, @"width": @1800,
+            @"height": @1100 }]];
     sp_image_capture_match_begin(observationDirectory.fileSystemRepresentation, captureWriter);
     check(finalizeCaptureArtifacts(observationFixture), @"the finalizer writes a controlled display-link observation trace");
     NSData *observationData = [NSData dataWithContentsOfFile:
@@ -894,6 +896,10 @@ int main(void) { @autoreleasepool {
         && [firstObservation[@"machTimebaseNumerator"] unsignedIntValue] == observationTimebase.numer
         && [firstObservation[@"machTimebaseDenominator"] unsignedIntValue] == observationTimebase.denom,
         [NSString stringWithFormat:@"the finalized display-link trace preserves ordered timestamps, raw callback clock, timebase, and window state (%@)", observationTrace]);
+    check(firstObservation[@"inFront"] == nil && [secondObservation[@"inFront"] isEqual:@[@{ @"number": @9, @"owner": @"Cover",
+            @"pid": @300, @"layer": @0, @"x": @0, @"y": @25, @"width": @1800, @"height": @1100 }]],
+        [NSString stringWithFormat:@"the finalized display-link trace keeps the windows in front of a covered window on the callback "
+            "that read them and on no other (%@)", observations]);
     [observationFixture release];
 
     NSString *visibilityDirectory = [directory stringByAppendingPathComponent:@"display-link-visibility"];
@@ -906,21 +912,21 @@ int main(void) { @autoreleasepool {
     double visibilityTimestamp = visibilityMedia - 0.02;
     [visibilityFixture recordDisplayLinkTimestamp:visibilityTimestamp targetTimestamp:visibilityTimestamp + 0.016 duration:0.016
         callbackTime:visibilityBefore mediaClockTime:visibilityMedia mediaClockAfter:visibilityAfter
-        timebase:observationTimebase windowNumber:41 displayID:@7 visible:YES occluded:NO applicationActive:YES];
+        timebase:observationTimebase windowNumber:41 displayID:@7 visible:YES occluded:NO applicationActive:YES inFront:nil];
     uint64_t hiddenBefore = mach_absolute_time();
     double hiddenMedia = CACurrentMediaTime();
     uint64_t hiddenAfter = mach_absolute_time();
     double hiddenTimestamp = visibilityTimestamp + 0.001;
     [visibilityFixture recordDisplayLinkTimestamp:hiddenTimestamp targetTimestamp:hiddenTimestamp + 0.016 duration:0.016
         callbackTime:hiddenBefore mediaClockTime:hiddenMedia mediaClockAfter:hiddenAfter
-        timebase:observationTimebase windowNumber:41 displayID:@7 visible:NO occluded:YES applicationActive:YES];
+        timebase:observationTimebase windowNumber:41 displayID:@7 visible:NO occluded:YES applicationActive:YES inFront:nil];
     uint64_t offDisplayBefore = mach_absolute_time();
     double offDisplayMedia = CACurrentMediaTime();
     uint64_t offDisplayAfter = mach_absolute_time();
     double offDisplayTimestamp = hiddenTimestamp + 0.001;
     [visibilityFixture recordDisplayLinkTimestamp:offDisplayTimestamp targetTimestamp:offDisplayTimestamp + 0.016 duration:0.016
         callbackTime:offDisplayBefore mediaClockTime:offDisplayMedia mediaClockAfter:offDisplayAfter
-        timebase:observationTimebase windowNumber:41 displayID:nil visible:YES occluded:NO applicationActive:YES];
+        timebase:observationTimebase windowNumber:41 displayID:nil visible:YES occluded:NO applicationActive:YES inFront:nil];
     sp_image_capture_match_begin(visibilityDirectory.fileSystemRepresentation, captureWriter);
     check(finalizeCaptureArtifacts(visibilityFixture), @"the hidden-window display-link trace is finalized");
     NSData *visibilityData = [NSData dataWithContentsOfFile:
@@ -949,14 +955,14 @@ int main(void) { @autoreleasepool {
     [invalidFixture recordDisplayLinkTimestamp:invalidTimestamp targetTimestamp:invalidTimestamp + 0.016 duration:0.016
         callbackTime:invalidCallbackTime mediaClockTime:invalidMediaTime mediaClockAfter:invalidMediaClockAfter
         timebase:observationTimebase windowNumber:41 displayID:@7
-        visible:YES occluded:NO applicationActive:YES];
+        visible:YES occluded:NO applicationActive:YES inFront:nil];
     double regressedMediaTime = CACurrentMediaTime();
     uint64_t regressedAfter = mach_absolute_time();
     double regressedTimestamp = regressedMediaTime - 0.01;
     [invalidFixture recordDisplayLinkTimestamp:regressedTimestamp targetTimestamp:regressedTimestamp - 0.001 duration:0.016
         callbackTime:invalidCallbackTime - 1 mediaClockTime:regressedMediaTime mediaClockAfter:regressedAfter
         timebase:observationTimebase windowNumber:41 displayID:@7
-        visible:YES occluded:NO applicationActive:YES];
+        visible:YES occluded:NO applicationActive:YES inFront:nil];
     check([invalidFixture.displayLinkState isEqual:@"incomplete"]
         && invalidFixture.omittedDisplayLinkObservations == 1
         && invalidFixture.displayLinkObservations.count == 1
@@ -985,7 +991,7 @@ int main(void) { @autoreleasepool {
     [boundaryFixture recordDisplayLinkTimestamp:1e20 targetTimestamp:1e20 + 1e10 duration:0.016
         callbackTime:boundaryCallbackTime mediaClockTime:boundaryMediaTime mediaClockAfter:boundaryMediaClockAfter
         timebase:observationTimebase windowNumber:41 displayID:@7
-        visible:YES occluded:NO applicationActive:YES];
+        visible:YES occluded:NO applicationActive:YES inFront:nil];
     check([boundaryFixture.displayLinkState isEqual:@"incomplete"]
         && boundaryFixture.omittedDisplayLinkObservations == 1
         && boundaryFixture.displayLinkObservations.count == 0,
@@ -1003,7 +1009,7 @@ int main(void) { @autoreleasepool {
     double timebaseTimestamp = timebaseMedia - 0.02;
     [timebaseFixture recordDisplayLinkTimestamp:timebaseTimestamp targetTimestamp:timebaseTimestamp + 0.016 duration:0.016
         callbackTime:timebaseBefore mediaClockTime:timebaseMedia mediaClockAfter:timebaseAfter
-        timebase:observationTimebase windowNumber:41 displayID:@7 visible:YES occluded:NO applicationActive:YES];
+        timebase:observationTimebase windowNumber:41 displayID:@7 visible:YES occluded:NO applicationActive:YES inFront:nil];
     mach_timebase_info_data_t changedTimebase = observationTimebase;
     changedTimebase.numer++;
     uint64_t changedBefore = mach_absolute_time();
@@ -1012,7 +1018,7 @@ int main(void) { @autoreleasepool {
     double changedTimestamp = timebaseTimestamp + 0.001;
     [timebaseFixture recordDisplayLinkTimestamp:changedTimestamp targetTimestamp:changedTimestamp + 0.016 duration:0.016
         callbackTime:changedBefore mediaClockTime:changedMedia mediaClockAfter:changedAfter
-        timebase:changedTimebase windowNumber:41 displayID:@7 visible:YES occluded:NO applicationActive:YES];
+        timebase:changedTimebase windowNumber:41 displayID:@7 visible:YES occluded:NO applicationActive:YES inFront:nil];
     check([timebaseFixture.displayLinkState isEqual:@"incomplete"]
         && timebaseFixture.omittedDisplayLinkObservations == 1
         && timebaseFixture.displayLinkObservations.count == 1,
@@ -1033,7 +1039,7 @@ int main(void) { @autoreleasepool {
         [overflowFixture recordDisplayLinkTimestamp:timestamp targetTimestamp:timestamp + 0.016 duration:0.016
             callbackTime:callbackTime mediaClockTime:mediaClockTime mediaClockAfter:mediaClockAfter
             timebase:observationTimebase windowNumber:41 displayID:@7
-            visible:YES occluded:NO applicationActive:YES];
+            visible:YES occluded:NO applicationActive:YES inFront:nil];
     }
     check(overflowFixture.displayLinkObservations.count == 4096
         && overflowFixture.omittedDisplayLinkObservations == 1

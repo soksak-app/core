@@ -18,6 +18,7 @@
 #import "application_log.h"
 #import "event_ring.h"
 #import "observe.h"
+#import "window_order.h"
 #import <ImageIO/ImageIO.h>
 #include <math.h>
 #include <pthread.h>
@@ -310,6 +311,9 @@ static bool requestCaptureStopAfterStart(SCStream *stream, SPCaptureAttempt *att
 @property (nonatomic) uint64_t lastDisplayLinkCallbackTime;
 @property (nonatomic) uint32_t displayLinkTimebaseNumerator;
 @property (nonatomic) uint32_t displayLinkTimebaseDenominator;
+// Whether the window was covered at the last display-link callback, so the first callback of a covered stretch reads the windows in
+// front of it (sp_window_in_front).
+@property (nonatomic) BOOL displayLinkCovered;
 @property (nonatomic) BOOL callbackStatusTraceOverflowed;
 @property (nonatomic) int written;
 @property (nonatomic) int idle;
@@ -340,7 +344,8 @@ static bool requestCaptureStopAfterStart(SCStream *stream, SPCaptureAttempt *att
 - (void)recordDisplayLinkTimestamp:(double)timestamp targetTimestamp:(double)targetTimestamp duration:(double)duration
     callbackTime:(uint64_t)callbackTime mediaClockTime:(double)mediaClockTime mediaClockAfter:(uint64_t)mediaClockAfter
     timebase:(mach_timebase_info_data_t)timebase windowNumber:(long)windowNumber
-    displayID:(NSNumber *)displayID visible:(BOOL)visible occluded:(BOOL)occluded applicationActive:(BOOL)applicationActive;
+    displayID:(NSNumber *)displayID visible:(BOOL)visible occluded:(BOOL)occluded applicationActive:(BOOL)applicationActive
+    inFront:(NSArray *)inFront;
 - (void)rejectDisplayLinkObservation:(NSString *)reason;
 - (NSDictionary *)displayLinkRecord;
 - (void)write:(CMSampleBufferRef)sample callbackTime:(uint64_t)callbackTime;
@@ -502,6 +507,7 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
         self.lastDisplayLinkCallbackTime = 0;
         self.displayLinkTimebaseNumerator = 0;
         self.displayLinkTimebaseDenominator = 0;
+        self.displayLinkCovered = NO;
         self.displayLinkState = @"unavailable";
         self.displayLinkReason = @"no display-link callback was delivered during the capture";
     }
@@ -613,15 +619,23 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
         return;
     }
     NSNumber *displayID = window.screen.deviceDescription[@"NSScreenNumber"];
+    BOOL occluded = (window.occlusionState & NSWindowOcclusionStateVisible) == 0;
+    // The first callback of a stretch in which no part of the window shows reads the windows in front of it from the window list of
+    // the window server, which tells what covers it; the reading changes no window, and the callbacks after it in the stretch do
+    // not read the list again.
+    BOOL wasCovered = NO;
+    @synchronized (self) {
+        wasCovered = self.displayLinkCovered;
+        self.displayLinkCovered = occluded;
+    }
+    NSArray *inFront = occluded && !wasCovered ? (sp_window_in_front(window.windowNumber) ?: @[]) : nil;
     SPCaptureAttempt *attempt = objc_getAssociatedObject(link, &captureAttemptAssociationKey);
     [attempt recordWindowNumber:window.windowNumber displayID:displayID visible:window.isVisible
-        occluded:(window.occlusionState & NSWindowOcclusionStateVisible) == 0
-        applicationActive:NSApp.isActive callbackMachTicks:callbackTime];
+        occluded:occluded applicationActive:NSApp.isActive callbackMachTicks:callbackTime];
     [self recordDisplayLinkTimestamp:link.timestamp targetTimestamp:link.targetTimestamp duration:link.duration
         callbackTime:callbackTime mediaClockTime:mediaClockTime mediaClockAfter:mediaClockAfter
         timebase:timebase windowNumber:window.windowNumber displayID:displayID
-        visible:window.isVisible occluded:(window.occlusionState & NSWindowOcclusionStateVisible) == 0
-        applicationActive:NSApp.isActive];
+        visible:window.isVisible occluded:occluded applicationActive:NSApp.isActive inFront:inFront];
     [window release];
 }
 
@@ -641,7 +655,8 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
 - (void)recordDisplayLinkTimestamp:(double)timestamp targetTimestamp:(double)targetTimestamp duration:(double)duration
     callbackTime:(uint64_t)callbackTime mediaClockTime:(double)mediaClockTime mediaClockAfter:(uint64_t)mediaClockAfter
     timebase:(mach_timebase_info_data_t)timebase windowNumber:(long)windowNumber
-    displayID:(NSNumber *)displayID visible:(BOOL)visible occluded:(BOOL)occluded applicationActive:(BOOL)applicationActive {
+    displayID:(NSNumber *)displayID visible:(BOOL)visible occluded:(BOOL)occluded applicationActive:(BOOL)applicationActive
+    inFront:(NSArray *)inFront {
     @synchronized (self) {
         if (self.displayLinkStopped) return;
         if ([self.displayLinkState isEqual:@"incomplete"]) {
@@ -695,7 +710,7 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
                 setCaptureError([NSString stringWithFormat:@"display-link trace incomplete: %@", self.displayLinkReason]);
             }
         } else {
-            [self.displayLinkObservations addObject:@{
+            NSMutableDictionary *observation = [NSMutableDictionary dictionaryWithDictionary:@{
                 @"sequence": @(self.displayLinkObservations.count + 1),
                 @"timestamp": @(timestamp),
                 @"targetTimestamp": @(targetTimestamp),
@@ -711,6 +726,8 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
                 @"occluded": @(occluded),
                 @"applicationActive": @(applicationActive),
             }];
+            if (inFront) observation[@"inFront"] = inFront;
+            [self.displayLinkObservations addObject:observation];
             self.lastDisplayLinkTimestampMach = timestampMach;
             self.lastDisplayLinkCallbackTime = callbackTime;
             self.displayLinkTimebaseNumerator = timebase.numer;

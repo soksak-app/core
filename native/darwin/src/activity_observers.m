@@ -2,6 +2,7 @@
 #import "activity_observers.h"
 #import "event_ring.h"
 #import "observe.h"
+#import "window_order.h"
 #import <stdatomic.h>
 
 // The observer belongs to the process. Publish capability only after its actual installation succeeds.
@@ -94,8 +95,16 @@ void sp_observe_activity(void) {
         sp_observe_notification("activity.occlusion", SP_OBSERVE_STORED, NSWindowDidChangeOcclusionStateNotification, nil, nil, ^(NSNotification *note) {
             NSWindow *window = note.object;
             if (![window isKindOfClass:NSWindow.class]) return;
-            emit(SP_CLASS_LIFECYCLE, @"native.window.occlusion", @{@"window": @(window.windowNumber),
-                @"visible": [NSNumber numberWithBool:(window.occlusionState & NSWindowOcclusionStateVisible) != 0]});
+            BOOL visible = (window.occlusionState & NSWindowOcclusionStateVisible) != 0;
+            NSMutableDictionary *fields = [NSMutableDictionary dictionaryWithDictionary:@{@"window": @(window.windowNumber),
+                @"visible": [NSNumber numberWithBool:visible]}];
+            // A covered window names the windows in front of it, read from the window list of the window server, so the record
+            // tells what covers it (sp_window_in_front). Reading the list changes no window.
+            if (!visible && sp_event_gate(SP_CLASS_LIFECYCLE, SP_EVENT_INFO)) {
+                NSArray *front = sp_window_in_front(window.windowNumber);
+                if (front) fields[@"inFront"] = front;
+            }
+            emit(SP_CLASS_LIFECYCLE, @"native.window.occlusion", fields);
         });
         sp_observe_notification("activity.input_source", SP_OBSERVE_STORED, NSTextInputContextKeyboardSelectionDidChangeNotification, nil, nil, ^(NSNotification *note) {
             emit(SP_CLASS_INPUT, @"native.input.source_changed", @{});
