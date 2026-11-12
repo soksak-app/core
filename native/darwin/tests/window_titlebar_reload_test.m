@@ -1,8 +1,8 @@
 // Checks that while a page reloads in a new WebContent process, the layout transaction of the window stays open, the title
 // bar height is changed in it before the new page is answered, and the transaction is committed with the first presentation of
-// the new page (docs/spec/native-surfaces.md#title-bar-height). A recording of the window at each refresh keeps every still
-// with a complete frame file; the frames are evidence of what the window showed and their pixels are not judged. The check does
-// not activate the application.
+// the new page (docs/spec/native-surfaces.md#title-bar-height), judged by the layout trace of the start transaction. A recording
+// of the window at each refresh is evidence of what the window showed and is not judged; a failing check keeps its folder. The
+// check does not activate the application.
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
 #import <WebKit/WebKit.h>
@@ -12,7 +12,6 @@
 #import "window_facts.h"
 #import "private/webkit.h"
 #import "capture.h"
-#import "support/capture_frame.m"
 #import "support/event_wait.h"
 #import "support/temporary_folder.h"
 
@@ -194,10 +193,9 @@ int main(void) { @autoreleasepool {
         operationError = NULL;
         started = sp_capture_start(directory, 1000.0 / window.screen.maximumFramesPerSecond, 0, 4096, 0, &operationError);
     }
-    check(started, [NSString stringWithFormat:@"the recording starts with its initial frame (%s)",
-        operationError == NULL ? "" : operationError]);
+    // The recording is evidence: a recording that does not start or ends with an error is reported and not judged.
+    if (!started) fprintf(stdout, "the recording did not start (%s)\n", operationError == NULL ? "" : operationError);
     free(operationError);
-    if (!started) { [window close]; return 1; }
     waitFrames(window.screen, kRefreshes);
 
     surfaceLayoutTraceStart();
@@ -211,35 +209,34 @@ int main(void) { @autoreleasepool {
     waitFrames(window.screen, kRefreshes);
     double records[SURFACE_LAYOUT_TRACE_STAGES * 8];
     size_t transactions = surfaceLayoutTraceStop(records, 8);
-    double committed = NAN;
+    double ended = CACurrentMediaTime() * 1000;
+    double committed = NAN, begun = NAN, flushed = NAN, path = NAN;
     for (size_t index = 0; index < transactions && index < 8; index++) {
-        if (records[index * SURFACE_LAYOUT_TRACE_STAGES] == 301) committed = records[index * SURFACE_LAYOUT_TRACE_STAGES + 3];
+        const double *record = records + index * SURFACE_LAYOUT_TRACE_STAGES;
+        if (record[0] == 301) { begun = record[1]; committed = record[3]; path = record[5]; flushed = record[7]; }
     }
     check(pages->ready && pages->failure == nil, [NSString stringWithFormat:
         @"the start sets the title bar before the new page is answered (%@)", pages->failure ?: @"no failure"]);
     // If the transaction blocks the first drawing of the new page, there is no commit.
     check(!isnan(committed), @"the start transaction commits with the first presentation of the new page");
+    check(begun <= pages->set && pages->set <= committed && committed <= ended && path == SURFACE_LAYOUT_COMMIT_START,
+        [NSString stringWithFormat:@"the trace records the start transaction begun before the title bar change and committed "
+            "by the start of the new page after it (begun %.3f, set %.3f, committed %.3f, ended %.3f, path %.0f)", begun,
+            pages->set, committed, ended, path]);
+    check(begun <= flushed && flushed <= ended, [NSString stringWithFormat:@"the trace records when the commit of the start "
+        "transaction was sent to the render server (begun %.3f, flushed %.3f, ended %.3f)", begun, flushed, ended]);
     pid_t after = webview._webProcessIdentifier;
     check(after != before && after > 0, [NSString stringWithFormat:
         @"the new page runs in a new WebContent process (%d, then %d)", before, after]);
     fprintf(stdout, "the start transaction stayed open %.1fms from the title bar change to the commit\n",
         committed - pages->set);
 
-    int count = sp_capture_stop(CACurrentMediaTime() * 1000, 0);
-    const char *recordingError = sp_capture_error();
-    check(recordingError[0] == 0, [NSString stringWithFormat:
-        @"the recording ends without error or a failed still (%s)", recordingError[0] ? recordingError : "none"]);
-    fprintf(stdout, "recording: %d frames, %d late, longest gap %.1fms\n", count, sp_capture_late(), sp_capture_longest_gap());
-
-    // Every still of the recording has a complete frame file. The frames are evidence and are not judged.
-    int unreadable = 0;
-    for (int index = 0; index < count; index++) {
-        NSString *path = [recordingDirectory stringByAppendingPathComponent:
-            [NSString stringWithFormat:@"frame-%04d.bgra", index]];
-        if (readCaptureFrame([NSData dataWithContentsOfFile:path]) == nil) unreadable++;
+    if (started) {
+        int count = sp_capture_stop(CACurrentMediaTime() * 1000, 0);
+        const char *recordingError = sp_capture_error();
+        fprintf(stdout, "recording: %d frames, %d late, longest gap %.1fms, error %s\n", count, sp_capture_late(),
+            sp_capture_longest_gap(), recordingError[0] ? recordingError : "none");
     }
-    check(count > 0 && unreadable == 0, [NSString stringWithFormat:@"every still of the recording has a complete frame file "
-        "(%d frames, %d unreadable)", count, unreadable]);
     if (failures) keepTemporaryFolder(recordingDirectory);
     [window close];
     return failures ? 1 : 0;

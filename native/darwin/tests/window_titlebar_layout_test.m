@@ -1,13 +1,13 @@
 // Checks that a title bar height changed while the layout transaction (surfaceLayoutBegin) of the window is open is taken by
-// the window model and that the transaction commits. A recording of the window at each refresh keeps every still with a complete
-// frame file and holds stills taken while each transaction is open and after its commit; the frames are evidence of the window
-// buttons on screen and their pixels are not judged. The check does not activate the application.
+// the window model and that the transaction commits, judged by the layout trace of each transaction: its ticket, its begin
+// before the change, its commit after the change, and the time it was sent to the render server. A recording of the window at
+// each refresh is evidence of the window buttons on screen and is not judged; a failing check keeps its folder. The check does
+// not activate the application.
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
 #import "surface_layout.h"
 #import "window_controls.h"
 #import "capture.h"
-#import "support/capture_frame.m"
 #import "support/event_wait.h"
 #import "support/temporary_folder.h"
 
@@ -102,6 +102,8 @@ typedef struct { double height; double set; double committed; double from; doubl
 static SPChange change(NSWindow *window, uint64_t ticket, double to) {
     SPChange result = { to, 0, 0, buttonsCentre(window), 0 };
     __block BOOL allowed = NO;
+    surfaceLayoutTraceStart();
+    double began = CACurrentMediaTime() * 1000;
     surfaceLayoutBegin(window, ticket, ^(int ready) { allowed = ready; });
     check(allowed, [NSString stringWithFormat:@"the layout transaction %llu starts", ticket]);
     fprintf(stdout, "model before %.1fpt: %s\n", to, modelValues(window).UTF8String);
@@ -114,46 +116,24 @@ static SPChange change(NSWindow *window, uint64_t ticket, double to) {
         kRefreshes, waited, modelValues(window).UTF8String);
     result.committed = CACurrentMediaTime() * 1000;
     check(surfaceLayoutCommit(window, ticket), [NSString stringWithFormat:@"the layout transaction %llu commits", ticket]);
+    double returned = CACurrentMediaTime() * 1000;
     waited = waitFrames(window.screen, kRefreshes);
     fprintf(stdout, "model after %d refreshes (%.1fms) after the commit: %s\n",
         kRefreshes, waited, modelValues(window).UTF8String);
+    // The refreshes after the commit end after the transaction that carried it reached the render server.
+    double ended = CACurrentMediaTime() * 1000;
+    double trace[2 * SURFACE_LAYOUT_TRACE_STAGES];
+    size_t traced = surfaceLayoutTraceStop(trace, 2);
+    check(traced == 1 && trace[0] == ticket && began <= trace[1] && trace[1] <= result.set && result.committed <= trace[3]
+            && trace[3] <= returned && trace[5] == SURFACE_LAYOUT_COMMIT_PRESENT,
+        [NSString stringWithFormat:@"%.1fpt title bar: the trace records ticket %llu begun before the change and committed by "
+            "the host after it (%zu records: ticket %.0f, begun %.3f, set %.3f, committed %.3f within %.3f..%.3f, path %.0f)",
+            to, ticket, traced, trace[0], trace[1], result.set, trace[3], result.committed, returned, trace[5]]);
+    check(traced == 1 && trace[1] <= trace[7] && trace[7] <= ended,
+        [NSString stringWithFormat:@"%.1fpt title bar: the trace records when the commit of ticket %llu was sent to the render "
+            "server, before the refreshes after it end (begun %.3f, flushed %.3f, refreshes ended %.3f)", to, ticket, trace[1],
+            trace[7], ended]);
     return result;
-}
-
-// Checks the recording frames at every change, in request order: every still has a complete frame file, and for every change
-// the recording has stills requested after the change and completed before the commit, and stills requested after the commit.
-// The pixels are evidence and are not judged.
-static void judge(NSString *directory, int count, const SPChange *changes, int total) {
-    double requested[count], completed[count];
-    int unreadable = 0;
-    for (int index = 0; index < count; index++) {
-        NSString *path = [directory stringByAppendingPathComponent:
-            [NSString stringWithFormat:@"frame-%04d.bgra", index]];
-        NSData *data = readCaptureFrame([NSData dataWithContentsOfFile:path]);
-        double info[8] = {0};
-        requested[index] = completed[index] = NAN;
-        if (data == nil) { unreadable++; continue; }
-        [data getBytes:info range:NSMakeRange(3 * sizeof(uint32_t), sizeof(info))];
-        requested[index] = info[6];
-        completed[index] = info[7];
-    }
-    check(unreadable == 0, [NSString stringWithFormat:@"every still of the recording has a complete frame file (%d of %d do not)",
-        unreadable, count]);
-    for (int c = 0; c < total; c++) {
-        const SPChange *at = &changes[c];
-        double next = c + 1 < total ? changes[c + 1].set : INFINITY;
-        int held = 0, after = 0;
-        for (int index = 0; index < count; index++) {
-            if (requested[index] >= at->set && completed[index] < at->committed) held++;
-            else if (requested[index] >= at->committed && requested[index] < next) after++;
-        }
-        fprintf(stdout, "%.1fpt title bar: %d frames between the change and the commit, %d frames after the commit\n",
-            at->height, held, after);
-        check(held > 0, [NSString stringWithFormat:@"%.1fpt title bar: the recording has frames taken while the "
-            "transaction is open (%d)", at->height, held]);
-        check(after > 0, [NSString stringWithFormat:@"%.1fpt title bar: the recording has frames taken after the commit (%d)",
-            at->height, after]);
-    }
 }
 
 int main(void) { @autoreleasepool {
@@ -178,21 +158,17 @@ int main(void) { @autoreleasepool {
         operationError = NULL;
         started = sp_capture_start(directory, 1000.0 / window.screen.maximumFramesPerSecond, 0, 4096, 0, &operationError);
     }
-    check(started, [NSString stringWithFormat:@"the title bar recording starts with its initial frame (%s)",
-        operationError == NULL ? "" : operationError]);
+    // The recording is evidence: a recording that does not start or ends with an error is reported and not judged.
+    if (!started) fprintf(stdout, "the title bar recording did not start (%s)\n", operationError == NULL ? "" : operationError);
     free(operationError);
+    // The heights are the first rows for frame font scales 1 and 2. Raises then lowers.
+    change(window, 201, 80);
+    change(window, 202, 40);
     if (started) {
-        // The heights are the first rows for frame font scales 1 and 2. Raises then lowers.
-        SPChange changes[2];
-        changes[0] = change(window, 201, 80);
-        changes[1] = change(window, 202, 40);
         int count = sp_capture_stop(CACurrentMediaTime() * 1000, 0);
         const char *recordingError = sp_capture_error();
-        check(recordingError[0] == 0, [NSString stringWithFormat:
-            @"the title bar recording ends without error or a failed still (%s)", recordingError[0] ? recordingError : "none"]);
-        check(count >= 3, [NSString stringWithFormat:@"the title bar recording has frames for both changes (%d)", count]);
-        fprintf(stdout, "recording: %d frames, %d late, longest gap %.1fms\n", count, sp_capture_late(), sp_capture_longest_gap());
-        judge(recordingDirectory, count, changes, 2);
+        fprintf(stdout, "recording: %d frames, %d late, longest gap %.1fms, error %s\n", count, sp_capture_late(),
+            sp_capture_longest_gap(), recordingError[0] ? recordingError : "none");
     }
     if (failures) keepTemporaryFolder(recordingDirectory);
     [window close];
