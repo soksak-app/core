@@ -92,8 +92,6 @@ for (const app of Object.values(APPS))
         const began = performance.now();
         console.info(`START ${app.name}: ${label}`);
         ({ displayed } = await s.presented());
-        // The changes asked for since the last check are shown by this display.
-        for (const change of owed) change.to ??= displayed;
         const host = await s.get("host.window");
         const grid = await s.get("core.grid");
         const current = grid.cards.find((item) => item.id === card.id);
