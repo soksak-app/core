@@ -1219,6 +1219,131 @@ fn a_failed_presentation_notice_ends_the_present_with_its_error() {
     );
 }
 
+/// The native content and the page of one layout reach the screen in one transaction: the preparation begins the layout of its
+/// ticket and sets the frame of each surface in it, the page draws that layout, and the presentation of the ticket commits it only
+/// after the presentation notice of the page called back, with the frame of the preparation unchanged
+/// (docs/spec/native-surfaces.md#acceptance-criteria).
+// contract: surface-layout.commits-the-prepared-geometry-with-its-ticket
+#[test]
+fn the_geometry_of_a_preparation_is_committed_with_its_ticket_after_the_presentation_notice() {
+    use super::{
+        Placement, ask_presentation_notice, await_presentation_notice, begin_and_apply_layout,
+        commit_presentation, seated_placement,
+    };
+    use crate::test_framework::{FixtureFrontend, application};
+    const TICKET: u64 = 9;
+    let slot = [10.0, 20.0, 300.0, 200.0];
+    // The platform of the test records, in their order, the layouts that begin, the frames that it sets and the commits and
+    // cancels of the layouts.
+    let events = Arc::new(Mutex::new(Vec::<String>::new()));
+    let frames = Arc::new(Mutex::new(HashMap::<String, [f64; 4]>::new()));
+    let recorded = |events: &Mutex<Vec<String>>| events.lock().unwrap().clone();
+    // The platform begins the layout and holds its ready callback, as a window whose transaction waits for its turn.
+    let ready = std::cell::RefCell::new(None);
+    let place = {
+        let (events, frames) = (Arc::clone(&events), Arc::clone(&frames));
+        move |allowed: bool| {
+            assert!(allowed, "the layout of the preparation was refused");
+            frames.lock().unwrap().insert("tab".into(), slot);
+            events.lock().unwrap().push(format!("frame {slot:?}"));
+        }
+    };
+    begin_and_apply_layout(
+        TICKET,
+        |ticket, callback| {
+            events.lock().unwrap().push(format!("begin {ticket}"));
+            *ready.borrow_mut() = Some(callback);
+            Ok(())
+        },
+        place,
+    )
+    .unwrap();
+    let begun = vec![format!("begin {TICKET}")];
+    assert_eq!(
+        recorded(&events),
+        begun,
+        "the preparation set a frame before its layout began"
+    );
+    let callback = ready.borrow_mut().take().unwrap();
+    callback(true);
+    callback(true);
+    let prepared = vec![begun[0].clone(), format!("frame {slot:?}")];
+    assert_eq!(
+        recorded(&events),
+        prepared,
+        "the preparation sets the frame of its surface once, in the layout of its ticket"
+    );
+    let placements = vec![seated_placement("tab", slot, true, Some(2.0))];
+
+    let frontend = Arc::new(FixtureFrontend::new(Ok(1)));
+    let window = application().window_of(frontend.clone());
+    let (ready_tx, ready_rx) = mpsc::channel();
+    let worker = {
+        let (events, frames) = (Arc::clone(&events), Arc::clone(&frames));
+        thread::spawn(move || -> Result<(Vec<Placement>, bool), String> {
+            complete_layout_presentation(
+                || {
+                    ask_presentation_notice(
+                        &window,
+                        TICKET,
+                        ready_tx,
+                        crate::images::Images::default(),
+                    )
+                },
+                || await_presentation_notice(&ready_rx),
+                || Ok(()),
+                || Ok(()),
+            )?;
+            commit_presentation(
+                TICKET,
+                &placements,
+                |placement| {
+                    let frame = frames.lock().unwrap()[&placement.id];
+                    Ok(seated_placement(
+                        &placement.id,
+                        frame,
+                        placement.visible,
+                        placement.scale,
+                    ))
+                },
+                |ticket, _| {
+                    events.lock().unwrap().push(format!("commit {ticket}"));
+                    Ok(true)
+                },
+                || {
+                    events.lock().unwrap().push(format!("cancel {TICKET}"));
+                    Ok(())
+                },
+            )
+        })
+    };
+    // The Frontend holds the notice once the presentation asked for it; until it calls back, the layout of the ticket is neither
+    // committed nor placed again, and the result is read after it, so no check depends on time.
+    let notice = frontend.notice();
+    assert_eq!(
+        recorded(&events),
+        prepared,
+        "the layout went on before the presentation notice called back"
+    );
+    notice(Ok(()));
+    let (placed, committed) = worker.join().unwrap().unwrap();
+    assert!(committed);
+    assert_eq!(
+        recorded(&events),
+        [prepared, vec![format!("commit {TICKET}")]].concat(),
+        "the layout commits the prepared ticket after the notice, with the frame of the preparation"
+    );
+    let frames: Vec<_> = placed
+        .iter()
+        .map(|p| (p.id.as_str(), [p.x, p.y, p.w, p.h]))
+        .collect();
+    assert_eq!(
+        frames,
+        [("tab", slot)],
+        "the presentation answers the frames read at its commit"
+    );
+}
+
 // contract: surface-layout.keyboard-follows-the-focus-ring
 #[test]
 fn an_image_region_declaration_keeps_the_keys_of_its_surface() {

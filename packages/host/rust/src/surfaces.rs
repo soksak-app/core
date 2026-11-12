@@ -1075,6 +1075,26 @@ fn commit_layout_after_root_joins(
     Ok((committed, joined))
 }
 
+/// The commit step of a presentation: reads the frame of each placement that the preparation of ticket set, and then commits the
+/// layout of ticket with the frames that it read. A read or a commit that fails cancels the layout and ends with its error.
+fn commit_presentation<T>(
+    ticket: u64,
+    placements: &[Placement],
+    read: impl FnMut(&Placement) -> Result<Placement, String>,
+    commit: impl FnOnce(u64, &[Placement]) -> Result<T, String>,
+    cancel: impl FnOnce() -> Result<(), String>,
+) -> Result<(Vec<Placement>, T), String> {
+    let outcome = placements
+        .iter()
+        .map(read)
+        .collect::<Result<Vec<_>, String>>()
+        .and_then(|placed| commit(ticket, &placed).map(|value| (placed, value)));
+    outcome.or_else(|error| {
+        cancel().map_err(|cancel| format!("{error}; cancelling layout: {cancel}"))?;
+        Err(error)
+    })
+}
+
 fn cancel_layout_after_setup_error(
     error: String,
     cancel: impl FnOnce() -> Result<(), String>,
@@ -1789,37 +1809,27 @@ pub fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurfaces, S
                             "sync",
                             "sync-layout-ready-callback",
                         );
-                        let pending = std::cell::Cell::new(Some((
-                            begin_window,
-                            turn_context,
-                            request,
-                            applied_tx,
-                        )));
-                        platform.begin_layout(
-                            owner,
+                        begin_and_apply_layout(
                             ticket,
-                            Box::new(move |allowed| {
-                                let Some((window, context, request, sent)) = pending.take() else {
-                                    return;
-                                };
+                            |ticket, ready| platform.begin_layout(owner, ticket, ready),
+                            move |allowed| {
                                 let turn = LayoutTurn {
-                                    window,
-                                    context,
+                                    window: begin_window,
+                                    context: turn_context,
                                     platform,
                                     scale,
                                     ticket,
                                 };
-                                let outcome =
-                                    surface_dispatch_result(callback_dispatch.clone(), || {
-                                        apply_layout(&turn, &request, allowed)
-                                    });
-                                if sent.send(outcome).is_err() {
+                                let outcome = surface_dispatch_result(callback_dispatch, || {
+                                    apply_layout(&turn, &request, allowed)
+                                });
+                                if applied_tx.send(outcome).is_err() {
                                     crate::application_log::log_info(
                                         "surface",
                                         "surface preparation result arrived after its request ended",
                                     );
                                 }
-                            }),
+                            },
                         )
                     })
                     .map_err(|e| e.to_string())
@@ -1860,6 +1870,24 @@ pub fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurfaces, S
             .surface_opened(&plugin, &surface);
     }
     Ok(prepared)
+}
+
+/// The apply step of a preparation: begins the layout transaction of ticket and applies the layout in its ready callback, so the
+/// frames that the layout sets belong to the transaction of the ticket. A ready callback that runs again applies nothing.
+fn begin_and_apply_layout(
+    ticket: u64,
+    begin: impl FnOnce(u64, Box<dyn Fn(bool)>) -> Result<(), String>,
+    apply: impl FnOnce(bool) + 'static,
+) -> Result<(), String> {
+    let pending = std::cell::Cell::new(Some(apply));
+    begin(
+        ticket,
+        Box::new(move |allowed| {
+            if let Some(apply) = pending.take() {
+                apply(allowed);
+            }
+        }),
+    )
 }
 
 /// The ready callback of a layout transaction: sets the title bar and fits the surfaces on the main thread.
@@ -2218,9 +2246,10 @@ pub async fn present(window: Window, request: PresentRequest) -> Result<Vec<Plac
         surface_dispatch_result(commit_dispatch, || {
             let result = (|| -> Result<Vec<Placement>, String> {
                 let platform = platform::current()?;
-                let placed = match placements
-                    .iter()
-                    .map(|p| {
+                let (placed, (committed, joined_generations)) = commit_presentation(
+                    ticket,
+                    &placements,
+                    |p| {
                         let handle = context
                             .surface_hosts
                             .lock()
@@ -2235,51 +2264,44 @@ pub async fn present(window: Window, request: PresentRequest) -> Result<Vec<Plac
                         // The frame was fitted by the preparation of this ticket, so it keeps the scale that the preparation answered.
                         let frame = platform.surface_frame(handle)?;
                         Ok(seated_placement(&p.id, frame, p.visible, p.scale))
-                    })
-                    .collect::<Result<Vec<_>, String>>()
-                {
-                    Ok(placed) => placed,
-                    Err(error) => {
-                        cancel_layout_with_waits(&presentation_window, ticket)
-                            .map_err(|cancel| format!("{error}; cancelling layout: {cancel}"))?;
-                        return Err(error);
-                    }
-                };
-                let (committed, joined_generations) = match commit_layout_after_root_joins(
-                    &placed,
-                    std::mem::take(&mut joined_generations),
-                    |surface| context.documents.views().generation(surface),
-                    |surface, generation, placement| {
-                        context
-                            .documents
-                            .presentation()
-                            .needs_join(surface, generation, placement)
                     },
-                    |missing| {
-                        documents::join_shown_views(&presentation_window, platform, ticket, missing)
+                    |ticket, placed| {
+                        commit_layout_after_root_joins(
+                            placed,
+                            std::mem::take(&mut joined_generations),
+                            |surface| context.documents.views().generation(surface),
+                            |surface, generation, placement| {
+                                context
+                                    .documents
+                                    .presentation()
+                                    .needs_join(surface, generation, placement)
+                            },
+                            |missing| {
+                                documents::join_shown_views(
+                                    &presentation_window,
+                                    platform,
+                                    ticket,
+                                    missing,
+                                )
+                            },
+                            || {
+                                let dispatch = surface_dispatch(
+                                    &presentation_window,
+                                    Some(ticket),
+                                    "present",
+                                    "present-native-commit-ui",
+                                );
+                                with_native_owner(&presentation_window, move |owner| {
+                                    surface_dispatch_result(dispatch, || {
+                                        platform.commit_layout(owner, ticket)
+                                    })
+                                })
+                                .map_err(|error| error.to_string())
+                            },
+                        )
                     },
-                    || {
-                        let dispatch = surface_dispatch(
-                            &presentation_window,
-                            Some(ticket),
-                            "present",
-                            "present-native-commit-ui",
-                        );
-                        with_native_owner(&presentation_window, move |owner| {
-                            surface_dispatch_result(dispatch, || {
-                                platform.commit_layout(owner, ticket)
-                            })
-                        })
-                        .map_err(|error| error.to_string())
-                    },
-                ) {
-                    Ok(result) => result,
-                    Err(error) => {
-                        cancel_layout_with_waits(&presentation_window, ticket)
-                            .map_err(|cancel| format!("{error}; cancelling layout: {cancel}"))?;
-                        return Err(error);
-                    }
-                };
+                    || cancel_layout_with_waits(&presentation_window, ticket),
+                )?;
                 if !committed {
                     return Err(uncommitted_presentation(ticket, || {
                         documents::abandon_layout_presentation_waits(&presentation_window, ticket)
