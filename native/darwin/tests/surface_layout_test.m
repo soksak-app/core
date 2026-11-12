@@ -771,14 +771,17 @@ static void checkCommitFrame(WKWebViewConfiguration *configuration, NSString *va
         if (after != nil) {
             double borderAt = borderColumn(after, x, x);
             BOOL shown = !isnan(borderAt) && fabs(borderAt - x) < 0.5;
-            // A failure keeps the still and names the first border column from the place of the move before the previous one:
-            // a border at the place of an earlier move tells a composition of an earlier commit, none tells a still without it.
-            double earlierAt = shown ? borderAt : borderColumn(after, x - 40, x + 20);
+            // A failure keeps the still and names the first border column in a range that holds the place of the border before
+            // this move, the initial right edge 40 + 260 before the first move: a border there tells a composition of the earlier
+            // commit, none tells a still without the border.
+            double previous = move == 0 ? 40 + 260 : x - 20;
+            double from = fmin(previous, x) - 20, to = fmax(previous, x) + 20;
+            double earlierAt = shown ? borderAt : borderColumn(after, from, to);
             if (!shown) keepTemporaryFolder(folder);
             check(shown, [NSString stringWithFormat:
                 @"%@: after move %d the window shows the moved DOM border beside the native placement (expected x %.0f, found %.1f, "
                 "first border in %.0f..%.0f at %.1f, begun %.3f, presented %.3f, committed %.3f, flushed %.3f, still requested %.3f, "
-                "completed %.3f, still %@)", variant, move, x, borderAt, x - 40, x + 20, earlierAt, timeline[1], timeline[2], timeline[3],
+                "completed %.3f, still %@)", variant, move, x, borderAt, from, to, earlierAt, timeline[1], timeline[2], timeline[3],
                 timeline[7], stillRequested, stillCompleted, stillPath.lastPathComponent]);
         }
     }
