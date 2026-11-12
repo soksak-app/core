@@ -970,7 +970,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn await_capture<T>(" },
       { file: "native/darwin/src/capture.m", symbol: "void sp_capture_end_wait(uint64_t token, const char *reason) {" },
       { file: "native/darwin/src/host_api_capture.m", symbol: "void scheduleCaptureStop(double after, uint64_t token, uintptr_t context) {" },
-      { file: "native/darwin/src/window_facts.m", symbol: "static NSArray *pagelessProcesses(WKWebView *any) {" },
+      { file: "native/darwin/src/window_facts.m", symbol: "static NSArray *pagelessProcesses(void) {" },
       { file: "packages/host/go/src/platform/darwin/capture.go", symbol: "func awaitCaptureAnswer(schedule func(context uintptr)) captureAnswer {" },
       { file: "native/darwin/src/input_source.m", symbol: "void sp_input_source_selection_end(const void *key, const char *reason) {" },
       { file: "native/darwin/src/input_reference.m", symbol: "void sp_input_reference_end(void *pointer, const char *reason) {" },
