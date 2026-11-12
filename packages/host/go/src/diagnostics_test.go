@@ -26,7 +26,7 @@ func TestCaptureStopLayoutFailurePreservesStartedFolder(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := finishCaptureStop(fakeCaptureStatus{}, directory, 1, false, func() ([]platform.LayoutRecord, error) {
+	_, err := finishCaptureStop(fakeCaptureStatus{}, directory, 1, false, nil, func() ([]platform.LayoutRecord, error) {
 		return nil, errors.New("layout trace stop failed")
 	})
 	if err == nil || err.Error() != "layout trace stop failed" {
@@ -135,10 +135,10 @@ func TestCaptureStartOptionsPreserveDisplayParsing(t *testing.T) {
 		json string
 		want bool
 	}{
-		{name: "omitted", json: `{}`, want: false},
-		{name: "false", json: `{"display":false}`, want: false},
-		{name: "true", json: `{"display":true}`, want: true},
-		{name: "null remains false", json: `{"display":null}`, want: false},
+		{name: "omitted", json: `{"gap":8,"frames":10}`, want: false},
+		{name: "false", json: `{"gap":8,"frames":10,"display":false}`, want: false},
+		{name: "true", json: `{"gap":8,"frames":10,"display":true}`, want: true},
+		{name: "null remains false", json: `{"gap":8,"frames":10,"display":null}`, want: false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			got, err := parseCaptureStartOptions(json.RawMessage(test.json))
@@ -148,7 +148,7 @@ func TestCaptureStartOptionsPreserveDisplayParsing(t *testing.T) {
 		})
 	}
 	for _, value := range []string{`"true"`, `1`, `[]`, `{}`} {
-		if _, err := parseCaptureStartOptions(json.RawMessage(`{"display":` + value + `}`)); err == nil {
+		if _, err := parseCaptureStartOptions(json.RawMessage(`{"gap":8,"frames":10,"display":` + value + `}`)); err == nil {
 			t.Errorf("display value %s was accepted", value)
 		}
 	}
@@ -156,8 +156,54 @@ func TestCaptureStartOptionsPreserveDisplayParsing(t *testing.T) {
 
 // contract: diagnostics.capture-start.frame-identity-is-strict-boolean
 func TestCaptureStartFrameIdentityRejectsNull(t *testing.T) {
-	if _, err := parseCaptureStartOptions(json.RawMessage(`{"frameIdentity":null}`)); err == nil {
-		t.Fatal("frameIdentity null was accepted as the default false value")
+	_, err := parseCaptureStartOptions(json.RawMessage(`{"gap":8,"frames":10,"frameIdentity":null}`))
+	if messageOf(err) != "frameIdentity must be a boolean" {
+		t.Fatalf("frameIdentity null: error %v, want frameIdentity must be a boolean", err)
+	}
+}
+
+// contract: diagnostics.capture-start.validates-still-plan
+func TestCaptureStartPlanTakesGapAndSecondsOrFrames(t *testing.T) {
+	for _, test := range []struct {
+		json string
+		want CapturePlan
+	}{
+		{json: `{"gap":8.333,"seconds":2}`, want: CapturePlan{Gap: 8.333, Seconds: 2}},
+		{json: `{"gap":1,"frames":4096}`, want: CapturePlan{Gap: 1, Frames: 4096}},
+		{json: `{"gap":1000,"seconds":600}`, want: CapturePlan{Gap: 1000, Seconds: 600}},
+		{json: `{"gap":146.484375,"seconds":600}`, want: CapturePlan{Gap: 146.484375, Seconds: 600}},
+		{json: `{"gap":10,"frames":1,"seconds":null}`, want: CapturePlan{Gap: 10, Frames: 1}},
+	} {
+		got, err := parseCaptureStartOptions(json.RawMessage(test.json))
+		if err != nil || got.Plan != test.want {
+			t.Errorf("parseCaptureStartOptions(%s) = %+v, %v; want plan %+v", test.json, got.Plan, err, test.want)
+		}
+	}
+	for _, test := range []struct{ json, want string }{
+		{`{"frames":10}`, "gap must be a number of milliseconds from 1 to 1000"},
+		{`{"gap":null,"frames":10}`, "gap must be a number of milliseconds from 1 to 1000"},
+		{`{"gap":"8","frames":10}`, "gap must be a number of milliseconds from 1 to 1000"},
+		{`{"gap":0.5,"frames":10}`, "gap must be a number of milliseconds from 1 to 1000"},
+		{`{"gap":1000.5,"frames":10}`, "gap must be a number of milliseconds from 1 to 1000"},
+		{`{"gap":8,"seconds":1,"frames":10}`, "give seconds or frames, not both"},
+		{`{"gap":8}`, "a recording needs seconds or frames"},
+		{`{"gap":8,"seconds":0}`, "seconds must be above 0 and at most 600"},
+		{`{"gap":8,"seconds":600.5}`, "seconds must be above 0 and at most 600"},
+		{`{"gap":8,"seconds":"1"}`, "seconds must be above 0 and at most 600"},
+		{`{"gap":8,"frames":0}`, "frames must be an integer from 1 to 4096"},
+		{`{"gap":8,"frames":4097}`, "frames must be an integer from 1 to 4096"},
+		{`{"gap":8,"frames":2.5}`, "frames must be an integer from 1 to 4096"},
+		{`{"gap":8,"seconds":40}`, "the recording plans 5000 stills, more than 4096"},
+		{`{"gap":146,"seconds":600}`, "the recording plans 4110 stills, more than 4096"},
+	} {
+		_, err := parseCaptureStartOptions(json.RawMessage(test.json))
+		if messageOf(err) != test.want {
+			t.Errorf("parseCaptureStartOptions(%s) error %v, want %q", test.json, err, test.want)
+		}
+	}
+	// The plan is checked before newWindow holds a window.
+	if _, err := parseCaptureStartOptions(json.RawMessage(`{"newWindow":true}`)); messageOf(err) != "gap must be a number of milliseconds from 1 to 1000" {
+		t.Errorf("newWindow without a plan: error %v", err)
 	}
 }
 
@@ -171,18 +217,18 @@ func TestDiagnosticDragFrameIdentityRequiresCapture(t *testing.T) {
 		wantErrorText string
 	}{
 		{name: "default is disabled", params: `{}`},
-		{name: "capture keeps identity disabled", params: `{"capture":true}`, wantCapture: true},
-		{name: "explicit false", params: `{"capture":true,"frameIdentity":false}`, wantCapture: true},
-		{name: "explicit true", params: `{"capture":true,"frameIdentity":true}`, wantCapture: true, wantIdentity: true},
-		{name: "identity requires capture", params: `{"frameIdentity":true}`, wantErrorText: "frameIdentity requires capture to be true"},
-		{name: "identity rejects disabled capture", params: `{"capture":false,"frameIdentity":true}`, wantErrorText: "frameIdentity requires capture to be true"},
-		{name: "identity rejects null", params: `{"capture":true,"frameIdentity":null}`, wantErrorText: "frameIdentity must be a boolean"},
-		{name: "identity rejects string", params: `{"capture":true,"frameIdentity":"true"}`, wantErrorText: "frameIdentity must be a boolean"},
+		{name: "capture keeps identity disabled", params: `{"capture":{"gap":8,"frames":10}}`, wantCapture: true},
+		{name: "explicit false", params: `{"capture":{"gap":8,"frames":10},"frameIdentity":false}`, wantCapture: true},
+		{name: "explicit true", params: `{"capture":{"gap":8,"frames":10},"frameIdentity":true}`, wantCapture: true, wantIdentity: true},
+		{name: "identity requires capture", params: `{"frameIdentity":true}`, wantErrorText: "frameIdentity requires a capture plan"},
+		{name: "identity rejects disabled capture", params: `{"capture":false,"frameIdentity":true}`, wantErrorText: "frameIdentity requires a capture plan"},
+		{name: "identity rejects null", params: `{"capture":{"gap":8,"frames":10},"frameIdentity":null}`, wantErrorText: "frameIdentity must be a boolean"},
+		{name: "identity rejects string", params: `{"capture":{"gap":8,"frames":10},"frameIdentity":"true"}`, wantErrorText: "frameIdentity must be a boolean"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			got, err := parseDragCaptureOptions(json.RawMessage(test.params))
 			if test.wantErrorText != "" {
-				if err == nil || !strings.Contains(err.Error(), test.wantErrorText) {
+				if messageOf(err) != test.wantErrorText {
 					t.Fatalf("parseDragCaptureOptions(%s) error = %v, want %q", test.params, err, test.wantErrorText)
 				}
 				return
@@ -198,6 +244,44 @@ func TestDiagnosticDragFrameIdentityRequiresCapture(t *testing.T) {
 	}
 }
 
+// contract: diagnostics.drag.takes-a-capture-plan
+func TestDiagnosticDragCaptureTakesAPlan(t *testing.T) {
+	for _, test := range []struct {
+		params string
+		want   dragCaptureOptions
+	}{
+		{params: `{}`, want: dragCaptureOptions{}},
+		{params: `{"capture":null}`, want: dragCaptureOptions{}},
+		{params: `{"capture":false}`, want: dragCaptureOptions{}},
+		{params: `{"capture":{"gap":8.333,"frames":4096}}`, want: dragCaptureOptions{capture: true, plan: CapturePlan{Gap: 8.333, Frames: 4096}}},
+		{params: `{"capture":{"gap":10,"seconds":2}}`, want: dragCaptureOptions{capture: true, plan: CapturePlan{Gap: 10, Seconds: 2}}},
+		// A plan at the top level of the drag is not a plan of its recording.
+		{params: `{"gap":8,"frames":10}`, want: dragCaptureOptions{}},
+	} {
+		got, err := parseDragCaptureOptions(json.RawMessage(test.params))
+		if err != nil || got != test.want {
+			t.Errorf("parseDragCaptureOptions(%s) = %+v, %v; want %+v", test.params, got, err, test.want)
+		}
+	}
+	for _, test := range []struct{ params, want string }{
+		{`{"capture":true}`, "capture must be false or a plan {gap, seconds | frames}"},
+		{`{"capture":"yes"}`, "capture must be false or a plan {gap, seconds | frames}"},
+		{`{"capture":1}`, "capture must be false or a plan {gap, seconds | frames}"},
+		{`{"capture":[]}`, "capture must be false or a plan {gap, seconds | frames}"},
+		{`{"capture":true,"gap":8,"frames":10}`, "capture must be false or a plan {gap, seconds | frames}"},
+		{`{"capture":{}}`, "gap must be a number of milliseconds from 1 to 1000"},
+		{`{"capture":{"gap":8,"seconds":1,"frames":10}}`, "give seconds or frames, not both"},
+		{`{"capture":{"gap":8}}`, "a recording needs seconds or frames"},
+		{`{"capture":{"gap":8,"seconds":601}}`, "seconds must be above 0 and at most 600"},
+		{`{"capture":{"gap":8,"frames":4097}}`, "frames must be an integer from 1 to 4096"},
+		{`{"capture":{"gap":8,"seconds":40}}`, "the recording plans 5000 stills, more than 4096"},
+	} {
+		if _, err := parseDragCaptureOptions(json.RawMessage(test.params)); messageOf(err) != test.want {
+			t.Errorf("parseDragCaptureOptions(%s) error %v, want %q", test.params, err, test.want)
+		}
+	}
+}
+
 // contract: diagnostics.capture-start.parses-frame-identity-option
 func TestCaptureStartOptionsParseFrameIdentity(t *testing.T) {
 	for _, test := range []struct {
@@ -205,9 +289,9 @@ func TestCaptureStartOptionsParseFrameIdentity(t *testing.T) {
 		json string
 		want bool
 	}{
-		{name: "omitted", json: `{}`, want: false},
-		{name: "false", json: `{"frameIdentity":false}`, want: false},
-		{name: "true", json: `{"frameIdentity":true}`, want: true},
+		{name: "omitted", json: `{"gap":8,"frames":10}`, want: false},
+		{name: "false", json: `{"gap":8,"frames":10,"frameIdentity":false}`, want: false},
+		{name: "true", json: `{"gap":8,"frames":10,"frameIdentity":true}`, want: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			got, err := parseCaptureStartOptions(json.RawMessage(test.json))
@@ -217,48 +301,49 @@ func TestCaptureStartOptionsParseFrameIdentity(t *testing.T) {
 		})
 	}
 	for _, value := range []string{`null`, `"true"`, `1`, `[]`, `{}`} {
-		if _, err := parseCaptureStartOptions(json.RawMessage(`{"frameIdentity":` + value + `}`)); err == nil {
+		if _, err := parseCaptureStartOptions(json.RawMessage(`{"gap":8,"frames":10,"frameIdentity":` + value + `}`)); err == nil {
 			t.Errorf("frameIdentity value %s was accepted", value)
 		}
 	}
 }
 
 type fakeCaptureStatus struct {
-	limited bool
-	gap     float64
+	missed int
+	late   int
+	gap    float64
 }
 
 type captureStartProbe struct {
 	frameIdentity bool
+	plan          CapturePlan
 	failStop      bool
-	ownedStream   bool
 }
 
 func (*captureStartProbe) Open(CaptureTarget) error { return nil }
-func (c *captureStartProbe) Start(_ string, frameIdentity bool) error {
+func (c *captureStartProbe) Start(_ string, plan CapturePlan, frameIdentity bool) error {
 	c.frameIdentity = frameIdentity
-	c.ownedStream = true
+	c.plan = plan
 	return nil
 }
-func (*captureStartProbe) Wait() (bool, error) { return true, nil }
 func (c *captureStartProbe) Stop() (int, error) {
 	if c.failStop {
 		return 0, errors.New("stop failed")
 	}
-	c.ownedStream = false
 	return 1, nil
 }
-func (c *captureStartProbe) HasStream() (bool, error) { return c.ownedStream, nil }
+
+// testPlan is the plan of the stills of the recordings of these tests.
+var testPlan = CapturePlan{Gap: 8, Frames: 120}
 
 // contract: diagnostics.capture-start.forwards-frame-identity
 func TestRecordingStartForwardsFrameIdentity(t *testing.T) {
 	fake := &captureStartProbe{}
 	var recording Recording
-	if err := recording.Start(fake, CaptureTarget{Window: 7}, filepath.Join(t.TempDir(), "frames"), true); err != nil {
+	if err := recording.Start(fake, CaptureTarget{Window: 7}, filepath.Join(t.TempDir(), "frames"), testPlan, true); err != nil {
 		t.Fatal(err)
 	}
-	if !fake.frameIdentity {
-		t.Fatal("recording start did not forward frameIdentity")
+	if !fake.frameIdentity || fake.plan != testPlan {
+		t.Fatalf("recording start forwarded frameIdentity %t and plan %+v, want true and %+v", fake.frameIdentity, fake.plan, testPlan)
 	}
 }
 
@@ -267,87 +352,83 @@ func TestRecordingFinishPreservesFrameIdentityOption(t *testing.T) {
 	fake := &captureStartProbe{}
 	var recording Recording
 	directory := filepath.Join(t.TempDir(), "frames")
-	if err := recording.Start(fake, CaptureTarget{Window: 7}, directory, true); err != nil {
+	if err := recording.Start(fake, CaptureTarget{Window: 7}, directory, testPlan, true); err != nil {
 		t.Fatal(err)
 	}
-	finishedDirectory, _, frameIdentity, err := recording.Finish(fake)
-	if err != nil || finishedDirectory != directory || !frameIdentity {
-		t.Fatalf("finish directory=%q frameIdentity=%v error=%v", finishedDirectory, frameIdentity, err)
+	finishedDirectory, _, frameIdentity, window, err := recording.Finish(fake)
+	if err != nil || finishedDirectory != directory || !frameIdentity || window == nil || *window != 7 {
+		t.Fatalf("finish directory=%q frameIdentity=%v window=%v error=%v", finishedDirectory, frameIdentity, window, err)
 	}
 }
 
-// contract: recording.finish.stop-failure-preserves-folder
-func TestRecordingFinishStopFailurePreservesFolder(t *testing.T) {
-	fake := &captureStartProbe{failStop: true}
+// contract: recording.finish.reports-the-recorded-window
+func TestRecordingFinishReportsTheRecordedWindow(t *testing.T) {
+	fake := &captureStartProbe{}
 	var recording Recording
-	directory := filepath.Join(t.TempDir(), "frames")
-	if err := recording.Start(fake, CaptureTarget{Window: 7}, directory, false); err != nil {
+	if err := recording.Start(fake, CaptureTarget{Window: 7, Display: true}, filepath.Join(t.TempDir(), "display"), testPlan, false); err != nil {
 		t.Fatal(err)
 	}
-
-	finishedDirectory, _, _, err := recording.Finish(fake)
-	if finishedDirectory != directory || err == nil || err.Error() != "stop failed" {
-		t.Fatalf("finish directory=%q error=%v", finishedDirectory, err)
+	if _, _, _, window, err := recording.Finish(fake); err != nil || window != nil {
+		t.Fatalf("a display recording finished with window %v and error %v, want nil and nil", window, err)
 	}
-	if info, statErr := os.Stat(directory); statErr != nil || !info.IsDir() {
-		t.Fatalf("failed capture directory was not preserved: stat=%v info=%v", statErr, info)
-	}
-	if recording.Running() != directory {
-		t.Fatalf("failed finish lost cleanup owner: running=%q want=%q", recording.Running(), directory)
-	}
-	blocked := recording.Start(&captureStartProbe{}, CaptureTarget{Window: 8}, filepath.Join(t.TempDir(), "next"), false)
-	if blocked == nil || !strings.Contains(blocked.Error(), "is running") {
-		t.Fatalf("a new recording was not blocked: %v", blocked)
-	}
-	fake.failStop = false
-	if err := recording.Abort(fake); err != nil {
+	if err := recording.Start(fake, CaptureTarget{Window: 9}, filepath.Join(t.TempDir(), "window"), testPlan, false); err != nil {
 		t.Fatal(err)
 	}
-	_, statErr := os.Stat(directory)
-	if recording.Running() != "" || !os.IsNotExist(statErr) {
-		t.Fatalf("abort retry left running=%q folder error=%v", recording.Running(), statErr)
+	if _, _, _, window, err := recording.Finish(fake); err != nil || window == nil || *window != 9 {
+		t.Fatalf("a window recording finished with window %v and error %v, want 9 and nil", window, err)
 	}
 }
 
-func (c fakeCaptureStatus) Limited() bool       { return c.limited }
+func (c fakeCaptureStatus) Missed() int         { return c.missed }
+func (c fakeCaptureStatus) Late() int           { return c.late }
 func (c fakeCaptureStatus) LongestGap() float64 { return c.gap }
 
-// contract: diagnostics.capture-stop.payload-reports-frame-limit
-func TestCaptureStopPayloadReportsNormalFrameLimit(t *testing.T) {
-	payload := captureStopPayload(fakeCaptureStatus{limited: true, gap: 42.5}, "/tmp/frames", 600, nil, false)
-	if payload["frames"] != "/tmp/frames" || payload["callbackStatus"] != "/tmp/frames/callback-status.jsonl" || payload["displayLink"] != "/tmp/frames/display-link.json" || payload["count"] != 600 || payload["limited"] != true || payload["longestGap"] != 42.5 {
-		t.Fatalf("payload = %#v", payload)
+// contract: diagnostics.capture-stop.payload-reports-stills
+func TestCaptureStopPayloadReportsStills(t *testing.T) {
+	window := 31
+	payload := captureStopPayload(fakeCaptureStatus{missed: 2, late: 1, gap: 42.5}, "/tmp/frames", 598, nil, false, &window)
+	want := map[string]any{
+		"window":      31,
+		"frames":      "/tmp/frames",
+		"stills":      filepath.Join("/tmp/frames", "stills.jsonl"),
+		"displayLink": filepath.Join("/tmp/frames", "display-link.json"),
+		"count":       598,
+		"missed":      2,
+		"late":        1,
+		"longestGap":  42.5,
 	}
-}
-
-// contract: diagnostics.capture-stop.payload-reports-callback-status
-func TestCaptureStopPayloadNamesCallbackStatusArtifact(t *testing.T) {
-	payload := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, nil, false)
-	if payload["callbackStatus"] != filepath.Join("/tmp/frames", "callback-status.jsonl") {
-		t.Fatalf("callback status path = %#v", payload["callbackStatus"])
+	for key, value := range want {
+		if payload[key] != value {
+			t.Errorf("payload[%q] = %#v, want %#v", key, payload[key], value)
+		}
+	}
+	for key := range payload {
+		if _, ok := want[key]; !ok && key != "layouts" {
+			t.Errorf("payload has the member %q, which the stop does not report", key)
+		}
+	}
+	if _, ok := payload["layouts"]; !ok || len(payload) != len(want)+1 {
+		t.Errorf("payload has the members %v, want those of %v and layouts", payload, want)
+	}
+	// A display recording has no window of its own: the member is null, not absent.
+	display := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, nil, false, nil)
+	if value, ok := display["window"]; !ok || value != nil {
+		t.Errorf("the stop of a display recording reports window %#v (present %t), want null", value, ok)
 	}
 }
 
 // contract: diagnostics.capture-stop.payload-names-opt-in-frame-identity-artifact
 func TestCaptureStopPayloadNamesOptInFrameIdentityArtifact(t *testing.T) {
-	payload := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, nil, true)
+	payload := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, nil, true, nil)
 	identity, ok := payload["frameIdentity"].(map[string]any)
 	if !ok || identity["status"] != "complete" || identity["manifest"] != filepath.Join("/tmp/frames", "frame-identities", "manifest.json") {
 		t.Fatalf("opt-in identity artifact was not returned: %#v", payload)
 	}
 }
 
-// contract: diagnostics.capture-stop.payload-reports-unbounded
-func TestCaptureStopPayloadReportsUnboundedRecording(t *testing.T) {
-	payload := captureStopPayload(fakeCaptureStatus{limited: false}, "/tmp/frames", 3, nil, false)
-	if payload["limited"] != false {
-		t.Fatalf("payload = %#v", payload)
-	}
-}
-
 // contract: diagnostics.capture-stop.payload-reports-layout-timeline
 func TestCaptureStopPayloadRequiresLayoutTimeline(t *testing.T) {
-	payload := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, nil, false)
+	payload := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, nil, false, nil)
 	if _, ok := payload["layouts"]; !ok {
 		t.Fatalf("capture stop omitted layouts: %#v", payload)
 	}
@@ -359,7 +440,7 @@ func TestCaptureStopPayloadPreservesLayoutStages(t *testing.T) {
 		{Ticket: 7, Begun: 10, Requested: 15, Presented: 20, Committed: 30, CommitPath: "view-join", OpenAtCommit: 1, Flushed: 35},
 		{Ticket: 8, Begun: 40, Requested: math.NaN(), Presented: math.NaN(), Committed: math.NaN(), OpenAtCommit: math.NaN(), Flushed: math.NaN()},
 	}
-	payload := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, records, false)
+	payload := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, records, false, nil)
 	layouts := payload["layouts"].([]map[string]any)
 	want := []map[string]any{
 		{"ticket": uint64(7), "begun": float64(10), "requested": float64(15), "presented": float64(20), "committed": float64(30), "commitPath": "view-join", "openAtCommit": float64(1), "flushed": float64(35)},
@@ -705,7 +786,7 @@ func TestRecordingRejectsStartWhileDocumentIdentityCleanupIsIncomplete(t *testin
 	recording := Recording{
 		identitySource: &documentFrameIdentitySource{surface: "surface-a", generation: 7},
 	}
-	err := recording.StartWithDocumentIdentity(probe, CaptureTarget{Window: 9}, filepath.Join(t.TempDir(), "frames"), true, true)
+	err := recording.StartWithDocumentIdentity(probe, CaptureTarget{Window: 9}, filepath.Join(t.TempDir(), "frames"), testPlan, true, true)
 	if err == nil || !strings.Contains(err.Error(), "cleanup for surface \"surface-a\" generation 7 is incomplete") {
 		t.Fatalf("start error = %v, want incomplete prior cleanup", err)
 	}

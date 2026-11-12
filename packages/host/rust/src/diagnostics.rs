@@ -27,7 +27,9 @@ use crate::object_counts::{
 };
 use crate::platform;
 use crate::platform::{DocumentViewportMarker, Handle};
-use crate::recording::{Capture, NewWindowCapture, Recording, Target, layout_trace};
+use crate::recording::{
+    Capture, NewWindowCapture, Plan, Recording, StillCounts, Target, layout_trace,
+};
 use crate::workspace::Workspace;
 
 /// A recording in progress.
@@ -60,8 +62,8 @@ fn with_document_frame_identity_lifecycle<T>(
     operation()
 }
 
-/// The window recording operation of the platform. `after` is the last presentation time (ms) to include in the record
-/// when it stops; `window` and `connection` are the label of the window and the end of the endpoint connection of the
+/// The window recording operation of the platform. `after` is the time (ms) from which a still must be requested before the
+/// recording stops, 0 for a stop that requests no later still; `window` and `connection` are the label of the window and the end of the endpoint connection of the
 /// request, whose ends end the waits of the operations.
 struct PlatformCapture {
     platform: &'static dyn platform::Platform,
@@ -99,23 +101,23 @@ impl NewWindowCapture for PlatformCapture {
 
 impl Capture for PlatformCapture {
     fn open(&self, target: Target) -> Result<(), String> {
+        self.platform.capture_open(target.window, target.display)
+    }
+    /// Waits, as the other capture waits do, for still 0 of the recording.
+    fn start(&self, directory: &Path, plan: Plan, frame_identity: bool) -> Result<(), String> {
         self.await_capture(|token| {
-            self.platform
-                .capture_open(target.window, target.display, token)
+            self.platform.capture_start(
+                &directory.to_string_lossy(),
+                plan.gap,
+                plan.seconds,
+                plan.frames,
+                frame_identity,
+                token,
+            )
         })
-    }
-    fn start(&self, directory: &Path, frame_identity: bool) -> Result<(), String> {
-        self.platform
-            .capture_start(&directory.to_string_lossy(), frame_identity)
-    }
-    fn wait(&self) -> Result<bool, String> {
-        self.await_capture(|token| self.platform.capture_wait(token))
     }
     fn stop(&self) -> Result<i32, String> {
         self.await_capture(|token| self.platform.capture_stop(self.after, token))
-    }
-    fn has_stream(&self) -> Result<bool, String> {
-        self.platform.capture_has_stream()
     }
 }
 
@@ -226,15 +228,27 @@ pub(crate) fn call(
         "diagnostics.capture.start" => {
             let options = parse_capture_start_options(&params)?;
             if options.new_window {
-                let frames = capture_start_new_window(window, &connection, options.frame_identity)?;
+                let frames = capture_start_new_window(
+                    window,
+                    &connection,
+                    options.plan,
+                    options.frame_identity,
+                )?;
                 let platform = platform::current().map_err(internal)?;
                 on_main(window, move || platform.layout_trace_start()).map_err(internal)?;
-                return Ok(json!({"frames": frames.to_string_lossy()}));
+                // The held window is known once the application shows it, after this reply; the stop reply names it.
+                return Ok(json!({"frames": frames.to_string_lossy(), "window": null}));
             }
             let display = options.display;
-            let frames = with_document_frame_identity_lifecycle(|| {
-                let frames =
-                    capture_start(window, &connection, display, options.frame_identity, true)?;
+            let (frames, recorded) = with_document_frame_identity_lifecycle(|| {
+                let started = capture_start(
+                    window,
+                    &connection,
+                    display,
+                    options.plan,
+                    options.frame_identity,
+                    true,
+                )?;
                 let traced = (|| -> Result<(), Failure> {
                     let platform = platform::current().map_err(internal)?;
                     on_main(window, move || platform.layout_trace_start()).map_err(internal)
@@ -250,9 +264,9 @@ pub(crate) fn call(
                     }
                     return Err(error);
                 }
-                Ok(frames)
+                Ok(started)
             })?;
-            Ok(json!({"frames": frames.to_string_lossy()}))
+            Ok(json!({"frames": frames.to_string_lossy(), "window": recorded}))
         }
         "diagnostics.capture.document-identity.start" => {
             capture_document_identity_start(window, &params)
@@ -325,7 +339,7 @@ pub(crate) fn call(
             )
             .map_err(|error| Failure::new(crate::endpoint::HANDLER_FAILED, error))
         }
-        "diagnostics.capture.still" => capture_still(window, &connection),
+        "diagnostics.capture.still" => capture_still(window),
         "diagnostics.notifications" => delivered_notifications(window),
         "diagnostics.page.collect" => page_collect(window),
         "diagnostics.host.events" => host_events(window, &params),
@@ -459,11 +473,64 @@ fn document_viewport_marker(
     )
 }
 
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Default, PartialEq)]
 struct CaptureStartOptions {
     display: bool,
     frame_identity: bool,
     new_window: bool,
+    plan: Plan,
+}
+
+/// The largest number of stills that a recording plans (native/darwin/src/capture.h).
+const CAPTURE_PLAN_LIMIT: f64 = 4096.0;
+
+/// Reads the plan of the stills of a recording, gap and seconds or frames, and refuses it with the messages of the native
+/// start (native/darwin/src/capture.h) before any window is held or prepared.
+fn parse_capture_plan(params: &Map<String, Value>) -> Result<Plan, Failure> {
+    let given = |name: &str| params.get(name).filter(|value| !value.is_null());
+    let gap = given("gap")
+        .and_then(Value::as_f64)
+        .filter(|gap| (1.0..=1000.0).contains(gap))
+        .ok_or_else(|| Failure::params("gap must be a number of milliseconds from 1 to 1000"))?;
+    match (given("seconds"), given("frames")) {
+        (Some(_), Some(_)) => Err(Failure::params("give seconds or frames, not both")),
+        (None, None) => Err(Failure::params("a recording needs seconds or frames")),
+        (Some(seconds), None) => {
+            let seconds = seconds
+                .as_f64()
+                .filter(|seconds| *seconds > 0.0 && *seconds <= 600.0)
+                .ok_or_else(|| Failure::params("seconds must be above 0 and at most 600"))?;
+            // Every still whose planned time n·gap is before the length.
+            let count = (seconds * 1000.0 / gap).ceil();
+            if count > CAPTURE_PLAN_LIMIT {
+                return Err(Failure::params(format!(
+                    "the recording plans {count:.0} stills, more than {CAPTURE_PLAN_LIMIT:.0}"
+                )));
+            }
+            Ok(Plan {
+                gap,
+                seconds,
+                frames: 0,
+            })
+        }
+        (None, Some(frames)) => {
+            let frames = frames
+                .as_f64()
+                .filter(|frames| {
+                    frames.fract() == 0.0 && (1.0..=CAPTURE_PLAN_LIMIT).contains(frames)
+                })
+                .ok_or_else(|| {
+                    Failure::params(format!(
+                        "frames must be an integer from 1 to {CAPTURE_PLAN_LIMIT:.0}"
+                    ))
+                })?;
+            Ok(Plan {
+                gap,
+                seconds: 0.0,
+                frames: frames as i32,
+            })
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -714,6 +781,7 @@ fn late_document_frame_identity_entry(
 fn parse_capture_start_options(
     params: &Map<String, Value>,
 ) -> Result<CaptureStartOptions, Failure> {
+    let plan = parse_capture_plan(params)?;
     let display = match params.get("display") {
         None | Some(Value::Null) => false,
         Some(Value::Bool(display)) => *display,
@@ -738,6 +806,7 @@ fn parse_capture_start_options(
         display,
         frame_identity,
         new_window,
+        plan,
     })
 }
 
@@ -1161,10 +1230,7 @@ fn process_exit_answer(pid: i32, exited: bool, end: Option<&str>) -> Result<Valu
 /// Takes one still image of the window without giving it focus, writes it to `<config-dir>/captures/still-*/window.png`
 /// and returns the path. It is observation material that a person checks visually during development, and the requester
 /// deletes the directory after checking.
-fn capture_still(
-    window: &Window,
-    connection: &crate::endpoint::ConnectionEnd,
-) -> Result<Value, Failure> {
+fn capture_still(window: &Window) -> Result<Value, Failure> {
     let platform = platform::current().map_err(internal)?;
     let held = window.clone();
     let numbers = on_main(window, move || platform.window_numbers(&held)).map_err(internal)?;
@@ -1187,10 +1253,9 @@ fn capture_still(
         ));
     platform.private_directory(&directory).map_err(internal)?;
     let path = directory.join("window.png");
-    let recorder = recorder(window, connection)?;
-    recorder
-        // The child windows of an open modal or settings window stand over the window, so the image holds them too.
-        .await_capture(|token| platform.capture_still(&numbers, &path.to_string_lossy(), token))
+    // The child windows of an open modal or settings window stand over the window, so the image holds them too.
+    platform
+        .capture_still(numbers[0], &path.to_string_lossy())
         .map_err(internal)?;
     Ok(json!({"path": path.to_string_lossy()}))
 }
@@ -1199,8 +1264,7 @@ fn capture_still(
 pub(crate) fn capture_windows(app: &crate::framework::AppHandle) -> Result<Vec<String>, String> {
     let mut paths = Vec::new();
     for (label, window) in app.windows() {
-        // The debug view has no endpoint connection; the window and its page end the wait.
-        let value = capture_still(&window, &crate::endpoint::ConnectionEnd::open())
+        let value = capture_still(&window)
             .map_err(|failure| format!("window {label}: {}", failure.message))?;
         let path = value["path"].as_str().ok_or_else(|| {
             format!("window {label}: the still capture answered {value} without a path")
@@ -1403,15 +1467,22 @@ fn fixture(host: &Host, window: &Window, request: Map<String, Value>) -> Result<
 struct DragCaptureOptions {
     capture: bool,
     frame_identity: bool,
+    plan: Plan,
 }
 
 fn parse_drag_capture_options(
     params: &mut Map<String, Value>,
 ) -> Result<DragCaptureOptions, Failure> {
-    let capture = match params.remove("capture") {
-        None | Some(Value::Null) => false,
-        Some(Value::Bool(capture)) => capture,
-        Some(_) => return Err(Failure::params("capture must be a boolean")),
+    // capture is absent, null or false for a drag without a recording, or the plan of the recording, which
+    // diagnostics.capture.start checks with the same messages; the page receives none of it.
+    let (capture, plan) = match params.remove("capture") {
+        None | Some(Value::Null) | Some(Value::Bool(false)) => (false, Plan::default()),
+        Some(Value::Object(plan)) => (true, parse_capture_plan(&plan)?),
+        Some(_) => {
+            return Err(Failure::params(
+                "capture must be false or a plan {gap, seconds | frames}",
+            ));
+        }
     };
     let frame_identity = match params.remove("frameIdentity") {
         None => false,
@@ -1419,11 +1490,12 @@ fn parse_drag_capture_options(
         Some(_) => return Err(Failure::params("frameIdentity must be a boolean")),
     };
     if frame_identity && !capture {
-        return Err(Failure::params("frameIdentity requires capture to be true"));
+        return Err(Failure::params("frameIdentity requires a capture plan"));
     }
     Ok(DragCaptureOptions {
         capture,
         frame_identity,
+        plan,
     })
 }
 
@@ -1636,16 +1708,17 @@ fn drag(
 
     let frames = if capture_options.capture {
         Some(with_document_frame_identity_lifecycle(|| {
-            let frames = capture_start(
+            let started = capture_start(
                 window,
                 connection,
                 false,
+                capture_options.plan,
                 capture_options.frame_identity,
                 false,
             )?;
             let platform = platform::current().map_err(internal)?;
             on_main(window, move || platform.layout_trace_start()).map_err(internal)?;
-            Ok::<_, Failure>(frames)
+            Ok::<_, Failure>(started)
         })?)
     } else {
         None
@@ -1754,11 +1827,12 @@ fn drag(
             Value::Null => Map::new(),
             _ => return Err(internal("the page drag result is not an object")),
         };
-        if let Some(frames) = &frames {
+        if let Some((frames, recorded)) = &frames {
             merged.insert(
                 "frames".into(),
                 Value::String(frames.to_string_lossy().into_owned()),
             );
+            merged.insert("window".into(), json!(recorded));
             // default: a lock that a panicking thread poisoned still holds the pointer ticks of the drag, which are
             // only read; the panic hook records the panic.
             let ticks = sent.lock().unwrap_or_else(PoisonError::into_inner).clone();
@@ -1884,13 +1958,12 @@ fn send_legs(
     }
 }
 
-/// Starts the window record and returns the record directory. When display is set, it records the windows of this
-/// application on the display that holds the window.
 /// Holds the next new window of the application and answers with the frame directory once the hold is set; the recording
 /// of that window starts when the application shows it (`Recording::start_new_window`).
 fn capture_start_new_window(
     window: &Window,
     connection: &crate::endpoint::ConnectionEnd,
+    plan: Plan,
     frame_identity: bool,
 ) -> Result<PathBuf, Failure> {
     let stamp = SystemTime::now()
@@ -1909,20 +1982,23 @@ fn capture_start_new_window(
     let recorder = Arc::new(recorder(window, connection)?);
     let platform = recorder.platform;
     RECORDING
-        .start_new_window(recorder, &directory, frame_identity, &|path| {
+        .start_new_window(recorder, &directory, plan, frame_identity, &|path| {
             platform.private_directory(path)
         })
         .map_err(internal)?;
     Ok(directory)
 }
 
+/// Starts the window recording of plan and returns the record directory once still 0 is written. When display is set, it
+/// records the windows of this application on the display that holds the window.
 fn capture_start(
     window: &Window,
     connection: &crate::endpoint::ConnectionEnd,
     display: bool,
+    plan: Plan,
     frame_identity: bool,
     document_identity_allowed: bool,
-) -> Result<PathBuf, Failure> {
+) -> Result<(PathBuf, Option<isize>), Failure> {
     let platform = platform::current().map_err(internal)?;
     let held = window.clone();
     let numbers = on_main(window, move || platform.window_numbers(&held)).map_err(internal)?;
@@ -1951,16 +2027,18 @@ fn capture_start(
                 display,
             },
             &directory,
+            plan,
             frame_identity,
             document_identity_allowed,
             &|path| recorder.platform.private_directory(path),
         )
         .map_err(internal)?;
-    Ok(directory)
+    // A display recording records every window of the application on the display, so it has no window of its own.
+    Ok((directory, (!display).then_some(number)))
 }
 
-/// Records until the presentation time after, ends the record in progress and returns the directory and the number of
-/// frames.
+/// Records until a still requested at or after after has completed, ends the recording in progress and returns the
+/// directory, the record of the stills and the number of frames.
 fn capture_stop(
     window: &Window,
     connection: &crate::endpoint::ConnectionEnd,
@@ -2021,15 +2099,20 @@ fn capture_stop(
         }
         return Err(internal(failures.join("; ")));
     }
-    let (directory, count, frame_identity) =
+    let (directory, count, frame_identity, recorded_window) =
         finished.ok_or_else(|| internal("capture stop completed without a recording result"))?;
-    let mut result = finish_capture_stop(&directory, count, frame_identity, || {
-        let platform = recorder.platform;
-        let layouts = on_main(window, move || platform.layout_trace_stop()).map_err(internal)?;
-        let limited = recorder.platform.capture_limited().map_err(internal)?;
-        let gap = recorder.platform.capture_longest_gap().map_err(internal)?;
-        Ok((layouts, limited, gap))
-    })?;
+    let mut result =
+        finish_capture_stop(&directory, count, frame_identity, recorded_window, || {
+            let platform = recorder.platform;
+            let layouts =
+                on_main(window, move || platform.layout_trace_stop()).map_err(internal)?;
+            let stills = StillCounts {
+                missed: recorder.platform.capture_missed().map_err(internal)?,
+                late: recorder.platform.capture_late().map_err(internal)?,
+                longest_gap: recorder.platform.capture_longest_gap().map_err(internal)?,
+            };
+            Ok((layouts, stills))
+        })?;
     if let Some(issued_slots) = issued_slots {
         result["frameIdentity"]["issuedSlots"] = json!(issued_slots);
     }
@@ -2173,16 +2256,17 @@ fn finish_capture_stop(
     directory: &Path,
     count: i32,
     frame_identity: bool,
-    finalize: impl FnOnce() -> Result<(Vec<crate::platform::LayoutRecord>, bool, f64), Failure>,
+    window: Option<isize>,
+    finalize: impl FnOnce() -> Result<(Vec<crate::platform::LayoutRecord>, StillCounts), Failure>,
 ) -> Result<Value, Failure> {
     match finalize() {
-        Ok((layouts, limited, gap)) => Ok(crate::recording::stop_payload(
+        Ok((layouts, stills)) => Ok(crate::recording::stop_payload(
             directory,
             count,
-            limited,
-            gap,
+            stills,
             &layouts,
             frame_identity,
+            window,
         )),
         Err(error) => Err(error),
     }
@@ -2401,29 +2485,28 @@ mod input_source_test;
 mod capture_start_options_test {
     use super::*;
 
+    fn parse(value: Value) -> Result<CaptureStartOptions, Failure> {
+        parse_capture_start_options(value.as_object().unwrap())
+    }
+
     // contract: diagnostics.capture-start.preserves-display-option-parsing
     #[test]
     fn capture_start_options_preserve_display_parsing() {
         for (json, expected) in [
-            (json!({}), false),
-            (json!({"display": false}), false),
-            (json!({"display": true}), true),
-            (json!({"display": null}), false),
+            (json!({"gap": 8, "frames": 10}), false),
+            (json!({"gap": 8, "frames": 10, "display": false}), false),
+            (json!({"gap": 8, "frames": 10, "display": true}), true),
+            (json!({"gap": 8, "frames": 10, "display": null}), false),
         ] {
-            let params = json.as_object().unwrap().clone();
-            let got = parse_capture_start_options(&params).unwrap();
-            assert_eq!(got.display, expected, "params {params:?}");
+            let got = parse(json.clone()).unwrap();
+            assert_eq!(got.display, expected, "params {json}");
         }
         for value in [json!("true"), json!(1), json!([]), json!({})] {
-            let mut params = Map::new();
-            params.insert("display".into(), value);
-            assert!(
-                parse_capture_start_options(&params).is_err(),
-                "params {params:?}"
-            );
+            let params = json!({"gap": 8, "frames": 10, "display": value});
+            assert!(parse(params.clone()).is_err(), "params {params}");
         }
         assert!(
-            !parse_capture_start_options(&Map::new())
+            !parse(json!({"gap": 8, "frames": 10}))
                 .unwrap()
                 .frame_identity
         );
@@ -2434,17 +2517,138 @@ mod capture_start_options_test {
     #[test]
     fn capture_start_options_parse_frame_identity_and_reject_non_booleans() {
         for (value, expected) in [(Value::Bool(false), false), (Value::Bool(true), true)] {
-            let params = Map::from_iter([("frameIdentity".into(), value)]);
-            assert_eq!(
-                parse_capture_start_options(&params).unwrap().frame_identity,
-                expected
-            );
+            let params = json!({"gap": 8, "frames": 10, "frameIdentity": value});
+            assert_eq!(parse(params).unwrap().frame_identity, expected);
         }
         for value in [Value::Null, json!("true"), json!(1), json!([]), json!({})] {
-            let params = Map::from_iter([("frameIdentity".into(), value)]);
-            assert!(
-                parse_capture_start_options(&params).is_err(),
-                "params {params:?}"
+            let params = json!({"gap": 8, "frames": 10, "frameIdentity": value});
+            assert_eq!(
+                parse(params.clone()).map(|_| ()).unwrap_err().message,
+                "frameIdentity must be a boolean",
+                "params {params}"
+            );
+        }
+    }
+
+    // contract: diagnostics.capture-start.validates-still-plan
+    #[test]
+    fn the_plan_of_a_recording_takes_gap_and_seconds_or_frames() {
+        for (params, expected) in [
+            (
+                json!({"gap": 8.333, "seconds": 2}),
+                Plan {
+                    gap: 8.333,
+                    seconds: 2.0,
+                    frames: 0,
+                },
+            ),
+            (
+                json!({"gap": 1, "frames": 4096}),
+                Plan {
+                    gap: 1.0,
+                    seconds: 0.0,
+                    frames: 4096,
+                },
+            ),
+            (
+                json!({"gap": 1000, "seconds": 600}),
+                Plan {
+                    gap: 1000.0,
+                    seconds: 600.0,
+                    frames: 0,
+                },
+            ),
+            (
+                json!({"gap": 146.484375, "seconds": 600}),
+                Plan {
+                    gap: 146.484375,
+                    seconds: 600.0,
+                    frames: 0,
+                },
+            ),
+            (
+                json!({"gap": 10, "frames": 1, "seconds": null}),
+                Plan {
+                    gap: 10.0,
+                    seconds: 0.0,
+                    frames: 1,
+                },
+            ),
+        ] {
+            assert_eq!(
+                parse(params.clone()).unwrap().plan,
+                expected,
+                "params {params}"
+            );
+        }
+        for (params, expected) in [
+            (
+                json!({"frames": 10}),
+                "gap must be a number of milliseconds from 1 to 1000",
+            ),
+            (
+                json!({"gap": null, "frames": 10}),
+                "gap must be a number of milliseconds from 1 to 1000",
+            ),
+            (
+                json!({"gap": "8", "frames": 10}),
+                "gap must be a number of milliseconds from 1 to 1000",
+            ),
+            (
+                json!({"gap": 0.5, "frames": 10}),
+                "gap must be a number of milliseconds from 1 to 1000",
+            ),
+            (
+                json!({"gap": 1000.5, "frames": 10}),
+                "gap must be a number of milliseconds from 1 to 1000",
+            ),
+            (
+                json!({"gap": 8, "seconds": 1, "frames": 10}),
+                "give seconds or frames, not both",
+            ),
+            (json!({"gap": 8}), "a recording needs seconds or frames"),
+            (
+                json!({"gap": 8, "seconds": 0}),
+                "seconds must be above 0 and at most 600",
+            ),
+            (
+                json!({"gap": 8, "seconds": 600.5}),
+                "seconds must be above 0 and at most 600",
+            ),
+            (
+                json!({"gap": 8, "seconds": "1"}),
+                "seconds must be above 0 and at most 600",
+            ),
+            (
+                json!({"gap": 8, "frames": 0}),
+                "frames must be an integer from 1 to 4096",
+            ),
+            (
+                json!({"gap": 8, "frames": 4097}),
+                "frames must be an integer from 1 to 4096",
+            ),
+            (
+                json!({"gap": 8, "frames": 2.5}),
+                "frames must be an integer from 1 to 4096",
+            ),
+            (
+                json!({"gap": 8, "seconds": 40}),
+                "the recording plans 5000 stills, more than 4096",
+            ),
+            (
+                json!({"gap": 146, "seconds": 600}),
+                "the recording plans 4110 stills, more than 4096",
+            ),
+            // The plan is checked before newWindow holds a window.
+            (
+                json!({"newWindow": true}),
+                "gap must be a number of milliseconds from 1 to 1000",
+            ),
+        ] {
+            assert_eq!(
+                parse(params.clone()).map(|_| ()).unwrap_err().message,
+                expected,
+                "params {params}"
             );
         }
     }
@@ -2464,13 +2668,17 @@ mod drag_capture_options_test {
     fn drag_capture_options_keep_identity_off_by_default_and_require_capture_when_enabled() {
         for (params, expected_capture, expected_identity) in [
             (json!({}), false, false),
-            (json!({"capture": true}), true, false),
+            (json!({"capture": {"gap": 8, "frames": 10}}), true, false),
             (
-                json!({"capture": true, "frameIdentity": false}),
+                json!({"capture": {"gap": 8, "frames": 10}, "frameIdentity": false}),
                 true,
                 false,
             ),
-            (json!({"capture": true, "frameIdentity": true}), true, true),
+            (
+                json!({"capture": {"gap": 8, "frames": 10}, "frameIdentity": true}),
+                true,
+                true,
+            ),
         ] {
             let options = parse(params.clone()).unwrap();
             assert_eq!(options.capture, expected_capture, "params {params}");
@@ -2485,14 +2693,14 @@ mod drag_capture_options_test {
                 Err(error) => error,
             };
             assert_eq!(
-                error.message, "frameIdentity requires capture to be true",
+                error.message, "frameIdentity requires a capture plan",
                 "params {params}"
             );
         }
         for params in [
-            json!({"capture": true, "frameIdentity": null}),
-            json!({"capture": true, "frameIdentity": "true"}),
-            json!({"capture": true, "frameIdentity": 1}),
+            json!({"capture": {"gap": 8, "frames": 10}, "frameIdentity": null}),
+            json!({"capture": {"gap": 8, "frames": 10}, "frameIdentity": "true"}),
+            json!({"capture": {"gap": 8, "frames": 10}, "frameIdentity": 1}),
         ] {
             let error = match parse(params.clone()) {
                 Ok(_) => panic!("params {params} unexpectedly parsed"),
@@ -2503,6 +2711,104 @@ mod drag_capture_options_test {
                 "params {params}"
             );
         }
+    }
+
+    // contract: diagnostics.drag.takes-a-capture-plan
+    #[test]
+    fn drag_capture_takes_a_plan() {
+        let none = Plan::default();
+        for (params, capture, plan) in [
+            (json!({}), false, none),
+            (json!({"capture": null}), false, none),
+            (json!({"capture": false}), false, none),
+            (
+                json!({"capture": {"gap": 8.333, "frames": 4096}}),
+                true,
+                Plan {
+                    gap: 8.333,
+                    seconds: 0.0,
+                    frames: 4096,
+                },
+            ),
+            (
+                json!({"capture": {"gap": 10, "seconds": 2}}),
+                true,
+                Plan {
+                    gap: 10.0,
+                    seconds: 2.0,
+                    frames: 0,
+                },
+            ),
+            // A plan at the top level of the drag is not a plan of its recording.
+            (json!({"gap": 8, "frames": 10}), false, none),
+        ] {
+            let options = parse(params.clone()).unwrap();
+            assert_eq!(
+                (options.capture, options.plan),
+                (capture, plan),
+                "params {params}"
+            );
+        }
+        for (params, expected) in [
+            (
+                json!({"capture": true}),
+                "capture must be false or a plan {gap, seconds | frames}",
+            ),
+            (
+                json!({"capture": "yes"}),
+                "capture must be false or a plan {gap, seconds | frames}",
+            ),
+            (
+                json!({"capture": 1}),
+                "capture must be false or a plan {gap, seconds | frames}",
+            ),
+            (
+                json!({"capture": []}),
+                "capture must be false or a plan {gap, seconds | frames}",
+            ),
+            (
+                json!({"capture": true, "gap": 8, "frames": 10}),
+                "capture must be false or a plan {gap, seconds | frames}",
+            ),
+            (
+                json!({"capture": {}}),
+                "gap must be a number of milliseconds from 1 to 1000",
+            ),
+            (
+                json!({"capture": {"gap": 8, "seconds": 1, "frames": 10}}),
+                "give seconds or frames, not both",
+            ),
+            (
+                json!({"capture": {"gap": 8}}),
+                "a recording needs seconds or frames",
+            ),
+            (
+                json!({"capture": {"gap": 8, "seconds": 601}}),
+                "seconds must be above 0 and at most 600",
+            ),
+            (
+                json!({"capture": {"gap": 8, "frames": 4097}}),
+                "frames must be an integer from 1 to 4096",
+            ),
+            (
+                json!({"capture": {"gap": 8, "seconds": 40}}),
+                "the recording plans 5000 stills, more than 4096",
+            ),
+        ] {
+            let error = match parse(params.clone()) {
+                Ok(_) => panic!("params {params} unexpectedly parsed"),
+                Err(error) => error,
+            };
+            assert_eq!(error.message, expected, "params {params}");
+        }
+        // The page receives neither capture nor frameIdentity.
+        let mut params =
+            json!({"capture": {"gap": 8, "seconds": 2}, "frameIdentity": true, "line": 1})
+                .as_object()
+                .unwrap()
+                .clone();
+        parse_drag_capture_options(&mut params).unwrap();
+        assert_eq!(Value::Object(params), json!({"line": 1}));
     }
 }
 

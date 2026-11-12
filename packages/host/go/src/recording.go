@@ -2,8 +2,9 @@
 
 // The state of the diagnostic recording. It is compiled only with the diagnostics build tag.
 //
-// There is one recording at a time. A failed start removes its folder after capture cleanup. A stop error retains
-// ownership only while the capture module still owns its stream and writer transaction. A remaining recording or cleanup folder blocks the next recording.
+// There is one recording at a time. A failed start removes its folder: the native start ends its recording when it fails. A stop
+// ends the native recording also when it fails, so a stop error releases the recording. A remaining recording or cleanup folder
+// blocks the next recording.
 
 package host
 
@@ -25,24 +26,27 @@ type CaptureTarget struct {
 	Display bool
 }
 
+// CapturePlan is the plan of the stills of a recording: Gap is the time in ms from the request of one still to the request of
+// the next, and the length is Seconds or Frames, the other 0.
+type CapturePlan struct {
+	Gap     float64
+	Seconds float64
+	Frames  int
+}
+
 // Capture is the recording device. The platform implementation or a fake of a check provides it.
 type Capture interface {
 	// Open makes the window with the window server number target.Window the recording target. An error leaves no new
 	// active recording and leaves any existing active recording unchanged.
 	Open(target CaptureTarget) error
-	// Start starts the frame recording in directory. An error rolls back resources created by this attempt.
-	Start(directory string, frameIdentity bool) error
-	// Wait returns whether the first frame was recorded.
-	Wait() (bool, error)
-	// Stop ends the recording and returns the number of recorded frames. An error may occur after native ownership retires.
+	// Start starts the recording of plan in directory and returns once still 0 is written. A failed start ends its recording.
+	Start(directory string, plan CapturePlan, frameIdentity bool) error
+	// Stop ends the recording and returns the number of written frames. The recording ends also when Stop fails.
 	Stop() (int, error)
-	// HasStream reports whether the native capture module still owns the current stream and its writer transaction.
-	// It does not report whether the operating system's asynchronous stop callback has completed.
-	HasStream() (bool, error)
 }
 
-// NewWindowCapture is a recording device that also records a new window from its first frame: it holds the next show of a window
-// that is not on screen, and the stream start of the recording of that window puts it on screen.
+// NewWindowCapture is a recording device that also records a new window from its first still: it holds the next show of a window
+// that is not on screen, and the start of the recording of that window puts it on screen.
 type NewWindowCapture interface {
 	Capture
 	// HoldNewWindow holds the next show of a window that is not on screen.
@@ -62,23 +66,23 @@ type Recording struct {
 	frameIdentity           bool
 	documentIdentityAllowed bool
 	identitySource          *documentFrameIdentitySource
+	// window is the window server number of the recorded window, nil for a display recording and for a new window that no
+	// show has given yet.
+	window *int
 	// pending is the start of the recording of a new window that runs after StartNewWindow returned (newWindowStart).
 	pending *newWindowStart
 }
 
-// newWindowStart is the start of the recording of a new window: the wait for the held window, then the open, the start and the
-// first frame of its recording. done receives its result once.
+// newWindowStart is the start of the recording of a new window: the wait for the held window, then the open and the start of its
+// recording, which returns once still 0 is written. done receives its failure once, nil for a start that succeeded.
 type newWindowStart struct {
-	done chan newWindowResult
-	mu   sync.Mutex
-	end  func(reason string)
+	done chan error
+	// window is the number of the held window, written before done receives nil.
+	window int
+	mu     sync.Mutex
+	end    func(reason string)
 	// ended is the reason of an end that came before the wait gave its end.
 	ended string
-}
-
-type newWindowResult struct {
-	err            error
-	captureStopped bool
 }
 
 // stop ends the wait for the held window; a wait that has already returned is not changed by it.
@@ -112,28 +116,32 @@ type documentFrameIdentitySource struct {
 	generation uint64
 }
 
-// Start creates directory and starts recording target into that folder. It returns after the first frame is recorded.
+// Start creates directory and starts recording target into that folder with plan. It returns after still 0 is written.
 // When cleanup after a failure is incomplete, the owned folder and stop state remain until Abort completes cleanup.
-func (r *Recording) Start(capture Capture, target CaptureTarget, directory string, frameIdentity bool) error {
-	return r.StartWithDocumentIdentity(capture, target, directory, frameIdentity, false)
+func (r *Recording) Start(capture Capture, target CaptureTarget, directory string, plan CapturePlan, frameIdentity bool) error {
+	return r.StartWithDocumentIdentity(capture, target, directory, plan, frameIdentity, false)
 }
 
 // StartWithDocumentIdentity marks diagnostics.capture.start recordings as eligible for one document source.
-func (r *Recording) StartWithDocumentIdentity(capture Capture, target CaptureTarget, directory string, frameIdentity, documentIdentityAllowed bool) error {
+func (r *Recording) StartWithDocumentIdentity(capture Capture, target CaptureTarget, directory string, plan CapturePlan, frameIdentity, documentIdentityAllowed bool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if err := r.createDirectory(directory); err != nil {
 		return err
 	}
-	captureStopped, err := r.begin(capture, target, directory, frameIdentity)
-	if err != nil {
-		return r.removeFailedStartDirectory(directory, captureStopped, err)
+	if err := begin(capture, target, directory, plan, frameIdentity); err != nil {
+		return r.removeFailedStartDirectory(directory, err)
 	}
 	r.directory = directory
 	r.captureStopped = false
 	r.frameIdentity = frameIdentity
 	r.documentIdentityAllowed = documentIdentityAllowed
 	r.identitySource = nil
+	r.window = nil
+	if !target.Display {
+		window := target.Window
+		r.window = &window
+	}
 	return nil
 }
 
@@ -156,110 +164,91 @@ func (r *Recording) createDirectory(directory string) error {
 		err = system.PrivateDirectory(directory)
 	}
 	if err != nil {
-		return r.removeFailedStartDirectory(directory, true, err)
+		return r.removeFailedStartDirectory(directory, err)
 	}
 	return nil
 }
 
 // StartNewWindow holds the next show of a window that is not on screen and returns once the hold is set, owning directory. The
 // recording of that window then starts without this call: once the application shows a window, the recording opens on it and
-// starts, and the stream start puts the window on screen, so the first frame of the recording is the first frame of the window.
+// starts with plan, and the start puts the window on screen, so still 0 of the recording holds the first content of the window.
 // A failure after the hold took a window shows that window. Finish and Abort end a hold that no show took and report the result
 // of the start.
-func (r *Recording) StartNewWindow(capture NewWindowCapture, directory string, frameIdentity bool) error {
+func (r *Recording) StartNewWindow(capture NewWindowCapture, directory string, plan CapturePlan, frameIdentity bool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if err := r.createDirectory(directory); err != nil {
 		return err
 	}
 	if err := capture.HoldNewWindow(); err != nil {
-		return r.removeFailedStartDirectory(directory, true, err)
+		return r.removeFailedStartDirectory(directory, err)
 	}
-	pending := &newWindowStart{done: make(chan newWindowResult, 1)}
+	pending := &newWindowStart{done: make(chan error, 1)}
 	r.directory = directory
 	r.captureStopped = false
 	r.frameIdentity = frameIdentity
 	r.documentIdentityAllowed = false
 	r.identitySource = nil
+	r.window = nil
 	r.pending = pending
 	routine.Go("new-window-recording", func() {
 		number, err := capture.WaitNewWindow(pending.registerEnd)
 		if err != nil {
-			pending.done <- newWindowResult{err: err, captureStopped: true}
+			pending.done <- err
 			return
 		}
-		captureStopped, err := r.begin(capture, CaptureTarget{Window: number}, directory, frameIdentity)
+		err = begin(capture, CaptureTarget{Window: number}, directory, plan, frameIdentity)
 		if err != nil {
 			capture.ReleaseNewWindow()
 		}
-		pending.done <- newWindowResult{err: err, captureStopped: captureStopped}
+		pending.window = number
+		pending.done <- err
 	})
 	return nil
 }
 
 // settleNewWindow waits for the start of the recording of a new window, ending a hold that no show took, and returns the failure
-// of that start, after which the recording owns its folder only while the capture module still owns its stream. Call it with mu held.
+// of that start. A failed start leaves no native recording, so the recording then owns only its folder. Call it with mu held.
 func (r *Recording) settleNewWindow() error {
 	pending := r.pending
 	if pending == nil {
 		return nil
 	}
 	pending.stop(newWindowStopReason)
-	result := <-pending.done
+	err := <-pending.done
 	r.pending = nil
-	if result.err == nil {
+	if err == nil {
+		window := pending.window
+		r.window = &window
 		return nil
 	}
-	r.captureStopped = result.captureStopped
-	return result.err
+	r.captureStopped = true
+	return err
 }
 
-func (r *Recording) removeFailedStartDirectory(directory string, captureStopped bool, cause error) error {
-	if !captureStopped {
-		r.directory = directory
-		r.captureStopped = false
-		r.frameIdentity = false
-		r.documentIdentityAllowed = false
-		r.identitySource = nil
-		return cause
-	}
+// removeFailedStartDirectory removes the folder of a start that failed with cause, which left no native recording. A folder that
+// cannot be removed stays owned until Abort removes it.
+func (r *Recording) removeFailedStartDirectory(directory string, cause error) error {
 	if removeErr := os.RemoveAll(directory); removeErr != nil {
 		r.directory = directory
-		r.captureStopped = captureStopped
+		r.captureStopped = true
 		r.frameIdentity = false
 		r.documentIdentityAllowed = false
 		r.identitySource = nil
+		r.window = nil
 		return fmt.Errorf("%w; remove failed capture directory: %v", cause, removeErr)
 	}
 	return cause
 }
 
-func (r *Recording) begin(capture Capture, target CaptureTarget, directory string, frameIdentity bool) (bool, error) {
-	// The preparation decides the output size from the window size at that time, so the same target is prepared again for each recording.
+// begin opens target and starts its recording with plan in directory. It returns once still 0 is written; a failure leaves no
+// native recording.
+func begin(capture Capture, target CaptureTarget, directory string, plan CapturePlan, frameIdentity bool) error {
+	// The preparation reads the windows of the target at that time, so the same target is prepared again for each recording.
 	if err := capture.Open(target); err != nil {
-		return true, err
+		return err
 	}
-	if err := capture.Start(directory, frameIdentity); err != nil {
-		return true, err
-	}
-	ready, err := capture.Wait()
-	if err == nil && !ready {
-		err = errors.New("capture did not produce an initial frame")
-	}
-	if err != nil {
-		if _, stopErr := capture.Stop(); stopErr != nil {
-			owned, queryErr := capture.HasStream()
-			if queryErr != nil {
-				return false, fmt.Errorf("%w; stop failed recording: %v; query capture ownership: %v", err, stopErr, queryErr)
-			}
-			if owned {
-				return false, fmt.Errorf("%w; stop failed recording: %v", err, stopErr)
-			}
-			return true, fmt.Errorf("%w; stop failed recording: %v", err, stopErr)
-		}
-		return true, err
-	}
-	return false, nil
+	return capture.Start(directory, plan, frameIdentity)
 }
 
 // FrameIdentityState reports whether the running capture requested identity matching and its selected view root.
@@ -302,8 +291,8 @@ func (r *Recording) ClearFrameIdentitySource(surface string, generation uint64) 
 	return true
 }
 
-// Abort stops the recording in progress and deletes the folder. It reports a stop error even after native ownership retires.
-// It does nothing when there is no recording.
+// Abort stops the recording in progress and deletes the folder. It reports a stop error, after which the native recording has
+// ended. It does nothing when there is no recording.
 func (r *Recording) Abort(capture Capture) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -316,18 +305,9 @@ func (r *Recording) Abort(capture Capture) error {
 	}
 	if !r.captureStopped {
 		if _, err := capture.Stop(); err != nil {
-			owned, queryErr := capture.HasStream()
-			if queryErr != nil {
-				return fmt.Errorf("stop capture: %w; query capture ownership: %v", err, queryErr)
-			}
-			if owned {
-				return fmt.Errorf("stop capture: %w", err)
-			}
-			r.captureStopped = true
 			stopErr = fmt.Errorf("stop capture: %w", err)
-		} else {
-			r.captureStopped = true
 		}
+		r.captureStopped = true
 	}
 	if err := os.RemoveAll(r.directory); err != nil {
 		if stopErr != nil {
@@ -340,20 +320,22 @@ func (r *Recording) Abort(capture Capture) error {
 	r.frameIdentity = false
 	r.documentIdentityAllowed = false
 	r.identitySource = nil
+	r.window = nil
 	return stopErr
 }
 
-// Finish ends the recording in progress and returns the folder and the number of frames. The requester deletes the folder.
-// When stop errors after native ownership retires, it preserves the folder, releases recording ownership, and returns the error.
-func (r *Recording) Finish(capture Capture) (string, int, bool, error) {
+// Finish ends the recording in progress and returns the folder, the number of frames, whether it has frame identity and the
+// window server number of its window, nil for a display recording. The requester deletes the folder. A stop error ends the
+// native recording too: Finish then preserves the folder, releases the recording, and returns the error.
+func (r *Recording) Finish(capture Capture) (string, int, bool, *int, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.captureStopped {
-		return "", 0, false, errors.New("capture has stopped but its directory cleanup is incomplete; abort is required")
+		return "", 0, false, nil, errors.New("capture has stopped but its directory cleanup is incomplete; abort is required")
 	}
 	directory := r.directory
 	if directory == "" {
-		return "", 0, false, errors.New("no capture is running")
+		return "", 0, false, nil, errors.New("no capture is running")
 	}
 	frameIdentity := r.frameIdentity
 	if err := r.settleNewWindow(); err != nil {
@@ -362,26 +344,20 @@ func (r *Recording) Finish(capture Capture) (string, int, bool, error) {
 			r.directory = ""
 			r.captureStopped = false
 			r.frameIdentity = false
+			r.window = nil
 		}
-		return directory, 0, frameIdentity, err
+		return directory, 0, frameIdentity, nil, err
 	}
+	window := r.window
 	count, err := capture.Stop()
-	if err != nil {
-		owned, queryErr := capture.HasStream()
-		if queryErr != nil {
-			return directory, count, frameIdentity, fmt.Errorf("%w; query capture ownership: %v", err, queryErr)
-		}
-		if owned {
-			return directory, count, frameIdentity, err
-		}
-	}
 	r.directory = ""
 	r.captureStopped = false
 	r.frameIdentity = false
+	r.window = nil
 	if r.identitySource == nil {
 		r.documentIdentityAllowed = false
 	}
-	return directory, count, frameIdentity, err
+	return directory, count, frameIdentity, window, err
 }
 
 // Running is the owned folder of the active recording or pending cleanup. It is empty when there is no owned folder.

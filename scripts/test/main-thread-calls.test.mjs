@@ -11,14 +11,14 @@ test("main-thread audit names the thread-safe native functions with a reason", {
   }
 });
 
-// The window recording and the still capture wait for ScreenCaptureKit; called in a step, they would hold the main thread while
-// the completions arrive on other queues, so the Go host calls them on the goroutine of its request, as the Tauri host calls
+// The window recording and the still capture wait for their stills; called in a step, they would hold the main thread while
+// the stills complete on other queues, so the Go host calls them on the goroutine of its request, as the Tauri host calls
 // them off the main thread (docs/spec/hosts.md#main-thread-of-the-wails-host).
-test("the capture functions that wait for ScreenCaptureKit need no main thread", { timeout: 30000 }, async () => {
+test("the capture functions that wait for their stills need no main thread", { timeout: 30000 }, async () => {
   const { MAIN_THREAD_FREE } = await import("../check-host-files.mjs");
   const free = (name) => Object.keys(MAIN_THREAD_FREE).some((key) => (key.endsWith("*") ? name.startsWith(key.slice(0, -1)) : name === key));
-  for (const name of ["sp_capture_open", "sp_capture_start", "sp_capture_wait", "sp_capture_stop", "sp_capture_still",
-    "sp_capture_has_stream", "sp_capture_limited", "sp_capture_longest_gap"]) {
+  for (const name of ["sp_capture_open", "sp_capture_start", "sp_capture_stop", "sp_capture_still", "sp_capture_wait_new_window",
+    "sp_capture_missed", "sp_capture_late", "sp_capture_longest_gap"]) {
     assert.ok(free(name), `${name} runs in a main-thread step`);
   }
 });

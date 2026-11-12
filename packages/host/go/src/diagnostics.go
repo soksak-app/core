@@ -403,6 +403,7 @@ type dragPlan struct {
 
 type dragCaptureOptions struct {
 	capture       bool
+	plan          CapturePlan
 	frameIdentity bool
 }
 
@@ -415,12 +416,18 @@ func parseDragCaptureOptions(params json.RawMessage) (dragCaptureOptions, error)
 		return dragCaptureOptions{}, err
 	}
 	options := dragCaptureOptions{}
-	if len(request.Capture) != 0 && !bytes.Equal(bytes.TrimSpace(request.Capture), []byte("null")) {
-		var capture *bool
-		if err := json.Unmarshal(request.Capture, &capture); err != nil || capture == nil {
-			return dragCaptureOptions{}, rpcError(codeInvalidParams, "capture must be a boolean")
+	// capture is absent, null or false for a drag without a recording, or the plan of the recording, which
+	// diagnostics.capture.start checks with the same messages.
+	if raw := bytes.TrimSpace(request.Capture); len(raw) != 0 && !bytes.Equal(raw, []byte("null")) && !bytes.Equal(raw, []byte("false")) {
+		if raw[0] != '{' {
+			return dragCaptureOptions{}, rpcError(codeInvalidParams, "capture must be false or a plan {gap, seconds | frames}")
 		}
-		options.capture = *capture
+		plan, err := parseCapturePlan(raw)
+		if err != nil {
+			return dragCaptureOptions{}, err
+		}
+		options.capture = true
+		options.plan = plan
 	}
 	if len(request.FrameIdentity) != 0 {
 		var frameIdentity *bool
@@ -430,7 +437,7 @@ func parseDragCaptureOptions(params json.RawMessage) (dragCaptureOptions, error)
 		options.frameIdentity = *frameIdentity
 	}
 	if options.frameIdentity && !options.capture {
-		return dragCaptureOptions{}, rpcError(codeInvalidParams, "frameIdentity requires capture to be true")
+		return dragCaptureOptions{}, rpcError(codeInvalidParams, "frameIdentity requires a capture plan")
 	}
 	return options, nil
 }
@@ -564,9 +571,9 @@ type documentFrameIdentityResult struct {
 	err   error
 }
 
-// platformCapture is the window recording operation of the platform. after is the last display time to include in the recording
-// when it stops. window and connection are the window and the endpoint connection of the request, whose ends end the waits of
-// the operations.
+// platformCapture is the window recording operation of the platform. after is the time from which a still must be requested before
+// the recording stops, 0 for a stop that requests no later still. window and connection are the window and the endpoint connection
+// of the request, whose ends end the waits of the operations.
 type platformCapture struct {
 	platform.Capturer
 	after      float64
@@ -594,10 +601,14 @@ func awaitCapture[T any](c platformCapture, call func(token uint64) T) T {
 }
 
 func (c platformCapture) Open(target CaptureTarget) error {
-	return awaitCapture(c, func(token uint64) error { return c.CaptureOpen(target.Window, target.Display, token) })
+	return c.CaptureOpen(target.Window, target.Display)
 }
-func (c platformCapture) Start(directory string, frameIdentity bool) error {
-	return c.CaptureStart(directory, frameIdentity)
+
+// Start waits, as the other capture waits do, for still 0 of the recording.
+func (c platformCapture) Start(directory string, plan CapturePlan, frameIdentity bool) error {
+	return awaitCapture(c, func(token uint64) error {
+		return c.CaptureStart(directory, plan.Gap, plan.Seconds, plan.Frames, frameIdentity, token)
+	})
 }
 
 // captureAnswer is the answer of a capture operation that returns a value and an error.
@@ -606,13 +617,6 @@ type captureAnswer[T any] struct {
 	err   error
 }
 
-func (c platformCapture) Wait() (bool, error) {
-	answer := awaitCapture(c, func(token uint64) captureAnswer[bool] {
-		ok, err := c.CaptureWait(token)
-		return captureAnswer[bool]{ok, err}
-	})
-	return answer.value, answer.err
-}
 func (c platformCapture) Stop() (int, error) {
 	answer := awaitCapture(c, func(token uint64) captureAnswer[int] {
 		frames, err := c.CaptureStop(c.after, token)
@@ -620,7 +624,6 @@ func (c platformCapture) Stop() (int, error) {
 	})
 	return answer.value, answer.err
 }
-func (c platformCapture) HasStream() (bool, error) { return c.CaptureHasStream() }
 
 // newWindowCapturer is the platform recording of a new window, or an error on a platform without it.
 func (c platformCapture) newWindowCapturer() (platform.NewWindowCapturer, error) {
@@ -665,22 +668,25 @@ func (c platformCapture) ReleaseNewWindow() {
 	}
 }
 
-func (c platformCapture) Limited() bool { return c.CaptureLimited() }
-
 type captureStatus interface {
-	Limited() bool
+	Missed() int
+	Late() int
 	LongestGap() float64
 }
 
-func captureStopPayload(c captureStatus, directory string, count int, records []platform.LayoutRecord, frameIdentity bool) map[string]any {
+// captureStopPayload is the reply of the stop of a recording; window is the window server number of the recorded window, nil
+// (JSON null) for a display recording.
+func captureStopPayload(c captureStatus, directory string, count int, records []platform.LayoutRecord, frameIdentity bool, window *int) map[string]any {
 	payload := map[string]any{
-		"frames":         directory,
-		"callbackStatus": filepath.Join(directory, "callback-status.jsonl"),
-		"displayLink":    filepath.Join(directory, "display-link.json"),
-		"count":          count,
-		"limited":        c.Limited(),
-		"longestGap":     c.LongestGap(),
-		"layouts":        layoutTrace(records),
+		"window":      windowNumberValue(window),
+		"frames":      directory,
+		"stills":      filepath.Join(directory, "stills.jsonl"),
+		"displayLink": filepath.Join(directory, "display-link.json"),
+		"count":       count,
+		"missed":      c.Missed(),
+		"late":        c.Late(),
+		"longestGap":  c.LongestGap(),
+		"layouts":     layoutTrace(records),
 	}
 	if frameIdentity {
 		payload["frameIdentity"] = map[string]any{
@@ -689,6 +695,14 @@ func captureStopPayload(c captureStatus, directory string, count int, records []
 		}
 	}
 	return payload
+}
+
+// windowNumberValue is the JSON value of the window of a recording: its window server number, or null.
+func windowNumberValue(window *int) any {
+	if window == nil {
+		return nil
+	}
+	return *window
 }
 
 // recorder returns the recording device of this platform for a request on connection c about window s, whose ends end the
@@ -745,12 +759,13 @@ func diagnosticDrag(e *Endpoint, c *endpointConn, params json.RawMessage, reply 
 		}
 	}
 	var frames string
+	var recordedWindow *int
 	// When recording, the time at which the step was sent is recorded on the same clock as the frames. This allows measuring the delay from a step to the screen.
 	var clock func() float64
 	if captureOptions.capture {
 		err = withDocumentFrameIdentityLifecycle(func() error {
 			var startErr error
-			frames, startErr = startCapture(h, s, c, false, captureOptions.frameIdentity, false)
+			frames, recordedWindow, startErr = startCapture(h, s, c, false, captureOptions.plan, captureOptions.frameIdentity, false)
 			if startErr != nil {
 				return startErr
 			}
@@ -818,6 +833,7 @@ func diagnosticDrag(e *Endpoint, c *endpointConn, params json.RawMessage, reply 
 	}
 	if captureOptions.capture {
 		result["frames"] = frames
+		result["window"] = windowNumberValue(recordedWindow)
 		tickMu.Lock()
 		result["ticks"] = append([]float64(nil), sent...)
 		tickMu.Unlock()
@@ -1044,34 +1060,39 @@ func dragPresented(ctx context.Context, h *Host, s *Surfaces) error {
 	return nil
 }
 
-// startCapture starts the recording of window s in a new folder under the configuration directory and waits for the first frame.
+// startCapture starts the recording of window s with plan in a new folder under the configuration directory and waits for still 0.
 // With display, it records the windows of this application on the display that holds the window.
-func startCapture(h *Host, s *Surfaces, c *endpointConn, display bool, frameIdentity, documentIdentityAllowed bool) (string, error) {
+func startCapture(h *Host, s *Surfaces, c *endpointConn, display bool, plan CapturePlan, frameIdentity, documentIdentityAllowed bool) (string, *int, error) {
 	capture, err := recorder(s, c)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	// The window list query of the window server waits for a reply, so only the window number is read on the main thread.
 	var numbers []int
 	mainThreadStep(func() { numbers, err = capture.WindowNumbers(s.window.NativeWindow()) })
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if len(numbers) == 0 {
-		return "", errors.New("the window has no window server number")
+		return "", nil, errors.New("the window has no window server number")
 	}
 	directory := filepath.Join(h.workspace.directory, "logs", "captures", fmt.Sprintf("%s-%d", s.name, time.Now().UnixNano()))
-	if err := recording.StartWithDocumentIdentity(capture, CaptureTarget{Window: numbers[0], Display: display}, directory, frameIdentity, documentIdentityAllowed); err != nil {
-		return "", err
+	if err := recording.StartWithDocumentIdentity(capture, CaptureTarget{Window: numbers[0], Display: display}, directory, plan, frameIdentity, documentIdentityAllowed); err != nil {
+		return "", nil, err
 	}
-	return directory, nil
+	// A display recording records every window of the application on the display, so it has no window of its own.
+	if display {
+		return directory, nil, nil
+	}
+	window := numbers[0]
+	return directory, &window, nil
 }
 
 // startNewWindowCapture holds the next new window of the application and answers with the frame directory once the hold is
 // set; the recording of that window starts when the application shows it (Recording.StartNewWindow).
-func startNewWindowCapture(h *Host, s *Surfaces, capture platformCapture, frameIdentity bool) (string, error) {
+func startNewWindowCapture(h *Host, s *Surfaces, capture platformCapture, plan CapturePlan, frameIdentity bool) (string, error) {
 	directory := filepath.Join(h.workspace.directory, "logs", "captures", fmt.Sprintf("%s-new-%d", s.name, time.Now().UnixNano()))
-	if err := recording.StartNewWindow(capture, directory, frameIdentity); err != nil {
+	if err := recording.StartNewWindow(capture, directory, plan, frameIdentity); err != nil {
 		return "", err
 	}
 	return directory, nil
@@ -1092,7 +1113,7 @@ func diagnosticCaptureStill(e *Endpoint, c *endpointConn, params json.RawMessage
 }
 
 // captureStill writes a still PNG of the window of s into a private folder under <config-dir>/logs/captures and
-// returns its path. The end of connection c, when there is one, of the window or of its page ends the wait for the picture.
+// returns its path.
 func captureStill(h *Host, s *Surfaces, c *endpointConn) (string, error) {
 	capture, err := recorder(s, c)
 	if err != nil {
@@ -1117,7 +1138,7 @@ func captureStill(h *Host, s *Surfaces, c *endpointConn) (string, error) {
 	}
 	path := filepath.Join(directory, "window.png")
 	// The child windows of an open modal or settings window stand over the window, so the picture holds them too.
-	if err := awaitCapture(capture, func(token uint64) error { return capture.CaptureStill(numbers, path, token) }); err != nil {
+	if err := capture.CaptureStill(numbers[0], path); err != nil {
 		return "", err
 	}
 	return path, nil
@@ -1157,17 +1178,19 @@ func diagnosticCaptureStart(e *Endpoint, c *endpointConn, params json.RawMessage
 		return nil, err
 	}
 	if p.NewWindow {
-		directory, err := startNewWindowCapture(h, s, capture, p.FrameIdentity)
+		directory, err := startNewWindowCapture(h, s, capture, p.Plan, p.FrameIdentity)
 		if err != nil {
 			return nil, err
 		}
 		mainThreadStep(capture.LayoutTraceStart)
-		return map[string]any{"frames": directory}, nil
+		// The held window is known once the application shows it, after this reply; the stop reply names it.
+		return map[string]any{"frames": directory, "window": nil}, nil
 	}
 	var directory string
+	var window *int
 	err = withDocumentFrameIdentityLifecycle(func() error {
 		var startErr error
-		directory, startErr = startCapture(h, s, c, p.Display, p.FrameIdentity, true)
+		directory, window, startErr = startCapture(h, s, c, p.Display, p.Plan, p.FrameIdentity, true)
 		if startErr != nil {
 			return startErr
 		}
@@ -1177,7 +1200,7 @@ func diagnosticCaptureStart(e *Endpoint, c *endpointConn, params json.RawMessage
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"frames": directory}, nil
+	return map[string]any{"frames": directory, "window": windowNumberValue(window)}, nil
 }
 
 func diagnosticCaptureDocumentIdentityStart(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
@@ -1318,9 +1341,66 @@ func frameIdentityFinitePositive(value float64) bool {
 }
 
 type captureStartOptions struct {
-	Display       bool `json:"display"`
-	FrameIdentity bool `json:"frameIdentity"`
-	NewWindow     bool `json:"newWindow"`
+	Display       bool
+	FrameIdentity bool
+	NewWindow     bool
+	Plan          CapturePlan
+}
+
+// The largest number of stills that a recording plans (native/darwin/src/capture.h).
+const capturePlanLimit = 4096
+
+// parseCapturePlan reads the plan of the stills of a recording, gap and seconds or frames, and refuses it with the messages of the
+// native start (native/darwin/src/capture.h) before any window is held or prepared.
+func parseCapturePlan(params json.RawMessage) (CapturePlan, error) {
+	var request struct {
+		Gap     json.RawMessage `json:"gap"`
+		Seconds json.RawMessage `json:"seconds"`
+		Frames  json.RawMessage `json:"frames"`
+	}
+	if err := decode(params, &request); err != nil {
+		return CapturePlan{}, err
+	}
+	present := func(raw json.RawMessage) bool {
+		return len(raw) != 0 && !bytes.Equal(bytes.TrimSpace(raw), []byte("null"))
+	}
+	number := func(raw json.RawMessage) (float64, bool) {
+		var value *float64
+		if err := json.Unmarshal(raw, &value); err != nil || value == nil || math.IsNaN(*value) || math.IsInf(*value, 0) {
+			return 0, false
+		}
+		return *value, true
+	}
+	gap, ok := number(request.Gap)
+	if !present(request.Gap) || !ok || gap < 1 || gap > 1000 {
+		return CapturePlan{}, rpcError(codeInvalidParams, "gap must be a number of milliseconds from 1 to 1000")
+	}
+	plan := CapturePlan{Gap: gap}
+	hasSeconds, hasFrames := present(request.Seconds), present(request.Frames)
+	if hasSeconds && hasFrames {
+		return CapturePlan{}, rpcError(codeInvalidParams, "give seconds or frames, not both")
+	}
+	if !hasSeconds && !hasFrames {
+		return CapturePlan{}, rpcError(codeInvalidParams, "a recording needs seconds or frames")
+	}
+	if hasSeconds {
+		seconds, ok := number(request.Seconds)
+		if !ok || !(seconds > 0 && seconds <= 600) {
+			return CapturePlan{}, rpcError(codeInvalidParams, "seconds must be above 0 and at most 600")
+		}
+		// Every still whose planned time n·gap is before the length.
+		if count := math.Ceil(seconds * 1000 / gap); count > capturePlanLimit {
+			return CapturePlan{}, rpcError(codeInvalidParams, "the recording plans %.0f stills, more than %d", count, capturePlanLimit)
+		}
+		plan.Seconds = seconds
+		return plan, nil
+	}
+	frames, ok := number(request.Frames)
+	if !ok || frames != math.Trunc(frames) || frames < 1 || frames > capturePlanLimit {
+		return CapturePlan{}, rpcError(codeInvalidParams, "frames must be an integer from 1 to %d", capturePlanLimit)
+	}
+	plan.Frames = int(frames)
+	return plan, nil
 }
 
 func parseCaptureStartOptions(params json.RawMessage) (captureStartOptions, error) {
@@ -1332,7 +1412,11 @@ func parseCaptureStartOptions(params json.RawMessage) (captureStartOptions, erro
 	if err := decode(params, &request); err != nil {
 		return captureStartOptions{}, err
 	}
-	options := captureStartOptions{Display: request.Display}
+	plan, err := parseCapturePlan(params)
+	if err != nil {
+		return captureStartOptions{}, err
+	}
+	options := captureStartOptions{Display: request.Display, Plan: plan}
 	if len(request.NewWindow) != 0 {
 		var newWindow *bool
 		if err := json.Unmarshal(request.NewWindow, &newWindow); err != nil || newWindow == nil {
@@ -1354,8 +1438,8 @@ func parseCaptureStartOptions(params json.RawMessage) (captureStartOptions, erro
 	return options, nil
 }
 
-// diagnosticCaptureStop records up to the display time of after, ends the recording, and returns the frame folder and the number of
-// frames.
+// diagnosticCaptureStop records until a still requested at or after after has completed, ends the recording, and returns the frame
+// folder, the stills and the number of frames.
 func diagnosticCaptureStop(e *Endpoint, c *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	_, s, err := diagnosticHost(e, params)
 	if err != nil {
@@ -1390,6 +1474,7 @@ func diagnosticCaptureStop(e *Endpoint, c *endpointConn, params json.RawMessage,
 	var directory string
 	var count int
 	var stoppedWithIdentity bool
+	var window *int
 	issuedSlots, removed, stopErr := documentIdentityStopSequence(frameIdentity, source, priorStartErr,
 		func(generation uint64) (json.RawMessage, error) {
 			if !hasIdentity {
@@ -1401,7 +1486,7 @@ func diagnosticCaptureStop(e *Endpoint, c *endpointConn, params json.RawMessage,
 		},
 		func() error {
 			var finishErr error
-			directory, count, stoppedWithIdentity, finishErr = recording.Finish(capture)
+			directory, count, stoppedWithIdentity, window, finishErr = recording.Finish(capture)
 			return finishErr
 		},
 		func(generation uint64) (json.RawMessage, error) {
@@ -1427,7 +1512,7 @@ func diagnosticCaptureStop(e *Endpoint, c *endpointConn, params json.RawMessage,
 	if layoutErr != nil {
 		return nil, layoutErr
 	}
-	payload, err := finishCaptureStop(captureStatusAdapter{capture}, directory, count, stoppedWithIdentity, func() ([]platform.LayoutRecord, error) { return records, nil })
+	payload, err := finishCaptureStop(captureStatusAdapter{capture}, directory, count, stoppedWithIdentity, window, func() ([]platform.LayoutRecord, error) { return records, nil })
 	if err != nil {
 		return nil, err
 	}
@@ -1565,17 +1650,18 @@ func documentFrameIdentityIssuedSlots(raw json.RawMessage, generation uint64) (u
 	return *reply.IssuedSlots, nil
 }
 
-func finishCaptureStop(c captureStatus, directory string, count int, frameIdentity bool, layoutTrace func() ([]platform.LayoutRecord, error)) (any, error) {
+func finishCaptureStop(c captureStatus, directory string, count int, frameIdentity bool, window *int, layoutTrace func() ([]platform.LayoutRecord, error)) (any, error) {
 	records, err := layoutTrace()
 	if err != nil {
 		return nil, err
 	}
-	return captureStopPayload(c, directory, count, records, frameIdentity), nil
+	return captureStopPayload(c, directory, count, records, frameIdentity, window), nil
 }
 
 type captureStatusAdapter struct{ platformCapture }
 
-func (c captureStatusAdapter) Limited() bool       { return c.CaptureLimited() }
+func (c captureStatusAdapter) Missed() int         { return c.CaptureMissed() }
+func (c captureStatusAdapter) Late() int           { return c.CaptureLate() }
 func (c captureStatusAdapter) LongestGap() float64 { return c.CaptureLongestGap() }
 
 // diagnosticLogFlush waits until the records written so far are in the event log of the host.

@@ -1,28 +1,25 @@
 //! The window capture calls of native/darwin.
 
-use std::ffi::{CStr, CString, c_char, c_int, c_void};
+use std::ffi::{CStr, CString, c_char, c_int, c_long, c_void};
 
 use crate::platform::{Handle, LayoutRecord};
 
 unsafe extern "C" {
-    fn sp_capture_open(
-        window_number: isize,
-        display: bool,
+    fn sp_capture_open(window_number: c_long, display: bool, error: *mut *mut c_char) -> bool;
+    fn sp_capture_start(
+        directory: *const c_char,
+        gap: f64,
+        seconds: f64,
+        frames: c_int,
+        frame_identity: bool,
         token: u64,
         error: *mut *mut c_char,
     ) -> bool;
-    fn sp_capture_start(
-        directory: *const c_char,
-        frame_identity: bool,
-        error: *mut *mut c_char,
-    ) -> bool;
     fn sp_capture_error() -> *const c_char;
-    fn sp_capture_wait(token: u64) -> c_int;
     fn sp_capture_stop(after: f64, token: u64) -> c_int;
     fn sp_capture_end_wait(token: u64, reason: *const c_char);
-    fn sp_capture_has_stream() -> bool;
     fn sp_capture_hold_new_window(error: *mut *mut c_char) -> bool;
-    fn sp_capture_wait_new_window(token: u64) -> std::os::raw::c_long;
+    fn sp_capture_wait_new_window(token: u64) -> c_long;
     fn sp_capture_release_new_window();
     fn sp_document_frame_identity_start(
         document: *mut c_void,
@@ -40,14 +37,13 @@ unsafe extern "C" {
         reply: extern "C" fn(*mut c_void, *const c_char, *const c_char),
         context: *mut c_void,
     ) -> bool;
-    fn sp_capture_limited() -> bool;
+    fn sp_capture_missed() -> c_int;
+    fn sp_capture_late() -> c_int;
     fn sp_capture_longest_gap() -> f64;
     fn sp_capture_clock() -> f64;
     fn sp_capture_still(
-        window_numbers: *const isize,
-        count: c_int,
+        window_number: c_long,
         path: *const c_char,
-        token: u64,
         error: *mut *mut c_char,
     ) -> bool;
     fn sp_notifications_delivered(
@@ -235,11 +231,10 @@ fn layout_records(values: &[f64], count: usize) -> Result<Vec<LayoutRecord>, Str
 #[path = "capture_layout_test.rs"]
 mod layout_test;
 
-/// Prepares the window with the window number as a capture target. When display is set, it captures the windows of this
-/// application on the display that holds the window.
-fn last_error(operation: &str) -> String {
-    let message = unsafe { CStr::from_ptr(sp_capture_error()) };
-    format!("{operation}: {}", message.to_string_lossy())
+/// The error that the last capture call without an error output recorded (sp_capture_error), None when it succeeded.
+fn last_error() -> Option<String> {
+    let error = unsafe { CStr::from_ptr(sp_capture_error()) };
+    (!error.to_bytes().is_empty()).then(|| error.to_string_lossy().into_owned())
 }
 
 // It reads and releases the error of each call, and does not look up the shared error of the recording.
@@ -259,30 +254,48 @@ fn call_result(operation: &str, success: bool, error: *mut c_char) -> Result<(),
     Ok(())
 }
 
-pub fn open(window_number: isize, display: bool, token: u64) -> Result<(), String> {
+/// Prepares the window with the window number as a capture target. When display is set, it captures the windows of this
+/// application on the display that holds the window.
+pub fn open(window_number: isize, display: bool) -> Result<(), String> {
     let mut error = std::ptr::null_mut();
-    let prepared = unsafe { sp_capture_open(window_number, display, token, &mut error) };
+    let prepared = unsafe { sp_capture_open(window_number as c_long, display, &mut error) };
     call_result("capture open failed", prepared, error)
 }
 
-/// Starts to record frames in directory. A path that contains a NUL character is ignored.
-pub fn start(directory: &str, frame_identity: bool) -> Result<(), String> {
+/// Starts the recording of the prepared window in directory and returns once still 0 is written. A directory that
+/// contains a NUL character is refused.
+pub fn start(
+    directory: &str,
+    gap: f64,
+    seconds: f64,
+    frames: i32,
+    frame_identity: bool,
+    token: u64,
+) -> Result<(), String> {
     let where_to = CString::new(directory)
         .map_err(|_| "capture start failed: directory contains NUL".to_owned())?;
     let mut error = std::ptr::null_mut();
-    let started = unsafe { sp_capture_start(where_to.as_ptr(), frame_identity, &mut error) };
+    let started = unsafe {
+        sp_capture_start(
+            where_to.as_ptr(),
+            gap,
+            seconds,
+            frames,
+            frame_identity,
+            token,
+            &mut error,
+        )
+    };
     call_result("capture start failed", started, error)
 }
 
-/// Records until the presentation time after (ms, the call time when 0), ends the record and returns the number of
-/// recorded frames.
+/// Stops the recording and returns the number of written frames. With after above 0 (ms), it continues until a still
+/// requested at or after after has completed; with 0 it requests no later still.
 pub fn stop(after: f64, token: u64) -> Result<i32, String> {
     let frames = unsafe { sp_capture_stop(after, token) };
-    let error = unsafe { CStr::from_ptr(sp_capture_error()) };
-    if error.to_bytes().is_empty() {
-        Ok(frames)
-    } else {
-        Err(format!("capture stop failed: {}", error.to_string_lossy()))
+    match last_error() {
+        None => Ok(frames),
+        Some(error) => Err(format!("capture stop failed: {error}")),
     }
 }
 
@@ -297,8 +310,8 @@ pub fn hold_new_window() -> Result<(), String> {
 pub fn wait_new_window(token: u64) -> Result<isize, String> {
     let number = unsafe { sp_capture_wait_new_window(token) };
     if number < 0 {
-        let error = unsafe { CStr::from_ptr(sp_capture_error()) };
-        return Err(error.to_string_lossy().into_owned());
+        // default: a failed wait without a recorded error still fails with an empty reason, never as a window.
+        return Err(last_error().unwrap_or_default());
     }
     Ok(number as isize)
 }
@@ -308,22 +321,22 @@ pub fn release_new_window() {
     unsafe { sp_capture_release_new_window() }
 }
 
-/// Reports whether the native capture module still owns the current stream and writer transaction.
-pub fn has_stream() -> bool {
-    unsafe { sp_capture_has_stream() }
+/// The number of planned stills of the recording stopped last without a written frame.
+pub fn missed() -> i32 {
+    unsafe { sp_capture_missed() }
 }
 
-/// Returns whether the last recording reached the finite frame limit and stopped automatically.
-pub fn limited() -> bool {
-    unsafe { sp_capture_limited() }
+/// The number of stills of the recording stopped last requested more than one gap after their planned time.
+pub fn late() -> i32 {
+    unsafe { sp_capture_late() }
 }
 
-/// The longest presentation interval (ms) between consecutive frames in the record that was stopped last.
+/// The longest interval (ms) between the request times of two consecutive written frames of the recording stopped last.
 pub fn longest_gap() -> f64 {
     unsafe { sp_capture_longest_gap() }
 }
 
-/// The current time (ms). It is on the same clock as the presentation time of the recorded frames.
+/// The current time (ms). It is on the same clock as the request and completion times of the stills.
 pub fn clock() -> f64 {
     unsafe { sp_capture_clock() }
 }
@@ -340,34 +353,12 @@ pub fn end_wait(token: u64, reason: &str) {
     };
 }
 
-/// Waits for the first frame and the completion of the stream start and returns whether the frame was recorded.
-pub fn wait(token: u64) -> Result<bool, String> {
-    if unsafe { sp_capture_wait(token) != 0 } {
-        Ok(true)
-    } else {
-        Err(last_error("capture wait failed"))
-    }
-}
-
-/// Takes one still image of a window without giving it focus and writes it as PNG to path: the window is the first of
-/// `window_numbers`, and its child windows, the rest, stand in their places over it.
-pub fn still(window_numbers: &[isize], path: &str, token: u64) -> Result<(), String> {
+/// Takes one still image of the window with the window number and its child windows without giving it focus and writes
+/// it as PNG to path.
+pub fn still(window_number: isize, path: &str) -> Result<(), String> {
     let target =
         CString::new(path).map_err(|_| "still capture failed: path contains NUL".to_owned())?;
-    if window_numbers.is_empty() {
-        return Err("still capture needs the number of a window".to_owned());
-    }
-    let count = c_int::try_from(window_numbers.len())
-        .map_err(|_| "still capture failed: too many windows".to_owned())?;
     let mut error = std::ptr::null_mut();
-    let written = unsafe {
-        sp_capture_still(
-            window_numbers.as_ptr(),
-            count,
-            target.as_ptr(),
-            token,
-            &mut error,
-        )
-    };
+    let written = unsafe { sp_capture_still(window_number as c_long, target.as_ptr(), &mut error) };
     call_result("still capture failed", written, error)
 }

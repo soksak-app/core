@@ -1,8 +1,8 @@
 //! The state of a diagnostic recording. It is included only by the cargo feature `diagnostics`.
 //!
-//! There is one recording at a time. A start failure removes its folder after capture cleanup. A stop failure retains
-//! ownership while the capture module still owns its stream and writer transaction; once that ownership retires, finish
-//! transfers the folder to its requester and abort removes it. A remaining recording or cleanup folder blocks another start.
+//! There is one recording at a time. A start failure removes its folder: the native start ends its recording when it
+//! fails. A stop ends the native recording also when it fails, so finish then transfers the folder to its requester and
+//! abort removes it. A remaining recording or cleanup folder blocks another start.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError, mpsc};
@@ -11,19 +11,30 @@ use serde_json::{Value, json};
 
 use crate::platform::LayoutRecord;
 
-/// The response of the request that ended a recording. It holds the frame folder, callback status artifact, number of frames,
-/// whether the recording reached the limit, and the longest interval between frames.
+/// What the native capture reports of the recording stopped last: the planned stills without a written frame, the stills
+/// requested more than one gap late, and the longest interval (ms) between the request times of two consecutive written
+/// frames.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct StillCounts {
+    pub missed: i32,
+    pub late: i32,
+    pub longest_gap: f64,
+}
+
+/// The response of the request that ended a recording. It holds the frame folder, the record of the stills, the
+/// display-link trace, the number of written frames, the missed and late stills, the longest interval between frames, and
+/// the window server number of the recorded window, null for a display recording.
 pub fn stop_payload(
     directory: &Path,
     count: i32,
-    limited: bool,
-    longest_gap: f64,
+    stills: StillCounts,
     layouts: &[LayoutRecord],
     frame_identity: bool,
+    window: Option<isize>,
 ) -> Value {
-    let callback_status = directory.join("callback-status.jsonl");
+    let still_record = directory.join("stills.jsonl");
     let display_link = directory.join("display-link.json");
-    let mut payload = json!({"frames": directory.to_string_lossy(), "callbackStatus": callback_status.to_string_lossy(), "displayLink": display_link.to_string_lossy(), "count": count, "limited": limited, "longestGap": longest_gap, "layouts": layout_trace(layouts)});
+    let mut payload = json!({"frames": directory.to_string_lossy(), "stills": still_record.to_string_lossy(), "displayLink": display_link.to_string_lossy(), "count": count, "missed": stills.missed, "late": stills.late, "longestGap": stills.longest_gap, "layouts": layout_trace(layouts), "window": window});
     if frame_identity {
         payload["frameIdentity"] = json!({"status": "complete", "manifest": directory.join("frame-identities/manifest.json").to_string_lossy()});
     }
@@ -67,25 +78,29 @@ pub struct Target {
     pub display: bool,
 }
 
+/// The plan of the stills of a recording: `gap` is the time in ms from the request of one still to the request of the
+/// next, and the length is `seconds` or `frames`, the other 0.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Plan {
+    pub gap: f64,
+    pub seconds: f64,
+    pub frames: i32,
+}
+
 /// The recording device. A platform implementation or a fake of a check provides it.
 pub trait Capture {
     /// Sets the window with the window server number target.window as the recording target. An error creates no
     /// preparation and leaves any existing active recording unchanged.
     fn open(&self, target: Target) -> Result<(), String>;
-    /// Starts to record frames in directory. An error rolls back resources created by this attempt; a panic may
-    /// interrupt an active start, which the recording owner stops while unwinding.
-    fn start(&self, directory: &Path, frame_identity: bool) -> Result<(), String>;
-    /// Returns whether the first frame was recorded.
-    fn wait(&self) -> Result<bool, String>;
-    /// Ends the recording and returns the number of recorded frames. An error may occur after native ownership retires.
+    /// Starts the recording of plan in directory and returns once still 0 is written. A failed start ends its recording; a
+    /// panic may interrupt an active start, which the recording owner stops while unwinding.
+    fn start(&self, directory: &Path, plan: Plan, frame_identity: bool) -> Result<(), String>;
+    /// Ends the recording and returns the number of written frames. The recording ends also when the stop fails.
     fn stop(&self) -> Result<i32, String>;
-    /// Reports whether the native capture module still owns the current stream and writer transaction.
-    /// It does not report whether the operating system's asynchronous stop callback has completed.
-    fn has_stream(&self) -> Result<bool, String>;
 }
 
-/// A recording device that also records a new window from its first frame: it holds the next show of a window that is
-/// not on screen, and the stream start of the recording of that window puts it on screen.
+/// A recording device that also records a new window from its first still: it holds the next show of a window that is
+/// not on screen, and the start of the recording of that window puts it on screen.
 pub trait NewWindowCapture: Capture + Send + Sync {
     /// Holds the next show of a window that is not on screen.
     fn hold_new_window(&self) -> Result<(), String>;
@@ -111,9 +126,10 @@ struct NewWindowEnd {
 }
 
 /// The start of the recording of a new window that runs after `start_new_window` returned: the wait for the held window,
-/// then the open, the start and the first frame of its recording.
+/// then the open and the start of its recording, which returns once still 0 is written.
+/// `done` gives the number of the held window once still 0 of its recording is written.
 struct NewWindowStart {
-    done: mpsc::Receiver<(Result<(), String>, bool)>,
+    done: mpsc::Receiver<Result<isize, String>>,
     end: Arc<Mutex<NewWindowEnd>>,
 }
 
@@ -124,51 +140,27 @@ struct State {
     document_identity_allowed: bool,
     identity_source: Option<(String, u64)>,
     pending: Option<NewWindowStart>,
+    /// The window server number of the recorded window: none for a display recording and for a new window that no show
+    /// has given yet.
+    window: Option<isize>,
 }
 
-/// Opens, starts and waits for the first frame of a recording, and stops a recording that did not produce it. It returns
-/// the result and whether no stream remains.
+/// Opens target and starts its recording of plan in directory. It returns once still 0 is written; a failure leaves no
+/// native recording.
 fn begin(
     capture: &dyn Capture,
     target: Target,
     directory: &Path,
+    plan: Plan,
     frame_identity: bool,
-) -> (Result<(), String>, bool) {
-    if let Err(error) = capture.open(target) {
-        return (Err(error), true);
-    }
-    if let Err(error) = capture.start(directory, frame_identity) {
-        return (Err(error), true);
-    }
-    let error = match capture.wait() {
-        Ok(true) => return (Ok(()), false),
-        Ok(false) => "capture did not produce an initial frame".to_string(),
-        Err(error) => error,
-    };
-    match capture.stop() {
-        Ok(_) => (Err(error), true),
-        Err(stop_error) => match capture.has_stream() {
-            Ok(false) => (
-                Err(format!("{error}; capture stop failed: {stop_error}")),
-                true,
-            ),
-            Ok(true) => (
-                Err(format!("{error}; capture stop failed: {stop_error}")),
-                false,
-            ),
-            Err(query_error) => (
-                Err(format!(
-                    "{error}; capture stop failed: {stop_error}; capture ownership query failed: {query_error}"
-                )),
-                false,
-            ),
-        },
-    }
+) -> Result<(), String> {
+    capture.open(target)?;
+    capture.start(directory, plan, frame_identity)
 }
 
 /// Waits for the start of the recording of a new window, ending a hold that no show took, and returns the failure of
-/// that start with whether no stream remains.
-fn settle_new_window(state: &mut State) -> Result<(), (String, bool)> {
+/// that start, which leaves no native recording. A start that succeeded gives the recording its window.
+fn settle_new_window(state: &mut State) -> Result<(), String> {
     let Some(pending) = state.pending.take() else {
         return Ok(());
     };
@@ -184,12 +176,12 @@ fn settle_new_window(state: &mut State) -> Result<(), (String, bool)> {
         end(NEW_WINDOW_STOP_REASON);
     }
     match pending.done.recv() {
-        Ok((Ok(()), _)) => Ok(()),
-        Ok((Err(error), stopped)) => Err((error, stopped)),
-        Err(_) => Err((
-            "the start of the new window recording ended without a result".into(),
-            true,
-        )),
+        Ok(Ok(window)) => {
+            state.window = Some(window);
+            Ok(())
+        }
+        Ok(Err(error)) => Err(error),
+        Err(_) => Err("the start of the new window recording ended without a result".into()),
     }
 }
 
@@ -214,19 +206,21 @@ impl Recording {
                 document_identity_allowed: false,
                 identity_source: None,
                 pending: None,
+                window: None,
             }),
         }
     }
 
     /// Holds the next show of a window that is not on screen and returns once the hold is set, owning directory. The
     /// recording of that window then starts on a thread of its own: once the application shows a window, the recording
-    /// opens on it and starts, and the stream start puts the window on screen, so the first frame of the recording is the
-    /// first frame of the window. A failure after the hold took a window shows that window. `finish` and `abort` end a
+    /// opens on it and starts with plan, and the start puts the window on screen, so still 0 of the recording holds the
+    /// first content of the window. A failure after the hold took a window shows that window. `finish` and `abort` end a
     /// hold that no show took and report the result of the start.
     pub fn start_new_window(
         &self,
         capture: Arc<dyn NewWindowCapture>,
         directory: &Path,
+        plan: Plan,
         frame_identity: bool,
         make: &dyn Fn(&Path) -> Result<(), String>,
     ) -> Result<(), String> {
@@ -261,17 +255,23 @@ impl Recording {
                 }
             };
             let result = match capture.wait_new_window(&register) {
-                Err(error) => (Err(error), true),
+                Err(error) => Err(error),
                 Ok(number) => {
                     let target = Target {
                         window: number,
                         display: false,
                     };
-                    let result = begin(capture.as_ref(), target, &target_directory, frame_identity);
-                    if result.0.is_err() {
+                    let result = begin(
+                        capture.as_ref(),
+                        target,
+                        &target_directory,
+                        plan,
+                        frame_identity,
+                    );
+                    if result.is_err() {
                         capture.release_new_window();
                     }
-                    result
+                    result.map(|()| number)
                 }
             };
             if done.send(result).is_err() {
@@ -288,29 +288,41 @@ impl Recording {
         state.frame_identity = frame_identity;
         state.document_identity_allowed = false;
         state.identity_source = None;
+        state.window = None;
         state.pending = Some(NewWindowStart { done: on_done, end });
         Ok(())
     }
 
-    /// Creates directory with make and starts to record target in that folder. It returns after the first frame was
-    /// recorded. On a failure it stops the recording and deletes the folder.
+    /// Creates directory with make and starts to record target with plan in that folder. It returns after still 0 was
+    /// written. On a failure it deletes the folder; the native start has ended its recording.
     pub fn start(
         &self,
         capture: &dyn Capture,
         target: Target,
         directory: &Path,
+        plan: Plan,
         frame_identity: bool,
         make: &dyn Fn(&Path) -> Result<(), String>,
     ) -> Result<(), String> {
-        self.start_with_document_identity(capture, target, directory, frame_identity, false, make)
+        self.start_with_document_identity(
+            capture,
+            target,
+            directory,
+            plan,
+            frame_identity,
+            false,
+            make,
+        )
     }
 
     /// Starts a diagnostics.capture.start recording that can select one plugin-root document source.
+    #[allow(clippy::too_many_arguments)]
     pub fn start_with_document_identity(
         &self,
         capture: &dyn Capture,
         target: Target,
         directory: &Path,
+        plan: Plan,
         frame_identity: bool,
         document_identity_allowed: bool,
         make: &dyn Fn(&Path) -> Result<(), String>,
@@ -329,63 +341,11 @@ impl Recording {
         // The caller owns the path until creation succeeds; a failed `make` must not trigger directory removal here.
         make(directory)?;
         let mut capture_open_attempted = false;
-        let mut capture_stop_attempted = false;
-        let mut capture_stopped = false;
         let started = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            // The preparation decides the output size from the window size at that time, so even the same target is
-            // prepared again for every recording.
+            // The preparation reads the windows of the target at that time, so even the same target is prepared again
+            // for every recording.
             capture_open_attempted = true;
-            capture.open(target)?;
-            capture.start(directory, frame_identity)?;
-            match capture.wait() {
-                Ok(true) => Ok(()),
-                Ok(false) => {
-                    capture_stop_attempted = true;
-                    match capture.stop() {
-                        Ok(_) => {
-                            capture_stopped = true;
-                            Err("capture did not produce an initial frame".into())
-                        }
-                        Err(stop_error) => {
-                            let failure = format!(
-                                "capture did not produce an initial frame; stop failed: {stop_error}"
-                            );
-                            match capture.has_stream() {
-                                Ok(false) => {
-                                    capture_stopped = true;
-                                    Err(failure)
-                                }
-                                Ok(true) => Err(failure),
-                                Err(query_error) => Err(format!(
-                                    "{failure}; capture ownership query failed: {query_error}"
-                                )),
-                            }
-                        }
-                    }
-                }
-                Err(error) => {
-                    capture_stop_attempted = true;
-                    match capture.stop() {
-                        Ok(_) => {
-                            capture_stopped = true;
-                            Err(error)
-                        }
-                        Err(stop_error) => {
-                            let failure = format!("{error}; capture stop failed: {stop_error}");
-                            match capture.has_stream() {
-                                Ok(false) => {
-                                    capture_stopped = true;
-                                    Err(failure)
-                                }
-                                Ok(true) => Err(failure),
-                                Err(query_error) => Err(format!(
-                                    "{failure}; capture ownership query failed: {query_error}"
-                                )),
-                            }
-                        }
-                    }
-                }
-            }
+            begin(capture, target, directory, plan, frame_identity)
         }));
         match started {
             Ok(Ok(())) => {
@@ -394,21 +354,14 @@ impl Recording {
                 state.frame_identity = frame_identity;
                 state.document_identity_allowed = document_identity_allowed;
                 state.identity_source = None;
+                state.window = (!target.display).then_some(target.window);
                 Ok(())
-            }
-            Ok(Err(error)) if capture_stop_attempted && !capture_stopped => {
-                state.directory = Some(directory.to_path_buf());
-                state.capture_stopped = false;
-                state.frame_identity = frame_identity;
-                state.document_identity_allowed = false;
-                state.identity_source = None;
-                Err(error)
             }
             Ok(Err(error)) => match std::fs::remove_dir_all(directory) {
                 Ok(()) => Err(error),
                 Err(cleanup_error) => {
                     state.directory = Some(directory.to_path_buf());
-                    state.capture_stopped = capture_stopped || !capture_stop_attempted;
+                    state.capture_stopped = true;
                     state.frame_identity = frame_identity;
                     state.document_identity_allowed = false;
                     state.identity_source = None;
@@ -420,68 +373,25 @@ impl Recording {
             Err(panic) => {
                 let mut cleanup_errors = Vec::new();
                 let mut retain_owner = false;
-                if !capture_open_attempted {
-                    capture_stopped = true;
-                }
-                if capture_open_attempted && !capture_stop_attempted {
+                // A panic can interrupt a start that the native capture has not ended, so a start that reached the
+                // capture is stopped; the stop ends the recording also when it fails.
+                let capture_stopped = if capture_open_attempted {
                     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| capture.stop()))
                     {
-                        Ok(Ok(_)) => capture_stopped = true,
+                        Ok(Ok(_)) => true,
                         Ok(Err(error)) => {
                             cleanup_errors.push(format!("capture stop failed: {error}"));
-                            match capture.has_stream() {
-                                Ok(false) => capture_stopped = true,
-                                Ok(true) => retain_owner = true,
-                                Err(query_error) => {
-                                    retain_owner = true;
-                                    cleanup_errors.push(format!(
-                                        "capture ownership query failed: {query_error}"
-                                    ));
-                                }
-                            }
+                            true
                         }
                         Err(_) => {
                             cleanup_errors.push("capture stop panicked".into());
-                            match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                                capture.has_stream()
-                            })) {
-                                Ok(Ok(false)) => capture_stopped = true,
-                                Ok(Ok(true)) => retain_owner = true,
-                                Ok(Err(query_error)) => {
-                                    retain_owner = true;
-                                    cleanup_errors.push(format!(
-                                        "capture ownership query failed: {query_error}"
-                                    ));
-                                }
-                                Err(_) => {
-                                    retain_owner = true;
-                                    cleanup_errors.push("capture ownership query panicked".into());
-                                }
-                            }
+                            retain_owner = true;
+                            false
                         }
                     }
-                }
-                if capture_open_attempted && capture_stop_attempted && !capture_stopped {
-                    cleanup_errors.push("capture stop did not complete before panic".into());
-                    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        capture.has_stream()
-                    })) {
-                        Ok(Ok(false)) => capture_stopped = true,
-                        Ok(Ok(true)) => retain_owner = true,
-                        Ok(Err(query_error)) => {
-                            retain_owner = true;
-                            cleanup_errors
-                                .push(format!("capture ownership query failed: {query_error}"));
-                        }
-                        Err(_) => {
-                            retain_owner = true;
-                            cleanup_errors.push("capture ownership query panicked".into());
-                        }
-                    }
-                }
-                if !capture_stopped && cleanup_errors.is_empty() {
-                    cleanup_errors.push("capture stop was not confirmed".into());
-                }
+                } else {
+                    true
+                };
                 if capture_stopped {
                     match std::fs::remove_dir_all(directory) {
                         Ok(()) => {}
@@ -506,9 +416,8 @@ impl Recording {
                     state.frame_identity = frame_identity;
                     state.document_identity_allowed = false;
                     state.identity_source = None;
-                    crate::application_log::log_error("recording", cleanup_errors.join("; "));
                 }
-                if !cleanup_errors.is_empty() && !retain_owner {
+                if !cleanup_errors.is_empty() {
                     crate::application_log::log_error("recording", cleanup_errors.join("; "));
                 }
                 drop(state);
@@ -517,8 +426,8 @@ impl Recording {
         }
     }
 
-    /// Stops the recording in progress and deletes the folder. It reports a stop error even after native ownership retires.
-    /// It does nothing when there is no recording.
+    /// Stops the recording in progress and deletes the folder. It reports a stop error, after which the native recording
+    /// has ended. It does nothing when there is no recording.
     pub fn abort(&self, capture: &dyn Capture) -> Result<(), String> {
         let mut state = self
             .state
@@ -527,26 +436,15 @@ impl Recording {
             .unwrap_or_else(PoisonError::into_inner);
         let mut retired_stop_error = None;
         if state.directory.is_some() {
-            if let Err((error, true)) = settle_new_window(&mut state) {
+            if let Err(error) = settle_new_window(&mut state) {
                 state.capture_stopped = true;
                 retired_stop_error = Some(error);
             }
             if !state.capture_stopped {
-                match capture.stop() {
-                    Ok(_) => state.capture_stopped = true,
-                    Err(stop_error) => match capture.has_stream() {
-                        Ok(true) => return Err(format!("capture stop failed: {stop_error}")),
-                        Err(query_error) => {
-                            return Err(format!(
-                                "capture stop failed: {stop_error}; capture ownership query failed: {query_error}"
-                            ));
-                        }
-                        Ok(false) => {
-                            state.capture_stopped = true;
-                            retired_stop_error = Some(format!("capture stop failed: {stop_error}"));
-                        }
-                    },
+                if let Err(stop_error) = capture.stop() {
+                    retired_stop_error = Some(format!("capture stop failed: {stop_error}"));
                 }
+                state.capture_stopped = true;
             }
             if let Some(directory) = state.directory.as_deref() {
                 match std::fs::remove_dir_all(directory) {
@@ -568,6 +466,7 @@ impl Recording {
         state.frame_identity = false;
         state.document_identity_allowed = false;
         state.identity_source = None;
+        state.window = None;
         self.state.clear_poison();
         match retired_stop_error {
             Some(error) => Err(error),
@@ -575,9 +474,13 @@ impl Recording {
         }
     }
 
-    /// Ends the recording in progress and returns the folder and the number of frames. The requester deletes the
-    /// folder. A stop error after native ownership retires releases recording ownership and leaves the folder in place.
-    pub fn finish(&self, capture: &dyn Capture) -> Result<(PathBuf, i32, bool), String> {
+    /// Ends the recording in progress and returns the folder, the number of frames, whether it has frame identity and the
+    /// window server number of its window, none for a display recording. The requester deletes the folder. A stop error
+    /// ends the native recording too: finish then releases the recording and leaves the folder in place.
+    pub fn finish(
+        &self,
+        capture: &dyn Capture,
+    ) -> Result<(PathBuf, i32, bool, Option<isize>), String> {
         let mut state = self
             .state
             .lock()
@@ -592,35 +495,27 @@ impl Recording {
         if state.directory.is_none() {
             return Err("no capture is running".into());
         }
-        if let Err((error, stopped)) = settle_new_window(&mut state) {
+        if let Err(error) = settle_new_window(&mut state) {
             // The start failed before a recording ran: the requester owns the folder, which keeps what was written.
-            if stopped {
-                state.directory = None;
-                state.frame_identity = false;
-                self.state.clear_poison();
-            }
+            state.directory = None;
+            state.frame_identity = false;
+            state.window = None;
+            self.state.clear_poison();
             return Err(error);
         }
+        let window = state.window.take();
         let count = match capture.stop() {
             Ok(count) => count,
-            Err(stop_error) => match capture.has_stream() {
-                Ok(true) => return Err(stop_error),
-                Err(query_error) => {
-                    return Err(format!(
-                        "{stop_error}; capture ownership query failed: {query_error}"
-                    ));
+            Err(stop_error) => {
+                state.directory = None;
+                state.capture_stopped = false;
+                state.frame_identity = false;
+                if state.identity_source.is_none() {
+                    state.document_identity_allowed = false;
                 }
-                Ok(false) => {
-                    state.directory = None;
-                    state.capture_stopped = false;
-                    state.frame_identity = false;
-                    if state.identity_source.is_none() {
-                        state.document_identity_allowed = false;
-                    }
-                    self.state.clear_poison();
-                    return Err(stop_error);
-                }
-            },
+                self.state.clear_poison();
+                return Err(stop_error);
+            }
         };
         state.capture_stopped = true;
         let directory = state
@@ -633,7 +528,7 @@ impl Recording {
             state.document_identity_allowed = false;
         }
         self.state.clear_poison();
-        Ok((directory, count, frame_identity))
+        Ok((directory, count, frame_identity, window))
     }
 
     /// Returns the active identity-capture flag and its selected view root.

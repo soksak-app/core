@@ -1006,37 +1006,42 @@ pub trait Platform: CoreRootHost + Send + Sync {
 
     // Capture
     //
-    // Every capture operation that waits for the recording system or for a frame takes token, a number that the caller
+    // A recording is a series of stills: each still is the image of the window that the window server composited,
+    // requested at its planned time. Every capture operation that waits for a still takes token, a number that the caller
     // gives no earlier operation and that is larger than the token of every earlier one. No limit ends such a wait: it
-    // ends when its event comes or when `capture_end_wait` ends the wait of its token, and an ended wait fails with
+    // ends when its still comes or when `capture_end_wait` ends the wait of its token, and an ended wait fails with
     // `<what did not come> before <reason>`.
 
     #[cfg(feature = "diagnostics")]
     /// Prepares the window with the window number as a capture target. When display is set, it captures the windows of
     /// this application on the display that holds the window.
-    fn capture_open(&self, window_number: isize, display: bool, token: u64) -> Result<(), String>;
+    fn capture_open(&self, window_number: isize, display: bool) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
-    /// Starts to record frames in directory.
-    fn capture_start(&self, directory: &str, frame_identity: bool) -> Result<(), String>;
+    /// Starts the recording of the prepared window in directory and returns once still 0 is written; a failed still 0
+    /// fails the start and ends the recording. gap is the time in ms between the requests of two stills, and the length
+    /// is seconds or frames, the other 0.
+    fn capture_start(
+        &self,
+        directory: &str,
+        gap: f64,
+        seconds: f64,
+        frames: i32,
+        frame_identity: bool,
+        token: u64,
+    ) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
-    /// Waits for the first frame and the completion of the stream start and returns whether the frame was recorded.
-    fn capture_wait(&self, token: u64) -> Result<bool, String>;
-    #[cfg(feature = "diagnostics")]
-    /// Records until the presentation time after (ms, the call time when 0), ends the record and returns the number of
-    /// recorded frames.
+    /// Ends the recording and returns the number of written frames. With after above 0 (ms, on the clock of
+    /// `capture_clock`), the recording continues until a still requested at or after after has completed; with 0 it
+    /// requests no later still. The stop ends the recording also when it fails.
     fn capture_stop(&self, after: f64, token: u64) -> Result<i32, String>;
     #[cfg(feature = "diagnostics")]
     /// Ends the wait of the capture operation of token with reason, from any thread. An end that comes before the
     /// operation waits ends it when it waits; an end for an operation that returned changes nothing.
     fn capture_end_wait(&self, token: u64, reason: &str);
     #[cfg(feature = "diagnostics")]
-    /// Reports whether the native capture module still owns the current stream and writer transaction. This does not
-    /// report whether the operating system's asynchronous stop callback has completed.
-    fn capture_has_stream(&self) -> Result<bool, String>;
-    #[cfg(feature = "diagnostics")]
     /// Holds the next show of a window that is not on screen, for the recording of a new window from its first frame
-    /// (docs/spec/endpoint.md, diagnostics.capture.start newWindow); the completion of the stream start of the recording of
-    /// that window puts it on screen. It fails while a recording runs or a hold is set. Call it on the main thread.
+    /// (docs/spec/endpoint.md, diagnostics.capture.start newWindow); the start of the recording of that window puts it on
+    /// screen. It fails while a recording runs or a hold is set. Call it on the main thread.
     fn capture_hold_new_window(&self) -> Result<(), String> {
         Err("the recording of a new window is not implemented on this platform".into())
     }
@@ -1078,20 +1083,22 @@ pub trait Platform: CoreRootHost + Send + Sync {
         Err("not implemented on this platform".into())
     }
     #[cfg(feature = "diagnostics")]
-    /// Returns whether the last recording reached the finite frame limit and stopped automatically.
-    fn capture_limited(&self) -> Result<bool, String>;
+    /// The number of planned stills of the recording stopped last without a written frame.
+    fn capture_missed(&self) -> Result<i32, String>;
     #[cfg(feature = "diagnostics")]
-    /// The longest presentation interval (ms) between consecutive frames in the record that was stopped last.
+    /// The number of stills of the recording stopped last requested more than one gap after their planned time.
+    fn capture_late(&self) -> Result<i32, String>;
+    #[cfg(feature = "diagnostics")]
+    /// The longest interval (ms) between the request times of two consecutive written frames of the recording stopped
+    /// last.
     fn capture_longest_gap(&self) -> Result<f64, String>;
     #[cfg(feature = "diagnostics")]
-    /// The current time (ms). It is on the same clock as the presentation time of the recorded frames.
+    /// The current time (ms). It is on the same clock as the request and completion times of the stills.
     fn capture_clock(&self) -> Result<f64, String>;
     #[cfg(feature = "diagnostics")]
-    /// Takes one still image of a window without giving it focus and writes it as PNG to path. `window_numbers` are those
-    /// of `window_numbers`: the window first, then its child windows, which the image shows in their places over it.
-    /// It is observation material.
-    fn capture_still(&self, window_numbers: &[isize], path: &str, token: u64)
-    -> Result<(), String>;
+    /// Takes one still image of the window with the window number and its child windows, the same image as a still of a
+    /// recording, without giving it focus, and writes it as PNG to path. It is observation material.
+    fn capture_still(&self, window_number: isize, path: &str) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
     /// Gives done the notifications of this application that the notification center still shows as JSON [{identifier,
     /// title, body}]. Call it on the main thread, and done is called on the main thread too.

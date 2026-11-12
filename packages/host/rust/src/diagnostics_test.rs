@@ -10,21 +10,21 @@ impl Capture for IdentityCaptureProbe {
         Ok(())
     }
 
-    fn start(&self, _directory: &Path, _frame_identity: bool) -> Result<(), String> {
+    fn start(&self, _directory: &Path, _plan: Plan, _frame_identity: bool) -> Result<(), String> {
         Ok(())
-    }
-
-    fn wait(&self) -> Result<bool, String> {
-        Ok(true)
     }
 
     fn stop(&self) -> Result<i32, String> {
         Ok(1)
     }
-    fn has_stream(&self) -> Result<bool, String> {
-        Ok(false)
-    }
 }
+
+/// The plan of the stills of the recordings of these tests.
+const TEST_PLAN: Plan = Plan {
+    gap: 8.0,
+    seconds: 0.0,
+    frames: 120,
+};
 
 // contract: recording.finish.layout-trace-failure-preserves-folder
 #[test]
@@ -33,7 +33,7 @@ fn a_layout_trace_failure_keeps_the_started_capture_folder() {
     let folder = parent.path().join("frames");
     std::fs::create_dir_all(&folder).unwrap();
 
-    let result = finish_capture_stop(&folder, 1, false, || {
+    let result = finish_capture_stop(&folder, 1, false, None, || {
         Err(internal("layout trace stop failed"))
     });
 
@@ -252,6 +252,7 @@ fn recording_selects_one_document_identity_source() {
                 display: false,
             },
             &directory,
+            TEST_PLAN,
             true,
             true,
             &|path| std::fs::create_dir_all(path).map_err(|error| error.to_string()),
@@ -293,6 +294,7 @@ fn recording_rejects_document_source_for_drag_owned_identity_capture() {
                 display: false,
             },
             &directory,
+            TEST_PLAN,
             true,
             &|path| std::fs::create_dir_all(path).map_err(|error| error.to_string()),
         )
@@ -431,6 +433,7 @@ fn recording_retains_selected_source_until_native_removal() {
                 display: false,
             },
             &directory,
+            TEST_PLAN,
             true,
             true,
             &|path| std::fs::create_dir_all(path).map_err(|error| error.to_string()),
@@ -463,6 +466,7 @@ fn recording_rejects_start_while_document_identity_cleanup_is_incomplete() {
                 display: false,
             },
             &initial_directory,
+            TEST_PLAN,
             true,
             true,
             &|path| std::fs::create_dir_all(path).map_err(|error| error.to_string()),
@@ -479,6 +483,7 @@ fn recording_rejects_start_while_document_identity_cleanup_is_incomplete() {
             display: false,
         },
         &directory,
+        TEST_PLAN,
         true,
         true,
         &|_| panic!("new recording was prepared before old marker removal"),

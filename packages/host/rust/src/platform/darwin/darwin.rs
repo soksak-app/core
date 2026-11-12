@@ -702,16 +702,20 @@ impl Platform for Darwin {
     }
 
     #[cfg(feature = "diagnostics")]
-    fn capture_open(&self, window_number: isize, display: bool, token: u64) -> Result<(), String> {
-        capture::open(window_number, display, token)
+    fn capture_open(&self, window_number: isize, display: bool) -> Result<(), String> {
+        capture::open(window_number, display)
     }
     #[cfg(feature = "diagnostics")]
-    fn capture_start(&self, directory: &str, frame_identity: bool) -> Result<(), String> {
-        capture::start(directory, frame_identity)
-    }
-    #[cfg(feature = "diagnostics")]
-    fn capture_wait(&self, token: u64) -> Result<bool, String> {
-        capture::wait(token)
+    fn capture_start(
+        &self,
+        directory: &str,
+        gap: f64,
+        seconds: f64,
+        frames: i32,
+        frame_identity: bool,
+        token: u64,
+    ) -> Result<(), String> {
+        capture::start(directory, gap, seconds, frames, frame_identity, token)
     }
     #[cfg(feature = "diagnostics")]
     fn capture_stop(&self, after: f64, token: u64) -> Result<i32, String> {
@@ -720,10 +724,6 @@ impl Platform for Darwin {
     #[cfg(feature = "diagnostics")]
     fn capture_end_wait(&self, token: u64, reason: &str) {
         capture::end_wait(token, reason);
-    }
-    #[cfg(feature = "diagnostics")]
-    fn capture_has_stream(&self) -> Result<bool, String> {
-        Ok(capture::has_stream())
     }
     #[cfg(feature = "diagnostics")]
     fn capture_hold_new_window(&self) -> Result<(), String> {
@@ -763,8 +763,12 @@ impl Platform for Darwin {
         capture::document_frame_identity_remove(generation, done)
     }
     #[cfg(feature = "diagnostics")]
-    fn capture_limited(&self) -> Result<bool, String> {
-        Ok(capture::limited())
+    fn capture_missed(&self) -> Result<i32, String> {
+        Ok(capture::missed())
+    }
+    #[cfg(feature = "diagnostics")]
+    fn capture_late(&self) -> Result<i32, String> {
+        Ok(capture::late())
     }
     #[cfg(feature = "diagnostics")]
     fn capture_longest_gap(&self) -> Result<f64, String> {
@@ -775,13 +779,8 @@ impl Platform for Darwin {
         Ok(capture::clock())
     }
     #[cfg(feature = "diagnostics")]
-    fn capture_still(
-        &self,
-        window_numbers: &[isize],
-        path: &str,
-        token: u64,
-    ) -> Result<(), String> {
-        capture::still(window_numbers, path, token)
+    fn capture_still(&self, window_number: isize, path: &str) -> Result<(), String> {
+        capture::still(window_number, path)
     }
     #[cfg(feature = "diagnostics")]
     fn delivered_notifications(&self, done: Box<dyn FnOnce(String) + Send>) -> Result<(), String> {

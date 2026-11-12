@@ -18,7 +18,7 @@ import (
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
-// Reads and releases the start capture error that the caller owns.
+// Reads and releases the capture error of a call that the caller owns.
 func captureCallError(operation string, success bool, nativeError *byte) error {
 	if nativeError != nil {
 		defer native.Free(unsafe.Pointer(nativeError))
@@ -74,22 +74,23 @@ func captureAnswerError(operation string, answer captureAnswer) error {
 	return nil
 }
 
-func (implementation) CaptureOpen(windowNumber int, display bool, token uint64) error {
+func (implementation) CaptureOpen(windowNumber int, display bool) error {
 	answer := awaitCaptureAnswer(func(context uintptr) {
-		diagnosticNative.ScheduleCaptureOpen(int64(windowNumber), bool(display), token, context)
+		diagnosticNative.ScheduleCaptureOpen(int64(windowNumber), bool(display), context)
 	})
 	return captureAnswerError("open", answer)
 }
 
-func (implementation) CaptureStart(directory string, frameIdentity bool) error {
+func (implementation) CaptureStart(directory string, gap, seconds float64, frames int, frameIdentity bool, token uint64) error {
 	if strings.IndexByte(directory, 0) >= 0 {
 		return errors.New("capture start: directory contains NUL")
 	}
 	where := native.CString(directory)
 	defer native.Free(unsafe.Pointer(where))
-	var nativeError *byte
-	started := bool(diagnosticNative.SpCaptureStart(where, bool(frameIdentity), &nativeError))
-	return captureCallError("start", started, nativeError)
+	answer := awaitCaptureAnswer(func(context uintptr) {
+		diagnosticNative.ScheduleCaptureStart(where, float64(gap), float64(seconds), int32(frames), bool(frameIdentity), token, context)
+	})
+	return captureAnswerError("start", answer)
 }
 
 func (implementation) CaptureStop(after float64, token uint64) (int, error) {
@@ -98,22 +99,6 @@ func (implementation) CaptureStop(after float64, token uint64) (int, error) {
 		return int(answer.result), fmt.Errorf("capture stop: %s", answer.failure)
 	}
 	return int(answer.result), nil
-}
-
-// CaptureHasStream reports whether the capture module still owns its current stream and writer transaction.
-func (implementation) CaptureHasStream() (bool, error) {
-	return bool(diagnosticNative.SpCaptureHasStream()), nil
-}
-
-func (implementation) CaptureWait(token uint64) (bool, error) {
-	answer := awaitCaptureAnswer(func(context uintptr) { diagnosticNative.ScheduleCaptureWait(token, context) })
-	if answer.result != 0 {
-		return true, nil
-	}
-	if !answer.failed {
-		return false, errors.New("capture wait failed without a native reason")
-	}
-	return false, fmt.Errorf("capture wait: %s", answer.failure)
 }
 
 // CaptureHoldNewWindow holds the next show of a window that is not on screen. The caller runs it in a step of the main thread.
@@ -142,7 +127,9 @@ func (implementation) CaptureEndWait(token uint64, reason string) {
 	diagnosticNative.EndCaptureWait(token, text)
 }
 
-func (implementation) CaptureLimited() bool { return bool(diagnosticNative.SpCaptureLimited()) }
+func (implementation) CaptureMissed() int { return int(diagnosticNative.SpCaptureMissed()) }
+
+func (implementation) CaptureLate() int { return int(diagnosticNative.SpCaptureLate()) }
 
 func (implementation) CaptureLongestGap() float64 {
 	return float64(diagnosticNative.SpCaptureLongestGap())
@@ -210,24 +197,18 @@ func layoutRecords(values []float64, count int) ([]platform.LayoutRecord, error)
 	return records, nil
 }
 
-func (implementation) CaptureStill(windowNumbers []int, path string, token uint64) error {
+func (implementation) CaptureStill(windowNumber int, path string) error {
 	if strings.IndexByte(path, 0) >= 0 {
 		return errors.New("still capture: path contains NUL")
-	}
-	if len(windowNumbers) == 0 {
-		return errors.New("still capture needs the number of a window")
-	}
-	numbers := make([]int64, len(windowNumbers))
-	for i, number := range windowNumbers {
-		numbers[i] = int64(number)
 	}
 	target := native.CString(path)
 	defer native.Free(unsafe.Pointer(target))
 	answer := awaitCaptureAnswer(func(context uintptr) {
-		diagnosticNative.ScheduleCaptureStill(&numbers[0], int32(len(numbers)), target, token, context)
+		diagnosticNative.ScheduleCaptureStill(int64(windowNumber), target, context)
 	})
 	return captureAnswerError("still", answer)
 }
+
 func (implementation) StartDocumentFrameIdentity(document unsafe.Pointer, generation uint64, done func(json.RawMessage, error)) error {
 	if done == nil {
 		return errors.New("start document frame identity: completion callback is nil")

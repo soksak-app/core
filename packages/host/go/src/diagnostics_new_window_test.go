@@ -64,21 +64,21 @@ func (p *newWindowProbe) releases() int {
 
 // contract: diagnostics.capture-start.new-window-is-strict-boolean
 func TestCaptureStartNewWindowIsAStrictBooleanWithoutDisplay(t *testing.T) {
-	got, err := parseCaptureStartOptions(json.RawMessage(`{"newWindow":true}`))
+	got, err := parseCaptureStartOptions(json.RawMessage(`{"gap":8,"frames":10,"newWindow":true}`))
 	if err != nil || !got.NewWindow {
 		t.Fatalf("newWindow true = %+v, %v", got, err)
 	}
-	got, err = parseCaptureStartOptions(json.RawMessage(`{}`))
+	got, err = parseCaptureStartOptions(json.RawMessage(`{"gap":8,"frames":10}`))
 	if err != nil || got.NewWindow {
 		t.Fatalf("absent newWindow = %+v, %v", got, err)
 	}
 	for _, value := range []string{`null`, `"true"`, `1`} {
-		_, err := parseCaptureStartOptions(json.RawMessage(`{"newWindow":` + value + `}`))
+		_, err := parseCaptureStartOptions(json.RawMessage(`{"gap":8,"frames":10,"newWindow":` + value + `}`))
 		if messageOf(err) != "newWindow must be a boolean" {
 			t.Errorf("newWindow %s: error %v, want newWindow must be a boolean", value, err)
 		}
 	}
-	_, err = parseCaptureStartOptions(json.RawMessage(`{"newWindow":true,"display":true}`))
+	_, err = parseCaptureStartOptions(json.RawMessage(`{"gap":8,"frames":10,"newWindow":true,"display":true}`))
 	if messageOf(err) != "newWindow records the new window alone and cannot be combined with display" {
 		t.Errorf("newWindow with display: error %v", err)
 	}
@@ -89,7 +89,7 @@ func TestANewWindowRecordingAnswersOnceTheHoldIsSetAndRecordsTheHeldWindow(t *te
 	probe := newNewWindowProbe()
 	var recording Recording
 	directory := filepath.Join(t.TempDir(), "frames")
-	if err := recording.StartNewWindow(probe, directory, false); err != nil {
+	if err := recording.StartNewWindow(probe, directory, testPlan, false); err != nil {
 		t.Fatal(err)
 	}
 	if recording.Running() != directory {
@@ -104,12 +104,15 @@ func TestANewWindowRecordingAnswersOnceTheHoldIsSetAndRecordsTheHeldWindow(t *te
 	if target := <-probe.opened; target != (CaptureTarget{Window: 31}) {
 		t.Fatalf("the recording opened %+v, want the held window 31 alone", target)
 	}
-	finished, count, _, err := recording.Finish(probe)
-	if err != nil || finished != directory || count != 1 {
-		t.Fatalf("finish = %q, %d, %v", finished, count, err)
+	finished, count, _, window, err := recording.Finish(probe)
+	if err != nil || finished != directory || count != 1 || window == nil || *window != 31 {
+		t.Fatalf("finish = %q, %d, window %v, %v; want the held window 31", finished, count, window, err)
 	}
 	if probe.releases() != 0 {
-		t.Fatalf("a recording that started released its hold %d times; its stream start shows the window", probe.releases())
+		t.Fatalf("a recording that started released its hold %d times; its start shows the window", probe.releases())
+	}
+	if probe.plan != testPlan {
+		t.Fatalf("the start of the held window received the plan %+v, want %+v", probe.plan, testPlan)
 	}
 }
 
@@ -118,7 +121,7 @@ func TestAFailedHoldStartsNoRecording(t *testing.T) {
 	probe := newNewWindowProbe()
 	probe.holdErr = errors.New("a new window is already held for a recording")
 	var recording Recording
-	err := recording.StartNewWindow(probe, filepath.Join(t.TempDir(), "frames"), false)
+	err := recording.StartNewWindow(probe, filepath.Join(t.TempDir(), "frames"), testPlan, false)
 	if err == nil || err.Error() != "a new window is already held for a recording" {
 		t.Fatalf("start error %v", err)
 	}
@@ -132,10 +135,10 @@ func TestTheStopEndsAHoldThatNoShowTook(t *testing.T) {
 	probe := newNewWindowProbe()
 	var recording Recording
 	directory := filepath.Join(t.TempDir(), "frames")
-	if err := recording.StartNewWindow(probe, directory, false); err != nil {
+	if err := recording.StartNewWindow(probe, directory, testPlan, false); err != nil {
 		t.Fatal(err)
 	}
-	finished, _, _, err := recording.Finish(probe)
+	finished, _, _, _, err := recording.Finish(probe)
 	if finished != directory || err == nil || err.Error() != "no new window was shown before the stop of the recording" {
 		t.Fatalf("finish = %q, %v", finished, err)
 	}
@@ -150,12 +153,12 @@ func TestAFailureAfterTheHoldReleasesTheHeldWindow(t *testing.T) {
 	probe.openErr = errors.New("window 31 not found")
 	var recording Recording
 	directory := filepath.Join(t.TempDir(), "frames")
-	if err := recording.StartNewWindow(probe, directory, false); err != nil {
+	if err := recording.StartNewWindow(probe, directory, testPlan, false); err != nil {
 		t.Fatal(err)
 	}
 	probe.held <- 31
 	<-probe.opened
-	finished, _, _, err := recording.Finish(probe)
+	finished, _, _, _, err := recording.Finish(probe)
 	if finished != directory || err == nil || !strings.Contains(err.Error(), "window 31 not found") {
 		t.Fatalf("finish = %q, %v", finished, err)
 	}

@@ -273,30 +273,32 @@ type PageObjectCounter interface {
 // Capturer is the window recording operation. Only the platform implementation of a diagnostic build (tag diagnostics) provides it, and
 // diagnostic code uses it by checking the value of Current() against this interface.
 //
-// Every operation that waits for the recording system or for a frame takes token, a number that the caller gives no earlier
-// call and that is larger than the token of every earlier call. No limit ends such a wait: it ends when its event comes or when
-// CaptureEndWait ends the wait of its token, and an ended wait fails with `<what did not come> before <reason>`.
+// A recording is a series of stills: each still is the image of the window that the window server composited, requested at its
+// planned time. Every operation that waits for a still takes token, a number that the caller gives no earlier call and that is
+// larger than the token of every earlier call. No limit ends such a wait: it ends when its still comes or when CaptureEndWait
+// ends the wait of its token, and an ended wait fails with `<what did not come> before <reason>`.
 type Capturer interface {
 	// WindowNumbers returns the window server numbers of the window and its child windows. The number of the window itself comes first.
 	WindowNumbers(window Window) ([]int, error)
 	// CaptureOpen makes the window with the window server number windowNumber the recording target. With display, it records the windows of this app on the display
 	// that holds the window.
-	CaptureOpen(windowNumber int, display bool, token uint64) error
-	// CaptureStart starts the frame recording in directory.
-	CaptureStart(directory string, frameIdentity bool) error
-	// CaptureWait returns whether the first frame was recorded and the stream start completed.
-	CaptureWait(token uint64) (bool, error)
-	// CaptureStop ends the recording and returns the number of recorded frames.
-	// after is the last display time (ms, on the same clock as the display time) to include in the recording, and 0 means the time of the call.
+	CaptureOpen(windowNumber int, display bool) error
+	// CaptureStart starts the recording of the prepared window in directory and returns once still 0 is written; a failed still 0
+	// fails the start and ends the recording. gap is the time in ms between the requests of two stills, and the length is
+	// seconds or frames, the other 0.
+	CaptureStart(directory string, gap, seconds float64, frames int, frameIdentity bool, token uint64) error
+	// CaptureStop ends the recording and returns the number of written frames. With after above 0 (ms, on the clock of
+	// CaptureClock), the recording continues until a still requested at or after after has completed; with 0 it requests no
+	// later still. The stop ends the recording also when it fails.
 	CaptureStop(after float64, token uint64) (int, error)
-	// CaptureHasStream reports whether the native capture module still owns its current stream and writer transaction.
-	// It does not report whether the operating system's asynchronous stop callback has completed.
-	CaptureHasStream() (bool, error)
-	// CaptureLimited tells whether the last recording reached the frame limit.
-	CaptureLimited() bool
-	// CaptureLongestGap is the longest display interval (ms) between consecutive frames in the recording stopped last.
+	// CaptureMissed is the number of planned stills of the recording stopped last without a written frame.
+	CaptureMissed() int
+	// CaptureLate is the number of stills of the recording stopped last requested more than one gap after their planned time.
+	CaptureLate() int
+	// CaptureLongestGap is the longest interval (ms) between the request times of two consecutive written frames of the
+	// recording stopped last.
 	CaptureLongestGap() float64
-	// CaptureClock is the current time (ms). It is on the same clock as the display time of the recorded frames.
+	// CaptureClock is the current time (ms). It is on the same clock as the request and completion times of the stills.
 	CaptureClock() float64
 	// DeliveredNotifications gives done the notifications of this application that the notification center still shows, as [{identifier, title, body}] JSON.
 	// Call it on the UI thread, and done is also called on the UI thread.
@@ -308,19 +310,18 @@ type Capturer interface {
 	// LayoutTraceRequested records the time at which the presentation of the open layout transaction was requested, and returns
 	// the function that records the time at which it was confirmed. Call both on the UI thread.
 	LayoutTraceRequested() (presented func())
-	// CaptureStill takes one picture of a window without giving it focus and writes it to path as PNG. windowNumbers are those
-	// that WindowNumbers returns: the window first, then its child windows, which the picture shows in their places over it.
-	// It is observation material.
-	CaptureStill(windowNumbers []int, path string, token uint64) error
+	// CaptureStill takes one picture of the window with the window server number windowNumber and its child windows, the same
+	// image as a still of a recording, without giving it focus, and writes it to path as PNG. It is observation material.
+	CaptureStill(windowNumber int, path string) error
 	// CaptureEndWait ends the wait of the operation of token with reason, from any thread; the waiting operation does not hold
 	// the UI thread. An end that comes before the operation waits ends it when it waits; an end for an operation that returned
 	// changes nothing.
 	CaptureEndWait(token uint64, reason string)
 }
 
-// NewWindowCapturer is the recording of a new window from its first frame (docs/spec/endpoint.md, diagnostics.capture.start
-// newWindow). The platform holds the next show of a window that is not on screen, and the completion of the stream start of the
-// recording of that window puts the window on screen, so the first frame of the recording is the first frame of the window.
+// NewWindowCapturer is the recording of a new window from its first still (docs/spec/endpoint.md, diagnostics.capture.start
+// newWindow). The platform holds the next show of a window that is not on screen, and the start of the recording of that window
+// puts the window on screen and requests still 0 in the same main-thread step, so still 0 holds the first content of the window.
 type NewWindowCapturer interface {
 	// CaptureHoldNewWindow holds the next show of a window that is not on screen. It fails while a recording runs or a hold is set.
 	CaptureHoldNewWindow() error
