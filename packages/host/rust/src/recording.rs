@@ -31,7 +31,7 @@ pub fn stop_payload(
 }
 
 /// Converts the placement transaction records into {ticket, begun, requested, presented, committed, commitPath,
-/// openAtCommit}. A value that did not happen is null.
+/// openAtCommit, flushed}. A value that did not happen is null.
 pub fn layout_trace(records: &[LayoutRecord]) -> Value {
     let stage = |value: f64| {
         if value.is_nan() {
@@ -52,6 +52,7 @@ pub fn layout_trace(records: &[LayoutRecord]) -> Value {
                     "committed": stage(record.committed),
                     "commitPath": record.commit_path,
                     "openAtCommit": stage(record.open_at_commit),
+                    "flushed": stage(record.flushed),
                 })
             })
             .collect(),

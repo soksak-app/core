@@ -1070,4 +1070,8 @@ type LayoutRecord struct {
 	// OpenAtCommit is the number of the other CATransaction pairs of the native code that were open at the commit. It is NaN
 	// when the transaction did not commit.
 	OpenAtCommit float64
+	// Flushed is the time at which the outermost Core Animation transaction of the thread that carried the commit had been
+	// sent to the render server: not later than Committed when the commit closed the outermost transaction, later when it
+	// was nested in another open one. It is NaN when the transaction did not commit or the send was not observed.
+	Flushed float64
 }

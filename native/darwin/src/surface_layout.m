@@ -8,6 +8,7 @@
 #import "window_controls.h"
 #import "window_facts.h"
 #import "window_reveal.h"
+#import "private/quartzcore.h"
 #import "private/webkit.h"
 
 @interface SPLayoutRequest : NSObject
@@ -117,6 +118,8 @@ static void releaseSettled(void);
 
 // Diagnostic trace. Records ticket, begun, presented, and committed for each transaction. The drag check uses it to divide the delay of the recording frames into stages.
 static NSMutableArray<NSMutableArray<NSNumber *> *> *trace;
+// Counts the starts and stops of the trace, so a commit handler marks only the trace that ran when it was added.
+static NSUInteger traceGeneration;
 
 // The CATransaction pairs of this code that are open, the layout transaction included.
 static NSUInteger openTransactions;
@@ -153,6 +156,21 @@ static void traceMark(uint64_t ticket, NSUInteger stage) {
     traceValue(ticket, stage, CACurrentMediaTime() * 1000);
 }
 
+// Records when the outermost Core Animation transaction of the thread, which carries the commit of the layout transaction of
+// ticket, has been sent to the render server. A commit nested in another open transaction is sent only with that one. The
+// handler marks only a record of the running trace, so a handler of a stopped trace adds nothing to a later one.
+static void traceFlushed(uint64_t ticket) {
+    if (!trace) return;
+    NSUInteger generation = traceGeneration;
+    void (^flushed)(void) = ^{
+        if (!trace || traceGeneration != generation) return;
+        for (NSMutableArray<NSNumber *> *item in trace.reverseObjectEnumerator) {
+            if (item[0].unsignedLongLongValue == ticket) { item[7] = @(CACurrentMediaTime() * 1000); return; }
+        }
+    };
+    [CATransaction addCommitHandler:[[flushed copy] autorelease] forPhase:kSPTransactionPhasePostCommit];
+}
+
 uint64_t surfaceLayoutTraceRequested(void) {
     NSCAssert(NSThread.isMainThread, @"surface layout trace requires the UI thread");
     traceMark(preparation, 4);
@@ -168,6 +186,7 @@ void surfaceLayoutTraceStart(void) {
     NSCAssert(NSThread.isMainThread, @"surface layout trace requires the UI thread");
     [trace release];
     trace = [[NSMutableArray alloc] init];
+    traceGeneration++;
 }
 
 size_t surfaceLayoutTraceStop(double *out, size_t capacity) {
@@ -181,6 +200,7 @@ size_t surfaceLayoutTraceStop(double *out, size_t capacity) {
     }
     [trace release];
     trace = nil;
+    traceGeneration++;
     return total;
 }
 
@@ -561,6 +581,7 @@ static void finishTransaction(void *owner, int path) {
     [layouts removeObjectForKey:[NSValue valueWithPointer:owner]];
     traceValue(ticket, 5, path);
     traceValue(ticket, 6, openTransactions - (holdOpen ? 1 : 0));
+    traceFlushed(ticket);
     if (holdOpen && layouts.count == 0) {
         holdOpen = NO;
         surfaceTransactionCommit();

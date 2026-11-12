@@ -457,6 +457,10 @@ pub struct LayoutRecord {
     /// The number of the other CATransaction pairs of the native code that were open at the commit. NaN when the
     /// transaction did not commit.
     pub open_at_commit: f64,
+    /// The time at which the outermost Core Animation transaction of the thread that carried the commit had been sent to
+    /// the render server: not later than committed when the commit closed the outermost transaction, later when it was
+    /// nested in another open one. NaN when the transaction did not commit or the send was not observed.
+    pub flushed: f64,
 }
 
 /// A global overlay of the main DOM plane and its CSS coordinates.

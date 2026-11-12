@@ -153,8 +153,8 @@ fn invalid_json_closes_connection() {
 | `diagnostics.capture-stop.payload-reports-callback-status` | 녹화 중지 페이로드는 녹화 폴더 안에 있는 bounded callback status 및 정확한 display time JSONL artifact의 경로를 보고한다. | all |
 | `diagnostics.capture-stop.payload-reports-unbounded` | 한도에 도달하지 않은 녹화의 중지 페이로드는 limited false를 보고한다. | all |
 | `diagnostics.capture-stop.payload-reports-layout-timeline` | 녹화 중지 페이로드는 기록된 layout transaction이 없어도 항상 `layouts` 배열을 보고한다. | all |
-| `diagnostics.capture-stop.payload-preserves-layout-stages` | 각 `layouts` 항목은 기록된 ticket, begun, requested, presented, committed 값을 유지한다. | all |
-| `diagnostics.layout-trace.native-record-names-its-commit` | host는 layout transaction의 각 native record를 ticket, begun, presented, committed, requested, commit path code, `openAtCommit`으로 읽고, 각 commit path code를 그 path의 이름(`present`, `start`, `view-join`, `view-abandon`, `cancel`)으로 바꾼다. commit하지 않은 transaction에는 commit path와 `openAtCommit`이 없다([endpoint](endpoint.ko.md)). | all |
+| `diagnostics.capture-stop.payload-preserves-layout-stages` | 각 `layouts` 항목은 기록된 ticket, begun, requested, presented, committed, flushed 값을 유지한다. | all |
+| `diagnostics.layout-trace.native-record-names-its-commit` | host는 layout transaction의 각 native record를 ticket, begun, presented, committed, requested, commit path code, `openAtCommit`, `flushed`로 읽고, 각 commit path code를 그 path의 이름(`present`, `start`, `view-join`, `view-abandon`, `cancel`)으로 바꾼다. commit하지 않은 transaction에는 commit path, `openAtCommit`, `flushed`가 없다([endpoint](endpoint.ko.md)). | all |
 | `diagnostics.layout-trace.unknown-commit-path-fails` | native code가 선언하지 않은 commit path code의 native layout record는 path 없는 record가 되지 않고 layout record 읽기를 실패시킨다. | all |
 | `diagnostics.capture-stop.payload-names-opt-in-frame-identity-artifact` | `frameIdentity: true`로 녹화를 시작하면 중지 페이로드는 상태가 `complete`이고 manifest 경로를 가진 `frameIdentity`를 보고한다. | all |
 | `diagnostics.capture-start.preserves-display-option-parsing` | 선택적 `frameIdentity` 매개변수를 추가해도 기존 `display` 옵션 파싱은 바뀌지 않는다. | all |

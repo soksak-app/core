@@ -225,6 +225,7 @@ fn layout_records(values: &[f64], count: usize) -> Result<Vec<LayoutRecord>, Str
                 requested: value[4],
                 commit_path,
                 open_at_commit: value[6],
+                flushed: value[7],
             })
         })
         .collect()

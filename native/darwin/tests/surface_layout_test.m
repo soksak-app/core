@@ -1074,6 +1074,7 @@ int main(void) { @autoreleasepool {
     BOOL nestedCommitted = surfaceLayoutCommit(window, 109);
     double outerClosed = CACurrentMediaTime() * 1000;
     surfaceTransactionCommit();
+    [CATransaction flush];
     size_t nestedCount = surfaceLayoutTraceStop(trace, 4);
     check(nestedCommitted && nestedCount == 1 && trace[0] == 109 && trace[5] == SURFACE_LAYOUT_COMMIT_PRESENT && trace[6] == 1,
         [NSString stringWithFormat:@"the trace records one other pair open at a nested commit (%zu records: ticket %.0f, "
