@@ -13,18 +13,18 @@ import (
 
 // contract: diagnostics.layout-trace.native-record-names-its-commit
 // The native record of a layout transaction holds ticket, begun, presented, committed, requested, the commit path code, the
-// number of other CATransaction pairs open at the commit, the time its outermost transaction was sent to the render server and
-// the display refresh that carried it. Each code becomes the name of its path, and a transaction that did not commit keeps no
-// path.
+// number of other CATransaction pairs open at the commit, the time its outermost transaction was sent to the render server, the
+// display refresh that carried it and the refresh before the callback that read it. Each code becomes the name of its path, and
+// a transaction that did not commit keeps no path.
 func TestANativeLayoutRecordNamesItsCommitPath(t *testing.T) {
 	nan := math.NaN()
 	values := []float64{
-		7, 10, 20, 30, 15, abi.SURFACE_LAYOUT_COMMIT_VIEW_JOIN, 1, 35, 41.6,
-		8, 40, 50, 60, 45, abi.SURFACE_LAYOUT_COMMIT_PRESENT, 0, 60, 66.6,
-		9, 70, 80, 90, nan, abi.SURFACE_LAYOUT_COMMIT_START, 0, 90, 100,
-		10, 100, nan, 110, nan, abi.SURFACE_LAYOUT_COMMIT_VIEW_ABANDON, 2, 112, 116.6,
-		11, 120, nan, 130, nan, abi.SURFACE_LAYOUT_COMMIT_CANCEL, 0, 130, 133.3,
-		12, 140, nan, nan, nan, nan, nan, nan, nan,
+		7, 10, 20, 30, 15, abi.SURFACE_LAYOUT_COMMIT_VIEW_JOIN, 1, 35, 41.6, 33.3,
+		8, 40, 50, 60, 45, abi.SURFACE_LAYOUT_COMMIT_PRESENT, 0, 60, 66.6, 58.3,
+		9, 70, 80, 90, nan, abi.SURFACE_LAYOUT_COMMIT_START, 0, 90, 100, 91.6,
+		10, 100, nan, 110, nan, abi.SURFACE_LAYOUT_COMMIT_VIEW_ABANDON, 2, 112, 116.6, 108.3,
+		11, 120, nan, 130, nan, abi.SURFACE_LAYOUT_COMMIT_CANCEL, 0, 130, 133.3, 125,
+		12, 140, nan, nan, nan, nan, nan, nan, nan, nan,
 	}
 	records, err := layoutRecords(values, 6)
 	if err != nil {
@@ -39,13 +39,13 @@ func TestANativeLayoutRecordNamesItsCommitPath(t *testing.T) {
 	}
 	first := platform.LayoutRecord{
 		Ticket: 7, Begun: 10, Requested: 15, Presented: 20, Committed: 30, CommitPath: "view-join", OpenAtCommit: 1, Flushed: 35,
-		Displayed: 41.6,
+		Displayed: 41.6, Refreshed: 33.3,
 	}
 	if records[0] != first {
 		t.Fatalf("first record = %#v, want %#v", records[0], first)
 	}
 	if last := records[5]; last.Ticket != 12 || !math.IsNaN(last.Committed) || !math.IsNaN(last.OpenAtCommit) || !math.IsNaN(last.Flushed) ||
-		!math.IsNaN(last.Displayed) {
+		!math.IsNaN(last.Displayed) || !math.IsNaN(last.Refreshed) {
 		t.Fatalf("an uncommitted record = %#v", last)
 	}
 }
@@ -53,7 +53,7 @@ func TestANativeLayoutRecordNamesItsCommitPath(t *testing.T) {
 // contract: diagnostics.layout-trace.unknown-commit-path-fails
 // A commit path code that the native code does not declare is an error, not a record without a path.
 func TestANativeLayoutRecordWithAnUnknownCommitPathFails(t *testing.T) {
-	if _, err := layoutRecords([]float64{7, 10, 20, 30, 15, 99, 0, 30, 33.3}, 1); err == nil {
+	if _, err := layoutRecords([]float64{7, 10, 20, 30, 15, 99, 0, 30, 33.3, 25}, 1); err == nil {
 		t.Fatal("an unknown commit path code was accepted")
 	}
 }

@@ -1,6 +1,6 @@
 // Judgments of the timing of layouts and of the content frames of views, from the numbers that the host and the views report: the
 // layout transactions of the layout trace ({ticket, begun, requested, presented, committed, commitPath, openAtCommit, flushed,
-// displayed, viewport}, ms on the host monotonic clock), the times of the steps of a drag, the window resize events and the content
+// displayed, refreshed, viewport}, ms on the host monotonic clock), the times of the steps of a drag, the window resize events and the content
 // frames that a view traces (viewContentFrameEvents of view-metrics-collection.mjs). No judgment reads a recorded frame. Each judgment
 // returns its measured values with `failures`, the requirements that the values miss, which is empty when they meet them.
 import assert from "node:assert/strict";

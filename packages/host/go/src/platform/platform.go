@@ -1073,4 +1073,7 @@ type LayoutRecord struct {
 	// first refresh callback of the display of the window after Flushed (CADisplayLink targetTimestamp). It is NaN when the
 	// transaction did not commit, its window was on no screen, or the trace ended before that callback.
 	Displayed float64
+	// Refreshed is the time of the display refresh that came before that first refresh callback (CADisplayLink timestamp), so
+	// Flushed against it tells how close to that refresh the commit was sent. It is NaN when Displayed is.
+	Refreshed float64
 }

@@ -5,7 +5,8 @@
 // the commits of the view drag follow one another within two display refreshes, counted between the display refreshes that carried
 // them (commitCadence), and each layout of the divider drag is sent at most four display periods after the grid began it, with a
 // median of 2.5 and a 90th percentile of 3 (stepCommitDelays of @soksak/window-check/layout-timing.mjs), from the steps and the
-// layout trace that diagnostics.drag answers.
+// layout trace that diagnostics.drag answers. A run that misses either keeps the layout trace of its drag in the log folder as
+// evidence (writeDragLayouts).
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -15,7 +16,7 @@ import { APPS, drag, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
 import { commitCadence, displayPeriod, dragTrips, stepCommitDelays } from "@soksak/window-check/layout-timing.mjs";
 import { fresh, joinedFailure } from "./fixture.mjs";
-import { openFloorPage, prepareFloorDrag, VIEW_DRAG_PLAN } from "./benchmark/cases/floor-page.mjs";
+import { openFloorPage, prepareFloorDrag, VIEW_DRAG_PLAN, writeDragLayouts } from "./benchmark/cases/floor-page.mjs";
 import { dragProcesses, NATIVE_DRAG_PLAN } from "./benchmark/cases/view-drag.mjs";
 import { execute, windowApplicationRows } from "../scripts/measure-app-usage.mjs";
 
@@ -78,6 +79,12 @@ for (const app of Object.values(APPS)) {
       t.diagnostic(`${app.name}: display period ${period} ms, ${commits.count} commits, refreshes between them ` +
         `${JSON.stringify(commits.refreshes)}; delays median ${delays.median}, p90 ${delays.p90}, longest ${delays.longest} display ` +
         "periods");
+      if (commits.failures.length > 0 || delays.failures.length > 0) {
+        const logs = join(app.configDir, "logs");
+        mkdirSync(logs, { recursive: true });
+        const path = writeDragLayouts(mkdtempSync(join(logs, "view-drag-commits-")), run.layouts);
+        t.diagnostic(`${app.name}: the layout trace of the drag from ${during.from} to ${during.to} ms: ${path}`);
+      }
       assert.deepEqual(commits.failures, [], "the commits of the view drag");
       assert.deepEqual(delays.failures, [], "the layouts of the divider drag");
     });

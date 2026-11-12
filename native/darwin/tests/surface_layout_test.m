@@ -508,6 +508,11 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration, BOOL
             @"%@: the trace records the display refresh that carried the commit of ticket 107, after it was sent and not after the "
             "refresh of the settled composition (flushed %.3f, displayed %.3f, settled refresh %.3f)", variant, timeline[7],
             timeline[8], shown]);
+        // The callback that read the display refresh came after the flush and after the refresh before it, so that refresh is
+        // before the one that carried the commit and not later than the callback, which was before the stop.
+        check(traced == 1 && timeline[9] < timeline[8] && timeline[9] <= CACurrentMediaTime() * 1000,
+            [NSString stringWithFormat:@"%@: the trace records the refresh before the callback that read the display refresh of "
+                "ticket 107 (refreshed %.3f, displayed %.3f)", variant, timeline[9], timeline[8]]);
     }
     // The folder of a failing check holds its frames as evidence with the request and completion times of every still
     // (stills.jsonl); a passing check removes its folder at once.

@@ -504,6 +504,7 @@ fn begun_record(ticket: u64, begun: f64) -> platform::LayoutRecord {
         open_at_commit: f64::NAN,
         flushed: f64::NAN,
         displayed: f64::NAN,
+        refreshed: f64::NAN,
     }
 }
 

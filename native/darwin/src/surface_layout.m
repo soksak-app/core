@@ -161,7 +161,8 @@ static void traceMark(uint64_t ticket, NSUInteger stage) {
 
 // SPTraceRefresh records the display refresh that carried a layout transaction to the screen: at the first refresh callback of
 // the display after the transaction was sent to the render server, the target time of the refresh that follows, which is the
-// refresh whose frame the render server composes with the content sent before that callback. It marks only a record of the trace
+// refresh whose frame the render server composes with the content sent before that callback, and the time of the refresh that
+// came before that callback, which tells how close to that refresh the transaction was sent. It marks only a record of the trace
 // that ran when the transaction was sent.
 @interface SPTraceRefresh : NSObject
 @property(nonatomic) uint64_t ticket;
@@ -171,10 +172,15 @@ static void traceMark(uint64_t ticket, NSUInteger stage) {
 @implementation SPTraceRefresh
 - (void)tick:(CADisplayLink *)link {
     double displayed = link.targetTimestamp * 1000;
+    double refreshed = link.timestamp * 1000;
     [link invalidate];
     if (!trace || traceGeneration != self.generation) return;
     for (NSMutableArray<NSNumber *> *item in trace.reverseObjectEnumerator) {
-        if (item[0].unsignedLongLongValue == self.ticket) { item[8] = @(displayed); return; }
+        if (item[0].unsignedLongLongValue == self.ticket) {
+            item[8] = @(displayed);
+            item[9] = @(refreshed);
+            return;
+        }
     }
 }
 @end

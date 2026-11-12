@@ -230,13 +230,13 @@ func TestALayoutTraceWithoutTransactionsReportsAnEmptyList(t *testing.T) {
 // contract: diagnostics.layout-trace.reply-preserves-layout-stages
 func TestALayoutTraceKeepsTheStagesOfEachTransaction(t *testing.T) {
 	records := []platform.LayoutRecord{
-		{Ticket: 7, Begun: 10, Requested: 15, Presented: 20, Committed: 30, CommitPath: "view-join", OpenAtCommit: 1, Flushed: 35, Displayed: 41.6},
-		{Ticket: 8, Begun: 40, Requested: math.NaN(), Presented: math.NaN(), Committed: math.NaN(), OpenAtCommit: math.NaN(), Flushed: math.NaN(), Displayed: math.NaN()},
+		{Ticket: 7, Begun: 10, Requested: 15, Presented: 20, Committed: 30, CommitPath: "view-join", OpenAtCommit: 1, Flushed: 35, Displayed: 41.6, Refreshed: 33.3},
+		{Ticket: 8, Begun: 40, Requested: math.NaN(), Presented: math.NaN(), Committed: math.NaN(), OpenAtCommit: math.NaN(), Flushed: math.NaN(), Displayed: math.NaN(), Refreshed: math.NaN()},
 	}
 	want := []map[string]any{
 		{"ticket": uint64(7), "begun": float64(10), "requested": float64(15), "presented": float64(20), "committed": float64(30), "commitPath": "view-join", "openAtCommit": float64(1), "flushed": float64(35), "displayed": float64(41.6),
-			"viewport": map[string]any{"width": float64(1800), "height": float64(1081)}},
-		{"ticket": uint64(8), "begun": float64(40), "requested": nil, "presented": nil, "committed": nil, "commitPath": nil, "openAtCommit": nil, "flushed": nil, "displayed": nil, "viewport": nil},
+			"refreshed": float64(33.3), "viewport": map[string]any{"width": float64(1800), "height": float64(1081)}},
+		{"ticket": uint64(8), "begun": float64(40), "requested": nil, "presented": nil, "committed": nil, "commitPath": nil, "openAtCommit": nil, "flushed": nil, "displayed": nil, "refreshed": nil, "viewport": nil},
 	}
 	// The transaction of ticket 8 began without a preparation of the trace, so it has no viewport.
 	if layouts := layoutTrace(records, map[uint64]LayoutViewport{7: {Width: 1800, Height: 1081}}); !reflect.DeepEqual(layouts, want) {

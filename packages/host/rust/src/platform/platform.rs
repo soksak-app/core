@@ -465,6 +465,9 @@ pub struct LayoutRecord {
     /// refresh callback of the display of the window after `flushed` (CADisplayLink targetTimestamp). NaN when the transaction
     /// did not commit, its window was on no screen, or the trace ended before that callback.
     pub displayed: f64,
+    /// The time of the display refresh that came before that first refresh callback (CADisplayLink timestamp), so `flushed`
+    /// against it tells how close to that refresh the commit was sent. NaN when `displayed` is.
+    pub refreshed: f64,
 }
 
 /// A global overlay of the main DOM plane and its CSS coordinates.

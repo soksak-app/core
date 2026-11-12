@@ -38,9 +38,9 @@ pub fn stop_payload(
 }
 
 /// Converts the placement transaction records into {ticket, begun, requested, presented, committed, commitPath,
-/// openAtCommit, flushed, displayed, viewport}. A value that did not happen is null, and viewport, the size {width, height}
-/// of the window that the page made the layout at (viewports, by ticket), is null for a transaction that no preparation of
-/// the trace began.
+/// openAtCommit, flushed, displayed, refreshed, viewport}. A value that did not happen is null, and viewport, the size
+/// {width, height} of the window that the page made the layout at (viewports, by ticket), is null for a transaction that
+/// no preparation of the trace began.
 pub fn layout_trace(records: &[LayoutRecord], viewports: &HashMap<u64, LayoutViewport>) -> Value {
     let stage = |value: f64| {
         if value.is_nan() {
@@ -63,6 +63,7 @@ pub fn layout_trace(records: &[LayoutRecord], viewports: &HashMap<u64, LayoutVie
                     "openAtCommit": stage(record.open_at_commit),
                     "flushed": stage(record.flushed),
                     "displayed": stage(record.displayed),
+                    "refreshed": stage(record.refreshed),
                     "viewport": viewports.get(&record.ticket).map_or(Value::Null, |size| {
                         serde_json::json!({"width": size.width, "height": size.height})
                     }),

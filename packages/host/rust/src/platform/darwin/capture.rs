@@ -58,8 +58,8 @@ pub fn layout_trace_start() {
 }
 
 /// The number of values in the native record of one transaction (SURFACE_LAYOUT_TRACE_STAGES of native): ticket, begun,
-/// presented, committed, requested, commit path code, open at commit, flushed and displayed.
-const SURFACE_LAYOUT_TRACE_STAGES: usize = 9;
+/// presented, committed, requested, commit path code, open at commit, flushed, displayed and refreshed.
+const SURFACE_LAYOUT_TRACE_STAGES: usize = 10;
 /// The commit path codes of the native record (SURFACE_LAYOUT_COMMIT_* of native).
 const SURFACE_LAYOUT_COMMIT_PRESENT: f64 = 1.0;
 const SURFACE_LAYOUT_COMMIT_START: f64 = 2.0;
@@ -123,6 +123,7 @@ fn layout_records(values: &[f64], count: usize) -> Result<Vec<LayoutRecord>, Str
                 open_at_commit: value[6],
                 flushed: value[7],
                 displayed: value[8],
+                refreshed: value[9],
             })
         })
         .collect()

@@ -1103,8 +1103,8 @@ func nativeDragPresented(ctx context.Context, h *Host, s *Surfaces, plan dragPla
 }
 
 // layoutTrace converts the layout transaction records to {ticket, begun, requested, presented, committed, commitPath,
-// openAtCommit, flushed, displayed, viewport}. A value that did not happen is null, and viewport, the size {width, height} of the
-// window that the page made the layout at, is null for a transaction that no preparation of the trace began.
+// openAtCommit, flushed, displayed, refreshed, viewport}. A value that did not happen is null, and viewport, the size {width,
+// height} of the window that the page made the layout at, is null for a transaction that no preparation of the trace began.
 func layoutTrace(records []platform.LayoutRecord, viewports map[uint64]LayoutViewport) []map[string]any {
 	layouts := make([]map[string]any, 0, len(records))
 	stage := func(value float64) any {
@@ -1125,7 +1125,8 @@ func layoutTrace(records []platform.LayoutRecord, viewports map[uint64]LayoutVie
 		layouts = append(layouts, map[string]any{
 			"ticket": record.Ticket, "begun": stage(record.Begun), "requested": stage(record.Requested), "presented": stage(record.Presented),
 			"committed": stage(record.Committed), "commitPath": commitPath, "openAtCommit": stage(record.OpenAtCommit),
-			"flushed": stage(record.Flushed), "displayed": stage(record.Displayed), "viewport": viewport,
+			"flushed": stage(record.Flushed), "displayed": stage(record.Displayed), "refreshed": stage(record.Refreshed),
+			"viewport": viewport,
 		})
 	}
 	return layouts
