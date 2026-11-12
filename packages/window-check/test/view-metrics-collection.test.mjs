@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { readFrame } from "../frame.mjs";
-import { stillFrame } from "./still-recording.mjs";
+import { stillFrame } from "../still-recording.mjs";
 import { policyOfSetting, readPolicy } from "../log-policy.mjs";
 import * as viewMetrics from "../view-metrics-collection.mjs";
 import { closeViewGroup, collectViewProcessGroups, collectViewReclaimMeasurements, collectViewStartAndMemory, openRecordedView,
@@ -701,8 +701,8 @@ test("recorded view observation window rejects nonpositive and nonfinite duratio
 });
 
 /**
- * A session that opens view-1 in card-1 under a recording of stills requested at frameTimes, of which `missed` more stills were
- * lost, and presents it at displayed.
+ * A session that opens view-1 in card-1 under a recording of stills planned and requested at frameTimes, then `missed` more
+ * stills that failed, and presents it at displayed.
  */
 function recordedViewSession(t, { frameTimes, displayed, missed = 0, calls = [] }) {
   const root = mkdtempSync(join(tmpdir(), "view-recorded-content-"));
@@ -721,7 +721,17 @@ function recordedViewSession(t, { frameTimes, displayed, missed = 0, calls = [] 
       return { stop: async ({ after }) => {
         calls.push(`stop after ${after}`);
         for (const [index, time] of frameTimes.entries()) writeCapturedFrame(recordingDirectory, index, time);
-        return { frames: recordingDirectory, count: frameTimes.length, missed, late: 0 };
+        const ns = (ms) => String(Math.round(ms * 1e6));
+        const row = (index, time, written) => ({ index, planned: ns(time), requested: ns(time), completed: ns(time + 0.5),
+          outcome: written ? "written" : "failed", error: written ? null : "the window server returned no image",
+          frame: written ? `frame-${String(index).padStart(4, "0")}.bgra` : null, windows: [7], requestedGap: 1000,
+          machTimebaseNumerator: 1, machTimebaseDenominator: 1 });
+        const last = frameTimes.at(-1);
+        const rows = [...frameTimes.map((time, index) => row(index, time, true)),
+          ...Array.from({ length: missed }, (_, k) => row(frameTimes.length + k, last + k + 1, false))];
+        const stills = join(recordingDirectory, "stills.jsonl");
+        writeFileSync(stills, rows.map((item) => JSON.stringify(item)).join("\n") + "\n");
+        return { frames: recordingDirectory, stills, count: frameTimes.length, missed, late: 0 };
       } };
     },
     async request(method) { calls.push(method); return { mono_ns: "5000000" }; },
@@ -758,7 +768,7 @@ function recordedViewSession(t, { frameTimes, displayed, missed = 0, calls = [] 
 }
 
 test("direct recorded views return the content frame of the value before resolving", { timeout: 5000 }, async (t) => {
-  const s = recordedViewSession(t, { frameTimes: [4, 6], displayed: 5, missed: 1 });
+  const s = recordedViewSession(t, { frameTimes: [4, 6], displayed: 5 });
   const result = await openRecordedView({ diagnostic() {} }, s, {
     card: "card-1", plugin: "fixture", placement: TAB_PLACEMENT, readinessStatus: "fixture.ready", readiness: async () => {},
     expectedContent: "target content", readContent: async () => "the target content line", captureObservationWindowMs: 1,
@@ -767,9 +777,15 @@ test("direct recorded views return the content frame of the value before resolvi
     proof: { method: "value", expected: "target content", actual: "the target content line" } });
   assert.equal("anchor" in result, false, "the recorded view still reports an anchor");
   assert.equal(result.recording.frameCount, 2);
-  // The content frame is a final state, judged whatever stills the recording lost; the lost stills are reported with it.
-  assert.equal(result.recording.missed, 1);
-  assert.equal(result.recording.late, 0);
+});
+
+// The content frame is the first still that shows the content, so a still that the recording lost could have shown it first.
+test("a recorded view whose recording lost a still fails and names it", { timeout: 5000 }, async (t) => {
+  const s = recordedViewSession(t, { frameTimes: [4, 6], displayed: 5, missed: 1 });
+  await assert.rejects(openRecordedView({ diagnostic() {} }, s, {
+    card: "card-1", plugin: "fixture", placement: TAB_PLACEMENT, readinessStatus: "fixture.ready", readiness: async () => {},
+    expectedContent: "target content", readContent: async () => "the target content line", captureObservationWindowMs: 1,
+  }), /^Error: the recording lost 1 stills of the fixture first content: still 2 planned at 7\.0ms failed \(the window server returned no image\)$/);
 });
 
 test("a recorded view whose value lacks the expected content stops its recording and fails", { timeout: 5000 }, async (t) => {

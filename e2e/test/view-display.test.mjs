@@ -1,9 +1,34 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import test, { after } from "node:test";
 import {
   checkViewDisplay as acceptViewDisplay, expectedPresentations, observeViewDisplay as checkViewDisplay, rasterIdentity,
   appDomWebviews, viewPresentationJoins, viewWebviews,
 } from "../view-display.mjs";
+
+const stillsDirectory = mkdtempSync(join(tmpdir(), "view-display-stills-"));
+after(() => rmSync(stillsDirectory, { recursive: true, force: true }));
+let stillsFiles = 0;
+
+/**
+ * The stop reply of a recording of `count` written stills, 16ms apart, followed by `failed` stills that failed, with its
+ * stills.jsonl.
+ */
+function stopReply(count, failed = 0) {
+  const ns = (ms) => String(Math.round(ms * 1e6));
+  const rows = Array.from({ length: count + failed }, (_, index) => {
+    const written = index < count;
+    return { index, planned: ns(index * 16), requested: ns(index * 16), completed: ns(index * 16 + 0.5),
+      outcome: written ? "written" : "failed", error: written ? null : "the window server returned no image",
+      frame: written ? `frame-${String(index).padStart(4, "0")}.bgra` : null, windows: [7], requestedGap: 16,
+      machTimebaseNumerator: 1, machTimebaseDenominator: 1 };
+  });
+  const stills = join(stillsDirectory, `stills-${++stillsFiles}.jsonl`);
+  writeFileSync(stills, rows.map((row) => JSON.stringify(row)).join("\n") + "\n");
+  return { stills, count, missed: failed, late: 0, longestGap: 16 };
+}
 
 /** A window with two installed views but only one open card, and decoded frames of that card. */
 function fixture({ blank = false, offset = 0, openedOnly = false } = {}) {
@@ -15,7 +40,7 @@ function fixture({ blank = false, offset = 0, openedOnly = false } = {}) {
   let current = null;
   const opened = [];
   const frame = { width: 400, height: 400, stride: 1600, scale: 1, contentScale: 1,
-    content: { x: offset, y: offset, width: 160, height: 140 }, time: 200, data: Buffer.alloc(640000, 255) };
+    content: { x: offset, y: offset, width: 160, height: 140 }, requested: 200, completed: 200.5, data: Buffer.alloc(640000, 255) };
   const paint = (x, y, value) => {
     const at = (y + offset) * frame.stride + (x + offset) * 4;
     frame.data[at] = value; frame.data[at + 1] = value; frame.data[at + 2] = value;
@@ -57,9 +82,9 @@ function fixture({ blank = false, offset = 0, openedOnly = false } = {}) {
       return value;
     },
     async presented() { return { displayed: 150 }; },
-    async record() { return { frames: "fixture-recording", stop: async () => ({ count: 2, limited: false, longestGap: 16 }) }; },
+    async record() { return { frames: "fixture-recording", stop: async () => stopReply(2) }; },
   };
-  return { s, opened, readRecording: () => [frame, { ...frame, time: 216 }] };
+  return { s, opened, readRecording: () => [frame, { ...frame, requested: 216, completed: 216.5 }] };
 }
 
 test("the view display checker covers an installed view that has no open card", { timeout: 5000 }, async (t) => {
@@ -71,6 +96,15 @@ test("the view display checker covers an installed view that has no open card", 
 test("the view display checker rejects a blank view surrounded by coloured card chrome", { timeout: 5000 }, async (t) => {
   const f = fixture({ blank: true });
   await assert.rejects(checkViewDisplay(f.s, t, f.readRecording), /blank|no recorded frame.*content/);
+});
+
+// The display of a view is judged at every still of its recording, so a still that the recording lost could have shown the view
+// blank.
+test("the view display checker fails a recording that lost a still and names it", { timeout: 5000 }, async (t) => {
+  const f = fixture();
+  f.s.record = async () => ({ frames: "fixture-recording", stop: async () => stopReply(2, 1) });
+  await assert.rejects(checkViewDisplay(f.s, t, f.readRecording),
+    /^Error: the recording lost 1 stills of layoutprobe: still 2 planned at 32\.0ms failed \(the window server returned no image\)$/);
 });
 
 test("the view display checker measures content at a nonzero capture offset", { timeout: 5000 }, async (t) => {
@@ -102,7 +136,7 @@ test("view content readiness is verified before the recording stops", { timeout:
   let stopped = false;
   f.s.record = async () => ({ frames: "fixture-recording", stop: async () => {
     stopped = true;
-    return { count: 2, limited: false, longestGap: 16 };
+    return stopReply(2);
   } });
   await acceptViewDisplay(f.s, t, f.readRecording, new Map([["layoutprobe", { ready: async () => {
     assert.equal(stopped, false, "recording ended before content readiness");
@@ -138,7 +172,7 @@ test("view display runs the content verifier of the case after the recording sto
   let stopped = false;
   f.s.record = async () => ({ frames: "fixture-recording", stop: async () => {
     stopped = true;
-    return { count: 2, limited: false, longestGap: 16 };
+    return stopReply(2);
   } });
   let verified = false;
   await acceptViewDisplay(f.s, t, f.readRecording, new Map([["layoutprobe", { ready: async () => async (...args) => {
@@ -151,7 +185,7 @@ test("view display runs the content verifier of the case after the recording sto
 
 test("view display rejects missing finalized frame files", { timeout: 5000 }, async (t) => {
   const f = fixture({ openedOnly: true });
-  f.s.record = async () => ({ frames: "fixture-recording", stop: async () => ({ count: 3, limited: false, longestGap: 16 }) });
+  f.s.record = async () => ({ frames: "fixture-recording", stop: async () => stopReply(3) });
   await assert.rejects(checkViewDisplay(f.s, t, f.readRecording), /frame.*count|missing.*frame/);
 });
 

@@ -80,21 +80,27 @@ test("a third-stage collection failure preserves the valid captured threshold fa
   assert.equal(judgments, 1, "a valid capture must be judged even when third-stage collection fails");
 });
 
-/** Frame times, lag and observed display refreshes of a structurally valid captured drag that exceeds the unchanged cadence and latency targets. */
-const SLOW_DRAG = Object.freeze({ times: [0, 36, 72], lag: { lag: 100, time: 72, median: 40, medianTime: 36, p90: 70, p90Time: 72 }, refreshes: { times: [0], periods: [1000 / 60] } });
+/**
+ * Frame times, lag, observed display refreshes and still rows (readStills) of a structurally valid captured drag that exceeds the
+ * unchanged cadence and latency targets: every still of its span, one each 36ms, was written.
+ */
+const SLOW_DRAG = Object.freeze({ times: [0, 36, 72], lag: { lag: 100, time: 72, median: 40, medianTime: 36, p90: 70, p90Time: 72 }, refreshes: { times: [0], periods: [1000 / 60] },
+  stills: [0, 36, 72].map((planned, index) => ({ index, planned, requested: planned, completed: planned + 0.5, gap: 36, outcome: "written",
+    error: null, late: false })) });
 /** A captured drag whose assertPerformance applies assertDragPerformance to SLOW_DRAG and records each error it throws in `judged`. */
 function slowCapture(judged) {
   return { frameCount: 50, assertPerformance() {
-    try { return assertDragPerformance(SLOW_DRAG.times, SLOW_DRAG.lag, SLOW_DRAG.refreshes); }
+    try { return assertDragPerformance(SLOW_DRAG.times, SLOW_DRAG.lag, SLOW_DRAG.refreshes, SLOW_DRAG.stills); }
     catch (error) { judged.push(error); throw error; }
   } };
 }
 
 test("a structurally valid captured drag over the targets is measured without a verdict, and its assertPerformance throws the threshold error",
   { timeout: 5000 }, () => {
-    const measured = measureDragPerformance(SLOW_DRAG.times, SLOW_DRAG.lag, SLOW_DRAG.refreshes);
+    const measured = measureDragPerformance(SLOW_DRAG.times, SLOW_DRAG.lag, SLOW_DRAG.refreshes, SLOW_DRAG.stills);
     assert.equal(measured.targetsMet, false, "a valid slow capture is measured, not rejected, before assertPerformance");
     assert.deepEqual(measured.exceeded, ["cadence", "p90", "worst"]);
+    assert.deepEqual(measured.lost, [], "a capture that lost no still reports no lost still");
     const judged = [];
     assert.throws(() => slowCapture(judged).assertPerformance(), (error) => error === judged[0] && /drag performance targets exceeded/.test(error.message));
   });

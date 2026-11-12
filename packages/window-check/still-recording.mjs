@@ -1,4 +1,4 @@
-// A still recording as the host writes it, for the checks of the readers of recordings: one frame file per written still
+// A still recording as the host writes it, for the unit checks of the readers of recordings: one frame file per written still
 // (frame-<index>.bgra, marker LZ4S) and one stills.jsonl row per planned still, on a timebase of nanoseconds.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";

@@ -2,7 +2,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { recordedEdges } from "../sidebar-gesture-recording.mjs";
-function frame(time, border) {
+/** A still requested at `requested` (ms) and completed 0.5ms later, whose sidebar border is the row `border`. */
+function frame(requested, border) {
   const data = Buffer.alloc(100 * 100 * 4);
   for (let y = 0; y < 100; y++)
     for (let x = 0; x < 100; x++) {
@@ -11,7 +12,8 @@ function frame(time, border) {
       data.set([color[2], color[1], color[0], 255], at);
     }
   return {
-    time,
+    requested,
+    completed: requested + 0.5,
     width: 100,
     height: 100,
     stride: 400,
@@ -39,7 +41,8 @@ test("missing gesture frame reports index poses and full-axis border evidence", 
   const details = JSON.parse(failure.message.slice(failure.message.indexOf("{")));
   assert.equal(details.frameIndex, 1);
   assert.equal(details.frameCount, 2);
-  assert.equal(details.time, 2);
+  assert.equal(details.requested, 2);
+  assert.equal(details.completed, 2.5);
   assert.deepEqual(details.poses, poses);
   assert.deepEqual(details.layouts, layouts);
   assert.deepEqual(details.axisBorders, []);

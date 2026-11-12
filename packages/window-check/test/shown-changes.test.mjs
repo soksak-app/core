@@ -7,7 +7,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { judgeShownChanges, owe } from "../app.mjs";
-import { writeStillRecording } from "./still-recording.mjs";
+import { writeStillRecording } from "../still-recording.mjs";
 
 /**
  * A stop reply whose still recording takes a still every 8ms from 0 to `until` (ms on the clock of the recording, a timebase of

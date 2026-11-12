@@ -16,9 +16,10 @@ const BUTTONS = [9, 29, 49].map((x) => ({ x, y: 0, width: 14, height: 14 }));
 
 /**
  * A frame that draws, at the top of the window, a first row of height row pt (the lower 1pt is the border) and buttons of diameter 14pt whose vertical center is centre pt.
- * The window is at offset (buffer pt) of the buffer, and the area outside the window and the upper left corner are black.
+ * The window is at offset (buffer pt) of the buffer, and the area outside the window and the upper left corner are black. The
+ * still was requested at `requested` (ms) and completed 0.5ms later.
  */
-function synthetic({ row, centre, buttons = BUTTONS, scale = 2, offset = { x: 3, y: 2 }, time = 0, over = null }) {
+function synthetic({ row, centre, buttons = BUTTONS, scale = 2, offset = { x: 3, y: 2 }, requested = 0, over = null }) {
   const size = { width: 200, height: 240 };
   const width = (offset.x + size.width) * scale;
   const height = (offset.y + size.height) * scale;
@@ -37,7 +38,8 @@ function synthetic({ row, centre, buttons = BUTTONS, scale = 2, offset = { x: 3,
       data.set([colour[2], colour[1], colour[0], 255], (dy * width + dx) * 4);
     }
   }
-  return { width, height, stride: width * 4, content: { x: offset.x, y: offset.y, ...size }, contentScale: 1, scale, time, data };
+  return { width, height, stride: width * 4, content: { x: offset.x, y: offset.y, ...size }, contentScale: 1, scale, requested,
+    completed: requested + 0.5, data };
 }
 
 test("the first-row height follows the page row at every frame factor step", () => {
@@ -56,9 +58,10 @@ test("buttons centred in the first row measure no difference at every row height
 
 test("buttons 6px off the first-row centre fail the frame", () => {
   // The row was drawn at 54px, but the buttons are at the center of the earlier title bar of 66pt.
-  const measured = [measureTitlebar(synthetic({ row: 54, centre: 27, time: 1 }), BUTTONS),
-    measureTitlebar(synthetic({ row: 54, centre: 33, time: 2 }), BUTTONS)];
+  const measured = [measureTitlebar(synthetic({ row: 54, centre: 27, requested: 1 }), BUTTONS),
+    measureTitlebar(synthetic({ row: 54, centre: 33, requested: 2 }), BUTTONS)];
   assert.equal(measured[1].difference, 6);
+  // A measured still keeps the request time of its still.
   assert.deepEqual(misaligned(measured).map((frame) => frame.time), [2]);
 });
 

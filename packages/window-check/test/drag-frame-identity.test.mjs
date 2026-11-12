@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { drag } from "../app.mjs";
-import { writeStillRecording } from "./still-recording.mjs";
+import { writeStillRecording } from "../still-recording.mjs";
 
 async function runDrag(t, options) {
   const directory = mkdtempSync(join(tmpdir(), "drag-frame-identity-"));

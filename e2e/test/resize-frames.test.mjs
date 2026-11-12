@@ -8,7 +8,7 @@ import test from "node:test";
 
 import { frameEvidence, judgeFrames, LAG, lagStages, measureFrame, writeEvidence } from "../resize-frames.mjs";
 
-/** A frame of `width`×`height` device pixels whose top-left `bright` device columns and rows are bright. */
+/** A still of `width`×`height` device pixels, requested at `time`, whose top-left `bright` device columns and rows are bright. */
 function recordedFrame({ width = 200, height = 160, bright = { x: 150, y: 120 }, time = 1000, scale = 2 } = {}) {
   const stride = width * 4;
   const data = Buffer.alloc(stride * height);
@@ -22,7 +22,7 @@ function recordedFrame({ width = 200, height = 160, bright = { x: 150, y: 120 },
     }
   }
   return { width, height, stride, content: { x: 0, y: 0, width: width / scale, height: height / scale },
-    contentScale: 1, scale, time, data };
+    contentScale: 1, scale, requested: time, completed: time + 0.5, data };
 }
 
 /** A measured frame with the gap of the layout given in points. */
@@ -33,7 +33,7 @@ test("measureFrame reads the window size and the right and bottom gaps in points
   const measured = measureFrame(recordedFrame());
   assert.deepEqual(measured.window, { width: 100, height: 80 });
   assert.deepEqual(measured.gap, { x: 25, y: 20 });
-  assert.equal(measured.time, 1000);
+  assert.equal(measured.time, 1000, "a measured frame keeps the request time of its still");
 });
 
 test("judgeFrames marks a frame behind when its gap differs by more than the lag, and took ends at the last behind frame", () => {

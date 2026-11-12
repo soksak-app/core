@@ -5,16 +5,16 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { drag, finishSession, Session } from "../app.mjs";
-import { writeStillRecording } from "./still-recording.mjs";
+import { writeStillRecording } from "../still-recording.mjs";
 
 /**
  * A connection that imitates a host with one recording on a display of `refreshRate` Hz. The recording plans the stills that
  * its start asks for (frames, or seconds at gap), and its stop writes the first two of them and stops the rest of the plan.
  * stop takes the recording and then fails when stopFails is set. Without a recording, it rejects with `no capture is running`
- * like the host. `damage` changes the stop reply and the stills.jsonl of the recording after it is written.
+ * like the host. The stills of `failed` fail. `damage` changes the stop reply and the stills.jsonl of the recording after it is written.
  */
 function fakeClient(directory, { stopFails = false, removeFramesOnStopFailure = false, refreshRate = 120,
-  damage = (reply) => reply, framePath = (path) => path } = {}) {
+  damage = (reply) => reply, framePath = (path) => path, failed = [] } = {}) {
   const requests = [];
   let running = null;
   let plan = null;
@@ -46,7 +46,7 @@ function fakeClient(directory, { stopFails = false, removeFramesOnStopFailure = 
           throw new Error("layout trace failed");
         }
         const reply = writeStillRecording(storedFrames, { gap: plan.gap, until: (plan.stills - 1) * plan.gap, changes: [0],
-          stoppedAt: 2, layouts: [{ ticket: 3, begun: 1, requested: 2, presented: 3, committed: 4 }] });
+          stoppedAt: 2, failed, layouts: [{ ticket: 3, begun: 1, requested: 2, presented: 3, committed: 4 }] });
         return damage({ ...reply, frames, stills: join(frames, "stills.jsonl") }, storedFrames);
       }
       throw new Error(`unexpected ${method}`);
@@ -110,6 +110,17 @@ test("a recording that the check did not stop is stopped and removed after final
   await cleanUp(s);
   assert.deepEqual(stops(client).map(({ after }) => after), [0]);
   assert.equal(existsSync(recording.frames), false, "the recording folder stayed");
+});
+
+// A recording that the check did not stop is still judged: a still that it lost is a moment of the window that no check saw.
+test("a recording that the check did not stop fails finalization on a still that it lost and preserves its folder", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "soksak-record-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const client = fakeClient(directory, { failed: [1] });
+  const s = newSession(directory, client);
+  const recording = await s.record();
+  await assert.rejects(cleanUp(s), /the recording lost 1 stills of the recording that the check did not stop: still 1 planned at 8\.3ms failed/);
+  assert.equal(existsSync(recording.frames), true, "the failed recording folder was not preserved");
 });
 
 test("a stopped recording is removed after finalization without another stop", async (t) => {
@@ -220,7 +231,7 @@ test("a stopped recording keeps its stop reply and the values that the check kee
 });
 
 // The stop of a recording checks the still recording that the host wrote: one stills.jsonl row for each planned still, every
-// planned still written or counted as missed, and the frame file of each written still.
+// planned still written or counted as missed, and the frame file of each written still and of no other still.
 for (const [what, damage, error] of [
   ["without its stills.jsonl", (reply, stored) => { rmSync(join(stored, "stills.jsonl")); return reply; },
     /the still recording .*stills\.jsonl is missing/],
@@ -249,6 +260,8 @@ for (const [what, damage, error] of [
   }, new RegExp(`the still recording .* took still 0 at a gap of 16ms, not the ${1000 / 120}ms that the recording asked for`)],
   ["without the frame of a written still", (reply, stored) => { rmSync(join(stored, "frame-0001.bgra")); return reply; },
     /the still recording .* has no frame-0001\.bgra for its written still 1/],
+  ["with a frame file of no written still", (reply, stored) => { writeFileSync(join(stored, "frame-0005.bgra"), ""); return reply; },
+    /the still recording .* has frame-0005\.bgra, the frame file of no written still/],
 ]) {
   test(`a recording stop ${what} fails and keeps the recording`, async (t) => {
     const directory = mkdtempSync(join(tmpdir(), "soksak-record-"));
@@ -261,6 +274,16 @@ for (const [what, damage, error] of [
     assert.equal(existsSync(recording.frames), true, "the recording with an invalid stop reply was not preserved");
   });
 }
+
+// A recording holds at most 4096 stills, so a reply for a larger plan is no reply of a recording.
+test("a recording stop for a plan of more stills than a recording holds fails", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "soksak-record-most-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const s = newSession(directory, fakeClient(directory));
+  const recording = await s.record({ gap: 8, frames: 4097 });
+  await assert.rejects(recording.stop(), /the still recording .*stills\.jsonl plans 4097 stills, more than the 4096 that a recording holds$/);
+  await assert.rejects(cleanUp(s), /1 recording failed/);
+});
 
 // A recording stopped after a time that its plan does not reach lost the screens of that time.
 test("a recording whose plan ends before the time that it is stopped after fails", async (t) => {
@@ -322,14 +345,14 @@ const dragRecording = (frames, { until, ...stills }) =>
 /**
  * A session whose captured drag sends its steps at `ticks` and stops with a still recording, taken until `until` (ms), of a
  * window that changes at `changes`, the layouts `layouts` of the drag and display-link callbacks of the main thread at
- * `mainThread`, all in ms on the clock of the recording. The last screen of the drag is displayed at its last change.
+ * `mainThread`, all in ms on the clock of the recording; the stills of `failed` fail. The last screen of the drag is displayed at its last change.
  */
-function gapSession(t, { changes, until, ticks, layouts = [], mainThread = [] }) {
+function gapSession(t, { changes, until, ticks, layouts = [], mainThread = [], failed = [] }) {
   const directory = mkdtempSync(join(tmpdir(), "soksak-drag-gap-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const s = newSession(directory, fakeClient(directory));
   const frames = join(directory, "logs", "captures", "drag-1");
-  const stopped = dragRecording(frames, { changes, until, displayLink: { state: "available", reason: "", omittedObservations: 0,
+  const stopped = dragRecording(frames, { changes, until, failed, displayLink: { state: "available", reason: "", omittedObservations: 0,
     observations: mainThread.map((ms, index) => ({ sequence: index + 1, callbackTime: String(Math.round(ms * 1e6)),
       callbackMediaTime: ms / 1000, timestamp: (ms - 0.5) / 1000, targetTimestamp: (ms + 7.833) / 1000, duration: 0.008333,
       machTimebaseNumerator: 1, machTimebaseDenominator: 1 })) } });
@@ -387,6 +410,13 @@ test("a drag step after the last change that the recording shows fails", async (
   const s = gapSession(t, { changes: every(0, 96, 8), until: 104, ticks: every(4, 100, 8) });
   await assert.rejects(drag(s, gapPlan, { capture: true }),
     /^Error: the application did not show drag step 13 of 13 \(asked at 100\.0ms on the clock of the recording\) without waiting longer than 100ms for a frame: the recording shows no change after 100\.0ms;/);
+});
+
+// A drag is judged at every still of its recording, so a still that the recording lost is a moment of the drag that no judgment saw.
+test("a captured drag whose recording lost a still fails and names it", async (t) => {
+  const s = gapSession(t, { changes: every(0, 96, 8), until: 104, ticks: every(4, 92, 8), failed: [5] });
+  await assert.rejects(drag(s, gapPlan, { capture: true }),
+    /^Error: the recording lost 1 stills of the drag: still 5 planned at 40\.0ms failed \(the window server returned no image\)$/);
 });
 
 test("a captured drag whose reply has no step times fails", async (t) => {

@@ -6,8 +6,16 @@ import { crc32 } from "node:zlib";
 import test from "node:test";
 import { finishSession, Session } from "@soksak/window-check/app.mjs";
 import { regionCells, regionSample, RASTER_ELEMENT } from "../region-sample.mjs";
+import { writeStillRecording } from "@soksak/window-check/still-recording.mjs";
 
-function capturedFrame({ scale, contentScale, origin, point, marks = [{ point, color: [12, 34, 56] }] }) {
+// The recording of a sample takes a still every 8ms (a display of 125 Hz): the stills 0 to 6, requested at 0 to 48ms, were taken
+// before the stop, the last one after the presentation at 42ms, and the rest of the 4096 planned stills were not requested.
+const GAP = 8;
+const TAKEN = 7;
+
+/** A still requested at `requested` (ms, by default that of still `TAKEN - 1`) and completed 0.5ms later, with marked pixels. */
+function capturedFrame({ scale, contentScale, origin, point, marks = [{ point, color: [12, 34, 56] }],
+  requested = (TAKEN - 1) * GAP }) {
   const width = 64, height = 64, stride = width * 4 + 8;
   const data = Buffer.alloc(stride * height, 255);
   for (const { point: [x, y], color: [red, green, blue] } of marks) data.set([blue, green, red, 255], y * stride + x * 4);
@@ -17,14 +25,19 @@ function capturedFrame({ scale, contentScale, origin, point, marks = [{ point, c
   while (remaining >= 255) { lengths.push(255); remaining -= 255; }
   lengths.push(remaining);
   const block = Buffer.concat([Buffer.from(lengths), data]);
-  const header = Buffer.alloc(80);
+  const header = Buffer.alloc(88);
   header.writeUInt32LE(width, 0); header.writeUInt32LE(height, 4); header.writeUInt32LE(stride, 8);
-  [...origin, width / scale - origin[0], height / scale - origin[1], contentScale, scale, 42].forEach((value, i) => header.writeDoubleLE(value, 12 + i * 8));
-  header.write("LZ4B", 68); header.writeUInt32LE(block.length, 72); header.writeUInt32LE(crc32(data), 76);
+  [...origin, width / scale - origin[0], height / scale - origin[1], contentScale, scale, requested, requested + 0.5]
+    .forEach((value, i) => header.writeDoubleLE(value, 12 + i * 8));
+  header.write("LZ4S", 76); header.writeUInt32LE(block.length, 80); header.writeUInt32LE(crc32(data), 84);
   return Buffer.concat([header, block]);
 }
 
-function captureSession(t, { bytes, presentationError, stopError, viewError,
+/**
+ * A session whose recording writes `bytes` as its last still. With `empty` every still of the recording failed. `taken` is the
+ * number of stills requested before the stop.
+ */
+function captureSession(t, { bytes, empty = false, presentationError, stopError, viewError, taken = TAKEN,
   view = { document: { x: 0, y: 0 }, x: 4, y: 8 }, cellWidth = 8, cellHeight = 4, frameScale = 1 } = {}) {
   const directory = mkdtempSync(join(tmpdir(), "region-sample-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
@@ -33,7 +46,6 @@ function captureSession(t, { bytes, presentationError, stopError, viewError,
   const log = join(directory, "logs", "host-1-1.jsonl");
   writeFileSync(log, `${JSON.stringify({ ts_us: 1791000000000000, seq: 1, level: "info", layer: "host",
     event: "log.open", fields: { schema: 2 } })}\n`);
-  if (bytes) writeFileSync(join(frameDir, "frame-1.bgra"), bytes);
   const calls = [];
   const session = new Session({ name: "region-sample", configDir: directory }, {
     endpoint: { pid: process.pid },
@@ -42,6 +54,7 @@ function captureSession(t, { bytes, presentationError, stopError, viewError,
       calls.push([method, params]);
       // A recording holds the covered drawing of the window until it stops (holdCovered of the session).
       if (method === "diagnostics.window.draw-covered") return null;
+      if (method === "status.get") return { refreshRate: 1000 / GAP };
       if (method === "diagnostics.capture.start") return { frames: frameDir };
       if (method === "command.run") {
         assert.equal(params.name, "host.window.presented");
@@ -55,9 +68,10 @@ function captureSession(t, { bytes, presentationError, stopError, viewError,
       }
       assert.equal(method, "diagnostics.capture.stop");
       if (stopError) throw stopError;
-      const callbackStatus = join(frameDir, "callback-status.jsonl");
-      writeFileSync(callbackStatus, '{"sequence":1,"status":0,"displayTime":"42"}\n');
-      return { frames: frameDir, callbackStatus };
+      const failed = empty ? Array.from({ length: taken }, (_, index) => index) : [];
+      const reply = writeStillRecording(frameDir, { gap: GAP, until: 4095 * GAP, stoppedAt: taken, failed });
+      if (bytes) writeFileSync(join(frameDir, `frame-${String(taken - 1).padStart(4, "0")}.bgra`), bytes);
+      return reply;
     },
   });
   session.step = () => {};
@@ -111,7 +125,8 @@ for (const geometry of [
     const capture = captureSession(t, { bytes: capturedFrame(geometry) });
     const sample = await regionSample(capture.session, geometry.rect ?? rect);
     assert.deepEqual(sample, [12, 34, 56], "the sample must read the marked region pixel, not the white surrounding card");
-    assert.deepEqual(capture.calls, [["diagnostics.window.draw-covered", { draw: true }], ["diagnostics.capture.start", {}],
+    assert.deepEqual(capture.calls, [["status.get", { name: "host.window" }], ["diagnostics.window.draw-covered", { draw: true }],
+      ["diagnostics.capture.start", { gap: GAP, frames: 4096 }],
       ["command.run", { name: "host.window.presented", params: {} }], ["diagnostics.capture.stop", { after: 42 }],
       ["diagnostics.window.draw-covered", { draw: false }]]);
     assert.equal(existsSync(capture.frameDir), true, "the completed capture must remain until session finalization");
@@ -122,9 +137,20 @@ for (const geometry of [
   });
 }
 
+// A still shows the window at a moment after its request, so only a still requested at or after the presentation shows it.
+test("region sample rejects a recording whose last still was requested before the presentation", { timeout: 5000 }, async (t) => {
+  const capture = captureSession(t, { taken: TAKEN - 1,
+    bytes: capturedFrame({ scale: 1, contentScale: 1, origin: [0, 0], point: [10, 11], requested: (TAKEN - 2) * GAP }) });
+  await assert.rejects(regionSample(capture.session, rect), /no still of the region capture was requested at or after the presentation at 42ms/);
+  await capture.finish(false);
+  assert.equal(existsSync(capture.frameDir), true, "a failed sample must retain its capture evidence");
+});
+
+// A capture whose every still failed lost them: the sample names each of them.
 test("region sample rejects an empty capture and preserves its folder", { timeout: 5000 }, async (t) => {
-  const capture = captureSession(t);
-  await assert.rejects(regionSample(capture.session, rect), /no frames/);
+  const capture = captureSession(t, { empty: true });
+  await assert.rejects(regionSample(capture.session, rect),
+    /^Error: the recording lost 7 stills of the region capture: still 0 planned at 0\.0ms failed \(the window server returned no image\), /);
   await capture.finish(false);
   assert.equal(stops(capture).length, 1);
   assert.equal(existsSync(capture.frameDir), true, "a failed sample must retain its capture evidence");
@@ -132,7 +158,7 @@ test("region sample rejects an empty capture and preserves its folder", { timeou
 });
 
 for (const invalid of [
-  { name: "region sample rejects a corrupt frame and preserves its folder", bytes: Buffer.from("broken"), rect, error: /complete LZ4 frame header/ },
+  { name: "region sample rejects a corrupt frame and preserves its folder", bytes: Buffer.from("broken"), rect, error: /complete LZ4S frame header/ },
   { name: "region sample rejects an outside view and preserves its folder", bytes: capturedFrame({ scale: 1, contentScale: 1, origin: [0, 0], point: [10, 11] }), rect: { x: 60, y: 8, width: 8, height: 4 }, error: /outside/ },
 ]) {
   test(invalid.name, { timeout: 5000 }, async (t) => {
@@ -271,8 +297,8 @@ test("region cell stop failure remains failed after being caught and is not retr
 });
 
 for (const invalid of [
-  { name: "region cells preserve an empty capture", error: /no frames/ },
-  { name: "region cells preserve a corrupt capture", bytes: Buffer.from("broken"), error: /complete LZ4 frame header/ },
+  { name: "region cells preserve an empty capture", empty: true, error: /^Error: the recording lost 7 stills of the cell capture: still 0 / },
+  { name: "region cells preserve a corrupt capture", bytes: Buffer.from("broken"), error: /complete LZ4S frame header/ },
   { name: "region cells preserve a capture when the view read fails",
     bytes: capturedFrame({ scale: 1, contentScale: 1, origin: [0, 0], point: [5, 8] }),
     viewError: new Error("cell view read failed"), error: /cell view read failed/ },

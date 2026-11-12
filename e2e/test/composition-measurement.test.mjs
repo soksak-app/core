@@ -11,16 +11,23 @@ test("drag measurement rejects a stationary, incomplete, or non-returning gestur
   assert.equal(assertRoundTrips([100, 150, 200, 150, 100, 150, 200, 150, 100], 2), 100);
 });
 
+/** The still rows (readStills) of a recording that wrote a still every `gap` ms from `from` to `to`, none of them lost. */
+const writtenStills = (from, to, gap = 8) => Array.from({ length: Math.floor((to - from) / gap) + 1 }, (_, index) => {
+  const planned = from + index * gap;
+  return { index, planned, requested: planned, completed: planned + 0.5, gap, outcome: "written", error: null, late: false };
+});
+
 test("every layout held for two frames must appear in the recording, and shorter ones may be replaced", () => {
   // The fixture ticks are 16 ms apart. The host paces real drag steps by the display period of the window, so no step has a fixed length.
   const ticks = [0, 16, 32, 48, 64, 80];
   const boundary = [100, 90, 80, 80, 80, 90, 100];
   const sample = (time, offset) => ({ time, position: 200 + offset });
+  const stills = writtenStills(-8, 96);
   const shown = [sample(-5, 0), sample(20, -10), sample(40, -20), sample(90, 0)];
-  assertHeldStatesShown(shown, ticks, boundary);
-  assert.throws(() => assertHeldStatesShown([sample(-5, 0), sample(90, 0)], ticks, boundary), /missing/,
+  assertHeldStatesShown(shown, ticks, boundary, stills);
+  assert.throws(() => assertHeldStatesShown([sample(-5, 0), sample(90, 0)], ticks, boundary, stills), /missing/,
     "the -20 layout held for 48ms must appear");
-  assert.throws(() => assertHeldStatesShown([sample(-5, 0), sample(40, -20)], ticks, boundary), /missing/,
+  assert.throws(() => assertHeldStatesShown([sample(-5, 0), sample(40, -20)], ticks, boundary, stills), /missing/,
     "the final layout must appear");
 });
 
@@ -29,8 +36,9 @@ test("a missing held layout names its hold, the step times, the boundary positio
   const ticks = [1000, 1016.25, 1032.5, 1048.75, 1065, 1081.25];
   const boundary = [100, 90, 80, 80, 80, 90, 100];
   const sample = (time, offset) => ({ time, position: 200 + offset });
-  assert.throws(() => assertHeldStatesShown([sample(995, 0), sample(1090.4, 0)], ticks, boundary), (error) => {
+  assert.throws(() => assertHeldStatesShown([sample(995, 0), sample(1090.4, 0)], ticks, boundary, writtenStills(992, 1096)), (error) => {
     assert.match(error.message, /-20 held 1016\.3\.\.1065\.0/, "the missing layout names when it was held");
+    assert.match(error.message, /the recording lost no still in that time/, "the message names the stills lost in that time");
     assert.match(error.message, /steps at 1000\.0,1016\.3,1032\.5,1048\.8,1065\.0,1081\.3/, "the message names the step times");
     assert.match(error.message, /boundary 100,90,80,80,80,90,100/, "the message names the boundary positions");
     assert.match(error.message, /recorded 995\.0:0,1090\.4:0/, "the message names the time and offset of each frame");

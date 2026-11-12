@@ -90,7 +90,8 @@ function floorLayoutFrame({ cardLeft, rootLeft, time }) {
   for (const x of [card.left + 9, card.right - 10]) {
     for (const y of [card.top + 2, card.bottom - 3]) paint(x, y, focusCornerBlend);
   }
-  return { width, height, stride, scale: 2, contentScale: 1, content: { x: 0, y: 0 }, time, data };
+  // A still of the recording, requested at `time` and completed 0.5ms later.
+  return { width, height, stride, scale: 2, contentScale: 1, content: { x: 0, y: 0 }, requested: time, completed: time + 0.5, data };
 }
 
 test("floor page layout geometry excludes captured focus-corner colors from content bounds", { timeout: 5000 }, () => {
