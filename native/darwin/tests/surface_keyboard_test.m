@@ -149,7 +149,11 @@ int main(void) { @autoreleasepool {
 
     // The surface gives the keyboard to the other surface and takes it back.
     sp_surface_focus(browserHost);
-    check(window.firstResponder == browserPage, "the keyboard moves to the page of the other surface");
+    // A move of the keyboard waits for the release of an open left press, of the person (AppKit reports the button) or of the
+    // driver, so the failure names both with the first responder.
+    check(window.firstResponder == browserPage, [NSString stringWithFormat:@"the keyboard moves to the page of the other surface "
+        "(first responder %@, AppKit buttons %lu, driver press open %d)", window.firstResponder, sp_input_person_buttons(),
+        sp_input_press_open(window, 0)].UTF8String);
     sp_surface_focus(terminalHost);
     check(window.firstResponder == (NSResponder *)region, "the keyboard returns to the region that held it in the surface");
 

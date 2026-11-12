@@ -242,9 +242,12 @@ int main(void) { @autoreleasepool {
     eventWait(@"the download that the framework places", ^BOOL{
         return placing.finished || placing.failed || (placing.navigationsEnded > 0 && !placing.becameDownload) || requests.count > before;
     });
-    check(placing.finished && requests.count == before && [contents(placing.placed) isEqual:content]
-        && [[NSFileManager.defaultManager contentsOfDirectoryAtPath:downloads error:nil] count] == 0,
-        @"without a hold a download goes where the framework puts it");
+    NSArray<NSString *> *inDownloads = [NSFileManager.defaultManager contentsOfDirectoryAtPath:downloads error:nil];
+    check(placing.finished && requests.count == before && [contents(placing.placed) isEqual:content] && inDownloads.count == 0,
+        [NSString stringWithFormat:@"without a hold a download goes where the framework puts it (finished %d, failed %d, navigations ended %ld, "
+            "became a download %d, %lu new requests, placed at %@ with %@, download folder %@)", placing.finished, placing.failed,
+            (long)placing.navigationsEnded, placing.becameDownload, (unsigned long)(requests.count - before), placing.placed,
+            contents(placing.placed), inDownloads]);
 
     // Without a hold and without a framework that places it, a download goes into the download folder under a free name.
     // The name that the download suggests is taken in the download folder.

@@ -588,7 +588,11 @@ static void checkKeyWindowPressPassesApplication(void) {
         return event;
     }];
     [window makeFirstResponder:nil];
-    check(sp_input_pointer(window, 50, 50, 1, 0, 0, 0) == SP_INPUT_DELIVERED, @"the press of a key window is delivered");
+    // The record of the press names the result and the reason of a refusal, which the failure shows.
+    __block sp_input_result keyPress = SP_INPUT_REJECTED;
+    NSString *keyPressRecord = capturedRecords(^{ keyPress = sp_input_pointer(window, 50, 50, 1, 0, 0, 0); });
+    check(keyPress == SP_INPUT_DELIVERED,
+        [NSString stringWithFormat:@"the press of a key window is delivered (%d: %@)", keyPress, keyPressRecord]);
     check(downs == 1, [NSString stringWithFormat:@"a local monitor sees the press of a key window once (%lu)", (unsigned long)downs]);
     check(pressed.downs == 1, [NSString stringWithFormat:@"AppKit delivers the press of a key window to the view once (%lu)", (unsigned long)pressed.downs]);
     check(!pressed.pressIsCurrent, @"the application path leaves NSApp.currentEvent, so the press context stays on that path");
@@ -610,8 +614,11 @@ static void checkKeyWindowPressPassesApplication(void) {
     other.contentView = direct;
     [other orderBack:nil];
     downs = 0;
-    check(sp_input_pointer(other, 50, 50, 1, 0, 0, 0) == SP_INPUT_DELIVERED && direct.downs == 1 && other.firstResponder == direct,
-        @"the press of a window that is not key reaches the view and moves the first responder");
+    __block sp_input_result otherPress = SP_INPUT_REJECTED;
+    NSString *otherPressRecord = capturedRecords(^{ otherPress = sp_input_pointer(other, 50, 50, 1, 0, 0, 0); });
+    check(otherPress == SP_INPUT_DELIVERED && direct.downs == 1 && other.firstResponder == direct,
+        [NSString stringWithFormat:@"the press of a window that is not key reaches the view and moves the first responder (%d, downs %lu: %@)",
+            otherPress, (unsigned long)direct.downs, otherPressRecord]);
     check(sp_input_pointer(other, 120, 80, 2, 0, 0, 0) == SP_INPUT_DELIVERED && direct.drags == 1,
         @"the drag of a window that is not key reaches the pressed view");
     check(sp_input_pointer(other, 120, 80, 3, 0, 0, 0) == SP_INPUT_DELIVERED && direct.ups == 1,
