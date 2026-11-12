@@ -7,6 +7,19 @@ import { refreshAfter } from "@soksak/window-check/display-refresh.mjs";
  * { displayed, at } (display time in ms, boundary coordinates of that state). Refresh times are the display refreshes of the window (ms). A state is missing when it is absent from the frames up to the first frame at or after the second observed refresh after its display, or when no such frame exists. A frame stream promises no cadence, so the limit is that frame and not a time; each check bounds the recording gap itself.
  */
 export function missingPoses(frames, poses, refreshes) {
+  return poses.filter((pose, index) => {
+    const span = poseSpan(frames, poses, refreshes, index);
+    return !frames.some((frame) => frame.time >= span.at && frame.time <= span.end && frame.edges.some((edge) => Math.abs(edge - pose.at) <= 1));
+  });
+}
+
+/**
+ * The span of the recording in which the state poses[index] must appear (missingPoses): from the display of the state before it
+ * (from the first frame for the first state) to the first frame at or after the second observed refresh after its display, or to
+ * the end of the recording without such a frame (end Infinity). A judgment of that state judges this span, so its premise is the
+ * window shown in it (judgedWhileShown of @soksak/window-check).
+ */
+export function poseSpan(frames, poses, refreshes, index) {
   assert.ok(Array.isArray(refreshes) && refreshes.length > 0, "the display refresh times are missing");
   // There is no frame before the recording starts. A state that was displayed before the recording started and did not change until the first frame is counted from the first frame.
   // A state that changed to the next state before the recording started cannot be recorded, so it is counted from its original time.
@@ -21,11 +34,11 @@ export function missingPoses(frames, poses, refreshes) {
   // was displayed record an earlier state.
   const after = (index) => (index === 0 ? -Infinity : poses[index - 1].displayed - 1);
   const until = (pose, index) => {
-  const settled = refreshAfter(refreshes, start(pose, index), 2);
+    const settled = refreshAfter(refreshes, start(pose, index), 2);
     return Math.min(...frames.filter((frame) => frame.time >= settled).map((frame) => frame.time), Infinity);
   };
-  return poses.filter((pose, index) => !frames.some((frame) => frame.time >= after(index) &&
-    frame.time <= until(pose, index) && frame.edges.some((edge) => Math.abs(edge - pose.at) <= 1)));
+  const at = after(index);
+  return { at: Number.isFinite(at) ? at : first, end: until(poses[index], index) };
 }
 
 /** Fails when a panel remains after all panels are turned off. A remaining default panel fails as well. */

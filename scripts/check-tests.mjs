@@ -9319,6 +9319,29 @@ const FEATURE_LINKS = [
     levels: ["native", "unit", "application"],
   },
   {
+    id: "F746-3",
+    implementation: [
+      { file: "packages/window-check/app.mjs", symbol: "export class NotJudged extends Error {" },
+      { file: "packages/window-check/app.mjs", symbol: "export async function judgedWhileShown(frames, { spans, what }, judge) {" },
+      { file: "scripts/test-runner.mjs", symbol: "const notJudged = new Set();" },
+      { file: "e2e/card-panel-checks.mjs", symbol: "export function poseSpan(frames, poses, refreshes, index) {" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/shown-changes.test.mjs", id: "a failing wait in which the window was covered at a display-link callback is not judged and names the owners in front" },
+      { file: "packages/window-check/test/shown-changes.test.mjs", id: "a failing wait in which the window showed at every display-link callback fails and is not a judgment that was not made" },
+      { file: "packages/window-check/test/shown-changes.test.mjs", id: "a window covered only outside the failing wait leaves the failure standing" },
+      { file: "packages/window-check/test/shown-changes.test.mjs", id: "a failing wait of a recording without a display-link observation fails" },
+      { file: "packages/window-check/test/shown-changes.test.mjs", id: "a judgment of a span that fails while the window was covered in that span is not judged" },
+      { file: "packages/window-check/test/shown-changes.test.mjs", id: "a judgment of a span that fails while the window showed at every callback of that span fails" },
+      { file: "packages/window-check/test/shown-changes.test.mjs", id: "a judgment of several spans fails when the window showed at every callback of one of them" },
+      { file: "packages/window-check/test/shown-changes.test.mjs", id: "a judgment of a span that passes returns its value whatever covered the window" },
+      { file: "scripts/test/test-runner.test.mjs", id: "a file whose only failed tests were not judged is not judged, and the total counts those tests apart from the failures" },
+      { file: "scripts/test/test-runner.test.mjs", id: "the code of a judgment that was not made is the same in the runner and in the window checks" },
+    ],
+    expected: "A judgment of the frames of a recording that fails over a span in which the display link found the window covered is not judged, names the owners of the windows in front and the failure it would have had, and a failure over a span in which the window showed at every callback stays a failure; the test runner counts the files and tests that were not judged apart from the failures and fails the run.",
+    levels: ["unit"],
+  },
+  {
     id: "F756-6",
     implementation: [
       { file: "native/darwin/src/window_facts.m", symbol: "bool sp_window_raise(void *handle) {" },

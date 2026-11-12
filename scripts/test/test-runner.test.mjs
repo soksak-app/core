@@ -69,7 +69,7 @@ test("the summary counts the results and lists the slowest tests, slowest first"
   const measured = [...results].sort(([, a], [, b]) => b.elapsedMs - a.elapsedMs).slice(0, 2).map(([name]) => name);
   assert.deepEqual(slowest.map((item) => item.name), measured);
   assert.ok(slowest[0].elapsedMs >= slowest[1].elapsedMs, JSON.stringify(slowest));
-  assert.match(lines.at(-1), /^TOTAL 3 tests: 3 pass, 0 fail, 0 timeout in \d+\.\d{3}s$/);
+  assert.match(lines.at(-1), /^TOTAL 3 tests: 3 pass, 0 fail, 0 timeout, 0 not judged in \d+\.\d{3}s$/);
   assert.ok(lines.some((line) => line.startsWith("SLOWEST ")));
 });
 
@@ -584,12 +584,51 @@ test("a test file that ran no test passes with `no test ran`, and a run in which
     assert.equal(result.status, "pass", result.output);
     assert.equal(result.tests, 0, result.output);
     assert.match(lines.find((line) => line.startsWith("PASS events")), /^PASS events \d+\.\d{3}s no test ran$/);
-    assert.match(lines.find((line) => line.startsWith("TOTAL ")), /^TOTAL 0 tests ran in 1 file: 1 pass, 0 fail, 0 timeout in \d+\.\d{3}s$/);
+    assert.match(lines.find((line) => line.startsWith("TOTAL ")), /^TOTAL 0 tests ran in 1 file: 1 pass, 0 fail, 0 timeout, 0 not judged in \d+\.\d{3}s; 0 tests not judged$/);
     assert.equal(lines.at(-1), "FAIL no test ran in the 1 file of the run");
     assert.equal(passed, false);
   } finally {
     rmSync(folder, { recursive: true, force: true });
   }
+});
+
+// A test whose judgment was not made because its premise did not hold throws an error with the code not-judged (NotJudged of
+// @soksak/window-check). A file whose only failed tests are such tests is not judged, a file with another failure fails, and the
+// total counts the tests that were not judged apart from the failures; neither passes the run.
+test("a file whose only failed tests were not judged is not judged, and the total counts those tests apart from the failures", async () => {
+  const notJudged = 'Object.assign(new Error("not judged: covered"), { code: "not-judged" })';
+  const only = await nodeTestFile([
+    'import test from "node:test";',
+    'test("passes", () => {});',
+    `test("covered", () => { throw ${notJudged}; });`,
+  ].join("\n") + "\n");
+  const mixed = await nodeTestFile([
+    'import assert from "node:assert/strict";',
+    'import test from "node:test";',
+    `test("covered", () => { throw ${notJudged}; });`,
+    'test("fails", () => { assert.equal(1, 2); });',
+  ].join("\n") + "\n");
+  try {
+    const { results, passed, lines } = await run([
+      eventsOf(only.file, { name: "only", eventLimitMs: 60_000 }), eventsOf(mixed.file, { name: "mixed", eventLimitMs: 60_000 }),
+    ], { concurrency: 1 });
+    assert.equal(results.get("only").status, "not-judged", results.get("only").output);
+    assert.equal(results.get("only").notJudged, 1);
+    assert.match(lines.find((line) => line.startsWith("NOT JUDGED only")), /^NOT JUDGED only \d+\.\d{3}s not judged: covered$/);
+    assert.equal(results.get("mixed").status, "fail", results.get("mixed").output);
+    assert.equal(results.get("mixed").notJudged, 1);
+    assert.match(lines.at(-1), /^TOTAL 4 tests ran in 2 files: 0 pass, 1 fail, 0 timeout, 1 not judged in \d+\.\d{3}s; 2 tests not judged$/);
+    assert.equal(passed, false);
+  } finally {
+    rmSync(only.folder, { recursive: true, force: true });
+    rmSync(mixed.folder, { recursive: true, force: true });
+  }
+});
+
+test("the code of a judgment that was not made is the same in the runner and in the window checks", async () => {
+  const { NOT_JUDGED } = await import("../test-event-reporter.mjs");
+  const windowCheck = await import("../../packages/window-check/app.mjs");
+  assert.equal(windowCheck.NOT_JUDGED, NOT_JUDGED);
 });
 
 test("the total counts the tests that the files ran, not the files, and a run passes when a file ran a test", async () => {
@@ -609,7 +648,7 @@ test("the total counts the tests that the files ran, not the files, and a run pa
     assert.equal(results.get("none").tests, 0, results.get("none").output);
     assert.match(lines.find((line) => line.startsWith("PASS ran")), /^PASS ran \d+\.\d{3}s$/);
     assert.match(lines.find((line) => line.startsWith("PASS none")), /^PASS none \d+\.\d{3}s no test ran$/);
-    assert.match(lines.at(-1), /^TOTAL 3 tests ran in 2 files: 2 pass, 0 fail, 0 timeout in \d+\.\d{3}s$/);
+    assert.match(lines.at(-1), /^TOTAL 3 tests ran in 2 files: 2 pass, 0 fail, 0 timeout, 0 not judged in \d+\.\d{3}s; 0 tests not judged$/);
     assert.equal(passed, true);
   } finally {
     rmSync(ran.folder, { recursive: true, force: true });
@@ -620,7 +659,7 @@ test("the total counts the tests that the files ran, not the files, and a run pa
 test("a run of processes that do not report their test events counts the processes and passes when each passes", async () => {
   const { results, passed, lines } = await run([node("a", "process.exit(0)")], { concurrency: 1 });
   assert.equal(results.get("a").tests, undefined);
-  assert.match(lines.at(-1), /^TOTAL 1 tests: 1 pass, 0 fail, 0 timeout in \d+\.\d{3}s$/);
+  assert.match(lines.at(-1), /^TOTAL 1 tests: 1 pass, 0 fail, 0 timeout, 0 not judged in \d+\.\d{3}s$/);
   assert.equal(passed, true);
   assert.equal((await run([node("b", "process.exit(3)")], { concurrency: 1 })).passed, false);
 });

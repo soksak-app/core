@@ -8,6 +8,9 @@
 // A summary also carries `success`, and a `test:complete` its `skip` and `todo` flags: the file-owned summary shows that the file ran its
 // tests, and the flags keep skipped or todo suites, which the counts of the summary do not include.
 export const EVENT_PREFIX = "@soksak-test-event ";
+// The code of the error of a test whose judgment was not made because its premise did not hold (NotJudged of @soksak/window-check,
+// docs/spec/diagnostics.md#judgments-of-a-covered-window). The runner counts such a test apart from the failures.
+export const NOT_JUDGED = "not-judged";
 
 export default async function* testEvents(source) {
   for await (const event of source) {

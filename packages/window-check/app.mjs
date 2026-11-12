@@ -1383,6 +1383,7 @@ function recordedFrameTimes(path) {
  */
 function displayLinkTimes(path) {
   if (typeof path !== "string") return { unavailable: `missing from the stop reply (displayLink ${JSON.stringify(path)})` };
+  if (!existsSync(path)) return { unavailable: `missing: ${path} does not exist` };
   const trace = JSON.parse(readFileSync(path, "utf8"));
   if (trace.state !== "available") return { unavailable: `${trace.state}${trace.reason ? ` (${trace.reason})` : ""}` };
   return {
@@ -1447,6 +1448,78 @@ function coveredCallbacks(callbacks, at, end) {
       (read.inFront.length === 0 ? "no window" : `[${read.inFront.map(named).join(", ")}]`);
   return `, and no part of the window showed (NSWindow occlusion) at ${covered.length} of its ${inWait.length} display-link ` +
     `callbacks in that time, the first at ${covered[0].at.toFixed(1)}ms${front}`;
+}
+
+/** The code of a judgment that was not made because its premise did not hold (NotJudged). */
+export const NOT_JUDGED = "not-judged";
+
+/**
+ * A judgment of the frames of a recording that was not made: the window of the check was covered, at a display-link callback
+ * within the span that the judgment judges, by windows that the check does not move (the windows of a person), so a frame that
+ * the recording lacks there tells nothing of the application (F746-1 of docs/features.md). It is neither a pass nor a failure: the
+ * test fails with it, the runner counts it apart from the failures and keeps it in the list of the checks to run again, and a
+ * release needs no check that was not judged (docs/spec/diagnostics.md#judgments-of-a-covered-window). `owners` names the owners of
+ * the windows in front of the window; `span` is the judged span {at, end} in ms on the clock of the recording; `failure` is the text
+ * of the judgment that would have failed.
+ */
+export class NotJudged extends Error {
+  constructor(what, { owners, span, covered, callbacks, failure }) {
+    super(`not judged: ${what}: the window was covered at ${covered} of its ${callbacks} display-link callbacks from ` +
+      `${span.at.toFixed(1)}ms to ${Number.isFinite(span.end) ? `${span.end.toFixed(1)}ms` : "the end of the recording"}, ` +
+      `in front of it ${owners.length ? owners.join(", ") : "no window that the recording read"}; the judgment over that span ` +
+      `would have failed: ${failure}`);
+    this.name = "NotJudged";
+    this.code = NOT_JUDGED;
+    this.owners = owners;
+    this.span = span;
+  }
+}
+
+/**
+ * The premise of a judgment over the span from `at` to `end` (ms on the clock of the recording) of the display-link callbacks of a
+ * recording: null when every callback in the span found a part of the window shown, or the covered callbacks with the owners of
+ * the windows in front of the window (`inFront` of the last callback at or before each covered callback that read them). The
+ * premise holds also when the observation of the display link is not available or the span holds no callback, because nothing
+ * then tells that the window was covered: the judgment stands.
+ */
+function coveredPremise(callbacks, at, end) {
+  const inSpan = callbacks.filter((callback) => callback.at >= at && callback.at < end);
+  const covered = inSpan.filter((callback) => callback.occluded);
+  if (covered.length === 0) return null;
+  const owners = new Set();
+  for (const callback of covered) {
+    const read = callbacks.filter((other) => other.at <= callback.at && other.inFront !== undefined).at(-1);
+    for (const window of read?.inFront ?? []) owners.add(`${window.owner} (pid ${window.pid})`);
+  }
+  return { covered: covered.length, callbacks: inSpan.length, owners: [...owners] };
+}
+
+/**
+ * Runs `judge`, a judgment of the frames of the recording in the folder `frames` over the spans `spans` ({at, end}, ms on the clock
+ * of the recording; end Infinity for the rest of the recording), and returns what it returns. A judgment that fails judges each of
+ * its spans, such as the span of each state that the recording lacks: when the display link of the window found no part of the
+ * window shown at a callback within every one of them, it throws NotJudged with the owners of the windows in front and the
+ * failure; when the window showed at every callback of one span, the failure stands, because that span alone fails it. `what` names
+ * the judgment.
+ */
+export async function judgedWhileShown(frames, { spans, what }, judge) {
+  if (!Array.isArray(spans) || spans.length === 0 || !spans.every(({ at, end }) => Number.isFinite(at) && end > at)) {
+    throw new TypeError(`the judged spans of ${what} are not spans: ${JSON.stringify(spans)}`);
+  }
+  try {
+    return await judge();
+  } catch (error) {
+    const link = displayLinkTimes(join(frames, "display-link.json"));
+    if (link.unavailable) throw error;
+    const premises = spans.map(({ at, end }) => coveredPremise(link.callbacks, at, end));
+    if (premises.some((premise) => premise === null)) throw error;
+    const span = { at: Math.min(...spans.map(({ at }) => at)), end: Math.max(...spans.map(({ end }) => end)) };
+    throw new NotJudged(what, {
+      covered: premises.reduce((sum, premise) => sum + premise.covered, 0),
+      callbacks: premises.reduce((sum, premise) => sum + premise.callbacks, 0),
+      owners: [...new Set(premises.flatMap((premise) => premise.owners))], span, failure: error.message,
+    });
+  }
 }
 
 /**
@@ -1531,11 +1604,16 @@ export function judgeShownChanges(stopped, changes, { layouts = stopped.layouts,
   const shown = worst.next === null
     ? `the recording has no frame after ${worst.at.toFixed(1)}ms`
     : `after ${worst.at.toFixed(1)}ms the next frame was displayed ${worst.wait.toFixed(0)}ms later, at ${worst.next.toFixed(1)}ms`;
-  throw new Error(`the application did not show ${what} ${worst.index} of ${changes.length} (asked at ${change.from.toFixed(1)}ms` +
+  const failure = `the application did not show ${what} ${worst.index} of ${changes.length} (asked at ${change.from.toFixed(1)}ms` +
     `${final} on the clock of the recording) without waiting longer than ${limit}ms for a frame: ${shown}; in that time the ` +
     `check asked for ${asked} ${what}s, the host began ${begun.length} layouts ${JSON.stringify(begun)} and committed ` +
     `${committed.length} [${committed.join(", ")}], and ${mainThread}; recording ${stopped.frames}; 1-minute load average ` +
-    `${loadavg()[0].toFixed(2)}`);
+    `${loadavg()[0].toFixed(2)}`;
+  // The wait is the judged span: a window covered at a display-link callback in it makes the judgment not judged, and a window that
+  // showed at every callback of it fails.
+  const premise = displayLink.unavailable ? null : coveredPremise(displayLink.callbacks, worst.at, end);
+  if (premise !== null) throw new NotJudged(`${what} ${worst.index} of ${changes.length}`, { ...premise, span: { at: worst.at, end }, failure });
+  throw new Error(failure);
 }
 
 function requireCallbackStatusArtifact(result, frames) {

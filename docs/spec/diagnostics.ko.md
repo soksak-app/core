@@ -87,6 +87,10 @@ Diagnostic capture는 matching용 image source를 메모리에 보존한다. `fr
 2. **Event.** event 파일의 한 줄: [event 계약](logging.ko.md#event)의 JSON 객체로 `ts_us`, `seq`, `level`, `layer`, `event`와 그 event의 필드를 가진다. event는 무슨 일이 언제 일어났는지를 계층을 가로지르는 한 시간선의 순서로 기록한다.
 3. **State file.** `state-<time>.json`: 한 시점의 애플리케이션 상태로, `time`, `host`, `versions`, `windows`, `page`를 가진다. 쓰는 쪽이 읽지 못한 부분은 그 오류와 함께 기록하고 파일 쓰기를 멈추지 않는다.
 
+## 가린 창의 판정
+
+window check 는 창을 녹화하고 창이 보인다는 전제에서 그 frame 을 판정한다. 다른 애플리케이션의 창이 전부 덮은 창의 녹화는 창이 그리고 display link 가 도는 동안에도 몇 초씩 frame 을 하나도 보내지 않을 수 있다([features](../features.ko.md) 의 F746-1). `display-link.json` 은 녹화하는 창의 display link callback 마다 창의 일부가 보였는지(`occluded`)를, 가린 구간의 첫 callback 에서는 창 앞의 창(`inFront`)을 담는다. 녹화의 frame 판정(`@soksak/window-check` 의 `judgeShownChanges` 와 `judgedWhileShown`)이 실패한 구간에 창을 가린 것으로 본 callback 이 있으면 그 판정은 판정 안 됨이다. test 는 `NotJudged` 오류로 실패하고, 그 code 는 `not-judged` 이며 message 는 구간, 가린 callback, 창 앞 창의 owner, 판정이 냈을 실패를 말한다. 모든 callback 에서 창이 보인 구간의 실패는 그대로 실패이고, display-link 관측이 없는 녹화의 실패도 그대로 실패다. 판정 안 됨은 통과도 실패도 아니다. test runner 는 실패한 test 가 모두 판정 안 됨인 파일을 `NOT JUDGED` 로 찍고, 그런 파일과 판정 안 된 모든 test 를 `TOTAL` 에서 실패와 따로 세며, run 을 실패시킨다. TAP 출력에서 그 test 는 `not ok` 로 남으므로 다음 run 이 다시 돌리는 check 목록에도 남는다. 판정 안 된 check 가 있는 동안 release 는 통과할 수 없다. 그 check 는 사람의 창이 check 의 창을 가리지 않는 window run 에서 다시 돌고, release 는 판정 안 된 test 의 수가 0 이 될 때까지 기다린다.
+
 ## 규칙
 
 - 실패 지점의 기록은 아래 표에 있다. 표에 없는 실패 지점은 이 문서의 결함이다.

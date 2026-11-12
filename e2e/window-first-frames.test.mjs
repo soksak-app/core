@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { APPS, judgedWhileShown, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { alpha, cardPoint, fullSize, LOGO, sample, undrawn } from "./screen-drawn.mjs";
@@ -58,6 +58,14 @@ async function firstFrames(t, s, label, opening, ready) {
   const stop = await recording.stop({ after: shown.displayed + 100 });
   assert.equal(stop.limited, false, `${label}: the recording reached its frame cap`);
   const window = (await child.get("host.window")).frame;
+  // The judgment spans the whole recording of the new window: a window that windows of a person covered at a display-link callback
+  // of the recording is not judged when the judgment fails, and one that showed at every callback fails (judgedWhileShown).
+  await judgedWhileShown(recording.frames, { spans: [{ at: 0, end: Infinity }], what: `${label}: the first screen of the new window` },
+    () => judgeFirstFrames(t, recording, label, window, card));
+}
+
+/** Judges the frames of the recording of the new window: it appears in a frame after the first and shows its complete first screen from then on. */
+function judgeFirstFrames(t, recording, label, window, card) {
   // A window recording reads the window itself, so the window points of LOGO and cardPoint sample its frames.
   const captured = frames(recording.frames).map(readFrame);
   assert.ok(captured.length > 1, `${label}: the recording has ${captured.length} frames`);
