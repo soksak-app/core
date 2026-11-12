@@ -728,6 +728,8 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/test/stills.test.mjs", id: "a still row whose stages are half bracketed or out of order is refused" },
       { file: "packages/window-check/test/stills.test.mjs", id: "decoded rows that name taken stills by their index and ticks pass" },
       { file: "packages/window-check/test/stills.test.mjs", id: "a decoded row that names no still of the recording or another time of its still is refused" },
+      { file: "packages/window-check/test/stills.test.mjs", id: "a written still row without the colour space and the profile of its frame is refused" },
+      { file: "packages/window-check/test/stills.test.mjs", id: "a still row that took no image with a colour space or a profile is refused" },
       { file: "e2e/test/capture-document-frame-identity.test.mjs", id: "document identity capture rejects a decoded row of no still of the recording and a still decoded twice" },
       { file: "packages/window-check/test/view-frame-geometry.test.mjs", id: "a still completed before its request is no recorded frame" },
       { file: "packages/window-check/test/view-metrics-collection.test.mjs", id: "a recorded view whose recording lost a still fails and names it" },

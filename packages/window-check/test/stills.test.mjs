@@ -19,7 +19,9 @@ function rows(t, stills) {
 test("the still rows hold the times of each still in ms and the path of its frame", (t) => {
   const [first, second] = rows(t, { until: 8, took: 0.5, lateBy: { 1: 9 } });
   assert.deepEqual({ ...first, frame: first.frame.split("/").at(-1) }, { index: 0, planned: 0, requested: 0, completed: 0.5, gap: 8,
-    outcome: "written", error: null, frame: "frame-0000.bgra", windows: [7], late: false });
+    outcome: "written", error: null, frame: "frame-0000.bgra", windows: [7], late: false, colorSpace: null,
+    colorProfile: first.colorProfile });
+  assert.match(first.colorProfile, /\/color-[0-9a-f]{16}\.icc$/);
   assert.equal(second.late, true);
 });
 
@@ -182,4 +184,28 @@ test("a decoded row that names no still of the recording or another time of its 
   ]) {
     assert.throws(() => stills.requireDecodedStills([row], path, "the identity"), error);
   }
+});
+
+// The frame of a written still holds the bytes of the colour space that the window server gave, which the row names: its Core
+// Graphics name, or null for a space without one, and the file of its ICC profile in the recording folder (docs/spec/diagnostics.md,
+// stills.jsonl).
+test("a written still row without the colour space and the profile of its frame is refused", (t) => {
+  for (const [change, error] of [
+    [(row) => { row.colorProfile = null; }, /^Error: still row 0 of .* is written without its colour profile$/],
+    [(row) => { row.colorProfile = "color-xyz.icc"; }, /^Error: still row 0 of .* has the colour profile "color-xyz\.icc", not color-<16 hex digits>\.icc$/],
+    [(row) => { delete row.colorProfile; }, /^Error: still row 0 of .* has the colour profile undefined, not color-<16 hex digits>\.icc$/],
+    [(row) => { row.colorSpace = ""; }, /^Error: still row 0 of .* has the colour space "", not a name or null$/],
+    [(row) => { delete row.colorSpace; }, /^Error: still row 0 of .* has the colour space undefined, not a name or null$/],
+  ]) {
+    assert.throws(changedRow(t, (list) => change(list[0])), error);
+  }
+  const named = changedRow(t, (list) => { list[0].colorSpace = "kCGColorSpaceDisplayP3"; })();
+  assert.equal(named[0].colorSpace, "kCGColorSpaceDisplayP3");
+});
+
+test("a still row that took no image with a colour space or a profile is refused", (t) => {
+  assert.throws(changedRow(t, (list) => { list[2].colorProfile = "color-0123456789abcdef.icc"; }),
+    /^Error: still row 2 of .* took no image and has the colour profile "color-0123456789abcdef\.icc"$/);
+  assert.throws(changedRow(t, (list) => { list[2].colorSpace = "kCGColorSpaceSRGB"; }),
+    /^Error: still row 2 of .* took no image and has the colour space "kCGColorSpaceSRGB"$/);
 });

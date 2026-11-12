@@ -1,6 +1,7 @@
 // A still recording as the host writes it, for the unit checks of the readers of recordings: one frame file per written still
 // (frame-<index>.bgra, marker LZ4S) and one stills.jsonl row per planned still, on a timebase of nanoseconds.
 import { mkdirSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { crc32 } from "node:zlib";
 
@@ -23,14 +24,20 @@ const NO_STAGES = Object.fromEntries(["writeStartTime", "writeCompleteTime", "im
   "identityDecodeEnqueueStartTime", "identityDecodeEnqueueCompleteTime", "writerEnqueuedTime", "writerStartTime",
   "writerCompleteTime", "frameIdentityDecodeStartTime", "frameIdentityDecodeCompleteTime"].map((name) => [name, null]));
 
+/** The ICC profile of the frames of the fixture recordings, and its file name in a recording folder. */
+export const FIXTURE_PROFILE = Buffer.from("soksak fixture ICC profile");
+export const FIXTURE_PROFILE_FILE = `color-${createHash("sha256").update(FIXTURE_PROFILE).digest("hex").slice(0, 16)}.icc`;
+
 /**
- * The stage times of a still row: for a written still completed at the raw mach time `completed`, its processing, image match
- * and frame write, all at that time; for another still, none.
+ * The fields of a still row that the processing of its image writes: for a written still completed at the raw mach time
+ * `completed`, its processing, image match and frame write, all at that time, and the colour space of its frame, a display
+ * space without a name and the profile FIXTURE_PROFILE_FILE; for another still, none.
  */
-export function stillStages(written, completed) {
+export function stillFields(written, completed) {
   return written ? { ...NO_STAGES, writeStartTime: completed, writeCompleteTime: completed, imageMatchStartTime: completed,
-    imageMatchCompleteTime: completed, writerEnqueuedTime: completed, writerStartTime: completed, writerCompleteTime: completed }
-    : NO_STAGES;
+    imageMatchCompleteTime: completed, writerEnqueuedTime: completed, writerStartTime: completed, writerCompleteTime: completed,
+    colorSpace: null, colorProfile: FIXTURE_PROFILE_FILE }
+    : { ...NO_STAGES, colorSpace: null, colorProfile: null };
 }
 
 /**
@@ -50,7 +57,7 @@ export function writeStillRecording(frames, { gap = 8, until, changes = [], took
     const planned = index * gap;
     if (index >= stoppedAt || notRequested.includes(index)) {
       rows.push({ index, planned: ns(planned), requested: null, completed: null, outcome: "not-requested", error: null,
-        frame: null, windows: null, requestedGap: gap, machTimebaseNumerator: 1, machTimebaseDenominator: 1, ...stillStages(false) });
+        frame: null, windows: null, requestedGap: gap, machTimebaseNumerator: 1, machTimebaseDenominator: 1, ...stillFields(false) });
       continue;
     }
     const requested = planned + (lateBy[index] ?? 0);
@@ -58,18 +65,20 @@ export function writeStillRecording(frames, { gap = 8, until, changes = [], took
     if (failed.includes(index)) {
       rows.push({ index, planned: ns(planned), requested: ns(requested), completed: ns(completed), outcome: "failed",
         error: "the window server returned no image", frame: null, windows, requestedGap: gap, machTimebaseNumerator: 1,
-        machTimebaseDenominator: 1, ...stillStages(false) });
+        machTimebaseDenominator: 1, ...stillFields(false) });
       continue;
     }
     const frame = `frame-${String(index).padStart(4, "0")}.bgra`;
     writeFileSync(join(frames, frame), stillFrame(changes.filter((at) => at <= requested).length, requested, completed));
     rows.push({ index, planned: ns(planned), requested: ns(requested), completed: ns(completed), outcome: "written",
       error: null, frame, windows, requestedGap: gap, machTimebaseNumerator: 1, machTimebaseDenominator: 1,
-      ...stillStages(true, ns(completed)) });
+      ...stillFields(true, ns(completed)) });
   }
   const stills = join(frames, "stills.jsonl");
   writeFileSync(stills, rows.map((row) => JSON.stringify(row)).join("\n") + "\n");
   const written = rows.filter((row) => row.outcome === "written");
+  // The first written still writes the profile of its colour space.
+  if (written.length > 0) writeFileSync(join(frames, FIXTURE_PROFILE_FILE), FIXTURE_PROFILE);
   const longestGap = Math.max(0, ...written.slice(1).map((row, i) => Number(BigInt(row.requested) - BigInt(written[i].requested)) / 1e6));
   let link;
   if (displayLink !== undefined) {

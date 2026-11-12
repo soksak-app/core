@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -265,6 +265,16 @@ for (const [what, damage, error] of [
     /the still recording .* has no frame-0001\.bgra for its written still 1/],
   ["with a frame file of no written still", (reply, stored) => { writeFileSync(join(stored, "frame-0005.bgra"), ""); return reply; },
     /the still recording .* has frame-0005\.bgra, the frame file of no written still/],
+  ["whose written still names a profile that the recording lacks", (reply, stored) => {
+    for (const name of readdirSync(stored).filter((name) => name.endsWith(".icc"))) rmSync(join(stored, name));
+    return reply;
+  }, /the still recording .* has no color-[0-9a-f]{16}\.icc for its written still 0/],
+  ["with a profile file of no still", (reply, stored) => { writeFileSync(join(stored, "color-0000000000000000.icc"), "x"); return reply; },
+    /the still recording .* has color-0000000000000000\.icc, the colour profile of no still/],
+  ["whose profile file is not the profile of its name", (reply, stored) => {
+    for (const name of readdirSync(stored).filter((name) => name.endsWith(".icc"))) writeFileSync(join(stored, name), "another profile");
+    return reply;
+  }, /the still recording .* has color-[0-9a-f]{16}\.icc, whose SHA-256 begins with [0-9a-f]{16}/],
   ["that counts other late stills than its rows", (reply) => ({ ...reply, late: reply.late + 1 }),
     /the still recording .* counts 1 late stills, and stills\.jsonl has 0 late rows/],
   ["that names another longest gap than its rows", (reply) => ({ ...reply, longestGap: reply.longestGap + 0.000001 }),

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { readFrame } from "../frame.mjs";
-import { stillFrame, stillStages } from "../still-recording.mjs";
+import { stillFrame, stillFields } from "../still-recording.mjs";
 import { policyOfSetting, readPolicy } from "../log-policy.mjs";
 import * as viewMetrics from "../view-metrics-collection.mjs";
 import { closeViewGroup, collectViewProcessGroups, collectViewReclaimMeasurements, collectViewStartAndMemory, openRecordedView,
@@ -725,7 +725,7 @@ function recordedViewSession(t, { frameTimes, displayed, missed = 0, calls = [] 
         const row = (index, time, written) => ({ index, planned: ns(time), requested: ns(time), completed: ns(time + 0.5),
           outcome: written ? "written" : "failed", error: written ? null : "the window server returned no image",
           frame: written ? `frame-${String(index).padStart(4, "0")}.bgra` : null, windows: [7], requestedGap: 1000,
-          machTimebaseNumerator: 1, machTimebaseDenominator: 1, ...stillStages(written, ns(time + 0.5)) });
+          machTimebaseNumerator: 1, machTimebaseDenominator: 1, ...stillFields(written, ns(time + 0.5)) });
         const last = frameTimes.at(-1);
         const rows = [...frameTimes.map((time, index) => row(index, time, true)),
           ...Array.from({ length: missed }, (_, k) => row(frameTimes.length + k, last + k + 1, false))];
