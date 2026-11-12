@@ -742,7 +742,8 @@ static void checkCommitFrame(WKWebViewConfiguration *configuration, NSString *va
         check(surfaceLayoutCommit(window, ticket), [NSString stringWithFormat:
             @"%@: the commit frame transaction commits after the presentation callback", variant]);
         eventWait(@"the joined tab view presents before the move is read", ^BOOL { return tabPresented == move + 1; });
-        check(surfaceLayoutTraceStop(timeline, SURFACE_LAYOUT_TRACE_STAGES) == 1, @"the commit frame trace records its transaction");
+        // The trace keeps running until the still is taken, so the send of a commit that was nested in another transaction is
+        // recorded even when it comes after the refresh.
         // The commit reaches the screen at the first refresh after it, so the screen is read at that refresh.
         SPFrames *refreshes = [afterFrames(window.screen, 1, nil) retain];
         eventWait(@"the display refreshes once after the commit", ^BOOL { return refreshes.left == 0; });
@@ -750,7 +751,10 @@ static void checkCommitFrame(WKWebViewConfiguration *configuration, NSString *va
         NSString *stillPath = [[NSString stringWithUTF8String:directory] stringByAppendingPathComponent:
             [NSString stringWithFormat:@"after-move-%d.png", move]];
         char *stillError = NULL;
+        double stillRequested = CACurrentMediaTime() * 1000;
         BOOL captured = sp_capture_still((long[]){window.windowNumber}, 1, stillPath.fileSystemRepresentation, 0, &stillError);
+        double stillCompleted = CACurrentMediaTime() * 1000;
+        check(surfaceLayoutTraceStop(timeline, SURFACE_LAYOUT_TRACE_STAGES) == 1, @"the commit frame trace records its transaction");
         check(captured && stillError == NULL, [NSString stringWithFormat:@"the window is captured after move %d (%s)", move,
             stillError == NULL ? "no error" : stillError]);
         free(stillError);
@@ -760,7 +764,8 @@ static void checkCommitFrame(WKWebViewConfiguration *configuration, NSString *va
             double borderAt = borderColumn(after, x, x);
             check(!isnan(borderAt) && fabs(borderAt - x) < 0.5, [NSString stringWithFormat:
                 @"%@: after move %d the window shows the moved DOM border beside the native placement (expected x %.0f, found %.1f, "
-                "begun %.3f, presented %.3f, committed %.3f)", variant, move, x, borderAt, timeline[1], timeline[2], timeline[3]]);
+                "begun %.3f, presented %.3f, committed %.3f, flushed %.3f, still requested %.3f, completed %.3f)", variant, move, x,
+                borderAt, timeline[1], timeline[2], timeline[3], timeline[7], stillRequested, stillCompleted]);
         }
     }
     PointerDone release = {NO, SP_INPUT_REJECTED};
