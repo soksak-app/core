@@ -576,9 +576,10 @@ func (s *Shell) headButton(c *ui.Context, name, command, item string, params any
 func (s *Shell) dressHeadButton(button ui.Element, title string, disabled bool) {
 	button.Size(s.metrics.cardButton, s.metrics.cardButton).Center().Radius(s.radiusSmall()).Label(title).Tooltip(title)
 	if disabled {
-		button.Disabled(true).Opacity(s.metrics.disabledOpacity)
+		button.Disabled(true).Opacity(s.metrics.disabledOpacity).Cursor(ui.CursorNotAllowed)
 		return
 	}
+	button.Cursor(ui.CursorPointer)
 	if button.Hovered() {
 		button.Background(faded(s.palette.Fg, s.metrics.insetMix))
 	}
