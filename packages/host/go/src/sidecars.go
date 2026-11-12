@@ -685,11 +685,14 @@ func (c *Sidecars) sendAtRootGuarded(ctx context.Context, owner SidecarOwner, na
 	c.traceMessage("sidecar.send", name, surface, body)
 
 	// When this send is the first start after a connection loss, the connection notification is sent after the unlock (V5-106).
-	// The notification calls back the picture reconstruction of the owner, so it cannot run inside the mutex.
+	// The notification calls back the picture reconstruction of the owner, so it cannot run inside the mutex. It runs on a
+	// goroutine of its own, as the notification of a revival runs on the reader of the connection: the caller of a send can hold a
+	// lock that the reconstruction takes again, as the window holds the order of the drawing states while it sends one of them
+	// (Surfaces.sendImageDrawing), and a notification in the goroutine of that caller would wait for its own lock.
 	var reconnected bool
 	defer func() {
 		if reconnected {
-			c.notifyConnection(name, nil)
+			routine.Go("sidecar-reconnected", func() { c.notifyConnection(name, nil) })
 		}
 	}()
 	// Outdated UI invalidation runs after unlock; its status value is enqueued with the locked mutation.

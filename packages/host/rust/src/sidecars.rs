@@ -2263,7 +2263,15 @@ impl<O: Owner> Sidecars<O> {
             );
         }
         if restarted {
-            notify_connection(&self.core, name, Ok(()));
+            // The notification runs on a thread of its own, as the notification of a revival runs on the reader of the
+            // connection: the caller of a send can hold a lock that the reconstruction of the owner takes again, as the window
+            // holds the order of the drawing states while it sends one of them (composition::send_image_drawing_of), and a
+            // notification on the thread of that caller would wait for its own lock.
+            let core = Arc::clone(&self.core);
+            let name = name.to_string();
+            crate::routine::spawn_named("sidecar-reconnected", move || {
+                notify_connection(&core, &name, Ok(()));
+            });
         }
         if let (true, Some(changed)) = (outdated_changed, changed) {
             changed();
