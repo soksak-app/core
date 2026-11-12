@@ -1,19 +1,18 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
 import { drag } from "../app.mjs";
+import { writeStillRecording } from "./still-recording.mjs";
 
 async function runDrag(t, options) {
   const directory = mkdtempSync(join(tmpdir(), "drag-frame-identity-"));
   const frames = join(directory, "frames");
-  mkdirSync(frames);
-  // Two complete frames displayed at 0 and 16 ms, on a timebase of nanoseconds, after the steps at 4 and 12 ms of the drag.
-  writeFileSync(join(frames, "callback-status.jsonl"), [0, 16].map((ms, index) => JSON.stringify({ sequence: index + 1, status: 0,
-    frame: `frame-${index + 1}.bgra`, displayTime: String(ms * 1e6), machTimebaseNumerator: 1, machTimebaseDenominator: 1 }))
-    .join("\n") + "\n");
+  // The 4096 stills of a recording at 8ms on a display of 125 Hz: the first three, taken until 16ms, show the steps at 4 and
+  // 12ms of the drag, and the rest were stopped.
+  const stopped = writeStillRecording(frames, { gap: 8, until: 4095 * 8, stoppedAt: 3, changes: [4, 12] });
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const calls = [];
   const stoppedIdentity = { manifest: join(frames, "frame-identities", "manifest.json"), status: "complete" };
@@ -21,21 +20,14 @@ async function runDrag(t, options) {
     app: { name: "wailsv3" },
     // The connection of the session, which holds the covered drawing of its windows (holdCovered).
     client: { endpoint: { pid: 4242 } },
-    get: async () => ({ active: false, occluded: false }),
+    get: async () => ({ active: false, occluded: false, refreshRate: 125 }),
     presented: async () => ({ displayed: 12 }),
     trackRecording() {},
     request: async (method, params) => {
       if (method === "diagnostics.window.draw-covered") return null;
       calls.push({ method, params });
       if (method === "diagnostics.drag") return { frames, took: 100, asked: 100, ticks: [4, 12], layouts: [] };
-      if (method === "diagnostics.capture.stop") return {
-        frames,
-        callbackStatus: join(frames, "callback-status.jsonl"),
-        count: 2,
-        limited: false,
-        longestGap: 16,
-        frameIdentity: stoppedIdentity,
-      };
+      if (method === "diagnostics.capture.stop") return { ...stopped, frameIdentity: stoppedIdentity };
       throw new Error(`unexpected method ${method}`);
     },
   };
@@ -47,15 +39,15 @@ test("drag forwards opt-in frame identity and preserves the stop result", { time
   const { calls, result, stoppedIdentity } = await runDrag(t, { capture: true, frameIdentity: true });
   assert.deepEqual(calls[0], {
     method: "diagnostics.drag",
-    params: { axis: "x", line: 0, dx: 10, dy: 0, ms: 100, times: 1, capture: true, frameIdentity: true },
+    params: { axis: "x", line: 0, dx: 10, dy: 0, ms: 100, times: 1, capture: { gap: 8, frames: 4096 }, frameIdentity: true },
   });
   assert.deepEqual(result.frameIdentity, stoppedIdentity);
 });
 
-test("drag preserves the legacy request when frame identity is disabled", { timeout: 5000 }, async (t) => {
+test("drag asks for no frame identity when frame identity is disabled", { timeout: 5000 }, async (t) => {
   const { calls, result } = await runDrag(t, { capture: true });
   assert.deepEqual(calls[0].params, {
-    axis: "x", line: 0, dx: 10, dy: 0, ms: 100, times: 1, capture: true,
+    axis: "x", line: 0, dx: 10, dy: 0, ms: 100, times: 1, capture: { gap: 8, frames: 4096 },
   });
   assert.equal(Object.hasOwn(result, "frameIdentity"), false);
 });

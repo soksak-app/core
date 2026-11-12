@@ -245,6 +245,7 @@ test("probe body fails", async (t) => {
   let activeFrames;
   const client = { endpoint: { pid: process.pid }, request: async (method) => {
     if (method === "diagnostics.window.draw-covered") return null;
+    if (method === "status.get") return { refreshRate: 120 };
     if (method === "diagnostics.capture.start") {
       activeFrames = join(captures, "capture-1");
       mkdirSync(activeFrames);

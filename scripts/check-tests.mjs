@@ -679,7 +679,7 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/test/shown-changes.test.mjs", id: "owe reads the clock of the recordings in milliseconds" },
       { file: "packages/window-check/test/recording.test.mjs", id: "a drag whose window stays unchanged before its first step, between its round trips and after its last step passes" },
       { file: "packages/window-check/test/recording.test.mjs", id: "a drag step that waits longer than the limit for a frame fails and names what the host did in that time" },
-      { file: "packages/window-check/test/recording.test.mjs", id: "a drag step after the last recorded frame fails" },
+      { file: "packages/window-check/test/recording.test.mjs", id: "a drag step after the last change that the recording shows fails" },
       { file: "packages/window-check/test/recording.test.mjs", id: "a captured drag whose reply has no step times fails" },
       { file: "packages/window-check/test/drag-measurement.test.mjs", id: "drag cadence ends at the first shown frame after the last step" },
     ],
