@@ -7,6 +7,7 @@
 #import "capture.h"
 #import "image_region.h"
 #import "input_inject.h"
+#import "input_virtual.h"
 #import "support/capture_frame.m"
 #import "support/event_wait.h"
 #import "webview_geometry.h"
@@ -602,11 +603,17 @@ static double borderColumn(NSBitmapImageRep *still, double from, double to) {
     return NAN;
 }
 
-typedef struct { BOOL done; sp_input_result result; } PointerDone;
+// held keeps the buttons that AppKit reported and the frontmost application of a rejection for a button held.
+typedef struct { BOOL done; sp_input_result result; unsigned long long mask; int pid; char front[256]; } PointerDone;
 
 static void pointerDone(void *context, sp_input_result result, const sp_input_held *held) {
     PointerDone *state = context;
     state->result = result;
+    if (held) {
+        state->mask = held->mask;
+        state->pid = held->pid;
+        snprintf(state->front, sizeof state->front, "%s", held->bundleIdentifier ? held->bundleIdentifier : "");
+    }
     state->done = YES;
 }
 
@@ -772,7 +779,8 @@ static void checkCommitFrame(WKWebViewConfiguration *configuration, NSString *va
     sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 220, 100, 3, 0, 0, 0, 1, pointerDone, &release);
     eventWait(@"the release of the drag is delivered", ^BOOL { return release.done; });
     check(release.result == SP_INPUT_DELIVERED, [NSString stringWithFormat:@"%@: the release of the drag is delivered to the main page "
-        "(result %d)", variant, (int)release.result]);
+        "(result %d, buttons %llu, frontmost %d %s, virtual key window %d)", variant, (int)release.result, release.mask, release.pid,
+        release.front, (int)sp_input_virtual_any()]);
     int count = sp_capture_stop(timeline[3], 0);
     const char *captureError = sp_capture_error();
     check(count >= 1 && !sp_capture_limited() && captureError[0] == '\0', [NSString stringWithFormat:
