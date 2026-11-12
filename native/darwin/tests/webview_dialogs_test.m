@@ -89,6 +89,20 @@ static void check(BOOL condition, NSString *message) {
 }
 @end
 
+// A navigation delegate of a framework that decides each navigation, as the delegate of wry does. It counts its decisions.
+@interface DecidingDelegate : NSObject <WKNavigationDelegate>
+@property (nonatomic) NSInteger decided;
+@end
+
+@implementation DecidingDelegate
+- (void)webView:(WKWebView *)webView decidePolicyForNavigationAction:(WKNavigationAction *)action
+    decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
+    (void)webView; (void)action;
+    self.decided += 1;
+    decisionHandler(WKNavigationActionPolicyAllow);
+}
+@end
+
 // One request that a hold received.
 static NSMutableArray<NSDictionary *> *requests;
 static NSMutableArray<NSNumber *> *numbers;
@@ -267,6 +281,25 @@ int main(void) { @autoreleasepool {
     check(observing.finished && second != nil && [contents([downloads stringByAppendingPathComponent:suggested]) isEqual:@"taken"]
         && [contents([downloads stringByAppendingPathComponent:second]) isEqual:content],
         [NSString stringWithFormat:@"without a framework that places it a download goes into the download folder and keeps the file there (%@)", saved]);
+
+    // WebKit keeps calling the decision method of a framework delegate that is gone, as when the framework releases its delegate
+    // while its web view closes: the route decides the navigation as a web view without that method, so the page loads, where a
+    // decision handler that no one calls ends the process.
+    DecidingDelegate *deciding = [DecidingDelegate new];
+    WKWebView *decidedView = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 300, 400)] autorelease];
+    decidedView.navigationDelegate = deciding;
+    [window.contentView addSubview:decidedView];
+    sp_webview_route_dialogs(decidedView);
+    [decidedView loadFileURL:[NSURL fileURLWithPath:page] allowingReadAccessToURL:[NSURL fileURLWithPath:temporary]];
+    eventWait(@"the page that the framework delegate decides", ^BOOL{ return [decidedView.title isEqual:@"ready"] && !decidedView.loading; });
+    check(deciding.decided > 0, [NSString stringWithFormat:@"the route gives the navigation to the framework delegate that decides it (%ld decisions)",
+        (long)deciding.decided]);
+    [deciding release];
+    [decidedView evaluateJavaScript:@"document.title = 'reloading'" completionHandler:nil];
+    eventWait(@"the title before the reload", ^BOOL{ return [decidedView.title isEqual:@"reloading"]; });
+    [decidedView reload];
+    eventWait(@"the reload without the framework delegate", ^BOOL{ return [decidedView.title isEqual:@"ready"] && !decidedView.loading; });
+    check([decidedView.title isEqual:@"ready"], @"a navigation whose framework delegate is gone is decided by the route and loads");
 
     [window close];
     if (failures) keepTemporaryFolder(temporary);

@@ -8948,6 +8948,8 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/dialog.rs", symbol: "pub fn choice(request: &Request, answer: &Answer) -> Result<Vec<String>, String> {" },
       { file: "packages/host/rust/src/exposure.rs", symbol: "pub fn dialog_answer(" },
       { file: "native/darwin/src/webview_dialogs.m", symbol: "void sp_dialog_answer(" },
+      { file: "native/darwin/src/webview_dialogs.m", symbol: "    return selector == @selector(webView:decidePolicyForNavigationAction:decisionHandler:) ||" },
+      { file: "native/darwin/src/webview_dialogs.m", symbol: "    decisionHandler(WKPermissionDecisionPrompt);" },
     ],
     tests: [
       { file: "native/darwin/tests/window_facts_test.m", id: "a window without a sheet reports no sheet" },
@@ -8982,6 +8984,8 @@ const FEATURE_LINKS = [
       { file: "native/darwin/tests/webview_dialogs_test.m", id: "the answer of a held download returns after it replaced the chosen file (%@, %@)" },
       { file: "native/darwin/tests/webview_dialogs_test.m", id: "without a hold a download goes where the framework puts it" },
       { file: "native/darwin/tests/webview_dialogs_test.m", id: "without a framework that places it a download goes into the download folder and keeps the file there (%@)" },
+      { file: "native/darwin/tests/webview_dialogs_test.m", id: "the route gives the navigation to the framework delegate that decides it (%ld decisions)" },
+      { file: "native/darwin/tests/webview_dialogs_test.m", id: "a navigation whose framework delegate is gone is decided by the route and loads" },
       { file: "packages/host/rust/src/dialog_test.rs", id: "a_watched_window_holds_the_save_and_folder_panels_of_the_host" },
       { file: "packages/host/rust/src/dialog_test.rs", id: "the_end_of_the_watch_cancels_the_held_dialogs" },
       { file: "packages/host/rust/src/dialog_test.rs", id: "an_answer_passes_the_checks_of_the_panel" },
@@ -8990,7 +8994,7 @@ const FEATURE_LINKS = [
       { file: "e2e/file-place.test.mjs", id: "core.file.place asks host.dialog for the place of the name and answers it relative to the project root, refuses a place outside the root and answers null on a cancel" },
       { file: "e2e/modal.test.mjs", id: "the debug timeline selects rows, reports the count and the warning of the save, and saves the selected rows through host.dialog" },
     ],
-    expected: "host.window reports the kind and frame of the sheet attached to a window and notifies its watchers when the sheet begins and ends. A panel is the person's: the emulated input of it is refused with a reason that names host.dialog. While a client watches host.dialog of a window, the save and folder panels of the host, the file inputs and the downloads of its pages wait as requests that the client answers through input.dialog.answer with the checks of the panel of a person, and the end of the watch cancels them, so the checks of the save of the debug view, of the save of the selected rows of the debug timeline and of the place of a new document answer them in the default run, with no check that waits for a person.",
+    expected: "host.window reports the kind and frame of the sheet attached to a window and notifies its watchers when the sheet begins and ends. A panel is the person's: the emulated input of it is refused with a reason that names host.dialog. While a client watches host.dialog of a window, the save and folder panels of the host, the file inputs and the downloads of its pages wait as requests that the client answers through input.dialog.answer with the checks of the panel of a person, and the end of the watch cancels them, so the checks of the save of the debug view, of the save of the selected rows of the debug timeline and of the place of a new document answer them in the default run, with no check that waits for a person. The routes of the dialogs answer each delegate method with a handler themselves and decide as a web view without that method when the framework delegate is gone, so a navigation of a web view whose framework released its delegate loads instead of ending the process.",
     levels: ["native", "unit", "application"],
   },
   {

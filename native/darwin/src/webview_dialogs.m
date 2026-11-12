@@ -250,10 +250,26 @@ static BOOL isAttachment(WKNavigationResponse *response) {
 }
 
 @implementation SPNavigationRoute
+// WebKit reads which methods the delegate implements when the delegate is set, so it keeps calling a method of the framework delegate
+// after that delegate is gone, as when the framework releases it while its web view closes. A forwarded message without its receiver
+// is discarded, and a discarded decision handler ends the process (CompletionHandlerCallChecker), so the route answers each method
+// with a handler itself and decides as a web view without that delegate method when the framework delegate is gone.
 - (BOOL)handles:(SEL)selector {
-    return selector == @selector(webView:decidePolicyForNavigationResponse:decisionHandler:) ||
+    return selector == @selector(webView:decidePolicyForNavigationAction:decisionHandler:) ||
+        selector == @selector(webView:decidePolicyForNavigationResponse:decisionHandler:) ||
         selector == @selector(webView:navigationAction:didBecomeDownload:) ||
         selector == @selector(webView:navigationResponse:didBecomeDownload:);
+}
+
+- (void)webView:(WKWebView *)webView decidePolicyForNavigationAction:(WKNavigationAction *)action
+    decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
+    id current = self.target;
+    if ([current respondsToSelector:_cmd]) {
+        [current webView:webView decidePolicyForNavigationAction:action decisionHandler:decisionHandler];
+        return;
+    }
+    // default: a web view without the delegate method allows every navigation.
+    decisionHandler(WKNavigationActionPolicyAllow);
 }
 
 - (void)webView:(WKWebView *)webView decidePolicyForNavigationResponse:(WKNavigationResponse *)response
@@ -285,8 +301,22 @@ static BOOL isAttachment(WKNavigationResponse *response) {
 @end
 
 @implementation SPPanelRoute
+// The route answers each method with a handler itself, as the navigation route does.
 - (BOOL)handles:(SEL)selector {
-    return selector == @selector(webView:runOpenPanelWithParameters:initiatedByFrame:completionHandler:);
+    return selector == @selector(webView:runOpenPanelWithParameters:initiatedByFrame:completionHandler:) ||
+        selector == @selector(webView:requestMediaCapturePermissionForOrigin:initiatedByFrame:type:decisionHandler:);
+}
+
+- (void)webView:(WKWebView *)webView requestMediaCapturePermissionForOrigin:(WKSecurityOrigin *)origin
+    initiatedByFrame:(WKFrameInfo *)frame type:(WKMediaCaptureType)type decisionHandler:(void (^)(WKPermissionDecision))decisionHandler {
+    id current = self.target;
+    if ([current respondsToSelector:_cmd]) {
+        [current webView:webView requestMediaCapturePermissionForOrigin:origin initiatedByFrame:frame type:type
+            decisionHandler:decisionHandler];
+        return;
+    }
+    // default: a web view without the delegate method prompts the person.
+    decisionHandler(WKPermissionDecisionPrompt);
 }
 
 - (void)webView:(WKWebView *)webView runOpenPanelWithParameters:(WKOpenPanelParameters *)parameters
