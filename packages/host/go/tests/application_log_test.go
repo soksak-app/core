@@ -155,6 +155,102 @@ func TestStartStandardErrorWritesTheRunRecordAsAnEventAndTakesTheStandardErrorOf
 	}
 }
 
+// crashOutputEndChild is the environment variable that tells the child process the configuration directory and whether the crash
+// file of its run holds output before the normal exit ("empty" or "written").
+const crashOutputEndChild = "SOKSAK_CRASH_OUTPUT_END_CHILD"
+
+// runCrashOutputEnd starts this test binary as a host process that opens its standard error and crash files, writes to the crash
+// file when written is true, and ends normally through EndCrashOutput; it returns the configuration directory.
+func runCrashOutputEnd(t *testing.T, test string, written bool) string {
+	t.Helper()
+	config := t.TempDir()
+	state := "empty"
+	if written {
+		state = "written"
+	}
+	command := exec.Command(os.Args[0], "-test.run=^"+test+"$")
+	command.Env = append(os.Environ(), crashOutputEndChild+"="+state+":"+config)
+	if output, err := command.Output(); err != nil {
+		t.Fatalf("child ended with %v, output %q", err, output)
+	}
+	return config
+}
+
+// crashOutputEndInChild runs the host side of runCrashOutputEnd and reports whether this process is that child.
+func crashOutputEndInChild() bool {
+	value := os.Getenv(crashOutputEndChild)
+	if value == "" {
+		return false
+	}
+	state, config, _ := strings.Cut(value, ":")
+	fail := func(err error) {
+		os.Stdout.WriteString(err.Error() + "\n")
+		os.Exit(2)
+	}
+	log, err := host.StartHostEventLog(config)
+	if err != nil {
+		fail(err)
+	}
+	host.UseHostEventLog(log)
+	if err := host.StartStandardError(config, "com.soksak.test"); err != nil {
+		fail(err)
+	}
+	if state == "written" {
+		file, err := os.OpenFile(host.CrashOutputPath(config), os.O_WRONLY|os.O_APPEND, 0)
+		if err != nil {
+			fail(err)
+		}
+		if _, err := file.WriteString("fatal error: output of an earlier fault\n"); err != nil {
+			fail(err)
+		}
+		if err := file.Close(); err != nil {
+			fail(err)
+		}
+	}
+	if err := host.EndCrashOutput(config); err != nil {
+		fail(err)
+	}
+	if err := log.Flush(); err != nil {
+		fail(err)
+	}
+	return true
+}
+
+// A normal exit removes the crash file of its run when no fatal error wrote it, so the logs folder keeps a crash file only for a run
+// that crashed; the standard error file stays (docs/spec/logging.md#files).
+func TestANormalExitRemovesTheEmptyCrashFileOfItsRun(t *testing.T) {
+	if crashOutputEndInChild() {
+		return
+	}
+	config := runCrashOutputEnd(t, "TestANormalExitRemovesTheEmptyCrashFileOfItsRun", false)
+	crash, err := filepath.Glob(filepath.Join(config, "logs", "host-*.crash"))
+	if err != nil || len(crash) != 0 {
+		t.Fatalf("crash files after a normal exit %v, %v", crash, err)
+	}
+	stderr, err := filepath.Glob(filepath.Join(config, "logs", "host-*.stderr"))
+	if err != nil || len(stderr) != 1 {
+		t.Fatalf("stderr files %v, %v", stderr, err)
+	}
+}
+
+func TestANormalExitKeepsACrashFileThatHoldsOutput(t *testing.T) {
+	if crashOutputEndInChild() {
+		return
+	}
+	config := runCrashOutputEnd(t, "TestANormalExitKeepsACrashFileThatHoldsOutput", true)
+	crash, err := filepath.Glob(filepath.Join(config, "logs", "host-*.crash"))
+	if err != nil || len(crash) != 1 {
+		t.Fatalf("crash files after a normal exit %v, %v", crash, err)
+	}
+	data, err := os.ReadFile(crash[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(data); got != "fatal error: output of an earlier fault\n" {
+		t.Fatalf("crash file %q", got)
+	}
+}
+
 // contract: log.error.line-form
 func TestLogErrorWritesAnErrorEventToTheEventLog(t *testing.T) {
 	if config := os.Getenv(standardErrorChild); config != "" {

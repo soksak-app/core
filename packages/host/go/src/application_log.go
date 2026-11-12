@@ -174,3 +174,9 @@ func StartStandardError(config, identifier string) error {
 	LogInfo("run", fmt.Sprintf("%s pid %d", identifier, os.Getpid()))
 	return nil
 }
+
+// EndCrashOutput ends the crash output of this run at a normal exit (docs/spec/logging.md#files). It changes nothing yet: the crash
+// file of the run stays, empty, after a normal exit.
+func EndCrashOutput(config string) error {
+	return nil
+}
