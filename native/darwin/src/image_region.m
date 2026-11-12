@@ -268,6 +268,42 @@ static SPImageRegion *spRegionAtWindowPoint(NSWindow *window, NSPoint windowPoin
     return nil;
 }
 
+// The tokens of the press origins of a window whose press reached the page of the image region under it, by button. A region
+// does not take the pointer (its hitTest: is nil), so a press inside its bounds reaches its page only where no other view
+// takes the press first, as a boundary drawn over the edge of the region does.
+static char spPagePressesKey;
+
+// The web view that the press at windowPoint of window reaches: AppKit sends the press to the view that the content view
+// hit-tests there, and the page is the web view that contains that view.
+static WKWebView *spPressedPage(NSWindow *window, NSPoint windowPoint) {
+    NSView *content = window.contentView;
+    NSView *hit = [content hitTest:content.superview ? [content.superview convertPoint:windowPoint fromView:nil] : windowPoint];
+    while (hit && ![hit isKindOfClass:WKWebView.class]) hit = hit.superview;
+    return (WKWebView *)hit;
+}
+
+// Records whether the press of the origin token reached the page of the region at its point, for its release.
+static void spRecordPagePress(NSWindow *window, int button, uint64_t token, NSPoint windowPoint) {
+    NSMutableDictionary *presses = objc_getAssociatedObject(window, &spPagePressesKey);
+    if (!presses) {
+        presses = [NSMutableDictionary dictionary];
+        objc_setAssociatedObject(window, &spPagePressesKey, presses, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    SPImageRegion *region = spRegionAtWindowPoint(window, windowPoint);
+    WKWebView *page = region.webSurface ? surfaceWebView(region.webSurface) : nil;
+    if (page && spPressedPage(window, windowPoint) == page) presses[@(button)] = @(token);
+    else [presses removeObjectForKey:@(button)];
+}
+
+// Whether the press of the origin token reached the page of the region at its point. It forgets the press.
+static BOOL spTakePagePress(NSWindow *window, int button, uint64_t token) {
+    NSMutableDictionary *presses = objc_getAssociatedObject(window, &spPagePressesKey);
+    NSNumber *recorded = presses[@(button)];
+    if (!recorded || recorded.unsignedLongLongValue != token) return NO;
+    [presses removeObjectForKey:@(button)];
+    return YES;
+}
+
 static void spEnsurePressOriginMonitor(void) {
     if (spPressOriginMonitor) return;
     NSEventMask mask = NSEventMaskLeftMouseDown | NSEventMaskRightMouseDown | NSEventMaskOtherMouseDown
@@ -279,17 +315,25 @@ static void spEnsurePressOriginMonitor(void) {
             int button = (int)event.buttonNumber;
             if (event.type == NSEventTypeLeftMouseDown || event.type == NSEventTypeRightMouseDown
                 || event.type == NSEventTypeOtherMouseDown) {
-                sp_input_press_origin_set(window, button, event.locationInWindow.x, event.locationInWindow.y);
+                uint64_t token = sp_input_press_origin_set(window, button, event.locationInWindow.x, event.locationInWindow.y);
+                spRecordPagePress(window, button, token, event.locationInWindow);
             } else {
                 double x = 0, y = 0;
                 uint64_t token = 0;
                 if (!sp_input_press_origin_point(window, button, &x, &y, &token)) return event;
+                BOOL pagePress = spTakePagePress(window, button, token);
                 SPImageRegion *region = spRegionAtWindowPoint(window, NSMakePoint(x, y));
                 if (region && region.webSurface) {
                     WKWebView *webView = surfaceWebView(region.webSurface);
                     if (!webView) {
                         sp_log_error("image region", "the press-origin surface has no page webview for release receipt");
                         sp_input_press_origin_clear(window, button, token);
+                    } else if (!pagePress) {
+                        // The press reached another view, as a boundary over the edge of the region: the page receives
+                        // neither the press nor its release, so no receipt of the release is awaited.
+                        dispatch_async(dispatch_get_main_queue(), ^{
+                            sp_input_press_origin_clear(window, button, token);
+                        });
                     } else {
                         bool active = false, key = false, virtualKey = false;
                         sp_input_press_origin_state(window, button, &active, &key, &virtualKey);

@@ -650,8 +650,10 @@ const FEATURE_LINKS = [
       { file: "native/darwin/src/window_facts.m", symbol: "void *sp_window_facts_begin(void *handle, void *surfaceView, long *orderWindow) {" },
       { file: "native/darwin/src/host_api_window.m", symbol: "    void *read = ON_MAIN(void *, sp_window_facts_begin((void *)window, sp_window_composition((void *)window), &orderWindow));" },
       { file: "packages/host/rust/src/surfaces.rs", symbol: "fn commit_presentation<T>(" },
+      { file: "native/darwin/src/image_region.m", symbol: "static void spRecordPagePress(NSWindow *window, int button, uint64_t token, NSPoint windowPoint) {" },
     ],
     tests: [
+      { file: "native/darwin/tests/press_release_test.m", id: "a release of a press that a boundary over a region took waits for no receipt of the page " },
       { file: "packages/window-check/test/recording.test.mjs", id: "a recording whose start names no recorded window is told, and its judgment fails" },
       { file: "packages/window-check/test/recording.test.mjs", id: "a recording of the display takes no recorded window" },
       { file: "packages/window-check/test/recording.test.mjs", id: "a captured drag whose reply names no recorded window tells it" },

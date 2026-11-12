@@ -137,6 +137,59 @@ static void checkHiddenSurfaceRegion(void) {
     reallyActive = NO;
 }
 
+// A view over the edge of an image region, as a boundary between cards, that takes the press itself.
+@interface SPBoundary : NSView
+@property int presses;
+@property int releases;
+@end
+@implementation SPBoundary
+- (BOOL)acceptsFirstMouse:(NSEvent *)event { return YES; }
+- (void)mouseDown:(NSEvent *)event { self.presses++; }
+- (void)mouseUp:(NSEvent *)event { self.releases++; }
+@end
+
+// A press that a view over the edge of a region takes reaches neither the page of the region nor, with it, its release, so
+// the release waits for no receipt of that page and leaves no record of a release that the page did not receive.
+static void checkBoundaryOverRegion(void) {
+    reallyActive = YES;
+    NSWindow *window = [[SPKeyWindow alloc] initWithContentRect:NSMakeRect(100, 100, 500, 400)
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+    [window setReleasedWhenClosed:NO];
+    WKWebView *main = [[[WKWebView alloc] initWithFrame:window.contentView.bounds] autorelease];
+    [window.contentView addSubview:main];
+    [window orderBack:nil];
+    void *root = sp_window_set_main_webview(main.window, main);
+    WKWebView *page = [[[SPFirstClickPage alloc] initWithFrame:NSMakeRect(0, 0, 500, 400)] autorelease];
+    [window.contentView addSubview:page];
+    void *surface = sp_surface_create(root);
+    webviewInputRegister(page);
+    sp_surface_place_view(surface, page);
+    loadPage(page, @"<!doctype html><style>html,body{margin:0;height:100%}</style>");
+    webviewSetFrame(surface, 0, 0, 500, 400);
+    webviewSetSurfaceHidden(surface, false);
+    sp_region_place(sp_region_create(surface, "edge", testEvent, NULL), 100, 150, 100, 50, true);
+    awaitLoad(page);
+    // The boundary covers the band from 170 to 180 of the region, whose top is at 150, on top of every other view.
+    SPBoundary *boundary = [[[SPBoundary alloc] initWithFrame:NSMakeRect(100, 400 - 180, 100, 10)] autorelease];
+    [window.contentView addSubview:boundary positioned:NSWindowAbove relativeTo:nil];
+    int down = 0, up = 0;
+    int *downAnswer = &down, *upAnswer = &up;
+    NSString *records = capturedRecords(^{
+        sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 150, 175, 1, 0, 0, 0, 1, pressDone, downAnswer);
+        eventWait(@"the press answers", ^BOOL { return *downAnswer != 0; });
+        sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 150, 175, 3, 0, 0, 0, 1, pressDone, upAnswer);
+        eventWait(@"the release answers and its press origin ends", ^BOOL { return *upAnswer != 0 && pressOriginEnded(window); });
+    });
+    check(down == SP_INPUT_DELIVERED + 1 && up == SP_INPUT_DELIVERED + 1 && boundary.presses == 1 && boundary.releases == 1,
+        [NSString stringWithFormat:@"the press and the release reach the boundary over the region (%d, %d, %d, %d)", down, up,
+            boundary.presses, boundary.releases]);
+    check(![records containsString:@"paired pointer release"] && ![records containsString:@"wait for pointerup ended"],
+        [NSString stringWithFormat:@"a release of a press that a boundary over a region took waits for no receipt of the page "
+            @"of the region (%@)", records]);
+    [window close];
+    reallyActive = NO;
+}
+
 int main(void) { @autoreleasepool {
     method_setImplementation(class_getInstanceMethod(NSApplication.class, @selector(isActive)), (IMP)testIsActive);
     [NSApplication sharedApplication];
@@ -198,5 +251,6 @@ int main(void) { @autoreleasepool {
     sp_input_press_origin_clear(window, 0, token);
     sp_input_virtual_end("the check of the press state ended");
     checkHiddenSurfaceRegion();
+    checkBoundaryOverRegion();
     return failures ? 1 : 0;
 } }
