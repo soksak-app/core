@@ -16,9 +16,10 @@ const (
 )
 
 // FrameRecord is the record of one frame. The times are nanoseconds of the host event clock; a Request of 0 tells that the frame
-// requested no presentation.
+// requested no presentation, and a Committed of 0 that it committed no command buffer.
 type FrameRecord struct {
 	Start, Request, End, DrawableWait    uint64
+	Committed                            uint64
 	Damage, Nodes                        int
 	Outcome                              string
 	CommandBuffer                        bool
@@ -93,6 +94,10 @@ func (w *WindowFrames) Commit(kind string, at uint64) {
 	}
 	EmitHost(LevelDebug, "host.frame.commit", map[string]any{"window": w.window, "kind": kind, "commit_ns": strconv.FormatUint(at, 10)})
 }
+
+// Complete writes the record of a command buffer that completed: committed is the Committed of its frame or the time of its
+// commit outside a frame, and completed the time its completed handler ran.
+func (w *WindowFrames) Complete(committed, completed uint64) {}
 
 // OnSettled runs notify after a frame that leaves the window settled and after a frame that ends its rest: each frame changes
 // the counters of the status of the window, and a watcher hears of them when a burst of frames ends, not at each frame.

@@ -58,22 +58,31 @@ func TestFrameRecordsReachTheClassFrame(t *testing.T) {
 	frames := NewWindowFrames("main")
 	isolateTraceRecords(t)
 	frames.Frame(&FrameRecord{Start: 10, End: 40, Damage: 12, Nodes: 3, Outcome: "undamaged"})
-	frames.Frame(&FrameRecord{Start: 50, Request: 60, End: 70, DrawableWait: 5, Damage: 12, Nodes: 3, Outcome: "immediate", CommandBuffer: true, Timer: true})
+	frames.Frame(&FrameRecord{Start: 50, Request: 60, End: 70, DrawableWait: 5, Damage: 12, Nodes: 3, Outcome: "immediate", CommandBuffer: true, Committed: 61, Timer: true})
 	frames.Commit("stashed", 80)
+	frames.Complete(61, 90)
+	frames.Complete(80, 95)
 	records := bufferedTraces(t, "host.frame.record")
 	if len(records) != 2 {
 		t.Fatalf("%d frame records, want 2", len(records))
 	}
-	if records[0]["request_ns"] != nil || records[0]["start_ns"] != "10" || records[0]["outcome"] != "undamaged" {
+	if records[0]["request_ns"] != nil || records[0]["commit_ns"] != nil || records[0]["start_ns"] != "10" || records[0]["outcome"] != "undamaged" {
 		t.Fatalf("the record of a frame without a presentation: %v", records[0])
 	}
 	second := records[1]
-	if second["request_ns"] != "60" || second["end_ns"] != "70" || second["drawable_wait_ns"] != "5" || second["command_buffer"] != true || second["timer"] != true {
+	if second["request_ns"] != "60" || second["end_ns"] != "70" || second["drawable_wait_ns"] != "5" || second["command_buffer"] != true ||
+		second["commit_ns"] != "61" || second["timer"] != true {
 		t.Fatalf("the record of a frame that presented: %v", second)
 	}
 	commits := bufferedTraces(t, "host.frame.commit")
 	if len(commits) != 1 || commits[0]["kind"] != "stashed" || commits[0]["commit_ns"] != "80" || commits[0]["window"] != "main" {
 		t.Fatalf("the commits: %v", commits)
+	}
+	// A completion names the commit of its frame or the commit outside a frame, so a reader joins it to its command buffer.
+	completes := bufferedTraces(t, "host.frame.complete")
+	if len(completes) != 2 || completes[0]["commit_ns"] != "61" || completes[0]["complete_ns"] != "90" || completes[0]["window"] != "main" ||
+		completes[1]["commit_ns"] != "80" || completes[1]["complete_ns"] != "95" {
+		t.Fatalf("the completions: %v", completes)
 	}
 }
 
