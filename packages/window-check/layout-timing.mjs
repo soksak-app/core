@@ -146,16 +146,18 @@ export function contentConvergence(frames, { end, limit = 40 }) {
 }
 
 /**
- * After a card layout change at `changedAt` (ms), the view draws its content at the new size within `limit` ms (100), by the upper
- * bound of the mapped time of its first content frame at that size. The new size is that of the last content frame, and it differs
- * from the size of the last content frame before the change.
+ * After a card layout change whose first layout began at `began` and whose first layout was sent at `changedAt` (ms), the view draws
+ * its content at the new size within `limit` ms (100) of `changedAt`, by the upper bound of the mapped time of its first content frame
+ * at that size. The frames of the change are those from `began`: the view can draw its new size before the layout that placed it is
+ * sent, and such a frame meets the limit. The new size is that of the last content frame, and it differs from the size of the last
+ * content frame before the change.
  */
-export function contentAfterChange(frames, { changedAt, limit = 100 }) {
-  const before = frames.filter(({ timeRange }) => timeRange.upperMs < changedAt).at(-1);
+export function contentAfterChange(frames, { began, changedAt, limit = 100 }) {
+  const before = frames.filter(({ timeRange }) => timeRange.upperMs < began).at(-1);
   if (before === undefined) return { took: null, limit, failures: ["the view drew no content frame before the change"] };
   const final = frames.at(-1);
   if (sameSize(before, final)) return { took: null, limit, failures: ["the view drew no new size after the change"] };
-  const drawn = frames.find((frame) => frame.timeRange.upperMs >= changedAt && sameSize(frame, final));
+  const drawn = frames.find((frame) => frame.timeRange.upperMs >= began && sameSize(frame, final));
   const took = drawn.timeRange.upperMs - changedAt;
   const failures = took > limit ? [`the view drew its new size ${took} ms after the change, more than ${limit} ms`] : [];
   return { took, limit, failures };

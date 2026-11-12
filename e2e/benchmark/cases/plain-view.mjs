@@ -28,8 +28,9 @@ export async function openPlainView(s, prepare) {
 /**
  * Under the content trace of the plain view `surface`, drags the right edge of its card `card` (with `capture`, under a recording that
  * is its log) and then makes the card 80 pt wider under the layout trace until that layout is displayed. Returns the traced content
- * frames and `{dragged, changed}`: the drag result and the sending time (sentAt) of the first layout of the card change that was
- * sent, or null.
+ * frames and `{dragged, began, changed}`: the drag result, the time the first layout of the card change began, from which the content
+ * frames are those of the change, and the sending time (sentAt) of the first layout of the change that was sent, each null without
+ * one.
  */
 export function dragAndWiden(t, s, { surface, grid, card }, { capture = false } = {}) {
   return withViewContentTrace(t, s, PLAIN_VIEW, surface, async () => {
@@ -41,7 +42,8 @@ export function dragAndWiden(t, s, { surface, grid, card }, { capture = false } 
         `card ${card.id} did not become ${width} pt wide`);
       await s.presented();
     });
-    return { dragged, changed: layouts.map(sentAt).filter((time) => time !== null).sort((a, b) => a - b)[0] ?? null };
+    const first = (times) => times.filter((time) => time !== null).sort((a, b) => a - b)[0] ?? null;
+    return { dragged, began: first(layouts.map(({ begun }) => begun)), changed: first(layouts.map(sentAt)) };
   });
 }
 

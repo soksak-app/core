@@ -19,17 +19,18 @@ for (const app of Object.values(APPS)) {
       const opened = await openPlainView(s,
         () => fresh(s, { log: { frame: "trace" }, reads: ["plugin.probeplain.view.content_frame"] }));
       const traced = await dragAndWiden(t, s, opened);
-      const { dragged, changed } = traced.action;
+      const { dragged, began, changed } = traced.action;
       const [from, end] = [dragged.ticks[0], dragged.ticks.at(-1)];
       const cadence = contentCadence(traced.contentFrames, { from, to: end });
-      // The frames of the card change are not frames of the drag.
-      const converged = contentConvergence(traced.contentFrames.filter(({ timeRange }) => changed === null
-        || timeRange.upperMs < changed), { end });
+      // The frames of the card change, from the beginning of its first layout, are not frames of the drag: the view can draw the new
+      // size before that layout is sent.
+      const converged = contentConvergence(traced.contentFrames.filter(({ timeRange }) => began === null
+        || timeRange.upperMs < began), { end });
       t.diagnostic(`${app.name}: content intervals ${JSON.stringify(cadence.intervals)} ms; final size ` +
         (converged.applicable ? `${converged.took} ms after the drag` : "equal to the last size of the drag"));
       assert.deepEqual([...cadence.failures, ...converged.failures], [], "the content frames of the drag");
       assert.ok(changed !== null, "the card size change sent no layout");
-      const after = contentAfterChange(traced.contentFrames, { changedAt: changed });
+      const after = contentAfterChange(traced.contentFrames, { began, changedAt: changed });
       t.diagnostic(`${app.name}: the new size of the card ${after.took} ms after the first layout of the change`);
       assert.deepEqual(after.failures, [], "the content frames of the card size change");
     });

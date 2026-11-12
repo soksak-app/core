@@ -106,12 +106,21 @@ test("the view draws its final size within 40 ms after the drag when that size d
 });
 
 test("a card layout change shows the content at the new size within 100 ms", () => {
-  assert.deepEqual(contentAfterChange([frame(0, 100), frame(40, 100), frame(80, 180), frame(90, 180)], { changedAt: 20 }),
+  assert.deepEqual(contentAfterChange([frame(0, 100), frame(40, 100), frame(80, 180), frame(90, 180)], { began: 20, changedAt: 20 }),
     { took: 61, limit: 100, failures: [] });
-  assert.deepEqual(contentAfterChange([frame(0, 100), frame(140, 180)], { changedAt: 20 }).failures,
+  assert.deepEqual(contentAfterChange([frame(0, 100), frame(140, 180)], { began: 20, changedAt: 20 }).failures,
     ["the view drew its new size 121 ms after the change, more than 100 ms"]);
-  assert.deepEqual(contentAfterChange([frame(0, 100), frame(40, 100)], { changedAt: 20 }).failures,
+  assert.deepEqual(contentAfterChange([frame(0, 100), frame(40, 100)], { began: 20, changedAt: 20 }).failures,
     ["the view drew no new size after the change"]);
-  assert.deepEqual(contentAfterChange([frame(40, 180)], { changedAt: 20 }).failures,
+  assert.deepEqual(contentAfterChange([frame(40, 180)], { began: 20, changedAt: 20 }).failures,
     ["the view drew no content frame before the change"]);
+});
+
+test("a content frame of a card change drawn before its first layout was sent belongs to the change", () => {
+  // The change began at 20 and its first layout was sent at 50; the view drew the new size at 40, before the sending.
+  const frames = [frame(0, 100), frame(40, 180)];
+  assert.deepEqual(contentAfterChange(frames, { began: 20, changedAt: 50 }), { took: -9, limit: 100, failures: [] });
+  // That frame is not a frame of the drag that ended at 10: the drag kept its last size.
+  assert.deepEqual(contentConvergence(frames.filter(({ timeRange }) => timeRange.upperMs < 20), { end: 10 }),
+    { applicable: false, took: null, limit: 40, failures: [] });
 });

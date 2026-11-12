@@ -28,15 +28,16 @@ for (const app of Object.values(APPS)) {
     assert.ok(summary.count > 1, "the gesture has too few source frames");
     const [from, end] = [run.ticks[0], run.ticks.at(-1)];
     const cadence = contentCadence(traced.contentFrames, { from, to: end });
-    const converged = contentConvergence(traced.contentFrames.filter(({ timeRange }) => traced.action.changed === null
-      || timeRange.upperMs < traced.action.changed), { end });
+    const { began } = traced.action;
+    const converged = contentConvergence(traced.contentFrames.filter(({ timeRange }) => began === null || timeRange.upperMs < began),
+      { end });
     t.diagnostic(`${app.name}: content intervals ${JSON.stringify(cadence.intervals)} ms; final size ` +
       (converged.applicable ? `${converged.took} ms after the drag` : "equal to the last size of the drag") +
       `; misses ${JSON.stringify([...cadence.failures, ...converged.failures])}`);
     if (traced.action.changed === null) {
       t.diagnostic(`${app.name}: the card size change sent no layout`);
     } else {
-      const changed = contentAfterChange(traced.contentFrames, { changedAt: traced.action.changed });
+      const changed = contentAfterChange(traced.contentFrames, { began, changedAt: traced.action.changed });
       t.diagnostic(`${app.name}: the new size of the card ${changed.took} ms after the first layout of the change; misses ` +
         JSON.stringify(changed.failures));
     }
