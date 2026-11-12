@@ -299,6 +299,7 @@ static void spRecordPagePress(NSWindow *window, int button, uint64_t token, NSPo
 static BOOL spTakePagePress(NSWindow *window, int button, uint64_t token) {
     NSMutableDictionary *presses = objc_getAssociatedObject(window, &spPagePressesKey);
     NSNumber *recorded = presses[@(button)];
+    // silent: NO answers that the press did not reach the page of a region; nothing failed, so nothing is recorded.
     if (!recorded || recorded.unsignedLongLongValue != token) return NO;
     [presses removeObjectForKey:@(button)];
     return YES;
