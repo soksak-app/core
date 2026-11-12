@@ -1,10 +1,11 @@
 // Injects writer capacity, window server and file write faults into the real still recording, and checks the ends of its waits. A
-// full writer fails the still without holding its request; a still requested while 8 stills wait for their image fails at its
-// request; the last still of the largest plan is written; a still 0 without an image fails the start; the stills after a slow
-// still 0 are requested before it completes; the end of a wait from another thread ends the wait of its token only; the close of
-// the recorded window ends a stop with its own reason while the main thread stays free; a scheduled stop answers its context once
-// when another window's close ends its wait; a request during a recording keeps the recording, its error and its prepared window;
-// a still request fails with its own error; and a stop keeps the earlier write error of the recording with its own.
+// still whose frame and encoded frame would pass the 256 MiB byte limit of the writer fails without holding its request, and one
+// whose bytes fit is written and gives them back; a still requested while 8 stills wait for their image fails at its request; the
+// last still of the largest plan is written; a still 0 without an image fails the start; the stills after a slow still 0 are
+// requested before it completes; the end of a wait from another thread ends the wait of its token only; the close of the recorded
+// window ends a stop with its own reason while the main thread stays free; a scheduled stop answers its context once when another
+// window's close ends its wait; a request during a recording keeps the recording, its error and its prepared window; a still
+// request fails with its own error; and a stop keeps the earlier write error of the recording with its own.
 // Capture internal state is read only by the ownership checks.
 #import "../src/capture.m"
 #import "../src/host_api_capture.m"
@@ -147,7 +148,6 @@ int main(void) { @autoreleasepool {
     [NSApp finishLaunching];
     NSString *root = temporaryFolder(@"soksak-capture-pressure-");
     prepareCaptureQueues();
-    dispatch_semaphore_t realPending = capturePending;
 
     // The still path from the image to the frame writer, with controlled writer capacity.
     SPCaptureTarget *target = [[[SPCaptureTarget alloc] init] autorelease];
@@ -158,7 +158,14 @@ int main(void) { @autoreleasepool {
     NSString *exhausted = folder(root, @"exhausted");
     SPCaptureRecording *recording = rowsRecording(exhausted, 1);
     clearCaptureError();
-    capturePending = dispatch_semaphore_create(0);
+    // The limit counts bytes: a 4x4 still reserves its frame (76 header and 64 pixel bytes) and its encoded frame (88 header bytes
+    // and an LZ4 capacity of 64 + 0 + 16 + 128), 436 bytes; the still of the 2400x1520 window of the window run reserves 29 241 531
+    // bytes, 9 of which fit in the 256 MiB limit.
+    check(kCapturePendingBytes == 268435456 && stillReservation(64) == 436 && stillReservation(2400 * 1520 * 4) == 29241531
+        && kCapturePendingBytes / stillReservation(2400 * 1520 * 4) == 9,
+        [NSString stringWithFormat:@"the writer limit is 256 MiB and a still reserves its frame and its encoded frame (%zu, %zu, %zu)",
+            kCapturePendingBytes, stillReservation(64), stillReservation(2400 * 1520 * 4)]);
+    capturePendingBytes = kCapturePendingBytes;
     // The still runs on this thread: a still that waited for writer capacity would hold it here, and the check after it is
     // reached by the return of the still.
     bool returned = false;
@@ -167,15 +174,30 @@ int main(void) { @autoreleasepool {
     check(returned, @"exhausted writer capacity never blocks the still");
     dispatch_sync(captureWriter, ^{});
     check([recording.rows[0][@"outcome"] isEqual:@"failed"]
-        && [recording.rows[0][@"error"] isEqual:@"capture pending writer capacity exceeded (64 frames)"],
+        && [recording.rows[0][@"error"] isEqual:@"capture pending writer capacity exceeded (268435456 bytes)"],
         [NSString stringWithFormat:@"exhausted writer capacity fails the still with its reason (%@)", recording.rows[0]]);
     check(strstr(sp_capture_error(), "pending writer capacity exceeded") != NULL,
         @"exhausted writer capacity reports an explicit recording error");
     check(recording.written == 0 && ![NSFileManager.defaultManager fileExistsAtPath:
         [exhausted stringByAppendingPathComponent:@"frame-0000.bgra"]], @"an exhausted writer writes no frame for the still");
-    dispatch_release(capturePending);
+    check(capturePendingBytes == kCapturePendingBytes, @"a refused still reserves no bytes");
 
-    capturePending = dispatch_semaphore_create(1);
+    // One byte short of the reservation of the still fails it; exactly its reservation admits it, and the written still gives
+    // every byte back.
+    NSString *boundary = folder(root, @"boundary");
+    recording = rowsRecording(boundary, 2);
+    clearCaptureError();
+    capturePendingBytes = kCapturePendingBytes - stillReservation(64) + 1;
+    processStill(recording, 0, target, image, mach_absolute_time(), mach_absolute_time());
+    capturePendingBytes = kCapturePendingBytes - stillReservation(64);
+    processStill(recording, 1, target, image, mach_absolute_time(), mach_absolute_time());
+    dispatch_sync(captureWriter, ^{});
+    check([recording.rows[0][@"outcome"] isEqual:@"failed"] && [recording.rows[1][@"outcome"] isEqual:@"written"]
+        && capturePendingBytes == kCapturePendingBytes - stillReservation(64),
+        [NSString stringWithFormat:@"the writer admits a still whose bytes fit and fails one byte more (%@, %@, %zu)",
+            recording.rows[0][@"outcome"], recording.rows[1][@"outcome"], capturePendingBytes]);
+    capturePendingBytes = 0;
+
     NSString *available = folder(root, @"available");
     recording = rowsRecording(available, 4096);
     clearCaptureError();
@@ -188,8 +210,7 @@ int main(void) { @autoreleasepool {
     check(strlen(sp_capture_error()) == 0 && recording.written == 2 && [recording.rows[4095][@"frame"] isEqual:@"frame-4095.bgra"]
         && [NSFileManager.defaultManager fileExistsAtPath:[available stringByAppendingPathComponent:@"frame-4095.bgra"]],
         @"the last still of a plan of 4096 is written under its index");
-    dispatch_release(capturePending);
-    capturePending = realPending;
+    check(capturePendingBytes == 0, [NSString stringWithFormat:@"the written stills give back every reserved byte (%zu)", capturePendingBytes]);
     CGImageRelease(image);
 
     // The recordings of a window through the window server of the test.

@@ -330,10 +330,10 @@ int main(void) { @autoreleasepool {
     // A still that took its image and failed after naming its colour space has no frame, so it names no colour space.
     NSString *fullDirectory = subdirectory(directory, @"writer-full");
     SPCaptureRecording *fullRecording = makeRecording(fullDirectory, 1);
-    long heldSlots = 0;
-    while (dispatch_semaphore_wait(capturePending, DISPATCH_TIME_NOW) == 0) heldSlots++;
+    size_t heldBytes = capturePendingBytes;
+    capturePendingBytes = kCapturePendingBytes;
     stillImage(fullRecording, 0, opaquePixels(8, 4, 90), 8, 4, CGRectMake(0, 0, 4, 2), stillRequested, stillCompleted);
-    for (long slot = 0; slot < heldSlots; slot++) dispatch_semaphore_signal(capturePending);
+    capturePendingBytes = heldBytes;
     NSDictionary *fullRow = nil;
     @synchronized (fullRecording) { fullRow = [[fullRecording.rows[0] copy] autorelease]; }
     check([fullRow[@"outcome"] isEqual:@"failed"] && fullRow[@"frame"] == NSNull.null

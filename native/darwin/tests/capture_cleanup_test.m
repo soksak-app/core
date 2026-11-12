@@ -82,8 +82,6 @@ int main(void) { @autoreleasepool {
     NSString *pending = [directory stringByAppendingPathComponent:@"frame-0000.bgra.partial"];
     NSString *committed = [directory stringByAppendingPathComponent:@"frame-0000.bgra"];
     prepareCaptureQueues();
-    dispatch_release(capturePending);
-    capturePending = dispatch_semaphore_create(1);
     mach_timebase_info_data_t timebase;
     mach_timebase_info(&timebase);
     // The still covers the rectangle of a target without a window list, at scale 1.
@@ -146,9 +144,7 @@ int main(void) { @autoreleasepool {
             } else if (!failOpen) check(removes == 1 && ![[NSFileManager defaultManager] fileExistsAtPath:pending],
                 @"successful cleanup removes the failed partial file");
         }
-        check(dispatch_semaphore_wait(capturePending, DISPATCH_TIME_NOW) == 0,
-            @"every file result restores pending writer capacity");
-        dispatch_semaphore_signal(capturePending);
+        check(capturePendingBytes == 0, @"every file result restores pending writer capacity");
         [recording release];
         failOpen = failWrite = failClose = failCommit = failRemove = NO;
         NSError *error = nil;

@@ -26,6 +26,8 @@
 #include <unistd.h>
 #include <compression.h>
 #include <zlib.h>
+#include <sys/mman.h>
+#include <os/lock.h>
 
 // The function that gives the image of a list of windows, looked up at each open and still through captureLookup, which a test
 // replaces with the lookup of a macOS that lacks it.
@@ -288,15 +290,57 @@ static const size_t kFrameEncodedHeader = kFrameHeader + 12;
 // (osfmk/vm/lz4.h) names it LZ4_GOFAST_SAFETY_MARGIN.
 static const size_t kLZ4OutputMargin = 128;
 
+// The bytes of the encoded frame of a still of pixels bytes: the header with the marker, the count and the checksum, and the worst
+// case of an LZ4 block with the margin that the LZ4 encoder keeps free at the end of its output (with the worst case alone, the
+// encoder failed the 64 bytes of a 4x4 still, capacity 80).
+static size_t encodedCapacity(size_t pixels) { return pixels + pixels / 255 + 16 + kLZ4OutputMargin; }
+static size_t encodedBytes(size_t pixels) { return kFrameEncodedHeader + encodedCapacity(pixels); }
+static size_t frameBytes(size_t pixels) { return kFrameHeader + pixels; }
+// The bytes that a still of pixels bytes reserves against kCapturePendingBytes: its frame and its encoded frame.
+static size_t stillReservation(size_t pixels) { return frameBytes(pixels) + encodedBytes(pixels); }
+
+// A buffer of bytes mapped from the system, not from malloc: its unmapping takes its pages out of the footprint of the process at
+// once, where the allocator kept the freed large blocks of the stills as dirty memory.
+static uint8_t *mapBuffer(size_t bytes) {
+    void *buffer = mmap(NULL, bytes, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0);
+    return buffer == MAP_FAILED ? NULL : buffer;
+}
+static void unmapBuffer(uint8_t *buffer, size_t bytes) {
+    if (buffer != NULL) munmap(buffer, bytes);
+}
+
 @class SPCaptureRecording;
 static void setCaptureError(NSString *message);
 static bool hasCaptureError(void);
 static void stillOutcome(SPCaptureRecording *recording, NSUInteger index, NSString *outcome, NSString *error, NSString *frame);
 
-// The serial queue that writes frames to disk and the upper limit of frames that wait to be written.
+// The serial queue that writes frames to disk.
 static dispatch_queue_t captureWriter;
-static dispatch_semaphore_t capturePending;
-static const long kCapturePending = 64;
+// The upper limit of the bytes that the stills waiting for the writer hold. A still reserves its frame (header and pixels) and the
+// worst case of its encoded frame (stillReservation) before it allocates either, and gives back each part when that buffer is
+// unmapped, so the limit bounds the memory of the writer whatever the size of the still. A still that finds the limit reached fails
+// instead of waiting. The value is 256 MiB: a still of the 2400x1520 window of a window run (2026-11-12) reserves 29 241 531
+// bytes, so 9 of them fit, 75 ms of stills at 120 Hz, while the writer takes a median of 2.6 ms per still of that size and a still
+// slower than that comes from a stalled machine, which no memory bound absorbs. The count limit of 64 stills that it replaces let
+// 64 such frames and one encoded frame wait, 949 MB, and the host reached 805 MB of footprint with 668 MB of freed stills that
+// the allocator kept. The largest display still, 7680x4320, reserves 265 941 540 bytes and still fits.
+static const size_t kCapturePendingBytes = 256u << 20;
+static os_unfair_lock capturePendingLock = OS_UNFAIR_LOCK_INIT;
+static size_t capturePendingBytes;
+
+// Reserves bytes for a still, or answers false without waiting when they would pass kCapturePendingBytes.
+static bool reservePending(size_t bytes) {
+    os_unfair_lock_lock(&capturePendingLock);
+    bool admitted = bytes <= kCapturePendingBytes && capturePendingBytes <= kCapturePendingBytes - bytes;
+    if (admitted) capturePendingBytes += bytes;
+    os_unfair_lock_unlock(&capturePendingLock);
+    return admitted;
+}
+static void releasePending(size_t bytes) {
+    os_unfair_lock_lock(&capturePendingLock);
+    capturePendingBytes -= bytes;
+    os_unfair_lock_unlock(&capturePendingLock);
+}
 // The upper limit of stills whose image the window server has not given yet. A still takes a median of 0.5 ms, so only a still
 // that takes longer than 8 gaps reaches it; a still requested at the limit fails instead of adding a request to a window server
 // that has not answered the earlier ones.
@@ -313,7 +357,6 @@ static void prepareCaptureQueues(void) {
     static dispatch_once_t once;
     dispatch_once(&once, ^{
         captureWriter = dispatch_queue_create("sp.capture.writer", DISPATCH_QUEUE_SERIAL);
-        capturePending = dispatch_semaphore_create(kCapturePending);
         captureRequests = dispatch_queue_create("sp.capture.requests",
             dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL, QOS_CLASS_USER_INTERACTIVE, 0));
         captureWorkers = dispatch_queue_create("sp.capture.stills",
@@ -810,10 +853,8 @@ static void writeFrame(SPCaptureRecording *recording, NSUInteger index, uint8_t 
     dispatch_async(captureWriter, ^{
         uint64_t writerStarted = captureTicks();
         NSString *failure = nil;
-        // The worst case of an LZ4 block and the margin that the LZ4 encoder keeps free at the end of its output: with the worst
-        // case alone, the encoder failed the 64 bytes of a 4x4 still (capacity 80).
-        size_t capacity = pixels + pixels / 255 + 16 + kLZ4OutputMargin;
-        uint8_t *encoded = capacity <= UINT32_MAX ? malloc(kFrameEncodedHeader + capacity) : NULL;
+        size_t capacity = encodedCapacity(pixels);
+        uint8_t *encoded = capacity <= UINT32_MAX ? mapBuffer(encodedBytes(pixels)) : NULL;
         size_t compressed = 0;
         if (encoded != NULL) {
             memcpy(encoded, frame, kFrameHeader);
@@ -825,7 +866,8 @@ static void writeFrame(SPCaptureRecording *recording, NSUInteger index, uint8_t 
             memcpy(encoded + kFrameHeader + 4, &count, sizeof count);
             memcpy(encoded + kFrameHeader + 8, &checksum, sizeof checksum);
         }
-        free(frame);
+        unmapBuffer(frame, frameBytes(pixels));
+        releasePending(frameBytes(pixels));
         if (encoded == NULL || compressed == 0) {
             failure = [NSString stringWithFormat:@"the frame could not be losslessly compressed (capacity %zu)", capacity];
         } else {
@@ -849,12 +891,12 @@ static void writeFrame(SPCaptureRecording *recording, NSUInteger index, uint8_t 
                     failure = [failure stringByAppendingFormat:@"; %@", fileFailure(@"remove", pending, errno)];
             }
         }
-        free(encoded);
+        unmapBuffer(encoded, encodedBytes(pixels));
+        releasePending(encodedBytes(pixels));
         @synchronized (recording) {
             recording.rows[index][@"writerStartTime"] = tickString(writerStarted);
             recording.rows[index][@"writerCompleteTime"] = tickString(captureTicks());
         }
-        dispatch_semaphore_signal(capturePending);
         if (failure != nil) stillOutcome(recording, index, @"failed", [NSString stringWithFormat:@"the frame was not written: %@", failure], nil);
         else stillOutcome(recording, index, @"written", nil, name);
     });
@@ -908,10 +950,22 @@ static void processStill(SPCaptureRecording *recording, NSUInteger index, SPCapt
         return;
     }
     size_t stride = width * 4, pixels = stride * height;
-    uint8_t *frame = pixels / height == stride ? malloc(kFrameHeader + pixels) : NULL;
+    if (pixels / height != stride || pixels > SIZE_MAX / 3) {
+        stillOutcome(recording, index, @"failed", [NSString stringWithFormat:@"the image of %zux%zu pixels is too large", width, height], nil);
+        return;
+    }
+    // A still that waits for the writer would move the requests after it, so a still whose frame and encoded frame would pass the
+    // byte limit of the writer fails instead, before it allocates them.
+    if (!reservePending(stillReservation(pixels))) {
+        stillOutcome(recording, index, @"failed",
+            [NSString stringWithFormat:@"capture pending writer capacity exceeded (%zu bytes)", kCapturePendingBytes], nil);
+        return;
+    }
+    uint8_t *frame = mapBuffer(frameBytes(pixels));
     NSString *drawFailure = frame == NULL ? @"no memory for the frame" : drawOwnSpace(image, frame + kFrameHeader, width, height, stride);
     if (drawFailure != nil) {
-        free(frame);
+        unmapBuffer(frame, frameBytes(pixels));
+        releasePending(stillReservation(pixels));
         stillOutcome(recording, index, @"failed", [NSString stringWithFormat:@"the image of %zux%zu pixels could not be drawn: %@",
             width, height, drawFailure], nil);
         return;
@@ -920,7 +974,8 @@ static void processStill(SPCaptureRecording *recording, NSUInteger index, SPCapt
     NSString *profileFailure = nil;
     NSString *profile = colorProfileFile(recording, space, &profileFailure);
     if (profile == nil) {
-        free(frame);
+        unmapBuffer(frame, frameBytes(pixels));
+        releasePending(stillReservation(pixels));
         stillOutcome(recording, index, @"failed", profileFailure, nil);
         return;
     }
@@ -941,13 +996,6 @@ static void processStill(SPCaptureRecording *recording, NSUInteger index, SPCapt
         NSMutableDictionary *row = recording.rows[index];
         row[@"writeStartTime"] = tickString(processStarted);
         row[@"writeCompleteTime"] = tickString(captureTicks());
-    }
-    // A still that waits for the writer would move the requests after it, so a full writer fails the still instead.
-    if (dispatch_semaphore_wait(capturePending, DISPATCH_TIME_NOW) != 0) {
-        free(frame);
-        stillOutcome(recording, index, @"failed",
-            [NSString stringWithFormat:@"capture pending writer capacity exceeded (%ld frames)", kCapturePending], nil);
-        return;
     }
     writeFrame(recording, index, frame, pixels);
 }
