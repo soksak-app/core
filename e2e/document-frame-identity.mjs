@@ -1,3 +1,5 @@
+import { requireDecodedStills } from "@soksak/window-check/stills.mjs";
+
 /** Finds the unique current view generation from its host presentation-join trace rows. */
 export function viewGenerationForSurface(rows, surface) {
   if (!Array.isArray(rows)) throw new TypeError("view presentation trace rows must be an array");
@@ -120,17 +122,19 @@ export function verifyDocumentFrameIdentityCapture({ start, stop, manifest, deco
   if (!Number.isSafeInteger(document.decodedRecords) || document.decodedRecords !== documentRows.length) {
     throw new Error(`document identity decodedRecords does not match retained document rows: ${JSON.stringify(document.decodedRecords)} != ${documentRows.length}`);
   }
+  // Each document row names the still whose pixels it decoded, as the recording took it, and the document region is one region of
+  // each still.
+  requireDecodedStills(documentRows, stop.stills, "document identity");
   let matchedRecords = 0;
   let unknownRecords = 0;
-  const matchedFrames = [];
-  const seenFrames = new Set();
+  const matchedStills = [];
+  const seenStills = new Set();
   for (const row of documentRows) {
-    if (!Number.isSafeInteger(row.frame) || row.frame < 1 || seenFrames.has(row.frame)
-      || typeof row.displayTime !== "string" || !/^\d+$/.test(row.displayTime)
-      || row.region !== document.regionToken || !(row.roi === null || validROI(row.roi, false))) {
+    if (seenStills.has(row.index)) throw new Error(`document identity decoded rows name still ${row.index} twice`);
+    if (row.region !== document.regionToken || !(row.roi === null || validROI(row.roi, false))) {
       throw new Error(`document identity decoded row has invalid sample fields: ${JSON.stringify(row)}`);
     }
-    seenFrames.add(row.frame);
+    seenStills.add(row.index);
     for (const field of ["decodeEnqueuedTime", "decodeStartTime", "decodeCompleteTime"]) {
       if (!(row[field] === null || (typeof row[field] === "string" && /^\d+$/.test(row[field])))) {
         throw new Error(`document identity decoded row has invalid ${field}: ${JSON.stringify(row)}`);
@@ -145,7 +149,7 @@ export function verifyDocumentFrameIdentityCapture({ start, stop, manifest, deco
         throw new Error(`decoded sample contains an unissued document identity: ${JSON.stringify(row)}`);
       }
       matchedRecords += 1;
-      matchedFrames.push(row.frame);
+      matchedStills.push(row.index);
     } else if (row.status === "unknown") {
       if (row.identity !== null || typeof row.reason !== "string" || row.reason.length === 0) {
         throw new Error(`document identity unknown row lost its reason or retained an identity: ${JSON.stringify(row)}`);
@@ -168,7 +172,7 @@ export function verifyDocumentFrameIdentityCapture({ start, stop, manifest, deco
   if (matchedRecords === 0) throw new Error("capture contains no decoded document identity in the pixels of its stills");
   return {
     generation, issuedSlots: document.issuedSlots, decodedRecords: document.decodedRecords,
-    matchedRecords, unknownRecords, matchedFrames, manifest: stop.frameIdentity.manifest,
+    matchedRecords, unknownRecords, matchedStills, manifest: stop.frameIdentity.manifest,
   };
 }
 

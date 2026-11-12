@@ -115,6 +115,9 @@ function requireStillRow(row, place, path, first) {
   }
 }
 
+/** The rows of the still recording file `path` (stills.jsonl) as the host wrote them. */
+const rawStills = (path) => readFileSync(path, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line));
+
 /**
  * The rows of the still recording file `path` (stills.jsonl), one per planned still in the order of the plan, with the times of
  * each still in ms on the clock of the recording: `planned`, `requested` and `completed` (null for a still that was not
@@ -124,7 +127,7 @@ function requireStillRow(row, place, path, first) {
  */
 export function readStills(path) {
   const directory = dirname(path);
-  const raw = readFileSync(path, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line));
+  const raw = rawStills(path);
   return raw.map((row, place) => {
     requireStillRow(row, place, path, raw[0]);
     const ms = (ticks) => ticks === null ? null : machMs(ticks, row.machTimebaseNumerator, row.machTimebaseDenominator);
@@ -141,7 +144,7 @@ export function readStills(path) {
  * consecutive written stills (0 for fewer than two), each on the raw mach clock of the recording.
  */
 export function stillCounts(path) {
-  const raw = readFileSync(path, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line));
+  const raw = rawStills(path);
   const written = raw.filter((row) => row.outcome === "written");
   const longestGap = Math.max(0, ...written.slice(1).map((row, i) => Number(BigInt(row.requested) - BigInt(written[i].requested))
     * row.machTimebaseNumerator / row.machTimebaseDenominator / 1e6));
@@ -172,4 +175,28 @@ export const toldStill = (row) => `still ${row.index} planned at ${row.planned.t
 export function requireNoLostStills(rows, what, { from = -Infinity, to = Infinity } = {}) {
   const lost = lostStills(rows, from, to).map(toldStill);
   if (lost.length > 0) throw new Error(`the recording lost ${lost.length} stills of ${what}: ${lost.join(", ")}`);
+}
+
+/**
+ * Checks the decoded rows `decoded` of the frame identity of a recording (decoded-frames.jsonl, `what` names them) against its
+ * still recording file `path` (stills.jsonl, read by readStills): each row names the still whose pixels it decoded by its index
+ * and the exact decimal mach times of its request and completion, which are those of that still in the recording.
+ */
+export function requireDecodedStills(decoded, path, what) {
+  const raw = rawStills(path);
+  decoded.forEach((row, place) => {
+    const fail = (told) => { throw new Error(`${what}: decoded row ${place} ${told}`); };
+    if (!(Number.isSafeInteger(row.index) && row.index >= 0)) fail(`names the still ${JSON.stringify(row.index)}, not a still index`);
+    for (const name of ["requested", "completed"]) {
+      if (!(typeof row[name] === "string" && DECIMAL.test(row[name]))) {
+        fail(`has the ${name} time ${JSON.stringify(row[name])}, not an exact decimal mach time`);
+      }
+    }
+    const still = raw[row.index];
+    if (!still) fail(`names still ${row.index}, which ${path} does not plan`);
+    if (still.requested !== row.requested || still.completed !== row.completed) {
+      fail(`names still ${row.index} requested at ${row.requested} and completed at ${row.completed}, and ${path} has it ` +
+        `requested at ${still.requested} and completed at ${still.completed}`);
+    }
+  });
 }

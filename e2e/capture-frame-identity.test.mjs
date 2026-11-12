@@ -9,7 +9,7 @@ import test from "node:test";
 import { APPS, drag, open } from "@soksak/window-check/app.mjs";
 import { fresh, joinedFailure } from "./fixture.mjs";
 import { addRasterTab, presentedFrame, presentRasterTab, REGION } from "./raster-probe.mjs";
-import { readStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
+import { readStills, requireDecodedStills, requireNoLostStills } from "@soksak/window-check/stills.mjs";
 
 const tuple = (value) => ({ generation: String(value.generation), raster: String(value.raster), sequence: value.sequence });
 
@@ -83,9 +83,9 @@ for (const app of Object.values(APPS)) {
       const decoded = rawDecoded.trimEnd().split("\n").map((line) => JSON.parse(line));
       assert.equal(decoded.length, manifest.decodedRecords);
       assert.ok(decoded.length > 0, "capture produced no decoded sample records");
+      // Each decoded row names the still whose pixels it decoded, by its index and its request and completion ticks.
+      requireDecodedStills(decoded, stopResult.stills, "the frame identity recording");
       for (const row of decoded) {
-        assert.ok(Number.isSafeInteger(row.frame) && row.frame > 0, `invalid decoded frame number: ${JSON.stringify(row)}`);
-        assert.match(row.displayTime, /^\d+$/, `invalid decoded display time: ${JSON.stringify(row)}`);
         assert.ok(row.region === null || typeof row.region === "string", `invalid decoded region: ${JSON.stringify(row)}`);
         assert.ok(row.roi === null || (row.roi && ["x", "y", "width", "height"].every((key) => Number.isFinite(row.roi[key]))),
           `invalid decoded ROI: ${JSON.stringify(row)}`);
