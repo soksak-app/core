@@ -24,6 +24,10 @@ for (const app of Object.values(APPS)) {
     await s.pointer(adding.x + adding.width / 2, adding.y + adding.height / 2, "move");
     await s.until("host.window", (state) => state.virtualKey, "the window did not become the virtual key window");
     const card = focusedCard(await s.get("core.grid")).id;
+    // A key that comes before the view of the new tab presented ends the hold of its layout, and the host logs that end
+    // (docs/spec/native-surfaces.md#layout-transaction, docs/spec/diagnostics.md); whether a key comes first depends on how fast
+    // the view presents.
+    s.expectError(/^error host view presentation: surface \S+ had not presented when input ended the hold$/);
     const { tab } = await s.run("core.card.add-tab", { card, plugin: RASTER_PROBE });
     // No wait for the view: the reply of the call is the first moment a person could know that the tab opened.
     for (const key of TYPED) {
