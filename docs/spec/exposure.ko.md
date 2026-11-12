@@ -250,7 +250,7 @@ view는 그 표면의 네이티브 승인이 완료된 뒤에 코어·플러그�
 
 `host.window` 의 `display` 와 `order`, `host.window.raise`, `host.window.lower` 는 사람처럼 애플리케이션을 쓰는 AI 가 창이 화면에서 어디에 있는지 알고, 사람이 창을 누르거나 시스템의 창 목록으로 하듯 창을 앞으로 가져오거나 뒤로 보내게 한다. 다만 사람에게서 활성 애플리케이션이나 key 창을 빼앗지 않는다. 모든 호스트의 제품 항목이고, `sok` 는 선언된 command 로(`sok host.window.raise [window]`), MCP server 는 tool `command_run_host_window_raise` 와 `command_run_host_window_lower` 로, `@soksak/window-check` 의 session 은 `raise()` 와 `lower()` 로 실행한다. Windows 호스트는 `host.window.raise` 와 `host.window.lower` 에 `host.window.raise is not implemented on this platform` 과 `host.window.lower is not implemented on this platform` 으로 답한다.
 
-window check 는 이것을 쓰지 않는다. check 는 사람의 창 뒤에서 돌고 가려진 창을 창 자체로 재므로(`diagnostics.window.draw-covered`) 창의 순서는 측정의 조건이 아니다. 창의 순서를 바꾸는 e2e check 나 `@soksak/window-check` 의 함수는 그것을 지키는 `packages/window-check` 의 test 에서 실패한다.
+window check 는 자기가 check 하는 애플리케이션에 이것을 쓰지 않는다. check 는 사람의 창 뒤에서 돌고 가려진 창을 창 자체로 잰다(`diagnostics.window.draw-covered`). run 의 애플리케이션 창은 애플리케이션이 놓은 자리에 있으므로 run 의 다른 애플리케이션 창이 check 가 재는 창을 가릴 수 있고, 다른 창이 전부 덮은 창의 녹화는 몇 초씩 frame 을 하나도 보내지 않을 수 있다([features](../features.ko.md) F746-1). 그래서 `@soksak/window-check` 는 check 전에, check process 의 session 이 쓰지 않는 run 의 다른 애플리케이션마다 그 창을 모두 lower 한다. lower 는 그 창만 옮기므로 사람의 창 순서는 그대로이고, 어떤 애플리케이션도 active 가 되거나 key window 를 가져가지 않는다. 창의 순서를 바꾸는 e2e check 나, 그 lower 와 session 의 두 entry 밖의 `@soksak/window-check` 함수는 그것을 지키는 `packages/window-check` 의 test 에서 실패한다.
 
 ## 메서드
 

@@ -75,6 +75,39 @@ export function runProcesses(env = process.env) {
     .map((file) => JSON.parse(readFileSync(file, "utf8")).pid);
 }
 
+/**
+ * Sends the windows of the other applications of the run behind every window, before a check of the application name measures its
+ * window: the windows of the run stand where the applications put them (windowPosition), so a window of another application of
+ * the run can cover the window of the check. An application that a session of this process uses keeps its windows where they are,
+ * because a check of this process measures them. The lower orders only the windows of those applications, so the windows of a
+ * person keep their order and no application becomes active or takes the key window (host.window.lower,
+ * docs/spec/exposure.md#order-of-a-window). An application without an endpoint, whose endpoint names a process that no longer
+ * runs, or that stopped replying (F351) is not asked; a window that it leaves in front of the window of the check makes the
+ * judgments of that stretch not judged (docs/spec/diagnostics.md). Returns the lowered windows as `<application> <window>`.
+ */
+export async function lowerOtherRunWindows(name, { env = process.env, connectTo = connect, inUse = (other) => sessionTails.has(other) } = {}) {
+  const root = env.SOKSAK_CONFIG_ROOT ?? tmpdir();
+  const lowered = [];
+  for (const other of APP_NAMES) {
+    if (other === name || inUse(other)) continue;
+    const configDir = join(root, `soksak-check-${other}`);
+    if (!existsSync(join(configDir, "endpoint.json")) || exitedEndpointPid(configDir) !== null) continue;
+    if (unresponsiveError({ name: other, configDir }) !== null) continue;
+    const client = await connectTo({ configDir });
+    try {
+      for (const window of await client.request("windows.list", {})) {
+        await client.request("command.run", { window: window.window, name: "host.window.lower", params: {} });
+        lowered.push(`${other} ${window.window}`);
+      }
+    } catch (error) {
+      throw new Error(`${other}: the lower of its windows before the check of ${name} failed: ${error.message}`);
+    } finally {
+      client.close();
+    }
+  }
+  return lowered;
+}
+
 // The applications that have a main page: their host draws the workbench in a web page; the mygo host draws it in native
 // UI and has no main page (docs/spec/hosts.md#mygo-host).
 const MAIN_PAGE_NAMES = ["wailsv3", "tauriv2"];
@@ -348,6 +381,8 @@ export async function open(t, app, { clipboard = false, inactive = false } = {})
       throw new Error(`${app.configDir}/endpoint.json belongs to ${endpoint.application}, not ${app.name}`);
     }
     assertEndpointUsesCurrentBuild(endpoint, realpathSync(app.binary), statSync(app.binary).mtimeMs);
+    const lowered = await lowerOtherRunWindows(app.name);
+    if (lowered.length) t.diagnostic(`${app.name}: the windows of the other applications of the run stand behind every window: ${lowered.join(", ")}`);
     if (inactive) {
       const baseline = await inactiveObservation(session);
       session.verifyInactive = async () => {

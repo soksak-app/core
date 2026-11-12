@@ -9325,6 +9325,7 @@ const FEATURE_LINKS = [
       { file: "native/darwin/src/window_facts.m", symbol: "bool sp_window_lower(void *handle) {" },
       { file: "native/darwin/src/window_facts.m", symbol: "NSDictionary *sp_window_order_in(NSArray<NSDictionary *> *windows, NSInteger number, pid_t pid) {" },
       { file: "packages/host/rust/src/exposure.rs", symbol: "pub fn window_place(facts: &Value) -> Result<(Value, Value), String> {" },
+      { file: "packages/window-check/app.mjs", symbol: "export async function lowerOtherRunWindows(name, " },
     ],
     tests: [
       { file: "native/darwin/tests/window_order_test.m", id: "the raise changes neither the active application, the front application nor the key window" },
