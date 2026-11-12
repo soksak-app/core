@@ -115,6 +115,21 @@ static NSWindow *makeWindow(CGFloat shift) {
     [window setReleasedWhenClosed:NO];
     return window;
 }
+// A window that counts the pointer moves and crossings that reach it.
+@interface SPMoveWindow : NSWindow
+@property NSUInteger moves;
+@end
+@implementation SPMoveWindow
+- (void)sendEvent:(NSEvent *)event {
+    if (event.type == NSEventTypeMouseMoved || event.type == NSEventTypeMouseEntered || event.type == NSEventTypeMouseExited) self.moves++;
+    [super sendEvent:event];
+}
+@end
+// Gives window a real move through the application, as a move of a person arrives.
+static void realMove(NSWindow *window) {
+    [NSApp sendEvent:[NSEvent mouseEventWithType:NSEventTypeMouseMoved location:NSMakePoint(200, 40) modifierFlags:0
+        timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber context:nil eventNumber:0 clickCount:0 pressure:0]];
+}
 // The navigation delegate of a page that a check loads. It is kept on its web view, which does not retain its delegate.
 @interface SPPageLoad : NSObject <WKNavigationDelegate>
 @property BOOL finished;
@@ -596,6 +611,34 @@ int main(void) { @autoreleasepool {
     [rects release];
 
     sp_input_virtual_end("no state");
+
+    // A real move of a window that the emulated input drove does not reach the window after the virtual key window moved to
+    // another window: a check that drives a second window still reads the first, and a move of a person would change it.
+    SPMoveWindow *driven = [[SPMoveWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(420, 300), 0)
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+    [driven setReleasedWhenClosed:NO];
+    NSWindow *next = makeWindow(440);
+    // A tracking area hears each injected move, which a window without one refuses.
+    [driven.contentView addSubview:[[[SPCursorUpdateView alloc] initWithFrame:NSMakeRect(0, 0, 420, 300)] autorelease]];
+    [next.contentView addSubview:[[[SPCursorUpdateView alloc] initWithFrame:NSMakeRect(0, 0, 420, 300)] autorelease]];
+    [driven orderBack:nil];
+    [next orderBack:nil];
+    realMove(driven);
+    check(driven.moves == 1, [NSString stringWithFormat:@"a real move reaches a window that no emulated input drove (%lu)", (unsigned long)driven.moves]);
+    check(pointer(driven, 30, 30, 0) == SP_INPUT_DELIVERED && sp_input_virtual_is(driven), @"a move makes the window the virtual key window");
+    realMove(driven);
+    check(driven.moves == 1, [NSString stringWithFormat:@"a real move does not reach the virtual key window (%lu)", (unsigned long)driven.moves]);
+    check(pointer(next, 30, 30, 0) == SP_INPUT_DELIVERED && sp_input_virtual_is(next) && !sp_input_virtual_is(driven),
+        @"a move of another window moves the virtual key window there");
+    realMove(driven);
+    check(driven.moves == 1,
+        [NSString stringWithFormat:@"a real move does not reach a window that the emulated input drove before another window (%lu)", (unsigned long)driven.moves]);
+    sp_input_virtual_end("no state");
+    [next close];
+    [next release];
+    [driven close];
+    [driven release];
+
     [second close];
     [cover close];
     // An activation that the closes caused is decided in the closes or in the blocks that they queued, so the front is judged
