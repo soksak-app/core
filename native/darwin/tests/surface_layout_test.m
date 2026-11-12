@@ -1,6 +1,7 @@
 // Checks that the app DOM presentation wait excludes independent webviews and that a layout transaction can join a
 // resized plugin root webview. A busy document must not block the app DOM layout. The check does not activate the app.
 #import <Cocoa/Cocoa.h>
+#include <math.h>
 #import <IOSurface/IOSurface.h>
 #import <QuartzCore/QuartzCore.h>
 #import "surface_layout.h"
@@ -1001,6 +1002,23 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"the trace records a nested commit as sent to the render server when the outer pair "
             "closes, not at the commit (committed %.3f, outer pair closed at %.3f, flushed %.3f)", trace[3], outerClosed,
             trace[7]]);
+    // A preparation that starts in the open transaction of its window takes the earlier one over: the earlier ticket no longer
+    // commits by itself, and the commit of the later ticket sends the changes of both, so the trace records it for both.
+    surfaceLayoutTraceStart();
+    surfaceLayoutBegin(window, 110, ^(int allowed) {});
+    surfaceLayoutBegin(window, 111, ^(int allowed) {});
+    BOOL takenOverCommits = surfaceLayoutCommit(window, 110);
+    BOOL carrierCommits = surfaceLayoutCommit(window, 111);
+    [CATransaction flush];
+    size_t carriedCount = surfaceLayoutTraceStop(trace, 4);
+    const size_t next = SURFACE_LAYOUT_TRACE_STAGES;
+    check(!takenOverCommits && carrierCommits && carriedCount == 2 && trace[0] == 110 && trace[next] == 111 &&
+        trace[5] == SURFACE_LAYOUT_COMMIT_PRESENT && trace[next + 5] == SURFACE_LAYOUT_COMMIT_PRESENT &&
+        !isnan(trace[3]) && !isnan(trace[7]) && !isnan(trace[next + 3]) && !isnan(trace[next + 7]),
+        [NSString stringWithFormat:@"the commit of ticket 111 is recorded for ticket 110, which it took over (%zu records: ticket "
+            "%.0f path %.0f committed %.3f flushed %.3f, ticket %.0f path %.0f committed %.3f flushed %.3f; the taken-over ticket "
+            "commits by itself: %d)", carriedCount, trace[0], trace[5], trace[3], trace[7], trace[next], trace[next + 5],
+            trace[next + 3], trace[next + 7], takenOverCommits]);
 
     SPWait externalWait = waitWhileBusy(main, external, scheme, NO, nil);
     check(externalWait.heldAtEnd,

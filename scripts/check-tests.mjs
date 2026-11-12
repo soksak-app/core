@@ -12297,7 +12297,7 @@ const FEATURE_LINKS = [
       { file: "native/darwin/src/webview_geometry.m", symbol: "sp_window_focus_workbench" },
       { file: "native/darwin/src/window_reveal.m", symbol: "sp_window_after_reveal" },
       { file: "packages/window-check/app.mjs", symbol: "writeFileSync(join(frames, \"stop.json\"), JSON.stringify(result))" },
-      { file: "native/darwin/src/surface_layout.m", symbol: "traceValue(ticket, 6, openTransactions - (holdOpen ? 1 : 0));" },
+      { file: "native/darwin/src/surface_layout.m", symbol: "traceValue(sent.unsignedLongLongValue, 6, openTransactions - (holdOpen ? 1 : 0));" },
       { file: "native/darwin/src/surface_layout.m", symbol: "finishDeferredCommit(owner, SURFACE_LAYOUT_COMMIT_VIEW_JOIN);" },
       { file: "packages/host/go/src/platform/darwin/capture.go", symbol: "func layoutRecords(values []float64, count int) ([]platform.LayoutRecord, error) {" },
       { file: "packages/host/rust/src/platform/darwin/capture.rs", symbol: "fn layout_records(values: &[f64], count: usize) -> Result<Vec<LayoutRecord>, String> {" },

@@ -78,9 +78,12 @@
 @property(nonatomic, assign) BOOL committing;
 @property(nonatomic, retain) NSMutableArray<SPViewJoin *> *joins;
 @property(nonatomic, retain) NSMutableArray<SPLayoutRequest *> *waiting;
+// The earlier preparations of the open transaction that a later preparation took over: their changes are sent with the commit of
+// the transaction, so the trace records that commit for them too.
+@property(nonatomic, retain) NSMutableArray<NSNumber *> *carried;
 @end
 @implementation SPWindowLayout
-- (void)dealloc { [_joins release]; [_waiting release]; [super dealloc]; }
+- (void)dealloc { [_joins release]; [_waiting release]; [_carried release]; [super dealloc]; }
 @end
 
 // The preparation that started last, which the diagnostic trace names.
@@ -562,10 +565,13 @@ static void startLayout(SPLayoutRequest *request) {
         layout.owner = request.owner;
         layout.joins = [NSMutableArray array];
         layout.waiting = [NSMutableArray array];
+        layout.carried = [NSMutableArray array];
         if (!layouts) layouts = [[NSMutableDictionary alloc] init];
         layouts[key] = layout;
     }
     [inputEnded removeObjectForKey:key];
+    // A preparation that starts in the open transaction of its window takes the earlier preparation over and commits its changes.
+    if (layout.preparation != 0 && layout.preparation != request.ticket) [layout.carried addObject:@(layout.preparation)];
     layout.preparation = request.ticket;
     preparation = request.ticket;
     traceMark(request.ticket, 1);
@@ -607,14 +613,19 @@ static void finishTransaction(void *owner, int path) {
     if (!layout) return;
     uint64_t ticket = layout.preparation;
     [layouts removeObjectForKey:[NSValue valueWithPointer:owner]];
-    traceValue(ticket, 5, path);
-    traceValue(ticket, 6, openTransactions - (holdOpen ? 1 : 0));
-    traceFlushed(ticket, ((NSWindow *)owner).screen);
+    // The transaction sends the changes of every preparation that it carried, so each of their records names this commit.
+    NSMutableArray<NSNumber *> *tickets = [NSMutableArray arrayWithArray:layout.carried];
+    [tickets addObject:@(ticket)];
+    for (NSNumber *sent in tickets) {
+        traceValue(sent.unsignedLongLongValue, 5, path);
+        traceValue(sent.unsignedLongLongValue, 6, openTransactions - (holdOpen ? 1 : 0));
+        traceFlushed(sent.unsignedLongLongValue, ((NSWindow *)owner).screen);
+    }
     if (holdOpen && layouts.count == 0) {
         holdOpen = NO;
         surfaceTransactionCommit();
     }
-    traceMark(ticket, 3);
+    for (NSNumber *sent in tickets) traceMark(sent.unsignedLongLongValue, 3);
     if (layoutEnded) layoutEnded(owner);
     releaseWhenFree(owner);
     NSArray<SPLayoutRequest *> *next = [[layout.waiting copy] autorelease];
