@@ -1286,7 +1286,7 @@ bool sp_image_capture_match_identity_enqueue_frame(const uint8_t *pixels, size_t
     double content_scale, double scale_factor, uint64_t frame_number, uint64_t display_time, char **error) {
     if (error) *error = NULL;
     if (!pixels || !frame_width || !frame_height || frame_width > SIZE_MAX / 4 || frame_stride < frame_width * 4
-        || frame_height > SIZE_MAX / frame_stride || !color_space || !frame_number || !error
+        || frame_height > SIZE_MAX / frame_stride || !color_space || !error
         || !isfinite(content_scale) || !isfinite(scale_factor) || content_scale <= 0 || scale_factor <= 0)
         return identityFailure(error, "decoded frame identity sample or geometry is invalid");
     initializeHistory();

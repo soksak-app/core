@@ -176,8 +176,9 @@ int main(void) { @autoreleasepool {
             check(decoded != nil && decoded.length == kCaptureFrameHeader + payload,
                 [NSString stringWithFormat:@"frame %lu holds its header and BGRA bytes (got %lu, expected %llu)", (unsigned long)index,
                     (unsigned long)decoded.length, (unsigned long long)(kCaptureFrameHeader + payload)]);
+            // The header before the compressed block holds the times, so they are read from the file as it was written.
             double header[8] = {0};
-            if (decoded.length >= kCaptureFrameHeader) [decoded getBytes:header range:NSMakeRange(12, sizeof header)];
+            if (recorded.length >= kCaptureFrameHeader) [recorded getBytes:header range:NSMakeRange(12, sizeof header)];
             check(fabs(header[6] - requested) < 1e-6 && fabs(header[7] - completed) < 1e-6,
                 [NSString stringWithFormat:@"frame %lu holds the request and completion times of its still (%.6f %.6f against %.6f %.6f)",
                     (unsigned long)index, header[6], header[7], requested, completed]);
@@ -211,7 +212,8 @@ int main(void) { @autoreleasepool {
         @"the window reopens for an opt-in identity recording");
     free(operationError); operationError = NULL;
     // The identity recordings plan more stills than they take, and each stops after the state it judges.
-    bool identityRecordingStarted = sp_capture_start(folder(@"identity").fileSystemRepresentation, gap, 0, 4096, true, 5,
+    NSString *identityFolder = folder(@"identity");
+    bool identityRecordingStarted = sp_capture_start(identityFolder.fileSystemRepresentation, gap, 0, 4096, true, 5,
         &operationError);
     check(identityRecordingStarted, [NSString stringWithFormat:@"opt-in identity recording starts (%s)",
         operationError == NULL ? "" : operationError]);
@@ -261,8 +263,7 @@ int main(void) { @autoreleasepool {
                 identityFrames, sp_capture_error()]);
         check(regionMatchesSurfaceBytes(regionA, imageA, rawA) && regionMatchesSurfaceBytes(regionB, imageB, rawB),
             @"identity capture stop restores both raw image provider byte arrays without another producer frame");
-        NSString *identityManifest = [[NSString stringWithUTF8String:directory]
-            stringByAppendingPathComponent:@"frame-identities/manifest.json"];
+        NSString *identityManifest = [identityFolder stringByAppendingPathComponent:@"frame-identities/manifest.json"];
         NSDictionary *identityMetadata = [NSJSONSerialization JSONObjectWithData:
             [NSData dataWithContentsOfFile:identityManifest] options:0 error:NULL];
         check(identityMetadata != nil && [identityMetadata[@"artifacts"] isKindOfClass:NSArray.class],

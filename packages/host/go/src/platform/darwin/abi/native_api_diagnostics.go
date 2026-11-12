@@ -30,20 +30,19 @@ type DiagnosticFunctions struct {
 	MainSurfaceLayoutTraceStart         func()
 	MainSurfaceLayoutTraceStop          func(*float64, uint64) uint64
 	ReleaseCaptureNewWindow             func()
-	ScheduleCaptureOpen                 func(int64, bool, uint64, uintptr)
-	ScheduleCaptureStill                func(*int64, int32, *byte, uint64, uintptr)
+	ScheduleCaptureOpen                 func(int64, bool, uintptr)
+	ScheduleCaptureStart                func(*byte, float64, float64, int32, bool, uint64, uintptr)
+	ScheduleCaptureStill                func(int64, *byte, uintptr)
 	ScheduleCaptureStop                 func(float64, uint64, uintptr)
-	ScheduleCaptureWait                 func(uint64, uintptr)
 	ScheduleCaptureWaitNewWindow        func(uint64, uintptr)
 	ScheduleDocumentFrameIdentityFreeze func(uint64, uintptr) bool
 	ScheduleDocumentFrameIdentityRemove func(uint64, uintptr) bool
 	ScheduleDocumentFrameIdentityStart  func(unsafe.Pointer, uint64, uintptr) bool
 	SpCaptureClock                      func() float64
 	SpCaptureError                      func() *byte
-	SpCaptureHasStream                  func() bool
-	SpCaptureLimited                    func() bool
+	SpCaptureLate                       func() int32
 	SpCaptureLongestGap                 func() float64
-	SpCaptureStart                      func(*byte, bool, **byte) bool
+	SpCaptureMissed                     func() int32
 	WhenExited                          func(int32, uintptr)
 	WindowNumbers                       func(uintptr, *int64, int32) int32
 }
@@ -115,14 +114,14 @@ func (functions DiagnosticFunctions) Validate() error {
 	if functions.ScheduleCaptureOpen == nil {
 		return fmt.Errorf("native API function is missing: scheduleCaptureOpen")
 	}
+	if functions.ScheduleCaptureStart == nil {
+		return fmt.Errorf("native API function is missing: scheduleCaptureStart")
+	}
 	if functions.ScheduleCaptureStill == nil {
 		return fmt.Errorf("native API function is missing: scheduleCaptureStill")
 	}
 	if functions.ScheduleCaptureStop == nil {
 		return fmt.Errorf("native API function is missing: scheduleCaptureStop")
-	}
-	if functions.ScheduleCaptureWait == nil {
-		return fmt.Errorf("native API function is missing: scheduleCaptureWait")
 	}
 	if functions.ScheduleCaptureWaitNewWindow == nil {
 		return fmt.Errorf("native API function is missing: scheduleCaptureWaitNewWindow")
@@ -142,17 +141,14 @@ func (functions DiagnosticFunctions) Validate() error {
 	if functions.SpCaptureError == nil {
 		return fmt.Errorf("native API function is missing: sp_capture_error")
 	}
-	if functions.SpCaptureHasStream == nil {
-		return fmt.Errorf("native API function is missing: sp_capture_has_stream")
-	}
-	if functions.SpCaptureLimited == nil {
-		return fmt.Errorf("native API function is missing: sp_capture_limited")
+	if functions.SpCaptureLate == nil {
+		return fmt.Errorf("native API function is missing: sp_capture_late")
 	}
 	if functions.SpCaptureLongestGap == nil {
 		return fmt.Errorf("native API function is missing: sp_capture_longest_gap")
 	}
-	if functions.SpCaptureStart == nil {
-		return fmt.Errorf("native API function is missing: sp_capture_start")
+	if functions.SpCaptureMissed == nil {
+		return fmt.Errorf("native API function is missing: sp_capture_missed")
 	}
 	if functions.WhenExited == nil {
 		return fmt.Errorf("native API function is missing: whenExited")

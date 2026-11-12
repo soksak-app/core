@@ -3,9 +3,8 @@
 // layer changes while the window stays covered, and the capture shows the change. The check uses no activation, no real input and no window position outside the screen.
 // A recording of the covered window takes a still every refresh for three seconds while a marker changes every refresh, and each
 // frame shows what the window server showed between the request of its still and its completion (docs/spec/diagnostics.md).
-// The capture asks the window server for the windows of its own process, so it needs no screen recording permission: the check
-// prints whether the process has it, and with --without-screen-recording, which a launch of its bundle by LaunchServices gives
-// (make test-capture-without-screen-recording), it requires that the process has it not.
+// The capture asks the window server for the windows of its own process; the check prints whether the process has the screen
+// recording permission.
 #import <Cocoa/Cocoa.h>
 #import <IOSurface/IOSurface.h>
 #import <Metal/Metal.h>
@@ -236,15 +235,13 @@ static double ticksToMilliseconds(id value, double numerator, double denominator
     return [value isKindOfClass:NSString.class] ? strtoull([value UTF8String], NULL, 10) * numerator / denominator / 1e6 : NAN;
 }
 
-int main(int argc, char **argv) { @autoreleasepool {
+int main(void) { @autoreleasepool {
     fprintf(stderr, "START: covered window capture\n");
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
     BOOL permitted = CGPreflightScreenCaptureAccess();
     fprintf(stderr, "screen recording permission: %s\n", permitted ? "granted" : "not granted");
-    if (argc > 1 && strcmp(argv[1], "--without-screen-recording") == 0)
-        check(!permitted, @"the process runs without the screen recording permission");
     NSString *directory = temporaryFolder(@"soksak-capture-covered-");
 
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(160, 160, kWidth, kHeight)

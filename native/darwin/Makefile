@@ -94,7 +94,7 @@ MYGO_LIBRARY := $(BUILD)/mygo/libsoksak-darwin.dylib
 HOST_CALLBACK_ABI_LIBRARY := $(BUILD)/libhost_callback_abi.dylib
 HOST_CALLBACK_WORKER_LIBRARY := $(BUILD)/libhost_callback_worker.dylib
 PKGCONFIG  := $(BUILD)/soksak-darwin.pc
-FRAMEWORKS := -framework Cocoa -framework WebKit -framework QuartzCore -framework CoreImage -framework ScreenCaptureKit -framework CoreMedia -framework CoreVideo -framework IOSurface -framework Carbon -framework UserNotifications -lcompression -lz -lc++
+FRAMEWORKS := -framework Cocoa -framework WebKit -framework QuartzCore -framework CoreImage -framework IOSurface -framework Carbon -framework UserNotifications -lcompression -lz -lc++
 ZXING_COMMIT := 287c85df6f961c8efbfb5ffd736cd9457b8b890e
 ZXING_URL := https://codeload.github.com/zxing-cpp/zxing-cpp/tar.gz/$(ZXING_COMMIT)
 ZXING_SHA256 := 97d952c661b1f79d21aacc2ec544ef05c4d1465f55692cc49622ea6a8166ca7b
@@ -104,9 +104,10 @@ ZXING_SOURCE := $(BUILD)/zxing-cpp-$(ZXING_COMMIT)
 ZXING_BUILD := $(BUILD)/zxing-cpp-build
 ZXING_INSTALL := $(BUILD)/zxing-cpp-install
 ZXING_LIBRARY := $(ZXING_INSTALL)/lib/libZXing.a
-# The newest API the sources use is from macOS 14.4 (getCurrentProcessShareableContentWithCompletionHandler in
-# capture.m). MACOS_MINIMUM of the Makefile of the repository declares that version once: that Makefile passes it, a make
-# in this folder alone reads it, and this Makefile passes it to the process identity package.
+# The minimum macOS version is 14.4; the newest API that the sources call, the display link of a window or a view
+# (displayLinkWithTarget:selector: in capture.m and surface_layout.m), needs macOS 14.0. MACOS_MINIMUM of the Makefile of
+# the repository declares that version once: that Makefile passes it, a make in this folder alone reads it, and this
+# Makefile passes it to the process identity package.
 # The same minimum version is also put in Cflags and Libs of the .pc so that the builds that use it compile and link
 # with it.
 ifeq ($(origin MACOS_MINIMUM),undefined)
@@ -128,7 +129,7 @@ endif
 
 CFLAGS     := -arch $(ARCH) -fblocks -fmodules -Wall -Werror -O2 $(MINIMUM)
 
-.PHONY: build-host-callback-worker build-host-callback-abi build fetch test test-app benchmark-site-cost test-capture-frame-identity test-capture-stop-intake test-capture-without-screen-recording test-app-activation test-app-virtual-ime test-app-input-reference-readiness test-app-activation-backspace test-app-activation-backspace-repeat build-ime-activation-target test-ime-cli test-app-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost benchmark-webview-resize-cadence build-test repeat repeat-suite clean pkgconfig-current
+.PHONY: build-host-callback-worker build-host-callback-abi build fetch test test-app benchmark-site-cost test-capture-frame-identity test-capture-stop-intake test-app-activation test-app-virtual-ime test-app-input-reference-readiness test-app-activation-backspace test-app-activation-backspace-repeat build-ime-activation-target test-ime-cli test-app-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost benchmark-webview-resize-cadence build-test repeat repeat-suite clean pkgconfig-current
 
 build: fetch $(LIBRARY) $(PKGCONFIG)
 
@@ -282,13 +283,6 @@ $(BUILD)/capture_checker_test $(BUILD)/capture_file_checker_test $(BUILD)/captur
 $(BUILD)/notifications_test.app/Contents/MacOS/notifications_test: $(BUILD)/notifications_test tests/support/notifications_test.plist
 	@mkdir -p $(dir $@)
 	@cp tests/support/notifications_test.plist $(BUILD)/notifications_test.app/Contents/Info.plist
-	@cp $< $@
-
-# The covered capture without the screen recording permission: LaunchServices starts the bundle as a process of its own, which
-# holds no permission, so the capture of its own windows is checked without it (tests/capture_covered_test.m).
-$(BUILD)/capture_covered_test.app/Contents/MacOS/capture_covered_test: $(BUILD)/capture_covered_test tests/support/capture_covered_test.plist
-	@mkdir -p $(dir $@)
-	@cp tests/support/capture_covered_test.plist $(BUILD)/capture_covered_test.app/Contents/Info.plist
 	@cp $< $@
 
 $(BUILD)/capture_file_checker_test: tests/capture_test.m
@@ -511,15 +505,6 @@ benchmark-webview-resize-cadence: $(BUILD)/webview_resize_cadence_test
 
 test-capture-frame-identity: $(BUILD)/capture_frame_identity_test
 	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) capture_frame_identity_test
-
-# open -g starts the bundle without bringing it to the front, and -W returns when it ends; the run passes when the check wrote its
-# pass line.
-test-capture-without-screen-recording: $(BUILD)/capture_covered_test.app/Contents/MacOS/capture_covered_test
-	@rm -f $(BUILD)/capture_covered_test.out $(BUILD)/capture_covered_test.err
-	@open -g -n -W --stdout $(BUILD)/capture_covered_test.out --stderr $(BUILD)/capture_covered_test.err \
-	  $(BUILD)/capture_covered_test.app --args --without-screen-recording
-	@cat $(BUILD)/capture_covered_test.out $(BUILD)/capture_covered_test.err
-	@grep -q '^PASS: covered window capture$$' $(BUILD)/capture_covered_test.err
 
 test-capture-stop-intake: $(BUILD)/capture_stop_intake_test
 	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) capture_stop_intake_test

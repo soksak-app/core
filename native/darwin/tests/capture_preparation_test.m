@@ -1,7 +1,7 @@
 // The capture asks the window server for the image of its windows through CGWindowListCreateImageFromArray, which the macOS 15
 // SDK marks obsolete, so the capture looks it up at run time (docs/operations/private-native-apis.md). On a macOS without it, the
 // open of a recording and a still fail with an error that names it, and they take nothing. With it, a window that is on screen
-// opens, and a window that is not there fails with its number.
+// opens, and a window that the window server does not list on screen fails with its number.
 #import "../src/capture.m"
 #include <dlfcn.h>
 #import "support/temporary_folder.h"
@@ -66,7 +66,7 @@ int main(void) { @autoreleasepool {
     long number = closed.windowNumber;
     [closed close];
     [CATransaction flush];
-    NSString *message = [NSString stringWithFormat:@"window %ld not found", number];
+    NSString *message = [NSString stringWithFormat:@"window %ld is not on screen", number];
     check(!sp_capture_open(number, false, &error) && error != NULL && [[NSString stringWithUTF8String:error] isEqual:message],
         [NSString stringWithFormat:@"a closed window does not open (\"%s\")", error ?: ""]);
     free(error); error = NULL;

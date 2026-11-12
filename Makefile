@@ -390,8 +390,8 @@ export CARGO := $(shell PATH="$(PATH)" command -v cargo)
 check-cargo:
 	@test -n "$(CARGO)" || { echo "make: cargo is on neither PATH nor $(CARGO_HOME)/bin; rustup installs it there" >&2; exit 1; }
 
-# The minimum macOS version of the native apps. The capture code uses the macOS 14.4 API
-# getCurrentProcessShareableContentWithCompletionHandler. This is the one declaration of the version: native/darwin reads it,
+# The minimum macOS version of the native apps, 14.4; the newest API that the native code calls, the display link of a window
+# or a view (displayLinkWithTarget:selector:), needs macOS 14.0. This is the one declaration of the version: native/darwin reads it,
 # and every Go and Rust command of a target gets it here (docs/spec/hosts.md#nativedarwin).
 # Go passes it to cgo packages through CGO_CFLAGS and their external linker through -extldflags.
 # Cgo-free native profiles pass GO_INTERNAL_LINK to the Go internal linker. Clang reads

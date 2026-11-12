@@ -12,7 +12,7 @@
 
 // The callbacks run their Go functions on the worker, and the native calls of this file that use AppKit or WebKit run on the main
 // thread (main_thread.h). The capture functions of capture.h need no thread: the host calls those that do not wait directly, and
-// the capture calls that wait run on a queue of their own (scheduleCapture*).
+// the capture calls that wait or read the windows on the main thread run on a queue of their own (scheduleCapture*).
 static void documentFrameIdentityDoneBridge(void *context, const char *json, const char *error) {
 	hostRunOnWorker(^{ sp_host_diagnostic_callback_document_frame_identity_done((uintptr_t)context, (char *)json, (char *)error); });
 }
@@ -49,10 +49,11 @@ static int windowNumbersOnMain(void* nsWindow, long* out, int max) {
     return n;
 }
 int windowNumbers(uintptr_t nsWindow, long* out, int max) { return ON_MAIN(int, windowNumbersOnMain((void *)nsWindow, out, max)); }
-// The capture calls that wait (open, wait, stop, still) run on a queue of their own and answer their context with one
-// capture_answered callback on the worker, so neither the main thread nor the worker waits for them: the window close and
-// the page end that end their waits (endCaptureWait) reach the main thread while they wait. The answer carries the result
-// of the call and its failure: the error of an open or a still, or the error of the recording after a wait or a stop.
+// The capture calls that wait or read the windows on the main thread (open, start, stop, still) run on a queue of their own and
+// answer their context with one capture_answered callback on the worker, so neither the main thread nor the worker waits for
+// them: the window close and the page end that end their waits (endCaptureWait) reach the main thread while they wait. The answer
+// carries the result of the call and its failure: the error of an open, a start or a still, or the error of the recording after
+// a stop.
 static dispatch_queue_t captureCalls(void) {
     static dispatch_queue_t queue;
     static dispatch_once_t once;
@@ -69,18 +70,25 @@ static void answerRecording(uintptr_t context, long result) {
     const char *recording = sp_capture_error();
     answerCapture(context, result, recording != NULL && recording[0] != 0 ? strdup(recording) : NULL);
 }
-void scheduleCaptureOpen(long windowNumber, bool display, uint64_t token, uintptr_t context) {
+void scheduleCaptureOpen(long windowNumber, bool display, uintptr_t context) {
     dispatch_async(captureCalls(), ^{
         @autoreleasepool {
             char *error = NULL;
-            bool prepared = sp_capture_open(windowNumber, display, token, &error);
+            bool prepared = sp_capture_open(windowNumber, display, &error);
             answerCapture(context, prepared, error);
         }
     });
 }
-void scheduleCaptureWait(uint64_t token, uintptr_t context) {
+void scheduleCaptureStart(const char *directory, double gap, double seconds, int frames, bool frameIdentity, uint64_t token,
+    uintptr_t context) {
+    char *folder = directory != NULL ? strdup(directory) : NULL;
     dispatch_async(captureCalls(), ^{
-        @autoreleasepool { answerRecording(context, sp_capture_wait(token)); }
+        @autoreleasepool {
+            char *error = NULL;
+            bool started = sp_capture_start(folder, gap, seconds, frames, frameIdentity, token, &error);
+            free(folder);
+            answerCapture(context, started, error);
+        }
     });
 }
 bool main_sp_capture_hold_new_window(char **error) { return ON_MAIN(bool, sp_capture_hold_new_window(error)); }
@@ -98,20 +106,12 @@ void scheduleCaptureStop(double after, uint64_t token, uintptr_t context) {
         @autoreleasepool { answerRecording(context, sp_capture_stop(after, token)); }
     });
 }
-void scheduleCaptureStill(const long *windowNumbers, int count, const char *path, uint64_t token, uintptr_t context) {
-    long *numbers = NULL;
-    if (windowNumbers != NULL && count > 0) {
-        numbers = malloc(sizeof(long) * (size_t)count);
-        // A loop of assignments copies the numbers, so the function calls no native function on the calling thread.
-        if (numbers != NULL) for (int index = 0; index < count; index++) numbers[index] = windowNumbers[index];
-    }
+void scheduleCaptureStill(long windowNumber, const char *path, uintptr_t context) {
     char *target = path != NULL ? strdup(path) : NULL;
-    int held = numbers != NULL ? count : 0;
     dispatch_async(captureCalls(), ^{
         @autoreleasepool {
             char *error = NULL;
-            bool written = sp_capture_still(numbers, held, target, token, &error);
-            free(numbers);
+            bool written = sp_capture_still(windowNumber, target, &error);
             free(target);
             answerCapture(context, written, error);
         }

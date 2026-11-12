@@ -52,16 +52,16 @@ func DiagnosticFunctions() abi.DiagnosticFunctions {
 			return uint64(C.main_surfaceLayoutTraceStop((*C.double)(unsafe.Pointer(a0)), C.size_t(a1)))
 		},
 		ReleaseCaptureNewWindow: func() { C.releaseCaptureNewWindow() },
-		ScheduleCaptureOpen: func(a0 int64, a1 bool, a2 uint64, a3 uintptr) {
-			C.scheduleCaptureOpen(C.long(a0), C.bool(a1), C.uint64_t(a2), C.uintptr_t(a3))
+		ScheduleCaptureOpen:     func(a0 int64, a1 bool, a2 uintptr) { C.scheduleCaptureOpen(C.long(a0), C.bool(a1), C.uintptr_t(a2)) },
+		ScheduleCaptureStart: func(a0 *byte, a1 float64, a2 float64, a3 int32, a4 bool, a5 uint64, a6 uintptr) {
+			C.scheduleCaptureStart((*C.char)(unsafe.Pointer(a0)), C.double(a1), C.double(a2), C.int(a3), C.bool(a4), C.uint64_t(a5), C.uintptr_t(a6))
 		},
-		ScheduleCaptureStill: func(a0 *int64, a1 int32, a2 *byte, a3 uint64, a4 uintptr) {
-			C.scheduleCaptureStill((*C.long)(unsafe.Pointer(a0)), C.int(a1), (*C.char)(unsafe.Pointer(a2)), C.uint64_t(a3), C.uintptr_t(a4))
+		ScheduleCaptureStill: func(a0 int64, a1 *byte, a2 uintptr) {
+			C.scheduleCaptureStill(C.long(a0), (*C.char)(unsafe.Pointer(a1)), C.uintptr_t(a2))
 		},
 		ScheduleCaptureStop: func(a0 float64, a1 uint64, a2 uintptr) {
 			C.scheduleCaptureStop(C.double(a0), C.uint64_t(a1), C.uintptr_t(a2))
 		},
-		ScheduleCaptureWait:          func(a0 uint64, a1 uintptr) { C.scheduleCaptureWait(C.uint64_t(a0), C.uintptr_t(a1)) },
 		ScheduleCaptureWaitNewWindow: func(a0 uint64, a1 uintptr) { C.scheduleCaptureWaitNewWindow(C.uint64_t(a0), C.uintptr_t(a1)) },
 		ScheduleDocumentFrameIdentityFreeze: func(a0 uint64, a1 uintptr) bool {
 			return bool(C.scheduleDocumentFrameIdentityFreeze(C.uint64_t(a0), C.uintptr_t(a1)))
@@ -74,13 +74,10 @@ func DiagnosticFunctions() abi.DiagnosticFunctions {
 		},
 		SpCaptureClock:      func() float64 { return float64(C.sp_capture_clock()) },
 		SpCaptureError:      func() *byte { return (*byte)(unsafe.Pointer(C.sp_capture_error())) },
-		SpCaptureHasStream:  func() bool { return bool(C.sp_capture_has_stream()) },
-		SpCaptureLimited:    func() bool { return bool(C.sp_capture_limited()) },
+		SpCaptureLate:       func() int32 { return int32(C.sp_capture_late()) },
 		SpCaptureLongestGap: func() float64 { return float64(C.sp_capture_longest_gap()) },
-		SpCaptureStart: func(a0 *byte, a1 bool, a2 **byte) bool {
-			return bool(C.sp_capture_start((*C.char)(unsafe.Pointer(a0)), C.bool(a1), (**C.char)(unsafe.Pointer(a2))))
-		},
-		WhenExited: func(a0 int32, a1 uintptr) { C.whenExited(C.int32_t(a0), C.uintptr_t(a1)) },
+		SpCaptureMissed:     func() int32 { return int32(C.sp_capture_missed()) },
+		WhenExited:          func(a0 int32, a1 uintptr) { C.whenExited(C.int32_t(a0), C.uintptr_t(a1)) },
 		WindowNumbers: func(a0 uintptr, a1 *int64, a2 int32) int32 {
 			return int32(C.windowNumbers(C.uintptr_t(a0), (*C.long)(unsafe.Pointer(a1)), C.int(a2)))
 		},
