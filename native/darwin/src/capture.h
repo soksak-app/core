@@ -32,10 +32,9 @@ void sp_capture_release_new_window(void);
 // with its error. gap is the time in ms from the request of one still to the request of the next, from 1 to 1000. The length
 // is seconds, above 0 and at most 600, or frames, an integer from 1 to 4096: the other is 0. Still n is planned at the start
 // plus n·gap and requested at its planned time whether or not the stills before it completed; a plan of more than 4096 stills
-// is refused. The arguments are checked before the prepared window. frame_identity is an opt-in diagnostic request. The wait
-// for still 0 ends by its outcome or by sp_capture_end_wait of token.
-bool sp_capture_start(const char *directory, double gap, double seconds, int frames, bool frame_identity, uint64_t token,
-    char **error);
+// is refused. The arguments are checked before the prepared window. The wait for still 0 ends by its outcome or by
+// sp_capture_end_wait of token.
+bool sp_capture_start(const char *directory, double gap, double seconds, int frames, uint64_t token, char **error);
 const char *sp_capture_error(void);
 // Ends the wait of the call of token with reason, from any thread: the call fails with its error `... before <reason>`. An
 // end that comes before the call of token waits ends that call when it waits; an end for a call that returned changes nothing.
@@ -62,5 +61,3 @@ bool sp_capture_still(long windowNumber, const char *path, char **error);
 
 // Injects a capture failure on the calling thread for lifecycle cleanup tests.
 void sp_capture_test_report_error(const char *message);
-// Simulates a startup failure that ends matcher state before reporting an error.
-void sp_capture_test_report_startup_failure(const char *message);

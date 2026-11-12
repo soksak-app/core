@@ -82,7 +82,7 @@ static NSString *folder(NSString *root, NSString *name) {
 static bool startRecording(NSWindow *window, NSString *directory, double gap, int frames, uint64_t token) {
     char *error = NULL;
     bool started = sp_capture_open(window.windowNumber, false, &error)
-        && sp_capture_start(directory.fileSystemRepresentation, gap, 0, frames, false, token, &error);
+        && sp_capture_start(directory.fileSystemRepresentation, gap, 0, frames, token, &error);
     if (!started) fprintf(stderr, "the fixture recording did not start: %s\n", error ?: "");
     free(error);
     return started;
@@ -175,7 +175,7 @@ int main(void) { @autoreleasepool {
     check(sp_capture_open(window.windowNumber, false, &operationError), @"the window opens for a recording without images");
     free(operationError); operationError = NULL;
     NSString *imageless = folder(root, @"imageless");
-    bool imagelessStarted = sp_capture_start(imageless.fileSystemRepresentation, 10, 0, 4, false, 1, &operationError);
+    bool imagelessStarted = sp_capture_start(imageless.fileSystemRepresentation, 10, 0, 4, 1, &operationError);
     NSString *want = [NSString stringWithFormat:@"the window server gave no image of window %ld", (long)window.windowNumber];
     check(!imagelessStarted && operationError != NULL && strstr(operationError, want.UTF8String) != NULL,
         [NSString stringWithFormat:@"a still 0 without an image fails the start with its reason (%s)", operationError ?: ""]);
@@ -285,7 +285,7 @@ int main(void) { @autoreleasepool {
         NSString *pendingFolder = folder(root, @"pending");
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
             char *failure = NULL;
-            bool result = sp_capture_start(pendingFolder.fileSystemRepresentation, 10, 0, 4096, false, 24, &failure);
+            bool result = sp_capture_start(pendingFolder.fileSystemRepresentation, 10, 0, 4096, 24, &failure);
             dispatch_async(dispatch_get_main_queue(), ^{ started = result; startError = failure; startReturned = true; });
         });
         sp_run_until("the ended start closes the requests of its recording", ^BOOL {
@@ -361,7 +361,7 @@ int main(void) { @autoreleasepool {
         check(operationError != NULL && strstr(operationError, "already running") != NULL,
             @"the rejected open returns its own active-recording reason");
         free(operationError); operationError = NULL;
-        check(!sp_capture_start(root.fileSystemRepresentation, 10, 0, 4, false, 31, &operationError),
+        check(!sp_capture_start(root.fileSystemRepresentation, 10, 0, 4, 31, &operationError),
             @"start rejects an active recording");
         check(strstr(sp_capture_error(), "fixture recording failure before open") != NULL,
             @"rejected start preserves the active recording error");
@@ -373,7 +373,7 @@ int main(void) { @autoreleasepool {
     if (startRecording(window, folder(root, @"healthy"), 10, 4096, 33)) {
         check(!sp_capture_open(-1, false, &operationError), @"open also rejects a healthy active recording");
         free(operationError); operationError = NULL;
-        check(!sp_capture_start(root.fileSystemRepresentation, 10, 0, 4, false, 34, &operationError),
+        check(!sp_capture_start(root.fileSystemRepresentation, 10, 0, 4, 34, &operationError),
             @"start also rejects a healthy active recording");
         free(operationError); operationError = NULL;
         // A still request fails with its own error and leaves the recording as it is.

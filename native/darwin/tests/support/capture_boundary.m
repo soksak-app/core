@@ -5,7 +5,7 @@
 // A start with these arguments fails before it looks at its target, with an error that holds want.
 static void expectRefusedStart(const char *directory, double gap, double seconds, int frames, const char *want, NSString *what) {
     char *operationError = NULL;
-    bool started = sp_capture_start(directory, gap, seconds, frames, false, 0, &operationError);
+    bool started = sp_capture_start(directory, gap, seconds, frames, 0, &operationError);
     check(!started && operationError != NULL && strstr(operationError, want) != NULL,
         [NSString stringWithFormat:@"%@ is refused with \"%s\" (got \"%s\")", what, want, operationError ?: ""]);
     free(operationError);
@@ -27,11 +27,7 @@ static void checkCaptureBoundary(const char *directory) {
     expectRefusedStart(directory, 16.7, 0, 4097, "frames must be an integer from 1 to 4096", @"more than 4096 frames");
     // 100 s at 10 ms plans the stills at 0, 10, ... 99990 ms: 10000 stills.
     expectRefusedStart(directory, 10, 100, 0, "the recording plans 10000 stills, more than 4096", @"a plan of more than 4096 stills");
-    check(!sp_capture_start(directory, 16.7, 0, 1, true, 0, &operationError), @"identity capture without a prepared target is rejected");
-    check(operationError != NULL && strstr(operationError, "capture has no prepared window") != NULL,
-        @"identity start validates its capture target before creating a session");
-    free(operationError); operationError = NULL;
-    check(!sp_capture_start(directory, 16.7, 0, 1, false, 0, &operationError), @"starting without a capture target is rejected");
+    check(!sp_capture_start(directory, 16.7, 0, 1, 0, &operationError), @"starting without a capture target is rejected");
     check(operationError != NULL && strlen(operationError) > 0, @"start failure is observable to the caller");
     free(operationError); operationError = NULL;
     check(sp_capture_stop(0, 0) == 0, @"stopping an invalid capture reports no written frames");

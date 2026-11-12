@@ -62,7 +62,7 @@ int main(void) { @autoreleasepool {
         if (!opened) break;
         // The start answers once still 0 is written, and the stop at once requests no later still.
         record(@"start", cycle, nil);
-        bool recording = sp_capture_start(directory.fileSystemRepresentation, 1000.0 / 60, 0, 4096, false, 0, &operationError);
+        bool recording = sp_capture_start(directory.fileSystemRepresentation, 1000.0 / 60, 0, 4096, 0, &operationError);
         check(recording, [NSString stringWithFormat:@"cycle %d starts recording with its first still (%s)", cycle,
             operationError == NULL ? "" : operationError]);
         free(operationError);

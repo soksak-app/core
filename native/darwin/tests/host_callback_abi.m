@@ -88,7 +88,6 @@ int sp_test_callback_run(void) {
     sp_host_diagnostic_callback_window_objects_counted(token, -83, -83, -83, true);
     sp_host_diagnostic_callback_page_objects_counted(token, -83, -83, text);
     sp_host_diagnostic_callback_delivered_notifications(token, text);
-    sp_host_diagnostic_callback_document_frame_identity_done(token, text, text);
     sp_host_diagnostic_callback_input_reference_reply(token, text, text);
     sp_host_diagnostic_callback_process_exit_answered(token, true);
     sp_host_diagnostic_callback_capture_answered(token, -83, text);

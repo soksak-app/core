@@ -176,7 +176,7 @@ int main(void) { @autoreleasepool {
     if (opened) {
         free(operationError);
         operationError = NULL;
-        started = sp_capture_start(directory, 1000.0 / window.screen.maximumFramesPerSecond, 0, 4096, false, 0, &operationError);
+        started = sp_capture_start(directory, 1000.0 / window.screen.maximumFramesPerSecond, 0, 4096, 0, &operationError);
     }
     check(started, [NSString stringWithFormat:@"the title bar recording starts with its initial frame (%s)",
         operationError == NULL ? "" : operationError]);

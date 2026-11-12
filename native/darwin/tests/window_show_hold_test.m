@@ -119,7 +119,7 @@ int main(void) { @autoreleasepool {
     uint64_t startToken = token++;
     offMain(@"the start of the recording of the held window", ^{
         char *failure = NULL;
-        started = sp_capture_start(frames.fileSystemRepresentation, 1000.0 / 60, 0, 4096, false, startToken, &failure);
+        started = sp_capture_start(frames.fileSystemRepresentation, 1000.0 / 60, 0, 4096, startToken, &failure);
         startError = [taken(failure) retain];
     });
     check(started, [NSString stringWithFormat:@"the recording of the held window starts with its first still (%@)", startError]);
@@ -194,7 +194,7 @@ int main(void) { @autoreleasepool {
         if (refusedOpened) {
             failStill = YES;
             refusedStarted = sp_capture_start([directory stringByAppendingPathComponent:@"refused"].fileSystemRepresentation,
-                1000.0 / 60, 0, 4096, false, refusedStart, &failure);
+                1000.0 / 60, 0, 4096, refusedStart, &failure);
             failStill = NO;
             refusedStartError = [taken(failure) retain];
         }

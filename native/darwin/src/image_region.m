@@ -16,10 +16,8 @@
 #import "application_log.h"
 #import "input_virtual.h"
 #import "input_inject.h"
-#import "capture_frame_identity.h"
 #import "declared_color_space.h"
 #import "event_ring.h"
-#import "image_capture_match.h"
 #import "image_region.h"
 #import "input_press_context.h"
 #import "webview_input.h"
@@ -29,16 +27,6 @@
 
 static BOOL inputRangeFitsLength(NSRange range, NSUInteger length) {
     return range.location != NSNotFound && range.location <= length && range.length <= length - range.location;
-}
-
-static void failFrameIdentitySession(NSString *message) {
-    char *error = NULL;
-    if (!sp_image_capture_match_identity_session_fail(message.UTF8String, &error)) {
-        sp_log_error("frame identity", error ?: "identity session could not record the tagging failure");
-    }
-    free(error);
-    sp_log_error("frame identity", message.UTF8String);
-    sp_region_restore_capture_identity();
 }
 
 @class SPImageRegion;
@@ -66,13 +54,7 @@ static NSTimeInterval spareDelay = 1;
 @end
 
 // Image region implementation.
-@interface SPImageRegion : NSView <NSTextInputClient> {
-@public
-    // The stable token of the region that an opt-in frame identity tags each presented frame with
-    // (docs/spec/diagnostics.md): random, made when the region is created and kept until it closes. The token of the IOSurface
-    // of a frame is not it, since a supplier in the lease mode presents frames from several surfaces.
-    uint8_t identityToken[16];
-}
+@interface SPImageRegion : NSView <NSTextInputClient>
 @property sp_region_event event;
 @property void *context;
 @property(retain) CALayer *imageLayer;
@@ -235,17 +217,6 @@ static NSString *keypadKeyName(unsigned short keyCode) {
 static NSHashTable *spLiveRegions = nil;
 static id spPressOriginMonitor = nil;
 static NSUInteger spOpenRegionCount = 0;
-
-void sp_region_restore_capture_identity(void) {
-    NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
-    for (SPImageRegion *region in spLiveRegions) {
-        if (region.closed || region.presented == NULL || region.imageLayer.contents == (__bridge id)region.presented) continue;
-        surfaceTransactionBegin();
-        [CATransaction setDisableActions:YES];
-        region.imageLayer.contents = (__bridge id)region.presented;
-        surfaceTransactionCommit();
-    }
-}
 
 // Whether a press at a point of the window reaches region. A region that does not show takes no press: a surface that hides keeps
 // the frame of its last placement, and that frame can lie under a press elsewhere in the window.
@@ -1576,34 +1547,6 @@ static IOSurfaceRef copyPresentation(SPImageRegion *view, IOSurfaceRef source, c
     return copy;
 }
 
-// Diagnostic pixels have the same presentation contract as ordinary frames.
-// Keep the original presentation for restore/lease ownership; only the layer
-// retains this separate host-owned tagged surface. Never write supplier bytes.
-static IOSurfaceRef copyTaggedPresentation(IOSurfaceRef source, NSData *pixels, size_t stride) {
-    size_t width = IOSurfaceGetWidth(source), height = IOSurfaceGetHeight(source);
-    if (!width || width > SIZE_MAX / 4 || stride < width * 4 || !height || height > SIZE_MAX / stride
-        || pixels.length != stride * height) return NULL;
-    IOSurfaceRef tagged = createPresentationSurface(width, height);
-    if (!tagged) return NULL;
-    CFPropertyListRef colors = IOSurfaceCopyValue(source, kIOSurfaceColorSpace);
-    if (colors) {
-        IOSurfaceSetValue(tagged, kIOSurfaceColorSpace, colors);
-        CFRelease(colors);
-    }
-    if (IOSurfaceLock(tagged, 0, NULL) != kIOReturnSuccess) {
-        CFRelease(tagged);
-        return NULL;
-    }
-    uint8_t *to = IOSurfaceGetBaseAddress(tagged);
-    size_t targetStride = IOSurfaceGetBytesPerRow(tagged);
-    BOOL valid = to && targetStride >= width * 4;
-    if (valid) for (size_t row = 0; row < height; row++)
-        memcpy(to + row * targetStride, (const uint8_t *)pixels.bytes + row * stride, width * 4);
-    IOSurfaceUnlock(tagged, 0, NULL);
-    if (!valid) { CFRelease(tagged); return NULL; }
-    return tagged;
-}
-
 // Returns the accepted surface retained for the lease mode after the check of its declared color space, which the copy mode
 // makes in copyPresentation, or NULL when the declaration cannot be decoded.
 static IOSurfaceRef leasePresentation(IOSurfaceRef surface, char *declaredColorSpaceName, size_t nameCapacity) {
@@ -1621,35 +1564,12 @@ static IOSurfaceRef leasePresentation(IOSurfaceRef surface, char *declaredColorS
     return (IOSurfaceRef)CFRetain(surface);
 }
 
-// The image of a presentation copy for the diagnostics that read source bytes and color space: its bytes with the declared
-// color space, or DeviceRGB when it declares none. The caller releases it.
-static CGImageRef copyPresentationImage(IOSurfaceRef surface) {
-    if (IOSurfaceLock(surface, kIOSurfaceLockReadOnly, NULL) != kIOReturnSuccess) return NULL;
-    size_t width = IOSurfaceGetWidth(surface);
-    size_t height = IOSurfaceGetHeight(surface);
-    size_t bytesPerRow = IOSurfaceGetBytesPerRow(surface);
-    CFDataRef data = CFDataCreate(NULL, IOSurfaceGetBaseAddress(surface), bytesPerRow * height);
-    IOSurfaceUnlock(surface, kIOSurfaceLockReadOnly, NULL);
-    if (!data) return NULL;
-    CFPropertyListRef colorProperties = IOSurfaceCopyValue(surface, kIOSurfaceColorSpace);
-    CGColorSpaceRef colors = colorProperties ? createDeclaredColorSpace(colorProperties) : CGColorSpaceCreateDeviceRGB();
-    if (colorProperties) CFRelease(colorProperties);
-    CGDataProviderRef provider = CGDataProviderCreateWithCFData(data);
-    CGImageRef image = provider && colors ? CGImageCreate(width, height, 8, 32, bytesPerRow, colors,
-        kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst, provider, NULL, false, kCGRenderingIntentDefault) : NULL;
-    if (colors) CGColorSpaceRelease(colors);
-    if (provider) CGDataProviderRelease(provider);
-    CFRelease(data);
-    return image;
-}
-
 void *sp_region_create(void *surfaceHandle, const char *name, sp_region_event event, void *context) {
     NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
     NSView *surface = (NSView *)surfaceHandle;
     if (!surface || !name || !event || !surface.window) return NULL;
 
     SPImageRegion *view = [[SPImageRegion alloc] initWithFrame:NSZeroRect];
-    arc4random_buf(view->identityToken, sizeof view->identityToken);
     view.event = event;
     view.context = context;
     view.webSurface = surface;
@@ -1796,107 +1716,10 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
         return false;
     }
 
-    BOOL identityTagging = sp_image_capture_match_identity_session_active() && !view.isHiddenOrHasHiddenAncestor;
-    BOOL captureMatching = !identityTagging && sp_image_capture_match_active() && !view.isHiddenOrHasHiddenAncestor;
-    // The diagnostics read the source bytes and color space through an image of the presentation copy.
-    CGImageRef snapshot = identityTagging || captureMatching ? copyPresentationImage(presentation) : NULL;
-    if ((identityTagging || captureMatching) && !snapshot) {
-        CFRelease(presentation);
-        [view reject:@"presentFailed"];
-        return false;
-    }
     id displayContents = (__bridge id)presentation;
-    CGImageRef taggedSnapshot = NULL;
-    IOSurfaceRef taggedPresentation = NULL;
-    CFDataRef sourceBytes = NULL;
-    if (identityTagging) {
-        CGDataProviderRef provider = CGImageGetDataProvider(snapshot);
-        sourceBytes = provider ? CGDataProviderCopyData(provider) : NULL;
-        sp_image_capture_identity identity = { generation, raster, sequence };
-        const char *colorSpaceName = declaredColorSpaceName[0] ? declaredColorSpaceName : NULL;
-        NSRect localBounds = [view convertRect:view.bounds toView:nil];
-        NSRect screenBounds = [view.window convertRectToScreen:localBounds];
-        NSScreen *primaryScreen = NSScreen.screens.firstObject;
-        if (primaryScreen) {
-            // The window server bounds of a capture and window_facts use top-left coordinates. AppKit screen rectangles use a
-            // bottom-left origin, so normalize before retaining bounds for crop mapping.
-            screenBounds.origin.y = NSMaxY(primaryScreen.frame) - NSMaxY(screenBounds);
-        } else {
-            screenBounds = NSZeroRect;
-        }
-        size_t imageWidth = CGImageGetWidth(snapshot);
-        size_t imageHeight = CGImageGetHeight(snapshot);
-        size_t imageStride = CGImageGetBytesPerRow(snapshot);
-        bool sourceRetained = sourceBytes && sp_image_capture_match_retain(identity,
-            CFDataGetBytePtr(sourceBytes), imageWidth, imageHeight, imageStride,
-            NSRectToCGRect(screenBounds), scale, colorSpaceName);
-        NSString *identityFailure = nil;
-        if (!sourceBytes) {
-            sp_image_capture_match_drop();
-            identityFailure = @"frame identity source raster bytes could not be copied";
-        } else if (!sourceRetained) {
-            identityFailure = @"frame identity source raster could not be retained within its diagnostic bounds";
-        } else if (imageWidth < 192 || imageHeight < 192) {
-            identityFailure = @"frame identity source raster is too small for the reserved 192x192 ROI";
-        } else if (!CGImageGetColorSpace(snapshot)) {
-            identityFailure = @"frame identity source image has no color-space metadata";
-        } else {
-            CGRect roi = CGRectMake(imageWidth - 192, 0, 192, 192);
-            NSString *regionNonce = nil;
-            NSString *issuedPayload = nil;
-            char *identityError = NULL;
-            if (!sp_image_capture_match_identity_region_nonce(view->identityToken, &regionNonce, &identityError)) {
-                identityFailure = [NSString stringWithUTF8String:identityError ?: "region nonce derivation failed"];
-            }
-            free(identityError); identityError = NULL;
-            if (!identityFailure && !sp_image_capture_match_identity_issue(view->identityToken, identity,
-                &issuedPayload, &identityError)) {
-                identityFailure = [NSString stringWithUTF8String:identityError ?: "source identity issuance failed"];
-            }
-            free(identityError); identityError = NULL;
-            NSData *taggedPixels = nil;
-            NSString *encodedPayload = nil;
-            NSString *encodeError = nil;
-            if (!identityFailure && !sp_capture_frame_identity_encode(CFDataGetBytePtr(sourceBytes), imageWidth,
-                imageHeight, imageStride, CGImageGetColorSpace(snapshot), roi, regionNonce,
-                (SPCaptureFrameIdentity){ generation, raster, sequence }, &taggedSnapshot,
-                &taggedPixels, &encodedPayload, &encodeError)) {
-                identityFailure = encodeError ?: @"frame identity QR encoding failed";
-            }
-            if (!identityFailure && ![issuedPayload isEqualToString:encodedPayload])
-                identityFailure = @"frame identity encoder returned a payload outside the issued set";
-            if (!identityFailure) {
-                taggedPresentation = copyTaggedPresentation(presentation, taggedPixels, imageStride);
-                if (!taggedPresentation) identityFailure = @"frame identity tagged IOSurface presentation could not be copied";
-            }
-            if (!identityFailure && !sp_image_capture_match_identity_record(view->identityToken, identity, roi,
-                taggedPixels.bytes, imageWidth, imageHeight, imageStride, colorSpaceName, &identityError)) {
-                identityFailure = [NSString stringWithUTF8String:identityError ?: "tagged source artifact was not accepted"];
-            }
-            free(identityError);
-            if (!identityFailure && !sp_image_capture_match_identity_session_active()) {
-                char *sessionError = sp_image_capture_match_identity_session_error_copy();
-                identityFailure = sessionError
-                    ? [NSString stringWithUTF8String:sessionError]
-                    : @"frame identity artifact failed before tagged presentation";
-                free(sessionError);
-            }
-            if (!identityFailure) displayContents = (__bridge id)taggedPresentation;
-            else if (issuedPayload) {
-                char *evictionError = NULL;
-                if (!sp_image_capture_match_identity_evict(view->identityToken, identity, &evictionError))
-                    sp_log_error("frame identity", evictionError ?: "failed to remove an unpresented issued payload");
-                free(evictionError);
-            }
-            [regionNonce release]; [issuedPayload release]; [taggedPixels release];
-            [encodedPayload release]; [encodeError release];
-        }
-        if (identityFailure) failFrameIdentitySession(identityFailure);
-    }
 
     // The previous presentation is replaced only after all validation and copying are done. In the copy mode the layer never
-    // points at the IOSurface that the provider rewrites; the presentation copy remains the unmodified source while
-    // displayContents may carry the opt-in diagnostic QR, and the previous copy becomes the spare of the next frame. In the
+    // points at the IOSurface that the provider rewrites, and the previous copy becomes the spare of the next frame. In the
     // lease mode the previous surface is released to its supplier after the swap.
     IOSurfaceRef previous = view.presented;
     uint64_t previousGeneration = view.presentedGeneration, previousRaster = view.presentedRaster;
@@ -1916,35 +1739,6 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
     view.presentedRaster = raster;
     view.presentedSequence = sequence;
     view.presentationError = nil;
-    if (captureMatching) {
-        CGDataProviderRef provider = CGImageGetDataProvider(snapshot);
-        CFDataRef snapshotBytes = provider ? CGDataProviderCopyData(provider) : NULL;
-        const char *colorSpaceName = declaredColorSpaceName[0] ? declaredColorSpaceName : NULL;
-        NSRect localBounds = [view convertRect:view.bounds toView:nil];
-        NSRect screenBounds = [view.window convertRectToScreen:localBounds];
-        NSScreen *primaryScreen = NSScreen.screens.firstObject;
-        if (primaryScreen) {
-            // The window server bounds of a capture and window_facts use top-left coordinates. AppKit screen rectangles use a
-            // bottom-left origin, so normalize before retaining bounds for crop mapping.
-            screenBounds.origin.y = NSMaxY(primaryScreen.frame) - NSMaxY(screenBounds);
-        } else {
-            screenBounds = NSZeroRect;
-        }
-        sp_image_capture_identity identity = { generation, raster, sequence };
-        if (snapshotBytes) {
-            if (!sp_image_capture_match_retain(identity, CFDataGetBytePtr(snapshotBytes), CGImageGetWidth(snapshot),
-                CGImageGetHeight(snapshot), CGImageGetBytesPerRow(snapshot), NSRectToCGRect(screenBounds), scale,
-                colorSpaceName)) sp_log_error("image capture match", "source snapshot exceeded or failed the diagnostic retention bound");
-            CFRelease(snapshotBytes);
-        } else {
-            sp_image_capture_match_drop();
-            sp_log_error("image capture match", "source snapshot bytes could not be copied for diagnostic retention");
-        }
-    }
-    if (sourceBytes) CFRelease(sourceBytes);
-    if (taggedSnapshot) CGImageRelease(taggedSnapshot);
-    if (taggedPresentation) CFRelease(taggedPresentation);
-    if (snapshot) CGImageRelease(snapshot);
     if (previous && view.released) {
         // The lease of the replaced surface ends with the committed swap; a surface sent again while held is not released.
         if (previous != presentation) view.released(view.releasedContext, previousGeneration, previousRaster, previousSequence);
@@ -1995,11 +1789,6 @@ void sp_region_caret(void *handle, double x, double y, double w, double h) {
 void sp_region_set_input_context(void *handle, void *context) {
     NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
     ((SPImageRegion *)handle).givenInputContext = (NSTextInputContext *)context;
-}
-
-void sp_region_identity_token(void *handle, unsigned char token[16]) {
-    NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
-    memcpy(token, ((SPImageRegion *)handle)->identityToken, sizeof ((SPImageRegion *)handle)->identityToken);
 }
 
 void sp_region_text(void *handle, const char *utf8) {

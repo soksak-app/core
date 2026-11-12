@@ -69,7 +69,7 @@ static void recordWithHeldStill(NSWindow *window, NSString *directory, BOOL fail
     __block bool started = false;
     __block char *startError = NULL;
     NSArray<NSDictionary *> *startEvents = opened ? capturedEvents(^{
-        started = sp_capture_start(directory.fileSystemRepresentation, 10, 0, 4096, false, 1, &startError);
+        started = sp_capture_start(directory.fileSystemRepresentation, 10, 0, 4096, 1, &startError);
     }) : @[];
     check(started, [NSString stringWithFormat:@"%@: the recording starts (%s)", label, startError ?: ""]);
     free(startError);

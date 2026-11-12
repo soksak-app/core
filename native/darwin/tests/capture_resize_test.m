@@ -100,7 +100,7 @@ int main(void) { @autoreleasepool {
         free(operationError); operationError = NULL;
         // One still at each refresh of the display, for as long as the change takes: the stop ends the recording.
         double gap = 1000.0 / window.screen.maximumFramesPerSecond;
-        bool recording = opened && sp_capture_start(directory.fileSystemRepresentation, gap, 0, 4096, false, 0, &operationError);
+        bool recording = opened && sp_capture_start(directory.fileSystemRepresentation, gap, 0, 4096, 0, &operationError);
         check(recording, [NSString stringWithFormat:@"%@: recording starts with its first still (%s)", label, operationError ?: ""]);
         free(operationError);
         if (!recording) return 0;

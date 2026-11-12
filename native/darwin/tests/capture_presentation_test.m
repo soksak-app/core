@@ -146,7 +146,7 @@ int main(void) { @autoreleasepool {
     free(operationError); operationError = NULL;
     // Half the shortest refresh interval of the display: every drawable stays on screen for at least one refresh.
     double gap = MAX(1, window.screen.minimumRefreshInterval * 1000 / 2);
-    BOOL started = opened && sp_capture_start(directory.fileSystemRepresentation, gap, 0, 4096, false, 1, &operationError);
+    BOOL started = opened && sp_capture_start(directory.fileSystemRepresentation, gap, 0, 4096, 1, &operationError);
     check(started, [NSString stringWithFormat:@"the recording of the control window starts (%s)", operationError ?: ""]);
     free(operationError); operationError = NULL;
     if (!started) { [window close]; [view release]; [window release]; return 1; }

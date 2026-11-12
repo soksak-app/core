@@ -195,7 +195,7 @@ int main(void) { @autoreleasepool {
     check(sp_capture_open(window.windowNumber, false, &error), [NSString stringWithFormat:@"the covered window opens for a recording (%s)", error ?: ""]);
     free(error); error = NULL;
     double length = 3000;
-    bool started = sp_capture_start(recorded.fileSystemRepresentation, period, length / 1000, 0, false, 1, &error);
+    bool started = sp_capture_start(recorded.fileSystemRepresentation, period, length / 1000, 0, 1, &error);
     check(started, [NSString stringWithFormat:@"the recording of the covered window starts (%s)", error ?: ""]);
     free(error); error = NULL;
     NSUInteger planned = (NSUInteger)ceil(length / period);

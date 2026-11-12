@@ -129,7 +129,7 @@ test("portable repeat-go forwards the explicitly selected internal macOS minimum
   assert.match(command, /--ldflags=['"]-macos=99\.7['"]/);
 });
 
-test("the native library compiles, configures and declares in its pkg-config file the macOS minimum of the Makefile", { timeout: 60000 }, () => {
+test("the native library compiles and declares in its pkg-config file the macOS minimum of the Makefile", { timeout: 60000 }, () => {
   const expand = (variables) => {
     const result = spawnSync("make", ["-n", "-B", "-C", "native/darwin", ...variables, "build"], { cwd: root, encoding: "utf8", timeout: 30000 });
     assert.ifError(result.error);
@@ -139,10 +139,8 @@ test("the native library compiles, configures and declares in its pkg-config fil
   for (const [variables, version] of [[[], macosMinimum(root)], [[`MACOS_MINIMUM=${PROBE}`], PROBE]]) {
     const lines = expand(variables);
     const clang = lines.filter((line) => /^clang /.test(line));
-    const cmake = lines.filter((line) => /^cmake -S /.test(line));
-    assert.ok(clang.length > 0 && cmake.length === 1, lines.join("\n"));
+    assert.ok(clang.length > 0, lines.join("\n"));
     for (const line of clang) assert.ok(line.includes(` -mmacosx-version-min=${version} `), `${line}\n  does not compile for ${version}`);
-    assert.ok(cmake[0].includes(`-DCMAKE_OSX_DEPLOYMENT_TARGET=${version} `), `${cmake[0]}\n  does not configure ZXing for ${version}`);
     const pkgconfig = lines.filter((line) => line.includes("soksak-darwin.pc"));
     assert.ok(pkgconfig.some((line) => line.includes(`-mmacosx-version-min=${version}`)), `the pkg-config file does not declare ${version}:\n${pkgconfig.join("\n")}`);
   }

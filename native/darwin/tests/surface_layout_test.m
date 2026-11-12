@@ -210,7 +210,7 @@ static BOOL snapshotShowsMarkerAtX(NSImage *image, CGFloat x) {
 // Starts a recording of the opened window with one still at each refresh of its display, long enough for every check of this
 // file: each check stops it at the state it judges. The start answers once still 0 is written.
 static bool startRecording(NSWindow *window, const char *directory, char **error) {
-    return sp_capture_start(directory, 1000.0 / window.screen.maximumFramesPerSecond, 0, 4096, false, 0, error);
+    return sp_capture_start(directory, 1000.0 / window.screen.maximumFramesPerSecond, 0, 4096, 0, error);
 }
 
 // A joined plugin root webview presents its resized content while its window transaction remains open, then the

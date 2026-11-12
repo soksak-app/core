@@ -6,26 +6,12 @@
 #include "capture.h"
 #include "surface_layout.h"
 #include "notifications.h"
-#include "document_view.h"
 #include "main_thread.h"
 #include "host_callbacks.h"
 
 // The callbacks run their Go functions on the worker, and the native calls of this file that use AppKit or WebKit run on the main
 // thread (main_thread.h). The capture functions of capture.h need no thread: the host calls those that do not wait directly, and
 // the capture calls that wait or read the windows on the main thread run on a queue of their own (scheduleCapture*).
-static void documentFrameIdentityDoneBridge(void *context, const char *json, const char *error) {
-	hostRunOnWorker(^{ sp_host_diagnostic_callback_document_frame_identity_done((uintptr_t)context, (char *)json, (char *)error); });
-}
-bool scheduleDocumentFrameIdentityStart(void *document, uint64_t generation, uintptr_t context) {
-	return ON_MAIN(bool, sp_document_frame_identity_start(document, generation, documentFrameIdentityDoneBridge, (void *)context));
-}
-bool scheduleDocumentFrameIdentityFreeze(uint64_t generation, uintptr_t context) {
-	return ON_MAIN(bool, sp_document_frame_identity_freeze(generation, documentFrameIdentityDoneBridge, (void *)context));
-}
-bool scheduleDocumentFrameIdentityRemove(uint64_t generation, uintptr_t context) {
-	return ON_MAIN(bool, sp_document_frame_identity_remove(generation, documentFrameIdentityDoneBridge, (void *)context));
-}
-
 static void deliveredNotificationsBridge(void *context, const char *json) {
     hostRunOnWorker(^{ sp_host_diagnostic_callback_delivered_notifications((uintptr_t)context, (char *)json); });
 }
@@ -79,13 +65,12 @@ void scheduleCaptureOpen(long windowNumber, bool display, uintptr_t context) {
         }
     });
 }
-void scheduleCaptureStart(const char *directory, double gap, double seconds, int frames, bool frameIdentity, uint64_t token,
-    uintptr_t context) {
+void scheduleCaptureStart(const char *directory, double gap, double seconds, int frames, uint64_t token, uintptr_t context) {
     char *folder = directory != NULL ? strdup(directory) : NULL;
     dispatch_async(captureCalls(), ^{
         @autoreleasepool {
             char *error = NULL;
-            bool started = sp_capture_start(folder, gap, seconds, frames, frameIdentity, token, &error);
+            bool started = sp_capture_start(folder, gap, seconds, frames, token, &error);
             free(folder);
             answerCapture(context, started, error);
         }

@@ -15,8 +15,6 @@
 #import <CommonCrypto/CommonDigest.h>
 #import "capture.h"
 #import "window_reveal.h"
-#import "image_capture_match.h"
-#import "image_region.h"
 #import "application_log.h"
 #import "event_ring.h"
 #import "observe.h"
@@ -247,49 +245,6 @@ static BOOL drawOwnSpace(CGImageRef image, uint8_t *pixels, size_t width, size_t
     return YES;
 }
 
-static NSDictionary *captureRectRecord(CGRect rect) {
-    return @{ @"x": @(CGRectGetMinX(rect)), @"y": @(CGRectGetMinY(rect)),
-        @"width": @(CGRectGetWidth(rect)), @"height": @(CGRectGetHeight(rect)) };
-}
-
-static NSDictionary *imageMatchRecord(sp_image_capture_match_result result, double processingMilliseconds,
-    size_t frameWidth, size_t frameHeight, size_t frameStride, CGRect contentRect, CGRect screenRect,
-    double contentScale, double scaleFactor, const char *colorSpace) {
-    NSMutableArray *candidates = [NSMutableArray arrayWithCapacity:result.candidate_count];
-    for (size_t index = 0; index < result.candidate_count; index++) {
-        sp_image_capture_identity identity = result.candidates[index];
-        [candidates addObject:@{ @"generation": [NSString stringWithFormat:@"%llu", (unsigned long long)identity.generation],
-            @"raster": [NSString stringWithFormat:@"%llu", (unsigned long long)identity.raster],
-            @"sequence": @(identity.sequence) }];
-    }
-    NSDictionary *source = result.has_latest_source ? @{ @"generation": [NSString stringWithFormat:@"%llu", (unsigned long long)result.latest_source.generation],
-        @"raster": [NSString stringWithFormat:@"%llu", (unsigned long long)result.latest_source.raster],
-        @"sequence": @(result.latest_source.sequence), @"width": @(result.latest_width), @"height": @(result.latest_height),
-        @"stride": @(result.latest_stride), @"scale": @(result.latest_scale),
-        @"colorSpace": result.latest_color_space[0] ? [NSString stringWithUTF8String:result.latest_color_space] : (id)NSNull.null,
-        @"screenBounds": captureRectRecord(result.latest_screen_bounds) } : (id)NSNull.null;
-    NSMutableDictionary *record = [NSMutableDictionary dictionaryWithDictionary:@{ @"state": [NSString stringWithUTF8String:sp_image_capture_match_state_name(result.state)],
-        @"displayTime": [NSString stringWithFormat:@"%llu", (unsigned long long)result.display_time],
-        @"candidates": candidates, @"droppedSnapshots": @(result.dropped_snapshots),
-        @"processingMilliseconds": @(processingMilliseconds),
-        @"captureFrame": @{ @"width": @(frameWidth), @"height": @(frameHeight), @"stride": @(frameStride),
-            @"contentRect": captureRectRecord(contentRect), @"screenRect": captureRectRecord(screenRect),
-            @"contentScale": @(contentScale), @"scaleFactor": @(scaleFactor),
-            @"colorSpace": colorSpace ? [NSString stringWithUTF8String:colorSpace] : (id)NSNull.null },
-        @"latestRetainedSource": source,
-        @"latestSourceCrop": result.has_latest_crop ? captureRectRecord(result.latest_crop) : (id)NSNull.null }];
-    if (result.has_pixel_difference) {
-        record[@"differentPixels"] = @(result.different_pixels);
-        record[@"firstDifference"] = @{
-            @"x": @(result.first_difference_x),
-            @"y": @(result.first_difference_y),
-            @"expectedBGRA": @[@(result.expected_bgra[0]), @(result.expected_bgra[1]), @(result.expected_bgra[2]), @(result.expected_bgra[3])],
-            @"actualBGRA": @[@(result.actual_bgra[0]), @(result.actual_bgra[1]), @(result.actual_bgra[2]), @(result.actual_bgra[3])],
-        };
-    }
-    return record;
-}
-
 // The frame file: header (12 bytes of uint32, 64 bytes of float64), marker, compressed count, checksum, then the LZ4 block.
 static const size_t kFrameHeader = 3 * sizeof(uint32_t) + 8 * sizeof(double);
 static const size_t kFrameEncodedHeader = kFrameHeader + 12;
@@ -302,36 +257,14 @@ static void setCaptureError(NSString *message);
 static bool hasCaptureError(void);
 static void stillOutcome(SPCaptureRecording *recording, NSUInteger index, NSString *outcome, NSString *error, NSString *frame);
 
-// The serial queue that writes frames to disk, the queue of source artifacts, and the upper limit of frames that wait to be
-// written.
+// The serial queue that writes frames to disk and the upper limit of frames that wait to be written.
 static dispatch_queue_t captureWriter;
-static dispatch_queue_t captureSourceWriter;
 static dispatch_semaphore_t capturePending;
 static const long kCapturePending = 64;
 // The queue whose strict timer requests the stills at their planned times, and the queue on which each still is taken. Neither
 // is the main queue, so a busy main thread does not move a request.
 static dispatch_queue_t captureRequests;
 static dispatch_queue_t captureWorkers;
-
-static void endCaptureSourceArtifacts(void);
-
-static bool beginCaptureSourceArtifacts(NSString *directory, bool sourceFiles) {
-    if (directory == nil || captureWriter == NULL) return false;
-    if (captureSourceWriter != NULL) endCaptureSourceArtifacts();
-    captureSourceWriter = dispatch_queue_create("sp.capture.source-writer", DISPATCH_QUEUE_SERIAL);
-    if (captureSourceWriter == NULL) return false;
-    if (sourceFiles) sp_image_capture_match_begin(directory.fileSystemRepresentation, captureSourceWriter);
-    else sp_image_capture_match_begin_without_source_files(directory.fileSystemRepresentation, captureSourceWriter);
-    return true;
-}
-
-static void endCaptureSourceArtifacts(void) {
-    sp_image_capture_match_end();
-    if (captureSourceWriter != NULL) {
-        dispatch_release(captureSourceWriter);
-        captureSourceWriter = NULL;
-    }
-}
 
 static void prepareCaptureQueues(void) {
     static dispatch_once_t once;
@@ -684,8 +617,7 @@ static void emitLifecycle(SPCaptureRecording *recording, NSString *phase, uint8_
 }
 @end
 
-// The error of the recordings. A failed recording ends its identity session, and its tagged regions are restored on the main
-// thread unless a newer recording owns them.
+// The error of the recordings.
 static void appendCaptureError(NSString *message) {
     NSString *combined = captureError == nil ? [message copy]
         : [[captureError stringByAppendingFormat:@"; %@", message] copy];
@@ -700,46 +632,9 @@ static void clearCaptureError(void) {
     }
 }
 
-static void failIdentitySessionForCaptureError(NSString *message) {
-    if (!sp_image_capture_match_identity_session_active()) return;
-    char *identityError = NULL;
-    if (!sp_image_capture_match_identity_session_fail(message.UTF8String, &identityError) && identityError != NULL)
-        sp_log_error("frame identity", identityError);
-    free(identityError);
-}
-
-// Restores the raw image layers after a failure of recording, or of no recording, unless a newer recording or identity session
-// owns the tags by the time the main thread runs it.
-static void restoreCaptureIdentityAfterFailure(SPCaptureRecording *recording) {
-    void (^restore)(void) = ^{
-        bool current = false, noCurrent = false;
-        @synchronized ([SPCaptureRecording class]) {
-            current = recording != nil && captureRecording == recording;
-            noCurrent = captureRecording == nil;
-        }
-        if (current || (noCurrent && !sp_image_capture_match_identity_session_active())) sp_region_restore_capture_identity();
-    };
-    if (NSThread.isMainThread) {
-        restore();
-        return;
-    }
-    [recording retain];
-    dispatch_async(dispatch_get_main_queue(), ^{
-        restore();
-        [recording release];
-    });
-}
-
 static void setCaptureError(NSString *message) {
-    SPCaptureRecording *recording = nil;
-    @synchronized ([SPCaptureRecording class]) {
-        appendCaptureError(message);
-        failIdentitySessionForCaptureError(message);
-        recording = [captureRecording retain];
-    }
+    @synchronized ([SPCaptureRecording class]) { appendCaptureError(message); }
     sp_log_error("capture", message.UTF8String);
-    restoreCaptureIdentityAfterFailure(recording);
-    [recording release];
 }
 
 static bool hasCaptureError(void) {
@@ -757,11 +652,6 @@ void sp_capture_test_report_error(const char *message) {
         return;
     }
     setCaptureError(decoded);
-}
-
-void sp_capture_test_report_startup_failure(const char *message) {
-    endCaptureSourceArtifacts();
-    sp_capture_test_report_error(message);
 }
 
 const char *sp_capture_error(void) {
@@ -789,6 +679,11 @@ static void stillOutcome(SPCaptureRecording *recording, NSUInteger index, NSStri
         record[@"outcome"] = outcome;
         record[@"error"] = error ?: (id)NSNull.null;
         record[@"frame"] = frame ?: (id)NSNull.null;
+        // A still without a frame names no colour space.
+        if (frame == nil) {
+            record[@"colorSpace"] = NSNull.null;
+            record[@"colorProfile"] = NSNull.null;
+        }
         if ([outcome isEqual:@"written"]) recording.written++;
         recording.outcomes++;
         row = [[record copy] autorelease];
@@ -898,7 +793,7 @@ static NSString *colorProfileFile(SPCaptureRecording *recording, CGColorSpaceRef
 }
 
 // Processes the image of still index after its completion: its pixels as BGRA in the colour space of the image with the header,
-// the ICC profile of that space, the image match, the identity decode, and the frame write. image is released by the caller.
+// the ICC profile of that space, and the frame write. image is released by the caller.
 static void processStill(SPCaptureRecording *recording, NSUInteger index, SPCaptureTarget *target, CGImageRef image,
     uint64_t requested, uint64_t completed) {
     uint64_t processStarted = captureTicks();
@@ -933,7 +828,7 @@ static void processStill(SPCaptureRecording *recording, NSUInteger index, SPCapt
         stillOutcome(recording, index, @"failed", profileFailure, nil);
         return;
     }
-    // A named colour space keeps its name, which the sources of the image match carry; another one is named by its profile.
+    // A named colour space keeps its name; another one is named by its profile.
     NSString *spaceName = [(NSString *)CGColorSpaceCopyName(space) autorelease];
     @synchronized (recording) {
         recording.rows[index][@"colorSpace"] = spaceName ?: (id)NSNull.null;
@@ -946,41 +841,11 @@ static void processStill(SPCaptureRecording *recording, NSUInteger index, SPCapt
         ticksToMilliseconds(requested, timebase), ticksToMilliseconds(completed, timebase) };
     memcpy(frame, head, sizeof head);
     memcpy(frame + sizeof head, info, sizeof info);
-    const char *colorName = (spaceName ?: profile).UTF8String;
-    uint64_t matchStarted = captureTicks();
-    CFTimeInterval matchBegan = CACurrentMediaTime();
-    sp_image_capture_match_result match = sp_image_capture_match_sample(frame + kFrameHeader, width, height, stride, content,
-        screen, 1, scale, colorName, completed);
-    uint64_t matchCompleted = captureTicks();
-    NSDictionary *matchRecord = imageMatchRecord(match, (CACurrentMediaTime() - matchBegan) * 1000, width, height, stride,
-        content, screen, 1, scale, colorName);
-    sp_image_capture_match_result_dispose(&match);
-    uint64_t enqueueStarted = 0, enqueueCompleted = 0;
-    NSString *identityFailure = nil;
-    if (sp_image_capture_match_identity_session_active()) {
-        char *identityError = NULL;
-        enqueueStarted = captureTicks();
-        BOOL enqueued = sp_image_capture_match_identity_enqueue_frame(frame + kFrameHeader, width, height, stride, space, content,
-            screen, 1, scale, (uint64_t)index, requested, completed, &identityError);
-        enqueueCompleted = captureTicks();
-        if (!enqueued) {
-            identityFailure = [NSString stringWithUTF8String:identityError ?: "captured still identity decode could not be queued"];
-            free(identityError);
-        }
-    }
     @synchronized (recording) {
         NSMutableDictionary *row = recording.rows[index];
         row[@"writeStartTime"] = tickString(processStarted);
-        row[@"imageMatchStartTime"] = tickString(matchStarted);
-        row[@"imageMatchCompleteTime"] = tickString(matchCompleted);
-        row[@"imageMatch"] = matchRecord;
-        if (enqueueStarted) {
-            row[@"identityDecodeEnqueueStartTime"] = tickString(enqueueStarted);
-            row[@"identityDecodeEnqueueCompleteTime"] = tickString(enqueueCompleted);
-        }
         row[@"writeCompleteTime"] = tickString(captureTicks());
     }
-    if (identityFailure != nil) setCaptureError([NSString stringWithFormat:@"frame identity decode failed: %@", identityFailure]);
     // A still that waits for the writer would move the requests after it, so a full writer fails the still instead.
     if (dispatch_semaphore_wait(capturePending, DISPATCH_TIME_NOW) != 0) {
         free(frame);
@@ -1320,21 +1185,12 @@ static bool writeCaptureDisplayLinkTrace(SPCaptureRecording *recording) {
     return true;
 }
 
-// Finalizes the artifacts of a recording whose stills all settled: restores the raw image layers, writes the source manifest,
-// stills.jsonl and display-link.json, and ends the source artifacts.
+// Finalizes the artifacts of a recording whose stills all settled: writes stills.jsonl and display-link.json.
 static bool finalizeCaptureArtifacts(SPCaptureRecording *recording) {
     [recording stopDisplayLinkObservation];
-    onMain(^{ sp_region_restore_capture_identity(); });
-    bool sourceManifestWritten = sp_image_capture_match_write_manifest(recording.directory.fileSystemRepresentation);
-    char *identityError = sp_image_capture_match_identity_session_error_copy();
-    NSString *identityReason = identityError ? [NSString stringWithUTF8String:identityError] : nil;
-    free(identityError);
-    if (identityReason) setCaptureError([NSString stringWithFormat:@"frame identity capture failed: %@", identityReason]);
-    else if (!sourceManifestWritten) setCaptureError(@"diagnostic image source artifact manifest or source write failed");
     bool stillsWritten = writeCaptureStills(recording);
     bool displayLinkWritten = writeCaptureDisplayLinkTrace(recording);
-    endCaptureSourceArtifacts();
-    return sourceManifestWritten && identityReason == nil && stillsWritten && displayLinkWritten;
+    return stillsWritten && displayLinkWritten;
 }
 
 // Ends the recording: no later still is requested, every requested still settles, the artifacts are written, and the counts of
@@ -1403,8 +1259,7 @@ static NSString *planStills(double gap, double seconds, int frames, NSUInteger *
     return nil;
 }
 
-bool sp_capture_start(const char *directory, double gap, double seconds, int frames, bool frameIdentity, uint64_t token,
-    char **errorOut) {
+bool sp_capture_start(const char *directory, double gap, double seconds, int frames, uint64_t token, char **errorOut) {
     if (errorOut == NULL) {
         sp_log_error("capture start", "an error output is required");
         return false;
@@ -1443,27 +1298,6 @@ bool sp_capture_start(const char *directory, double gap, double seconds, int fra
         return captureOperationFailure(errorOut, kWindowImageMissing);
     }
     prepareCaptureQueues();
-    // Only the reader of a frame identity recording reads the source files, and a raster of a large view is megabytes.
-    if (!beginCaptureSourceArtifacts(folder, frameIdentity)) {
-        forgetCaptureEnd(token);
-        return captureOperationFailure(errorOut, @"diagnostic source artifact writer could not start");
-    }
-    if (frameIdentity) {
-        char *identityError = NULL;
-        NSString *reason = nil;
-        if (!sp_image_capture_match_identity_session_begin(&identityError))
-            reason = [NSString stringWithUTF8String:identityError ?: "identity session could not start"];
-        else if (!sp_image_capture_match_identity_prepare_decoder(&identityError)) {
-            reason = [NSString stringWithUTF8String:identityError ?: "frame identity Vision readiness failed"];
-            sp_image_capture_match_identity_session_end();
-        }
-        free(identityError);
-        if (reason != nil) {
-            endCaptureSourceArtifacts();
-            forgetCaptureEnd(token);
-            return captureOperationFailure(errorOut, reason);
-        }
-    }
     SPCaptureRecording *recording = [[[SPCaptureRecording alloc] init] autorelease];
     mach_timebase_info_data_t timebase = {};
     mach_timebase_info(&timebase);
@@ -1486,9 +1320,6 @@ bool sp_capture_start(const char *directory, double gap, double seconds, int fra
             @"colorSpace": NSNull.null, @"colorProfile": NSNull.null, @"requestedGap": @(gap), @"machTimebaseNumerator": @(timebase.numer), @"machTimebaseDenominator": @(timebase.denom),
             @"writeStartTime": NSNull.null, @"writeCompleteTime": NSNull.null, @"writerEnqueuedTime": NSNull.null,
             @"writerStartTime": NSNull.null, @"writerCompleteTime": NSNull.null,
-            @"imageMatchStartTime": NSNull.null, @"imageMatchCompleteTime": NSNull.null,
-            @"identityDecodeEnqueueStartTime": NSNull.null, @"identityDecodeEnqueueCompleteTime": NSNull.null,
-            @"frameIdentityDecodeStartTime": NSNull.null, @"frameIdentityDecodeCompleteTime": NSNull.null,
         }]];
     }
     @synchronized ([SPCaptureRecording class]) {

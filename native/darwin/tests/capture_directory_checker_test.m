@@ -10,10 +10,10 @@ static char *fixtureDirectory;
 static int stopCalls, stillCalls;
 static BOOL listingFault;
 
-static bool startWithDirectory(const char *directory, double gap, double seconds, int frames, bool frameIdentity,
-    uint64_t token, char **error) {
+static bool startWithDirectory(const char *directory, double gap, double seconds, int frames, uint64_t token,
+    char **error) {
     if (fixtureDirectory == NULL) fixtureDirectory = strdup(directory);
-    return sp_capture_start(directory, gap, seconds, frames, frameIdentity, token, error);
+    return sp_capture_start(directory, gap, seconds, frames, token, error);
 }
 
 static int stopWithFaults(double after, uint64_t token) {

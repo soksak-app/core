@@ -6,9 +6,9 @@
 
 static NSString *recordingDirectory;
 static BOOL faultApplied;
-static bool startWithDirectory(const char *directory, double gap, double seconds, int frames, bool frameIdentity,
-    uint64_t token, char **error) {
-    bool started = sp_capture_start(directory, gap, seconds, frames, frameIdentity, token, error);
+static bool startWithDirectory(const char *directory, double gap, double seconds, int frames, uint64_t token,
+    char **error) {
+    bool started = sp_capture_start(directory, gap, seconds, frames, token, error);
     // The first recording is the one whose frames the acceptance reads.
     if (started && recordingDirectory == nil) recordingDirectory = [[NSString stringWithUTF8String:directory] copy];
     return started;
