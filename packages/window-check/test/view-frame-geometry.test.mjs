@@ -67,7 +67,7 @@ function recordedFrame({ card = { left: 10, top: 8, right: 90, bottom: 72 },
   if (resumedBorderAfterPlaneGap) {
     for (let x = card.left + 3; x < card.left + 6; x++) paint(x, card.top, PALETTE.planeColor);
   }
-  return { width, height, stride, scale, contentScale, content: contentOrigin, time: 12.5, data };
+  return { width, height, stride, scale, contentScale, content: contentOrigin, requested: 12.5, completed: 13, data };
 }
 
 function twoCardFrame({ extraTargetContent = false, fragmentedTarget = false, centerDifferentColor = false,
@@ -116,7 +116,7 @@ function twoCardFrame({ extraTargetContent = false, fragmentedTarget = false, ce
     }
   }
   if (extraTargetContent) content(112, 30, 113, 31);
-  return { width, height, stride, scale: 1, contentScale: 1, content: { x: 0, y: 0 }, time: 20, data };
+  return { width, height, stride, scale: 1, contentScale: 1, content: { x: 0, y: 0 }, requested: 20, completed: 20.5, data };
 }
 
 test("recorded pixels measure content and outer card on all four edges", { timeout: 1000 }, () => {
@@ -125,7 +125,16 @@ test("recorded pixels measure content and outer card on all four edges", { timeo
   assert.deepEqual(measured.nativeRectPx, { left: 14, top: 22, right: 86, bottom: 64 });
   assert.deepEqual(measured.cardRectPt, { left: 5, top: 4, right: 45, bottom: 36 });
   assert.deepEqual(measured.nativeRectPt, { left: 7, top: 11, right: 43, bottom: 32 });
+  // A measured still keeps the time of its request and of its completion.
   assert.equal(measured.timeMs, 12.5);
+  assert.equal(measured.completedMs, 13);
+});
+
+test("a still completed before its request is no recorded frame", { timeout: 1000 }, () => {
+  assert.throws(() => measureViewFrameGeometry({ ...recordedFrame(), completed: 12 }, PALETTE),
+    /recorded still request or completion time is invalid/);
+  const { completed, ...withoutCompletion } = recordedFrame();
+  assert.throws(() => measureViewFrameGeometry(withoutCompletion, PALETTE), /recorded still request or completion time is invalid/);
 });
 
 test("effective card radius follows public settings and removes the radius at zero gap", { timeout: 1000 }, () => {
@@ -188,7 +197,7 @@ test("geometry boundary errors retain the frame, target, palette, radius, candid
   assert.throws(() => measureViewFrameGeometry(frame, PALETTE), (error) => {
     assert.match(error.message, /geometryDiagnostic=/);
     const diagnostic = JSON.parse(error.message.split("geometryDiagnostic=")[1]);
-    assert.deepEqual(diagnostic.frame, { width: 100, height: 80, timeMs: 12.5 });
+    assert.deepEqual(diagnostic.frame, { width: 100, height: 80, timeMs: 12.5, completedMs: 13 });
     assert.deepEqual(diagnostic.targetSeed, { x: 49, y: 42 });
     assert.deepEqual(diagnostic.contentAnchor, { x: 49, y: 42 });
     assert.deepEqual(diagnostic.palette, { contentColor: PALETTE.contentColor, cardColor: PALETTE.cardColor,
@@ -310,13 +319,21 @@ test("layout timing finds the first changed card frame and first pixel-aligned d
   const card = (right) => ({ left: 0, top: 0, right, bottom: 80 });
   const native = (right) => ({ left: 5, top: 10, right, bottom: 70 });
   const geometry = [
-    { timeMs: 10, cardRectPt: card(100), nativeRectPt: native(95) },
-    { timeMs: 20, cardRectPt: card(100), nativeRectPt: native(95) },
-    { timeMs: 30, cardRectPt: card(110), nativeRectPt: native(95) },
-    { timeMs: 40, cardRectPt: card(110), nativeRectPt: native(105) },
+    { timeMs: 10, completedMs: 10.5, cardRectPt: card(100), nativeRectPt: native(95) },
+    { timeMs: 20, completedMs: 20.5, cardRectPt: card(100), nativeRectPt: native(95) },
+    { timeMs: 30, completedMs: 30.5, cardRectPt: card(110), nativeRectPt: native(95) },
+    { timeMs: 40, completedMs: 40.5, cardRectPt: card(110), nativeRectPt: native(105) },
   ];
   assert.deepEqual(findFirstChangedSlotFrame(geometry, {
     beforeChangeTimeMs: 25, slotInsetsPt: { left: 5, top: 10, right: 5, bottom: 10 },
   }), { baselineFrameIndex: 1, changeFrameIndex: 2, contentFrameIndex: 3,
     slotMatchFrameIndices: [3], maxSlotErrorPt: 0 });
+  // A still shows the window at a moment between its request and its completion, so only a still completed before the request
+  // of the change shows the window before it: a still requested before the change and completed after it is no baseline.
+  assert.equal(findFirstChangedSlotFrame(geometry, {
+    beforeChangeTimeMs: 20.25, slotInsetsPt: { left: 5, top: 10, right: 5, bottom: 10 },
+  }).baselineFrameIndex, 0);
+  assert.throws(() => findFirstChangedSlotFrame(geometry.map(({ completedMs, ...frame }) => frame), {
+    beforeChangeTimeMs: 25, slotInsetsPt: { left: 5, top: 10, right: 5, bottom: 10 },
+  }), /layout geometry frame 0 has no completion time at or after its request/);
 });

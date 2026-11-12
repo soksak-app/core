@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { crc32 } from "node:zlib";
 import { appendFileSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
 import { readFrame } from "../frame.mjs";
+import { stillFrame } from "./still-recording.mjs";
 import { policyOfSetting, readPolicy } from "../log-policy.mjs";
 import * as viewMetrics from "../view-metrics-collection.mjs";
 import { closeViewGroup, collectViewProcessGroups, collectViewReclaimMeasurements, collectViewStartAndMemory, openRecordedView,
@@ -55,17 +55,9 @@ function traceSession(root, calls, { clockValues, hostPid = 41, window = "main",
 // The five clock reads after the start of a trace, each between two native clock reads.
 const CLOCK_READS = Array.from({ length: 5 }, () => ["clock", "read", "clock"]).flat();
 
+/** Writes still `index` of a recording, requested at `time` (ms) and completed 0.5ms later. */
 function writeCapturedFrame(directory, index, time) {
-  const pixels = Buffer.from([1, 2, 3, 255]);
-  const frame = Buffer.alloc(80);
-  frame.writeUInt32LE(1, 0);
-  frame.writeUInt32LE(1, 4);
-  frame.writeUInt32LE(4, 8);
-  [0, 0, 1, 1, 1, 1, time].forEach((value, field) => frame.writeDoubleLE(value, 12 + field * 8));
-  frame.write("LZ4B", 68, "ascii");
-  frame.writeUInt32LE(5, 72);
-  frame.writeUInt32LE(crc32(pixels), 76);
-  writeFileSync(join(directory, `frame-${index}.bgra`), Buffer.concat([frame, Buffer.from([0x40]), pixels]));
+  writeFileSync(join(directory, `frame-${String(index).padStart(4, "0")}.bgra`), stillFrame(1, time, time + 0.5));
 }
 
 test("generic view process samples preserve both event clocks and pair the first ready event", { timeout: 5000 }, () => {
@@ -327,7 +319,9 @@ test("generic source-frame mapping preserves multiple events per capture frame",
     { sequence: 3, timeRange: { lowerMs: 11, upperMs: 12 }, width: 302, height: 200 },
     { sequence: 4, timeRange: { lowerMs: 20, upperMs: 21 }, width: 303, height: 200 },
   ];
-  const captured = [{ time: 9 }, { time: 15 }, { time: 20 }];
+  // Each still is requested at its time and completed 0.5ms later: a source frame maps to the first still requested at or after
+  // the end of its interval.
+  const captured = [{ requested: 9, completed: 9.5 }, { requested: 15, completed: 15.5 }, { requested: 20, completed: 20.5 }];
   assert.deepEqual(mapViewContentFramesToCapture(source, captured), [
     { ...source[0], sourceSequence: 0, frameIndex: 0 },
     { ...source[1], sourceSequence: 1, frameIndex: 1 },
@@ -706,8 +700,11 @@ test("recorded view observation window rejects nonpositive and nonfinite duratio
   }
 });
 
-/** A session that opens view-1 in card-1 under a recording of frames at frameTimes and presents it at displayed. */
-function recordedViewSession(t, { frameTimes, displayed, calls = [] }) {
+/**
+ * A session that opens view-1 in card-1 under a recording of stills requested at frameTimes, of which `missed` more stills were
+ * lost, and presents it at displayed.
+ */
+function recordedViewSession(t, { frameTimes, displayed, missed = 0, calls = [] }) {
   const root = mkdtempSync(join(tmpdir(), "view-recorded-content-"));
   const logDirectory = join(root, "logs");
   const recordingDirectory = join(root, "recording");
@@ -724,7 +721,7 @@ function recordedViewSession(t, { frameTimes, displayed, calls = [] }) {
       return { stop: async ({ after }) => {
         calls.push(`stop after ${after}`);
         for (const [index, time] of frameTimes.entries()) writeCapturedFrame(recordingDirectory, index, time);
-        return { frames: recordingDirectory, count: frameTimes.length, limited: false };
+        return { frames: recordingDirectory, count: frameTimes.length, missed, late: 0 };
       } };
     },
     async request(method) { calls.push(method); return { mono_ns: "5000000" }; },
@@ -761,7 +758,7 @@ function recordedViewSession(t, { frameTimes, displayed, calls = [] }) {
 }
 
 test("direct recorded views return the content frame of the value before resolving", { timeout: 5000 }, async (t) => {
-  const s = recordedViewSession(t, { frameTimes: [4, 6], displayed: 5 });
+  const s = recordedViewSession(t, { frameTimes: [4, 6], displayed: 5, missed: 1 });
   const result = await openRecordedView({ diagnostic() {} }, s, {
     card: "card-1", plugin: "fixture", placement: TAB_PLACEMENT, readinessStatus: "fixture.ready", readiness: async () => {},
     expectedContent: "target content", readContent: async () => "the target content line", captureObservationWindowMs: 1,
@@ -770,6 +767,9 @@ test("direct recorded views return the content frame of the value before resolvi
     proof: { method: "value", expected: "target content", actual: "the target content line" } });
   assert.equal("anchor" in result, false, "the recorded view still reports an anchor");
   assert.equal(result.recording.frameCount, 2);
+  // The content frame is a final state, judged whatever stills the recording lost; the lost stills are reported with it.
+  assert.equal(result.recording.missed, 1);
+  assert.equal(result.recording.late, 0);
 });
 
 test("a recorded view whose value lacks the expected content stops its recording and fails", { timeout: 5000 }, async (t) => {
@@ -783,16 +783,18 @@ test("a recorded view whose value lacks the expected content stops its recording
   assert.ok(calls.includes("stop after 0"), `the failed view left its recording running: ${calls}`);
 });
 
-test("the content frame is the first recorded frame at or after the presentation of the value", { timeout: 5000 }, () => {
+test("the content frame is the first recorded still requested at or after the presentation of the value", { timeout: 5000 }, () => {
   const proof = { method: "value", expected: "x", actual: "x" };
-  assert.deepEqual(viewMetrics.recordedContentFrame([{ time: 1 }, { time: 5 }, { time: 9 }], 5, proof),
-    { frameIndex: 1, frameCount: 3, timeMs: 5, displayedAtMs: 5, proof });
-  assert.throws(() => viewMetrics.recordedContentFrame([{ time: 1 }, { time: 4 }], 5, proof),
-    /no recorded frame is at or after the content presentation at 5 ms/);
-  assert.throws(() => viewMetrics.recordedContentFrame([{ time: 4 }, { time: 4 }], 1, proof),
-    /recorded frame 1 has no increasing display time/);
+  const still = (requested) => ({ requested, completed: requested + 0.5 });
+  // A still requested at or after the presentation shows what was presented; one requested before it may not.
+  assert.deepEqual(viewMetrics.recordedContentFrame([still(1), still(4.75), still(5), still(9)], 5, proof),
+    { frameIndex: 2, frameCount: 4, timeMs: 5, displayedAtMs: 5, proof });
+  assert.throws(() => viewMetrics.recordedContentFrame([still(1), still(4)], 5, proof),
+    /no recorded still is requested at or after the content presentation at 5 ms/);
+  assert.throws(() => viewMetrics.recordedContentFrame([still(4), still(4)], 1, proof),
+    /recorded still 1 has no increasing request time/);
   assert.throws(() => viewMetrics.recordedContentFrame([], 1, proof), /requires recorded frames/);
-  assert.throws(() => viewMetrics.recordedContentFrame([{ time: 1 }], Number.NaN, proof), /invalid display time/);
+  assert.throws(() => viewMetrics.recordedContentFrame([still(1)], Number.NaN, proof), /invalid display time/);
 });
 
 test("one recording reads the content value after readiness and defers the content frame past the footprint sample", { timeout: 5000 }, async (t) => {
