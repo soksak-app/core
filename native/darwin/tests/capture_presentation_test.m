@@ -1,6 +1,12 @@
 // Compares actual CAMetalLayer drawable presentations with the exact pixel IDs that the stills of the window recording hold.
 // The recording requests a still every half refresh, so each drawable, which the window shows for at least one refresh, falls in
 // some still. It classifies only this controlled Metal capture path and does not activate the application.
+// A still is the image of the window that the window server composites; the display shows that composite later, at the
+// presentation time of the drawable (MTLDrawable presentedTime). The window server holds drawable n from after its commit, and
+// it holds drawable n + 1 at the latest when the display presents it, so a still that holds drawable n completed after the commit
+// of n and was requested before the presentation of n + 1. A still can hold n before the display presents n.
+// The frames hold the bytes of the display colour space; the pixel ID is read through the ICC profile of the recording as sRGB,
+// the space of the clear colours.
 #import <Cocoa/Cocoa.h>
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
@@ -53,6 +59,8 @@ static NSInteger pixelFrameID(uint8_t blue, uint8_t green, uint8_t red) {
 - (void)submitNext;
 - (void)draw:(NSUInteger)frameID;
 - (void)recordSkippedFrameID:(NSUInteger)frameID drawableID:(NSUInteger)drawableID submitted:(uint64_t)submitted;
+// The mach time of the commit of each drawable, by its frame ID. Written on the main thread before the presentation handler runs.
+@property(nonatomic) uint64_t *committed;
 - (NSUInteger)completedPresentationCount;
 @end
 @implementation SPMetalFrames
@@ -61,6 +69,7 @@ static NSInteger pixelFrameID(uint8_t blue, uint8_t green, uint8_t red) {
     if (self) {
         _presentations = [[NSMutableArray alloc] initWithCapacity:frameCount];
         for (NSUInteger i = 0; i < frameCount; i++) [_presentations addObject:[NSNull null]];
+        _committed = calloc(frameCount, sizeof(uint64_t));
     }
     return self;
 }
@@ -95,6 +104,7 @@ static NSInteger pixelFrameID(uint8_t blue, uint8_t green, uint8_t red) {
     }];
     [command presentDrawable:drawable];
     [command commit];
+    self.committed[frameID] = mach_absolute_time();
 }
 - (void)recordSkippedFrameID:(NSUInteger)frameID drawableID:(NSUInteger)drawableID submitted:(uint64_t)submitted {
     NSDictionary *record = @{ @"id": @(frameID), @"drawable": @(drawableID),
@@ -113,7 +123,7 @@ static NSInteger pixelFrameID(uint8_t blue, uint8_t green, uint8_t red) {
     }
     return count;
 }
-- (void)dealloc { [_queue release]; [_presentations release]; [super dealloc]; }
+- (void)dealloc { [_queue release]; [_presentations release]; free(_committed); [super dealloc]; }
 @end
 
 static BOOL onScreen(NSWindow *window) {
@@ -197,19 +207,34 @@ int main(void) { @autoreleasepool {
         for (id record in driver.presentations)
             if (record != [NSNull null]) lastPresented = MAX(lastPresented, [record[@"presentedTime"] doubleValue] * 1000);
     }
+    // The plan is longer than the test needs and the stop ends it, so the stills after the last request stay not requested.
     int written = sp_capture_stop(lastPresented > 0 ? lastPresented : sp_capture_clock(), 2);
     NSString *stopError = [NSString stringWithUTF8String:sp_capture_error()];
-    check(written > 0 && stopError.length == 0 && sp_capture_missed() == 0,
-        [NSString stringWithFormat:@"the recording writes every still it requested (%d written, %d missed, %@)", written,
-            sp_capture_missed(), stopError]);
+    int late = sp_capture_late();
     NSString *rowsText = [NSString stringWithContentsOfFile:[directory stringByAppendingPathComponent:@"stills.jsonl"]
         encoding:NSUTF8StringEncoding error:NULL];
-    NSMutableArray<NSDictionary *> *rows = [NSMutableArray array];
+    NSMutableArray<NSDictionary *> *rows = [NSMutableArray array], *allRows = [NSMutableArray array];
     for (NSString *line in [rowsText componentsSeparatedByString:@"\n"]) {
         if (line.length == 0) continue;
         NSDictionary *row = [NSJSONSerialization JSONObjectWithData:[line dataUsingEncoding:NSUTF8StringEncoding] options:0 error:NULL];
+        if (![row isKindOfClass:NSDictionary.class]) continue;
+        [allRows addObject:row];
         if ([row[@"outcome"] isEqual:@"written"]) [rows addObject:row];
     }
+    // A lost still: a failed still, a still not requested before the last requested still, or a late still (more than one gap
+    // after its planned time).
+    NSInteger lastRequested = -1;
+    for (NSDictionary *row in allRows) if ([row[@"requested"] isKindOfClass:NSString.class]) lastRequested = [row[@"index"] integerValue];
+    NSUInteger failed = 0, skipped = 0;
+    for (NSDictionary *row in allRows) {
+        if ([row[@"outcome"] isEqual:@"failed"]) failed++;
+        if ([row[@"outcome"] isEqual:@"not-requested"] && [row[@"index"] integerValue] < lastRequested) skipped++;
+    }
+    check(written > 0 && stopError.length == 0 && failed == 0 && skipped == 0 && late == 0,
+        [NSString stringWithFormat:@"the recording loses no still up to its last request (%d written, %lu failed, %lu not requested "
+            "before still %ld, %d late, %@)", written, (unsigned long)failed, (unsigned long)skipped, (long)lastRequested, late, stopError]);
+    CGColorSpaceRef frameSpace = captureFolderColorSpace(directory);
+    check(frameSpace != NULL, @"the recording folder holds the one colour profile of its frames");
     // The pixel ID at the centre of each written still, in the order of the requests.
     NSMutableArray<NSNumber *> *stillIDs = [NSMutableArray array];
     NSMutableArray<NSString *> *stillErrors = [NSMutableArray array];
@@ -224,7 +249,9 @@ int main(void) { @autoreleasepool {
         }
         const uint8_t *center = (const uint8_t *)frame.bytes + kCaptureFrameHeader + (dimensions[1] / 2) * dimensions[2]
             + (dimensions[0] / 2) * 4;
-        [stillIDs addObject:@(pixelFrameID(center[0], center[1], center[2]))];
+        uint8_t rgb[3];
+        captureFramePixelSRGB(center, frameSpace, rgb);
+        [stillIDs addObject:@(pixelFrameID(rgb[2], rgb[1], rgb[0]))];
     }
     check([stillIDs containsObject:@(frameCount - 1)],
         [NSString stringWithFormat:@"the recording observes the final exact pixel ID (%lu written stills)", (unsigned long)rows.count]);
@@ -290,12 +317,14 @@ int main(void) { @autoreleasepool {
                 }
                 previousRequest = requested;
                 [captureIDs addObject:@(frameID)];
-                // The still showed its pixels at some time between its request and its completion, and the window showed drawable n
-                // from its presentation until the presentation of drawable n + 1: the two intervals meet.
+                // The still took its pixels at some time between its request and its completion, and the window server held drawable
+                // n from its commit until at the latest the presentation of drawable n + 1: the two intervals meet.
+                uint64_t committedTicks = driver.committed[frameID];
                 uint64_t nextPresentation = (NSUInteger)frameID + 1 < frameCount ? presentationTicks[frameID + 1] : 0;
-                check(expectedPresentation == 0 || (completed >= expectedPresentation
-                        && (nextPresentation == 0 || requested < nextPresentation)),
-                    [NSString stringWithFormat:@"the still that holds drawable %ld was taken while the window showed it", (long)frameID]);
+                check(committedTicks > 0 && completed >= committedTicks && (nextPresentation == 0 || requested < nextPresentation),
+                    [NSString stringWithFormat:@"the still that holds drawable %ld was taken while the window server held it (requested "
+                        "%llu, completed %llu, committed %llu, next presented %llu)", (long)frameID, requested, completed, committedTicks,
+                        nextPresentation]);
                 int64_t requestSkew = (int64_t)requested - (int64_t)expectedPresentation;
                 int64_t completionSkew = (int64_t)completed - (int64_t)expectedPresentation;
                 fprintf(stdout, "CAPTURE id=%ld repeated-pixel=%d still=%ld requested=%llu completed=%llu presentation=%llu "
@@ -319,9 +348,12 @@ int main(void) { @autoreleasepool {
         }
     }
     [driver release];
+    if (frameSpace) CGColorSpaceRelease(frameSpace);
 
     [window close]; [view release]; [window release];
     check(!NSApp.isActive, @"the control test does not activate the application");
+    // The frames, stills.jsonl and the colour profile of a failing check are its evidence.
+    if (failures) keepTemporaryFolder(directory);
     fprintf(stderr, "%s: correlate actual Metal drawable presentation with captured window pixels (%.1fms)\n",
         failures ? "FAIL" : "PASS", (CACurrentMediaTime() - began) * 1000);
     return failures ? 1 : 0;

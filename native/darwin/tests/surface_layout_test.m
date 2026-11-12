@@ -237,16 +237,18 @@ static BOOL captureFrameHasColorAtPoint(NSData *data, CGColorSpaceRef space, CGF
     return abs((int)rgb[0]) <= 3 && abs((int)rgb[1] - 160) <= 3 && abs((int)rgb[2] - 210) <= 3;
 }
 
+// A still holds the bytes of the display colour space; the profile of the PNG reads them as sRGB, the space of the marker.
 static BOOL bitmapContainsFirstShowMarker(NSBitmapImageRep *bitmap) {
     if (bitmap == nil) return NO;
-    for (NSInteger y = 0; y < bitmap.pixelsHigh; y++) {
-        for (NSInteger x = 0; x < bitmap.pixelsWide; x++) {
-            NSColor *color = [[bitmap colorAtX:x y:y] colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
-            if (color != nil && fabs(color.redComponent) <= 0.03 && fabs(color.greenComponent - 160.0/255) <= 0.03
-                && fabs(color.blueComponent - 210.0/255) <= 0.03) return YES;
-        }
-    }
-    return NO;
+    SPStillPixels still = captureStillPixels(bitmap.CGImage);
+    BOOL found = NO;
+    uint8_t rgb[3];
+    for (size_t y = 0; y < still.height && !found; y++)
+        for (size_t x = 0; x < still.width && !found; x++)
+            found = captureStillPixelSRGB(&still, x, y, rgb) && rgb[0] <= 7 && abs((int)rgb[1] - 160) <= 7
+                && abs((int)rgb[2] - 210) <= 7;
+    captureStillPixelsRelease(&still);
+    return found;
 }
 
 // A joined plugin root webview presents its resized content while its window transaction remains open, then the
@@ -612,19 +614,22 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration, BOOL
 // A commit that follows the presentation callback of its DOM change shows that DOM in the first frame the display presents
 // at or after the commit (docs/spec/native-surfaces.md#layout-transaction). No frame is waited for before the commit.
 // The column in [from, to] whose pixels in the rows of the box differ from the background of the page, or NAN.
-static double borderColumn(NSBitmapImageRep *still, double from, double to) {
-    double scale = (double)still.pixelsWide / 400;
-    for (double x = from; x <= to; x += 1) {
+// The still holds the bytes of the display colour space; the profile of the PNG reads them as sRGB, the space of the page.
+static double borderColumn(NSBitmapImageRep *bitmap, double from, double to) {
+    double scale = (double)bitmap.pixelsWide / 400;
+    SPStillPixels still = captureStillPixels(bitmap.CGImage);
+    double found = NAN;
+    for (double x = from; x <= to && isnan(found); x += 1) {
         BOOL matches = YES;
         for (int offset = -12; offset <= 12; offset += 6) {
-            NSColor *color = [[still colorAtX:(NSInteger)floor(x * scale) y:(NSInteger)floor((100 + offset) * scale)]
-                colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
-            if (color == nil || (fabs(color.redComponent - 33.0/255) < 0.03 && fabs(color.greenComponent - 36.0/255) < 0.03
-                && fabs(color.blueComponent - 48.0/255) < 0.03)) matches = NO;
+            uint8_t rgb[3];
+            if (!captureStillPixelSRGB(&still, (size_t)floor(x * scale), (size_t)floor((100 + offset) * scale), rgb)
+                || (abs((int)rgb[0] - 33) <= 7 && abs((int)rgb[1] - 36) <= 7 && abs((int)rgb[2] - 48) <= 7)) matches = NO;
         }
-        if (matches) return x;
+        if (matches) found = x;
     }
-    return NAN;
+    captureStillPixelsRelease(&still);
+    return found;
 }
 
 typedef struct { BOOL done; sp_input_result result; } PointerDone;

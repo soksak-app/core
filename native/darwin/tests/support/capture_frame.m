@@ -67,3 +67,56 @@ __attribute__((unused)) static void captureFramePixelSRGB(const uint8_t *bgra, C
     if (color) CGColorRelease(color);
     CGColorSpaceRelease(srgb);
 }
+
+// The pixels of a still PNG (diagnostics.capture.still) in the colour space that the PNG names. A still holds the bytes of the
+// display colour space, so a check reads a pixel through that space as sRGB; NSBitmapImageRep colorAtX:y: does not apply the
+// profile of the PNG and is not used. The caller releases the pixels.
+typedef struct {
+    size_t width, height, stride;
+    BOOL alphaFirst;
+    CFDataRef data;
+    CGColorSpaceRef space;
+    uint32_t cachedRaw, cachedRGB;
+    BOOL cached;
+} SPStillPixels;
+
+__attribute__((unused)) static SPStillPixels captureStillPixels(CGImageRef image) {
+    SPStillPixels still = {0};
+    if (image == NULL || CGImageGetBitsPerComponent(image) != 8 || CGImageGetBitsPerPixel(image) != 32) return still;
+    CGBitmapInfo info = CGImageGetBitmapInfo(image);
+    CGImageAlphaInfo alpha = CGImageGetAlphaInfo(image);
+    BOOL little = (info & kCGBitmapByteOrderMask) == kCGBitmapByteOrder32Little;
+    BOOL first = alpha == kCGImageAlphaFirst || alpha == kCGImageAlphaPremultipliedFirst || alpha == kCGImageAlphaNoneSkipFirst;
+    BOOL last = alpha == kCGImageAlphaLast || alpha == kCGImageAlphaPremultipliedLast || alpha == kCGImageAlphaNoneSkipLast;
+    // Read as bytes: little-endian alpha first is B G R A, the default order with alpha last is R G B A.
+    if (!((little && first) || (!little && last))) return still;
+    still.width = CGImageGetWidth(image);
+    still.height = CGImageGetHeight(image);
+    still.stride = CGImageGetBytesPerRow(image);
+    still.alphaFirst = little && first;
+    still.data = CGDataProviderCopyData(CGImageGetDataProvider(image));
+    still.space = CGColorSpaceRetain(CGImageGetColorSpace(image));
+    return still;
+}
+
+__attribute__((unused)) static BOOL captureStillPixelSRGB(SPStillPixels *still, size_t x, size_t y, uint8_t rgb[3]) {
+    if (still->data == NULL || x >= still->width || y >= still->height) return NO;
+    const uint8_t *p = CFDataGetBytePtr(still->data) + y * still->stride + x * 4;
+    uint8_t bgra[4] = { still->alphaFirst ? p[0] : p[2], p[1], still->alphaFirst ? p[2] : p[0], 255 };
+    uint32_t raw = (uint32_t)bgra[2] << 16 | (uint32_t)bgra[1] << 8 | bgra[0];
+    if (!still->cached || still->cachedRaw != raw) {
+        uint8_t read[3];
+        captureFramePixelSRGB(bgra, still->space, read);
+        still->cachedRaw = raw;
+        still->cachedRGB = (uint32_t)read[0] << 16 | (uint32_t)read[1] << 8 | read[2];
+        still->cached = YES;
+    }
+    rgb[0] = still->cachedRGB >> 16; rgb[1] = still->cachedRGB >> 8 & 0xff; rgb[2] = still->cachedRGB & 0xff;
+    return YES;
+}
+
+__attribute__((unused)) static void captureStillPixelsRelease(SPStillPixels *still) {
+    if (still->data) CFRelease(still->data);
+    if (still->space) CGColorSpaceRelease(still->space);
+    *still = (SPStillPixels){0};
+}

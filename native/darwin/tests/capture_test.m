@@ -106,9 +106,13 @@ int main(void) { @autoreleasepool {
     check(image != nil && image.pixelsWide == (NSInteger)(200 * scale) && image.pixelsHigh == (NSInteger)(100 * scale),
         [NSString stringWithFormat:@"the still image has the window's device-pixel size (got %ldx%ld)",
             (long)image.pixelsWide, (long)image.pixelsHigh]);
-    NSColor *centre = [[image colorAtX:image.pixelsWide / 2 y:image.pixelsHigh / 2] colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
-    check(centre.redComponent > 0.9 && centre.greenComponent < 0.3 && centre.blueComponent < 0.1,
-        [NSString stringWithFormat:@"the still image shows the window content (centre %@)", centre]);
+    // The still holds the bytes of the display colour space; the profile of the PNG reads them as sRGB, the space of the window.
+    SPStillPixels pixels = captureStillPixels(image.CGImage);
+    uint8_t centre[3] = {0, 0, 0};
+    BOOL read = captureStillPixelSRGB(&pixels, (size_t)image.pixelsWide / 2, (size_t)image.pixelsHigh / 2, centre);
+    captureStillPixelsRelease(&pixels);
+    check(read && centre[0] > 229 && centre[1] < 77 && centre[2] < 26,
+        [NSString stringWithFormat:@"the still image shows the window content (centre sRGB %d,%d,%d)", centre[0], centre[1], centre[2]]);
     check(!NSApp.isActive, @"the still capture does not activate the application");
     // A recording of five stills, one every 1/60 s. The stop waits for the last planned still.
     NSString *root = [NSString stringWithUTF8String:directory];
