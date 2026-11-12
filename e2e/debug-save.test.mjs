@@ -1,14 +1,11 @@
-// The save panel of the debug view, driven with emulated input. The panel is a sheet of the window, which host.window reports in
-// `sheet` with the folder that the panel shows and the name in its name field. The panel saves into the folder that it remembers,
-// which may be a folder of the person, so the check never removes a file it did not save: it types a name that no file of that
-// folder has, and removes only the file that its Return saved. The panel object of the application takes its name, Return and
-// Escape, so the panel saves and cancels as a person's Save and Cancel do while the person keeps the keyboard
-// (docs/spec/exposure.md#virtual-key-window). The mygo host shows the
-// panel as an application-modal panel, which activates the application, only for a window that is not visible
-// (internal/darwin/dialog.go of mygo); the window of a check is visible behind the windows of the person, so every host shows a
-// sheet.
+// The save of the debug view, answered through host.dialog (docs/spec/exposure.md#dialogs). While the check watches host.dialog
+// of its window, the save shows no panel: its place waits as a request that the check answers with a path in a folder of its
+// own, so the check never shows a panel to the person and never writes into a folder of the person. The answer passes the
+// checks of the panel of a person: the name of an existing file is refused without replace and the request keeps waiting, and
+// a cancel answers no file.
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
@@ -16,42 +13,22 @@ import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 
 /**
- * Starts core.debug.save of path and waits until its save panel is the sheet of the window. Returns `{ answer, sheet }`: the
- * pending answer of the command, which the panel gives when it ends, and the sheet that host.window reported.
+ * Starts core.debug.save of path and waits until its place is the one request of host.dialog. Returns `{ answer, request }`:
+ * the pending answer of the command, which the answer of the request gives, and the request. A command that answers before it
+ * asks fails the wait at once.
  */
 async function saveAsked(s, path) {
   const answer = s.run("core.debug.save", { path });
-  // A failure of the command before its panel shows ends the wait on the sheet with that failure.
-  const failed = answer.then(() => new Promise(() => {}));
-  const window = await Promise.race([failed,
-    s.until("host.window", (value) => value.sheet?.kind === "save", "the save panel did not show")]);
-  return { answer, sheet: window.sheet };
-}
-
-/** Waits until the window has no sheet. */
-function sheetEnded(s) {
-  return s.until("host.window", (window) => window.sheet === null, "the save panel did not end");
-}
-
-/** The first name `<stem>-check-<n>.jsonl` of name that no file of directory has. */
-function freeName(directory, name) {
-  const stem = name.replace(/\.jsonl$/, "");
-  for (let index = 1; ; index++) {
-    const candidate = `${stem}-check-${index}.jsonl`;
-    if (!existsSync(join(directory, candidate))) return candidate;
-  }
-}
-
-/** Replaces the name in the name field of the save panel with name: Backspace removes each character and input.text types it. */
-async function rename(s, shown, name) {
-  for (const _ of shown) await s.press("Backspace");
-  await s.text("insert", name);
-  const { sheet } = await s.get("host.window");
-  assert.equal(sheet?.name, name, `the name field of the save panel holds ${JSON.stringify(sheet?.name)}`);
+  const answeredFirst = answer.then((value) => {
+    throw new Error(`core.debug.save answered ${JSON.stringify(value)} before it asked for its place`);
+  });
+  const value = await Promise.race([answeredFirst,
+    s.until("host.dialog", (dialog) => dialog.pending.length === 1, "the save of the debug view did not ask for its place")]);
+  return { answer, request: value.pending[0] };
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: the save panel of the debug view saves under a typed name with Return, refuses an existing name and answers null on Escape`, async (t) => {
+  test(`${app.name}: the save of the debug view is a request of host.dialog that an answer saves into a folder of the check, refuses an existing file without replace and cancels`, async (t) => {
     const s = await open(t, app, { inactive: true });
     await fresh(s);
     await s.run("core.debug.open");
@@ -62,37 +39,42 @@ for (const app of Object.values(APPS)) {
     const entry = listing.entries.find(isEventLog).path;
     const name = entry.split("/").at(-1);
     const source = readFileSync(join(app.configDir, entry));
+    const folder = realpathSync(mkdtempSync(join(tmpdir(), "soksak-debug-save-")));
+    s.cleanup(() => rmSync(folder, { recursive: true, force: true }));
 
-    // The panel shows the name of the file in the folder that it remembers. Return saves the file there under the typed name.
-    let { answer, sheet } = await saveAsked(s, entry);
-    assert.equal(sheet.name, name, `the save panel shows the name ${JSON.stringify(sheet.name)}`);
-    assert.equal(typeof sheet.directory, "string", `the save panel reports the folder ${JSON.stringify(sheet.directory)}`);
-    const directory = sheet.directory;
-    const typed = freeName(directory, name);
-    await rename(s, sheet.name, typed);
-    await s.press("Enter");
+    // The watch of host.dialog holds the dialogs of the window until the last answer; the second wait returns once the watch
+    // started, so the save that follows asks the check and not the person.
+    let last = false;
+    const watching = s.until("host.dialog", () => last, "the watch of host.dialog ended before the last answer");
+    await s.until("host.dialog", (dialog) => dialog.pending.length === 0, "a dialog of the window waited before the check");
+
+    // The save asks for the place of the file with its name and shows no panel. The answer saves it there.
+    let { answer, request } = await saveAsked(s, entry);
+    assert.equal(request.kind, "save", `the save asked for ${JSON.stringify(request)}`);
+    assert.equal(request.suggestedName, name, `the save proposed ${JSON.stringify(request.suggestedName)}`);
+    assert.equal((await s.get("host.window")).sheet, null, "the save showed a panel");
+    const target = join(folder, name);
+    await s.request("input.dialog.answer", { id: request.id, paths: [target] });
     const saved = await answer;
-    assert.equal(saved?.saved, join(directory, typed), `the panel answered ${JSON.stringify(saved)}`);
-    s.cleanup(() => rmSync(saved.saved, { force: true }));
+    assert.equal(saved?.saved, target, `the save answered ${JSON.stringify(saved)}`);
     // The event log grows while the view runs, so the saved file starts with the log that existed before the save.
-    assert.ok(readFileSync(saved.saved).subarray(0, source.length).equals(source), "the saved file does not start with the event log");
-    await sheetEnded(s);
+    const written = readFileSync(target);
+    assert.ok(written.subarray(0, source.length).equals(source), "the saved file does not start with the event log");
 
-    // Return refuses the name of the file that the panel just saved, which it does not replace (the native record of the key names
-    // the existing path), and the panel stays. Escape then cancels, and the command answers no file.
-    ({ answer, sheet } = await saveAsked(s, entry));
-    assert.equal(sheet.directory, directory, "the save panel shows another folder than the one it saved into");
-    await rename(s, sheet.name, typed);
-    await assert.rejects(s.key("Enter", "down"), (error) => {
+    // The name of the saved file is refused without replace, and the request keeps waiting. The cancel answers no file.
+    ({ answer, request } = await saveAsked(s, entry));
+    await assert.rejects(s.request("input.dialog.answer", { id: request.id, paths: [target] }), (error) => {
       assert.equal(error.code, -32602, error.message);
+      assert.match(error.message, /exists/);
       return true;
     });
-    await s.key("Enter", "up");
-    assert.equal((await s.get("host.window")).sheet?.kind, "save", "the save panel ended on the refused Return");
-    await s.press("Escape");
+    assert.deepEqual((await s.get("host.dialog")).pending.map((pending) => pending.id), [request.id],
+      "the refused answer did not leave the request waiting");
+    last = true;
+    await s.request("input.dialog.answer", { id: request.id, cancel: true });
     const cancelled = await answer;
-    assert.equal(cancelled?.saved ?? null, null, `a cancelled panel answered ${JSON.stringify(cancelled)}`);
-    await sheetEnded(s);
-    assert.ok(existsSync(saved.saved), `${saved.saved} is gone after the refused Return`);
+    assert.equal(cancelled?.saved ?? null, null, `a cancelled save answered ${JSON.stringify(cancelled)}`);
+    await watching;
+    assert.ok(existsSync(target) && readFileSync(target).equals(written), `${target} changed after the refused answer`);
   });
 }

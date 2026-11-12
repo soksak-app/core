@@ -9346,9 +9346,9 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/dialog_test.rs", id: "the_end_of_the_watch_cancels_the_held_dialogs" },
       { file: "packages/host/rust/src/dialog_test.rs", id: "an_answer_passes_the_checks_of_the_panel" },
       { file: "scripts/test/test-kinds.test.mjs", id: "the root make targets are the only entry points of the window checks" },
-      { file: "e2e/debug-save.test.mjs", id: "the save panel of the debug view saves under a typed name with Return, refuses an existing name and answers null on Escape" },
+      { file: "e2e/debug-save.test.mjs", id: "the save of the debug view is a request of host.dialog that an answer saves into a folder of the check, refuses an existing file without replace and cancels" },
     ],
-    expected: "host.window reports the sheet attached to a window with its kind and frame and notifies its watchers when the sheet begins and ends, so the check of the save panel of the debug view waits for the panel and saves, renames and cancels it with emulated input in the default run, with no check that waits for a person.",
+    expected: "host.window reports the kind and frame of the sheet attached to a window and notifies its watchers when the sheet begins and ends. A panel is the person's: the emulated input of it is refused with a reason that names host.dialog. While a client watches host.dialog of a window, the save and folder panels of the host, the file inputs and the downloads of its pages wait as requests that the client answers through input.dialog.answer with the checks of the panel of a person, and the end of the watch cancels them, so the check of the save of the debug view answers it into a folder of its own in the default run, with no check that waits for a person.",
     levels: ["native", "unit", "application"],
   },
   {
