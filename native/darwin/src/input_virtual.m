@@ -30,7 +30,11 @@
 
 // Written on the main thread, read on any thread. It holds a retained reference while it is set.
 static _Atomic(void *) current;
-static id closeObserver, sheetObserver, moveMonitor;
+static id closeObserver, sheetObserver;
+// The windows that the emulated input drives: each window that became the virtual key window since the last real activation,
+// until it closes. A real move does not reach them while the set holds a window. Main thread; the set refers to them weakly.
+static NSHashTable<NSWindow *> *drivenWindows;
+static id drivenCloseObserver, moveMonitor;
 // Set while the virtual key window moves between a sheet and the window it is attached to, whose main window does not change.
 static BOOL keepMain;
 static double pointX, pointY;
@@ -135,6 +139,7 @@ static void refuseOrderFront(NSWindow *self, SEL selector, id sender) {
 }
 
 static bool enter(NSWindow *window, const char *reason);
+static void forgetDriven(NSWindow *window);
 
 // The key equivalent of the default button of a window, which -[NSWindow becomeKeyWindow] gives back to the default button cell
 // (Return) and -[NSWindow resignKeyWindow] takes from it, so Return presses the default button only of the key window. Private
@@ -270,8 +275,42 @@ static void install(void) {
             class_getClassMethod(NSWindow.class, @selector(windowNumberAtPoint:belowWindowWithWindowNumber:)), (IMP)answerWindowNumberAtPoint);
         appKitAddCursorRect = (void (*)(id, SEL, NSRect, NSCursor *))replace(NSView.class, @selector(addCursorRect:cursor:), (IMP)collectCursorRect);
         sp_observe_notification("input_virtual.app_active", SP_OBSERVE_RECORD, NSApplicationDidBecomeActiveNotification, NSApp, nil,
-            ^(NSNotification *note) { if (sp_input_virtual_real_active()) sp_input_virtual_end("activation"); });
+            ^(NSNotification *note) {
+                if (!sp_input_virtual_real_active()) return;
+                sp_input_virtual_end("activation");
+                forgetDriven(nil);
+            });
     });
+}
+
+// Adds window to the windows that the emulated input drives. The first window starts the monitor that keeps real moves from them
+// and the observer of their closes.
+static void addDriven(NSWindow *window) {
+    if (!drivenWindows) drivenWindows = [[NSHashTable weakObjectsHashTable] retain];
+    [drivenWindows addObject:window];
+    if (moveMonitor) return;
+    // A real move holds the position of a person's cursor, so it does not reach a page that a check drives. An injected move
+    // does not pass the application and no monitor sees it.
+    moveMonitor = [sp_observe_local_monitor("input_virtual.real_move", SP_OBSERVE_COUNT,
+        NSEventMaskMouseMoved | NSEventMaskMouseEntered | NSEventMaskMouseExited | NSEventMaskCursorUpdate, ^NSEvent *(NSEvent *event) {
+            return event.window && !sp_input_virtual_real_active() && [drivenWindows containsObject:event.window] ? nil : event;
+        }) retain];
+    drivenCloseObserver = [sp_observe_notification("input_virtual.driven_close", SP_OBSERVE_RECORD, NSWindowWillCloseNotification,
+        nil, nil, ^(NSNotification *note) { forgetDriven(note.object); }) retain];
+}
+
+// Removes window from the windows that the emulated input drives, or all of them when window is nil. The last window stops the
+// monitor and the observer.
+static void forgetDriven(NSWindow *window) {
+    if (window) [drivenWindows removeObject:window];
+    else [drivenWindows removeAllObjects];
+    if (drivenWindows.anyObject || !moveMonitor) return;
+    [NSEvent removeMonitor:moveMonitor];
+    [moveMonitor release];
+    moveMonitor = nil;
+    [NSNotificationCenter.defaultCenter removeObserver:drivenCloseObserver];
+    [drivenCloseObserver release];
+    drivenCloseObserver = nil;
 }
 
 bool sp_input_virtual_enter(void *handle) {
@@ -299,12 +338,7 @@ static bool enter(NSWindow *window, const char *reason) {
                 if ((__bridge void *)window == atomic_load(&current) && !window.isVisible) enter(parent, "sheet ended");
             }) retain];
     }
-    // A real move holds the position of a person's cursor, so it does not reach a page that a check drives. An injected move
-    // does not pass the application and no monitor sees it.
-    moveMonitor = [sp_observe_local_monitor("input_virtual.real_move", SP_OBSERVE_COUNT,
-        NSEventMaskMouseMoved | NSEventMaskMouseEntered | NSEventMaskMouseExited | NSEventMaskCursorUpdate, ^NSEvent *(NSEvent *event) {
-            return event.window && event.window == answering() ? nil : event;
-        }) retain];
+    addDriven(window);
     NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
     setDefaultButtonKey(window, YES);
     [center postNotificationName:NSWindowDidBecomeKeyNotification object:window];
@@ -327,9 +361,6 @@ void sp_input_virtual_end(const char *reason) {
     if (sheetObserver) [NSNotificationCenter.defaultCenter removeObserver:sheetObserver];
     [sheetObserver release];
     sheetObserver = nil;
-    [NSEvent removeMonitor:moveMonitor];
-    [moveMonitor release];
-    moveMonitor = nil;
     record("ended", reason);
     // The window that a real activation made key has heard that from AppKit, and a closing window has no state to resign.
     if (strcmp(reason, "closed") != 0 && !window.isKeyWindow) {
