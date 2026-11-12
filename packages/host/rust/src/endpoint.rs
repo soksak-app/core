@@ -84,6 +84,7 @@ const DIAGNOSTICS: &[&str] = &[
     "diagnostics.fixture",
     "diagnostics.clock",
     "diagnostics.drag",
+    "diagnostics.layout.trace",
     "diagnostics.capture.start",
     "diagnostics.capture.stop",
     "diagnostics.capture.still",
