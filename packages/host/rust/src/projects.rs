@@ -3,7 +3,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::framework::{AppHandle, Manager, Window};
+use crate::framework::{AppHandle, Window};
 use serde::{Deserialize, Serialize};
 
 use crate::platform;
