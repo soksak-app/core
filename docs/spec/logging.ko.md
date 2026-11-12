@@ -151,7 +151,7 @@ event가 싣는 모든 buffer와 값에는 상한이 있고, 생산자는 값을
 
 사람은 실행 event의 약 5%를 담은 main 파일을 먼저 읽고, main 파일이 실패를 설명하지 못할 때 debug 파일을 연다. 그래서 debug 파일도 main 파일만큼 완전하다: 표본 추출이 없고, 어느 파일의 손실이든 channel을 밝힌 `log.dropped`가 센다. `seq`는 writer가 두 파일에 걸쳐 부여하므로 두 파일을 합치면 실행의 모든 `seq`가 한 번씩 있다. host 프로세스는 native 라이브러리, page, plugin의 event도 담는다. 각 파일은 따로 100 MB에서 회전하며 다른 프로세스의 파일은 회전하지 않는다. 닫은 파일은 세대 `<file>.<n>`이 되고 번호는 회전 순서대로 1부터 센다. 회전은 아무것도 지우지 않는다. 압축한 파일은 그 자리에서 검색할 수 없으므로 세대는 압축하지 않으며, 아래 보존이나 사람만 세대를 지운다.
 
-event가 아닌 raw 파일이 둘 있다. `logs/<role>-<boot>.stderr`는 프로세스의 표준 오류(운영체제와 framework의 출력)를, `logs/<role>-<boot>.crash`는 runtime fatal 오류의 crash 출력을 담는다. viewer는 이를 event 파일과 함께 나열한다.
+event가 아닌 raw 파일이 둘 있다. `logs/<role>-<boot>.stderr`는 프로세스의 표준 오류(운영체제와 framework의 출력)를, `logs/<role>-<boot>.crash`는 runtime fatal 오류의 crash 출력을 담는다. Go host 는 시작할 때 crash 파일을 연다. Go runtime 은 fatal 오류를 이미 쥔 파일에만 쓰기 때문이다(`debug.SetCrashOutput`). 정상 종료 때 host 는 그 출력을 끝내고, run 의 crash 파일이 비어 있으면 지우고 출력이 있으면 남긴다(`EndCrashOutput`). 그래서 `logs/` 의 crash 파일은 crash 한 run 의 출력이다. Rust host 에는 crash 파일이 없다. panic 은 panic hook 으로 `host.panic` 을 저장하고, fatal 신호는 신호 처리기가 그 줄을 쓴다([Writer](#writer)). viewer는 이를 event 파일과 함께 나열한다.
 
 파일은 mode `0600`으로, 폴더는 mode `0700`으로 만들고 close-on-exec로 열어서 자식 프로세스가 물려받지 않는다.
 

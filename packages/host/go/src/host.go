@@ -264,6 +264,10 @@ func (s *Session) Shutdown() {
 	if err := host.endpoint.Close(); err != nil {
 		LogError("endpoint close", err)
 	}
+	// The exit is normal, so an empty crash file of the run holds nothing and is removed; the flush below stores a failure.
+	if err := EndCrashOutput(s.config); err != nil {
+		LogError("crash output", err)
+	}
 	if err := FlushEventLog(host.events, system.FlushNativeObservers); err != nil {
 		LogError("event log flush", err)
 	}
