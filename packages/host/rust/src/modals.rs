@@ -12,9 +12,11 @@ use serde::{Deserialize, Serialize};
 use crate::application_log::{log_error, log_failure};
 use crate::documents;
 use crate::exposure;
-use crate::platform::{self, Handle};
+use crate::platform;
 use crate::surfaces::{PageFocus, Rect, aligned, isolate_webview};
-use crate::windows::{emit_window, root_view, window_data};
+use crate::windows::{
+    NativeFailure, emit_window, open_owner, root_view, window_data, with_native_owner,
+};
 
 /// The values that are needed to show a [data-native-modal] element in the main DOM.
 #[derive(Debug, Deserialize)]
@@ -336,20 +338,20 @@ fn place_overlay(view: &Webview, at: Rect) -> Result<(), String> {
     .map_err(|e| e.to_string())
 }
 
-/// Opens or ends the wait of the input of window for its modal on the main thread (docs/spec/native-modals.md#keyboard).
+/// Opens or ends the wait of the input of window for its modal on the main thread (docs/spec/native-modals.md#keyboard). A
+/// window that closed takes no input, so a call that arrives after the close does nothing.
 fn modal_hold(window: &Window, open: bool) -> Result<(), String> {
     let platform = platform::current()?;
-    let hold_window = window.clone();
-    exposure::on_main(window, move || {
-        let handle = hold_window
-            .native_window()
-            .map_err(|error| error.to_string())? as Handle;
+    match with_native_owner(window, move |handle| {
         if open {
             platform.modal_hold(handle)
         } else {
             platform.modal_hold_end(handle)
         }
-    })
+    }) {
+        Ok(()) | Err(NativeFailure::Closed) => Ok(()),
+        Err(NativeFailure::Failed(error)) => Err(error),
+    }
 }
 
 /// Tells whether label names a modal webview of the window labelled window: `modal-{window}-{instance}`, with a decimal
@@ -787,9 +789,10 @@ pub fn hide(window: &Window, id: String) -> Result<(), String> {
             if has_modal {
                 return;
             }
-            let restored = platform::current().and_then(|platform| {
-                let handle = host.native_window().map_err(|error| error.to_string())? as Handle;
-                platform.keyboard_after_modal(handle)
+            // A window that closed before this turn takes no keyboard.
+            let restored = platform::current().and_then(|platform| match open_owner(&host)? {
+                Some(handle) => platform.keyboard_after_modal(handle),
+                None => Ok(()),
             });
             if let Err(error) = restored {
                 log_error("modal focus restoration", error);

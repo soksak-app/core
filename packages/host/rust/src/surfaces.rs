@@ -1115,43 +1115,42 @@ pub struct FocusRequest {
 }
 
 /// Gives the keyboard of the window to the surface of the request or to the workbench on the main thread
-/// (docs/spec/native-surfaces.md#keyboard-of-a-surface). A surface that the window does not hold is refused.
+/// (docs/spec/native-surfaces.md#keyboard-of-a-surface). A surface that the window does not hold is refused. A window that
+/// closed takes no keyboard, and its close dropped the keys that waited, so a call that arrives after the close does nothing.
 pub fn focus(window: &Window, request: FocusRequest) -> Result<(), String> {
     let platform = platform::current()?;
     let focus_window = window.clone();
     let decided = request.decided;
-    exposure::on_main(window, move || {
-        let focused = focus_on_main(platform, &focus_window, request.surface);
+    match with_native_owner(window, move |owner| {
+        let focused = focus_on_main(platform, &focus_window, owner, request.surface);
         // A refused surface still gives the keys: they wait for no later decision of this call.
         if decided {
-            platform.keys_decided(
-                focus_window
-                    .native_window()
-                    .map_err(|error| error.to_string())? as Handle,
-            )?;
+            platform.keys_decided(owner)?;
         }
         focused
-    })
+    }) {
+        Ok(()) | Err(NativeFailure::Closed) => Ok(()),
+        Err(NativeFailure::Failed(error)) => Err(error),
+    }
 }
 
 /// Gives the keys of the window that waited for the decision of its workbench, which ended with the process of its page
-/// (docs/spec/native-surfaces.md#keyboard-of-a-surface).
+/// (docs/spec/native-surfaces.md#keyboard-of-a-surface). The close of a window dropped its keys, so a window that closed has
+/// none to give.
 pub(crate) fn keys_page_ended(window: &Window) -> Result<(), String> {
     let platform = platform::current()?;
-    let ended_window = window.clone();
-    exposure::on_main(window, move || {
-        platform.keys_page_ended(
-            ended_window
-                .native_window()
-                .map_err(|error| error.to_string())? as Handle,
-        )
-    })
+    match with_native_owner(window, move |owner| platform.keys_page_ended(owner)) {
+        Ok(()) | Err(NativeFailure::Closed) => Ok(()),
+        Err(NativeFailure::Failed(error)) => Err(error),
+    }
 }
 
-/// Gives the keyboard of focus_window to surface, or to the workbench for none. Runs on the main thread.
+/// Gives the keyboard of focus_window, whose native window is owner, to surface, or to the workbench for none. Runs on the
+/// main thread.
 fn focus_on_main(
     platform: &'static dyn platform::Platform,
     focus_window: &Window,
+    owner: Handle,
     surface: Option<String>,
 ) -> Result<(), String> {
     match surface {
@@ -1171,11 +1170,7 @@ fn focus_on_main(
                 platform.focus_surface(handle)
             }
         }
-        None => platform.focus_workbench(
-            focus_window
-                .native_window()
-                .map_err(|error| error.to_string())? as Handle,
-        ),
+        None => platform.focus_workbench(owner),
     }
 }
 
