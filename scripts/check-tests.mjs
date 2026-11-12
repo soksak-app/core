@@ -673,8 +673,9 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/stills.mjs", symbol: "export function lostStills(rows, from, to) {" },
       { file: "packages/window-check/stills.mjs", symbol: "export function requireNoLostStills(rows, what, { from = -Infinity, to = Infinity } = {}) {" },
       { file: "packages/window-check/app.mjs", symbol: "async function recordingOf(s, params) {" },
-      { file: "packages/window-check/app.mjs", symbol: "export function requireStillsArtifact(result, frames, asked, after) {" },
-      { file: "packages/window-check/app.mjs", symbol: "requireNoLostStills(requireStillsArtifact(stopped, result.frames, recording, displayed), \"the drag\");" },
+      { file: "packages/window-check/app.mjs", symbol: "export function recordedWindow(reply, asked, which) {" },
+      { file: "packages/window-check/app.mjs", symbol: "export function requireStillsArtifact(result, frames, asked, after, window) {" },
+      { file: "packages/window-check/app.mjs", symbol: "requireNoLostStills(requireStillsArtifact(stopped, result.frames, recording, displayed, recordedWindow(stopped, recording, \"stop\"))," },
       { file: "packages/window-check/app.mjs", symbol: "function longestWait(changes, stills) {" },
     ],
     tests: [

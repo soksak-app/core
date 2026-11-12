@@ -821,27 +821,36 @@ export class Session {
     }
     const { frames } = started;
     let sent = false;
+    let window;
     const identity = this.trackRecording(frames);
     this.cleanup(async () => {
       try {
         if (sent) return;
         sent = true;
+        const result = await this.request("diagnostics.capture.stop", { after: 0 });
+        // A recording whose start named no recorded window failed at its start, which kept it.
+        if (window === undefined) return;
         // A recording that the check did not stop is judged as a stopped one: a still that it lost is a moment of the window
         // that no check saw.
-        const result = await this.request("diagnostics.capture.stop", { after: 0 });
-        requireNoLostStills(requireStillsArtifact(result, frames, asked, 0), "the recording that the check did not stop");
+        requireNoLostStills(requireStillsArtifact(result, frames, asked, 0, window), "the recording that the check did not stop");
       } catch (error) {
         this.failedRecordings.set(identity, error);
         throw error;
       }
     });
+    try {
+      window = recordedWindow(started, asked, "start");
+    } catch (error) {
+      this.failedRecordings.set(identity, error);
+      throw error;
+    }
     return {
       frames,
       stop: (options = {}) => {
         if (sent) return Promise.reject(new Error(`the stop was already sent for the recording ${frames}`));
         sent = true;
         return this.request("diagnostics.capture.stop", options).finally(release).then((result) => {
-          requireStillsArtifact(result, frames, asked, options.after ?? 0);
+          requireStillsArtifact(result, frames, asked, options.after ?? 0, window);
           writeFileSync(join(frames, "stop.json"), JSON.stringify(result));
           return result;
         }).catch((error) => {
@@ -1552,15 +1561,40 @@ export function plannedStills({ gap, seconds, frames }) {
 }
 
 /**
+ * The window that a recording started with `asked` records, as the reply `reply` of its `which` (start or stop) names it: a
+ * window number for a recording of a window, and null for a recording of the display (`asked.display`), which takes every
+ * window of the application on the display.
+ */
+export function recordedWindow(reply, asked, which) {
+  const { window } = reply;
+  if (asked.display === true) {
+    if (window !== null) {
+      throw new Error(`the ${which} reply of a display recording names the recorded window ${JSON.stringify(window)}, not null`);
+    }
+    return null;
+  }
+  if (!(Number.isSafeInteger(window) && window > 0)) {
+    throw new Error(`the ${which} reply of a window recording names the recorded window ${window === undefined ? "undefined"
+      : JSON.stringify(window)}, not a window number`);
+  }
+  return window;
+}
+
+/**
  * Checks the still recording that a stop reply `result` of the recording in `frames`, started with `asked` ({gap, seconds} or
- * {gap, frames}) and stopped after the time `after` (ms), names: stills.jsonl in `frames`, with one row for each planned still in
+ * {gap, frames}), recording the window `window` (recordedWindow) and stopped after the time `after` (ms), names: the recorded
+ * window, each written still having taken it in a recording of a window, stills.jsonl in `frames`, with one row for each planned still in
  * the order of the plan, each taken at the gap asked for, a plan that reaches `after`, the written and missed stills of the reply
  * making the plan, the written stills of the reply being the written rows, and the frame file of each written row. Returns the
  * rows (readStills).
  */
-export function requireStillsArtifact(result, frames, asked, after) {
+export function requireStillsArtifact(result, frames, asked, after, window) {
   const plan = plannedStills(asked);
   const expected = join(frames, "stills.jsonl");
+  if (result.window !== window) {
+    throw new Error(`the stop reply names the recorded window ${JSON.stringify(result.window)}, and the start named ` +
+      `${JSON.stringify(window)}`);
+  }
   if (plan > MOST_STILLS) {
     throw new Error(`the still recording ${expected} plans ${plan} stills, more than the ${MOST_STILLS} that a recording holds`);
   }
@@ -1590,6 +1624,11 @@ export function requireStillsArtifact(result, frames, asked, after) {
   if (written.length !== result.count) {
     throw new Error(`the still recording ${expected} counts ${result.count} written stills, and stills.jsonl has ` +
       `${written.length} written rows`);
+  }
+  const untaken = window === null ? undefined : written.find((row) => !row.windows.includes(window));
+  if (untaken) {
+    throw new Error(`the still recording ${expected} took still ${untaken.index} of the windows ${JSON.stringify(untaken.windows)}, ` +
+      `without the recorded window ${window}`);
   }
   const unwritten = written.find((row) => !existsSync(row.frame));
   if (unwritten) {
@@ -1667,7 +1706,8 @@ async function dragDrawing(s, plan, capture, frameIdentity) {
   const stopped = await s.request("diagnostics.capture.stop", { after: displayed });
   // A drag is judged at every still of its recording, so a still that the recording lost is a moment of the drag that no
   // judgment saw.
-  requireNoLostStills(requireStillsArtifact(stopped, result.frames, recording, displayed), "the drag");
+  requireNoLostStills(requireStillsArtifact(stopped, result.frames, recording, displayed, recordedWindow(stopped, recording, "stop")),
+    "the drag");
   // A drag changes the screen with every step, so each step (ticks of the reply) is owed a still that shows a change.
   // A drag without steps changed nothing, so a reply without step times cannot be judged.
   const steps = !Array.isArray(result.ticks) ? result.ticks : result.ticks.length > 0 ? result.ticks.map((from) => ({ from })) : null;
