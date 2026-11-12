@@ -676,7 +676,7 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/app.mjs", symbol: "async function recordingOf(s, params) {" },
       { file: "packages/window-check/app.mjs", symbol: "export function recordedWindow(reply, asked, which) {" },
       { file: "packages/window-check/app.mjs", symbol: "export function requireStillsArtifact(result, frames, asked, after, window) {" },
-      { file: "packages/window-check/app.mjs", symbol: "requireNoLostStills(requireStillsArtifact(stopped, result.frames, recording, displayed, recordedWindow(stopped, recording, \"stop\"))," },
+      { file: "packages/window-check/app.mjs", symbol: "requireNoLostStills(requireStillsArtifact(stopped, result.frames, recording, displayed, recordedWindow(result, recording, \"drag\"))," },
       { file: "packages/window-check/app.mjs", symbol: "function longestWait(changes, stills) {" },
     ],
     tests: [

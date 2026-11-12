@@ -832,7 +832,8 @@ export class Session {
         if (window === undefined) return;
         // A recording that the check did not stop is judged as a stopped one: a still that it lost is a moment of the window
         // that no check saw.
-        requireNoLostStills(requireStillsArtifact(result, frames, asked, 0, window), "the recording that the check did not stop");
+        requireNoLostStills(requireStillsArtifact(result, frames, asked, 0, stoppedWindow(result)),
+          "the recording that the check did not stop");
       } catch (error) {
         this.failedRecordings.set(identity, error);
         throw error;
@@ -844,13 +845,15 @@ export class Session {
       this.failedRecordings.set(identity, error);
       throw error;
     }
+    // A recording of a new window starts before the window is shown, so its stop names the window that it recorded.
+    const stoppedWindow = (result) => asked.newWindow === true ? recordedWindow(result, asked, "stop") : window;
     return {
       frames,
       stop: (options = {}) => {
         if (sent) return Promise.reject(new Error(`the stop was already sent for the recording ${frames}`));
         sent = true;
         return this.request("diagnostics.capture.stop", options).finally(release).then((result) => {
-          requireStillsArtifact(result, frames, asked, options.after ?? 0, window);
+          requireStillsArtifact(result, frames, asked, options.after ?? 0, stoppedWindow(result));
           writeFileSync(join(frames, "stop.json"), JSON.stringify(result));
           return result;
         }).catch((error) => {
@@ -1561,15 +1564,17 @@ export function plannedStills({ gap, seconds, frames }) {
 }
 
 /**
- * The window that a recording started with `asked` records, as the reply `reply` of its `which` (start or stop) names it: a
- * window number for a recording of a window, and null for a recording of the display (`asked.display`), which takes every
- * window of the application on the display.
+ * The window that a recording started with `asked` records, as the reply `reply` of its `which` (start, stop or drag) names it:
+ * a window number for a recording of a window, and null for a recording of the display (`asked.display`), which takes every
+ * window of the application on the display, and for the start of a recording of a new window (`asked.newWindow`), whose window
+ * the application shows after the start.
  */
 export function recordedWindow(reply, asked, which) {
   const { window } = reply;
-  if (asked.display === true) {
+  const none = asked.display === true ? "display" : asked.newWindow === true && which === "start" ? "new window" : null;
+  if (none) {
     if (window !== null) {
-      throw new Error(`the ${which} reply of a display recording names the recorded window ${JSON.stringify(window)}, not null`);
+      throw new Error(`the ${which} reply of a ${none} recording names the recorded window ${JSON.stringify(window)}, not null`);
     }
     return null;
   }
@@ -1592,8 +1597,8 @@ export function requireStillsArtifact(result, frames, asked, after, window) {
   const plan = plannedStills(asked);
   const expected = join(frames, "stills.jsonl");
   if (result.window !== window) {
-    throw new Error(`the stop reply names the recorded window ${JSON.stringify(result.window)}, and the start named ` +
-      `${JSON.stringify(window)}`);
+    throw new Error(`the stop reply names the recorded window ${JSON.stringify(result.window)}, not the window ` +
+      `${JSON.stringify(window)} that the recording records`);
   }
   if (plan > MOST_STILLS) {
     throw new Error(`the still recording ${expected} plans ${plan} stills, more than the ${MOST_STILLS} that a recording holds`);
@@ -1714,7 +1719,7 @@ async function dragDrawing(s, plan, capture, frameIdentity) {
   const stopped = await s.request("diagnostics.capture.stop", { after: displayed });
   // A drag is judged at every still of its recording, so a still that the recording lost is a moment of the drag that no
   // judgment saw.
-  requireNoLostStills(requireStillsArtifact(stopped, result.frames, recording, displayed, recordedWindow(stopped, recording, "stop")),
+  requireNoLostStills(requireStillsArtifact(stopped, result.frames, recording, displayed, recordedWindow(result, recording, "drag")),
     "the drag");
   // A drag changes the screen with every step, so each step (ticks of the reply) is owed a still that shows a change.
   // A drag without steps changed nothing, so a reply without step times cannot be judged.
