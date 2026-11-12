@@ -3,6 +3,8 @@
 // the completion time of its still in ms), the marker LZ4S, the uint32 compressed byte count and the uint32 CRC-32 of the pixels.
 // The decoded frame keeps the 76 bytes before the marker and then the pixels, from kCaptureFrameHeader.
 #import <Foundation/Foundation.h>
+#import <CoreGraphics/CoreGraphics.h>
+#include <math.h>
 #include <compression.h>
 #include <zlib.h>
 
@@ -34,4 +36,34 @@ static NSData *readCaptureFrame(NSData *file) {
     }
     [decoded setLength:kCaptureFrameHeader + (size_t)expected];
     return decoded;
+}
+
+// The colour space of the frames of a recording folder: the ICC profile file color-<hash>.icc that the stills wrote (the row field
+// colorProfile of stills.jsonl). NULL when the folder holds no profile or more than one, which a check reports. The caller
+// releases the space.
+__attribute__((unused)) static CGColorSpaceRef captureFolderColorSpace(NSString *folder) {
+    NSString *found = nil;
+    for (NSString *name in [NSFileManager.defaultManager contentsOfDirectoryAtPath:folder error:NULL]) {
+        if (![name hasPrefix:@"color-"] || ![name.pathExtension isEqualToString:@"icc"]) continue;
+        if (found != nil) return NULL;
+        found = name;
+    }
+    NSData *profile = found ? [NSData dataWithContentsOfFile:[folder stringByAppendingPathComponent:found]] : nil;
+    return profile ? CGColorSpaceCreateWithICCData((CFDataRef)profile) : NULL;
+}
+
+// The BGRA pixel at the byte offset of a frame in space, read through the ICC profile of space as 8-bit sRGB red, green and
+// blue. A check with a tolerance compares this with an sRGB constant; a check without one compares the frame bytes with a
+// reference patch of the same frame.
+__attribute__((unused)) static void captureFramePixelSRGB(const uint8_t *bgra, CGColorSpaceRef space, uint8_t rgb[3]) {
+    CGFloat components[4] = { bgra[2] / 255.0, bgra[1] / 255.0, bgra[0] / 255.0, 1 };
+    CGColorRef color = space ? CGColorCreate(space, components) : NULL;
+    CGColorSpaceRef srgb = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+    CGColorRef matched = color ? CGColorCreateCopyByMatchingToColorSpace(srgb, kCGRenderingIntentDefault, color, NULL) : NULL;
+    const CGFloat *values = matched ? CGColorGetComponents(matched) : NULL;
+    for (int index = 0; index < 3; index++)
+        rgb[index] = values ? (uint8_t)lround(fmin(fmax(values[index], 0), 1) * 255) : 0;
+    if (matched) CGColorRelease(matched);
+    if (color) CGColorRelease(color);
+    CGColorSpaceRelease(srgb);
 }

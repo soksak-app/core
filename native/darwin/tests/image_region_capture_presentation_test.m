@@ -1,4 +1,6 @@
-// Compares an anonymized P86 BGRA patch with the captured image-region pixels without activating the window.
+// Compares an anonymized P86 BGRA patch with the captured image-region pixels without activating the window. The still holds the
+// bytes of the display colour space, so the crop of the region is compared byte for byte with the crop of a reference layer in the
+// same still: a plain layer that shows a second sRGB IOSurface with the same source bytes.
 #import <Cocoa/Cocoa.h>
 #import <IOSurface/IOSurface.h>
 #import <WebKit/WebKit.h>
@@ -186,7 +188,8 @@ static void runPresentationCase(BOOL tagged, BOOL lease) { @autoreleasepool {
     [NSApp finishLaunching];
     const char *directory = temporaryFolder(@"soksak-image-region-pixels-").fileSystemRepresentation;
 
-    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(120, 120, 240, 160)
+    // The window holds the region and, to its right, the reference layer of the same size.
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(120, 120, 360, 160)
         styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
     window.releasedWhenClosed = NO; window.animationBehavior = NSWindowAnimationBehaviorNone;
     NSView *content = [[NSView alloc] initWithFrame:window.contentView.bounds];
@@ -219,6 +222,22 @@ static void runPresentationCase(BOOL tagged, BOOL lease) { @autoreleasepool {
     IOSurfaceRef source = fixtureSurface(nonce, &sourceBytes);
     check(source && sourceBytes.length == sourceWidth * sourceHeight * 4,
         @"the anonymized opaque BGRA fixture and sRGB IOSurface are complete");
+    // The reference: the same source bytes in a second sRGB IOSurface, shown by a plain layer right of the region. The window
+    // server composites both into the display colour space of the still.
+    unsigned char referenceNonce[16] = {0};
+    NSData *referenceBytes = nil;
+    IOSurfaceRef referenceSurface = fixtureSurface(referenceNonce, &referenceBytes);
+    CGFloat referenceWidth = sourceWidth / backingScale, referenceHeight = sourceHeight / backingScale;
+    NSView *referenceView = [[NSView alloc] initWithFrame:NSMakeRect(referenceWidth + 8,
+        content.bounds.size.height - referenceHeight, referenceWidth, referenceHeight)];
+    referenceView.wantsLayer = YES;
+    referenceView.layer.contentsScale = backingScale;
+    referenceView.layer.magnificationFilter = kCAFilterNearest;
+    referenceView.layer.minificationFilter = kCAFilterNearest;
+    referenceView.layer.contents = (id)referenceSurface;
+    [content addSubview:referenceView positioned:NSWindowAbove relativeTo:nil];
+    check(referenceSurface && [referenceBytes isEqualToData:sourceBytes],
+        @"the reference layer shows a second sRGB IOSurface with the source bytes");
     dispatch_queue_t identityWriter = NULL;
     if (tagged) {
         NSString *issuedDirectory = [[NSString stringWithUTF8String:directory] stringByAppendingPathComponent:@"tagged-issued"];
@@ -306,22 +325,28 @@ static void runPresentationCase(BOOL tagged, BOOL lease) { @autoreleasepool {
     check(imageLayer.contents && CFGetTypeID((__bridge CFTypeRef)imageLayer.contents) == IOSurfaceGetTypeID()
         && [sourceBytes isEqualToData:tightImageBytes(layerContentsImage(imageLayer))],
         @"capture stop restores the complete untagged supplier presentation");
-    NSView *regionView = (NSView *)region;
-    NSRect localRegion = [regionView convertRect:regionView.bounds toView:nil];
-    NSRect screenRegion = [window convertRectToScreen:localRegion];
-    NSScreen *primary = NSScreen.screens.firstObject;
-    if (primary) screenRegion.origin.y = NSMaxY(primary.frame) - NSMaxY(screenRegion);
+    // The crop of the still under a view of the window, at the pixel size of the source.
     NSDictionary *screenRectValue = captureFacts[@"screenRect"];
     NSDictionary *contentRectValue = captureFacts[@"contentRect"];
     double pixelsPerPoint = [captureFacts[@"scaleFactor"] doubleValue] / [captureFacts[@"contentScale"] doubleValue];
-    double cropXValue = [contentRectValue[@"x"] doubleValue]
-        + (screenRegion.origin.x - [screenRectValue[@"x"] doubleValue]) * pixelsPerPoint;
-    double cropYValue = [contentRectValue[@"y"] doubleValue]
-        + (screenRegion.origin.y - [screenRectValue[@"y"] doubleValue]) * pixelsPerPoint;
-    size_t cropX = (size_t)llround(cropXValue), cropY = (size_t)llround(cropYValue);
-    NSData *capturedCrop = captureFacts && fabs(cropXValue - cropX) < 0.000001
-        && fabs(cropYValue - cropY) < 0.000001 && fabs(pixelsPerPoint - raster[2]) < 0.000001
-        ? cropFrame(decoded, dimensions[0], dimensions[1], dimensions[2], cropX, cropY, sourceWidth, sourceHeight) : nil;
+    double rasterScale = raster[2];
+    uint32_t frameWidth = dimensions[0], frameHeight = dimensions[1], frameStride = dimensions[2];
+    NSData *(^cropOf)(NSView *, size_t *, size_t *) = ^NSData *(NSView *view, size_t *x, size_t *y) {
+        NSRect screenRect = [window convertRectToScreen:[view convertRect:view.bounds toView:nil]];
+        NSScreen *primary = NSScreen.screens.firstObject;
+        if (primary) screenRect.origin.y = NSMaxY(primary.frame) - NSMaxY(screenRect);
+        double xValue = [contentRectValue[@"x"] doubleValue]
+            + (screenRect.origin.x - [screenRectValue[@"x"] doubleValue]) * pixelsPerPoint;
+        double yValue = [contentRectValue[@"y"] doubleValue]
+            + (screenRect.origin.y - [screenRectValue[@"y"] doubleValue]) * pixelsPerPoint;
+        *x = (size_t)llround(xValue); *y = (size_t)llround(yValue);
+        return captureFacts && fabs(xValue - *x) < 0.000001 && fabs(yValue - *y) < 0.000001
+            && fabs(pixelsPerPoint - rasterScale) < 0.000001
+            ? cropFrame(decoded, frameWidth, frameHeight, frameStride, *x, *y, sourceWidth, sourceHeight) : nil;
+    };
+    size_t cropX = 0, cropY = 0, referenceX = 0, referenceY = 0;
+    NSData *capturedCrop = cropOf((NSView *)region, &cropX, &cropY);
+    NSData *referenceCrop = cropOf(referenceView, &referenceX, &referenceY);
     if (tagged) {
         SPCaptureFrameIdentity decodedIdentity = {0};
         NSString *unknown = nil, *decodeError = nil;
@@ -351,8 +376,8 @@ static void runPresentationCase(BOOL tagged, BOOL lease) { @autoreleasepool {
         [historicalDifferences addObject:@{@"x": @(sample->x), @"y": @(sample->y),
             @"expectedBGRA": expected, @"capturedBGRA": captured}];
     }
-    if (sourceBytes && capturedCrop) {
-        const uint8_t *expected = sourceBytes.bytes, *actual = capturedCrop.bytes;
+    if (referenceCrop && capturedCrop) {
+        const uint8_t *expected = referenceCrop.bytes, *actual = capturedCrop.bytes;
         for (size_t y = 0; y < sourceHeight; y++) for (size_t x = 0; x < sourceWidth; x++) {
             size_t offset = (y * sourceWidth + x) * 4;
             if (!(tagged && x >= sourceWidth - 192 && y < 192) && memcmp(expected + offset, actual + offset, 4) != 0) {
@@ -372,6 +397,8 @@ static void runPresentationCase(BOOL tagged, BOOL lease) { @autoreleasepool {
         @"windowBackingColorSpace": @{@"localizedName": windowColorName, @"iccSHA256": windowICC},
         @"capture": captureFacts ?: @{}, @"crop": @{@"x": @(cropX), @"y": @(cropY), @"width": @(sourceWidth),
             @"height": @(sourceHeight), @"sha256": capturedCrop ? sha256(capturedCrop) : @"unavailable"},
+        @"referenceCrop": @{@"x": @(referenceX), @"y": @(referenceY),
+            @"sha256": referenceCrop ? sha256(referenceCrop) : @"unavailable"},
         @"captureICCReferenceSHA256": captureICCReference,
         @"historicalP86Reference": @{@"scaleFactor": @2, @"differenceCount": @(historicalDifferences.count),
             @"differences": historicalDifferences},
@@ -380,7 +407,7 @@ static void runPresentationCase(BOOL tagged, BOOL lease) { @autoreleasepool {
         @"captureHeaderContentRect": @{@"x": @(captureInfo[0]), @"y": @(captureInfo[1]),
             @"width": @(captureInfo[2]), @"height": @(captureInfo[3])},
         @"actualGeometry": @(actualGeometry),
-        @"exact": @(outsideQRExact(sourceBytes, capturedCrop, tagged)),
+        @"exact": @(outsideQRExact(referenceCrop, capturedCrop, tagged)),
         @"identityTagged": @(tagged), @"lease": @(lease),
         @"differenceCount": @(differences.count), @"differences": differences,
         @"windowActive": @(NSApp.isActive),
@@ -388,7 +415,7 @@ static void runPresentationCase(BOOL tagged, BOOL lease) { @autoreleasepool {
     NSData *json = [NSJSONSerialization dataWithJSONObject:evidence options:NSJSONWritingPrettyPrinted error:NULL];
     fprintf(stdout, "IMAGE_REGION_CAPTURE_EVIDENCE %s\n", json ? [[[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding] UTF8String] : "{}");
     fflush(stdout);
-    BOOL exact = outsideQRExact(sourceBytes, capturedCrop, tagged);
+    BOOL exact = outsideQRExact(referenceCrop, capturedCrop, tagged);
     check(!NSApp.isActive, @"recording and comparison do not activate the application");
     check(sourceLayerExact, @"the presented IOSurface snapshot preserves source pixels outside the QR");
     CGColorSpaceRef declaredSRGB = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
@@ -398,11 +425,15 @@ static void runPresentationCase(BOOL tagged, BOOL lease) { @autoreleasepool {
     check(actualGeometry,
         [NSString stringWithFormat:@"the source and capture match actual backing geometry (region %.0fx%.0f pixels at scale %.0f; capture %ux%u, factor %.0f)",
             raster[0], raster[1], raster[2], dimensions[0], dimensions[1], [captureFacts[@"scaleFactor"] doubleValue]]);
-    check(exact, [NSString stringWithFormat:@"the captured image-region crop equals the source bytes (%lu differences)",
-        (unsigned long)differences.count]);
+    check(referenceCrop != nil, @"the still holds the reference layer at the pixel size of the source");
+    check(exact, [NSString stringWithFormat:@"the captured image-region crop equals the reference layer crop of the same still "
+        "(%lu differences)", (unsigned long)differences.count]);
 
     if (source) CFRelease(source);
     [sourceBytes release];
+    [referenceView removeFromSuperview]; [referenceView release];
+    if (referenceSurface) CFRelease(referenceSurface);
+    [referenceBytes release];
     [layerBytes release]; [sourceICC release];
     [issuedPayloads release];
     sp_region_close(region);

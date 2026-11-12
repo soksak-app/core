@@ -15,6 +15,7 @@
 #import "support/records.h"
 #import "support/run_until.h"
 #import "support/temporary_folder.h"
+#import "support/capture_frame.m"
 #import <CommonCrypto/CommonDigest.h>
 #import "event_ring.h"
 #include <sys/stat.h>
@@ -92,7 +93,7 @@ static SPCaptureRecording *makeRecording(NSString *directory, NSUInteger planned
         [recording.rows addObject:[NSMutableDictionary dictionaryWithDictionary:@{
             @"index": @(index), @"planned": tickString([recording plannedTicks:index]), @"requested": NSNull.null,
             @"completed": NSNull.null, @"outcome": @"not-requested", @"error": NSNull.null, @"frame": NSNull.null,
-            @"windows": NSNull.null, @"requestedGap": @(recording.gap),
+            @"windows": NSNull.null, @"colorSpace": NSNull.null, @"colorProfile": NSNull.null, @"requestedGap": @(recording.gap),
             @"machTimebaseNumerator": @(timebase.numer), @"machTimebaseDenominator": @(timebase.denom),
             @"writeStartTime": NSNull.null, @"writeCompleteTime": NSNull.null, @"writerEnqueuedTime": NSNull.null,
             @"writerStartTime": NSNull.null, @"writerCompleteTime": NSNull.null,
@@ -133,7 +134,16 @@ static uint64_t fixedClock(void) { return 100 * (atomic_fetch_add(&fixedClockRea
 static kern_return_t failingTimebase(mach_timebase_info_t info) { (void)info; return KERN_FAILURE; }
 
 // A window server image whose provider reads the capture clock at the first read of its pixels: the image that the window server
-// returns reads the window surfaces only when its pixels are read.
+// returns reads the window surfaces only when its pixels are read. Its pixels are #32c8c8 in Display P3, a colour that a conversion
+// to sRGB changes, as the window server gives the pixels in the colour space of the display.
+static NSData *lazyPixels(void) {
+    NSMutableData *pixels = [NSMutableData dataWithLength:8 * 4 * 4];
+    uint8_t *bytes = pixels.mutableBytes;
+    for (size_t offset = 0; offset < pixels.length; offset += 4) {
+        bytes[offset] = 0xc8; bytes[offset + 1] = 0xc8; bytes[offset + 2] = 0x32; bytes[offset + 3] = 0xff;
+    }
+    return pixels;
+}
 static _Atomic uint64_t lazyReadTick;
 static size_t lazyBytes(void *info, void *buffer, off_t position, size_t count) {
     uint64_t unread = 0, now = captureTicks();
@@ -144,10 +154,10 @@ static size_t lazyBytes(void *info, void *buffer, off_t position, size_t count) 
 static void lazyRelease(void *info) { [(NSData *)info release]; }
 static CGImageRef lazyWindowImage(CGRect rect, CFArrayRef windows, CGWindowImageOption options) {
     (void)rect; (void)windows; (void)options;
-    NSData *pixels = [opaquePixels(8, 4, 90) retain];
+    NSData *pixels = [lazyPixels() retain];
     CGDataProviderDirectCallbacks callbacks = { 0, NULL, NULL, lazyBytes, lazyRelease };
     CGDataProviderRef provider = CGDataProviderCreateDirect(pixels, (off_t)pixels.length, &callbacks);
-    CGColorSpaceRef colorSpace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateWithName(kCGColorSpaceDisplayP3);
     CGImageRef image = CGImageCreate(8, 4, 8, 32, 32, colorSpace,
         (CGBitmapInfo)kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little, provider, NULL, false, kCGRenderingIntentDefault);
     CGColorSpaceRelease(colorSpace);
@@ -546,6 +556,27 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"a still reads the pixels of its image between its request and its completion (requested %@, "
             "pixels read %llu, completed %@, %@)", lazyRow[@"requested"], (unsigned long long)atomic_load(&lazyReadTick),
             lazyRow[@"completed"], lazyRow[@"outcome"]]);
+    // The frame holds the bytes of the image in its own colour space, and the row names that space and its ICC profile file.
+    NSData *lazyFrame = [lazyRow[@"frame"] isKindOfClass:NSString.class] ? readCaptureFrame([NSData dataWithContentsOfFile:
+        [lazyDirectory stringByAppendingPathComponent:lazyRow[@"frame"]]]) : nil;
+    NSData *lazyFramePixels = lazyFrame.length > kCaptureFrameHeader
+        ? [lazyFrame subdataWithRange:NSMakeRange(kCaptureFrameHeader, lazyFrame.length - kCaptureFrameHeader)] : nil;
+    check([lazyFramePixels isEqualToData:lazyPixels()], [NSString stringWithFormat:
+        @"a frame holds the bytes of its image in the colour space of the image, unconverted (%@)",
+        lazyFramePixels.length >= 4 ? [lazyFramePixels subdataWithRange:NSMakeRange(0, 4)] : lazyFramePixels]);
+    CGColorSpaceRef displayP3 = CGColorSpaceCreateWithName(kCGColorSpaceDisplayP3);
+    NSData *displayP3Profile = [(NSData *)CGColorSpaceCopyICCData(displayP3) autorelease];
+    CGColorSpaceRelease(displayP3);
+    unsigned char profileDigest[CC_SHA256_DIGEST_LENGTH];
+    CC_SHA256(displayP3Profile.bytes, (CC_LONG)displayP3Profile.length, profileDigest);
+    NSMutableString *profileName = [NSMutableString stringWithString:@"color-"];
+    for (int index = 0; index < 8; index++) [profileName appendFormat:@"%02x", profileDigest[index]];
+    [profileName appendString:@".icc"];
+    NSData *writtenProfile = [NSData dataWithContentsOfFile:[lazyDirectory stringByAppendingPathComponent:profileName]];
+    check([lazyRow[@"colorSpace"] isEqual:(NSString *)kCGColorSpaceDisplayP3] && [lazyRow[@"colorProfile"] isEqual:profileName]
+        && [writtenProfile isEqualToData:displayP3Profile], [NSString stringWithFormat:
+        @"a still row names the colour space of its frame and the ICC profile file of that space (%@, %@, expected %@, file %lu bytes)",
+        lazyRow[@"colorSpace"], lazyRow[@"colorProfile"], profileName, (unsigned long)writtenProfile.length]);
     clearCaptureError();
     check(finalizeCaptureArtifacts(lazyRecording), [NSString stringWithFormat:@"the pixel-read recording finalizes (%s)",
         sp_capture_error()]);

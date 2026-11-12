@@ -146,7 +146,7 @@ typedef enum { SPShownOld, SPShownNew, SPShownOther } SPShown;
 
 // Measures the visible page and the center (pt from the window top) of the rows that the window buttons occupy in one
 // recording frame, and the request and the completion time of its still: the window showed the frame at some time between the two.
-static double measure(NSData *data, double *requested, double *completed, SPShown *shown, uint8_t seen[3]) {
+static double measure(NSData *data, CGColorSpaceRef space, double *requested, double *completed, SPShown *shown, uint8_t seen[3]) {
     uint32_t head[3] = {0}; double info[8] = {0};
     *shown = SPShownOther;
     if (data.length < sizeof(head) + sizeof(info)) return NAN;
@@ -162,8 +162,8 @@ static double measure(NSData *data, double *requested, double *completed, SPShow
     size_t bx = (size_t)floor((info[0] + 300) * scale), by = (size_t)floor((info[1] + 150) * scale);
     if (bx >= head[0] || by >= head[1]) return NAN;
     const uint8_t *background = pixels + by * head[2] + bx * 4;
-    // BGRA
-    seen[0] = background[2]; seen[1] = background[1]; seen[2] = background[0];
+    // The frame holds the bytes of the display colour space; its ICC profile reads them as sRGB, the space of the page colours.
+    captureFramePixelSRGB(background, space, seen);
     BOOL old = abs(seen[0] - kOld[0]) < 24 && abs(seen[1] - kOld[1]) < 24 && abs(seen[2] - kOld[2]) < 24;
     BOOL new = abs(seen[0] - kNew[0]) < 24 && abs(seen[1] - kNew[1]) < 24 && abs(seen[2] - kNew[2]) < 24;
     *shown = old ? SPShownOld : new ? SPShownNew : SPShownOther;
@@ -277,6 +277,8 @@ int main(void) { @autoreleasepool {
     // For every visible page, the window buttons are at the center of the first row of that page. The previous page
     // must stay visible until the commit, even after the change, so the criterion is observed.
     int oldHeld = 0, newShown = 0, newBeforeCommit = 0;
+    CGColorSpaceRef space = captureFolderColorSpace(recordingDirectory);
+    check(space != NULL, @"the recording folder holds the one colour profile of its frames");
     for (int index = 0; index < count; index++) {
         NSString *path = [recordingDirectory stringByAppendingPathComponent:
             [NSString stringWithFormat:@"frame-%04d.bgra", index]];
@@ -284,7 +286,7 @@ int main(void) { @autoreleasepool {
         double requested = NAN, completed = NAN;
         SPShown shown = SPShownOther;
         uint8_t seen[3] = {0, 0, 0};
-        double centre = data ? measure(data, &requested, &completed, &shown, seen) : NAN;
+        double centre = data ? measure(data, space, &requested, &completed, &shown, seen) : NAN;
         if (shown == SPShownOther) {
             check(NO, [NSString stringWithFormat:@"frame %d/%d shows one of the two pages (colour %d,%d,%d)",
                 index, count, seen[0], seen[1], seen[2]]);
@@ -307,6 +309,7 @@ int main(void) { @autoreleasepool {
         oldHeld, newShown, newBeforeCommit);
     check(oldHeld > 0, @"the recording has old-page frames taken after the title bar change while the start transaction is open");
     check(newShown > 0, @"the recording has new-page frames");
+    if (space) CGColorSpaceRelease(space);
     [window close];
     return failures ? 1 : 0;
 }}

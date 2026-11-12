@@ -5,6 +5,9 @@
 // frame shows what the window server showed between the request of its still and its completion (docs/spec/diagnostics.md).
 // The capture asks the window server for the windows of its own process; the check prints whether the process has the screen
 // recording permission.
+// A capture holds the bytes of the display colour space. Each colour is judged against a reference patch of the same capture: a
+// layer that shows the same sRGB colour, which the window server composites with the window. The pixel equals its patch byte for
+// byte.
 #import <Cocoa/Cocoa.h>
 #import <IOSurface/IOSurface.h>
 #import <Metal/Metal.h>
@@ -52,13 +55,13 @@ static Image capture(NSWindow *window, NSString *directory, NSString *name) {
     image.width = CGImageGetWidth(decoded);
     image.height = CGImageGetHeight(decoded);
     image.bytes = calloc(image.width * image.height, 4);
-    CGColorSpaceRef srgb = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
-    CGContextRef context = CGBitmapContextCreate(image.bytes, image.width, image.height, 8, image.width * 4, srgb,
-        (CGBitmapInfo)kCGImageAlphaPremultipliedLast);
+    // The PNG holds the profile of the display colour space; a context in that same space reads its bytes without conversion.
+    CGContextRef context = CGBitmapContextCreate(image.bytes, image.width, image.height, 8, image.width * 4,
+        CGImageGetColorSpace(decoded), (CGBitmapInfo)kCGImageAlphaPremultipliedLast);
+    check(context != NULL, [NSString stringWithFormat:@"the %@ capture reads in its own colour space", name]);
     CGContextSetBlendMode(context, kCGBlendModeCopy);
-    CGContextDrawImage(context, CGRectMake(0, 0, image.width, image.height), decoded);
+    if (context) CGContextDrawImage(context, CGRectMake(0, 0, image.width, image.height), decoded);
     CGContextRelease(context);
-    CGColorSpaceRelease(srgb);
     CGImageRelease(decoded);
     CFRelease(source);
     return image;
@@ -69,15 +72,48 @@ static uint32_t pixelAt(Image image, CGFloat scale, CGFloat x, CGFloat y) {
     const uint8_t *p = image.bytes + ((top + (size_t)(y * scale)) * image.width + (size_t)(x * scale)) * 4;
     return (uint32_t)p[0] << 16 | (uint32_t)p[1] << 8 | p[2];
 }
-static void expectPixel(Image image, CGFloat scale, CGFloat x, CGFloat y, uint32_t want, NSString *what) {
-    uint32_t got = image.bytes == NULL ? 0xffffffff : pixelAt(image, scale, x, y);
-    check(got == want, [NSString stringWithFormat:@"%@ is %06x (got %06x)", what, want, got]);
+// The reference patches: 8-point squares of the sRGB colours that the window shows, in a row at y 296 of the content view from
+// x 230, one every 10 points. The last one has the colour of the cover.
+static const uint32_t kPatchColors[] = {
+    0xc83232, 0xe5b21a, 0x32c8c8, 0x10a820, 0x1032c0, 0x333340, 0x28c850, 0x3278c8, 0x1ab2e5, 0xc8c832, 0x90a820, 0x103240,
+    0xff00ff,
+};
+static const size_t kPatchCount = sizeof kPatchColors / sizeof kPatchColors[0];
+static const CGFloat kPatchX = 230, kPatchY = 296, kPatchSize = 8, kPatchStep = 10;
+static const uint32_t kCoverColor = 0xff00ff;
+static size_t patchIndex(uint32_t color) {
+    for (size_t index = 0; index < kPatchCount; index++) if (kPatchColors[index] == color) return index;
+    abort();
 }
-static NSUInteger pixelsOfColor(Image image, uint32_t color) {
+static NSPoint patchCentre(uint32_t color) {
+    return NSMakePoint(kPatchX + patchIndex(color) * kPatchStep + kPatchSize / 2, kPatchY + kPatchSize / 2);
+}
+// Whether the pixel x, y (pixels from the top left of the content view) lies in the patch of color.
+static BOOL inPatch(uint32_t color, CGFloat scale, size_t x, size_t y) {
+    size_t left = (size_t)llround((kPatchX + patchIndex(color) * kPatchStep) * scale), top = (size_t)llround(kPatchY * scale);
+    size_t size = (size_t)llround(kPatchSize * scale);
+    return x >= left && x < left + size && y >= top && y < top + size;
+}
+static void expectPixel(Image image, CGFloat scale, CGFloat x, CGFloat y, uint32_t color, NSString *what) {
+    NSPoint centre = patchCentre(color);
+    uint32_t got = image.bytes == NULL ? 0xffffffff : pixelAt(image, scale, x, y);
+    uint32_t patch = image.bytes == NULL ? 0xfffffffe : pixelAt(image, scale, centre.x, centre.y);
+    check(got == patch, [NSString stringWithFormat:@"%@ equals its sRGB #%06x reference patch of the same capture (got %06x, patch %06x)",
+        what, color, got, patch]);
+}
+// The pixels of the image outside the cover patch that have the bytes of the cover patch.
+static NSUInteger coverPixelsOf(Image image, CGFloat scale) {
+    NSPoint centre = patchCentre(kCoverColor);
+    uint32_t cover = pixelAt(image, scale, centre.x, centre.y);
+    size_t top = image.height - (size_t)(kHeight * scale);
     NSUInteger count = 0;
-    for (size_t i = 0; i < image.width * image.height; i++) {
-        const uint8_t *p = image.bytes + i * 4;
-        if (((uint32_t)p[0] << 16 | (uint32_t)p[1] << 8 | p[2]) == color) count++;
+    for (size_t y = 0; y < image.height; y++) {
+        for (size_t x = 0; x < image.width; x++) {
+            const uint8_t *p = image.bytes + (y * image.width + x) * 4;
+            if (((uint32_t)p[0] << 16 | (uint32_t)p[1] << 8 | p[2]) != cover) continue;
+            if (y >= top && inPatch(kCoverColor, scale, x, y - top)) continue;
+            count++;
+        }
     }
     return count;
 }
@@ -189,7 +225,7 @@ static long markerStep(NSData *frame) {
     for (int bit = 0; bit < kMarkerBits; bit++) step = step << 1 | (green(kMarkerX + 20 + bit * 8) >= 128 ? 1 : 0);
     return step;
 }
-// The BGRA pixel of a frame at a point of the content view, as 0xRRGGBB.
+// The BGRA pixel of a frame at a point of the content view, as 0xRRGGBB of the display colour space.
 static uint32_t framePixel(NSData *frame, CGFloat x, CGFloat y) {
     const uint8_t *bytes = frame.bytes;
     uint32_t dimensions[3];
@@ -273,7 +309,7 @@ int main(void) { @autoreleasepool {
         "#composited{left:298px;top:208px;width:86px;height:80px;background:#32c8c8;transform:translateZ(0);will-change:transform}</style>"
         "<div id=page></div><canvas id=gl width=144 height=128></canvas><div id=composited></div><script>"
         "const gl=document.getElementById('gl').getContext('webgl',{preserveDrawingBuffer:true});"
-        "function paint(r,g,b){gl.clearColor(r,g,b,1);gl.clear(gl.COLOR_BUFFER_BIT)};paint(0.9,0.7,0.1);"
+        "function paint(r,g,b){gl.clearColor(r/255,g/255,b/255,1);gl.clear(gl.COLOR_BUFFER_BIT)};paint(0xe5,0xb2,0x1a);"
         "</script>" baseURL:nil];
     until(@"the page load ends", ^BOOL { return !web.isLoading; });
     loaded = !web.isLoading;
@@ -312,6 +348,17 @@ int main(void) { @autoreleasepool {
     child.backgroundColor = [NSColor colorWithSRGBRed:0x28 / 255.0 green:0xc8 / 255.0 blue:0x50 / 255.0 alpha:1];
     [window addChildWindow:child ordered:NSWindowAbove];
     [child displayIfNeeded];
+    // The reference patches stand over the window background, apart from every judged layer.
+    for (size_t index = 0; index < kPatchCount; index++) {
+        NSView *patch = [[[NSView alloc] initWithFrame:NSMakeRect(kPatchX + index * kPatchStep, kHeight - kPatchY - kPatchSize,
+            kPatchSize, kPatchSize)] autorelease];
+        patch.wantsLayer = YES;
+        CGColorRef color = CGColorCreateSRGB((kPatchColors[index] >> 16 & 0xff) / 255.0, (kPatchColors[index] >> 8 & 0xff) / 255.0,
+            (kPatchColors[index] & 0xff) / 255.0, 1);
+        patch.layer.backgroundColor = color;
+        CGColorRelease(color);
+        [content addSubview:patch];
+    }
     [CATransaction flush];
     waitForPresentation(web);
 
@@ -322,7 +369,8 @@ int main(void) { @autoreleasepool {
         styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
     cover.releasedWhenClosed = NO;
     cover.animationBehavior = NSWindowAnimationBehaviorNone;
-    cover.backgroundColor = [NSColor colorWithSRGBRed:1 green:0 blue:1 alpha:1];
+    cover.backgroundColor = [NSColor colorWithSRGBRed:(kCoverColor >> 16) / 255.0 green:(kCoverColor >> 8 & 0xff) / 255.0
+        blue:(kCoverColor & 0xff) / 255.0 alpha:1];
 
     // The window controls of a window that has just appeared can still change: the state before the cover is the first
     // capture that equals the capture before it.
@@ -386,12 +434,14 @@ int main(void) { @autoreleasepool {
         expectPixel(covered, scale, 240, 285, 0x333340, @"the window background");
         expectPixel(covered, scale, 180, 280, 0x28c850, @"the child window of the covered window");
         // The cover is a window of the same application outside the list: the capture holds the listed windows only.
-        check(pixelsOfColor(covered, 0xff00ff) == 0, @"no pixel of the cover is in the capture");
+        NSUInteger coverPixels = coverPixelsOf(covered, scale);
+        check(coverPixels == 0, [NSString stringWithFormat:@"no pixel of the cover is in the capture: none outside its reference "
+            "patch has its bytes (%lu)", (unsigned long)coverPixels]);
     }
 
     // Every layer changes while the window stays covered.
     evaluate(web, @"document.getElementById('page').style.background='#3278c8';"
-        "document.getElementById('composited').style.background='#c8c832';paint(0.1,0.7,0.9);");
+        "document.getElementById('composited').style.background='#c8c832';paint(0x1a,0xb2,0xe5);");
     paintMetal(metal, queue, 0x90);
     IOSurfaceRef changedSurface = surfaceOf(144 * scale, 128 * scale, 0x40);
     showSurface(surfaceView.layer, changedSurface);
@@ -408,7 +458,9 @@ int main(void) { @autoreleasepool {
         expectPixel(changed, scale, 70, 160, 0x90a820, @"the changed Metal layer");
         expectPixel(changed, scale, 360, 128, 0x103240, @"the changed IOSurface layer");
         expectPixel(changed, scale, 180, 280, 0x28c850, @"the child window after the change");
-        check(pixelsOfColor(changed, 0xff00ff) == 0, @"no pixel of the cover is in the changed capture");
+        NSUInteger coverPixels = coverPixelsOf(changed, scale);
+        check(coverPixels == 0, [NSString stringWithFormat:@"no pixel of the cover is in the changed capture: none outside its "
+            "reference patch has its bytes (%lu)", (unsigned long)coverPixels]);
     }
 
     // A recording of the covered window: a still every refresh for three seconds, while the marker changes at every refresh.
@@ -510,15 +562,22 @@ int main(void) { @autoreleasepool {
         NSData *frame = [row[@"frame"] isKindOfClass:NSString.class]
             ? readCaptureFrame([NSData dataWithContentsOfFile:[recorded stringByAppendingPathComponent:row[@"frame"]]]) : nil;
         if (frame == nil) { missing++; continue; }
-        if (framePixel(frame, 180, 280) != 0x28c850) wrongChild++;
+        NSPoint childPatch = patchCentre(0x28c850), coverPatch = patchCentre(kCoverColor);
+        if (framePixel(frame, 180, 280) != framePixel(frame, childPatch.x, childPatch.y)) wrongChild++;
         {
             uint32_t dimensions[3];
             memcpy(dimensions, frame.bytes, sizeof dimensions);
+            double frameScale;
+            memcpy(&frameScale, (const uint8_t *)frame.bytes + 12 + 5 * sizeof(double), sizeof frameScale);
+            size_t top = dimensions[1] - (size_t)llround(kHeight * frameScale);
+            uint32_t cover = framePixel(frame, coverPatch.x, coverPatch.y);
             const uint8_t *pixels = (const uint8_t *)frame.bytes + kCaptureFrameHeader;
             for (size_t y = 0; y < dimensions[1]; y++)
                 for (size_t x = 0; x < dimensions[0]; x++) {
                     const uint8_t *p = pixels + y * dimensions[2] + x * 4;
-                    if (p[2] == 0xff && p[1] == 0 && p[0] == 0xff) coverPixels++;
+                    if (((uint32_t)p[2] << 16 | (uint32_t)p[1] << 8 | p[0]) != cover) continue;
+                    if (y >= top && inPatch(kCoverColor, frameScale, x, y - top)) continue;
+                    coverPixels++;
                 }
         }
         long step = markerStep(frame);

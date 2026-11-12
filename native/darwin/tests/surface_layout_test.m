@@ -215,7 +215,8 @@ static bool startRecording(NSWindow *window, const char *directory, char **error
 
 // Whether the decoded frame data shows the first-show marker colour at the point (x, y) of the window, and the request and the
 // completion time of its still.
-static BOOL captureFrameHasColorAtPoint(NSData *data, CGFloat x, CGFloat y, double *requested, double *completed) {
+static BOOL captureFrameHasColorAtPoint(NSData *data, CGColorSpaceRef space, CGFloat x, CGFloat y, double *requested,
+    double *completed) {
     if (data.length < kCaptureFrameHeader) return NO;
     uint32_t head[3] = {0};
     double info[8] = {0};
@@ -230,8 +231,10 @@ static BOOL captureFrameHasColorAtPoint(NSData *data, CGFloat x, CGFloat y, doub
     size_t py = (size_t)floor(info[1] * info[5] + y * scale);
     if (px >= head[0] || py >= head[1]) return NO;
     const uint8_t *pixels = (const uint8_t *)data.bytes + sizeof(head) + sizeof(info);
-    const uint8_t *pixel = pixels + py * head[2] + px * 4;
-    return abs((int)pixel[2]) <= 3 && abs((int)pixel[1] - 160) <= 3 && abs((int)pixel[0] - 210) <= 3;
+    // The frame holds the bytes of the display colour space; its ICC profile reads them as sRGB, the space of the marker.
+    uint8_t rgb[3];
+    captureFramePixelSRGB(pixels + py * head[2] + px * 4, space, rgb);
+    return abs((int)rgb[0]) <= 3 && abs((int)rgb[1] - 160) <= 3 && abs((int)rgb[2] - 210) <= 3;
 }
 
 static BOOL bitmapContainsFirstShowMarker(NSBitmapImageRep *bitmap) {
@@ -523,6 +526,10 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration, BOOL
         check(surfaceLayoutTraceStop(timeline, 1) == 1, @"the composition recording contains its transaction timeline");
         // The frames are named by the index of their still, so the files of the folder in their order are the stills in the
         // order of their requests.
+        // The frames hold the bytes of the display colour space, and the ICC profile of the folder reads them as sRGB.
+        CGColorSpaceRef folderSpace = captureFolderColorSpace(folder);
+        check(folderSpace != NULL, [NSString stringWithFormat:@"%@: the recording folder holds the one colour profile of its frames",
+            variant]);
         NSMutableArray<NSString *> *frameNames = [NSMutableArray array];
         for (NSString *name in [NSFileManager.defaultManager contentsOfDirectoryAtPath:folder error:NULL])
             if ([name.pathExtension isEqualToString:@"bgra"]) [frameNames addObject:name];
@@ -550,14 +557,20 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration, BOOL
             if (!pageChange) {
                 // The column at x 295 lies inside the native plane before the commit and outside the narrower plane after it.
                 size_t px = (size_t)floor((info[0] + 295) * scale), py = (size_t)floor((info[1] + 100) * scale);
-                const uint8_t *rgb = px < head[0] && py < head[1] ? pixels + py * head[2] + px * 4 : NULL;
-                BOOL narrowed = rgb != NULL && (abs((int)rgb[2] - 25) > 6 || abs((int)rgb[1] - 27) > 6 || abs((int)rgb[0] - 36) > 6);
+                // The frame holds the bytes of the display colour space; its ICC profile reads them as sRGB, the space of the plane.
+                uint8_t read[3] = {0, 0, 0};
+                const uint8_t *rgb = NULL;
+                if (px < head[0] && py < head[1]) {
+                    captureFramePixelSRGB(pixels + py * head[2] + px * 4, folderSpace, read);
+                    rgb = read;
+                }
+                BOOL narrowed = rgb != NULL && (abs((int)rgb[0] - 25) > 6 || abs((int)rgb[1] - 27) > 6 || abs((int)rgb[2] - 36) > 6);
                 if (preCommit)
                     check(!narrowed, [NSString stringWithFormat:@"%@: a pre-commit frame shows the native plane at x 295", variant]);
                 if (index == count)
                     check(narrowed, [NSString stringWithFormat:@"%@: the final frame shows the narrower native plane (x 295 rgb %d,%d,%d, "
-                        "requested %.3f, completed %.3f, committed %.3f)", variant, rgb ? rgb[2] : -1, rgb ? rgb[1] : -1,
-                        rgb ? rgb[0] : -1, info[6], info[7], timeline[3]]);
+                        "requested %.3f, completed %.3f, committed %.3f)", variant, rgb ? rgb[0] : -1, rgb ? rgb[1] : -1,
+                        rgb ? rgb[2] : -1, info[6], info[7], timeline[3]]);
                 continue;
             }
             BOOL found = NO;
@@ -568,8 +581,9 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration, BOOL
                     size_t px = (size_t)floor((info[0] + x) * scale);
                     size_t py = (size_t)floor((info[1] + 100 + offset) * scale);
                     if (px >= head[0] || py >= head[1]) { matches = NO; break; }
-                    const uint8_t *rgb = pixels + py * head[2] + px * 4;
-                    if (abs((int)rgb[2] - 43) > 3 || abs((int)rgb[1] - 46) > 3 || abs((int)rgb[0] - 61) > 3)
+                    uint8_t rgb[3];
+                    captureFramePixelSRGB(pixels + py * head[2] + px * 4, folderSpace, rgb);
+                    if (abs((int)rgb[0] - 43) > 3 || abs((int)rgb[1] - 46) > 3 || abs((int)rgb[2] - 61) > 3)
                         matches = NO;
                 }
                 found = matches;
@@ -585,6 +599,7 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration, BOOL
                 check(borderAt >= 290 && borderAt < 291, [NSString stringWithFormat:
                     @"the final composition frame contains the moved border (x %.1f)", borderAt]);
         }
+        if (folderSpace) CGColorSpaceRelease(folderSpace);
     }
     // The folder of a failing check holds its frames and the request and completion times of every still (stills.jsonl); a
     // passing check removes its folder at once.
@@ -902,6 +917,8 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
         NSError *listingError = nil;
         NSArray<NSString *> *contents = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:
             [NSString stringWithUTF8String:directory] error:&listingError];
+        CGColorSpaceRef firstShowSpace = captureFolderColorSpace([NSString stringWithUTF8String:directory]);
+        check(firstShowSpace != NULL, @"the first-show recording folder holds the one colour profile of its frames");
         NSMutableArray<NSString *> *frameNames = [NSMutableArray array];
         for (NSString *name in contents) if ([name.pathExtension isEqualToString:@"bgra"]) [frameNames addObject:name];
         [frameNames sortUsingSelector:@selector(compare:)];
@@ -914,7 +931,7 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
             check(data != nil, [NSString stringWithFormat:@"first-show frame %@ decodes completely", frameNames[index]]);
             // A still completed before the commit cannot show it, and a still requested at or after the commit shows it.
             double requested = NAN, completed = NAN;
-            BOOL marker = data != nil && captureFrameHasColorAtPoint(data, 70, 70, &requested, &completed);
+            BOOL marker = data != nil && captureFrameHasColorAtPoint(data, firstShowSpace, 70, 70, &requested, &completed);
             if (completed < timeline[3]) {
                 precommitFrame = YES;
                 if (marker) precommitMarkerAbsent = NO;
@@ -926,6 +943,7 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
         check(precommitMarkerAbsent, @"the first-show marker remains unpublished in every recorded pre-commit frame");
         check(postcommitFrame && finalMarkerPresent,
             @"the final post-commit frame contains the first-show marker at its declared geometry");
+        if (firstShowSpace) CGColorSpaceRelease(firstShowSpace);
     }
     sp_surface_unplace_view(root);
     [root removeFromSuperview];
