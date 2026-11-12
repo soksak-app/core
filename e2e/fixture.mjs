@@ -168,3 +168,31 @@ export async function coverCheckWindow(s, cover) {
     `the covering window does not hold the frame of the check window ${JSON.stringify(covered)}`);
   return covered;
 }
+
+/**
+ * Holds the dialogs of the window of s for a check (docs/spec/exposure.md#dialogs): while the watch of host.dialog lasts, a dialog
+ * of the window shows no panel and waits as a request that the check answers, so a check never shows a panel to the person. It
+ * returns once the watch started. `asked(answer, what)` waits until the one request of host.dialog waits and returns it; the
+ * pending answer of the command that asked fails the wait at once when it answers first. `end(last)` runs the last answer of the
+ * check and waits until the watch ended with the change that it made.
+ */
+export async function holdDialogs(s) {
+  let last = false;
+  const watching = s.until("host.dialog", () => last, "the watch of host.dialog ended before the last answer");
+  await s.until("host.dialog", (dialog) => dialog.pending.length === 0, "a dialog of the window waited before the check");
+  return {
+    async asked(answer, what) {
+      const answeredFirst = answer.then((value) => {
+        throw new Error(`${what} answered ${JSON.stringify(value)} before it asked for a dialog`);
+      });
+      const dialog = await Promise.race([answeredFirst,
+        s.until("host.dialog", (value) => value.pending.length === 1, `${what} did not ask for a dialog`)]);
+      return dialog.pending[0];
+    },
+    async end(lastAnswer) {
+      last = true;
+      await lastAnswer();
+      await watching;
+    },
+  };
+}

@@ -1,8 +1,8 @@
-// The save of the debug view, answered through host.dialog (docs/spec/exposure.md#dialogs). While the check watches host.dialog
-// of its window, the save shows no panel: its place waits as a request that the check answers with a path in a folder of its
-// own, so the check never shows a panel to the person and never writes into a folder of the person. The answer passes the
-// checks of the panel of a person: the name of an existing file is refused without replace and the request keeps waiting, and
-// a cancel answers no file.
+// The save of the debug view, answered through host.dialog (docs/spec/exposure.md#dialogs). While the check holds the dialogs of
+// its window, the save shows no panel: its place waits as a request that the check answers with a path in a folder of its own,
+// so the check never shows a panel to the person and never writes into a folder of the person. The answer passes the checks of
+// the panel of a person: the name of an existing file is refused without replace and the request keeps waiting, and a cancel
+// answers no file.
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -10,22 +10,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { fresh } from "./fixture.mjs";
-
-/**
- * Starts core.debug.save of path and waits until its place is the one request of host.dialog. Returns `{ answer, request }`:
- * the pending answer of the command, which the answer of the request gives, and the request. A command that answers before it
- * asks fails the wait at once.
- */
-async function saveAsked(s, path) {
-  const answer = s.run("core.debug.save", { path });
-  const answeredFirst = answer.then((value) => {
-    throw new Error(`core.debug.save answered ${JSON.stringify(value)} before it asked for its place`);
-  });
-  const value = await Promise.race([answeredFirst,
-    s.until("host.dialog", (dialog) => dialog.pending.length === 1, "the save of the debug view did not ask for its place")]);
-  return { answer, request: value.pending[0] };
-}
+import { fresh, holdDialogs } from "./fixture.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the save of the debug view is a request of host.dialog that an answer saves into a folder of the check, refuses an existing file without replace and cancels`, async (t) => {
@@ -41,15 +26,11 @@ for (const app of Object.values(APPS)) {
     const source = readFileSync(join(app.configDir, entry));
     const folder = realpathSync(mkdtempSync(join(tmpdir(), "soksak-debug-save-")));
     s.cleanup(() => rmSync(folder, { recursive: true, force: true }));
-
-    // The watch of host.dialog holds the dialogs of the window until the last answer; the second wait returns once the watch
-    // started, so the save that follows asks the check and not the person.
-    let last = false;
-    const watching = s.until("host.dialog", () => last, "the watch of host.dialog ended before the last answer");
-    await s.until("host.dialog", (dialog) => dialog.pending.length === 0, "a dialog of the window waited before the check");
+    const dialogs = await holdDialogs(s);
 
     // The save asks for the place of the file with its name and shows no panel. The answer saves it there.
-    let { answer, request } = await saveAsked(s, entry);
+    let answer = s.run("core.debug.save", { path: entry });
+    let request = await dialogs.asked(answer, "core.debug.save");
     assert.equal(request.kind, "save", `the save asked for ${JSON.stringify(request)}`);
     assert.equal(request.suggestedName, name, `the save proposed ${JSON.stringify(request.suggestedName)}`);
     assert.equal((await s.get("host.window")).sheet, null, "the save showed a panel");
@@ -62,7 +43,8 @@ for (const app of Object.values(APPS)) {
     assert.ok(written.subarray(0, source.length).equals(source), "the saved file does not start with the event log");
 
     // The name of the saved file is refused without replace, and the request keeps waiting. The cancel answers no file.
-    ({ answer, request } = await saveAsked(s, entry));
+    answer = s.run("core.debug.save", { path: entry });
+    request = await dialogs.asked(answer, "core.debug.save");
     await assert.rejects(s.request("input.dialog.answer", { id: request.id, paths: [target] }), (error) => {
       assert.equal(error.code, -32602, error.message);
       assert.match(error.message, /exists/);
@@ -70,11 +52,9 @@ for (const app of Object.values(APPS)) {
     });
     assert.deepEqual((await s.get("host.dialog")).pending.map((pending) => pending.id), [request.id],
       "the refused answer did not leave the request waiting");
-    last = true;
-    await s.request("input.dialog.answer", { id: request.id, cancel: true });
+    await dialogs.end(() => s.request("input.dialog.answer", { id: request.id, cancel: true }));
     const cancelled = await answer;
     assert.equal(cancelled?.saved ?? null, null, `a cancelled save answered ${JSON.stringify(cancelled)}`);
-    await watching;
     assert.ok(existsSync(target) && readFileSync(target).equals(written), `${target} changed after the refused answer`);
   });
 }

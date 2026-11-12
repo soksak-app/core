@@ -1,11 +1,12 @@
 // Checks the display order, the background, the input, the move, the resize and the removal of a modal.
 import assert from "node:assert/strict";
-import { readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 
 import { APPS, holdCovered, judgeShownChanges, MAIN_PAGE_APPS, open, owe } from "@soksak/window-check/app.mjs";
-import { fresh as prepare } from "./fixture.mjs";
+import { fresh as prepare, holdDialogs } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { addRasterTab, RASTER, rasterReady } from "./raster-probe.mjs";
 import { readStillCapture } from "./still-capture.mjs";
@@ -517,7 +518,7 @@ for (const app of Object.values(APPS)) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: the debug timeline selects rows and reports the count and the warning of the save`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: the debug timeline selects rows, reports the count and the warning of the save, and saves the selected rows through host.dialog`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const titles = HELP_TITLES[(await s.get("host.menu")).language];
@@ -531,7 +532,6 @@ for (const app of Object.values(APPS)) {
     const shown = await s.until("core.debug", (debug) => debug.timeline !== null && debug.timeline.held > 1, "the timeline did not show rows");
     assert.equal(shown.timeline.selected, 0);
     assert.match(shown.timeline.warning, /입력한 글자/);
-    // The save panel needs a person, so the check does not run core.debug.timeline.save.
     await s.run("core.debug.timeline.select", { row: 0, selected: true });
     await s.run("core.debug.timeline.select", { row: 1, selected: true });
     await s.run("core.debug.timeline.select", { row: 1, selected: true });
@@ -539,6 +539,26 @@ for (const app of Object.values(APPS)) {
     assert.equal(two.error, null);
     await s.run("core.debug.timeline.select", { row: 0, selected: false });
     await s.until("core.debug", (debug) => debug.timeline.selected === 1, "the unselected row was not reported");
+    // The save of the selected row asks host.dialog for its place, which the check answers with a path in a folder of its own,
+    // and writes the line of the row; a cancel answers no file (docs/spec/debug.md, docs/spec/exposure.md#dialogs).
+    const folder = realpathSync(mkdtempSync(join(tmpdir(), "soksak-timeline-save-")));
+    s.cleanup(() => rmSync(folder, { recursive: true, force: true }));
+    const dialogs = await holdDialogs(s);
+    let saving = s.run("core.debug.timeline.save");
+    let request = await dialogs.asked(saving, "core.debug.timeline.save");
+    assert.equal(request.kind, "save", `the save asked for ${JSON.stringify(request)}`);
+    assert.match(request.suggestedName, /^soksak-timeline-\d{8}T\d{6}Z\.txt$/, `the save proposed ${JSON.stringify(request.suggestedName)}`);
+    assert.equal((await s.get("host.window")).sheet, null, "the save showed a panel");
+    const target = join(folder, request.suggestedName);
+    await s.request("input.dialog.answer", { id: request.id, paths: [target] });
+    assert.deepEqual(await saving, { saved: target });
+    const lines = readFileSync(target, "utf8");
+    assert.match(lines, /^[^\n]+\n$/, `the saved file holds ${JSON.stringify(lines)}, not the line of the one selected row`);
+    saving = s.run("core.debug.timeline.save");
+    request = await dialogs.asked(saving, "core.debug.timeline.save");
+    await dialogs.end(() => s.request("input.dialog.answer", { id: request.id, cancel: true }));
+    assert.equal((await saving)?.saved ?? null, null, "a cancelled save answered a file");
+    assert.equal((await s.get("core.debug")).error, null);
     await assert.rejects(s.run("core.debug.timeline.select", { row: shown.timeline.held + 1_000_000, selected: true }), /is not one of the/);
     s.expectError(/^error workbench .*timeline row \d+ is not one of the \d+ rows/);
   });
