@@ -96,9 +96,8 @@ fn every_pending_reply_is_flushed_after_the_queue_drains() {
 const FLUSH_LOG_CHILD: &str = "SOKSAK_FLUSH_LOG_CHILD";
 
 // A close that waits for the full queue is recorded with its surface.
-// The surfaces that the flush scenario closes while the queue is full. The writer can take lines out of the queue just after
-// the queue was full, until the pipe of the sidecar holds what it can (at most five lines of the scenario), so a close can find
-// room (a_close_that_finds_room_writes_no_buffered_record). More closes than those lines include a close that waits.
+// The surfaces that the flush scenario closes while the queue is full. The writer is inside a line larger than any pipe of the
+// sidecar from before the queue fills until the release, so it takes no line out of the queue and every close waits.
 const CLOSED: [&str; 8] = ["s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9"];
 
 // contract: sidecars.close.buffered-close-is-recorded
@@ -128,14 +127,10 @@ fn a_buffered_close_is_recorded() {
     let log = records::text_of(&records::read_events(&records::event_log_path(
         config.path(),
     )));
-    assert!(
-        CLOSED.iter().any(|surface| {
-            log.contains(&format!(
-                " info host sidecar {ECHO}: close {surface}: outbox full, buffered"
-            ))
-        }),
-        "no close is recorded as buffered in {log}"
-    );
+    for surface in CLOSED {
+        let buffered = format!(" info host sidecar {ECHO}: close {surface}: outbox full, buffered");
+        assert!(log.contains(&buffered), "{buffered:?} is not in {log}");
+    }
 }
 
 // contract: sidecars.close.room-has-no-buffered-record
@@ -427,24 +422,21 @@ fn send_until_full(sidecars: &Sidecars<FakeOwner>, owner: &FakeOwner, big: &RawV
     panic!("the queue never filled");
 }
 
-/// The scenario of the queue that fills, the replies and closes that wait for it, and the drain.
+/// The scenario of the queue that fills, the replies and closes that wait for it, and the drain. The first line is larger than
+/// any pipe of the sidecar, and the sidecar reads one byte of it and then waits for the release, so the writer is inside that
+/// line and takes no line out of the queue until the release: the queue stays full for every reply and close that follows. After
+/// the release the sidecar drops the rest of that line and records and acknowledges each line after it.
 fn every_pending_reply_scenario() {
     let directory = folder::Folder::new();
     let fifo_path = directory.path().join("go");
     let fifo_str = fifo_path.display().to_string();
-
-    // Creates a FIFO by calling mkfifo.
-    let output = std::process::Command::new("mkfifo")
-        .arg(&fifo_str)
-        .output()
-        .expect("mkfifo failed");
-    if !output.status.success() {
-        panic!("mkfifo failed: {}", String::from_utf8_lossy(&output.stderr));
-    }
+    let taken = directory.path().join("taken");
+    make_fifos(&[&fifo_path, &taken]);
 
     let received = directory.path().join("received");
     let script = format!(
-        "#!/bin/sh\nread _ < {}\nwhile IFS= read -r line; do\n  printf '%s\\n' \"$line\" >> {}\n  printf '%s\\n' '{{\"surface\":\"s1\",\"body\":\"received\"}}'\ndone\n",
+        "#!/bin/sh\ndd bs=1 count=1 of=/dev/null 2>/dev/null\necho > {}\nread _ < {}\nIFS= read -r _\nwhile IFS= read -r line; do\n  printf '%s\\n' \"$line\" >> {}\n  printf '%s\\n' '{{\"surface\":\"s1\",\"body\":\"received\"}}'\ndone\n",
+        taken.display(),
         fifo_str,
         received.display()
     );
@@ -460,8 +452,11 @@ fn every_pending_reply_scenario() {
 
     let (owner, events) = owner("a", "/p");
 
-    // First register the surface.
-    for s in std::iter::once(&"s1").chain(CLOSED.iter()) {
+    // The first line registers s1 and holds the writer; the next lines register the surfaces that are closed.
+    let huge = raw(&format!(r#"{{"hold":"{}"}}"#, "y".repeat(512 * 1024)));
+    sidecars.send(&owner, ECHO, "s1", &huge).unwrap();
+    read_fifo(&taken);
+    for s in CLOSED.iter() {
         sidecars.send(&owner, ECHO, s, &raw(r#"{}"#)).unwrap();
     }
 

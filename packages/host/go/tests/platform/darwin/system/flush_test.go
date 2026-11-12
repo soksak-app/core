@@ -14,9 +14,9 @@ import (
 	"github.com/soksak-app/core/packages/host/go/tests/support"
 )
 
-// closedSurfaces are the surfaces that the flush scenario closes while the queue is full. The writer can take lines out of the
-// queue just after the queue was full, until the pipe of the sidecar holds what it can (at most five lines of the scenario), so a
-// close can find room (TestACloseThatFindsRoomWritesNoBufferedRecord). More closes than those lines include a close that waits.
+// closedSurfaces are the surfaces that the flush scenario closes while the queue is full. The writer is inside a line larger than
+// any pipe of the sidecar from before the queue fills until the release, so it takes no line out of the queue and every close
+// waits.
 var closedSurfaces = []string{"s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9"}
 
 // sendUntilFull sends big on s1 until the queue refuses it.
@@ -131,12 +131,18 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 	written := support.CaptureLog(t)
 	directory := t.TempDir()
 	fifo := filepath.Join(directory, "go")
-	if err := syscall.Mkfifo(fifo, 0o600); err != nil {
-		t.Fatal(err)
+	taken := filepath.Join(directory, "taken")
+	for _, path := range []string{fifo, taken} {
+		if err := syscall.Mkfifo(path, 0o600); err != nil {
+			t.Fatal(err)
+		}
 	}
 	received := filepath.Join(directory, "received")
-	// The sidecar blocks the moment it opens the FIFO for reading. Meanwhile it does not read stdin. This is not polling.
-	script := "#!/bin/sh\ntrap '' TERM\nread _ < " + fifo + "\nexec cat > " + received + "\n"
+	// The first line is larger than any pipe of the sidecar. The sidecar reads one byte of it and then waits for the release, so
+	// the writer is inside that line and takes no line out of the queue until the release: the queue stays full for every reply
+	// and close that follows. After the release the sidecar drops the rest of that line and keeps every line after it.
+	script := "#!/bin/sh\ntrap '' TERM\ndd bs=1 count=1 of=/dev/null 2>/dev/null\necho > " + taken + "\nread _ < " + fifo +
+		"\nIFS= read -r _\nexec cat > " + received + "\n"
 	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -145,13 +151,18 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 		t.Fatal(err)
 	}
 	owner := support.NewFakeOwner("/p")
-	// Registers the surfaces to close first (Close notifies only registered surfaces).
-	for _, s := range append([]string{"s1"}, closedSurfaces...) {
+	// The first line registers s1 and holds the writer; the next lines register the surfaces to close (Close notifies only
+	// registered surfaces).
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"hold":"`+strings.Repeat("y", 512*1024)+`"}`)); err != nil {
+		t.Fatal(err)
+	}
+	readFIFO(t, taken)
+	for _, s := range closedSurfaces {
 		if err := sidecars.Send(owner, support.EchoSidecar, s, json.RawMessage(`{}`)); err != nil {
 			t.Fatal(err)
 		}
 	}
-	// Fills the queue and the pipe buffer.
+	// Fills the queue.
 	sendUntilFull(t, sidecars, owner, json.RawMessage(`{"data":"`+strings.Repeat("x", 20*1024)+`"}`))
 	// Three returns and two closes with different surfaces and names in the full state.
 	for i, name := range []string{"a", "b", "c"} {
@@ -171,12 +182,10 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 		sidecars.Close(surface)
 	}
 	// A close that waits for the full queue is recorded with its surface.
-	recorded := false
 	for _, surface := range closedSurfaces {
-		recorded = recorded || strings.Contains(written(), " info host sidecar @fixture/sidecar-echo: close "+surface+": outbox full, buffered")
-	}
-	if !recorded {
-		t.Errorf("the log records no close as buffered:\n%s", written())
+		if buffered := " info host sidecar @fixture/sidecar-echo: close " + surface + ": outbox full, buffered"; !strings.Contains(written(), buffered) {
+			t.Errorf("the log does not record %q:\n%s", buffered, written())
+		}
 	}
 	// Releases the sidecar. Nothing more is sent after that.
 	f, err := os.OpenFile(fifo, os.O_WRONLY, 0)
