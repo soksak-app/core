@@ -159,20 +159,29 @@ static void traceMark(uint64_t ticket, NSUInteger stage) {
     traceValue(ticket, stage, CACurrentMediaTime() * 1000);
 }
 
-// SPTraceRefresh records the display refresh that carried a layout transaction to the screen: at the first refresh callback of
-// the display after the transaction was sent to the render server, the target time of the refresh that follows, which is the
-// refresh whose frame the render server composes with the content sent before that callback, and the time of the refresh that
-// came before that callback, which tells how close to that refresh the transaction was sent. It marks only a record of the trace
-// that ran when the transaction was sent.
+void surfaceLayoutTraceRefresh(double flushed, double timestamp, double target, double *refreshed, double *displayed) {
+    double period = target - timestamp;
+    // The refreshes of the display lie one period apart, so the callback names every refresh around it, also when the main thread
+    // delivered it refreshes after the flush or for the refresh before it.
+    *refreshed = timestamp + ceil((flushed - timestamp) / period) * period;
+    *displayed = *refreshed + period;
+}
+
+// SPTraceRefresh records the display refresh that carried a layout transaction to the screen: the first refresh of the display at
+// or after the transaction was sent to the render server (refreshed), on the grid of the first refresh callback after that send,
+// and the refresh that follows it (displayed), whose frame the render server composes with the content sent before the first
+// refresh. The main thread delivers the callback late when it is busy, so neither is the refresh of the callback itself. It marks
+// only a record of the trace that ran when the transaction was sent.
 @interface SPTraceRefresh : NSObject
 @property(nonatomic) uint64_t ticket;
 @property(nonatomic) NSUInteger generation;
+@property(nonatomic) double flushed;
 - (void)tick:(CADisplayLink *)link;
 @end
 @implementation SPTraceRefresh
 - (void)tick:(CADisplayLink *)link {
-    double displayed = link.targetTimestamp * 1000;
-    double refreshed = link.timestamp * 1000;
+    double refreshed = NAN, displayed = NAN;
+    surfaceLayoutTraceRefresh(self.flushed, link.timestamp * 1000, link.targetTimestamp * 1000, &refreshed, &displayed);
     [link invalidate];
     if (!trace || traceGeneration != self.generation) return;
     for (NSMutableArray<NSNumber *> *item in trace.reverseObjectEnumerator) {
@@ -194,13 +203,15 @@ static void traceFlushed(uint64_t ticket, NSScreen *screen) {
     NSUInteger generation = traceGeneration;
     void (^flushed)(void) = ^{
         if (!trace || traceGeneration != generation) return;
+        double sent = CACurrentMediaTime() * 1000;
         for (NSMutableArray<NSNumber *> *item in trace.reverseObjectEnumerator) {
-            if (item[0].unsignedLongLongValue == ticket) { item[7] = @(CACurrentMediaTime() * 1000); break; }
+            if (item[0].unsignedLongLongValue == ticket) { item[7] = @(sent); break; }
         }
         if (!screen) return;
         SPTraceRefresh *refresh = [[SPTraceRefresh new] autorelease];
         refresh.ticket = ticket;
         refresh.generation = generation;
+        refresh.flushed = sent;
         // A link retains its target until it is invalidated.
         CADisplayLink *link = [screen displayLinkWithTarget:refresh selector:@selector(tick:)];
         [link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];

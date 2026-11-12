@@ -1069,11 +1069,12 @@ type LayoutRecord struct {
 	// sent to the render server: not later than Committed when the commit closed the outermost transaction, later when it
 	// was nested in another open one. It is NaN when the transaction did not commit or the send was not observed.
 	Flushed float64
-	// Displayed is the display refresh that carried the commit to the screen: the target time of the refresh that follows the
-	// first refresh callback of the display of the window after Flushed (CADisplayLink targetTimestamp). It is NaN when the
-	// transaction did not commit, its window was on no screen, or the trace ended before that callback.
+	// Displayed is the display refresh that carried the commit to the screen: the refresh that follows Refreshed. It is NaN when
+	// the transaction did not commit, its window was on no screen, or the trace ended before the first refresh callback of the
+	// display of the window after Flushed.
 	Displayed float64
-	// Refreshed is the time of the display refresh that came before that first refresh callback (CADisplayLink timestamp), so
-	// Flushed against it tells how close to that refresh the commit was sent. It is NaN when Displayed is.
+	// Refreshed is the first display refresh at or after Flushed, on the refresh grid of that first callback (CADisplayLink
+	// timestamp plus whole periods), whenever the callback was delivered, so Flushed against it tells how close to that refresh
+	// the commit was sent. It is NaN when Displayed is.
 	Refreshed float64
 }
