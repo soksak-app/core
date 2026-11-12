@@ -131,6 +131,13 @@ func (d *Dialogs) Ask(ctx context.Context, window string, request DialogRequest,
 	return nil, ctx.Err()
 }
 
+// Hold holds request, a request of a page of window that the window gives the host. apply applies the answer to the page.
+func (d *Dialogs) Hold(window string, request DialogRequest, apply func(paths []string) error) {
+	if err := apply(nil); err != nil {
+		LogError("dialog", err)
+	}
+}
+
 // remove takes the request id out of the requests of window. d.mu is held.
 func (d *Dialogs) remove(window, id string) *heldDialog {
 	held := d.held[window]

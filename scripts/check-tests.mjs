@@ -9323,6 +9323,8 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/dialog_test.go", id: "TestTheEndOfTheWatchCancelsTheHeldDialogs" },
       { file: "packages/host/go/src/dialog_test.go", id: "TestTheEndOfTheCallRemovesItsRequest" },
       { file: "packages/host/go/src/dialog_test.go", id: "TestAnAnswerPassesTheChecksOfThePanel" },
+      { file: "packages/host/go/src/dialog_test.go", id: "TestARequestOfAPageIsHeldAndItsAnswerApplied" },
+      { file: "packages/host/rust/src/dialog_test.rs", id: "a_request_of_a_page_is_held_and_its_answer_applied" },
       { file: "packages/host/go/tests/endpoint_test.go", id: "TestTheWatchOfHostDialogReachesTheHost" },
       { file: "packages/host/go/tests/endpoint_test.go", id: "TestEndpointDialogAnswer" },
       { file: "packages/host/rust/tests/exposure_test.rs", id: "a_dialog_answer_reaches_the_host_as_paths_or_a_cancel" },

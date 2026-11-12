@@ -335,3 +335,95 @@ fn an_answer_passes_the_checks_of_the_panel() {
     assert_eq!(announced(&seen), Vec::new());
     assert_eq!(returned(&seen), Ok(None));
 }
+
+// contract: dialog.page.held
+#[test]
+fn a_request_of_a_page_is_held_and_its_answer_applied() {
+    let (dialogs, send, seen) = dialogs();
+    let (applied, applies) = channel::<Option<Vec<String>>>();
+    let (end, ended) = channel::<Result<(), String>>();
+    let ended = Arc::new(Mutex::new(ended));
+    // Holds request on a thread of its own; its apply reports the paths and, for paths, waits for the end that the test
+    // gives. The thread reports its end as a return.
+    let hold = |request: Request| {
+        let (dialogs, send, applied, ended) = (
+            dialogs.clone(),
+            send.clone(),
+            applied.clone(),
+            ended.clone(),
+        );
+        std::thread::spawn(move || {
+            dialogs.hold("w1", request, move |paths| {
+                let waits = paths.is_some();
+                applied
+                    .send(paths)
+                    .expect("the test receives the applied paths");
+                if !waits {
+                    return Ok(());
+                }
+                ended
+                    .lock()
+                    .unwrap()
+                    .recv()
+                    .expect("the test ends the download")
+            });
+            send.send(Seen::Returned(Ok(None)))
+                .expect("the test receives the end of the hold");
+        });
+    };
+
+    let opened = applied.clone();
+    dialogs.hold("w1", request(OPEN), move |paths| {
+        opened
+            .send(paths)
+            .expect("the test receives the applied paths");
+        Ok(())
+    });
+    assert_eq!(
+        applies.try_recv(),
+        Ok(None),
+        "an unwatched page request is cancelled at once"
+    );
+    assert!(
+        seen.try_recv().is_err(),
+        "an unwatched page request was announced"
+    );
+
+    dialogs.watched("w1", true);
+    let url = "https://example.com/report.txt".to_string();
+    hold(Request {
+        suggested_name: Some("report.txt".into()),
+        url: Some(url.clone()),
+        ..request(DOWNLOAD)
+    });
+    let waiting = held(&seen);
+    assert_eq!(waiting.len(), 1);
+    assert_eq!(waiting[0].kind, DOWNLOAD);
+    assert_eq!(waiting[0].url, Some(url));
+    let root = crate::test_folder::Folder::new();
+    let target = root.canonicalize().unwrap().join("report.txt");
+    let mut chosen = answer(&[&target]);
+    chosen.id = waiting[0].id.clone();
+    let (answered, answers) = channel();
+    let answering = dialogs.clone();
+    std::thread::spawn(move || {
+        answered
+            .send(answering.answer("w1", chosen))
+            .expect("the test receives the answer");
+    });
+    assert_eq!(applies.recv().unwrap(), Some(names(&[&target])));
+    assert!(
+        answers.try_recv().is_err(),
+        "the answer of a download returned before the download ended"
+    );
+    end.send(Err("the network failed".into())).unwrap();
+    let failed = answers.recv().unwrap().unwrap_err();
+    assert!(failed.contains("the network failed"), "{failed}");
+    assert_eq!(announced(&seen), Vec::new());
+    assert_eq!(returned(&seen), Ok(None));
+
+    hold(request(OPEN));
+    held(&seen);
+    dialogs.watched("w1", false);
+    assert_eq!(applies.recv().unwrap(), None);
+}

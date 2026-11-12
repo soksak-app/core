@@ -173,6 +173,20 @@ impl Dialogs {
     }
 }
 
+impl Dialogs {
+    /// Holds request, a request of a page of window that the window gives the host. apply applies the answer to the page.
+    pub fn hold(
+        &self,
+        _window: &str,
+        _request: Request,
+        apply: impl FnOnce(Option<Vec<String>>) -> Result<(), String>,
+    ) {
+        if let Err(error) = apply(None) {
+            log_error("dialog", error);
+        }
+    }
+}
+
 /// Sends the answer of a request that was taken out of the requests. Each request receives one answer, so the channel is
 /// not full; a send fails only when the call that asked ended with a panic, which the panic hook records.
 fn deliver(dialog: &Held, paths: Option<Vec<String>>) {

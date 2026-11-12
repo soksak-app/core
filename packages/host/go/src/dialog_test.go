@@ -2,6 +2,7 @@ package host
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -289,4 +290,88 @@ func TestAnAnswerPassesTheChecksOfThePanel(t *testing.T) {
 	if got := <-asked; got.err != nil || got.path != "" {
 		t.Fatalf("the end of the watch gave the caller %q, %v; want the cancel of the panel", got.path, got.err)
 	}
+}
+
+// A request of a page of a watched window, the open panel of a file input or the place of a download, is held and announced; its
+// answer is applied before the answer returns, so the answer of a download returns the end of the download, and a cancel and
+// the end of the watch apply no path. A request of a page of a window that is not watched is cancelled at once.
+// contract: dialog.page.held
+func TestARequestOfAPageIsHeldAndItsAnswerApplied(t *testing.T) {
+	h, _, _, _, changes := dialogHost(t)
+	type applied struct{ paths []string }
+	applies := make(chan applied, 4)
+	ended := make(chan error, 1)
+	apply := func(paths []string) error {
+		applies <- applied{paths}
+		if paths == nil {
+			return nil
+		}
+		return <-ended
+	}
+	held := make(chan struct{}, 4)
+	hold := func(request DialogRequest) {
+		h.dialogs.Hold("w1", request, apply)
+		held <- struct{}{}
+	}
+
+	hold(DialogRequest{Kind: DialogOpen, Multiple: true})
+	select {
+	case got := <-applies:
+		if got.paths != nil {
+			t.Fatalf("an unwatched page request applied %v, want a cancel", got.paths)
+		}
+	default:
+		t.Fatal("an unwatched page request was not cancelled at once")
+	}
+	if len(changes) != 0 {
+		t.Fatalf("an unwatched page request was announced: %v", <-changes)
+	}
+	<-held
+
+	h.dialogs.Watched("w1", true)
+	url := "https://example.com/report.txt"
+	name := "report.txt"
+	// A hold that returns first was not held, and the test fails at once.
+	waitHeld := func() []DialogRequest {
+		select {
+		case value := <-changes:
+			return pendingOf(t, value)
+		case <-held:
+			t.Fatal("a page request of a watched window was not held")
+			return nil
+		}
+	}
+	go hold(DialogRequest{Kind: DialogDownload, SuggestedName: &name, URL: &url})
+	pending := waitHeld()
+	if len(pending) != 1 || pending[0].Kind != DialogDownload || pending[0].URL == nil || *pending[0].URL != url {
+		t.Fatalf("the held download is %+v", pending)
+	}
+	folder := t.TempDir()
+	target := filepath.Join(folder, "report.txt")
+	answered := make(chan error, 1)
+	go func() { answered <- h.dialogs.Answer("w1", DialogAnswer{ID: pending[0].ID, Paths: []string{target}}) }()
+	if got := <-applies; !reflect.DeepEqual(got.paths, []string{target}) {
+		t.Fatalf("the answer applied %v, want %s", got.paths, target)
+	}
+	select {
+	case err := <-answered:
+		t.Fatalf("the answer of a download returned %v before the download ended", err)
+	default:
+	}
+	ended <- errors.New("the network failed")
+	if err := <-answered; err == nil || !strings.Contains(err.Error(), "the network failed") {
+		t.Fatalf("the answer of a failed download returned %v", err)
+	}
+	<-held
+	if pending := pendingOf(t, announced(t, changes)); len(pending) != 0 {
+		t.Fatalf("an answered download stays pending: %+v", pending)
+	}
+
+	go hold(DialogRequest{Kind: DialogOpen})
+	waitHeld()
+	h.dialogs.Watched("w1", false)
+	if got := <-applies; got.paths != nil {
+		t.Fatalf("the end of the watch applied %v, want a cancel", got.paths)
+	}
+	<-held
 }
