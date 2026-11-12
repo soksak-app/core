@@ -2734,11 +2734,14 @@ fn a_sidecar_that_exits_fails_while_its_child_keeps_the_output() {
 
 // A process that left the process group of the sidecar and keeps its output open does not hold the end of the sidecar
 // (docs/spec/sidecars.md#declaration-and-startup).
+// The first perl process exits only after the second one left the group: it reads its end of a pipe whose write end the second
+// process closes after setsid. Without that order the script could read the request and exit while the second process was
+// still in the group, the end of the group killed it before it wrote its process id, and the check waited for that id.
 // contract: sidecars.end.is-the-process-exit
 #[test]
 fn a_sidecar_that_exits_fails_while_a_process_outside_its_group_keeps_the_output() {
     let (sidecars, directory) = script_sidecars(
-        "#!/bin/sh\necho $$ > DIR/pid\n/usr/bin/perl -MPOSIX -e 'exit if fork; POSIX::setsid(); open(my $f, \">\", \"DIR/child\"); print $f $$; close $f; open(my $h, \"<\", \"DIR/hold\"); my $line = <$h>'\nread request\nexit 3\n",
+        "#!/bin/sh\necho $$ > DIR/pid\n/usr/bin/perl -MPOSIX -e 'pipe(my $r, my $w) or die; if (fork) { close $w; my $left = <$r>; exit } close $r; POSIX::setsid() or die; close $w; open(my $f, \">\", \"DIR/child\"); print $f $$; close $f; open(my $h, \"<\", \"DIR/hold\"); my $line = <$h>'\nread request\nexit 3\n",
     );
     let _hold = hold_fifo(directory.path(), "hold");
     let fifo = child_fifo(directory.path(), "child");
