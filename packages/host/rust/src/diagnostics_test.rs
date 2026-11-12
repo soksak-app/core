@@ -8,6 +8,83 @@ fn stopped_clock() -> Duration {
     Duration::ZERO
 }
 
+/// The step of a native drag on the clock now of a check: it waits one period after previous, the step before it, with
+/// next_step, moving now by the wait, and answers the time of the step.
+fn periodic_step(now: &Cell<Duration>, previous: Duration, period: Duration) -> Duration {
+    let taken = next_step(previous, period, now.get(), |wait| {
+        now.set(now.get() + wait)
+    });
+    now.set(taken);
+    taken
+}
+
+// contract: diagnostics.drag.native-delivers-pointer-gesture
+#[test]
+fn a_native_drag_step_follows_the_step_before_it_by_one_period() {
+    // The period runs from the step before, so a wait inside it is no longer than what is left of it, and a step whose
+    // time passed is taken at once, from which the next period runs.
+    let ms = Duration::from_millis;
+    let slept = RefCell::new(Vec::new());
+    assert_eq!(
+        next_step(ms(100), ms(16), ms(105), |wait| slept
+            .borrow_mut()
+            .push(wait)),
+        ms(116),
+        "a step 5 ms into its period"
+    );
+    assert_eq!(
+        *slept.borrow(),
+        [ms(11)],
+        "the wait of a step 5 ms into its period"
+    );
+    slept.borrow_mut().clear();
+    assert_eq!(
+        next_step(ms(100), ms(16), ms(120), |wait| slept
+            .borrow_mut()
+            .push(wait)),
+        ms(120),
+        "a step whose time passed"
+    );
+    assert!(slept.borrow().is_empty(), "a step whose time passed waits");
+
+    // Each input takes 5 ms to deliver. Every round trip is a press, two legs of 32 ms whose steps come 16 ms apart, the
+    // last step of each leg delivered 5 ms after its time, and a release: 5 + 37 + 37 + 5 ms.
+    let now = Cell::new(Duration::ZERO);
+    let gaps = RefCell::new(Vec::new());
+    let result = native_drag(
+        &NativeDragPlan {
+            dx: 20.0,
+            dy: 0.0,
+            ms: 32.0,
+            times: 2,
+        },
+        (100.0, 50.0),
+        || now.get(),
+        |_| {
+            now.set(now.get() + ms(5));
+            Ok(())
+        },
+        |previous| {
+            let taken = periodic_step(&now, previous, ms(16));
+            gaps.borrow_mut().push(taken - previous);
+            Ok(taken)
+        },
+        || Ok(()),
+    )
+    .expect("native drag");
+    assert!(
+        gaps.borrow().iter().all(|gap| *gap == ms(16)),
+        "each step one period of 16 ms after the step before it: {:?}",
+        gaps.borrow()
+    );
+    assert_eq!(result["steps"], json!(8), "2 steps in each of the 4 legs");
+    assert_eq!(
+        result["took"].as_u64(),
+        Some(168),
+        "native drag took, want 168 ms: the deliveries are inside the periods"
+    );
+}
+
 // contract: diagnostics.drag.native-delivers-pointer-gesture
 #[test]
 fn native_drag_delivers_the_press_the_steps_and_the_release_of_each_round_trip() {
@@ -64,11 +141,10 @@ fn native_drag_delivers_the_press_the_steps_and_the_release_of_each_round_trip()
             ));
             Ok(())
         },
-    || {
-        now.set(now.get() + Duration::from_millis(10));
-        ticks.set(ticks.get() + 1);
-        Ok(())
-    },
+        |previous| {
+            ticks.set(ticks.get() + 1);
+            Ok(periodic_step(&now, previous, Duration::from_millis(10)))
+        },
         || Ok(()),
     )
     .expect("native drag");
@@ -112,7 +188,7 @@ fn native_drag_delivers_the_press_the_steps_and_the_release_of_each_round_trip()
             }
             Ok(())
         },
-        || Ok(()),
+        Ok,
         || Ok(()),
     )
     .expect_err("a failing step");
@@ -266,10 +342,7 @@ fn a_native_drag_presses_only_after_the_window_presented_its_layout() {
             events.borrow_mut().push(phase(pointer));
             Ok(())
         },
-        || {
-            now.set(now.get() + Duration::from_millis(10));
-            Ok(())
-        },
+        |previous| Ok(periodic_step(&now, previous, Duration::from_millis(10))),
         || {
             now.set(now.get() + late);
             answers.set(answers.get() + 1);
@@ -318,10 +391,7 @@ fn a_native_drag_presses_only_after_the_window_presented_its_layout() {
             events.borrow_mut().push(phase(pointer));
             Ok(())
         },
-        || {
-            now.set(now.get() + Duration::from_millis(10));
-            Ok(())
-        },
+        |previous| Ok(periodic_step(&now, previous, Duration::from_millis(10))),
         || {
             if events.borrow().is_empty() {
                 Ok(())

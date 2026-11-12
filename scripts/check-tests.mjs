@@ -2141,7 +2141,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/images.rs", symbol: "pub fn presented_frames(&self, key: &Key) -> Result<u64, String> {" },
       { file: "packages/host/go/src/exposure.go", symbol: "type WindowFrameCounters struct {" },
       { file: "packages/host/rust/src/exposure.rs", symbol: "fn window_frame_counters() -> serde_json::Map<String, Value> {" },
-      { file: "packages/host/go/src/diagnostics.go", symbol: "func nativeDrag(plan dragPlan, from point, clock func() time.Duration, deliver func(PointerInput) error, step func() error, presented func() error) (map[string]any, error) {" },
+      { file: "packages/host/go/src/diagnostics.go", symbol: "func nativeDrag(plan dragPlan, from point, clock func() time.Duration, deliver func(PointerInput) error, step func(previous time.Duration) (time.Duration, error), presented func() error) (map[string]any, error) {" },
       { file: "packages/host/go/src/diagnostics.go", symbol: "func sendLegs(plan dragPlan, refreshRate func() (*int, error), clock func() time.Duration, wait func(time.Duration), send func(dragTick)) {" },
       { file: "packages/host/go/src/diagnostics.go", symbol: "func pageDrag(ctx context.Context, h *Host, s *Surfaces, plan dragPlan, sent func()) (map[string]any, error) {" },
       { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn native_drag(" },

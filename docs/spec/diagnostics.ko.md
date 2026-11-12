@@ -80,7 +80,7 @@ Still은 녹화 창과 그 child window를 window server가 합성한 그대로 
 - 기록을 쓰지 못하는 쪽은 할 수 있는 곳에 오류를 알린다. application log를 열지 못한 host는 시작하지 않는다.
 - 각 실패 지점에는 그 실패를 일으키고 기록을 읽는 test가 있다.
 - state file은 host가 가진 값만으로 완성된다. 그래서 page가 시작하지 못한 창도 `ready` 값과 마지막 오류 줄과 함께 그 안에 있다.
-- drag는 단계마다 그 순간 `host.window.refreshRate`에서 읽은 창의 표시 주기 한 개만큼 기다린다. 주기를 가정하지 않는다. 디스플레이에 없는 창은 `the window is on no display with a refresh rate`로 drag를 실패시킨다. 각 구간은 host 시계로 정해진 시간만큼 이어지므로 단계 수는 주기를 따른다. 응답은 실제 단계 수를 `steps`로, 요청한 시간을 밀리초 단위 `asked`로 보고한다.
+- drag는 단계마다 그 순간 `host.window.refreshRate`에서 읽은 창의 표시 주기 한 개만큼 기다린다. 주기를 가정하지 않는다. 디스플레이에 없는 창은 `the window is on no display with a refresh rate`로 drag를 실패시킨다. native drag 는 주기를 이전 단계의 host 시각부터 세므로 입력 전달 시간은 주기 안에 든다. 앞 입력을 전달하는 동안 시각이 지난 단계는 바로 보내고, 다음 주기는 그 단계부터 센다. 각 구간은 host 시계로 정해진 시간만큼 이어지므로 단계 수는 주기를 따른다. 응답은 실제 단계 수를 `steps`로, 요청한 시간을 밀리초 단위 `asked`로 보고한다.
 
 ## 실패 지점
 

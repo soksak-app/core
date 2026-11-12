@@ -80,7 +80,7 @@ Three forms of record exist, and each fact has the form that fits it. The two li
 - A writer that cannot write its record reports the error where it can: the host that cannot open its application log does not start.
 - Each failure point has a test that causes the failure and reads the record.
 - The state file is complete from values that the host holds, so a window whose page did not start is in it with its `ready` value and its last error line.
-- A drag paces each step by one display period of the window's display, read from `host.window.refreshRate` at that step; no period is assumed. A window on no display fails the drag with `the window is on no display with a refresh rate`. Each leg runs for its time on the host clock, so the number of steps follows the period. The reply reports the real count as `steps` and the requested time as `asked` in milliseconds.
+- A drag paces each step by one display period of the window's display, read from `host.window.refreshRate` at that step; no period is assumed. A window on no display fails the drag with `the window is on no display with a refresh rate`. A native drag counts the period from the host time of the step before, so the delivery of an input is inside the period; a step whose time passed while the input before it was delivered is taken at once, and the next period runs from it. Each leg runs for its time on the host clock, so the number of steps follows the period. The reply reports the real count as `steps` and the requested time as `asked` in milliseconds.
 
 ## Failure points
 

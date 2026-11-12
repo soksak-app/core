@@ -1195,7 +1195,8 @@ struct NativeDragPlan {
 /// fraction of the leg reached, out and back, and a release at from after the last step. Each leg runs until plan.ms
 /// milliseconds have passed on clock, the clock of the host, so the position follows the time of the host and the steps
 /// are the refreshes that the window presented. deliver delivers one input without activating the window or the
-/// application, step returns at the host time of the next step, and presented returns when the window has presented its
+/// application, step(previous) returns at the host time of the next step, one display period after previous, the host time
+/// of the step before it, and answers that time, and presented returns when the window has presented its
 /// current layout; it runs before each press, because a press goes where the last frame drew. A failed input after a press
 /// releases the button at the last point, so no press stays open in the window. The reply is {from, steps, took, asked,
 /// pressWaits}: took is the time from the first press to the last release without the waits before the presses, asked the
@@ -1205,7 +1206,7 @@ fn native_drag(
     from: (f64, f64),
     clock: impl Fn() -> Duration,
     mut deliver: impl FnMut(platform::Pointer) -> Result<(), Failure>,
-    mut step: impl FnMut() -> Result<(), Failure>,
+    mut step: impl FnMut(Duration) -> Result<Duration, Failure>,
     mut presented: impl FnMut() -> Result<(), Failure>,
 ) -> Result<Value, Failure> {
     let input = |phase: i32, (x, y): (f64, f64)| platform::Pointer {
@@ -1253,17 +1254,24 @@ fn native_drag(
         let mut last = from;
         for back in [false, true] {
             let leg_start = clock();
+            // The period of a step runs from the time of the step before it, so the delivery of an input, which is inside
+            // the period, does not lengthen the step (docs/spec/diagnostics.md).
+            let mut previous = leg_start;
             loop {
-                if let Err(error) = step() {
-                    let mut message = format!("native drag step {}: {}", steps + 1, error.message);
-                    if let Err(released) = deliver(input(3, last)) {
-                        message = format!(
-                            "{message}; release after the failed step: {}",
-                            released.message
-                        );
+                previous = match step(previous) {
+                    Ok(taken) => taken,
+                    Err(error) => {
+                        let mut message =
+                            format!("native drag step {}: {}", steps + 1, error.message);
+                        if let Err(released) = deliver(input(3, last)) {
+                            message = format!(
+                                "{message}; release after the failed step: {}",
+                                released.message
+                            );
+                        }
+                        return Err(Failure::new(error.code, message));
                     }
-                    return Err(Failure::new(error.code, message));
-                }
+                };
                 steps += 1;
                 let elapsed = (clock() - leg_start).as_secs_f64() / span;
                 let reached = elapsed.min(1.0);
@@ -1301,6 +1309,23 @@ fn native_drag(
         "asked": ((plan.times * 2) as f64 * plan.ms).round() as u64,
         "pressWaits": press_waits,
     }))
+}
+
+/// Waits with sleep until one period after previous, the host time of the step before, and answers the host time of the
+/// step: that time, or now when the delivery of the step before outlasted the period, so a late step does not bring the
+/// steps after it closer than one period.
+fn next_step(
+    previous: Duration,
+    period: Duration,
+    now: Duration,
+    sleep: impl FnOnce(Duration),
+) -> Duration {
+    let at = previous + period;
+    if at <= now {
+        return now;
+    }
+    sleep(at - now);
+    at
 }
 
 /// The length of one step at refresh_rate, the refresh rate of the display that shows the window at the moment the step is
@@ -1452,12 +1477,12 @@ fn drag(
                 from,
                 || start.elapsed(),
                 |pointer| host.input_pointer(window, pointer).map(|_| ()),
-                || {
+                |previous| {
                     // The period is read from the display that shows the window at the moment of the step, so a window
                     // that moves between a 60 Hz and a 120 Hz display follows the display it is on.
                     let period =
                         step_period(exposure::window_refresh_rate(window).map_err(internal)?)?;
-                    std::thread::sleep(period);
+                    let taken = next_step(previous, period, start.elapsed(), std::thread::sleep);
                     if let Some(platform) = clock {
                         match (platform.capture_clock(), recorded.lock()) {
                             (Ok(now), Ok(mut ticks)) => ticks.push(now),
@@ -1465,7 +1490,7 @@ fn drag(
                             (_, Err(error)) => log_error("drag tick clock", error),
                         }
                     }
-                    Ok(())
+                    Ok(taken)
                 },
                 || {
                     exposure::presented(window, None)?;

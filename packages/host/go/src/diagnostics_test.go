@@ -494,7 +494,7 @@ func TestNativeDragDeliversThePressTheStepsAndTheReleaseOfEachRoundTrip(t *testi
 		}
 		delivered = append(delivered, fmt.Sprintf("%s %g,%g after %d", input.Phase, input.X, input.Y, ticks))
 		return nil
-	}, func() error { ticks++; now += 16 * time.Millisecond; return nil }, func() error { return nil })
+	}, periodicStep(&now, 16*time.Millisecond, func() { ticks++ }), func() error { return nil })
 	if err != nil {
 		t.Fatalf("native drag: %v", err)
 	}
@@ -525,12 +525,68 @@ func TestNativeDragDeliversThePressTheStepsAndTheReleaseOfEachRoundTrip(t *testi
 			return errors.New("the window did not accept the input")
 		}
 		return nil
-	}, func() error { return nil }, func() error { return nil })
+	}, func(previous time.Duration) (time.Duration, error) { return previous, nil }, func() error { return nil })
 	if err == nil || err.Error() != "native drag step 1: the window did not accept the input" {
 		t.Fatalf("native drag with a failing step: error %v", err)
 	}
 	if !reflect.DeepEqual(delivered, []string{"down", "drag", "up"}) {
 		t.Fatalf("native drag with a failing step delivered %v, want down, drag and the release up", delivered)
+	}
+}
+
+// periodicStep is the step of a native drag on the clock now of a check: it runs each, then waits one period after the step
+// before it with nextStep, moving now by the wait.
+func periodicStep(now *time.Duration, period time.Duration, each func()) func(time.Duration) (time.Duration, error) {
+	return func(previous time.Duration) (time.Duration, error) {
+		if each != nil {
+			each()
+		}
+		*now = nextStep(previous, period, *now, func(wait time.Duration) { *now += wait })
+		return *now, nil
+	}
+}
+
+// contract: diagnostics.drag.native-delivers-pointer-gesture
+func TestANativeDragStepFollowsTheStepBeforeItByOnePeriod(t *testing.T) {
+	// The period runs from the step before, so a wait inside it is no longer than what is left of it, and a step whose time
+	// passed is taken at once, from which the next period runs.
+	var slept []time.Duration
+	sleep := func(wait time.Duration) { slept = append(slept, wait) }
+	if at := nextStep(100*time.Millisecond, 16*time.Millisecond, 105*time.Millisecond, sleep); at != 116*time.Millisecond ||
+		!reflect.DeepEqual(slept, []time.Duration{11 * time.Millisecond}) {
+		t.Fatalf("a step 5 ms into its period was taken at %v after the waits %v, want 116ms after one wait of 11ms", at, slept)
+	}
+	slept = nil
+	if at := nextStep(100*time.Millisecond, 16*time.Millisecond, 120*time.Millisecond, sleep); at != 120*time.Millisecond || slept != nil {
+		t.Fatalf("a step whose time passed was taken at %v after the waits %v, want 120ms without a wait", at, slept)
+	}
+
+	// Each input takes 5 ms to deliver. Every round trip is a press, two legs of 32 ms whose steps come 16 ms apart, the last
+	// step of each leg delivered 5 ms after its time, and a release: 5 + 37 + 37 + 5 ms.
+	var now time.Duration
+	var stepped []time.Duration
+	result, err := nativeDrag(dragPlan{Axis: "x", Line: 3, DX: 20, MS: 32, Times: 2}, point{X: 100, Y: 50}, func() time.Duration { return now },
+		func(PointerInput) error {
+			now += 5 * time.Millisecond
+			return nil
+		}, func(previous time.Duration) (time.Duration, error) {
+			taken, err := periodicStep(&now, 16*time.Millisecond, nil)(previous)
+			stepped = append(stepped, taken-previous)
+			return taken, err
+		}, func() error { return nil })
+	if err != nil {
+		t.Fatalf("native drag: %v", err)
+	}
+	for i, gap := range stepped {
+		if gap != 16*time.Millisecond {
+			t.Fatalf("step %d came %v after the step before it, want one period of 16ms; steps %v", i+1, gap, stepped)
+		}
+	}
+	if result["steps"] != 8 {
+		t.Fatalf("native drag steps %v, want 2 steps in each of the 4 legs", result["steps"])
+	}
+	if took, ok := result["took"].(int64); !ok || took != 168 {
+		t.Fatalf("native drag took %#v ms, want 168 ms: the deliveries are inside the periods", result["took"])
 	}
 }
 
@@ -547,7 +603,7 @@ func TestANativeDragPressesOnlyAfterTheWindowPresentedItsLayout(t *testing.T) {
 		func(input PointerInput) error {
 			events = append(events, input.Phase)
 			return nil
-		}, func() error { now += 16 * time.Millisecond; return nil }, func() error {
+		}, periodicStep(&now, 16*time.Millisecond, nil), func() error {
 			now += late
 			answers++
 			events = append(events, fmt.Sprintf("presented %d", answers))
@@ -584,7 +640,7 @@ func TestANativeDragPressesOnlyAfterTheWindowPresentedItsLayout(t *testing.T) {
 		func(input PointerInput) error {
 			events = append(events, input.Phase)
 			return nil
-		}, func() error { waitNow += 16 * time.Millisecond; return nil }, func() error {
+		}, periodicStep(&waitNow, 16*time.Millisecond, nil), func() error {
 			if len(events) > 0 {
 				return errors.New("the window did not present within 10s")
 			}

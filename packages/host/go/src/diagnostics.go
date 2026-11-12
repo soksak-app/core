@@ -452,13 +452,14 @@ func parseDragNative(params json.RawMessage) (bool, error) {
 // nativeDrag delivers the drag of plan from the boundary point from as native input of the primary button, as a person
 // drags: for each round trip a press at from, each step as a drag of the button at from plus the offset times the
 // fraction of the step, out and back, and a release at from after the last step. deliver delivers one input without
-// activating the window or the application, step returns at the host time of the next step, and presented returns when
+// activating the window or the application, step(previous) returns at the host time of the next step, one display period
+// after previous, the host time of the step before it, and answers that time, and presented returns when
 // the window has presented its current layout; it runs before each press, because a press goes where the last frame
 // drew. A failed input after a press releases the button at the last point, so no press stays open in the window. The
 // reply is {from, steps, took, asked, pressWaits}: took is the time from the first press to the last release without the
 // waits before the presses, on clock, the clock of the host, asked the time that the steps ask, and pressWaits the wait before
 // each press, all in milliseconds.
-func nativeDrag(plan dragPlan, from point, clock func() time.Duration, deliver func(PointerInput) error, step func() error, presented func() error) (map[string]any, error) {
+func nativeDrag(plan dragPlan, from point, clock func() time.Duration, deliver func(PointerInput) error, step func(previous time.Duration) (time.Duration, error), presented func() error) (map[string]any, error) {
 	span := float64(plan.MS) * float64(time.Millisecond)
 	at := func(fraction float64) point {
 		return point{X: from.X + plan.DX*fraction, Y: from.Y + plan.DY*fraction}
@@ -486,14 +487,19 @@ func nativeDrag(plan dragPlan, from point, clock func() time.Duration, deliver f
 		// not a count of steps fixed in advance. The steps are the refreshes that the window presented.
 		for _, back := range []bool{false, true} {
 			legStart := clock()
+			// The period of a step runs from the time of the step before it, so the delivery of an input, which is inside the
+			// period, does not lengthen the step (docs/spec/diagnostics.md).
+			previous := legStart
 			for {
-				if err := step(); err != nil {
+				taken, err := step(previous)
+				if err != nil {
 					err = fmt.Errorf("native drag step %d: %w", steps+1, err)
 					if released := deliver(input("up", last)); released != nil {
 						err = fmt.Errorf("%w; release after the failed step: %v", err, released)
 					}
 					return nil, err
 				}
+				previous = taken
 				steps++
 				elapsed := float64(clock()-legStart) / span
 				fraction := math.Min(elapsed, 1)
@@ -519,6 +525,18 @@ func nativeDrag(plan dragPlan, from point, clock func() time.Duration, deliver f
 	}
 	return map[string]any{"from": from, "steps": steps, "took": (clock() - began - waited).Milliseconds(),
 		"asked": plan.Times * 2 * plan.MS, "pressWaits": pressWaits}, nil
+}
+
+// nextStep waits with sleep until one period after previous, the host time of the step before, and answers the host time of
+// the step: that time, or now when the delivery of the step before outlasted the period, so a late step does not bring the
+// steps after it closer than one period.
+func nextStep(previous, period, now time.Duration, sleep func(time.Duration)) time.Duration {
+	at := previous + period
+	if at <= now {
+		return now
+	}
+	sleep(at - now)
+	return at
 }
 
 // stepPeriod is the length of one step at refreshRate, the refresh rate of the display that shows the window at the
@@ -1042,20 +1060,20 @@ func nativeDragPresented(ctx context.Context, h *Host, s *Surfaces, plan dragPla
 	start := time.Now()
 	clock := func() time.Duration { return time.Since(start) }
 	result, err := nativeDrag(plan, from, clock, func(input PointerInput) error { return backend.Pointer(s.name, input) },
-		func() error {
+		func(previous time.Duration) (time.Duration, error) {
 			// The period is read from the display of the window at the moment of the step, so a window that moves
 			// between a 60 Hz and a 120 Hz display follows the display it is on.
 			rate, err := s.refreshRate()
 			if err != nil {
-				return err
+				return 0, err
 			}
 			period, err := stepPeriod(rate)
 			if err != nil {
-				return err
+				return 0, err
 			}
-			time.Sleep(period)
+			taken := nextStep(previous, period, clock(), time.Sleep)
 			sent()
-			return nil
+			return taken, nil
 		}, func() error {
 			_, err := s.presented(ctx)
 			return err
