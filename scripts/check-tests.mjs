@@ -6353,7 +6353,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "e2e/commands.test.mjs", id: "card, tab, and menu commands change the grid" },
       { file: "e2e/modal.test.mjs", id: "settings blocks background input and closes only through its close button" },
-      { file: "e2e/document-region.test.mjs", id: "documents follow host theme pixels for existing, new, and reloaded documents" },
+      { file: "e2e/document-region.test.mjs", id: "documents report the host theme for existing, new, and reloaded documents" },
       { file: "e2e/library.test.mjs", id: "library windows create and open projects in place" },
       { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
     ],
@@ -6368,7 +6368,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "e2e/commands.test.mjs", id: "card, tab, and menu commands change the grid" },
-      { file: "e2e/document-region.test.mjs", id: "documents follow host theme pixels for existing, new, and reloaded documents" },
+      { file: "e2e/document-region.test.mjs", id: "documents report the host theme for existing, new, and reloaded documents" },
       { file: "e2e/library.test.mjs", id: "library windows create and open projects in place" },
       { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
     ],
@@ -10384,7 +10384,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/documents.rs", symbol: "set_document_appearance" },
       { file: "packages/host/go/src/documents.go", symbol: "SetDocumentAppearance" },
     ],
-    tests: [{ file: "e2e/document-region.test.mjs", id: "documents follow host theme pixels for existing, new, and reloaded documents" }],
+    tests: [{ file: "e2e/document-region.test.mjs", id: "documents report the host theme for existing, new, and reloaded documents" }],
     expected: "Existing, newly split, and reloaded documents apply the current host theme before presentation.",
     levels: ["unit", "native", "application"],
   },

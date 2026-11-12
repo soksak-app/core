@@ -121,7 +121,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(hiding.length, 0, `a placement hid the shown probe surface: ${JSON.stringify(hiding[0])}`);
   });
 
-  test(`${app.name}: documents follow host theme pixels for existing, new, and reloaded documents`, async (t) => {
+  test(`${app.name}: documents report the host theme for existing, new, and reloaded documents`, async (t) => {
     const s = await open(t, app);
     const { surface } = await fresh(s);
     await mode(s, "light");
