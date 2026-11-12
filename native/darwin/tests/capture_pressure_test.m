@@ -1,9 +1,10 @@
 // Injects writer capacity, window server and file write faults into the real still recording, and checks the ends of its waits.
 // A full writer fails the still without holding its request; the last still of the largest plan is written; a still 0 without an
-// image fails the start; the end of a wait from another thread ends the wait of its token only; the close of the recorded window
-// ends a stop while the main thread stays free; a scheduled stop answers its context once when another window's close ends its
-// wait; a request during a recording keeps the recording, its error and its prepared
-// window; a still request fails with its own error; and a stop keeps the earlier write error of the recording with its own.
+// image fails the start; the stills after a slow still 0 are requested before it completes; the end of a wait from another
+// thread ends the wait of its token only; the close of the recorded window ends a stop with its own reason while the main thread
+// stays free; a scheduled stop answers its context once when another window's close ends its wait; a request during a recording
+// keeps the recording, its error and its prepared window; a still request fails with its own error; and a stop keeps the
+// earlier write error of the recording with its own.
 // Capture internal state is read only by the ownership checks.
 #import "../src/capture.m"
 #import "../src/host_api_capture.m"
@@ -58,6 +59,20 @@ static CGImageRef testWindowImage(CGRect rect, CFArrayRef windows, CGWindowImage
 }
 static void *lookupTestWindowImage(void *handle, const char *name) {
     return strcmp(name, "CGWindowListCreateImageFromArray") == 0 ? (void *)testWindowImage : dlsym(handle, name);
+}
+
+// A window server whose first image, still 0, comes only after three later stills were requested: the stills after a slow still 0
+// are requested at their planned times, as the stills after any slow still are.
+static atomic_int slowCalls;
+static dispatch_semaphore_t slowRelease;
+static CGImageRef slowFirstImage(CGRect rect, CFArrayRef windows, CGWindowImageOption options) {
+    int call = atomic_fetch_add(&slowCalls, 1) + 1;
+    if (call == 1) dispatch_semaphore_wait(slowRelease, DISPATCH_TIME_FOREVER);
+    else if (call == 4) dispatch_semaphore_signal(slowRelease);
+    return testWindowImage(rect, windows, options);
+}
+static void *lookupSlowFirstImage(void *handle, const char *name) {
+    return strcmp(name, "CGWindowListCreateImageFromArray") == 0 ? (void *)slowFirstImage : dlsym(handle, name);
 }
 
 static NSWindow *makeWindow(void) {
@@ -186,6 +201,33 @@ int main(void) { @autoreleasepool {
     check([imagelessRows containsString:@"\"outcome\":\"failed\""] && [imagelessRows containsString:want],
         @"the failed start records its failed still 0 in stills.jsonl");
     atomic_store(&noImage, false);
+
+    // Still 0 completes only after stills 1 to 3 were requested, so each of them is requested before still 0 completed.
+    slowRelease = dispatch_semaphore_create(0);
+    atomic_store(&slowCalls, 0);
+    captureLookup = lookupSlowFirstImage;
+    if (startRecording(window, folder(root, @"slow-first"), 10, 4096, 5)) {
+        int written = sp_capture_stop(0, 6);
+        NSString *rowsText = [NSString stringWithContentsOfFile:[root stringByAppendingPathComponent:@"slow-first/stills.jsonl"]
+            encoding:NSUTF8StringEncoding error:NULL];
+        NSMutableArray<NSDictionary *> *rows = [NSMutableArray array];
+        for (NSString *line in [rowsText componentsSeparatedByString:@"\n"]) {
+            NSData *data = [line dataUsingEncoding:NSUTF8StringEncoding];
+            NSDictionary *row = line.length ? [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL] : nil;
+            if ([row isKindOfClass:NSDictionary.class]) [rows addObject:row];
+        }
+        uint64_t firstCompleted = rows.count > 0 && [rows[0][@"completed"] isKindOfClass:NSString.class]
+            ? strtoull([rows[0][@"completed"] UTF8String], NULL, 10) : 0;
+        NSUInteger before = 0;
+        for (NSUInteger index = 1; index < 4 && index < rows.count; index++) {
+            if ([rows[index][@"requested"] isKindOfClass:NSString.class]
+                && strtoull([rows[index][@"requested"] UTF8String], NULL, 10) < firstCompleted) before++;
+        }
+        check(written >= 4 && before == 3, [NSString stringWithFormat:@"the stills after a slow still 0 are requested before it "
+            "completes (%d written, %lu of stills 1 to 3 requested before still 0 completed)", written, (unsigned long)before]);
+    }
+    captureLookup = lookupTestWindowImage;
+    dispatch_release(slowRelease);
 
     fprintf(stderr, "START: the ends of the capture waits\n");
     // A stop that waits for a still after the plan's last request: the end from another thread ends the wait, whether it comes

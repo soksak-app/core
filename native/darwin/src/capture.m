@@ -365,7 +365,7 @@ static void emitLifecycle(SPCaptureRecording *recording, NSString *phase, uint8_
         @"windowNumber": @(recording.windowNumber), @"display": @(recording.display),
         @"gap": @(recording.gap), @"plannedStills": @(recording.planned),
         @"index": still[@"index"] ?: null,
-        @"plannedMachTicks": still[@"planned"] ?: null,
+        @"plannedMachTicks": still[@"index"] ? tickString([recording plannedTicks:[still[@"index"] unsignedIntegerValue]]) : null,
         @"requestedMachTicks": still[@"requested"] ?: null,
         @"completedMachTicks": still[@"completed"] ?: null,
         @"machTimebaseNumerator": @(recording.timebase.numer),
@@ -927,12 +927,17 @@ static void requestDueStills(SPCaptureRecording *recording) {
     if (done) dispatch_semaphore_signal(recording.stopSignal);
 }
 
-// Closes the requests of a recording: no later still is requested, and the stills not requested stay not requested.
-static void closeRequests(SPCaptureRecording *recording) {
+// Closes the requests of a recording: no later still is requested. The stills not requested stay not requested, or fail with
+// failure when it is given. They fail under the lock that closes the requests, so a stop that learns the end sees them failed.
+static void closeRequests(SPCaptureRecording *recording, NSString *failure) {
     BOOL done = NO;
     @synchronized (recording) {
         recording.closed = YES;
         if (recording.timer) dispatch_source_cancel(recording.timer);
+        for (NSUInteger index = recording.nextIndex; failure != nil && index < recording.planned; index++) {
+            recording.rows[index][@"outcome"] = @"failed";
+            recording.rows[index][@"error"] = failure;
+        }
         if (!recording.requestsDone) {
             recording.requestsDone = YES;
             done = recording.outcomes == recording.nextIndex;
@@ -1121,14 +1126,10 @@ static void observeCaptureWindows(void) {
                 recording = [captureRecording retain];
             }
             NSString *closed = [NSString stringWithFormat:@"the recorded window %ld closed", recording.windowNumber];
-            closeRequests(recording);
-            @synchronized (recording) {
-                for (NSUInteger index = recording.nextIndex; index < recording.planned; index++) {
-                    recording.rows[index][@"outcome"] = @"failed";
-                    recording.rows[index][@"error"] = closed;
-                }
-            }
+            // The error of the close is set before the requests close: closing them can end the wait of a stop on another
+            // thread, and that stop reads whether the recording has an error to decide whether the plan ended before its time.
             setCaptureError(closed);
+            closeRequests(recording, closed);
             dispatch_semaphore_signal(recording.stopSignal);
             [recording release];
         });
@@ -1143,7 +1144,12 @@ static bool writeCaptureStills(SPCaptureRecording *recording) {
     NSArray<NSDictionary *> *rows = nil;
     @synchronized (recording) {
         NSMutableArray *copies = [NSMutableArray arrayWithCapacity:recording.rows.count];
-        for (NSDictionary *row in recording.rows) [copies addObject:[[row copy] autorelease]];
+        // The planned time of a still follows from the plan (plannedTicks:), so the record names it as it is written.
+        for (NSDictionary *row in recording.rows) {
+            NSMutableDictionary *copied = [[row mutableCopy] autorelease];
+            copied[@"planned"] = tickString([recording plannedTicks:[row[@"index"] unsignedIntegerValue]]);
+            [copies addObject:copied];
+        }
         rows = copies;
     }
     for (NSDictionary *row in rows) {
@@ -1207,7 +1213,7 @@ static bool finalizeCaptureArtifacts(SPCaptureRecording *recording) {
 // Ends the recording: no later still is requested, every requested still settles, the artifacts are written, and the counts of
 // the recording become those of sp_capture_missed, sp_capture_late and sp_capture_longest_gap.
 static int finishRecording(SPCaptureRecording *recording) {
-    closeRequests(recording);
+    closeRequests(recording, nil);
     dispatch_group_wait(recording.inflight, DISPATCH_TIME_FOREVER);
     // The writer settles every queued frame before the record is written.
     dispatch_sync(captureWriter, ^{});
@@ -1228,7 +1234,7 @@ static int finishRecording(SPCaptureRecording *recording) {
             }
             if ([row[@"requested"] isKindOfClass:NSString.class]) {
                 uint64_t requested = strtoull([row[@"requested"] UTF8String], NULL, 10);
-                uint64_t planned = strtoull([row[@"planned"] UTF8String], NULL, 10);
+                uint64_t planned = [recording plannedTicks:[row[@"index"] unsignedIntegerValue]];
                 if (requested > planned && (double)(requested - planned) > recording.gapTicks) late++;
             }
         }
@@ -1339,8 +1345,16 @@ bool sp_capture_start(const char *directory, double gap, double seconds, int fra
     }
     observeCaptureWindows();
     emitLifecycle(recording, @"start", SP_EVENT_DEBUG, nil, nil);
+    // The strict timer requests stills 1 and later at their planned times.
+    // The entrance counts each request of the timer; a refused timer was recorded as native.observe.failed, no still after still 0
+    // can be requested, and the start fails once still 0 has settled.
+    recording.timer = sp_observe_dispatch_timer("capture.requests", SP_OBSERVE_COUNT, DISPATCH_TIMER_STRICT, captureRequests,
+        ^{ @autoreleasepool { requestDueStills(recording); } });
+    NSString *timerFailure = recording.timer == NULL ? @"the timer of the still requests could not be made" : nil;
     // Still 0 is requested in one main-thread step with the windows it takes: a held window goes on screen first and its order
-    // is committed, so still 0 holds the first content that the window server shows of it. The plan starts at that request.
+    // is committed, so still 0 holds the first content that the window server shows of it. The plan starts at that request, and
+    // the timer is armed for still 1 before still 0 is taken: still 1 and later are requested at their planned times whether or
+    // not still 0 has completed, as every still after a slow still is.
     __block SPCaptureTarget *first = nil;
     __block CGImageRef image = NULL;
     __block uint64_t requested = 0, completed = 0;
@@ -1350,14 +1364,24 @@ bool sp_capture_start(const char *directory, double gap, double seconds, int fra
         [recording replaceTarget:first];
         [recording startDisplayLinkObservation];
         requested = captureTicks();
+        recording.startTicks = requested;
+        @synchronized (recording) { recording.nextIndex = 1; }
+        if (timerFailure == nil) {
+            if (planned > 1) {
+                uint64_t now = captureTicks(), next = [recording plannedTicks:1];
+                int64_t nanoseconds = next > now ? (int64_t)((double)(next - now) * timebase.numer / timebase.denom) : 0;
+                dispatch_source_set_timer(recording.timer, dispatch_time(DISPATCH_TIME_NOW, nanoseconds), DISPATCH_TIME_FOREVER, 0);
+            } else {
+                @synchronized (recording) { recording.requestsDone = YES; }
+            }
+            dispatch_resume(recording.timer);
+        }
         if (first.error == nil) image = takeImage(function, first);
         completed = captureTicks();
     });
     [first autorelease];
-    recording.startTicks = requested;
-    for (NSUInteger index = 0; index < planned; index++) recording.rows[index][@"planned"] = tickString([recording plannedTicks:index]);
+    if (timerFailure != nil) closeRequests(recording, nil);
     @synchronized (recording) {
-        recording.nextIndex = 1;
         NSMutableDictionary *row = recording.rows[0];
         row[@"requested"] = tickString(requested);
         row[@"windows"] = first.windows ?: @[];
@@ -1376,23 +1400,6 @@ bool sp_capture_start(const char *directory, double gap, double seconds, int fra
             else processStill(recording, 0, firstTarget, firstImage, firstRequested, firstCompleted);
         }
         if (firstImage) CGImageRelease(firstImage);
-    });
-    // The strict timer requests stills 1 and later at their planned times.
-    // The entrance counts each request of the timer; a refused timer was recorded as native.observe.failed, no still after still 0
-    // can be requested, and the start fails once still 0 has settled.
-    recording.timer = sp_observe_dispatch_timer("capture.requests", SP_OBSERVE_COUNT, DISPATCH_TIMER_STRICT, captureRequests,
-        ^{ @autoreleasepool { requestDueStills(recording); } });
-    NSString *timerFailure = recording.timer == NULL ? @"the timer of the still requests could not be made" : nil;
-    if (timerFailure != nil) closeRequests(recording);
-    else dispatch_sync(captureRequests, ^{
-        if (planned > 1) {
-            uint64_t now = captureTicks(), next = [recording plannedTicks:1];
-            int64_t nanoseconds = next > now ? (int64_t)((double)(next - now) * timebase.numer / timebase.denom) : 0;
-            dispatch_source_set_timer(recording.timer, dispatch_time(DISPATCH_TIME_NOW, nanoseconds), DISPATCH_TIME_FOREVER, 0);
-        } else {
-            @synchronized (recording) { recording.requestsDone = YES; }
-        }
-        dispatch_resume(recording.timer);
     });
     NSString *ended = awaitCaptureSignal(recording.firstStill, token, @"the first still was not written");
     forgetCaptureEnd(token);

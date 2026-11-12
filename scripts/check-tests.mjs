@@ -902,7 +902,7 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "native/darwin/src/input_inject.m", symbol: "startPointerRequests" },
       { file: "native/darwin/src/host_api_input.m", symbol: "sp_surface_is_host(view)" },
-      { file: "native/darwin/src/capture.m", symbol: "static void closeRequests(SPCaptureRecording *recording)" },
+      { file: "native/darwin/src/capture.m", symbol: "static void closeRequests(SPCaptureRecording *recording, NSString *failure)" },
       { file: "native/darwin/src/capture.m", symbol: "void sp_capture_end_wait(uint64_t token, const char *reason) {" },
       { file: "packages/host/go/src/endpoint.go", symbol: "func (c *endpointConn) onClose(end func()) (remove func()) {" },
       { file: "packages/host/rust/src/endpoint.rs", symbol: "pub fn watch(&self, on_end: impl FnOnce() + Send + 'static) -> ConnectionWatch {" },

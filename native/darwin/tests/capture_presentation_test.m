@@ -1,5 +1,7 @@
 // Records a window whose CAMetalLayer presents seven drawables, with a still every half refresh, and stops at the last
-// presentation. The recording loses no still up to its last request: no failed still, no still not requested before the last
+// presentation. Which drawables the window server shows is the window server's: Metal gives a drawable that it did not show the
+// presented time 0, and the first drawable of a window that has just been ordered can be such a drawable. The check needs the
+// presented time of the last drawable, where the stop ends; the presented times of the others are evidence. The recording loses no still up to its last request: no failed still, no still not requested before the last
 // request and no late still; the stills after the last request of the plan, which the stop ends, are not lost. Every written
 // still has a frame file of the declared format, and the request times increase. The pixels are evidence and are not judged.
 // The check does not activate the application.
@@ -110,7 +112,7 @@ static BOOL onScreen(NSWindow *window) {
 
 int main(void) { @autoreleasepool {
     CFTimeInterval began = CACurrentMediaTime();
-    fprintf(stderr, "START: correlate actual Metal drawable presentation with captured window pixels\n");
+    fprintf(stderr, "START: a recording of a presenting Metal window loses no still\n");
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     [NSApp finishLaunching];
@@ -174,8 +176,10 @@ int main(void) { @autoreleasepool {
         for (NSUInteger i = 0; i < frameCount; i++) {
             NSDictionary *record;
             @synchronized (driver) { record = [[driver.presentations[i] retain] autorelease]; }
-            check([record[@"id"] unsignedIntegerValue] == i && [record[@"presentedTime"] doubleValue] > 0,
-                [NSString stringWithFormat:@"drawable %lu has a nonzero actual presentation time (%@)", (unsigned long)i, record]);
+            check([record[@"id"] unsignedIntegerValue] == i,
+                [NSString stringWithFormat:@"the presentation callback of drawable %lu names it (%@)", (unsigned long)i, record]);
+            if (i == frameCount - 1) check([record[@"presentedTime"] doubleValue] > 0,
+                [NSString stringWithFormat:@"the last drawable has a nonzero presented time, where the stop ends (%@)", record]);
             fprintf(stdout, "PRESENT id=%lu drawable=%llu submitted=%llu presented=%.9f\n", (unsigned long)i,
                 [record[@"drawable"] unsignedLongLongValue], [record[@"submitted"] unsignedLongLongValue],
                 [record[@"presentedTime"] doubleValue]);
@@ -240,7 +244,7 @@ int main(void) { @autoreleasepool {
     check(!NSApp.isActive, @"the control test does not activate the application");
     // The frames, stills.jsonl and the colour profile of a failing check are its evidence.
     if (failures) keepTemporaryFolder(directory);
-    fprintf(stderr, "%s: correlate actual Metal drawable presentation with captured window pixels (%.1fms)\n",
+    fprintf(stderr, "%s: a recording of a presenting Metal window loses no still (%.1fms)\n",
         failures ? "FAIL" : "PASS", (CACurrentMediaTime() - began) * 1000);
     return failures ? 1 : 0;
 }}
