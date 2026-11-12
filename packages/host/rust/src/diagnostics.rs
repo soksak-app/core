@@ -1397,14 +1397,33 @@ fn drag(
         None
     };
 
+    // The recording of a drag is its log: a recording that does not start or whose layout trace does not start or end is told in
+    // the result (recorded_drag_result), and the drag runs and answers without it.
+    let mut capture_error: Option<String> = None;
     let frames = if capture_options.capture {
-        let started = capture_start(window, connection, false, capture_options.plan)?;
-        let platform = platform::current().map_err(internal)?;
-        on_main(window, move || platform.layout_trace_start()).map_err(internal)?;
-        Some(started)
+        match capture_start(window, connection, false, capture_options.plan) {
+            Ok(started) => Some(started),
+            Err(error) => {
+                capture_error = Some(format!("the recording did not start: {}", error.message));
+                None
+            }
+        }
     } else {
         None
     };
+    let tracing = frames.is_some()
+        && match platform::current().map_err(internal).and_then(|platform| {
+            on_main(window, move || platform.layout_trace_start()).map_err(internal)
+        }) {
+            Ok(()) => true,
+            Err(error) => {
+                capture_error = Some(format!(
+                    "the layout trace of the recording did not start: {}",
+                    error.message
+                ));
+                false
+            }
+        };
 
     exposure::note(
         window,
@@ -1483,7 +1502,7 @@ fn drag(
             Ok(result)
         },
         || {
-            if frames.is_some() {
+            if tracing {
                 let platform = platform::current().map_err(internal)?;
                 on_main(window, move || platform.layout_trace_stop())
                     .map(Some)
@@ -1494,41 +1513,36 @@ fn drag(
         },
     );
     let finished = (|| -> Result<Value, Failure> {
-        let (result, layouts) = match (result, layouts) {
-            (Ok(result), Ok(layouts)) => (result, layouts),
-            (Err(error), Ok(_)) | (Ok(_), Err(error)) => return Err(error),
-            (Err(error), Err(trace)) => {
-                return Err(internal(format!(
-                    "{}; layout trace: {}",
-                    error.message, trace.message
-                )));
+        let result = result?;
+        let layouts = match layouts {
+            Ok(layouts) => layouts.as_deref().map(layout_trace),
+            Err(trace) => {
+                capture_error = Some(format!(
+                    "the layout trace of the recording did not end: {}",
+                    trace.message
+                ));
+                None
             }
         };
-        let mut merged = match result {
+        let merged = match result {
             Value::Object(fields) => fields,
             Value::Null => Map::new(),
             _ => return Err(internal("the page drag result is not an object")),
         };
-        if let Some((frames, recorded)) = &frames {
-            merged.insert(
-                "frames".into(),
-                Value::String(frames.to_string_lossy().into_owned()),
-            );
-            merged.insert("window".into(), json!(recorded));
-            // default: a lock that a panicking thread poisoned still holds the pointer ticks of the drag, which are
-            // only read; the panic hook records the panic.
-            let ticks = sent.lock().unwrap_or_else(PoisonError::into_inner).clone();
-            merged.insert("ticks".into(), serde_json::json!(ticks));
-            merged.insert(
-                "layouts".into(),
-                layout_trace(
-                    layouts
-                        .as_deref()
-                        .ok_or_else(|| internal("the recorded drag has no layout trace"))?,
-                ),
-            );
-        }
-        Ok(Value::Object(merged))
+        // default: a lock that a panicking thread poisoned still holds the pointer ticks of the drag, which are
+        // only read; the panic hook records the panic.
+        let ticks = sent.lock().unwrap_or_else(PoisonError::into_inner).clone();
+        let recording = frames.as_ref().map(|(frames, recorded)| DragRecording {
+            frames: frames.to_string_lossy().into_owned(),
+            window: json!(recorded),
+            ticks,
+            layouts,
+        });
+        Ok(Value::Object(recorded_drag_result(
+            merged,
+            recording,
+            capture_error.take(),
+        )))
     })();
     // When the requester cannot receive the frame folder, the recording is stopped and the folder is deleted.
     if let Err(error) = finished {
@@ -1545,6 +1559,37 @@ fn drag(
         return Err(error);
     }
     finished
+}
+
+/// The recording of a recorded drag that started: its frame folder, its recorded window, the time of each step and the layouts of
+/// its layout trace, or none when the trace did not run to its end.
+struct DragRecording {
+    frames: String,
+    window: Value,
+    ticks: Vec<f64>,
+    layouts: Option<Value>,
+}
+
+/// Adds the recording of a recorded drag to the result of the drag. A recording that started adds frames, window and ticks, and
+/// layouts when its trace ended; captureError tells what failed of the recording. The recording is the log of the drag, so the
+/// drag does not fail on it.
+fn recorded_drag_result(
+    mut result: Map<String, Value>,
+    recording: Option<DragRecording>,
+    capture_error: Option<String>,
+) -> Map<String, Value> {
+    if let Some(recording) = recording {
+        result.insert("frames".into(), Value::String(recording.frames));
+        result.insert("window".into(), recording.window);
+        result.insert("ticks".into(), json!(recording.ticks));
+        if let Some(layouts) = recording.layouts {
+            result.insert("layouts".into(), layouts);
+        }
+    }
+    if let Some(error) = capture_error {
+        result.insert("captureError".into(), Value::String(error));
+    }
+    result
 }
 
 /// Runs settle, which waits until the last placement of a drag is committed and presented, and then stop, which ends the

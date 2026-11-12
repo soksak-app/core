@@ -1587,7 +1587,10 @@ async function dragDrawing(s, plan, capture) {
     }
   }
   const result = await s.request("diagnostics.drag", { ...plan, capture: recording ?? false });
-  if (!recording) return result;
+  // The host answers the drag also when its recording failed, and tells what failed in captureError; a recording that did not
+  // start has no frames and nothing to stop.
+  if (result.captureError) s.recordingNotes.push(`the recording of the drag: ${result.captureError}`);
+  if (!recording || !result.frames) return result;
   try {
     s.trackRecording(result.frames);
   } catch (error) {

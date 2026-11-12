@@ -520,6 +520,20 @@ test("a captured drag whose stop fails tells it and returns the drag", async (t)
     ["the stop of the recording of the drag failed: the capture failed"]);
 });
 
+test("a captured drag whose host recording did not start tells the host failure and stops nothing", async (t) => {
+  const s = dragSession(t, { until: 104, ticks: every(4, 92, 8) });
+  const request = s.request;
+  s.request = async (method, params) => {
+    if (method !== "diagnostics.drag") return request(method, params);
+    s.requests.push({ method, ...params });
+    return { took: 100, asked: 100, captureError: "the recording did not start: no window" };
+  };
+  const result = await drag(s, gapPlan, { capture: true });
+  assert.equal(result.took, 100);
+  assert.equal(s.requests.some((request) => request.method === "diagnostics.capture.stop"), false);
+  assert.deepEqual(s.recordingNotes, ["the recording of the drag: the recording did not start: no window"]);
+});
+
 test("a captured drag of a window on no display runs without a recording and tells it", async (t) => {
   const s = dragSession(t, { until: 104, ticks: every(4, 92, 8) });
   s.get = async () => ({ active: false, occluded: false, refreshRate: null });

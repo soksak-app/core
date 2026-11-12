@@ -384,6 +384,49 @@ fn a_native_drag_asks_for_its_boundary_after_the_window_presented_it() {
     assert_eq!(error.message, "the window did not present");
 }
 
+// A recorded drag answers whatever happened to its recording: the recording is the log of the drag, so what failed of it is
+// told in captureError, and a recording that started keeps its frames, window and steps.
+// contract: recording.drag.recording-failure-is-told
+#[test]
+fn a_recorded_drag_tells_what_failed_of_its_recording() {
+    let took = || {
+        let mut result = Map::new();
+        result.insert("took".into(), json!(100));
+        result
+    };
+    let recording = |layouts: Option<Value>| DragRecording {
+        frames: "/frames".into(),
+        window: json!(7),
+        ticks: vec![1.0, 2.0],
+        layouts,
+    };
+    assert_eq!(
+        Value::Object(recorded_drag_result(
+            took(),
+            None,
+            Some("the recording did not start: no window".into())
+        )),
+        json!({"took": 100, "captureError": "the recording did not start: no window"})
+    );
+    assert_eq!(
+        Value::Object(recorded_drag_result(
+            took(),
+            Some(recording(None)),
+            Some("the layout trace of the recording did not end: no trace".into())
+        )),
+        json!({"took": 100, "frames": "/frames", "window": 7, "ticks": [1.0, 2.0],
+            "captureError": "the layout trace of the recording did not end: no trace"})
+    );
+    assert_eq!(
+        Value::Object(recorded_drag_result(
+            took(),
+            Some(recording(Some(json!([{"ticket": 1}])))),
+            None
+        )),
+        json!({"took": 100, "frames": "/frames", "window": 7, "ticks": [1.0, 2.0], "layouts": [{"ticket": 1}]})
+    );
+}
+
 // contract: recording.drag.layout-trace-after-settle
 #[test]
 fn a_recorded_drag_stops_its_layout_trace_after_the_last_placement_is_presented() {

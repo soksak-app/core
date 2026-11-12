@@ -723,22 +723,24 @@ func diagnosticDrag(e *Endpoint, c *endpointConn, params json.RawMessage, reply 
 			return nil, err
 		}
 	}
-	var frames string
-	var recordedWindow *int
+	// The recording of a drag is its log: a recording that does not start or whose layout trace does not end is told in the
+	// result (recordedDragResult), and the drag runs and answers without it.
+	var recorded dragRecording
 	// When recording, the time at which the step was sent is recorded on the same clock as the frames. This allows measuring the delay from a step to the screen.
 	var clock func() float64
 	if captureOptions.capture {
-		frames, recordedWindow, err = startCapture(h, s, c, false, captureOptions.plan)
-		if err != nil {
-			return nil, err
+		var startErr error
+		recorded.frames, recorded.window, startErr = startCapture(h, s, c, false, captureOptions.plan)
+		if startErr != nil {
+			recorded.failure = fmt.Sprintf("the recording did not start: %v", startErr)
+		} else if capture, captureErr := recorder(s, c); captureErr != nil {
+			recorded.failure = fmt.Sprintf("the recording has no recorder: %v", captureErr)
+		} else {
+			clock = capture.CaptureClock
+			mainThreadStep(capture.LayoutTraceStart)
 		}
-		capture, err := recorder(s, c)
-		if err != nil {
-			return nil, err
-		}
-		clock = capture.CaptureClock
-		mainThreadStep(capture.LayoutTraceStart)
 	}
+	tracing := clock != nil
 	var tickMu sync.Mutex
 	sent := []float64{}
 	s.note(fmt.Sprintf("diagnostics: drag %s:%d by %g,%g for %d ms, %d times, native %t", plan.Axis, plan.Line, plan.DX, plan.DY, plan.MS, plan.Times, native))
@@ -762,23 +764,25 @@ func diagnosticDrag(e *Endpoint, c *endpointConn, params json.RawMessage, reply 
 			return pageDrag(ctx, h, s, plan, stepped)
 		}
 	}
-	var layouts []map[string]any
 	result, err := stopAfterSettled(settle, func() error {
-		if !captureOptions.capture {
+		if !tracing {
 			return nil
 		}
 		capture, err := recorder(s, c)
-		if err != nil {
-			return err
+		if err == nil {
+			var records []platform.LayoutRecord
+			mainThreadStep(func() { records, err = capture.LayoutTraceStop() })
+			recorded.layouts = layoutTrace(records)
 		}
-		var records []platform.LayoutRecord
-		mainThreadStep(func() { records, err = capture.LayoutTraceStop() })
-		layouts = layoutTrace(records)
-		return err
+		if err != nil {
+			recorded.layouts = nil
+			recorded.failure = fmt.Sprintf("the layout trace of the recording did not end: %v", err)
+		}
+		return nil
 	})
 	if err != nil {
 		// When the requester does not receive the frame folder, the recording stops and the folder is deleted.
-		if captureOptions.capture {
+		if recorded.frames != "" {
 			if capture, captureErr := recorder(s, c); captureErr == nil {
 				if abortErr := recording.Abort(capture); abortErr != nil {
 					err = fmt.Errorf("%w; abort capture: %v", err, abortErr)
@@ -789,15 +793,38 @@ func diagnosticDrag(e *Endpoint, c *endpointConn, params json.RawMessage, reply 
 		}
 		return nil, err
 	}
-	if captureOptions.capture {
-		result["frames"] = frames
-		result["window"] = windowNumberValue(recordedWindow)
-		tickMu.Lock()
-		result["ticks"] = append([]float64(nil), sent...)
-		tickMu.Unlock()
-		result["layouts"] = layouts
+	tickMu.Lock()
+	recorded.ticks = append([]float64(nil), sent...)
+	tickMu.Unlock()
+	return recordedDragResult(result, recorded), nil
+}
+
+// dragRecording is the recording of a recorded drag: its frame folder and recorded window when it started, the time of each step,
+// the layouts of its layout trace, or nil when the trace did not end, and failure, what failed of it.
+type dragRecording struct {
+	frames  string
+	window  *int
+	ticks   []float64
+	layouts []map[string]any
+	failure string
+}
+
+// recordedDragResult adds the recording of a recorded drag to the result of the drag. A recording that started adds frames,
+// window and ticks, and layouts when its trace ended; captureError tells what failed of the recording. The recording is the log
+// of the drag, so the drag does not fail on it.
+func recordedDragResult(result map[string]any, recorded dragRecording) map[string]any {
+	if recorded.frames != "" {
+		result["frames"] = recorded.frames
+		result["window"] = windowNumberValue(recorded.window)
+		result["ticks"] = recorded.ticks
+		if recorded.layouts != nil {
+			result["layouts"] = recorded.layouts
+		}
 	}
-	return result, nil
+	if recorded.failure != "" {
+		result["captureError"] = recorded.failure
+	}
+	return result
 }
 
 // dragTick is one step of a drag that the page performs. Fraction is how far its leg has reached, from 0 to 1, and Last ends the

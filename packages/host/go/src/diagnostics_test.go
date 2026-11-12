@@ -627,6 +627,34 @@ func TestRecordedDragStopsItsLayoutTraceAfterTheLastLayoutIsPresented(t *testing
 	}
 }
 
+// A recorded drag answers whatever happened to its recording: the recording is the log of the drag, so what failed of it is told
+// in captureError, and a recording that started keeps its frames, window and steps.
+// contract: recording.drag.recording-failure-is-told
+func TestARecordedDragTellsWhatFailedOfItsRecording(t *testing.T) {
+	window := 7
+	traced := []map[string]any{{"ticket": 1}}
+	cases := []struct {
+		name     string
+		recorded dragRecording
+		want     map[string]any
+	}{
+		{"a recording that did not start", dragRecording{failure: "the recording did not start: no window"},
+			map[string]any{"took": 100, "captureError": "the recording did not start: no window"}},
+		{"a layout trace that did not end", dragRecording{frames: "/frames", window: &window, ticks: []float64{1, 2},
+			failure: "the layout trace of the recording did not end: no trace"},
+			map[string]any{"took": 100, "frames": "/frames", "window": 7, "ticks": []float64{1, 2},
+				"captureError": "the layout trace of the recording did not end: no trace"}},
+		{"a recording without a failure", dragRecording{frames: "/frames", window: &window, ticks: []float64{1}, layouts: traced},
+			map[string]any{"took": 100, "frames": "/frames", "window": 7, "ticks": []float64{1}, "layouts": traced}},
+	}
+	for _, c := range cases {
+		got := recordedDragResult(map[string]any{"took": 100}, c.recorded)
+		if !reflect.DeepEqual(got, c.want) {
+			t.Fatalf("%s: result %#v, want %#v", c.name, got, c.want)
+		}
+	}
+}
+
 // contract: diagnostics.capture-wait.ends-with-the-connection
 func TestTheEndOfTheConnectionEndsTheCaptureWaitsOnlyWhileItsRequestRuns(t *testing.T) {
 	conn := endpointConnection(t)
