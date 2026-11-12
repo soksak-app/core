@@ -1294,6 +1294,8 @@ type windowFacts struct {
 		Webview uint64 `json:"webview"`
 		Surface uint64 `json:"surface"`
 		Main    bool   `json:"main"`
+		// Reference tells that the responder is in the diagnostic input reference, a view of the host outside the workbench.
+		Reference bool `json:"reference"`
 	} `json:"responder"`
 	Main    uint64 `json:"main"`
 	Frame   frame  `json:"frame"`
@@ -1488,9 +1490,9 @@ type WindowResponder struct {
 }
 
 // windowResponder is the first responder of host.window: the class of the responder view, the web view that holds it (0 for
-// a view outside the web views), the surface host that contains it (0 for none) and whether it is the main web view, read
-// against the surface hosts, the documents and the modal web view of the window.
-func windowResponder(class string, view, surface uint64, main bool, named map[uint64]string, documents map[uint64]DocumentKey, modalHandle uint64) WindowResponder {
+// a view outside the web views), the surface host that contains it (0 for none), whether it is the main web view and whether
+// it is in the diagnostic input reference, read against the surface hosts, the documents and the modal web view of the window.
+func windowResponder(class string, view, surface uint64, main, reference bool, named map[uint64]string, documents map[uint64]DocumentKey, modalHandle uint64) WindowResponder {
 	out := WindowResponder{Class: class, Owner: "native"}
 	if id, ok := named[surface]; ok && surface != 0 {
 		out.Surface = &id
@@ -1513,8 +1515,9 @@ func windowResponder(class string, view, surface uint64, main bool, named map[ui
 		default:
 			out.Owner = "webview"
 		}
-	} else if surface == 0 && !framework.MainPage() {
-		// A window without a main page draws the workbench in its content view, outside every web view and surface host.
+	} else if surface == 0 && !reference && !framework.MainPage() {
+		// A window without a main page draws the workbench in its content view, outside every web view and surface host. The
+		// input reference is a view of the host in that content view and not the workbench, so it stays a native view.
 		out.Owner = "workbench"
 	}
 	return out
@@ -1746,7 +1749,7 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 			out.Documents = append(out.Documents, windowDocument(key, order, view))
 		}
 	}
-	out.Responder = windowResponder(facts.Responder.Class, facts.Responder.Webview, facts.Responder.Surface, facts.Responder.Main, named, documents, modalHandle)
+	out.Responder = windowResponder(facts.Responder.Class, facts.Responder.Webview, facts.Responder.Surface, facts.Responder.Main, facts.Responder.Reference, named, documents, modalHandle)
 	sort.Slice(out.Regions, func(a, b int) bool {
 		if out.Regions[a].Surface != out.Regions[b].Surface {
 			return out.Regions[a].Surface < out.Regions[b].Surface
