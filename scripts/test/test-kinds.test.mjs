@@ -43,10 +43,61 @@ function testSource(entry) {
   return [...source.matchAll(/^#import "([a-z0-9_]+\.m)"$/gm)].reduce((text, match) => text + read(`native/darwin/tests/${match[1]}`), source);
 }
 
+// The functions of a source that start a recording: sp_capture_start and each function whose body calls one of them.
+function recordingCalls(source) {
+  const names = new Set(["sp_capture_start"]);
+  const bodies = [...source.matchAll(/^static [^\n(]*?\b(\w+)\(([^)]*)\) \{\n([\s\S]*?)^\}/gm)];
+  for (let grown = true; grown; ) {
+    grown = false;
+    for (const [, name, , body] of bodies) {
+      if (names.has(name) || ![...names].some((called) => new RegExp(`\\b${called}\\(`).test(body))) continue;
+      names.add(name);
+      grown = true;
+    }
+  }
+  return names;
+}
+
+/**
+ * Whether every recording of the main function of source takes its images from a stand-in of the window server: main sets
+ * captureLookup to a lookup that answers CGWindowListCreateImageFromArray with a function of the test whatever the state, and
+ * every call that starts a recording comes after that and before captureLookup is the system lookup again. A stand-in that
+ * answers only in some states leaves the other recordings on the window server.
+ */
+export function controlledRecordings(source) {
+  const standIns = new Set([...source.matchAll(
+    /^static void \*(\w+)\(void \*handle, const char \*name\) \{\n\s*return strcmp\(name, "CGWindowListCreateImageFromArray"\) == 0 \? \(void \*\)\w+ : dlsym\(handle, name\);\n\}/gm,
+  )].map((match) => match[1]));
+  const main = /^int main\([^)]*\) \{([\s\S]*)$/m.exec(source)?.[1] ?? "";
+  const calls = [...recordingCalls(source)].filter((name) => name !== "main");
+  const starts = calls.flatMap((name) => [...main.matchAll(new RegExp(`\\b${name}\\(`, "g"))].map((match) => match.index));
+  if (standIns.size === 0 || starts.length === 0) return false;
+  const swaps = [...main.matchAll(/\bcaptureLookup = (\w+);/g)].map((match) => ({ at: match.index, standIn: standIns.has(match[1]) }));
+  return starts.every((at) => {
+    const before = swaps.filter((swap) => swap.at < at).at(-1);
+    return before !== undefined && before.standIn;
+  });
+}
+
 // A recording that starts on a real window waits for frames that the display presents, so it is an end-to-end case; an invalid
-// window number is negative, an open alone prepares the target, a still capture takes one image, and a controlled sample needs
-// no display.
-const recordsAWindow = (source) => /sp_capture_open\(\s*[^-\s]/.test(source) && /sp_capture_start\(/.test(source);
+// window number is negative, an open alone prepares the target, a still capture takes one image, and a recording whose images
+// all come from a stand-in of the window server is a controlled sample that needs no display.
+const recordsAWindow = (source) =>
+  /sp_capture_open\(\s*[^-\s]/.test(source) && /sp_capture_start\(/.test(source) && !controlledRecordings(source);
+
+test("a recording is controlled only while an unconditional stand-in gives every image", { timeout: 1000 }, () => {
+  const standIn = 'static void *lookupTest(void *handle, const char *name) {\n    return strcmp(name, "CGWindowListCreateImageFromArray") == 0 ? (void *)testImage : dlsym(handle, name);\n}\n';
+  const failing = 'static void *lookupFailing(void *handle, const char *name) {\n    if (fail && strcmp(name, "CGWindowListCreateImageFromArray") == 0) return (void *)noImage;\n    return dlsym(handle, name);\n}\n';
+  const helper = "static bool record(NSWindow *window) {\n    return sp_capture_open(window.windowNumber, false, NULL) && sp_capture_start(\"d\", 10, 0, 4, 1, NULL);\n}\n";
+  assert.equal(controlledRecordings(`${standIn}${helper}int main(void) {\n    captureLookup = lookupTest;\n    record(window);\n    captureLookup = dlsym;\n}\n`), true,
+    "a helper recording between the stand-in and the system lookup is controlled");
+  assert.equal(controlledRecordings(`${standIn}${helper}int main(void) {\n    captureLookup = lookupTest;\n    record(window);\n    captureLookup = dlsym;\n    record(window);\n}\n`), false,
+    "a recording after the system lookup is restored records the screen");
+  assert.equal(controlledRecordings(`${failing}${helper}int main(void) {\n    captureLookup = lookupFailing;\n    record(window);\n}\n`), false,
+    "a stand-in that answers only in some states is not controlled");
+  assert.equal(controlledRecordings(`${standIn}${helper}int main(void) {\n    record(window);\n    captureLookup = lookupTest;\n}\n`), false,
+    "a recording before the stand-in records the screen");
+});
 
 test("a native unit test records no window of the screen", { timeout: 1000 }, () => {
   const makefile = read("native/darwin/Makefile");
