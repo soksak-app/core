@@ -1818,7 +1818,7 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
         NSRect screenBounds = [view.window convertRectToScreen:localBounds];
         NSScreen *primaryScreen = NSScreen.screens.firstObject;
         if (primaryScreen) {
-            // ScreenCaptureKit screenRect and window_facts use top-left coordinates. AppKit screen rectangles use a
+            // The window server bounds of a capture and window_facts use top-left coordinates. AppKit screen rectangles use a
             // bottom-left origin, so normalize before retaining bounds for crop mapping.
             screenBounds.origin.y = NSMaxY(primaryScreen.frame) - NSMaxY(screenBounds);
         } else {
@@ -1924,7 +1924,7 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
         NSRect screenBounds = [view.window convertRectToScreen:localBounds];
         NSScreen *primaryScreen = NSScreen.screens.firstObject;
         if (primaryScreen) {
-            // ScreenCaptureKit screenRect and window_facts use top-left coordinates. AppKit screen rectangles use a
+            // The window server bounds of a capture and window_facts use top-left coordinates. AppKit screen rectangles use a
             // bottom-left origin, so normalize before retaining bounds for crop mapping.
             screenBounds.origin.y = NSMaxY(primaryScreen.frame) - NSMaxY(screenBounds);
         } else {

@@ -104,12 +104,12 @@ static void frameIdentityDocumentChecks(void) {
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
     BOOL firstAccepted = frozen && firstPixels && colorSpace && sp_image_capture_match_identity_enqueue_frame(
         firstPixels.bytes, 128, 128, 128 * 4, colorSpace, CGRectMake(0, 0, 128, 128),
-        CGRectMake(0, 0, 128, 128), 1, 1, 1, 111, &error);
+        CGRectMake(0, 0, 128, 128), 1, 1, 1, 111, 112, &error);
     check(firstAccepted && error == NULL, @"a complete captured sample admits its exact first document atlas cell");
     free(error); error = NULL;
     BOOL secondAccepted = frozen && secondPixels && colorSpace && sp_image_capture_match_identity_enqueue_frame(
         secondPixels.bytes, 128, 128, 128 * 4, colorSpace, CGRectMake(0, 0, 128, 128),
-        CGRectMake(0, 0, 128, 128), 1, 1, 2, 222, &error);
+        CGRectMake(0, 0, 128, 128), 1, 1, 2, 222, 223, &error);
     check(secondAccepted && error == NULL, @"a second complete sample admits the next generated document atlas cell");
     free(error); error = NULL;
     if (colorSpace) CGColorSpaceRelease(colorSpace);
@@ -136,11 +136,12 @@ static void frameIdentityDocumentChecks(void) {
         && [rows[0][@"identity"][@"generation"] isEqual:@"53"]
         && [rows[0][@"identity"][@"raster"] isEqual:@"18446744073709551615"]
         && [rows[0][@"identity"][@"sequence"] unsignedIntegerValue] == 1
-        && [rows[0][@"displayTime"] isEqual:@"111"],
-        @"the exact issued document QR is recorded as matched with its SCK displayTime and document tuple");
+        && [rows[0][@"index"] isEqual:@1] && [rows[0][@"requested"] isEqual:@"111"] && [rows[0][@"completed"] isEqual:@"112"],
+        @"the exact issued document QR is recorded as matched with the index, request and completion times of its still and document tuple");
     check(rows.count == 2 && [rows[1][@"sourceKind"] isEqual:@"document"]
         && [rows[1][@"status"] isEqual:@"unknown"] && [rows[1][@"reason"] isEqual:@"unissued"]
-        && [rows[1][@"identity"] isEqual:NSNull.null] && [rows[1][@"displayTime"] isEqual:@"222"],
+        && [rows[1][@"identity"] isEqual:NSNull.null] && [rows[1][@"index"] isEqual:@2]
+        && [rows[1][@"requested"] isEqual:@"222"] && [rows[1][@"completed"] isEqual:@"223"],
         @"a generated atlas cell above the final issued count remains unknown instead of being credited");
     NSString *manifestPath = [NSString stringWithFormat:@"%s/frame-identities/manifest.json", directory];
     NSDictionary *manifest = [NSJSONSerialization JSONObjectWithData:[NSData dataWithContentsOfFile:manifestPath]
@@ -451,7 +452,7 @@ static void frameIdentityCropByteBoundChecks(void) {
     error = NULL;
     BOOL admitted = registered && sp_image_capture_match_identity_enqueue_frame(samplePixels.bytes,
         frameWidth, frameHeight, frameStride, colorSpace, CGRectMake(0, 0, frameWidth, frameHeight),
-        CGRectMake(0, 0, frameWidth, frameHeight), 1, 1, 1, 1, &error);
+        CGRectMake(0, 0, frameWidth, frameHeight), 1, 1, 1, 1, 2, &error);
     check(!admitted && error != NULL && strstr(error, "pending capacity") != NULL,
         @"compact ROI bytes above the shared 64 MiB pending budget fail explicitly before decoder admission");
     free(error);
@@ -510,7 +511,7 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
     dispatch_async(sampleQueue, ^{
         firstEnqueued = sp_image_capture_match_identity_enqueue_frame(mutableFirstSample.bytes, width, height,
             stride, colorSpace, CGRectMake(0, 0, 128, 128), CGRectMake(0, 0, 128, 128), 1, 2,
-            1, 1000, &firstError);
+            1, 1000, 1001, &firstError);
         dispatch_semaphore_signal(firstReturned);
     });
     // The first sample reaches the controlled QR decoder boundary.
@@ -518,7 +519,7 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
     dispatch_async(sampleQueue, ^{
         secondEnqueued = sp_image_capture_match_identity_enqueue_frame(taggedPixels.bytes, width, height,
             stride, colorSpace, CGRectMake(0, 0, 128, 128), CGRectMake(0, 0, 128, 128), 1, 2,
-            2, 2000, &secondError);
+            2, 2000, 2001, &secondError);
         dispatch_semaphore_signal(secondReturned);
     });
     long secondBeforeRelease = dispatch_semaphore_wait(secondReturned, DISPATCH_TIME_NOW);
@@ -546,17 +547,17 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
         char *enqueueError = NULL;
         BOOL accepted = sp_image_capture_match_identity_enqueue_frame(taggedPixels.bytes, width, height,
             stride, colorSpace, CGRectMake(0, 0, 128, 128), CGRectMake(0, 0, 128, 128), 1, 2,
-            frame, frame * 1000, &enqueueError);
+            frame, frame * 1000, frame * 1000 + 1, &enqueueError);
         acceptedThroughLimit = acceptedThroughLimit && accepted && enqueueError == NULL;
         free(enqueueError);
     }
     char *overflowError = NULL;
     BOOL overflowAccepted = sp_image_capture_match_identity_enqueue_frame(taggedPixels.bytes, width, height,
         stride, colorSpace, CGRectMake(0, 0, 128, 128), CGRectMake(0, 0, 128, 128), 1, 2,
-        17, 17000, &overflowError);
+        17, 17000, 17001, &overflowError);
     BOOL overflowHasMeasuredCapacity = overflowError
         && strstr(overflowError, "stage=job-admission")
-        && strstr(overflowError, "frame=17")
+        && strstr(overflowError, "still=17")
         && strstr(overflowError, "pendingJobs=16")
         && strstr(overflowError, "jobLimit=16")
         && strstr(overflowError, "pendingCropBytes=")
@@ -600,12 +601,15 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
         if (line.length == 0) continue;
         NSDictionary *row = [NSJSONSerialization JSONObjectWithData:[line dataUsingEncoding:NSUTF8StringEncoding]
             options:0 error:nil];
-        if (row[@"frame"]) {
-            [decodedFrames addObject:row[@"frame"]];
+        if (row[@"index"]) {
+            [decodedFrames addObject:row[@"index"]];
+            unsigned long long still = [row[@"index"] unsignedLongLongValue];
             uint64_t enqueued = [row[@"decodeEnqueuedTime"] longLongValue];
             uint64_t started = [row[@"decodeStartTime"] longLongValue];
             uint64_t completed = [row[@"decodeCompleteTime"] longLongValue];
-            measuredEveryDecode = measuredEveryDecode && [row[@"displayTime"] isKindOfClass:NSString.class]
+            measuredEveryDecode = measuredEveryDecode
+                && [row[@"requested"] isEqual:[NSString stringWithFormat:@"%llu", still * 1000]]
+                && [row[@"completed"] isEqual:[NSString stringWithFormat:@"%llu", still * 1000 + 1]]
                 && [row[@"decodeEnqueuedTime"] isKindOfClass:NSString.class]
                 && [row[@"decodeStartTime"] isKindOfClass:NSString.class]
                 && [row[@"decodeCompleteTime"] isKindOfClass:NSString.class]
@@ -620,13 +624,13 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
         if (line.length == 0) continue;
         NSDictionary *row = [NSJSONSerialization JSONObjectWithData:[line dataUsingEncoding:NSUTF8StringEncoding]
             options:0 error:nil];
-        if ([row[@"frame"] unsignedLongLongValue] == 1)
+        if ([row[@"index"] unsignedLongLongValue] == 1)
             firstSnapshotMatched = [row[@"status"] isEqual:@"matched"];
     }
     check(orderedFrames, @"all admitted frames drain in sample order before session state is released, despite later overflow");
     check(firstSnapshotMatched,
         @"the first frame decodes its intake-time ROI after the caller mutates the source sample");
-    check(measuredEveryDecode, @"every decoder result owns ordered enqueue, start, and completion ticks for its display time");
+    check(measuredEveryDecode, @"every decoder result owns ordered enqueue, start, and completion ticks and the exact request and completion times of its still");
     check(sp_image_capture_match_identity_session_begin(&error) && error == NULL,
         @"a new identity session starts only after the previous decoder drained");
     free(error); error = NULL;
@@ -658,7 +662,7 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
     sp_capture_frame_identity_test_set_decode_hook(throwIdentityDecode);
     BOOL exceptionEnqueued = sp_image_capture_match_identity_enqueue_frame(exceptionPixels.bytes, width,
         height, stride, colorSpace, CGRectMake(0, 0, 128, 128), CGRectMake(0, 0, 128, 128), 1, 2,
-        18, 18000, &error);
+        18, 18000, 18001, &error);
     check(exceptionEnqueued && error == NULL,
         @"the controlled decoder exception is admitted as an asynchronous decode job");
     free(error); error = NULL;
@@ -699,8 +703,8 @@ static NSArray<NSNumber *> *identityDecodedFrameNumbers(NSString *path) {
         if (!line.length) continue;
         NSData *lineData = [line dataUsingEncoding:NSUTF8StringEncoding];
         NSDictionary *record = lineData ? [NSJSONSerialization JSONObjectWithData:lineData options:0 error:nil] : nil;
-        if ([record[@"frame"] respondsToSelector:@selector(unsignedLongLongValue)])
-            [frames addObject:record[@"frame"]];
+        if ([record[@"index"] respondsToSelector:@selector(unsignedLongLongValue)])
+            [frames addObject:record[@"index"]];
     }
     return frames;
 }
@@ -770,7 +774,7 @@ static void frameIdentityCommitDoesNotWaitForArtifactWriter(void) {
     for (uint64_t frame = 1; frame <= 8 && admittedEight; frame++) {
         error = NULL;
         BOOL accepted = sp_image_capture_match_identity_enqueue_frame(sample, 4, 4, 16, colorSpace,
-            CGRectMake(0, 0, 4, 4), CGRectMake(0, 0, 4, 4), 1, 1, frame, frame * 1000, &error);
+            CGRectMake(0, 0, 4, 4), CGRectMake(0, 0, 4, 4), 1, 1, frame, frame * 1000, frame * 1000 + 1, &error);
         admittedEight = accepted && error == NULL;
         free(error); error = NULL;
     }
@@ -862,7 +866,7 @@ int main(void) { @autoreleasepool {
     check(result.state == SP_IMAGE_CAPTURE_MATCHED && result.candidate_count == 1
         && result.candidates[0].generation == first.generation && result.candidates[0].raster == first.raster
         && result.candidates[0].sequence == first.sequence && result.display_time == 987654321,
-        @"the geometrically mapped ScreenCaptureKit crop matches its source identity and preserves displayTime");
+        @"the geometrically mapped capture crop matches its source identity and preserves displayTime");
     sp_image_capture_match_result_dispose(&result);
 
     sp_image_capture_match_begin(NULL, NULL);
@@ -947,7 +951,7 @@ int main(void) { @autoreleasepool {
     result = sp_image_capture_match_sample(topLeftFrame, 4, 4, 16,
         CGRectMake(0, 0, 4, 4), CGRectMake(10, 20, 4, 4), 1, 1, "DeviceRGB", 987654328);
     check(result.state == SP_IMAGE_CAPTURE_MATCHED && result.candidate_count == 1,
-        @"ScreenCaptureKit maps a source rectangle at the screenRect top-left origin to the frame top row");
+        @"the capture maps a source rectangle at the screenRect top-left origin to the frame top row");
     sp_image_capture_match_result_dispose(&result);
     sp_image_capture_match_end();
 

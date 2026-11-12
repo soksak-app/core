@@ -5,7 +5,6 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <CoreGraphics/CoreGraphics.h>
-#include <CoreVideo/CoreVideo.h>
 #include <dispatch/dispatch.h>
 
 typedef struct {
@@ -111,12 +110,15 @@ char *sp_image_capture_match_identity_session_error_copy(void);
 bool sp_image_capture_match_identity_record(const uint8_t region_token[16], sp_image_capture_identity identity,
     CGRect roi, const uint8_t *tagged_pixels, size_t width, size_t height, size_t stride,
     const char *color_space, char **error);
-// Copies mapped tag ROIs into bounded immutable jobs and returns before Vision decoding. The serial decoder queue
-// preserves frame and region order; overflow fails the identity session explicitly. Caller retains the sample bytes.
+// Copies mapped tag ROIs of the still still_index, requested and completed at the raw Mach ticks requested_time and
+// completed_time, into bounded immutable jobs and returns before Vision decoding. Each row of decoded-frames.jsonl names the
+// still by index, requested and completed. The serial decoder queue preserves still and region order; overflow fails the
+// identity session explicitly. Caller retains the sample bytes.
 bool sp_image_capture_match_identity_enqueue_frame(const uint8_t *pixels, size_t frame_width, size_t frame_height,
     size_t frame_stride, CGColorSpaceRef color_space, CGRect content_rect, CGRect screen_rect,
-    double content_scale, double scale_factor, uint64_t frame_number, uint64_t display_time, char **error);
-// Performs one real CoreImage encode and Vision decode before ScreenCaptureKit starts accepting samples.
+    double content_scale, double scale_factor, uint64_t still_index, uint64_t requested_time, uint64_t completed_time,
+    char **error);
+// Performs one real CoreImage encode and Vision decode before a recording requests its first still.
 bool sp_image_capture_match_identity_prepare_decoder(char **error);
 #endif
 

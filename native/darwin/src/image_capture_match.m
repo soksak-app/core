@@ -19,12 +19,12 @@ static const size_t kImageCaptureArtifactPendingLimit = 64 * 1024 * 1024;
 // The budget includes ordered record completion after decode; crop bytes keep their independent 64 MiB limit.
 static const NSUInteger kIdentityDecodePendingJobLimit = 16;
 
-static NSString *identityCapacityMessage(NSString *stage, uint64_t frame, NSUInteger pendingJobs,
+static NSString *identityCapacityMessage(NSString *stage, uint64_t still_index, NSUInteger pendingJobs,
     size_t pendingCropBytes, size_t incomingCropBytes, size_t artifactPendingBytes,
     BOOL jobLimitExceeded, BOOL byteLimitExceeded) {
     return [NSString stringWithFormat:
-        @"frame identity decoder pending capacity was exceeded: stage=%@ frame=%llu pendingJobs=%lu jobLimit=%lu pendingCropBytes=%zu incomingCropBytes=%zu artifactPendingBytes=%zu byteLimit=%zu jobLimitExceeded=%d byteLimitExceeded=%d",
-        stage, (unsigned long long)frame, (unsigned long)pendingJobs,
+        @"frame identity decoder pending capacity was exceeded: stage=%@ still=%llu pendingJobs=%lu jobLimit=%lu pendingCropBytes=%zu incomingCropBytes=%zu artifactPendingBytes=%zu byteLimit=%zu jobLimitExceeded=%d byteLimitExceeded=%d",
+        stage, (unsigned long long)still_index, (unsigned long)pendingJobs,
         (unsigned long)kIdentityDecodePendingJobLimit, pendingCropBytes, incomingCropBytes,
         artifactPendingBytes, kImageCaptureArtifactPendingLimit,
         jobLimitExceeded, byteLimitExceeded];
@@ -131,8 +131,10 @@ static size_t identityDecodePendingBytes;
 static BOOL identityDecodeAccepting;
 
 @interface SPIdentityDecodeJob : NSObject
-@property uint64_t frame;
-@property uint64_t displayTime;
+// The still of the recording that the job decodes: its index and its request and completion ticks.
+@property uint64_t stillIndex;
+@property uint64_t requestedTime;
+@property uint64_t completedTime;
 @property uint64_t enqueuedTime;
 @property(retain) NSArray<NSDictionary *> *groups;
 @property(copy) NSString *unknownReason;
@@ -866,10 +868,12 @@ static NSDictionary *identityTupleRecord(sp_image_capture_identity identity) {
         @"sequence": @(identity.sequence) };
 }
 
-static NSDictionary *identityDecodeRecord(uint64_t frame, uint64_t display_time, NSString *region,
+static NSDictionary *identityDecodeRecord(uint64_t still_index, uint64_t requested_time, uint64_t completed_time, NSString *region,
     CGRect roi, NSString *status, NSString *reason, sp_image_capture_identity identity, BOOL has_identity,
     NSString *source_kind) {
-    return @{ @"frame": @(frame), @"displayTime": [NSString stringWithFormat:@"%llu", (unsigned long long)display_time],
+    return @{ @"index": @(still_index),
+        @"requested": [NSString stringWithFormat:@"%llu", (unsigned long long)requested_time],
+        @"completed": [NSString stringWithFormat:@"%llu", (unsigned long long)completed_time],
         @"region": region ?: (id)NSNull.null,
         @"roi": CGRectIsNull(roi) ? (id)NSNull.null : @{ @"x": @(CGRectGetMinX(roi)), @"y": @(CGRectGetMinY(roi)),
             @"width": @(CGRectGetWidth(roi)), @"height": @(CGRectGetHeight(roi)) },
@@ -887,7 +891,7 @@ static NSString *identityDecodeReason(NSString *helperReason) {
     return @"unissued";
 }
 
-static BOOL appendIdentityDecodeRecords(NSArray<NSDictionary *> *records, uint64_t frame_number, char **error) {
+static BOOL appendIdentityDecodeRecords(NSArray<NSDictionary *> *records, uint64_t still_index, char **error) {
     if (error) *error = NULL;
     if (!error) return NO; // silent: the public decoder validates its required error output before calling this helper.
     NSMutableData *lines = [NSMutableData data];
@@ -940,8 +944,8 @@ static BOOL appendIdentityDecodeRecords(NSArray<NSDictionary *> *records, uint64
     [historyLock broadcast];
     [historyLock unlock];
     NSString *failureReason = written ? nil : [(writeError.localizedDescription
-        ?: [NSString stringWithFormat:@"decoded identity frame %llu could not be appended: %s",
-            (unsigned long long)frame_number, strerror(savedErrno)]) copy];
+        ?: [NSString stringWithFormat:@"decoded identity of still %llu could not be appended: %s",
+            (unsigned long long)still_index, strerror(savedErrno)]) copy];
     [ownedLines release];
     [directory release];
     if (!written) {
@@ -1193,7 +1197,7 @@ static void decodeIdentityJob(SPIdentityDecodeJob *job) {
                 }
                 [activeUnknownReason release]; activeUnknownReason = nil;
             }
-            NSMutableDictionary *record = [identityDecodeRecord(job.frame, job.displayTime, region, roi,
+            NSMutableDictionary *record = [identityDecodeRecord(job.stillIndex, job.requestedTime, job.completedTime, region, roi,
                 status, reason, identity, hasIdentity, group[@"sourceKind"]) mutableCopy];
             record[@"decodeEnqueuedTime"] = decoderRan
                 ? [NSString stringWithFormat:@"%llu", (unsigned long long)job.enqueuedTime] : (id)NSNull.null;
@@ -1205,10 +1209,10 @@ static void decodeIdentityJob(SPIdentityDecodeJob *job) {
             [record release];
         }
         if (!decodeFailure && job.groups.count == 0) {
-            [records addObject:identityDecodeRecord(job.frame, job.displayTime, nil, CGRectNull,
+            [records addObject:identityDecodeRecord(job.stillIndex, job.requestedTime, job.completedTime, nil, CGRectNull,
                 @"unknown", job.unknownReason ?: @"unknown-geometry", (sp_image_capture_identity){0}, NO, nil)];
         } else if (!decodeFailure && job.coverageMarker) {
-            [records addObject:identityDecodeRecord(job.frame, job.displayTime, nil, CGRectNull,
+            [records addObject:identityDecodeRecord(job.stillIndex, job.requestedTime, job.completedTime, nil, CGRectNull,
                 @"unknown", job.retentionMarker ? @"unknown-retention" : @"unknown-geometry",
                 (sp_image_capture_identity){0}, NO, nil)];
         }
@@ -1270,7 +1274,7 @@ static void commitIdentityDecodeJob(SPIdentityDecodeJob *job, NSOperation *opera
         return;
     }
     char *error = NULL;
-    BOOL appended = appendIdentityDecodeRecords(job.decodedRecords, job.frame, &error);
+    BOOL appended = appendIdentityDecodeRecords(job.decodedRecords, job.stillIndex, &error);
     if (!appended) {
         char *failure = NULL;
         sp_image_capture_match_identity_session_fail(error
@@ -1283,7 +1287,8 @@ static void commitIdentityDecodeJob(SPIdentityDecodeJob *job, NSOperation *opera
 
 bool sp_image_capture_match_identity_enqueue_frame(const uint8_t *pixels, size_t frame_width, size_t frame_height,
     size_t frame_stride, CGColorSpaceRef color_space, CGRect content_rect, CGRect screen_rect,
-    double content_scale, double scale_factor, uint64_t frame_number, uint64_t display_time, char **error) {
+    double content_scale, double scale_factor, uint64_t still_index, uint64_t requested_time, uint64_t completed_time,
+    char **error) {
     if (error) *error = NULL;
     if (!pixels || !frame_width || !frame_height || frame_width > SIZE_MAX / 4 || frame_stride < frame_width * 4
         || frame_height > SIZE_MAX / frame_stride || !color_space || !error
@@ -1409,7 +1414,7 @@ bool sp_image_capture_match_identity_enqueue_frame(const uint8_t *pixels, size_t
                 || cropBytes > kImageCaptureArtifactPendingLimit - artifactPendingBytes
                     - identityDecodePendingBytes - bytes;
             if (byteLimitExceeded) {
-                NSString *capacityError = identityCapacityMessage(@"roi-copy", frame_number,
+                NSString *capacityError = identityCapacityMessage(@"roi-copy", still_index,
                     identityDecodePendingJobs, identityDecodePendingBytes, cropBytes + bytes,
                     artifactPendingBytes, NO, YES);
                 if (!identitySessionFailure) identitySessionFailure = [capacityError copy];
@@ -1449,8 +1454,9 @@ bool sp_image_capture_match_identity_enqueue_frame(const uint8_t *pixels, size_t
         [historyLock unlock];
         return identityEnqueueFailure(error, "frame identity decode job allocation failed");
     }
-    job.frame = frame_number;
-    job.displayTime = display_time;
+    job.stillIndex = still_index;
+    job.requestedTime = requested_time;
+    job.completedTime = completed_time;
     job.enqueuedTime = now;
     job.groups = snapshots;
     job.unknownReason = unknownReason;
@@ -1467,7 +1473,7 @@ bool sp_image_capture_match_identity_enqueue_frame(const uint8_t *pixels, size_t
             [job release];
             return identityFailure(error, "frame identity decoder intake is closed");
         }
-        NSString *capacityError = identityCapacityMessage(@"job-admission", frame_number,
+        NSString *capacityError = identityCapacityMessage(@"job-admission", still_index,
             identityDecodePendingJobs, identityDecodePendingBytes, cropBytes, artifactPendingBytes,
             jobLimitExceeded, byteLimitExceeded);
         if (!identitySessionFailure) identitySessionFailure = [capacityError copy];

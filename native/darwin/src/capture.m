@@ -879,7 +879,7 @@ static void processStill(SPCaptureRecording *recording, NSUInteger index, SPCapt
         CGColorSpaceRef srgb = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
         enqueueStarted = captureTicks();
         BOOL enqueued = sp_image_capture_match_identity_enqueue_frame(frame + kFrameHeader, width, height, stride, srgb, content,
-            screen, 1, scale, (uint64_t)index, completed, &identityError);
+            screen, 1, scale, (uint64_t)index, requested, completed, &identityError);
         enqueueCompleted = captureTicks();
         if (srgb) CGColorSpaceRelease(srgb);
         if (!enqueued) {

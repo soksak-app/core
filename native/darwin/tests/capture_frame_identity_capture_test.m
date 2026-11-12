@@ -228,45 +228,45 @@ int main(void) { @autoreleasepool {
         if (item) [decodedRecords addObject:item];
     }
     NSPredicate *frameOneUnknown = [NSPredicate predicateWithBlock:^BOOL(NSDictionary *item, NSDictionary *bindings) {
-        (void)bindings; return [item[@"frame"] isEqual:@0] && [item[@"reason"] isEqual:@"unknown-geometry"];
+        (void)bindings; return [item[@"index"] isEqual:@0] && [item[@"reason"] isEqual:@"unknown-geometry"];
     }];
     NSArray *frameOne = [decodedRecords filteredArrayUsingPredicate:frameOneUnknown];
     check(frameOne.count == 2,
         @"a still without a mapped source region reports unknown geometry instead of inferring identity");
     NSPredicate *frameTwoMatched = [NSPredicate predicateWithBlock:^BOOL(NSDictionary *item, NSDictionary *bindings) {
-        (void)bindings; return [item[@"frame"] isEqual:@1] && [item[@"status"] isEqual:@"matched"];
+        (void)bindings; return [item[@"index"] isEqual:@1] && [item[@"status"] isEqual:@"matched"];
     }];
     NSArray *frameTwo = [decodedRecords filteredArrayUsingPredicate:frameTwoMatched];
     check(frameTwo.count == 2 && [frameTwo valueForKeyPath:@"identity.generation"]
         && [[NSSet setWithArray:[frameTwo valueForKeyPath:@"identity.generation"]] isEqualToSet:[NSSet setWithArray:@[@"19", @"31"]]],
         @"separate disjoint ROIs decode each region-scoped issued identity");
     NSPredicate *frameThreeNoCode = [NSPredicate predicateWithBlock:^BOOL(NSDictionary *item, NSDictionary *bindings) {
-        (void)bindings; return [item[@"frame"] isEqual:@2] && [item[@"reason"] isEqual:@"no-code"];
+        (void)bindings; return [item[@"index"] isEqual:@2] && [item[@"reason"] isEqual:@"no-code"];
     }];
     check([decodedRecords filteredArrayUsingPredicate:frameThreeNoCode].count == 1,
         @"a missing tag produces an explicit no-code result");
     NSPredicate *frameFourUnissued = [NSPredicate predicateWithBlock:^BOOL(NSDictionary *item, NSDictionary *bindings) {
-        (void)bindings; return [item[@"frame"] isEqual:@4] && [item[@"reason"] isEqual:@"unissued"];
+        (void)bindings; return [item[@"index"] isEqual:@4] && [item[@"reason"] isEqual:@"unissued"];
     }];
     check([decodedRecords filteredArrayUsingPredicate:frameFourUnissued].count == 1,
         @"a valid QR issued for another region is reported as unissued");
     NSPredicate *frameFourPartial = [NSPredicate predicateWithBlock:^BOOL(NSDictionary *item, NSDictionary *bindings) {
-        (void)bindings; return [item[@"frame"] isEqual:@3] && [item[@"status"] isEqual:@"unknown"];
+        (void)bindings; return [item[@"index"] isEqual:@3] && [item[@"status"] isEqual:@"unknown"];
     }];
     check([decodedRecords filteredArrayUsingPredicate:frameFourPartial].count == 2,
         @"a cropped partial tag remains an explicit unknown result");
     NSPredicate *frameSixAmbiguous = [NSPredicate predicateWithBlock:^BOOL(NSDictionary *item, NSDictionary *bindings) {
-        (void)bindings; return [item[@"frame"] isEqual:@5] && [item[@"reason"] isEqual:@"ambiguous"];
+        (void)bindings; return [item[@"index"] isEqual:@5] && [item[@"reason"] isEqual:@"ambiguous"];
     }];
     check([decodedRecords filteredArrayUsingPredicate:frameSixAmbiguous].count == 1,
         @"multiple complete codes inside one expected ROI are ambiguous");
     NSPredicate *frameFiveDuplicate = [NSPredicate predicateWithBlock:^BOOL(NSDictionary *item, NSDictionary *bindings) {
-        (void)bindings; return [item[@"frame"] isEqual:@6] && [item[@"reason"] isEqual:@"duplicate-roi"];
+        (void)bindings; return [item[@"index"] isEqual:@6] && [item[@"reason"] isEqual:@"duplicate-roi"];
     }];
     check([decodedRecords filteredArrayUsingPredicate:frameFiveDuplicate].count == 2,
         @"two regions claiming the same captured ROI are both unknown instead of sharing one code");
     NSPredicate *frameSixRetention = [NSPredicate predicateWithBlock:^BOOL(NSDictionary *item, NSDictionary *bindings) {
-        (void)bindings; return [item[@"frame"] isEqual:@7] && [item[@"reason"] isEqual:@"unknown-retention"];
+        (void)bindings; return [item[@"index"] isEqual:@7] && [item[@"reason"] isEqual:@"unknown-retention"];
     }];
     check([decodedRecords filteredArrayUsingPredicate:frameSixRetention].count == 1,
         @"an evicted source payload is classified as unknown retention rather than a match");
@@ -411,7 +411,7 @@ int main(void) { @autoreleasepool {
     }
     NSPredicate *historyEvictionMatched = [NSPredicate predicateWithBlock:^BOOL(NSDictionary *row, NSDictionary *bindings) {
         (void)bindings;
-        return [row[@"frame"] isEqual:@0] && [row[@"status"] isEqual:@"matched"]
+        return [row[@"index"] isEqual:@0] && [row[@"status"] isEqual:@"matched"]
             && [row[@"identity"][@"generation"] isEqual:@"73"]
             && [row[@"identity"][@"raster"] isEqual:@"79"]
             && [row[@"identity"][@"sequence"] isEqual:@83]
@@ -420,7 +420,7 @@ int main(void) { @autoreleasepool {
     NSArray<NSDictionary *> *historyEvictionMatches = [historyEvictionDecodedRows filteredArrayUsingPredicate:historyEvictionMatched];
     NSPredicate *historyEvictionRetired = [NSPredicate predicateWithBlock:^BOOL(NSDictionary *row, NSDictionary *bindings) {
         (void)bindings;
-        return [row[@"frame"] isEqual:@0] && [row[@"status"] isEqual:@"unknown"]
+        return [row[@"index"] isEqual:@0] && [row[@"status"] isEqual:@"unknown"]
             && [row[@"reason"] isEqual:@"unknown-retention"]
             && [row[@"region"] isEqual:@"191a1b1c000000000000000000000000"]
             && [row[@"roi"] isKindOfClass:[NSDictionary class]] && [row[@"roi"][@"x"] isEqual:@192];
@@ -431,7 +431,7 @@ int main(void) { @autoreleasepool {
     }];
     NSArray<NSDictionary *> *historyEvictionUnlocatedRows = [historyEvictionDecodedRows filteredArrayUsingPredicate:historyEvictionUnlocated];
     NSPredicate *historyEvictionNonEvictionDrop = [NSPredicate predicateWithBlock:^BOOL(NSDictionary *row, NSDictionary *bindings) {
-        (void)bindings; return [row[@"frame"] isEqual:@1] && [row[@"status"] isEqual:@"unknown"]
+        (void)bindings; return [row[@"index"] isEqual:@1] && [row[@"status"] isEqual:@"unknown"]
             && [row[@"reason"] isEqual:@"unknown-retention"] && row[@"roi"] == NSNull.null;
     }];
     NSArray<NSDictionary *> *historyEvictionNonEvictionRows =
@@ -467,7 +467,7 @@ int main(void) { @autoreleasepool {
     BOOL identityDirectoryUnlocked = chmod(identityDirectory.fileSystemRepresentation, 0700) == 0;
     check(failedSessionStarted && identityDirectoryCreated && identityDirectoryLocked && !failedFinalize
         && [finalError containsString:@"frame identity capture failed"]
-        && [finalError containsString:@"decoded identity frame 0 could not be appended"] && identityDirectoryUnlocked,
+        && [finalError containsString:@"decoded identity of still 0 could not be appended"] && identityDirectoryUnlocked,
         [NSString stringWithFormat:@"a decoded-frame artifact write error fails finalization (%@, %@)",
             finalError, directoryError.localizedDescription ?: @""]);
     free(identityError);
