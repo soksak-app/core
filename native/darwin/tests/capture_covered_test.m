@@ -14,6 +14,7 @@
 #import "window_facts.h"
 #import "private/webkit.h"
 #import "support/run_until.h"
+#import "support/person_window.h"
 #import "support/temporary_folder.h"
 
 @interface WKWebView (Presentation)
@@ -224,7 +225,10 @@ static void expectError(char *error, NSString *what, long code) {
     check([text containsString:want], [NSString stringWithFormat:@"%@ keeps the error code %@ (got \"%@\")", what, want, text]);
 }
 
-int main(void) { @autoreleasepool {
+int main(int argc, char **argv) {
+    int person = sp_person_child(argc, argv);
+    if (person >= 0) return person;
+    @autoreleasepool {
     fprintf(stderr, "START: covered window capture\n");
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
@@ -308,15 +312,15 @@ int main(void) { @autoreleasepool {
     }
     if (back.bytes != NULL) expectPixel(back, scale, 180, 280, 0x28c850, @"the child window");
 
-    NSWindow *cover = [[NSWindow alloc] initWithContentRect:NSMakeRect(100, 100, kWidth + 160, kHeight + 160)
-        styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
-    cover.releasedWhenClosed = NO;
-    cover.animationBehavior = NSWindowAnimationBehaviorNone;
-    cover.backgroundColor = [NSColor colorWithSRGBRed:1 green:0 blue:1 alpha:1];
-    [cover orderWindow:NSWindowAbove relativeTo:window.windowNumber];
-    // AppKit keeps the order in the open Core Animation transaction of the thread until the run loop commits it, so the window
-    // server lists the cover only after this commit.
-    [CATransaction flush];
+    // The cover is a window of another application, as the windows of a person are, so the order of the cover touches no window
+    // of this application. With a cover of this application the capture of the covered window held the window buttons that
+    // the captures before the cover did not. The person orders it directly above the child window, the front window of the
+    // group, and commits the order before it answers.
+    NSRect coverFrame = NSMakeRect(100, 100, kWidth + 160, kHeight + 160);
+    check(sp_person_start(argv[0]), @"the application of the person starts");
+    long coverNumber = sp_person_window(coverFrame, 0xff00ff);
+    check(coverNumber >= 0 && sp_person_order_above(coverNumber, child.windowNumber),
+        @"the window of the person is ordered above the window and its child");
     // A window behind other windows is occluded already, so the place of the cover in the window list says that it covers.
     __block NSInteger targetIndex = -1, childIndex = -1, coverIndex = -1;
     BOOL (^coverIsOver)(void) = ^BOOL {
@@ -326,14 +330,14 @@ int main(void) { @autoreleasepool {
         for (NSDictionary *entry in stack) {
             if ([entry[(id)kCGWindowNumber] longValue] == window.windowNumber) targetIndex = index;
             if ([entry[(id)kCGWindowNumber] longValue] == child.windowNumber) childIndex = index;
-            if ([entry[(id)kCGWindowNumber] longValue] == cover.windowNumber) coverIndex = index;
+            if ([entry[(id)kCGWindowNumber] longValue] == coverNumber) coverIndex = index;
             index++;
         }
         return coverIndex >= 0 && targetIndex > coverIndex && childIndex > coverIndex;
     };
     // The commit of the order returns after the window server has placed the cover.
     BOOL coverOver = coverIsOver();
-    check(coverOver && NSContainsRect(cover.frame, window.frame) && NSContainsRect(cover.frame, child.frame),
+    check(coverOver && NSContainsRect(coverFrame, window.frame) && NSContainsRect(coverFrame, child.frame),
         [NSString stringWithFormat:@"the cover is over the whole window and its child (cover %ld, window %ld, child %ld)",
             (long)coverIndex, (long)targetIndex, (long)childIndex]);
     check((window.occlusionState & NSWindowOcclusionStateVisible) == 0, @"the window server reports the window as occluded");
@@ -355,7 +359,7 @@ int main(void) { @autoreleasepool {
         expectPixel(covered, scale, 360, 128, 0x1032c0, @"the IOSurface layer");
         expectPixel(covered, scale, 240, 285, 0x333340, @"the window background");
         expectPixel(covered, scale, 180, 280, 0x28c850, @"the child window of the covered window");
-        // The cover is a window of the same application outside the list: the capture holds the listed windows only.
+        // The cover is a window outside the list: the capture holds the listed windows only.
         check(pixelsOfColor(covered, 0xff00ff) == 0, @"no pixel of the cover is in the capture");
     }
 
@@ -411,7 +415,8 @@ int main(void) { @autoreleasepool {
     // Which other application is in front belongs to the other processes, so the check judges only this process.
     check(NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier != getpid()
         && !NSRunningApplication.currentApplication.isActive, @"the capture does not bring the application to the front");
-    [cover close];
+    check(sp_person_close(coverNumber) && sp_person_active() == 0, @"the cover closes and the person never became active");
+    sp_person_end();
     [window removeChildWindow:child];
     [child close];
     [window close];
@@ -422,4 +427,5 @@ int main(void) { @autoreleasepool {
     if (failures) keepTemporaryFolder(directory);
     if (failures == 0) fprintf(stderr, "PASS: covered window capture\n");
     return failures == 0 ? 0 : 1;
-} }
+    }
+}
