@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
+import { cargoCommand } from '@soksak/window-check/cargo.mjs';
 import { auditDeclarations, auditHostContract, parseContractCases, GO_RUNS, RUST_RUNS, groupResults, goTestSourceFilesForRun, parseDeclarations, selectRustDeclarations, uncoveredCases } from '../test-hosts.mjs';
 
 const SPEC = `# Hosts
@@ -189,7 +190,7 @@ test('Go host run profiles preserve shared coverage with CGO0 for every mygo run
 
 test('every Rust run of the host tauriv2 builds each test target of its package, with the features that the target requires', { timeout: 60000 }, () => {
   // A cargo test target whose required features a run does not enable is skipped by cargo without a message, so its tests never run.
-  const metadata = spawnSync('cargo', ['metadata', '--locked', '--no-deps', '--format-version', '1'], { cwd: fileURLToPath(new URL('../../', import.meta.url)), encoding: 'utf8' });
+  const metadata = spawnSync(cargoCommand(), ['metadata', '--locked', '--no-deps', '--format-version', '1'], { cwd: fileURLToPath(new URL('../../', import.meta.url)), encoding: 'utf8' });
   assert.equal(metadata.status, 0, metadata.stderr);
   const packages = new Map(JSON.parse(metadata.stdout).packages.map((item) => [item.name, item]));
   const missing = [];

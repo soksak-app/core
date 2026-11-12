@@ -1403,6 +1403,7 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/test/cargo.test.mjs", id: "the cargo of PATH when the cargo folder of rustup holds none" },
       { file: "packages/window-check/test/cargo.test.mjs", id: "a CARGO that is no executable file is an error that names it" },
       { file: "packages/window-check/test/cargo.test.mjs", id: "no cargo in the cargo folder of rustup or in PATH is an error that names both" },
+      { file: "packages/window-check/test/cargo.test.mjs", id: "no script of the checkout starts cargo by its bare name" },
     ],
     expected: "Every script and check that starts cargo runs the path that cargoCommand of @soksak/window-check resolves: CARGO of the environment, which the Makefile exports, then $CARGO_HOME/bin or ~/.cargo/bin, then PATH, so it runs in a shell whose PATH holds no cargo folder.",
     levels: ["unit"],

@@ -1,9 +1,10 @@
 // The cargo that the scripts and the checks of the repository start: CARGO of the environment, then the cargo folder of rustup,
 // then PATH, the order of the Makefile.
 import assert from "node:assert/strict";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { cargoCommand } from "../cargo.mjs";
 
@@ -51,4 +52,26 @@ test("no cargo in the cargo folder of rustup or in PATH is an error that names b
   const root = folders(t, []);
   assert.throws(() => cargoCommand({ HOME: root, PATH: "/nonexistent-path-folder" }),
     new RegExp(`^Error: cargo is in neither ${join(root, ".cargo/bin")} nor PATH; rustup installs it in \\$CARGO_HOME/bin$`));
+});
+
+/** The JavaScript files of the scripts, the packages and the e2e folder of the checkout, without installed dependencies. */
+function scriptFiles(root) {
+  const found = [];
+  const walk = (folder) => {
+    for (const entry of readdirSync(folder, { withFileTypes: true })) {
+      if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
+      const path = join(folder, entry.name);
+      if (entry.isDirectory()) walk(path);
+      else if (/\.(?:mjs|js|cjs)$/.test(entry.name)) found.push(path);
+    }
+  };
+  for (const folder of ["scripts", "packages", "e2e"]) walk(join(root, folder));
+  return found;
+}
+
+test("no script of the checkout starts cargo by its bare name", () => {
+  const root = fileURLToPath(new URL("../../../", import.meta.url));
+  const bare = /\b(?:spawnSync|spawn|execFileSync|execFile|execFileAsync)\(\s*["'`]cargo["'`]/;
+  const starting = scriptFiles(root).filter((path) => bare.test(readFileSync(path, "utf8"))).map((path) => relative(root, path));
+  assert.deepEqual(starting, [], "these files start cargo from PATH instead of the cargo that cargoCommand resolves");
 });
