@@ -5,6 +5,7 @@
 // The test process is never active. The value of the real activation is a replacement of isActive and the buttons of a person
 // a replacement of pressedMouseButtons, both set before the virtual state replaces them, so these are what it reads as AppKit.
 #import <Cocoa/Cocoa.h>
+#import <QuartzCore/QuartzCore.h>
 #import <WebKit/WebKit.h>
 #import <objc/message.h>
 #import <objc/runtime.h>
@@ -263,6 +264,26 @@ static BOOL stayedBehind(void) {
     return NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier != getpid()
         && !NSRunningApplication.currentApplication.isActive;
 }
+// The order of windows in the window server, front to back, as their window numbers. AppKit holds an order in the open Core
+// Animation transaction of the thread until it commits, so the transaction is committed first. Only the given windows are read:
+// AppKit and the system also order windows of the application that the check does not make, and those come and go without it.
+static NSArray<NSNumber *> *serverOrder(NSArray<NSWindow *> *windows) {
+    [CATransaction flush];
+    NSArray *numbers = [windows valueForKey:@"windowNumber"];
+    NSArray *listed = [(NSArray *)CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly, kCGNullWindowID) autorelease];
+    NSMutableArray<NSNumber *> *order = [NSMutableArray array];
+    for (NSDictionary *info in listed) {
+        NSNumber *number = info[(id)kCGWindowNumber];
+        if ([numbers containsObject:number]) [order addObject:number];
+    }
+    return order;
+}
+// The classes of the windows of the application, front to back, as AppKit orders them.
+static NSString *applicationOrder(void) {
+    NSMutableArray *names = [NSMutableArray array];
+    for (NSWindow *shown in NSApp.orderedWindows) [names addObject:[NSString stringWithFormat:@"%@ %ld", shown.class, (long)shown.windowNumber]];
+    return [names componentsJoinedByString:@", "];
+}
 // The events native.input.virtual that block writes with the given phase and reason.
 static NSUInteger count(void (^block)(void), NSString *reason) {
     NSUInteger found = 0;
@@ -466,12 +487,22 @@ int main(void) { @autoreleasepool {
     check(held.count > 0 && ![held containsObject:@1], [NSString stringWithFormat:@"no page event carries the real button (%@)", held]);
     personButtons = 0;
 
-    // Any order to the front keeps the window where it is. An order of a window reaches the window server in the call, as the
-    // order of cover below shows, so the index is judged after the calls.
-    [window orderFront:nil];
-    [window makeKeyAndOrderFront:nil];
-    [window orderFrontRegardless];
-    check(window.orderedIndex == orderBefore, [NSString stringWithFormat:@"a virtual key window is not ordered to the front (%ld, %ld)", (long)window.orderedIndex, (long)orderBefore]);
+    // Any order to the front keeps the window where it is: each call is refused with its record, and the window server holds the
+    // windows of the check in the same order after the calls. The order is read around the calls and not against the start: a
+    // window of the application that the check does not make changes the index without the check.
+    printf("NOTE: the windows of the application before the order calls (index %ld, %ld at the start): %s\n",
+        (long)window.orderedIndex, (long)orderBefore, applicationOrder().UTF8String);
+    NSArray<NSWindow *> *own = @[cover, window];
+    NSArray<NSNumber *> *ownBefore = serverOrder(own);
+    NSUInteger orderRefusals = count(^{
+        [window orderFront:nil];
+        [window makeKeyAndOrderFront:nil];
+        [window orderFrontRegardless];
+    }, nil);
+    NSArray<NSNumber *> *ownAfter = serverOrder(own);
+    check(orderRefusals == 3 && ownBefore.count == 2 && [ownAfter isEqualToArray:ownBefore],
+        [NSString stringWithFormat:@"a virtual key window is not ordered to the front (refused %lu, server order %@ before, %@ after)",
+            (unsigned long)orderRefusals, [ownBefore componentsJoinedByString:@" "], [ownAfter componentsJoinedByString:@" "]]);
     NSInteger coverBefore = cover.orderedIndex;
     [cover orderFront:nil];
     check(cover.orderedIndex <= coverBefore, @"another window still orders to the front");
