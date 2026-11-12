@@ -48,6 +48,10 @@ size_t surfaceLayoutTraceStop(double *out, size_t capacity);
 uint64_t surfaceLayoutTraceRequested(void);
 // Diagnostics only. Records the time at which the presentation of the transaction of the ticket was confirmed.
 void surfaceLayoutTracePresented(uint64_t ticket);
+// Diagnostics only. The display refresh of a transaction sent to the render server at flushed (ms), read from a refresh callback whose
+// refresh came at timestamp and whose next refresh comes at target (ms): refreshed is the first refresh at or after flushed on the
+// grid of that callback, and displayed the refresh that follows it, whenever the callback was delivered.
+void surfaceLayoutTraceRefresh(double flushed, double timestamp, double target, double *refreshed, double *displayed);
 // The key wait of a window (docs/spec/native-surfaces.md#keyboard-of-a-surface). The release of a left press on the workbench of a
 // window opens the wait for the decision of the workbench, and surfaceLayoutKeysWaitForModal opens the wait for a modal web view
 // that takes the keyboard. Only keys wait, in their order, while either waits; a press of the window ends the wait for the

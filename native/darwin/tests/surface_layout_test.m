@@ -904,7 +904,28 @@ static SPWait waitWhileBusy(WKWebView *main, WKWebView *busy, SPPageScheme *sche
     return (SPWait){ took, heldAtEnd, requested, finished, displayed, nextRefresh };
 }
 
+// The refresh of a layout trace record is the first refresh of the display at or after the flush of its transaction, on the grid of
+// the refresh callback that reads it, so a callback that the main thread delivers late, or one that reports the refresh before the
+// flush, names the same refresh as a callback that comes at once.
+static void checkTraceRefreshGrid(void) {
+    struct { const char *name; double timestamp, target, refreshed, displayed; } cases[] = {
+        {"a callback at the first refresh after the flush", 115, 125, 115, 125},
+        {"a callback that the main thread delivered two refreshes late", 135, 145, 115, 125},
+        {"a callback that reports the refresh before the flush", 105, 115, 115, 125},
+        {"a callback at a refresh that coincides with the flush", 112, 122, 112, 122},
+    };
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        double refreshed = NAN, displayed = NAN;
+        surfaceLayoutTraceRefresh(112, cases[i].timestamp, cases[i].target, &refreshed, &displayed);
+        check(refreshed == cases[i].refreshed && displayed == cases[i].displayed,
+            [NSString stringWithFormat:@"%s: a transaction flushed at 112 ms with the callback timestamp %.0f and target %.0f is "
+                "refreshed at %.3f and displayed at %.3f, want %.0f and %.0f", cases[i].name, cases[i].timestamp,
+                cases[i].target, refreshed, displayed, cases[i].refreshed, cases[i].displayed]);
+    }
+}
+
 int main(void) { @autoreleasepool {
+    checkTraceRefreshGrid();
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
