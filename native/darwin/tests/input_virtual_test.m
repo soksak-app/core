@@ -630,11 +630,29 @@ int main(void) { @autoreleasepool {
     check(driven.moves == 1, [NSString stringWithFormat:@"a real move does not reach the virtual key window (%lu)", (unsigned long)driven.moves]);
     check(pointer(next, 30, 30, 0) == SP_INPUT_DELIVERED && sp_input_virtual_is(next) && !sp_input_virtual_is(driven),
         @"a move of another window moves the virtual key window there");
+    NSUInteger movesBefore = driven.moves;
     realMove(driven);
-    check(driven.moves == 1,
+    check(driven.moves == movesBefore,
         [NSString stringWithFormat:@"a real move does not reach a window that the emulated input drove before another window (%lu)", (unsigned long)driven.moves]);
-    sp_input_virtual_end("no state");
+    // The close of the virtual key window ends the state and not the windows that the emulated input drove.
     [next close];
+    check(!sp_input_virtual_any(), @"the close of the virtual key window ends the state");
+    movesBefore = driven.moves;
+    realMove(driven);
+    check(driven.moves == movesBefore,
+        [NSString stringWithFormat:@"a real move does not reach a window that the emulated input drove after the virtual key window closed (%lu)", (unsigned long)driven.moves]);
+    // A real activation ends them: the person's pointer reaches each window again, also after the application is no longer active.
+    reallyActive = YES;
+    [NSNotificationCenter.defaultCenter postNotificationName:NSApplicationDidBecomeActiveNotification object:NSApp];
+    movesBefore = driven.moves;
+    realMove(driven);
+    check(driven.moves == movesBefore + 1,
+        [NSString stringWithFormat:@"a real move reaches a window that the emulated input drove after a real activation (%lu)", (unsigned long)driven.moves]);
+    reallyActive = NO;
+    movesBefore = driven.moves;
+    realMove(driven);
+    check(driven.moves == movesBefore + 1,
+        [NSString stringWithFormat:@"a real move reaches a window that the emulated input drove after the activation ended (%lu)", (unsigned long)driven.moves]);
     [next release];
     [driven close];
     [driven release];
