@@ -642,6 +642,7 @@ const FEATURE_LINKS = [
       { file: "native/darwin/src/webview_geometry.m", symbol: "self.layer.masksToBounds = YES;" },
       { file: "packages/host/rust/src/surfaces.rs", symbol: "fn begin_and_apply_layout(" },
       { file: "native/darwin/src/capture.m", symbol: "static void refuseStill(SPCaptureRecording *recording, NSUInteger index, uint64_t requested) {" },
+      { file: "native/darwin/src/capture.m", symbol: "- (void)readWindowsOfNextStill {" },
       { file: "packages/host/rust/src/surfaces.rs", symbol: "fn commit_presentation<T>(" },
     ],
     tests: [
@@ -692,9 +693,10 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/layout_order_test.go", id: "TestTheGeometryOfAPreparationIsCommittedWithItsTicketAfterThePresentationNotice" },
       { file: "native/darwin/tests/capture_pressure_test.m", id: "still 9 fails at its request while stills 1 to 8 wait for their image" },
       { file: "native/darwin/tests/capture_pressure_test.m", id: "the refused still is an error of the recording, and the held stills are written" },
+      { file: "native/darwin/tests/capture_metadata_test.m", id: "a callback whose window read finds an earlier read waiting for the window server reads no windows and is counted" },
       { file: "packages/host/rust/src/surfaces_test.rs", id: "the_geometry_of_a_preparation_is_committed_with_its_ticket_after_the_presentation_notice" },
     ],
-    expected: "A window recording is a still of the window and its child windows at each multiple of its gap: a check reads the request and completion time of each still, judges a state shown no later than the completion of the first still requested at or after it, checks the still rows of the stop against the plan and each row against its own fields, and fails a recording that lost a still in the time that its judgment sees, naming the lost stills. In place of a judgment on the pixels of a recording, at the commit of each move of a drag the surface host stands on the slot of the move, masks its content to its bounds and holds the clip view of its image region in its native plane, and the move commits through the presentation of the page that drew it; each host sets the frames of a preparation only in the layout transaction of its ticket and commits that ticket with those frames unchanged only after the presentation notice of the page calls back. A still whose request finds 8 stills waiting for their image fails at once with `capture in-flight capacity exceeded (8 stills)`, an error of the recording, instead of adding a request to a window server that has not answered.",
+    expected: "A window recording is a still of the window and its child windows at each multiple of its gap: a check reads the request and completion time of each still, judges a state shown no later than the completion of the first still requested at or after it, checks the still rows of the stop against the plan and each row against its own fields, and fails a recording that lost a still in the time that its judgment sees, naming the lost stills. In place of a judgment on the pixels of a recording, at the commit of each move of a drag the surface host stands on the slot of the move, masks its content to its bounds and holds the clip view of its image region in its native plane, and the move commits through the presentation of the page that drew it; each host sets the frames of a preparation only in the layout transaction of its ticket and commits that ticket with those frames unchanged only after the presentation notice of the page calls back. A still whose request finds 8 stills waiting for their image fails at once with `capture in-flight capacity exceeded (8 stills)`, an error of the recording, instead of adding a request to a window server that has not answered. A display-link callback reads only the AppKit windows on the main thread and asks the window server on a capture queue; while an earlier read waits, the callback reads none and the skip is counted in the lifecycle events.",
     levels: ["unit"],
   },
   {
@@ -10764,7 +10766,7 @@ const FEATURE_LINKS = [
     id: "F239-47-30-3",
     implementation: [
       { file: "native/darwin/src/capture.m", symbol: "- (void)startDisplayLinkObservation {" },
-      { file: "native/darwin/src/capture.m", symbol: "- (void)recordDisplayLinkTimestamp:(double)timestamp targetTimestamp:(double)targetTimestamp duration:(double)duration" },
+      { file: "native/darwin/src/capture.m", symbol: "- (NSMutableDictionary *)recordDisplayLinkTimestamp:(double)timestamp targetTimestamp:(double)targetTimestamp duration:(double)duration" },
       { file: "native/darwin/src/capture.m", symbol: "static bool finalizeCaptureArtifacts(SPCaptureRecording *recording)" },
       { file: "packages/host/go/src/diagnostics.go", symbol: "func captureStopPayload(" },
       { file: "packages/host/rust/src/recording.rs", symbol: "pub fn stop_payload(" },

@@ -6,7 +6,8 @@
 // - the display-link trace in display-link.json: unavailable without observations, ordered observations with window state,
 //   hidden and off-display observations, rejected clocks, a changed timebase and the 4096-record bound;
 // - the release of the display-link resources on the main thread;
-// - the lifecycle debug events of a recording (start, first-still, still-failed, stop, end) and their fields.
+// - the lifecycle debug events of a recording (start, first-still, still-failed, stop, end) and their fields;
+// - the window read of a display-link callback, which is skipped and counted while an earlier read waits for the window server.
 #import "../src/capture.m"
 #import "support/records.h"
 #import "support/run_until.h"
@@ -611,6 +612,23 @@ int main(void) { @autoreleasepool {
     const int8_t defaultPolicy[SP_CLASS_COUNT] = {SP_EVENT_ERROR, SP_EVENT_ERROR, SP_EVENT_ERROR, SP_EVENT_ERROR, SP_EVENT_ERROR};
     uint64_t lifecycleRequested = mach_absolute_time();
     check(sp_event_set_policy(lifecyclePolicy), @"the fixture enables lifecycle debug events before the recording");
+    // While a window server read waits on captureWindowReads, the read of the next callback is skipped and counted, and the
+    // main thread does not wait for the held read.
+    dispatch_semaphore_t readsHeld = dispatch_semaphore_create(0);
+    dispatch_async(captureWindowReads, ^{ dispatch_semaphore_wait(readsHeld, DISPATCH_TIME_FOREVER); });
+    [lifecycle readWindowsOfNextStill];
+    [lifecycle readWindowsOfNextStill];
+    BOOL skippedWhileHeld = NO;
+    @synchronized (lifecycle) { skippedWhileHeld = lifecycle.readingWindows && lifecycle.skippedWindowReads == 1; }
+    dispatch_semaphore_signal(readsHeld);
+    dispatch_sync(captureWindowReads, ^{});
+    dispatch_release(readsHeld);
+    BOOL readSettled = NO;
+    @synchronized (lifecycle) {
+        readSettled = !lifecycle.readingWindows && [[lifecycle currentTarget].error isEqual:@"window 41 is not on screen"];
+    }
+    check(skippedWhileHeld && readSettled,
+        @"a callback whose window read finds an earlier read waiting for the window server reads no windows and is counted");
     NSArray<NSDictionary *> *events = capturedEvents(^{
         emitLifecycle(lifecycle, @"start", SP_EVENT_DEBUG, nil, nil);
         stillImage(lifecycle, 0, opaquePixels(8, 4, 60), 8, 4, CGRectMake(0, 0, 4, 2), lifecycleRequested, lifecycleRequested + 1000);
@@ -640,9 +658,11 @@ int main(void) { @autoreleasepool {
             && [fields[@"plannedStills"] isEqual:@2]
             && [fields[@"machTimebaseNumerator"] unsignedIntValue] == actualTimebase.numer
             && [fields[@"machTimebaseDenominator"] unsignedIntValue] == actualTimebase.denom
-            && fields[@"written"] != nil && fields[@"settled"] != nil && fields[@"reason"] != nil;
+            && fields[@"written"] != nil && fields[@"settled"] != nil && [fields[@"skippedWindowReads"] isEqual:@1]
+            && fields[@"reason"] != nil;
     }
-    check(everyEventHasFields, @"every lifecycle event carries the session, window, plan, timebase and outcome counts");
+    check(everyEventHasFields,
+        @"every lifecycle event carries the session, window, plan, timebase, outcome counts and skipped window reads");
     check([firstStill[@"index"] isEqual:@0] && [firstStill[@"plannedMachTicks"] isEqual:lifecycle.rows[0][@"planned"]]
         && [firstStill[@"requestedMachTicks"] isEqual:tickString(lifecycleRequested)]
         && [firstStill[@"completedMachTicks"] isEqual:tickString(lifecycleRequested + 1000)]

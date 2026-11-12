@@ -113,19 +113,29 @@ static BOOL windowBounds(NSDictionary *info, CGRect *bounds) {
     return [bound isKindOfClass:NSDictionary.class] && CGRectMakeWithDictionaryRepresentation((CFDictionaryRef)bound, bounds);
 }
 
-// Resolves what a still of windowNumber takes, on the main thread. In window mode these are the window and its child windows
-// (recursively) that the window server lists on screen, in its front-to-back order, so a child ordered below the window stays
-// below it; with display, every on-screen window of this process on the display that holds the centre of the window.
-static SPCaptureTarget *resolveTargetOnMain(long windowNumber, BOOL display) {
-    NSCAssert(NSThread.isMainThread, @"the capture reads its windows on the main thread");
-    NSString *notOnScreen = [NSString stringWithFormat:@"window %ld is not on screen", windowNumber];
+// The windows that AppKit shows of windowNumber, read on the main thread: the window and its child windows (recursively), or nil
+// and the reason when the window is not shown.
+static NSSet<NSNumber *> *shownWindowsOnMain(long windowNumber, NSString **failure) {
+    NSCAssert(NSThread.isMainThread, @"the capture reads its AppKit windows on the main thread");
     NSWindow *window = nil;
     for (NSWindow *candidate in NSApp.windows) {
         if (candidate.windowNumber == windowNumber) { window = candidate; break; }
     }
-    if (window == nil || windowNumber <= 0 || !window.isVisible) return failedTarget(notOnScreen);
+    if (window == nil || windowNumber <= 0 || !window.isVisible) {
+        *failure = [NSString stringWithFormat:@"window %ld is not on screen", windowNumber];
+        return nil;
+    }
     NSMutableSet<NSNumber *> *numbers = [NSMutableSet set];
     collectWindows(window, numbers);
+    return numbers;
+}
+
+// Resolves what a still of windowNumber takes from the windows that AppKit shows of it (shownWindowsOnMain), through the window
+// server, on any thread. In window mode these are the window and its child windows that the window server lists on screen, in
+// its front-to-back order, so a child ordered below the window stays below it; with display, every on-screen window of this
+// process on the display that holds the centre of the window.
+static SPCaptureTarget *resolveShownTarget(long windowNumber, BOOL display, NSSet<NSNumber *> *numbers) {
+    NSString *notOnScreen = [NSString stringWithFormat:@"window %ld is not on screen", windowNumber];
     NSArray<NSDictionary *> *list = nil;
     if (numbers.count == 1 && !display) {
         // A window without child windows needs no order, so the window server describes that window only.
@@ -177,10 +187,26 @@ static SPCaptureTarget *resolveTargetOnMain(long windowNumber, BOOL display) {
     return target;
 }
 
+// Resolves what a still of windowNumber takes in one main-thread step: still 0, which is taken in the step that puts a held
+// window on screen.
+static SPCaptureTarget *resolveTargetOnMain(long windowNumber, BOOL display) {
+    NSString *failure = nil;
+    NSSet<NSNumber *> *numbers = shownWindowsOnMain(windowNumber, &failure);
+    return numbers ? resolveShownTarget(windowNumber, display, numbers) : failedTarget(failure);
+}
+
+// Resolves what a still of windowNumber takes from a thread other than the main thread: only the AppKit windows are read on the
+// main thread, and the window server is asked on the calling thread.
 static SPCaptureTarget *resolveTarget(long windowNumber, BOOL display) {
-    __block SPCaptureTarget *target = nil;
-    onMain(^{ target = [resolveTargetOnMain(windowNumber, display) retain]; });
-    return [target autorelease];
+    __block NSSet<NSNumber *> *numbers = nil;
+    __block NSString *failure = nil;
+    onMain(^{
+        numbers = [shownWindowsOnMain(windowNumber, &failure) retain];
+        [failure retain];
+    });
+    [numbers autorelease];
+    [failure autorelease];
+    return numbers ? resolveShownTarget(windowNumber, display, numbers) : failedTarget(failure);
 }
 
 // The rectangle on screen that an image of target covers, read right after the image: the window server bounds of its windows,
@@ -279,6 +305,9 @@ static const NSUInteger kCaptureInFlight = 8;
 // is the main queue, so a busy main thread does not move a request.
 static dispatch_queue_t captureRequests;
 static dispatch_queue_t captureWorkers;
+// The serial queue that asks the window server for the windows of the next still and for the windows in front of a covered window,
+// after a display-link callback read the AppKit windows on the main thread: the main thread never waits for the window server.
+static dispatch_queue_t captureWindowReads;
 
 static void prepareCaptureQueues(void) {
     static dispatch_once_t once;
@@ -289,6 +318,8 @@ static void prepareCaptureQueues(void) {
             dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL, QOS_CLASS_USER_INTERACTIVE, 0));
         captureWorkers = dispatch_queue_create("sp.capture.stills",
             dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_CONCURRENT, QOS_CLASS_USER_INTERACTIVE, 0));
+        captureWindowReads = dispatch_queue_create("sp.capture.windows",
+            dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL, QOS_CLASS_USER_INTERACTIVE, 0));
     });
 }
 
@@ -341,6 +372,10 @@ static void prepareCaptureQueues(void) {
 // Whether the window was covered at the last display-link callback, so the first callback of a covered stretch reads the windows in
 // front of it (sp_window_in_front).
 @property (nonatomic) BOOL displayLinkCovered;
+// Whether a read of the windows of the next still waits on captureWindowReads, and the display-link callbacks that read no windows
+// because one did. Guarded by the recording.
+@property (nonatomic) BOOL readingWindows;
+@property (nonatomic) NSUInteger skippedWindowReads;
 - (SPCaptureTarget *)currentTarget;
 - (uint64_t)plannedTicks:(NSUInteger)index;
 - (void)startDisplayLinkObservation;
@@ -364,8 +399,12 @@ static void emitLifecycle(SPCaptureRecording *recording, NSString *phase, uint8_
     if (!sp_event_gate(SP_CLASS_LIFECYCLE, level)) return;
     id null = NSNull.null;
     int written = 0;
-    NSUInteger outcomes = 0;
-    @synchronized (recording) { written = recording.written; outcomes = recording.outcomes; }
+    NSUInteger outcomes = 0, skipped = 0;
+    @synchronized (recording) {
+        written = recording.written;
+        outcomes = recording.outcomes;
+        skipped = recording.skippedWindowReads;
+    }
     NSDictionary *fields = @{
         @"session": recording.session ?: @"", @"phase": phase,
         @"windowNumber": @(recording.windowNumber), @"display": @(recording.display),
@@ -376,7 +415,7 @@ static void emitLifecycle(SPCaptureRecording *recording, NSString *phase, uint8_
         @"completedMachTicks": still[@"completed"] ?: null,
         @"machTimebaseNumerator": @(recording.timebase.numer),
         @"machTimebaseDenominator": @(recording.timebase.denom),
-        @"written": @(written), @"settled": @(outcomes),
+        @"written": @(written), @"settled": @(outcomes), @"skippedWindowReads": @(skipped),
         @"reason": reason ?: null,
     };
     NSError *encodingError = nil;
@@ -492,8 +531,8 @@ static void emitLifecycle(SPCaptureRecording *recording, NSString *phase, uint8_
     double mediaClockTime = CACurrentMediaTime();
     uint64_t mediaClockAfter = captureTicks();
     // The windows of the next still follow the windows of this refresh: a child window that appeared since the last refresh is in
-    // the next still.
-    [self replaceTarget:resolveTargetOnMain(self.windowNumber, self.display)];
+    // the next still. The callback reads the AppKit windows; the window server is asked on captureWindowReads.
+    [self readWindowsOfNextStill];
     mach_timebase_info_data_t timebase = {};
     if (captureReadTimebase(&timebase) != KERN_SUCCESS) {
         [self rejectDisplayLinkObservation:@"mach_timebase_info failed for a display-link callback"];
@@ -509,11 +548,40 @@ static void emitLifecycle(SPCaptureRecording *recording, NSString *phase, uint8_
         wasCovered = self.displayLinkCovered;
         self.displayLinkCovered = occluded;
     }
-    NSArray *inFront = occluded && !wasCovered ? (sp_window_in_front(window.windowNumber) ?: @[]) : nil;
-    [self recordDisplayLinkTimestamp:link.timestamp targetTimestamp:link.targetTimestamp duration:link.duration
-        callbackTime:callbackTime mediaClockTime:mediaClockTime mediaClockAfter:mediaClockAfter
+    NSMutableDictionary *observation = [self recordDisplayLinkTimestamp:link.timestamp targetTimestamp:link.targetTimestamp
+        duration:link.duration callbackTime:callbackTime mediaClockTime:mediaClockTime mediaClockAfter:mediaClockAfter
         timebase:timebase windowNumber:window.windowNumber displayID:displayID
-        visible:window.isVisible occluded:occluded applicationActive:NSApp.isActive inFront:inFront];
+        visible:window.isVisible occluded:occluded applicationActive:NSApp.isActive inFront:nil];
+    // The window list of the window server is read on captureWindowReads right after the callback, and its windows in front are
+    // added to the observation of the callback.
+    if (observation != nil && occluded && !wasCovered) {
+        long number = window.windowNumber;
+        dispatch_async(captureWindowReads, ^{ @autoreleasepool {
+            NSArray *inFront = sp_window_in_front(number) ?: @[];
+            @synchronized (self) { observation[@"inFront"] = inFront; }
+        } });
+    }
+}
+
+// Reads on the main thread the AppKit windows of the next still and asks the window server for their order on captureWindowReads.
+// While an earlier read waits there, the callback reads no windows, the next still keeps the windows of the earlier read, and
+// the skip is counted (skippedWindowReads of the lifecycle events), so a slow window server is not given a request per refresh.
+- (void)readWindowsOfNextStill {
+    @synchronized (self) {
+        if (self.readingWindows) {
+            self.skippedWindowReads++;
+            return;
+        }
+        self.readingWindows = YES;
+    }
+    NSString *failure = nil;
+    NSSet<NSNumber *> *numbers = shownWindowsOnMain(self.windowNumber, &failure);
+    long number = self.windowNumber;
+    BOOL display = self.display;
+    dispatch_async(captureWindowReads, ^{ @autoreleasepool {
+        [self replaceTarget:numbers ? resolveShownTarget(number, display, numbers) : failedTarget(failure)];
+        @synchronized (self) { self.readingWindows = NO; }
+    } });
 }
 
 - (void)rejectDisplayLinkObservation:(NSString *)reason {
@@ -527,16 +595,17 @@ static void emitLifecycle(SPCaptureRecording *recording, NSString *phase, uint8_
     }
 }
 
-- (void)recordDisplayLinkTimestamp:(double)timestamp targetTimestamp:(double)targetTimestamp duration:(double)duration
+- (NSMutableDictionary *)recordDisplayLinkTimestamp:(double)timestamp targetTimestamp:(double)targetTimestamp duration:(double)duration
     callbackTime:(uint64_t)callbackTime mediaClockTime:(double)mediaClockTime mediaClockAfter:(uint64_t)mediaClockAfter
     timebase:(mach_timebase_info_data_t)timebase windowNumber:(long)windowNumber
     displayID:(NSNumber *)displayID visible:(BOOL)visible occluded:(BOOL)occluded applicationActive:(BOOL)applicationActive
     inFront:(NSArray *)inFront {
+    NSMutableDictionary *recorded = nil;
     @synchronized (self) {
-        if (self.displayLinkStopped) return;
+        if (self.displayLinkStopped) return nil;
         if ([self.displayLinkState isEqual:@"incomplete"]) {
             self.omittedDisplayLinkObservations++;
-            return;
+            return nil;
         }
         BOOL valid = isfinite(timestamp) && isfinite(targetTimestamp) && isfinite(duration)
             && isfinite(mediaClockTime) && timestamp > 0 && targetTimestamp > timestamp && duration > 0
@@ -603,6 +672,7 @@ static void emitLifecycle(SPCaptureRecording *recording, NSString *phase, uint8_
             }];
             if (inFront) observation[@"inFront"] = inFront;
             [self.displayLinkObservations addObject:observation];
+            recorded = observation;
             self.lastDisplayLinkTimestampMach = timestampMach;
             self.lastDisplayLinkCallbackTime = callbackTime;
             self.displayLinkTimebaseNumerator = timebase.numer;
@@ -619,6 +689,7 @@ static void emitLifecycle(SPCaptureRecording *recording, NSString *phase, uint8_
             }
         }
     }
+    return recorded;
 }
 
 - (NSDictionary *)displayLinkRecord {
@@ -626,7 +697,8 @@ static void emitLifecycle(SPCaptureRecording *recording, NSString *phase, uint8_
         return @{
             @"state": self.displayLinkState ?: @"unavailable",
             @"reason": self.displayLinkReason ?: @"display-link state was not recorded",
-            @"observations": [[self.displayLinkObservations copy] autorelease],
+            // Each observation is copied under the lock, because a read on captureWindowReads adds the windows in front to it.
+            @"observations": [[[NSArray alloc] initWithArray:self.displayLinkObservations copyItems:YES] autorelease],
             @"omittedObservations": @(self.omittedDisplayLinkObservations),
         };
     }
@@ -1238,6 +1310,8 @@ static bool writeCaptureDisplayLinkTrace(SPCaptureRecording *recording) {
 // Finalizes the artifacts of a recording whose stills all settled: writes stills.jsonl and display-link.json.
 static bool finalizeCaptureArtifacts(SPCaptureRecording *recording) {
     [recording stopDisplayLinkObservation];
+    // The window reads that the last callbacks queued add their windows in front to the record before it is written.
+    dispatch_sync(captureWindowReads, ^{});
     bool stillsWritten = writeCaptureStills(recording);
     bool displayLinkWritten = writeCaptureDisplayLinkTrace(recording);
     return stillsWritten && displayLinkWritten;
