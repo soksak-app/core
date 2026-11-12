@@ -1357,7 +1357,7 @@ function displayLinkTimes(path) {
           "and refresh period, so its lateness cannot be told");
       }
       return { at: machMs(row.callbackTime, row.machTimebaseNumerator, row.machTimebaseDenominator),
-        late: (row.callbackMediaTime - row.timestamp) * 1000, period: row.duration * 1000 };
+        late: (row.callbackMediaTime - row.timestamp) * 1000, period: row.duration * 1000, occluded: row.occluded === true };
     }),
   };
 }
@@ -1388,6 +1388,19 @@ function displayLinkSilences(callbacks, at, end) {
         `${(next.at - callback.at).toFixed(0)}ms (the display link received no vsync)`);
   });
   return told;
+}
+
+/**
+ * The display-link callbacks within the wait from `at` to `end` at which no part of the window showed (`occluded`, read from
+ * NSWindow.occlusionState at the callback), told with their count among the callbacks of the wait and the first of them, or
+ * an empty text when the window showed at each of them.
+ */
+function coveredCallbacks(callbacks, at, end) {
+  const inWait = callbacks.filter((callback) => callback.at >= at && callback.at < end);
+  const covered = inWait.filter((callback) => callback.occluded);
+  if (covered.length === 0) return "";
+  return `, and no part of the window showed (NSWindow occlusion) at ${covered.length} of its ${inWait.length} display-link ` +
+    `callbacks in that time, the first at ${covered[0].at.toFixed(1)}ms`;
 }
 
 /**
@@ -1435,7 +1448,8 @@ function longestWait(changes, frames) {
  * that the host began in it and the commit time of each layout committed in it (`layouts`, by default those of the stop reply),
  * and each silence of the display link of the window in it, told as a busy main thread or as refreshes that did not reach the
  * window, so it tells a main thread that stopped from a transaction that waited for its commit and from committed layouts whose
- * frames did not come. The recording keeps the layouts that it was judged by in layouts.json, because the layouts of a drag
+ * frames did not come, and the display-link callbacks in it at which no part of the window showed, so it tells a covered window
+ * from one in front. The recording keeps the layouts that it was judged by in layouts.json, because the layouts of a drag
  * come with its reply and not with the stop reply. `what` names one change. A recording in which the check asked for no change
  * owes no frame.
  */
@@ -1465,6 +1479,7 @@ export function judgeShownChanges(stopped, changes, { layouts = stopped.layouts,
       ? "the display link of the window called back at every refresh of it"
       : `the display link of the window was silent for longer than two refreshes ` +
         `${silences.length === 1 ? "once" : `${silences.length} times`}: ${silences.join("; ")}`;
+    mainThread += coveredCallbacks(displayLink.callbacks, worst.at, end);
   }
   const final = change.to === undefined ? "" : `, its final state displayed at ${change.to.toFixed(1)}ms`;
   const shown = worst.next === null
