@@ -685,8 +685,9 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/test/recording.test.mjs", id: "[\"without the frame of a written still\"," },
       { file: "packages/window-check/test/recording.test.mjs", id: "[\"with a frame file of no written still\"," },
       { file: "native/darwin/tests/surface_layout_test.m", id: "clips its content to the slot of the move at its commit" },
+      { file: "native/darwin/tests/surface_layout_test.m", id: "commits its native frame with the presentation of the page that drew it" },
     ],
-    expected: "A window recording is a still of the window and its child windows at each multiple of its gap: a check reads the request and completion time of each still, judges a state shown no later than the completion of the first still requested at or after it, checks the still rows of the stop against the plan and each row against its own fields, and fails a recording that lost a still in the time that its judgment sees, naming the lost stills. In place of a judgment on the pixels of a recording, at the commit of each move of a drag the surface host stands on the slot of the move, masks its content to its bounds and holds the clip view of its image region in its native plane.",
+    expected: "A window recording is a still of the window and its child windows at each multiple of its gap: a check reads the request and completion time of each still, judges a state shown no later than the completion of the first still requested at or after it, checks the still rows of the stop against the plan and each row against its own fields, and fails a recording that lost a still in the time that its judgment sees, naming the lost stills. In place of a judgment on the pixels of a recording, at the commit of each move of a drag the surface host stands on the slot of the move, masks its content to its bounds and holds the clip view of its image region in its native plane, and the move commits through the presentation of the page that drew it.",
     levels: ["unit"],
   },
   {

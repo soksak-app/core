@@ -567,8 +567,8 @@ static BOOL presentRegionRaster(void *region, uint64_t raster) {
 // A drag of the main page through the input path of the host: each move opens a transaction, the page moves its DOM border
 // in its pointermove handler, the transaction waits for the presentation of that DOM, commits, and the window is captured one refresh
 // of the screen after the commit. The layout trace of each move judges it: its ticket, its begin, its commit and the time it was
-// sent to the render server; the surface host read back at its commit judges its clip: the slot of the move, its mask and its native
-// plane. The recording and the captures are evidence of the move and are not judged. The conditions of the application are added one
+// sent to the render server, and its commit path, the presentation of the page that drew the move; the surface host read back at
+// its commit judges its clip: the slot of the move, its mask and its native plane. The recording and the captures are evidence of the move and are not judged. The conditions of the application are added one
 // at a time (docs/features.md, F752): ownTab gives the joined tab view a web process of its own, as a plugin view has, and
 // rasterRefreshes keeps the transaction open for that many refreshes after the presentation callback of the DOM, as the raster
 // wait of the image regions keeps it before the host commits; with imageRegion the surface holds an image region whose raster of
@@ -687,6 +687,12 @@ static void checkCommitFrame(WKWebViewConfiguration *configuration, NSString *va
         check(traced == 1 && timeline[1] <= timeline[7] && timeline[7] <= ended, [NSString stringWithFormat:
             @"%@: the trace records when the commit of move %d was sent to the render server, before the refresh after it "
             "(begun %.3f, flushed %.3f, refreshed by %.3f)", variant, move, timeline[1], timeline[7], ended]);
+        // The host commits a ticket only after the page that drew its layout presented: the commit of the presentation, or its
+        // deferral to the last joined view. Every other path (a page start, an abandon, a cancel, a press or key) commits without
+        // that presentation.
+        check(traced == 1 && (timeline[5] == SURFACE_LAYOUT_COMMIT_PRESENT || timeline[5] == SURFACE_LAYOUT_COMMIT_VIEW_JOIN),
+            [NSString stringWithFormat:@"%@: move %d commits its native frame with the presentation of the page that drew it "
+                "(path %.0f)", variant, move, timeline[5]]);
         NSString *stillPath = [[NSString stringWithUTF8String:directory] stringByAppendingPathComponent:
             [NSString stringWithFormat:@"after-move-%d.png", move]];
         char *stillError = NULL;
