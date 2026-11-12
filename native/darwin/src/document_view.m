@@ -355,6 +355,10 @@ static NSString *binaryRefusal(SPBinaryStore *store, NSUInteger length, NSString
 @property(copy) NSURL *committedURL;
 // The navigation that was last counted in navigations, so a navigation is counted once, when it starts.
 @property(retain) WKNavigation *countedNavigation;
+// The navigations that a requested navigation replaced before they ended. WebKit can deliver the start of such a navigation
+// after the request that replaced it, and then its cancellation; neither changes the navigation in progress, so the end of a
+// replaced load is not reported. A navigation leaves the set when it ends or fails.
+@property(retain) NSMutableSet<WKNavigation *> *replacedNavigations;
 // The number of navigations that the document has started. A progress change of a navigation does not change it, so the host
 // clears the ready document of a view only when a new navigation starts (docs/spec/native-surfaces.md, document-state).
 @property unsigned long long navigations;
@@ -784,6 +788,7 @@ static void sendBody(id<WKURLSchemeTask> task, NSData *data) {
     [_navigation release];
     [_committedURL release];
     [_countedNavigation release];
+    [_replacedNavigations release];
     [_eventMonitor release];
     [_webSurface release];
     [self stopHiddenTimer];
@@ -944,6 +949,10 @@ static void sendBody(id<WKURLSchemeTask> task, NSData *data) {
 }
 
 - (void)request:(WKNavigation *)navigation {
+    if (self.navigation && navigation != self.navigation) {
+        if (!self.replacedNavigations) self.replacedNavigations = [NSMutableSet set];
+        [self.replacedNavigations addObject:self.navigation];
+    }
     [self countNavigation:navigation];
     self.navigation = navigation;
     [self report];
@@ -964,10 +973,14 @@ static void sendBody(id<WKURLSchemeTask> task, NSData *data) {
 
 // The navigation finished. If it is not the navigation in progress, it is a replaced navigation and is ignored.
 - (void)settle:(WKNavigation *)navigation {
+    if (navigation) [self.replacedNavigations removeObject:navigation];
     if (navigation == self.navigation) self.navigation = nil;
 }
 
+// A navigation that the page or the document starts replaces the one in progress. The start of a navigation that a request
+// replaced before it started is not a new navigation: it is not counted and does not take the place of the request.
 - (void)webView:(WKWebView *)view didStartProvisionalNavigation:(WKNavigation *)navigation {
+    if (navigation && [self.replacedNavigations containsObject:navigation]) return;
     [self countNavigation:navigation];
     self.navigation = navigation;
     self.failure = nil;
@@ -1051,6 +1064,7 @@ static void sendBody(id<WKURLSchemeTask> task, NSData *data) {
 - (void)webViewWebContentProcessDidTerminate:(WKWebView *)view {
     sp_log_error("document view", [NSString stringWithFormat:@"web content process terminated: %@", self.URL.absoluteString].UTF8String);
     self.navigation = nil;
+    [self.replacedNavigations removeAllObjects];
     self.committedURL = nil;
     self.failure = @"the web content process ended";
     [self report];
