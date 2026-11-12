@@ -166,9 +166,13 @@ export function assertHeldStatesShown(samples, ticks, boundary, hold = HOLD) {
   }
   const missing = segments.filter((segment) => segment.end - segment.start >= hold).filter((segment) =>
     !samples.some(({ time, position }) => time >= segment.start && Math.abs(position - base - segment.value) <= 1));
+  // The step times and the frame times are on the clock of the layout trace, so the message can be laid over the transactions.
+  const ms = (value) => value.toFixed(1);
   assert.deepEqual(missing.map(({ value, start, end }) => ({ value, held: end - start })), [],
-    `layouts held for ${hold}ms or longer are missing from the recording; ` +
-    `recorded offsets: ${samples.map(({ position }) => (position - base).toFixed(0)).join(",")}`);
+    `layouts held for ${hold}ms or longer are missing from the recording: ` +
+    `${missing.map(({ value, start, end }) => `${value.toFixed(0)} held ${ms(start)}..${ms(end)}`).join(", ")}; ` +
+    `steps at ${ticks.map(ms).join(",")}; boundary ${boundary.map((value) => String(Math.round(value * 10) / 10)).join(",")}; ` +
+    `recorded ${samples.map(({ time, position }) => `${ms(time)}:${(position - base).toFixed(0)}`).join(",")}`);
 }
 
 /**
