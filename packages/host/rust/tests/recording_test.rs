@@ -748,6 +748,7 @@ fn the_stop_payload_preserves_layout_stages() {
                 committed: 30.0,
                 commit_path: Some("view-join"),
                 open_at_commit: 1.0,
+                flushed: 35.0,
             },
             LayoutRecord {
                 ticket: 8,
@@ -757,6 +758,7 @@ fn the_stop_payload_preserves_layout_stages() {
                 committed: f64::NAN,
                 commit_path: None,
                 open_at_commit: f64::NAN,
+                flushed: f64::NAN,
             },
         ],
         false,
@@ -764,8 +766,8 @@ fn the_stop_payload_preserves_layout_stages() {
     assert_eq!(
         payload["layouts"],
         serde_json::json!([
-            {"ticket":7,"begun":10.0,"requested":15.0,"presented":20.0,"committed":30.0,"commitPath":"view-join","openAtCommit":1.0},
-            {"ticket":8,"begun":40.0,"requested":null,"presented":null,"committed":null,"commitPath":null,"openAtCommit":null}
+            {"ticket":7,"begun":10.0,"requested":15.0,"presented":20.0,"committed":30.0,"commitPath":"view-join","openAtCommit":1.0,"flushed":35.0},
+            {"ticket":8,"begun":40.0,"requested":null,"presented":null,"committed":null,"commitPath":null,"openAtCommit":null,"flushed":null}
         ])
     );
 }

@@ -356,14 +356,14 @@ func TestCaptureStopPayloadRequiresLayoutTimeline(t *testing.T) {
 // contract: diagnostics.capture-stop.payload-preserves-layout-stages
 func TestCaptureStopPayloadPreservesLayoutStages(t *testing.T) {
 	records := []platform.LayoutRecord{
-		{Ticket: 7, Begun: 10, Requested: 15, Presented: 20, Committed: 30, CommitPath: "view-join", OpenAtCommit: 1},
-		{Ticket: 8, Begun: 40, Requested: math.NaN(), Presented: math.NaN(), Committed: math.NaN(), OpenAtCommit: math.NaN()},
+		{Ticket: 7, Begun: 10, Requested: 15, Presented: 20, Committed: 30, CommitPath: "view-join", OpenAtCommit: 1, Flushed: 35},
+		{Ticket: 8, Begun: 40, Requested: math.NaN(), Presented: math.NaN(), Committed: math.NaN(), OpenAtCommit: math.NaN(), Flushed: math.NaN()},
 	}
 	payload := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, records, false)
 	layouts := payload["layouts"].([]map[string]any)
 	want := []map[string]any{
-		{"ticket": uint64(7), "begun": float64(10), "requested": float64(15), "presented": float64(20), "committed": float64(30), "commitPath": "view-join", "openAtCommit": float64(1)},
-		{"ticket": uint64(8), "begun": float64(40), "requested": nil, "presented": nil, "committed": nil, "commitPath": nil, "openAtCommit": nil},
+		{"ticket": uint64(7), "begun": float64(10), "requested": float64(15), "presented": float64(20), "committed": float64(30), "commitPath": "view-join", "openAtCommit": float64(1), "flushed": float64(35)},
+		{"ticket": uint64(8), "begun": float64(40), "requested": nil, "presented": nil, "committed": nil, "commitPath": nil, "openAtCommit": nil, "flushed": nil},
 	}
 	if !reflect.DeepEqual(layouts, want) {
 		t.Fatalf("layout entries = %#v, want %#v", layouts, want)

@@ -1036,6 +1036,9 @@ int main(void) { @autoreleasepool {
     }];
     eventWait(@"the app DOM presents its new layout", ^BOOL { return mainReady; });
     check(surfaceLayoutCommit(window, 103), @"the app DOM confirms its new layout before native commit");
+    // The commit of the hold sends nothing to the render server while another transaction of the thread is open; the flush
+    // sends the transaction that carries it.
+    [CATransaction flush];
     double traceEnded = CACurrentMediaTime() * 1000;
     double trace[4 * SURFACE_LAYOUT_TRACE_STAGES];
     size_t traced = surfaceLayoutTraceStop(trace, 4);
@@ -1047,6 +1050,12 @@ int main(void) { @autoreleasepool {
     check(traced == 1 && trace[5] == SURFACE_LAYOUT_COMMIT_PRESENT && trace[6] == 0,
         [NSString stringWithFormat:@"the trace names the presentation commit of ticket 103 with no other pair open "
             "(path %.0f, open %.0f)", trace[5], trace[6]]);
+    // A commit that is the outermost transaction sends it inside the commit, so its flushed time is not later than the
+    // committed time, which is taken when the commit returns.
+    check(traced == 1 && trace[2] <= trace[7] && trace[7] <= traceEnded,
+        [NSString stringWithFormat:@"the trace records when the transaction that carried the commit of ticket 103 was sent to "
+            "the render server, after the presentation and by the flush (presented %.3f, committed %.3f, flushed %.3f, "
+            "flush ended %.3f)", trace[2], trace[3], trace[7], traceEnded]);
     surfaceLayoutBegin(window, 104, ^(int allowed) {});
     check(surfaceLayoutCommit(window, 104) && surfaceLayoutTraceStop(trace, 4) == 0,
         @"a stopped trace records nothing");
@@ -1063,11 +1072,17 @@ int main(void) { @autoreleasepool {
     surfaceLayoutBegin(window, 109, ^(int allowed) {});
     surfaceTransactionBegin();
     BOOL nestedCommitted = surfaceLayoutCommit(window, 109);
+    double outerClosed = CACurrentMediaTime() * 1000;
     surfaceTransactionCommit();
     size_t nestedCount = surfaceLayoutTraceStop(trace, 4);
     check(nestedCommitted && nestedCount == 1 && trace[0] == 109 && trace[5] == SURFACE_LAYOUT_COMMIT_PRESENT && trace[6] == 1,
         [NSString stringWithFormat:@"the trace records one other pair open at a nested commit (%zu records: ticket %.0f, "
             "path %.0f, open %.0f)", nestedCount, trace[0], trace[5], trace[6]]);
+    // A nested commit reaches the render server only with the outermost transaction, so its record tells the two apart.
+    check(nestedCount == 1 && trace[3] < outerClosed && outerClosed <= trace[7],
+        [NSString stringWithFormat:@"the trace records a nested commit as sent to the render server when the outer pair "
+            "closes, not at the commit (committed %.3f, outer pair closed at %.3f, flushed %.3f)", trace[3], outerClosed,
+            trace[7]]);
 
     SPWait externalWait = waitWhileBusy(main, external, scheme, NO, nil);
     check(externalWait.heldAtEnd,

@@ -162,8 +162,8 @@ pub fn layout_trace_start() {
 }
 
 /// The number of values in the native record of one transaction (SURFACE_LAYOUT_TRACE_STAGES of native): ticket, begun,
-/// presented, committed, requested, commit path code and open at commit.
-const SURFACE_LAYOUT_TRACE_STAGES: usize = 7;
+/// presented, committed, requested, commit path code, open at commit and flushed.
+const SURFACE_LAYOUT_TRACE_STAGES: usize = 8;
 /// The commit path codes of the native record (SURFACE_LAYOUT_COMMIT_* of native).
 const SURFACE_LAYOUT_COMMIT_PRESENT: f64 = 1.0;
 const SURFACE_LAYOUT_COMMIT_START: f64 = 2.0;

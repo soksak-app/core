@@ -67,7 +67,7 @@ const SURFACE_LAYOUT_COMMIT_VIEW_ABANDON = 4
 
 const SURFACE_LAYOUT_COMMIT_VIEW_JOIN = 3
 
-const SURFACE_LAYOUT_TRACE_STAGES = 7
+const SURFACE_LAYOUT_TRACE_STAGES = 8
 
 // Compile-time agreement with Clang's sizeof and field offsets.
 var (

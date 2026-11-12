@@ -21,8 +21,10 @@ void surfaceLayoutCancelTicket(void *owner, uint64_t ticket);
 // (ms, the same mach clock as the recording frames), the path that committed it, and how many of the CATransaction pairs of this
 // code besides the layout transaction were open at its commit. Clears the earlier recording.
 void surfaceLayoutTraceStart(void);
-// Number of values in the record of one transaction: ticket, begun, presented, committed, requested, commit path, open at commit.
-#define SURFACE_LAYOUT_TRACE_STAGES 7
+// Number of values in the record of one transaction: ticket, begun, presented, committed, requested, commit path, open at commit,
+// flushed. Committed is the commit of the layout transaction; flushed is the end of the commit of the outermost Core Animation
+// transaction of the thread that carried it to the render server, which is later when the commit was nested in another one.
+#define SURFACE_LAYOUT_TRACE_STAGES 8
 // The commit path of a transaction in its record: the presentation of the host, the start transaction of a new page, the
 // presentation of the last joined view, the abandon or close of the last joined view, a cancel, or a press or key event that
 // ended the hold.
