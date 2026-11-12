@@ -101,7 +101,10 @@ static SPCaptureTarget *failedTarget(NSString *reason) {
     return target;
 }
 
+// The window and its child windows (recursively) that AppKit shows. A window that the application closed or ordered out is not
+// shown from that call on, while the window server still lists it on screen until it applies the order.
 static void collectWindows(NSWindow *window, NSMutableSet<NSNumber *> *numbers) {
+    if (!window.isVisible) return;
     [numbers addObject:@(window.windowNumber)];
     for (NSWindow *child in window.childWindows) collectWindows(child, numbers);
 }
@@ -121,7 +124,7 @@ static SPCaptureTarget *resolveTargetOnMain(long windowNumber, BOOL display) {
     for (NSWindow *candidate in NSApp.windows) {
         if (candidate.windowNumber == windowNumber) { window = candidate; break; }
     }
-    if (window == nil || windowNumber <= 0) return failedTarget(notOnScreen);
+    if (window == nil || windowNumber <= 0 || !window.isVisible) return failedTarget(notOnScreen);
     NSMutableSet<NSNumber *> *numbers = [NSMutableSet set];
     collectWindows(window, numbers);
     NSArray<NSDictionary *> *list = nil;
@@ -194,10 +197,22 @@ static CGRect imageScreen(SPCaptureTarget *target) {
     return CGRectIsNull(screen) ? target.screen : screen;
 }
 
-// The image of target, or NULL. The caller releases the image.
+// The image of target with its pixels copied, or NULL. The image that the window server returns refers to the surfaces of the
+// windows until its pixels are read, and a read after a later commit holds that later content, so the copy is part of the still:
+// the time read after this call is the time by which the still holds its pixels. The caller releases the image.
 static CGImageRef takeImage(SPWindowImage function, SPCaptureTarget *target) {
     CGWindowImageOption options = kCGWindowImageBestResolution | (target.display ? 0 : kCGWindowImageBoundsIgnoreFraming);
-    return function(target.request, target.windowIDs, options);
+    CGImageRef image = function(target.request, target.windowIDs, options);
+    if (image == NULL) return NULL;
+    CFDataRef pixels = CGDataProviderCopyData(CGImageGetDataProvider(image));
+    CGDataProviderRef provider = pixels ? CGDataProviderCreateWithCFData(pixels) : NULL;
+    CGImageRef copied = provider ? CGImageCreate(CGImageGetWidth(image), CGImageGetHeight(image), CGImageGetBitsPerComponent(image),
+        CGImageGetBitsPerPixel(image), CGImageGetBytesPerRow(image), CGImageGetColorSpace(image), CGImageGetBitmapInfo(image),
+        provider, NULL, false, CGImageGetRenderingIntent(image)) : NULL;
+    if (provider) CGDataProviderRelease(provider);
+    if (pixels) CFRelease(pixels);
+    CGImageRelease(image);
+    return copied;
 }
 
 // The pixels of image as sRGB BGRA (premultiplied alpha first, little endian) into pixels with stride bytes per row. The
@@ -260,6 +275,9 @@ static NSDictionary *imageMatchRecord(sp_image_capture_match_result result, doub
 // The frame file: header (12 bytes of uint32, 64 bytes of float64), marker, compressed count, checksum, then the LZ4 block.
 static const size_t kFrameHeader = 3 * sizeof(uint32_t) + 8 * sizeof(double);
 static const size_t kFrameEncodedHeader = kFrameHeader + 12;
+// The bytes that the LZ4 encoder of libcompression leaves free at the end of its output; its open source form in xnu
+// (osfmk/vm/lz4.h) names it LZ4_GOFAST_SAFETY_MARGIN.
+static const size_t kLZ4OutputMargin = 128;
 
 @class SPCaptureRecording;
 static void setCaptureError(NSString *message);
@@ -780,7 +798,9 @@ static void writeFrame(SPCaptureRecording *recording, NSUInteger index, uint8_t 
     dispatch_async(captureWriter, ^{
         uint64_t writerStarted = captureTicks();
         NSString *failure = nil;
-        size_t capacity = pixels + pixels / 255 + 16;
+        // The worst case of an LZ4 block and the margin that the LZ4 encoder keeps free at the end of its output: with the worst
+        // case alone, the encoder failed the 64 bytes of a 4x4 still (capacity 80).
+        size_t capacity = pixels + pixels / 255 + 16 + kLZ4OutputMargin;
         uint8_t *encoded = capacity <= UINT32_MAX ? malloc(kFrameEncodedHeader + capacity) : NULL;
         size_t compressed = 0;
         if (encoded != NULL) {
@@ -910,8 +930,8 @@ static void processStill(SPCaptureRecording *recording, NSUInteger index, SPCapt
     writeFrame(recording, index, frame, pixels);
 }
 
-// Takes still index: reads the request time right before the window server call and the completion time right after it returns,
-// and records both with the windows that the still took.
+// Takes still index: reads the request time right before the window server call and the completion time right after the pixels
+// of its image are copied (takeImage), and records both with the windows that the still took.
 static void takeStill(SPCaptureRecording *recording, NSUInteger index, SPCaptureTarget *target) {
     uint64_t requested = captureTicks();
     if (target.error != nil) {

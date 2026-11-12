@@ -310,8 +310,8 @@ $(BUILD)/capture_resize_test: src/capture.m
 $(BUILD)/capture_covered_test: tests/capture_covered_test.m tests/support/event_wait.m tests/support/temporary_folder.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h tests/support/*.h)
 	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m tests/support/event_wait.m tests/support/temporary_folder.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Metal -framework Network $(MINIMUM) -o $@
 
-$(BUILD)/capture_presentation_test: tests/capture_presentation_test.m tests/support/temporary_folder.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h tests/support/*.h)
-	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m tests/support/temporary_folder.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Metal -framework Network $(MINIMUM) -o $@
+$(BUILD)/capture_presentation_test: tests/capture_presentation_test.m tests/support/event_wait.m tests/support/no_activation.m tests/support/temporary_folder.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h tests/support/*.h)
+	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m tests/support/event_wait.m tests/support/temporary_folder.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Metal -framework Network $(MINIMUM) -o $@
 
 $(BUILD)/image_region_capture_presentation_test: tests/image_region_capture_presentation_test.m tests/support/event_wait.m tests/support/no_activation.m tests/support/temporary_folder.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h tests/support/*.h)
 	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/event_wait.m tests/support/no_activation.m tests/support/temporary_folder.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
