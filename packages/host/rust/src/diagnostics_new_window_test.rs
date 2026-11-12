@@ -17,7 +17,16 @@ struct NewWindowProbe {
     ends: Mutex<mpsc::Sender<HoldEvent>>,
     opened: Mutex<mpsc::Sender<Target>>,
     released: AtomicU64,
+    /// The plan that the start of the recording received.
+    plan: Mutex<Option<Plan>>,
 }
+
+/// The plan of the stills of the recordings of these tests.
+const TEST_PLAN: Plan = Plan {
+    gap: 8.0,
+    seconds: 0.0,
+    frames: 120,
+};
 
 fn probe(
     hold_error: Option<&str>,
@@ -37,6 +46,7 @@ fn probe(
             ends: Mutex::new(hold.clone()),
             opened: Mutex::new(opened),
             released: AtomicU64::new(0),
+            plan: Mutex::new(None),
         }),
         hold,
         on_opened,
@@ -48,17 +58,12 @@ impl Capture for NewWindowProbe {
         self.opened.lock().unwrap().send(target).unwrap();
         self.open_error.clone().map_or(Ok(()), Err)
     }
-    fn start(&self, _directory: &Path, _frame_identity: bool) -> Result<(), String> {
+    fn start(&self, _directory: &Path, plan: Plan) -> Result<(), String> {
+        *self.plan.lock().unwrap() = Some(plan);
         Ok(())
-    }
-    fn wait(&self) -> Result<bool, String> {
-        Ok(true)
     }
     fn stop(&self) -> Result<i32, String> {
         Ok(1)
-    }
-    fn has_stream(&self) -> Result<bool, String> {
-        Ok(false)
     }
 }
 
@@ -96,16 +101,22 @@ fn make(directory: &Path) -> Result<(), String> {
 #[test]
 fn the_new_window_option_is_a_strict_boolean_without_display() {
     let parse = |json: Value| parse_capture_start_options(json.as_object().unwrap());
-    assert!(parse(json!({"newWindow": true})).unwrap().new_window);
-    assert!(!parse(json!({})).unwrap().new_window);
+    assert!(
+        parse(json!({"gap": 8, "frames": 10, "newWindow": true}))
+            .unwrap()
+            .new_window
+    );
+    assert!(!parse(json!({"gap": 8, "frames": 10})).unwrap().new_window);
     for value in [json!(null), json!("true"), json!(1)] {
         assert_eq!(
-            parse(json!({ "newWindow": value })).unwrap_err().message,
+            parse(json!({ "gap": 8, "frames": 10, "newWindow": value }))
+                .unwrap_err()
+                .message,
             "newWindow must be a boolean"
         );
     }
     assert_eq!(
-        parse(json!({"newWindow": true, "display": true}))
+        parse(json!({"gap": 8, "frames": 10, "newWindow": true, "display": true}))
             .unwrap_err()
             .message,
         "newWindow records the new window alone and cannot be combined with display"
@@ -120,7 +131,7 @@ fn a_new_window_recording_answers_once_the_hold_is_set_and_records_the_held_wind
     let (capture, hold, opened) = probe(None, None);
     let recording = Recording::new();
     recording
-        .start_new_window(capture.clone(), &directory, false, &make)
+        .start_new_window(capture.clone(), &directory, TEST_PLAN, &make)
         .unwrap();
     assert_eq!(recording.running(), Some(directory.clone()));
     assert!(
@@ -135,13 +146,14 @@ fn a_new_window_recording_answers_once_the_hold_is_set_and_records_the_held_wind
             display: false
         }
     );
-    let (finished, count, _) = recording.finish(capture.as_ref()).unwrap();
-    assert_eq!((finished, count), (directory, 1));
+    let (finished, count, window) = recording.finish(capture.as_ref()).unwrap();
+    assert_eq!((finished, count, window), (directory, 1, Some(31)));
     assert_eq!(
         capture.released.load(Ordering::SeqCst),
         0,
-        "a recording that started released its hold; its stream start shows the window"
+        "a recording that started released its hold; its start shows the window"
     );
+    assert_eq!(*capture.plan.lock().unwrap(), Some(TEST_PLAN));
 }
 
 // contract: diagnostics.capture-start.new-window-answers-once-held
@@ -152,7 +164,7 @@ fn a_failed_hold_starts_no_recording() {
         probe(Some("a new window is already held for a recording"), None);
     let recording = Recording::new();
     let error = recording
-        .start_new_window(capture, &parent.path().join("frames"), false, &make)
+        .start_new_window(capture, &parent.path().join("frames"), TEST_PLAN, &make)
         .unwrap_err();
     assert_eq!(error, "a new window is already held for a recording");
     assert_eq!(recording.running(), None);
@@ -166,7 +178,7 @@ fn the_stop_ends_a_hold_that_no_show_took() {
     let (capture, _hold, _opened) = probe(None, None);
     let recording = Recording::new();
     recording
-        .start_new_window(capture.clone(), &directory, false, &make)
+        .start_new_window(capture.clone(), &directory, TEST_PLAN, &make)
         .unwrap();
     let error = recording.finish(capture.as_ref()).unwrap_err();
     assert_eq!(
@@ -184,7 +196,7 @@ fn a_failure_after_the_hold_releases_the_held_window() {
     let (capture, hold, opened) = probe(None, Some("window 31 not found"));
     let recording = Recording::new();
     recording
-        .start_new_window(capture.clone(), &directory, false, &make)
+        .start_new_window(capture.clone(), &directory, TEST_PLAN, &make)
         .unwrap();
     hold.send(HoldEvent::Held(31)).unwrap();
     opened.recv().unwrap();

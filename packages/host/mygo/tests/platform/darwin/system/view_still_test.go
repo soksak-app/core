@@ -38,8 +38,7 @@ func (s *viewSession) stillPixel(t *testing.T) [3]uint32 {
 		t.Fatal("the window has no window server number")
 	}
 	path := filepath.Join(t.TempDir(), fmt.Sprintf("window-%d.png", os.Getpid()))
-	// The test ends no wait, so the token of the picture is the first one.
-	if err := capturer.CaptureStill(numbers, path, 1); err != nil {
+	if err := capturer.CaptureStill(numbers[0], path); err != nil {
 		t.Fatal(err)
 	}
 	file, err := os.Open(path)

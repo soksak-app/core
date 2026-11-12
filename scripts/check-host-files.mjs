@@ -433,7 +433,7 @@ export const MAIN_THREAD_FREE = {
   sp_observe_flush: "the observation counters are atomic, and the flush writes them to the event ring",
   sp_phys_footprint: "the footprint reads task_info of the own task, a Mach call of any thread",
   sp_diagnostic_reports_directory: "the directory is a path of the file system that NSFileManager resolves on any thread",
-  "sp_capture_*": "the window recording and the still capture keep their state in capture.m under its own lock and queues, wait for the completions of ScreenCaptureKit on other queues and hand their AppKit work to the main queue, so a step that called them would hold the main thread while those completions arrive",
+  "sp_capture_*": "the window recording and the still capture keep their state in capture.m under its own lock and queues, take the stills of the window server on their own queues and wait for them, and hand their AppKit work to the main queue, so a step that called them would hold the main thread while those stills complete",
   sp_facts_free: "the function frees a string that a native function returned",
   sp_ui_enqueue: "the function adds a C function to the main queue of libdispatch, which any thread may do",
   sp_host_callbacks_install: "startup copies the complete host callback table before native work begins, without invoking a callback or accessing AppKit",

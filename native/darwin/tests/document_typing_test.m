@@ -58,8 +58,10 @@ int main(void) { @autoreleasepool {
     eventWait(@"the page loads", ^BOOL{ return [latest[@"title"] isEqual:@"type"] && [latest[@"loading"] isEqual:@NO]; });
 
     check(!NSApp.isActive && NSApp.keyWindow == nil, @"the application is inactive and has no key window");
-    check(sp_input_pointer(window, 100, 20, 1, 0, 0, 0) == SP_INPUT_DELIVERED
-        && sp_input_pointer(window, 100, 20, 3, 0, 0, 0) == SP_INPUT_DELIVERED, @"a native press on the field is delivered");
+    sp_input_result pressed = sp_input_pointer(window, 100, 20, 1, 0, 0, 0);
+    sp_input_result released = pressed == SP_INPUT_DELIVERED ? sp_input_pointer(window, 100, 20, 3, 0, 0, 0) : SP_INPUT_REJECTED;
+    check(pressed == SP_INPUT_DELIVERED && released == SP_INPUT_DELIVERED, [NSString stringWithFormat:
+        @"a native press on the field is delivered (press %d, release %d; input_inject.h names each result)", pressed, released]);
     for (NSString *key in @[ @"x", @"y" ]) {
         check(sp_input_key(window, key.UTF8String, key.UTF8String, 0, true) == SP_INPUT_DELIVERED
             && sp_input_key(window, key.UTF8String, key.UTF8String, 0, false) == SP_INPUT_DELIVERED,

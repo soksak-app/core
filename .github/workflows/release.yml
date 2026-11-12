@@ -75,11 +75,8 @@ jobs:
           CI=1 PNPM_DISABLE_SELF_UPDATE_CHECK=1 pnpm install --frozen-lockfile
           go -C apps/wailsv3 mod download
           go -C packages/sok/go mod download
-      - name: Fetch the pinned native release file
-        run: make fetch-native
       - name: Build and audit Wails release bundle offline
         env:
-          OFFLINE: '1'
           npm_config_offline: 'true'
           GOTOOLCHAIN: local
           GOFLAGS: -mod=readonly
@@ -136,11 +133,8 @@ jobs:
           make check-tools
           CI=1 PNPM_DISABLE_SELF_UPDATE_CHECK=1 pnpm install --frozen-lockfile
           cargo fetch --locked
-      - name: Fetch the pinned native release file
-        run: make fetch-native
       - name: Build and audit Tauri release bundle offline
         env:
-          OFFLINE: '1'
           npm_config_offline: 'true'
           CARGO_NET_OFFLINE: 'true'
         run: make check-release-tauriv2
@@ -190,11 +184,8 @@ jobs:
           CI=1 PNPM_DISABLE_SELF_UPDATE_CHECK=1 pnpm install --frozen-lockfile
           go -C apps/mygo mod download
           go -C packages/sok/go mod download
-      - name: Fetch the pinned native release file
-        run: make fetch-native
       - name: Build and audit mygo release bundle offline
         env:
-          OFFLINE: '1'
           npm_config_offline: 'true'
           GOTOOLCHAIN: local
           GOFLAGS: -mod=readonly

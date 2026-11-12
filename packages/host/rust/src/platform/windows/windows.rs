@@ -563,56 +563,34 @@ impl Platform for Windows {
     }
 
     #[cfg(feature = "diagnostics")]
-    fn capture_open(&self, window_number: isize, display: bool, _token: u64) -> Result<(), String> {
+    fn capture_open(&self, window_number: isize, display: bool) -> Result<(), String> {
         unsupported::capture_open(window_number, display)
     }
     #[cfg(feature = "diagnostics")]
-    fn capture_start(&self, directory: &str, frame_identity: bool) -> Result<(), String> {
-        unsupported::capture_start(directory, frame_identity)
-    }
-    #[cfg(feature = "diagnostics")]
-    fn capture_wait(&self, _token: u64) -> Result<bool, String> {
-        unsupported::capture_wait()
+    fn capture_start(
+        &self,
+        directory: &str,
+        _gap: f64,
+        _seconds: f64,
+        _frames: i32,
+        _token: u64,
+    ) -> Result<(), String> {
+        unsupported::capture_start(directory)
     }
     #[cfg(feature = "diagnostics")]
     fn capture_stop(&self, after: f64, _token: u64) -> Result<i32, String> {
         unsupported::capture_stop(after)
     }
     #[cfg(feature = "diagnostics")]
-    fn capture_has_stream(&self) -> Result<bool, String> {
-        unsupported::capture_has_stream()
-    }
-    #[cfg(feature = "diagnostics")]
     // This platform records no window, and its still capture ends by its own limit, so no capture wait waits for an end.
     fn capture_end_wait(&self, _token: u64, _reason: &str) {}
     #[cfg(feature = "diagnostics")]
-    fn document_frame_identity_start(
-        &self,
-        _document: Handle,
-        _generation: u64,
-        _done: Box<dyn FnOnce(Result<String, String>) + Send>,
-    ) -> Result<(), String> {
-        Err("not implemented on windows".into())
+    fn capture_missed(&self) -> Result<i32, String> {
+        unsupported::capture_missed()
     }
     #[cfg(feature = "diagnostics")]
-    fn document_frame_identity_freeze(
-        &self,
-        _generation: u64,
-        _done: Box<dyn FnOnce(Result<String, String>) + Send>,
-    ) -> Result<(), String> {
-        Err("not implemented on windows".into())
-    }
-    #[cfg(feature = "diagnostics")]
-    fn document_frame_identity_remove(
-        &self,
-        _generation: u64,
-        _done: Box<dyn FnOnce(Result<String, String>) + Send>,
-    ) -> Result<(), String> {
-        Err("not implemented on windows".into())
-    }
-    #[cfg(feature = "diagnostics")]
-    fn capture_limited(&self) -> Result<bool, String> {
-        unsupported::capture_limited()
+    fn capture_late(&self) -> Result<i32, String> {
+        unsupported::capture_late()
     }
     #[cfg(feature = "diagnostics")]
     fn capture_longest_gap(&self) -> Result<f64, String> {
@@ -623,17 +601,8 @@ impl Platform for Windows {
         unsupported::capture_clock()
     }
     #[cfg(feature = "diagnostics")]
-    // Its still capture keeps its own limit, so it takes no token.
-    fn capture_still(
-        &self,
-        window_numbers: &[isize],
-        path: &str,
-        _token: u64,
-    ) -> Result<(), String> {
-        // `window_numbers` holds the window alone here, so its first number is the whole list.
-        let window_number = *window_numbers
-            .first()
-            .ok_or_else(|| "still capture needs the number of a window".to_owned())?;
+    // Its still capture keeps its own limit. `window_number` is the handle that `window_numbers` gives.
+    fn capture_still(&self, window_number: isize, path: &str) -> Result<(), String> {
         capture::capture_still(window_number, path)
     }
     #[cfg(feature = "diagnostics")]

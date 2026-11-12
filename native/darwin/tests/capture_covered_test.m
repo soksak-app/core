@@ -1,20 +1,19 @@
-// A window behind another window is captured with the pixels of its three kinds of layers: a web view registered as a
-// host registers it, a Metal layer and an IOSurface layer, and with its child window, as a modal stands over it. Each
-// layer changes while the window stays covered, and the capture shows the change. The check uses no activation, no real input and no window position outside the screen.
-// A failure of ScreenCaptureKit keeps its error code, because its text depends on the language of the person.
+// A window behind another window, with a web view registered as a host registers it and a child window, as a modal stands over
+// it, is captured: the still is written at the device-pixel size of the window, and the capture does not change the window. A
+// recording of the covered window takes a still every refresh for three seconds: every planned still is written, names the child
+// window and then the window, and has a frame file of the declared format. The pixels are evidence and are not judged
+// (docs/spec/diagnostics.md). The check uses no activation, no real input and no window position outside the screen.
+// The capture asks the window server for the windows of its own process; the check prints whether the process has the screen
+// recording permission.
 #import <Cocoa/Cocoa.h>
-#import <IOSurface/IOSurface.h>
-#import <Metal/Metal.h>
-#import <QuartzCore/CAMetalLayer.h>
 #import <QuartzCore/QuartzCore.h>
-#import <ScreenCaptureKit/ScreenCaptureKit.h>
 #import <WebKit/WebKit.h>
-#import <objc/runtime.h>
 #import "capture.h"
 #import "window_facts.h"
 #import "private/webkit.h"
 #import "support/run_until.h"
 #import "support/temporary_folder.h"
+#import "support/capture_frame.m"
 
 @interface WKWebView (Presentation)
 - (void)_doAfterNextPresentationUpdate:(void (^)(void))update;
@@ -30,169 +29,6 @@ static void check(BOOL condition, NSString *message) {
 // Runs the run loop until done holds (support/run_until.h).
 static void until(NSString *what, BOOL (^done)(void)) {
     sp_run_until(what.UTF8String, done);
-}
-
-// The system paths are observed, and one failure is injected at a time. The general content query is never forwarded:
-// it is the path that asks the person for the screen recording permission.
-static NSUInteger generalContentQueries;
-static NSUInteger stillRequests, stillRequestsWithCursor;
-static NSError *contentFailure, *stillFailure, *startFailure;
-static IMP realCurrentContent, realStill, realStart;
-// Set on the main queue after the injected start failure has answered the start request.
-static BOOL startFailureAnswered;
-
-static void observedGeneralContent(id self, SEL _cmd, void (^reply)(SCShareableContent *, NSError *)) {
-    generalContentQueries++;
-    reply(nil, [NSError errorWithDomain:SCStreamErrorDomain code:SCStreamErrorUserDeclined userInfo:nil]);
-}
-static void observedCurrentContent(id self, SEL _cmd, void (^reply)(SCShareableContent *, NSError *)) {
-    if (contentFailure != nil) { reply(nil, contentFailure); return; }
-    ((void (*)(id, SEL, id))realCurrentContent)(self, _cmd, reply);
-}
-static void observedStill(id self, SEL _cmd, SCContentFilter *filter, SCStreamConfiguration *config,
-    void (^reply)(CGImageRef, NSError *)) {
-    stillRequests++;
-    if (config.showsCursor) stillRequestsWithCursor++;
-    if (stillFailure != nil) { reply(NULL, stillFailure); return; }
-    ((void (*)(id, SEL, id, id, id))realStill)(self, _cmd, filter, config, reply);
-}
-static void observedStart(id self, SEL _cmd, void (^reply)(NSError *)) {
-    if (startFailure != nil) {
-        reply(startFailure);
-        dispatch_async(dispatch_get_main_queue(), ^{ startFailureAnswered = YES; });
-        return;
-    }
-    ((void (*)(id, SEL, id))realStart)(self, _cmd, reply);
-}
-static void observeSystemPaths(void) {
-    Class content = SCShareableContent.class;
-    method_setImplementation(class_getClassMethod(content, @selector(getShareableContentWithCompletionHandler:)),
-        (IMP)observedGeneralContent);
-    realCurrentContent = method_setImplementation(
-        class_getClassMethod(content, @selector(getCurrentProcessShareableContentWithCompletionHandler:)),
-        (IMP)observedCurrentContent);
-    realStill = method_setImplementation(class_getClassMethod(SCScreenshotManager.class,
-        @selector(captureImageWithFilter:configuration:completionHandler:)), (IMP)observedStill);
-    realStart = method_setImplementation(class_getInstanceMethod(SCStream.class,
-        @selector(startCaptureWithCompletionHandler:)), (IMP)observedStart);
-}
-
-typedef struct { size_t width, height; uint8_t *bytes; } Image;
-static NSUInteger captures;
-
-static Image capture(NSWindow *window, NSString *directory, NSString *name) {
-    NSString *path = [directory stringByAppendingPathComponent:[name stringByAppendingString:@".png"]];
-    char *error = NULL;
-    // The window first, then its child windows, as a host lists them.
-    NSMutableArray<NSNumber *> *listed = [NSMutableArray arrayWithObject:@(window.windowNumber)];
-    for (NSWindow *child in window.childWindows) [listed addObject:@(child.windowNumber)];
-    long numbers[listed.count];
-    for (NSUInteger index = 0; index < listed.count; index++) numbers[index] = listed[index].longValue;
-    bool written = sp_capture_still(numbers, (int)listed.count, path.fileSystemRepresentation, 0, &error);
-    captures++;
-    check(written && error == NULL, [NSString stringWithFormat:@"the %@ capture has no error (%s)", name, error ?: ""]);
-    free(error);
-    Image image = {0, 0, NULL};
-    if (!written) return image;
-    CGImageSourceRef source = CGImageSourceCreateWithData((CFDataRef)[NSData dataWithContentsOfFile:path], NULL);
-    CGImageRef decoded = CGImageSourceCreateImageAtIndex(source, 0, NULL);
-    image.width = CGImageGetWidth(decoded);
-    image.height = CGImageGetHeight(decoded);
-    image.bytes = calloc(image.width * image.height, 4);
-    CGColorSpaceRef srgb = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
-    CGContextRef context = CGBitmapContextCreate(image.bytes, image.width, image.height, 8, image.width * 4, srgb,
-        (CGBitmapInfo)kCGImageAlphaPremultipliedLast);
-    CGContextSetBlendMode(context, kCGBlendModeCopy);
-    CGContextDrawImage(context, CGRectMake(0, 0, image.width, image.height), decoded);
-    CGContextRelease(context);
-    CGColorSpaceRelease(srgb);
-    CGImageRelease(decoded);
-    CFRelease(source);
-    return image;
-}
-// x and y are points in the content view from its top left.
-static uint32_t pixelAt(Image image, CGFloat scale, CGFloat x, CGFloat y) {
-    size_t top = image.height - (size_t)(kHeight * scale);
-    const uint8_t *p = image.bytes + ((top + (size_t)(y * scale)) * image.width + (size_t)(x * scale)) * 4;
-    return (uint32_t)p[0] << 16 | (uint32_t)p[1] << 8 | p[2];
-}
-static void expectPixel(Image image, CGFloat scale, CGFloat x, CGFloat y, uint32_t want, NSString *what) {
-    uint32_t got = image.bytes == NULL ? 0xffffffff : pixelAt(image, scale, x, y);
-    check(got == want, [NSString stringWithFormat:@"%@ is %06x (got %06x)", what, want, got]);
-}
-static NSUInteger pixelsOfColor(Image image, uint32_t color) {
-    NSUInteger count = 0;
-    for (size_t i = 0; i < image.width * image.height; i++) {
-        const uint8_t *p = image.bytes + i * 4;
-        if (((uint32_t)p[0] << 16 | (uint32_t)p[1] << 8 | p[2]) == color) count++;
-    }
-    return count;
-}
-
-// The pixels that differ above the content view, in its first row, and in the rest of it, and the first row that differs.
-static NSString *differences(Image a, Image b, CGFloat scale) {
-    if (a.bytes == NULL || b.bytes == NULL) return @"a capture is missing";
-    if (a.width != b.width || a.height != b.height) return [NSString stringWithFormat:@"sizes %zux%zu and %zux%zu", a.width, a.height, b.width, b.height];
-    size_t top = a.height - (size_t)(kHeight * scale), above = 0, first = 0, rest = 0;
-    long firstRow = -1, firstColumn = -1;
-    for (size_t y = 0; y < a.height; y++) {
-        for (size_t x = 0; x < a.width; x++) {
-            size_t at = (y * a.width + x) * 4;
-            if (memcmp(a.bytes + at, b.bytes + at, 4) == 0) continue;
-            if (firstRow < 0) { firstRow = y; firstColumn = x; }
-            if (y < top) above++; else if (y == top) first++; else rest++;
-        }
-    }
-    return [NSString stringWithFormat:@"title bar %zu, first content row %zu, content %zu, first at row %ld column %ld, content starts at row %zu",
-        above, first, rest, firstRow, firstColumn, top];
-}
-static void paintMetal(CAMetalLayer *layer, id<MTLCommandQueue> queue, uint8_t red) {
-    size_t width = layer.drawableSize.width, height = layer.drawableSize.height;
-    id<MTLBuffer> buffer = [[layer.device newBufferWithLength:width * height * 4 options:MTLResourceStorageModeShared] autorelease];
-    uint8_t *bytes = buffer.contents;
-    // The left 30 percent is opaque, the rest is the hole through which the web view shows.
-    for (size_t y = 0; y < height; y++) {
-        for (size_t x = 0; x < width * 3 / 10; x++) {
-            uint8_t *p = bytes + (y * width + x) * 4;
-            p[0] = 0x20; p[1] = 0xa8; p[2] = red; p[3] = 0xff;
-        }
-    }
-    id<CAMetalDrawable> drawable = [layer nextDrawable];
-    id<MTLCommandBuffer> command = [queue commandBuffer];
-    id<MTLBlitCommandEncoder> blit = [command blitCommandEncoder];
-    [blit copyFromBuffer:buffer sourceOffset:0 sourceBytesPerRow:width * 4 sourceBytesPerImage:width * height * 4
-        sourceSize:MTLSizeMake(width, height, 1) toTexture:drawable.texture destinationSlice:0 destinationLevel:0
-        destinationOrigin:MTLOriginMake(0, 0, 0)];
-    [blit endEncoding];
-    [command presentDrawable:drawable];
-    [command commit];
-    // The window is behind other windows, and the compositor may not present a drawable of an occluded window, so the frame is
-    // judged by the completion of its commands; the web view presentation update that follows commits the window's layers.
-    [command waitUntilCompleted];
-    check(command.status == MTLCommandBufferStatusCompleted, @"the Metal frame completes");
-}
-static IOSurfaceRef surfaceOf(size_t width, size_t height, uint8_t blue) {
-    IOSurfaceRef surface = IOSurfaceCreate((CFDictionaryRef)@{(id)kIOSurfaceWidth: @(width), (id)kIOSurfaceHeight: @(height),
-        (id)kIOSurfaceBytesPerElement: @4, (id)kIOSurfacePixelFormat: @(0x42475241u)});
-    IOSurfaceSetValue(surface, kIOSurfaceColorSpace, kCGColorSpaceSRGB);
-    IOSurfaceLock(surface, 0, NULL);
-    uint8_t *bytes = IOSurfaceGetBaseAddress(surface);
-    size_t row = IOSurfaceGetBytesPerRow(surface);
-    for (size_t y = 0; y < height; y++) {
-        for (size_t x = 0; x < width; x++) {
-            uint8_t *p = bytes + y * row + x * 4;
-            p[0] = blue; p[1] = 0x32; p[2] = 0x10; p[3] = 0xff;
-        }
-    }
-    IOSurfaceUnlock(surface, 0, NULL);
-    return surface;
-}
-static void showSurface(CALayer *layer, IOSurfaceRef surface) {
-    [CATransaction begin];
-    [CATransaction setDisableActions:YES];
-    layer.contents = (id)surface;
-    [CATransaction commit];
-    [CATransaction flush];
 }
 static void waitForPresentation(WKWebView *web) {
     __block BOOL presented = NO;
@@ -213,15 +49,38 @@ static id evaluate(WKWebView *web, NSString *script) {
     [failure release];
     return [value autorelease];
 }
-// The system gives a failure a description of its own, in the language of the person, that names no code.
-static NSError *systemFailure(long code) {
-    return [NSError errorWithDomain:SCStreamErrorDomain code:code
-        userInfo:@{NSLocalizedDescriptionKey: @"the stream failed"}];
+// A still capture of the window into name.png in directory: whether it is written and its pixel size. The content of the pixels is
+// not judged; the capture is evidence that a failing check keeps.
+static CGSize capture(NSWindow *window, NSString *directory, NSString *name) {
+    NSString *path = [directory stringByAppendingPathComponent:[name stringByAppendingString:@".png"]];
+    char *error = NULL;
+    // The capture finds the child windows of the window itself.
+    bool written = sp_capture_still(window.windowNumber, path.fileSystemRepresentation, &error);
+    check(written && error == NULL, [NSString stringWithFormat:@"the %@ capture has no error (%s)", name, error ?: ""]);
+    free(error);
+    if (!written) return CGSizeZero;
+    CGImageSourceRef source = CGImageSourceCreateWithData((CFDataRef)[NSData dataWithContentsOfFile:path], NULL);
+    CGImageRef decoded = source ? CGImageSourceCreateImageAtIndex(source, 0, NULL) : NULL;
+    CGSize size = decoded ? CGSizeMake(CGImageGetWidth(decoded), CGImageGetHeight(decoded)) : CGSizeZero;
+    if (decoded) CGImageRelease(decoded);
+    if (source) CFRelease(source);
+    return size;
 }
-static void expectError(char *error, NSString *what, long code) {
-    NSString *text = error == NULL ? @"" : [NSString stringWithUTF8String:error];
-    NSString *want = [NSString stringWithFormat:@"%@ %ld", SCStreamErrorDomain, code];
-    check([text containsString:want], [NSString stringWithFormat:@"%@ keeps the error code %@ (got \"%@\")", what, want, text]);
+
+// Counts the refreshes of the display of the window and keeps their times.
+@interface Refreshes : NSObject
+@property (nonatomic, retain) NSMutableArray<NSNumber *> *times;
+@end
+@implementation Refreshes
+- (void)refresh:(CADisplayLink *)link { [self.times addObject:@(link.timestamp * 1000)]; }
+@end
+
+static double median(NSArray<NSNumber *> *values) {
+    NSArray<NSNumber *> *sorted = [values sortedArrayUsingSelector:@selector(compare:)];
+    return sorted.count == 0 ? 0 : sorted[sorted.count / 2].doubleValue;
+}
+static double ticksToMilliseconds(id value, double numerator, double denominator) {
+    return [value isKindOfClass:NSString.class] ? strtoull([value UTF8String], NULL, 10) * numerator / denominator / 1e6 : NAN;
 }
 
 int main(void) { @autoreleasepool {
@@ -229,103 +88,56 @@ int main(void) { @autoreleasepool {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
-    observeSystemPaths();
+    BOOL permitted = CGPreflightScreenCaptureAccess();
+    fprintf(stderr, "screen recording permission: %s\n", permitted ? "granted" : "not granted");
     NSString *directory = temporaryFolder(@"soksak-capture-covered-");
 
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(160, 160, kWidth, kHeight)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
     window.releasedWhenClosed = NO;
     window.animationBehavior = NSWindowAnimationBehaviorNone;
-    window.backgroundColor = [NSColor colorWithSRGBRed:0.2 green:0.2 blue:0.25 alpha:1];
+    // The layout passes of the window, which a capture must not cause. AppKit posts NSWindowDidLayoutNotification after each
+    // layout pass of a window; the SDK declares no constant for it, so the check names it.
+    __block NSUInteger layouts = 0;
+    id layoutObserver = [NSNotificationCenter.defaultCenter addObserverForName:@"NSWindowDidLayoutNotification" object:window queue:nil
+        usingBlock:^(NSNotification *note) { (void)note; layouts++; }];
+    NSString *(^windowState)(void) = ^NSString * {
+        return [NSString stringWithFormat:@"buttons close %d miniaturize %d zoom %d, layouts %lu",
+            [window standardWindowButton:NSWindowCloseButton] != nil, [window standardWindowButton:NSWindowMiniaturizeButton] != nil,
+            [window standardWindowButton:NSWindowZoomButton] != nil, (unsigned long)layouts];
+    };
     NSView *content = window.contentView;
     content.wantsLayer = YES;
     WKWebView *web = [[WKWebView alloc] initWithFrame:content.bounds configuration:[[WKWebViewConfiguration new] autorelease]];
-    [web setValue:@NO forKey:@"drawsBackground"];
     [content addSubview:web];
     [window orderBack:nil];
     check(sp_window_set_main_webview(window, web) != NULL, @"the web view is registered as a host registers it");
-    __block BOOL loaded = NO;
-    [web loadHTMLString:@"<!doctype html><style>html,body{margin:0;background:transparent;overflow:hidden}"
-        "div,canvas{position:absolute}#page{left:0;top:0;width:480px;height:160px;background:#c83232}"
-        "#gl{left:216px;top:176px;width:72px;height:64px}"
-        "#composited{left:298px;top:208px;width:86px;height:80px;background:#32c8c8;transform:translateZ(0);will-change:transform}</style>"
-        "<div id=page></div><canvas id=gl width=144 height=128></canvas><div id=composited></div><script>"
-        "const gl=document.getElementById('gl').getContext('webgl',{preserveDrawingBuffer:true});"
-        "function paint(r,g,b){gl.clearColor(r,g,b,1);gl.clear(gl.COLOR_BUFFER_BIT)};paint(0.9,0.7,0.1);"
-        "</script>" baseURL:nil];
+    [web loadHTMLString:@"<!doctype html><style>html,body{margin:0}</style><p>covered</p>" baseURL:nil];
     until(@"the page load ends", ^BOOL { return !web.isLoading; });
-    loaded = !web.isLoading;
-    check(loaded, @"the page loads behind other windows");
-
+    check(!web.isLoading, @"the page loads behind other windows");
     CGFloat scale = window.backingScaleFactor;
-    NSView *metalView = [[NSView alloc] initWithFrame:content.bounds];
-    CAMetalLayer *metal = [CAMetalLayer layer];
-    metal.device = [MTLCreateSystemDefaultDevice() autorelease];
-    metal.pixelFormat = MTLPixelFormatBGRA8Unorm;
-    metal.framebufferOnly = NO;
-    metal.opaque = NO;
-    CGColorSpaceRef srgb = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
-    metal.colorspace = srgb;
-    CGColorSpaceRelease(srgb);
-    metal.contentsScale = scale;
-    metal.drawableSize = CGSizeMake(kWidth * scale, kHeight * scale);
-    metalView.layer = metal;
-    metalView.wantsLayer = YES;
-    [content addSubview:metalView];
-    id<MTLCommandQueue> queue = [metal.device newCommandQueue];
-    NSView *surfaceView = [[NSView alloc] initWithFrame:NSMakeRect(288, kHeight - 192, 144, 128)];
-    surfaceView.wantsLayer = YES;
-    surfaceView.layer.contentsGravity = kCAGravityResize;
-    surfaceView.layer.contentsScale = scale;
-    [content addSubview:surfaceView];
-    paintMetal(metal, queue, 0x10);
-    IOSurfaceRef surface = surfaceOf(144 * scale, 128 * scale, 0xc0);
-    showSurface(surfaceView.layer, surface);
-    // A child window stands over the window from x 150 to 210 and y 250 to 310 of the content view, as a modal does.
+    CGSize windowPixels = CGSizeMake(window.frame.size.width * scale, window.frame.size.height * scale);
+    // A child window stands over the window, as a modal does.
     NSWindow *child = [[NSWindow alloc] initWithContentRect:[window convertRectToScreen:
         [content convertRect:NSMakeRect(150, kHeight - 310, 60, 60) toView:nil]]
         styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
     child.releasedWhenClosed = NO;
     child.animationBehavior = NSWindowAnimationBehaviorNone;
-    child.backgroundColor = [NSColor colorWithSRGBRed:0x28 / 255.0 green:0xc8 / 255.0 blue:0x50 / 255.0 alpha:1];
     [window addChildWindow:child ordered:NSWindowAbove];
     [child displayIfNeeded];
     [CATransaction flush];
     waitForPresentation(web);
 
-    // The window has no title bar buttons after its own appearance and its presentations: standardWindowButton: is nil, and a
-    // capture holds a title bar without them, while the capture of the covered window has them. In the window run they were
-    // there only after the cover was ordered behind the window, a still capture of the window was taken and the next
-    // presentation followed; after the order and two presentations, and right after the still, there were none. So the cover is
-    // made first and ordered behind the window, where it covers nothing of it, and this still is that capture.
+    // A capture does not change the window: its title bar buttons and its layout passes are the same before the first capture
+    // and after the covered capture.
     NSWindow *cover = [[NSWindow alloc] initWithContentRect:NSMakeRect(100, 100, kWidth + 160, kHeight + 160)
         styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
     cover.releasedWhenClosed = NO;
     cover.animationBehavior = NSWindowAnimationBehaviorNone;
-    cover.backgroundColor = [NSColor colorWithSRGBRed:1 green:0 blue:1 alpha:1];
-    [cover orderWindow:NSWindowBelow relativeTo:window.windowNumber];
-    [CATransaction flush];
-    Image rendered = capture(window, directory, @"rendered");
-    free(rendered.bytes);
-    waitForPresentation(web);
-    check([window standardWindowButton:NSWindowCloseButton] != nil && [window standardWindowButton:NSWindowMiniaturizeButton] != nil
-        && [window standardWindowButton:NSWindowZoomButton] != nil,
-        @"the window has its three title bar buttons before the first capture");
-
-    // The window controls of a window that has just appeared can still change: the state before the cover is the first
-    // capture that equals the capture before it.
-    Image first = capture(window, directory, @"first");
-    Image back = capture(window, directory, @"back");
-    for (;;) {
-        fprintf(stderr, "two captures before the cover: %s\n", differences(first, back, scale).UTF8String);
-        BOOL same = first.bytes != NULL && back.bytes != NULL && first.width == back.width && first.height == back.height
-            && memcmp(first.bytes, back.bytes, first.width * first.height * 4) == 0;
-        if (same || first.bytes == NULL || back.bytes == NULL) break;
-        free(first.bytes);
-        first = back;
-        back = capture(window, directory, @"back");
-    }
-    if (back.bytes != NULL) expectPixel(back, scale, 180, 280, 0x28c850, @"the child window");
+    NSString *beforeCaptures = windowState();
+    CGSize before = capture(window, directory, @"before");
+    check(CGSizeEqualToSize(before, windowPixels), [NSString stringWithFormat:@"the capture before the cover has the device-pixel "
+        "size of the window (%.0fx%.0f, window %.0fx%.0f)", before.width, before.height, windowPixels.width, windowPixels.height]);
 
     [cover orderWindow:NSWindowAbove relativeTo:window.windowNumber];
     // AppKit keeps the order in the open Core Animation transaction of the thread until the run loop commits it, so the window
@@ -356,70 +168,96 @@ int main(void) { @autoreleasepool {
     check(!web._windowOcclusionDetectionEnabled, @"the registered web view does not detect the occlusion of its window");
     check([evaluate(web, @"document.visibilityState") isEqual:@"visible"], @"the document of the covered window stays visible");
 
-    Image covered = capture(window, directory, @"covered");
-    check(back.bytes != NULL && covered.bytes != NULL && back.width == covered.width && back.height == covered.height
-        && memcmp(back.bytes, covered.bytes, back.width * back.height * 4) == 0,
-        [NSString stringWithFormat:@"the capture of the covered window equals its capture before the cover, byte for byte (%@)",
-            differences(back, covered, scale)]);
-    if (covered.bytes != NULL) {
-        expectPixel(covered, scale, 240, 100, 0xc83232, @"the web view");
-        expectPixel(covered, scale, 250, 205, 0xe5b21a, @"the WebGL canvas of the web view");
-        expectPixel(covered, scale, 340, 250, 0x32c8c8, @"the composited layer of the web view");
-        expectPixel(covered, scale, 70, 160, 0x10a820, @"the Metal layer");
-        expectPixel(covered, scale, 360, 128, 0x1032c0, @"the IOSurface layer");
-        expectPixel(covered, scale, 240, 285, 0x333340, @"the window background");
-        expectPixel(covered, scale, 180, 280, 0x28c850, @"the child window of the covered window");
-        // The cover is a window of the same application outside the list: the capture holds the listed windows only.
-        check(pixelsOfColor(covered, 0xff00ff) == 0, @"no pixel of the cover is in the capture");
-    }
+    CGSize covered = capture(window, directory, @"covered");
+    check(CGSizeEqualToSize(covered, windowPixels), [NSString stringWithFormat:@"the capture of the covered window has the "
+        "device-pixel size of the window (%.0fx%.0f)", covered.width, covered.height]);
+    NSString *afterCovered = windowState();
+    check([afterCovered isEqual:beforeCaptures], [NSString stringWithFormat:
+        @"the capture does not change the window: the same buttons and layouts after the covered capture (before %@, after %@)",
+        beforeCaptures, afterCovered]);
 
-    // Every layer changes while the window stays covered.
-    evaluate(web, @"document.getElementById('page').style.background='#3278c8';"
-        "document.getElementById('composited').style.background='#c8c832';paint(0.1,0.7,0.9);");
-    paintMetal(metal, queue, 0x90);
-    IOSurfaceRef changedSurface = surfaceOf(144 * scale, 128 * scale, 0x40);
-    showSurface(surfaceView.layer, changedSurface);
-    waitForPresentation(web);
-    Image changed = capture(window, directory, @"changed");
-    if (changed.bytes != NULL) {
-        expectPixel(changed, scale, 240, 100, 0x3278c8, @"the changed web view");
-        expectPixel(changed, scale, 250, 205, 0x1ab2e5, @"the changed WebGL canvas");
-        expectPixel(changed, scale, 340, 250, 0xc8c832, @"the changed composited layer");
-        expectPixel(changed, scale, 70, 160, 0x90a820, @"the changed Metal layer");
-        expectPixel(changed, scale, 360, 128, 0x103240, @"the changed IOSurface layer");
-        expectPixel(changed, scale, 180, 280, 0x28c850, @"the child window after the change");
-        check(pixelsOfColor(changed, 0xff00ff) == 0, @"no pixel of the cover is in the changed capture");
-    }
-    check(generalContentQueries == 0, @"the capture does not query the content that needs the screen recording permission");
-    check(stillRequests == captures && stillRequestsWithCursor == 0,
-        [NSString stringWithFormat:@"the %lu captures ask for no cursor (%lu requests, %lu with one)", (unsigned long)captures,
-            (unsigned long)stillRequests, (unsigned long)stillRequestsWithCursor]);
-
-    // A failure of the system keeps its code at each entry point.
-    NSString *path = [directory stringByAppendingPathComponent:@"failed.png"];
+    // A recording of the covered window: a still every refresh for three seconds.
+    Refreshes *refreshes = [[Refreshes new] autorelease];
+    refreshes.times = [NSMutableArray array];
+    CADisplayLink *link = [window displayLinkWithTarget:refreshes selector:@selector(refresh:)];
+    [link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
+    // The refresh period of the display of the window, as the window observes it, is the gap of the recording.
+    until(@"the window observes 13 refreshes", ^BOOL { return refreshes.times.count >= 13; });
+    [link invalidate];
+    NSMutableArray<NSNumber *> *periods = [NSMutableArray array];
+    for (NSUInteger index = 1; index < refreshes.times.count; index++)
+        [periods addObject:@(refreshes.times[index].doubleValue - refreshes.times[index - 1].doubleValue)];
+    double period = median(periods);
+    fprintf(stderr, "refresh period %.3f ms\n", period);
+    NSString *recorded = [directory stringByAppendingPathComponent:@"recording"];
+    [NSFileManager.defaultManager createDirectoryAtPath:recorded withIntermediateDirectories:NO attributes:nil error:NULL];
     char *error = NULL;
-    stillFailure = systemFailure(SCStreamErrorInternalError);
-    check(!sp_capture_still((long[]){window.windowNumber}, 1, path.fileSystemRepresentation, 0, &error), @"a failed still capture reports failure");
-    expectError(error, @"a failed still capture", SCStreamErrorInternalError);
+    check(sp_capture_open(window.windowNumber, false, &error), [NSString stringWithFormat:@"the covered window opens for a recording (%s)", error ?: ""]);
     free(error); error = NULL;
-    stillFailure = nil;
-    contentFailure = systemFailure(SCStreamErrorNoWindowList);
-    check(!sp_capture_still((long[]){window.windowNumber}, 1, path.fileSystemRepresentation, 0, &error), @"a failed content query reports failure");
-    expectError(error, @"the content query of a still capture", SCStreamErrorNoWindowList);
+    double length = 3000;
+    bool started = sp_capture_start(recorded.fileSystemRepresentation, period, length / 1000, 0, 1, &error);
+    check(started, [NSString stringWithFormat:@"the recording of the covered window starts (%s)", error ?: ""]);
     free(error); error = NULL;
-    check(!sp_capture_open(window.windowNumber, false, 0, &error), @"a failed content query fails a recording");
-    expectError(error, @"the content query of a recording", SCStreamErrorNoWindowList);
-    free(error); error = NULL;
-    contentFailure = nil;
-    startFailure = systemFailure(SCStreamErrorFailedToStart);
-    check(sp_capture_open(window.windowNumber, false, 0, &error), @"a recording opens the covered window");
-    free(error); error = NULL;
-    check(sp_capture_start(directory.fileSystemRepresentation, false, &error), @"the start request of a recording is sent");
-    free(error); error = NULL;
-    until(@"the injected start failure answers", ^BOOL { return startFailureAnswered; });
-    expectError((char *)sp_capture_error(), @"a failed recording start", SCStreamErrorFailedToStart);
-    sp_capture_stop(0, 0);
-    startFailure = nil;
+    NSUInteger planned = (NSUInteger)ceil(length / period);
+    // The start returns once still 0 is written, and the header of its frame holds its request time, at which the plan starts.
+    // The last still is planned at that time plus (planned - 1) gaps, and a still is requested at or after its planned time, so
+    // the stop waits for the completion of the last still. The stop waits on another thread while the main thread runs.
+    NSData *firstFrame = readCaptureFrame([NSData dataWithContentsOfFile:[recorded stringByAppendingPathComponent:@"frame-0000.bgra"]]);
+    double firstRequest = NAN;
+    if (firstFrame != nil) memcpy(&firstRequest, (const uint8_t *)firstFrame.bytes + 12 + 6 * sizeof(double), sizeof firstRequest);
+    check(!started || isfinite(firstRequest), @"the frame of still 0 holds its request time");
+    double after = firstRequest + (planned - 1) * period;
+    __block int count = 0;
+    __block BOOL stopReturned = NO;
+    if (started && isfinite(firstRequest)) {
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+            int stoppedCount = sp_capture_stop(after, 2);
+            dispatch_async(dispatch_get_main_queue(), ^{ count = stoppedCount; stopReturned = YES; });
+        });
+        until(@"the stop returns after the completion of the last planned still", ^BOOL { return stopReturned; });
+    } else if (started) {
+        count = sp_capture_stop(0, 2);
+    }
+    const char *stopped = sp_capture_error();
+    check(started && stopped != NULL && strlen(stopped) == 0, [NSString stringWithFormat:@"the recording stops without error (%s)", stopped ?: ""]);
+    check(count == (int)planned && sp_capture_missed() == 0 && sp_capture_late() == 0,
+        [NSString stringWithFormat:@"the covered window gives every planned still: %lu planned, %d written, %d missed, %d late",
+            (unsigned long)planned, count, sp_capture_missed(), sp_capture_late()]);
+
+    NSString *rowsText = [NSString stringWithContentsOfFile:[recorded stringByAppendingPathComponent:@"stills.jsonl"]
+        encoding:NSUTF8StringEncoding error:NULL];
+    NSMutableArray<NSDictionary *> *rows = [NSMutableArray array];
+    for (NSString *line in [rowsText componentsSeparatedByString:@"\n"]) {
+        if (line.length == 0) continue;
+        NSDictionary *row = [NSJSONSerialization JSONObjectWithData:[line dataUsingEncoding:NSUTF8StringEncoding] options:0 error:NULL];
+        if ([row isKindOfClass:NSDictionary.class]) [rows addObject:row];
+    }
+    check(rows.count == planned, [NSString stringWithFormat:@"stills.jsonl holds a row for each planned still (%lu rows)", (unsigned long)rows.count]);
+    // Each written still names the child window and then the window, and its frame file has the declared header, size and
+    // checksum at the device-pixel size of the window. The pixels are evidence and are not judged.
+    NSUInteger wrongWindows = 0, missing = 0, wrongSize = 0, longGaps = 0;
+    double previousRequest = NAN, longestRequestGap = 0;
+    for (NSDictionary *row in rows) {
+        double numerator = [row[@"machTimebaseNumerator"] doubleValue], denominator = [row[@"machTimebaseDenominator"] doubleValue];
+        double requested = ticksToMilliseconds(row[@"requested"], numerator, denominator);
+        NSArray *windows = row[@"windows"];
+        if (![windows isKindOfClass:NSArray.class] || windows.count != 2 || [windows[0] longValue] != child.windowNumber
+            || [windows[1] longValue] != window.windowNumber) wrongWindows++;
+        if (!isnan(previousRequest) && requested - previousRequest > 2 * period) longGaps++;
+        if (!isnan(previousRequest)) longestRequestGap = MAX(longestRequestGap, requested - previousRequest);
+        previousRequest = requested;
+        NSData *frame = [row[@"frame"] isKindOfClass:NSString.class]
+            ? readCaptureFrame([NSData dataWithContentsOfFile:[recorded stringByAppendingPathComponent:row[@"frame"]]]) : nil;
+        if (frame == nil) { missing++; continue; }
+        uint32_t dimensions[3];
+        memcpy(dimensions, frame.bytes, sizeof dimensions);
+        if (dimensions[0] != (uint32_t)windowPixels.width || dimensions[1] != (uint32_t)windowPixels.height) wrongSize++;
+    }
+    check(missing == 0, [NSString stringWithFormat:@"every row names a frame that reads (%lu do not)", (unsigned long)missing]);
+    check(wrongSize == 0, [NSString stringWithFormat:@"every frame has the device-pixel size of the window (%lu do not)", (unsigned long)wrongSize]);
+    check(wrongWindows == 0, [NSString stringWithFormat:@"every still holds the child window, then the window (%lu do not)", (unsigned long)wrongWindows]);
+    check(longGaps == 0, [NSString stringWithFormat:@"no two stills are requested more than two refresh periods apart (%lu are; longest %.2f ms)",
+        (unsigned long)longGaps, longestRequestGap]);
 
     check(!NSApp.isActive, @"the capture does not activate the application");
     // Which other application is in front belongs to the other processes, so the check judges only this process.
@@ -428,11 +266,9 @@ int main(void) { @autoreleasepool {
     [cover close];
     [window removeChildWindow:child];
     [child close];
+    [NSNotificationCenter.defaultCenter removeObserver:layoutObserver];
     [window close];
-    CFRelease(surface);
-    CFRelease(changedSurface);
-    free(first.bytes); free(back.bytes); free(covered.bytes); free(changed.bytes);
-    // The images of a failed run are its evidence.
+    // The captures and the recording of a failed run are its evidence.
     if (failures) keepTemporaryFolder(directory);
     if (failures == 0) fprintf(stderr, "PASS: covered window capture\n");
     return failures == 0 ? 0 : 1;

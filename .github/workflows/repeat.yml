@@ -47,15 +47,10 @@ jobs:
           root: core
       - name: Fetch locked Node dependencies
         run: pnpm -C core install --frozen-lockfile
-      - name: Fetch pinned native release file
-        run: make -C core fetch-native
       - name: Build the native library offline
-        env:
-          OFFLINE: '1'
         run: make -C core build-native
       - name: Repeat the native test
         env:
-          OFFLINE: '1'
           SOKSAK_NATIVE_TEST_RUN_FOLDER: ${{ runner.temp }}/soksak-native-darwin
           TEST: ${{ inputs.test }}
           COUNT: ${{ inputs.count }}
@@ -98,16 +93,11 @@ jobs:
       - name: Fetch locked Rust dependencies
         working-directory: core
         run: cargo fetch --locked
-      - name: Fetch pinned native release file
-        run: make -C core fetch-native
       - name: Build the native library and the Tauri frontend offline
-        env:
-          OFFLINE: '1'
         run: make -C core build-native copy-frontend-tauriv2
       - name: Repeat the Rust test
         env:
           CARGO_NET_OFFLINE: 'true'
-          OFFLINE: '1'
           PKG_CONFIG_PATH: ${{ github.workspace }}/core/native/darwin/build
           PACKAGE: ${{ inputs.package }}
           TEST_TARGET: ${{ inputs.test_target }}

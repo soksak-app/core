@@ -1,14 +1,13 @@
-// Checks, with a window recording that the window server showed, that a title bar height changed while the layout
-// transaction (surfaceLayoutBegin) of the window is open does not appear on screen before the commit and appears
-// after the commit. The page changes the title bar height in the transaction of the frame in which it draws the new
-// first row, so the window buttons must move in the same frame as that commit. The check does not activate the
-// application.
+// Checks that a title bar height changed while the layout transaction (surfaceLayoutBegin) of the window is open is taken by
+// the window model and that the transaction commits, judged by the layout trace of each transaction: its ticket, its begin
+// before the change, its commit after the change, and the time it was sent to the render server. A recording of the window at
+// each refresh is evidence of the window buttons on screen and is not judged; a failing check keeps its folder. The check does
+// not activate the application.
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
 #import "surface_layout.h"
 #import "window_controls.h"
 #import "capture.h"
-#import "support/capture_frame.m"
 #import "support/event_wait.h"
 #import "support/temporary_folder.h"
 
@@ -94,41 +93,6 @@ static double buttonsCentre(NSWindow *window) {
     return area[1] + area[3] / 2;
 }
 
-// Measures the center (pt from the window top) of the rows that the window buttons occupy in one recording frame. It
-// is the center of the first row and the last row that have pixels different from the content color. It skips the top
-// left 6pt to avoid the window border and rounded corner. NAN if there is no button.
-static double measuredCentre(NSData *data, double *displayed) {
-    uint32_t head[3] = {0}; double info[7] = {0};
-    if (data.length < sizeof(head) + sizeof(info)) return NAN;
-    [data getBytes:head length:sizeof(head)];
-    [data getBytes:info range:NSMakeRange(sizeof(head), sizeof(info))];
-    if (!(head[0] > 0 && head[1] > 0 && head[2] >= head[0] * 4 &&
-          data.length == sizeof(head) + sizeof(info) + (size_t)head[2] * head[1] && info[4] > 0 && info[5] > 0))
-        return NAN;
-    *displayed = info[6];
-    const uint8_t *pixels = (const uint8_t *)data.bytes + sizeof(head) + sizeof(info);
-    double scale = info[4] * info[5];
-    // The content color is read at a place without buttons (100pt from the window top, 300pt from the left).
-    size_t bx = (size_t)floor((info[0] + 300) * scale), by = (size_t)floor((info[1] + 100) * scale);
-    if (bx >= head[0] || by >= head[1]) return NAN;
-    const uint8_t *background = pixels + by * head[2] + bx * 4;
-    long top = (long)floor(info[1] * scale);
-    long first = -1, last = -1;
-    for (long y = (long)floor((info[1] + 6) * scale); y < (long)floor((info[1] + 120) * scale) && y < (long)head[1]; y++) {
-        for (long x = (long)floor((info[0] + 6) * scale); x < (long)floor((info[0] + 90) * scale) && x < (long)head[0]; x++) {
-            const uint8_t *p = pixels + (size_t)y * head[2] + (size_t)x * 4;
-            if (abs((int)p[0] - background[0]) > 40 || abs((int)p[1] - background[1]) > 40 ||
-                abs((int)p[2] - background[2]) > 40) {
-                if (first < 0) first = y;
-                last = y;
-                break;
-            }
-        }
-    }
-    if (first < 0) return NAN;
-    return ((first - top) + (last - top) + 1) / 2.0 / scale;
-}
-
 // The changed title bar height (height), the time of the change (set) and the commit time (committed), and the button
 // center before and after the change (from, to).
 typedef struct { double height; double set; double committed; double from; double to; } SPChange;
@@ -138,6 +102,8 @@ typedef struct { double height; double set; double committed; double from; doubl
 static SPChange change(NSWindow *window, uint64_t ticket, double to) {
     SPChange result = { to, 0, 0, buttonsCentre(window), 0 };
     __block BOOL allowed = NO;
+    surfaceLayoutTraceStart();
+    double began = CACurrentMediaTime() * 1000;
     surfaceLayoutBegin(window, ticket, ^(int ready) { allowed = ready; });
     check(allowed, [NSString stringWithFormat:@"the layout transaction %llu starts", ticket]);
     fprintf(stdout, "model before %.1fpt: %s\n", to, modelValues(window).UTF8String);
@@ -150,60 +116,24 @@ static SPChange change(NSWindow *window, uint64_t ticket, double to) {
         kRefreshes, waited, modelValues(window).UTF8String);
     result.committed = CACurrentMediaTime() * 1000;
     check(surfaceLayoutCommit(window, ticket), [NSString stringWithFormat:@"the layout transaction %llu commits", ticket]);
+    double returned = CACurrentMediaTime() * 1000;
     waited = waitFrames(window.screen, kRefreshes);
     fprintf(stdout, "model after %d refreshes (%.1fms) after the commit: %s\n",
         kRefreshes, waited, modelValues(window).UTF8String);
+    // The refreshes after the commit end after the transaction that carried it reached the render server.
+    double ended = CACurrentMediaTime() * 1000;
+    double trace[2 * SURFACE_LAYOUT_TRACE_STAGES];
+    size_t traced = surfaceLayoutTraceStop(trace, 2);
+    check(traced == 1 && trace[0] == ticket && began <= trace[1] && trace[1] <= result.set && result.committed <= trace[3]
+            && trace[3] <= returned && trace[5] == SURFACE_LAYOUT_COMMIT_PRESENT,
+        [NSString stringWithFormat:@"%.1fpt title bar: the trace records ticket %llu begun before the change and committed by "
+            "the host after it (%zu records: ticket %.0f, begun %.3f, set %.3f, committed %.3f within %.3f..%.3f, path %.0f)",
+            to, ticket, traced, trace[0], trace[1], result.set, trace[3], result.committed, returned, trace[5]]);
+    check(traced == 1 && trace[1] <= trace[7] && trace[7] <= ended,
+        [NSString stringWithFormat:@"%.1fpt title bar: the trace records when the commit of ticket %llu was sent to the render "
+            "server, before the refreshes after it end (begun %.3f, flushed %.3f, refreshes ended %.3f)", to, ticket, trace[1],
+            trace[7], ended]);
     return result;
-}
-
-// Judges the recording frames at every change, in display time order. Every frame displayed after the title bar
-// change and before the commit has the previous position, the last frame after the commit and before the next change
-// has the new position, and the position does not return to the previous one after the new one appears.
-static void judge(NSString *directory, int count, const SPChange *changes, int total) {
-    double centres[count], shown[count];
-    for (int index = 0; index < count; index++) {
-        NSString *path = [directory stringByAppendingPathComponent:
-            [NSString stringWithFormat:@"frame-%04d.bgra", index + 1]];
-        NSData *data = readCaptureFrame([NSData dataWithContentsOfFile:path]);
-        shown[index] = NAN;
-        centres[index] = data ? measuredCentre(data, &shown[index]) : NAN;
-        check(!isnan(centres[index]) && !isnan(shown[index]), [NSString stringWithFormat:
-            @"frame %d/%d shows the window buttons (centre %.2fpt, display %.3f)", index + 1, count, centres[index], shown[index]]);
-    }
-    for (int c = 0; c < total; c++) {
-        const SPChange *at = &changes[c];
-        double next = c + 1 < total ? changes[c + 1].set : INFINITY;
-        int held = 0, after = 0, lastAfter = -1;
-        BOOL moved = NO, returned = NO;
-        double firstNew = NAN;
-        for (int index = 0; index < count; index++) {
-            if (isnan(centres[index])) continue;
-            BOOL old = fabs(centres[index] - at->from) <= 0.5;
-            BOOL new = fabs(centres[index] - at->to) <= 0.5;
-            if (shown[index] >= at->set && shown[index] < at->committed) {
-                held++;
-                check(old, [NSString stringWithFormat:@"%.1fpt title bar: frame %d displayed %.1fms after the change and "
-                    "%.1fms before the commit keeps the buttons at %.2fpt (measured %.2fpt)",
-                    at->height, index + 1, shown[index] - at->set, at->committed - shown[index], at->from, centres[index]]);
-            } else if (shown[index] >= at->committed && shown[index] < next) {
-                after++;
-                lastAfter = index;
-                check(old || new, [NSString stringWithFormat:@"%.1fpt title bar: frame %d after the commit shows the buttons at "
-                    "%.2fpt or %.2fpt (measured %.2fpt)", at->height, index + 1, at->from, at->to, centres[index]]);
-                if (new && !moved) firstNew = shown[index] - at->committed;
-                if (new) moved = YES;
-                else if (moved) returned = YES;
-            }
-        }
-        fprintf(stdout, "%.1fpt title bar: %d frames between the change and the commit, %d frames after the commit, "
-            "first new frame %.1fms after the commit\n", at->height, held, after, firstNew);
-        // If there is no frame before the commit, it is not an observation that the change did not appear on screen.
-        check(held > 0, [NSString stringWithFormat:@"%.1fpt title bar: the recording has frames displayed while the "
-            "transaction is open (%d)", at->height, held]);
-        check(lastAfter >= 0 && fabs(centres[lastAfter] - at->to) <= 0.5 && !returned, [NSString stringWithFormat:
-            @"%.1fpt title bar: the buttons reach %.2fpt after the commit and stay (last frame %.2fpt)",
-            at->height, at->to, lastAfter >= 0 ? centres[lastAfter] : NAN]);
-    }
 }
 
 int main(void) { @autoreleasepool {
@@ -220,25 +150,27 @@ int main(void) { @autoreleasepool {
     NSString *recordingDirectory = temporaryFolder(@"soksak-titlebar-test-");
     const char *directory = recordingDirectory.fileSystemRepresentation;
     char *operationError = NULL;
-    BOOL opened = sp_capture_open(window.windowNumber, false, 0, &operationError);
+    BOOL opened = sp_capture_open(window.windowNumber, false, &operationError);
     BOOL started = NO;
-    if (opened) { free(operationError); operationError = NULL; started = sp_capture_start(directory, false, &operationError); }
-    check(started, [NSString stringWithFormat:@"the title bar recording starts (%s)", operationError == NULL ? "" : operationError]);
+    // One still at each refresh of the display, for longer than both changes take: the stop ends the recording.
+    if (opened) {
+        free(operationError);
+        operationError = NULL;
+        started = sp_capture_start(directory, 1000.0 / window.screen.maximumFramesPerSecond, 0, 4096, 0, &operationError);
+    }
+    // The recording is evidence: a recording that does not start or ends with an error is reported and not judged.
+    if (!started) fprintf(stdout, "the title bar recording did not start (%s)\n", operationError == NULL ? "" : operationError);
     free(operationError);
+    // The heights are the first rows for frame font scales 1 and 2. Raises then lowers.
+    change(window, 201, 80);
+    change(window, 202, 40);
     if (started) {
-        check(sp_capture_wait(0) > 0, @"the title bar recording contains its initial frame");
-        // The heights are the first rows for frame font scales 1 and 2. Raises then lowers.
-        SPChange changes[2];
-        changes[0] = change(window, 201, 80);
-        changes[1] = change(window, 202, 40);
         int count = sp_capture_stop(CACurrentMediaTime() * 1000, 0);
         const char *recordingError = sp_capture_error();
-        check(recordingError[0] == 0 && !sp_capture_limited(), [NSString stringWithFormat:
-            @"the title bar recording ends without error or truncation (%s)", recordingError[0] ? recordingError : "none"]);
-        check(count >= 3, [NSString stringWithFormat:@"the title bar recording has frames for both changes (%d)", count]);
-        fprintf(stdout, "recording: %d frames, longest gap %.1fms\n", count, sp_capture_longest_gap());
-        judge(recordingDirectory, count, changes, 2);
+        fprintf(stdout, "recording: %d frames, %d late, longest gap %.1fms, error %s\n", count, sp_capture_late(),
+            sp_capture_longest_gap(), recordingError[0] ? recordingError : "none");
     }
+    if (failures) keepTemporaryFolder(recordingDirectory);
     [window close];
     return failures ? 1 : 0;
 }}

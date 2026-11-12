@@ -7,13 +7,12 @@ import "github.com/soksak-app/core/packages/host/go/src/platform/darwin/abi"
 
 func diagnosticCallbackHandlers() abi.DiagnosticCallbacks {
 	return abi.DiagnosticCallbacks{
-		NativeInputSourceAdopted:  goHost_native_input_source_adopted,
-		WindowObjectsCounted:      goHost_window_objects_counted,
-		PageObjectsCounted:        goHost_page_objects_counted,
-		DeliveredNotifications:    goHost_delivered_notifications,
-		DocumentFrameIdentityDone: goHost_document_frame_identity_done,
-		InputReferenceReply:       goHost_input_reference_reply,
-		ProcessExitAnswered:       goHost_process_exit_answered,
-		CaptureAnswered:           goHost_capture_answered,
+		NativeInputSourceAdopted: goHost_native_input_source_adopted,
+		WindowObjectsCounted:     goHost_window_objects_counted,
+		PageObjectsCounted:       goHost_page_objects_counted,
+		DeliveredNotifications:   goHost_delivered_notifications,
+		InputReferenceReply:      goHost_input_reference_reply,
+		ProcessExitAnswered:      goHost_process_exit_answered,
+		CaptureAnswered:          goHost_capture_answered,
 	}
 }

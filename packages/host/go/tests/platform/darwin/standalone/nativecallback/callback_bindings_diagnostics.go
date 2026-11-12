@@ -33,9 +33,6 @@ func BindDiagnostic(callbacks abi.DiagnosticCallbacks) (abi.DiagnosticTable, err
 	if callbacks.DeliveredNotifications == nil {
 		return abi.DiagnosticTable{}, fmt.Errorf("native callback is missing: delivered_notifications")
 	}
-	if callbacks.DocumentFrameIdentityDone == nil {
-		return abi.DiagnosticTable{}, fmt.Errorf("native callback is missing: document_frame_identity_done")
-	}
 	if callbacks.InputReferenceReply == nil {
 		return abi.DiagnosticTable{}, fmt.Errorf("native callback is missing: input_reference_reply")
 	}
@@ -50,7 +47,6 @@ func BindDiagnostic(callbacks abi.DiagnosticCallbacks) (abi.DiagnosticTable, err
 		purego.NewCallback(callbacks.WindowObjectsCounted),
 		purego.NewCallback(callbacks.PageObjectsCounted),
 		purego.NewCallback(callbacks.DeliveredNotifications),
-		purego.NewCallback(callbacks.DocumentFrameIdentityDone),
 		purego.NewCallback(callbacks.InputReferenceReply),
 		purego.NewCallback(callbacks.ProcessExitAnswered),
 		purego.NewCallback(callbacks.CaptureAnswered),

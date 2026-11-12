@@ -94,19 +94,11 @@ MYGO_LIBRARY := $(BUILD)/mygo/libsoksak-darwin.dylib
 HOST_CALLBACK_ABI_LIBRARY := $(BUILD)/libhost_callback_abi.dylib
 HOST_CALLBACK_WORKER_LIBRARY := $(BUILD)/libhost_callback_worker.dylib
 PKGCONFIG  := $(BUILD)/soksak-darwin.pc
-FRAMEWORKS := -framework Cocoa -framework WebKit -framework QuartzCore -framework CoreImage -framework ScreenCaptureKit -framework CoreMedia -framework CoreVideo -framework IOSurface -framework Carbon -framework UserNotifications -lcompression -lz -lc++
-ZXING_COMMIT := 287c85df6f961c8efbfb5ffd736cd9457b8b890e
-ZXING_URL := https://codeload.github.com/zxing-cpp/zxing-cpp/tar.gz/$(ZXING_COMMIT)
-ZXING_SHA256 := 97d952c661b1f79d21aacc2ec544ef05c4d1465f55692cc49622ea6a8166ca7b
-OFFLINE ?= 0
-ZXING_RELEASE_FILE := $(BUILD)/zxing-cpp-$(ZXING_COMMIT).tar.gz
-ZXING_SOURCE := $(BUILD)/zxing-cpp-$(ZXING_COMMIT)
-ZXING_BUILD := $(BUILD)/zxing-cpp-build
-ZXING_INSTALL := $(BUILD)/zxing-cpp-install
-ZXING_LIBRARY := $(ZXING_INSTALL)/lib/libZXing.a
-# The newest API the sources use is from macOS 14.4 (getCurrentProcessShareableContentWithCompletionHandler in
-# capture.m). MACOS_MINIMUM of the Makefile of the repository declares that version once: that Makefile passes it, a make
-# in this folder alone reads it, and this Makefile passes it to the process identity package.
+FRAMEWORKS := -framework Cocoa -framework WebKit -framework QuartzCore -framework CoreImage -framework IOSurface -framework Carbon -framework UserNotifications -lcompression -lz
+# The minimum macOS version is 14.4; the newest API that the sources call, the display link of a window or a view
+# (displayLinkWithTarget:selector: in capture.m and surface_layout.m), needs macOS 14.0. MACOS_MINIMUM of the Makefile of
+# the repository declares that version once: that Makefile passes it, a make in this folder alone reads it, and this
+# Makefile passes it to the process identity package.
 # The same minimum version is also put in Cflags and Libs of the .pc so that the builds that use it compile and link
 # with it.
 ifeq ($(origin MACOS_MINIMUM),undefined)
@@ -116,85 +108,31 @@ ifeq ($(MACOS_MINIMUM),)
 $(error $(abspath $(CURDIR)/../../Makefile) declares no MACOS_MINIMUM = <macOS version>)
 endif
 MINIMUM    := -mmacosx-version-min=$(MACOS_MINIMUM)
-# The architecture of the release platform darwin-arm64. Every clang call and the ZXing configure name it, so a make that
-# runs as a translated process builds no part for another architecture.
+# The architecture of the release platform darwin-arm64. Every clang call names it, so a make that runs as a translated
+# process builds no part for another architecture.
 ARCH       := arm64
-
-ifneq ($(OFFLINE),0)
-ifneq ($(OFFLINE),1)
-$(error OFFLINE must be 0 or 1 (got '$(OFFLINE)'))
-endif
-endif
 
 CFLAGS     := -arch $(ARCH) -fblocks -fmodules -Wall -Werror -O2 $(MINIMUM)
 
-.PHONY: build-host-callback-worker build-host-callback-abi build fetch test test-app benchmark-site-cost test-capture-frame-identity test-capture-stop-intake test-app-activation test-app-virtual-ime test-app-input-reference-readiness test-app-activation-backspace test-app-activation-backspace-repeat build-ime-activation-target test-ime-cli test-app-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost benchmark-webview-resize-cadence build-test repeat repeat-suite clean pkgconfig-current
+.PHONY: build-host-callback-worker build-host-callback-abi build test test-app benchmark-site-cost test-capture-stop-intake test-app-activation test-app-virtual-ime test-app-input-reference-readiness test-app-activation-backspace test-app-activation-backspace-repeat build-ime-activation-target test-ime-cli test-app-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost benchmark-webview-resize-cadence build-test repeat repeat-suite clean pkgconfig-current
 
-build: fetch $(LIBRARY) $(PKGCONFIG)
+build: $(LIBRARY) $(PKGCONFIG)
 
 # Keep the dynamic artifact in its own directory so existing static consumers
 # never change link mode through the linker's -l search order.
 .PHONY: build-mygo
 build-mygo: build $(MYGO_LIBRARY)
 
-$(MYGO_LIBRARY): $(OBJECTS) $(ZXING_LIBRARY)
+$(MYGO_LIBRARY): $(OBJECTS)
 	@mkdir -p $(@D)
-	@clang $(CFLAGS) -dynamiclib -install_name @rpath/libsoksak-darwin.dylib $(OBJECTS) $(ZXING_LIBRARY) $(FRAMEWORKS) -framework Network -o $@
+	@clang $(CFLAGS) -dynamiclib -install_name @rpath/libsoksak-darwin.dylib $(OBJECTS) $(FRAMEWORKS) -framework Network -o $@
 
-$(BUILD)/%.o: src/%.m $(wildcard src/*.h src/private/*.h) Makefile $(ZXING_LIBRARY) | $(BUILD)
-	@clang $(CFLAGS) -I$(ZXING_INSTALL)/include -c $< -o $@
+$(BUILD)/%.o: src/%.m $(wildcard src/*.h src/private/*.h) Makefile | $(BUILD)
+	@clang $(CFLAGS) -c $< -o $@
 
-fetch: | $(BUILD)
-	@set -eu; \
-	  if [ -f '$(ZXING_RELEASE_FILE)' ]; then \
-	    printf '%s  %s\n' '$(ZXING_SHA256)' '$(ZXING_RELEASE_FILE)' | shasum -a 256 -c -; \
-	  elif [ '$(OFFLINE)' = '1' ]; then \
-	    echo 'ERROR: offline mode is missing pinned ZXing release file $(ZXING_RELEASE_FILE)' >&2; exit 1; \
-	  else \
-	    curl -L --fail --show-error '$(ZXING_URL)' -o '$(ZXING_RELEASE_FILE).part'; \
-	    printf '%s  %s\n' '$(ZXING_SHA256)' '$(ZXING_RELEASE_FILE).part' | shasum -a 256 -c -; \
-	    mv '$(ZXING_RELEASE_FILE).part' '$(ZXING_RELEASE_FILE)'; \
-	  fi
-
-$(ZXING_RELEASE_FILE): | fetch
-	@test -f '$@' || { echo 'ERROR: pinned ZXing release file was not produced at $@' >&2; exit 1; }
-
-# The entries of the pinned release file have modification times older than the file itself, so the extracted files
-# are stamped with the extraction time (-m) and the LICENSE target is current after the extraction. The tree is
-# extracted into a temporary folder and moved into place, so a concurrent make never sees a partial tree; a tree that
-# another make has already moved into place (its LICENSE is newer than the release file) is kept.
-$(ZXING_SOURCE)/LICENSE: $(ZXING_RELEASE_FILE) | $(BUILD)
-	@set -eu; \
-	  tmp=$$(mktemp -d '$(ZXING_SOURCE).XXXXXX'); \
-	  if tar -xmzf '$(ZXING_RELEASE_FILE)' --strip-components=1 -C "$$tmp" && test -f "$$tmp/LICENSE"; then \
-	    if [ '$(ZXING_SOURCE)/LICENSE' -nt '$(ZXING_RELEASE_FILE)' ]; then \
-	      rm -rf "$$tmp"; \
-	    else \
-	      rm -rf '$(ZXING_SOURCE)' && mv "$$tmp" '$(ZXING_SOURCE)'; \
-	    fi; \
-	  else \
-	    rm -rf "$$tmp"; exit 1; \
-	  fi
-	@test -f $@
-
-# The configure starts from a new build folder, so no value that an earlier configure detected remains in its cache.
-$(ZXING_LIBRARY): $(ZXING_SOURCE)/LICENSE Makefile
-	@rm -rf $(ZXING_BUILD) $(ZXING_INSTALL)
-	@cmake -S $(ZXING_SOURCE)/core -B $(ZXING_BUILD) \
-	  -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=$(ARCH) -DCMAKE_OSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM) \
-	  -DCMAKE_INSTALL_PREFIX=$(ZXING_INSTALL) -DBUILD_SHARED_LIBS=OFF \
-	  -DZXING_READERS=ON -DZXING_WRITERS=OFF -DZXING_C_API=ON \
-	  -DZXING_ENABLE_1D=OFF -DZXING_ENABLE_AZTEC=OFF -DZXING_ENABLE_DATAMATRIX=OFF \
-	  -DZXING_ENABLE_MAXICODE=OFF -DZXING_ENABLE_PDF417=OFF -DZXING_ENABLE_QRCODE=ON
-	@cmake --build $(ZXING_BUILD) --config Release --target ZXing -j 4
-	@cmake --install $(ZXING_BUILD) --config Release
-	@mkdir -p $(ZXING_INSTALL)/share/licenses/ZXing
-	@cp $(CURDIR)/THIRD_PARTY_LICENSES/ZXing-LICENSE.txt $(ZXING_INSTALL)/share/licenses/ZXing/LICENSE
-	@test -f $(ZXING_LIBRARY)
-
-$(LIBRARY): $(OBJECTS) $(ZXING_LIBRARY)
+$(LIBRARY): $(OBJECTS)
 	@rm -f $@
-	@libtool -static -o $@ $(OBJECTS) $(ZXING_LIBRARY)
+	@libtool -static -o $@ $(OBJECTS)
 
 # The file content depends on the current location, so every build compares it. pkgconfig-current marks that this
 # comparison is required.
@@ -275,7 +213,7 @@ benchmark-site-cost: $(BUILD)/site_cost_benchmark
 	@$(BUILD)/site_cost_benchmark --runs $(RUNS)
 
 # A check that includes the acceptance check body is rebuilt when that body changes.
-$(BUILD)/capture_checker_test $(BUILD)/capture_file_checker_test $(BUILD)/capture_lifecycle_test $(BUILD)/capture_directory_checker_test: tests/capture_test.m
+$(BUILD)/capture_checker_test $(BUILD)/capture_file_checker_test $(BUILD)/capture_directory_checker_test: tests/capture_test.m
 
 # Notification Center accepts only processes started from a bundle, so the notification check also runs inside a
 # bundle.
@@ -287,10 +225,6 @@ $(BUILD)/notifications_test.app/Contents/MacOS/notifications_test: $(BUILD)/noti
 $(BUILD)/capture_file_checker_test: tests/capture_test.m
 
 $(BUILD)/capture_checker_test: tests/capture_test.m
-
-$(BUILD)/capture_lifecycle_test: tests/capture_test.m src/capture.m
-
-$(BUILD)/capture_callback_test: src/capture.m
 
 $(BUILD)/capture_stop_intake_test: src/capture.m
 
@@ -306,24 +240,13 @@ $(BUILD)/capture_storage_test: src/capture.m
 
 $(BUILD)/capture_metadata_test: src/capture.m
 
-$(BUILD)/capture_source_writer_test: src/capture.m
-
 $(BUILD)/capture_resize_test: src/capture.m
 
 $(BUILD)/capture_covered_test: tests/capture_covered_test.m tests/support/event_wait.m tests/support/temporary_folder.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h tests/support/*.h)
 	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m tests/support/event_wait.m tests/support/temporary_folder.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Metal -framework Network $(MINIMUM) -o $@
 
-$(BUILD)/capture_presentation_test: tests/capture_presentation_test.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h)
-	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Metal -framework Network $(MINIMUM) -o $@
-
-$(BUILD)/image_region_capture_presentation_test: tests/image_region_capture_presentation_test.m tests/support/event_wait.m tests/support/no_activation.m tests/support/temporary_folder.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h tests/support/*.h)
-	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/event_wait.m tests/support/no_activation.m tests/support/temporary_folder.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
-
-$(BUILD)/image_capture_match_test: tests/image_capture_match_test.m tests/support/event_wait.m tests/support/temporary_folder.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h tests/support/*.h)
-	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m tests/support/event_wait.m tests/support/temporary_folder.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
-
-$(BUILD)/capture_frame_identity_test: tests/capture_frame_identity_test.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h)
-	@clang $(CFLAGS) -I$(CURDIR)/src $< -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) $(MINIMUM) -o $@
+$(BUILD)/capture_presentation_test: tests/capture_presentation_test.m tests/support/event_wait.m tests/support/no_activation.m tests/support/temporary_folder.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h tests/support/*.h)
+	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m tests/support/event_wait.m tests/support/temporary_folder.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Metal -framework Network $(MINIMUM) -o $@
 
 # The native tests in the order they run: executables of the build folder, with an argument after a comma. They run one at a time
 # through the test runner (scripts/native-tests.mjs), which writes the start, the end and the elapsed time of each; NATIVE_TEST_ONLY=<text>
@@ -446,24 +369,19 @@ NATIVE_TESTS = observe_test \
   capture_boundary_test \
   temporary_folder_test \
   document_store_end_test \
-  capture_stop_late_test \
   capture_stop_intake_test \
   capture_cleanup_test \
   capture_preparation_test \
   capture_pressure_test \
   capture_storage_test \
   capture_metadata_test \
-  image_capture_match_test \
-  capture_frame_identity_test \
-  capture_frame_identity_capture_test \
-  capture_source_writer_test \
   capture_frame_test \
   dock_menu_test \
   appearance_test \
   notifications_test \
   notifications_test.app/Contents/MacOS/notifications_test,--bundled
 
-# The native end-to-end tests: they need the presentation times and the ScreenCaptureKit frames of a display, so they run only
+# The native end-to-end tests: they need the presentation times and the window server images of a display, so they run only
 # locally through e2e (docs/operations/examples.md#test-kinds). test runs the unit tests of NATIVE_TESTS.
 NATIVE_E2E_TESTS = window_titlebar_layout_test \
   window_titlebar_reload_test \
@@ -475,11 +393,8 @@ NATIVE_E2E_TESTS = window_titlebar_layout_test \
   capture_checker_test \
   capture_file_checker_test \
   capture_directory_checker_test \
-  capture_lifecycle_test \
   capture_cycles_test \
-  capture_callback_test \
-  window_show_hold_test \
-  image_region_capture_presentation_test
+  window_show_hold_test
 
 comma := ,
 executables = $(foreach entry,$(1),$(firstword $(subst $(comma), ,$(entry))))
@@ -501,9 +416,6 @@ test-app: $(addprefix $(BUILD)/,$(call executables,$(NATIVE_E2E_TESTS)))
 
 benchmark-webview-resize-cadence: $(BUILD)/webview_resize_cadence_test
 	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) webview_resize_cadence_test
-
-test-capture-frame-identity: $(BUILD)/capture_frame_identity_test
-	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) capture_frame_identity_test
 
 test-capture-stop-intake: $(BUILD)/capture_stop_intake_test
 	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) capture_stop_intake_test

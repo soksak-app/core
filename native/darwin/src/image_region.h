@@ -40,8 +40,7 @@ bool sp_region_set_spare_delay(double seconds);
 
 // Shows an external IOSurface. token_id is the global ID of the IOSurface, nonce is 16 bytes of data for the nonce
 // comparison, width and height are the size in device pixels, and scale is the scale at which the image was made
-// (used as contentsScale). The accepted snapshot retains its generic source identity. That identity does not report
-// physical display presentation. Returns true on success and false if the surface is not found or the size does not match.
+// (used as contentsScale). Returns true on success and false if the surface is not found or the size does not match.
 bool sp_region_present(void *region, unsigned int token_id, const unsigned char *nonce, double width, double height,
     double scale, uint64_t generation, uint64_t raster, int sequence);
 
@@ -58,9 +57,6 @@ void sp_region_caret(void *region, double x, double y, double w, double h);
 // Diagnostic builds can give the region a controlled input context. NULL restores AppKit's context. The region retains
 // the supplied context. Production builds omit this test interface.
 void sp_region_set_input_context(void *region, void *context);
-// Writes the stable 16-byte token with which an opt-in frame identity tags every frame of the region, whichever IOSurface
-// carries the frame (docs/spec/diagnostics.md). Diagnostic builds only.
-void sp_region_identity_token(void *region, unsigned char token[16]);
 
 // Stores the string that is exposed as the accessibility value.
 void sp_region_text(void *region, const char *utf8);
@@ -78,7 +74,3 @@ const char *sp_region_facts(void *region);
 
 // Removes and releases the region. event is not called afterward.
 void sp_region_close(void *region);
-
-// Restores every live image-region layer to its latest immutable raw snapshot after diagnostic identity capture.
-// Called on the main thread; repeated calls are harmless.
-void sp_region_restore_capture_identity(void);

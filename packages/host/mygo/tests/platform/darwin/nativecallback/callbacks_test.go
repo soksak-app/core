@@ -208,7 +208,7 @@ func TestNativeCallbacksPreserveTheDeclaredABI(t *testing.T) {
 		"NativeFullscreenDone", "SurfacePressed", "SurfacePoint", "InputDelivered", "InputActivated",
 		"DocumentChanged", "DocumentMessage", "ViewMessage", "ViewEnded", "ViewResponsiveness", "DocumentStream", "CoreRootServe",
 		"DocumentQueried", "DocumentEvent", "MemoryPressure", "DockNewWindow", "MouseButtonsChanged", "NativeInputSourceAdopted",
-		"WindowObjectsCounted", "PageObjectsCounted", "DeliveredNotifications", "DocumentFrameIdentityDone", "InputReferenceReply", "ProcessExitAnswered",
+		"WindowObjectsCounted", "PageObjectsCounted", "DeliveredNotifications", "InputReferenceReply", "ProcessExitAnswered",
 		"CaptureAnswered",
 	}
 	if !reflect.DeepEqual(order, wantOrder) {

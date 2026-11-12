@@ -83,6 +83,7 @@ impl State {
             .held
             .get(window)
             .map(|held| held.iter().map(|dialog| &dialog.request).collect())
+            // default: a window that holds no dialog has no entry, and its value is the empty list of pending requests.
             .unwrap_or_default();
         json!({ "pending": pending })
     }

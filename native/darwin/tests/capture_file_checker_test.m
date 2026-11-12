@@ -1,20 +1,23 @@
-// Truncates a file that was really recorded to its size header to check that the argument check rejects the incomplete buffer.
+// Truncates a file that was really recorded to its header, before the compressed pixels, to check that the argument check rejects
+// the incomplete frame.
 #import <Cocoa/Cocoa.h>
 #import "capture.h"
 #include <unistd.h>
 
 static NSString *recordingDirectory;
 static BOOL faultApplied;
-static bool startWithDirectory(const char *directory, bool frameIdentity, char **error) {
-    bool started = sp_capture_start(directory, frameIdentity, error);
-    if (started) recordingDirectory = [[NSString stringWithUTF8String:directory] copy];
+static bool startWithDirectory(const char *directory, double gap, double seconds, int frames, uint64_t token,
+    char **error) {
+    bool started = sp_capture_start(directory, gap, seconds, frames, token, error);
+    // The first recording is the one whose frames the acceptance reads.
+    if (started && recordingDirectory == nil) recordingDirectory = [[NSString stringWithUTF8String:directory] copy];
     return started;
 }
 static int stopWithTruncatedFrame(double after, uint64_t token) {
     int count = sp_capture_stop(after, token);
-    if (count > 0) {
+    if (count > 0 && !faultApplied) {
         NSString *file = [recordingDirectory stringByAppendingPathComponent:@"frame-0001.bgra"];
-        faultApplied = truncate(file.UTF8String, 3 * sizeof(uint32_t)) == 0;
+        faultApplied = truncate(file.UTF8String, 3 * sizeof(uint32_t) + 8 * sizeof(double)) == 0;
         if (!faultApplied) fprintf(stderr, "fixture frame truncation failed: %s\n", strerror(errno));
     }
     return count;

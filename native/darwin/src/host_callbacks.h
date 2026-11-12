@@ -61,7 +61,6 @@
     X(V, void, window_objects_counted, (uintptr_t context, long compositions, long hosts, long registrations, bool reached), (context, compositions, hosts, registrations, reached)) \
     X(V, void, page_objects_counted, (uintptr_t context, long elements, long documents, char *failure), (context, elements, documents, failure)) \
     X(V, void, delivered_notifications, (uintptr_t context, char *json), (context, json)) \
-    X(V, void, document_frame_identity_done, (uintptr_t context, char *reply, char *failure), (context, reply, failure)) \
     X(V, void, input_reference_reply, (uintptr_t context, char *value, char *failure), (context, value, failure)) \
     X(V, void, process_exit_answered, (uintptr_t context, bool exited), (context, exited)) \
     X(V, void, capture_answered, (uintptr_t context, long result, char *failure), (context, result, failure))

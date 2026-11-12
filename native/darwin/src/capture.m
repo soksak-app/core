@@ -1,312 +1,333 @@
-// Records the application windows with a ScreenCaptureKit stream.
+// Records the application windows as a series of stills.
 //
-// The window server composites the page, the surfaces, and the modals, so the composite is what is measured. A
-// screenshot
-// requested one at a time returns a composite made at the time of the request, so a state that lasts one frame
-// between a resize
-// and the next render is not captured. The stream delivers the frames that the compositor presented
-// as they are.
+// Each still is the image of the window and its child windows that the window server composited, which the application asks
+// for its own windows with CGWindowListCreateImageFromArray. The window server answers with what it shows, so the page, the
+// surfaces and the modals are measured as they appeared, also while other windows cover the window. A still is requested at
+// its planned time whether or not the stills before it completed, and each still keeps the time of its request and of its
+// completion: the window showed the content of the still at some time between the two.
 //
-// CGWindowListCreateImage is rejected at compile time from macOS 15. ScreenCaptureKit is the
-// replacement interface.
+// The macOS 15 SDK marks CGWindowListCreateImageFromArray obsolete, so the capture looks it up at run time
+// (docs/operations/private-native-apis.md). A macOS without it fails the open and the still with an error that names it.
+// ScreenCaptureKit is not used: the stream of a covered window stopped delivering frames one to two seconds after its start,
+// and its still could not follow a refresh of 8.3 ms (docs/features.md, F746).
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
+#import <CommonCrypto/CommonDigest.h>
 #import "capture.h"
 #import "window_reveal.h"
-#import "image_capture_match.h"
-#import "image_region.h"
 #import "application_log.h"
 #import "event_ring.h"
 #import "observe.h"
 #import "window_order.h"
 #import <ImageIO/ImageIO.h>
+#include <dlfcn.h>
 #include <math.h>
 #include <pthread.h>
-#import <ScreenCaptureKit/ScreenCaptureKit.h>
-#import <objc/runtime.h>
+#include <unistd.h>
 #include <compression.h>
 #include <zlib.h>
 
-static void setCaptureError(NSString* message);
-static bool hasCaptureError(void);
-static void reportCaptureStreamFailure(SCStream *stream, NSString *message, NSError *error);
-static void endCaptureStream(SCStream *stream);
+// The function that gives the image of a list of windows, looked up at each open and still through captureLookup, which a test
+// replaces with the lookup of a macOS that lacks it.
+typedef CGImageRef (*SPWindowImage)(CGRect, CFArrayRef, CGWindowImageOption);
+static void *(*captureLookup)(void *, const char *) = dlsym;
+static NSString *const kWindowImageMissing = @"CGWindowListCreateImageFromArray is not available on this macOS";
 
-// The text of a failed capture call: its description, which the system may localize, and its domain and code, which name the failure.
-static NSString *captureFailureText(NSError *error) {
-    return [NSString stringWithFormat:@"%@ (%@ %ld)", error.localizedDescription, error.domain, (long)error.code];
+static SPWindowImage windowImageFunction(void) {
+    return (SPWindowImage)captureLookup(RTLD_DEFAULT, "CGWindowListCreateImageFromArray");
 }
 
-static dispatch_semaphore_t captureFirstFrame;
-// Completion of the stream start request. ScreenCaptureKit can deliver the first frame before the start completes,
-// and a
-// stop request before the start finishes is rejected as a stream that already stopped (SCStreamErrorDomain -3808).
-static dispatch_semaphore_t captureStartDone;
-// The stop request time (mach absolute time) and the signal that a frame presented after it has arrived.
-static uint64_t captureStopAfter;
-static dispatch_semaphore_t captureCaughtUp;
-// Whether the current stream ended: it stopped, its start failed or its window closed. No frame follows, so the waits for a
-// frame end with it. Read and written on captureQueue.
-static BOOL captureStreamEnded;
-// Whether a callback met the stop boundary of captureStopAfter. Read and written on captureQueue.
-static BOOL captureStopReached;
-// Whether the current stream ended, for the first frame wait. Read and written under the lock of SPCapture.
-static BOOL captureFirstFrameEnded;
-static dispatch_queue_t captureQueue;
-static SCStream* captureStream = nil;
-static BOOL captureAcceptingSamples = NO;
-static int captureBefore;
-static long captureWindowNumber;
-// The serial queue that writes frames to disk, and the upper limit of frames that wait to be written.
-static dispatch_queue_t captureWriter;
-static dispatch_queue_t captureSourceWriter;
-static dispatch_semaphore_t capturePending;
-static const long kCapturePending = 64;
-// ScreenCaptureKit can deliver idle and incomplete callbacks between recorded images. Keep a bounded timeline so a display-time gap
-// can be classified; a full timeline is a capture failure rather than silently omitted evidence.
-static const int kCaptureMaxCallbackStatusRecords = 4096;
-static bool captureLimitReached;
-// Frames presented before the capture request do not belong to the measured gesture.
-// ScreenCaptureKit can deliver one cached frame when the stream starts.
-// Only frames whose display time is at or after this boundary time (including the same time) are kept.
-static uint64_t captureStartedAt;
-// True if the buffer of a completed frame differs from the device pixel size of the window. The stop waits until the
-// stream
-// sends a frame with the new output size. captureUpdating is true while a stream configuration change is requested
-// and awaited.
-static bool captureResizing;
-static bool captureUpdating;
-static void followWindowSize(size_t width, size_t height, size_t needWidth, size_t needHeight);
+// The clock of the stage ticks and the timebase reader of the display-link callback, which a test replaces with a clock of known
+// values and with a reader that fails.
 static uint64_t (*captureRawClock)(void) = mach_absolute_time;
-static kern_return_t (*captureReadTimebase)(mach_timebase_info_data_t *) = mach_timebase_info;
-static CVReturn (*captureLockBaseAddress)(CVPixelBufferRef, CVPixelBufferLockFlags) = CVPixelBufferLockBaseAddress;
-static CVReturn (*captureUnlockBaseAddress)(CVPixelBufferRef, CVPixelBufferLockFlags) = CVPixelBufferUnlockBaseAddress;
-static void *(*captureGetBaseAddress)(CVPixelBufferRef) = CVPixelBufferGetBaseAddress;
-static void (*captureDisplayLinkAfterWindowLookup)(NSWindow *window);
+static kern_return_t (*captureReadTimebase)(mach_timebase_info_t) = mach_timebase_info;
 
-@class SPCaptureAttempt;
-static char captureAttemptAssociationKey;
-static uint64_t captureAttemptSequence;
-static SPCaptureAttempt* captureAttempt = nil;
+static uint64_t captureTicks(void) { return captureRawClock(); }
 
-// Starts diagnostic source artifact retention on its own serial writer.
-static void endCaptureSourceArtifacts(void);
-
-static bool beginCaptureSourceArtifacts(NSString *directory, bool sourceFiles) {
-    if (directory == nil || captureWriter == NULL) return false;
-    if (captureSourceWriter != NULL) endCaptureSourceArtifacts();
-    captureSourceWriter = dispatch_queue_create("sp.capture.source-writer", DISPATCH_QUEUE_SERIAL);
-    if (captureSourceWriter == NULL) return false;
-    if (sourceFiles) sp_image_capture_match_begin(directory.fileSystemRepresentation, captureSourceWriter);
-    else sp_image_capture_match_begin_without_source_files(directory.fileSystemRepresentation, captureSourceWriter);
-    return true;
+static double ticksToMilliseconds(uint64_t ticks, mach_timebase_info_data_t timebase) {
+    return (double)ticks * timebase.numer / timebase.denom / 1e6;
 }
 
-static void endCaptureSourceArtifacts(void) {
-    sp_image_capture_match_end();
-    if (captureSourceWriter != NULL) {
-        dispatch_release(captureSourceWriter);
-        captureSourceWriter = NULL;
-    }
+static NSString *tickString(uint64_t ticks) {
+    return [NSString stringWithFormat:@"%llu", (unsigned long long)ticks];
 }
 
-@interface SPCaptureAttempt : NSObject
-@property (nonatomic, copy) NSString *session;
-@property (nonatomic) long windowNumber;
-@property (nonatomic) uint64_t requestMachTicks;
-@property (nonatomic) mach_timebase_info_data_t timebase;
-@property (nonatomic) BOOL startCompletionSeen;
-@property (nonatomic) BOOL startFailed;
-@property (nonatomic) BOOL firstSampleSeen;
-@property (nonatomic) BOOL delegateStopSeen;
-@property (nonatomic) BOOL failed;
-@property (nonatomic) BOOL stopRequested;
-@property (nonatomic) BOOL stopRequestIssued;
-@property (nonatomic, assign) dispatch_semaphore_t stopCompleted;
-@property (nonatomic, retain) NSNumber *stopAfterMilliseconds;
-@property (nonatomic) uint64_t stopTargetMachTicks;
-@property (nonatomic) uint64_t stopRegistrationMachTicks;
-@property (nonatomic) BOOL stopBoundaryRecorded;
-@property (nonatomic) uint64_t latestSampleCallbackMachTicks;
-@property (nonatomic) BOOL latestSampleStatusPresent;
-@property (nonatomic, retain) NSNumber *latestSampleStatus;
-@property (nonatomic) BOOL latestSampleDisplayTimePresent;
-@property (nonatomic) uint64_t latestSampleDisplayTimeMachTicks;
-@property (nonatomic) uint64_t factsObservedMachTicks;
-@property (nonatomic, retain) NSNumber *visible;
-@property (nonatomic, retain) NSNumber *occluded;
-@property (nonatomic, retain) NSNumber *displayID;
-@property (nonatomic, retain) NSNumber *applicationActive;
-- (void)emit:(NSString *)phase level:(uint8_t)level callbackMachTicks:(NSNumber *)callbackMachTicks
-    sampleType:(NSNumber *)sampleType statusPresent:(BOOL)statusPresent status:(NSNumber *)status
-    displayTimePresent:(BOOL)displayTimePresent displayTimeMachTicks:(id)displayTimeMachTicks
-    error:(NSError *)error reason:(NSString *)reason;
-- (void)recordFirstSampleType:(SCStreamOutputType)type statusPresent:(BOOL)statusPresent status:(SCFrameStatus)status
-    displayTimePresent:(BOOL)displayTimePresent displayTimeMachTicks:(uint64_t)displayTimeMachTicks
-    callbackMachTicks:(uint64_t)callbackMachTicks;
-- (void)recordStopBoundaryAfterMilliseconds:(double)after targetMachTicks:(uint64_t)targetMachTicks
-    registrationMachTicks:(uint64_t)registrationMachTicks;
-- (void)recordLatestSampleStatusPresent:(BOOL)statusPresent status:(SCFrameStatus)status
-    displayTimePresent:(BOOL)displayTimePresent displayTimeMachTicks:(uint64_t)displayTimeMachTicks
-    callbackMachTicks:(uint64_t)callbackMachTicks;
-- (void)recordWindowNumber:(long)windowNumber displayID:(NSNumber *)displayID visible:(BOOL)visible
-    occluded:(BOOL)occluded applicationActive:(BOOL)applicationActive callbackMachTicks:(uint64_t)callbackMachTicks;
-- (void)recordFailure:(NSString *)reason error:(NSError *)error;
+// Runs block on the main thread and returns after it ran. The capture reads AppKit windows only on the main thread; the
+// callers that wait (the host's capture calls) run on threads that the main thread never waits for.
+static void onMain(void (^block)(void)) {
+    if (NSThread.isMainThread) block();
+    else dispatch_sync(dispatch_get_main_queue(), block);
+}
+
+// What a still takes: the window server numbers of the windows, front to back, the rectangle of the request (CGRectNull for the
+// bounds of the windows, or the bounds of a display), and the rectangle on screen that the image covers, in window server
+// coordinates (top-left origin). A target that cannot be taken holds the reason instead.
+@interface SPCaptureTarget : NSObject
+@property (nonatomic, copy) NSArray<NSNumber *> *windows;
+@property (nonatomic) CGRect request;
+@property (nonatomic) CGRect screen;
+@property (nonatomic) BOOL display;
+@property (nonatomic, copy) NSString *error;
+@property (nonatomic) CFArrayRef windowIDs;
 @end
 
-@implementation SPCaptureAttempt
-- (instancetype)init {
-    self = [super init];
-    if (self) _stopCompleted = dispatch_semaphore_create(0);
-    return self;
-}
-- (void)emit:(NSString *)phase level:(uint8_t)level callbackMachTicks:(NSNumber *)callbackMachTicks
-    sampleType:(NSNumber *)sampleType statusPresent:(BOOL)statusPresent status:(NSNumber *)status
-    displayTimePresent:(BOOL)displayTimePresent displayTimeMachTicks:(id)displayTimeMachTicks
-    error:(NSError *)error reason:(NSString *)reason {
-    if (!sp_event_gate(SP_CLASS_LIFECYCLE, level)) return;
-    @synchronized (self) {
-        id null = [NSNull null];
-        NSString *callbackMachTickString = callbackMachTicks == nil ? nil :
-            [NSString stringWithFormat:@"%llu", callbackMachTicks.unsignedLongLongValue];
-        NSDictionary *facts = @{
-            @"factsObservedMachTicks": self.factsObservedMachTicks == 0 ? null :
-                [NSString stringWithFormat:@"%llu", (unsigned long long)self.factsObservedMachTicks],
-            @"visible": self.visible ?: null, @"occluded": self.occluded ?: null,
-            @"displayID": self.displayID ?: null, @"applicationActive": self.applicationActive ?: null,
-        };
-        NSDictionary *fields = @{
-            @"session": self.session, @"phase": phase,
-            @"windowNumber": @(self.windowNumber),
-            @"requestMachTicks": self.requestMachTicks == 0 ? null :
-                [NSString stringWithFormat:@"%llu", (unsigned long long)self.requestMachTicks],
-            @"callbackMachTicks": callbackMachTickString ?: null,
-            @"elapsedMachTicks": callbackMachTickString == nil ? null :
-                [NSString stringWithFormat:@"%llu", (unsigned long long)(callbackMachTicks.unsignedLongLongValue - self.requestMachTicks)],
-            @"machTimebaseNumerator": self.timebase.numer ? @(self.timebase.numer) : null,
-            @"machTimebaseDenominator": self.timebase.denom ? @(self.timebase.denom) : null,
-            @"sampleType": sampleType ?: null, @"statusPresent": @(statusPresent),
-            @"status": statusPresent ? (id)status : null,
-            @"displayTimePresent": @(displayTimePresent), @"displayTimeMachTicks": displayTimeMachTicks ?: null,
-            @"errorDomain": error.domain ?: null, @"errorCode": error == nil ? null : @(error.code),
-            @"reason": reason ?: null,
-            @"startCompletionSeen": @(self.startCompletionSeen), @"firstSampleSeen": @(self.firstSampleSeen),
-            @"delegateStopSeen": @(self.delegateStopSeen),
-            @"stopAfterMilliseconds": self.stopAfterMilliseconds ?: null,
-            @"stopTargetMachTicks": self.stopBoundaryRecorded
-                ? [NSString stringWithFormat:@"%llu", (unsigned long long)self.stopTargetMachTicks] : null,
-            @"stopRegistrationMachTicks": self.stopBoundaryRecorded
-                ? [NSString stringWithFormat:@"%llu", (unsigned long long)self.stopRegistrationMachTicks] : null,
-            @"latestSampleCallbackMachTicks": self.latestSampleCallbackMachTicks == 0 ? null
-                : [NSString stringWithFormat:@"%llu", (unsigned long long)self.latestSampleCallbackMachTicks],
-            @"latestSampleStatusPresent": @(self.latestSampleStatusPresent),
-            @"latestSampleStatus": self.latestSampleStatus ?: null,
-            @"latestSampleDisplayTimePresent": @(self.latestSampleDisplayTimePresent),
-            @"latestSampleDisplayTimeMachTicks": self.latestSampleDisplayTimePresent
-                ? [NSString stringWithFormat:@"%llu", (unsigned long long)self.latestSampleDisplayTimeMachTicks] : null,
-        };
-        NSMutableDictionary *record = [NSMutableDictionary dictionaryWithDictionary:fields];
-        [record addEntriesFromDictionary:facts];
-        NSError *encodingError = nil;
-        NSData *data = [NSJSONSerialization dataWithJSONObject:record options:0 error:&encodingError];
-        if (data == nil || !sp_event(SP_CLASS_LIFECYCLE, level, "native.capture.lifecycle",
-            data == nil ? "{}" : [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease].UTF8String)) {
-            NSString *message = data == nil ? [NSString stringWithFormat:@"capture lifecycle event encoding failed: %@", encodingError]
-                : @"capture lifecycle event was not stored";
-            sp_log_error("capture lifecycle", message.UTF8String);
-        }
-    }
-}
-- (void)recordFirstSampleType:(SCStreamOutputType)type statusPresent:(BOOL)statusPresent status:(SCFrameStatus)status
-    displayTimePresent:(BOOL)displayTimePresent displayTimeMachTicks:(uint64_t)displayTimeMachTicks
-    callbackMachTicks:(uint64_t)callbackMachTicks {
-    @synchronized (self) { if (self.firstSampleSeen) return; self.firstSampleSeen = YES; }
-    [self emit:@"first-sample" level:SP_EVENT_DEBUG callbackMachTicks:@(callbackMachTicks)
-        sampleType:@(type) statusPresent:statusPresent status:statusPresent ? @(status) : nil
-        displayTimePresent:displayTimePresent displayTimeMachTicks:displayTimePresent ?
-            [NSString stringWithFormat:@"%llu", (unsigned long long)displayTimeMachTicks] : nil error:nil reason:nil];
-}
-- (void)recordStopBoundaryAfterMilliseconds:(double)after targetMachTicks:(uint64_t)targetMachTicks
-    registrationMachTicks:(uint64_t)registrationMachTicks {
-    @synchronized (self) {
-        self.stopAfterMilliseconds = isfinite(after) ? @(after) : nil;
-        self.stopTargetMachTicks = targetMachTicks;
-        self.stopRegistrationMachTicks = registrationMachTicks;
-        self.stopBoundaryRecorded = YES;
-    }
-}
-- (void)recordLatestSampleStatusPresent:(BOOL)statusPresent status:(SCFrameStatus)status
-    displayTimePresent:(BOOL)displayTimePresent displayTimeMachTicks:(uint64_t)displayTimeMachTicks
-    callbackMachTicks:(uint64_t)callbackMachTicks {
-    @synchronized (self) {
-        if (!self.stopBoundaryRecorded || self.failed) return;
-        self.latestSampleCallbackMachTicks = callbackMachTicks;
-        self.latestSampleStatusPresent = statusPresent;
-        self.latestSampleStatus = statusPresent ? @(status) : nil;
-        self.latestSampleDisplayTimePresent = displayTimePresent;
-        self.latestSampleDisplayTimeMachTicks = displayTimePresent ? displayTimeMachTicks : 0;
-    }
-}
-- (void)recordWindowNumber:(long)windowNumber displayID:(NSNumber *)displayID visible:(BOOL)visible
-    occluded:(BOOL)occluded applicationActive:(BOOL)applicationActive callbackMachTicks:(uint64_t)callbackMachTicks {
-    if (windowNumber != self.windowNumber || !NSThread.isMainThread) return;
-    @synchronized (self) {
-        self.factsObservedMachTicks = callbackMachTicks;
-        self.visible = @(visible); self.occluded = @(occluded);
-        self.displayID = displayID; self.applicationActive = @(applicationActive);
-    }
-}
-- (void)recordFailure:(NSString *)reason error:(NSError *)error {
-    @synchronized (self) { if (self.failed) return; self.failed = YES; }
-    [self emit:@"failed" level:SP_EVENT_ERROR callbackMachTicks:@(mach_absolute_time()) sampleType:nil
-        statusPresent:NO status:nil displayTimePresent:NO displayTimeMachTicks:nil error:error reason:reason];
+@implementation SPCaptureTarget
+- (void)setWindows:(NSArray<NSNumber *> *)windows {
+    if (_windows == windows) return;
+    [_windows release];
+    _windows = [windows copy];
+    if (_windowIDs) CFRelease(_windowIDs);
+    _windowIDs = NULL;
+    if (_windows.count == 0) return;
+    const void **ids = malloc(sizeof(void *) * _windows.count);
+    if (ids == NULL) return;
+    for (NSUInteger index = 0; index < _windows.count; index++)
+        ids[index] = (const void *)(uintptr_t)_windows[index].unsignedIntValue;
+    _windowIDs = CFArrayCreate(NULL, ids, (CFIndex)_windows.count, NULL);
+    free(ids);
 }
 - (void)dealloc {
-    [_session release]; [_visible release]; [_occluded release]; [_displayID release]; [_applicationActive release];
-    [_stopAfterMilliseconds release]; [_latestSampleStatus release];
-    if (_stopCompleted != NULL) dispatch_release(_stopCompleted);
+    [_windows release];
+    [_error release];
+    if (_windowIDs) CFRelease(_windowIDs);
     [super dealloc];
 }
 @end
 
-static SPCaptureAttempt *captureAttemptForStream(SCStream *stream) {
-    return stream == nil ? nil : objc_getAssociatedObject(stream, &captureAttemptAssociationKey);
+static SPCaptureTarget *failedTarget(NSString *reason) {
+    SPCaptureTarget *target = [[[SPCaptureTarget alloc] init] autorelease];
+    target.error = reason;
+    return target;
 }
 
-// The current caller or the delayed start callback claims the one stop request for its stream.
-static bool requestCaptureStopAfterStart(SCStream *stream, SPCaptureAttempt *attempt) {
-    if (stream == nil || attempt == nil) return false;
-    @synchronized (attempt) {
-        if (!attempt.stopRequested || !attempt.startCompletionSeen || attempt.startFailed
-            || attempt.stopRequestIssued) return false;
-        attempt.stopRequestIssued = YES;
+// The window and its child windows (recursively) that AppKit shows. A window that the application closed or ordered out is not
+// shown from that call on, while the window server still lists it on screen until it applies the order.
+static void collectWindows(NSWindow *window, NSMutableSet<NSNumber *> *numbers) {
+    if (!window.isVisible) return;
+    [numbers addObject:@(window.windowNumber)];
+    for (NSWindow *child in window.childWindows) collectWindows(child, numbers);
+}
+
+static BOOL windowBounds(NSDictionary *info, CGRect *bounds) {
+    NSDictionary *bound = info[(id)kCGWindowBounds];
+    return [bound isKindOfClass:NSDictionary.class] && CGRectMakeWithDictionaryRepresentation((CFDictionaryRef)bound, bounds);
+}
+
+// Resolves what a still of windowNumber takes, on the main thread. In window mode these are the window and its child windows
+// (recursively) that the window server lists on screen, in its front-to-back order, so a child ordered below the window stays
+// below it; with display, every on-screen window of this process on the display that holds the centre of the window.
+static SPCaptureTarget *resolveTargetOnMain(long windowNumber, BOOL display) {
+    NSCAssert(NSThread.isMainThread, @"the capture reads its windows on the main thread");
+    NSString *notOnScreen = [NSString stringWithFormat:@"window %ld is not on screen", windowNumber];
+    NSWindow *window = nil;
+    for (NSWindow *candidate in NSApp.windows) {
+        if (candidate.windowNumber == windowNumber) { window = candidate; break; }
     }
-    [stream stopCaptureWithCompletionHandler:^(NSError *failed) {
-        if (failed != nil) {
-            reportCaptureStreamFailure(stream,
-                [NSString stringWithFormat:@"capture did not stop: %@", captureFailureText(failed)], failed);
-        }
-        dispatch_semaphore_signal(attempt.stopCompleted);
-    }];
-    return true;
+    if (window == nil || windowNumber <= 0 || !window.isVisible) return failedTarget(notOnScreen);
+    NSMutableSet<NSNumber *> *numbers = [NSMutableSet set];
+    collectWindows(window, numbers);
+    NSArray<NSDictionary *> *list = nil;
+    if (numbers.count == 1 && !display) {
+        // A window without child windows needs no order, so the window server describes that window only.
+        const void *ids[1] = { (const void *)(uintptr_t)windowNumber };
+        CFArrayRef one = CFArrayCreate(NULL, ids, 1, NULL);
+        list = [(NSArray *)CGWindowListCreateDescriptionFromArray(one) autorelease];
+        CFRelease(one);
+    } else {
+        list = [(NSArray *)CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly, kCGNullWindowID) autorelease];
+    }
+    NSMutableArray<NSNumber *> *ordered = [NSMutableArray array];
+    CGRect screen = CGRectNull, windowRect = CGRectNull;
+    pid_t own = getpid();
+    NSMutableArray<NSDictionary *> *process = [NSMutableArray array];
+    for (NSDictionary *info in list) {
+        NSNumber *number = info[(id)kCGWindowNumber];
+        if (![number isKindOfClass:NSNumber.class] || ![info[(id)kCGWindowIsOnscreen] boolValue]) continue;
+        if ([info[(id)kCGWindowOwnerPID] intValue] == own) [process addObject:info];
+        if (![numbers containsObject:number]) continue;
+        CGRect bounds;
+        if (!windowBounds(info, &bounds)) continue;
+        if (number.longValue == windowNumber) windowRect = bounds;
+        [ordered addObject:number];
+        screen = CGRectUnion(screen, bounds);
+    }
+    if (CGRectIsNull(windowRect)) return failedTarget(notOnScreen);
+    SPCaptureTarget *target = [[[SPCaptureTarget alloc] init] autorelease];
+    target.display = display;
+    if (!display) {
+        target.windows = ordered;
+        target.request = CGRectNull;
+        target.screen = screen;
+        return target;
+    }
+    CGDirectDisplayID displayID = 0;
+    uint32_t count = 0;
+    CGPoint centre = CGPointMake(CGRectGetMidX(windowRect), CGRectGetMidY(windowRect));
+    if (CGGetDisplaysWithPoint(centre, 1, &displayID, &count) != kCGErrorSuccess || count == 0)
+        return failedTarget([NSString stringWithFormat:@"window %ld is on no display", windowNumber]);
+    CGRect bounds = CGDisplayBounds(displayID);
+    NSMutableArray<NSNumber *> *windows = [NSMutableArray array];
+    for (NSDictionary *info in process) {
+        CGRect rect;
+        if (windowBounds(info, &rect) && CGRectIntersectsRect(rect, bounds)) [windows addObject:info[(id)kCGWindowNumber]];
+    }
+    target.windows = windows;
+    target.request = bounds;
+    target.screen = bounds;
+    return target;
 }
 
+static SPCaptureTarget *resolveTarget(long windowNumber, BOOL display) {
+    __block SPCaptureTarget *target = nil;
+    onMain(^{ target = [resolveTargetOnMain(windowNumber, display) retain]; });
+    return [target autorelease];
+}
 
-// Receives frames and writes them to files. The frames are delivered as messages, so a receiver object is required.
-@interface SPCapture : NSObject <SCStreamOutput, SCStreamDelegate>
-@property (nonatomic, copy) NSString* directory;
-@property (nonatomic, retain) NSMutableArray<NSDictionary *> *callbackStatusTrace;
-// The frame writer owns these immutable rows until finalization copies them on that serial queue.
-@property (nonatomic, retain) NSMutableDictionary<NSString *, NSDictionary *> *frameWriterTimes;
+// The rectangle on screen that an image of target covers, read right after the image: the window server bounds of its windows,
+// which can have moved since the target was resolved, or the bounds of its display.
+static CGRect imageScreen(SPCaptureTarget *target) {
+    if (target.display || target.windowIDs == NULL) return target.screen;
+    NSArray<NSDictionary *> *list = [(NSArray *)CGWindowListCreateDescriptionFromArray(target.windowIDs) autorelease];
+    CGRect screen = CGRectNull;
+    for (NSDictionary *info in list) {
+        CGRect bounds;
+        if (windowBounds(info, &bounds)) screen = CGRectUnion(screen, bounds);
+    }
+    return CGRectIsNull(screen) ? target.screen : screen;
+}
+
+// The image of target with its pixels copied, or NULL. The image that the window server returns refers to the surfaces of the
+// windows until its pixels are read, and a read after a later commit holds that later content, so the copy is part of the still:
+// the time read after this call is the time by which the still holds its pixels. The caller releases the image.
+static CGImageRef takeImage(SPWindowImage function, SPCaptureTarget *target) {
+    CGWindowImageOption options = kCGWindowImageBestResolution | (target.display ? 0 : kCGWindowImageBoundsIgnoreFraming);
+    CGImageRef image = function(target.request, target.windowIDs, options);
+    if (image == NULL) return NULL;
+    CFDataRef pixels = CGDataProviderCopyData(CGImageGetDataProvider(image));
+    CGDataProviderRef provider = pixels ? CGDataProviderCreateWithCFData(pixels) : NULL;
+    CGImageRef copied = provider ? CGImageCreate(CGImageGetWidth(image), CGImageGetHeight(image), CGImageGetBitsPerComponent(image),
+        CGImageGetBitsPerPixel(image), CGImageGetBytesPerRow(image), CGImageGetColorSpace(image), CGImageGetBitmapInfo(image),
+        provider, NULL, false, CGImageGetRenderingIntent(image)) : NULL;
+    if (provider) CGDataProviderRelease(provider);
+    if (pixels) CFRelease(pixels);
+    CGImageRelease(image);
+    return copied;
+}
+
+// The pixels of image in its own colour space as BGRA (premultiplied alpha first, little endian) into pixels with stride bytes
+// per row: no colour is converted. The window server composites every layer into the 8-bit colour space of the display, and a
+// conversion of those values to another space changes some of them by 1 to 3 (sRGB 32c8c8 came back as 31c8c9), so a frame
+// holds the bytes that the window server gave and the recording names their colour space. An image in that layout gives its
+// bytes as they are; another layout is drawn into its own colour space, which changes the layout and no colour. Returns nil, or
+// why the pixels could not be given, which the caller records as the error of the still.
+static NSString *drawOwnSpace(CGImageRef image, uint8_t *pixels, size_t width, size_t height, size_t stride) {
+    CGColorSpaceRef space = CGImageGetColorSpace(image);
+    if (space == NULL) return @"the image names no colour space";
+    if (CGColorSpaceGetModel(space) != kCGColorSpaceModelRGB) {
+        return [NSString stringWithFormat:@"the colour space of the image has the model %d, not RGB", (int)CGColorSpaceGetModel(space)];
+    }
+    CGBitmapInfo info = CGImageGetBitmapInfo(image);
+    if (CGImageGetBitsPerComponent(image) == 8 && CGImageGetBitsPerPixel(image) == 32
+        && (info & kCGBitmapByteOrderMask) == kCGBitmapByteOrder32Little && (info & kCGBitmapFloatComponents) == 0
+        && CGImageGetAlphaInfo(image) == kCGImageAlphaPremultipliedFirst && CGImageGetBytesPerRow(image) >= stride) {
+        CFDataRef data = CGDataProviderCopyData(CGImageGetDataProvider(image));
+        size_t row = CGImageGetBytesPerRow(image), needed = row * (height - 1) + stride;
+        size_t length = data != NULL ? (size_t)CFDataGetLength(data) : 0;
+        NSString *failure = nil;
+        if (data == NULL) failure = @"the window server gave no bytes of the image";
+        else if (length < needed) {
+            failure = [NSString stringWithFormat:@"the window server gave %zu bytes of the image, not %zu", length, needed];
+        } else {
+            const uint8_t *bytes = CFDataGetBytePtr(data);
+            for (size_t y = 0; y < height; y++) memcpy(pixels + y * stride, bytes + y * row, stride);
+        }
+        if (data) CFRelease(data);
+        return failure;
+    }
+    CGContextRef context = CGBitmapContextCreate(pixels, width, height, 8, stride, space,
+        (CGBitmapInfo)kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little);
+    if (context == NULL) {
+        return [NSString stringWithFormat:@"no BGRA bitmap of %zux%zu could be made in the colour space of the image", width, height];
+    }
+    CGContextSetBlendMode(context, kCGBlendModeCopy);
+    CGContextDrawImage(context, CGRectMake(0, 0, width, height), image);
+    CGContextRelease(context);
+    return nil;
+}
+
+// The frame file: header (12 bytes of uint32, 64 bytes of float64), marker, compressed count, checksum, then the LZ4 block.
+static const size_t kFrameHeader = 3 * sizeof(uint32_t) + 8 * sizeof(double);
+static const size_t kFrameEncodedHeader = kFrameHeader + 12;
+// The bytes that the LZ4 encoder of libcompression leaves free at the end of its output; its open source form in xnu
+// (osfmk/vm/lz4.h) names it LZ4_GOFAST_SAFETY_MARGIN.
+static const size_t kLZ4OutputMargin = 128;
+
+@class SPCaptureRecording;
+static void setCaptureError(NSString *message);
+static bool hasCaptureError(void);
+static void stillOutcome(SPCaptureRecording *recording, NSUInteger index, NSString *outcome, NSString *error, NSString *frame);
+
+// The serial queue that writes frames to disk and the upper limit of frames that wait to be written.
+static dispatch_queue_t captureWriter;
+static dispatch_semaphore_t capturePending;
+static const long kCapturePending = 64;
+// The queue whose strict timer requests the stills at their planned times, and the queue on which each still is taken. Neither
+// is the main queue, so a busy main thread does not move a request.
+static dispatch_queue_t captureRequests;
+static dispatch_queue_t captureWorkers;
+
+static void prepareCaptureQueues(void) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        captureWriter = dispatch_queue_create("sp.capture.writer", DISPATCH_QUEUE_SERIAL);
+        capturePending = dispatch_semaphore_create(kCapturePending);
+        captureRequests = dispatch_queue_create("sp.capture.requests",
+            dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL, QOS_CLASS_USER_INTERACTIVE, 0));
+        captureWorkers = dispatch_queue_create("sp.capture.stills",
+            dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_CONCURRENT, QOS_CLASS_USER_INTERACTIVE, 0));
+    });
+}
+
+// One recording: its plan, the record of each planned still, the strict timer that requests them, and the display-link
+// observation of its window, whose callback also refreshes the windows that the next still takes.
+@interface SPCaptureRecording : NSObject
+@property (nonatomic, copy) NSString *session;
+@property (nonatomic, copy) NSString *directory;
+@property (nonatomic) long windowNumber;
+@property (nonatomic) BOOL display;
+@property (nonatomic) double gap;
+@property (nonatomic) NSUInteger planned;
+@property (nonatomic) uint64_t startTicks;
+@property (nonatomic) double gapTicks;
+@property (nonatomic) mach_timebase_info_data_t timebase;
+@property (nonatomic) SPWindowImage function;
+// The rows of stills.jsonl, one per planned still, and the counts of their outcomes. Guarded by the recording.
+@property (nonatomic, retain) NSMutableArray<NSMutableDictionary *> *rows;
+// The names of the ICC profile files that the stills of the recording wrote. Guarded by the recording.
+@property (nonatomic, retain) NSMutableSet<NSString *> *profiles;
+@property (nonatomic) NSUInteger nextIndex;
+@property (nonatomic) NSUInteger completedCount;
+@property (nonatomic) NSUInteger outcomes;
+@property (nonatomic) int written;
+@property (nonatomic) BOOL closed;
+@property (nonatomic) BOOL requestsDone;
+@property (nonatomic) uint64_t stopAfterTicks;
+@property (nonatomic) BOOL stopArmed;
+@property (nonatomic) BOOL stopReached;
+@property (nonatomic, assign) dispatch_semaphore_t stopSignal;
+@property (nonatomic, assign) dispatch_semaphore_t firstStill;
+@property (nonatomic, assign) dispatch_group_t inflight;
+@property (nonatomic, assign) dispatch_source_t timer;
+// The windows that the next still takes, refreshed on the main thread at each display-link callback. Guarded by targetLock.
+@property (nonatomic, retain) SPCaptureTarget *target;
+// The display-link observation of the window. Guarded by the recording.
 @property (nonatomic, retain) NSMutableArray<NSDictionary *> *displayLinkObservations;
 @property (nonatomic, retain) CADisplayLink *displayLink;
 @property (nonatomic, retain) NSWindow *displayWindow;
-@property (nonatomic, retain) SPCaptureAttempt *displayAttempt;
 @property (nonatomic, copy) NSString *displayLinkState;
 @property (nonatomic, copy) NSString *displayLinkReason;
 @property (nonatomic) NSUInteger omittedDisplayLinkObservations;
 @property (nonatomic) BOOL displayLinkStopped;
-@property (nonatomic) BOOL displayLinkInvalidated;
 @property (nonatomic) uint64_t lastDisplayLinkTimestampMach;
 @property (nonatomic) uint64_t lastDisplayLinkCallbackTime;
 @property (nonatomic) uint32_t displayLinkTimebaseNumerator;
@@ -314,256 +335,126 @@ static bool requestCaptureStopAfterStart(SCStream *stream, SPCaptureAttempt *att
 // Whether the window was covered at the last display-link callback, so the first callback of a covered stretch reads the windows in
 // front of it (sp_window_in_front).
 @property (nonatomic) BOOL displayLinkCovered;
-@property (nonatomic) BOOL callbackStatusTraceOverflowed;
-@property (nonatomic) int written;
-@property (nonatomic) int idle;
-// The count of incomplete frames per status. The index is an SCFrameStatus value.
-@property (nonatomic) int *statuses;
-// The count of received complete frames, the count queued for writing, the count rejected by the write queue limit,
-// the slowest write (seconds),
-// and the longest display interval between consecutive complete frames (mach time). The write queue changes written
-// and slowestWrite.
-@property (nonatomic) int complete;
-@property (nonatomic) int queued;
-@property (nonatomic) int rejected;
-@property (nonatomic) double slowestWrite;
-@property (nonatomic) uint64_t lastShown;
-@property (nonatomic) uint64_t longestGap;
-@property (nonatomic) BOOL latestCallbackSeen;
-@property (nonatomic) uint64_t latestCallbackMachTicks;
-@property (nonatomic) BOOL latestCallbackStatusPresent;
-@property (nonatomic) SCFrameStatus latestCallbackStatus;
-@property (nonatomic) BOOL latestCallbackDisplayTimePresent;
-@property (nonatomic) uint64_t latestCallbackDisplayTimeMachTicks;
-- (BOOL)recordCallbackStatus:(SCFrameStatus)status hasStatus:(BOOL)hasStatus displayTime:(uint64_t)shown
-    hasDisplayTime:(BOOL)hasDisplayTime callbackTime:(uint64_t)callbackTime writeStartTime:(uint64_t)writeStartTime
-    timebase:(mach_timebase_info_data_t)timebase;
-- (void)startDisplayLinkObservationForWindowNumber:(long)windowNumber;
+- (SPCaptureTarget *)currentTarget;
+- (uint64_t)plannedTicks:(NSUInteger)index;
+- (void)startDisplayLinkObservation;
 - (void)stopDisplayLinkObservation;
-- (void)invalidateDisplayLink:(CADisplayLink *)link window:(NSWindow *)window;
-- (void)recordDisplayLinkTimestamp:(double)timestamp targetTimestamp:(double)targetTimestamp duration:(double)duration
-    callbackTime:(uint64_t)callbackTime mediaClockTime:(double)mediaClockTime mediaClockAfter:(uint64_t)mediaClockAfter
-    timebase:(mach_timebase_info_data_t)timebase windowNumber:(long)windowNumber
-    displayID:(NSNumber *)displayID visible:(BOOL)visible occluded:(BOOL)occluded applicationActive:(BOOL)applicationActive
-    inFront:(NSArray *)inFront;
-- (void)rejectDisplayLinkObservation:(NSString *)reason;
 - (NSDictionary *)displayLinkRecord;
-- (void)write:(CMSampleBufferRef)sample callbackTime:(uint64_t)callbackTime;
-- (void)processSample:(CMSampleBufferRef)sample status:(SCFrameStatus)status hasStatus:(BOOL)hasStatus
-    displayTime:(uint64_t)shown hasDisplayTime:(BOOL)hasDisplayTime;
 @end
 
-static void closeCaptureSampleIntake(SCStream *stream) {
-    @synchronized ([SPCapture class]) {
-        if (captureStream == stream) captureAcceptingSamples = NO;
+static pthread_mutex_t targetLock = PTHREAD_MUTEX_INITIALIZER;
+static uint64_t captureSessionSequence;
+// The current recording, the window that the next recording records, and the error of the last recording. Guarded by
+// [SPCaptureRecording class].
+static SPCaptureRecording *captureRecording;
+static long captureWindowNumber = -1;
+static BOOL captureDisplay;
+static NSString *captureError;
+static int captureMissed;
+static int captureLate;
+static double captureLongestGap;
+
+static void emitLifecycle(SPCaptureRecording *recording, NSString *phase, uint8_t level, NSDictionary *still, NSString *reason) {
+    if (!sp_event_gate(SP_CLASS_LIFECYCLE, level)) return;
+    id null = NSNull.null;
+    int written = 0;
+    NSUInteger outcomes = 0;
+    @synchronized (recording) { written = recording.written; outcomes = recording.outcomes; }
+    NSDictionary *fields = @{
+        @"session": recording.session ?: @"", @"phase": phase,
+        @"windowNumber": @(recording.windowNumber), @"display": @(recording.display),
+        @"gap": @(recording.gap), @"plannedStills": @(recording.planned),
+        @"index": still[@"index"] ?: null,
+        @"plannedMachTicks": still[@"planned"] ?: null,
+        @"requestedMachTicks": still[@"requested"] ?: null,
+        @"completedMachTicks": still[@"completed"] ?: null,
+        @"machTimebaseNumerator": @(recording.timebase.numer),
+        @"machTimebaseDenominator": @(recording.timebase.denom),
+        @"written": @(written), @"settled": @(outcomes),
+        @"reason": reason ?: null,
+    };
+    NSError *encodingError = nil;
+    NSData *data = [NSJSONSerialization dataWithJSONObject:fields options:0 error:&encodingError];
+    if (data == nil || !sp_event(SP_CLASS_LIFECYCLE, level, "native.capture.lifecycle",
+        [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease].UTF8String)) {
+        NSString *message = data == nil ? [NSString stringWithFormat:@"capture lifecycle event encoding failed: %@", encodingError]
+            : @"capture lifecycle event was not stored";
+        sp_log_error("capture lifecycle", message.UTF8String);
     }
 }
 
-// frameInfo reads the value of key from the information dictionary attached to a frame. It is NULL if the dictionary
-// or the value is missing.
-static CFTypeRef frameInfo(CMSampleBufferRef sample, SCStreamFrameInfo key) {
-    CFArrayRef list = CMSampleBufferGetSampleAttachmentsArray(sample, false);
-    if (list == NULL || CFArrayGetCount(list) == 0) return NULL;
-    return CFDictionaryGetValue(CFArrayGetValueAtIndex(list, 0), (__bridge CFStringRef)key);
-}
-
-// displayTime reads the mach absolute time at which the frame was presented on the screen. It returns NO if there is
-// no time.
-static BOOL displayTime(CMSampleBufferRef sample, uint64_t *value) {
-    CFTypeRef time = frameInfo(sample, SCStreamFrameInfoDisplayTime);
-    return time != NULL && CFGetTypeID(time) == CFNumberGetTypeID()
-        && CFNumberGetValue(time, kCFNumberSInt64Type, value);
-}
-
-// frameNumber reads the numeric information attached to a frame. It returns NO if there is no value.
-static BOOL frameNumber(CMSampleBufferRef sample, SCStreamFrameInfo key, double *number) {
-    CFTypeRef value = frameInfo(sample, key);
-    return value != NULL && CFGetTypeID(value) == CFNumberGetTypeID()
-        && CFNumberGetValue(value, kCFNumberDoubleType, number);
-}
-
-// contentRect reads the rectangle in which the window is drawn inside the buffer (in buffer points). It returns NO if
-// there is no rectangle.
-static BOOL contentRect(CMSampleBufferRef sample, CGRect *rect) {
-    CFTypeRef value = frameInfo(sample, SCStreamFrameInfoContentRect);
-    return value != NULL && CFGetTypeID(value) == CFDictionaryGetTypeID()
-        && CGRectMakeWithDictionaryRepresentation(value, rect);
-}
-
-static BOOL screenRect(CMSampleBufferRef sample, CGRect *rect) {
-    CFTypeRef value = frameInfo(sample, SCStreamFrameInfoScreenRect);
-    return value != NULL && CFGetTypeID(value) == CFDictionaryGetTypeID()
-        && CGRectMakeWithDictionaryRepresentation(value, rect);
-}
-
-static NSDictionary *captureRectRecord(CGRect rect) {
-    return @{ @"x": @(CGRectGetMinX(rect)), @"y": @(CGRectGetMinY(rect)),
-        @"width": @(CGRectGetWidth(rect)), @"height": @(CGRectGetHeight(rect)) };
-}
-
-static NSDictionary *imageMatchRecord(sp_image_capture_match_result result, double processingMilliseconds,
-    size_t frameWidth, size_t frameHeight, size_t frameStride, CGRect contentRect, CGRect screenRect,
-    BOOL hasScreenRect, double contentScale, double scaleFactor, uint32_t pixelFormat, const char *colorSpace) {
-    NSMutableArray *candidates = [NSMutableArray arrayWithCapacity:result.candidate_count];
-    for (size_t index = 0; index < result.candidate_count; index++) {
-        sp_image_capture_identity identity = result.candidates[index];
-        [candidates addObject:@{ @"generation": [NSString stringWithFormat:@"%llu", (unsigned long long)identity.generation],
-            @"raster": [NSString stringWithFormat:@"%llu", (unsigned long long)identity.raster],
-            @"sequence": @(identity.sequence) }];
-    }
-    NSDictionary *source = result.has_latest_source ? @{ @"generation": [NSString stringWithFormat:@"%llu", (unsigned long long)result.latest_source.generation],
-        @"raster": [NSString stringWithFormat:@"%llu", (unsigned long long)result.latest_source.raster],
-        @"sequence": @(result.latest_source.sequence), @"width": @(result.latest_width), @"height": @(result.latest_height),
-        @"stride": @(result.latest_stride), @"scale": @(result.latest_scale),
-        @"colorSpace": result.latest_color_space[0] ? [NSString stringWithUTF8String:result.latest_color_space] : (id)NSNull.null,
-        @"screenBounds": captureRectRecord(result.latest_screen_bounds) } : (id)NSNull.null;
-    NSMutableDictionary *record = [NSMutableDictionary dictionaryWithDictionary:@{ @"state": [NSString stringWithUTF8String:sp_image_capture_match_state_name(result.state)],
-        @"displayTime": [NSString stringWithFormat:@"%llu", (unsigned long long)result.display_time],
-        @"candidates": candidates, @"droppedSnapshots": @(result.dropped_snapshots),
-        @"processingMilliseconds": @(processingMilliseconds),
-        @"captureFrame": @{ @"width": @(frameWidth), @"height": @(frameHeight), @"stride": @(frameStride),
-            @"pixelFormat": @(pixelFormat), @"contentRect": captureRectRecord(contentRect),
-            @"screenRect": hasScreenRect ? captureRectRecord(screenRect) : (id)NSNull.null,
-            @"contentScale": @(contentScale), @"scaleFactor": @(scaleFactor),
-            @"colorSpace": colorSpace ? [NSString stringWithUTF8String:colorSpace] : (id)NSNull.null },
-        @"latestRetainedSource": source,
-        @"latestSourceCrop": result.has_latest_crop ? captureRectRecord(result.latest_crop) : (id)NSNull.null }];
-    if (result.has_pixel_difference) {
-        record[@"differentPixels"] = @(result.different_pixels);
-        record[@"firstDifference"] = @{
-            @"x": @(result.first_difference_x),
-            @"y": @(result.first_difference_y),
-            @"expectedBGRA": @[@(result.expected_bgra[0]), @(result.expected_bgra[1]), @(result.expected_bgra[2]), @(result.expected_bgra[3])],
-            @"actualBGRA": @[@(result.actual_bgra[0]), @(result.actual_bgra[1]), @(result.actual_bgra[2]), @(result.actual_bgra[3])],
-        };
-    }
-    return record;
-}
-
-// frameStatus reads the status attached to a frame. It returns NO if there is no status.
-static BOOL frameStatus(CMSampleBufferRef sample, SCFrameStatus *status) {
-    CFTypeRef value = frameInfo(sample, SCStreamFrameInfoStatus);
-    int number = 0;
-    if (value == NULL || CFGetTypeID(value) != CFNumberGetTypeID()
-        || !CFNumberGetValue(value, kCFNumberIntType, &number)) return NO; // silent: the answer NO is the result of the reader, and its caller records the capture error "has no status"
-    *status = (SCFrameStatus)number;
-    return YES;
-}
-
-// Reports the cause saved right after a file operation together with the path. A following cleanup error is added
-// too.
-static void reportCaptureFileFailure(int number, NSString *operation, NSString *path, int error) {
-    NSString *message = [NSString stringWithFormat:@"frame %d was not written: %@ %@: %s",
-        number, operation, path, strerror(error)];
-    setCaptureError(message);
-    sp_log_error("capture", message.UTF8String);
-}
-
-static void reportPixelBufferFailure(int number, NSString *operation, CVReturn result) {
-    NSString *message = [NSString stringWithFormat:@"frame %d pixel buffer %@ failed: CVReturn %d",
-        number, operation, result];
-    setCaptureError(message);
-    sp_log_error("capture", message.UTF8String);
-}
-
-@implementation SPCapture
+@implementation SPCaptureRecording
 
 - (instancetype)init {
     self = [super init];
     if (self) {
-        _callbackStatusTrace = [[NSMutableArray alloc] init];
-        _frameWriterTimes = [[NSMutableDictionary alloc] init];
+        _rows = [[NSMutableArray alloc] init];
+        _profiles = [[NSMutableSet alloc] init];
         _displayLinkObservations = [[NSMutableArray alloc] init];
         _displayLinkState = [@"unavailable" copy];
-        _displayLinkReason = [@"no display-link observation was recorded" copy];
+        _displayLinkReason = [@"no display-link callback was delivered during the capture" copy];
+        _stopSignal = dispatch_semaphore_create(0);
+        _firstStill = dispatch_semaphore_create(0);
+        _inflight = dispatch_group_create();
     }
     return self;
 }
 
 - (void)dealloc {
-    [self stopDisplayLinkObservation];
-    [_callbackStatusTrace release];
-    [_frameWriterTimes release];
+    [_session release];
+    [_directory release];
+    [_rows release];
+    [_profiles release];
+    [_target release];
     [_displayLinkObservations release];
     [_displayLink release];
     [_displayWindow release];
-    [_displayAttempt release];
     [_displayLinkState release];
     [_displayLinkReason release];
-    [_directory release];
+    dispatch_release(_stopSignal);
+    dispatch_release(_firstStill);
+    dispatch_release(_inflight);
+    if (_timer) dispatch_release(_timer);
     [super dealloc];
 }
 
-- (void)startDisplayLinkObservationForWindowNumber:(long)windowNumber {
-    SPCaptureAttempt *attempt = nil;
-    @synchronized ([SPCapture class]) { attempt = [captureAttempt retain]; }
-    @synchronized (self) {
-        self.displayAttempt = attempt;
-        self.displayLinkStopped = NO;
-        self.displayLinkInvalidated = NO;
-        [self.displayLinkObservations removeAllObjects];
-        self.omittedDisplayLinkObservations = 0;
-        self.lastDisplayLinkTimestampMach = 0;
-        self.lastDisplayLinkCallbackTime = 0;
-        self.displayLinkTimebaseNumerator = 0;
-        self.displayLinkTimebaseDenominator = 0;
-        self.displayLinkCovered = NO;
-        self.displayLinkState = @"unavailable";
-        self.displayLinkReason = @"no display-link callback was delivered during the capture";
+- (SPCaptureTarget *)currentTarget {
+    pthread_mutex_lock(&targetLock);
+    SPCaptureTarget *target = [_target retain];
+    pthread_mutex_unlock(&targetLock);
+    return [target autorelease];
+}
+
+- (void)replaceTarget:(SPCaptureTarget *)target {
+    pthread_mutex_lock(&targetLock);
+    self.target = target;
+    pthread_mutex_unlock(&targetLock);
+}
+
+- (uint64_t)plannedTicks:(NSUInteger)index {
+    return self.startTicks + (uint64_t)llround((double)index * self.gapTicks);
+}
+
+- (void)startDisplayLinkObservation {
+    NSAssert(NSThread.isMainThread, @"the display link of the recorded window is installed on the main thread");
+    NSWindow *window = nil;
+    for (NSWindow *candidate in NSApp.windows) {
+        if (candidate.windowNumber == self.windowNumber) { window = candidate; break; }
     }
-    void (^install)(void) = ^{
-        @synchronized (self) {
-            if (self.displayLinkStopped || self.displayAttempt != attempt) return;
-        }
-        NSWindow *window = nil;
-        for (NSWindow *candidate in NSApp.windows) {
-            if (candidate.windowNumber == windowNumber) { window = candidate; break; }
-        }
-        if (captureDisplayLinkAfterWindowLookup != NULL) captureDisplayLinkAfterWindowLookup(window);
-        if (window == nil) {
-            @synchronized (self) {
-                if (self.displayLinkStopped) return;
-                self.displayLinkReason = @"the captured window is not available in AppKit";
-            }
+    NSString *reason = window == nil ? @"the captured window is not available in AppKit"
+        : !window.isVisible ? @"the captured window is hidden"
+        : window.screen == nil ? @"the captured window is not on a display" : nil;
+    CADisplayLink *link = reason == nil ? [window displayLinkWithTarget:self selector:@selector(displayLinkDidRefresh:)] : nil;
+    if (reason == nil && link == nil) reason = @"AppKit did not provide a display link for the captured window";
+    @synchronized (self) {
+        if (reason != nil) {
+            self.displayLinkReason = reason;
             return;
         }
-        if (!window.isVisible) {
-            @synchronized (self) {
-                if (self.displayLinkStopped) return;
-                self.displayLinkReason = @"the captured window is hidden";
-            }
-            return;
-        }
-        if (window.screen == nil) {
-            @synchronized (self) {
-                if (self.displayLinkStopped) return;
-                self.displayLinkReason = @"the captured window is not on a display";
-            }
-            return;
-        }
-        CADisplayLink *link = [window displayLinkWithTarget:self selector:@selector(displayLinkDidRefresh:)];
-        if (link == nil) {
-            @synchronized (self) {
-                if (self.displayLinkStopped) return;
-                self.displayLinkReason = @"AppKit did not provide a display link for the captured window";
-            }
-            return;
-        }
-        if (attempt != nil) objc_setAssociatedObject(link, &captureAttemptAssociationKey, attempt, OBJC_ASSOCIATION_RETAIN);
-        @synchronized (self) {
-            if (self.displayLinkStopped || self.displayAttempt != attempt) {
-                [link invalidate];
-                return;
-            }
-            self.displayWindow = window;
-            self.displayLink = link;
-            self.displayLinkInvalidated = NO;
-        }
-        [link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
-    };
-    if ([NSThread isMainThread]) install();
-    else dispatch_async(dispatch_get_main_queue(), install);
-    [attempt release];
+        self.displayWindow = window;
+        self.displayLink = link;
+    }
+    [link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
 }
 
 - (void)stopDisplayLinkObservation {
@@ -571,51 +462,35 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
     NSWindow *window = nil;
     @synchronized (self) {
         self.displayLinkStopped = YES;
-        self.displayAttempt = nil;
         link = [self.displayLink retain];
         self.displayLink = nil;
         window = [self.displayWindow retain];
         self.displayWindow = nil;
-        if (self.displayLinkObservations.count == 0 && [self.displayLinkState isEqual:@"unavailable"]
-            && self.displayLinkReason.length == 0) {
-            self.displayLinkReason = @"no display-link callback was delivered during the capture";
-        }
     }
     if (link == nil && window == nil) return;
-    if ([NSThread isMainThread]) {
-        [self invalidateDisplayLink:link window:window];
-    } else {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [self invalidateDisplayLink:link window:window];
-        });
-    }
-}
-
-- (void)invalidateDisplayLink:(CADisplayLink *)link window:(NSWindow *)window {
-    [link invalidate];
-    [link release];
-    [window release];
-    @synchronized (self) { self.displayLinkInvalidated = YES; }
+    // The link retains the recording as its target until it is invalidated on the main thread.
+    onMain(^{
+        [link invalidate];
+        [link release];
+        [window release];
+    });
 }
 
 - (void)displayLinkDidRefresh:(CADisplayLink *)link {
     NSWindow *window = nil;
     @synchronized (self) {
         if (self.displayLinkStopped || link != self.displayLink) return;
-        window = [self.displayWindow retain];
+        window = [[self.displayWindow retain] autorelease];
     }
-    uint64_t callbackTime = captureRawClock();
+    uint64_t callbackTime = captureTicks();
     double mediaClockTime = CACurrentMediaTime();
-    uint64_t mediaClockAfter = captureRawClock();
+    uint64_t mediaClockAfter = captureTicks();
+    // The windows of the next still follow the windows of this refresh: a child window that appeared since the last refresh is in
+    // the next still.
+    [self replaceTarget:resolveTargetOnMain(self.windowNumber, self.display)];
     mach_timebase_info_data_t timebase = {};
     if (captureReadTimebase(&timebase) != KERN_SUCCESS) {
         [self rejectDisplayLinkObservation:@"mach_timebase_info failed for a display-link callback"];
-        [window release];
-        return;
-    }
-    if (window == nil) {
-        [self rejectDisplayLinkObservation:@"display-link callback arrived without its captured window"];
-        [window release];
         return;
     }
     NSNumber *displayID = window.screen.deviceDescription[@"NSScreenNumber"];
@@ -629,14 +504,10 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
         self.displayLinkCovered = occluded;
     }
     NSArray *inFront = occluded && !wasCovered ? (sp_window_in_front(window.windowNumber) ?: @[]) : nil;
-    SPCaptureAttempt *attempt = objc_getAssociatedObject(link, &captureAttemptAssociationKey);
-    [attempt recordWindowNumber:window.windowNumber displayID:displayID visible:window.isVisible
-        occluded:occluded applicationActive:NSApp.isActive callbackMachTicks:callbackTime];
     [self recordDisplayLinkTimestamp:link.timestamp targetTimestamp:link.targetTimestamp duration:link.duration
         callbackTime:callbackTime mediaClockTime:mediaClockTime mediaClockAfter:mediaClockAfter
         timebase:timebase windowNumber:window.windowNumber displayID:displayID
         visible:window.isVisible occluded:occluded applicationActive:NSApp.isActive inFront:inFront];
-    [window release];
 }
 
 - (void)rejectDisplayLinkObservation:(NSString *)reason {
@@ -646,9 +517,7 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
         self.displayLinkState = @"incomplete";
         self.displayLinkReason = reason;
         self.omittedDisplayLinkObservations++;
-        if (firstFailure) {
-            setCaptureError([NSString stringWithFormat:@"display-link trace incomplete: %@", reason]);
-        }
+        if (firstFailure) setCaptureError([NSString stringWithFormat:@"display-link trace incomplete: %@", reason]);
     }
 }
 
@@ -715,9 +584,9 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
                 @"timestamp": @(timestamp),
                 @"targetTimestamp": @(targetTimestamp),
                 @"duration": @(duration),
-                @"callbackTime": [NSString stringWithFormat:@"%llu", (unsigned long long)callbackTime],
+                @"callbackTime": tickString(callbackTime),
                 @"callbackMediaTime": @(mediaClockTime),
-                @"mediaClockAfter": [NSString stringWithFormat:@"%llu", (unsigned long long)mediaClockAfter],
+                @"mediaClockAfter": tickString(mediaClockAfter),
                 @"machTimebaseNumerator": @(timebase.numer),
                 @"machTimebaseDenominator": @(timebase.denom),
                 @"windowNumber": @(windowNumber),
@@ -748,423 +617,17 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
 
 - (NSDictionary *)displayLinkRecord {
     @synchronized (self) {
-        NSString *state = self.displayLinkState;
-        NSString *reason = self.displayLinkReason;
-        if (self.displayLinkObservations.count == 0 && [state isEqual:@"unavailable"] && reason.length == 0) {
-            reason = @"no display-link callback was delivered during the capture";
-        }
         return @{
-            @"state": state ?: @"unavailable",
-            @"reason": reason ?: @"display-link state was not recorded",
+            @"state": self.displayLinkState ?: @"unavailable",
+            @"reason": self.displayLinkReason ?: @"display-link state was not recorded",
             @"observations": [[self.displayLinkObservations copy] autorelease],
             @"omittedObservations": @(self.omittedDisplayLinkObservations),
         };
     }
 }
-
-- (BOOL)recordCallbackStatus:(SCFrameStatus)status hasStatus:(BOOL)hasStatus displayTime:(uint64_t)shown
-    hasDisplayTime:(BOOL)hasDisplayTime callbackTime:(uint64_t)callbackTime writeStartTime:(uint64_t)writeStartTime
-    timebase:(mach_timebase_info_data_t)timebase {
-    if (self.callbackStatusTrace.count >= kCaptureMaxCallbackStatusRecords) {
-        if (!self.callbackStatusTraceOverflowed) {
-            self.callbackStatusTraceOverflowed = YES;
-            captureLimitReached = true;
-            setCaptureError([NSString stringWithFormat:@"capture callback status trace capacity exceeded (%d records)",
-                kCaptureMaxCallbackStatusRecords]);
-        }
-        return NO; // silent: setCaptureError retains the capacity failure, which sp_capture_error returns after capture stop.
-    }
-    id statusValue = hasStatus ? @((int)status) : [NSNull null];
-    id timeValue = hasDisplayTime ? [NSString stringWithFormat:@"%llu", (unsigned long long)shown] : [NSNull null];
-    [self.callbackStatusTrace addObject:[NSMutableDictionary dictionaryWithDictionary:@{
-        @"sequence": @(self.callbackStatusTrace.count + 1),
-        @"status": statusValue,
-        @"displayTime": timeValue,
-        @"callbackTime": [NSString stringWithFormat:@"%llu", (unsigned long long)callbackTime],
-        @"writeStartTime": [NSString stringWithFormat:@"%llu", (unsigned long long)writeStartTime],
-        @"machTimebaseNumerator": @(timebase.numer),
-        @"machTimebaseDenominator": @(timebase.denom),
-        @"imageMatchStartTime": [NSNull null],
-        @"imageMatchCompleteTime": [NSNull null],
-        @"identityDecodeEnqueueStartTime": [NSNull null],
-        @"identityDecodeEnqueueCompleteTime": [NSNull null],
-        @"frameIdentityDecodeStartTime": [NSNull null],
-        @"frameIdentityDecodeCompleteTime": [NSNull null],
-        @"writeCompleteTime": [NSNull null],
-        @"writerEnqueuedTime": [NSNull null],
-        @"writerStartTime": [NSNull null],
-        @"writerCompleteTime": [NSNull null],
-        @"frame": [NSNull null],
-    }]];
-    return YES;
-}
-
-- (void)stream:(SCStream*)stream
-    didOutputSampleBuffer:(CMSampleBufferRef)sample
-                   ofType:(SCStreamOutputType)type {
-    uint64_t callbackTime = captureRawClock();
-    if (type != SCStreamOutputTypeScreen) return;
-    SPCaptureAttempt *attempt = captureAttemptForStream(stream);
-    if (attempt != nil) {
-        SCFrameStatus sampleStatus = SCFrameStatusComplete;
-        BOOL hasStatus = frameStatus(sample, &sampleStatus);
-        uint64_t shown = 0;
-        BOOL hasDisplayTime = displayTime(sample, &shown);
-        [attempt recordFirstSampleType:type statusPresent:hasStatus status:sampleStatus
-            displayTimePresent:hasDisplayTime displayTimeMachTicks:shown callbackMachTicks:callbackTime];
-    }
-    // Keep old-attempt diagnostics above, but retired streams cannot reach the shared recording.
-    NSString *discardReason = nil;
-    @synchronized ([SPCapture class]) {
-        if (stream == nil || captureStream != stream) discardReason = @"stream-replaced";
-        else if (!captureAcceptingSamples) discardReason = @"sample-intake-closed";
-    }
-    if (discardReason != nil) {
-        if (attempt != nil) {
-            SCFrameStatus sampleStatus = SCFrameStatusComplete;
-            BOOL hasStatus = frameStatus(sample, &sampleStatus);
-            uint64_t shown = 0;
-            BOOL hasDisplayTime = displayTime(sample, &shown);
-            [attempt emit:@"sample-discarded" level:SP_EVENT_DEBUG callbackMachTicks:@(callbackTime)
-                sampleType:@(type) statusPresent:hasStatus status:@(sampleStatus)
-                displayTimePresent:hasDisplayTime displayTimeMachTicks:hasDisplayTime
-                    ? [NSString stringWithFormat:@"%llu", (unsigned long long)shown] : nil
-                error:nil reason:discardReason];
-        } else {
-            sp_log_error("capture sample", "discarded callback has no stream attempt context");
-        }
-        return;
-    }
-    if (attempt != nil) {
-        SCFrameStatus sampleStatus = SCFrameStatusComplete;
-        BOOL hasStatus = frameStatus(sample, &sampleStatus);
-        uint64_t shown = 0;
-        BOOL hasDisplayTime = displayTime(sample, &shown);
-        [attempt recordLatestSampleStatusPresent:hasStatus status:sampleStatus displayTimePresent:hasDisplayTime
-            displayTimeMachTicks:shown callbackMachTicks:callbackTime];
-    }
-    [self write:sample callbackTime:callbackTime];
-    // A frame presented after the stop request means that the screen up to that time has been fully delivered, even
-    // if it is idle.
-    // A complete frame without a time is left as a recording error by write:, and the stop reports that error.
-    // While the stream follows the window size, the stop is deferred until a frame of the new size arrives.
-    uint64_t shown = 0;
-    BOOL hasDisplayTime = displayTime(sample, &shown);
-    SCFrameStatus latestStatus = SCFrameStatusComplete;
-    BOOL hasStatus = frameStatus(sample, &latestStatus);
-    self.latestCallbackSeen = YES;
-    self.latestCallbackMachTicks = callbackTime;
-    self.latestCallbackStatusPresent = hasStatus;
-    self.latestCallbackStatus = latestStatus;
-    self.latestCallbackDisplayTimePresent = hasDisplayTime;
-    self.latestCallbackDisplayTimeMachTicks = hasDisplayTime ? shown : 0;
-    if (captureCaughtUp != NULL && attempt != nil) {
-        [attempt recordLatestSampleStatusPresent:hasStatus status:latestStatus displayTimePresent:hasDisplayTime
-            displayTimeMachTicks:shown callbackMachTicks:callbackTime];
-    }
-    if (captureCaughtUp != NULL && captureStopAfter != 0 && !captureResizing && hasDisplayTime
-        && shown >= captureStopAfter) {
-        captureStopAfter = 0;
-        captureStopReached = YES;
-        dispatch_semaphore_signal(captureCaughtUp);
-    }
-}
-
-- (void)write:(CMSampleBufferRef)sample {
-    [self write:sample callbackTime:captureRawClock()];
-}
-
-- (void)write:(CMSampleBufferRef)sample callbackTime:(uint64_t)callbackTime {
-    uint64_t writeStartTime = captureRawClock();
-    mach_timebase_info_data_t timebase = {};
-    kern_return_t timebaseResult = captureReadTimebase(&timebase);
-    if (timebaseResult != KERN_SUCCESS) {
-        NSString *message = [NSString stringWithFormat:@"capture callback mach timebase failed: %d", timebaseResult];
-        setCaptureError(message);
-        sp_log_error("capture callback", message.UTF8String);
-        return;
-    }
-    // A window stream delivers a complete frame when the window server updates the window. While the window stays as it
-    // is, the stream delivers idle frames without an image for some refreshes and often no callback at all, so a time
-    // without callbacks does not show a lost frame. Counting idle frames states why a recording that received callbacks
-    // has 0 frames.
-    // A frame without a status cannot be known to be complete, so the recording fails.
-    SCFrameStatus status = SCFrameStatusComplete;
-    BOOL hasStatus = frameStatus(sample, &status);
-    uint64_t shown = 0;
-    BOOL hasDisplayTime = displayTime(sample, &shown);
-    if (![self recordCallbackStatus:status hasStatus:hasStatus displayTime:shown hasDisplayTime:hasDisplayTime
-        callbackTime:callbackTime writeStartTime:writeStartTime timebase:timebase]) return;
-    NSMutableDictionary *record = (NSMutableDictionary *)self.callbackStatusTrace.lastObject;
-    @try {
-        [self processSample:sample status:status hasStatus:hasStatus displayTime:shown hasDisplayTime:hasDisplayTime];
-    } @finally {
-        record[@"writeCompleteTime"] = [NSString stringWithFormat:@"%llu", (unsigned long long)captureRawClock()];
-    }
-}
-
-- (void)processSample:(CMSampleBufferRef)sample status:(SCFrameStatus)status hasStatus:(BOOL)hasStatus
-    displayTime:(uint64_t)shown hasDisplayTime:(BOOL)hasDisplayTime {
-    if (!hasStatus) {
-        if (!hasCaptureError()) setCaptureError([NSString stringWithFormat:@"frame %d has no status", self.queued + 1]);
-        return;
-    }
-    if (status != SCFrameStatusComplete) {
-        if (status == SCFrameStatusIdle) self.idle++;
-        if ((int)status >= 0 && (int)status < 6) self.statuses[status]++;
-        return;
-    }
-    if (hasCaptureError()) return;
-    // The image, display time, window rectangle, and scale of a complete frame are required to measure the frame, so
-    // the recording fails if any is missing.
-    int number = self.queued + 1;
-    CVImageBufferRef buffer = CMSampleBufferGetImageBuffer(sample);
-    if (buffer == NULL) {
-        setCaptureError([NSString stringWithFormat:@"frame %d has no image buffer", number]);
-        return;
-    }
-    if (!hasDisplayTime) {
-        setCaptureError([NSString stringWithFormat:@"frame %d has no display time", number]);
-        return;
-    }
-    CGRect rect = CGRectZero;
-    if (!contentRect(sample, &rect)) {
-        setCaptureError([NSString stringWithFormat:@"frame %d has no content rectangle", number]);
-        return;
-    }
-    double contentScale = 0, scaleFactor = 0;
-    if (!frameNumber(sample, SCStreamFrameInfoContentScale, &contentScale)) {
-        setCaptureError([NSString stringWithFormat:@"frame %d has no content scale", number]);
-        return;
-    }
-    if (!frameNumber(sample, SCStreamFrameInfoScaleFactor, &scaleFactor)) {
-        setCaptureError([NSString stringWithFormat:@"frame %d has no scale factor", number]);
-        return;
-    }
-    if (!(contentScale > 0) || !(scaleFactor > 0)) {
-        setCaptureError([NSString stringWithFormat:@"frame %d has content scale %g and scale factor %g",
-            number, contentScale, scaleFactor]);
-        return;
-    }
-    // The stream output size is the window size at the start. If the window grows, frames are reduced (content scale
-    // < 1), and if it shrinks,
-    // the buffer has spare area. If the device pixel size of the window differs from the buffer, the output size is
-    // changed. Frames before the
-    // change are also recorded and are distinguished by the content scale of the header.
-    followWindowSize(CVPixelBufferGetWidth(buffer), CVPixelBufferGetHeight(buffer),
-        (size_t)llround(rect.size.width / contentScale * scaleFactor),
-        (size_t)llround(rect.size.height / contentScale * scaleFactor));
-    if (captureStartedAt != 0 && shown < captureStartedAt) return;
-    self.complete++;
-    if (self.lastShown != 0 && shown > self.lastShown && shown - self.lastShown > self.longestGap) {
-        self.longestGap = shown - self.lastShown;
-    }
-    self.lastShown = shown;
-    // If the sample callback waits for a write, the stream loses the next frame. When the queue capacity is
-    // exhausted,
-    // the recording itself fails, and the next callback and the delivery of the stop time are not blocked.
-    if (dispatch_semaphore_wait(capturePending, DISPATCH_TIME_NOW) != 0) {
-        self.rejected++;
-        setCaptureError([NSString stringWithFormat:@"capture pending writer capacity exceeded (%ld frames)", kCapturePending]);
-        return;
-    }
-    CVReturn lockResult = captureLockBaseAddress(buffer, kCVPixelBufferLock_ReadOnly);
-    if (lockResult != kCVReturnSuccess) {
-        reportPixelBufferFailure(number, @"lock", lockResult);
-        dispatch_semaphore_signal(capturePending);
-        return;
-    }
-    size_t width = CVPixelBufferGetWidth(buffer);
-    size_t height = CVPixelBufferGetHeight(buffer);
-    size_t stride = CVPixelBufferGetBytesPerRow(buffer);
-    const uint8_t* base = (const uint8_t*)captureGetBaseAddress(buffer);
-    if (base == NULL) {
-        NSString *message = [NSString stringWithFormat:@"frame %d has no pixel buffer", number];
-        setCaptureError(message);
-        sp_log_error("capture", message.UTF8String);
-    }
-    // Measuring a window whose size changes requires the drawn area, the scale, and the display time of each frame.
-    mach_timebase_info_data_t timebase;
-    mach_timebase_info(&timebase);
-    uint32_t head[3] = { (uint32_t)width, (uint32_t)height, (uint32_t)stride };
-    double info[7] = { rect.origin.x, rect.origin.y, rect.size.width, rect.size.height,
-        contentScale, scaleFactor,
-        (double)shown * timebase.numer / timebase.denom / 1e6 };
-    size_t size = sizeof(head) + sizeof(info) + stride * height;
-    uint8_t *copy = base == NULL ? NULL : malloc(size);
-    if (copy != NULL) {
-        memcpy(copy, head, sizeof(head));
-        memcpy(copy + sizeof(head), info, sizeof(info));
-        memcpy(copy + sizeof(head) + sizeof(info), base, stride * height);
-    }
-    CVReturn unlockResult = captureUnlockBaseAddress(buffer, kCVPixelBufferLock_ReadOnly);
-    if (unlockResult != kCVReturnSuccess) {
-        reportPixelBufferFailure(number, @"unlock", unlockResult);
-        free(copy);
-        dispatch_semaphore_signal(capturePending);
-        return;
-    }
-    if (base == NULL) {
-        dispatch_semaphore_signal(capturePending);
-        return;
-    }
-    if (copy == NULL) {
-        NSString *message = [NSString stringWithFormat:@"frame %d could not be copied: %s", self.queued + 1, strerror(errno)];
-        setCaptureError(message);
-        sp_log_error("capture", message.UTF8String);
-        dispatch_semaphore_signal(capturePending);
-        return;
-    }
-    CGRect screen = CGRectZero;
-    BOOL hasScreenRect = screenRect(sample, &screen);
-    CFTypeRef colorAttachment = CVBufferCopyAttachment(buffer, kCVImageBufferCGColorSpaceKey, NULL);
-    CGColorSpaceRef captureColorSpace = colorAttachment && CFGetTypeID(colorAttachment) == CGColorSpaceGetTypeID()
-        ? (CGColorSpaceRef)colorAttachment : NULL;
-    CFStringRef captureColorName = captureColorSpace ? CGColorSpaceGetName(captureColorSpace) : NULL;
-    char colorNameBuffer[256];
-    const char *colorName = CVPixelBufferGetPixelFormatType(buffer) == kCVPixelFormatType_32BGRA
-        && captureColorName && CFStringGetCString(captureColorName, colorNameBuffer,
-            sizeof(colorNameBuffer), kCFStringEncodingUTF8) ? colorNameBuffer : NULL;
-    NSMutableDictionary *callbackRecord = (NSMutableDictionary *)self.callbackStatusTrace.lastObject;
-    CFTimeInterval matchBegan = CACurrentMediaTime();
-    uint64_t imageMatchStartTime = captureRawClock();
-    sp_image_capture_match_result match = {0};
-    @try {
-        match = sp_image_capture_match_sample(copy + sizeof(head) + sizeof(info),
-            width, height, stride, rect, hasScreenRect ? screen : CGRectZero,
-            contentScale, scaleFactor, colorName, shown);
-    } @finally {
-        uint64_t imageMatchCompleteTime = captureRawClock();
-        callbackRecord[@"imageMatchStartTime"] = [NSString stringWithFormat:@"%llu",
-            (unsigned long long)imageMatchStartTime];
-        callbackRecord[@"imageMatchCompleteTime"] = [NSString stringWithFormat:@"%llu",
-            (unsigned long long)imageMatchCompleteTime];
-    }
-    double matchMilliseconds = (CACurrentMediaTime() - matchBegan) * 1000;
-    callbackRecord[@"imageMatch"] = imageMatchRecord(match, matchMilliseconds, width, height, stride,
-        rect, screen, hasScreenRect, contentScale, scaleFactor, CVPixelBufferGetPixelFormatType(buffer), colorName);
-    sp_image_capture_match_result_dispose(&match);
-    if (sp_image_capture_match_identity_session_active()) {
-        char *identityError = NULL;
-        uint64_t enqueueStart = captureRawClock();
-        CGColorSpaceRef identityColorSpace = captureColorSpace ? captureColorSpace : CGColorSpaceCreateDeviceRGB();
-        BOOL enqueued = sp_image_capture_match_identity_enqueue_frame(copy + sizeof(head) + sizeof(info),
-            width, height, stride, identityColorSpace, rect,
-            hasScreenRect ? screen : CGRectZero, contentScale, scaleFactor,
-            (uint64_t)number, shown, &identityError);
-        if (!captureColorSpace && identityColorSpace) CGColorSpaceRelease(identityColorSpace);
-        uint64_t enqueueComplete = captureRawClock();
-        callbackRecord[@"identityDecodeEnqueueStartTime"] = [NSString stringWithFormat:@"%llu",
-            (unsigned long long)enqueueStart];
-        callbackRecord[@"identityDecodeEnqueueCompleteTime"] = [NSString stringWithFormat:@"%llu",
-            (unsigned long long)enqueueComplete];
-        if (!enqueued) {
-            NSString *message = [NSString stringWithUTF8String:identityError
-                ?: "captured sample identity decode could not be queued"];
-            free(identityError);
-            setCaptureError([NSString stringWithFormat:@"frame identity decode failed: %@", message]);
-            sp_log_error("frame identity", message.UTF8String);
-        }
-    }
-    if (colorAttachment) CFRelease(colorAttachment);
-    self.queued = number;
-    NSString* path = [self.directory stringByAppendingPathComponent:[NSString stringWithFormat:@"frame-%04d.bgra", number]];
-    callbackRecord[@"frame"] = path.lastPathComponent;
-    callbackRecord[@"writerEnqueuedTime"] = [NSString stringWithFormat:@"%llu", (unsigned long long)mach_absolute_time()];
-    dispatch_async(captureWriter, ^{
-        uint64_t writerStarted = mach_absolute_time();
-        @try {
-            CFTimeInterval began = CACurrentMediaTime();
-            // Preserves the header and compresses all pixels and row padding losslessly.
-            size_t pixels = stride * height;
-            size_t capacity = pixels + pixels / 255 + 16;
-            uint8_t *encoded = capacity <= UINT32_MAX ? malloc(80 + capacity) : NULL;
-            size_t compressed = 0;
-            if (encoded != NULL) {
-                memcpy(encoded, copy, sizeof(head) + sizeof(info));
-                memcpy(encoded + 68, "LZ4B", 4);
-                compressed = compression_encode_buffer(encoded + 80, capacity,
-                    copy + sizeof(head) + sizeof(info), pixels, NULL, COMPRESSION_LZ4_RAW);
-                uint32_t count = (uint32_t)compressed;
-                uint32_t checksum = (uint32_t)crc32(0, copy + sizeof(head) + sizeof(info), (uInt)pixels);
-                memcpy(encoded + 72, &count, sizeof count);
-                memcpy(encoded + 76, &checksum, sizeof checksum);
-            }
-            free(copy);
-            if (encoded == NULL || compressed == 0) {
-                setCaptureError([NSString stringWithFormat:@"frame %d could not be losslessly compressed (capacity %zu)", number, capacity]);
-                free(encoded);
-                dispatch_semaphore_signal(capturePending);
-                return;
-            }
-            NSString* pending = [path stringByAppendingString:@".partial"];
-            FILE *file = fopen(pending.UTF8String, "wb");
-            if (file == NULL) {
-                // A path that could not be opened is not owned by this write, so it is not deleted.
-                reportCaptureFileFailure(number, @"open", pending, errno);
-            } else {
-                bool whole = fwrite(encoded, 80 + compressed, 1, file) == 1;
-                if (!whole) reportCaptureFileFailure(number, @"write", pending, errno);
-                // Closes also after a write failure. Each of the two failures preserves its original system error.
-                bool closed = fclose(file) == 0;
-                if (!closed) reportCaptureFileFailure(number, @"close", pending, errno);
-                bool committed = false;
-                if (whole && closed) {
-                    committed = rename(pending.UTF8String, path.UTF8String) == 0;
-                    if (!committed) reportCaptureFileFailure(number, @"commit", path, errno);
-                }
-                if (committed) {
-                    self.written++;
-                    if (self.written == captureBefore + 1) dispatch_semaphore_signal(captureFirstFrame);
-                } else if (unlink(pending.UTF8String) != 0) {
-                    reportCaptureFileFailure(number, @"remove", pending, errno);
-                }
-            }
-            free(encoded);
-            self.slowestWrite = MAX(self.slowestWrite, CACurrentMediaTime() - began);
-            dispatch_semaphore_signal(capturePending);
-        } @finally {
-            uint64_t writerCompleted = mach_absolute_time();
-            self.frameWriterTimes[path.lastPathComponent] = @{
-                @"writerStartTime": [NSString stringWithFormat:@"%llu", (unsigned long long)writerStarted],
-                @"writerCompleteTime": [NSString stringWithFormat:@"%llu", (unsigned long long)writerCompleted],
-            };
-        }
-    });
-}
-
-- (void)stream:(SCStream*)stream didStopWithError:(NSError*)error {
-    SPCaptureAttempt *attempt = captureAttemptForStream(stream);
-    if (attempt != nil) {
-        @synchronized (attempt) { attempt.delegateStopSeen = YES; }
-        [attempt emit:@"delegate-stop" level:SP_EVENT_DEBUG callbackMachTicks:@(mach_absolute_time())
-            sampleType:nil statusPresent:NO status:nil displayTimePresent:NO displayTimeMachTicks:nil error:error reason:nil];
-    }
-    if (error != nil) {
-        reportCaptureStreamFailure(stream,
-            [NSString stringWithFormat:@"capture stopped with error: %@", captureFailureText(error)], error);
-    } else {
-        sp_log_info("capture", [NSString stringWithFormat:@"stopped without a delegate error (stream=%p)", stream].UTF8String);
-        endCaptureStream(stream);
-    }
-}
-
 @end
 
-// The value that all captures use. The window list query of the window server is much slower than one frame, so
-// it is queried only once.
-static SCContentFilter* captureFilter = nil;
-static SCStreamConfiguration* captureConfig = nil;
-static SPCapture* captureSink = nil;
-static NSString* captureError = nil;
-
-static void clearCaptureError(void) {
-    @synchronized([SPCapture class]) {
-        [captureError release];
-        captureError = nil;
-    }
-}
-
+// The error of the recordings.
 static void appendCaptureError(NSString *message) {
     NSString *combined = captureError == nil ? [message copy]
         : [[captureError stringByAppendingFormat:@"; %@", message] copy];
@@ -1172,67 +635,20 @@ static void appendCaptureError(NSString *message) {
     captureError = combined;
 }
 
-static void failIdentitySessionForCaptureError(NSString *message) {
-    if (!sp_image_capture_match_identity_session_active()) return;
-    char *identityError = NULL;
-    if (!sp_image_capture_match_identity_session_fail(message.UTF8String, &identityError) && identityError != NULL)
-        sp_log_error("frame identity", identityError);
-    free(identityError);
-}
-
-static void restoreCaptureIdentityAfterFailure(SCStream *stream) {
-    if (NSThread.isMainThread) {
-        bool current = false;
-        bool noCurrentStream = false;
-        @synchronized([SPCapture class]) {
-            current = stream != nil && captureStream == stream;
-            noCurrentStream = captureStream == nil;
-        }
-        if (current || (noCurrentStream && !sp_image_capture_match_identity_session_active()))
-            sp_region_restore_capture_identity();
-    } else {
-        // The stream retains this queued cleanup's identity until the main thread checks the current capture.
-        if (stream != nil) [stream retain];
-        dispatch_async(dispatch_get_main_queue(), ^{
-            bool current = false;
-            bool noCurrentStream = false;
-            @synchronized([SPCapture class]) {
-                current = stream != nil && captureStream == stream;
-                noCurrentStream = captureStream == nil;
-            }
-            if (current || (noCurrentStream && !sp_image_capture_match_identity_session_active()))
-                sp_region_restore_capture_identity();
-            if (stream != nil) [stream release];
-        });
+static void clearCaptureError(void) {
+    @synchronized ([SPCaptureRecording class]) {
+        [captureError release];
+        captureError = nil;
     }
 }
 
-static bool recordCaptureError(NSString *message, SCStream *expectedStream, BOOL requireCurrentStream,
-    SPCapture **sinkOut, NSError *eventError) {
-    SCStream *cleanupStream = nil;
-    SPCaptureAttempt *failedAttempt = nil;
-    if (sinkOut != NULL) *sinkOut = nil;
-    @synchronized([SPCapture class]) {
-        if (requireCurrentStream && (expectedStream == nil || captureStream != expectedStream)) return false;
-        appendCaptureError(message);
-        failIdentitySessionForCaptureError(message);
-        cleanupStream = [(expectedStream ?: captureStream) retain];
-        failedAttempt = [(expectedStream == nil ? captureAttempt : captureAttemptForStream(expectedStream)) retain];
-        if (sinkOut != NULL) *sinkOut = [captureSink retain];
-    }
-    [failedAttempt recordFailure:message error:eventError];
-    [failedAttempt release];
-    restoreCaptureIdentityAfterFailure(cleanupStream);
-    [cleanupStream release];
-    return true;
+static void setCaptureError(NSString *message) {
+    @synchronized ([SPCaptureRecording class]) { appendCaptureError(message); }
+    sp_log_error("capture", message.UTF8String);
 }
 
-static void setCaptureError(NSString* message) {
-    recordCaptureError(message, nil, NO, NULL, nil);
-}
-
-static bool setCaptureErrorForStream(SCStream *stream, NSString *message, SPCapture **sinkOut, NSError *error) {
-    return recordCaptureError(message, stream, YES, sinkOut, error);
+static bool hasCaptureError(void) {
+    @synchronized ([SPCaptureRecording class]) { return captureError != nil; }
 }
 
 void sp_capture_test_report_error(const char *message) {
@@ -1248,169 +664,8 @@ void sp_capture_test_report_error(const char *message) {
     setCaptureError(decoded);
 }
 
-void sp_capture_test_report_startup_failure(const char *message) {
-    endCaptureSourceArtifacts();
-    sp_capture_test_report_error(message);
-}
-
-// Errors of the previous stream are also reported but do not change the result of the current recording.
-static void reportCaptureStreamFailure(SCStream *stream, NSString *message, NSError *error) {
-    SPCapture *sink = nil;
-    bool current = setCaptureErrorForStream(stream, message, &sink, error);
-    if (!current) [captureAttemptForStream(stream) recordFailure:message error:error];
-    sp_log_error("capture", [NSString stringWithFormat:@"%@ (stream=%p current=%d)", message, stream, current].UTF8String);
-    // A recording that failed writes no later frame (processSample), so its failure ends the waits for a frame as its end does.
-    if (current) endCaptureStream(stream);
-    [sink stopDisplayLinkObservation];
-    [sink release];
-}
-
-// Ends the waits for a frame of the current stream when that stream ends. The first frame wait and the stop boundary wait end
-// by a frame or by this end, which no later frame follows; a stream that is not current has no waiter.
-static void endCaptureStream(SCStream *stream) {
-    @synchronized([SPCapture class]) {
-        if (stream == nil || stream != captureStream) return;
-        captureFirstFrameEnded = YES;
-        if (captureFirstFrame) dispatch_semaphore_signal(captureFirstFrame);
-        if (captureQueue == NULL) return;
-        [stream retain];
-        dispatch_async(captureQueue, ^{
-            BOOL current = NO;
-            @synchronized([SPCapture class]) { current = stream == captureStream; }
-            [stream release];
-            if (!current) return;
-            captureStreamEnded = YES;
-            if (captureCaughtUp == NULL || captureStopAfter == 0) return;
-            captureStopAfter = 0;
-            dispatch_semaphore_signal(captureCaughtUp);
-        });
-    }
-}
-
-// Ends the current stream when its window closes. A window that closes is not drawn again, so a recording of it receives no
-// later frame.
-static void observeCaptureWindows(void) {
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        sp_observe_notification("capture.window_close", SP_OBSERVE_COUNT, NSWindowWillCloseNotification, nil, nil,
-            ^(NSNotification *note) {
-            SCStream *stream = nil;
-            @synchronized([SPCapture class]) {
-                if (captureStream == nil || [(NSWindow *)note.object windowNumber] != captureWindowNumber) return;
-                stream = [captureStream retain];
-            }
-            reportCaptureStreamFailure(stream,
-                [NSString stringWithFormat:@"the recorded window %ld closed", captureWindowNumber], nil);
-            [stream release];
-        });
-    });
-}
-
-static bool hasCaptureError(void) {
-    @synchronized([SPCapture class]) { return captureError != nil; }
-}
-
-static NSString *const kCaptureCallbackStatusFile = @"callback-status.jsonl";
-static NSString *const kCaptureDisplayLinkFile = @"display-link.json";
-
-static bool writeCaptureCallbackStatusTrace(SPCapture *sink) {
-    __block NSDictionary *writerTimes = nil;
-    if (captureWriter) {
-        dispatch_sync(captureWriter, ^{ writerTimes = [sink.frameWriterTimes copy]; });
-    } else {
-        writerTimes = [sink.frameWriterTimes copy];
-    }
-    [writerTimes autorelease];
-    NSMutableData *contents = [NSMutableData data];
-    NSUInteger recordNumber = 0;
-    for (NSDictionary *callback in sink.callbackStatusTrace) {
-        NSMutableDictionary *record = [[callback mutableCopy] autorelease];
-        NSDictionary *writer = writerTimes[record[@"frame"]];
-        if (writer) [record addEntriesFromDictionary:writer];
-        recordNumber++;
-        NSError *error = nil;
-        NSData *line = nil;
-        NSString *encodingFailure = nil;
-        @try {
-            line = [NSJSONSerialization dataWithJSONObject:record options:0 error:&error];
-        } @catch (NSException *exception) { // silent: preserve the exception reason for the explicit capture error below.
-            encodingFailure = exception.reason ?: exception.name;
-        }
-        if (line == nil) {
-            NSString *reason = encodingFailure ?: error.localizedDescription ?: @"no encoding error was provided";
-            NSString *message = [NSString stringWithFormat:@"capture callback status trace could not encode record %lu: %@",
-                (unsigned long)recordNumber, reason];
-            setCaptureError(message);
-            sp_log_error("capture callback status", message.UTF8String);
-            return false;
-        }
-        [contents appendData:line];
-        [contents appendBytes:"\n" length:1];
-    }
-    NSString *path = [sink.directory stringByAppendingPathComponent:kCaptureCallbackStatusFile];
-    NSError *error = nil;
-    if (![contents writeToFile:path options:NSDataWritingAtomic error:&error]) {
-        NSString *reason = error.localizedDescription ?: @"no write error was provided";
-        NSString *message = [NSString stringWithFormat:@"capture callback status trace could not write %@: %@",
-            path, reason];
-        setCaptureError(message);
-        sp_log_error("capture callback status", message.UTF8String);
-        return false;
-    }
-    return true;
-}
-
-static bool writeCaptureDisplayLinkTrace(SPCapture *sink) {
-    NSError *error = nil;
-    NSData *data = nil;
-    NSString *encodingFailure = nil;
-    @try {
-        data = [NSJSONSerialization dataWithJSONObject:[sink displayLinkRecord] options:NSJSONWritingPrettyPrinted error:&error];
-    } @catch (NSException *exception) { // silent: preserve the exception reason for the explicit capture error below.
-        encodingFailure = exception.reason ?: exception.name;
-    }
-    if (data == nil) {
-        NSString *reason = encodingFailure ?: error.localizedDescription ?: @"no encoding error was provided";
-        setCaptureError([NSString stringWithFormat:@"capture display-link trace could not be encoded: %@", reason]);
-        return false;
-    }
-    NSString *path = [sink.directory stringByAppendingPathComponent:kCaptureDisplayLinkFile];
-    if (![data writeToFile:path options:NSDataWritingAtomic error:&error]) {
-        NSString *reason = error.localizedDescription ?: @"no write error was provided";
-        setCaptureError([NSString stringWithFormat:@"capture display-link trace could not write %@: %@", path, reason]);
-        return false;
-    }
-    return true;
-}
-
-// Finalizes the artifacts produced by a stopped recording. Keeping this boundary separate lets the recording owner
-// verify finalization with controlled callback records without creating a live ScreenCaptureKit stream.
-static bool finalizeCaptureArtifacts(SPCapture *sink) {
-    [sink stopDisplayLinkObservation];
-    if (NSThread.isMainThread) {
-        sp_region_restore_capture_identity();
-    } else {
-        // Finalization runs after capture and artifact queues have drained, without holding matcher history state.
-        dispatch_sync(dispatch_get_main_queue(), ^{ sp_region_restore_capture_identity(); });
-    }
-    bool sourceManifestWritten = sp_image_capture_match_write_manifest(sink.directory.fileSystemRepresentation);
-    char *identityError = sp_image_capture_match_identity_session_error_copy();
-    NSString *identityReason = identityError ? [NSString stringWithUTF8String:identityError] : nil;
-    free(identityError);
-    if (identityReason) setCaptureError([NSString stringWithFormat:@"frame identity capture failed: %@", identityReason]);
-    else if (!sourceManifestWritten)
-        setCaptureError(@"diagnostic image source artifact manifest or source write failed");
-    bool callbackStatusWritten = writeCaptureCallbackStatusTrace(sink);
-    if (!callbackStatusWritten && !hasCaptureError()) {
-        setCaptureError(@"capture callback status trace failed without a reason");
-    }
-    bool displayLinkWritten = writeCaptureDisplayLinkTrace(sink);
-    endCaptureSourceArtifacts();
-    return sourceManifestWritten && identityReason == nil && callbackStatusWritten && displayLinkWritten;
-}
-
 const char *sp_capture_error(void) {
-    @synchronized([SPCapture class]) {
+    @synchronized ([SPCaptureRecording class]) {
         return captureError == nil ? "" : captureError.UTF8String;
     }
 }
@@ -1424,79 +679,266 @@ static bool captureOperationFailure(char **errorOut, NSString *message) {
     return false;
 }
 
-
-// The result of asynchronous preparation is owned only by the callback of that query. The waiting caller publishes
-// the global target.
-@interface SPCapturePreparation : NSObject
-@property (nonatomic, retain) SCContentFilter *filter;
-@property (nonatomic, retain) SCStreamConfiguration *configuration;
-@property (nonatomic, copy) NSString *error;
-@property (nonatomic, assign) dispatch_semaphore_t answered;
-- (void)completeWithFilter:(SCContentFilter *)filter
-    configuration:(SCStreamConfiguration *)configuration error:(NSString *)error;
-@end
-@implementation SPCapturePreparation
-- (instancetype)init {
-    self = [super init];
-    if (self) _answered = dispatch_semaphore_create(0);
-    return self;
-}
-- (void)completeWithFilter:(SCContentFilter *)filter
-    configuration:(SCStreamConfiguration *)configuration error:(NSString *)error {
-    self.filter = filter;
-    self.configuration = configuration;
-    self.error = error;
-    if (error != nil) sp_log_error("capture preparation", error.UTF8String);
-    dispatch_semaphore_signal(self.answered);
-}
-- (void)dealloc {
-    [_filter release]; [_configuration release]; [_error release];
-    dispatch_release(_answered);
-    [super dealloc];
-}
-@end
-
-// Recording stream configuration. Device pixels and sRGB are kept so that the coordinates and colors of thin lines
-// are measured as they are.
-static SCStreamConfiguration *recordingConfiguration(size_t width, size_t height) {
-    SCStreamConfiguration *config = [[[SCStreamConfiguration alloc] init] autorelease];
-    config.width = width;
-    config.height = height;
-    config.pixelFormat = kCVPixelFormatType_32BGRA;
-    config.colorSpaceName = kCGColorSpaceSRGB;
-    config.showsCursor = NO;
-    config.captureResolution = SCCaptureResolutionBest;
-    // kCMTimeZero asks for every refresh of the display that shows the window, so the rate follows the display.
-    config.minimumFrameInterval = kCMTimeZero;
-    config.queueDepth = 8;
-    return config;
-}
-
-// If the buffer size width×height differs from the device pixel size needWidth×needHeight of the window, the output
-// size of the current stream is
-// changed. No new request is made while a change is awaited, and if it still differs after the change, the next frame
-// requests again.
-static void followWindowSize(size_t width, size_t height, size_t needWidth, size_t needHeight) {
-    @synchronized([SPCapture class]) {
-        if (width == needWidth && height == needHeight) {
-            captureResizing = false;
-            return;
+// Settles still index: its outcome, its error and its frame. The first settled still 0 ends the wait of the start, and the
+// stop waits until every requested still settled.
+static void stillOutcome(SPCaptureRecording *recording, NSUInteger index, NSString *outcome, NSString *error, NSString *frame) {
+    NSDictionary *row = nil;
+    BOOL plannedDone = NO;
+    @synchronized (recording) {
+        NSMutableDictionary *record = recording.rows[index];
+        record[@"outcome"] = outcome;
+        record[@"error"] = error ?: (id)NSNull.null;
+        record[@"frame"] = frame ?: (id)NSNull.null;
+        // A still without a frame names no colour space.
+        if (frame == nil) {
+            record[@"colorSpace"] = NSNull.null;
+            record[@"colorProfile"] = NSNull.null;
         }
-        captureResizing = true;
-        if (captureUpdating || captureStream == nil) return;
-        captureUpdating = true;
-        SCStream *stream = captureStream;
-        SCStreamConfiguration *config = recordingConfiguration(needWidth, needHeight);
-        [stream updateConfiguration:config completionHandler:^(NSError *failed) {
-            if (failed != nil) {
-                reportCaptureStreamFailure(stream, [NSString stringWithFormat:
-                    @"capture did not follow the window size %zux%zu: %@", needWidth, needHeight, captureFailureText(failed)], failed);
-            }
-            @synchronized([SPCapture class]) {
-                if (stream == captureStream) captureUpdating = false;
-            }
-        }];
+        if ([outcome isEqual:@"written"]) recording.written++;
+        recording.outcomes++;
+        row = [[record copy] autorelease];
+        plannedDone = recording.requestsDone && recording.outcomes == recording.nextIndex;
     }
+    if (error != nil) {
+        setCaptureError([NSString stringWithFormat:@"still %lu: %@", (unsigned long)index, error]);
+        emitLifecycle(recording, @"still-failed", SP_EVENT_ERROR, row, error);
+    } else if (index == 0) {
+        emitLifecycle(recording, @"first-still", SP_EVENT_DEBUG, row, nil);
+    }
+    if (index == 0) dispatch_semaphore_signal(recording.firstStill);
+    if (plannedDone) dispatch_semaphore_signal(recording.stopSignal);
+}
+
+// Reports the cause saved right after a file operation together with the path.
+static NSString *fileFailure(NSString *operation, NSString *path, int error) {
+    return [NSString stringWithFormat:@"%@ %@: %s", operation, path, strerror(error)];
+}
+
+// Writes the frame of still index on the serial writer: the header and the lossless LZ4 block of all pixels and row padding,
+// first to a .partial file that is renamed when whole.
+static void writeFrame(SPCaptureRecording *recording, NSUInteger index, uint8_t *frame, size_t pixels) {
+    NSString *name = [NSString stringWithFormat:@"frame-%04lu.bgra", (unsigned long)index];
+    NSString *path = [recording.directory stringByAppendingPathComponent:name];
+    @synchronized (recording) {
+        recording.rows[index][@"writerEnqueuedTime"] = tickString(captureTicks());
+    }
+    dispatch_async(captureWriter, ^{
+        uint64_t writerStarted = captureTicks();
+        NSString *failure = nil;
+        // The worst case of an LZ4 block and the margin that the LZ4 encoder keeps free at the end of its output: with the worst
+        // case alone, the encoder failed the 64 bytes of a 4x4 still (capacity 80).
+        size_t capacity = pixels + pixels / 255 + 16 + kLZ4OutputMargin;
+        uint8_t *encoded = capacity <= UINT32_MAX ? malloc(kFrameEncodedHeader + capacity) : NULL;
+        size_t compressed = 0;
+        if (encoded != NULL) {
+            memcpy(encoded, frame, kFrameHeader);
+            memcpy(encoded + kFrameHeader, "LZ4S", 4);
+            compressed = compression_encode_buffer(encoded + kFrameEncodedHeader, capacity, frame + kFrameHeader, pixels, NULL,
+                COMPRESSION_LZ4_RAW);
+            uint32_t count = (uint32_t)compressed;
+            uint32_t checksum = (uint32_t)crc32(0, frame + kFrameHeader, (uInt)pixels);
+            memcpy(encoded + kFrameHeader + 4, &count, sizeof count);
+            memcpy(encoded + kFrameHeader + 8, &checksum, sizeof checksum);
+        }
+        free(frame);
+        if (encoded == NULL || compressed == 0) {
+            failure = [NSString stringWithFormat:@"the frame could not be losslessly compressed (capacity %zu)", capacity];
+        } else {
+            NSString *pending = [path stringByAppendingString:@".partial"];
+            FILE *file = fopen(pending.fileSystemRepresentation, "wb");
+            if (file == NULL) {
+                // A path that could not be opened is not owned by this write, so it is not deleted.
+                failure = fileFailure(@"open", pending, errno);
+            } else {
+                bool whole = fwrite(encoded, kFrameEncodedHeader + compressed, 1, file) == 1;
+                if (!whole) failure = fileFailure(@"write", pending, errno);
+                // Closes also after a write failure. Each failure keeps its own system error.
+                bool closed = fclose(file) == 0;
+                if (!closed) {
+                    NSString *closeFailure = fileFailure(@"close", pending, errno);
+                    failure = failure ? [failure stringByAppendingFormat:@"; %@", closeFailure] : closeFailure;
+                }
+                if (whole && closed && rename(pending.fileSystemRepresentation, path.fileSystemRepresentation) != 0)
+                    failure = fileFailure(@"commit", path, errno);
+                if (failure != nil && unlink(pending.fileSystemRepresentation) != 0 && errno != ENOENT)
+                    failure = [failure stringByAppendingFormat:@"; %@", fileFailure(@"remove", pending, errno)];
+            }
+        }
+        free(encoded);
+        @synchronized (recording) {
+            recording.rows[index][@"writerStartTime"] = tickString(writerStarted);
+            recording.rows[index][@"writerCompleteTime"] = tickString(captureTicks());
+        }
+        dispatch_semaphore_signal(capturePending);
+        if (failure != nil) stillOutcome(recording, index, @"failed", [NSString stringWithFormat:@"the frame was not written: %@", failure], nil);
+        else stillOutcome(recording, index, @"written", nil, name);
+    });
+}
+
+// The name of the ICC profile file of space inside the recording folder, color-<first 16 hex digits of its SHA-256>.icc, which
+// the first still in that space writes; nil with reason when the space has no profile or the file cannot be written.
+static NSString *colorProfileFile(SPCaptureRecording *recording, CGColorSpaceRef space, NSString **reason) {
+    NSData *profile = space ? [(NSData *)CGColorSpaceCopyICCData(space) autorelease] : nil;
+    if (profile.length == 0) {
+        *reason = @"the colour space of the image has no ICC profile";
+        return nil;
+    }
+    unsigned char digest[CC_SHA256_DIGEST_LENGTH];
+    CC_SHA256(profile.bytes, (CC_LONG)profile.length, digest);
+    NSMutableString *name = [NSMutableString stringWithString:@"color-"];
+    for (int index = 0; index < 8; index++) [name appendFormat:@"%02x", digest[index]];
+    [name appendString:@".icc"];
+    @synchronized (recording) {
+        if ([recording.profiles containsObject:name]) return name;
+        NSError *error = nil;
+        NSString *path = [recording.directory stringByAppendingPathComponent:name];
+        if (![profile writeToFile:path options:NSDataWritingAtomic error:&error]) {
+            *reason = [NSString stringWithFormat:@"the colour profile %@ could not be written: %@", name,
+                error.localizedDescription ?: @"no write error was provided"];
+            return nil;
+        }
+        [recording.profiles addObject:name];
+    }
+    return name;
+}
+
+// Processes the image of still index after its completion: its pixels as BGRA in the colour space of the image with the header,
+// the ICC profile of that space, and the frame write. image is released by the caller.
+static void processStill(SPCaptureRecording *recording, NSUInteger index, SPCaptureTarget *target, CGImageRef image,
+    uint64_t requested, uint64_t completed) {
+    uint64_t processStarted = captureTicks();
+    NSString *failure = nil;
+    size_t width = image ? CGImageGetWidth(image) : 0, height = image ? CGImageGetHeight(image) : 0;
+    CGRect screen = image ? imageScreen(target) : CGRectNull;
+    double scale = width > 0 && !CGRectIsNull(screen) && CGRectGetWidth(screen) > 0 ? width / CGRectGetWidth(screen) : 0;
+    if (image == NULL) {
+        failure = [NSString stringWithFormat:@"the window server gave no image of window %ld", recording.windowNumber];
+    } else if (width == 0 || height == 0) {
+        failure = [NSString stringWithFormat:@"the window server gave an empty image of window %ld", recording.windowNumber];
+    } else if (!(scale > 0) || !isfinite(scale)) {
+        failure = [NSString stringWithFormat:@"window %ld has no bounds in the window server", recording.windowNumber];
+    }
+    if (failure != nil) {
+        stillOutcome(recording, index, @"failed", failure, nil);
+        return;
+    }
+    size_t stride = width * 4, pixels = stride * height;
+    uint8_t *frame = pixels / height == stride ? malloc(kFrameHeader + pixels) : NULL;
+    NSString *drawFailure = frame == NULL ? @"no memory for the frame" : drawOwnSpace(image, frame + kFrameHeader, width, height, stride);
+    if (drawFailure != nil) {
+        free(frame);
+        stillOutcome(recording, index, @"failed", [NSString stringWithFormat:@"the image of %zux%zu pixels could not be drawn: %@",
+            width, height, drawFailure], nil);
+        return;
+    }
+    CGColorSpaceRef space = CGImageGetColorSpace(image);
+    NSString *profileFailure = nil;
+    NSString *profile = colorProfileFile(recording, space, &profileFailure);
+    if (profile == nil) {
+        free(frame);
+        stillOutcome(recording, index, @"failed", profileFailure, nil);
+        return;
+    }
+    // A named colour space keeps its name; another one is named by its profile.
+    NSString *spaceName = [(NSString *)CGColorSpaceCopyName(space) autorelease];
+    @synchronized (recording) {
+        recording.rows[index][@"colorSpace"] = spaceName ?: (id)NSNull.null;
+        recording.rows[index][@"colorProfile"] = profile;
+    }
+    CGRect content = CGRectMake(0, 0, width / scale, height / scale);
+    mach_timebase_info_data_t timebase = recording.timebase;
+    uint32_t head[3] = { (uint32_t)width, (uint32_t)height, (uint32_t)stride };
+    double info[8] = { CGRectGetMinX(content), CGRectGetMinY(content), CGRectGetWidth(content), CGRectGetHeight(content), 1, scale,
+        ticksToMilliseconds(requested, timebase), ticksToMilliseconds(completed, timebase) };
+    memcpy(frame, head, sizeof head);
+    memcpy(frame + sizeof head, info, sizeof info);
+    @synchronized (recording) {
+        NSMutableDictionary *row = recording.rows[index];
+        row[@"writeStartTime"] = tickString(processStarted);
+        row[@"writeCompleteTime"] = tickString(captureTicks());
+    }
+    // A still that waits for the writer would move the requests after it, so a full writer fails the still instead.
+    if (dispatch_semaphore_wait(capturePending, DISPATCH_TIME_NOW) != 0) {
+        free(frame);
+        stillOutcome(recording, index, @"failed",
+            [NSString stringWithFormat:@"capture pending writer capacity exceeded (%ld frames)", kCapturePending], nil);
+        return;
+    }
+    writeFrame(recording, index, frame, pixels);
+}
+
+// Takes still index: reads the request time right before the window server call and the completion time right after the pixels
+// of its image are copied (takeImage), and records both with the windows that the still took.
+static void takeStill(SPCaptureRecording *recording, NSUInteger index, SPCaptureTarget *target) {
+    uint64_t requested = captureTicks();
+    if (target.error != nil) {
+        @synchronized (recording) {
+            recording.rows[index][@"requested"] = tickString(requested);
+            recording.rows[index][@"windows"] = @[];
+        }
+        stillOutcome(recording, index, @"failed", target.error, nil);
+        return;
+    }
+    requested = captureTicks();
+    CGImageRef image = takeImage(recording.function, target);
+    uint64_t completed = captureTicks();
+    BOOL reached = NO;
+    @synchronized (recording) {
+        NSMutableDictionary *row = recording.rows[index];
+        row[@"requested"] = tickString(requested);
+        row[@"completed"] = tickString(completed);
+        row[@"windows"] = target.windows ?: @[];
+        recording.completedCount++;
+        reached = recording.stopArmed && !recording.stopReached && requested >= recording.stopAfterTicks;
+        if (reached) recording.stopReached = YES;
+    }
+    if (reached) dispatch_semaphore_signal(recording.stopSignal);
+    processStill(recording, index, target, image, requested, completed);
+    if (image) CGImageRelease(image);
+}
+
+// Requests on the worker queue every still whose planned time has come, then sets the strict timer for the next planned still.
+static void requestDueStills(SPCaptureRecording *recording) {
+    uint64_t now = captureTicks();
+    BOOL done = NO;
+    @synchronized (recording) {
+        while (!recording.closed && recording.nextIndex < recording.planned && [recording plannedTicks:recording.nextIndex] <= now) {
+            NSUInteger index = recording.nextIndex;
+            recording.nextIndex = index + 1;
+            dispatch_group_async(recording.inflight, captureWorkers, ^{
+                @autoreleasepool { takeStill(recording, index, [recording currentTarget]); }
+            });
+        }
+        if (recording.closed || recording.nextIndex >= recording.planned) {
+            if (recording.timer) dispatch_source_cancel(recording.timer);
+            if (!recording.requestsDone) {
+                recording.requestsDone = YES;
+                done = recording.outcomes == recording.nextIndex;
+            }
+        } else {
+            uint64_t next = [recording plannedTicks:recording.nextIndex];
+            mach_timebase_info_data_t timebase = recording.timebase;
+            uint64_t ticks = next > now ? next - now : 0;
+            int64_t nanoseconds = (int64_t)((double)ticks * timebase.numer / timebase.denom);
+            dispatch_source_set_timer(recording.timer, dispatch_time(DISPATCH_TIME_NOW, nanoseconds), DISPATCH_TIME_FOREVER, 0);
+        }
+    }
+    // Every planned still was requested and every one settled already: a stop that waits for a later request learns the end.
+    if (done) dispatch_semaphore_signal(recording.stopSignal);
+}
+
+// Closes the requests of a recording: no later still is requested, and the stills not requested stay not requested.
+static void closeRequests(SPCaptureRecording *recording) {
+    BOOL done = NO;
+    @synchronized (recording) {
+        recording.closed = YES;
+        if (recording.timer) dispatch_source_cancel(recording.timer);
+        if (!recording.requestsDone) {
+            recording.requestsDone = YES;
+            done = recording.outcomes == recording.nextIndex;
+        }
+    }
+    if (done) dispatch_semaphore_signal(recording.stopSignal);
 }
 
 // The ends of the capture waits. The host ends the wait of a call by the token of that call (sp_capture_end_wait), from any
@@ -1533,13 +975,6 @@ static NSString *awaitCaptureSignal(dispatch_semaphore_t signal, uint64_t token,
     return message;
 }
 
-// Waits as awaitCaptureSignal does for a wait of the recording, whose end is an error of the recording.
-static bool awaitRecordingSignal(dispatch_semaphore_t signal, uint64_t token, NSString *missing) {
-    NSString *ended = awaitCaptureSignal(signal, token, missing);
-    if (ended) setCaptureError(ended);
-    return ended == nil;
-}
-
 // Forgets the ends of token and of every earlier token when the call of token returns.
 static void forgetCaptureEnd(uint64_t token) {
     pthread_mutex_lock(&captureEndLock);
@@ -1561,28 +996,20 @@ void sp_capture_end_wait(uint64_t token, const char *reason) {
     }
 }
 
-// The recording of a new window from its first frame (sp_capture_hold_new_window). The window that the hold took is not on screen
-// until the stream of its recording started, so the window server has no bounds for it and the shareable content has no frame;
-// the preparation sizes its recording from the window itself, which the held show reports on the main thread.
+// The recording of a new window from its first still (sp_capture_hold_new_window). The window that the hold took is off the
+// screen until the start of its recording, which puts it on screen and takes still 0 in the same main-thread step.
 static pthread_mutex_t heldWindowLock = PTHREAD_MUTEX_INITIALIZER;
 static dispatch_semaphore_t heldWindowShown;
 static long heldWindowNumber = -1;
-static CGSize heldWindowPoints;
-static CGFloat heldWindowScale;
 
-// The size of the held window when windowNumber is the held window, or false for any other window.
-static bool heldWindowSize(long windowNumber, CGSize *points, CGFloat *scale) {
+static bool isHeldWindow(long windowNumber) {
     pthread_mutex_lock(&heldWindowLock);
     bool held = heldWindowNumber >= 0 && heldWindowNumber == windowNumber;
-    if (held) {
-        *points = heldWindowPoints;
-        *scale = heldWindowScale;
-    }
     pthread_mutex_unlock(&heldWindowLock);
     return held;
 }
 
-// Ends the hold on the main thread: the held window goes on screen and the hold is dropped.
+// Ends the hold on the main thread: the held window goes on screen, its order is committed, and the hold is dropped.
 static void releaseHeldWindowOnMain(void) {
     sp_window_show_release_held();
     pthread_mutex_lock(&heldWindowLock);
@@ -1592,6 +1019,10 @@ static void releaseHeldWindowOnMain(void) {
     pthread_mutex_unlock(&heldWindowLock);
 }
 
+static bool recordingActive(void) {
+    @synchronized ([SPCaptureRecording class]) { return captureRecording != nil; }
+}
+
 bool sp_capture_hold_new_window(char **errorOut) {
     NSCAssert(NSThread.isMainThread, @"the hold of a new window requires the UI thread");
     if (errorOut == NULL) {
@@ -1599,14 +1030,12 @@ bool sp_capture_hold_new_window(char **errorOut) {
         return false;
     }
     *errorOut = NULL;
-    if (captureStream != nil) return captureOperationFailure(errorOut, @"capture is already running");
+    if (recordingActive()) return captureOperationFailure(errorOut, @"capture is already running");
     dispatch_semaphore_t shown = dispatch_semaphore_create(0);
     bool set = sp_window_show_hold_next(^(void *handle) {
         NSWindow *window = (NSWindow *)handle;
         pthread_mutex_lock(&heldWindowLock);
         heldWindowNumber = window.windowNumber;
-        heldWindowPoints = NSSizeToCGSize(window.frame.size);
-        heldWindowScale = window.backingScaleFactor;
         pthread_mutex_unlock(&heldWindowLock);
         dispatch_semaphore_signal(shown);
     });
@@ -1657,552 +1086,438 @@ void sp_capture_release_new_window(void) {
     dispatch_async(dispatch_get_main_queue(), ^{ releaseHeldWindowOnMain(); });
 }
 
-bool sp_capture_open(long windowNumber, bool display, uint64_t token, char **errorOut) {
+bool sp_capture_open(long windowNumber, bool display, char **errorOut) {
     if (errorOut == NULL) {
         sp_log_error("capture open", "an error output is required");
         return false;
     }
     *errorOut = NULL;
-    if (captureStream != nil) return captureOperationFailure(errorOut, @"capture is already running");
-    // Releases the inactive preparation ownership so that a failed query is not followed by a recording of the
-    // previous target.
-    [captureFilter release]; captureFilter = nil;
-    [captureConfig release]; captureConfig = nil;
-    SPCapturePreparation *result = [[SPCapturePreparation alloc] init];
-    // Only the windows of this process are queried, so the screen recording permission path of other applications is
-    // not relied on.
-    [SCShareableContent getCurrentProcessShareableContentWithCompletionHandler:
-        ^(SCShareableContent *content, NSError *error) {
-        if (error != nil) {
-            [result completeWithFilter:nil configuration:nil error:
-                [NSString stringWithFormat:@"current-process capture unavailable: %@", captureFailureText(error)]];
-            return;
-        }
-        for (SCWindow *window in content.windows) {
-            if ((long)window.windowID != windowNumber) continue;
-            SCContentFilter *filter = nil;
-            if (display) {
-                // Only the windows of this application are captured from the display that holds the center of the
-                // window.
-                CGPoint centre = CGPointMake(CGRectGetMidX(window.frame), CGRectGetMidY(window.frame));
-                for (SCDisplay *candidate in content.displays) {
-                    if (!CGRectContainsPoint(candidate.frame, centre)) continue;
-                    NSMutableArray *own = [NSMutableArray array];
-                    if (window.owningApplication != nil) [own addObject:window.owningApplication];
-                    filter = [[[SCContentFilter alloc] initWithDisplay:candidate
-                        includingApplications:own exceptingWindows:@[]] autorelease];
-                    break;
-                }
-                if (filter == nil) {
-                    [result completeWithFilter:nil configuration:nil error:
-                        [NSString stringWithFormat:@"window %ld is on no display", windowNumber]];
-                    return;
-                }
-            } else {
-                filter = [[[SCContentFilter alloc] initWithDesktopIndependentWindow:window] autorelease];
-            }
-            CGSize points = filter.contentRect.size;
-            CGRect bounds = CGRectNull;
-            CGSize heldPoints;
-            CGFloat heldScale;
-            if (!display && heldWindowSize(windowNumber, &heldPoints, &heldScale)) {
-                // A held window is off the screen until the stream starts: the window server lists no bounds for it, so the
-                // recording takes the size of the window itself.
-                points = heldPoints;
-                SCStreamConfiguration *config = recordingConfiguration(
-                    (size_t)(points.width * heldScale), (size_t)(points.height * heldScale));
-                sp_log_info("capture", [NSString stringWithFormat:@"prepared held window %ld size %@ scale %g output %zux%zu",
-                    windowNumber, NSStringFromSize(NSSizeFromCGSize(points)), heldScale, config.width, config.height].UTF8String);
-                [result completeWithFilter:filter configuration:config error:nil];
-                return;
-            }
-            if (!display) {
-                // The shareable content is a snapshot that can still hold the frame of the window before its last
-                // setFrame. The window server answers on the connection of the process that changed the frame, after
-                // that change, so the output size is the window size at this call.
-                NSArray *info = [(NSArray *)CGWindowListCopyWindowInfo(kCGWindowListOptionIncludingWindow,
-                    (CGWindowID)windowNumber) autorelease];
-                NSDictionary *bound = info.count == 1 ? info[0][(id)kCGWindowBounds] : nil;
-                if (![bound isKindOfClass:NSDictionary.class]
-                    || !CGRectMakeWithDictionaryRepresentation((CFDictionaryRef)bound, &bounds)) {
-                    [result completeWithFilter:nil configuration:nil error:
-                        [NSString stringWithFormat:@"window %ld has no bounds in the window server", windowNumber]];
-                    return;
-                }
-                points = bounds.size;
-            }
-            SCStreamConfiguration *config = recordingConfiguration(
-                (size_t)(points.width * filter.pointPixelScale),
-                (size_t)(points.height * filter.pointPixelScale));
-            // Keeps the window frames that were read and the output size that was prepared so that the cause can be
-            // identified when the recording size differs from the window.
-            sp_log_info("capture", [NSString stringWithFormat:@"prepared window %ld frame %@ bounds %@ filter %@ scale %g output %zux%zu",
-                windowNumber, NSStringFromRect(NSRectFromCGRect(window.frame)), NSStringFromRect(NSRectFromCGRect(bounds)),
-                NSStringFromRect(NSRectFromCGRect(filter.contentRect)), filter.pointPixelScale,
-                config.width, config.height].UTF8String);
-            [result completeWithFilter:filter configuration:config error:nil];
-            return;
-        }
-        [result completeWithFilter:nil configuration:nil error:
-            [NSString stringWithFormat:@"window %ld not found", windowNumber]];
-    }];
-    NSString *ended = awaitCaptureSignal(result.answered, token, @"the shareable content query did not answer");
-    forgetCaptureEnd(token);
-    if (ended) {
-        [result release];
-        return captureOperationFailure(errorOut, ended);
+    if (recordingActive()) return captureOperationFailure(errorOut, @"capture is already running");
+    // A failed open leaves no prepared window, so a later start does not record the window of an earlier open.
+    @synchronized ([SPCaptureRecording class]) { captureWindowNumber = -1; }
+    if (windowImageFunction() == NULL) return captureOperationFailure(errorOut, kWindowImageMissing);
+    // The held window is off the screen until the start puts it there.
+    if (!(isHeldWindow(windowNumber) && !display)) {
+        SPCaptureTarget *target = resolveTarget(windowNumber, display);
+        if (target.error != nil) return captureOperationFailure(errorOut, target.error);
     }
-    if (result.error != nil) {
-        captureOperationFailure(errorOut, result.error);
-        [result release];
-        return false;
+    @synchronized ([SPCaptureRecording class]) {
+        captureWindowNumber = windowNumber;
+        captureDisplay = display;
     }
-    if (result.filter == nil || result.configuration == nil) {
-        [result release];
-        return captureOperationFailure(errorOut, @"capture preparation completed without filter or configuration");
-    }
-    if (captureStream != nil) {
-        [result release];
-        return captureOperationFailure(errorOut, @"capture became active during preparation");
-    }
-    captureConfig = [result.configuration retain];
-    captureFilter = [result.filter retain];
-    captureWindowNumber = windowNumber;
-    [result release];
     return true;
 }
 
-bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut) {
+// Ends the current recording when its window closes: a window that closes is not drawn again, so the stills not requested fail
+// with the close, and the recording fails with `the recorded window <n> closed`.
+static void observeCaptureWindows(void) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        sp_observe_notification("capture.window_close", SP_OBSERVE_COUNT, NSWindowWillCloseNotification, nil, nil,
+            ^(NSNotification *note) {
+            SPCaptureRecording *recording = nil;
+            @synchronized ([SPCaptureRecording class]) {
+                if (captureRecording == nil || [(NSWindow *)note.object windowNumber] != captureRecording.windowNumber) return;
+                recording = [captureRecording retain];
+            }
+            NSString *closed = [NSString stringWithFormat:@"the recorded window %ld closed", recording.windowNumber];
+            closeRequests(recording);
+            @synchronized (recording) {
+                for (NSUInteger index = recording.nextIndex; index < recording.planned; index++) {
+                    recording.rows[index][@"outcome"] = @"failed";
+                    recording.rows[index][@"error"] = closed;
+                }
+            }
+            setCaptureError(closed);
+            dispatch_semaphore_signal(recording.stopSignal);
+            [recording release];
+        });
+    });
+}
+
+static NSString *const kCaptureStillsFile = @"stills.jsonl";
+static NSString *const kCaptureDisplayLinkFile = @"display-link.json";
+
+static bool writeCaptureStills(SPCaptureRecording *recording) {
+    NSMutableData *contents = [NSMutableData data];
+    NSArray<NSDictionary *> *rows = nil;
+    @synchronized (recording) {
+        NSMutableArray *copies = [NSMutableArray arrayWithCapacity:recording.rows.count];
+        for (NSDictionary *row in recording.rows) [copies addObject:[[row copy] autorelease]];
+        rows = copies;
+    }
+    for (NSDictionary *row in rows) {
+        NSError *error = nil;
+        NSData *line = nil;
+        NSString *encodingFailure = nil;
+        @try {
+            line = [NSJSONSerialization dataWithJSONObject:row options:0 error:&error];
+        } @catch (NSException *exception) { // silent: preserve the exception reason for the explicit capture error below.
+            encodingFailure = exception.reason ?: exception.name;
+        }
+        if (line == nil) {
+            NSString *reason = encodingFailure ?: error.localizedDescription ?: @"no encoding error was provided";
+            setCaptureError([NSString stringWithFormat:@"stills.jsonl could not encode the row of still %@: %@", row[@"index"], reason]);
+            return false;
+        }
+        [contents appendData:line];
+        [contents appendBytes:"\n" length:1];
+    }
+    NSString *path = [recording.directory stringByAppendingPathComponent:kCaptureStillsFile];
+    NSError *error = nil;
+    if (![contents writeToFile:path options:NSDataWritingAtomic error:&error]) {
+        setCaptureError([NSString stringWithFormat:@"stills.jsonl could not be written to %@: %@", path,
+            error.localizedDescription ?: @"no write error was provided"]);
+        return false;
+    }
+    return true;
+}
+
+static bool writeCaptureDisplayLinkTrace(SPCaptureRecording *recording) {
+    NSError *error = nil;
+    NSData *data = nil;
+    NSString *encodingFailure = nil;
+    @try {
+        data = [NSJSONSerialization dataWithJSONObject:[recording displayLinkRecord] options:NSJSONWritingPrettyPrinted error:&error];
+    } @catch (NSException *exception) { // silent: preserve the exception reason for the explicit capture error below.
+        encodingFailure = exception.reason ?: exception.name;
+    }
+    if (data == nil) {
+        NSString *reason = encodingFailure ?: error.localizedDescription ?: @"no encoding error was provided";
+        setCaptureError([NSString stringWithFormat:@"capture display-link trace could not be encoded: %@", reason]);
+        return false;
+    }
+    NSString *path = [recording.directory stringByAppendingPathComponent:kCaptureDisplayLinkFile];
+    if (![data writeToFile:path options:NSDataWritingAtomic error:&error]) {
+        NSString *reason = error.localizedDescription ?: @"no write error was provided";
+        setCaptureError([NSString stringWithFormat:@"capture display-link trace could not write %@: %@", path, reason]);
+        return false;
+    }
+    return true;
+}
+
+// Finalizes the artifacts of a recording whose stills all settled: writes stills.jsonl and display-link.json.
+static bool finalizeCaptureArtifacts(SPCaptureRecording *recording) {
+    [recording stopDisplayLinkObservation];
+    bool stillsWritten = writeCaptureStills(recording);
+    bool displayLinkWritten = writeCaptureDisplayLinkTrace(recording);
+    return stillsWritten && displayLinkWritten;
+}
+
+// Ends the recording: no later still is requested, every requested still settles, the artifacts are written, and the counts of
+// the recording become those of sp_capture_missed, sp_capture_late and sp_capture_longest_gap.
+static int finishRecording(SPCaptureRecording *recording) {
+    closeRequests(recording);
+    dispatch_group_wait(recording.inflight, DISPATCH_TIME_FOREVER);
+    // The writer settles every queued frame before the record is written.
+    dispatch_sync(captureWriter, ^{});
+    finalizeCaptureArtifacts(recording);
+    int written = 0, missed = 0, late = 0;
+    double longest = 0;
+    @synchronized (recording) {
+        written = recording.written;
+        uint64_t previous = 0;
+        for (NSDictionary *row in recording.rows) {
+            if (![row[@"outcome"] isEqual:@"written"]) {
+                missed++;
+            } else {
+                uint64_t requested = strtoull([row[@"requested"] UTF8String], NULL, 10);
+                if (previous != 0 && requested > previous)
+                    longest = MAX(longest, ticksToMilliseconds(requested - previous, recording.timebase));
+                previous = requested;
+            }
+            if ([row[@"requested"] isKindOfClass:NSString.class]) {
+                uint64_t requested = strtoull([row[@"requested"] UTF8String], NULL, 10);
+                uint64_t planned = strtoull([row[@"planned"] UTF8String], NULL, 10);
+                if (requested > planned && (double)(requested - planned) > recording.gapTicks) late++;
+            }
+        }
+    }
+    @synchronized ([SPCaptureRecording class]) {
+        captureMissed = missed;
+        captureLate = late;
+        captureLongestGap = longest;
+    }
+    emitLifecycle(recording, @"end", hasCaptureError() ? SP_EVENT_ERROR : SP_EVENT_DEBUG, nil,
+        hasCaptureError() ? [NSString stringWithUTF8String:sp_capture_error()] : nil);
+    @synchronized ([SPCaptureRecording class]) {
+        if (captureRecording == recording) {
+            [captureRecording release];
+            captureRecording = nil;
+        }
+    }
+    sp_log_info("capture", [NSString stringWithFormat:@"%d of %lu planned stills written, %d missed, %d late, longest gap %.1fms",
+        written, (unsigned long)recording.planned, missed, late, longest].UTF8String);
+    return written;
+}
+
+// The plan of a start, or the reason it is refused. The arguments are checked before the prepared window.
+static NSString *planStills(double gap, double seconds, int frames, NSUInteger *planned) {
+    if (!isfinite(gap) || gap < 1 || gap > 1000) return @"gap must be a number of milliseconds from 1 to 1000";
+    bool hasSeconds = seconds != 0, hasFrames = frames != 0;
+    if (hasSeconds && hasFrames) return @"give seconds or frames, not both";
+    if (!hasSeconds && !hasFrames) return @"a recording needs seconds or frames";
+    if (hasSeconds) {
+        if (!(seconds > 0 && seconds <= 600)) return @"seconds must be above 0 and at most 600";
+        // Every still whose planned time n·gap is before the length.
+        double count = ceil(seconds * 1000 / gap);
+        if (count > 4096) return [NSString stringWithFormat:@"the recording plans %.0f stills, more than 4096", count];
+        *planned = (NSUInteger)count;
+        return nil;
+    }
+    if (frames < 1 || frames > 4096) return @"frames must be an integer from 1 to 4096";
+    *planned = (NSUInteger)frames;
+    return nil;
+}
+
+bool sp_capture_start(const char *directory, double gap, double seconds, int frames, uint64_t token, char **errorOut) {
     if (errorOut == NULL) {
         sp_log_error("capture start", "an error output is required");
         return false;
     }
     *errorOut = NULL;
-    if (captureStream != nil) return captureOperationFailure(errorOut, @"capture is already running");
+    if (recordingActive()) return captureOperationFailure(errorOut, @"capture is already running");
     clearCaptureError();
-    SPCaptureAttempt *attempt = [[SPCaptureAttempt alloc] init];
-    @synchronized ([SPCapture class]) {
-        captureAttemptSequence++;
-        attempt.session = [NSString stringWithFormat:@"capture-%llu", (unsigned long long)captureAttemptSequence];
-        attempt.windowNumber = captureWindowNumber;
-        [captureAttempt release];
-        captureAttempt = [attempt retain];
+    NSUInteger planned = 0;
+    NSString *refused = planStills(gap, seconds, frames, &planned);
+    if (refused != nil) {
+        forgetCaptureEnd(token);
+        return captureOperationFailure(errorOut, refused);
     }
-    mach_timebase_info_data_t attemptTimebase = {};
-    if (captureReadTimebase(&attemptTimebase) == KERN_SUCCESS) attempt.timebase = attemptTimebase;
-    if (captureFilter == nil) {
-        setCaptureError(@"capture has no prepared window");
-        sp_log_error("capture start", "capture has no prepared window");
-        [attempt release];
+    long windowNumber = -1;
+    BOOL display = NO;
+    @synchronized ([SPCaptureRecording class]) {
+        windowNumber = captureWindowNumber;
+        display = captureDisplay;
+    }
+    if (windowNumber < 0) {
+        forgetCaptureEnd(token);
         return captureOperationFailure(errorOut, @"capture has no prepared window");
     }
     if (directory == NULL) {
-        setCaptureError(@"capture directory is null");
-        [attempt release];
+        forgetCaptureEnd(token);
         return captureOperationFailure(errorOut, @"capture directory is null");
     }
-    captureStartedAt = mach_absolute_time();
-    captureLimitReached = false;
-    @synchronized([SPCapture class]) {
-        captureResizing = false;
-        captureUpdating = false;
-    }
-    // The receiver object is created only once. If it were created for each recording, the frame numbers would
-    // start again from 1 and overwrite the files written by an earlier recording.
-    if (captureSink == nil) captureSink = [[SPCapture alloc] init];
-    if (!captureWriter) {
-        captureWriter = dispatch_queue_create("sp.capture.writer", DISPATCH_QUEUE_SERIAL);
-        capturePending = dispatch_semaphore_create(kCapturePending);
-    }
-    captureBefore = captureSink.written;
-    captureSink.latestCallbackSeen = NO;
-    captureSink.latestCallbackMachTicks = 0;
-    captureSink.latestCallbackStatusPresent = NO;
-    captureSink.latestCallbackStatus = SCFrameStatusComplete;
-    captureSink.latestCallbackDisplayTimePresent = NO;
-    captureSink.latestCallbackDisplayTimeMachTicks = 0;
-    captureSink.queued = captureSink.written;
-    captureSink.rejected = 0;
-    captureSink.idle = 0;
-    captureSink.complete = 0;
-    captureSink.callbackStatusTraceOverflowed = NO;
-    [captureSink.callbackStatusTrace removeAllObjects];
-    [captureSink.frameWriterTimes removeAllObjects];
-    captureSink.slowestWrite = 0;
-    captureSink.lastShown = 0;
-    captureSink.longestGap = 0;
-    static int statuses[6];
-    memset(statuses, 0, sizeof statuses);
-    captureSink.statuses = statuses;
-    @synchronized ([SPCapture class]) {
-        if (captureFirstFrame) dispatch_release(captureFirstFrame);
-        captureFirstFrame = dispatch_semaphore_create(0);
-    }
-    captureSink.directory = [NSString stringWithUTF8String:directory];
-    if (captureSink.directory == nil) {
-        setCaptureError(@"capture directory is not valid UTF-8");
-        [attempt release];
+    NSString *folder = [NSString stringWithUTF8String:directory];
+    if (folder == nil) {
+        forgetCaptureEnd(token);
         return captureOperationFailure(errorOut, @"capture directory is not valid UTF-8");
     }
-    // Only the reader of a frame identity recording reads the source files, and a raster of a large view is megabytes.
-    if (!beginCaptureSourceArtifacts(captureSink.directory, frameIdentity)) {
-        setCaptureError(@"diagnostic source artifact writer could not start");
-        [attempt release];
-        return captureOperationFailure(errorOut, @"diagnostic source artifact writer could not start");
+    SPWindowImage function = windowImageFunction();
+    if (function == NULL) {
+        forgetCaptureEnd(token);
+        return captureOperationFailure(errorOut, kWindowImageMissing);
     }
-    if (frameIdentity) {
-        char *identityError = NULL;
-        if (!sp_image_capture_match_identity_session_begin(&identityError)) {
-            NSString *reason = [NSString stringWithUTF8String:identityError ?: "identity session could not start"];
-            free(identityError);
-            endCaptureSourceArtifacts();
-            setCaptureError(reason);
-            [attempt release];
-            return captureOperationFailure(errorOut, reason);
-        }
-        if (!sp_image_capture_match_identity_prepare_decoder(&identityError)) {
-            NSString *reason = [NSString stringWithUTF8String:identityError ?: "frame identity Vision readiness failed"];
-            free(identityError);
-            sp_image_capture_match_identity_session_end();
-            endCaptureSourceArtifacts();
-            setCaptureError(reason);
-            [attempt release];
-            return captureOperationFailure(errorOut, reason);
-        }
-    }
-    SCStream *stream = [[SCStream alloc] initWithFilter:captureFilter
-                                       configuration:captureConfig
-                                            delegate:captureSink];
-    if (!stream) {
-        endCaptureSourceArtifacts();
-        setCaptureError(@"capture stream allocation failed");
-        [attempt release];
-        return captureOperationFailure(errorOut, @"capture stream allocation failed");
-    }
-    objc_setAssociatedObject(stream, &captureAttemptAssociationKey, attempt, OBJC_ASSOCIATION_RETAIN);
-    @synchronized([SPCapture class]) {
-        captureStream = stream;
-        captureAcceptingSamples = YES;
-    }
-    NSError* error = nil;
-    observeCaptureWindows();
-    @synchronized([SPCapture class]) { captureFirstFrameEnded = NO; }
-    captureStreamEnded = NO;
-    captureStopReached = NO;
-    captureQueue = dispatch_queue_create("sp.capture", NULL);
-    [stream addStreamOutput:captureSink
-                              type:SCStreamOutputTypeScreen
-                sampleHandlerQueue:captureQueue
-                             error:&error];
-    if (error != nil) {
-        NSString *message = [NSString stringWithFormat:@"capture output was not added: %@", captureFailureText(error)];
-        setCaptureError(message);
-        sp_log_error("capture start", message.UTF8String);
-        @synchronized([SPCapture class]) {
-            captureAcceptingSamples = NO;
-            captureStream = nil;
-        }
-        [stream release];
-        endCaptureSourceArtifacts();
-        [attempt release];
-        return captureOperationFailure(errorOut,
-            [NSString stringWithFormat:@"capture output was not added: %@", captureFailureText(error)]);
-    }
-    [captureSink startDisplayLinkObservationForWindowNumber:captureWindowNumber];
-    // The copied completion block retains the original stream, so its identity is kept after a replacement.
-    if (captureStartDone) dispatch_release(captureStartDone);
-    captureStartDone = dispatch_semaphore_create(0);
-    dispatch_semaphore_t startDone = captureStartDone;
-    dispatch_retain(startDone);
-    attempt.requestMachTicks = captureRawClock();
-    [attempt emit:@"start-request" level:SP_EVENT_DEBUG callbackMachTicks:nil sampleType:nil
-        statusPresent:NO status:nil displayTimePresent:NO displayTimeMachTicks:nil error:nil reason:nil];
-    [stream startCaptureWithCompletionHandler:^(NSError* failed) {
-        uint64_t completedAt = captureRawClock();
-        @synchronized (attempt) {
-            attempt.startCompletionSeen = YES;
-            attempt.startFailed = failed != nil;
-        }
-        [attempt emit:@"start-completion" level:SP_EVENT_DEBUG callbackMachTicks:@(completedAt) sampleType:nil
-            statusPresent:NO status:nil displayTimePresent:NO displayTimeMachTicks:nil error:failed
-            reason:failed != nil ? captureFailureText(failed) : nil];
-        if (failed != nil) {
-            reportCaptureStreamFailure(stream,
-                [NSString stringWithFormat:@"capture did not start: %@", captureFailureText(failed)], failed);
-        }
-        dispatch_semaphore_signal(startDone);
-        requestCaptureStopAfterStart(stream, attempt);
-        dispatch_release(startDone);
-        // The stream of a held window has started, or failed to start: the window goes on screen, so its first frame is the
-        // first frame of the recording, and a failed recording does not keep the window off the screen.
-        CGSize heldPoints;
-        CGFloat heldScale;
-        if (heldWindowSize(attempt.windowNumber, &heldPoints, &heldScale)) sp_capture_release_new_window();
-    }];
-    [attempt release];
-    return true;
-}
-
-// Waits until the stream start request completes or the wait of token ends. The awaited signal is raised again so that later
-// calls also pass.
-static bool waitCaptureStart(uint64_t token) {
-    if (captureStartDone == NULL) {
-        setCaptureError(@"capture start was not requested");
-        return false;
-    }
-    if (!awaitRecordingSignal(captureStartDone, token, @"capture start did not complete")) return false;
-    dispatch_semaphore_signal(captureStartDone);
-    return true;
-}
-
-int sp_capture_wait(uint64_t token) {
-    if (captureStream == nil) {
-        setCaptureError(@"capture is not running");
-        return 0;
-    }
-    // The wait ends by the first written frame, by the end of the stream, which no frame follows, or by the end of the wait of
-    // token. The awaited signal is raised again so that later calls also pass. The first frame can arrive before the start
-    // completes, and the recording has started only when the start finishes.
-    bool started = awaitRecordingSignal(captureFirstFrame, token, @"no capture frame arrived");
-    if (started) dispatch_semaphore_signal(captureFirstFrame);
-    started = started && waitCaptureStart(token);
-    forgetCaptureEnd(token);
-    if (!started) return 0;
-    BOOL ended = NO;
-    @synchronized([SPCapture class]) { ended = captureFirstFrameEnded; }
-    if (ended && captureSink.written == captureBefore && !hasCaptureError())
-        setCaptureError(@"the stream ended before a capture frame was written");
-    return hasCaptureError() ? 0 : 1;
-}
-
-bool sp_capture_has_stream(void) {
-    @synchronized([SPCapture class]) { return captureStream != nil; }
-}
-
-static void registerCaptureStopBoundary(SPCapture *sink, SPCaptureAttempt *attempt, double after,
-    uint64_t targetMachTicks, uint64_t registrationMachTicks, dispatch_semaphore_t caughtUp) {
-    captureCaughtUp = caughtUp;
-    captureStopAfter = targetMachTicks;
-    captureStopReached = NO;
-    [attempt recordStopBoundaryAfterMilliseconds:after targetMachTicks:targetMachTicks
-        registrationMachTicks:registrationMachTicks];
-    if (sink.latestCallbackSeen) {
-        [attempt recordLatestSampleStatusPresent:sink.latestCallbackStatusPresent status:sink.latestCallbackStatus
-            displayTimePresent:sink.latestCallbackDisplayTimePresent
-            displayTimeMachTicks:sink.latestCallbackDisplayTimeMachTicks callbackMachTicks:sink.latestCallbackMachTicks];
-    }
-    // The serial capture queue may have processed a qualifying callback before this boundary was registered.
-    // Reuse that callback instead of waiting for another one; idle callbacks also satisfy the stop predicate.
-    if (!captureResizing && sink.latestCallbackSeen && sink.latestCallbackDisplayTimePresent
-        && sink.latestCallbackDisplayTimeMachTicks >= targetMachTicks) {
-        captureStopAfter = 0;
-        captureStopReached = YES;
-        dispatch_semaphore_signal(caughtUp);
-        return;
-    }
-    // A stream that already ended delivers no later callback.
-    if (captureStreamEnded) {
-        captureStopAfter = 0;
-        dispatch_semaphore_signal(caughtUp);
-    }
-}
-
-// Stops the stream and reports the number of frames recorded on disk.
-//
-// The stop reply arrives on another queue, and frames already handed over are recorded in the meantime.
-// Reading the count before that reports fewer than the actual number, and if the process exits then,
-// the last file remains truncated.
-int sp_capture_stop(double after, uint64_t token) {
-    if (captureStream == nil) {
-        setCaptureError(@"capture is not running");
-        return 0;
-    }
-    SCStream* stream = captureStream;
-    SPCaptureAttempt *attempt = captureAttemptForStream(stream);
-    if (attempt == nil) {
-        setCaptureError(@"capture stream has no attempt context");
-        return 0;
-    }
-    // Stops after a callback delivers a display time at or beyond the later of the call time and requested
-    // presentation time. A pending size change must finish first. The wait has no limit: it ends by that callback, by the end
-    // of the stream, which no callback follows, or by sp_capture_end_wait of token; an end before the boundary is an explicit
-    // error, and the stop still stops.
-    mach_timebase_info_data_t base;
-    mach_timebase_info(&base);
-    uint64_t now = mach_absolute_time();
-    uint64_t shown = after > 0 ? (uint64_t)(after * 1e6 * base.denom / base.numer) : 0;
-    uint64_t until = shown > now ? shown : now;
-    dispatch_semaphore_t caughtUp = dispatch_semaphore_create(0);
-    dispatch_sync(captureQueue, ^{
-        registerCaptureStopBoundary(captureSink, attempt, after, until, captureRawClock(), caughtUp);
-    });
-    NSString *waitEnded = awaitCaptureSignal(caughtUp, token, captureResizing
-        ? @"no frame at the window's device-pixel size arrived at the requested display time"
-        : @"no frame arrived at the requested display time");
-    __block BOOL reached = NO;
-    dispatch_sync(captureQueue, ^{
-        reached = captureStopReached;
-        captureCaughtUp = NULL;
-        captureStopAfter = 0;
-        // The boundary has been observed, the stream ended or the wait ended. Seal intake at this sample-queue fence before
-        // waiting for start completion or asking ScreenCaptureKit to stop the stream.
-        closeCaptureSampleIntake(stream);
-    });
-    if (waitEnded) {
-        setCaptureError(waitEnded);
-    } else if (!reached) {
-        NSString *message = captureResizing
-            ? @"the stream ended before a frame at the window's device-pixel size arrived after the requested display time"
-            : @"the stream ended before a frame arrived after the requested display time";
-        setCaptureError(message);
-        sp_log_error("capture stop", message.UTF8String);
-    }
-    dispatch_release(caughtUp);
-    @synchronized (attempt) { attempt.stopRequested = YES; }
-    // A start completion that has not come when the wait of token ends passes the stop cleanup to the late start callback. The
-    // one-shot owner claim resolves a start completion that races this stop without issuing two stop requests.
-    bool started = waitCaptureStart(token);
-    bool stopIssued = requestCaptureStopAfterStart(stream, attempt);
-    BOOL stopIssuedOrAlready = stopIssued;
-    @synchronized (attempt) { stopIssuedOrAlready = stopIssuedOrAlready || attempt.stopRequestIssued; }
-    if (started && stopIssuedOrAlready) {
-        awaitRecordingSignal(attempt.stopCompleted, token, @"capture stop did not complete");
-    }
-    forgetCaptureEnd(token);
-    // Source manifest finalization closes source intake and drains the shared writer queue.
-    finalizeCaptureArtifacts(captureSink);
-    @synchronized([SPCapture class]) { captureStream = nil; }
-    dispatch_release(captureQueue);
-    [stream release];
-    // Records the reason for frames that were not recorded. blank means the window is not visible, and suspended
-    // means the stream stopped.
-    int *counts = captureSink.statuses;
-    mach_timebase_info_data_t timebase;
+    prepareCaptureQueues();
+    SPCaptureRecording *recording = [[[SPCaptureRecording alloc] init] autorelease];
+    mach_timebase_info_data_t timebase = {};
     mach_timebase_info(&timebase);
-    sp_log_info("capture", [NSString stringWithFormat:@"%d complete frames received, %d written, %d rejected for pending writer capacity, "
-        "slowest write %.1fms, longest display gap %.1fms",
-        captureSink.complete, captureSink.written - captureBefore, captureSink.rejected, captureSink.slowestWrite * 1000,
-        (double)captureSink.longestGap * timebase.numer / timebase.denom / 1e6].UTF8String);
-    if (counts[SCFrameStatusBlank] || counts[SCFrameStatusSuspended]) {
-        sp_log_info("capture", [NSString stringWithFormat:@"%d blank and %d suspended frames were not written",
-            counts[SCFrameStatusBlank], counts[SCFrameStatusSuspended]].UTF8String);
+    @synchronized ([SPCaptureRecording class]) {
+        captureSessionSequence++;
+        recording.session = [NSString stringWithFormat:@"capture-%llu", (unsigned long long)captureSessionSequence];
     }
-    if (captureSink.written == captureBefore && captureSink.idle > 0) {
-        sp_log_info("capture", [NSString stringWithFormat:@"the window was not redrawn during %d frames; "
-            "the display is off or the window is not on screen", captureSink.idle].UTF8String);
+    recording.directory = folder;
+    recording.windowNumber = windowNumber;
+    recording.display = display;
+    recording.gap = gap;
+    recording.planned = planned;
+    recording.timebase = timebase;
+    recording.gapTicks = gap * 1e6 * timebase.denom / timebase.numer;
+    recording.function = function;
+    for (NSUInteger index = 0; index < planned; index++) {
+        [recording.rows addObject:[NSMutableDictionary dictionaryWithDictionary:@{
+            @"index": @(index), @"planned": NSNull.null, @"requested": NSNull.null, @"completed": NSNull.null,
+            @"outcome": @"not-requested", @"error": NSNull.null, @"frame": NSNull.null, @"windows": NSNull.null,
+            @"colorSpace": NSNull.null, @"colorProfile": NSNull.null, @"requestedGap": @(gap), @"machTimebaseNumerator": @(timebase.numer), @"machTimebaseDenominator": @(timebase.denom),
+            @"writeStartTime": NSNull.null, @"writeCompleteTime": NSNull.null, @"writerEnqueuedTime": NSNull.null,
+            @"writerStartTime": NSNull.null, @"writerCompleteTime": NSNull.null,
+        }]];
     }
-    return captureSink.written - captureBefore;
+    @synchronized ([SPCaptureRecording class]) {
+        [captureRecording release];
+        captureRecording = [recording retain];
+    }
+    observeCaptureWindows();
+    emitLifecycle(recording, @"start", SP_EVENT_DEBUG, nil, nil);
+    // Still 0 is requested in one main-thread step with the windows it takes: a held window goes on screen first and its order
+    // is committed, so still 0 holds the first content that the window server shows of it. The plan starts at that request.
+    __block SPCaptureTarget *first = nil;
+    __block CGImageRef image = NULL;
+    __block uint64_t requested = 0, completed = 0;
+    onMain(^{
+        if (isHeldWindow(windowNumber)) releaseHeldWindowOnMain();
+        first = [resolveTargetOnMain(windowNumber, display) retain];
+        [recording replaceTarget:first];
+        [recording startDisplayLinkObservation];
+        requested = captureTicks();
+        if (first.error == nil) image = takeImage(function, first);
+        completed = captureTicks();
+    });
+    [first autorelease];
+    recording.startTicks = requested;
+    for (NSUInteger index = 0; index < planned; index++) recording.rows[index][@"planned"] = tickString([recording plannedTicks:index]);
+    @synchronized (recording) {
+        recording.nextIndex = 1;
+        NSMutableDictionary *row = recording.rows[0];
+        row[@"requested"] = tickString(requested);
+        row[@"windows"] = first.windows ?: @[];
+        if (first.error == nil) {
+            row[@"completed"] = tickString(completed);
+            recording.completedCount = 1;
+        }
+    }
+    // The block retains the target and the recording; it releases the image.
+    SPCaptureTarget *firstTarget = first;
+    CGImageRef firstImage = image;
+    uint64_t firstRequested = requested, firstCompleted = completed;
+    dispatch_group_async(recording.inflight, captureWorkers, ^{
+        @autoreleasepool {
+            if (firstTarget.error != nil) stillOutcome(recording, 0, @"failed", firstTarget.error, nil);
+            else processStill(recording, 0, firstTarget, firstImage, firstRequested, firstCompleted);
+        }
+        if (firstImage) CGImageRelease(firstImage);
+    });
+    // The strict timer requests stills 1 and later at their planned times.
+    // The entrance counts each request of the timer; a refused timer was recorded as native.observe.failed, no still after still 0
+    // can be requested, and the start fails once still 0 has settled.
+    recording.timer = sp_observe_dispatch_timer("capture.requests", SP_OBSERVE_COUNT, DISPATCH_TIMER_STRICT, captureRequests,
+        ^{ @autoreleasepool { requestDueStills(recording); } });
+    NSString *timerFailure = recording.timer == NULL ? @"the timer of the still requests could not be made" : nil;
+    if (timerFailure != nil) closeRequests(recording);
+    else dispatch_sync(captureRequests, ^{
+        if (planned > 1) {
+            uint64_t now = captureTicks(), next = [recording plannedTicks:1];
+            int64_t nanoseconds = next > now ? (int64_t)((double)(next - now) * timebase.numer / timebase.denom) : 0;
+            dispatch_source_set_timer(recording.timer, dispatch_time(DISPATCH_TIME_NOW, nanoseconds), DISPATCH_TIME_FOREVER, 0);
+        } else {
+            @synchronized (recording) { recording.requestsDone = YES; }
+        }
+        dispatch_resume(recording.timer);
+    });
+    NSString *ended = awaitCaptureSignal(recording.firstStill, token, @"the first still was not written");
+    forgetCaptureEnd(token);
+    NSString *firstError = nil;
+    @synchronized (recording) {
+        if (ended == nil && ![recording.rows[0][@"outcome"] isEqual:@"written"]) firstError = recording.rows[0][@"error"];
+    }
+    if (ended == nil && firstError == nil && timerFailure == nil) return true;
+    NSString *failure = ended ?: firstError != nil ? [NSString stringWithFormat:@"%@", firstError] : timerFailure;
+    if (ended) setCaptureError(ended);
+    else if (firstError == nil) setCaptureError(timerFailure);
+    finishRecording(recording);
+    return captureOperationFailure(errorOut, failure);
 }
 
-bool sp_capture_limited(void) {
-    return captureLimitReached;
+int sp_capture_stop(double after, uint64_t token) {
+    SPCaptureRecording *recording = nil;
+    @synchronized ([SPCaptureRecording class]) { recording = [[captureRecording retain] autorelease]; }
+    if (recording == nil) {
+        setCaptureError(@"capture is not running");
+        forgetCaptureEnd(token);
+        return 0;
+    }
+    mach_timebase_info_data_t timebase = recording.timebase;
+    uint64_t afterTicks = after > 0 ? (uint64_t)(after * 1e6 * timebase.denom / timebase.numer) : 0;
+    emitLifecycle(recording, @"stop", SP_EVENT_DEBUG, nil, after > 0 ? [NSString stringWithFormat:@"after %.3f ms", after] : nil);
+    if (afterTicks > 0) {
+        // Waits until a still requested at or after after completed, the plan ended without one, or the recording ended.
+        BOOL reached = NO, ended = NO;
+        while (YES) {
+            @synchronized (recording) {
+                recording.stopAfterTicks = afterTicks;
+                recording.stopArmed = YES;
+                for (NSDictionary *row in recording.rows) {
+                    if ([row[@"completed"] isKindOfClass:NSString.class]
+                        && strtoull([row[@"requested"] UTF8String], NULL, 10) >= afterTicks) reached = YES;
+                }
+                recording.stopReached = reached;
+                ended = recording.requestsDone && recording.outcomes == recording.nextIndex;
+            }
+            if (reached || ended) break;
+            NSString *waitEnded = awaitCaptureSignal(recording.stopSignal, token, @"no still was requested at the requested time");
+            if (waitEnded) {
+                setCaptureError(waitEnded);
+                break;
+            }
+        }
+        if (!reached && ended && !hasCaptureError()) {
+            uint64_t last = 0;
+            @synchronized (recording) {
+                for (NSDictionary *row in recording.rows) {
+                    if ([row[@"requested"] isKindOfClass:NSString.class]) last = strtoull([row[@"requested"] UTF8String], NULL, 10);
+                }
+            }
+            setCaptureError([NSString stringWithFormat:@"the recording ended at %.3f ms, before the requested time %.3f ms",
+                ticksToMilliseconds(last, timebase), after]);
+        }
+    }
+    forgetCaptureEnd(token);
+    return finishRecording(recording);
+}
+
+int sp_capture_missed(void) {
+    @synchronized ([SPCaptureRecording class]) { return captureMissed; }
+}
+
+int sp_capture_late(void) {
+    @synchronized ([SPCaptureRecording class]) { return captureLate; }
 }
 
 double sp_capture_longest_gap(void) {
-    mach_timebase_info_data_t timebase;
-    mach_timebase_info(&timebase);
-    return (double)captureSink.longestGap * timebase.numer / timebase.denom / 1e6;
+    @synchronized ([SPCaptureRecording class]) { return captureLongestGap; }
 }
 
-// The asynchronous state of a still capture is owned only by the callback of that call.
-@interface SPCaptureStillResult : NSObject
-@property (nonatomic, copy) NSString *error;
-@property (nonatomic) bool written;
-@property (nonatomic, assign) dispatch_semaphore_t answered;
-- (void)complete:(bool)written error:(NSString *)error;
-@end
-@implementation SPCaptureStillResult
-- (instancetype)init {
-    self = [super init];
-    if (self) _answered = dispatch_semaphore_create(0);
-    return self;
-}
-- (void)complete:(bool)written error:(NSString *)error {
-    self.written = written;
-    self.error = error;
-    // An error that arrives after the caller returned because its wait ended is also reported to the log.
-    if (error != nil) sp_log_error("still capture", error.UTF8String);
-    dispatch_semaphore_signal(self.answered);
-}
-- (void)dealloc {
-    [_error release];
-    dispatch_release(_answered);
-    [super dealloc];
-}
-@end
-
-
-bool sp_capture_still(const long *windowNumbers, int count, const char *path, uint64_t token, char **errorOut) {
+bool sp_capture_still(long windowNumber, const char *path, char **errorOut) {
     if (errorOut == NULL) {
         sp_log_error("still capture", "an error output is required");
         return false;
     }
     *errorOut = NULL;
-    if (windowNumbers == NULL || count < 1) {
-        return captureOperationFailure(errorOut, @"still capture needs the number of a window");
-    }
-    long windowNumber = windowNumbers[0];
-    if (path == NULL) {
-        return captureOperationFailure(errorOut, @"still capture needs a path");
-    }
+    if (path == NULL) return captureOperationFailure(errorOut, @"still capture needs a path");
     NSString *decoded = [NSString stringWithUTF8String:path];
     if (decoded == nil) return captureOperationFailure(errorOut, @"still capture path is not valid UTF-8");
-    NSURL *url = [NSURL fileURLWithPath:decoded];
-    SPCaptureStillResult *result = [[SPCaptureStillResult alloc] init];
-    [SCShareableContent getCurrentProcessShareableContentWithCompletionHandler:
-        ^(SCShareableContent *content, NSError *error) {
-        if (error != nil) {
-            [result complete:NO error:[NSString stringWithFormat:@"current-process capture unavailable: %@", captureFailureText(error)]];
-            return;
-        }
-        SCWindow *target = nil;
-        for (SCWindow *window in content.windows) {
-            if ((long)window.windowID == windowNumber) target = window;
-        }
-        if (target == nil) {
-            [result complete:NO error:[NSString stringWithFormat:@"window %ld not found", windowNumber]];
-            return;
-        }
-        if (CGRectIsEmpty(target.frame)) {
-            [result complete:NO error:[NSString stringWithFormat:@"window %ld has no on-screen frame", windowNumber]];
-            return;
-        }
-        SCContentFilter *filter = [[[SCContentFilter alloc] initWithDesktopIndependentWindow:target] autorelease];
-        SCStreamConfiguration *config = [[[SCStreamConfiguration alloc] init] autorelease];
-        // The observation image keeps device pixels.
-        config.width = (size_t)(filter.contentRect.size.width * filter.pointPixelScale);
-        config.height = (size_t)(filter.contentRect.size.height * filter.pointPixelScale);
-        config.colorSpaceName = kCGColorSpaceSRGB;
-        config.showsCursor = NO;
-        [SCScreenshotManager captureImageWithFilter:filter configuration:config
-            completionHandler:^(CGImageRef image, NSError *captureError) {
-            if (image == NULL) {
-                [result complete:NO error:[NSString stringWithFormat:@"still capture failed: %@",
-                    captureError != nil ? captureFailureText(captureError) : @"no image"]];
-                return;
-            }
-            CGImageDestinationRef destination = CGImageDestinationCreateWithURL(
-                (CFURLRef)url, (CFStringRef)@"public.png", 1, NULL);
-            if (destination == NULL) {
-                [result complete:NO error:[NSString stringWithFormat:@"cannot write %@", url.path]];
-                return;
-            }
-            CGImageDestinationAddImage(destination, image, NULL);
-            bool written = CGImageDestinationFinalize(destination);
-            CFRelease(destination);
-            [result complete:written error:written ? nil : [NSString stringWithFormat:@"cannot write %@", url.path]];
-        }];
-    }];
-    NSString *ended = awaitCaptureSignal(result.answered, token, @"still capture did not answer");
-    forgetCaptureEnd(token);
-    bool written = ended == nil && result.written;
-    if (!written) captureOperationFailure(errorOut, ended ?: result.error);
-    [result release];
-    return written;
+    SPWindowImage function = windowImageFunction();
+    if (function == NULL) return captureOperationFailure(errorOut, kWindowImageMissing);
+    SPCaptureTarget *target = resolveTarget(windowNumber, NO);
+    if (target.error != nil) return captureOperationFailure(errorOut, target.error);
+    CGImageRef image = takeImage(function, target);
+    if (image == NULL) {
+        return captureOperationFailure(errorOut, [NSString stringWithFormat:@"the window server gave no image of window %ld",
+            windowNumber]);
+    }
+    size_t width = CGImageGetWidth(image), height = CGImageGetHeight(image), stride = width * 4;
+    // The still holds the pixels as a frame does: BGRA in the colour space of the image, which the PNG names by its ICC profile.
+    NSMutableData *pixels = width && height && stride / 4 == width ? [NSMutableData dataWithLength:stride * height] : nil;
+    CGImageRef converted = NULL;
+    NSString *drawFailure = pixels == nil ? @"the image is empty or has no memory" : drawOwnSpace(image, pixels.mutableBytes, width,
+        height, stride);
+    if (drawFailure == nil) {
+        CGDataProviderRef provider = CGDataProviderCreateWithCFData((CFDataRef)pixels);
+        converted = provider ? CGImageCreate(width, height, 8, 32, stride, CGImageGetColorSpace(image),
+            (CGBitmapInfo)kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little, provider, NULL, false,
+            kCGRenderingIntentDefault) : NULL;
+        if (provider) CGDataProviderRelease(provider);
+    }
+    CGImageRelease(image);
+    if (converted == NULL) {
+        return captureOperationFailure(errorOut, [NSString stringWithFormat:@"the image of window %ld (%zux%zu) could not be drawn: %@",
+            windowNumber, width, height, drawFailure ?: @"its pixels could not be made into an image"]);
+    }
+    CGImageDestinationRef destination = CGImageDestinationCreateWithURL((CFURLRef)[NSURL fileURLWithPath:decoded],
+        (CFStringRef)@"public.png", 1, NULL);
+    bool written = false;
+    if (destination != NULL) {
+        CGImageDestinationAddImage(destination, converted, NULL);
+        written = CGImageDestinationFinalize(destination);
+        CFRelease(destination);
+    }
+    CGImageRelease(converted);
+    if (!written) return captureOperationFailure(errorOut, [NSString stringWithFormat:@"cannot write %@", decoded]);
+    return true;
 }
 
 double sp_capture_clock(void) {
     mach_timebase_info_data_t timebase;
     mach_timebase_info(&timebase);
-    return (double)mach_absolute_time() * timebase.numer / timebase.denom / 1e6;
+    return ticksToMilliseconds(mach_absolute_time(), timebase);
 }

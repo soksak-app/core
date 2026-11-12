@@ -64,10 +64,9 @@ test('release builds audited candidate packages and publication consumes their i
     const packaging = list.findIndex((step) => step.name === `Package ${label} release bundle`);
     assert.ok(packaging >= 0, `${host}: no package step`);
     assert.match(list[packaging].text, new RegExp(`ditto -c -k --keepParent target/release/${host}/soksak\\.app "dist/soksak-\\$version-darwin-arm64-${host}\\.zip"`));
-    const nativeFetch = list.findIndex((step) => step.name === 'Fetch the pinned native release file');
     const build = list.findIndex((step) => step.name === `Build and audit ${label} release bundle offline`);
-    assert.ok(nativeFetch >= 0 && build > nativeFetch, `${host}: native dependency fetch must precede its offline build`);
-    assert.match(list[build].text, /OFFLINE: '1'/);
+    assert.ok(build >= 0, `${host}: no offline build step`);
+    assert.match(list[build].text, /npm_config_offline: 'true'/);
   }
   const publish = job('publish');
   assert.match(publish, /if: github.event_name == 'workflow_dispatch'/);
@@ -173,26 +172,17 @@ test('ci keeps language host checks independent and gates release on every requi
     ['wailsv3', 'macos-wailsv3', 'Wails host tests'], ['tauriv2', 'macos-tauriv2', 'Tauri host tests'], ['mygo', 'macos-mygo', 'mygo host tests'],
   ]) {
     const list = steps(job(jobName));
-    const fetch = list.findIndex((step) => step.name === 'Fetch pinned native release file');
-    const check = list.findIndex((step) => step.name === testName);
-    assert.ok(fetch >= 0 && check > fetch, `${host}: native release file fetch must precede offline host tests`);
-    assert.match(list[check].text, /OFFLINE: '1'/);
+    assert.ok(list.some((step) => step.name === testName), `${host}: no host test step`);
   }
   const native = steps(job('build-native'));
-  const nativeFetch = native.findIndex((step) => step.name === 'Fetch pinned native release file');
   const nativeBuild = native.findIndex((step) => step.name === 'Build the native library offline');
   const nativeTest = native.findIndex((step) => step.name === 'Native Darwin tests');
   const processIdentityTest = native.findIndex((step) => step.name === 'Native process identity package tests');
-  assert.ok(nativeFetch >= 0 && nativeBuild > nativeFetch && nativeTest > nativeBuild && processIdentityTest > nativeBuild,
-    'native dependency fetch, build, and tests are not ordered');
+  assert.ok(nativeBuild >= 0 && nativeTest > nativeBuild && processIdentityTest > nativeBuild,
+    'the native build and tests are not ordered');
   assert.match(native[processIdentityTest].text, /pnpm -C core\/native\/darwin\/process-identity test/);
-  assert.match(native[nativeBuild].text, /OFFLINE: '1'/);
-  assert.match(native[nativeTest].text, /OFFLINE: '1'/);
   const equivalence = steps(job('equivalence'));
-  const eqFetch = equivalence.findIndex((step) => step.name === 'Fetch pinned native release file');
-  const eqChecks = equivalence.findIndex((step) => step.name === 'Structure checks');
-  assert.ok(eqFetch >= 0 && eqChecks > eqFetch, 'equivalence does not fetch native dependency before offline structure checks');
-  assert.match(equivalence[eqChecks].text, /OFFLINE: '1'/);
+  assert.ok(equivalence.some((step) => step.name === 'Structure checks'), 'equivalence has no structure checks');
   // A hosted runner serves one job, so its Rust builds use every processor; a one-job limit builds each crate on one processor.
   assert.doesNotMatch(job('equivalence'), /CARGO_BUILD_JOBS/, 'equivalence limits its Rust builds to fewer jobs than the runner has processors');
 });

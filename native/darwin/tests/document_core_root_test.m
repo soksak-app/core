@@ -2,8 +2,6 @@
 // from the core root resolver of the application and imports the files that the resolver serves, each with the header
 // Access-Control-Allow-Origin of its plugin; a refused path fails with no such header; and a document region receives no
 // core root grant, so its requests to soksak://core fail without calling the resolver.
-// The diagnostic frame identity of a plugin root ends with the close, the navigation and the WebContent process of its
-// document (docs/spec/diagnostics.md).
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "support/temporary_folder.h"
@@ -13,8 +11,6 @@
 #import "webview_geometry.h"
 #import "window_facts.h"
 #import "surface_layout.h"
-#import "image_capture_match.h"
-#import "private/webkit.h"
 
 static int failures = 0;
 
@@ -30,76 +26,6 @@ static void until(NSString *what, BOOL (^done)(void)) {
 }
 
 static NSDictionary *latest;
-static NSString *frameIdentityReplyJSON;
-static NSString *frameIdentityReplyError;
-static int frameIdentityReplyCount;
-static WKWebView *frameIdentityPresentationView;
-static BOOL frameIdentityPresentationCallbackArrived;
-static BOOL releaseFrameIdentityPresentationCallback;
-static NSUInteger frameIdentityPresentationRequests;
-static void (^heldFrameIdentityPresentationCompletion)(void);
-static NSUInteger cancelledFrameIdentityStartReplies;
-static NSString *cancelledFrameIdentityStartError;
-
-static void cancelledFrameIdentityStartReply(void *context, const char *json, const char *error) {
-    (void)context;
-    (void)json;
-    cancelledFrameIdentityStartReplies++;
-    [cancelledFrameIdentityStartError release];
-    cancelledFrameIdentityStartError = error ? [[NSString alloc] initWithUTF8String:error] : nil;
-}
-
-static void controlledFrameIdentityAfterUpdate(void *document, void (^completion)(void)) {
-    WKWebView *view = (WKWebView *)document;
-    if (view != frameIdentityPresentationView) return;
-    frameIdentityPresentationRequests++;
-    [view _doAfterNextPresentationUpdate:^{
-        frameIdentityPresentationCallbackArrived = YES;
-        if (releaseFrameIdentityPresentationCallback) {
-            completion();
-        } else {
-            [heldFrameIdentityPresentationCompletion release];
-            heldFrameIdentityPresentationCompletion = [completion copy];
-        }
-    }];
-}
-
-static void controlFrameIdentityPresentation(WKWebView *view) {
-    frameIdentityPresentationView = view;
-    frameIdentityPresentationCallbackArrived = NO;
-    releaseFrameIdentityPresentationCallback = NO;
-    frameIdentityPresentationRequests = 0;
-    sp_document_frame_identity_test_set_after_update_hook(controlledFrameIdentityAfterUpdate);
-}
-
-static void releaseControlledFrameIdentityPresentation(void) {
-    releaseFrameIdentityPresentationCallback = YES;
-    void (^completion)(void) = [heldFrameIdentityPresentationCompletion retain];
-    [heldFrameIdentityPresentationCompletion release];
-    heldFrameIdentityPresentationCompletion = nil;
-    if (completion) {
-        completion();
-        [completion release];
-    }
-    sp_document_frame_identity_test_set_after_update_hook(NULL);
-    frameIdentityPresentationView = nil;
-}
-
-static void frameIdentityReply(void *context, const char *json, const char *error) {
-    (void)context;
-    [frameIdentityReplyJSON release];
-    [frameIdentityReplyError release];
-    frameIdentityReplyJSON = json ? [[NSString alloc] initWithUTF8String:json] : nil;
-    frameIdentityReplyError = error ? [[NSString alloc] initWithUTF8String:error] : nil;
-    frameIdentityReplyCount++;
-}
-
-static void clearFrameIdentityReply(void) {
-    [frameIdentityReplyJSON release]; frameIdentityReplyJSON = nil;
-    [frameIdentityReplyError release]; frameIdentityReplyError = nil;
-    frameIdentityReplyCount = 0;
-}
-
 static void changed(void *context, const char *text) {
     (void)context;
     latest = [[NSJSONSerialization JSONObjectWithData:[NSData dataWithBytes:text length:strlen(text)] options:0 error:nil] retain];
@@ -208,212 +134,10 @@ int main(void) { @autoreleasepool {
             [NSString stringWithFormat:@"a served core response has the header that a fetch of the view reads: %@", steps]);
         check([steps[@"refusedFetch"] isEqual:@"fail"],
             [NSString stringWithFormat:@"a refused core response carries no Access-Control-Allow-Origin and the fetch fails: %@", steps]);
-
-        sp_image_capture_match_begin(NULL, NULL);
-        char *identitySessionError = NULL;
-        BOOL identitySession = sp_image_capture_match_identity_session_begin(&identitySessionError);
-        check(identitySession && identitySessionError == NULL,
-            @"the document identity producer owner starts an opt-in capture identity session");
-        free(identitySessionError);
-        clearFrameIdentityReply();
-        controlFrameIdentityPresentation((WKWebView *)view);
-        BOOL identityScheduled = sp_document_frame_identity_start(view, 41, frameIdentityReply, NULL);
-        check(identityScheduled, @"the current visible plugin root accepts the diagnostic QR producer");
-        until(@"the target root WebKit presentation callback or a start reply", ^BOOL {
-            return frameIdentityReplyCount != 0 || frameIdentityPresentationCallbackArrived;
-        });
-        check(frameIdentityPresentationRequests == 1 && frameIdentityPresentationCallbackArrived,
-            [NSString stringWithFormat:@"the start waits for the target root WebKit presentation callback before replying (requests=%lu callback=%d reply=%d)",
-                (unsigned long)frameIdentityPresentationRequests, frameIdentityPresentationCallbackArrived,
-                frameIdentityReplyCount]);
-        check(frameIdentityReplyCount == 0,
-            @"the start reply remains pending while the target root presentation callback is held");
-        releaseControlledFrameIdentityPresentation();
-        until(@"the visible root reports its first QR draw", ^BOOL { return frameIdentityReplyCount == 1; });
-        NSDictionary *identityStart = frameIdentityReplyJSON
-            ? [NSJSONSerialization JSONObjectWithData:[frameIdentityReplyJSON dataUsingEncoding:NSUTF8StringEncoding]
-                options:0 error:nil] : nil;
-        check(frameIdentityReplyError == nil && [identityStart[@"generation"] unsignedLongLongValue] == 41
-            && [identityStart[@"atlasSlots"] unsignedIntegerValue] == 512
-            && [identityStart[@"roi"] isKindOfClass:NSDictionary.class],
-            [NSString stringWithFormat:@"the asynchronous start reply follows initial marker draw with measured ROI: %@ %@",
-                identityStart, frameIdentityReplyError ?: @""]);
-        clearFrameIdentityReply();
-        BOOL freezeScheduled = sp_document_frame_identity_freeze(41, frameIdentityReply, NULL);
-        check(freezeScheduled, @"freezing the producer schedules on the main thread");
-        until(@"the producer reports its final issued slots", ^BOOL { return frameIdentityReplyCount == 1; });
-        NSDictionary *identityFreeze = frameIdentityReplyJSON
-            ? [NSJSONSerialization JSONObjectWithData:[frameIdentityReplyJSON dataUsingEncoding:NSUTF8StringEncoding]
-                options:0 error:nil] : nil;
-        NSUInteger issuedSlots = [identityFreeze[@"issuedSlots"] unsignedIntegerValue];
-        check(frameIdentityReplyError == nil && [identityFreeze[@"generation"] unsignedLongLongValue] == 41
-            && [identityFreeze[@"atlasSlots"] unsignedIntegerValue] == 512 && issuedSlots >= 1 && issuedSlots <= 512,
-            [NSString stringWithFormat:@"freeze reports the bounded count of distinct atlas cells drawn: %@ %@",
-                identityFreeze, frameIdentityReplyError ?: @""]);
-        clearFrameIdentityReply();
-        BOOL removeScheduled = sp_document_frame_identity_remove(41, frameIdentityReply, NULL);
-        check(removeScheduled, @"marker removal schedules after capture intake stops");
-        until(@"the marker removal completes", ^BOOL { return frameIdentityReplyCount == 1; });
-        NSDictionary *identityRemove = frameIdentityReplyJSON
-            ? [NSJSONSerialization JSONObjectWithData:[frameIdentityReplyJSON dataUsingEncoding:NSUTF8StringEncoding]
-                options:0 error:nil] : nil;
-        check(frameIdentityReplyError == nil && [identityRemove[@"generation"] unsignedLongLongValue] == 41
-            && [identityRemove[@"removed"] boolValue],
-            [NSString stringWithFormat:@"the matching generation marker is removed: %@ %@",
-                identityRemove, frameIdentityReplyError ?: @""]);
-        clearFrameIdentityReply();
-        BOOL retryRemoveScheduled = sp_document_frame_identity_remove(41, frameIdentityReply, NULL);
-        check(retryRemoveScheduled, @"a retry after an earlier removal callback schedules cleanup confirmation");
-        until(@"the idempotent removal retry completes", ^BOOL { return frameIdentityReplyCount == 1; });
-        NSDictionary *retryRemove = frameIdentityReplyJSON
-            ? [NSJSONSerialization JSONObjectWithData:[frameIdentityReplyJSON dataUsingEncoding:NSUTF8StringEncoding]
-                options:0 error:nil] : nil;
-        check(frameIdentityReplyError == nil && [retryRemove[@"generation"] unsignedLongLongValue] == 41
-            && [retryRemove[@"removed"] boolValue],
-            [NSString stringWithFormat:@"a repeated removal confirms the already removed generation: %@ %@",
-                retryRemove, frameIdentityReplyError ?: @""]);
-        sp_image_capture_match_end();
-        clearFrameIdentityReply();
-
-        sp_image_capture_match_begin(NULL, NULL);
-        identitySessionError = NULL;
-        identitySession = sp_image_capture_match_identity_session_begin(&identitySessionError);
-        check(identitySession && identitySessionError == NULL,
-            @"the pending-start cancellation case begins a separate identity session");
-        free(identitySessionError);
-        cancelledFrameIdentityStartReplies = 0;
-        [cancelledFrameIdentityStartError release]; cancelledFrameIdentityStartError = nil;
-        controlFrameIdentityPresentation((WKWebView *)view);
-        BOOL pendingIdentityScheduled = sp_document_frame_identity_start(view, 42,
-            cancelledFrameIdentityStartReply, NULL);
-        check(pendingIdentityScheduled, @"a second generation accepts a diagnostic QR producer");
-        until(@"WebKit reaches the held target update for the second generation",
-            ^BOOL { return frameIdentityPresentationCallbackArrived; });
-        check(cancelledFrameIdentityStartReplies == 0,
-            @"the second generation start remains pending before its target update completion");
-        BOOL pendingRemoveScheduled = sp_document_frame_identity_remove(42, frameIdentityReply, NULL);
-        check(pendingRemoveScheduled, @"removing a generation cancels its pending target update reply");
-        until(@"the pending start error and generation removal complete",
-            ^BOOL { return cancelledFrameIdentityStartReplies == 1 && frameIdentityReplyCount == 1; });
-        check(cancelledFrameIdentityStartError != nil,
-            @"removal reports one explicit error to the pending start callback");
-        NSDictionary *pendingRemove = frameIdentityReplyJSON
-            ? [NSJSONSerialization JSONObjectWithData:[frameIdentityReplyJSON dataUsingEncoding:NSUTF8StringEncoding]
-                options:0 error:nil] : nil;
-        check(frameIdentityReplyError == nil && [pendingRemove[@"generation"] unsignedLongLongValue] == 42
-            && [pendingRemove[@"removed"] boolValue],
-            [NSString stringWithFormat:@"the pending generation is removed before its update callback is released: %@ %@",
-                pendingRemove, frameIdentityReplyError ?: @""]);
-        releaseControlledFrameIdentityPresentation();
-        check(cancelledFrameIdentityStartReplies == 1,
-            @"the late target update callback cannot reply again after generation removal");
-        sp_image_capture_match_end();
-        clearFrameIdentityReply();
-
-        // A view keeps its first document (docs/spec/native-surfaces.md#view-surfaces), so a navigation of a plugin root
-        // document that has committed is refused and commits nothing: the identity of the document goes on. A start that has
-        // not answered answers at its target update, and a started identity freezes and is removed.
-        sp_image_capture_match_begin(NULL, NULL);
-        identitySessionError = NULL;
-        identitySession = sp_image_capture_match_identity_session_begin(&identitySessionError);
-        check(identitySession && identitySessionError == NULL, @"the refused navigation case begins its identity session");
-        free(identitySessionError);
-        cancelledFrameIdentityStartReplies = 0;
-        [cancelledFrameIdentityStartError release]; cancelledFrameIdentityStartError = nil;
-        controlFrameIdentityPresentation((WKWebView *)view);
-        check(sp_document_frame_identity_start(view, 44, cancelledFrameIdentityStartReply, NULL),
-            @"the refused navigation case starts a diagnostic QR producer");
-        until(@"WebKit reaches the held target update before the refused navigation",
-            ^BOOL { return frameIdentityPresentationCallbackArrived; });
+        // A view keeps its first document (docs/spec/native-surfaces.md#view-surfaces): a second load is refused.
         refusedLoad(view, @"soksak://probe/ui/core/probe.html");
-        check(cancelledFrameIdentityStartReplies == 0,
-            [NSString stringWithFormat:@"a refused navigation does not end the start that has not answered, got %lu %@",
-                (unsigned long)cancelledFrameIdentityStartReplies, cancelledFrameIdentityStartError ?: @"(no reply)"]);
-        releaseControlledFrameIdentityPresentation();
-        until(@"the start answers at its target update after the refused navigation",
-            ^BOOL { return cancelledFrameIdentityStartReplies != 0; });
-        check(cancelledFrameIdentityStartReplies == 1 && cancelledFrameIdentityStartError == nil,
-            [NSString stringWithFormat:@"the start answers once without an error after a refused navigation, got %lu %@",
-                (unsigned long)cancelledFrameIdentityStartReplies, cancelledFrameIdentityStartError ?: @"(no error)"]);
         refusedLoad(view, @"soksak://probe/ui/core/next.html");
-        clearFrameIdentityReply();
-        check(sp_document_frame_identity_freeze(44, frameIdentityReply, NULL), @"the freeze after the refused navigation schedules");
-        until(@"the freeze after the refused navigation answers", ^BOOL { return frameIdentityReplyCount == 1; });
-        check(frameIdentityReplyError == nil && [frameIdentityReplyJSON containsString:@"\"generation\":44"],
-            [NSString stringWithFormat:@"a refused navigation keeps the started identity, so its freeze answers: %@ %@",
-                frameIdentityReplyJSON ?: @"", frameIdentityReplyError ?: @""]);
-        clearFrameIdentityReply();
-        check(sp_document_frame_identity_remove(44, frameIdentityReply, NULL), @"the kept generation accepts its removal");
-        until(@"the removal of the kept generation answers", ^BOOL { return frameIdentityReplyCount == 1; });
-        check(frameIdentityReplyError == nil && [frameIdentityReplyJSON containsString:@"\"removed\":true"],
-            [NSString stringWithFormat:@"the removal of the kept generation answers that it is removed: %@ %@",
-                frameIdentityReplyJSON ?: @"", frameIdentityReplyError ?: @""]);
-        sp_image_capture_match_end();
-        clearFrameIdentityReply();
-
-        // The end of the WebContent process of the document ends the identity: a start that has not answered fails with its reason.
-        sp_image_capture_match_begin(NULL, NULL);
-        identitySessionError = NULL;
-        identitySession = sp_image_capture_match_identity_session_begin(&identitySessionError);
-        check(identitySession && identitySessionError == NULL, @"the process end case begins its identity session");
-        free(identitySessionError);
-        cancelledFrameIdentityStartReplies = 0;
-        [cancelledFrameIdentityStartError release]; cancelledFrameIdentityStartError = nil;
-        controlFrameIdentityPresentation((WKWebView *)view);
-        check(sp_document_frame_identity_start(view, 46, cancelledFrameIdentityStartReply, NULL),
-            @"the process end case starts a diagnostic QR producer");
-        until(@"WebKit reaches the held target update before the process end",
-            ^BOOL { return frameIdentityPresentationCallbackArrived; });
-        [(WKWebView *)view _killWebContentProcessAndResetState];
-        until(@"the start that the process end ended answers", ^BOOL { return cancelledFrameIdentityStartReplies != 0; });
-        check(cancelledFrameIdentityStartReplies == 1
-            && [cancelledFrameIdentityStartError isEqualToString:@"the web content process of the plugin root document ended during frame identity capture"],
-            [NSString stringWithFormat:@"the end of the WebContent process fails the start that has not answered, got %lu %@",
-                (unsigned long)cancelledFrameIdentityStartReplies, cancelledFrameIdentityStartError ?: @"(no reply)"]);
-        clearFrameIdentityReply();
-        check(sp_document_frame_identity_remove(46, frameIdentityReply, NULL), @"the generation of the ended process accepts its removal");
-        until(@"the removal of the generation of the ended process answers", ^BOOL { return frameIdentityReplyCount == 1; });
-        check(frameIdentityReplyError == nil && [frameIdentityReplyJSON containsString:@"\"removed\":true"],
-            [NSString stringWithFormat:@"the removal of the generation of an ended process answers that it is removed: %@ %@",
-                frameIdentityReplyJSON ?: @"", frameIdentityReplyError ?: @""]);
-        releaseControlledFrameIdentityPresentation();
-        sp_image_capture_match_end();
-        clearFrameIdentityReply();
         sp_document_close(view);
-
-        // The navigation that a plugin root document commits is its first one, so an identity that starts while that
-        // navigation is in progress ends at its commit as at the close (docs/spec/diagnostics.md): the start fails with its
-        // reason, and its removal still answers. The target update of the start is held, so the start answers only by the end.
-        void *committing = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe", NULL, "", changed, NULL);
-        check(committing != NULL, @"the committing view is created");
-        sp_document_place(committing, 0, 0, 0, 0, true);
-        sp_image_capture_match_begin(NULL, NULL);
-        identitySessionError = NULL;
-        identitySession = sp_image_capture_match_identity_session_begin(&identitySessionError);
-        check(identitySession && identitySessionError == NULL, @"the navigation case begins its identity session");
-        free(identitySessionError);
-        cancelledFrameIdentityStartReplies = 0;
-        [cancelledFrameIdentityStartError release]; cancelledFrameIdentityStartError = nil;
-        controlFrameIdentityPresentation((WKWebView *)committing);
-        check(sp_document_load(committing, "soksak://probe/ui/core/probe.html"), @"the committing view starts its first load");
-        check(sp_document_frame_identity_start(committing, 47, cancelledFrameIdentityStartReply, NULL),
-            @"the navigation case starts a diagnostic QR producer");
-        until(@"the start that the navigation ended answers", ^BOOL { return cancelledFrameIdentityStartReplies != 0; });
-        check(cancelledFrameIdentityStartReplies == 1
-            && [cancelledFrameIdentityStartError isEqualToString:@"the plugin root document navigated during frame identity capture"],
-            [NSString stringWithFormat:@"a navigation that the document commits fails the start that has not answered, got %lu %@",
-                (unsigned long)cancelledFrameIdentityStartReplies, cancelledFrameIdentityStartError ?: @"(no reply)"]);
-        clearFrameIdentityReply();
-        check(sp_document_frame_identity_remove(47, frameIdentityReply, NULL), @"the navigated generation accepts its removal");
-        until(@"the removal of the navigated generation answers", ^BOOL { return frameIdentityReplyCount == 1; });
-        check(frameIdentityReplyError == nil && [frameIdentityReplyJSON containsString:@"\"removed\":true"],
-            [NSString stringWithFormat:@"the removal of a navigated generation answers that it is removed: %@ %@",
-                frameIdentityReplyJSON ?: @"", frameIdentityReplyError ?: @""]);
-        releaseControlledFrameIdentityPresentation();
-        check(cancelledFrameIdentityStartReplies == 1, @"the late target update of a navigated generation does not answer again");
-        sp_image_capture_match_end();
-        clearFrameIdentityReply();
-        sp_document_close(committing);
 
         // A region gets no core root grant: its core requests fail and the resolver is not called for them.
         [resolverCalls removeAllObjects];
@@ -427,17 +151,6 @@ int main(void) { @autoreleasepool {
         check(surfaceLayoutPrefersNear60FPS(region) == 0,
             [NSString stringWithFormat:@"a document region renders at the display refresh rate (preference %d)",
                 surfaceLayoutPrefersNear60FPS(region)]);
-        sp_image_capture_match_begin(NULL, NULL);
-        identitySessionError = NULL;
-        identitySession = sp_image_capture_match_identity_session_begin(&identitySessionError);
-        check(identitySession && identitySessionError == NULL, @"the attached document check owns an active identity session");
-        free(identitySessionError);
-        clearFrameIdentityReply();
-        check(sp_document_frame_identity_start(region, 43, frameIdentityReply, NULL), @"the root-only entry replies for an attached target");
-        until(@"the root-only entry rejects the attached document", ^BOOL { return frameIdentityReplyCount == 1; });
-        check(frameIdentityReplyError != nil, @"an attached document does not acquire the plugin-root identity capability");
-        sp_image_capture_match_end();
-        clearFrameIdentityReply();
         sp_document_close(region);
     }
     sp_core_root_set_resolver(NULL, NULL);

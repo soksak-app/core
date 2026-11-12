@@ -374,7 +374,7 @@ TAURI_DEBUG_FEATURES = diagnostics,dev
 WAILS_DEBUG_TAGS     = diagnostics dev
 # The declared core release candidate is the RELEASE constant of scripts/check-versions.mjs.
 DIAGNOSTIC_RELEASE := $(filter 0.0.%,$(shell sed -n 's/^export const RELEASE = "\(.*\)";$$/\1/p' scripts/check-versions.mjs))
-.PHONY: build-native fetch-native build-sok build-fixture-registry build-fixture-registry-from-sok copy-frontend-browser run-browser copy-frontend-wailsv3 copy-frontend-tauriv2 copy-frontend-mygo test-wailsv3 test-tauriv2 test-mygo test-hosts check-release-wailsv3 check-release-tauriv2 check-release-mygo check-rust-format check-rust-clippy check-go-format run-tauriv2 run-tauriv2-release build-tauriv2 build-tauriv2-release run-wailsv3 run-wailsv3-release build-wailsv3 build-wailsv3-release run-mygo run-mygo-release build-mygo build-mygo-release test-app test-app-candidate test-app-capture-input-close test-app-host-go test-app-activation test-app-section-design benchmark-input-latency measure-examples-size run-tauriv2 run-tauriv2-release run-wailsv3 run-wailsv3-release test-app
+.PHONY: build-native build-sok build-fixture-registry build-fixture-registry-from-sok copy-frontend-browser run-browser copy-frontend-wailsv3 copy-frontend-tauriv2 copy-frontend-mygo test-wailsv3 test-tauriv2 test-mygo test-hosts check-release-wailsv3 check-release-tauriv2 check-release-mygo check-rust-format check-rust-clippy check-go-format run-tauriv2 run-tauriv2-release build-tauriv2 build-tauriv2-release run-wailsv3 run-wailsv3-release build-wailsv3 build-wailsv3-release run-mygo run-mygo-release build-mygo build-mygo-release test-app test-app-candidate test-app-capture-input-close test-app-host-go test-app-activation test-app-section-design benchmark-input-latency measure-examples-size run-tauriv2 run-tauriv2-release run-wailsv3 run-wailsv3-release test-app
 
 # rustup installs cargo in $(CARGO_HOME)/bin, which is ~/.cargo/bin when CARGO_HOME is not set, and adds the path to
 # the shell profile. The shell of make does not read the profile, and a hosted runner sets CARGO_HOME outside HOME.
@@ -390,8 +390,8 @@ export CARGO := $(shell PATH="$(PATH)" command -v cargo)
 check-cargo:
 	@test -n "$(CARGO)" || { echo "make: cargo is on neither PATH nor $(CARGO_HOME)/bin; rustup installs it there" >&2; exit 1; }
 
-# The minimum macOS version of the native apps. The capture code uses the macOS 14.4 API
-# getCurrentProcessShareableContentWithCompletionHandler. This is the one declaration of the version: native/darwin reads it,
+# The minimum macOS version of the native apps, 14.4; the newest API that the native code calls, the display link of a window
+# or a view (displayLinkWithTarget:selector:), needs macOS 14.0. This is the one declaration of the version: native/darwin reads it,
 # and every Go and Rust command of a target gets it here (docs/spec/hosts.md#nativedarwin).
 # Go passes it to cgo packages through CGO_CFLAGS and their external linker through -extldflags.
 # Cgo-free native profiles pass GO_INTERNAL_LINK to the Go internal linker. Clang reads
@@ -464,10 +464,6 @@ build-native-mygo: check-host-callbacks check-host-api
 .PHONY: build-native-tests
 build-native-tests:
 	@$(MAKE) -C native/darwin MACOS_MINIMUM=$(MACOS_MINIMUM) build-host-test build-host-callback-abi build-host-callback-worker
-
-# Fetches and checksum-validates the pinned native dependency without compiling it.
-fetch-native:
-	@$(MAKE) -C native/darwin MACOS_MINIMUM=$(MACOS_MINIMUM) fetch
 
 # The sok command line of the debug build, which builds and installs registries outside an application bundle.
 build-sok: check-cargo

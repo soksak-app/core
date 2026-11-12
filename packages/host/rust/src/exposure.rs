@@ -520,6 +520,7 @@ pub fn dialog_answer(params: &Map<String, Value>) -> Result<crate::dialog::Answe
         Some(Value::Bool(on)) => Ok(Some(*on)),
         Some(_) => Err(Failure::params(format!("{name} must be a boolean"))),
     };
+    // default: an answer that leaves out cancel does not cancel; a cancel that is not a boolean was refused above.
     let cancel = flag("cancel")?.unwrap_or(false);
     let replace = flag("replace")?;
     let paths = match params.get("paths") {
@@ -546,6 +547,7 @@ pub fn dialog_answer(params: &Map<String, Value>) -> Result<crate::dialog::Answe
         id,
         paths,
         cancel,
+        // default: an answer that leaves out replace keeps a file that its path names; a value that is not a boolean was refused.
         replace: replace.unwrap_or(false),
     })
 }
@@ -1552,11 +1554,11 @@ fn hold_page_dialogs(window: &Window, on: bool) {
     if !on {
         let result = on_main(window, move || {
             let holds = app.state::<PageHolds>();
-            // default: a lock that a panicking thread poisoned still holds the holds, each of which is added or removed
-            // whole; the panic hook records the panic.
             let hold = holds
                 .0
                 .lock()
+                // default: a lock that a panicking thread poisoned still holds the holds, each of which is added or
+                // removed whole; the panic hook records the panic.
                 .unwrap_or_else(PoisonError::into_inner)
                 .remove(&label);
             if let Some(hold) = hold {
@@ -1572,7 +1574,8 @@ fn hold_page_dialogs(window: &Window, on: bool) {
     let asker = window.clone();
     let result = with_native_owner(window, move |owner| {
         let holds = app.state::<PageHolds>();
-        // default: as above.
+        // default: a lock that a panicking thread poisoned still holds the holds, each of which is added or removed whole;
+        // the panic hook records the panic.
         let mut holds = holds.0.lock().unwrap_or_else(PoisonError::into_inner);
         if holds.contains_key(&label) {
             return Ok(());
@@ -1604,6 +1607,7 @@ fn page_dialog(window: &Window, number: u64, fields: &str) {
         on_main(&applying, move || {
             platform.answer_dialog(
                 number,
+                // default: a cancel has no paths; the native layer reads the cancel from its own argument.
                 paths.unwrap_or_default(),
                 cancel,
                 Box::new(move |result| {

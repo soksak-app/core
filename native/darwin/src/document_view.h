@@ -151,28 +151,6 @@ bool sp_document_draw_covered(void *window, bool draw);
 // All three output pointers are required. On failure, error receives an allocated UTF-8 message for the caller to free.
 bool sp_document_viewport_marker(void *document, bool enabled, uint8_t *rgb3, double *borderWidthPt, char **error);
 
-// Replaces only the document identity producer's target-view update completion for its owning test. The production
-// default calls WKWebView's existing next-presentation-update API. The test keeps the real API call and controls only
-// when its completion is delivered.
-typedef void (*sp_document_frame_identity_after_update)(void *document, void (^completion)(void));
-void sp_document_frame_identity_test_set_after_update_hook(sp_document_frame_identity_after_update hook);
-void sp_document_frame_identity_after_target_update(void *document, void (^completion)(void));
-
-// Completion runs exactly once on the main thread; JSON and error are borrowed until the callback returns. The caller
-// keeps context alive until completion, including when the awaiting RPC reaches its own deadline.
-typedef void (*sp_document_frame_identity_reply)(void *context, const char *json, const char *error);
-// Starts a capture-scoped visible QR producer in the current plugin root document. The caller supplies the active
-// host view generation. Call start on the main thread because document is owned by the native window registry.
-// Completion reports installation and initial draw acceptance, not presentation. Freeze and remove accept calls from
-// any thread and schedule WebKit work on the main thread; false means no callback will follow.
-bool sp_document_frame_identity_start(void *document, uint64_t generation,
-    sp_document_frame_identity_reply reply, void *context);
-// Freezes the producer without removing its last marker. Completion reports generated and actually advanced slot counts.
-bool sp_document_frame_identity_freeze(uint64_t generation, sp_document_frame_identity_reply reply, void *context);
-// Removes only the matching capture-session marker after capture intake has stopped. Completion runs exactly once on
-// the main thread; stale generations are reported as errors and cannot remove a replacement marker.
-bool sp_document_frame_identity_remove(uint64_t generation, sp_document_frame_identity_reply reply, void *context);
-
 // Writes the region in window coordinates and the visibility {x, y, width, height, visible} to out[0..4].
 void sp_document_frame(void *document, double *out);
 

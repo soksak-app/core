@@ -450,12 +450,7 @@ pub fn capture_open(_window_number: isize, _display: bool) -> Result<(), String>
 }
 
 #[cfg(feature = "diagnostics")]
-pub fn capture_start(_directory: &str, _frame_identity: bool) -> Result<(), String> {
-    missing("window capture")
-}
-
-#[cfg(feature = "diagnostics")]
-pub fn capture_wait() -> Result<bool, String> {
+pub fn capture_start(_directory: &str) -> Result<(), String> {
     missing("window capture")
 }
 
@@ -465,12 +460,12 @@ pub fn capture_stop(_after: f64) -> Result<i32, String> {
 }
 
 #[cfg(feature = "diagnostics")]
-pub fn capture_has_stream() -> Result<bool, String> {
+pub fn capture_missed() -> Result<i32, String> {
     missing("window capture")
 }
 
 #[cfg(feature = "diagnostics")]
-pub fn capture_limited() -> Result<bool, String> {
+pub fn capture_late() -> Result<i32, String> {
     missing("window capture")
 }
 

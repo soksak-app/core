@@ -10,7 +10,6 @@ extern void goHost_native_input_source_adopted(uintptr_t arg0, char * arg1);
 extern void goHost_window_objects_counted(uintptr_t arg0, long arg1, long arg2, long arg3, _Bool arg4);
 extern void goHost_page_objects_counted(uintptr_t arg0, long arg1, long arg2, char * arg3);
 extern void goHost_delivered_notifications(uintptr_t arg0, char * arg1);
-extern void goHost_document_frame_identity_done(uintptr_t arg0, char * arg1, char * arg2);
 extern void goHost_input_reference_reply(uintptr_t arg0, char * arg1, char * arg2);
 extern void goHost_process_exit_answered(uintptr_t arg0, _Bool arg1);
 extern void goHost_capture_answered(uintptr_t arg0, long arg1, char * arg2);
@@ -48,9 +47,6 @@ func InstallDiagnosticCallbacks(callbacks abi.DiagnosticCallbacks) error {
 	if callbacks.DeliveredNotifications == nil {
 		return fmt.Errorf("native callback is missing: delivered_notifications")
 	}
-	if callbacks.DocumentFrameIdentityDone == nil {
-		return fmt.Errorf("native callback is missing: document_frame_identity_done")
-	}
 	if callbacks.InputReferenceReply == nil {
 		return fmt.Errorf("native callback is missing: input_reference_reply")
 	}
@@ -65,7 +61,6 @@ func InstallDiagnosticCallbacks(callbacks abi.DiagnosticCallbacks) error {
 	native.window_objects_counted = (*[0]byte)(C.goHost_window_objects_counted)
 	native.page_objects_counted = (*[0]byte)(C.goHost_page_objects_counted)
 	native.delivered_notifications = (*[0]byte)(C.goHost_delivered_notifications)
-	native.document_frame_identity_done = (*[0]byte)(C.goHost_document_frame_identity_done)
 	native.input_reference_reply = (*[0]byte)(C.goHost_input_reference_reply)
 	native.process_exit_answered = (*[0]byte)(C.goHost_process_exit_answered)
 	native.capture_answered = (*[0]byte)(C.goHost_capture_answered)
@@ -95,11 +90,6 @@ func goHost_page_objects_counted(arg0 C.uintptr_t, arg1 C.long, arg2 C.long, arg
 //export goHost_delivered_notifications
 func goHost_delivered_notifications(arg0 C.uintptr_t, arg1 *C.char) {
 	diagnosticHandlers.DeliveredNotifications(uintptr(arg0), (*byte)(unsafe.Pointer(arg1)))
-}
-
-//export goHost_document_frame_identity_done
-func goHost_document_frame_identity_done(arg0 C.uintptr_t, arg1 *C.char, arg2 *C.char) {
-	diagnosticHandlers.DocumentFrameIdentityDone(uintptr(arg0), (*byte)(unsafe.Pointer(arg1)), (*byte)(unsafe.Pointer(arg2)))
 }
 
 //export goHost_input_reference_reply

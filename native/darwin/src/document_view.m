@@ -9,7 +9,6 @@
 #import <CommonCrypto/CommonDigest.h>
 #import <CoreImage/CoreImage.h>
 #import <QuartzCore/QuartzCore.h>
-#import <Security/Security.h>
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
 #include <errno.h>
@@ -24,8 +23,6 @@
 #import "document_view.h"
 #import "document_message.h"
 #import "event_ring.h"
-#import "capture_frame_identity.h"
-#import "image_capture_match.h"
 #import "observe.h"
 #import "private/webkit.h"
 #import "surface_layout.h"
@@ -318,62 +315,6 @@ static NSString *binaryRefusal(SPBinaryStore *store, NSUInteger length, NSString
 @property(assign) SPDocumentView *view;
 @end
 
-@interface SPDocumentFrameIdentity : NSObject {
-@public
-    SPDocumentView *view;
-    uint64_t generation;
-    NSData *regionToken;
-    NSData *sessionNonce;
-    NSArray<NSString *> *payloads;
-    NSData *atlasPNG;
-    NSString *scriptKey;
-    NSUInteger atlasSlots;
-    NSUInteger issuedSlots;
-    CGRect screenROI;
-    double pageZoom;
-    sp_document_frame_identity_reply startReply;
-    void *startContext;
-    BOOL startPending;
-    BOOL frozen;
-    BOOL removed;
-    BOOL invalidated;
-}
-@end
-
-@implementation SPDocumentFrameIdentity
-- (void)dealloc {
-    [regionToken release];
-    if ([(id)sessionNonce isKindOfClass:NSMutableData.class] && sessionNonce.length)
-        memset(((NSMutableData *)sessionNonce).mutableBytes, 0, sessionNonce.length);
-    [sessionNonce release];
-    [payloads release];
-    [atlasPNG release];
-    [scriptKey release];
-    [super dealloc];
-}
-@end
-
-static SPDocumentFrameIdentity *activeDocumentFrameIdentity;
-static sp_document_frame_identity_after_update frameIdentityAfterUpdateTestHook;
-void sp_document_frame_identity_test_set_after_update_hook(sp_document_frame_identity_after_update hook) {
-    frameIdentityAfterUpdateTestHook = hook;
-}
-
-void sp_document_frame_identity_after_target_update(void *document, void (^completion)(void)) {
-    SPDocumentView *view = (SPDocumentView *)document;
-    if (!view || !completion) return;
-    if (frameIdentityAfterUpdateTestHook) {
-        frameIdentityAfterUpdateTestHook(view, completion);
-    } else {
-        [view _doAfterNextPresentationUpdate:completion];
-    }
-}
-
-static void frameIdentityStartFailed(SPDocumentFrameIdentity *identity, NSString *reason);
-static void frameIdentityStartReply(SPDocumentFrameIdentity *identity, NSString *json, NSString *error);
-static void frameIdentityFailSession(SPDocumentFrameIdentity *identity, NSString *reason);
-static void frameIdentityEnd(SPDocumentView *view, NSString *reason);
-
 @interface SPDocumentView : WKWebView <WKNavigationDelegate, WKUIDelegate>
 @property sp_document_changed changed;
 @property sp_document_message message;
@@ -458,8 +399,6 @@ static void frameIdentityEnd(SPDocumentView *view, NSString *reason);
 @property BOOL pluginRootView;
 // Whether the view of a plugin has committed its first document. A view keeps that document for its source generation.
 @property BOOL viewDocumentCommitted;
-@property(retain) SPDocumentFrameIdentity *frameIdentity;
-@property(retain) id frameIdentityMessage;
 - (void)clearBackForwardCache:(NSString *)reason;
 - (void)stopHiddenTimer;
 - (void)report;
@@ -473,102 +412,6 @@ static void frameIdentityEnd(SPDocumentView *view, NSString *reason);
 - (void)sendStream:(NSString *)name message:(NSDictionary *)message;
 - (void)applyStream:(NSString *)name;
 - (void)takeSnapshot;
-@end
-
-@interface SPDocumentFrameIdentityMessage : NSObject <WKScriptMessageHandler>
-@property(assign) SPDocumentView *view;
-@end
-@implementation SPDocumentFrameIdentityMessage
-- (void)userContentController:(WKUserContentController *)userContentController
-    didReceiveScriptMessage:(WKScriptMessage *)message {
-    SPDocumentView *document = self.view;
-    SPDocumentFrameIdentity *identity = document.frameIdentity;
-    NSDictionary *body = [message.body isKindOfClass:NSDictionary.class] ? message.body : nil;
-    if (!identity || identity != activeDocumentFrameIdentity || identity->invalidated || identity->view != document
-        || !body || ![body[@"key"] isEqualToString:identity->scriptKey]
-        || [body[@"generation"] unsignedLongLongValue] != identity->generation) return;
-    NSString *type = [body[@"type"] isKindOfClass:NSString.class] ? body[@"type"] : nil;
-    if ([type isEqualToString:@"start-error"]) {
-        NSString *reason = [body[@"error"] isKindOfClass:NSString.class] ? body[@"error"] : @"the QR atlas could not be installed";
-        frameIdentityStartFailed(identity, reason);
-        return;
-    }
-    if (![type isEqualToString:@"started"] || !identity->startPending || !identity->startReply) return;
-    NSDictionary *rect = [body[@"rect"] isKindOfClass:NSDictionary.class] ? body[@"rect"] : nil;
-    double x = [rect[@"x"] doubleValue], y = [rect[@"y"] doubleValue];
-    double width = [rect[@"width"] doubleValue], height = [rect[@"height"] doubleValue];
-    double zoom = [rect[@"zoom"] doubleValue];
-    NSRect viewBounds = document.bounds;
-    if (!rect || !isfinite(x) || !isfinite(y) || !isfinite(width) || !isfinite(height) || !isfinite(zoom)
-        || width <= 0 || height <= 0 || zoom <= 0 || fabs(zoom - document.pageZoom) > 0.000001
-        || fabs(width - 128) > 0.5 || fabs(height - 128) > 0.5
-        || [body[@"issuedSlots"] unsignedIntegerValue] != 1
-        || x < 0 || y < 0 || x + width > NSWidth(viewBounds) / zoom + 0.5
-        || y + height > NSHeight(viewBounds) / zoom + 0.5 || document.closed
-        || document.frameIdentity != identity || document.isHiddenOrHasHiddenAncestor || !document.window) {
-        NSString *reason = @"the installed QR atlas ROI does not match the visible root document";
-        frameIdentityFailSession(identity, reason);
-        sp_document_frame_identity_reply reply = identity->startReply;
-        void *context = identity->startContext;
-        identity->startReply = NULL;
-        identity->startContext = NULL;
-        identity->startPending = NO;
-        identity->invalidated = YES;
-        if (reply) reply(context, NULL, reason.UTF8String);
-        return;
-    }
-    NSRect local = NSMakeRect(x * zoom,
-        document.isFlipped ? y * zoom : NSHeight(viewBounds) - (y + height) * zoom,
-        width * zoom, height * zoom);
-    NSRect screen = [document.window convertRectToScreen:[document convertRect:local toView:nil]];
-    NSScreen *primary = NSScreen.screens.firstObject;
-    if (!primary) {
-        NSString *reason = @"the primary screen is unavailable for document frame identity geometry";
-        frameIdentityFailSession(identity, reason);
-        sp_document_frame_identity_reply reply = identity->startReply;
-        void *context = identity->startContext;
-        identity->startReply = NULL;
-        identity->startContext = NULL;
-        identity->startPending = NO;
-        identity->invalidated = YES;
-        if (reply) reply(context, NULL, reason.UTF8String);
-        return;
-    }
-    screen.origin.y = NSMaxY(primary.frame) - NSMaxY(screen);
-    CGRect measuredScreen = NSRectToCGRect(screen);
-    if (fabs(CGRectGetMinX(measuredScreen) - CGRectGetMinX(identity->screenROI)) > 0.5
-        || fabs(CGRectGetMinY(measuredScreen) - CGRectGetMinY(identity->screenROI)) > 0.5
-        || fabs(CGRectGetWidth(measuredScreen) - CGRectGetWidth(identity->screenROI)) > 0.5
-        || fabs(CGRectGetHeight(measuredScreen) - CGRectGetHeight(identity->screenROI)) > 0.5) {
-        NSString *reason = @"the installed QR atlas ROI differs from the registered capture region";
-        frameIdentityFailSession(identity, reason);
-        sp_document_frame_identity_reply reply = identity->startReply;
-        void *context = identity->startContext;
-        identity->startReply = NULL;
-        identity->startContext = NULL;
-        identity->startPending = NO;
-        identity->invalidated = YES;
-        if (reply) reply(context, NULL, reason.UTF8String);
-        return;
-    }
-    NSString *json = [NSString stringWithFormat:
-        @"{\"generation\":%llu,\"atlasSlots\":%lu,\"roi\":{\"x\":%.6f,\"y\":%.6f,\"width\":%.6f,\"height\":%.6f,\"scale\":%.6f}}",
-        (unsigned long long)identity->generation, (unsigned long)identity->atlasSlots,
-        screen.origin.x, screen.origin.y, screen.size.width, screen.size.height, zoom];
-    SPDocumentFrameIdentity *retainedIdentity = [identity retain];
-    NSString *retainedJSON = [json copy];
-    sp_document_frame_identity_after_target_update(document, ^{
-        if (retainedIdentity->invalidated || retainedIdentity->removed || retainedIdentity->view != document
-            || activeDocumentFrameIdentity != retainedIdentity || !retainedIdentity->startPending) {
-            [retainedJSON release];
-            [retainedIdentity release];
-            return;
-        }
-        frameIdentityStartReply(retainedIdentity, retainedJSON, nil);
-        [retainedJSON release];
-        [retainedIdentity release];
-    });
-}
 @end
 
 // The scheme of application documents inside webviews (docs/spec/native-host.md#application-addresses).
@@ -933,8 +776,6 @@ static void sendBody(id<WKURLSchemeTask> task, NSData *data) {
 - (void)dealloc {
     [self restoreViewportMarker];
     [_formFrames release];
-    [_frameIdentityMessage release];
-    [_frameIdentity release];
     [_scroll release];
     [_failure release];
     [_link release];
@@ -1137,7 +978,6 @@ static void sendBody(id<WKURLSchemeTask> task, NSData *data) {
 // the script of the new document asks for its streams again when it is installed.
 // A main frame commit, a reload included, replaces every frame document, so every form flag is cleared.
 - (void)webView:(WKWebView *)view didCommitNavigation:(WKNavigation *)navigation {
-    frameIdentityEnd(self, @"the plugin root document navigated during frame identity capture");
     if (self.pluginRootView) self.viewDocumentCommitted = YES;
     self.committedURL = view.URL;
     [self.formFrames removeAllObjects];
@@ -1210,7 +1050,6 @@ static void sendBody(id<WKURLSchemeTask> task, NSData *data) {
 // owns the region through the document state.
 - (void)webViewWebContentProcessDidTerminate:(WKWebView *)view {
     sp_log_error("document view", [NSString stringWithFormat:@"web content process terminated: %@", self.URL.absoluteString].UTF8String);
-    frameIdentityEnd(self, @"the web content process of the plugin root document ended during frame identity capture");
     self.navigation = nil;
     self.committedURL = nil;
     self.failure = @"the web content process ended";
@@ -1884,372 +1723,6 @@ bool sp_document_zoom(void *document, double zoom) {
     return true;
 }
 
-static WKContentWorld *frameIdentityWorld(void) {
-    return [WKContentWorld worldWithName:@"soksak-diagnostic-frame-identity"];
-}
-
-static NSString *const kFrameIdentityMessageName = @"soksakFrameIdentity";
-
-static void frameIdentityStartReply(SPDocumentFrameIdentity *identity, NSString *json, NSString *error) {
-    if (!identity->startReply) return;
-    sp_document_frame_identity_reply reply = identity->startReply;
-    void *context = identity->startContext;
-    identity->startReply = NULL;
-    identity->startContext = NULL;
-    identity->startPending = NO;
-    reply(context, json.UTF8String, error.UTF8String);
-}
-
-static void frameIdentityFailSessionForNonce(NSData *sessionNonce, NSString *reason) {
-    char *failure = NULL;
-    if (!sp_image_capture_match_identity_session_fail_for_nonce(sessionNonce, reason.UTF8String, &failure) && failure)
-        sp_log_error("frame identity", failure);
-    free(failure);
-}
-
-static void frameIdentityFailSession(SPDocumentFrameIdentity *identity, NSString *reason) {
-    frameIdentityFailSessionForNonce(identity->sessionNonce, reason);
-}
-
-static void frameIdentityRemoveMessageHandler(SPDocumentView *view) {
-    if (!view.frameIdentityMessage) return;
-    [view.configuration.userContentController removeScriptMessageHandlerForName:kFrameIdentityMessageName
-        contentWorld:frameIdentityWorld()];
-    [(SPDocumentFrameIdentityMessage *)view.frameIdentityMessage setView:nil];
-    view.frameIdentityMessage = nil;
-}
-
-static NSString *frameIdentityJSON(id value, NSString **failure) {
-    if (failure) *failure = nil;
-    NSError *error = nil;
-    NSData *data = [NSJSONSerialization dataWithJSONObject:value options:NSJSONWritingFragmentsAllowed error:&error];
-    if (!data) {
-        if (failure) *failure = error.localizedDescription ?: @"JSON serialization returned no data";
-        return nil;
-    }
-    NSString *json = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
-    if (!json && failure) *failure = @"JSON serialization produced invalid UTF-8";
-    return json;
-}
-
-static void frameIdentityStartFailed(SPDocumentFrameIdentity *identity, NSString *reason) {
-    if (!identity || identity->invalidated) return;
-    identity->invalidated = YES;
-    frameIdentityFailSession(identity, reason);
-    frameIdentityStartReply(identity, nil, reason);
-    SPDocumentView *view = identity->view;
-    if (!view) return;
-    NSString *jsonError = nil;
-    NSString *keyJSON = frameIdentityJSON(identity->scriptKey ?: @"", &jsonError);
-    NSString *script = keyJSON ? [NSString stringWithFormat:
-        @"(()=>{const s=globalThis[%@];if(s)s.cancel();else document.querySelectorAll('canvas[data-soksak-frame-identity]').forEach((c)=>c.remove());return !globalThis[%@]&&document.querySelectorAll('canvas[data-soksak-frame-identity]').length===0})()", keyJSON, keyJSON]
-        : @"(()=>{document.querySelectorAll('canvas[data-soksak-frame-identity]').forEach((c)=>c.remove());return true})()";
-    if (!keyJSON) frameIdentityFailSession(identity, jsonError);
-    [view evaluateJavaScript:script inFrame:nil inContentWorld:frameIdentityWorld() completionHandler:nil];
-    frameIdentityRemoveMessageHandler(view);
-}
-
-bool sp_document_frame_identity_start(void *handle, uint64_t generation,
-    sp_document_frame_identity_reply reply, void *context) {
-    NSCAssert(NSThread.isMainThread, @"document frame identity start requires the main thread");
-    if (!reply) return false;
-    SPDocumentView *view = (SPDocumentView *)handle;
-    NSString *failure = nil;
-    if (!view || !generation) failure = @"a root document and nonzero generation are required";
-    else if (view.closed || !view.pluginRootView || !view.webSurface || !view.window || !view.URL)
-        failure = @"the requested plugin root document is not open and visible";
-    else if (view.isHiddenOrHasHiddenAncestor) failure = @"the requested plugin root document is hidden";
-    else if (!sp_image_capture_match_identity_session_active())
-        failure = @"document frame identity requires an active frameIdentity capture";
-    else if (activeDocumentFrameIdentity) failure = @"one document frame identity source is allowed per capture";
-    if (failure) {
-        reply(context, NULL, failure.UTF8String);
-        return true;
-    }
-
-    double zoom = view.pageZoom;
-    double viewportWidth = NSWidth(view.bounds) / zoom;
-    double viewportHeight = NSHeight(view.bounds) / zoom;
-    if (!isfinite(zoom) || zoom <= 0 || viewportWidth < 136 || viewportHeight < 136) {
-        reply(context, NULL, "the root document viewport is too small for the QR marker");
-        return true;
-    }
-    NSRect local = NSMakeRect((viewportWidth - 136) * zoom,
-        view.isFlipped ? 8 * zoom : NSHeight(view.bounds) - 136 * zoom,
-        128 * zoom, 128 * zoom);
-    NSRect screen = [view.window convertRectToScreen:[view convertRect:local toView:nil]];
-    NSScreen *primary = NSScreen.screens.firstObject;
-    if (!primary) {
-        reply(context, NULL, "the primary screen is unavailable for document frame identity geometry");
-        return true;
-    }
-    screen.origin.y = NSMaxY(primary.frame) - NSMaxY(screen);
-
-    uint8_t tokenBytes[16];
-    if (SecRandomCopyBytes(kSecRandomDefault, sizeof(tokenBytes), tokenBytes) != errSecSuccess) {
-        reply(context, NULL, "the document frame identity region token could not be generated");
-        return true;
-    }
-    NSData *regionToken = [NSData dataWithBytes:tokenBytes length:sizeof(tokenBytes)];
-    memset(tokenBytes, 0, sizeof(tokenBytes));
-    NSArray<NSString *> *payloads = nil;
-    NSData *sessionNonce = nil;
-    char *matcherError = NULL;
-    if (!sp_image_capture_match_identity_document_begin(regionToken.bytes, generation,
-        NSRectToCGRect(screen), 512, &payloads, &sessionNonce, &matcherError)) {
-        NSString *reason = [NSString stringWithUTF8String:matcherError ?: "document frame identity matcher registration failed"];
-        free(matcherError);
-        reply(context, NULL, reason.UTF8String);
-        return true;
-    }
-    NSData *atlasPNG = nil;
-    NSString *atlasError = nil;
-    if (!sp_capture_frame_identity_atlas(payloads, 128, 8, &atlasPNG, &atlasError)) {
-        frameIdentityFailSessionForNonce(sessionNonce,
-            atlasError ?: @"document frame identity QR atlas could not be generated");
-        reply(context, NULL, atlasError.UTF8String ?: "document frame identity QR atlas could not be generated");
-        [payloads release];
-        [sessionNonce release];
-        [atlasError release];
-        return true;
-    }
-
-    SPDocumentFrameIdentity *identity = [SPDocumentFrameIdentity new];
-    if (!identity) {
-        frameIdentityFailSessionForNonce(sessionNonce, @"document frame identity state allocation failed");
-        reply(context, NULL, "document frame identity state allocation failed");
-        [payloads release];
-        [sessionNonce release];
-        [atlasPNG release];
-        [atlasError release];
-        return true;
-    }
-    identity->view = view;
-    identity->generation = generation;
-    identity->regionToken = [regionToken copy];
-    identity->sessionNonce = [sessionNonce mutableCopy];
-    if (!identity->sessionNonce) {
-        frameIdentityFailSessionForNonce(sessionNonce, @"document frame identity session nonce copy failed");
-        [sessionNonce release];
-        [identity release];
-        reply(context, NULL, "document frame identity session nonce copy failed");
-        [payloads release];
-        [atlasPNG release];
-        [atlasError release];
-        return true;
-    }
-    [sessionNonce release];
-    identity->payloads = payloads;
-    identity->atlasPNG = [atlasPNG copy];
-    identity->atlasSlots = payloads.count;
-    identity->screenROI = NSRectToCGRect(screen);
-    identity->pageZoom = zoom;
-    identity->startReply = reply;
-    identity->startContext = context;
-    identity->startPending = YES;
-    NSString *hex = [regionToken.description stringByReplacingOccurrencesOfString:@" " withString:@""];
-    hex = [[hex stringByReplacingOccurrencesOfString:@"<" withString:@""]
-        stringByReplacingOccurrencesOfString:@">" withString:@""];
-    identity->scriptKey = [[NSString stringWithFormat:@"__soksakFrameIdentity_%@", hex] copy];
-    if (!identity->regionToken || !identity->atlasPNG || identity->atlasSlots != 512 || !identity->scriptKey) {
-        // The incomplete state still owns the capture nonce used to isolate its failure.
-        frameIdentityFailSession(identity, @"document frame identity state is incomplete");
-        [identity release];
-        reply(context, NULL, "document frame identity state is incomplete");
-        [atlasPNG release];
-        [atlasError release];
-        return true;
-    }
-    view.frameIdentity = identity;
-    activeDocumentFrameIdentity = [identity retain];
-    SPDocumentFrameIdentityMessage *message = [SPDocumentFrameIdentityMessage new];
-    message.view = view;
-    [view.configuration.userContentController addScriptMessageHandler:message
-        contentWorld:frameIdentityWorld() name:kFrameIdentityMessageName];
-    view.frameIdentityMessage = message;
-    [message release];
-
-    NSString *dataURL = [NSString stringWithFormat:@"data:image/png;base64,%@", [atlasPNG base64EncodedStringWithOptions:0]];
-    [atlasPNG release];
-    NSString *jsonError = nil;
-    NSString *arguments = frameIdentityJSON(@[identity->scriptKey, dataURL, @(generation), @(identity->atlasSlots), @128, @8, @(zoom)], &jsonError);
-    NSString *script = arguments ? [NSString stringWithFormat:
-        @"(()=>{const [key,src,generation,slots,cell,columns,zoom]=%@;const post=(m)=>window.webkit.messageHandlers.soksakFrameIdentity.postMessage(Object.assign({key,generation},m));const state={cancelled:false,freeze:null,remove:null,cancel:null};let image=null,canvas=null;Object.defineProperty(globalThis,key,{value:state,configurable:true});const cancel=()=>{state.cancelled=true;if(image){image.onload=null;image.onerror=null}if(state.remove)state.remove();else if(globalThis[key]===state)delete globalThis[key]};state.cancel=cancel;image=new Image();image.onload=()=>{if(state.cancelled)return;try{canvas=document.createElement('canvas');canvas.width=128;canvas.height=128;canvas.style.cssText='position:fixed;right:8px;top:8px;width:128px;height:128px;z-index:2147483647;pointer-events:none;user-select:none;';canvas.setAttribute('aria-hidden','true');canvas.setAttribute('data-soksak-frame-identity',key);const ctx=canvas.getContext('2d',{alpha:false});if(!ctx)throw new Error('2D canvas context is unavailable');ctx.imageSmoothingEnabled=false;document.documentElement.appendChild(canvas);let issued=0,raf=0,frozen=false;const draw=(slot)=>ctx.drawImage(image,(slot%%columns)*cell,Math.floor(slot/columns)*cell,cell,cell,0,0,128,128);const remove=()=>{state.cancelled=true;image.onload=null;image.onerror=null;frozen=true;if(raf)cancelAnimationFrame(raf);canvas.remove();if(globalThis[key]===state)delete globalThis[key]};const freeze=()=>{frozen=true;if(raf)cancelAnimationFrame(raf);return {issuedSlots:issued}};state.remove=remove;state.freeze=freeze;draw(0);issued=1;const advance=()=>{if(frozen||issued>=slots)return;draw(issued);issued++;if(issued<slots)raf=requestAnimationFrame(advance)};if(issued<slots)raf=requestAnimationFrame(advance);const r=canvas.getBoundingClientRect();post({type:'started',issuedSlots:issued,rect:{x:r.x,y:r.y,width:r.width,height:r.height,zoom}})}catch(e){state.cancel();if(canvas)canvas.remove();post({type:'start-error',error:String(e)})}};image.onerror=()=>{if(state.cancelled)return;image.onload=null;image.onerror=null;if(globalThis[key]===state)delete globalThis[key];post({type:'start-error',error:'the QR atlas image could not be decoded'})};image.src=src;return true})()", arguments] : nil;
-    if (!script) {
-        NSString *reason = jsonError
-            ? [NSString stringWithFormat:@"document frame identity setup arguments could not be encoded: %@", jsonError]
-            : @"document frame identity setup script could not be encoded";
-        frameIdentityStartFailed(identity, reason);
-    } else {
-        SPDocumentFrameIdentity *retainedIdentity = [identity retain];
-        SPDocumentView *retainedView = [view retain];
-        [view evaluateJavaScript:script inFrame:nil inContentWorld:frameIdentityWorld() completionHandler:^(id result, NSError *error) {
-            if (error || ![result respondsToSelector:@selector(boolValue)] || ![result boolValue]) {
-                NSString *reason = error.localizedDescription ?: @"document frame identity setup script was refused";
-                frameIdentityStartFailed(retainedIdentity, reason);
-            }
-            [retainedIdentity release];
-            [retainedView release];
-        }];
-    }
-    [identity release];
-    [atlasError release];
-    return true;
-}
-
-bool sp_document_frame_identity_freeze(uint64_t generation, sp_document_frame_identity_reply reply, void *context) {
-    if (!reply || !generation) return false;
-    dispatch_async(dispatch_get_main_queue(), ^{
-        SPDocumentFrameIdentity *identity = activeDocumentFrameIdentity;
-        if (!identity || identity->generation != generation || identity->invalidated || identity->removed) {
-            reply(context, NULL, "the document frame identity generation is not active");
-            return;
-        }
-        if (identity->startPending) {
-            frameIdentityStartFailed(identity, @"document frame identity start did not complete before freeze");
-            reply(context, NULL, "document frame identity start did not complete before freeze");
-            return;
-        }
-        if (identity->frozen) {
-            NSString *json = [NSString stringWithFormat:
-                @"{\"generation\":%llu,\"atlasSlots\":%lu,\"issuedSlots\":%lu}",
-                (unsigned long long)identity->generation, (unsigned long)identity->atlasSlots,
-                (unsigned long)identity->issuedSlots];
-            reply(context, json.UTF8String, NULL);
-            return;
-        }
-        NSString *jsonError = nil;
-        NSString *keyJSON = frameIdentityJSON(identity->scriptKey, &jsonError);
-        if (!keyJSON) {
-            frameIdentityFailSession(identity, jsonError);
-            reply(context, NULL, jsonError.UTF8String);
-            return;
-        }
-        NSString *script = [NSString stringWithFormat:
-            @"(()=>{const s=globalThis[%@];if(!s)return null;return s.freeze()})()", keyJSON];
-        SPDocumentFrameIdentity *retainedIdentity = [identity retain];
-        [identity->view evaluateJavaScript:script inFrame:nil inContentWorld:frameIdentityWorld()
-            completionHandler:^(id value, NSError *error) {
-                if (activeDocumentFrameIdentity != retainedIdentity || retainedIdentity->invalidated
-                    || retainedIdentity->removed) {
-                    reply(context, NULL, "the document frame identity generation ended before freeze completed");
-                    [retainedIdentity release];
-                    return;
-                }
-                if (error || ![value isKindOfClass:NSDictionary.class]) {
-                    NSString *reason = error.localizedDescription ?: @"the QR producer did not return its final count";
-                    frameIdentityFailSession(retainedIdentity, reason);
-                    reply(context, NULL, reason.UTF8String);
-                    [retainedIdentity release];
-                    return;
-                }
-                NSUInteger issued = [value[@"issuedSlots"] unsignedIntegerValue];
-                if (issued == 0 || issued > retainedIdentity->atlasSlots) {
-                    NSString *reason = @"the QR producer returned a count outside its generated atlas";
-                    frameIdentityFailSession(retainedIdentity, reason);
-                    reply(context, NULL, reason.UTF8String);
-                    [retainedIdentity release];
-                    return;
-                }
-                char *matcherError = NULL;
-                if (!sp_image_capture_match_identity_document_finish(retainedIdentity->sessionNonce,
-                    retainedIdentity->atlasPNG, issued, &matcherError)) {
-                    NSString *reason = [NSString stringWithUTF8String:matcherError
-                        ?: "document frame identity final count could not be stored"];
-                    free(matcherError);
-                    frameIdentityFailSession(retainedIdentity, reason);
-                    reply(context, NULL, reason.UTF8String);
-                    [retainedIdentity release];
-                    return;
-                }
-                retainedIdentity->issuedSlots = issued;
-                retainedIdentity->frozen = YES;
-                NSString *json = [NSString stringWithFormat:
-                    @"{\"generation\":%llu,\"atlasSlots\":%lu,\"issuedSlots\":%lu}",
-                    (unsigned long long)retainedIdentity->generation, (unsigned long)retainedIdentity->atlasSlots,
-                    (unsigned long)issued];
-                reply(context, json.UTF8String, NULL);
-                [retainedIdentity release];
-            }];
-    });
-    return true;
-}
-
-bool sp_document_frame_identity_remove(uint64_t generation, sp_document_frame_identity_reply reply, void *context) {
-    if (!reply || !generation) return false;
-    dispatch_async(dispatch_get_main_queue(), ^{
-        SPDocumentFrameIdentity *identity = activeDocumentFrameIdentity;
-        if (!identity) {
-            NSString *json = [NSString stringWithFormat:
-                @"{\"generation\":%llu,\"removed\":true}", (unsigned long long)generation];
-            reply(context, json.UTF8String, NULL);
-            return;
-        }
-        if (identity->generation != generation || identity->removed) {
-            reply(context, NULL, "the document frame identity generation is not active");
-            return;
-        }
-        SPDocumentView *view = identity->view;
-        if (identity->startPending) {
-            frameIdentityStartFailed(identity, @"document frame identity was removed before start completed");
-        }
-        NSString *jsonError = nil;
-        NSString *keyJSON = frameIdentityJSON(identity->scriptKey, &jsonError);
-        NSString *script = keyJSON ? [NSString stringWithFormat:
-            @"(()=>{const s=globalThis[%@];if(s)s.cancel();return !globalThis[%@]&&document.querySelectorAll('canvas[data-soksak-frame-identity]').length===0})()",
-            keyJSON, keyJSON]
-            : @"(()=>{document.querySelectorAll('canvas[data-soksak-frame-identity]').forEach((c)=>c.remove());return true})()";
-        if (!keyJSON) frameIdentityFailSession(identity, jsonError);
-        SPDocumentFrameIdentity *retainedIdentity = [identity retain];
-        [view evaluateJavaScript:script inFrame:nil inContentWorld:frameIdentityWorld()
-            completionHandler:^(id value, NSError *error) {
-                NSString *reason = error.localizedDescription;
-                if (!reason && (![value respondsToSelector:@selector(boolValue)] || ![value boolValue]))
-                    reason = @"the document frame identity marker removal was refused";
-                if (reason) frameIdentityFailSession(retainedIdentity, reason);
-                frameIdentityRemoveMessageHandler(view);
-                if (view.frameIdentity == retainedIdentity) view.frameIdentity = nil;
-                retainedIdentity->removed = YES;
-                retainedIdentity->view = nil;
-                if (activeDocumentFrameIdentity == retainedIdentity) {
-                    activeDocumentFrameIdentity = nil;
-                    [retainedIdentity release];
-                }
-                NSString *json = reason ? nil : [NSString stringWithFormat:
-                    @"{\"generation\":%llu,\"removed\":true}", (unsigned long long)generation];
-                reply(context, json.UTF8String, reason.UTF8String);
-                [retainedIdentity release];
-            }];
-    });
-    return true;
-}
-
-// Ends the frame identity of view when its document ends: by the close, by a navigation that the document commits or by the
-// end of its WebContent process (docs/spec/diagnostics.md). A start that has not answered fails with reason, a started
-// identity is invalidated, so its freeze fails, and its removal answers that the generation is removed.
-static void frameIdentityEnd(SPDocumentView *view, NSString *reason) {
-    SPDocumentFrameIdentity *identity = view.frameIdentity;
-    if (!identity) return;
-    identity->invalidated = YES;
-    frameIdentityFailSession(identity, reason);
-    frameIdentityStartReply(identity, nil, reason);
-    NSString *jsonError = nil;
-    NSString *keyJSON = frameIdentityJSON(identity->scriptKey ?: @"", &jsonError);
-    NSString *script = keyJSON ? [NSString stringWithFormat:
-        @"(()=>{const s=globalThis[%@];if(s)s.cancel();return !globalThis[%@]&&document.querySelectorAll('canvas[data-soksak-frame-identity]').length===0})()",
-        keyJSON, keyJSON]
-        : @"(()=>{document.querySelectorAll('canvas[data-soksak-frame-identity]').forEach((c)=>c.remove());return true})()";
-    if (!keyJSON) frameIdentityFailSession(identity, jsonError);
-    [view evaluateJavaScript:script inFrame:nil inContentWorld:frameIdentityWorld() completionHandler:nil];
-    frameIdentityRemoveMessageHandler(view);
-    view.frameIdentity = nil;
-    identity->view = nil;
-    if (activeDocumentFrameIdentity == identity) {
-        activeDocumentFrameIdentity = nil;
-        [identity release];
-    }
-}
-
 static void documentViewportMarkerError(char **error, const char *message) {
     if (error) *error = strdup(message);
 }
@@ -2343,7 +1816,6 @@ void sp_document_close(void *handle) {
     SPDocumentView *view = (SPDocumentView *)handle;
     // A view out of its window never presents, so its close ends each join of it in this turn.
     surfaceLayoutViewClosed(view);
-    frameIdentityEnd(view, @"the plugin root document closed during frame identity capture");
     [view restoreViewportMarker];
     // The web content process of the view lives as long as AppKit keeps the view, so the keyboard leaves it at the close.
     sp_view_give_up_keyboard(view);

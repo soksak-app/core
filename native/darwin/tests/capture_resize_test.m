@@ -1,5 +1,5 @@
-// Checks with a real stream that, when the window grows during a recording, the last frame holds the entire window at device pixel resolution.
-// The stream output size is fixed at start; if it is not followed, the enlarged window is recorded scaled down.
+// Checks with a real recording that, when the window grows during a recording, the last frame holds the entire window at device
+// pixel resolution: each still takes the window at its size at the request, so no output size is fixed at the start.
 // Does not activate the application.
 #import "../src/capture.m"
 #import "support/run_until.h"
@@ -62,8 +62,8 @@ int main(void) { @autoreleasepool {
         [link invalidate];
         return presentation.target;
     };
-    // Checks that the index-th (from 1) frame of a recording holds the window size points in device pixels. Frame numbers continue
-    // across recordings, so the frame is chosen by the file order of the directory.
+    // Checks that the number-th (from 1) frame of a recording, in the file order of its directory, holds the window size points in
+    // device pixels. Frames are named by the index of their still, so the file order is the order of the requests.
     BOOL (^frameIs)(NSString *, int, NSSize, NSString *) = ^BOOL(NSString *directory, int number, NSSize points, NSString *label) {
         NSArray *files = [[[[NSFileManager defaultManager] contentsOfDirectoryAtPath:directory error:nil]
             filteredArrayUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(NSString *name, NSDictionary *bindings) {
@@ -73,20 +73,21 @@ int main(void) { @autoreleasepool {
         NSString *path = number >= 1 && number <= (int)files.count
             ? [directory stringByAppendingPathComponent:files[number - 1]] : nil;
         NSData *stored = path ? [NSData dataWithContentsOfFile:path] : nil;
-        if (stored.length < 68) {
+        if (stored.length < 88) {
             check(NO, [NSString stringWithFormat:@"%@: frame %d has a header", label, number]);
             return NO;
         }
         uint32_t head[3];
-        double info[7];
+        double info[8];
         memcpy(head, stored.bytes, sizeof head);
         memcpy(info, (const uint8_t *)stored.bytes + sizeof head, sizeof info);
         uint32_t width = (uint32_t)llround(points.width * scale), height = (uint32_t)llround(points.height * scale);
         BOOL ok = head[0] == width && head[1] == height && info[4] == 1;
         check(ok, [NSString stringWithFormat:@"%@: frame %d records the window at device pixels "
             "(buffer %ux%u, content %.1fx%.1f at content scale %.4f; expected %ux%u at 1; "
-            "frame displayed at %.3fms, resize requested at %.3fms)",
-            label, number, head[0], head[1], info[2], info[3], info[4], width, height, info[6], resizeRequestedAtMilliseconds]);
+            "still requested at %.3fms and completed at %.3fms, resize requested at %.3fms)",
+            label, number, head[0], head[1], info[2], info[3], info[4], width, height, info[6], info[7],
+            resizeRequestedAtMilliseconds]);
         return ok;
     };
     // Runs change while recording the window and stops after its presentation. Returns the frame count and leaves the directory in directory.
@@ -94,14 +95,17 @@ int main(void) { @autoreleasepool {
         NSString *directory = temporaryFolder(@"soksak-capture-resize-");
         *directoryOut = directory;
         char *operationError = NULL;
-        bool opened = sp_capture_open(window.windowNumber, false, 0, &operationError);
+        bool opened = sp_capture_open(window.windowNumber, false, &operationError);
         check(opened, [NSString stringWithFormat:@"%@: the window opens for recording (%s)", label, operationError ?: ""]);
         free(operationError); operationError = NULL;
-        bool recording = opened && sp_capture_start(directory.fileSystemRepresentation, false, &operationError);
-        check(recording, [NSString stringWithFormat:@"%@: recording starts (%s)", label, operationError ?: ""]);
+        // One still at each refresh of the display, for as long as the change takes: the stop ends the recording.
+        double gap = 1000.0 / window.screen.maximumFramesPerSecond;
+        bool recording = opened && sp_capture_start(directory.fileSystemRepresentation, gap, 0, 4096, 0, &operationError);
+        check(recording, [NSString stringWithFormat:@"%@: recording starts with its first still (%s)", label, operationError ?: ""]);
         free(operationError);
         if (!recording) return 0;
-        check(sp_capture_wait(0) == 1, [NSString stringWithFormat:@"%@: a first frame arrives (%s)", label, sp_capture_error()]);
+        SPCaptureRecording *current = nil;
+        @synchronized ([SPCaptureRecording class]) { current = [captureRecording retain]; }
         resizeRequestedAtMilliseconds = CACurrentMediaTime() * 1000;
         change();
         [window display];
@@ -115,8 +119,9 @@ int main(void) { @autoreleasepool {
             && [displayLinkTrace[@"observations"] isKindOfClass:NSArray.class]
             && [displayLinkTrace[@"observations"] count] > 0,
             [NSString stringWithFormat:@"%@ : the visible capture window produces independent AppKit refresh observations", label]);
-        check(captureSink.displayLink == nil && captureSink.displayLinkStopped && captureSink.displayLinkInvalidated,
+        check(current.displayLink == nil && current.displayWindow == nil && current.displayLinkStopped,
             [NSString stringWithFormat:@"%@ : stopping the capture invalidates its retained display link", label]);
+        [current release];
         check(stopError.length == 0 && frames > 0,
             [NSString stringWithFormat:@"%@: recording stops without error (frames %d, error %@)", label, frames, stopError]);
         return frames;
@@ -139,19 +144,24 @@ int main(void) { @autoreleasepool {
         frameIs(directory, 1, NSMakeSize(200, 100), @"after shrinking");
         frameIs(directory, frames, NSMakeSize(200, 100), @"after shrinking");
     }
-    [captureSink startDisplayLinkObservationForWindowNumber:window.windowNumber];
-    check(captureSink.displayLink != nil, @"a visible test window creates an AppKit display link for asynchronous teardown");
-    SPCapture *asyncStopSink = [captureSink retain];
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        [asyncStopSink stopDisplayLinkObservation];
-        [asyncStopSink release];
+    // A stop on another thread invalidates the display link on the main thread, which keeps running its run loop meanwhile; the
+    // stop returns once the link is invalidated.
+    SPCaptureRecording *observed = [[SPCaptureRecording alloc] init];
+    observed.windowNumber = window.windowNumber;
+    [observed startDisplayLinkObservation];
+    check(observed.displayLink != nil, @"a visible test window creates an AppKit display link for asynchronous teardown");
+    __block BOOL stopped = NO;
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
+        [observed stopDisplayLinkObservation];
+        dispatch_async(dispatch_get_main_queue(), ^{ stopped = YES; });
     });
-    until(@"the display link invalidation on the main queue", ^BOOL { return captureSink.displayLinkInvalidated; });
-    check(captureSink.displayLink == nil && captureSink.displayLinkStopped && captureSink.displayLinkInvalidated,
+    until(@"the display link invalidation on the main queue", ^BOOL { return stopped; });
+    check(observed.displayLink == nil && observed.displayWindow == nil && observed.displayLinkStopped,
         @"background capture stop completes main-run-loop display-link invalidation without blocking the window thread");
+    [observed release];
     check(!NSApp.isActive, @"recording does not activate the application");
     [window close];
-    // The frames, the callback statuses and the display link trace of both recordings are the evidence of a failure.
+    // The frames, stills.jsonl and the display link trace of both recordings are the evidence of a failure.
     if (failures) {
         if (growingDirectory) keepTemporaryFolder(growingDirectory);
         if (directory) keepTemporaryFolder(directory);
