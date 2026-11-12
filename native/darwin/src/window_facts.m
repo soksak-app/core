@@ -642,6 +642,15 @@ bool sp_window_on_screen(void *handle) {
     return window && (window.occlusionState & NSWindowOcclusionStateVisible) != 0;
 }
 
+bool sp_window_content_size(void *handle, double *out) {
+    NSCAssert(NSThread.isMainThread, @"the window state requires the UI thread");
+    NSView *content = ((NSWindow *)handle).contentView;
+    if (!content) return false;
+    out[0] = content.bounds.size.width;
+    out[1] = content.bounds.size.height;
+    return true;
+}
+
 bool sp_window_observe_occlusion(void *handle, void (^changed)(bool onScreen)) {
     NSCAssert(NSThread.isMainThread, @"occlusion observation requires the UI thread");
     NSWindow *window = (NSWindow *)handle;

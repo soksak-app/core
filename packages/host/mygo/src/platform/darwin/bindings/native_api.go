@@ -812,6 +812,16 @@ func Functions(library uintptr) (abi.NativeFunctions, error) {
 		purego.RegisterFunc(&functions.MainSpWindowColorSpaceFacts, address)
 	}
 	{
+		address, err := purego.Dlsym(library, "main_sp_window_content_size")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_window_content_size: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_window_content_size: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.MainSpWindowContentSize, address)
+	}
+	{
 		address, err := purego.Dlsym(library, "main_sp_window_end_responder_observation")
 		if err != nil {
 			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_window_end_responder_observation: %w", err)

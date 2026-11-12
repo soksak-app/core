@@ -34,6 +34,7 @@ char *main_sp_window_facts(uintptr_t window) {
     return sp_window_facts_finish(read, orderWindow);
 }
 bool main_sp_window_on_screen(uintptr_t window) { return ON_MAIN(bool, sp_window_on_screen((void *)window)); }
+bool main_sp_window_content_size(uintptr_t window, double *out) { return ON_MAIN(bool, sp_window_content_size((void *)window, out)); }
 char *main_sp_window_color_space_facts(uintptr_t window) { return ON_MAIN(char *, sp_window_color_space_facts((void *)window)); }
 char *main_sp_window_hit(uintptr_t window, double x, double y) {
     return ON_MAIN(char *, sp_window_hit((void *)window, sp_window_composition((void *)window), x, y));

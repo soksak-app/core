@@ -410,6 +410,10 @@ type Platform interface {
 	// WindowOnScreen returns whether some part of the window is visible on screen, the same as sp_window_on_screen of
 	// native/darwin/src/window_facts.h. Call it on the UI thread.
 	WindowOnScreen(window Window) (bool, error)
+	// WindowContentSize returns the width and the height of the content view of the window in points, the same as
+	// sp_window_content_size of native/darwin/src/window_facts.h. It reads them on the UI thread and can be called from any thread.
+	// A window that is gone is an error.
+	WindowContentSize(window Window) (width, height float64, err error)
 	// WindowColorSpace returns the current AppKit backing color space and ICC profile fingerprint as JSON.
 	// Call it on the UI thread for a one-shot diagnostic query.
 	WindowColorSpace(window Window) (string, error)

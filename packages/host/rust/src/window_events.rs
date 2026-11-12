@@ -1,12 +1,12 @@
 //! The events of a window (docs/spec/logging.md#entrances): every event that a host registers for a window is the
-//! event `host.window.event` with the window and the kind.
+//! event `host.window.event` with the window and the kind, and a resize also with the content size of the window.
 
 use crate::event_log::Level;
+use crate::framework::LogicalSize;
 
-/// The kinds of a window event and the level of each. The movement and the size change of a window arrive in streams, so they
-/// are at the level `debug`.
-const KINDS: [(&str, Level); 13] = [
-    ("resize", Level::Debug),
+/// The kinds of a window event that `record_window_event` stores and the level of each. The movement of a window arrives in a
+/// stream, so it is at the level `debug`. The kind `resize` carries the content size, so `record_window_resize` stores it.
+const KINDS: [(&str, Level); 12] = [
     ("move", Level::Debug),
     ("scale_factor_changed", Level::Debug),
     ("show", Level::Info),
@@ -44,5 +44,21 @@ pub fn record_window_event(window: &str, kind: &str) {
         *level,
         "host.window.event",
         serde_json::json!({"window": window, "kind": kind}),
+    );
+}
+
+/// Stores the window event `resize` of the window with the width and the height of its content in points, read when the event
+/// arrived and before it is stored. `size` is None when the content was gone, as that of a window that closed is, and the width and
+/// the height are then null. The size change of a window arrives in a stream, so it is at the level `debug`.
+pub fn record_window_resize(window: &str, size: Option<LogicalSize>) {
+    crate::event_record::emit_host(
+        Level::Debug,
+        "host.window.event",
+        serde_json::json!({
+            "window": window,
+            "kind": "resize",
+            "width": size.map(|size| size.width),
+            "height": size.map(|size| size.height),
+        }),
     );
 }

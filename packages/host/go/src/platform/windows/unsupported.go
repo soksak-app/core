@@ -82,6 +82,9 @@ func (implementation) WindowFacts(platform.Window) (string, error) {
 func (implementation) WindowOnScreen(platform.Window) (bool, error) {
 	return false, unsupported("window on screen")
 }
+func (implementation) WindowContentSize(platform.Window) (float64, float64, error) {
+	return 0, 0, unsupported("window content size")
+}
 func (implementation) WindowColorSpace(platform.Window) (string, error) {
 	return "", unsupported("window color space")
 }

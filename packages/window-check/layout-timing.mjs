@@ -114,27 +114,39 @@ export function lastInputLatency(layouts, { lastInput, period }) {
   };
 }
 
+/** Whether `a` and `b` have the same width and height. */
+const sameSize = (a, b) => a.width === b.width && a.height === b.height;
+
 /**
  * A maximise or restore keeps the layout at the window size within `limit` ms (150): the time from the first window resize of the
- * gesture to the sending of the first layout that began at or after its last resize, which is laid out at the final window size.
- * `resizes` are the times (ms) of the window resize events of the gesture.
+ * gesture to the sending of the first layout that began at or after the last resize that changed the content size, which is laid
+ * out at the final window size. `resizes` are the window resize events of the gesture, `{at, width, height}`: the time (ms) and the
+ * content size (points) that the event recorded. The first resize changes the size; a later one changes it when its size differs
+ * from that of the resize before it. A resize that recorded no size is a failure.
  */
 export function catchUp(layouts, resizes, { limit = 150 } = {}) {
-  if (resizes.length === 0) return { took: null, limit, ticket: null, failures: ["the gesture has no window resize"] };
-  const sorted = [...resizes].sort((a, b) => a - b);
-  const [first, last] = [sorted[0], sorted.at(-1)];
+  if (resizes.length === 0) return { took: null, limit, ticket: null, last: null, failures: ["the gesture has no window resize"] };
+  const sorted = [...resizes].sort((a, b) => a.at - b.at);
+  const unsized = sorted.filter(({ width, height }) => !Number.isFinite(width) || !Number.isFinite(height));
+  if (unsized.length > 0) {
+    return { took: null, limit, ticket: null, last: null,
+      failures: unsized.map(({ at }) => `the window resize at ${at} ms recorded no content size`) };
+  }
+  const changed = sorted.filter((resize, index) => index === 0 || !sameSize(resize, sorted[index - 1]));
+  const first = sorted[0].at;
+  const last = changed.at(-1).at;
   const caught = layouts.filter((layout) => layout.begun !== null && layout.begun >= last && sentAt(layout) !== null)
     .sort((a, b) => a.begun - b.begun)[0];
-  if (caught === undefined) return { took: null, limit, ticket: null, failures: [`no layout began after the last resize at ${last} ms`] };
+  if (caught === undefined) {
+    return { took: null, limit, ticket: null, last, failures: [`no layout began after the last size change at ${last} ms`] };
+  }
   const took = sentAt(caught) - first;
   const failures = took > limit ? [`the layout at the window size was sent ${took} ms after the first resize, more than ${limit} ms`] : [];
-  return { took, limit, ticket: caught.ticket, failures };
+  return { took, limit, ticket: caught.ticket, last, failures };
 }
 
 /** The content frames of `frames` whose mapped time meets the time from `from` to `to` (ms). */
 const framesIn = (frames, from, to) => frames.filter(({ timeRange }) => timeRange.upperMs >= from && timeRange.lowerMs <= to);
-
-const sameSize = (a, b) => a.width === b.width && a.height === b.height;
 
 /**
  * The content frames that a view draws during a drag, from its first step `from` to its last step `to` (ms), follow one another

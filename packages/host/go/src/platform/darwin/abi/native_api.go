@@ -188,6 +188,7 @@ type NativeFunctions struct {
 	MainSpViewImportMapSet                 func(*byte)
 	MainSpWebviewCollectGarbage            func(unsafe.Pointer) bool
 	MainSpWindowColorSpaceFacts            func(uintptr) *byte
+	MainSpWindowContentSize                func(uintptr, *float64) bool
 	MainSpWindowEndResponderObservation    func(unsafe.Pointer)
 	MainSpInputVirtualEndCursorObservation func(unsafe.Pointer)
 	MainSpWindowEndSheetObservation        func(unsafe.Pointer)
@@ -522,6 +523,9 @@ func (functions NativeFunctions) Validate() error {
 	}
 	if functions.MainSpWindowColorSpaceFacts == nil {
 		return fmt.Errorf("native API function is missing: main_sp_window_color_space_facts")
+	}
+	if functions.MainSpWindowContentSize == nil {
+		return fmt.Errorf("native API function is missing: main_sp_window_content_size")
 	}
 	if functions.MainSpWindowEndResponderObservation == nil {
 		return fmt.Errorf("native API function is missing: main_sp_window_end_responder_observation")

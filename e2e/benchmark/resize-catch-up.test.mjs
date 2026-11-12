@@ -23,8 +23,9 @@ for (const app of Object.values(APPS)) {
       const { pageProcess } = await recordMaximiseAndRestore(s, (gesture, { stopped, layouts, resizes }) => {
         t.diagnostic(`${app.name} ${gesture}: ${recordingSummary(stopped)}`);
         const caught = catchUp(layouts, resizes);
-        t.diagnostic(`${app.name} ${gesture}: ${resizes.length} window resizes, ${layouts.length} layout transactions, the layout ` +
-          `of ticket ${caught.ticket} at the window size ${caught.took} ms after the first resize; misses ` +
+        t.diagnostic(`${app.name} ${gesture}: window resizes ${JSON.stringify(resizes)}, last size change at ${caught.last} ms, ` +
+          `${layouts.length} layout transactions, the layout of ticket ${caught.ticket} at the window size ${caught.took} ms after ` +
+          `the first resize; misses ` +
           `${JSON.stringify(caught.failures)}`);
       }, {
         started: async () => {

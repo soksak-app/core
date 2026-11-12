@@ -107,6 +107,11 @@ void sp_facts_free(char *text);
 // only while this is true (docs/spec/native-surfaces.md#image-regions). Returns false when there is no window.
 bool sp_window_on_screen(void *window);
 
+// Writes the width and the height of the content view of the window, in points, to out[0] and out[1]: the content size that a
+// resize event of the window records (docs/spec/logging.md#entrances). Returns false, and writes nothing, when there is no window
+// or it has no content view.
+bool sp_window_content_size(void *window, double *out);
+
 // Calls changed on the main thread each time the occlusion state of the window changes
 // (NSWindowDidChangeOcclusionStateNotification). The observation ends when the window is released. An
 // existing observation of the window is replaced. Returns false when there is no window.

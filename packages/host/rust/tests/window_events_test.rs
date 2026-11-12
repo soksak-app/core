@@ -9,7 +9,8 @@ use std::process::{Command, Stdio};
 #[path = "support/records.rs"]
 mod records;
 
-use soksak_host::window_events::record_window_event;
+use soksak_host::framework::LogicalSize;
+use soksak_host::window_events::{record_window_event, record_window_resize};
 
 const CHILD: &str = "SOKSAK_WINDOW_EVENTS_CHILD";
 const NAME: &str = "a_window_event_is_recorded_as_an_event";
@@ -19,11 +20,16 @@ const NAME: &str = "a_window_event_is_recorded_as_an_event";
 fn a_window_event_is_recorded_as_an_event() {
     if let Some(config) = std::env::var_os(CHILD) {
         let writer = records::start_writer(std::path::Path::new(&config));
-        for kind in ["resize", "focus", "window-active", "closed"] {
+        record_window_resize("main-2", Some(LogicalSize::new(1440.0, 900.0)));
+        // The content of a window that closed is gone, so its resize records no size.
+        record_window_resize("main-2", None);
+        for kind in ["focus", "window-active", "closed"] {
             record_window_event("main-2", kind);
         }
-        // A kind outside the contract is reported on the standard error and stores nothing.
+        // A kind outside the contract is reported on the standard error and stores nothing, and so is a resize without its
+        // size.
         record_window_event("main-2", "teleport");
+        record_window_event("main-2", "resize");
         writer.flush().unwrap();
         return;
     }
@@ -40,27 +46,19 @@ fn a_window_event_is_recorded_as_an_event() {
         output.status,
         String::from_utf8_lossy(&output.stderr)
     );
-    let seen: Vec<(String, String, String)> =
+    let seen: Vec<serde_json::Value> =
         records::read_events(&records::event_log_path(config.path()))
             .into_iter()
             .filter(|event| event["event"] == "host.window.event")
-            .map(|event| {
-                (
-                    event["level"].as_str().unwrap().to_string(),
-                    event["fields"]["window"].as_str().unwrap().to_string(),
-                    event["fields"]["kind"].as_str().unwrap().to_string(),
-                )
-            })
+            .map(|event| serde_json::json!({"level": event["level"], "fields": event["fields"]}))
             .collect();
-    let want: Vec<(String, String, String)> = [
-        ("debug", "resize"),
-        ("info", "focus"),
-        ("info", "window-active"),
-        ("info", "closed"),
-    ]
-    .iter()
-    .map(|(level, kind)| (level.to_string(), "main-2".to_string(), kind.to_string()))
-    .collect();
+    let want = vec![
+        serde_json::json!({"level": "debug", "fields": {"window": "main-2", "kind": "resize", "width": 1440.0, "height": 900.0}}),
+        serde_json::json!({"level": "debug", "fields": {"window": "main-2", "kind": "resize", "width": null, "height": null}}),
+        serde_json::json!({"level": "info", "fields": {"window": "main-2", "kind": "focus"}}),
+        serde_json::json!({"level": "info", "fields": {"window": "main-2", "kind": "window-active"}}),
+        serde_json::json!({"level": "info", "fields": {"window": "main-2", "kind": "closed"}}),
+    ];
     assert_eq!(seen, want);
 }
 

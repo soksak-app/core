@@ -22,8 +22,9 @@ const margin = (w) => w.content.width - right(w);
  * Records the change that resizes the window until the layout at the new size is displayed: the window reaches the size of `sized`
  * and the surfaces keep their distance to the right edge of the window. Returns `{displayed, stopped, layouts, resizes}`: the display
  * time of the layout, the stop reply of the recording, which is the log of the change, or null when the recording failed (the
- * recording diagnostics tell why), the layout transactions of the change (Session.traceLayouts) and the times of its window resize
- * events (`host.window.event` of kind `resize`), all in milliseconds on the clock of diagnostics.clock.
+ * recording diagnostics tell why), the layout transactions of the change (Session.traceLayouts) and its window resize events
+ * (`host.window.event` of kind `resize`) as `{at, width, height}`, the time of the event and the content size that it recorded; all
+ * times are in milliseconds on the clock of diagnostics.clock.
  */
 async function record(s, change, sized) {
   const kept = margin(await s.get("host.window"));
@@ -50,7 +51,7 @@ async function record(s, change, sized) {
   await s.flushLog();
   const resizes = readEvents(s.app.configDir, offsets).events
     .filter((event) => event.event === "host.window.event" && event.fields?.kind === "resize")
-    .map((event) => event.mono_ns / 1e6);
+    .map((event) => ({ at: event.mono_ns / 1e6, width: event.fields.width, height: event.fields.height }));
   return { displayed, stopped, layouts, resizes };
 }
 

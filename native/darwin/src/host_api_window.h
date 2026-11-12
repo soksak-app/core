@@ -23,6 +23,7 @@ bool main_windowSetTitlebarHeight(uintptr_t window, double height, char **failur
 void main_windowControls(uintptr_t window, double *out);
 char *main_sp_window_facts(uintptr_t window);
 bool main_sp_window_on_screen(uintptr_t window);
+bool main_sp_window_content_size(uintptr_t window, double *out);
 char *main_sp_window_color_space_facts(uintptr_t window);
 char *main_sp_window_hit(uintptr_t window, double x, double y);
 bool main_sp_window_move(uintptr_t window, double x, double y);

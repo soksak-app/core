@@ -3473,14 +3473,60 @@
           },
           "kind": {
             "type": "string"
+          },
+          "width": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "height": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
           }
         },
         "required": [
           "window",
           "kind"
-        ]
+        ],
+        "if": {
+          "properties": {
+            "kind": {
+              "const": "resize"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        "then": {
+          "required": [
+            "width",
+            "height"
+          ]
+        },
+        "else": {
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "width"
+                ]
+              },
+              {
+                "required": [
+                  "height"
+                ]
+              }
+            ]
+          }
+        }
       },
-      "description": "A window event that the host registered."
+      "description": "A window event that the host registered. A resize records the width and the height of the content of the window in points, read when the event arrived, or null for both when the content was gone."
     },
     "host.overlay.dropped": {
       "layer": "host",

@@ -41,6 +41,10 @@ type pagelessPlatform struct {
 	calls []string
 }
 
+func (p *pagelessPlatform) WindowContentSize(platform.Window) (float64, float64, error) {
+	return 1200, 800, nil
+}
+
 func (p *pagelessPlatform) SetTitlebarHeight(platform.Window, float64) error {
 	p.calls = append(p.calls, "titlebar")
 	return nil

@@ -1,6 +1,7 @@
 package host_test
 
 import (
+	"reflect"
 	"testing"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
@@ -11,29 +12,33 @@ import (
 func TestAWindowEventIsRecordedAsAnEvent(t *testing.T) {
 	config := t.TempDir()
 	log := support.StartWriter(t, config)
-	for _, kind := range []string{"resize", "focus", "window-active", "closed"} {
+	host.RecordWindowResize("main-2", 1440, 900, true)
+	// The content of a window that closed is gone, so its resize records no size.
+	host.RecordWindowResize("main-2", 0, 0, false)
+	for _, kind := range []string{"focus", "window-active", "closed"} {
 		host.RecordWindowEvent("main-2", kind)
 	}
-	// A kind outside the contract is reported on the standard error and stores nothing.
+	// A kind outside the contract is reported on the standard error and stores nothing, and so is a resize without its size.
 	host.RecordWindowEvent("main-2", "teleport")
+	host.RecordWindowEvent("main-2", "resize")
 	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
-	var seen [][3]string
+	var seen []map[string]any
 	for _, event := range support.ReadEvents(t, support.EventLogPath(t, config)) {
 		if event["event"] != "host.window.event" {
 			continue
 		}
-		fields := event["fields"].(map[string]any)
-		seen = append(seen, [3]string{event["level"].(string), fields["window"].(string), fields["kind"].(string)})
+		seen = append(seen, map[string]any{"level": event["level"], "fields": event["fields"]})
 	}
-	want := [][3]string{{"debug", "main-2", "resize"}, {"info", "main-2", "focus"}, {"info", "main-2", "window-active"}, {"info", "main-2", "closed"}}
-	if len(seen) != len(want) {
+	want := []map[string]any{
+		{"level": "debug", "fields": map[string]any{"window": "main-2", "kind": "resize", "width": float64(1440), "height": float64(900)}},
+		{"level": "debug", "fields": map[string]any{"window": "main-2", "kind": "resize", "width": nil, "height": nil}},
+		{"level": "info", "fields": map[string]any{"window": "main-2", "kind": "focus"}},
+		{"level": "info", "fields": map[string]any{"window": "main-2", "kind": "window-active"}},
+		{"level": "info", "fields": map[string]any{"window": "main-2", "kind": "closed"}},
+	}
+	if !reflect.DeepEqual(seen, want) {
 		t.Fatalf("window events = %v, want %v", seen, want)
-	}
-	for i := range want {
-		if seen[i] != want[i] {
-			t.Fatalf("window events = %v, want %v", seen, want)
-		}
 	}
 }

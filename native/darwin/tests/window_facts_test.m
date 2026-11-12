@@ -339,6 +339,14 @@ int main(void) { @autoreleasepool {
         reportedOnScreen = onScreen;
     }), @"occlusion observation starts");
     check(!sp_window_observe_occlusion(NULL, ^(bool onScreen) { (void)onScreen; }), @"occlusion observation without a window is rejected");
+    // The content size that a resize event records is the size of the content view of the window, and a window that is gone has
+    // none.
+    double contentSize[2] = {-1, -1};
+    check(sp_window_content_size(observed, contentSize) && contentSize[0] == observed.contentView.bounds.size.width
+        && contentSize[1] == observed.contentView.bounds.size.height && contentSize[0] == 200 && contentSize[1] == 120,
+        [NSString stringWithFormat:@"the content size of the window is its content view size (%g x %g)", contentSize[0], contentSize[1]]);
+    double noSize[2] = {-1, -1};
+    check(!sp_window_content_size(NULL, noSize) && noSize[0] == -1 && noSize[1] == -1, @"a window that is gone has no content size");
     [observed orderBack:nil];
     int before = changes;
     [NSNotificationCenter.defaultCenter postNotificationName:NSWindowDidChangeOcclusionStateNotification object:observed];

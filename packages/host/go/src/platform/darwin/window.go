@@ -222,6 +222,14 @@ func (implementation) WindowOnScreen(window platform.Window) (bool, error) {
 	return bool(native.MainSpWindowOnScreen(uintptr(window))), nil
 }
 
+func (implementation) WindowContentSize(window platform.Window) (width, height float64, err error) {
+	var out [2]float64
+	if !native.MainSpWindowContentSize(uintptr(window), &out[0]) {
+		return 0, 0, errors.New("window content size: the window is gone")
+	}
+	return out[0], out[1], nil
+}
+
 func (implementation) WindowColorSpace(window platform.Window) (string, error) {
 	return facts(native.MainSpWindowColorSpaceFacts(uintptr(window)), "window color-space facts")
 }

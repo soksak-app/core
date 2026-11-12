@@ -525,7 +525,12 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 		WindowFocusLost: "lost_focus", WindowShow: "show", WindowHide: "hide",
 	} {
 		win.OnWindowEvent(event, func() {
-			RecordWindowEvent(s.name, kind)
+			if kind == "resize" {
+				width, height, err := system.WindowContentSize(win.NativeWindow())
+				RecordWindowResize(s.name, width, height, err == nil)
+			} else {
+				RecordWindowEvent(s.name, kind)
+			}
 			changed()
 		})
 	}

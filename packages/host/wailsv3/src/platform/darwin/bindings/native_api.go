@@ -153,6 +153,9 @@ func Functions() abi.NativeFunctions {
 		MainSpWindowColorSpaceFacts: func(a0 uintptr) *byte {
 			return (*byte)(unsafe.Pointer(C.main_sp_window_color_space_facts(C.uintptr_t(a0))))
 		},
+		MainSpWindowContentSize: func(a0 uintptr, a1 *float64) bool {
+			return bool(C.main_sp_window_content_size(C.uintptr_t(a0), (*C.double)(unsafe.Pointer(a1))))
+		},
 		MainSpWindowEndResponderObservation:    func(a0 unsafe.Pointer) { C.main_sp_window_end_responder_observation(a0) },
 		MainSpInputVirtualEndCursorObservation: func(a0 unsafe.Pointer) { C.main_sp_input_virtual_end_cursor_observation(a0) },
 		MainSpWindowEndSheetObservation:        func(a0 unsafe.Pointer) { C.main_sp_window_end_sheet_observation(a0) },

@@ -1057,9 +1057,19 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
     initial_titlebar(&window)?;
     let host = window.clone();
     let window_events_label = window.label().to_string();
+    let resized = window.clone();
     window.on_window_event(move |event| {
+        // A resize carries the content size of the window, read when the event arrives.
+        if let WindowEvent::Resized = event {
+            crate::window_events::record_window_resize(
+                window_events_label.as_str(),
+                // default: a window whose content is gone, as that of a window that closed is, has no size, and its resize records
+                // a null width and height.
+                resized.size().ok(),
+            );
+            return;
+        }
         let kind = match event {
-            WindowEvent::Resized => Some("resize"),
             WindowEvent::Moved => Some("move"),
             WindowEvent::ScaleFactorChanged => Some("scale_factor_changed"),
             WindowEvent::Focused(true) => Some("focus"),
