@@ -62,10 +62,11 @@ func FrameRecorder(frames *host.WindowFrames) *ui.FrameRecorder {
 		Frame: func(r *ui.FrameRecord) {
 			frames.Frame(&host.FrameRecord{
 				Start: r.Start, Request: r.Request, End: r.End, DrawableWait: r.DrawableWait, Damage: r.Damage, Nodes: r.Nodes,
-				Outcome: frameOutcomes[r.Outcome], CommandBuffer: r.CommandBuffer,
+				Outcome: frameOutcomes[r.Outcome], CommandBuffer: r.CommandBuffer, Committed: r.Committed,
 				AsksFrame: r.AsksFrame, Animates: r.Animates, Repaints: r.Repaints, Timer: r.Timer,
 			})
 		},
-		Commit: func(c ui.CommitRecord) { frames.Commit(commitKinds[c.Kind], c.At) },
+		Commit:   func(c ui.CommitRecord) { frames.Commit(commitKinds[c.Kind], c.At) },
+		Complete: func(c ui.CompleteRecord) { frames.Complete(c.Committed, c.Completed) },
 	}
 }

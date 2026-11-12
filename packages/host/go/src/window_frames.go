@@ -77,11 +77,15 @@ func (w *WindowFrames) Frame(record *FrameRecord) {
 	if record.Request != 0 {
 		request = strconv.FormatUint(record.Request, 10)
 	}
+	var commit any
+	if record.Committed != 0 {
+		commit = strconv.FormatUint(record.Committed, 10)
+	}
 	EmitHost(LevelDebug, "host.frame.record", map[string]any{
 		"window": w.window, "start_ns": strconv.FormatUint(record.Start, 10), "request_ns": request,
 		"end_ns": strconv.FormatUint(record.End, 10), "damage": record.Damage, "nodes": record.Nodes,
 		"drawable_wait_ns": strconv.FormatUint(record.DrawableWait, 10), "outcome": record.Outcome,
-		"command_buffer": record.CommandBuffer, "asks_frame": record.AsksFrame, "animates": record.Animates,
+		"command_buffer": record.CommandBuffer, "commit_ns": commit, "asks_frame": record.AsksFrame, "animates": record.Animates,
 		"repaints": record.Repaints, "timer": record.Timer,
 	})
 }
@@ -97,7 +101,14 @@ func (w *WindowFrames) Commit(kind string, at uint64) {
 
 // Complete writes the record of a command buffer that completed: committed is the Committed of its frame or the time of its
 // commit outside a frame, and completed the time its completed handler ran.
-func (w *WindowFrames) Complete(committed, completed uint64) {}
+func (w *WindowFrames) Complete(committed, completed uint64) {
+	if committed == 0 || !GateEvent(ClassFrame, LevelDebug) {
+		return
+	}
+	EmitHost(LevelDebug, "host.frame.complete", map[string]any{
+		"window": w.window, "commit_ns": strconv.FormatUint(committed, 10), "complete_ns": strconv.FormatUint(completed, 10),
+	})
+}
 
 // OnSettled runs notify after a frame that leaves the window settled and after a frame that ends its rest: each frame changes
 // the counters of the status of the window, and a watcher hears of them when a burst of frames ends, not at each frame.

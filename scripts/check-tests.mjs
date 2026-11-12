@@ -2067,7 +2067,7 @@ const FEATURE_LINKS = [
       { file: "scripts/test/measure-trace.test.mjs", id: "a target that also measures FRAME_RECORDS reads it from TRACE and names its three states in the error" },
       { file: "scripts/test/measure-terminal-redraw.test.mjs", id: "the B3 output of the redraw takes its conditions from b3-out with the performance switch of the trace state" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the B3 keys of app-usage end in their unit, are listed for each trace state, and a measurement with every figure holds every key of TRACE 0 and 1" },
-      { file: "scripts/test/frame-records.test.mjs", id: "the U7 events are the frame, commit and step records that the U7 row of the plan names" },
+      { file: "scripts/test/frame-records.test.mjs", id: "the U7 events are the frame, commit, completion and step records that the U7 row of the plan names" },
       { file: "scripts/test/frame-records.test.mjs", id: "the frame time runs from the start of a frame to its presentation request less its wait for a drawable" },
       { file: "scripts/test/frame-records.test.mjs", id: "the step time runs from the entry of each step to its return and keeps the kind of the step" },
       { file: "scripts/test/frame-records.test.mjs", id: "the first frame time runs from the start of the first frame of the gesture to its presentation request" },

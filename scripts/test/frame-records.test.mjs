@@ -24,8 +24,8 @@ function step(seq, { kind = "selector", callback, entry, back, window = "w1" }) 
   return { seq, event: "host.frame.step", fields: { window, kind, callback, entry_ns: ns(entry), return_ns: ns(back), forwarded: 6, wait_ns: "40000" } };
 }
 
-test("the U7 events are the frame, commit and step records that the U7 row of the plan names", () => {
-  assert.deepEqual(U7_EVENTS, { frame: "host.frame.record", commit: "host.frame.commit", step: "host.frame.step" });
+test("the U7 events are the frame, commit, completion and step records that the U7 row of the plan names", () => {
+  assert.deepEqual(U7_EVENTS, { frame: "host.frame.record", commit: "host.frame.commit", complete: "host.frame.complete", step: "host.frame.step" });
   assert.ok(Object.isFrozen(U7_EVENTS));
 });
 
@@ -97,14 +97,15 @@ test("the records of a gesture in the event log are the U7 records and the log.d
     host(step(102, { callback: "mouseDragged:", entry: 0, back: 1000 })),
     host(frame(103, { start: 1000, request: 3000 })),
     host({ seq: 104, event: "host.frame.commit", fields: { window: "w1", kind: "layer", commit_ns: ns(3500) } }),
-    host({ seq: 105, event: "log.dropped", fields: { from_seq: 90, to_seq: 95, count: 6, bytes: 600, reason: "queue full", channel: "debug" } }),
+    host({ seq: 105, event: "host.frame.complete", fields: { window: "w1", commit_ns: ns(3500), complete_ns: ns(4200) } }),
+    host({ seq: 106, event: "log.dropped", fields: { from_seq: 90, to_seq: 95, count: 6, bytes: 600, reason: "queue full", channel: "debug" } }),
     { layer: "sidecar", seq: 7, event: "host.frame.record", fields: { window: "w1" } },
     { layer: "page", seq: 300, event: "page.start", fields: {} },
   ];
   const read = gestureRecords(events);
-  assert.deepEqual(read.records.map(({ seq }) => seq), [102, 103, 104]);
-  assert.deepEqual(read.dropped.map(({ seq }) => seq), [105]);
-  assert.deepEqual([read.fromSeq, read.toSeq], [100, 105]);
-  assert.equal(requireCompleteGesture({ ...read, window: "w1", framesBefore: 10, framesAfter: 11 }).length, 3);
-  assert.throws(() => gestureRecords(events.slice(5)), /the gesture has no event of the host process/);
+  assert.deepEqual(read.records.map(({ seq }) => seq), [102, 103, 104, 105]);
+  assert.deepEqual(read.dropped.map(({ seq }) => seq), [106]);
+  assert.deepEqual([read.fromSeq, read.toSeq], [100, 106]);
+  assert.equal(requireCompleteGesture({ ...read, window: "w1", framesBefore: 10, framesAfter: 11 }).length, 4);
+  assert.throws(() => gestureRecords(events.slice(6)), /the gesture has no event of the host process/);
 });

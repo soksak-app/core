@@ -6,11 +6,14 @@
 /**
  * The events of the U7 records, as the U7 row of docs/spec/hosts.md names them, all of the class frame at the level debug:
  * `frame`, one for each frame {window, start_ns, request_ns (null when the frame requested no presentation), end_ns, damage, nodes,
- * drawable_wait_ns, outcome, command_buffer, asks_frame, animates, repaints, timer}; `commit`, one for each command buffer committed
- * outside a frame {window, kind, commit_ns}; and `step`, one for each step of U1 {window, kind, callback, entry_ns, return_ns, forwarded,
- * wait_ns}.
+ * drawable_wait_ns, outcome, command_buffer, commit_ns (null when the frame committed no command buffer), asks_frame, animates, repaints,
+ * timer}; `commit`, one for each command buffer committed outside a frame {window, kind, commit_ns}; `complete`, one for each command
+ * buffer that completed {window, commit_ns, complete_ns}; and `step`, one for each step of U1 {window, kind, callback, entry_ns,
+ * return_ns, forwarded, wait_ns}.
  */
-export const U7_EVENTS = Object.freeze({ frame: "host.frame.record", commit: "host.frame.commit", step: "host.frame.step" });
+export const U7_EVENTS = Object.freeze({
+  frame: "host.frame.record", commit: "host.frame.commit", complete: "host.frame.complete", step: "host.frame.step",
+});
 
 /** The kinds of a step of U1. */
 const STEP_KINDS = ["selector", "block", "callback"];

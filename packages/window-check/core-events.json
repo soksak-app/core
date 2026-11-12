@@ -1025,6 +1025,36 @@
       },
       "description": "The U7 record of a command buffer of a mygo window committed outside a frame."
     },
+    "host.frame.complete": {
+      "layer": "host",
+      "class": "frame",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "string",
+            "minLength": 1
+          },
+          "commit_ns": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "complete_ns": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          }
+        },
+        "required": [
+          "window",
+          "commit_ns",
+          "complete_ns"
+        ],
+        "additionalProperties": false
+      },
+      "description": "The U7 record of a command buffer of a mygo window that completed on the GPU: the commit time of its frame or of its commit outside a frame, and the time its completed handler ran, both on the host event clock."
+    },
     "host.frame.record": {
       "layer": "host",
       "class": "frame",
@@ -1077,6 +1107,13 @@
           "command_buffer": {
             "type": "boolean"
           },
+          "commit_ns": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[1-9][0-9]*$"
+          },
           "asks_frame": {
             "type": "boolean"
           },
@@ -1100,6 +1137,7 @@
           "drawable_wait_ns",
           "outcome",
           "command_buffer",
+          "commit_ns",
           "asks_frame",
           "animates",
           "repaints",
@@ -1107,7 +1145,7 @@
         ],
         "additionalProperties": false
       },
-      "description": "The U7 record of one frame of a mygo window: its times on the host event clock, the pixels it changed, the nodes of the last build pass, how it presented, whether it committed a command buffer, and what the window still asks for after it."
+      "description": "The U7 record of one frame of a mygo window: its times on the host event clock, the pixels it changed, the nodes of the last build pass, how it presented, whether it committed a command buffer and when, and what the window still asks for after it."
     },
     "host.frame.step": {
       "layer": "host",

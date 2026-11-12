@@ -66,6 +66,7 @@ pub fn class_of(name: &str) -> Option<Class> {
         "host.crash.found" => Some(Class::Lifecycle),
         "host.endpoint.call" => Some(Class::Call),
         "host.frame.commit" => Some(Class::Frame),
+        "host.frame.complete" => Some(Class::Frame),
         "host.frame.record" => Some(Class::Frame),
         "host.frame.step" => Some(Class::Frame),
         "host.frame.surface.dispatch" => Some(Class::Frame),
