@@ -276,7 +276,7 @@ benchmark-site-cost: $(BUILD)/site_cost_benchmark
 	@$(BUILD)/site_cost_benchmark --runs $(RUNS)
 
 # A check that includes the acceptance check body is rebuilt when that body changes.
-$(BUILD)/capture_checker_test $(BUILD)/capture_file_checker_test $(BUILD)/capture_lifecycle_test $(BUILD)/capture_directory_checker_test: tests/capture_test.m
+$(BUILD)/capture_checker_test $(BUILD)/capture_file_checker_test $(BUILD)/capture_directory_checker_test: tests/capture_test.m
 
 # Notification Center accepts only processes started from a bundle, so the notification check also runs inside a
 # bundle.
@@ -288,10 +288,6 @@ $(BUILD)/notifications_test.app/Contents/MacOS/notifications_test: $(BUILD)/noti
 $(BUILD)/capture_file_checker_test: tests/capture_test.m
 
 $(BUILD)/capture_checker_test: tests/capture_test.m
-
-$(BUILD)/capture_lifecycle_test: tests/capture_test.m src/capture.m
-
-$(BUILD)/capture_callback_test: src/capture.m
 
 $(BUILD)/capture_stop_intake_test: src/capture.m
 
@@ -314,8 +310,8 @@ $(BUILD)/capture_resize_test: src/capture.m
 $(BUILD)/capture_covered_test: tests/capture_covered_test.m tests/support/event_wait.m tests/support/temporary_folder.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h tests/support/*.h)
 	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m tests/support/event_wait.m tests/support/temporary_folder.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Metal -framework Network $(MINIMUM) -o $@
 
-$(BUILD)/capture_presentation_test: tests/capture_presentation_test.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h)
-	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Metal -framework Network $(MINIMUM) -o $@
+$(BUILD)/capture_presentation_test: tests/capture_presentation_test.m tests/support/temporary_folder.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h tests/support/*.h)
+	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m tests/support/temporary_folder.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Metal -framework Network $(MINIMUM) -o $@
 
 $(BUILD)/image_region_capture_presentation_test: tests/image_region_capture_presentation_test.m tests/support/event_wait.m tests/support/no_activation.m tests/support/temporary_folder.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h tests/support/*.h)
 	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/event_wait.m tests/support/no_activation.m tests/support/temporary_folder.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
@@ -447,7 +443,6 @@ NATIVE_TESTS = observe_test \
   capture_boundary_test \
   temporary_folder_test \
   document_store_end_test \
-  capture_stop_late_test \
   capture_stop_intake_test \
   capture_cleanup_test \
   capture_preparation_test \
@@ -464,7 +459,7 @@ NATIVE_TESTS = observe_test \
   notifications_test \
   notifications_test.app/Contents/MacOS/notifications_test,--bundled
 
-# The native end-to-end tests: they need the presentation times and the ScreenCaptureKit frames of a display, so they run only
+# The native end-to-end tests: they need the presentation times and the window server images of a display, so they run only
 # locally through e2e (docs/operations/examples.md#test-kinds). test runs the unit tests of NATIVE_TESTS.
 NATIVE_E2E_TESTS = window_titlebar_layout_test \
   window_titlebar_reload_test \
@@ -476,9 +471,7 @@ NATIVE_E2E_TESTS = window_titlebar_layout_test \
   capture_checker_test \
   capture_file_checker_test \
   capture_directory_checker_test \
-  capture_lifecycle_test \
   capture_cycles_test \
-  capture_callback_test \
   window_show_hold_test \
   image_region_capture_presentation_test
 

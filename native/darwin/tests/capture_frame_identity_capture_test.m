@@ -1,4 +1,6 @@
-// Checks that opt-in ScreenCaptureKit samples record a separate decoded identity result without changing raw frames.
+// Checks that the stills of an opt-in identity recording record a separate decoded identity result without changing raw frames.
+// The test hands images to the still processing of the recording (processStill) as the window server would give them, with
+// the screen rectangle that each image covers, so it needs no display.
 #import "../src/capture.m"
 #import "../src/capture_frame_identity.h"
 #import "support/temporary_folder.h"
@@ -9,40 +11,52 @@ static void check(BOOL condition, NSString *label) {
     if (!condition) failures++;
 }
 
-static CMSampleBufferRef sampleBGRA(NSData *pixels, size_t width, size_t height, CGRect bounds) {
-    CVPixelBufferRef buffer = NULL;
-    NSDictionary *attributes = @{ (id)kCVPixelBufferCGImageCompatibilityKey: @YES,
-        (id)kCVPixelBufferCGBitmapContextCompatibilityKey: @YES };
-    if (CVPixelBufferCreate(kCFAllocatorDefault, width, height, kCVPixelFormatType_32BGRA,
-        (CFDictionaryRef)attributes, &buffer) != kCVReturnSuccess) return NULL;
-    if (CVPixelBufferLockBaseAddress(buffer, 0) != kCVReturnSuccess) { CVPixelBufferRelease(buffer); return NULL; }
-    size_t stride = CVPixelBufferGetBytesPerRow(buffer);
-    uint8_t *destination = CVPixelBufferGetBaseAddress(buffer);
-    for (size_t y = 0; y < height; y++) memcpy(destination + y * stride, (const uint8_t *)pixels.bytes + y * width * 4, width * 4);
-    CVPixelBufferUnlockBaseAddress(buffer, 0);
+// An sRGB BGRA image of pixels, the format in which the recording draws every still.
+static CGImageRef imageBGRA(NSData *pixels, size_t width, size_t height) {
     CGColorSpaceRef colorSpace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
-    if (colorSpace) {
-        CVBufferSetAttachment(buffer, kCVImageBufferCGColorSpaceKey, colorSpace, kCVAttachmentMode_ShouldPropagate);
-        CGColorSpaceRelease(colorSpace);
+    CGDataProviderRef provider = CGDataProviderCreateWithCFData((CFDataRef)pixels);
+    CGImageRef image = colorSpace && provider ? CGImageCreate(width, height, 8, 32, width * 4, colorSpace,
+        (CGBitmapInfo)kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little, provider, NULL, false,
+        kCGRenderingIntentDefault) : NULL;
+    if (provider) CGDataProviderRelease(provider);
+    if (colorSpace) CGColorSpaceRelease(colorSpace);
+    return image;
+}
+
+// A recording of planned stills in directory, without a window: the stills are handed to it by stillImage.
+static SPCaptureRecording *makeRecording(NSString *directory, NSUInteger planned) {
+    SPCaptureRecording *recording = [[SPCaptureRecording alloc] init];
+    mach_timebase_info_data_t timebase;
+    mach_timebase_info(&timebase);
+    recording.session = @"capture-frame-identity-test";
+    recording.directory = directory;
+    recording.windowNumber = 1;
+    recording.gap = 1;
+    recording.planned = planned;
+    recording.timebase = timebase;
+    recording.gapTicks = 1e6 * timebase.denom / timebase.numer;
+    for (NSUInteger index = 0; index < planned; index++)
+        [recording.rows addObject:[NSMutableDictionary dictionaryWithDictionary:@{ @"index": @(index), @"outcome": @"not-requested" }]];
+    return recording;
+}
+
+// Hands still index the image of pixels covering screen, as the window server gives it at the request of that still.
+static BOOL stillImage(SPCaptureRecording *recording, NSUInteger index, NSData *pixels, size_t width, size_t height, CGRect screen) {
+    CGImageRef image = imageBGRA(pixels, width, height);
+    if (image == NULL) return NO;
+    SPCaptureTarget *target = [[[SPCaptureTarget alloc] init] autorelease];
+    target.display = YES;
+    target.request = screen;
+    target.screen = screen;
+    uint64_t requested = captureTicks(), completed = captureTicks();
+    @synchronized (recording) {
+        recording.nextIndex = MAX(recording.nextIndex, index + 1);
+        recording.rows[index][@"requested"] = tickString(requested);
+        recording.rows[index][@"completed"] = tickString(completed);
     }
-    CMVideoFormatDescriptionRef format = NULL;
-    CMSampleBufferRef result = NULL;
-    CMSampleTimingInfo timing = {kCMTimeInvalid, kCMTimeZero, kCMTimeInvalid};
-    if (CMVideoFormatDescriptionCreateForImageBuffer(kCFAllocatorDefault, buffer, &format) == noErr)
-        CMSampleBufferCreateReadyWithImageBuffer(kCFAllocatorDefault, buffer, format, &timing, &result);
-    if (format) CFRelease(format);
-    CVPixelBufferRelease(buffer);
-    if (!result) return NULL;
-    NSDictionary *content = [(NSDictionary *)CGRectCreateDictionaryRepresentation(CGRectMake(0, 0, bounds.size.width, bounds.size.height)) autorelease];
-    NSDictionary *screen = [(NSDictionary *)CGRectCreateDictionaryRepresentation(bounds) autorelease];
-    NSDictionary *metadata = @{ SCStreamFrameInfoStatus: @(SCFrameStatusComplete),
-        SCStreamFrameInfoDisplayTime: @(mach_absolute_time()), SCStreamFrameInfoContentRect: content,
-        SCStreamFrameInfoScreenRect: screen, SCStreamFrameInfoContentScale: @1, SCStreamFrameInfoScaleFactor: @1 };
-    CFArrayRef attachments = CMSampleBufferGetSampleAttachmentsArray(result, true);
-    if (!attachments || CFArrayGetCount(attachments) != 1) { CFRelease(result); return NULL; }
-    CFMutableDictionaryRef values = (CFMutableDictionaryRef)CFArrayGetValueAtIndex(attachments, 0);
-    for (NSString *key in metadata) CFDictionarySetValue(values, (__bridge CFStringRef)key, (__bridge CFTypeRef)metadata[key]);
-    return result;
+    processStill(recording, index, target, image, requested, completed);
+    CGImageRelease(image);
+    return YES;
 }
 
 int main(void) { @autoreleasepool {
@@ -50,11 +64,7 @@ int main(void) { @autoreleasepool {
     fprintf(stderr, "START: native capture frame identity recording\n");
     [NSApplication sharedApplication];
     NSString *directory = temporaryFolder(@"soksak-frame-identity-capture-");
-    captureWriter = dispatch_queue_create("capture.test.identity", DISPATCH_QUEUE_SERIAL);
-    capturePending = dispatch_semaphore_create(kCapturePending);
-    captureFirstFrame = dispatch_semaphore_create(0);
-    static int statuses[6];
-    memset(statuses, 0, sizeof statuses);
+    prepareCaptureQueues();
 
     sp_image_capture_match_begin(directory.fileSystemRepresentation, captureWriter);
     char *identityError = NULL;
@@ -117,44 +127,12 @@ int main(void) { @autoreleasepool {
     [secondNonce release]; [secondIssuedPayload release]; [secondEncodedPayload release]; [secondEncodeError release];
     if (secondTaggedImage) CGImageRelease(secondTaggedImage);
     if (secondColorSpace) CGColorSpaceRelease(secondColorSpace);
-    SPCapture *sink = [SPCapture new];
-    sink.directory = directory;
-    sink.statuses = statuses;
-    captureSink = [sink retain];
-    captureBefore = 0;
-    captureStartedAt = 0;
+    SPCaptureRecording *sink = makeRecording(directory, 8);
     clearCaptureError();
 
-    NSDictionary *content = [(NSDictionary *)CGRectCreateDictionaryRepresentation(CGRectMake(0, 0, 4, 2)) autorelease];
-    NSDictionary *screen = [(NSDictionary *)CGRectCreateDictionaryRepresentation(CGRectMake(0, 0, 4, 2)) autorelease];
-    CMSampleBufferRef frame = NULL;
-    CVPixelBufferRef buffer = NULL;
-    CMVideoFormatDescriptionRef format = NULL;
-    CMSampleTimingInfo timing = {kCMTimeInvalid, kCMTimeZero, kCMTimeInvalid};
-    NSDictionary *metadata = @{
-        SCStreamFrameInfoStatus: @(SCFrameStatusComplete),
-        SCStreamFrameInfoDisplayTime: @(mach_absolute_time()),
-        SCStreamFrameInfoContentRect: content,
-        SCStreamFrameInfoScreenRect: screen,
-        SCStreamFrameInfoContentScale: @1,
-        SCStreamFrameInfoScaleFactor: @1,
-    };
-    CVPixelBufferCreate(NULL, 8, 4, kCVPixelFormatType_32BGRA, NULL, &buffer);
-    if (buffer && CMVideoFormatDescriptionCreateForImageBuffer(NULL, buffer, &format) == noErr)
-        CMSampleBufferCreateReadyWithImageBuffer(NULL, buffer, format, &timing, &frame);
-    if (buffer) CVPixelBufferRelease(buffer);
-    if (format) CFRelease(format);
-    check(frame != NULL, @"the complete ScreenCaptureKit sample fixture is created");
-    if (frame) {
-        CFArrayRef attachments = CMSampleBufferGetSampleAttachmentsArray(frame, true);
-        if (attachments && CFArrayGetCount(attachments) == 1) {
-            CFMutableDictionaryRef values = (CFMutableDictionaryRef)CFArrayGetValueAtIndex(attachments, 0);
-            for (NSString *key in metadata) CFDictionarySetValue(values, (__bridge CFStringRef)key,
-                (__bridge CFTypeRef)metadata[key]);
-        }
-        [sink write:frame callbackTime:mach_absolute_time()];
-        CFRelease(frame);
-    }
+    // A still of an empty image, whose screen rectangle holds no retained source.
+    check(stillImage(sink, 0, [NSMutableData dataWithLength:8 * 4 * 4], 8, 4, CGRectMake(0, 0, 4, 2)),
+        @"the still of an empty image is handed to the recording");
     NSMutableData *composite = [NSMutableData dataWithLength:sourceStride * sourceHeight * 2];
     for (size_t y = 0; y < sourceHeight; y++) {
         memcpy((uint8_t *)composite.mutableBytes + y * sourceStride * 2,
@@ -162,37 +140,17 @@ int main(void) { @autoreleasepool {
         memcpy((uint8_t *)composite.mutableBytes + y * sourceStride * 2 + sourceStride,
             (const uint8_t *)secondTaggedPixels.bytes + y * sourceStride, sourceStride);
     }
-    CMSampleBufferRef taggedFrame = sampleBGRA(composite, sourceWidth * 2, sourceHeight,
-        CGRectMake(0, 0, sourceWidth * 2, sourceHeight));
-    check(taggedFrame != NULL, @"the captured sample fixture contains two disjoint issued region tags");
-    if (taggedFrame) {
-        [sink write:taggedFrame callbackTime:mach_absolute_time()];
-        CFRelease(taggedFrame);
-    }
-    CMSampleBufferRef untaggedFrame = sampleBGRA(sourcePixels, sourceWidth, sourceHeight,
-        CGRectMake(0, 0, sourceWidth, sourceHeight));
-    if (untaggedFrame) {
-        [sink write:untaggedFrame callbackTime:mach_absolute_time()];
-        CFRelease(untaggedFrame);
-    }
+    check(stillImage(sink, 1, composite, sourceWidth * 2, sourceHeight, CGRectMake(0, 0, sourceWidth * 2, sourceHeight)),
+        @"the captured still fixture contains two disjoint issued region tags");
+    stillImage(sink, 2, sourcePixels, sourceWidth, sourceHeight, CGRectMake(0, 0, sourceWidth, sourceHeight));
     NSMutableData *partialPixels = [taggedPixels mutableCopy];
     for (size_t y = 0; y < 192; y++) for (size_t x = 100; x < 200; x++) {
         uint8_t *pixel = (uint8_t *)partialPixels.mutableBytes + y * sourceStride + x * 4;
         pixel[0] = pixel[1] = pixel[2] = pixel[3] = 255;
     }
-    CMSampleBufferRef partialFrame = sampleBGRA(partialPixels, sourceWidth, sourceHeight,
-        CGRectMake(0, 0, sourceWidth, sourceHeight));
-    if (partialFrame) {
-        [sink write:partialFrame callbackTime:mach_absolute_time()];
-        CFRelease(partialFrame);
-    }
+    stillImage(sink, 3, partialPixels, sourceWidth, sourceHeight, CGRectMake(0, 0, sourceWidth, sourceHeight));
     [partialPixels release];
-    CMSampleBufferRef unissuedFrame = sampleBGRA(secondTaggedPixels, sourceWidth, sourceHeight,
-        CGRectMake(0, 0, sourceWidth, sourceHeight));
-    if (unissuedFrame) {
-        [sink write:unissuedFrame callbackTime:mach_absolute_time()];
-        CFRelease(unissuedFrame);
-    }
+    stillImage(sink, 4, secondTaggedPixels, sourceWidth, sourceHeight, CGRectMake(0, 0, sourceWidth, sourceHeight));
     sp_image_capture_identity secondIssuedIdentity = { 59, 61, 67 };
     NSString *secondIssuedCode = nil, *secondCodeError = nil;
     BOOL secondCodeIssued = sp_image_capture_match_identity_issue(regionToken, secondIssuedIdentity,
@@ -216,12 +174,7 @@ int main(void) { @autoreleasepool {
             (const uint8_t *)secondSmallCode.bytes + y * sourceStride + 104 * 4, 96 * 4);
     check(ambiguityPrepared, [NSString stringWithFormat:@"two independently issued codes fit inside one expected ROI (%@, %@)",
         firstSmallError ?: @"", secondCodeError ?: @""]);
-    CMSampleBufferRef ambiguousFrame = ambiguityPrepared
-        ? sampleBGRA(ambiguousPixels, sourceWidth, sourceHeight, CGRectMake(0, 0, sourceWidth, sourceHeight)) : NULL;
-    if (ambiguousFrame) {
-        [sink write:ambiguousFrame callbackTime:mach_absolute_time()];
-        CFRelease(ambiguousFrame);
-    }
+    if (ambiguityPrepared) stillImage(sink, 5, ambiguousPixels, sourceWidth, sourceHeight, CGRectMake(0, 0, sourceWidth, sourceHeight));
     [ambiguousPixels release];
     [secondIssuedCode release]; [secondCodeError release];
     if (firstSmallImage) CGImageRelease(firstSmallImage);
@@ -253,29 +206,19 @@ int main(void) { @autoreleasepool {
     [duplicateNonce release]; [duplicateIssued release]; [duplicateEncoded release]; [duplicateError release];
     if (duplicateImage) CGImageRelease(duplicateImage);
     if (duplicateColor) CGColorSpaceRelease(duplicateColor);
-    CMSampleBufferRef duplicateFrame = sampleBGRA(taggedPixels, sourceWidth, sourceHeight,
-        CGRectMake(0, 0, sourceWidth, sourceHeight));
-    if (duplicateFrame) {
-        [sink write:duplicateFrame callbackTime:mach_absolute_time()];
-        CFRelease(duplicateFrame);
-    }
+    stillImage(sink, 6, taggedPixels, sourceWidth, sourceHeight, CGRectMake(0, 0, sourceWidth, sourceHeight));
     BOOL evicted = sp_image_capture_match_identity_evict(secondRegionToken, secondIdentity, &identityError);
     check(evicted, [NSString stringWithFormat:@"the second region payload can be explicitly evicted (%s)", identityError ?: ""]);
     free(identityError); identityError = NULL;
-    CMSampleBufferRef retiredFrame = sampleBGRA(secondTaggedPixels, sourceWidth, sourceHeight,
-        CGRectMake(sourceWidth, 0, sourceWidth, sourceHeight));
-    if (retiredFrame) {
-        [sink write:retiredFrame callbackTime:mach_absolute_time()];
-        CFRelease(retiredFrame);
-    }
+    stillImage(sink, 7, secondTaggedPixels, sourceWidth, sourceHeight, CGRectMake(sourceWidth, 0, sourceWidth, sourceHeight));
     dispatch_sync(captureWriter, ^{});
-    NSDictionary *record = sink.callbackStatusTrace.lastObject;
-    check([record[@"frame"] isEqual:@"frame-0008.bgra"] && sink.written == 8,
-        @"the ordinary raw sample frame remains recorded in its existing path");
+    NSDictionary *record = sink.rows.lastObject;
+    check([record[@"frame"] isEqual:@"frame-0007.bgra"] && sink.written == 8,
+        @"the ordinary raw still frames remain recorded in their existing path");
     check(finalizeCaptureArtifacts(sink), @"the capture finalizes its identity artifact without changing the raw path");
     NSString *decodedPath = [directory stringByAppendingPathComponent:@"frame-identities/decoded-frames.jsonl"];
     NSData *decoded = [NSData dataWithContentsOfFile:decodedPath];
-    check(decoded.length > 0, @"capture finalization writes decoded sample identity records separately");
+    check(decoded.length > 0, @"capture finalization writes decoded still identity records separately");
     NSString *decodedText = decoded ? [[NSString alloc] initWithData:decoded encoding:NSUTF8StringEncoding] : nil;
     NSArray<NSString *> *decodedLines = [decodedText componentsSeparatedByString:@"\n"];
     NSMutableArray<NSDictionary *> *decodedRecords = [NSMutableArray array];
@@ -285,49 +228,49 @@ int main(void) { @autoreleasepool {
         if (item) [decodedRecords addObject:item];
     }
     NSPredicate *frameOneUnknown = [NSPredicate predicateWithBlock:^BOOL(NSDictionary *item, NSDictionary *bindings) {
-        (void)bindings; return [item[@"frame"] isEqual:@1] && [item[@"reason"] isEqual:@"unknown-geometry"];
+        (void)bindings; return [item[@"frame"] isEqual:@0] && [item[@"reason"] isEqual:@"unknown-geometry"];
     }];
     NSArray *frameOne = [decodedRecords filteredArrayUsingPredicate:frameOneUnknown];
     check(frameOne.count == 2,
-        @"a sample without a mapped source region reports unknown geometry instead of inferring identity");
+        @"a still without a mapped source region reports unknown geometry instead of inferring identity");
     NSPredicate *frameTwoMatched = [NSPredicate predicateWithBlock:^BOOL(NSDictionary *item, NSDictionary *bindings) {
-        (void)bindings; return [item[@"frame"] isEqual:@2] && [item[@"status"] isEqual:@"matched"];
+        (void)bindings; return [item[@"frame"] isEqual:@1] && [item[@"status"] isEqual:@"matched"];
     }];
     NSArray *frameTwo = [decodedRecords filteredArrayUsingPredicate:frameTwoMatched];
     check(frameTwo.count == 2 && [frameTwo valueForKeyPath:@"identity.generation"]
         && [[NSSet setWithArray:[frameTwo valueForKeyPath:@"identity.generation"]] isEqualToSet:[NSSet setWithArray:@[@"19", @"31"]]],
         @"separate disjoint ROIs decode each region-scoped issued identity");
     NSPredicate *frameThreeNoCode = [NSPredicate predicateWithBlock:^BOOL(NSDictionary *item, NSDictionary *bindings) {
-        (void)bindings; return [item[@"frame"] isEqual:@3] && [item[@"reason"] isEqual:@"no-code"];
+        (void)bindings; return [item[@"frame"] isEqual:@2] && [item[@"reason"] isEqual:@"no-code"];
     }];
     check([decodedRecords filteredArrayUsingPredicate:frameThreeNoCode].count == 1,
         @"a missing tag produces an explicit no-code result");
     NSPredicate *frameFourUnissued = [NSPredicate predicateWithBlock:^BOOL(NSDictionary *item, NSDictionary *bindings) {
-        (void)bindings; return [item[@"frame"] isEqual:@5] && [item[@"reason"] isEqual:@"unissued"];
+        (void)bindings; return [item[@"frame"] isEqual:@4] && [item[@"reason"] isEqual:@"unissued"];
     }];
     check([decodedRecords filteredArrayUsingPredicate:frameFourUnissued].count == 1,
         @"a valid QR issued for another region is reported as unissued");
     NSPredicate *frameFourPartial = [NSPredicate predicateWithBlock:^BOOL(NSDictionary *item, NSDictionary *bindings) {
-        (void)bindings; return [item[@"frame"] isEqual:@4] && [item[@"status"] isEqual:@"unknown"];
+        (void)bindings; return [item[@"frame"] isEqual:@3] && [item[@"status"] isEqual:@"unknown"];
     }];
     check([decodedRecords filteredArrayUsingPredicate:frameFourPartial].count == 2,
         @"a cropped partial tag remains an explicit unknown result");
     NSPredicate *frameSixAmbiguous = [NSPredicate predicateWithBlock:^BOOL(NSDictionary *item, NSDictionary *bindings) {
-        (void)bindings; return [item[@"frame"] isEqual:@6] && [item[@"reason"] isEqual:@"ambiguous"];
+        (void)bindings; return [item[@"frame"] isEqual:@5] && [item[@"reason"] isEqual:@"ambiguous"];
     }];
     check([decodedRecords filteredArrayUsingPredicate:frameSixAmbiguous].count == 1,
         @"multiple complete codes inside one expected ROI are ambiguous");
     NSPredicate *frameFiveDuplicate = [NSPredicate predicateWithBlock:^BOOL(NSDictionary *item, NSDictionary *bindings) {
-        (void)bindings; return [item[@"frame"] isEqual:@7] && [item[@"reason"] isEqual:@"duplicate-roi"];
+        (void)bindings; return [item[@"frame"] isEqual:@6] && [item[@"reason"] isEqual:@"duplicate-roi"];
     }];
     check([decodedRecords filteredArrayUsingPredicate:frameFiveDuplicate].count == 2,
         @"two regions claiming the same captured ROI are both unknown instead of sharing one code");
     NSPredicate *frameSixRetention = [NSPredicate predicateWithBlock:^BOOL(NSDictionary *item, NSDictionary *bindings) {
-        (void)bindings; return [item[@"frame"] isEqual:@8] && [item[@"reason"] isEqual:@"unknown-retention"];
+        (void)bindings; return [item[@"frame"] isEqual:@7] && [item[@"reason"] isEqual:@"unknown-retention"];
     }];
     check([decodedRecords filteredArrayUsingPredicate:frameSixRetention].count == 1,
         @"an evicted source payload is classified as unknown retention rather than a match");
-    check([sink.callbackStatusTrace.lastObject[@"imageMatch"][@"state"] isEqual:@"unmatched"],
+    check([sink.rows.lastObject[@"imageMatch"][@"state"] isEqual:@"unmatched"],
         @"QR bytes do not relax the exact source matcher");
     [decodedText release];
     [taggedPixels release];
@@ -335,23 +278,18 @@ int main(void) { @autoreleasepool {
     [duplicatePixels release];
     sp_image_capture_match_end();
     [sink release];
-    [captureSink release]; captureSink = nil;
 
     NSString *retentionDirectory = [directory stringByAppendingPathComponent:@"retention"];
     check([[NSFileManager defaultManager] createDirectoryAtPath:retentionDirectory
-        withIntermediateDirectories:YES attributes:nil error:nil], @"the retention capture directory exists before sample intake");
+        withIntermediateDirectories:YES attributes:nil error:nil], @"the retention capture directory exists before the first still");
     sp_image_capture_match_begin(retentionDirectory.fileSystemRepresentation, captureWriter);
     identityError = NULL;
     BOOL retentionSessionStarted = sp_image_capture_match_identity_session_begin(&identityError);
     sp_image_capture_match_drop();
-    SPCapture *retentionSink = [SPCapture new];
-    retentionSink.directory = retentionDirectory;
-    retentionSink.statuses = statuses;
-    captureSink = [retentionSink retain];
-    clearCaptureError(); captureBefore = 0; captureStartedAt = 0;
+    SPCaptureRecording *retentionSink = makeRecording(retentionDirectory, 1);
+    clearCaptureError();
     NSData *smallPixels = [NSMutableData dataWithLength:8 * 4 * 4];
-    CMSampleBufferRef retentionFrame = sampleBGRA(smallPixels, 8, 4, CGRectMake(0, 0, 4, 2));
-    if (retentionFrame) { [retentionSink write:retentionFrame callbackTime:mach_absolute_time()]; CFRelease(retentionFrame); }
+    stillImage(retentionSink, 0, smallPixels, 8, 4, CGRectMake(0, 0, 4, 2));
     dispatch_sync(captureWriter, ^{});
     BOOL retentionFinalized = finalizeCaptureArtifacts(retentionSink);
     NSData *retentionData = [NSData dataWithContentsOfFile:
@@ -363,7 +301,7 @@ int main(void) { @autoreleasepool {
         @"source-history loss emits an explicit unknown-retention record");
     free(identityError);
     sp_image_capture_match_end();
-    [retentionSink release]; [captureSink release]; captureSink = nil;
+    [retentionSink release];
 
     NSString *historyEvictionDirectory = [directory stringByAppendingPathComponent:@"history-eviction"];
     sp_image_capture_match_begin(historyEvictionDirectory.fileSystemRepresentation, captureWriter);
@@ -443,11 +381,8 @@ int main(void) { @autoreleasepool {
         if (filledHistory) dispatch_sync(captureWriter, ^{});
     }
     check(filledHistory, @"ordinary source snapshots cross the 64 MiB pixel-history eviction boundary");
-    SPCapture *historyEvictionSink = [SPCapture new];
-    historyEvictionSink.directory = historyEvictionDirectory;
-    historyEvictionSink.statuses = statuses;
-    captureSink = [historyEvictionSink retain];
-    clearCaptureError(); captureBefore = 0; captureStartedAt = 0;
+    SPCaptureRecording *historyEvictionSink = makeRecording(historyEvictionDirectory, 2);
+    clearCaptureError();
     NSMutableData *historyEvictionPixels = [NSMutableData dataWithLength:evictionStride * 2 * evictionHeight];
     if (evictionTaggedPixels && retiredTaggedPixels) for (size_t row = 0; row < evictionHeight; row++) {
             memcpy((uint8_t *)historyEvictionPixels.mutableBytes + row * evictionStride * 2,
@@ -455,22 +390,14 @@ int main(void) { @autoreleasepool {
             memcpy((uint8_t *)historyEvictionPixels.mutableBytes + row * evictionStride * 2 + evictionStride,
                 retiredTaggedPixels.bytes + row * evictionStride, evictionStride);
         }
-    CMSampleBufferRef historyEvictedFrame = sampleBGRA(historyEvictionPixels, evictionWidth * 2, evictionHeight,
+    stillImage(historyEvictionSink, 0, historyEvictionPixels, evictionWidth * 2, evictionHeight,
         CGRectMake(0, 0, evictionWidth * 2, evictionHeight));
-    if (historyEvictedFrame) {
-        [historyEvictionSink write:historyEvictedFrame callbackTime:mach_absolute_time()];
-        CFRelease(historyEvictedFrame);
-    }
     sp_image_capture_match_drop();
-    CMSampleBufferRef historyEvictedFrameAfterDrop = sampleBGRA(historyEvictionPixels,
-        evictionWidth * 2, evictionHeight, CGRectMake(0, 0, evictionWidth * 2, evictionHeight));
-    if (historyEvictedFrameAfterDrop) {
-        [historyEvictionSink write:historyEvictedFrameAfterDrop callbackTime:mach_absolute_time()];
-        CFRelease(historyEvictedFrameAfterDrop);
-    }
+    stillImage(historyEvictionSink, 1, historyEvictionPixels, evictionWidth * 2, evictionHeight,
+        CGRectMake(0, 0, evictionWidth * 2, evictionHeight));
     dispatch_sync(captureWriter, ^{});
     BOOL historyEvictionFinalized = finalizeCaptureArtifacts(historyEvictionSink);
-    NSDictionary *historyEvictionCallback = historyEvictionSink.callbackStatusTrace.firstObject;
+    NSDictionary *historyEvictionCallback = historyEvictionSink.rows.firstObject;
     BOOL rawMatcherStillUnknown = [historyEvictionCallback[@"imageMatch"][@"state"] isEqual:@"unknown-retention"];
     NSData *historyEvictionDecodedData = [NSData dataWithContentsOfFile:
         [historyEvictionDirectory stringByAppendingPathComponent:@"frame-identities/decoded-frames.jsonl"]];
@@ -484,7 +411,7 @@ int main(void) { @autoreleasepool {
     }
     NSPredicate *historyEvictionMatched = [NSPredicate predicateWithBlock:^BOOL(NSDictionary *row, NSDictionary *bindings) {
         (void)bindings;
-        return [row[@"frame"] isEqual:@1] && [row[@"status"] isEqual:@"matched"]
+        return [row[@"frame"] isEqual:@0] && [row[@"status"] isEqual:@"matched"]
             && [row[@"identity"][@"generation"] isEqual:@"73"]
             && [row[@"identity"][@"raster"] isEqual:@"79"]
             && [row[@"identity"][@"sequence"] isEqual:@83]
@@ -493,7 +420,7 @@ int main(void) { @autoreleasepool {
     NSArray<NSDictionary *> *historyEvictionMatches = [historyEvictionDecodedRows filteredArrayUsingPredicate:historyEvictionMatched];
     NSPredicate *historyEvictionRetired = [NSPredicate predicateWithBlock:^BOOL(NSDictionary *row, NSDictionary *bindings) {
         (void)bindings;
-        return [row[@"frame"] isEqual:@1] && [row[@"status"] isEqual:@"unknown"]
+        return [row[@"frame"] isEqual:@0] && [row[@"status"] isEqual:@"unknown"]
             && [row[@"reason"] isEqual:@"unknown-retention"]
             && [row[@"region"] isEqual:@"191a1b1c000000000000000000000000"]
             && [row[@"roi"] isKindOfClass:[NSDictionary class]] && [row[@"roi"][@"x"] isEqual:@192];
@@ -504,7 +431,7 @@ int main(void) { @autoreleasepool {
     }];
     NSArray<NSDictionary *> *historyEvictionUnlocatedRows = [historyEvictionDecodedRows filteredArrayUsingPredicate:historyEvictionUnlocated];
     NSPredicate *historyEvictionNonEvictionDrop = [NSPredicate predicateWithBlock:^BOOL(NSDictionary *row, NSDictionary *bindings) {
-        (void)bindings; return [row[@"frame"] isEqual:@2] && [row[@"status"] isEqual:@"unknown"]
+        (void)bindings; return [row[@"frame"] isEqual:@1] && [row[@"status"] isEqual:@"unknown"]
             && [row[@"reason"] isEqual:@"unknown-retention"] && row[@"roi"] == NSNull.null;
     }];
     NSArray<NSDictionary *> *historyEvictionNonEvictionRows =
@@ -520,7 +447,7 @@ int main(void) { @autoreleasepool {
     [historyEvictionDecodedText release];
     [evictionTaggedPixels release]; [retiredTaggedPixels release];
     sp_image_capture_match_end();
-    [historyEvictionSink release]; [captureSink release]; captureSink = nil;
+    [historyEvictionSink release];
 
     NSString *failedDirectory = [directory stringByAppendingPathComponent:@"decode-write-failure"];
     sp_image_capture_match_begin(failedDirectory.fileSystemRepresentation, captureWriter);
@@ -531,29 +458,21 @@ int main(void) { @autoreleasepool {
     BOOL identityDirectoryCreated = [NSFileManager.defaultManager createDirectoryAtPath:identityDirectory
         withIntermediateDirectories:YES attributes:nil error:&directoryError];
     BOOL identityDirectoryLocked = chmod(identityDirectory.fileSystemRepresentation, 0500) == 0;
-    SPCapture *failedSink = [SPCapture new];
-    failedSink.directory = failedDirectory;
-    failedSink.statuses = statuses;
-    captureSink = [failedSink retain];
-    clearCaptureError(); captureBefore = 0; captureStartedAt = 0;
-    CMSampleBufferRef failedFrame = sampleBGRA(smallPixels, 8, 4, CGRectMake(0, 0, 4, 2));
-    if (failedFrame) { [failedSink write:failedFrame callbackTime:mach_absolute_time()]; CFRelease(failedFrame); }
+    SPCaptureRecording *failedSink = makeRecording(failedDirectory, 1);
+    clearCaptureError();
+    stillImage(failedSink, 0, smallPixels, 8, 4, CGRectMake(0, 0, 4, 2));
     dispatch_sync(captureWriter, ^{});
     BOOL failedFinalize = finalizeCaptureArtifacts(failedSink);
     NSString *finalError = [NSString stringWithUTF8String:sp_capture_error()];
     BOOL identityDirectoryUnlocked = chmod(identityDirectory.fileSystemRepresentation, 0700) == 0;
     check(failedSessionStarted && identityDirectoryCreated && identityDirectoryLocked && !failedFinalize
         && [finalError containsString:@"frame identity capture failed"]
-        && [finalError containsString:@"decoded identity frame 1 could not be appended"] && identityDirectoryUnlocked,
+        && [finalError containsString:@"decoded identity frame 0 could not be appended"] && identityDirectoryUnlocked,
         [NSString stringWithFormat:@"a decoded-frame artifact write error fails finalization (%@, %@)",
             finalError, directoryError.localizedDescription ?: @""]);
     free(identityError);
     sp_image_capture_match_end();
-    [failedSink release]; [captureSink release]; captureSink = nil;
-
-    if (capturePending) dispatch_release(capturePending); capturePending = NULL;
-    if (captureFirstFrame) dispatch_release(captureFirstFrame); captureFirstFrame = NULL;
-    if (captureWriter) dispatch_release(captureWriter); captureWriter = NULL;
+    [failedSink release];
     fprintf(stderr, "%s: native capture frame identity recording (%.3fs)\n",
         failures == 0 ? "PASS" : "FAIL", CACurrentMediaTime() - began);
     return failures ? 1 : 0;

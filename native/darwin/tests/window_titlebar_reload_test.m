@@ -145,9 +145,9 @@ static NSString *page(const uint8_t *color) {
 typedef enum { SPShownOld, SPShownNew, SPShownOther } SPShown;
 
 // Measures the visible page and the center (pt from the window top) of the rows that the window buttons occupy in one
-// recording frame.
-static double measure(NSData *data, double *displayed, SPShown *shown, uint8_t seen[3]) {
-    uint32_t head[3] = {0}; double info[7] = {0};
+// recording frame, and the request and the completion time of its still: the window showed the frame at some time between the two.
+static double measure(NSData *data, double *requested, double *completed, SPShown *shown, uint8_t seen[3]) {
+    uint32_t head[3] = {0}; double info[8] = {0};
     *shown = SPShownOther;
     if (data.length < sizeof(head) + sizeof(info)) return NAN;
     [data getBytes:head length:sizeof(head)];
@@ -155,7 +155,8 @@ static double measure(NSData *data, double *displayed, SPShown *shown, uint8_t s
     if (!(head[0] > 0 && head[1] > 0 && head[2] >= head[0] * 4 &&
           data.length == sizeof(head) + sizeof(info) + (size_t)head[2] * head[1] && info[4] > 0 && info[5] > 0))
         return NAN;
-    *displayed = info[6];
+    *requested = info[6];
+    *completed = info[7];
     const uint8_t *pixels = (const uint8_t *)data.bytes + sizeof(head) + sizeof(info);
     double scale = info[4] * info[5];
     size_t bx = (size_t)floor((info[0] + 300) * scale), by = (size_t)floor((info[1] + 150) * scale);
@@ -228,13 +229,18 @@ int main(void) { @autoreleasepool {
     NSString *recordingDirectory = temporaryFolder(@"soksak-titlebar-reload-");
     const char *directory = recordingDirectory.fileSystemRepresentation;
     char *operationError = NULL;
-    BOOL opened = sp_capture_open(window.windowNumber, false, 0, &operationError);
+    BOOL opened = sp_capture_open(window.windowNumber, false, &operationError);
     BOOL started = NO;
-    if (opened) { free(operationError); operationError = NULL; started = sp_capture_start(directory, false, &operationError); }
-    check(started, [NSString stringWithFormat:@"the recording starts (%s)", operationError == NULL ? "" : operationError]);
+    // One still at each refresh of the display, for longer than the reload takes: the stop ends the recording.
+    if (opened) {
+        free(operationError);
+        operationError = NULL;
+        started = sp_capture_start(directory, 1000.0 / window.screen.maximumFramesPerSecond, 0, 4096, false, 0, &operationError);
+    }
+    check(started, [NSString stringWithFormat:@"the recording starts with its initial frame (%s)",
+        operationError == NULL ? "" : operationError]);
     free(operationError);
     if (!started) { [window close]; return 1; }
-    check(sp_capture_wait(0) > 0, @"the recording contains its initial frame");
     waitFrames(window.screen, kRefreshes);
 
     surfaceLayoutTraceStart();
@@ -264,40 +270,42 @@ int main(void) { @autoreleasepool {
 
     int count = sp_capture_stop(CACurrentMediaTime() * 1000, 0);
     const char *recordingError = sp_capture_error();
-    check(recordingError[0] == 0 && !sp_capture_limited(), [NSString stringWithFormat:
-        @"the recording ends without error or truncation (%s)", recordingError[0] ? recordingError : "none"]);
-    fprintf(stdout, "recording: %d frames, longest gap %.1fms\n", count, sp_capture_longest_gap());
+    check(recordingError[0] == 0, [NSString stringWithFormat:
+        @"the recording ends without error or a failed still (%s)", recordingError[0] ? recordingError : "none"]);
+    fprintf(stdout, "recording: %d frames, %d late, longest gap %.1fms\n", count, sp_capture_late(), sp_capture_longest_gap());
 
     // For every visible page, the window buttons are at the center of the first row of that page. The previous page
     // must stay visible until the commit, even after the change, so the criterion is observed.
     int oldHeld = 0, newShown = 0, newBeforeCommit = 0;
     for (int index = 0; index < count; index++) {
         NSString *path = [recordingDirectory stringByAppendingPathComponent:
-            [NSString stringWithFormat:@"frame-%04d.bgra", index + 1]];
+            [NSString stringWithFormat:@"frame-%04d.bgra", index]];
         NSData *data = readCaptureFrame([NSData dataWithContentsOfFile:path]);
-        double displayed = NAN;
+        double requested = NAN, completed = NAN;
         SPShown shown = SPShownOther;
         uint8_t seen[3] = {0, 0, 0};
-        double centre = data ? measure(data, &displayed, &shown, seen) : NAN;
+        double centre = data ? measure(data, &requested, &completed, &shown, seen) : NAN;
         if (shown == SPShownOther) {
             check(NO, [NSString stringWithFormat:@"frame %d/%d shows one of the two pages (colour %d,%d,%d)",
-                index + 1, count, seen[0], seen[1], seen[2]]);
+                index, count, seen[0], seen[1], seen[2]]);
             continue;
         }
         double row = shown == SPShownOld ? kOldRow : kNewRow;
         check(fabs(centre - row / 2) <= 0.5, [NSString stringWithFormat:
-            @"frame %d/%d (%.1fms after the title bar change, %.1fms after the commit) shows the %@ page with the "
-            "buttons at %.2fpt, the centre of its %.0fpt row", index + 1, count, displayed - pages->set,
-            displayed - committed, shown == SPShownOld ? @"old" : @"new", centre, row]);
-        if (shown == SPShownOld && displayed >= pages->set) oldHeld++;
+            @"frame %d/%d (requested %.1fms after the title bar change, completed %.1fms after the commit) shows the %@ page "
+            "with the buttons at %.2fpt, the centre of its %.0fpt row", index, count, requested - pages->set,
+            completed - committed, shown == SPShownOld ? @"old" : @"new", centre, row]);
+        // A still requested after the change shows the window at or after the change; a still completed before the commit shows
+        // it before the commit.
+        if (shown == SPShownOld && requested >= pages->set) oldHeld++;
         if (shown == SPShownNew) {
             newShown++;
-            if (!(displayed >= committed)) newBeforeCommit++;
+            if (completed < committed) newBeforeCommit++;
         }
     }
     fprintf(stdout, "%d old-page frames after the title bar change, %d new-page frames, %d of them before the commit\n",
         oldHeld, newShown, newBeforeCommit);
-    check(oldHeld > 0, @"the recording has old-page frames displayed while the start transaction is open");
+    check(oldHeld > 0, @"the recording has old-page frames taken after the title bar change while the start transaction is open");
     check(newShown > 0, @"the recording has new-page frames");
     [window close];
     return failures ? 1 : 0;

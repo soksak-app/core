@@ -1,11 +1,12 @@
-// The recording of a new window from its first frame (sp_capture_hold_new_window): the hold of the next show of a window that is
-// not on screen, the recording of that window before it goes on screen, sized from the window itself, and each end of the hold,
-// after which the window goes on screen. A show without a hold is unchanged.
+// The recording of a new window from its first still (sp_capture_hold_new_window): the hold of the next show of a window that is
+// not on screen, the preparation of its recording while it is off the screen, the start that puts it on screen and takes still
+// 0 at the window's device-pixel size, and each end of the hold, after which the window goes on screen. A show without a hold
+// is unchanged.
 #import "../src/capture.m"
 #import "../src/window_reveal.h"
 #import "support/event_wait.h"
 #import "support/temporary_folder.h"
-#import <objc/runtime.h>
+#include <dlfcn.h>
 
 static int failures;
 static void check(BOOL condition, NSString *message) {
@@ -46,25 +47,31 @@ static NSString *taken(char *error) {
     return text;
 }
 
-// A start of the stream that fails, as ScreenCaptureKit reports a start that it refused.
-static BOOL failStart;
-static IMP realStart;
-static void startOrFail(id stream, SEL selector, void (^done)(NSError *)) {
-    if (!failStart) {
-        ((void (*)(id, SEL, void (^)(NSError *)))realStart)(stream, selector, done);
-        return;
-    }
-    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-        done([NSError errorWithDomain:@"window_show_hold_test" code:1 userInfo:@{NSLocalizedDescriptionKey: @"refused by the test"}]);
-    });
+// A window server that gives no image, as a still of the start that fails: the lookup of the capture returns this function in
+// place of CGWindowListCreateImageFromArray while failStill is set.
+static BOOL failStill;
+static CGImageRef noImage(CGRect rect, CFArrayRef windows, CGWindowImageOption options) {
+    (void)rect; (void)windows; (void)options;
+    return NULL;
+}
+static void *lookupFailingStill(void *handle, const char *name) {
+    if (failStill && strcmp(name, "CGWindowListCreateImageFromArray") == 0) return (void *)noImage;
+    return dlsym(handle, name);
+}
+
+// The width and height of a recorded frame, from the uint32 values at the start of its file.
+static BOOL frameSize(NSString *path, uint32_t size[2]) {
+    NSData *data = [NSData dataWithContentsOfFile:path];
+    if (data.length < 2 * sizeof(uint32_t)) return NO;
+    [data getBytes:size length:2 * sizeof(uint32_t)];
+    return YES;
 }
 
 int main(void) { @autoreleasepool {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     [NSApp finishLaunching];
-    Method start = class_getInstanceMethod([SCStream class], @selector(startCaptureWithCompletionHandler:));
-    realStart = method_setImplementation(start, (IMP)startOrFail);
+    captureLookup = lookupFailingStill;
     uint64_t token = 1;
 
     // A show without a hold puts the window on screen when it returns, as before the hold existed.
@@ -73,8 +80,8 @@ int main(void) { @autoreleasepool {
     check(plain.isVisible, @"a window shown without a hold is on screen when the show returns");
     [plain close];
 
-    // A held show leaves the window off the screen; the recording opens on it, sized from the window itself, and its stream start
-    // puts it on screen, so the first frame of the recording is the first frame of the window.
+    // A held show leaves the window off the screen; the recording opens on it there, and its start puts it on screen and takes
+    // still 0 in the same main-thread step, so still 0 is the first content of the window.
     char *error = NULL;
     check(sp_capture_hold_new_window(&error), [NSString stringWithFormat:@"the hold of a new window is set (%@)", taken(error)]);
     error = NULL;
@@ -94,41 +101,41 @@ int main(void) { @autoreleasepool {
         number, (long)held.windowNumber]);
     __block bool opened = false;
     __block NSString *openError = nil;
-    uint64_t openToken = token++;
     offMain(@"the recording of the held window is prepared", ^{
         char *failure = NULL;
-        opened = sp_capture_open(number, false, openToken, &failure);
+        opened = sp_capture_open(number, false, &failure);
         openError = [taken(failure) retain];
     });
     check(opened, [NSString stringWithFormat:@"the window off the screen is prepared for recording (%@)", openError]);
-    size_t width = (size_t)(NSWidth(held.frame) * held.backingScaleFactor);
-    size_t height = (size_t)(NSHeight(held.frame) * held.backingScaleFactor);
-    check(captureConfig.width == width && captureConfig.height == height, [NSString stringWithFormat:
-        @"the recording of the window off the screen has the device-pixel size of the window (%zux%zu, window %zux%zu)",
-        captureConfig.width, captureConfig.height, width, height]);
     check(!held.isVisible, @"the preparation leaves the held window off the screen");
     NSString *directory = temporaryFolder(@"soksak-window-show-hold-");
     for (NSString *name in @[@"frames", @"refused"]) {
         [NSFileManager.defaultManager createDirectoryAtPath:[directory stringByAppendingPathComponent:name]
             withIntermediateDirectories:NO attributes:nil error:nil];
     }
+    NSString *frames = [directory stringByAppendingPathComponent:@"frames"];
     __block bool started = false;
-    __block int first = 0;
-    uint64_t waitToken = token++;
-    offMain(@"the first frame of the held window", ^{
+    __block NSString *startError = nil;
+    uint64_t startToken = token++;
+    offMain(@"the start of the recording of the held window", ^{
         char *failure = NULL;
-        started = sp_capture_start([directory stringByAppendingPathComponent:@"frames"].fileSystemRepresentation, false, &failure);
-        free(failure);
-        if (started) first = sp_capture_wait(waitToken);
+        started = sp_capture_start(frames.fileSystemRepresentation, 1000.0 / 60, 0, 4096, false, startToken, &failure);
+        startError = [taken(failure) retain];
     });
-    check(started && first == 1, [NSString stringWithFormat:@"the recording of the held window has its first frame (%s)",
-        sp_capture_error() ?: ""]);
+    check(started, [NSString stringWithFormat:@"the recording of the held window starts with its first still (%@)", startError]);
     check(held.isVisible && listed(held),
-        @"the stream start put the held window on screen, and the window server lists it with its bounds");
-    __block int frames = 0;
+        @"the start put the held window on screen, and the window server lists it with its bounds");
+    size_t width = (size_t)(NSWidth(held.frame) * held.backingScaleFactor);
+    size_t height = (size_t)(NSHeight(held.frame) * held.backingScaleFactor);
+    uint32_t size[2] = {0, 0};
+    BOOL sized = frameSize([frames stringByAppendingPathComponent:@"frame-0000.bgra"], size);
+    check(sized && size[0] == width && size[1] == height, [NSString stringWithFormat:
+        @"still 0 of the held window has the device-pixel size of the window (%ux%u, window %zux%zu)", size[0], size[1],
+        width, height]);
+    __block int written = 0;
     uint64_t stopToken = token++;
-    offMain(@"the stop of the recording", ^{ frames = sp_capture_stop(0, stopToken); });
-    check(frames > 0, [NSString stringWithFormat:@"the recording of the held window has frames (%d)", frames]);
+    offMain(@"the stop of the recording", ^{ written = sp_capture_stop(0, stopToken); });
+    check(written > 0, [NSString stringWithFormat:@"the recording of the held window has frames (%d)", written]);
     [held close];
 
     // The end of the wait for a held window ends the hold: the wait fails with that end, and the next show is not held.
@@ -149,8 +156,8 @@ int main(void) { @autoreleasepool {
     check(afterEnd.isVisible, @"the show after an ended hold is not held");
     [afterEnd close];
 
-    // The release of a hold puts a held window on screen, as the host releases it when the recording fails before its stream
-    // starts, and releases a hold that no show took.
+    // The release of a hold puts a held window on screen, as the host releases it when the recording fails before its
+    // start, and releases a hold that no show took.
     error = NULL;
     check(sp_capture_hold_new_window(&error), [NSString stringWithFormat:@"a hold is set for its release (%@)", taken(error)]);
     NSWindow *released = makeWindow();
@@ -168,38 +175,36 @@ int main(void) { @autoreleasepool {
     check(unheld.isVisible, @"the show after the release of an untaken hold is not held");
     [unheld close];
 
-    // A stream start that fails still puts the held window on screen, and the recording fails with that start.
+    // A still 0 that fails still puts the held window on screen, and the start fails with the error of that still.
     error = NULL;
-    check(sp_capture_hold_new_window(&error), [NSString stringWithFormat:@"a hold is set for a failed start (%@)", taken(error)]);
+    check(sp_capture_hold_new_window(&error), [NSString stringWithFormat:@"a hold is set for a failed still (%@)", taken(error)]);
     NSWindow *refused = makeWindow();
     sp_window_show(refused);
     __block long refusedNumber = -1;
     uint64_t refusedHold = token++;
-    offMain(@"the window of the failed start is reported", ^{ refusedNumber = sp_capture_wait_new_window(refusedHold); });
-    failStart = YES;
-    __block bool refusedOpened = false, refusedStarted = false;
-    __block int refusedFirst = -1;
-    uint64_t refusedOpen = token++, refusedWait = token++;
-    offMain(@"the failed start of the held window", ^{
+    offMain(@"the window of the failed still is reported", ^{ refusedNumber = sp_capture_wait_new_window(refusedHold); });
+    __block bool refusedOpened = false, refusedStarted = true;
+    __block NSString *refusedStartError = nil;
+    uint64_t refusedStart = token++;
+    offMain(@"the failed still 0 of the held window", ^{
         char *failure = NULL;
-        refusedOpened = sp_capture_open(refusedNumber, false, refusedOpen, &failure);
+        refusedOpened = sp_capture_open(refusedNumber, false, &failure);
         free(failure);
         failure = NULL;
         if (refusedOpened) {
-            refusedStarted = sp_capture_start([directory stringByAppendingPathComponent:@"refused"].fileSystemRepresentation, false,
-                &failure);
-            free(failure);
+            failStill = YES;
+            refusedStarted = sp_capture_start([directory stringByAppendingPathComponent:@"refused"].fileSystemRepresentation,
+                1000.0 / 60, 0, 4096, false, refusedStart, &failure);
+            failStill = NO;
+            refusedStartError = [taken(failure) retain];
         }
-        if (refusedStarted) refusedFirst = sp_capture_wait(refusedWait);
     });
-    failStart = NO;
+    NSString *want = [NSString stringWithFormat:@"the window server gave no image of window %ld", refusedNumber];
     NSString *refusedError = [NSString stringWithUTF8String:sp_capture_error() ?: ""];
-    check(refusedOpened && refusedStarted && refusedFirst == 0 && [refusedError containsString:@"refused by the test"],
-        [NSString stringWithFormat:@"the recording fails with the failed stream start (%@)", refusedError]);
-    eventWait(@"the window of the failed start goes on screen", ^BOOL { return refused.isVisible; });
-    check(refused.isVisible && listed(refused), @"a failed stream start puts the held window on screen");
-    uint64_t refusedStop = token++;
-    offMain(@"the stop of the failed recording", ^{ sp_capture_stop(0, refusedStop); });
+    check(refusedOpened && !refusedStarted && [refusedStartError isEqualToString:want] && [refusedError containsString:want],
+        [NSString stringWithFormat:@"the start fails with the error of its still 0 (start %@, recording %@)", refusedStartError,
+            refusedError]);
+    check(refused.isVisible && listed(refused), @"a failed still 0 puts the held window on screen");
     [refused close];
 
     if (failures) fprintf(stderr, "%d failures\n", failures);

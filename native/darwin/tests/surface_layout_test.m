@@ -207,15 +207,24 @@ static BOOL snapshotShowsMarkerAtX(NSImage *image, CGFloat x) {
     return markerRows >= (NSInteger)ceil(60 * scale);
 }
 
-static BOOL captureFrameHasColorAtPoint(NSData *data, CGFloat x, CGFloat y, double *displayed) {
-    if (data.length < sizeof(uint32_t) * 3 + sizeof(double) * 7) return NO;
+// Starts a recording of the opened window with one still at each refresh of its display, long enough for every check of this
+// file: each check stops it at the state it judges. The start answers once still 0 is written.
+static bool startRecording(NSWindow *window, const char *directory, char **error) {
+    return sp_capture_start(directory, 1000.0 / window.screen.maximumFramesPerSecond, 0, 4096, false, 0, error);
+}
+
+// Whether the decoded frame data shows the first-show marker colour at the point (x, y) of the window, and the request and the
+// completion time of its still.
+static BOOL captureFrameHasColorAtPoint(NSData *data, CGFloat x, CGFloat y, double *requested, double *completed) {
+    if (data.length < kCaptureFrameHeader) return NO;
     uint32_t head[3] = {0};
-    double info[7] = {0};
+    double info[8] = {0};
     [data getBytes:head length:sizeof(head)];
     [data getBytes:info range:NSMakeRange(sizeof(head), sizeof(info))];
     if (head[0] == 0 || head[1] == 0 || head[2] < head[0] * 4 || info[4] <= 0 || info[5] <= 0
         || data.length != sizeof(head) + sizeof(info) + (size_t)head[2] * head[1]) return NO;
-    if (displayed) *displayed = info[6];
+    if (requested) *requested = info[6];
+    if (completed) *completed = info[7];
     double scale = info[4] * info[5];
     size_t px = (size_t)floor(info[0] * info[5] + x * scale);
     size_t py = (size_t)floor(info[1] * info[5] + y * scale);
@@ -467,17 +476,17 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration, BOOL
     eventWait(@"the settled wait of the initial composition ends", ^BOOL { return shown != 0; });
     NSString *folder = temporaryFolder(@"soksak-composition-test-");
     char *operationError = NULL;
-    BOOL opened = sp_capture_open(window.windowNumber, false, 0, &operationError);
+    BOOL opened = sp_capture_open(window.windowNumber, false, &operationError);
     BOOL started = NO;
     if (opened) {
         free(operationError);
         operationError = NULL;
-        started = sp_capture_start(folder.fileSystemRepresentation, false, &operationError);
+        started = startRecording(window, folder.fileSystemRepresentation, &operationError);
     }
-    check(started, [NSString stringWithFormat:@"the composition recording starts (%s)", operationError == NULL ? "" : operationError]);
+    check(started, [NSString stringWithFormat:@"the composition recording starts with its initial frame (%s)",
+        operationError == NULL ? "" : operationError]);
     free(operationError);
     if (started) {
-        check(sp_capture_wait(0) > 0, @"the composition recording contains its initial frame");
         surfaceLayoutTraceStart();
         surfaceLayoutBegin(window, 107, ^(int allowed) { check(allowed, @"the composition transaction starts"); });
         webviewSetFrame(surface, 40, 40, 250, 120);
@@ -507,13 +516,13 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration, BOOL
         eventWait(@"the settled wait of the final composition ends", ^BOOL { return shown != 0; });
         int count = sp_capture_stop(shown, 0);
         const char *captureError = sp_capture_error();
-        check(count >= 2 && !sp_capture_limited() && captureError[0] == '\0', [NSString stringWithFormat:
-            @"%@: the recording includes initial and final frames without truncation or errors "
-            "(%d frames, limited %d, stop after %.3f, error %s)", variant, count, sp_capture_limited(), shown, captureError]);
+        check(count >= 2 && captureError[0] == '\0', [NSString stringWithFormat:
+            @"%@: the recording includes initial and final frames without a failed still or errors "
+            "(%d frames, stop after %.3f, error %s)", variant, count, shown, captureError]);
         double timeline[SURFACE_LAYOUT_TRACE_STAGES] = {0};
         check(surfaceLayoutTraceStop(timeline, 1) == 1, @"the composition recording contains its transaction timeline");
-        // The capture numbers its frames across the recordings of the process, so the frames of this recording are the
-        // files of its folder in their order.
+        // The frames are named by the index of their still, so the files of the folder in their order are the stills in the
+        // order of their requests.
         NSMutableArray<NSString *> *frameNames = [NSMutableArray array];
         for (NSString *name in [NSFileManager.defaultManager contentsOfDirectoryAtPath:folder error:NULL])
             if ([name.pathExtension isEqualToString:@"bgra"]) [frameNames addObject:name];
@@ -523,7 +532,7 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration, BOOL
         for (int index = 1; index <= (int)frameNames.count; index++) {
             NSData *data = readCaptureFrame([NSData dataWithContentsOfFile:
                 [folder stringByAppendingPathComponent:frameNames[index - 1]]]);
-            uint32_t head[3] = {0}; double info[7] = {0};
+            uint32_t head[3] = {0}; double info[8] = {0};
             BOOL valid = data.length >= sizeof(head) + sizeof(info);
             if (valid) {
                 [data getBytes:head length:sizeof(head)];
@@ -536,7 +545,8 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration, BOOL
             if (!valid) continue;
             const uint8_t *pixels = (const uint8_t *)data.bytes + sizeof(head) + sizeof(info);
             double scale = info[4] * info[5];
-            BOOL preCommit = index == 1 || info[6] < timeline[3];
+            // A still completed before the commit cannot show it; still 0 precedes the transaction.
+            BOOL preCommit = index == 1 || info[7] < timeline[3];
             if (!pageChange) {
                 // The column at x 295 lies inside the native plane before the commit and outside the narrower plane after it.
                 size_t px = (size_t)floor((info[0] + 295) * scale), py = (size_t)floor((info[1] + 100) * scale);
@@ -546,8 +556,8 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration, BOOL
                     check(!narrowed, [NSString stringWithFormat:@"%@: a pre-commit frame shows the native plane at x 295", variant]);
                 if (index == count)
                     check(narrowed, [NSString stringWithFormat:@"%@: the final frame shows the narrower native plane (x 295 rgb %d,%d,%d, "
-                        "display %.3f, committed %.3f)", variant, rgb ? rgb[2] : -1, rgb ? rgb[1] : -1, rgb ? rgb[0] : -1, info[6],
-                        timeline[3]]);
+                        "requested %.3f, completed %.3f, committed %.3f)", variant, rgb ? rgb[2] : -1, rgb ? rgb[1] : -1,
+                        rgb ? rgb[0] : -1, info[6], info[7], timeline[3]]);
                 continue;
             }
             BOOL found = NO;
@@ -566,8 +576,8 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration, BOOL
                 if (matches) borderAt = x;
             }
             check(found, [NSString stringWithFormat:@"composition frame %d/%d preserves the right DOM border "
-                "(display %.3f, begun %.3f, presented %.3f, committed %.3f)",
-                index, count, info[6], timeline[1], timeline[2], timeline[3]]);
+                "(requested %.3f, completed %.3f, begun %.3f, presented %.3f, committed %.3f)",
+                index, count, info[6], info[7], timeline[1], timeline[2], timeline[3]]);
             if (preCommit)
                 check(borderAt >= 300 && borderAt < 301, [NSString stringWithFormat:
                     @"a pre-commit composition frame retains the initial border (x %.1f)", borderAt]);
@@ -576,8 +586,8 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration, BOOL
                     @"the final composition frame contains the moved border (x %.1f)", borderAt]);
         }
     }
-    // The folder of a failing check holds its frames and the status and display time of every callback of the stream
-    // (callback-status.jsonl); a passing check removes its folder at once.
+    // The folder of a failing check holds its frames and the request and completion times of every still (stills.jsonl); a
+    // passing check removes its folder at once.
     if (failures > failed) keepTemporaryFolder(folder);
     else removeTemporaryFolder(folder);
     sp_surface_close(surface);
@@ -706,12 +716,12 @@ static void checkCommitFrame(WKWebViewConfiguration *configuration, NSString *va
     eventWait(@"the settled wait of the initial commit frame fixture ends", ^BOOL { return shown != 0; });
     const char *directory = temporaryFolder(@"soksak-commit-frame-test-").fileSystemRepresentation;
     char *operationError = NULL;
-    BOOL opened = sp_capture_open(window.windowNumber, false, 0, &operationError);
+    BOOL opened = sp_capture_open(window.windowNumber, false, &operationError);
     BOOL started = NO;
-    if (opened) { free(operationError); operationError = NULL; started = sp_capture_start(directory, false, &operationError); }
-    check(started, [NSString stringWithFormat:@"the commit frame recording starts (%s)", operationError == NULL ? "" : operationError]);
+    if (opened) { free(operationError); operationError = NULL; started = startRecording(window, directory, &operationError); }
+    check(started, [NSString stringWithFormat:@"the commit frame recording starts with its initial frame (%s)",
+        operationError == NULL ? "" : operationError]);
     free(operationError);
-    check(started && sp_capture_wait(0) > 0, @"the commit frame recording contains its initial frame");
     // The press starts the drag on the main page, left of the surface.
     PointerDone press = {NO, SP_INPUT_REJECTED};
     sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 20, 100, 1, 0, 0, 0, 1, pointerDone, &press);
@@ -750,7 +760,7 @@ static void checkCommitFrame(WKWebViewConfiguration *configuration, NSString *va
         NSString *stillPath = [[NSString stringWithUTF8String:directory] stringByAppendingPathComponent:
             [NSString stringWithFormat:@"after-move-%d.png", move]];
         char *stillError = NULL;
-        BOOL captured = sp_capture_still((long[]){window.windowNumber}, 1, stillPath.fileSystemRepresentation, 0, &stillError);
+        BOOL captured = sp_capture_still(window.windowNumber, stillPath.fileSystemRepresentation, &stillError);
         check(captured && stillError == NULL, [NSString stringWithFormat:@"the window is captured after move %d (%s)", move,
             stillError == NULL ? "no error" : stillError]);
         free(stillError);
@@ -770,9 +780,8 @@ static void checkCommitFrame(WKWebViewConfiguration *configuration, NSString *va
         "(result %d)", variant, (int)release.result]);
     int count = sp_capture_stop(timeline[3], 0);
     const char *captureError = sp_capture_error();
-    check(count >= 1 && !sp_capture_limited() && captureError[0] == '\0', [NSString stringWithFormat:
-        @"the commit frame recording stops without dropped frames or errors (%d frames, limited %d, error %s)",
-        count, sp_capture_limited(), captureError]);
+    check(count >= 1 && captureError[0] == '\0', [NSString stringWithFormat:
+        @"the commit frame recording stops without a failed still or errors (%d frames, error %s)", count, captureError]);
     [configuration.userContentController removeScriptMessageHandlerForName:@"commitDrawn"];
     if (image) sp_region_close(image);
     sp_surface_close(surface);
@@ -829,13 +838,13 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
     eventWait(@"the settled wait of the first-show baseline ends", ^BOOL { return shown != 0; });
     const char *directory = temporaryFolder(@"soksak-first-show-test-").fileSystemRepresentation;
     char *operationError = NULL;
-    BOOL opened = sp_capture_open(window.windowNumber, false, 0, &operationError);
+    BOOL opened = sp_capture_open(window.windowNumber, false, &operationError);
     BOOL started = NO;
-    if (opened) { free(operationError); operationError = NULL; started = sp_capture_start(directory, false, &operationError); }
-    check(started, [NSString stringWithFormat:@"the first-show recording starts (%s)", operationError == NULL ? "" : operationError]);
+    if (opened) { free(operationError); operationError = NULL; started = startRecording(window, directory, &operationError); }
+    check(started, [NSString stringWithFormat:@"the first-show recording starts with its initial frame (%s)",
+        operationError == NULL ? "" : operationError]);
     free(operationError);
     if (started) {
-        check(sp_capture_wait(0) > 0, @"the hidden-root recording contains its initial frame");
         surfaceLayoutTraceStart();
         __block BOOL prepared = NO;
         surfaceLayoutBegin(window, 108, ^(int allowed) { prepared = allowed != 0; });
@@ -860,7 +869,7 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
             @"root presentation while the app-DOM barrier is pending keeps the existing keyboard owner");
         NSString *pendingStillPath = [[NSString stringWithUTF8String:directory] stringByAppendingPathComponent:@"pending.png"];
         char *stillError = NULL;
-        BOOL stillCaptured = sp_capture_still((long[]){window.windowNumber}, 1, pendingStillPath.fileSystemRepresentation, 0, &stillError);
+        BOOL stillCaptured = sp_capture_still(window.windowNumber, pendingStillPath.fileSystemRepresentation, &stillError);
         check(stillCaptured, [NSString stringWithFormat:@"the pending first-show window is captured (%s)",
             stillError == NULL ? "no error" : stillError]);
         free(stillError);
@@ -868,7 +877,7 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
             NSBitmapImageRep *pendingBitmap = [NSBitmapImageRep imageRepWithData:
                 [NSData dataWithContentsOfFile:pendingStillPath]];
             check(pendingBitmap != nil && !bitmapContainsFirstShowMarker(pendingBitmap),
-                @"the actual pending SCK image contains no pixels from the hidden root marker");
+                @"the actual pending still contains no pixels from the hidden root marker");
         }
         appDOMBarrierPending = NO;
         check(surfaceLayoutCommit(window, 108), @"the first-show transaction commits after both presentation barriers");
@@ -879,9 +888,9 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
         eventWait(@"the settled wait after the first-show commit ends", ^BOOL { return shown != 0; });
         int count = sp_capture_stop(shown, 0);
         const char *captureError = sp_capture_error();
-        check(count >= 2 && !sp_capture_limited() && captureError[0] == '\0',
-            [NSString stringWithFormat:@"the first-show recording completes without dropped frames or errors "
-                "(%d frames, limited %d, error %s)", count, sp_capture_limited(), captureError ?: ""]);
+        check(count >= 2 && captureError[0] == '\0',
+            [NSString stringWithFormat:@"the first-show recording completes without a failed still or errors "
+                "(%d frames, error %s)", count, captureError ?: ""]);
         double timeline[SURFACE_LAYOUT_TRACE_STAGES] = {0};
         check(surfaceLayoutTraceStop(timeline, 1) == 1 && timeline[0] == 108 && timeline[1] <= timeline[2]
                 && timeline[2] <= timeline[3],
@@ -903,13 +912,14 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
             NSString *path = [[NSString stringWithUTF8String:directory] stringByAppendingPathComponent:frameNames[index]];
             NSData *data = readCaptureFrame([NSData dataWithContentsOfFile:path]);
             check(data != nil, [NSString stringWithFormat:@"first-show frame %@ decodes completely", frameNames[index]]);
-            double display = 0;
-            BOOL marker = data != nil && captureFrameHasColorAtPoint(data, 70, 70, &display);
-            if (display < timeline[3]) {
+            // A still completed before the commit cannot show it, and a still requested at or after the commit shows it.
+            double requested = NAN, completed = NAN;
+            BOOL marker = data != nil && captureFrameHasColorAtPoint(data, 70, 70, &requested, &completed);
+            if (completed < timeline[3]) {
                 precommitFrame = YES;
                 if (marker) precommitMarkerAbsent = NO;
             }
-            if (display >= timeline[3]) postcommitFrame = YES;
+            if (requested >= timeline[3]) postcommitFrame = YES;
             if (index + 1 == frameNames.count) finalMarkerPresent = marker;
         }
         check(precommitFrame, @"the recording contains a decoded frame before commit");

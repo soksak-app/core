@@ -10,9 +10,10 @@ static char *fixtureDirectory;
 static int stopCalls, stillCalls;
 static BOOL listingFault;
 
-static bool startWithDirectory(const char *directory, bool frameIdentity, char **error) {
+static bool startWithDirectory(const char *directory, double gap, double seconds, int frames, bool frameIdentity,
+    uint64_t token, char **error) {
     if (fixtureDirectory == NULL) fixtureDirectory = strdup(directory);
-    return sp_capture_start(directory, frameIdentity, error);
+    return sp_capture_start(directory, gap, seconds, frames, frameIdentity, token, error);
 }
 
 static int stopWithFaults(double after, uint64_t token) {
@@ -26,10 +27,10 @@ static int stopWithFaults(double after, uint64_t token) {
     return count;
 }
 
-static bool stillAfterListing(const long *windows, int count, const char *path, uint64_t token, char **error) {
+static bool stillAfterListing(long window, const char *path, char **error) {
     // Restores the folder permissions after the listing and before the first still capture.
     if (stillCalls++ == 0 && chmod(fixtureDirectory, 0700) != 0) fprintf(stderr, "fixture permission restore failed: %s\n", strerror(errno));
-    return sp_capture_still(windows, count, path, token, error);
+    return sp_capture_still(window, path, error);
 }
 
 #define sp_capture_start startWithDirectory

@@ -234,7 +234,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Darwin process identity Node test entrypoint", "js-ts", ["native/darwin/process-identity/tests/package.test.mjs"], ["native/darwin/process-identity/tests/package.test.mjs"]),
   lane("Darwin webview navigation", "objective-c", ["native/darwin/src/webview_navigation.m"], ["native/darwin/tests/webview_navigation_test.m"], { sharedTests: true }),
   lane("Darwin webview dialogs", "objective-c", ["native/darwin/src/webview_dialogs.m"], ["native/darwin/tests/webview_dialogs_test.m"], { sharedTests: true }),
-  lane("Darwin capture", "objective-c", ["native/darwin/src/capture.m"], ["native/darwin/tests/capture_test.m", "native/darwin/tests/capture_covered_test.m", "native/darwin/tests/capture_pressure_test.m", "native/darwin/tests/capture_metadata_test.m", "native/darwin/tests/capture_resize_test.m", "native/darwin/tests/capture_checker_test.m", "native/darwin/tests/capture_file_checker_test.m", "native/darwin/tests/capture_storage_test.m", "native/darwin/tests/capture_frame_test.m", "native/darwin/tests/capture_lifecycle_test.m", "native/darwin/tests/capture_preparation_test.m", "native/darwin/tests/capture_cleanup_test.m", "native/darwin/tests/capture_callback_test.m", "native/darwin/tests/capture_source_writer_test.m"], { sharedTests: true }),
+  lane("Darwin capture", "objective-c", ["native/darwin/src/capture.m"], ["native/darwin/tests/capture_test.m", "native/darwin/tests/capture_covered_test.m", "native/darwin/tests/capture_pressure_test.m", "native/darwin/tests/capture_metadata_test.m", "native/darwin/tests/capture_resize_test.m", "native/darwin/tests/capture_checker_test.m", "native/darwin/tests/capture_file_checker_test.m", "native/darwin/tests/capture_storage_test.m", "native/darwin/tests/capture_frame_test.m", "native/darwin/tests/capture_preparation_test.m", "native/darwin/tests/capture_cleanup_test.m", "native/darwin/tests/capture_source_writer_test.m"], { sharedTests: true }),
   lane("Darwin capture frame identity", "objective-c", ["native/darwin/src/capture_frame_identity.m"], ["native/darwin/tests/capture_frame_identity_test.m"], { sharedTests: true }),
   lane("Darwin dock menu", "objective-c", ["native/darwin/src/dock_menu.m"], ["native/darwin/tests/dock_menu_test.m"], { sharedTests: true }),
   lane("Darwin appearance", "objective-c", ["native/darwin/src/appearance.m"], ["native/darwin/tests/appearance_test.m"], { sharedTests: true }),
@@ -902,7 +902,7 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "native/darwin/src/input_inject.m", symbol: "startPointerRequests" },
       { file: "native/darwin/src/host_api_input.m", symbol: "sp_surface_is_host(view)" },
-      { file: "native/darwin/src/capture.m", symbol: "endCaptureStream" },
+      { file: "native/darwin/src/capture.m", symbol: "static void closeRequests(SPCaptureRecording *recording)" },
       { file: "native/darwin/src/capture.m", symbol: "void sp_capture_end_wait(uint64_t token, const char *reason) {" },
       { file: "packages/host/go/src/endpoint.go", symbol: "func (c *endpointConn) onClose(end func()) (remove func()) {" },
       { file: "packages/host/rust/src/endpoint.rs", symbol: "pub fn watch(&self, on_end: impl FnOnce() + Send + 'static) -> ConnectionWatch {" },
@@ -916,16 +916,15 @@ const FEATURE_LINKS = [
     tests: [
       { file: "native/darwin/tests/input_inject_test.m", id: "a request does not start while the request before it has not answered" },
       { file: "native/darwin/tests/surface_monitor_test.m", id: "a key down whose first responder is in no surface enters no Go step" },
-      { file: "native/darwin/tests/capture_stop_late_test.m", id: "the stop returns after its late completion" },
-      { file: "native/darwin/tests/capture_pressure_test.m", id: "stop reports a stream that ended before its boundary" },
-      { file: "native/darwin/tests/capture_callback_test.m", id: "the end of the connection ends the first-frame wait" },
+      { file: "native/darwin/tests/capture_pressure_test.m", id: "a plan that ends before the stop time fails the stop" },
+      { file: "native/darwin/tests/capture_pressure_test.m", id: "an end of its token ends the wait of the start for still 0" },
       { file: "packages/host/go/src/diagnostics_test.go", id: "TestTheEndOfTheConnectionEndsTheCaptureWaitsOnlyWhileItsRequestRuns" },
       { file: "packages/host/rust/src/endpoint_response_test.rs", id: "the_end_of_the_connection_runs_the_watches_of_the_requests_that_still_run" },
       { file: "packages/host/go/src/platform/darwin/input_test.go", id: "TestAnInjectionReturnsBeforeTheDeliveryOfTheInjectionBeforeIt" },
       { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestTheStopDoesNotWaitForAStart" },
       { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "the_stop_does_not_wait_for_a_start" },
       { file: "packages/host/rust/src/start_test.rs", id: "the_start_document_is_built_off_the_thread_that_asks_for_it" },
-      { file: "scripts/test/main-thread-calls.test.mjs", id: "the capture functions that wait for ScreenCaptureKit need no main thread" },
+      { file: "scripts/test/main-thread-calls.test.mjs", id: "the capture functions that wait for their stills need no main thread" },
     ],
     expected: "No main-thread step waits for a result that only a later turn produces: the native library orders the pointer injections and closes the requests of a closed window, the surface monitor reads the class of a view without a Go step, the capture functions run off the main thread and end each wait by its event, the end of the endpoint connection among them, the sidecar stop waits for no start, and the Tauri start document is built off the main thread.",
     levels: ["unit", "native"],
@@ -956,7 +955,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/diagnostics.go", symbol: "func awaitCapture[T any](c platformCapture, call func(token uint64) T) T {" },
       { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn await_capture<T>(" },
       { file: "native/darwin/src/capture.m", symbol: "void sp_capture_end_wait(uint64_t token, const char *reason) {" },
-      { file: "native/darwin/src/host_api_capture.m", symbol: "void scheduleCaptureWait(uint64_t token, uintptr_t context) {" },
+      { file: "native/darwin/src/host_api_capture.m", symbol: "void scheduleCaptureStop(double after, uint64_t token, uintptr_t context) {" },
       { file: "native/darwin/src/window_facts.m", symbol: "static NSArray *pagelessProcesses(WKWebView *any) {" },
       { file: "packages/host/go/src/platform/darwin/capture.go", symbol: "func awaitCaptureAnswer(schedule func(context uintptr)) captureAnswer {" },
       { file: "native/darwin/src/input_source.m", symbol: "void sp_input_source_selection_end(const void *key, const char *reason) {" },
@@ -992,12 +991,12 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/diagnostics_native_wait_test.go", id: "TestUnreachedWindowObjectsAnswerTheEndOfTheirWait" },
       { file: "packages/host/go/src/diagnostics_native_wait_test.go", id: "TestAProcessExitAnswerNamesTheEndOfItsWait" },
       { file: "native/darwin/tests/process_exit_test.m", id: "native.process.exit_wait_ended" },
-      { file: "native/darwin/tests/capture_pressure_test.m", id: "an end from another thread ends the first-frame wait" },
+      { file: "native/darwin/tests/capture_pressure_test.m", id: "an end from another thread ends the wait of the stop" },
       { file: "native/darwin/tests/capture_pressure_test.m", id: "the end of a returned call does not end a later wait" },
-      { file: "native/darwin/tests/capture_pressure_test.m", id: "a frame that came before the end answers its wait" },
+      { file: "native/darwin/tests/capture_pressure_test.m", id: "a still that came before the end answers the wait" },
       { file: "native/darwin/tests/capture_pressure_test.m", id: "the end of another call does not end this wait" },
-      { file: "native/darwin/tests/capture_pressure_test.m", id: "the main thread closes a window while a scheduled capture wait waits" },
-      { file: "native/darwin/tests/capture_pressure_test.m", id: "the close of the window ends the capture wait, which answers its context once" },
+      { file: "native/darwin/tests/capture_pressure_test.m", id: "the main thread closes a window while a scheduled stop waits" },
+      { file: "native/darwin/tests/capture_pressure_test.m", id: "the close of the window ends the scheduled stop, which answers its context once" },
       { file: "packages/window-check/test/view-metrics-collection.test.mjs", id: "the reclaim close reads the processes that remain and awaits only the exit of the processes that host.window reports ending" },
       { file: "packages/window-check/test/view-metrics-collection.test.mjs", id: "the reclaim close refuses a host.window that does not report the processes without a page" },
       { file: "native/darwin/tests/window_facts_test.m", id: "the process whose page closed is reported without a page and ending" },
@@ -1005,8 +1004,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/window_pageless_processes_test.go", id: "TestWindowReportsTheProcessesWithoutAPage" },
       { file: "packages/host/rust/src/window_pageless_processes_test.rs", id: "host_window_reports_the_processes_without_a_page" },
       { file: "packages/window-check/test/view-metrics-collection.test.mjs", id: "the end of a reclaim exit wait fails the close with its reason" },
-      { file: "native/darwin/tests/capture_stop_late_test.m", id: "the stop whose wait ended reports that end" },
-      { file: "native/darwin/tests/capture_callback_test.m", id: "a pending start reports the end of its wait" },
+      { file: "native/darwin/tests/capture_pressure_test.m", id: "stop reports the separate end of its wait" },
       { file: "native/darwin/tests/input_source_test.m", id: "the end of another key leaves the selection waiting" },
       { file: "native/darwin/tests/input_reference_test.m", id: "an unmet document keeps its wait without a limit" },
       { file: "native/darwin/tests/input_reference_test.m", id: "the end of the request fails the unmet wait with its end and the state" },
@@ -5337,16 +5335,16 @@ const FEATURE_LINKS = [
     implementation: [
       {
         file: "native/darwin/src/capture.m",
-        symbol: "captureLimitReached = true;"
+        symbol: "if (count > 4096) return [NSString stringWithFormat:@\"the recording plans %.0f stills, more than 4096\", count];"
       }
     ],
     tests: [
       {
         file: "native/darwin/tests/capture_pressure_test.m",
-        id: "a healthy recording writes the frame after 600 accepted frames"
+        id: "the last still of a plan of 4096 is written under its index"
       }
     ],
-    expected: "Recording retains the 601st frame while callback evidence overflow fails explicitly.",
+    expected: "A recording writes the last still of the largest plan, and a plan of more than 4096 stills is refused at its start.",
     levels: [
       "unit"
     ]
@@ -5526,12 +5524,12 @@ const FEATURE_LINKS = [
   {
     id: "F239-166",
     implementation: [
-      { file: "native/darwin/src/capture.m", symbol: "uint64_t writerStarted = mach_absolute_time();" },
+      { file: "native/darwin/src/capture.m", symbol: "uint64_t writerStarted = captureTicks();" },
     ],
     tests: [
       { file: "native/darwin/tests/capture_metadata_test.m", id: "the frame artifact preserves actual enqueue and asynchronous writer bounds as ordered raw ticks" },
     ],
-    expected: "Capture metadata records actual ordered asynchronous writer intervals separately from synchronous callback intervals.",
+    expected: "Capture metadata records actual ordered asynchronous writer intervals separately from the synchronous processing of each still.",
     levels: ["unit"],
   },
   {
@@ -6044,13 +6042,13 @@ const FEATURE_LINKS = [
   {
     id: "F239-81",
     implementation: [
-      { file: "native/darwin/src/capture.m", symbol: "captureStream != stream" },
+      { file: "native/darwin/src/capture.m", symbol: "current = recording != nil && captureRecording == recording;" },
     ],
     tests: [
-      { file: "native/darwin/tests/capture_callback_test.m", id: "late start and delegate callbacks retain the old stream's session identity" },
+      { file: "native/darwin/tests/capture_test.m", id: "delayed cleanup from capture A preserves both capture B tags" },
       { file: "e2e/capture-lifecycle.test.mjs", id: "consecutive captures preserve finalized recordings" },
     ],
-    expected: "Retired stream callbacks retain their original identity while consecutive recordings keep independent counts and finalized artifact bytes.",
+    expected: "The cleanup that a retired recording queued keeps the tags of a newer recording, and consecutive recordings keep independent counts and finalized artifact bytes.",
     levels: ["unit"],
   },
   {
@@ -6867,7 +6865,7 @@ const FEATURE_LINKS = [
       { file: "native/darwin/tests/support/capture_boundary.m", id: "open failure is observable to the caller" },
       { file: "scripts/test/check-tests.test.mjs", id: "Darwin native failure audit rejects log-only capture boundaries" },
     ],
-    expected: "Darwin capture open, start, wait, and stop failures cross the native boundary as explicit errors; invalid directory input and frame-write failures are not silently discarded.",
+    expected: "Darwin capture open, start, stop, and still failures cross the native boundary as explicit errors; invalid directory input and frame-write failures are not silently discarded.",
     levels: ["unit", "native"],
   },
   {
@@ -9394,7 +9392,7 @@ const FEATURE_LINKS = [
       { file: "native/darwin/tests/document_throttle_test.m", symbol: "[cover orderWindow:NSWindowAbove relativeTo:window.windowNumber];" },
       { file: "native/darwin/src/window_reveal.m", symbol: "bool sp_window_show_hold_next(void (^held)(void *window)) {" },
       { file: "native/darwin/src/capture.m", symbol: "long sp_capture_wait_new_window(uint64_t token) {" },
-      { file: "packages/host/go/src/recording.go", symbol: "func (r *Recording) StartNewWindow(capture NewWindowCapture, directory string, frameIdentity bool) error {" },
+      { file: "packages/host/go/src/recording.go", symbol: "func (r *Recording) StartNewWindow(capture NewWindowCapture, directory string, plan CapturePlan, frameIdentity bool) error {" },
       { file: "packages/host/rust/src/recording.rs", symbol: "pub fn start_new_window(" },
       { file: "packages/window-check/app.mjs", symbol: "const release = params.newWindow === true ? async () => {} : await holdCovered(this);" },
       { file: "e2e/window-first-frames.test.mjs", symbol: "const recording = await s.record({ newWindow: true });" },
@@ -9410,9 +9408,9 @@ const FEATURE_LINKS = [
       { file: "native/darwin/tests/window_facts_test.m", id: "the observation of a hidden window reports that it is not on screen" },
       { file: "native/darwin/tests/window_show_hold_test.m", id: "a window shown without a hold is on screen when the show returns" },
       { file: "native/darwin/tests/window_show_hold_test.m", id: "the held show leaves the window off the screen" },
-      { file: "native/darwin/tests/window_show_hold_test.m", id: "the stream start put the held window on screen, and the window server lists it with its bounds" },
+      { file: "native/darwin/tests/window_show_hold_test.m", id: "the start put the held window on screen, and the window server lists it with its bounds" },
       { file: "native/darwin/tests/window_show_hold_test.m", id: "the release puts the held window on screen, and the window server lists it with its bounds" },
-      { file: "native/darwin/tests/window_show_hold_test.m", id: "a failed stream start puts the held window on screen" },
+      { file: "native/darwin/tests/window_show_hold_test.m", id: "a failed still 0 puts the held window on screen" },
       { file: "packages/host/go/src/diagnostics_new_window_test.go", id: "TestCaptureStartNewWindowIsAStrictBooleanWithoutDisplay" },
       { file: "packages/host/go/src/diagnostics_new_window_test.go", id: "TestANewWindowRecordingAnswersOnceTheHoldIsSetAndRecordsTheHeldWindow" },
       { file: "packages/host/go/src/diagnostics_new_window_test.go", id: "TestAFailedHoldStartsNoRecording" },
@@ -11172,7 +11170,7 @@ const FEATURE_LINKS = [
   {
     id: "F239-47-40-3",
     implementation: [
-      { file: "native/darwin/src/capture.m", symbol: "bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut)" },
+      { file: "native/darwin/src/capture.m", symbol: "bool sp_capture_start(const char *directory, double gap, double seconds, int frames, bool frameIdentity, uint64_t token," },
       { file: "packages/host/go/src/diagnostics.go", symbol: "func parseCaptureStartOptions(params json.RawMessage)" },
       { file: "packages/host/rust/src/diagnostics.rs", symbol: "frame_identity = match params.get(\"frameIdentity\")" },
     ],
@@ -11194,9 +11192,9 @@ const FEATURE_LINKS = [
   {
     id: "F239-47-30-3",
     implementation: [
-      { file: "native/darwin/src/capture.m", symbol: "- (void)startDisplayLinkObservationForWindowNumber:(long)windowNumber" },
+      { file: "native/darwin/src/capture.m", symbol: "- (void)startDisplayLinkObservation {" },
       { file: "native/darwin/src/capture.m", symbol: "- (void)recordDisplayLinkTimestamp:(double)timestamp targetTimestamp:(double)targetTimestamp duration:(double)duration" },
-      { file: "native/darwin/src/capture.m", symbol: "static bool finalizeCaptureArtifacts(SPCapture *sink)" },
+      { file: "native/darwin/src/capture.m", symbol: "static bool finalizeCaptureArtifacts(SPCaptureRecording *recording)" },
       { file: "packages/host/go/src/diagnostics.go", symbol: "func captureStopPayload(" },
       { file: "packages/host/rust/src/recording.rs", symbol: "pub fn stop_payload(" },
     ],
@@ -11206,10 +11204,10 @@ const FEATURE_LINKS = [
       { file: "native/darwin/tests/capture_metadata_test.m", id: "hidden and off-display observations remain recorded but cannot claim available refresh coverage" },
       { file: "native/darwin/tests/capture_metadata_test.m", id: "the display-link trace records its 4096 bound, omitted count, incomplete state, and explicit error" },
       { file: "native/darwin/tests/capture_resize_test.m", id: "stopping the capture invalidates its retained display link" },
-      { file: "packages/host/go/src/diagnostics_test.go", id: "TestCaptureStopPayloadReportsNormalFrameLimit" },
-      { file: "packages/host/rust/tests/recording_test.rs", id: "the_stop_payload_reports_a_normal_frame_limit" },
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestCaptureStopPayloadReportsStills" },
+      { file: "packages/host/rust/tests/recording_test.rs", id: "the_stop_payload_reports_the_stills" },
     ],
-    expected: "A capture records bounded, validated AppKit display-link observations separately from ScreenCaptureKit callbacks and publishes the artifact path in both host stop payloads; hidden or missing observations are unavailable, overflow is explicitly incomplete, and the trace does not identify or prove presentation of a source frame.",
+    expected: "A capture records bounded, validated AppKit display-link observations separately from its stills and publishes the artifact path in both host stop payloads; hidden or missing observations are unavailable, overflow is explicitly incomplete, and the trace does not identify or prove presentation of a source frame.",
     levels: ["native", "unit"],
   },
   {
@@ -13559,9 +13557,9 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-88",
-    implementation: [{ file: "native/darwin/src/capture.m", symbol: "callbackMachTickString" }],
-    tests: [{ file: "native/darwin/tests/capture_metadata_test.m", id: "the callback artifact preserves stage ticks as decimal strings, absent stages as null, and the actual mach timebase" }],
-    expected: "Callback lifecycle Mach ticks remain exact decimal strings or explicit null values and preserve the actual timebase.",
+    implementation: [{ file: "native/darwin/src/capture.m", symbol: "static NSString *tickString(uint64_t ticks)" }],
+    tests: [{ file: "native/darwin/tests/capture_metadata_test.m", id: "the still row preserves stage ticks as decimal strings, absent stages as null, and the actual mach timebase" }],
+    expected: "Still record Mach ticks remain exact decimal strings or explicit null values and preserve the actual timebase.",
     levels: ["native"],
   },
   {
@@ -13613,8 +13611,8 @@ const FEATURE_LINKS = [
       { file: "native/darwin/src/capture.m", symbol: "sp_image_capture_match_identity_enqueue_frame(" },
       { file: "native/darwin/src/capture_frame_identity.m", symbol: "sp_capture_frame_identity_decode(" },
     ],
-    tests: [{ file: "native/darwin/tests/capture_metadata_test.m", id: "the real delegate path records callback and image-match raw bounds, absent identity-stage ticks, the timebase, display time and frame marker" }],
-    expected: "The bounded callback record measures raw Mach start and completion ticks around image matching and optional identity decoding.",
+    tests: [{ file: "native/darwin/tests/capture_metadata_test.m", id: "the still path records image-match raw bounds, absent identity-stage ticks, the timebase, request and completion times and the frame marker" }],
+    expected: "The row of each still measures raw Mach start and completion ticks around image matching and optional identity decoding.",
     levels: ["native"],
   },
   {
@@ -13709,9 +13707,9 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/host/rust/src/diagnostics_test.rs", id: "a_layout_trace_failure_keeps_the_started_capture_folder" },
-      { file: "packages/host/rust/tests/recording_test.rs", id: "a_stop_failure_keeps_the_folder_returned_by_start" },
+      { file: "packages/host/rust/tests/recording_test.rs", id: "a_retired_stop_failure_preserves_folder_and_releases_owner" },
       { file: "packages/host/go/src/diagnostics_test.go", id: "TestCaptureStopLayoutFailurePreservesStartedFolder" },
-      { file: "packages/host/go/src/diagnostics_test.go", id: "TestRecordingFinishStopFailurePreservesFolder" },
+      { file: "packages/host/go/tests/recording_test.go", id: "TestFinishRetiredStopFailureReleasesOwnerAndPreservesFolder" },
     ],
     expected: "Capture stop and layout failures preserve and report the folder returned by capture start.",
     levels: ["unit"],
@@ -13794,8 +13792,11 @@ const FEATURE_LINKS = [
   {
     id: "F239-150",
     implementation: [{ file: "native/darwin/src/capture.m", symbol: "int sp_capture_stop(double after, uint64_t token)" }],
-    tests: [{ file: "native/darwin/tests/capture_stop_intake_test.m", id: "sample intake is closed before the asynchronous stream stop is requested" }],
-    expected: "The stop boundary seals sample intake before asynchronous stream shutdown and retains late callback attribution.",
+    tests: [
+      { file: "native/darwin/tests/capture_stop_intake_test.m", id: "the stills after the last request stay not requested, with no request time and no frame" },
+      { file: "native/darwin/tests/capture_stop_intake_test.m", id: "the still in flight when the requests closed is written before stills.jsonl" },
+    ],
+    expected: "The stop closes the requests of the recording, so no still is requested after it, and every requested still settles before stills.jsonl is written.",
     levels: ["native"],
   },
   {
@@ -14076,13 +14077,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F239-189",
-    implementation: [{ file: "native/darwin/src/capture.m", symbol: "static bool requestCaptureStopAfterStart(" }],
-    tests: [{ file: "native/darwin/tests/capture_callback_test.m", id: "a pending start receives exactly one stop request after its completion" }],
-    expected: "Capture stop preserves its wait bound and delegates exactly-once cleanup to successful late start completion.",
-    levels: ["unit"],
-  },
-  {
     id: "F239-188",
     implementation: [{ file: "packages/host/go/src/documents.go", symbol: "func (s *Surfaces) postViewGeneration(" }],
     tests: [{ file: "packages/host/go/src/view_lifecycle_test.go", id: "TestReadyViewDeliveryDoesNotEndTheView" }],
@@ -14321,7 +14315,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-123",
-    implementation: [{ file: "packages/host/go/src/recording.go", symbol: "func (r *Recording) begin(" }],
+    implementation: [{ file: "packages/host/go/src/recording.go", symbol: "func begin(capture Capture, target CaptureTarget, directory string, plan CapturePlan, frameIdentity bool) error {" }],
     tests: [{ file: "packages/host/go/tests/recording_test.go", id: "TestFinishedRecordingKeepsItsFolderAndReportsFrames" }],
     expected: "The finished-recording fixture expects the frame-identity option forwarded at capture start and retained at finish.",
     levels: ["unit"],
@@ -14409,18 +14403,18 @@ const FEATURE_LINKS = [
   {
     id: "F239-252",
     implementation: [
-      { file: "native/darwin/src/capture.m", symbol: "bool sp_capture_has_stream(void)" },
+      { file: "native/darwin/src/capture.m", symbol: "static bool recordingActive(void)" },
       { file: "packages/host/go/src/recording.go", symbol: "func (r *Recording) Finish" },
       { file: "packages/host/rust/src/recording.rs", symbol: "pub fn finish" },
     ],
     tests: [
       { file: "packages/host/go/tests/recording_test.go", id: "TestFinishRetiredStopFailureReleasesOwnerAndPreservesFolder" },
-      { file: "packages/host/go/tests/recording_test.go", id: "TestAbortStopOwnershipQueryFailurePreservesOwner" },
+      { file: "packages/host/go/tests/recording_test.go", id: "TestAbortRetiredStopFailureCleanupRetrySkipsStop" },
       { file: "packages/host/rust/tests/recording_test.rs", id: "a_retired_stop_failure_preserves_folder_and_releases_owner" },
       { file: "packages/host/rust/tests/recording_test.rs", id: "an_abort_retries_retired_folder_cleanup_without_repeating_stop" },
-      { file: "native/darwin/tests/capture_pressure_test.m", id: "a stop error retires the current native stream" },
+      { file: "native/darwin/tests/capture_pressure_test.m", id: "a stop error retires the current recording" },
     ],
-    expected: "Stop errors remain observable while native ownership decides whether cleanup is retained or released; retired recordings permit another start and removal retries do not repeat stop.",
+    expected: "Stop errors remain observable, and a stop ends the native recording also when it fails: finish then releases the recording and keeps its folder, abort removes the folder, another start is permitted, and removal retries do not repeat stop.",
     levels: ["unit", "native"],
   },
   {
@@ -15489,7 +15483,8 @@ const MOVED_COMPLETIONS = new Set(["F6", "F596","F239-170", "F239-197", "F239-24
 // F756 removes the idle gate of the window runs whose poll F160.26 recorded, so that completion has no implementation left.
 // F756 removes the raise of the windows of a check (F747) and the parking of the windows of the occlusion fixture (F749): every check
 // starts behind the windows of a person and covers its window with its own window.
-const REMOVED_COMPLETIONS = new Set(["F747", "F749", "F160.26", "F239-98", "F239-98-1", "F239-98-1-1", "F239-98-2", "F239-98-3", "F239-98-4", "F239-47-17",
+// F239-189 handed the stop of a ScreenCaptureKit stream to its late start; the still recording of F746 has no stream to stop.
+const REMOVED_COMPLETIONS = new Set(["F239-189", "F747", "F749", "F160.26", "F239-98", "F239-98-1", "F239-98-1-1", "F239-98-2", "F239-98-3", "F239-98-4", "F239-47-17",
   "F239-47-19", "F239-134", "F239-158", "F239-175", "F239-47-10", "F239-47-12", "F239-47-13", "F239-47-14", "F212.12-1-15-5", "F212.9-3-1", "F212.9a-1", "F239-107-1", "F239-220", "F239-40", "F239-43",
   "F249", "F292-7", "F68", "F60", "F91", "F114", "F116", "F125", "F239-269", "F55", "F239-47-24", "F239-182", "F239-68", "F278",
   "F278-1", "F280", "F283-1", "F283-2", "F286", "F290", "F292-26-3", "F226", "F239-39", "F239-41", "F239-41-1", "F239-42",

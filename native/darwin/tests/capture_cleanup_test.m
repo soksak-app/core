@@ -1,5 +1,7 @@
-// Controls the results of actual write, close, commit, and delete operations to check each cause and the
-// remaining files.
+// Controls the results of the actual open, write, close, commit, and delete operations of the frame writer of a still. A failed
+// file operation fails its still with the original system error of each failed operation, also in the recording error, and
+// leaves the partial file only when its removal failed; a healthy still commits its frame. Every result restores the pending
+// writer capacity.
 #import <Cocoa/Cocoa.h>
 #import "support/temporary_folder.h"
 #include <stdio.h>
@@ -56,32 +58,18 @@ static void check(BOOL condition, NSString *message) {
     fprintf(stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
 }
-static CMSampleBufferRef sample(void) {
-    CVPixelBufferRef pixels = NULL;
-    if (CVPixelBufferCreate(NULL, 4, 4, kCVPixelFormatType_32BGRA, NULL, &pixels) != kCVReturnSuccess) {
-        check(NO, @"the cleanup fixture allocates pixels"); return NULL;
-    }
-    CVPixelBufferLockBaseAddress(pixels, 0);
-    memset(CVPixelBufferGetBaseAddress(pixels), 42, CVPixelBufferGetBytesPerRow(pixels) * 4);
-    CVPixelBufferUnlockBaseAddress(pixels, 0);
-    CMVideoFormatDescriptionRef format = NULL;
-    OSStatus formatted = CMVideoFormatDescriptionCreateForImageBuffer(NULL, pixels, &format);
-    CMSampleBufferRef frame = NULL;
-    CMSampleTimingInfo timing = {kCMTimeInvalid, kCMTimeZero, kCMTimeInvalid};
-    if (formatted == noErr) check(CMSampleBufferCreateReadyWithImageBuffer(NULL, pixels, format, &timing, &frame) == noErr,
-        @"the cleanup fixture creates a complete sample");
-    else check(NO, @"the cleanup fixture creates its format");
-    if (frame != NULL) {
-        CFMutableDictionaryRef attached = (CFMutableDictionaryRef)CFArrayGetValueAtIndex(
-            CMSampleBufferGetSampleAttachmentsArray(frame, true), 0);
-        NSDictionary *rect = [(NSDictionary *)CGRectCreateDictionaryRepresentation(CGRectMake(0, 0, 4, 4)) autorelease];
-        NSDictionary *metadata = @{SCStreamFrameInfoStatus: @(SCFrameStatusComplete),
-            SCStreamFrameInfoDisplayTime: @(mach_absolute_time()), SCStreamFrameInfoContentRect: rect,
-            SCStreamFrameInfoContentScale: @1, SCStreamFrameInfoScaleFactor: @1};
-        for (NSString *key in metadata) CFDictionarySetValue(attached, key, metadata[key]);
-    }
-    if (format != NULL) CFRelease(format);
-    CVPixelBufferRelease(pixels); return frame;
+// A 4x4 opaque sRGB image: the still that the frame writer writes.
+static CGImageRef image(void) {
+    CGColorSpaceRef srgb = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+    CGContextRef context = CGBitmapContextCreate(NULL, 4, 4, 8, 16, srgb,
+        (CGBitmapInfo)kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little);
+    CGColorSpaceRelease(srgb);
+    if (context == NULL) { check(NO, @"the cleanup fixture allocates pixels"); return NULL; }
+    CGContextSetRGBFillColor(context, 0.2, 0.4, 0.6, 1);
+    CGContextFillRect(context, CGRectMake(0, 0, 4, 4));
+    CGImageRef made = CGBitmapContextCreateImage(context);
+    CGContextRelease(context);
+    return made;
 }
 static void hasReason(int error, NSString *label) {
     check(strstr(sp_capture_error(), strerror(error)) != NULL, label);
@@ -91,12 +79,17 @@ int main(void) { @autoreleasepool {
     fprintf(stderr, "START: native capture file failure and cleanup\n");
     [NSApplication sharedApplication];
     NSString *directory = temporaryFolder(@"soksak-capture-cleanup-");
-    NSString *pending = [directory stringByAppendingPathComponent:@"frame-0001.bgra.partial"];
-    NSString *committed = [directory stringByAppendingPathComponent:@"frame-0001.bgra"];
-    captureWriter = dispatch_queue_create("capture.test.cleanup", DISPATCH_QUEUE_SERIAL);
+    NSString *pending = [directory stringByAppendingPathComponent:@"frame-0000.bgra.partial"];
+    NSString *committed = [directory stringByAppendingPathComponent:@"frame-0000.bgra"];
+    prepareCaptureQueues();
+    dispatch_release(capturePending);
     capturePending = dispatch_semaphore_create(1);
-    captureFirstFrame = dispatch_semaphore_create(0);
-    CMSampleBufferRef frame = sample();
+    mach_timebase_info_data_t timebase;
+    mach_timebase_info(&timebase);
+    // The still covers the rectangle of a target without a window list, at scale 1.
+    SPCaptureTarget *target = [[[SPCaptureTarget alloc] init] autorelease];
+    target.screen = CGRectMake(0, 0, 4, 4);
+    CGImageRef frame = image();
     const char *names[] = {"open", "write", "close", "write-close", "commit", "write-remove", "close-remove", "commit-remove", "healthy"};
     for (int index = 0; frame != NULL && index < 9; index++) {
         CFTimeInterval phase = CACurrentMediaTime();
@@ -106,25 +99,36 @@ int main(void) { @autoreleasepool {
         failClose = index == 2 || index == 3 || index == 6;
         failCommit = index == 4 || index == 7;
         failRemove = index == 5 || index == 6 || index == 7;
-        removes = 0; clearCaptureError(); captureBefore = 0; captureStartedAt = 0;
-        [captureSink release]; captureSink = [SPCapture new]; captureSink.directory = directory;
-        static int statuses[6]; captureSink.statuses = statuses;
+        removes = 0; clearCaptureError();
+        SPCaptureRecording *recording = [[SPCaptureRecording alloc] init];
+        recording.directory = directory;
+        recording.windowNumber = 1;
+        recording.planned = 1;
+        recording.timebase = timebase;
+        [recording.rows addObject:[NSMutableDictionary dictionaryWithDictionary:@{
+            @"index": @0, @"outcome": @"not-requested", @"error": NSNull.null, @"frame": NSNull.null }]];
+        recording.nextIndex = 1;
         if (failOpen) {
             NSError *error = nil;
             check([@"existing file" writeToFile:pending atomically:NO encoding:NSUTF8StringEncoding error:&error],
                 [NSString stringWithFormat:@"the open-failure control has a pre-existing path (%@)", error]);
         }
-        [captureSink write:frame]; dispatch_sync(captureWriter, ^{});
+        uint64_t requested = mach_absolute_time();
+        processStill(recording, 0, target, frame, requested, mach_absolute_time());
+        dispatch_sync(captureWriter, ^{});
+        NSDictionary *row = recording.rows[0];
         if (index == 8) {
-            check(strlen(sp_capture_error()) == 0 && captureSink.written == 1,
+            check(strlen(sp_capture_error()) == 0 && recording.written == 1,
                 @"a healthy write commits without an error");
-            check(dispatch_semaphore_wait(captureFirstFrame, DISPATCH_TIME_NOW) == 0,
-                @"only a healthy committed frame signals readiness");
+            check([row[@"outcome"] isEqual:@"written"] && [row[@"frame"] isEqual:@"frame-0000.bgra"] && row[@"error"] == NSNull.null,
+                [NSString stringWithFormat:@"only a healthy committed frame settles its still as written (%@)", row]);
             check([[NSFileManager defaultManager] fileExistsAtPath:committed] && removes == 0,
                 @"a healthy write publishes the frame without removing it");
         } else {
-            check(captureSink.written == 0 && dispatch_semaphore_wait(captureFirstFrame, DISPATCH_TIME_NOW) != 0,
-                @"a failed frame never counts or signals first-frame readiness");
+            check(recording.written == 0 && [row[@"outcome"] isEqual:@"failed"] && row[@"frame"] == NSNull.null
+                && [row[@"error"] isKindOfClass:NSString.class],
+                [NSString stringWithFormat:@"a failed frame never counts and fails its still with its error (%@)", row]);
+            check(![[NSFileManager defaultManager] fileExistsAtPath:committed], @"a failed frame publishes no frame file");
             if (failOpen) {
                 hasReason(EACCES, @"open failure preserves its original system error");
                 check(removes == 0 && [[NSFileManager defaultManager] fileExistsAtPath:pending],
@@ -145,13 +149,14 @@ int main(void) { @autoreleasepool {
         check(dispatch_semaphore_wait(capturePending, DISPATCH_TIME_NOW) == 0,
             @"every file result restores pending writer capacity");
         dispatch_semaphore_signal(capturePending);
+        [recording release];
         failOpen = failWrite = failClose = failCommit = failRemove = NO;
         NSError *error = nil;
         if ([[NSFileManager defaultManager] fileExistsAtPath:pending]) check([[NSFileManager defaultManager] removeItemAtPath:pending error:&error],
             [NSString stringWithFormat:@"the retained fixture is removed (%@)", error]);
         fprintf(stderr, "END: file failure %s (%.1fms)\n", names[index], (CACurrentMediaTime() - phase) * 1000);
     }
-    if (frame != NULL) CFRelease(frame);
+    if (frame != NULL) CGImageRelease(frame);
     fprintf(stderr, "%s: native capture file failure and cleanup (%d failed assertions, %.1fms)\n",
         failures ? "FAIL" : "PASS", failures, (CACurrentMediaTime() - began) * 1000);
     return failures ? 1 : 0;

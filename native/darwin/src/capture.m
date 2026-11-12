@@ -38,7 +38,12 @@ static SPWindowImage windowImageFunction(void) {
     return (SPWindowImage)captureLookup(RTLD_DEFAULT, "CGWindowListCreateImageFromArray");
 }
 
-static uint64_t captureTicks(void) { return mach_absolute_time(); }
+// The clock of the stage ticks and the timebase reader of the display-link callback, which a test replaces with a clock of known
+// values and with a reader that fails.
+static uint64_t (*captureRawClock)(void) = mach_absolute_time;
+static kern_return_t (*captureReadTimebase)(mach_timebase_info_t) = mach_timebase_info;
+
+static uint64_t captureTicks(void) { return captureRawClock(); }
 
 static double ticksToMilliseconds(uint64_t ticks, mach_timebase_info_data_t timebase) {
     return (double)ticks * timebase.numer / timebase.denom / 1e6;
@@ -501,7 +506,7 @@ static void emitLifecycle(SPCaptureRecording *recording, NSString *phase, uint8_
     // the next still.
     [self replaceTarget:resolveTargetOnMain(self.windowNumber, self.display)];
     mach_timebase_info_data_t timebase = {};
-    if (mach_timebase_info(&timebase) != KERN_SUCCESS) {
+    if (captureReadTimebase(&timebase) != KERN_SUCCESS) {
         [self rejectDisplayLinkObservation:@"mach_timebase_info failed for a display-link callback"];
         return;
     }

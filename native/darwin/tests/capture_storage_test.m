@@ -1,4 +1,5 @@
-// Measures the storage amount of the real sample write path and the cost of the lossless codec on the same pixels.
+// Measures the storage amount of the real still write path (processStill: the sRGB BGRA pixels of an image, the header and the
+// frame writer) and the cost of the lossless codecs on the same pixels. The frame on disk restores every pixel of the image.
 #import "../src/capture.m"
 #import "support/temporary_folder.h"
 #include <compression.h>
@@ -10,46 +11,34 @@ static void check(BOOL ok, NSString *label) {
     if (!ok) failures++;
 }
 
-static CMSampleBufferRef sample(BOOL noise, NSData **original) {
-    CVPixelBufferRef pixels = NULL;
-    CVReturn created = CVPixelBufferCreate(NULL, 2400, 1520, kCVPixelFormatType_32BGRA, NULL, &pixels);
-    check(created == kCVReturnSuccess, @"the storage fixture has a full-resolution pixel buffer");
-    if (created != kCVReturnSuccess) return NULL;
-    CVPixelBufferLockBaseAddress(pixels, 0);
-    size_t stride = CVPixelBufferGetBytesPerRow(pixels);
-    uint8_t *base = CVPixelBufferGetBaseAddress(pixels);
+static const size_t kWidth = 2400, kHeight = 1520;
+
+// A full-resolution sRGB image: a flat background with a small text area, or noise. Every pixel is opaque, so drawing it into
+// the sRGB BGRA frame keeps its bytes.
+static CGImageRef image(BOOL noise, NSData **original) {
+    CGColorSpaceRef srgb = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+    CGContextRef context = CGBitmapContextCreate(NULL, kWidth, kHeight, 8, kWidth * 4, srgb,
+        (CGBitmapInfo)kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little);
+    CGColorSpaceRelease(srgb);
+    check(context != NULL, @"the storage fixture has a full-resolution bitmap");
+    if (context == NULL) return NULL;
+    uint8_t *base = CGBitmapContextGetData(context);
+    size_t stride = CGBitmapContextGetBytesPerRow(context);
     uint32_t random = 123456789;
-    for (size_t y = 0; y < 1520; y++) {
-        for (size_t x = 0; x < stride; x++) {
+    for (size_t y = 0; y < kHeight; y++) {
+        for (size_t x = 0; x < kWidth * 4; x++) {
             random ^= random << 13; random ^= random >> 17; random ^= random << 5;
-            // A flat background, a small text area, and row padding are also included in the restoration comparison.
-            base[y * stride + x] = noise ? (uint8_t)random
+            uint8_t value = noise ? (uint8_t)random
                 : (x / 4 % 113 < 7 && y % 29 < 9 ? 180 : (uint8_t[]){29, 26, 25, 255}[x % 4]);
+            base[y * stride + x] = x % 4 == 3 ? 255 : value;
         }
     }
-    *original = [NSData dataWithBytes:base length:stride * 1520];
-    CVPixelBufferUnlockBaseAddress(pixels, 0);
-    CMVideoFormatDescriptionRef format = NULL;
-    OSStatus formatted = CMVideoFormatDescriptionCreateForImageBuffer(NULL, pixels, &format);
-    check(formatted == noErr, @"the storage fixture has an image format");
-    CMSampleBufferRef result = NULL;
-    if (formatted == noErr) {
-        CMSampleTimingInfo timing = {kCMTimeInvalid, kCMTimeZero, kCMTimeInvalid};
-        check(CMSampleBufferCreateReadyWithImageBuffer(NULL, pixels, format, &timing, &result) == noErr,
-            @"the storage fixture has a ready sample");
-    }
-    if (result != NULL) {
-        CFMutableDictionaryRef attachments = (CFMutableDictionaryRef)CFArrayGetValueAtIndex(
-            CMSampleBufferGetSampleAttachmentsArray(result, true), 0);
-        NSDictionary *rect = [(NSDictionary *)CGRectCreateDictionaryRepresentation(CGRectMake(0, 0, 1200, 760)) autorelease];
-        NSDictionary *metadata = @{SCStreamFrameInfoStatus: @(SCFrameStatusComplete),
-            SCStreamFrameInfoDisplayTime: @(mach_absolute_time()), SCStreamFrameInfoContentRect: rect,
-            SCStreamFrameInfoContentScale: @1, SCStreamFrameInfoScaleFactor: @2};
-        for (NSString *key in metadata) CFDictionarySetValue(attachments, key, metadata[key]);
-    }
-    if (format != NULL) CFRelease(format);
-    CVPixelBufferRelease(pixels);
-    return result;
+    NSMutableData *packed = [NSMutableData dataWithLength:kWidth * 4 * kHeight];
+    for (size_t y = 0; y < kHeight; y++) memcpy((uint8_t *)packed.mutableBytes + y * kWidth * 4, base + y * stride, kWidth * 4);
+    *original = packed;
+    CGImageRef made = CGBitmapContextCreateImage(context);
+    CGContextRelease(context);
+    return made;
 }
 
 static void measure(NSData *pixels, NSString *label) {
@@ -85,7 +74,7 @@ static void measure(NSData *pixels, NSString *label) {
         }
         double decodeMs = (CACurrentMediaTime() - began) * 1000;
         check(restored == pixels.length && memcmp(decoded, pixels.bytes, pixels.length) == 0,
-            [NSString stringWithFormat:@"%@ restores all pixels and row padding", name]);
+            [NSString stringWithFormat:@"%@ restores all pixels", name]);
         fprintf(stderr, "MEASURE: %s %s raw=%lu encoded=%lu encode=%.3fms decode=%.3fms\n",
             label.UTF8String, name.UTF8String, (unsigned long)pixels.length, (unsigned long)size, encodeMs, decodeMs);
     }
@@ -97,51 +86,69 @@ int main(void) { @autoreleasepool {
     fprintf(stderr, "START: native capture lossless storage measurement\n");
     [NSApplication sharedApplication];
     NSString *directory = temporaryFolder(@"soksak-capture-storage-");
-    captureWriter = dispatch_queue_create("capture.test.storage", DISPATCH_QUEUE_SERIAL);
-    capturePending = dispatch_semaphore_create(kCapturePending);
-    captureFirstFrame = dispatch_semaphore_create(0);
-    captureSink = [SPCapture new]; captureSink.directory = directory;
-    static int statuses[6]; captureSink.statuses = statuses;
-    clearCaptureError(); captureBefore = 0; captureStartedAt = 0;
+    prepareCaptureQueues();
+    clearCaptureError();
+    mach_timebase_info_data_t timebase;
+    mach_timebase_info(&timebase);
+    // A recording of two stills of a 1200x760 point window at scale 2. The target has no window list, so the still covers the
+    // rectangle of the target.
+    SPCaptureRecording *recording = [[SPCaptureRecording alloc] init];
+    recording.directory = directory;
+    recording.windowNumber = 1;
+    recording.planned = 2;
+    recording.timebase = timebase;
+    for (NSUInteger index = 0; index < 2; index++) [recording.rows addObject:[NSMutableDictionary dictionaryWithDictionary:@{
+        @"index": @(index), @"outcome": @"not-requested", @"error": NSNull.null, @"frame": NSNull.null }]];
+    recording.nextIndex = 2;
+    SPCaptureTarget *target = [[[SPCaptureTarget alloc] init] autorelease];
+    target.screen = CGRectMake(0, 0, kWidth / 2, kHeight / 2);
     for (int index = 0; index < 2; index++) {
         NSData *pixels = nil;
-        CMSampleBufferRef frame = sample(index == 1, &pixels);
+        CGImageRef frame = image(index == 1, &pixels);
         if (frame == NULL) continue;
         CFTimeInterval writeBegan = CACurrentMediaTime();
-        [captureSink write:frame]; dispatch_sync(captureWriter, ^{});
-        check(strlen(sp_capture_error()) == 0 && captureSink.written == index + 1,
-            @"the actual sample writer commits the measurement frame");
-        NSString *file = [directory stringByAppendingPathComponent:[NSString stringWithFormat:@"frame-%04d.bgra", index + 1]];
+        uint64_t requested = mach_absolute_time();
+        processStill(recording, (NSUInteger)index, target, frame, requested, mach_absolute_time());
+        dispatch_sync(captureWriter, ^{});
+        CGImageRelease(frame);
+        check(strlen(sp_capture_error()) == 0 && recording.written == index + 1
+            && [recording.rows[index][@"outcome"] isEqual:@"written"],
+            [NSString stringWithFormat:@"the still write path commits the measurement frame (%s)", sp_capture_error()]);
+        NSString *file = [directory stringByAppendingPathComponent:[NSString stringWithFormat:@"frame-%04d.bgra", index]];
         NSData *stored = [NSData dataWithContentsOfFile:file];
         check(stored != nil, @"the measurement frame file exists");
         fprintf(stderr, "MEASURE: %s actual stored=%lu write=%.3fms\n", index ? "noise" : "document",
             (unsigned long)stored.length, (CACurrentMediaTime() - writeBegan) * 1000);
         measure(pixels, index ? @"noise" : @"document");
         const uint8_t *bytes = stored.bytes;
-        BOOL marked = stored.length >= 80 && memcmp(bytes + 68, "LZ4B", 4) == 0;
-        check(marked, @"the actual writer emits the declared lossless LZ4 block header");
+        BOOL marked = stored.length >= kFrameEncodedHeader && memcmp(bytes + kFrameHeader, "LZ4S", 4) == 0;
+        check(marked, @"the still writer emits the declared lossless LZ4 block header");
         if (marked) {
-            uint32_t encodedBytes = 0, checksum = 0;
-            memcpy(&encodedBytes, bytes + 72, sizeof encodedBytes);
-            memcpy(&checksum, bytes + 76, sizeof checksum);
-            BOOL whole = stored.length == 80 + (size_t)encodedBytes;
+            uint32_t dimensions[3] = {0}, encodedBytes = 0, checksum = 0;
+            memcpy(dimensions, bytes, sizeof dimensions);
+            check(dimensions[0] == kWidth && dimensions[1] == kHeight && dimensions[2] == kWidth * 4,
+                [NSString stringWithFormat:@"the frame keeps the full resolution (%ux%u, stride %u)", dimensions[0], dimensions[1],
+                    dimensions[2]]);
+            memcpy(&encodedBytes, bytes + kFrameHeader + 4, sizeof encodedBytes);
+            memcpy(&checksum, bytes + kFrameHeader + 8, sizeof checksum);
+            BOOL whole = stored.length == kFrameEncodedHeader + (size_t)encodedBytes;
             check(whole, @"the stored block has exactly the declared byte count");
             uint8_t *decoded = malloc(pixels.length + 1);
-            check(decoded != NULL, @"the actual stored frame can allocate its decoded pixels");
+            check(decoded != NULL, @"the stored frame can allocate its decoded pixels");
             if (whole && decoded != NULL) {
                 size_t count = compression_decode_buffer(decoded, pixels.length + 1,
-                    bytes + 80, encodedBytes, NULL, COMPRESSION_LZ4_RAW);
+                    bytes + kFrameEncodedHeader, encodedBytes, NULL, COMPRESSION_LZ4_RAW);
                 check(count == pixels.length && memcmp(decoded, pixels.bytes, pixels.length) == 0,
-                    @"the actual stored block restores every pixel and padding byte");
+                    @"the stored block restores every pixel of the image");
                 check(count == pixels.length && crc32(0, decoded, (uInt)count) == checksum,
-                    @"the actual stored block preserves its pixel checksum");
+                    @"the stored block preserves its pixel checksum");
             }
             free(decoded);
         }
         if (index == 0) check(stored.length < pixels.length / 10,
             @"the document fixture removes raw-pixel disk pressure without reducing resolution");
-        CFRelease(frame);
     }
+    [recording release];
     fprintf(stderr, "%s: native capture lossless storage measurement (%.1fms)\n", failures ? "FAIL" : "PASS",
         (CACurrentMediaTime() - began) * 1000);
     return failures ? 1 : 0;

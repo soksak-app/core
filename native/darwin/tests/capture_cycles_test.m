@@ -1,44 +1,18 @@
 // Starts and stops the recording of an inactive window repeatedly in one process. The window check stops the
 // recording of each theme as soon as it starts, so this creates a sequence that an acceptance check running
-// only one cycle cannot create. It does not change the actual API results and records the start, stop, and
-// delegate callbacks. It does not activate the application.
+// only one cycle cannot create. Each cycle records its start, its first still, its stop and its counts, and the
+// next cycle starts only after the previous one ended. It does not activate the application.
 #import "../src/capture.m"
 #import "support/temporary_folder.h"
-#import <objc/runtime.h>
 #import "support/run_until.h"
 
 static const int CYCLES = 24;
-static IMP originalStart, originalStop, originalDelegate;
-static unsigned starts, stops, delegateStops;
 static CFTimeInterval began;
 static int failures;
 
-static void record(NSString *event, id stream, NSError *error) {
-    @synchronized([SPCapture class]) {
-        fprintf(stderr, "LIFECYCLE +%.3fms %s stream=%p current=%d error-domain=%s error-code=%ld error=%s\n",
-            (CACurrentMediaTime() - began) * 1000, event.UTF8String, stream, stream == captureStream,
-            error == nil ? "none" : error.domain.UTF8String, (long)error.code,
-            error == nil ? "none" : error.localizedDescription.UTF8String);
-    }
-}
-
-static void start(id stream, SEL selector, void (^completion)(NSError *)) {
-    starts++; record(@"start-request", stream, nil);
-    ((void (*)(id, SEL, void (^)(NSError *)))originalStart)(stream, selector, ^(NSError *error) {
-        record(@"start-completion", stream, error); completion(error);
-    });
-}
-
-static void stop(id stream, SEL selector, void (^completion)(NSError *)) {
-    stops++; record(@"stop-request", stream, nil);
-    ((void (*)(id, SEL, void (^)(NSError *)))originalStop)(stream, selector, ^(NSError *error) {
-        record(@"stop-completion", stream, error); completion(error);
-    });
-}
-
-static void delegateStop(id sink, SEL selector, SCStream *stream, NSError *error) {
-    delegateStops++; record(@"delegate-stop", stream, error);
-    ((void (*)(id, SEL, SCStream *, NSError *))originalDelegate)(sink, selector, stream, error);
+static void record(NSString *event, int cycle, NSString *detail) {
+    fprintf(stderr, "LIFECYCLE +%.3fms cycle=%d %s %s\n", (CACurrentMediaTime() - began) * 1000, cycle, event.UTF8String,
+        detail.UTF8String ?: "");
 }
 
 static void check(BOOL condition, NSString *message) {
@@ -51,16 +25,6 @@ int main(void) { @autoreleasepool {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     [NSApp finishLaunching];
-    Method startMethod = class_getInstanceMethod([SCStream class], @selector(startCaptureWithCompletionHandler:));
-    Method stopMethod = class_getInstanceMethod([SCStream class], @selector(stopCaptureWithCompletionHandler:));
-    Method delegateMethod = class_getInstanceMethod([SPCapture class], @selector(stream:didStopWithError:));
-    if (startMethod == NULL || stopMethod == NULL || delegateMethod == NULL) {
-        fprintf(stderr, "FAIL: capture lifecycle methods are unavailable\n"); return 1;
-    }
-    originalStart = method_setImplementation(startMethod, (IMP)start);
-    originalStop = method_setImplementation(stopMethod, (IMP)stop);
-    originalDelegate = method_setImplementation(delegateMethod, (IMP)delegateStop);
-
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(80, 80, 200, 100)
         styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
     [window setReleasedWhenClosed:NO];
@@ -91,24 +55,31 @@ int main(void) { @autoreleasepool {
             break;
         }
         char *operationError = NULL;
-        bool opened = sp_capture_open(window.windowNumber, false, 0, &operationError);
+        bool opened = sp_capture_open(window.windowNumber, false, &operationError);
         check(opened, [NSString stringWithFormat:@"cycle %d opens the window for recording (%s)", cycle,
             operationError == NULL ? "" : operationError]);
         free(operationError); operationError = NULL;
         if (!opened) break;
-        bool recording = sp_capture_start(directory.fileSystemRepresentation, false, &operationError);
-        check(recording, [NSString stringWithFormat:@"cycle %d starts recording (%s)", cycle,
+        // The start answers once still 0 is written, and the stop at once requests no later still.
+        record(@"start", cycle, nil);
+        bool recording = sp_capture_start(directory.fileSystemRepresentation, 1000.0 / 60, 0, 4096, false, 0, &operationError);
+        check(recording, [NSString stringWithFormat:@"cycle %d starts recording with its first still (%s)", cycle,
             operationError == NULL ? "" : operationError]);
         free(operationError);
         if (recording) {
-            int first = sp_capture_wait(0);
-            check(first == 1, [NSString stringWithFormat:@"cycle %d produces a first frame (%s)", cycle, sp_capture_error()]);
+            check([[NSFileManager defaultManager] fileExistsAtPath:[directory stringByAppendingPathComponent:@"frame-0000.bgra"]],
+                [NSString stringWithFormat:@"cycle %d writes still 0 before the start answers", cycle]);
+            record(@"first-still", cycle, nil);
             int frames = sp_capture_stop(0, 0);
+            record(@"stop", cycle, [NSString stringWithFormat:@"written=%d missed=%d late=%d", frames, sp_capture_missed(),
+                sp_capture_late()]);
             // The error string is shared state, so use the same copy for the verdict and the report.
             const char *stopError = sp_capture_error();
             NSString *stopText = stopError == NULL ? nil : [NSString stringWithUTF8String:stopError];
-            check(stopText != nil && stopText.length == 0 && frames > 0,
-                [NSString stringWithFormat:@"cycle %d stops without error (frames %d, error %@)", cycle, frames, stopText]);
+            check(stopText != nil && stopText.length == 0 && frames > 0 && frames + sp_capture_missed() == 4096,
+                [NSString stringWithFormat:@"cycle %d stops without error and accounts for every planned still (frames %d, missed %d, "
+                    "error %@)", cycle, frames, sp_capture_missed(), stopText]);
+            check(!recordingActive(), [NSString stringWithFormat:@"cycle %d ends its recording before the next cycle", cycle]);
             if (failures == 0) completed++;
         }
         NSError *removeError = nil;
@@ -117,13 +88,10 @@ int main(void) { @autoreleasepool {
             check(NO, [NSString stringWithFormat:@"cycle %d removes its frames (%@)", cycle, removeError]);
         }
     }
-    method_setImplementation(startMethod, originalStart);
-    method_setImplementation(stopMethod, originalStop);
-    method_setImplementation(delegateMethod, originalDelegate);
     check(!NSApp.isActive, @"recording cycles do not activate the application");
     [window close];
     [window release];
-    fprintf(stderr, "%s: %d of %d consecutive recording cycles (start=%u stop=%u delegate=%u, %.1fms)\n",
-        failures ? "FAIL" : "PASS", completed, CYCLES, starts, stops, delegateStops, (CACurrentMediaTime() - began) * 1000);
+    fprintf(stderr, "%s: %d of %d consecutive recording cycles (%.1fms)\n",
+        failures ? "FAIL" : "PASS", completed, CYCLES, (CACurrentMediaTime() - began) * 1000);
     return failures ? 1 : 0;
 }}

@@ -166,7 +166,7 @@ typedef struct { size_t width, height; uint8_t *bytes; } Image;
 static Image capture(NSWindow *window, NSString *directory, NSString *name) {
     NSString *path = [directory stringByAppendingPathComponent:[name stringByAppendingString:@".png"]];
     char *error = NULL;
-    bool written = sp_capture_still((long[]){window.windowNumber}, 1, path.fileSystemRepresentation, 0, &error);
+    bool written = sp_capture_still(window.windowNumber, path.fileSystemRepresentation, &error);
     check(written && error == NULL, [NSString stringWithFormat:@"the %@ capture has no error (%s)", name, error ?: ""]);
     free(error);
     Image image = {0, 0, NULL};

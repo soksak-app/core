@@ -154,12 +154,12 @@ static NSData *tightImageBytes(CGImageRef image) {
 }
 
 static NSDictionary *firstImageMatchRecord(NSString *directory) {
-    NSString *path = [directory stringByAppendingPathComponent:@"callback-status.jsonl"];
+    NSString *path = [directory stringByAppendingPathComponent:@"stills.jsonl"];
     NSString *contents = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:NULL];
     for (NSString *line in [contents componentsSeparatedByString:@"\n"]) {
         NSData *data = [line dataUsingEncoding:NSUTF8StringEncoding];
         NSDictionary *row = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL] : nil;
-        if ([row[@"status"] integerValue] == 0 && [row[@"imageMatch"] isKindOfClass:NSDictionary.class])
+        if ([row[@"outcome"] isEqual:@"written"] && [row[@"imageMatch"] isKindOfClass:NSDictionary.class])
             return row;
     }
     return nil;
@@ -168,9 +168,9 @@ static NSDictionary *firstImageMatchRecord(NSString *directory) {
 static NSData *cropFrame(NSData *decoded, uint32_t width, uint32_t height, uint32_t stride,
     size_t x, size_t y, size_t cropWidth, size_t cropHeight) {
     if (!decoded || stride < width * 4 || x > width || y > height || cropWidth > width - x
-        || cropHeight > height - y || decoded.length < 68 + (uint64_t)stride * height) return nil;
+        || cropHeight > height - y || decoded.length < kCaptureFrameHeader + (uint64_t)stride * height) return nil;
     NSMutableData *crop = [NSMutableData dataWithLength:cropWidth * cropHeight * 4];
-    const uint8_t *pixels = (const uint8_t *)decoded.bytes + 68;
+    const uint8_t *pixels = (const uint8_t *)decoded.bytes + kCaptureFrameHeader;
     for (size_t row = 0; row < cropHeight; row++)
         memcpy((uint8_t *)crop.mutableBytes + row * cropWidth * 4,
             pixels + (y + row) * stride + x * 4, cropWidth * 4);
@@ -247,52 +247,50 @@ static void runPresentationCase(BOOL tagged, BOOL lease) { @autoreleasepool {
             [NSString stringWithFormat:@"the active region exposes exactly its actual issued payload (%s)", payloadError ?: ""]);
         free(payloadError);
         // End acquisition without replacing the presented tagged contents. The
-        // following ordinary SCK recording measures that exact presentation.
+        // following ordinary still recording measures that exact presentation.
         sp_image_capture_match_identity_session_end();
         sp_image_capture_match_end();
         dispatch_release(identityWriter);
     }
     check(!NSApp.isActive, @"the fixture remains inactive before recording");
-    // The first sample is a complete recorded frame when the screen already shows the presentation: the refresh after the
-    // presentation composites its committed transaction and the refresh after that shows the composited window.
+    // Still 0 is requested when the screen already shows the presentation: the refresh after the presentation composites its
+    // committed transaction and the refresh after that shows the composited window.
     long presentedAt = refreshes.count;
     eventWait(@"the display refreshes twice after the presentation", ^BOOL { return refreshes.count >= presentedAt + 2; });
     [link invalidate];
     char *captureError = NULL;
-    BOOL opened = sp_capture_open(window.windowNumber, false, 0, &captureError);
+    BOOL opened = sp_capture_open(window.windowNumber, false, &captureError);
     check(opened, [NSString stringWithFormat:@"the nonactivating window opens for recording (%s)", captureError ?: ""]);
     free(captureError); captureError = NULL;
-    BOOL started = opened && sp_capture_start(directory, false, &captureError);
-    check(started, [NSString stringWithFormat:@"the ordinary sRGB/BGRA capture starts (%s)", captureError ?: ""]);
+    // One still: the start answers once it is written.
+    BOOL started = opened && sp_capture_start(directory, 1000.0 / 60, 0, 1, false, 1, &captureError);
+    check(started, [NSString stringWithFormat:@"the ordinary sRGB/BGRA recording writes its first still (%s)", captureError ?: ""]);
     free(captureError); captureError = NULL;
-    int firstFrame = started ? sp_capture_wait(0) : 0;
-    check(firstFrame == 1, [NSString stringWithFormat:@"a complete capture frame arrives (%s)", sp_capture_error()]);
     // Stop restores the supplier presentation. Retain the actually recorded
     // tagged layer bytes/profile before that lifecycle transition occurs.
     CALayer *imageLayer = (CALayer *)((NSView *)region).layer.sublayers.firstObject;
     CGImageRef activeLayerImage = layerContentsImage(imageLayer);
     NSData *layerBytes = [tightImageBytes(activeLayerImage) copy];
     NSString *sourceICC = [colorSpaceICC_SHA256(activeLayerImage ? CGImageGetColorSpace(activeLayerImage) : NULL) copy];
-    int frameCount = started ? sp_capture_stop(0, 0) : 0;
+    int frameCount = started ? sp_capture_stop(0, 2) : 0;
     check(started && frameCount > 0 && sp_capture_error() && strlen(sp_capture_error()) == 0,
         [NSString stringWithFormat:@"the capture artifact finalizes (%d, %s)", frameCount, sp_capture_error() ?: ""]);
-    // Frame filenames continue across recordings in one native process. Join
-    // the actual complete callback's declared filename instead of assuming 1.
+    // Join the frame filename that the written still declares.
     NSDictionary *statusRow = firstImageMatchRecord([NSString stringWithUTF8String:directory]);
     NSString *frameName = statusRow[@"frame"];
     BOOL validFrameName = [frameName isKindOfClass:NSString.class]
         && [frameName.lastPathComponent isEqualToString:frameName];
-    check(validFrameName, @"the complete callback declares its exact recorded frame filename");
+    check(validFrameName, @"the written still declares its exact recorded frame filename");
     NSData *encoded = validFrameName ? [NSData dataWithContentsOfFile:
         [[NSString stringWithUTF8String:directory] stringByAppendingPathComponent:frameName]] : nil;
     NSData *decoded = readCaptureFrame(encoded);
-    uint32_t dimensions[3] = {0}; double captureInfo[7] = {0};
-    if (decoded.length >= 68) { memcpy(dimensions, decoded.bytes, sizeof(dimensions)); memcpy(captureInfo, (const uint8_t *)decoded.bytes + 12, sizeof(captureInfo)); }
+    uint32_t dimensions[3] = {0}; double captureInfo[8] = {0};
+    if (decoded.length >= kCaptureFrameHeader) { memcpy(dimensions, decoded.bytes, sizeof(dimensions)); memcpy(captureInfo, (const uint8_t *)decoded.bytes + 12, sizeof(captureInfo)); }
     NSDictionary *captureFacts = statusRow[@"imageMatch"][@"captureFrame"];
     check(decoded && dimensions[0] == [captureFacts[@"width"] unsignedIntValue]
         && dimensions[1] == [captureFacts[@"height"] unsignedIntValue]
         && dimensions[2] == [captureFacts[@"stride"] unsignedIntValue],
-        @"actual callback dimensions and stride agree with the decoded capture file");
+        @"the recorded still dimensions and stride agree with the decoded capture file");
     id captureColorValue = captureFacts[@"colorSpace"];
     NSString *captureColorName = [captureColorValue isKindOfClass:NSString.class] ? captureColorValue : nil;
     CGColorSpaceRef captureProfile = captureColorName
@@ -377,8 +375,8 @@ static void runPresentationCase(BOOL tagged, BOOL lease) { @autoreleasepool {
         @"captureICCReferenceSHA256": captureICCReference,
         @"historicalP86Reference": @{@"scaleFactor": @2, @"differenceCount": @(historicalDifferences.count),
             @"differences": historicalDifferences},
-        @"displayTimeMach": statusRow[@"displayTime"] ?: NSNull.null,
-        @"callbackTimeMach": statusRow[@"callbackTime"] ?: NSNull.null,
+        @"requestedMach": statusRow[@"requested"] ?: NSNull.null,
+        @"completedMach": statusRow[@"completed"] ?: NSNull.null,
         @"captureHeaderContentRect": @{@"x": @(captureInfo[0]), @"y": @(captureInfo[1]),
             @"width": @(captureInfo[2]), @"height": @(captureInfo[3])},
         @"actualGeometry": @(actualGeometry),
@@ -412,7 +410,7 @@ static void runPresentationCase(BOOL tagged, BOOL lease) { @autoreleasepool {
     [page removeFromSuperview];
     if (surfaceHost) sp_surface_close(surfaceHost);
     [page release]; [main release]; [window close]; [content release]; [window release];
-    // The recorded frames and callback statuses of a crop that differs from the source are its evidence.
+    // The recorded frames and stills.jsonl of a crop that differs from the source are its evidence.
     if (!exact) keepTemporaryFolder([NSString stringWithUTF8String:directory]);
 } }
 

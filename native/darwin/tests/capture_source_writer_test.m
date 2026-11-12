@@ -1,4 +1,5 @@
-// Verifies source artifact writes can finish while the capture frame writer is held.
+// Source artifact writes and their manifest finish while the frame writer of the still recording is held: the two writers are
+// separate serial queues, so a slow frame write never holds the source manifest.
 #import "../src/capture.m"
 #import "support/temporary_folder.h"
 
