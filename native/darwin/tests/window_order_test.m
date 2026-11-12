@@ -164,7 +164,7 @@ static void checkLowerKeepsThePerson(const char *path) {
         @"the lower activates neither the check nor the person and keeps the front application");
     sp_person_close(front);
     sp_person_close(back);
-    sp_person_end();
+    check(sp_person_end(), @"the person ends at the end of its input and leaves no window on the screen");
     [own close];
 }
 

@@ -84,7 +84,6 @@ int sp_person_child(int argc, char **argv) {
             @autoreleasepool {
                 NSString *line = [[NSString stringWithUTF8String:buffer]
                     stringByTrimmingCharactersInSet:NSCharacterSet.newlineCharacterSet];
-                if ([line isEqual:@"quit"]) break;
                 personCommand(line);
             }
         }
@@ -180,11 +179,30 @@ pid_t sp_person_pid(void) {
     return person ? person.processIdentifier : 0;
 }
 
-void sp_person_end(void) {
-    if (!person) return;
-    @try { [toPerson writeData:[@"quit\n" dataUsingEncoding:NSUTF8StringEncoding]]; } @catch (NSException *exception) {}
+// The windows that the window server lists for the process pid, on the screen or not.
+static NSUInteger windowsOf(pid_t pid) {
+    NSArray *rows = [(NSArray *)CGWindowListCopyWindowInfo(kCGWindowListOptionAll, kCGNullWindowID) autorelease];
+    NSUInteger count = 0;
+    for (NSDictionary *row in rows) {
+        if ([row[(id)kCGWindowOwnerPID] intValue] == pid) count++;
+    }
+    return count;
+}
+
+BOOL sp_person_end(void) {
+    if (!person) return NO;
+    pid_t pid = person.processIdentifier;
+    // The end of its standard input ends the person: it closes its windows and exits, as it does when the check ends otherwise.
     [toPerson closeFile];
     [person waitUntilExit];
+    BOOL exited = person.terminationReason == NSTaskTerminationReasonExit && person.terminationStatus == 0;
+    if (!exited) {
+        fprintf(stderr, "the person did not exit with status 0 at the end of its input (reason %ld, status %d)\n",
+            (long)person.terminationReason, person.terminationStatus);
+    }
+    NSUInteger left = windowsOf(pid);
+    if (left) fprintf(stderr, "the window server still lists %lu windows of the person after its exit\n", (unsigned long)left);
     [toPerson release]; [fromPerson release]; [pending release]; [person release];
     toPerson = fromPerson = nil; pending = nil; person = nil;
+    return exited && left == 0;
 }

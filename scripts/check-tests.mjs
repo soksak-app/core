@@ -9355,6 +9355,7 @@ const FEATURE_LINKS = [
       { file: "native/darwin/tests/window_order_test.m", id: "the lower changes neither the active application, the front application nor the key window" },
       { file: "native/darwin/tests/window_order_test.m", id: "the lower keeps the order of the windows of the person and of every other window of other processes" },
       { file: "native/darwin/tests/window_order_test.m", id: "the lower activates neither the check nor the person and keeps the front application" },
+      { file: "native/darwin/tests/window_order_test.m", id: "the person ends at the end of its input and leaves no window on the screen" },
       { file: "packages/host/go/src/window_order_test.go", id: "TestWindowReportsItsDisplayAndItsPlaceAmongTheWindowsOnTheScreen" },
       { file: "packages/host/go/src/window_order_test.go", id: "TestRaiseAndLowerOrderTheNativeWindow" },
       { file: "packages/host/rust/src/window_order_test.rs", id: "the_window_reports_its_display_and_its_place_among_the_windows_on_the_screen" },
