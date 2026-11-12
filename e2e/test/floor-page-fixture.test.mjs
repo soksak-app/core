@@ -59,7 +59,7 @@ test("the floor page opens as the active tab of the focused card, which a fixtur
   await assert.rejects(openFloorPage(s), new Error("the start layout has no focused card for the floor page"));
 });
 
-test("drag layout evidence is written before frame analysis", { timeout: 5000 }, () => {
+test("drag layout evidence is written to the run folder", { timeout: 5000 }, () => {
   const directory = mkdtempSync(join(tmpdir(), "drag-layouts-"));
   try {
     const layouts = [{ ticket: 4, begun: 10, presented: 26, committed: 30 }];

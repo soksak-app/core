@@ -14,7 +14,7 @@ import { dragProcesses, NATIVE_DRAG_PLAN } from "./benchmark/cases/view-drag.mjs
 import { execute, windowApplicationRows } from "../scripts/measure-app-usage.mjs";
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: project-tab add control retains sampled contrast in every complete second-drag frame`,
+  test(`${app.name}: project-tab add control keeps its rectangle through the native and captured second drags`,
     { timeout: 180000 }, async (t) => {
       const s = await open(t, app);
       // The drags are measured under the default policy (prepareFloorDrag).
