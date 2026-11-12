@@ -89,11 +89,14 @@ impl State {
     }
 }
 
+/// Receives each new value of host.dialog of a window.
+type Changed = Box<dyn Fn(&str, Value) + Send + Sync>;
+
 /// The dialog requests of the windows whose host.dialog a client watches. While a window is watched, a dialog that the
 /// window asks for shows no panel: it waits as a request of host.dialog until a client answers it or the watch ends.
 pub struct Dialogs {
     state: Mutex<State>,
-    changed: Box<dyn Fn(&str, Value) + Send + Sync>,
+    changed: Changed,
 }
 
 impl Dialogs {

@@ -993,7 +993,7 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
     let main = crate::exposure::with_view(&main, move |view| platform.view_id(view))?;
     platform.set_main_webview(owner, main)?;
     show_new_window(&NewWindow {
-        platform: &*platform,
+        platform,
         owner,
         window: &window,
     })?;

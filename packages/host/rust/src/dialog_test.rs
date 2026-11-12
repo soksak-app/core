@@ -222,7 +222,9 @@ fn an_answer_passes_the_checks_of_the_panel() {
         answer
     };
     let none: &[&std::path::Path] = &[];
-    let cases: Vec<(Request, Answer, Result<Vec<String>, &str>)> = vec![
+    // A request, the answer of the panel and the names that the request answers with or its error.
+    type Case<'a> = (Request, Answer, Result<Vec<String>, &'a str>);
+    let cases: Vec<Case> = vec![
         (request(SAVE), answer(&[&fresh]), Ok(names(&[&fresh]))),
         (
             request(SAVE),
