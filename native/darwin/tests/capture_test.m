@@ -34,7 +34,7 @@ int main(void) { @autoreleasepool {
     // A window during the appearing animation is composited as a small rectangle.
     window.animationBehavior = NSWindowAnimationBehaviorNone;
     window.backgroundColor = [NSColor colorWithSRGBRed:1 green:0 blue:0 alpha:1];
-    // Puts the window in front without activating the application. When the occlusion state becomes visible, the window server has composited the window.
+    // Puts the window in front without activating the application.
     [window orderFrontRegardless];
     // Captures after the window server has put the window on screen. A window before that has no screen rectangle. Other windows may cover it.
     BOOL (^onScreen)(void) = ^BOOL {
@@ -42,7 +42,11 @@ int main(void) { @autoreleasepool {
             (CGWindowID)window.windowNumber) autorelease];
         return info.count == 1 && [info[0][(id)kCGWindowIsOnscreen] boolValue];
     };
-    sp_run_until("the window is visible", ^BOOL { return (window.occlusionState & NSWindowOcclusionStateVisible) != 0; });
+    // A capture reads the window from the window server whatever covers it, so the check does not wait until no other window
+    // covers it: a window of another application can cover it for as long as that window stays. The display and the flush commit
+    // the order and the first frame of the window to the window server, which lists the window on screen from then on.
+    [window displayIfNeeded];
+    [CATransaction flush];
     check(onScreen(), @"the window server shows the capture window");
     bool stillWritten = sp_capture_still(window.windowNumber, still.UTF8String, &stillError);
     check(stillWritten, [NSString stringWithFormat:@"a still capture of an inactive window is written (%@)",

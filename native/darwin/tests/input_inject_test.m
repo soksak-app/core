@@ -12,6 +12,7 @@
 #import "event_ring.h"
 #import "private/webkit.h"
 #import "webview_input.h"
+#import "webview_geometry.h"
 
 static int failures = 0;
 
@@ -180,8 +181,11 @@ static void drain(WKWebView *view) {
 @end
 static char pageLoadKey;
 
-// Loads html into view and keeps a navigation delegate that hears when the navigation finishes.
+// Loads html into view and keeps a navigation delegate that hears when the navigation finishes. The view renders while its window
+// is covered, as every web view of the hosts does (sp_webview_render_occluded): the windows of the check stand behind the windows of
+// other applications, and a view that WebKit hides in a covered window does not give its document the input that the check sends.
 static void loadPage(WKWebView *view, NSString *html) {
+    check(sp_webview_render_occluded(view, true), @"the web view of the check renders while its window is covered");
     SPPageLoad *load = [[[SPPageLoad alloc] init] autorelease];
     objc_setAssociatedObject(view, &pageLoadKey, load, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     view.navigationDelegate = load;
@@ -778,9 +782,13 @@ static void checkClickCount(void) {
         "addEventListener('dblclick',e=>{probe.double++;probe.detail=e.detail},true);window.ready=true;</script>");
     awaitLoad(view);
     pointerOutside(window);
-    check(sp_input_pointer_clicks(window, 50, 50, 1, 0, 1) == SP_INPUT_DELIVERED && sp_input_pointer_clicks(window, 50, 50, 3, 0, 1) == SP_INPUT_DELIVERED
-        && sp_input_pointer_clicks(window, 50, 50, 1, 0, 2) == SP_INPUT_DELIVERED && sp_input_pointer_clicks(window, 50, 50, 3, 0, 2) == SP_INPUT_DELIVERED,
-        @"the presses of a double click are delivered to the page");
+    BOOL doubleDelivered = sp_input_pointer_clicks(window, 50, 50, 1, 0, 1) == SP_INPUT_DELIVERED
+        && sp_input_pointer_clicks(window, 50, 50, 3, 0, 1) == SP_INPUT_DELIVERED
+        && sp_input_pointer_clicks(window, 50, 50, 1, 0, 2) == SP_INPUT_DELIVERED
+        && sp_input_pointer_clicks(window, 50, 50, 3, 0, 2) == SP_INPUT_DELIVERED;
+    check(doubleDelivered, @"the presses of a double click are delivered to the page");
+    // A press that the page did not receive makes no dblclick, so the check waits for it only after the presses were delivered.
+    if (!doubleDelivered) { [window close]; return; }
     awaitPage(view, @"the page receives the dblclick", @"dblclick", @"probe.double > 0");
     check([evaluate(view, @"probe.double") unsignedIntegerValue] == 1 && [evaluate(view, @"probe.detail") unsignedIntegerValue] == 2,
         @"the second press with the count 2 makes one dblclick with the detail 2");

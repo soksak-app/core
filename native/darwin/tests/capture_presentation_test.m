@@ -6,6 +6,7 @@
 #import <Cocoa/Cocoa.h>
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
+#import <QuartzCore/CATransaction.h>
 #import <mach/mach_time.h>
 #include <math.h>
 #include <limits.h>
@@ -135,7 +136,11 @@ int main(void) { @autoreleasepool {
     view.wantsLayer = YES;
     [window.contentView addSubview:view];
     [window orderFrontRegardless];
-    until(@"the window is visible", ^BOOL { return (window.occlusionState & NSWindowOcclusionStateVisible) != 0; });
+    // A capture reads the window from the window server whatever covers it, so the check does not wait until no other window
+    // covers it: a window of another application can cover it for as long as that window stays. The display and the flush commit
+    // the order and the first frame of the window to the window server, which lists the window on screen from then on.
+    [window displayIfNeeded];
+    [CATransaction flush];
     check(onScreen(window), @"the inactive control window is on screen");
     if (!onScreen(window)) { [window close]; [view release]; [window release]; return 1; }
 
