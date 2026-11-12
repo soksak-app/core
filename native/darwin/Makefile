@@ -230,7 +230,7 @@ $(HOST_CALLBACK_ABI_LIBRARY): tests/host_callback_abi.m src/host_callbacks.m src
 build-host-callback-abi: $(HOST_CALLBACK_ABI_LIBRARY)
 
 $(BUILD)/%_test: tests/%_test.m tests/support/no_activation.m $(LIBRARY) $(PROCESS_IDENTITY_LIBRARY) $(wildcard src/*.h src/private/*.h tests/support/*.h tests/support/*.m)
-	@clang $(CFLAGS) -I$(CURDIR)/process-identity/include -DVIEW_PAGE_CASES='"$(VIEW_PAGE_CASES)"' -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/event_wait.m tests/support/no_activation.m tests/support/records.m tests/support/temporary_folder.m tests/support/view_import_map.m -L$(BUILD) -lsoksak-darwin -L$(CURDIR)/process-identity/lib -lsoksak-process-identity $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
+	@clang $(CFLAGS) -I$(CURDIR)/process-identity/include -DVIEW_PAGE_CASES='"$(VIEW_PAGE_CASES)"' -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/event_wait.m tests/support/no_activation.m tests/support/records.m tests/support/temporary_folder.m tests/support/view_import_map.m tests/support/person_window.m -L$(BUILD) -lsoksak-darwin -L$(CURDIR)/process-identity/lib -lsoksak-process-identity $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
 
 $(BUILD)/site_cost_test: tests/site_cost_test.m tests/support/site_cost.m tests/support/site_cost.h tests/support/no_activation.m | $(BUILD)
 	@clang $(CFLAGS) -I$(CURDIR)/tests $< tests/support/site_cost.m tests/support/no_activation.m -framework Foundation -framework AppKit -o $@
@@ -310,8 +310,8 @@ $(BUILD)/capture_source_writer_test: src/capture.m
 
 $(BUILD)/capture_resize_test: src/capture.m
 
-$(BUILD)/capture_covered_test: tests/capture_covered_test.m tests/support/event_wait.m tests/support/temporary_folder.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h tests/support/*.h)
-	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m tests/support/event_wait.m tests/support/temporary_folder.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Metal -framework Network $(MINIMUM) -o $@
+$(BUILD)/capture_covered_test: tests/capture_covered_test.m tests/support/event_wait.m tests/support/temporary_folder.m tests/support/person_window.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h tests/support/*.h)
+	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m tests/support/event_wait.m tests/support/temporary_folder.m tests/support/person_window.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Metal -framework Network $(MINIMUM) -o $@
 
 $(BUILD)/capture_presentation_test: tests/capture_presentation_test.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h)
 	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Metal -framework Network $(MINIMUM) -o $@
@@ -471,6 +471,7 @@ NATIVE_E2E_TESTS = window_titlebar_layout_test \
   capture_resize_test \
   capture_test \
   capture_covered_test \
+  capture_covered_stream_test \
   capture_checker_test \
   capture_file_checker_test \
   capture_directory_checker_test \
