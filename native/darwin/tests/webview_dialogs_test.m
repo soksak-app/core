@@ -186,6 +186,15 @@ int main(void) { @autoreleasepool {
     sp_window_release_dialogs(held);
     eventWait(@"the cancel of the released request", ^BOOL{ return [inputView.title isEqual:@"cancel"] || framework.panels > 1; });
     check([inputView.title isEqual:@"cancel"] && framework.panels == 1, @"the end of a hold answers its waiting request as cancelled");
+    // The host cancels the requests of a watch that ended, which the release may have cancelled first: a cancel of a request
+    // that waits no more changes nothing and is applied.
+    __block NSString *cancelled = @"not answered";
+    if (numbers.count == 2) {
+        sp_dialog_answer(numbers[1].unsignedLongLongValue, NULL, 0, true, ^(const char *error) {
+            cancelled = error ? [[NSString alloc] initWithUTF8String:error] : nil;
+        });
+    }
+    check(cancelled == nil, [NSString stringWithFormat:@"a cancel of a request that waits no more is applied (%@)", cancelled]);
 
     // Downloads: a response that the page cannot show is a download.
     NSString *content = @"download content";
