@@ -11,7 +11,7 @@ import { StringDecoder } from 'node:string_decoder';
 // The process table reader of the command supervisor: a process group is read from the table, because kill(-pgid, 0) on macOS
 // also answers for a group that holds only zombies (test-command.mjs).
 import { hasEnded, killGroup, processTable, runningMembers, stopGroup } from './test-command.mjs';
-import { EVENT_PREFIX } from './test-event-reporter.mjs';
+import { EVENT_PREFIX, NOT_JUDGED } from './test-event-reporter.mjs';
 import { createNodeTestEvidence } from './node-test-evidence.mjs';
 import { linkerWarnings } from './macos-minimum.mjs';
 import { processFolderRoot, processStacks } from './platform/platform.js';
@@ -302,6 +302,11 @@ function runOne(item, limitMs, env, outputPath, stacks, temporary) {
     const queued = new Map();
     const running = new Map();
     let fileExit = null;
+    // The tests whose own judgment was not made because its premise did not hold (`errorCode` not-judged, NotJudged of
+    // @soksak/window-check), and the tests that failed by their own error otherwise: a parent that failed because a subtest failed and
+    // the result of a file process carry no failure of their own.
+    const notJudged = new Set();
+    const ownFailures = new Set();
     // The tests that the process ran: the summary of each file counts its started tests, of which the skipped ones did not run.
     let ran = 0;
     // The evidence of a node test file (`nodeTestFile`): its own summary and the skipped or todo tests that the process completed.
@@ -321,6 +326,8 @@ function runOne(item, limitMs, env, outputPath, stacks, temporary) {
       } else if (event.type === 'test:complete') {
         if (running.has(key)) count(running, key, -1);
         if (Object.hasOwn(event, 'exitCode')) fileExit = { exitCode: event.exitCode, signal: event.signal };
+        else if (event.errorCode === NOT_JUDGED) notJudged.add(event.name);
+        else if (typeof event.errorCode === 'string' && event.failureType !== 'subtestsFailed') ownFailures.add(event.name);
       } else if (event.type === 'test:summary' && Object.hasOwn(event, 'file')) {
         const { tests, skipped } = event.counts ?? {};
         if (!Number.isInteger(tests) || !Number.isInteger(skipped)) throw new Error(`the summary of ${event.file} has no counts of tests and skipped tests`);
@@ -416,7 +423,11 @@ function runOne(item, limitMs, env, outputPath, stacks, temporary) {
       else if (code === 0 && nodeWarnings.length > 0) finish({ status: 'fail', elapsedMs, output, detail: nodeWarnings.join('; ') });
       // A process that reports its test events and ran no test passes, and its detail says so.
       else if (code === 0) finish({ status: 'pass', elapsedMs, output, detail: reporting && ran === 0 ? 'no test ran' : '' });
-      else finish({ status: 'fail', elapsedMs, output, detail: code === null ? `signal ${signal}` : `exit ${code}` });
+      // A file whose only failed tests are judgments that were not made is not judged: it is not a pass, and it is not counted
+      // with the failures (docs/spec/diagnostics.md#judgments-of-a-covered-window).
+      else if (code === 1 && notJudged.size > 0 && ownFailures.size === 0) {
+        finish({ status: 'not-judged', elapsedMs, output, detail: `not judged: ${[...notJudged].join(', ')}`, notJudged: notJudged.size });
+      } else finish({ status: 'fail', elapsedMs, output, detail: code === null ? `signal ${signal}` : `exit ${code}`, notJudged: notJudged.size });
     });
   });
 }
@@ -522,7 +533,7 @@ export async function runTests(options) {
         saveManifest();
       }
       results.set(item.name, result);
-      const label = { pass: 'PASS', fail: 'FAIL', timeout: 'TIME' }[result.status];
+      const label = { pass: 'PASS', fail: 'FAIL', timeout: 'TIME', 'not-judged': 'NOT JUDGED' }[result.status];
       write(`${label} ${item.name} ${seconds(result.elapsedMs)}s${result.detail ? ` ${result.detail}` : ''}`);
       if (result.status !== 'pass') for (const line of result.output.split('\n')) if (line !== '') write(`  ${line}`);
     }
@@ -541,14 +552,17 @@ export async function runTests(options) {
     .sort((a, b) => b.elapsedMs - a.elapsedMs).slice(0, slowCount);
   write(`SLOWEST ${slowest.map((item) => `${item.name} ${seconds(item.elapsedMs)}s`).join(', ')}`);
   const count = (status) => [...results.values()].filter((result) => result.status === status).length;
-  const statuses = `${count('pass')} pass, ${count('fail')} fail, ${count('timeout')} timeout in ${seconds(performance.now() - begun)}s`;
+  const statuses = `${count('pass')} pass, ${count('fail')} fail, ${count('timeout')} timeout, ${count('not-judged')} not judged in ` +
+    `${seconds(performance.now() - begun)}s`;
   let passed = count('pass') === results.size;
   if (tests[0].eventLimitMs === undefined) write(`TOTAL ${results.size} tests: ${statuses}`);
   else {
     // The processes of the run report their test events, so each is a file whose tests the total counts.
     const plural = (number, noun) => `${number} ${noun}${number === 1 ? '' : 's'}`;
     const ran = [...results.values()].reduce((sum, result) => sum + result.tests, 0);
-    write(`TOTAL ${plural(ran, 'test')} ran in ${plural(results.size, 'file')}: ${statuses}`);
+    // The tests that were not judged are counted apart from the failures, also those of a file that failed otherwise.
+    const unjudged = [...results.values()].reduce((sum, result) => sum + (result.notJudged ?? 0), 0);
+    write(`TOTAL ${plural(ran, 'test')} ran in ${plural(results.size, 'file')}: ${statuses}; ${plural(unjudged, 'test')} not judged`);
     if (ran === 0) {
       write(`FAIL no test ran in the ${plural(results.size, 'file')} of the run`);
       passed = false;

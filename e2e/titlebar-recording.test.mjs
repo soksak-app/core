@@ -5,9 +5,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, judgedWhileShown, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
-import { missingPoses } from "./card-panel-checks.mjs";
+import { missingPoses, poseSpan } from "./card-panel-checks.mjs";
 import { readDisplayRefreshes } from "@soksak/window-check/display-refresh.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { TOLERANCE, measureTitlebar, misaligned, rowHeight } from "./titlebar-measurement.mjs";
@@ -53,14 +53,15 @@ async function record(s, buttons, action) {
   assert.equal(stop.limited, false, "the recording reached its frame cap");
   // Reads and measures one frame at a time. The whole recording is not held in memory.
   const measured = frames(recording.frames).map((path, index) => ({ index, ...measureTitlebar(readFrame(path), buttons) }));
-  return { poses, stop, measured, refreshes: readDisplayRefreshes(recording.frames).times };
+  return { poses, stop, measured, refreshes: readDisplayRefreshes(recording.frames).times, folder: recording.frames };
 }
 
 /**
  * Judges that in every frame the button center and the first-row center are within TOLERANCE, and that every displayed state
- * was recorded up to the first frame at or after two screen frames from its display.
+ * was recorded up to the first frame at or after two screen frames from its display. A displayed state that the recording lacks
+ * while the window was covered in its span is not judged (judgedWhileShown); one whose span the window showed in fails.
  */
-function judge(t, label, { poses, stop, measured, refreshes }) {
+async function judge(t, label, { poses, stop, measured, refreshes, folder }) {
   assert.ok(measured.length > 1, `${label}: the recording has ${measured.length} frames`);
   const off = misaligned(measured);
   const recorded = measured.filter((frame) => frame.row !== undefined).map((frame) => ({ time: frame.time, edges: [frame.row] }));
@@ -77,7 +78,11 @@ function judge(t, label, { poses, stop, measured, refreshes }) {
     `${TOLERANCE}px from the first-row centre or cannot be measured: ${JSON.stringify(traced)}`);
   // The stream delivers a frame only when the window changes, so the longest gap includes the time between two frame factor
   // steps; missing names every displayed first row that the recording did not hold, and the gap is only reported.
-  assert.deepEqual(missing, [], `${label}: displayed first rows missing from the recording`);
+  if (missing.length === 0) return;
+  const spans = recorded.length ? missing.map((pose) => poseSpan(recorded, poses, refreshes, poses.indexOf(pose))) : [];
+  if (spans.length === 0) assert.deepEqual(missing, [], `${label}: displayed first rows missing from a recording without a measured row`);
+  await judgedWhileShown(folder, { spans, what: `${label}: displayed first rows` },
+    () => assert.deepEqual(missing, [], `${label}: displayed first rows missing from the recording`));
 }
 
 for (const app of Object.values(APPS)) {
@@ -96,7 +101,7 @@ for (const app of Object.values(APPS)) {
       await s.until("core.text", (value) => value.scope.kind === "frame", "pressing the frame did not make it the text size scope");
       const { buttons } = await recordable(s);
       for (const [label, from, steps, command] of [["up", 1, UP, "core.text.larger"], ["down", 3, DOWN, "core.text.smaller"]]) {
-        judge(t, label, await record(s, buttons, async (displayed) => {
+        await judge(t, label, await record(s, buttons, async (displayed) => {
           const poses = [{ displayed, at: rowHeight(from) }];
           for (const factor of steps) {
             await s.run(command);
@@ -123,7 +128,7 @@ for (const app of Object.values(APPS)) {
       const before = (await s.get("core.window.workbench")).start;
       // The setting of another window changes the common scale, and this window reads again before or after it draws that notification. Either way every frame must keep the
       // criterion.
-      judge(t, "reload", await record(s, buttons, async (displayed) => {
+      await judge(t, "reload", await record(s, buttons, async (displayed) => {
         await other.run("core.settings.change", { key: "textSize", value: 2, scope: "common" });
         await other.until("core.text", (value) => value.frame === 2, "the other window did not take frame factor 2");
         await s.run("host.window.reload");

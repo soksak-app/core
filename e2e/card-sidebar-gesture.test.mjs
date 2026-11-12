@@ -1,11 +1,11 @@
 // Checks the native pointer input of the card four-side handles and the recorded boundary coordinates.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { APPS, judgeShownChanges, open, owe } from "@soksak/window-check/app.mjs";
+import { APPS, judgeShownChanges, judgedWhileShown, open, owe } from "@soksak/window-check/app.mjs";
 import { fresh, joinedFailure } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { recordedEdges } from "./sidebar-gesture-recording.mjs";
-import { missingPoses } from "./card-panel-checks.mjs";
+import { missingPoses, poseSpan } from "./card-panel-checks.mjs";
 import { readDisplayRefreshes } from "@soksak/window-check/display-refresh.mjs";
 
 const sides = ["top", "bottom", "left", "right"];
@@ -219,11 +219,9 @@ for (const app of Object.values(APPS)) {
             );
             // Every displayed state must remain with its boundary in a recorded frame up to the first frame at or after two screen frames from the display.
             const recorded = captured.map((frame, frameIndex) => ({ time: frame.time, edges: measured[frameIndex] }));
-            const missing = missingPoses(
-              recorded,
-              poses.map((pose) => ({ phase: pose.phase, displayed: pose.displayed, at: initial + sign(side) * (pose.size - 120) })),
-              readDisplayRefreshes(directory).times,
-            );
+            const states = poses.map((pose) => ({ phase: pose.phase, displayed: pose.displayed, at: initial + sign(side) * (pose.size - 120) }));
+            const refreshes = readDisplayRefreshes(directory).times;
+            const missing = missingPoses(recorded, states, refreshes);
             // For each missed state it reports the frame that showed its boundary and the times of the frames before and after the display time (ms relative to the display time).
             const around = missing.map((pose) => ({
               ...pose,
@@ -238,7 +236,13 @@ for (const app of Object.values(APPS)) {
                 .map((layout) => Object.fromEntries(Object.entries(layout).map(([key, value]) =>
                   [key, key !== "ticket" && typeof value === "number" ? +(value - pose.displayed).toFixed(1) : value]))),
             }));
-            assert.deepEqual(missing, [], `${side}: displayed states missing from the recording: ${JSON.stringify(around)}`);
+            // A displayed state that the recording lacks while the window was covered in its span is not judged; one whose span
+            // the window showed in fails (judgedWhileShown).
+            if (missing.length > 0) {
+              await judgedWhileShown(directory, { spans: missing.map((pose) => poseSpan(recorded, states, refreshes, states.indexOf(pose))),
+                what: `${side}: displayed states` },
+              () => assert.deepEqual(missing, [], `${side}: displayed states missing from the recording: ${JSON.stringify(around)}`));
+            }
             t.diagnostic(
               `${side}: 120 -> 160 -> 120 points, ${captured.length} frames at ${captured[0].width}x${captured[0].height}, ${stopped.layouts.length} layout transactions, gap ${stopped.longestGap}ms, input/presentation steps ${elapsed.join(",")}ms`,
             );
