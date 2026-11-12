@@ -4686,7 +4686,7 @@
       "class": "lifecycle",
       "level": [
         "debug",
-        "error"
+        "warn"
       ],
       "fields": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",

@@ -6,7 +6,8 @@
 // - the display-link trace in display-link.json: unavailable without observations, ordered observations with window state,
 //   hidden and off-display observations, rejected clocks, a changed timebase and the 4096-record bound;
 // - the release of the display-link resources on the main thread;
-// - the lifecycle debug events of a recording (start, first-still, still-failed, stop, end) and their fields;
+// - the lifecycle events of a recording (start, first-still, still-failed, stop, end), their levels and fields, and no error
+//   record for a lost still;
 // - the window read of a display-link callback, which is skipped and counted while an earlier read waits for the window server.
 #import "../src/capture.m"
 #import "support/records.h"
@@ -668,14 +669,20 @@ int main(void) { @autoreleasepool {
         && [firstStill[@"completedMachTicks"] isEqual:tickString(lifecycleRequested + 1000)]
         && [phases[@"first-still"][@"level"] isEqual:@(SP_EVENT_DEBUG)] && firstStill[@"reason"] == NSNull.null,
         [NSString stringWithFormat:@"the first-still event carries the index and the planned, requested and completed ticks of still 0 (%@)", firstStill]);
-    check([failedStill[@"index"] isEqual:@1] && [phases[@"still-failed"][@"level"] isEqual:@(SP_EVENT_ERROR)]
+    check([failedStill[@"index"] isEqual:@1] && [phases[@"still-failed"][@"level"] isEqual:@(SP_EVENT_WARN)]
         && [failedStill[@"reason"] isEqual:@"the window server gave no image of window 41"],
-        [NSString stringWithFormat:@"the still-failed event is an error with the index and reason of the failed still (%@)", failedStill]);
-    check(phases[@"start"][@"fields"][@"index"] == NSNull.null && [phases[@"end"][@"level"] isEqual:@(SP_EVENT_ERROR)]
+        [NSString stringWithFormat:@"the still-failed event is a warning with the index and reason of the failed still (%@)", failedStill]);
+    check(phases[@"start"][@"fields"][@"index"] == NSNull.null && [phases[@"end"][@"level"] isEqual:@(SP_EVENT_WARN)]
         && [ended[@"written"] isEqual:@1] && [ended[@"settled"] isEqual:@2]
         && [ended[@"reason"] containsString:@"still 1: the window server gave no image of window 41"]
         && sp_capture_missed() == 1,
-        [NSString stringWithFormat:@"the end event of a failed recording is an error with its counts and the recording error (%@)", ended]);
+        [NSString stringWithFormat:@"the end event of a failed recording is a warning with its counts and the recording error (%@)", ended]);
+    NSMutableArray<NSDictionary *> *errorRecords = [NSMutableArray array];
+    for (NSDictionary *event in events) {
+        if ([event[@"level"] isEqual:@(SP_EVENT_ERROR)]) [errorRecords addObject:event];
+    }
+    check(errorRecords.count == 0,
+        [NSString stringWithFormat:@"a lost still is no error record of the application (%@)", errorRecords]);
     [lifecycle release];
     clearCaptureError();
 

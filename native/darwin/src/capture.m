@@ -725,6 +725,13 @@ static void setCaptureError(NSString *message) {
     sp_log_error("capture", message.UTF8String);
 }
 
+// Adds the failure of a still to the error of the recording without an error record of the application: a recording is a record
+// of the window, so a still that it lost is a fact of the recording (the stop reply, the outcome of its row in stills.jsonl and
+// the warn event still-failed), not a failure of the application that a check of a feature audits.
+static void setStillError(NSString *message) {
+    @synchronized ([SPCaptureRecording class]) { appendCaptureError(message); }
+}
+
 static bool hasCaptureError(void) {
     @synchronized ([SPCaptureRecording class]) { return captureError != nil; }
 }
@@ -778,8 +785,8 @@ static void stillOutcome(SPCaptureRecording *recording, NSUInteger index, NSStri
         plannedDone = recording.requestsDone && recording.outcomes == recording.nextIndex;
     }
     if (error != nil) {
-        setCaptureError([NSString stringWithFormat:@"still %lu: %@", (unsigned long)index, error]);
-        emitLifecycle(recording, @"still-failed", SP_EVENT_ERROR, row, error);
+        setStillError([NSString stringWithFormat:@"still %lu: %@", (unsigned long)index, error]);
+        emitLifecycle(recording, @"still-failed", SP_EVENT_WARN, row, error);
     } else if (index == 0) {
         emitLifecycle(recording, @"first-still", SP_EVENT_DEBUG, row, nil);
     }
@@ -1351,7 +1358,8 @@ static int finishRecording(SPCaptureRecording *recording) {
         captureLate = late;
         captureLongestGap = longest;
     }
-    emitLifecycle(recording, @"end", hasCaptureError() ? SP_EVENT_ERROR : SP_EVENT_DEBUG, nil,
+    // A recording with an error ends at warn: the failure that is not a lost still was stored as an error where it happened.
+    emitLifecycle(recording, @"end", hasCaptureError() ? SP_EVENT_WARN : SP_EVENT_DEBUG, nil,
         hasCaptureError() ? [NSString stringWithUTF8String:sp_capture_error()] : nil);
     @synchronized ([SPCaptureRecording class]) {
         if (captureRecording == recording) {
