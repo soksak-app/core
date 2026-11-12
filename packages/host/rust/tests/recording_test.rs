@@ -28,6 +28,7 @@ struct Fake {
     plans: RefCell<Vec<Plan>>,
     fail_open: bool,
     fail_start: bool,
+    fail_first_still: bool,
     fail_stop: bool,
     panic_stop_once: Cell<bool>,
     replace_directory_on_open: Option<std::path::PathBuf>,
@@ -54,7 +55,7 @@ impl Capture for Fake {
             Ok(())
         }
     }
-    fn start(&self, _directory: &Path, plan: Plan, frame_identity: bool) -> Result<(), String> {
+    fn start(&self, directory: &Path, plan: Plan, frame_identity: bool) -> Result<(), String> {
         self.calls.borrow_mut().push(if frame_identity {
             "start frameIdentity".into()
         } else {
@@ -62,10 +63,17 @@ impl Capture for Fake {
         });
         self.plans.borrow_mut().push(plan);
         if self.fail_start {
-            Err("the first still was not written before the window closed".into())
-        } else {
-            Ok(())
+            return Err("the first still was not written before the window closed".into());
         }
+        if self.fail_first_still {
+            // The native start ends its recording when still 0 fails and writes its records into the folder before it
+            // answers.
+            for name in ["stills.jsonl", "display-link.json"] {
+                std::fs::write(directory.join(name), "{}\n").map_err(|error| error.to_string())?;
+            }
+            return Err("window 7 is not on screen".into());
+        }
+        Ok(())
     }
     fn stop(&self) -> Result<i32, String> {
         self.calls.borrow_mut().push("stop".into());
@@ -325,6 +333,38 @@ fn a_failed_start_removes_the_folder() {
             &make,
         )
         .expect("next start after a failed start");
+}
+
+// contract: recording.start.no-first-still-removes-folder
+#[test]
+fn a_failed_first_still_removes_the_folder() {
+    let parent = folder::Folder::new();
+    let folder = parent.path().join("frames");
+    let recording = Recording::new();
+    let fake = Fake {
+        fail_first_still: true,
+        ..Fake::default()
+    };
+    assert_eq!(
+        recording
+            .start(&fake, WINDOW, &folder, PLAN, false, &make)
+            .unwrap_err(),
+        "window 7 is not on screen"
+    );
+    assert!(!folder.exists());
+    assert_eq!(recording.running(), None);
+    // The native start ended its recording with still 0, so the recording asks for no stop.
+    assert_eq!(calls(&fake), ["open 7", "start"]);
+    recording
+        .start(
+            &Fake::default(),
+            WINDOW,
+            &parent.path().join("next"),
+            PLAN,
+            false,
+            &make,
+        )
+        .expect("next start after a failed first still");
 }
 
 // contract: recording.start.rejects-while-running, recording.abort.stops-removes-and-allows-next, recording.target.prepared-each-recording

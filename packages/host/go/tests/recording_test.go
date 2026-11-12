@@ -22,6 +22,7 @@ type fakeCapture struct {
 	plans                []host.CapturePlan
 	failOpen             bool
 	failStart            bool
+	failFirstStill       bool
 	stopErr              bool
 	blockDirectoryOnOpen string
 	blockDirectoryOnStop string
@@ -51,7 +52,7 @@ func (f *fakeCapture) Open(target host.CaptureTarget) error {
 	return nil
 }
 
-func (f *fakeCapture) Start(_ string, plan host.CapturePlan, frameIdentity bool) error {
+func (f *fakeCapture) Start(directory string, plan host.CapturePlan, frameIdentity bool) error {
 	if frameIdentity {
 		f.calls = append(f.calls, "start frameIdentity")
 	} else {
@@ -60,6 +61,15 @@ func (f *fakeCapture) Start(_ string, plan host.CapturePlan, frameIdentity bool)
 	f.plans = append(f.plans, plan)
 	if f.failStart {
 		return errors.New("the first still was not written before the window closed")
+	}
+	if f.failFirstStill {
+		// The native start ends its recording when still 0 fails and writes its records into the folder before it answers.
+		for _, name := range []string{"stills.jsonl", "display-link.json"} {
+			if err := os.WriteFile(filepath.Join(directory, name), []byte("{}\n"), 0o600); err != nil {
+				return err
+			}
+		}
+		return errors.New("window 7 is not on screen")
 	}
 	return nil
 }
@@ -165,6 +175,22 @@ func TestFailedStartRemovesTheFolder(t *testing.T) {
 	expectCalls(t, fake, "open 7", "start")
 	if err := recording.Start(&fakeCapture{}, window, filepath.Join(t.TempDir(), "next"), plan, false); err != nil {
 		t.Fatalf("next start after a failed start: %v", err)
+	}
+}
+
+// contract: recording.start.no-first-still-removes-folder
+func TestFailedFirstStillRemovesTheFolder(t *testing.T) {
+	folder := filepath.Join(t.TempDir(), "frames")
+	var recording host.Recording
+	fake := &fakeCapture{failFirstStill: true}
+	err := recording.Start(fake, window, folder, plan, false)
+	if err == nil || err.Error() != "window 7 is not on screen" || exists(folder) || recording.Running() != "" {
+		t.Fatalf("start %v, folder kept %v, running %q", err, exists(folder), recording.Running())
+	}
+	// The native start ended its recording with still 0, so the recording asks for no stop.
+	expectCalls(t, fake, "open 7", "start")
+	if err := recording.Start(&fakeCapture{}, window, filepath.Join(t.TempDir(), "next"), plan, false); err != nil {
+		t.Fatalf("next start after a failed first still: %v", err)
 	}
 }
 

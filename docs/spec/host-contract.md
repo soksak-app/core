@@ -752,6 +752,7 @@ Items:
 | `recording.drag.layout-trace-after-settle` | A recorded drag ends its layout trace after the last layout is committed and presented, so the trace holds the presentation and the commit of the last layout; the trace also ends when the drag or the wait fails. | all |
 | `recording.start.failed-open-removes-folder` | A recording whose capture fails to open removes its folder and leaves nothing running. | all |
 | `recording.start.failed-start-removes-folder` | A recording whose capture fails to start removes its folder and leaves nothing running. | all |
+| `recording.start.no-first-still-removes-folder` | A recording whose still 0 fails, which ends the native recording after it wrote its records into the folder, returns the error of the still, removes the folder with those records, asks for no stop and leaves nothing running, so the next start runs. | all |
 | `recording.start.cleanup-failure-retains-folder-owner` | When a failed start cannot remove its owned folder, it reports both errors, retains cleanup ownership, and blocks another start until abort removes the folder. | all |
 | `recording.start.make-failure-preserves-unowned-path` | When folder creation fails, the recording leaves the pre-existing path untouched and does not call the capture device or claim the path. | all |
 | `recording.start.rejects-while-running` | Starting a recording while one is running fails and creates no folder. | all |

@@ -755,6 +755,7 @@ fn invalid_json_closes_connection() {
 | `recording.drag.layout-trace-after-settle` | 기록하는 drag는 마지막 layout이 commit되고 표시된 뒤에 layout trace를 끝내므로, trace가 마지막 layout의 presentation과 commit을 가진다. drag나 그 대기가 실패해도 trace는 끝난다. | all |
 | `recording.start.failed-open-removes-folder` | 캡처 열기에 실패한 녹화는 폴더를 제거하고 실행 중인 것을 남기지 않는다. | all |
 | `recording.start.failed-start-removes-folder` | 캡처 시작에 실패한 녹화는 폴더를 제거하고 실행 중인 것을 남기지 않는다. | all |
+| `recording.start.no-first-still-removes-folder` | Still 0이 실패한 녹화, 곧 native 녹화가 기록을 폴더에 쓴 뒤 끝난 녹화는 그 still의 오류를 반환하고, 그 기록과 함께 폴더를 제거하며, stop을 요청하지 않고 실행 중인 것을 남기지 않아 다음 start가 실행된다. | all |
 | `recording.start.cleanup-failure-retains-folder-owner` | 시작 실패 뒤 소유 폴더를 제거할 수 없으면 두 오류를 보고하고 cleanup 소유권을 유지하며, abort가 폴더를 제거할 때까지 다음 시작을 막는다. | all |
 | `recording.start.make-failure-preserves-unowned-path` | 폴더 생성이 실패하면 기존 경로를 변경하지 않고 capture 장치를 호출하지 않으며 그 경로의 소유권을 주장하지 않는다. | all |
 | `recording.start.rejects-while-running` | 녹화 중에 녹화를 시작하면 실패하고 폴더를 만들지 않는다. | all |
