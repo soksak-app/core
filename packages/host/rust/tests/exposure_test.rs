@@ -553,6 +553,7 @@ fn host_entries_are_appended_as_registered() {
         [
             "core.layout",
             "host.buttons",
+            "host.dialog",
             "host.dock",
             "host.log",
             "host.menu",
@@ -1186,6 +1187,47 @@ fn a_text_input_reaches_the_platform_as_one_step_of_a_composition() {
         json!({"phase": "insert", "text": "a", "selection": {"start": 0, "length": 0}}),
         json!({"phase": "insert", "text": "a", "replacement": {"start": -1, "length": 0}}),
         json!({"phase": "mark", "text": "a", "selection": {"start": 0}}),
+    ] {
+        assert_eq!(read(invalid.clone()).unwrap_err().code, -32602, "{invalid}");
+    }
+}
+
+// contract: endpoint.input.dialog-answer
+#[test]
+fn a_dialog_answer_reaches_the_host_as_paths_or_a_cancel() {
+    let read = |value: Value| exposure::dialog_answer(value.as_object().unwrap());
+    let answer =
+        |id: &str, paths: &[&str], cancel: bool, replace: bool| soksak_host::dialog::Answer {
+            id: id.into(),
+            paths: paths.iter().map(|path| path.to_string()).collect(),
+            cancel,
+            replace,
+        };
+    assert_eq!(
+        read(json!({"id": "d1", "paths": ["/saved/host.jsonl"]})).unwrap(),
+        answer("d1", &["/saved/host.jsonl"], false, false)
+    );
+    assert_eq!(
+        read(json!({"id": "d2", "paths": ["/saved/host.jsonl"], "replace": true})).unwrap(),
+        answer("d2", &["/saved/host.jsonl"], false, true)
+    );
+    assert_eq!(
+        read(json!({"id": "d3", "paths": ["/a", "/b"]})).unwrap(),
+        answer("d3", &["/a", "/b"], false, false)
+    );
+    assert_eq!(
+        read(json!({"id": "d4", "cancel": true})).unwrap(),
+        answer("d4", &[], true, false)
+    );
+    for invalid in [
+        json!({"paths": ["/a"]}),
+        json!({"id": "", "paths": ["/a"]}),
+        json!({"id": "d5", "paths": ["/a"], "cancel": true}),
+        json!({"id": "d5"}),
+        json!({"id": "d5", "cancel": false}),
+        json!({"id": "d5", "paths": "/a"}),
+        json!({"id": "d5", "paths": [3]}),
+        json!({"id": "d5", "cancel": true, "replace": true}),
     ] {
         assert_eq!(read(invalid.clone()).unwrap_err().code, -32602, "{invalid}");
     }

@@ -11,8 +11,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -48,6 +50,10 @@ type fakeBackend struct {
 	failures map[string]error
 	// replies are the results that a page request returns for each method.
 	replies map[string]json.RawMessage
+	// hostWatches are the starts and the ends of the watches of host statuses that reached the host, "<window> <name> on|off".
+	hostWatches []string
+	// dialogAnswers are the answers of input.dialog.answer that reached the host.
+	dialogAnswers []host.DialogAnswer
 }
 
 func newFakeBackend() *fakeBackend {
@@ -120,6 +126,23 @@ func (b *fakeBackend) Pointer(window string, input host.PointerInput) error {
 func (b *fakeBackend) Text(window string, input host.TextInput) error {
 	b.mu.Lock()
 	b.texts = append(b.texts, input)
+	b.mu.Unlock()
+	return nil
+}
+
+func (b *fakeBackend) HostWatched(window, name string, on bool) {
+	state := "off"
+	if on {
+		state = "on"
+	}
+	b.mu.Lock()
+	b.hostWatches = append(b.hostWatches, window+" "+name+" "+state)
+	b.mu.Unlock()
+}
+
+func (b *fakeBackend) DialogAnswer(window string, answer host.DialogAnswer) error {
+	b.mu.Lock()
+	b.dialogAnswers = append(b.dialogAnswers, answer)
 	b.mu.Unlock()
 	return nil
 }
@@ -1607,4 +1630,88 @@ func TestTheEndOfTheEndpointConnectionEndsItsPageRequests(t *testing.T) {
 		t.Fatal(err)
 	}
 	<-backend.ended
+}
+
+// The first watch of host.dialog of a window and the end of its last watch reach the host, which holds the dialogs of the window
+// while it is watched; a watch of another connection while one stands and the end of a watch that is not the last do not.
+// contract: endpoint.dialog.watch-reaches-the-host
+func TestTheWatchOfHostDialogReachesTheHost(t *testing.T) {
+	backend := newFakeBackend()
+	_, address, _ := serve(t, backend)
+	first, second := dial(t, address), dial(t, address)
+	params := map[string]any{"window": "main", "name": "host.dialog"}
+	for index, step := range []struct {
+		conn   net.Conn
+		method string
+		want   []string
+	}{
+		{first, "status.watch", []string{"main host.dialog on"}},
+		{second, "status.watch", []string{"main host.dialog on"}},
+		{first, "status.unwatch", []string{"main host.dialog on"}},
+		{second, "status.unwatch", []string{"main host.dialog on", "main host.dialog off"}},
+	} {
+		if got := call(t, step.conn, index+1, step.method, params); got.Error != nil {
+			t.Fatalf("%s host.dialog: %+v", step.method, got.Error)
+		}
+		backend.mu.Lock()
+		seen := append([]string(nil), backend.hostWatches...)
+		backend.mu.Unlock()
+		if !slices.Equal(seen, step.want) {
+			t.Fatalf("after %s %d the host saw %v, want %v", step.method, index+1, seen, step.want)
+		}
+	}
+	backend.mu.Lock()
+	defer backend.mu.Unlock()
+	for _, request := range backend.requests {
+		if request == "status.watch" || request == "status.unwatch" {
+			t.Fatalf("the watch of host.dialog reached the page: %v", backend.requests)
+		}
+	}
+}
+
+// input.dialog.answer gives the host the answer {id, paths} or {id, cancel: true} of a dialog of the window, with replace for a
+// save or a download, and refuses with -32602 an answer without id, with paths and cancel, with neither, with paths that are not
+// strings or with replace on a cancel.
+// contract: endpoint.input.dialog-answer
+func TestEndpointDialogAnswer(t *testing.T) {
+	backend := newFakeBackend()
+	_, address, _ := serve(t, backend)
+	conn := dial(t, address)
+	valid := []map[string]any{
+		{"window": "main", "id": "d1", "paths": []string{"/saved/host.jsonl"}},
+		{"window": "main", "id": "d2", "paths": []string{"/saved/host.jsonl"}, "replace": true},
+		{"window": "main", "id": "d3", "paths": []string{"/a", "/b"}},
+		{"window": "main", "id": "d4", "cancel": true},
+	}
+	for index, params := range valid {
+		if got := call(t, conn, index+1, "input.dialog.answer", params); got.Error != nil || string(got.Result) != "null" {
+			t.Fatalf("input.dialog.answer %v: %+v", params, got)
+		}
+	}
+	invalid := []map[string]any{
+		{"window": "main", "paths": []string{"/a"}},
+		{"window": "main", "id": "", "paths": []string{"/a"}},
+		{"window": "main", "id": "d5", "paths": []string{"/a"}, "cancel": true},
+		{"window": "main", "id": "d5"},
+		{"window": "main", "id": "d5", "cancel": false},
+		{"window": "main", "id": "d5", "paths": "/a"},
+		{"window": "main", "id": "d5", "paths": []any{3}},
+		{"window": "main", "id": "d5", "cancel": true, "replace": true},
+	}
+	for index, params := range invalid {
+		if got := call(t, conn, 10+index, "input.dialog.answer", params); got.Error == nil || got.Error.Code != -32602 {
+			t.Fatalf("input.dialog.answer %v: %+v, want -32602", params, got)
+		}
+	}
+	backend.mu.Lock()
+	defer backend.mu.Unlock()
+	want := []host.DialogAnswer{
+		{ID: "d1", Paths: []string{"/saved/host.jsonl"}},
+		{ID: "d2", Paths: []string{"/saved/host.jsonl"}, Replace: true},
+		{ID: "d3", Paths: []string{"/a", "/b"}},
+		{ID: "d4", Cancel: true},
+	}
+	if !reflect.DeepEqual(backend.dialogAnswers, want) {
+		t.Fatalf("the host received %+v, want %+v", backend.dialogAnswers, want)
+	}
 }

@@ -9304,6 +9304,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/dialog.go", symbol: "func DialogChoice(request DialogRequest, answer DialogAnswer) ([]string, error) {" },
       { file: "packages/host/rust/src/dialog.rs", symbol: "pub fn answer(&self, window: &str, answer: Answer) -> Result<(), String> {" },
       { file: "packages/host/rust/src/dialog.rs", symbol: "pub fn choice(_request: &Request, answer: &Answer) -> Result<Vec<String>, String> {" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "pub fn dialog_answer(" },
     ],
     tests: [
       { file: "native/darwin/tests/window_facts_test.m", id: "a window without a sheet reports no sheet" },
@@ -9320,6 +9321,9 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/dialog_test.go", id: "TestTheEndOfTheWatchCancelsTheHeldDialogs" },
       { file: "packages/host/go/src/dialog_test.go", id: "TestTheEndOfTheCallRemovesItsRequest" },
       { file: "packages/host/go/src/dialog_test.go", id: "TestAnAnswerPassesTheChecksOfThePanel" },
+      { file: "packages/host/go/tests/endpoint_test.go", id: "TestTheWatchOfHostDialogReachesTheHost" },
+      { file: "packages/host/go/tests/endpoint_test.go", id: "TestEndpointDialogAnswer" },
+      { file: "packages/host/rust/tests/exposure_test.rs", id: "a_dialog_answer_reaches_the_host_as_paths_or_a_cancel" },
       { file: "packages/host/rust/src/dialog_test.rs", id: "a_watched_window_holds_the_save_and_folder_panels_of_the_host" },
       { file: "packages/host/rust/src/dialog_test.rs", id: "the_end_of_the_watch_cancels_the_held_dialogs" },
       { file: "packages/host/rust/src/dialog_test.rs", id: "an_answer_passes_the_checks_of_the_panel" },

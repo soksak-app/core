@@ -501,6 +501,11 @@ pub fn text_input(params: &Map<String, Value>) -> Result<TextInput, Failure> {
     Ok(input)
 }
 
+/// Reads the parameters of `input.dialog.answer`.
+pub fn dialog_answer(_params: &Map<String, Value>) -> Result<crate::dialog::Answer, Failure> {
+    Err(Failure::params("input.dialog.answer is not read"))
+}
+
 /// The document of a waiting request and the request whose handling forwarded it, if any.
 struct Held {
     target: String,

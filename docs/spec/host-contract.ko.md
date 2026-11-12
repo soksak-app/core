@@ -438,6 +438,8 @@ fn invalid_json_closes_connection() {
 | `endpoint.input.text-phases` | phase가 mark, insert, unmark인 text 입력은 그 단계로 platform에 닿는다. selection이 없는 mark는 caret을 text 끝(UTF-16 code unit으로 센다)에 두고, replacement가 없는 단계는 replacement가 없다(-1). | all |
 | `endpoint.input.text-ranges` | mark의 selection과 mark, insert의 replacement는 주어진 대로 UTF-16 code unit의 start와 length로 platform에 닿는다. | all |
 | `endpoint.input.text-invalid` | 알 수 없는 phase, text 없는 mark나 insert, text가 있는 unmark, text 밖이거나 insert에 붙은 selection, 음수 범위, start나 length가 없는 범위는 -32602를 반환한다. | all |
+| `endpoint.input.dialog-answer` | `input.dialog.answer` `{window, id, paths?, cancel?, replace?}` 는 창의 dialog 요청에 대한 답을 host 에 준다. 답은 문자열 배열 `paths`(save 와 download 는 `replace` 를 함께 받는다) 또는 `cancel: true` 다. 비지 않은 `id` 가 없는 답, `paths` 와 `cancel` 을 함께 가진 답, 둘 다 없는 답, 문자열 배열이 아닌 `paths`, cancel 의 `replace` 는 -32602 로 거부되고, 요청이 받지 않는 답은 host 가 -32602 로 거부한다. 결과는 `null` 이다. | all |
+| `endpoint.dialog.watch-reaches-the-host` | 창의 `host.dialog` 의 첫 watch 와 마지막 watch 의 끝은 host 에 닿고, host 는 watch 되는 동안 그 창의 dialog 를 붙잡는다. 한 watch 가 서 있는 동안 다른 연결의 watch 와 마지막이 아닌 watch 의 끝은 닿지 않으며, `host.dialog` 의 watch 는 page 에 닿지 않는다. | wailsv3, mygo only: Go endpoint 는 host status 의 watch 를 스스로 답하고 backend 로 host 에 알린다. Rust endpoint 는 모든 watch 를 host service 에 넘기고, host service 가 host entry 에서 `host.dialog` 를 답한다 |
 | `endpoint.discovery.writes-endpoint-json` | endpoint.json은 전송 방식, 주소, pid, 애플리케이션, 버전, 실행 파일, 시작 시각을 담는다. | all |
 | `endpoint.discovery.written-after-first-window` | 엔드포인트를 시작할 때 endpoint.json을 쓰지 않는다. 없는 창으로 게시하면 실패하고 파일을 쓰지 않으며, 있는 창으로 게시한 뒤에는 그 창의 요청에 응답한다. | all |
 | `endpoint.discovery.endpoint-json-mode-0600` | endpoint.json의 모드는 0600이다. | all |

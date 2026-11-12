@@ -45,7 +45,7 @@ func TestExposureListAppendsHostEntries(t *testing.T) {
 	for _, entry := range append(list.Status, list.Commands...) {
 		names[entry.Name] = entry.Registered
 	}
-	for _, name := range []string{"core.layout", "host.buttons", "host.log", "host.window", "host.windows", "host.screens", "host.dock", "host.window.close", "host.window.fullscreen", "host.window.move", "host.window.raise", "host.window.lower", "host.dock.select", "host.hit", "host.quit"} {
+	for _, name := range []string{"core.layout", "host.buttons", "host.dialog", "host.log", "host.window", "host.windows", "host.screens", "host.dock", "host.window.close", "host.window.fullscreen", "host.window.move", "host.window.raise", "host.window.lower", "host.dock.select", "host.hit", "host.quit"} {
 		if !names[name] {
 			t.Fatalf("%s is missing or unregistered in %s", name, got.Result)
 		}
@@ -123,7 +123,7 @@ func TestExposureListHostEntriesAreSortedAndDescribed(t *testing.T) {
 		}
 		return out
 	}
-	status := []string{"core.layout", "host.buttons", "host.dock", "host.log", "host.menu", "host.screens", "host.sidecars", "host.window", "host.windows"}
+	status := []string{"core.layout", "host.buttons", "host.dialog", "host.dock", "host.log", "host.menu", "host.screens", "host.sidecars", "host.window", "host.windows"}
 	if !slices.Equal(names(list.Status), status) {
 		t.Fatalf("status %v, want %v", names(list.Status), status)
 	}
