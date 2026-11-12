@@ -293,8 +293,8 @@ static const size_t kFrameEncodedHeader = kFrameHeader + 12;
 static const size_t kLZ4OutputMargin = 128;
 
 // The bytes of the encoded frame of a still of pixels bytes: the header with the marker, the count and the checksum, and the worst
-// case of an LZ4 block with the margin that the LZ4 encoder keeps free at the end of its output (with the worst case alone, the
-// encoder failed the 64 bytes of a 4x4 still, capacity 80).
+// case of an LZ4 block, pixels + pixels / 255 (integer division) + 16, with the margin that the LZ4 encoder keeps free at the end
+// of its output (with the worst case alone, the encoder failed the 64 bytes of a 4x4 still, capacity 80).
 static size_t encodedCapacity(size_t pixels) { return pixels + pixels / 255 + 16 + kLZ4OutputMargin; }
 static size_t encodedBytes(size_t pixels) { return kFrameEncodedHeader + encodedCapacity(pixels); }
 static size_t frameBytes(size_t pixels) { return kFrameHeader + pixels; }
@@ -320,7 +320,7 @@ static dispatch_queue_t captureWriter;
 // pixels are unmapped right after, and only its encoded frame waits for the writer, which gives its bytes back once it has
 // written it; a still that finds the limit reached fails instead of waiting, so the limit bounds the memory of the writer whatever
 // the size and the number of the stills. The value is the smallest power of two that admits one incompressible still of the
-// largest display, 7680x4320, whose encoded frame is 133 231 065 bytes. In the window run of 2026-11-12 an encoded still of its
+// largest display, 7680x4320, whose encoded frame is 133 231 064 bytes (encodedBytes). In the window run of 2026-11-12 an encoded still of its
 // 2400x1520 window was a median of 208 346 bytes (14 592 000 pixel bytes), so 644 of them fit, 5.4 s of stills at 120 Hz; the
 // writer fell behind only while the machine stalled, when 64 stills waited and 125 more were refused, 189 stills or 38 MiB
 // encoded. The count limit of 64 stills that it replaces let 64 raw frames of that window and one encoded frame wait, 949 MB, and

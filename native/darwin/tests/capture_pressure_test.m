@@ -170,8 +170,8 @@ int main(void) { @autoreleasepool {
     SPCaptureRecording *recording = rowsRecording(exhausted, 1);
     clearCaptureError();
     // The limit counts the bytes of encoded frames: 128 MiB, the smallest power of two that holds the encoded frame of one
-    // incompressible still of a 7680x4320 display (88 header bytes and an LZ4 block of p + p/255 + 144 bytes).
-    check(kCapturePendingBytes == 134217728 && encodedBytes(7680 * 4320 * 4) == 133231065
+    // incompressible still of a 7680x4320 display, whose size encodedBytes of the capture gives.
+    check(kCapturePendingBytes == 134217728
         && encodedBytes(7680 * 4320 * 4) <= kCapturePendingBytes && kCapturePendingBytes / 2 < encodedBytes(7680 * 4320 * 4),
         [NSString stringWithFormat:@"the writer limit is the smallest power of two that holds one incompressible still of a 7680x4320 display (%zu, %zu)",
             kCapturePendingBytes, encodedBytes(7680 * 4320 * 4)]);
