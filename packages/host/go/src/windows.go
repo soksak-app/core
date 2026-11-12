@@ -89,6 +89,8 @@ type Host struct {
 	plugins    *Plugins
 	// buttons is the value of host.buttons. It installs the watch after the application started and before endpoint.json is written.
 	buttons *Buttons
+	// dialogs holds the dialogs of the windows whose host.dialog a client watches (docs/spec/exposure.md#dialogs).
+	dialogs *Dialogs
 	// logNotices publishes the value of host.log and the host event debug-log-changed. It starts with the event log.
 	logNotices *LogNotices
 	configDir  string

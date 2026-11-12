@@ -38,6 +38,7 @@ pub mod command_line;
 pub mod composition;
 pub mod crash_report;
 pub mod debug;
+pub mod dialog;
 pub mod debug_follow;
 pub mod deep_link;
 #[cfg(feature = "diagnostics")]
