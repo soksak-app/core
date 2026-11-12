@@ -435,6 +435,7 @@ export const MAIN_THREAD_FREE = {
   sp_diagnostic_reports_directory: "the directory is a path of the file system that NSFileManager resolves on any thread",
   "sp_capture_*": "the window recording and the still capture keep their state in capture.m under its own lock and queues, take the stills of the window server on their own queues and wait for them, and hand their AppKit work to the main queue, so a step that called them would hold the main thread while those stills complete",
   sp_facts_free: "the function frees a string that a native function returned",
+  sp_window_facts_finish: "main_sp_window_facts reads the AppKit facts on the main thread (sp_window_facts_begin) and then reads the order of the window from the window list of the window server on the calling thread, a CoreGraphics call of any thread, so the main thread does not wait for the window server; it accesses no AppKit state",
   sp_ui_enqueue: "the function adds a C function to the main queue of libdispatch, which any thread may do",
   sp_host_callbacks_install: "startup copies the complete host callback table before native work begins, without invoking a callback or accessing AppKit",
   sp_host_diagnostic_callbacks_install: "diagnostic startup copies its complete callback table before diagnostic work begins, without invoking a callback or accessing AppKit",

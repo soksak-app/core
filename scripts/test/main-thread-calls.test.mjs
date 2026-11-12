@@ -14,6 +14,14 @@ test("main-thread audit names the thread-safe native functions with a reason", {
 // The window recording and the still capture wait for the stills that the window server returns on the capture queues; called in
 // a step, they would hold the main thread while those stills complete, so the Go host calls them on the goroutine of its request, as the Tauri host calls
 // them off the main thread (docs/spec/hosts.md#main-thread-of-the-wails-host).
+// The window facts read the order of the window from the window server off the main thread, so a loaded window server does not
+// hold the main thread (sp_window_facts_finish after the main-thread part sp_window_facts_begin).
+test("the window server part of the window facts needs no main thread", { timeout: 30000 }, async () => {
+  const { MAIN_THREAD_FREE } = await import("../check-host-files.mjs");
+  assert.ok(Object.hasOwn(MAIN_THREAD_FREE, "sp_window_facts_finish"), "sp_window_facts_finish runs in a main-thread step");
+  assert.ok(!Object.hasOwn(MAIN_THREAD_FREE, "sp_window_facts_begin"), "sp_window_facts_begin, which reads AppKit, runs off the main thread");
+});
+
 test("the capture functions that wait for stills need no main thread", { timeout: 30000 }, async () => {
   const { MAIN_THREAD_FREE } = await import("../check-host-files.mjs");
   const free = (name) => Object.keys(MAIN_THREAD_FREE).some((key) => (key.endsWith("*") ? name.startsWith(key.slice(0, -1)) : name === key));
