@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
+import * as stills from "../stills.mjs";
 import { lostStills, readStills, requireNoLostStills } from "../stills.mjs";
 import { writeStillRecording } from "../still-recording.mjs";
 
@@ -150,4 +151,35 @@ test("a still row whose stages are half bracketed or out of order is refused", (
   assert.throws(changedRow(t, (list) => {
     list[0].identityDecodeEnqueueStartTime = "500000"; list[0].identityDecodeEnqueueCompleteTime = "500001";
   }), /^Error: still row 0 of .* has its writeCompleteTime time before its identityDecodeEnqueueCompleteTime time$/);
+});
+
+// A decoded row of the frame identity of a recording (decoded-frames.jsonl) names the still whose pixels it decoded by its index
+// and its raw request and completion ticks, which are those of the still in stills.jsonl.
+function decodedOf(t) {
+  const directory = mkdtempSync(join(tmpdir(), "soksak-decoded-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  return writeStillRecording(directory, { gap: 8, until: 16, stoppedAt: 2 }).stills;
+}
+
+test("decoded rows that name taken stills by their index and ticks pass", (t) => {
+  const path = decodedOf(t);
+  stills.requireDecodedStills([{ index: 0, requested: "0", completed: "500000" }, { index: 1, requested: "8000000",
+    completed: "8500000" }, { index: 1, requested: "8000000", completed: "8500000" }], path, "the identity");
+});
+
+test("a decoded row that names no still of the recording or another time of its still is refused", (t) => {
+  const path = decodedOf(t);
+  for (const [row, error] of [
+    [{ index: -1, requested: "0", completed: "500000" }, /^Error: the identity: decoded row 0 names the still -1, not a still index$/],
+    [{ index: "0", requested: "0", completed: "500000" }, /^Error: the identity: decoded row 0 names the still "0", not a still index$/],
+    [{ index: 0, requested: 0, completed: "500000" }, /^Error: the identity: decoded row 0 has the requested time 0, not an exact decimal mach time$/],
+    [{ index: 0, requested: "0", completed: null }, /^Error: the identity: decoded row 0 has the completed time null, not an exact decimal mach time$/],
+    [{ index: 3, requested: "24000000", completed: "24500000" }, /^Error: the identity: decoded row 0 names still 3, which .*stills\.jsonl does not plan$/],
+    [{ index: 1, requested: "8000001", completed: "8500000" }, new RegExp("^Error: the identity: decoded row 0 names still 1 " +
+      "requested at 8000001 and completed at 8500000, and .*stills\\.jsonl has it requested at 8000000 and completed at 8500000$")],
+    [{ index: 2, requested: "16000000", completed: "16500000" }, new RegExp("^Error: the identity: decoded row 0 names still 2 " +
+      "requested at 16000000 and completed at 16500000, and .*stills\\.jsonl has it requested at null and completed at null$")],
+  ]) {
+    assert.throws(() => stills.requireDecodedStills([row], path, "the identity"), error);
+  }
 });

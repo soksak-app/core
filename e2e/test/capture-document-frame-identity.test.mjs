@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join as joinPath } from "node:path";
+import test, { after } from "node:test";
+
+import { writeStillRecording } from "@soksak/window-check/still-recording.mjs";
 
 import { documentIdentityCardIds, verifyDocumentFrameIdentityCapture, viewGenerationForSurface } from "../document-frame-identity.mjs";
 
@@ -49,6 +54,12 @@ test("document identity setup adds its root view tab only to editable pane cards
     /no editable pane card/);
 });
 
+// The still recording of the capture: stills 0 to 2 every 8ms, each completed 0.5ms after its request, on a timebase of
+// nanoseconds.
+const stillsDirectory = mkdtempSync(joinPath(tmpdir(), "document-identity-stills-"));
+after(() => rmSync(stillsDirectory, { recursive: true, force: true }));
+const { stills } = writeStillRecording(stillsDirectory, { gap: 8, until: 16 });
+
 const documentCapture = () => {
   const start = {
     surface: "surface-a", generation: 7, atlasSlots: 512,
@@ -71,15 +82,16 @@ const documentCapture = () => {
     },
   };
   const decodedRows = [
-    { frame: 1, displayTime: "9001", region: manifest.documentFrameIdentity.regionToken,
+    { index: 1, requested: "8000000", completed: "8500000", region: manifest.documentFrameIdentity.regionToken,
       roi: { x: 100, y: 200, width: 64, height: 64 }, status: "matched",
       identity: { generation: "7", raster: "18446744073709551615", sequence: 2 }, reason: null,
       sourceKind: "document", decodeEnqueuedTime: "8001", decodeStartTime: "8002", decodeCompleteTime: "8003" },
-    { frame: 2, displayTime: "9002", region: manifest.documentFrameIdentity.regionToken,
+    { index: 2, requested: "16000000", completed: "16500000", region: manifest.documentFrameIdentity.regionToken,
       roi: null, status: "unknown", identity: null, reason: "no-code", sourceKind: "document",
       decodeEnqueuedTime: "8004", decodeStartTime: null, decodeCompleteTime: null },
   ];
-  return { start, stop: { frameIdentity: { status: "complete", issuedSlots: 2, manifest: "/capture/frame-identities/manifest.json" } },
+  return { start, stop: { stills, frameIdentity: { status: "complete", issuedSlots: 2,
+    manifest: "/capture/frame-identities/manifest.json" } },
     manifest, decodedRows, surface: "surface-a", generation: 7 };
 };
 
@@ -87,8 +99,26 @@ test("document identity capture validates complete accounting and a decoded issu
   const capture = documentCapture();
   assert.deepEqual(verifyDocumentFrameIdentityCapture(capture), {
     generation: 7, issuedSlots: 2, decodedRecords: 2, matchedRecords: 1, unknownRecords: 1,
-    matchedFrames: [1], manifest: "/capture/frame-identities/manifest.json",
+    matchedStills: [1], manifest: "/capture/frame-identities/manifest.json",
   });
+});
+
+// A decoded row names the still whose pixels it decoded, by its index and its request and completion ticks in stills.jsonl, and
+// the document region is one region of each still.
+test("document identity capture rejects a decoded row of no still of the recording and a still decoded twice", { timeout: 1000 }, () => {
+  const otherTime = documentCapture();
+  otherTime.decodedRows[0].completed = "8500001";
+  assert.throws(() => verifyDocumentFrameIdentityCapture(otherTime), new RegExp("^Error: document identity: decoded row 0 names " +
+    "still 1 requested at 8000000 and completed at 8500001, and .*stills\\.jsonl has it requested at 8000000 and completed at 8500000$"));
+
+  const unplanned = documentCapture();
+  unplanned.decodedRows[1].index = 3;
+  assert.throws(() => verifyDocumentFrameIdentityCapture(unplanned),
+    /^Error: document identity: decoded row 1 names still 3, which .*stills\.jsonl does not plan$/);
+
+  const twice = documentCapture();
+  Object.assign(twice.decodedRows[1], { index: 1, requested: "8000000", completed: "8500000" });
+  assert.throws(() => verifyDocumentFrameIdentityCapture(twice), /^Error: document identity decoded rows name still 1 twice$/);
 });
 
 test("document identity capture rejects missing accounting and unissued decoded identities", { timeout: 1000 }, () => {
