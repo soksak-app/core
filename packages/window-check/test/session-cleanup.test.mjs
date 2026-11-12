@@ -249,9 +249,9 @@ test("probe body fails", async (t) => {
     if (method === "diagnostics.capture.start") {
       activeFrames = join(captures, "capture-1");
       mkdirSync(activeFrames);
-      return { frames: activeFrames };
+      return { frames: activeFrames, window: 7 };
     }
-    if (method === "diagnostics.capture.stop") return { frames: activeFrames };
+    if (method === "diagnostics.capture.stop") return { frames: activeFrames, window: 7 };
     throw new Error("unexpected request " + method);
   } };
   const session = new Session({ name: "probe", configDir }, client);

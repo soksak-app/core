@@ -11,10 +11,11 @@ import { writeStillRecording } from "../still-recording.mjs";
  * A connection that imitates a host with one recording on a display of `refreshRate` Hz. The recording plans the stills that
  * its start asks for (frames, or seconds at gap), and its stop writes the first two of them and stops the rest of the plan.
  * stop takes the recording and then fails when stopFails is set. Without a recording, it rejects with `no capture is running`
- * like the host. The stills of `failed` fail. `damage` changes the stop reply and the stills.jsonl of the recording after it is written.
+ * like the host. The start and stop replies name the recorded window 7, or null for a recording of the display; `started`
+ * changes the start reply. The stills of `failed` fail. `damage` changes the stop reply and the stills.jsonl of the recording after it is written.
  */
 function fakeClient(directory, { stopFails = false, removeFramesOnStopFailure = false, refreshRate = 120,
-  damage = (reply) => reply, framePath = (path) => path, failed = [] } = {}) {
+  damage = (reply) => reply, framePath = (path) => path, failed = [], started = (reply) => reply } = {}) {
   const requests = [];
   let running = null;
   let plan = null;
@@ -31,10 +32,11 @@ function fakeClient(directory, { stopFails = false, removeFramesOnStopFailure = 
       if (method === "diagnostics.window.draw-covered") return null;
       if (method === "status.get" && params.name === "host.window") return { refreshRate };
       if (method === "diagnostics.capture.start") {
-        plan = { gap: params.gap, stills: params.frames ?? Math.ceil(params.seconds * 1000 / params.gap) };
+        plan = { gap: params.gap, stills: params.frames ?? Math.ceil(params.seconds * 1000 / params.gap),
+          window: params.display === true ? null : 7 };
         running = join(captures, `capture-${requests.length}`);
         mkdirSync(running);
-        return { frames: framePath(running) };
+        return started({ frames: framePath(running), window: plan.window });
       }
       if (method === "diagnostics.capture.stop") {
         if (!running) throw new Error("no capture is running");
@@ -46,7 +48,7 @@ function fakeClient(directory, { stopFails = false, removeFramesOnStopFailure = 
           throw new Error("layout trace failed");
         }
         const reply = writeStillRecording(storedFrames, { gap: plan.gap, until: (plan.stills - 1) * plan.gap, changes: [0],
-          stoppedAt: 2, failed, layouts: [{ ticket: 3, begun: 1, requested: 2, presented: 3, committed: 4 }] });
+          stoppedAt: 2, failed, window: plan.window, layouts: [{ ticket: 3, begun: 1, requested: 2, presented: 3, committed: 4 }] });
         return damage({ ...reply, frames, stills: join(frames, "stills.jsonl") }, storedFrames);
       }
       throw new Error(`unexpected ${method}`);
@@ -262,6 +264,13 @@ for (const [what, damage, error] of [
     /the still recording .* has no frame-0001\.bgra for its written still 1/],
   ["with a frame file of no written still", (reply, stored) => { writeFileSync(join(stored, "frame-0005.bgra"), ""); return reply; },
     /the still recording .* has frame-0005\.bgra, the frame file of no written still/],
+  ["that names another recorded window than its start", (reply) => ({ ...reply, window: 8 }),
+    /the stop reply names the recorded window 8, and the start named 7/],
+  ["whose written still did not take the recorded window", (reply, stored) => {
+    const path = join(stored, "stills.jsonl");
+    writeFileSync(path, readFileSync(path, "utf8").replace('"windows":[7]', '"windows":[9]'));
+    return reply;
+  }, /the still recording .* took still 0 of the windows \[9\], without the recorded window 7/],
 ]) {
   test(`a recording stop ${what} fails and keeps the recording`, async (t) => {
     const directory = mkdtempSync(join(tmpdir(), "soksak-record-"));
@@ -274,6 +283,34 @@ for (const [what, damage, error] of [
     assert.equal(existsSync(recording.frames), true, "the recording with an invalid stop reply was not preserved");
   });
 }
+
+// A recording of a window names the window that it records (a window number), and a recording of the display names none
+// (null): each written still of a window recording took that window.
+test("a recording whose start names no recorded window fails", async (t) => {
+  for (const [params, started, error] of [
+    [{}, ({ frames }) => ({ frames }),
+      /^Error: the start reply of a window recording names the recorded window undefined, not a window number$/],
+    [{}, ({ frames }) => ({ frames, window: null }),
+      /^Error: the start reply of a window recording names the recorded window null, not a window number$/],
+    [{ display: true }, ({ frames }) => ({ frames, window: 7 }),
+      /^Error: the start reply of a display recording names the recorded window 7, not null$/],
+  ]) {
+    const directory = mkdtempSync(join(tmpdir(), "soksak-record-window-"));
+    t.after(() => rmSync(directory, { recursive: true, force: true }));
+    const s = newSession(directory, fakeClient(directory, { started }));
+    await assert.rejects(s.record(params), error);
+    await assert.rejects(cleanUp(s), /1 recording failed/);
+  }
+});
+
+test("a recording of the display takes no recorded window", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "soksak-record-display-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const s = newSession(directory, fakeClient(directory));
+  const stopped = await (await s.record({ display: true })).stop();
+  assert.equal(stopped.window, null);
+  await cleanUp(s);
+});
 
 // A recording holds at most 4096 stills, so a reply for a larger plan is no reply of a recording.
 test("a recording stop for a plan of more stills than a recording holds fails", async (t) => {
@@ -345,14 +382,15 @@ const dragRecording = (frames, { until, ...stills }) =>
 /**
  * A session whose captured drag sends its steps at `ticks` and stops with a still recording, taken until `until` (ms), of a
  * window that changes at `changes`, the layouts `layouts` of the drag and display-link callbacks of the main thread at
- * `mainThread`, all in ms on the clock of the recording; the stills of `failed` fail. The last screen of the drag is displayed at its last change.
+ * `mainThread`, all in ms on the clock of the recording; the stills of `failed` fail, and the stop names the recorded window
+ * `window`. The last screen of the drag is displayed at its last change.
  */
-function gapSession(t, { changes, until, ticks, layouts = [], mainThread = [], failed = [] }) {
+function gapSession(t, { changes, until, ticks, layouts = [], mainThread = [], failed = [], window = 7 }) {
   const directory = mkdtempSync(join(tmpdir(), "soksak-drag-gap-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const s = newSession(directory, fakeClient(directory));
   const frames = join(directory, "logs", "captures", "drag-1");
-  const stopped = dragRecording(frames, { changes, until, failed, displayLink: { state: "available", reason: "", omittedObservations: 0,
+  const stopped = dragRecording(frames, { changes, until, failed, window, displayLink: { state: "available", reason: "", omittedObservations: 0,
     observations: mainThread.map((ms, index) => ({ sequence: index + 1, callbackTime: String(Math.round(ms * 1e6)),
       callbackMediaTime: ms / 1000, timestamp: (ms - 0.5) / 1000, targetTimestamp: (ms + 7.833) / 1000, duration: 0.008333,
       machTimebaseNumerator: 1, machTimebaseDenominator: 1 })) } });
@@ -417,6 +455,13 @@ test("a captured drag whose recording lost a still fails and names it", async (t
   const s = gapSession(t, { changes: every(0, 96, 8), until: 104, ticks: every(4, 92, 8), failed: [5] });
   await assert.rejects(drag(s, gapPlan, { capture: true }),
     /^Error: the recording lost 1 stills of the drag: still 5 planned at 40\.0ms failed \(the window server returned no image\)$/);
+});
+
+// A drag records its window, so its stop names the window and each written still took it.
+test("a captured drag whose stop names no recorded window fails", async (t) => {
+  const s = gapSession(t, { changes: every(0, 96, 8), until: 104, ticks: every(4, 92, 8), window: null });
+  await assert.rejects(drag(s, gapPlan, { capture: true }),
+    /^Error: the stop reply of a window recording names the recorded window null, not a window number$/);
 });
 
 test("a captured drag whose reply has no step times fails", async (t) => {

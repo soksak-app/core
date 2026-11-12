@@ -55,7 +55,7 @@ function captureSession(t, { bytes, empty = false, presentationError, stopError,
       // A recording holds the covered drawing of the window until it stops (holdCovered of the session).
       if (method === "diagnostics.window.draw-covered") return null;
       if (method === "status.get") return { refreshRate: 1000 / GAP };
-      if (method === "diagnostics.capture.start") return { frames: frameDir };
+      if (method === "diagnostics.capture.start") return { frames: frameDir, window: 7 };
       if (method === "command.run") {
         assert.equal(params.name, "host.window.presented");
         if (presentationError) throw presentationError;

@@ -14,7 +14,7 @@ function session({ stopFails = false } = {}) {
       requests.push(method === "diagnostics.window.draw-covered" ? `${method} ${params.draw}` : method);
       if (method === "diagnostics.window.draw-covered") return null;
       if (method === "status.get") return { refreshRate: 120 };
-      if (method === "diagnostics.capture.start") return { frames: "/unused/frames" };
+      if (method === "diagnostics.capture.start") return { frames: "/unused/frames", window: 7 };
       if (method === "diagnostics.capture.stop" && stopFails) throw new Error("the capture failed");
       throw new Error(`unexpected request ${method}`);
     },

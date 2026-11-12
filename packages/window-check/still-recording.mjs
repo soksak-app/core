@@ -24,10 +24,11 @@ const ns = (ms) => String(Math.round(ms * 1e6));
  * `changes` at or before its request, so a change is first held by the first still requested at or after it. The stills of
  * `failed` fail and those of `notRequested`, and every still from the index `stoppedAt` on (a recording stopped before the end
  * of its plan), are not requested; neither writes a frame. `windows` is the window list of each still. Returns the stop reply of
- * the host, with `layouts` and the display link `displayLink` when given.
+ * the host, which names the recorded window `window` (null for a recording of the display), with `layouts` and the display link
+ * `displayLink` when given.
  */
 export function writeStillRecording(frames, { gap = 8, until, changes = [], took = 0.5, failed = [], notRequested = [],
-  stoppedAt = Infinity, lateBy = {}, windows = [7], layouts = [], displayLink } = {}) {
+  stoppedAt = Infinity, lateBy = {}, windows = [7], window = 7, layouts = [], displayLink } = {}) {
   mkdirSync(frames, { recursive: true });
   const rows = [];
   for (let index = 0; index * gap <= until; index++) {
@@ -60,6 +61,6 @@ export function writeStillRecording(frames, { gap = 8, until, changes = [], took
     link = join(frames, "display-link.json");
     writeFileSync(link, JSON.stringify(displayLink));
   }
-  return { frames, stills, ...(link ? { displayLink: link } : {}), count: written.length, missed: rows.length - written.length,
+  return { frames, stills, window, ...(link ? { displayLink: link } : {}), count: written.length, missed: rows.length - written.length,
     late: Object.keys(lateBy).filter((index) => lateBy[index] > gap).length, longestGap, layouts };
 }
