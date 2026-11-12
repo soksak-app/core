@@ -58,6 +58,8 @@ int sp_test_callback_run(void) {
     sp_host_callback_native_responder_changed(token);
     sp_host_callback_native_cursor_changed(token);
     sp_host_callback_native_sheet_changed(token);
+    sp_host_callback_native_dialog_requested(token, identifier, text);
+    sp_host_callback_native_dialog_answered(token, text);
     sp_host_callback_native_fullscreen_done(token, -37, text);
     sp_host_callback_surface_pressed(token, &context);
     sp_host_callback_surface_point(token, -37, -12.5, -12.5);
