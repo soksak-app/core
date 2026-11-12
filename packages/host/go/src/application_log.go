@@ -175,8 +175,24 @@ func StartStandardError(config, identifier string) error {
 	return nil
 }
 
-// EndCrashOutput ends the crash output of this run at a normal exit (docs/spec/logging.md#files). It changes nothing yet: the crash
-// file of the run stays, empty, after a normal exit.
+// EndCrashOutput ends the crash output of this run at a normal exit (docs/spec/logging.md#files): from then on a runtime fatal
+// error writes its output to the standard error file of the run, and the crash file of the run is removed when it is empty,
+// because no fatal error wrote it, and kept when it holds output. Call it once in the shutdown of the host, after
+// StartStandardError.
 func EndCrashOutput(config string) error {
+	if err := debug.SetCrashOutput(nil, debug.CrashOptions{}); err != nil {
+		return fmt.Errorf("crash output file: %w", err)
+	}
+	path := CrashOutputPath(config)
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("crash output file: %w", err)
+	}
+	if info.Size() != 0 {
+		return nil
+	}
+	if err := os.Remove(path); err != nil {
+		return fmt.Errorf("crash output file: %w", err)
+	}
 	return nil
 }

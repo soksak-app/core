@@ -614,6 +614,20 @@ const FEATURE_LINKS = [
   },
 
   {
+    id: "F759",
+    implementation: [
+      { file: "packages/host/go/src/application_log.go", symbol: "func EndCrashOutput(config string) error" },
+      { file: "packages/host/go/src/host.go", symbol: "if err := EndCrashOutput(s.config); err != nil {" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/application_log_test.go", id: "TestANormalExitRemovesTheEmptyCrashFileOfItsRun" },
+      { file: "packages/host/go/tests/application_log_test.go", id: "TestANormalExitKeepsACrashFileThatHoldsOutput" },
+    ],
+    expected: "At a normal exit a Go host ends its crash output, removes the crash file of its run when it is empty, and keeps it when it holds output.",
+    levels: ["unit"],
+  },
+
+  {
     id: "F748",
     implementation: [
       { file: "Cargo.toml", symbol: "wry = { git = \"https://github.com/min-0-max/wry\", tag = \"wry-v0.57.0-soksak.1\" }" },
