@@ -1,7 +1,7 @@
 // Injects writer capacity, window server and file write faults into the real still recording, and checks the ends of its waits. A
-// still whose frame and encoded frame would pass the 256 MiB byte limit of the writer fails without holding its request, and one
-// whose bytes fit is written and gives them back; a still requested while 8 stills wait for their image fails at its request; the
-// last still of the largest plan is written; a still 0 without an image fails the start; the stills after a slow still 0 are
+// still whose encoded frame would pass the 128 MiB byte limit of the writer fails without holding its request, and one whose
+// encoded bytes fit is written and gives them back; a still requested while 8 stills wait for their image fails at its request;
+// the last still of the largest plan is written; a still 0 without an image fails the start; the stills after a slow still 0 are
 // requested before it completes; the end of a wait from another thread ends the wait of its token only; the close of the recorded
 // window ends a stop with its own reason while the main thread stays free; a scheduled stop answers its context once when another
 // window's close ends its wait; a request during a recording keeps the recording, its error and its prepared window; a still
@@ -158,13 +158,12 @@ int main(void) { @autoreleasepool {
     NSString *exhausted = folder(root, @"exhausted");
     SPCaptureRecording *recording = rowsRecording(exhausted, 1);
     clearCaptureError();
-    // The limit counts bytes: a 4x4 still reserves its frame (76 header and 64 pixel bytes) and its encoded frame (88 header bytes
-    // and an LZ4 capacity of 64 + 0 + 16 + 128), 436 bytes; the still of the 2400x1520 window of the window run reserves 29 241 531
-    // bytes, 9 of which fit in the 256 MiB limit.
-    check(kCapturePendingBytes == 268435456 && stillReservation(64) == 436 && stillReservation(2400 * 1520 * 4) == 29241531
-        && kCapturePendingBytes / stillReservation(2400 * 1520 * 4) == 9,
-        [NSString stringWithFormat:@"the writer limit is 256 MiB and a still reserves its frame and its encoded frame (%zu, %zu, %zu)",
-            kCapturePendingBytes, stillReservation(64), stillReservation(2400 * 1520 * 4)]);
+    // The limit counts the bytes of encoded frames: 128 MiB, the smallest power of two that holds the encoded frame of one
+    // incompressible still of a 7680x4320 display (88 header bytes and an LZ4 block of p + p/255 + 144 bytes).
+    check(kCapturePendingBytes == 134217728 && encodedBytes(7680 * 4320 * 4) == 133231065
+        && encodedBytes(7680 * 4320 * 4) <= kCapturePendingBytes && kCapturePendingBytes / 2 < encodedBytes(7680 * 4320 * 4),
+        [NSString stringWithFormat:@"the writer limit is the smallest power of two that holds one incompressible still of a 7680x4320 display (%zu, %zu)",
+            kCapturePendingBytes, encodedBytes(7680 * 4320 * 4)]);
     capturePendingBytes = kCapturePendingBytes;
     // The still runs on this thread: a still that waited for writer capacity would hold it here, and the check after it is
     // reached by the return of the still.
@@ -174,7 +173,7 @@ int main(void) { @autoreleasepool {
     check(returned, @"exhausted writer capacity never blocks the still");
     dispatch_sync(captureWriter, ^{});
     check([recording.rows[0][@"outcome"] isEqual:@"failed"]
-        && [recording.rows[0][@"error"] isEqual:@"capture pending writer capacity exceeded (268435456 bytes)"],
+        && [recording.rows[0][@"error"] isEqual:@"capture pending writer capacity exceeded (134217728 bytes)"],
         [NSString stringWithFormat:@"exhausted writer capacity fails the still with its reason (%@)", recording.rows[0]]);
     check(strstr(sp_capture_error(), "pending writer capacity exceeded") != NULL,
         @"exhausted writer capacity reports an explicit recording error");
@@ -182,21 +181,38 @@ int main(void) { @autoreleasepool {
         [exhausted stringByAppendingPathComponent:@"frame-0000.bgra"]], @"an exhausted writer writes no frame for the still");
     check(capturePendingBytes == kCapturePendingBytes, @"a refused still reserves no bytes");
 
-    // One byte short of the reservation of the still fails it; exactly its reservation admits it, and the written still gives
-    // every byte back.
+    // A uniform 256x256 still has 262 144 pixel bytes and an encoded frame of far fewer: the writer counts the encoded frame, which
+    // is the frame file. With the limit short of it by one byte the still is drawn, compressed and refused; with exactly its bytes
+    // free it is written, and the writer gives them back.
+    SPCaptureTarget *wide = [[[SPCaptureTarget alloc] init] autorelease];
+    wide.screen = CGRectMake(0, 0, 256, 256);
+    imageWidth = 256; imageHeight = 256;
+    CGImageRef uniform = testWindowImage(CGRectNull, NULL, 0);
+    imageWidth = 4; imageHeight = 4;
     NSString *boundary = folder(root, @"boundary");
-    recording = rowsRecording(boundary, 2);
+    recording = rowsRecording(boundary, 3);
     clearCaptureError();
-    capturePendingBytes = kCapturePendingBytes - stillReservation(64) + 1;
-    processStill(recording, 0, target, image, mach_absolute_time(), mach_absolute_time());
-    capturePendingBytes = kCapturePendingBytes - stillReservation(64);
-    processStill(recording, 1, target, image, mach_absolute_time(), mach_absolute_time());
-    dispatch_sync(captureWriter, ^{});
-    check([recording.rows[0][@"outcome"] isEqual:@"failed"] && [recording.rows[1][@"outcome"] isEqual:@"written"]
-        && capturePendingBytes == kCapturePendingBytes - stillReservation(64),
-        [NSString stringWithFormat:@"the writer admits a still whose bytes fit and fails one byte more (%@, %@, %zu)",
-            recording.rows[0][@"outcome"], recording.rows[1][@"outcome"], capturePendingBytes]);
     capturePendingBytes = 0;
+    processStill(recording, 0, wide, uniform, mach_absolute_time(), mach_absolute_time());
+    dispatch_sync(captureWriter, ^{});
+    unsigned long long encodedSize = [[NSFileManager.defaultManager attributesOfItemAtPath:
+        [boundary stringByAppendingPathComponent:@"frame-0000.bgra"] error:NULL] fileSize];
+    check([recording.rows[0][@"outcome"] isEqual:@"written"] && capturePendingBytes == 0 && encodedSize > kFrameEncodedHeader
+        && encodedSize < frameBytes(256 * 256 * 4) / 16,
+        [NSString stringWithFormat:@"a written still gives back its bytes, and its encoded frame is far smaller than its pixels (%llu of %zu, %zu held)",
+            encodedSize, frameBytes(256 * 256 * 4), capturePendingBytes]);
+    capturePendingBytes = kCapturePendingBytes - (size_t)encodedSize + 1;
+    processStill(recording, 1, wide, uniform, mach_absolute_time(), mach_absolute_time());
+    capturePendingBytes = kCapturePendingBytes - (size_t)encodedSize;
+    processStill(recording, 2, wide, uniform, mach_absolute_time(), mach_absolute_time());
+    dispatch_sync(captureWriter, ^{});
+    check([recording.rows[1][@"outcome"] isEqual:@"failed"]
+        && [recording.rows[1][@"error"] isEqual:@"capture pending writer capacity exceeded (134217728 bytes)"]
+        && [recording.rows[2][@"outcome"] isEqual:@"written"] && capturePendingBytes == kCapturePendingBytes - (size_t)encodedSize,
+        [NSString stringWithFormat:@"the writer admits a still whose encoded bytes fit and refuses one byte more (%@, %@, %zu)",
+            recording.rows[1], recording.rows[2][@"outcome"], capturePendingBytes]);
+    capturePendingBytes = 0;
+    if (uniform) CGImageRelease(uniform);
 
     NSString *available = folder(root, @"available");
     recording = rowsRecording(available, 4096);
