@@ -573,10 +573,9 @@ impl Platform for Windows {
         _gap: f64,
         _seconds: f64,
         _frames: i32,
-        frame_identity: bool,
         _token: u64,
     ) -> Result<(), String> {
-        unsupported::capture_start(directory, frame_identity)
+        unsupported::capture_start(directory)
     }
     #[cfg(feature = "diagnostics")]
     fn capture_stop(&self, after: f64, _token: u64) -> Result<i32, String> {
@@ -585,31 +584,6 @@ impl Platform for Windows {
     #[cfg(feature = "diagnostics")]
     // This platform records no window, and its still capture ends by its own limit, so no capture wait waits for an end.
     fn capture_end_wait(&self, _token: u64, _reason: &str) {}
-    #[cfg(feature = "diagnostics")]
-    fn document_frame_identity_start(
-        &self,
-        _document: Handle,
-        _generation: u64,
-        _done: Box<dyn FnOnce(Result<String, String>) + Send>,
-    ) -> Result<(), String> {
-        Err("not implemented on windows".into())
-    }
-    #[cfg(feature = "diagnostics")]
-    fn document_frame_identity_freeze(
-        &self,
-        _generation: u64,
-        _done: Box<dyn FnOnce(Result<String, String>) + Send>,
-    ) -> Result<(), String> {
-        Err("not implemented on windows".into())
-    }
-    #[cfg(feature = "diagnostics")]
-    fn document_frame_identity_remove(
-        &self,
-        _generation: u64,
-        _done: Box<dyn FnOnce(Result<String, String>) + Send>,
-    ) -> Result<(), String> {
-        Err("not implemented on windows".into())
-    }
     #[cfg(feature = "diagnostics")]
     fn capture_missed(&self) -> Result<i32, String> {
         unsupported::capture_missed()

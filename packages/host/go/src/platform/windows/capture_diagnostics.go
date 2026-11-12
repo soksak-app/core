@@ -19,7 +19,7 @@ func (implementation) CaptureStill(windowNumber int, path string) error {
 
 func (implementation) CaptureOpen(int, bool) error { return unsupported("window recording") }
 
-func (implementation) CaptureStart(string, float64, float64, int, bool, uint64) error {
+func (implementation) CaptureStart(string, float64, float64, int, uint64) error {
 	return unsupported("window recording")
 }
 

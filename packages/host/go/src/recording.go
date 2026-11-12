@@ -40,7 +40,7 @@ type Capture interface {
 	// active recording and leaves any existing active recording unchanged.
 	Open(target CaptureTarget) error
 	// Start starts the recording of plan in directory and returns once still 0 is written. A failed start ends its recording.
-	Start(directory string, plan CapturePlan, frameIdentity bool) error
+	Start(directory string, plan CapturePlan) error
 	// Stop ends the recording and returns the number of written frames. The recording ends also when Stop fails.
 	Stop() (int, error)
 }
@@ -60,12 +60,9 @@ type NewWindowCapture interface {
 
 // Recording is the folder of the recording in progress. The zero value is used.
 type Recording struct {
-	mu                      sync.Mutex
-	directory               string
-	captureStopped          bool
-	frameIdentity           bool
-	documentIdentityAllowed bool
-	identitySource          *documentFrameIdentitySource
+	mu             sync.Mutex
+	directory      string
+	captureStopped bool
 	// window is the window server number of the recorded window, nil for a display recording and for a new window that no
 	// show has given yet.
 	window *int
@@ -111,32 +108,19 @@ func (p *newWindowStart) registerEnd(end func(reason string)) {
 // newWindowStopReason is the end of the wait for a held window that the stop of the recording gives.
 const newWindowStopReason = "the stop of the recording"
 
-type documentFrameIdentitySource struct {
-	surface    string
-	generation uint64
-}
-
 // Start creates directory and starts recording target into that folder with plan. It returns after still 0 is written.
 // When cleanup after a failure is incomplete, the owned folder and stop state remain until Abort completes cleanup.
-func (r *Recording) Start(capture Capture, target CaptureTarget, directory string, plan CapturePlan, frameIdentity bool) error {
-	return r.StartWithDocumentIdentity(capture, target, directory, plan, frameIdentity, false)
-}
-
-// StartWithDocumentIdentity marks diagnostics.capture.start recordings as eligible for one document source.
-func (r *Recording) StartWithDocumentIdentity(capture Capture, target CaptureTarget, directory string, plan CapturePlan, frameIdentity, documentIdentityAllowed bool) error {
+func (r *Recording) Start(capture Capture, target CaptureTarget, directory string, plan CapturePlan) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if err := r.createDirectory(directory); err != nil {
 		return err
 	}
-	if err := begin(capture, target, directory, plan, frameIdentity); err != nil {
+	if err := begin(capture, target, directory, plan); err != nil {
 		return r.removeFailedStartDirectory(directory, err)
 	}
 	r.directory = directory
 	r.captureStopped = false
-	r.frameIdentity = frameIdentity
-	r.documentIdentityAllowed = documentIdentityAllowed
-	r.identitySource = nil
 	r.window = nil
 	if !target.Display {
 		window := target.Window
@@ -149,9 +133,6 @@ func (r *Recording) StartWithDocumentIdentity(capture Capture, target CaptureTar
 func (r *Recording) createDirectory(directory string) error {
 	if r.directory != "" {
 		return fmt.Errorf("a capture into %s is running", r.directory)
-	}
-	if r.identitySource != nil {
-		return fmt.Errorf("document frame identity cleanup for surface %q generation %d is incomplete", r.identitySource.surface, r.identitySource.generation)
 	}
 	if err := os.MkdirAll(filepath.Dir(directory), 0o700); err != nil {
 		return err
@@ -174,7 +155,7 @@ func (r *Recording) createDirectory(directory string) error {
 // starts with plan, and the start puts the window on screen, so still 0 of the recording holds the first content of the window.
 // A failure after the hold took a window shows that window. Finish and Abort end a hold that no show took and report the result
 // of the start.
-func (r *Recording) StartNewWindow(capture NewWindowCapture, directory string, plan CapturePlan, frameIdentity bool) error {
+func (r *Recording) StartNewWindow(capture NewWindowCapture, directory string, plan CapturePlan) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if err := r.createDirectory(directory); err != nil {
@@ -186,9 +167,6 @@ func (r *Recording) StartNewWindow(capture NewWindowCapture, directory string, p
 	pending := &newWindowStart{done: make(chan error, 1)}
 	r.directory = directory
 	r.captureStopped = false
-	r.frameIdentity = frameIdentity
-	r.documentIdentityAllowed = false
-	r.identitySource = nil
 	r.window = nil
 	r.pending = pending
 	routine.Go("new-window-recording", func() {
@@ -197,7 +175,7 @@ func (r *Recording) StartNewWindow(capture NewWindowCapture, directory string, p
 			pending.done <- err
 			return
 		}
-		err = begin(capture, CaptureTarget{Window: number}, directory, plan, frameIdentity)
+		err = begin(capture, CaptureTarget{Window: number}, directory, plan)
 		if err != nil {
 			capture.ReleaseNewWindow()
 		}
@@ -232,9 +210,6 @@ func (r *Recording) removeFailedStartDirectory(directory string, cause error) er
 	if removeErr := os.RemoveAll(directory); removeErr != nil {
 		r.directory = directory
 		r.captureStopped = true
-		r.frameIdentity = false
-		r.documentIdentityAllowed = false
-		r.identitySource = nil
 		r.window = nil
 		return fmt.Errorf("%w; remove failed capture directory: %v", cause, removeErr)
 	}
@@ -243,52 +218,12 @@ func (r *Recording) removeFailedStartDirectory(directory string, cause error) er
 
 // begin opens target and starts its recording with plan in directory. It returns once still 0 is written; a failure leaves no
 // native recording.
-func begin(capture Capture, target CaptureTarget, directory string, plan CapturePlan, frameIdentity bool) error {
+func begin(capture Capture, target CaptureTarget, directory string, plan CapturePlan) error {
 	// The preparation reads the windows of the target at that time, so the same target is prepared again for each recording.
 	if err := capture.Open(target); err != nil {
 		return err
 	}
-	return capture.Start(directory, plan, frameIdentity)
-}
-
-// FrameIdentityState reports whether the running capture requested identity matching and its selected view root.
-func (r *Recording) FrameIdentityState() (bool, *documentFrameIdentitySource) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.identitySource == nil {
-		return r.directory != "" && !r.captureStopped && r.frameIdentity && r.documentIdentityAllowed, nil
-	}
-	source := *r.identitySource
-	return r.directory != "" && !r.captureStopped && r.frameIdentity && r.documentIdentityAllowed, &source
-}
-
-// SelectFrameIdentitySource binds one current view root to the running identity capture.
-func (r *Recording) SelectFrameIdentitySource(surface string, generation uint64) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.directory == "" || r.captureStopped || !r.frameIdentity || !r.documentIdentityAllowed {
-		return errors.New("document frame identity requires an active identity capture")
-	}
-	if surface == "" || generation == 0 {
-		return errors.New("document frame identity source requires a surface and generation")
-	}
-	if r.identitySource != nil {
-		return fmt.Errorf("identity capture already selected surface %q generation %d", r.identitySource.surface, r.identitySource.generation)
-	}
-	r.identitySource = &documentFrameIdentitySource{surface: surface, generation: generation}
-	return nil
-}
-
-// ClearFrameIdentitySource clears the selected view after its native marker has been removed.
-func (r *Recording) ClearFrameIdentitySource(surface string, generation uint64) bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.identitySource == nil || r.identitySource.surface != surface || r.identitySource.generation != generation {
-		return false
-	}
-	r.identitySource = nil
-	r.documentIdentityAllowed = false
-	return true
+	return capture.Start(directory, plan)
 }
 
 // Abort stops the recording in progress and deletes the folder. It reports a stop error, after which the native recording has
@@ -317,47 +252,38 @@ func (r *Recording) Abort(capture Capture) error {
 	}
 	r.directory = ""
 	r.captureStopped = false
-	r.frameIdentity = false
-	r.documentIdentityAllowed = false
-	r.identitySource = nil
 	r.window = nil
 	return stopErr
 }
 
-// Finish ends the recording in progress and returns the folder, the number of frames, whether it has frame identity and the
-// window server number of its window, nil for a display recording. The requester deletes the folder. A stop error ends the
+// Finish ends the recording in progress and returns the folder, the number of frames and the window server number of its
+// window, nil for a display recording. The requester deletes the folder. A stop error ends the
 // native recording too: Finish then preserves the folder, releases the recording, and returns the error.
-func (r *Recording) Finish(capture Capture) (string, int, bool, *int, error) {
+func (r *Recording) Finish(capture Capture) (string, int, *int, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.captureStopped {
-		return "", 0, false, nil, errors.New("capture has stopped but its directory cleanup is incomplete; abort is required")
+		return "", 0, nil, errors.New("capture has stopped but its directory cleanup is incomplete; abort is required")
 	}
 	directory := r.directory
 	if directory == "" {
-		return "", 0, false, nil, errors.New("no capture is running")
+		return "", 0, nil, errors.New("no capture is running")
 	}
-	frameIdentity := r.frameIdentity
 	if err := r.settleNewWindow(); err != nil {
 		// The start failed before a recording ran: the requester owns the folder, which keeps what was written.
 		if r.captureStopped {
 			r.directory = ""
 			r.captureStopped = false
-			r.frameIdentity = false
 			r.window = nil
 		}
-		return directory, 0, frameIdentity, nil, err
+		return directory, 0, nil, err
 	}
 	window := r.window
 	count, err := capture.Stop()
 	r.directory = ""
 	r.captureStopped = false
-	r.frameIdentity = false
 	r.window = nil
-	if r.identitySource == nil {
-		r.documentIdentityAllowed = false
-	}
-	return directory, count, frameIdentity, window, err
+	return directory, count, window, err
 }
 
 // Running is the owned folder of the active recording or pending cleanup. It is empty when there is no owned folder.

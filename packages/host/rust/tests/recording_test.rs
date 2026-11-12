@@ -55,12 +55,8 @@ impl Capture for Fake {
             Ok(())
         }
     }
-    fn start(&self, directory: &Path, plan: Plan, frame_identity: bool) -> Result<(), String> {
-        self.calls.borrow_mut().push(if frame_identity {
-            "start frameIdentity".into()
-        } else {
-            "start".into()
-        });
+    fn start(&self, directory: &Path, plan: Plan) -> Result<(), String> {
+        self.calls.borrow_mut().push("start".into());
         self.plans.borrow_mut().push(plan);
         if self.fail_start {
             return Err("the first still was not written before the window closed".into());
@@ -119,16 +115,16 @@ fn a_finished_recording_keeps_its_folder_and_reports_frames() {
     let recording = Recording::new();
     let fake = Fake::default();
     recording
-        .start(&fake, WINDOW, &folder, PLAN, true, &make)
+        .start(&fake, WINDOW, &folder, PLAN, &make)
         .unwrap();
     assert_eq!(recording.running().as_deref(), Some(folder.as_path()));
-    let (directory, count, frame_identity, window) = recording.finish(&fake).unwrap();
+    let (directory, count, window) = recording.finish(&fake).unwrap();
     assert_eq!(
-        (directory, count, frame_identity, window),
-        (folder.clone(), 3, true, Some(WINDOW.window))
+        (directory, count, window),
+        (folder.clone(), 3, Some(WINDOW.window))
     );
     assert!(folder.is_dir());
-    assert_eq!(calls(&fake), ["open 7", "start frameIdentity", "stop"]);
+    assert_eq!(calls(&fake), ["open 7", "start", "stop"]);
     assert_eq!(*fake.plans.borrow(), [PLAN]);
     assert!(recording.finish(&fake).is_err());
 }
@@ -144,7 +140,7 @@ fn a_poisoned_recording_state_is_recovered_when_it_ends() {
         ..Fake::default()
     };
     recording
-        .start(&fake, WINDOW, &folder, PLAN, false, &make)
+        .start(&fake, WINDOW, &folder, PLAN, &make)
         .unwrap();
 
     let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -174,7 +170,7 @@ fn a_retired_stop_failure_preserves_folder_and_releases_owner() {
         ..Fake::default()
     };
     recording
-        .start(&fake, WINDOW, &folder, PLAN, false, &make)
+        .start(&fake, WINDOW, &folder, PLAN, &make)
         .unwrap();
 
     assert_eq!(recording.finish(&fake).unwrap_err(), "stop failed");
@@ -186,7 +182,7 @@ fn a_retired_stop_failure_preserves_folder_and_releases_owner() {
     );
     let next = parent.path().join("next-frames");
     recording
-        .start(&Fake::default(), WINDOW, &next, PLAN, false, &make)
+        .start(&Fake::default(), WINDOW, &next, PLAN, &make)
         .expect("next recording should start after native ownership retired");
     assert_eq!(calls(&fake), ["open 7", "start", "stop"]);
 }
@@ -203,7 +199,7 @@ fn a_failed_open_removes_the_folder() {
     };
     assert_eq!(
         recording
-            .start(&fake, WINDOW, &folder, PLAN, false, &make)
+            .start(&fake, WINDOW, &folder, PLAN, &make)
             .unwrap_err(),
         "open failed"
     );
@@ -224,7 +220,7 @@ fn a_failed_start_cleanup_retains_retry_ownership() {
         ..Fake::default()
     };
     let error = recording
-        .start(&fake, WINDOW, &folder, PLAN, false, &make)
+        .start(&fake, WINDOW, &folder, PLAN, &make)
         .unwrap_err();
     assert!(
         error.contains("capture directory cleanup failed"),
@@ -234,7 +230,7 @@ fn a_failed_start_cleanup_retains_retry_ownership() {
     assert_eq!(calls(&fake), ["open 7"]);
 
     let blocked = recording
-        .start(&fake, WINDOW, &next, PLAN, false, &make)
+        .start(&fake, WINDOW, &next, PLAN, &make)
         .unwrap_err();
     assert!(
         blocked.contains("is running"),
@@ -261,7 +257,7 @@ fn a_directory_cleanup_retry_does_not_stop_a_completed_capture_twice() {
         ..Fake::default()
     };
     recording
-        .start(&fake, WINDOW, &folder, PLAN, false, &make)
+        .start(&fake, WINDOW, &folder, PLAN, &make)
         .unwrap();
 
     let error = recording.abort(&fake).unwrap_err();
@@ -293,7 +289,7 @@ fn a_make_failure_preserves_a_path_that_recording_did_not_create() {
     let fake = Fake::default();
 
     let error = recording
-        .start(&fake, WINDOW, &folder, PLAN, false, &|_| {
+        .start(&fake, WINDOW, &folder, PLAN, &|_| {
             Err("path is not available".into())
         })
         .unwrap_err();
@@ -315,7 +311,7 @@ fn a_failed_start_removes_the_folder() {
     };
     assert_eq!(
         recording
-            .start(&fake, WINDOW, &folder, PLAN, false, &make)
+            .start(&fake, WINDOW, &folder, PLAN, &make)
             .unwrap_err(),
         "the first still was not written before the window closed"
     );
@@ -329,7 +325,6 @@ fn a_failed_start_removes_the_folder() {
             WINDOW,
             &parent.path().join("next"),
             PLAN,
-            false,
             &make,
         )
         .expect("next start after a failed start");
@@ -347,7 +342,7 @@ fn a_failed_first_still_removes_the_folder() {
     };
     assert_eq!(
         recording
-            .start(&fake, WINDOW, &folder, PLAN, false, &make)
+            .start(&fake, WINDOW, &folder, PLAN, &make)
             .unwrap_err(),
         "window 7 is not on screen"
     );
@@ -361,7 +356,6 @@ fn a_failed_first_still_removes_the_folder() {
             WINDOW,
             &parent.path().join("next"),
             PLAN,
-            false,
             &make,
         )
         .expect("next start after a failed first still");
@@ -375,18 +369,16 @@ fn an_aborted_recording_is_stopped_and_removed_and_allows_the_next() {
     let second = parent.path().join("second");
     let recording = Recording::new();
     let fake = Fake::default();
-    recording
-        .start(&fake, WINDOW, &first, PLAN, false, &make)
-        .unwrap();
+    recording.start(&fake, WINDOW, &first, PLAN, &make).unwrap();
     let refused = recording
-        .start(&fake, WINDOW, &second, PLAN, false, &make)
+        .start(&fake, WINDOW, &second, PLAN, &make)
         .unwrap_err();
     assert!(refused.contains("is running"), "{refused}");
     assert!(!second.exists());
     recording.abort(&fake).unwrap();
     assert!(!first.exists());
     recording
-        .start(&fake, WINDOW, &second, PLAN, false, &make)
+        .start(&fake, WINDOW, &second, PLAN, &make)
         .unwrap();
     // The preparation reads the windows of the target at that time, so even the same window is prepared again for every
     // recording.
@@ -404,7 +396,7 @@ fn an_abort_removes_retired_folder_and_reports_stop_error() {
         ..Fake::default()
     };
     recording
-        .start(&fake, WINDOW, &folder, PLAN, false, &make)
+        .start(&fake, WINDOW, &folder, PLAN, &make)
         .unwrap();
 
     let error = recording.abort(&fake).unwrap_err();
@@ -417,7 +409,6 @@ fn an_abort_removes_retired_folder_and_reports_stop_error() {
             WINDOW,
             &parent.path().join("next"),
             PLAN,
-            false,
             &make,
         )
         .expect("next start after an abort whose stop failed");
@@ -435,7 +426,7 @@ fn an_abort_retries_retired_folder_cleanup_without_repeating_stop() {
         ..Fake::default()
     };
     recording
-        .start(&fake, WINDOW, &folder, PLAN, false, &make)
+        .start(&fake, WINDOW, &folder, PLAN, &make)
         .unwrap();
 
     let error = recording.abort(&fake).unwrap_err();
@@ -459,14 +450,7 @@ fn a_different_target_is_prepared_again() {
     let recording = Recording::new();
     let fake = Fake::default();
     recording
-        .start(
-            &fake,
-            WINDOW,
-            &parent.path().join("window"),
-            PLAN,
-            false,
-            &make,
-        )
+        .start(&fake, WINDOW, &parent.path().join("window"), PLAN, &make)
         .unwrap();
     recording.finish(&fake).unwrap();
     let display = Target {
@@ -474,39 +458,13 @@ fn a_different_target_is_prepared_again() {
         display: true,
     };
     recording
-        .start(
-            &fake,
-            display,
-            &parent.path().join("display"),
-            PLAN,
-            false,
-            &make,
-        )
+        .start(&fake, display, &parent.path().join("display"), PLAN, &make)
         .unwrap();
     recording.finish(&fake).unwrap();
     assert_eq!(
         calls(&fake),
         ["open 7", "start", "stop", "open 7 display", "start", "stop"]
     );
-}
-
-// contract: diagnostics.capture-start.forwards-frame-identity
-#[test]
-fn recording_start_forwards_frame_identity() {
-    let parent = folder::Folder::new();
-    let recording = Recording::new();
-    let fake = Fake::default();
-    recording
-        .start(
-            &fake,
-            WINDOW,
-            &parent.path().join("frames"),
-            PLAN,
-            true,
-            &make,
-        )
-        .unwrap();
-    assert_eq!(calls(&fake), ["open 7", "start frameIdentity"]);
 }
 
 // contract: recording.finish.reports-the-recorded-window
@@ -520,32 +478,18 @@ fn a_finished_recording_reports_its_window() {
         display: true,
     };
     recording
-        .start(
-            &fake,
-            display,
-            &parent.path().join("display"),
-            PLAN,
-            false,
-            &make,
-        )
+        .start(&fake, display, &parent.path().join("display"), PLAN, &make)
         .unwrap();
     // A display recording has no window of its own.
-    assert_eq!(recording.finish(&fake).unwrap().3, None);
+    assert_eq!(recording.finish(&fake).unwrap().2, None);
     let window = Target {
         window: 9,
         display: false,
     };
     recording
-        .start(
-            &fake,
-            window,
-            &parent.path().join("window"),
-            PLAN,
-            false,
-            &make,
-        )
+        .start(&fake, window, &parent.path().join("window"), PLAN, &make)
         .unwrap();
-    assert_eq!(recording.finish(&fake).unwrap().3, Some(9));
+    assert_eq!(recording.finish(&fake).unwrap().2, Some(9));
 }
 
 /// The counts of the stills of the recordings of the payload tests.
@@ -567,7 +511,6 @@ fn the_stop_payload_reports_the_stills() {
             longest_gap: 42.5,
         },
         &[],
-        false,
         Some(31),
     );
     assert_eq!(
@@ -575,25 +518,14 @@ fn the_stop_payload_reports_the_stills() {
         serde_json::json!({"frames": "/tmp/frames", "stills": "/tmp/frames/stills.jsonl", "displayLink": "/tmp/frames/display-link.json", "count": 598, "missed": 2, "late": 5, "longestGap": 42.5, "layouts": [], "window": 31})
     );
     // A display recording has no window of its own: the member is null, not absent.
-    let display = stop_payload(Path::new("/tmp/frames"), 3, STILLS, &[], false, None);
+    let display = stop_payload(Path::new("/tmp/frames"), 3, STILLS, &[], None);
     assert_eq!(display.get("window"), Some(&serde_json::Value::Null));
-}
-
-// contract: diagnostics.capture-stop.payload-names-opt-in-frame-identity-artifact
-#[test]
-fn the_stop_payload_names_the_opt_in_frame_identity_artifact() {
-    let payload = stop_payload(Path::new("/tmp/frames"), 3, STILLS, &[], true, None);
-    assert_eq!(payload["frameIdentity"]["status"], "complete");
-    assert_eq!(
-        payload["frameIdentity"]["manifest"],
-        "/tmp/frames/frame-identities/manifest.json"
-    );
 }
 
 // contract: diagnostics.capture-stop.payload-reports-layout-timeline
 #[test]
 fn the_stop_payload_requires_a_layout_timeline() {
-    let payload = stop_payload(Path::new("/tmp/frames"), 3, STILLS, &[], false, None);
+    let payload = stop_payload(Path::new("/tmp/frames"), 3, STILLS, &[], None);
     assert!(
         payload["layouts"].is_array(),
         "capture stop omitted layouts: {payload}"
@@ -629,7 +561,6 @@ fn the_stop_payload_preserves_layout_stages() {
                 flushed: f64::NAN,
             },
         ],
-        false,
         None,
     );
     assert_eq!(
@@ -654,7 +585,7 @@ impl Capture for Panicking {
     fn open(&self, _target: Target) -> Result<(), String> {
         Ok(())
     }
-    fn start(&self, _directory: &Path, _plan: Plan, _frame_identity: bool) -> Result<(), String> {
+    fn start(&self, _directory: &Path, _plan: Plan) -> Result<(), String> {
         self.active.set(true);
         panic!("capture start panicked")
     }
@@ -689,7 +620,7 @@ fn a_panicking_capture_start_stops_partial_capture_before_unwinding() {
         panic_first_stop: false,
     };
     let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let _ = recording.start(&capture, WINDOW, &folder, PLAN, false, &make);
+        let _ = recording.start(&capture, WINDOW, &folder, PLAN, &make);
     }));
     assert!(panicked.is_err());
     assert_eq!(capture.stops.get(), 1, "partial capture was not stopped");
@@ -726,7 +657,7 @@ fn a_panicking_start_releases_retired_capture_after_stop_error() {
         panic_first_stop: false,
     };
     let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let _ = recording.start(&capture, WINDOW, &folder, PLAN, false, &make);
+        let _ = recording.start(&capture, WINDOW, &folder, PLAN, &make);
     }));
     assert!(panicked.is_err());
     assert!(!capture.active.get(), "the native recording was not ended");
@@ -765,7 +696,7 @@ fn a_failed_panic_cleanup_retains_state_until_abort_retries() {
         panic_first_stop: true,
     };
     let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let _ = recording.start(&capture, WINDOW, &folder, PLAN, false, &make);
+        let _ = recording.start(&capture, WINDOW, &folder, PLAN, &make);
     }));
     assert!(panicked.is_err());
     assert!(
@@ -779,7 +710,7 @@ fn a_failed_panic_cleanup_retains_state_until_abort_retries() {
     assert_eq!(recording.running().as_deref(), Some(folder.as_path()));
 
     let error = recording
-        .start(&Fake::default(), WINDOW, &next, PLAN, false, &make)
+        .start(&Fake::default(), WINDOW, &next, PLAN, &make)
         .unwrap_err();
     assert!(
         error.contains("is running"),

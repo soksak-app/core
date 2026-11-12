@@ -29,16 +29,11 @@ pub fn stop_payload(
     count: i32,
     stills: StillCounts,
     layouts: &[LayoutRecord],
-    frame_identity: bool,
     window: Option<isize>,
 ) -> Value {
     let still_record = directory.join("stills.jsonl");
     let display_link = directory.join("display-link.json");
-    let mut payload = json!({"frames": directory.to_string_lossy(), "stills": still_record.to_string_lossy(), "displayLink": display_link.to_string_lossy(), "count": count, "missed": stills.missed, "late": stills.late, "longestGap": stills.longest_gap, "layouts": layout_trace(layouts), "window": window});
-    if frame_identity {
-        payload["frameIdentity"] = json!({"status": "complete", "manifest": directory.join("frame-identities/manifest.json").to_string_lossy()});
-    }
-    payload
+    json!({"frames": directory.to_string_lossy(), "stills": still_record.to_string_lossy(), "displayLink": display_link.to_string_lossy(), "count": count, "missed": stills.missed, "late": stills.late, "longestGap": stills.longest_gap, "layouts": layout_trace(layouts), "window": window})
 }
 
 /// Converts the placement transaction records into {ticket, begun, requested, presented, committed, commitPath,
@@ -94,7 +89,7 @@ pub trait Capture {
     fn open(&self, target: Target) -> Result<(), String>;
     /// Starts the recording of plan in directory and returns once still 0 is written. A failed start ends its recording; a
     /// panic may interrupt an active start, which the recording owner stops while unwinding.
-    fn start(&self, directory: &Path, plan: Plan, frame_identity: bool) -> Result<(), String>;
+    fn start(&self, directory: &Path, plan: Plan) -> Result<(), String>;
     /// Ends the recording and returns the number of written frames. The recording ends also when the stop fails.
     fn stop(&self) -> Result<i32, String>;
 }
@@ -136,9 +131,6 @@ struct NewWindowStart {
 struct State {
     directory: Option<PathBuf>,
     capture_stopped: bool,
-    frame_identity: bool,
-    document_identity_allowed: bool,
-    identity_source: Option<(String, u64)>,
     pending: Option<NewWindowStart>,
     /// The window server number of the recorded window: none for a display recording and for a new window that no show
     /// has given yet.
@@ -152,10 +144,9 @@ fn begin(
     target: Target,
     directory: &Path,
     plan: Plan,
-    frame_identity: bool,
 ) -> Result<(), String> {
     capture.open(target)?;
-    capture.start(directory, plan, frame_identity)
+    capture.start(directory, plan)
 }
 
 /// Waits for the start of the recording of a new window, ending a hold that no show took, and returns the failure of
@@ -202,9 +193,6 @@ impl Recording {
             state: Mutex::new(State {
                 directory: None,
                 capture_stopped: false,
-                frame_identity: false,
-                document_identity_allowed: false,
-                identity_source: None,
                 pending: None,
                 window: None,
             }),
@@ -221,18 +209,12 @@ impl Recording {
         capture: Arc<dyn NewWindowCapture>,
         directory: &Path,
         plan: Plan,
-        frame_identity: bool,
         make: &dyn Fn(&Path) -> Result<(), String>,
     ) -> Result<(), String> {
         // default: poison paths preserve the owned directory and stop status, so start can refuse a running capture.
         let mut state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
         if let Some(running) = &state.directory {
             return Err(format!("a capture into {} is running", running.display()));
-        }
-        if let Some((surface, generation)) = &state.identity_source {
-            return Err(format!(
-                "document frame identity cleanup for surface {surface:?} generation {generation} is incomplete"
-            ));
         }
         make(directory)?;
         if let Err(error) = capture.hold_new_window() {
@@ -261,13 +243,7 @@ impl Recording {
                         window: number,
                         display: false,
                     };
-                    let result = begin(
-                        capture.as_ref(),
-                        target,
-                        &target_directory,
-                        plan,
-                        frame_identity,
-                    );
+                    let result = begin(capture.as_ref(), target, &target_directory, plan);
                     if result.is_err() {
                         capture.release_new_window();
                     }
@@ -285,9 +261,6 @@ impl Recording {
         });
         state.directory = Some(directory.to_path_buf());
         state.capture_stopped = false;
-        state.frame_identity = frame_identity;
-        state.document_identity_allowed = false;
-        state.identity_source = None;
         state.window = None;
         state.pending = Some(NewWindowStart { done: on_done, end });
         Ok(())
@@ -301,30 +274,6 @@ impl Recording {
         target: Target,
         directory: &Path,
         plan: Plan,
-        frame_identity: bool,
-        make: &dyn Fn(&Path) -> Result<(), String>,
-    ) -> Result<(), String> {
-        self.start_with_document_identity(
-            capture,
-            target,
-            directory,
-            plan,
-            frame_identity,
-            false,
-            make,
-        )
-    }
-
-    /// Starts a diagnostics.capture.start recording that can select one plugin-root document source.
-    #[allow(clippy::too_many_arguments)]
-    pub fn start_with_document_identity(
-        &self,
-        capture: &dyn Capture,
-        target: Target,
-        directory: &Path,
-        plan: Plan,
-        frame_identity: bool,
-        document_identity_allowed: bool,
         make: &dyn Fn(&Path) -> Result<(), String>,
     ) -> Result<(), String> {
         // default: poison paths preserve the owned directory and stop status before unwinding, so start can refuse a
@@ -333,11 +282,6 @@ impl Recording {
         if let Some(running) = &state.directory {
             return Err(format!("a capture into {} is running", running.display()));
         }
-        if let Some((surface, generation)) = &state.identity_source {
-            return Err(format!(
-                "document frame identity cleanup for surface {surface:?} generation {generation} is incomplete"
-            ));
-        }
         // The caller owns the path until creation succeeds; a failed `make` must not trigger directory removal here.
         make(directory)?;
         let mut capture_open_attempted = false;
@@ -345,15 +289,12 @@ impl Recording {
             // The preparation reads the windows of the target at that time, so even the same target is prepared again
             // for every recording.
             capture_open_attempted = true;
-            begin(capture, target, directory, plan, frame_identity)
+            begin(capture, target, directory, plan)
         }));
         match started {
             Ok(Ok(())) => {
                 state.directory = Some(directory.to_path_buf());
                 state.capture_stopped = false;
-                state.frame_identity = frame_identity;
-                state.document_identity_allowed = document_identity_allowed;
-                state.identity_source = None;
                 state.window = (!target.display).then_some(target.window);
                 Ok(())
             }
@@ -362,9 +303,6 @@ impl Recording {
                 Err(cleanup_error) => {
                     state.directory = Some(directory.to_path_buf());
                     state.capture_stopped = true;
-                    state.frame_identity = frame_identity;
-                    state.document_identity_allowed = false;
-                    state.identity_source = None;
                     Err(format!(
                         "{error}; capture directory cleanup failed: {cleanup_error}"
                     ))
@@ -406,16 +344,10 @@ impl Recording {
                 if !retain_owner {
                     state.directory = None;
                     state.capture_stopped = false;
-                    state.frame_identity = false;
-                    state.document_identity_allowed = false;
-                    state.identity_source = None;
                     self.state.clear_poison();
                 } else {
                     state.directory = Some(directory.to_path_buf());
                     state.capture_stopped = capture_stopped;
-                    state.frame_identity = frame_identity;
-                    state.document_identity_allowed = false;
-                    state.identity_source = None;
                 }
                 if !cleanup_errors.is_empty() {
                     crate::application_log::log_error("recording", cleanup_errors.join("; "));
@@ -463,9 +395,6 @@ impl Recording {
         }
         state.directory = None;
         state.capture_stopped = false;
-        state.frame_identity = false;
-        state.document_identity_allowed = false;
-        state.identity_source = None;
         state.window = None;
         self.state.clear_poison();
         match retired_stop_error {
@@ -474,13 +403,9 @@ impl Recording {
         }
     }
 
-    /// Ends the recording in progress and returns the folder, the number of frames, whether it has frame identity and the
-    /// window server number of its window, none for a display recording. The requester deletes the folder. A stop error
+    /// Ends the recording in progress and returns the folder, the number of frames and the window server number of its window, none for a display recording. The requester deletes the folder. A stop error
     /// ends the native recording too: finish then releases the recording and leaves the folder in place.
-    pub fn finish(
-        &self,
-        capture: &dyn Capture,
-    ) -> Result<(PathBuf, i32, bool, Option<isize>), String> {
+    pub fn finish(&self, capture: &dyn Capture) -> Result<(PathBuf, i32, Option<isize>), String> {
         let mut state = self
             .state
             .lock()
@@ -498,7 +423,6 @@ impl Recording {
         if let Err(error) = settle_new_window(&mut state) {
             // The start failed before a recording ran: the requester owns the folder, which keeps what was written.
             state.directory = None;
-            state.frame_identity = false;
             state.window = None;
             self.state.clear_poison();
             return Err(error);
@@ -509,10 +433,6 @@ impl Recording {
             Err(stop_error) => {
                 state.directory = None;
                 state.capture_stopped = false;
-                state.frame_identity = false;
-                if state.identity_source.is_none() {
-                    state.document_identity_allowed = false;
-                }
                 self.state.clear_poison();
                 return Err(stop_error);
             }
@@ -523,61 +443,8 @@ impl Recording {
             .take()
             .ok_or_else(|| "capture directory disappeared while stopping".to_string())?;
         state.capture_stopped = false;
-        let frame_identity = std::mem::replace(&mut state.frame_identity, false);
-        if state.identity_source.is_none() {
-            state.document_identity_allowed = false;
-        }
         self.state.clear_poison();
-        Ok((directory, count, frame_identity, window))
-    }
-
-    /// Returns the active identity-capture flag and its selected view root.
-    pub fn frame_identity_state(&self) -> (bool, Option<(String, u64)>) {
-        // default: panic paths leave state unchanged until a stop succeeds; reading the retained state is safe for cleanup.
-        let state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
-        (
-            state.directory.is_some() && state.frame_identity && state.document_identity_allowed,
-            state.identity_source.clone(),
-        )
-    }
-
-    /// Selects the one current view root for the active identity capture.
-    pub fn select_frame_identity_source(
-        &self,
-        surface: &str,
-        generation: u64,
-    ) -> Result<(), String> {
-        if surface.is_empty() || generation == 0 {
-            return Err("document frame identity source requires a surface and generation".into());
-        }
-        // default: source validation runs before allocation and assignment, so a panic leaves the prior state intact.
-        let mut state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
-        if state.directory.is_none() || !state.frame_identity || !state.document_identity_allowed {
-            return Err("document frame identity requires an active frameIdentity capture".into());
-        }
-        if let Some((selected_surface, selected_generation)) = &state.identity_source {
-            return Err(format!(
-                "identity capture already selected surface {selected_surface:?} generation {selected_generation}"
-            ));
-        }
-        state.identity_source = Some((surface.to_string(), generation));
-        Ok(())
-    }
-
-    /// Clears the selected source after native marker cleanup completes.
-    pub fn clear_frame_identity_source(&self, surface: &str, generation: u64) -> bool {
-        // default: native cleanup completes before these non-panicking state-field updates run.
-        let mut state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
-        if state
-            .identity_source
-            .as_ref()
-            .is_none_or(|(selected, current)| selected != surface || *current != generation)
-        {
-            return false;
-        }
-        state.identity_source = None;
-        state.document_identity_allowed = false;
-        true
+        Ok((directory, count, window))
     }
 
     /// The folder of the recording in progress.

@@ -272,36 +272,6 @@ func DiagnosticFunctions(library uintptr) (abi.DiagnosticFunctions, error) {
 		purego.RegisterFunc(&functions.ScheduleCaptureWaitNewWindow, address)
 	}
 	{
-		address, err := purego.Dlsym(library, "scheduleDocumentFrameIdentityFreeze")
-		if err != nil {
-			return abi.DiagnosticFunctions{}, fmt.Errorf("native API scheduleDocumentFrameIdentityFreeze: %w", err)
-		}
-		if address == 0 {
-			return abi.DiagnosticFunctions{}, fmt.Errorf("native API scheduleDocumentFrameIdentityFreeze: symbol has a null address")
-		}
-		purego.RegisterFunc(&functions.ScheduleDocumentFrameIdentityFreeze, address)
-	}
-	{
-		address, err := purego.Dlsym(library, "scheduleDocumentFrameIdentityRemove")
-		if err != nil {
-			return abi.DiagnosticFunctions{}, fmt.Errorf("native API scheduleDocumentFrameIdentityRemove: %w", err)
-		}
-		if address == 0 {
-			return abi.DiagnosticFunctions{}, fmt.Errorf("native API scheduleDocumentFrameIdentityRemove: symbol has a null address")
-		}
-		purego.RegisterFunc(&functions.ScheduleDocumentFrameIdentityRemove, address)
-	}
-	{
-		address, err := purego.Dlsym(library, "scheduleDocumentFrameIdentityStart")
-		if err != nil {
-			return abi.DiagnosticFunctions{}, fmt.Errorf("native API scheduleDocumentFrameIdentityStart: %w", err)
-		}
-		if address == 0 {
-			return abi.DiagnosticFunctions{}, fmt.Errorf("native API scheduleDocumentFrameIdentityStart: symbol has a null address")
-		}
-		purego.RegisterFunc(&functions.ScheduleDocumentFrameIdentityStart, address)
-	}
-	{
 		address, err := purego.Dlsym(library, "sp_capture_clock")
 		if err != nil {
 			return abi.DiagnosticFunctions{}, fmt.Errorf("native API sp_capture_clock: %w", err)

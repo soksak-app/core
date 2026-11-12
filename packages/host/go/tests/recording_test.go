@@ -52,12 +52,8 @@ func (f *fakeCapture) Open(target host.CaptureTarget) error {
 	return nil
 }
 
-func (f *fakeCapture) Start(directory string, plan host.CapturePlan, frameIdentity bool) error {
-	if frameIdentity {
-		f.calls = append(f.calls, "start frameIdentity")
-	} else {
-		f.calls = append(f.calls, "start")
-	}
+func (f *fakeCapture) Start(directory string, plan host.CapturePlan) error {
+	f.calls = append(f.calls, "start")
 	f.plans = append(f.plans, plan)
 	if f.failStart {
 		return errors.New("the first still was not written before the window closed")
@@ -109,21 +105,21 @@ func TestFinishedRecordingKeepsItsFolderAndReportsFrames(t *testing.T) {
 	folder := filepath.Join(t.TempDir(), "frames")
 	var recording host.Recording
 	fake := &fakeCapture{}
-	if err := recording.Start(fake, window, folder, plan, true); err != nil {
+	if err := recording.Start(fake, window, folder, plan); err != nil {
 		t.Fatal(err)
 	}
 	if recording.Running() != folder {
 		t.Fatalf("running %q", recording.Running())
 	}
-	directory, count, frameIdentity, recorded, err := recording.Finish(fake)
-	if err != nil || directory != folder || count != 3 || !frameIdentity || !exists(folder) || recorded == nil || *recorded != window.Window {
-		t.Fatalf("finish %q %d frameIdentity=%v window=%v %v", directory, count, frameIdentity, recorded, err)
+	directory, count, recorded, err := recording.Finish(fake)
+	if err != nil || directory != folder || count != 3 || !exists(folder) || recorded == nil || *recorded != window.Window {
+		t.Fatalf("finish %q %d window=%v %v", directory, count, recorded, err)
 	}
-	expectCalls(t, fake, "open 7", "start frameIdentity", "stop")
+	expectCalls(t, fake, "open 7", "start", "stop")
 	if !reflect.DeepEqual(fake.plans, []host.CapturePlan{plan}) {
 		t.Fatalf("the start received the plans %+v, want %+v", fake.plans, plan)
 	}
-	if _, _, _, _, err := recording.Finish(fake); err == nil {
+	if _, _, _, err := recording.Finish(fake); err == nil {
 		t.Fatal("a second finish succeeded")
 	}
 }
@@ -134,17 +130,17 @@ func TestFinishRetiredStopFailureReleasesOwnerAndPreservesFolder(t *testing.T) {
 	folder := filepath.Join(parent, "frames")
 	fake := &fakeCapture{stopErr: true}
 	var recording host.Recording
-	if err := recording.Start(fake, window, folder, plan, false); err != nil {
+	if err := recording.Start(fake, window, folder, plan); err != nil {
 		t.Fatal(err)
 	}
-	directory, _, _, _, err := recording.Finish(fake)
+	directory, _, _, err := recording.Finish(fake)
 	if err == nil || !strings.Contains(err.Error(), "stop failed") {
 		t.Fatalf("finish error %v, want stop failure", err)
 	}
 	if directory != folder || !exists(folder) || recording.Running() != "" {
 		t.Fatalf("retired finish directory=%q exists=%t running=%q", directory, exists(folder), recording.Running())
 	}
-	if err := recording.Start(&fakeCapture{}, window, filepath.Join(parent, "next"), plan, false); err != nil {
+	if err := recording.Start(&fakeCapture{}, window, filepath.Join(parent, "next"), plan); err != nil {
 		t.Fatalf("next start after retired stop failure: %v", err)
 	}
 	expectCalls(t, fake, "open 7", "start", "stop")
@@ -155,7 +151,7 @@ func TestFailedOpenRemovesTheFolder(t *testing.T) {
 	folder := filepath.Join(t.TempDir(), "frames")
 	var recording host.Recording
 	fake := &fakeCapture{failOpen: true}
-	err := recording.Start(fake, window, folder, plan, false)
+	err := recording.Start(fake, window, folder, plan)
 	if err == nil || err.Error() != "open failed" || exists(folder) || recording.Running() != "" {
 		t.Fatalf("start %v, folder kept %v", err, exists(folder))
 	}
@@ -167,13 +163,13 @@ func TestFailedStartRemovesTheFolder(t *testing.T) {
 	folder := filepath.Join(t.TempDir(), "frames")
 	var recording host.Recording
 	fake := &fakeCapture{failStart: true}
-	err := recording.Start(fake, window, folder, plan, false)
+	err := recording.Start(fake, window, folder, plan)
 	if err == nil || err.Error() != "the first still was not written before the window closed" || exists(folder) || recording.Running() != "" {
 		t.Fatalf("start %v, folder kept %v", err, exists(folder))
 	}
 	// The native start ends its recording when still 0 fails, so the recording asks for no stop.
 	expectCalls(t, fake, "open 7", "start")
-	if err := recording.Start(&fakeCapture{}, window, filepath.Join(t.TempDir(), "next"), plan, false); err != nil {
+	if err := recording.Start(&fakeCapture{}, window, filepath.Join(t.TempDir(), "next"), plan); err != nil {
 		t.Fatalf("next start after a failed start: %v", err)
 	}
 }
@@ -183,13 +179,13 @@ func TestFailedFirstStillRemovesTheFolder(t *testing.T) {
 	folder := filepath.Join(t.TempDir(), "frames")
 	var recording host.Recording
 	fake := &fakeCapture{failFirstStill: true}
-	err := recording.Start(fake, window, folder, plan, false)
+	err := recording.Start(fake, window, folder, plan)
 	if err == nil || err.Error() != "window 7 is not on screen" || exists(folder) || recording.Running() != "" {
 		t.Fatalf("start %v, folder kept %v, running %q", err, exists(folder), recording.Running())
 	}
 	// The native start ended its recording with still 0, so the recording asks for no stop.
 	expectCalls(t, fake, "open 7", "start")
-	if err := recording.Start(&fakeCapture{}, window, filepath.Join(t.TempDir(), "next"), plan, false); err != nil {
+	if err := recording.Start(&fakeCapture{}, window, filepath.Join(t.TempDir(), "next"), plan); err != nil {
 		t.Fatalf("next start after a failed first still: %v", err)
 	}
 }
@@ -206,7 +202,7 @@ func TestStartMakeFailurePreservesUnownedPath(t *testing.T) {
 	}
 	var recording host.Recording
 	fake := &fakeCapture{}
-	err := recording.Start(fake, window, folder, plan, false)
+	err := recording.Start(fake, window, folder, plan)
 	if err == nil || recording.Running() != "" || !exists(sentinel) {
 		t.Fatalf("start error=%v running=%q caller path exists=%t", err, recording.Running(), exists(sentinel))
 	}
@@ -218,7 +214,7 @@ func TestFailedStartCleanupRetainsFolderOwner(t *testing.T) {
 	folder := filepath.Join(t.TempDir(), "frames")
 	var recording host.Recording
 	fake := &fakeCapture{failOpen: true, blockDirectoryOnOpen: folder}
-	err := recording.Start(fake, window, folder, plan, false)
+	err := recording.Start(fake, window, folder, plan)
 	defer os.Chmod(folder, 0o700)
 	if err == nil || !strings.Contains(err.Error(), "remove failed capture directory") {
 		t.Fatalf("start error = %v", err)
@@ -226,7 +222,7 @@ func TestFailedStartCleanupRetainsFolderOwner(t *testing.T) {
 	if recording.Running() != folder {
 		t.Fatalf("cleanup owner %q, want %q", recording.Running(), folder)
 	}
-	blocked := recording.Start(&fakeCapture{}, window, filepath.Join(t.TempDir(), "next"), plan, false)
+	blocked := recording.Start(&fakeCapture{}, window, filepath.Join(t.TempDir(), "next"), plan)
 	if blocked == nil || !strings.Contains(blocked.Error(), "is running") {
 		t.Fatalf("a new recording was not blocked: %v", blocked)
 	}
@@ -248,17 +244,17 @@ func TestAbortedRecordingIsStoppedAndRemovedAndAllowsTheNext(t *testing.T) {
 	first, second := filepath.Join(parent, "first"), filepath.Join(parent, "second")
 	var recording host.Recording
 	fake := &fakeCapture{}
-	if err := recording.Start(fake, window, first, plan, false); err != nil {
+	if err := recording.Start(fake, window, first, plan); err != nil {
 		t.Fatal(err)
 	}
-	if err := recording.Start(fake, window, second, plan, false); err == nil || !strings.Contains(err.Error(), "is running") || exists(second) {
+	if err := recording.Start(fake, window, second, plan); err == nil || !strings.Contains(err.Error(), "is running") || exists(second) {
 		t.Fatalf("a second recording started: %v", err)
 	}
 	recording.Abort(fake)
 	if exists(first) {
 		t.Fatal("the aborted folder remains")
 	}
-	if err := recording.Start(fake, window, second, plan, false); err != nil {
+	if err := recording.Start(fake, window, second, plan); err != nil {
 		t.Fatal(err)
 	}
 	// The preparation reads the windows of the target at that time, so the same window is prepared again for each recording.
@@ -270,7 +266,7 @@ func TestAbortRetiredStopFailureRemovesFolderAndReportsStopError(t *testing.T) {
 	folder := filepath.Join(t.TempDir(), "frames")
 	var recording host.Recording
 	fake := &fakeCapture{stopErr: true}
-	if err := recording.Start(fake, window, folder, plan, false); err != nil {
+	if err := recording.Start(fake, window, folder, plan); err != nil {
 		t.Fatal(err)
 	}
 	err := recording.Abort(fake)
@@ -280,7 +276,7 @@ func TestAbortRetiredStopFailureRemovesFolderAndReportsStopError(t *testing.T) {
 	if exists(folder) || recording.Running() != "" {
 		t.Fatalf("retired abort left folder=%t running=%q", exists(folder), recording.Running())
 	}
-	if err := recording.Start(&fakeCapture{}, window, filepath.Join(t.TempDir(), "next"), plan, false); err != nil {
+	if err := recording.Start(&fakeCapture{}, window, filepath.Join(t.TempDir(), "next"), plan); err != nil {
 		t.Fatalf("next start after retired abort: %v", err)
 	}
 	expectCalls(t, fake, "open 7", "start", "stop")
@@ -291,7 +287,7 @@ func TestAbortRetiredStopFailureCleanupRetrySkipsStop(t *testing.T) {
 	folder := filepath.Join(t.TempDir(), "frames")
 	var recording host.Recording
 	fake := &fakeCapture{stopErr: true, blockDirectoryOnStop: folder}
-	if err := recording.Start(fake, window, folder, plan, false); err != nil {
+	if err := recording.Start(fake, window, folder, plan); err != nil {
 		t.Fatal(err)
 	}
 	err := recording.Abort(fake)
@@ -322,7 +318,7 @@ func TestAbortCleanupRetrySkipsCompletedStop(t *testing.T) {
 	folder := filepath.Join(t.TempDir(), "frames")
 	var recording host.Recording
 	fake := &fakeCapture{blockDirectoryOnStop: folder}
-	if err := recording.Start(fake, window, folder, plan, false); err != nil {
+	if err := recording.Start(fake, window, folder, plan); err != nil {
 		t.Fatal(err)
 	}
 	err := recording.Abort(fake)
@@ -351,17 +347,17 @@ func TestDifferentTargetIsPreparedAgain(t *testing.T) {
 	parent := t.TempDir()
 	var recording host.Recording
 	fake := &fakeCapture{}
-	if err := recording.Start(fake, window, filepath.Join(parent, "window"), plan, false); err != nil {
+	if err := recording.Start(fake, window, filepath.Join(parent, "window"), plan); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, _, _, err := recording.Finish(fake); err != nil {
+	if _, _, _, err := recording.Finish(fake); err != nil {
 		t.Fatal(err)
 	}
 	display := host.CaptureTarget{Window: 7, Display: true}
-	if err := recording.Start(fake, display, filepath.Join(parent, "display"), plan, false); err != nil {
+	if err := recording.Start(fake, display, filepath.Join(parent, "display"), plan); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, _, _, err := recording.Finish(fake); err != nil {
+	if _, _, _, err := recording.Finish(fake); err != nil {
 		t.Fatal(err)
 	}
 	expectCalls(t, fake, "open 7", "start", "stop", "open 7 display", "start", "stop")

@@ -1,8 +1,8 @@
 //! The window capture calls of native/darwin.
 
-use std::ffi::{CStr, CString, c_char, c_int, c_long, c_void};
+use std::ffi::{CStr, CString, c_char, c_int, c_long};
 
-use crate::platform::{Handle, LayoutRecord};
+use crate::platform::LayoutRecord;
 
 unsafe extern "C" {
     fn sp_capture_open(window_number: c_long, display: bool, error: *mut *mut c_char) -> bool;
@@ -11,7 +11,6 @@ unsafe extern "C" {
         gap: f64,
         seconds: f64,
         frames: c_int,
-        frame_identity: bool,
         token: u64,
         error: *mut *mut c_char,
     ) -> bool;
@@ -21,22 +20,6 @@ unsafe extern "C" {
     fn sp_capture_hold_new_window(error: *mut *mut c_char) -> bool;
     fn sp_capture_wait_new_window(token: u64) -> c_long;
     fn sp_capture_release_new_window();
-    fn sp_document_frame_identity_start(
-        document: *mut c_void,
-        generation: u64,
-        reply: extern "C" fn(*mut c_void, *const c_char, *const c_char),
-        context: *mut c_void,
-    ) -> bool;
-    fn sp_document_frame_identity_freeze(
-        generation: u64,
-        reply: extern "C" fn(*mut c_void, *const c_char, *const c_char),
-        context: *mut c_void,
-    ) -> bool;
-    fn sp_document_frame_identity_remove(
-        generation: u64,
-        reply: extern "C" fn(*mut c_void, *const c_char, *const c_char),
-        context: *mut c_void,
-    ) -> bool;
     fn sp_capture_missed() -> c_int;
     fn sp_capture_late() -> c_int;
     fn sp_capture_longest_gap() -> f64;
@@ -52,89 +35,6 @@ unsafe extern "C" {
     );
     fn surfaceLayoutTraceStart();
     fn surfaceLayoutTraceStop(out: *mut f64, capacity: usize) -> usize;
-}
-
-type IdentityDone = Box<dyn FnOnce(Result<String, String>) + Send>;
-
-extern "C" fn document_frame_identity_reply(
-    context: *mut c_void,
-    json: *const c_char,
-    error: *const c_char,
-) {
-    let done = unsafe { Box::from_raw(context.cast::<IdentityDone>()) };
-    if !error.is_null() {
-        done(Err(unsafe { CStr::from_ptr(error) }
-            .to_string_lossy()
-            .into_owned()));
-    } else if json.is_null() {
-        done(Err(
-            "document frame identity callback returned no JSON".into()
-        ));
-    } else {
-        done(Ok(unsafe { CStr::from_ptr(json) }
-            .to_string_lossy()
-            .into_owned()));
-    }
-}
-
-pub fn document_frame_identity_start(
-    document: Handle,
-    generation: u64,
-    done: IdentityDone,
-) -> Result<(), String> {
-    let context = Box::into_raw(Box::new(done)).cast::<c_void>();
-    if unsafe {
-        sp_document_frame_identity_start(
-            document as *mut c_void,
-            generation,
-            document_frame_identity_reply,
-            context,
-        )
-    } {
-        Ok(())
-    } else {
-        unsafe { drop(Box::from_raw(context.cast::<IdentityDone>())) };
-        Err("start document frame identity was not scheduled".into())
-    }
-}
-
-fn schedule_document_frame_identity(
-    operation: &str,
-    generation: u64,
-    done: IdentityDone,
-    schedule: unsafe extern "C" fn(
-        u64,
-        extern "C" fn(*mut c_void, *const c_char, *const c_char),
-        *mut c_void,
-    ) -> bool,
-) -> Result<(), String> {
-    let context = Box::into_raw(Box::new(done)).cast::<c_void>();
-    if unsafe { schedule(generation, document_frame_identity_reply, context) } {
-        Ok(())
-    } else {
-        unsafe { drop(Box::from_raw(context.cast::<IdentityDone>())) };
-        Err(format!(
-            "{operation} document frame identity was not scheduled"
-        ))
-    }
-}
-
-pub fn document_frame_identity_freeze(generation: u64, done: IdentityDone) -> Result<(), String> {
-    schedule_document_frame_identity(
-        "freeze",
-        generation,
-        done,
-        sp_document_frame_identity_freeze,
-    )
-}
-
-pub fn document_frame_identity_remove(generation: u64, done: IdentityDone) -> Result<(), String> {
-    schedule_document_frame_identity(
-        "remove",
-        generation,
-        done,
-        sp_document_frame_identity_remove,
-    )
 }
 
 extern "C" fn delivered(context: *mut std::ffi::c_void, json: *const c_char) {
@@ -269,23 +169,13 @@ pub fn start(
     gap: f64,
     seconds: f64,
     frames: i32,
-    frame_identity: bool,
     token: u64,
 ) -> Result<(), String> {
     let where_to = CString::new(directory)
         .map_err(|_| "capture start failed: directory contains NUL".to_owned())?;
     let mut error = std::ptr::null_mut();
-    let started = unsafe {
-        sp_capture_start(
-            where_to.as_ptr(),
-            gap,
-            seconds,
-            frames,
-            frame_identity,
-            token,
-            &mut error,
-        )
-    };
+    let started =
+        unsafe { sp_capture_start(where_to.as_ptr(), gap, seconds, frames, token, &mut error) };
     call_result("capture start failed", started, error)
 }
 

@@ -89,7 +89,7 @@ func TestANewWindowRecordingAnswersOnceTheHoldIsSetAndRecordsTheHeldWindow(t *te
 	probe := newNewWindowProbe()
 	var recording Recording
 	directory := filepath.Join(t.TempDir(), "frames")
-	if err := recording.StartNewWindow(probe, directory, testPlan, false); err != nil {
+	if err := recording.StartNewWindow(probe, directory, testPlan); err != nil {
 		t.Fatal(err)
 	}
 	if recording.Running() != directory {
@@ -104,7 +104,7 @@ func TestANewWindowRecordingAnswersOnceTheHoldIsSetAndRecordsTheHeldWindow(t *te
 	if target := <-probe.opened; target != (CaptureTarget{Window: 31}) {
 		t.Fatalf("the recording opened %+v, want the held window 31 alone", target)
 	}
-	finished, count, _, window, err := recording.Finish(probe)
+	finished, count, window, err := recording.Finish(probe)
 	if err != nil || finished != directory || count != 1 || window == nil || *window != 31 {
 		t.Fatalf("finish = %q, %d, window %v, %v; want the held window 31", finished, count, window, err)
 	}
@@ -121,7 +121,7 @@ func TestAFailedHoldStartsNoRecording(t *testing.T) {
 	probe := newNewWindowProbe()
 	probe.holdErr = errors.New("a new window is already held for a recording")
 	var recording Recording
-	err := recording.StartNewWindow(probe, filepath.Join(t.TempDir(), "frames"), testPlan, false)
+	err := recording.StartNewWindow(probe, filepath.Join(t.TempDir(), "frames"), testPlan)
 	if err == nil || err.Error() != "a new window is already held for a recording" {
 		t.Fatalf("start error %v", err)
 	}
@@ -135,10 +135,10 @@ func TestTheStopEndsAHoldThatNoShowTook(t *testing.T) {
 	probe := newNewWindowProbe()
 	var recording Recording
 	directory := filepath.Join(t.TempDir(), "frames")
-	if err := recording.StartNewWindow(probe, directory, testPlan, false); err != nil {
+	if err := recording.StartNewWindow(probe, directory, testPlan); err != nil {
 		t.Fatal(err)
 	}
-	finished, _, _, _, err := recording.Finish(probe)
+	finished, _, _, err := recording.Finish(probe)
 	if finished != directory || err == nil || err.Error() != "no new window was shown before the stop of the recording" {
 		t.Fatalf("finish = %q, %v", finished, err)
 	}
@@ -153,12 +153,12 @@ func TestAFailureAfterTheHoldReleasesTheHeldWindow(t *testing.T) {
 	probe.openErr = errors.New("window 31 not found")
 	var recording Recording
 	directory := filepath.Join(t.TempDir(), "frames")
-	if err := recording.StartNewWindow(probe, directory, testPlan, false); err != nil {
+	if err := recording.StartNewWindow(probe, directory, testPlan); err != nil {
 		t.Fatal(err)
 	}
 	probe.held <- 31
 	<-probe.opened
-	finished, _, _, _, err := recording.Finish(probe)
+	finished, _, _, err := recording.Finish(probe)
 	if finished != directory || err == nil || !strings.Contains(err.Error(), "window 31 not found") {
 		t.Fatalf("finish = %q, %v", finished, err)
 	}

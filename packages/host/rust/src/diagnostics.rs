@@ -34,34 +34,6 @@ use crate::workspace::Workspace;
 
 /// A recording in progress.
 static RECORDING: Recording = Recording::new();
-static DOCUMENT_FRAME_IDENTITY: Mutex<()> = Mutex::new(());
-type PendingDocumentFrameIdentityStart = std::sync::mpsc::Receiver<Result<String, String>>;
-static PENDING_DOCUMENT_FRAME_IDENTITY_START: Mutex<Option<PendingDocumentFrameIdentityStart>> =
-    Mutex::new(None);
-
-fn lifecycle_lock(lock: &Mutex<()>) -> Result<MutexGuard<'_, ()>, String> {
-    let guard = lock
-        .lock()
-        .map_err(|_| "document frame identity lifecycle was interrupted by a panic".to_string())?;
-    Ok(guard)
-}
-
-fn pending_frame_identity_lock(
-    lock: &Mutex<Option<PendingDocumentFrameIdentityStart>>,
-) -> Result<MutexGuard<'_, Option<PendingDocumentFrameIdentityStart>>, String> {
-    let guard = lock.lock().map_err(|_| {
-        "pending document frame identity start was interrupted by a panic".to_string()
-    })?;
-    Ok(guard)
-}
-
-fn with_document_frame_identity_lifecycle<T>(
-    operation: impl FnOnce() -> Result<T, Failure>,
-) -> Result<T, Failure> {
-    let _guard = lifecycle_lock(&DOCUMENT_FRAME_IDENTITY).map_err(internal)?;
-    operation()
-}
-
 /// The window recording operation of the platform. `after` is the time (ms) from which a still must be requested before the
 /// recording stops, 0 for a stop that requests no later still; `window` and `connection` are the label of the window and the end of the endpoint connection of the
 /// request, whose ends end the waits of the operations.
@@ -104,14 +76,13 @@ impl Capture for PlatformCapture {
         self.platform.capture_open(target.window, target.display)
     }
     /// Waits, as the other capture waits do, for still 0 of the recording.
-    fn start(&self, directory: &Path, plan: Plan, frame_identity: bool) -> Result<(), String> {
+    fn start(&self, directory: &Path, plan: Plan) -> Result<(), String> {
         self.await_capture(|token| {
             self.platform.capture_start(
                 &directory.to_string_lossy(),
                 plan.gap,
                 plan.seconds,
                 plan.frames,
-                frame_identity,
                 token,
             )
         })
@@ -228,27 +199,15 @@ pub(crate) fn call(
         "diagnostics.capture.start" => {
             let options = parse_capture_start_options(&params)?;
             if options.new_window {
-                let frames = capture_start_new_window(
-                    window,
-                    &connection,
-                    options.plan,
-                    options.frame_identity,
-                )?;
+                let frames = capture_start_new_window(window, &connection, options.plan)?;
                 let platform = platform::current().map_err(internal)?;
                 on_main(window, move || platform.layout_trace_start()).map_err(internal)?;
                 // The held window is known once the application shows it, after this reply; the stop reply names it.
                 return Ok(json!({"frames": frames.to_string_lossy(), "window": null}));
             }
             let display = options.display;
-            let (frames, recorded) = with_document_frame_identity_lifecycle(|| {
-                let started = capture_start(
-                    window,
-                    &connection,
-                    display,
-                    options.plan,
-                    options.frame_identity,
-                    true,
-                )?;
+            let (frames, recorded) = (|| {
+                let started = capture_start(window, &connection, display, options.plan)?;
                 let traced = (|| -> Result<(), Failure> {
                     let platform = platform::current().map_err(internal)?;
                     on_main(window, move || platform.layout_trace_start()).map_err(internal)
@@ -265,11 +224,8 @@ pub(crate) fn call(
                     return Err(error);
                 }
                 Ok(started)
-            })?;
+            })()?;
             Ok(json!({"frames": frames.to_string_lossy(), "window": recorded}))
-        }
-        "diagnostics.capture.document-identity.start" => {
-            capture_document_identity_start(window, &params)
         }
         "diagnostics.capture.stop" => {
             let after = match params.get("after") {
@@ -476,7 +432,6 @@ fn document_viewport_marker(
 #[derive(Debug, Default, PartialEq)]
 struct CaptureStartOptions {
     display: bool,
-    frame_identity: bool,
     new_window: bool,
     plan: Plan,
 }
@@ -533,251 +488,6 @@ fn parse_capture_plan(params: &Map<String, Value>) -> Result<Plan, Failure> {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct CaptureDocumentIdentityRequest {
-    surface: String,
-    generation: u64,
-}
-
-fn parse_capture_document_identity_request(
-    params: &Map<String, Value>,
-) -> Result<CaptureDocumentIdentityRequest, Failure> {
-    let surface = params
-        .get("surface")
-        .and_then(Value::as_str)
-        .filter(|surface| !surface.is_empty())
-        .ok_or_else(|| Failure::params("surface must be a non-empty string"))?;
-    let generation = params
-        .get("generation")
-        .and_then(Value::as_u64)
-        .filter(|generation| *generation > 0 && *generation < (1u64 << 53))
-        .ok_or_else(|| Failure::params("generation must be a positive JavaScript safe integer"))?;
-    Ok(CaptureDocumentIdentityRequest {
-        surface: surface.to_string(),
-        generation,
-    })
-}
-
-fn capture_document_identity_start(
-    window: &Window,
-    params: &Map<String, Value>,
-) -> Result<Value, Failure> {
-    let request = parse_capture_document_identity_request(params)?;
-    let _guard = lifecycle_lock(&DOCUMENT_FRAME_IDENTITY).map_err(internal)?;
-    let (active, selected) = RECORDING.frame_identity_state();
-    if !active {
-        return Err(internal(
-            "document frame identity requires an active frameIdentity capture",
-        ));
-    }
-    if selected.is_some() {
-        return Err(internal(
-            "identity capture already selected a document source",
-        ));
-    }
-    let platform = platform::current().map_err(internal)?;
-    {
-        let pending = pending_frame_identity_lock(&PENDING_DOCUMENT_FRAME_IDENTITY_START)
-            .map_err(internal)?;
-        if pending.is_some() {
-            return Err(internal(
-                "a previous document frame identity start is still pending",
-            ));
-        }
-    }
-    RECORDING
-        .select_frame_identity_source(&request.surface, request.generation)
-        .map_err(internal)?;
-
-    let scheduled_window = window.clone();
-    let operation_window = window.clone();
-    let operation_request = request.clone();
-    let (sender, receiver) = std::sync::mpsc::channel();
-    match pending_frame_identity_lock(&PENDING_DOCUMENT_FRAME_IDENTITY_START) {
-        Ok(mut pending) => *pending = Some(receiver),
-        Err(error) => {
-            RECORDING.clear_frame_identity_source(&request.surface, request.generation);
-            return Err(internal(error));
-        }
-    }
-    let scheduled = on_main(&scheduled_window, move || {
-        let data = crate::windows::window_data(&operation_window)?;
-        if data
-            .view_source_origins
-            .current_view(&operation_request.surface)
-            != Some(operation_request.generation)
-        {
-            return Err(format!(
-                "view surface {:?} generation {} is not current",
-                operation_request.surface, operation_request.generation
-            ));
-        }
-        let document = resolve_document_frame_identity_root(
-            &data.documents,
-            data.view_source_origins
-                .current_view(&operation_request.surface),
-            &operation_request,
-        )?;
-        platform.document_frame_identity_start(
-            document,
-            operation_request.generation,
-            Box::new(move |result| {
-                if let Err(error) = sender.send(result) {
-                    log_late_document_frame_identity_result(error.0);
-                }
-            }),
-        )
-    });
-    match scheduled {
-        Ok(()) => {}
-        Err(error) => {
-            let cleanup_error =
-                match pending_frame_identity_lock(&PENDING_DOCUMENT_FRAME_IDENTITY_START) {
-                    Ok(mut pending) => {
-                        pending.take();
-                        None
-                    }
-                    Err(error) => Some(error),
-                };
-            RECORDING.clear_frame_identity_source(&request.surface, request.generation);
-            return Err(internal(match cleanup_error {
-                Some(cleanup) => format!("{error}; pending start cleanup failed: {cleanup}"),
-                None => error,
-            }));
-        }
-    }
-    let native = match receive_pending_document_frame_identity_start() {
-        Ok(Some(value)) => value,
-        Ok(None) => {
-            return Err(internal(
-                "document frame identity start callback was not retained",
-            ));
-        }
-        Err(error) => return Err(internal(error)),
-    };
-    let mut reply = validate_document_frame_identity_start_reply(&native, request.generation)?;
-    let fields = reply
-        .as_object_mut()
-        .expect("object reply was checked above");
-    fields.insert("surface".into(), json!(request.surface));
-    fields.insert("generation".into(), json!(request.generation));
-    Ok(reply)
-}
-
-fn resolve_document_frame_identity_root(
-    documents: &Documents,
-    current_generation: Option<u64>,
-    request: &CaptureDocumentIdentityRequest,
-) -> Result<Handle, String> {
-    if current_generation != Some(request.generation) {
-        return Err(format!(
-            "view surface {:?} generation {} is not current",
-            request.surface, request.generation
-        ));
-    }
-    if documents.views().generation(&request.surface) != Some(request.generation) {
-        return Err(format!(
-            "view surface {:?} generation {} has no matching root channel",
-            request.surface, request.generation
-        ));
-    }
-    documents.get(&(request.surface.clone(), String::new()))
-}
-
-fn validate_document_frame_identity_start_reply(
-    raw: &str,
-    generation: u64,
-) -> Result<Value, Failure> {
-    let invalid =
-        || internal("native document frame identity start returned invalid JSON metadata");
-    let mut value: Value = serde_json::from_str(raw).map_err(|_| invalid())?;
-    let Some(fields) = value.as_object_mut() else {
-        return Err(invalid());
-    };
-    let actual_generation = fields.get("generation").and_then(Value::as_u64);
-    let atlas_slots = fields.get("atlasSlots").and_then(Value::as_u64);
-    let roi = fields.get("roi").and_then(Value::as_object);
-    let finite = |name: &str| {
-        roi.and_then(|roi| roi.get(name))
-            .and_then(Value::as_f64)
-            .filter(|value| value.is_finite())
-    };
-    let valid = actual_generation == Some(generation)
-        && atlas_slots.is_some_and(|slots| (1..=512).contains(&slots))
-        && finite("x").is_some()
-        && finite("y").is_some()
-        && finite("width").is_some_and(|width| width > 0.0)
-        && finite("height").is_some_and(|height| height > 0.0)
-        && finite("scale").is_some_and(|scale| scale > 0.0);
-    if !valid {
-        return Err(invalid());
-    }
-    Ok(value)
-}
-
-fn receive_pending_document_frame_identity_start() -> Result<Option<String>, String> {
-    receive_pending_document_frame_identity_start_from(&PENDING_DOCUMENT_FRAME_IDENTITY_START)
-}
-
-fn pending_document_frame_identity_start(
-    lock: &Mutex<Option<PendingDocumentFrameIdentityStart>>,
-) -> Result<Option<String>, String> {
-    let has_pending = pending_frame_identity_lock(lock)?.is_some();
-    if has_pending {
-        receive_pending_document_frame_identity_start_from(lock)
-    } else {
-        Ok(None)
-    }
-}
-
-fn receive_pending_document_frame_identity_start_from(
-    lock: &Mutex<Option<PendingDocumentFrameIdentityStart>>,
-) -> Result<Option<String>, String> {
-    let mut pending = pending_frame_identity_lock(lock)?;
-    let Some(receiver) = pending.as_ref() else {
-        return Ok(None);
-    };
-    // The library answers the start once on every path, the end of the document included, so the host waits without a
-    // limit of its own.
-    let result = receiver.recv();
-    pending.take();
-    match result {
-        Ok(Ok(reply)) => Ok(Some(reply)),
-        Ok(Err(error)) => Err(error),
-        Err(std::sync::mpsc::RecvError) => {
-            Err("document frame identity start callback ended before replying".into())
-        }
-    }
-}
-
-fn detach_pending_document_frame_identity_start() -> Result<(), String> {
-    pending_frame_identity_lock(&PENDING_DOCUMENT_FRAME_IDENTITY_START)?.take();
-    Ok(())
-}
-
-fn log_late_document_frame_identity_result(result: Result<String, String>) {
-    late_document_frame_identity_entry(result).log();
-}
-
-fn late_document_frame_identity_entry(
-    result: Result<String, String>,
-) -> crate::application_log::Entry {
-    match result {
-        Ok(_) => crate::application_log::Entry::new(
-            "info",
-            "host",
-            "diagnostics",
-            "document frame identity callback arrived after its request ended",
-        ),
-        Err(error) => crate::application_log::Entry::new(
-            "error",
-            "host",
-            "diagnostics",
-            format!("document frame identity callback failed after its request ended: {error}"),
-        ),
-    }
-}
-
 fn parse_capture_start_options(
     params: &Map<String, Value>,
 ) -> Result<CaptureStartOptions, Failure> {
@@ -786,11 +496,6 @@ fn parse_capture_start_options(
         None | Some(Value::Null) => false,
         Some(Value::Bool(display)) => *display,
         Some(_) => return Err(Failure::params("display must be a boolean")),
-    };
-    let frame_identity = match params.get("frameIdentity") {
-        None => false,
-        Some(Value::Bool(frame_identity)) => *frame_identity,
-        Some(_) => return Err(Failure::params("frameIdentity must be a boolean")),
     };
     let new_window = match params.get("newWindow") {
         None => false,
@@ -804,7 +509,6 @@ fn parse_capture_start_options(
     }
     Ok(CaptureStartOptions {
         display,
-        frame_identity,
         new_window,
         plan,
     })
@@ -1466,7 +1170,6 @@ fn fixture(host: &Host, window: &Window, request: Map<String, Value>) -> Result<
 /// record directory.
 struct DragCaptureOptions {
     capture: bool,
-    frame_identity: bool,
     plan: Plan,
 }
 
@@ -1484,19 +1187,7 @@ fn parse_drag_capture_options(
             ));
         }
     };
-    let frame_identity = match params.remove("frameIdentity") {
-        None => false,
-        Some(Value::Bool(frame_identity)) => frame_identity,
-        Some(_) => return Err(Failure::params("frameIdentity must be a boolean")),
-    };
-    if frame_identity && !capture {
-        return Err(Failure::params("frameIdentity requires a capture plan"));
-    }
-    Ok(DragCaptureOptions {
-        capture,
-        frame_identity,
-        plan,
-    })
+    Ok(DragCaptureOptions { capture, plan })
 }
 
 /// Reads native, which makes the host deliver the drag as native pointer input instead of the page
@@ -1707,19 +1398,10 @@ fn drag(
     };
 
     let frames = if capture_options.capture {
-        Some(with_document_frame_identity_lifecycle(|| {
-            let started = capture_start(
-                window,
-                connection,
-                false,
-                capture_options.plan,
-                capture_options.frame_identity,
-                false,
-            )?;
-            let platform = platform::current().map_err(internal)?;
-            on_main(window, move || platform.layout_trace_start()).map_err(internal)?;
-            Ok::<_, Failure>(started)
-        })?)
+        let started = capture_start(window, connection, false, capture_options.plan)?;
+        let platform = platform::current().map_err(internal)?;
+        on_main(window, move || platform.layout_trace_start()).map_err(internal)?;
+        Some(started)
     } else {
         None
     };
@@ -1964,7 +1646,6 @@ fn capture_start_new_window(
     window: &Window,
     connection: &crate::endpoint::ConnectionEnd,
     plan: Plan,
-    frame_identity: bool,
 ) -> Result<PathBuf, Failure> {
     let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -1982,7 +1663,7 @@ fn capture_start_new_window(
     let recorder = Arc::new(recorder(window, connection)?);
     let platform = recorder.platform;
     RECORDING
-        .start_new_window(recorder, &directory, plan, frame_identity, &|path| {
+        .start_new_window(recorder, &directory, plan, &|path| {
             platform.private_directory(path)
         })
         .map_err(internal)?;
@@ -1996,8 +1677,6 @@ fn capture_start(
     connection: &crate::endpoint::ConnectionEnd,
     display: bool,
     plan: Plan,
-    frame_identity: bool,
-    document_identity_allowed: bool,
 ) -> Result<(PathBuf, Option<isize>), Failure> {
     let platform = platform::current().map_err(internal)?;
     let held = window.clone();
@@ -2020,7 +1699,7 @@ fn capture_start(
         ));
     let recorder = recorder(window, connection)?;
     RECORDING
-        .start_with_document_identity(
+        .start(
             &recorder,
             Target {
                 window: number,
@@ -2028,8 +1707,6 @@ fn capture_start(
             },
             &directory,
             plan,
-            frame_identity,
-            document_identity_allowed,
             &|path| recorder.platform.private_directory(path),
         )
         .map_err(internal)?;
@@ -2048,225 +1725,37 @@ fn capture_stop(
         after,
         ..recorder(window, connection)?
     };
-    let _guard = lifecycle_lock(&DOCUMENT_FRAME_IDENTITY).map_err(internal)?;
-    let (frame_identity, source) = RECORDING.frame_identity_state();
     let platform = recorder.platform;
-    let prior_start_error =
-        pending_document_frame_identity_start(&PENDING_DOCUMENT_FRAME_IDENTITY_START)
-            .err()
-            .map(|error| format!("wait for document frame identity start: {error}"));
-    let mut finished = None;
-    let (issued_slots, removed, sequence_error) = document_identity_stop_sequence(
-        frame_identity,
-        source.as_ref(),
-        prior_start_error,
-        |generation| {
-            await_document_frame_identity(window, move |done| {
-                platform.document_frame_identity_freeze(generation, done)
-            })
-        },
-        || {
-            let result = RECORDING.finish(&recorder);
-            if let Ok(value) = &result {
-                finished = Some(value.clone());
+    let (directory, count, recorded_window) = match RECORDING.finish(&recorder) {
+        Ok(finished) => finished,
+        Err(error) => {
+            let mut failures = vec![format!("stop capture: {error}")];
+            if let Err(layout_error) = on_main(window, move || platform.layout_trace_stop()) {
+                failures.push(format!("stop layout trace: {layout_error}"));
             }
-            result.map(|_| ())
-        },
-        |generation| {
-            await_document_frame_identity(window, move |done| {
-                platform.document_frame_identity_remove(generation, done)
-            })
-        },
-    );
-    if let Some((surface, generation)) = &source
-        && removed
-    {
-        RECORDING.clear_frame_identity_source(surface, *generation);
-    }
-    let detach_error = detach_pending_document_frame_identity_start()
-        .err()
-        .map(|error| format!("detach pending document frame identity start: {error}"));
-    if sequence_error.is_some() || detach_error.is_some() {
-        let mut failures = Vec::new();
-        if let Some(error) = sequence_error {
-            failures.push(error);
+            return Err(internal(failures.join("; ")));
         }
-        if let Some(error) = detach_error {
-            failures.push(error);
-        }
-        if let Err(layout_error) = on_main(window, move || platform.layout_trace_stop()) {
-            failures.push(format!("stop layout trace: {layout_error}"));
-        }
-        return Err(internal(failures.join("; ")));
-    }
-    let (directory, count, frame_identity, recorded_window) =
-        finished.ok_or_else(|| internal("capture stop completed without a recording result"))?;
-    let mut result =
-        finish_capture_stop(&directory, count, frame_identity, recorded_window, || {
-            let platform = recorder.platform;
-            let layouts =
-                on_main(window, move || platform.layout_trace_stop()).map_err(internal)?;
-            let stills = StillCounts {
-                missed: recorder.platform.capture_missed().map_err(internal)?,
-                late: recorder.platform.capture_late().map_err(internal)?,
-                longest_gap: recorder.platform.capture_longest_gap().map_err(internal)?,
-            };
-            Ok((layouts, stills))
-        })?;
-    if let Some(issued_slots) = issued_slots {
-        result["frameIdentity"]["issuedSlots"] = json!(issued_slots);
-    }
-    Ok(result)
-}
-
-fn document_identity_stop_sequence(
-    _frame_identity: bool,
-    source: Option<&(String, u64)>,
-    prior_start_error: Option<String>,
-    freeze: impl FnOnce(u64) -> Result<String, String>,
-    stop: impl FnOnce() -> Result<(), String>,
-    remove: impl FnOnce(u64) -> Result<String, String>,
-) -> (Option<u64>, bool, Option<String>) {
-    let mut failures = Vec::new();
-    if let Some(error) = prior_start_error {
-        failures.push(error);
-    }
-    let frozen = source.map(|(_, generation)| freeze(*generation));
-    if let Some(Err(error)) = &frozen {
-        failures.push(format!("freeze document frame identity: {error}"));
-    }
-    if let Err(error) = stop() {
-        failures.push(format!("stop capture: {error}"));
-    }
-    let removed = if let Some((_, generation)) = source {
-        match remove(*generation) {
-            Ok(reply) => match document_frame_identity_removed(&reply, *generation) {
-                Ok(()) => true,
-                Err(error) => {
-                    failures.push(error);
-                    false
-                }
-            },
-            Err(error) => {
-                failures.push(format!("remove document frame identity: {error}"));
-                false
-            }
-        }
-    } else {
-        true
     };
-    if !failures.is_empty() {
-        return (None, removed, Some(failures.join("; ")));
-    }
-    let Some((_, generation)) = source else {
-        return (None, true, None);
-    };
-    let Some(Ok(reply)) = frozen else {
-        return (
-            None,
-            removed,
-            Some("document frame identity freeze returned no result".into()),
-        );
-    };
-    match document_frame_identity_issued_slots(&reply, *generation) {
-        Ok(issued) => (Some(issued), removed, None),
-        Err(error) => (None, removed, Some(error.message)),
-    }
-}
-
-fn document_frame_identity_removed(reply: &str, generation: u64) -> Result<(), String> {
-    let value: Value = serde_json::from_str(reply)
-        .map_err(|error| format!("invalid document frame identity remove JSON: {error}"))?;
-    let actual_generation = value.get("generation").and_then(Value::as_u64);
-    let removed = value.get("removed").and_then(Value::as_bool);
-    if actual_generation == Some(generation) && removed == Some(true) {
-        Ok(())
-    } else {
-        Err(format!(
-            "native document frame identity remove returned invalid metadata for generation {generation}: {reply}"
-        ))
-    }
-}
-
-fn await_document_frame_identity(
-    window: &Window,
-    schedule: impl FnOnce(Box<dyn FnOnce(Result<String, String>) + Send>) -> Result<(), String>
-    + Send
-    + 'static,
-) -> Result<String, String> {
-    let (sender, receiver) = std::sync::mpsc::channel();
-    let scheduled = on_main(window, move || {
-        schedule(Box::new(move |result| {
-            if let Err(error) = sender.send(result) {
-                log_late_document_frame_identity_result(error.0);
-            }
-        }))
-    });
-    await_document_frame_identity_schedule_result(scheduled, receiver)
-}
-
-fn await_document_frame_identity_schedule_result(
-    scheduled: Result<(), String>,
-    receiver: std::sync::mpsc::Receiver<Result<String, String>>,
-) -> Result<String, String> {
-    if let Err(schedule_error) = scheduled {
-        return match receiver.try_recv() {
-            Ok(Err(callback_error)) => Err(format!(
-                "document frame identity scheduling failed: {schedule_error}; callback failed: {callback_error}"
-            )),
-            Ok(Ok(_))
-            | Err(
-                std::sync::mpsc::TryRecvError::Empty | std::sync::mpsc::TryRecvError::Disconnected,
-            ) => Err(schedule_error),
+    finish_capture_stop(&directory, count, recorded_window, || {
+        let layouts = on_main(window, move || platform.layout_trace_stop()).map_err(internal)?;
+        let stills = StillCounts {
+            missed: recorder.platform.capture_missed().map_err(internal)?,
+            late: recorder.platform.capture_late().map_err(internal)?,
+            longest_gap: recorder.platform.capture_longest_gap().map_err(internal)?,
         };
-    }
-    await_document_frame_identity_reply(receiver)
-}
-
-/// Waits for the document frame identity callback, which the library gives once on every path: the wait ends by that
-/// callback and by no limit of the host.
-fn await_document_frame_identity_reply(
-    receiver: std::sync::mpsc::Receiver<Result<String, String>>,
-) -> Result<String, String> {
-    receiver
-        .recv()
-        // default: a callback that is released without replying fails the wait with this reason.
-        .unwrap_or_else(|_| Err("document frame identity callback ended before replying".into()))
-}
-
-fn document_frame_identity_issued_slots(reply: &str, generation: u64) -> Result<u64, Failure> {
-    let value: Value = serde_json::from_str(reply)
-        .map_err(|error| internal(format!("invalid frame identity freeze JSON: {error}")))?;
-    let actual_generation = value.get("generation").and_then(Value::as_u64);
-    let atlas_slots = value.get("atlasSlots").and_then(Value::as_u64);
-    let issued_slots = value.get("issuedSlots").and_then(Value::as_u64);
-    match (actual_generation, atlas_slots, issued_slots) {
-        (Some(actual), Some(atlas), Some(issued))
-            if actual == generation && atlas > 0 && atlas <= 512 && issued <= atlas =>
-        {
-            Ok(issued)
-        }
-        _ => Err(internal(format!(
-            "native document frame identity freeze returned invalid metadata for generation {generation}: {reply}"
-        ))),
-    }
+        Ok((layouts, stills))
+    })
 }
 
 fn finish_capture_stop(
     directory: &Path,
     count: i32,
-    frame_identity: bool,
     window: Option<isize>,
     finalize: impl FnOnce() -> Result<(Vec<crate::platform::LayoutRecord>, StillCounts), Failure>,
 ) -> Result<Value, Failure> {
     match finalize() {
         Ok((layouts, stills)) => Ok(crate::recording::stop_payload(
-            directory,
-            count,
-            stills,
-            &layouts,
-            frame_identity,
-            window,
+            directory, count, stills, &layouts, window,
         )),
         Err(error) => Err(error),
     }
@@ -2505,29 +1994,6 @@ mod capture_start_options_test {
             let params = json!({"gap": 8, "frames": 10, "display": value});
             assert!(parse(params.clone()).is_err(), "params {params}");
         }
-        assert!(
-            !parse(json!({"gap": 8, "frames": 10}))
-                .unwrap()
-                .frame_identity
-        );
-    }
-
-    // contract: diagnostics.capture-start.frame-identity-is-strict-boolean
-    // contract: diagnostics.capture-start.parses-frame-identity-option
-    #[test]
-    fn capture_start_options_parse_frame_identity_and_reject_non_booleans() {
-        for (value, expected) in [(Value::Bool(false), false), (Value::Bool(true), true)] {
-            let params = json!({"gap": 8, "frames": 10, "frameIdentity": value});
-            assert_eq!(parse(params).unwrap().frame_identity, expected);
-        }
-        for value in [Value::Null, json!("true"), json!(1), json!([]), json!({})] {
-            let params = json!({"gap": 8, "frames": 10, "frameIdentity": value});
-            assert_eq!(
-                parse(params.clone()).map(|_| ()).unwrap_err().message,
-                "frameIdentity must be a boolean",
-                "params {params}"
-            );
-        }
     }
 
     // contract: diagnostics.capture-start.validates-still-plan
@@ -2663,56 +2129,6 @@ mod drag_capture_options_test {
         parse_drag_capture_options(&mut params)
     }
 
-    // contract: diagnostics.drag.forwards-frame-identity
-    #[test]
-    fn drag_capture_options_keep_identity_off_by_default_and_require_capture_when_enabled() {
-        for (params, expected_capture, expected_identity) in [
-            (json!({}), false, false),
-            (json!({"capture": {"gap": 8, "frames": 10}}), true, false),
-            (
-                json!({"capture": {"gap": 8, "frames": 10}, "frameIdentity": false}),
-                true,
-                false,
-            ),
-            (
-                json!({"capture": {"gap": 8, "frames": 10}, "frameIdentity": true}),
-                true,
-                true,
-            ),
-        ] {
-            let options = parse(params.clone()).unwrap();
-            assert_eq!(options.capture, expected_capture, "params {params}");
-            assert_eq!(options.frame_identity, expected_identity, "params {params}");
-        }
-        for params in [
-            json!({"frameIdentity": true}),
-            json!({"capture": false, "frameIdentity": true}),
-        ] {
-            let error = match parse(params.clone()) {
-                Ok(_) => panic!("params {params} unexpectedly parsed"),
-                Err(error) => error,
-            };
-            assert_eq!(
-                error.message, "frameIdentity requires a capture plan",
-                "params {params}"
-            );
-        }
-        for params in [
-            json!({"capture": {"gap": 8, "frames": 10}, "frameIdentity": null}),
-            json!({"capture": {"gap": 8, "frames": 10}, "frameIdentity": "true"}),
-            json!({"capture": {"gap": 8, "frames": 10}, "frameIdentity": 1}),
-        ] {
-            let error = match parse(params.clone()) {
-                Ok(_) => panic!("params {params} unexpectedly parsed"),
-                Err(error) => error,
-            };
-            assert_eq!(
-                error.message, "frameIdentity must be a boolean",
-                "params {params}"
-            );
-        }
-    }
-
     // contract: diagnostics.drag.takes-a-capture-plan
     #[test]
     fn drag_capture_takes_a_plan() {
@@ -2801,12 +2217,11 @@ mod drag_capture_options_test {
             };
             assert_eq!(error.message, expected, "params {params}");
         }
-        // The page receives neither capture nor frameIdentity.
-        let mut params =
-            json!({"capture": {"gap": 8, "seconds": 2}, "frameIdentity": true, "line": 1})
-                .as_object()
-                .unwrap()
-                .clone();
+        // The page does not receive capture.
+        let mut params = json!({"capture": {"gap": 8, "seconds": 2}, "line": 1})
+            .as_object()
+            .unwrap()
+            .clone();
         parse_drag_capture_options(&mut params).unwrap();
         assert_eq!(Value::Object(params), json!({"line": 1}));
     }

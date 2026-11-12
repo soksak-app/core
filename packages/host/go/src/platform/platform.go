@@ -130,15 +130,6 @@ type InputReference interface {
 	EndInputReferenceWait(window Window, reason string)
 }
 
-// DocumentFrameIdentityCapture manages the diagnostic identity marker in one live view root.
-// The start method runs synchronously on the UI thread. Freeze and remove must be initiated on
-// the UI thread and complete asynchronously on that thread.
-type DocumentFrameIdentityCapture interface {
-	StartDocumentFrameIdentity(document unsafe.Pointer, generation uint64, done func(json.RawMessage, error)) error
-	FreezeDocumentFrameIdentity(generation uint64, done func(json.RawMessage, error)) error
-	RemoveDocumentFrameIdentity(generation uint64, done func(json.RawMessage, error)) error
-}
-
 // InputSources are the keyboard input source operations. Only the platform implementation of a diagnostic build (tag diagnostics) provides them, and
 // diagnostic code uses them by checking the value of Current() against this interface. Selection and key-view adoption are one main-thread operation.
 // A role is one of the input source roles of diagnostics.input.source (docs/spec/endpoint.md); the platform owns the input source of each role.
@@ -286,7 +277,7 @@ type Capturer interface {
 	// CaptureStart starts the recording of the prepared window in directory and returns once still 0 is written; a failed still 0
 	// fails the start and ends the recording. gap is the time in ms between the requests of two stills, and the length is
 	// seconds or frames, the other 0.
-	CaptureStart(directory string, gap, seconds float64, frames int, frameIdentity bool, token uint64) error
+	CaptureStart(directory string, gap, seconds float64, frames int, token uint64) error
 	// CaptureStop ends the recording and returns the number of written frames. With after above 0 (ms, on the clock of
 	// CaptureClock), the recording continues until a still requested at or after after has completed; with 0 it requests no
 	// later still. The stop ends the recording also when it fails.

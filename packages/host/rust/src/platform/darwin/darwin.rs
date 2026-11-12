@@ -712,10 +712,9 @@ impl Platform for Darwin {
         gap: f64,
         seconds: f64,
         frames: i32,
-        frame_identity: bool,
         token: u64,
     ) -> Result<(), String> {
-        capture::start(directory, gap, seconds, frames, frame_identity, token)
+        capture::start(directory, gap, seconds, frames, token)
     }
     #[cfg(feature = "diagnostics")]
     fn capture_stop(&self, after: f64, token: u64) -> Result<i32, String> {
@@ -736,31 +735,6 @@ impl Platform for Darwin {
     #[cfg(feature = "diagnostics")]
     fn capture_release_new_window(&self) {
         capture::release_new_window();
-    }
-    #[cfg(feature = "diagnostics")]
-    fn document_frame_identity_start(
-        &self,
-        document: Handle,
-        generation: u64,
-        done: Box<dyn FnOnce(Result<String, String>) + Send>,
-    ) -> Result<(), String> {
-        capture::document_frame_identity_start(document, generation, done)
-    }
-    #[cfg(feature = "diagnostics")]
-    fn document_frame_identity_freeze(
-        &self,
-        generation: u64,
-        done: Box<dyn FnOnce(Result<String, String>) + Send>,
-    ) -> Result<(), String> {
-        capture::document_frame_identity_freeze(generation, done)
-    }
-    #[cfg(feature = "diagnostics")]
-    fn document_frame_identity_remove(
-        &self,
-        generation: u64,
-        done: Box<dyn FnOnce(Result<String, String>) + Send>,
-    ) -> Result<(), String> {
-        capture::document_frame_identity_remove(generation, done)
     }
     #[cfg(feature = "diagnostics")]
     fn capture_missed(&self) -> Result<i32, String> {

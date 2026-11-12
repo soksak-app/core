@@ -58,7 +58,7 @@ impl Capture for NewWindowProbe {
         self.opened.lock().unwrap().send(target).unwrap();
         self.open_error.clone().map_or(Ok(()), Err)
     }
-    fn start(&self, _directory: &Path, plan: Plan, _frame_identity: bool) -> Result<(), String> {
+    fn start(&self, _directory: &Path, plan: Plan) -> Result<(), String> {
         *self.plan.lock().unwrap() = Some(plan);
         Ok(())
     }
@@ -131,7 +131,7 @@ fn a_new_window_recording_answers_once_the_hold_is_set_and_records_the_held_wind
     let (capture, hold, opened) = probe(None, None);
     let recording = Recording::new();
     recording
-        .start_new_window(capture.clone(), &directory, TEST_PLAN, false, &make)
+        .start_new_window(capture.clone(), &directory, TEST_PLAN, &make)
         .unwrap();
     assert_eq!(recording.running(), Some(directory.clone()));
     assert!(
@@ -146,7 +146,7 @@ fn a_new_window_recording_answers_once_the_hold_is_set_and_records_the_held_wind
             display: false
         }
     );
-    let (finished, count, _, window) = recording.finish(capture.as_ref()).unwrap();
+    let (finished, count, window) = recording.finish(capture.as_ref()).unwrap();
     assert_eq!((finished, count, window), (directory, 1, Some(31)));
     assert_eq!(
         capture.released.load(Ordering::SeqCst),
@@ -164,13 +164,7 @@ fn a_failed_hold_starts_no_recording() {
         probe(Some("a new window is already held for a recording"), None);
     let recording = Recording::new();
     let error = recording
-        .start_new_window(
-            capture,
-            &parent.path().join("frames"),
-            TEST_PLAN,
-            false,
-            &make,
-        )
+        .start_new_window(capture, &parent.path().join("frames"), TEST_PLAN, &make)
         .unwrap_err();
     assert_eq!(error, "a new window is already held for a recording");
     assert_eq!(recording.running(), None);
@@ -184,7 +178,7 @@ fn the_stop_ends_a_hold_that_no_show_took() {
     let (capture, _hold, _opened) = probe(None, None);
     let recording = Recording::new();
     recording
-        .start_new_window(capture.clone(), &directory, TEST_PLAN, false, &make)
+        .start_new_window(capture.clone(), &directory, TEST_PLAN, &make)
         .unwrap();
     let error = recording.finish(capture.as_ref()).unwrap_err();
     assert_eq!(
@@ -202,7 +196,7 @@ fn a_failure_after_the_hold_releases_the_held_window() {
     let (capture, hold, opened) = probe(None, Some("window 31 not found"));
     let recording = Recording::new();
     recording
-        .start_new_window(capture.clone(), &directory, TEST_PLAN, false, &make)
+        .start_new_window(capture.clone(), &directory, TEST_PLAN, &make)
         .unwrap();
     hold.send(HoldEvent::Held(31)).unwrap();
     opened.recv().unwrap();

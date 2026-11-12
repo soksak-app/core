@@ -5,7 +5,6 @@ package darwin
 // Records a window. The recording implementation is capture.m of native/darwin. It is included only in diagnostic builds.
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/soksak-app/core/packages/host/go/src/platform/darwin/abi"
@@ -81,14 +80,14 @@ func (implementation) CaptureOpen(windowNumber int, display bool) error {
 	return captureAnswerError("open", answer)
 }
 
-func (implementation) CaptureStart(directory string, gap, seconds float64, frames int, frameIdentity bool, token uint64) error {
+func (implementation) CaptureStart(directory string, gap, seconds float64, frames int, token uint64) error {
 	if strings.IndexByte(directory, 0) >= 0 {
 		return errors.New("capture start: directory contains NUL")
 	}
 	where := native.CString(directory)
 	defer native.Free(unsafe.Pointer(where))
 	answer := awaitCaptureAnswer(func(context uintptr) {
-		diagnosticNative.ScheduleCaptureStart(where, float64(gap), float64(seconds), int32(frames), bool(frameIdentity), token, context)
+		diagnosticNative.ScheduleCaptureStart(where, float64(gap), float64(seconds), int32(frames), token, context)
 	})
 	return captureAnswerError("start", answer)
 }
@@ -207,55 +206,4 @@ func (implementation) CaptureStill(windowNumber int, path string) error {
 		diagnosticNative.ScheduleCaptureStill(int64(windowNumber), target, context)
 	})
 	return captureAnswerError("still", answer)
-}
-
-func (implementation) StartDocumentFrameIdentity(document unsafe.Pointer, generation uint64, done func(json.RawMessage, error)) error {
-	if done == nil {
-		return errors.New("start document frame identity: completion callback is nil")
-	}
-	handle := handles.NewHandle(done)
-	if !bool(diagnosticNative.ScheduleDocumentFrameIdentityStart(document, uint64(generation), uintptr(handle))) {
-		handle.Delete()
-		return errors.New("start document frame identity was not scheduled")
-	}
-	return nil
-}
-
-func (implementation) FreezeDocumentFrameIdentity(generation uint64, done func(json.RawMessage, error)) error {
-	return scheduleDocumentFrameIdentity("freeze", generation, done, func(handle uintptr) bool {
-		return bool(diagnosticNative.ScheduleDocumentFrameIdentityFreeze(uint64(generation), handle))
-	})
-}
-
-func (implementation) RemoveDocumentFrameIdentity(generation uint64, done func(json.RawMessage, error)) error {
-	return scheduleDocumentFrameIdentity("remove", generation, done, func(handle uintptr) bool {
-		return bool(diagnosticNative.ScheduleDocumentFrameIdentityRemove(uint64(generation), handle))
-	})
-}
-
-func scheduleDocumentFrameIdentity(operation string, generation uint64, done func(json.RawMessage, error), schedule func(uintptr) bool) error {
-	if done == nil {
-		return fmt.Errorf("%s document frame identity: completion callback is nil", operation)
-	}
-	handle := handles.NewHandle(done)
-	if !schedule(uintptr(handle)) {
-		handle.Delete()
-		return fmt.Errorf("%s document frame identity was not scheduled", operation)
-	}
-	return nil
-}
-
-func goHost_document_frame_identity_done(context uintptr, reply *byte, nativeError *byte) {
-	handle := handles.Handle(context)
-	done := handle.Value().(func(json.RawMessage, error))
-	handle.Delete()
-	if nativeError != nil {
-		done(nil, errors.New(native.GoString(nativeError)))
-		return
-	}
-	if reply == nil {
-		done(nil, errors.New("document frame identity callback returned no reply"))
-		return
-	}
-	done(json.RawMessage(native.GoString(reply)), nil)
 }

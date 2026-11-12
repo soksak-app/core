@@ -6,15 +6,14 @@ package abi
 // DiagnosticCallbacks preserves the C signatures of host_callbacks.h.
 // Native pointers are borrowed for the callback; integer contexts are never Go pointers.
 type DiagnosticCallbacks struct {
-	NativeInputSourceAdopted  func(uintptr, *byte)
-	WindowObjectsCounted      func(uintptr, int64, int64, int64, bool)
-	PageObjectsCounted        func(uintptr, int64, int64, *byte)
-	DeliveredNotifications    func(uintptr, *byte)
-	DocumentFrameIdentityDone func(uintptr, *byte, *byte)
-	InputReferenceReply       func(uintptr, *byte, *byte)
-	ProcessExitAnswered       func(uintptr, bool)
-	CaptureAnswered           func(uintptr, int64, *byte)
+	NativeInputSourceAdopted func(uintptr, *byte)
+	WindowObjectsCounted     func(uintptr, int64, int64, int64, bool)
+	PageObjectsCounted       func(uintptr, int64, int64, *byte)
+	DeliveredNotifications   func(uintptr, *byte)
+	InputReferenceReply      func(uintptr, *byte, *byte)
+	ProcessExitAnswered      func(uintptr, bool)
+	CaptureAnswered          func(uintptr, int64, *byte)
 }
 
 // DiagnosticTable holds process-lifetime function addresses in the native header's field order.
-type DiagnosticTable [8]uintptr
+type DiagnosticTable [7]uintptr

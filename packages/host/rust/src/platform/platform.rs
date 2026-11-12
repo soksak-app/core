@@ -1026,7 +1026,6 @@ pub trait Platform: CoreRootHost + Send + Sync {
         gap: f64,
         seconds: f64,
         frames: i32,
-        frame_identity: bool,
         token: u64,
     ) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
@@ -1054,34 +1053,6 @@ pub trait Platform: CoreRootHost + Send + Sync {
     #[cfg(feature = "diagnostics")]
     /// Ends the hold of a new window at once, from any thread: a held window goes on screen.
     fn capture_release_new_window(&self) {}
-    #[cfg(feature = "diagnostics")]
-    /// Starts the document-frame identity producer for an attached view root on the UI thread.
-    fn document_frame_identity_start(
-        &self,
-        _document: Handle,
-        _generation: u64,
-        _done: Box<dyn FnOnce(Result<String, String>) + Send>,
-    ) -> Result<(), String> {
-        Err("not implemented on this platform".into())
-    }
-    #[cfg(feature = "diagnostics")]
-    /// Freezes the document-frame identity producer. Completion runs once on the UI thread.
-    fn document_frame_identity_freeze(
-        &self,
-        _generation: u64,
-        _done: Box<dyn FnOnce(Result<String, String>) + Send>,
-    ) -> Result<(), String> {
-        Err("not implemented on this platform".into())
-    }
-    #[cfg(feature = "diagnostics")]
-    /// Removes the exact document-frame identity marker. Completion runs once on the UI thread.
-    fn document_frame_identity_remove(
-        &self,
-        _generation: u64,
-        _done: Box<dyn FnOnce(Result<String, String>) + Send>,
-    ) -> Result<(), String> {
-        Err("not implemented on this platform".into())
-    }
     #[cfg(feature = "diagnostics")]
     /// The number of planned stills of the recording stopped last without a written frame.
     fn capture_missed(&self) -> Result<i32, String>;

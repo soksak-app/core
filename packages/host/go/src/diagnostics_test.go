@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 	"unsafe"
@@ -26,7 +25,7 @@ func TestCaptureStopLayoutFailurePreservesStartedFolder(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := finishCaptureStop(fakeCaptureStatus{}, directory, 1, false, nil, func() ([]platform.LayoutRecord, error) {
+	_, err := finishCaptureStop(fakeCaptureStatus{}, directory, 1, nil, func() ([]platform.LayoutRecord, error) {
 		return nil, errors.New("layout trace stop failed")
 	})
 	if err == nil || err.Error() != "layout trace stop failed" {
@@ -34,97 +33,6 @@ func TestCaptureStopLayoutFailurePreservesStartedFolder(t *testing.T) {
 	}
 	if info, statErr := os.Stat(directory); statErr != nil || !info.IsDir() {
 		t.Fatalf("failed capture directory was not preserved: stat=%v info=%v", statErr, info)
-	}
-}
-
-// contract: diagnostics.capture-document-identity.callback-ends-the-wait
-func TestTheFrameIdentityWaitEndsByItsCallback(t *testing.T) {
-	t.Parallel()
-	s := &Surfaces{invoke: func(work func()) { work() }}
-	want := json.RawMessage(`{"generation":7}`)
-	reply, err := awaitDocumentFrameIdentity(s, func(done func(json.RawMessage, error)) error {
-		// The library answers once on every path, from another routine after the wait began; the wait ends by that answer.
-		go done(want, nil)
-		return nil
-	})
-	if err != nil || string(reply) != string(want) {
-		t.Fatalf("awaitDocumentFrameIdentity = %s, %v; want the reply of the callback %s", reply, err, want)
-	}
-}
-
-// contract: diagnostics.capture-document-identity.reports-late-callback-errors
-func TestAwaitDocumentFrameIdentityReportsALateErrorAfterAFailedSchedule(t *testing.T) {
-	isolateTraceRecords(t)
-	s := &Surfaces{invoke: func(work func()) { work() }}
-	var callback func(json.RawMessage, error)
-	scheduleErr := errors.New("native operation was not scheduled")
-	reply, err := awaitDocumentFrameIdentity(s, func(done func(json.RawMessage, error)) error {
-		callback = done
-		return scheduleErr
-	})
-	if !errors.Is(err, scheduleErr) || reply != nil {
-		t.Fatalf("awaitDocumentFrameIdentity = %s, %v; want the schedule failure and no source result", reply, err)
-	}
-	if callback == nil {
-		t.Fatal("native callback was not registered")
-	}
-
-	callback(nil, errors.New("late native identity callback failed"))
-	errors := bufferedTraces(t, "host.record.error")
-	if len(errors) != 1 {
-		t.Fatalf("late callback error records = %#v, want one error", errors)
-	}
-	if errors[0]["where"] != "document frame identity callback" || errors[0]["text"] != "late native identity callback failed" {
-		t.Fatalf("late callback error record = %#v, want the callback error at its source", errors[0])
-	}
-}
-
-// contract: diagnostics.capture-document-identity.callback-completion-is-single-use
-func TestAwaitDocumentFrameIdentitySynchronousCallbackReturnsResult(t *testing.T) {
-	s := &Surfaces{invoke: func(work func()) { work() }}
-	want := json.RawMessage(`{"generation":7}`)
-	reply, err := awaitDocumentFrameIdentity(s, func(done func(json.RawMessage, error)) error {
-		done(want, nil)
-		return nil
-	})
-	if err != nil || string(reply) != string(want) {
-		t.Fatalf("awaitDocumentFrameIdentity = %s, %v; want synchronous result %s", reply, err, want)
-	}
-}
-
-// contract: diagnostics.capture-document-identity.callback-completion-is-single-use
-func TestAwaitDocumentFrameIdentityReportsDuplicateCallback(t *testing.T) {
-	isolateTraceRecords(t)
-	s := &Surfaces{invoke: func(work func()) { work() }}
-	var first error
-	reply, err := awaitDocumentFrameIdentity(s, func(done func(json.RawMessage, error)) error {
-		done(json.RawMessage(`{"generation":7}`), nil)
-		first = errors.New("identity callback completion invoked more than once")
-		done(nil, first)
-		return nil
-	})
-	if err != nil || string(reply) != `{"generation":7}` {
-		t.Fatalf("awaitDocumentFrameIdentity = %s, %v; want first callback result", reply, err)
-	}
-	got := bufferedTraces(t, "host.record.error")
-	if len(got) != 1 || got[0]["where"] != "document frame identity callback" ||
-		!strings.Contains(got[0]["text"].(string), "completed more than once") ||
-		!strings.Contains(got[0]["text"].(string), first.Error()) {
-		t.Fatalf("duplicate callback records = %#v, want one explicit callback error", got)
-	}
-}
-
-// contract: diagnostics.capture-document-identity.schedule-error-preserves-callback-error
-func TestAwaitDocumentFrameIdentityPreservesCallbackErrorWhenScheduleFails(t *testing.T) {
-	scheduleErr := errors.New("identity operation was not scheduled")
-	callbackErr := errors.New("identity callback failed")
-	s := &Surfaces{invoke: func(work func()) { work() }}
-	_, err := awaitDocumentFrameIdentity(s, func(done func(json.RawMessage, error)) error {
-		done(nil, callbackErr)
-		return scheduleErr
-	})
-	if !errors.Is(err, scheduleErr) || !errors.Is(err, callbackErr) {
-		t.Fatalf("awaitDocumentFrameIdentity error = %v, want both schedule and callback errors", err)
 	}
 }
 
@@ -151,14 +59,6 @@ func TestCaptureStartOptionsPreserveDisplayParsing(t *testing.T) {
 		if _, err := parseCaptureStartOptions(json.RawMessage(`{"gap":8,"frames":10,"display":` + value + `}`)); err == nil {
 			t.Errorf("display value %s was accepted", value)
 		}
-	}
-}
-
-// contract: diagnostics.capture-start.frame-identity-is-strict-boolean
-func TestCaptureStartFrameIdentityRejectsNull(t *testing.T) {
-	_, err := parseCaptureStartOptions(json.RawMessage(`{"gap":8,"frames":10,"frameIdentity":null}`))
-	if messageOf(err) != "frameIdentity must be a boolean" {
-		t.Fatalf("frameIdentity null: error %v, want frameIdentity must be a boolean", err)
 	}
 }
 
@@ -207,43 +107,6 @@ func TestCaptureStartPlanTakesGapAndSecondsOrFrames(t *testing.T) {
 	}
 }
 
-// contract: diagnostics.drag.forwards-frame-identity
-func TestDiagnosticDragFrameIdentityRequiresCapture(t *testing.T) {
-	for _, test := range []struct {
-		name          string
-		params        string
-		wantCapture   bool
-		wantIdentity  bool
-		wantErrorText string
-	}{
-		{name: "default is disabled", params: `{}`},
-		{name: "capture keeps identity disabled", params: `{"capture":{"gap":8,"frames":10}}`, wantCapture: true},
-		{name: "explicit false", params: `{"capture":{"gap":8,"frames":10},"frameIdentity":false}`, wantCapture: true},
-		{name: "explicit true", params: `{"capture":{"gap":8,"frames":10},"frameIdentity":true}`, wantCapture: true, wantIdentity: true},
-		{name: "identity requires capture", params: `{"frameIdentity":true}`, wantErrorText: "frameIdentity requires a capture plan"},
-		{name: "identity rejects disabled capture", params: `{"capture":false,"frameIdentity":true}`, wantErrorText: "frameIdentity requires a capture plan"},
-		{name: "identity rejects null", params: `{"capture":{"gap":8,"frames":10},"frameIdentity":null}`, wantErrorText: "frameIdentity must be a boolean"},
-		{name: "identity rejects string", params: `{"capture":{"gap":8,"frames":10},"frameIdentity":"true"}`, wantErrorText: "frameIdentity must be a boolean"},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			got, err := parseDragCaptureOptions(json.RawMessage(test.params))
-			if test.wantErrorText != "" {
-				if messageOf(err) != test.wantErrorText {
-					t.Fatalf("parseDragCaptureOptions(%s) error = %v, want %q", test.params, err, test.wantErrorText)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("parseDragCaptureOptions(%s): %v", test.params, err)
-			}
-			if got.capture != test.wantCapture || got.frameIdentity != test.wantIdentity {
-				t.Fatalf("parseDragCaptureOptions(%s) = %+v, want capture=%t frameIdentity=%t",
-					test.params, got, test.wantCapture, test.wantIdentity)
-			}
-		})
-	}
-}
-
 // contract: diagnostics.drag.takes-a-capture-plan
 func TestDiagnosticDragCaptureTakesAPlan(t *testing.T) {
 	for _, test := range []struct {
@@ -282,31 +145,6 @@ func TestDiagnosticDragCaptureTakesAPlan(t *testing.T) {
 	}
 }
 
-// contract: diagnostics.capture-start.parses-frame-identity-option
-func TestCaptureStartOptionsParseFrameIdentity(t *testing.T) {
-	for _, test := range []struct {
-		name string
-		json string
-		want bool
-	}{
-		{name: "omitted", json: `{"gap":8,"frames":10}`, want: false},
-		{name: "false", json: `{"gap":8,"frames":10,"frameIdentity":false}`, want: false},
-		{name: "true", json: `{"gap":8,"frames":10,"frameIdentity":true}`, want: true},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			got, err := parseCaptureStartOptions(json.RawMessage(test.json))
-			if err != nil || got.FrameIdentity != test.want {
-				t.Fatalf("parseCaptureStartOptions(%s) = %+v, %v; want frameIdentity %t", test.json, got, err, test.want)
-			}
-		})
-	}
-	for _, value := range []string{`null`, `"true"`, `1`, `[]`, `{}`} {
-		if _, err := parseCaptureStartOptions(json.RawMessage(`{"gap":8,"frames":10,"frameIdentity":` + value + `}`)); err == nil {
-			t.Errorf("frameIdentity value %s was accepted", value)
-		}
-	}
-}
-
 type fakeCaptureStatus struct {
 	missed int
 	late   int
@@ -314,14 +152,12 @@ type fakeCaptureStatus struct {
 }
 
 type captureStartProbe struct {
-	frameIdentity bool
-	plan          CapturePlan
-	failStop      bool
+	plan     CapturePlan
+	failStop bool
 }
 
 func (*captureStartProbe) Open(CaptureTarget) error { return nil }
-func (c *captureStartProbe) Start(_ string, plan CapturePlan, frameIdentity bool) error {
-	c.frameIdentity = frameIdentity
+func (c *captureStartProbe) Start(_ string, plan CapturePlan) error {
 	c.plan = plan
 	return nil
 }
@@ -335,29 +171,17 @@ func (c *captureStartProbe) Stop() (int, error) {
 // testPlan is the plan of the stills of the recordings of these tests.
 var testPlan = CapturePlan{Gap: 8, Frames: 120}
 
-// contract: diagnostics.capture-start.forwards-frame-identity
-func TestRecordingStartForwardsFrameIdentity(t *testing.T) {
-	fake := &captureStartProbe{}
-	var recording Recording
-	if err := recording.Start(fake, CaptureTarget{Window: 7}, filepath.Join(t.TempDir(), "frames"), testPlan, true); err != nil {
-		t.Fatal(err)
-	}
-	if !fake.frameIdentity || fake.plan != testPlan {
-		t.Fatalf("recording start forwarded frameIdentity %t and plan %+v, want true and %+v", fake.frameIdentity, fake.plan, testPlan)
-	}
-}
-
 // contract: recording.finish.keeps-folder-and-reports-frames
-func TestRecordingFinishPreservesFrameIdentityOption(t *testing.T) {
+func TestRecordingFinishKeepsTheFolder(t *testing.T) {
 	fake := &captureStartProbe{}
 	var recording Recording
 	directory := filepath.Join(t.TempDir(), "frames")
-	if err := recording.Start(fake, CaptureTarget{Window: 7}, directory, testPlan, true); err != nil {
+	if err := recording.Start(fake, CaptureTarget{Window: 7}, directory, testPlan); err != nil {
 		t.Fatal(err)
 	}
-	finishedDirectory, _, frameIdentity, window, err := recording.Finish(fake)
-	if err != nil || finishedDirectory != directory || !frameIdentity || window == nil || *window != 7 {
-		t.Fatalf("finish directory=%q frameIdentity=%v window=%v error=%v", finishedDirectory, frameIdentity, window, err)
+	finishedDirectory, _, window, err := recording.Finish(fake)
+	if err != nil || finishedDirectory != directory || window == nil || *window != 7 {
+		t.Fatalf("finish directory=%q window=%v error=%v", finishedDirectory, window, err)
 	}
 }
 
@@ -365,16 +189,16 @@ func TestRecordingFinishPreservesFrameIdentityOption(t *testing.T) {
 func TestRecordingFinishReportsTheRecordedWindow(t *testing.T) {
 	fake := &captureStartProbe{}
 	var recording Recording
-	if err := recording.Start(fake, CaptureTarget{Window: 7, Display: true}, filepath.Join(t.TempDir(), "display"), testPlan, false); err != nil {
+	if err := recording.Start(fake, CaptureTarget{Window: 7, Display: true}, filepath.Join(t.TempDir(), "display"), testPlan); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, _, window, err := recording.Finish(fake); err != nil || window != nil {
+	if _, _, window, err := recording.Finish(fake); err != nil || window != nil {
 		t.Fatalf("a display recording finished with window %v and error %v, want nil and nil", window, err)
 	}
-	if err := recording.Start(fake, CaptureTarget{Window: 9}, filepath.Join(t.TempDir(), "window"), testPlan, false); err != nil {
+	if err := recording.Start(fake, CaptureTarget{Window: 9}, filepath.Join(t.TempDir(), "window"), testPlan); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, _, window, err := recording.Finish(fake); err != nil || window == nil || *window != 9 {
+	if _, _, window, err := recording.Finish(fake); err != nil || window == nil || *window != 9 {
 		t.Fatalf("a window recording finished with window %v and error %v, want 9 and nil", window, err)
 	}
 }
@@ -386,7 +210,7 @@ func (c fakeCaptureStatus) LongestGap() float64 { return c.gap }
 // contract: diagnostics.capture-stop.payload-reports-stills
 func TestCaptureStopPayloadReportsStills(t *testing.T) {
 	window := 31
-	payload := captureStopPayload(fakeCaptureStatus{missed: 2, late: 1, gap: 42.5}, "/tmp/frames", 598, nil, false, &window)
+	payload := captureStopPayload(fakeCaptureStatus{missed: 2, late: 1, gap: 42.5}, "/tmp/frames", 598, nil, &window)
 	want := map[string]any{
 		"window":      31,
 		"frames":      "/tmp/frames",
@@ -411,24 +235,15 @@ func TestCaptureStopPayloadReportsStills(t *testing.T) {
 		t.Errorf("payload has the members %v, want those of %v and layouts", payload, want)
 	}
 	// A display recording has no window of its own: the member is null, not absent.
-	display := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, nil, false, nil)
+	display := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, nil, nil)
 	if value, ok := display["window"]; !ok || value != nil {
 		t.Errorf("the stop of a display recording reports window %#v (present %t), want null", value, ok)
 	}
 }
 
-// contract: diagnostics.capture-stop.payload-names-opt-in-frame-identity-artifact
-func TestCaptureStopPayloadNamesOptInFrameIdentityArtifact(t *testing.T) {
-	payload := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, nil, true, nil)
-	identity, ok := payload["frameIdentity"].(map[string]any)
-	if !ok || identity["status"] != "complete" || identity["manifest"] != filepath.Join("/tmp/frames", "frame-identities", "manifest.json") {
-		t.Fatalf("opt-in identity artifact was not returned: %#v", payload)
-	}
-}
-
 // contract: diagnostics.capture-stop.payload-reports-layout-timeline
 func TestCaptureStopPayloadRequiresLayoutTimeline(t *testing.T) {
-	payload := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, nil, false, nil)
+	payload := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, nil, nil)
 	if _, ok := payload["layouts"]; !ok {
 		t.Fatalf("capture stop omitted layouts: %#v", payload)
 	}
@@ -440,7 +255,7 @@ func TestCaptureStopPayloadPreservesLayoutStages(t *testing.T) {
 		{Ticket: 7, Begun: 10, Requested: 15, Presented: 20, Committed: 30, CommitPath: "view-join", OpenAtCommit: 1, Flushed: 35},
 		{Ticket: 8, Begun: 40, Requested: math.NaN(), Presented: math.NaN(), Committed: math.NaN(), OpenAtCommit: math.NaN(), Flushed: math.NaN()},
 	}
-	payload := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, records, false, nil)
+	payload := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, records, nil)
 	layouts := payload["layouts"].([]map[string]any)
 	want := []map[string]any{
 		{"ticket": uint64(7), "begun": float64(10), "requested": float64(15), "presented": float64(20), "committed": float64(30), "commitPath": "view-join", "openAtCommit": float64(1), "flushed": float64(35)},
@@ -470,328 +285,6 @@ func TestDiagnosticViewportMarkerIsDeclared(t *testing.T) {
 	method, ok := diagnosticMethods["diagnostics.document.viewport-marker"]
 	if !ok || method == nil {
 		t.Fatal("diagnostics.document.viewport-marker is not registered")
-	}
-}
-
-// contract: diagnostics.capture.document-identity.start.is-declared
-func TestCaptureDocumentIdentityStartIsRegistered(t *testing.T) {
-	method, ok := diagnosticMethods["diagnostics.capture.document-identity.start"]
-	if !ok || method == nil {
-		t.Fatal("diagnostics.capture.document-identity.start is not registered")
-	}
-}
-
-// contract: diagnostics.capture-document-identity.stop-preserves-captures-without-a-document-source
-func TestCaptureStopPreservesCaptureModesWithoutDocumentSource(t *testing.T) {
-	for _, frameIdentity := range []bool{false, true} {
-		freezeCalls, stopCalls, removeCalls := 0, 0, 0
-		issued, removed, err := documentIdentityStopSequence(
-			frameIdentity,
-			nil,
-			nil,
-			func(uint64) (json.RawMessage, error) {
-				freezeCalls++
-				return nil, nil
-			},
-			func() error { stopCalls++; return nil },
-			func(uint64) (json.RawMessage, error) {
-				removeCalls++
-				return nil, nil
-			},
-		)
-		if err != nil || issued != nil || !removed {
-			t.Fatalf("frameIdentity=%t stop result issued=%v removed=%t error=%v", frameIdentity, issued, removed, err)
-		}
-		if freezeCalls != 0 || stopCalls != 1 || removeCalls != 0 {
-			t.Fatalf("frameIdentity=%t operation counts freeze=%d stop=%d remove=%d", frameIdentity, freezeCalls, stopCalls, removeCalls)
-		}
-	}
-}
-
-// contract: diagnostics.capture-start.waits-for-prior-identity-removal
-func TestCaptureStartWaitsForPriorIdentityRemoval(t *testing.T) {
-	recordingStarted := make(chan struct{})
-	allowTrace := make(chan struct{})
-	traceStarted := make(chan struct{})
-	stopStarted := make(chan struct{})
-	results := make(chan error, 2)
-	// order records the entries in the order they ran: a stop that entered while the start held the lifecycle comes first.
-	var orderMu sync.Mutex
-	var order []string
-	enter := func(name string) {
-		orderMu.Lock()
-		order = append(order, name)
-		orderMu.Unlock()
-	}
-	go func() {
-		results <- withDocumentFrameIdentityLifecycle(func() error {
-			close(recordingStarted)
-			<-allowTrace
-			enter("trace")
-			close(traceStarted)
-			return nil
-		})
-	}()
-	<-recordingStarted
-	// While the capture start holds the lifecycle, no other operation can enter it.
-	if documentFrameIdentityMu.TryLock() {
-		documentFrameIdentityMu.Unlock()
-		close(allowTrace)
-		t.Fatal("the lifecycle was free while new capture trace initialization was pending")
-	}
-	// The stop enters after the start returned, which is after its trace initialization.
-	go func() {
-		results <- withDocumentFrameIdentityLifecycle(func() error {
-			enter("stop")
-			close(stopStarted)
-			return nil
-		})
-	}()
-	close(allowTrace)
-	<-traceStarted
-	<-stopStarted
-	for range 2 {
-		if err := <-results; err != nil {
-			t.Fatalf("capture lifecycle operation: %v", err)
-		}
-	}
-	if !reflect.DeepEqual(order, []string{"trace", "stop"}) {
-		t.Fatalf("the lifecycle ran %v, want the trace initialization of the start before the stop", order)
-	}
-}
-
-// contract: diagnostics.capture-document-identity.stop-orders-freeze-capture-and-cleanup
-func TestCaptureStopFreezesAndRemovesTheSelectedSourceAfterRecording(t *testing.T) {
-	source := &documentFrameIdentitySource{surface: "surface-a", generation: 7}
-	var phases []string
-	issued, removed, err := documentIdentityStopSequence(
-		true,
-		source,
-		nil,
-		func(generation uint64) (json.RawMessage, error) {
-			phases = append(phases, "freeze")
-			if generation != source.generation {
-				t.Fatalf("freeze generation=%d", generation)
-			}
-			return json.RawMessage(`{"generation":7,"atlasSlots":300,"issuedSlots":2}`), nil
-		},
-		func() error { phases = append(phases, "capture-stop"); return nil },
-		func(generation uint64) (json.RawMessage, error) {
-			phases = append(phases, "remove")
-			if generation != source.generation {
-				t.Fatalf("remove generation=%d", generation)
-			}
-			return json.RawMessage(`{"generation":7,"removed":true}`), nil
-		},
-	)
-	if err != nil || issued == nil || *issued != 2 || !removed {
-		t.Fatalf("stop result issued=%v removed=%t error=%v", issued, removed, err)
-	}
-	if !reflect.DeepEqual(phases, []string{"freeze", "capture-stop", "remove"}) {
-		t.Fatalf("stop phases=%v", phases)
-	}
-}
-
-// contract: diagnostics.capture-document-identity.stop-does-not-credit-unconfirmed-freeze
-func TestCaptureStopStillCleansUpAfterFreezeFailure(t *testing.T) {
-	source := &documentFrameIdentitySource{surface: "surface-a", generation: 7}
-	stopCalls, removeCalls := 0, 0
-	issued, removed, err := documentIdentityStopSequence(
-		true,
-		source,
-		nil,
-		func(uint64) (json.RawMessage, error) { return nil, errors.New("freeze timeout") },
-		func() error { stopCalls++; return nil },
-		func(uint64) (json.RawMessage, error) {
-			removeCalls++
-			return json.RawMessage(`{"generation":7,"removed":true}`), nil
-		},
-	)
-	if err == nil || issued != nil || !removed || stopCalls != 1 || removeCalls != 1 {
-		t.Fatalf("freeze failure stop result issued=%v removed=%t stop=%d remove=%d error=%v", issued, removed, stopCalls, removeCalls, err)
-	}
-}
-
-// contract: diagnostics.capture-document-identity.stop-drains-late-start-before-cleanup
-func TestCaptureStopDrainsPendingStartWithoutCreditingItsUnconfirmedCount(t *testing.T) {
-	source := &documentFrameIdentitySource{surface: "surface-a", generation: 7}
-	phases := make([]string, 0, 3)
-	issued, removed, err := documentIdentityStopSequence(
-		true,
-		source,
-		errors.New("the start callback failed"),
-		func(uint64) (json.RawMessage, error) {
-			phases = append(phases, "freeze")
-			return json.RawMessage(`{"generation":7,"atlasSlots":300,"issuedSlots":2}`), nil
-		},
-		func() error { phases = append(phases, "capture-stop"); return nil },
-		func(uint64) (json.RawMessage, error) {
-			phases = append(phases, "remove")
-			return json.RawMessage(`{"generation":7,"removed":true}`), nil
-		},
-	)
-	if err == nil || issued != nil || !removed {
-		t.Fatalf("pending start result issued=%v removed=%t error=%v", issued, removed, err)
-	}
-	if !reflect.DeepEqual(phases, []string{"freeze", "capture-stop", "remove"}) {
-		t.Fatalf("pending start cleanup phases=%v", phases)
-	}
-}
-
-// contract: diagnostics.capture-document-identity.start-validates-current-root-generation
-func TestCaptureDocumentIdentityStartResolvesCurrentRootHandle(t *testing.T) {
-	s := &Surfaces{documents: NewDocuments(), sourceOrigins: newSourceOrigins()}
-	generation, err := s.sourceOriginState().create("surface-a")
-	if err != nil {
-		t.Fatal(err)
-	}
-	handle := new(byte)
-	key := DocumentKey{Surface: "surface-a", Name: ""}
-	if err := s.documents.Reserve(key); err != nil {
-		t.Fatal(err)
-	}
-	if !s.documents.Set(key, unsafe.Pointer(handle)) {
-		t.Fatal("root document reservation disappeared")
-	}
-	s.documents.views["surface-a"] = &viewChannel{generation: generation, handle: unsafe.Pointer(handle)}
-	got, err := s.documentFrameIdentityRoot("surface-a", generation)
-	if err != nil || got != unsafe.Pointer(handle) {
-		t.Fatalf("root handle=%p error=%v", got, err)
-	}
-	if _, err := s.documentFrameIdentityRoot("surface-a", generation+1); err == nil {
-		t.Fatal("stale generation was accepted")
-	}
-	s.documents.views["surface-a"].handle = unsafe.Pointer(new(byte))
-	if _, err := s.documentFrameIdentityRoot("surface-a", generation); err == nil {
-		t.Fatal("root handle mismatch was accepted")
-	}
-}
-
-// contract: diagnostics.capture-document-identity.start-validates-native-metadata
-func TestCaptureDocumentIdentityStartValidatesNativeMetadata(t *testing.T) {
-	valid := json.RawMessage(`{"generation":7,"atlasSlots":300,"roi":{"x":1,"y":2,"width":30,"height":40,"scale":2}}`)
-	var reply map[string]any
-	if err := validateDocumentFrameIdentityStartReply(valid, 7, &reply); err != nil || reply["atlasSlots"] != float64(300) {
-		t.Fatalf("valid native metadata reply=%#v error=%v", reply, err)
-	}
-	zeroOrigin := json.RawMessage(`{"generation":7,"atlasSlots":300,"roi":{"x":0,"y":0,"width":30,"height":40,"scale":2}}`)
-	if err := validateDocumentFrameIdentityStartReply(zeroOrigin, 7, &reply); err != nil {
-		t.Fatalf("valid zero-origin metadata was rejected: %v", err)
-	}
-	for _, raw := range []json.RawMessage{
-		json.RawMessage(`{"generation":8,"atlasSlots":300,"roi":{"x":1,"y":2,"width":30,"height":40,"scale":2}}`),
-		json.RawMessage(`{"generation":7,"atlasSlots":513,"roi":{"x":1,"y":2,"width":30,"height":40,"scale":2}}`),
-		json.RawMessage(`{"generation":7,"atlasSlots":300,"roi":{"x":1,"y":2,"width":0,"height":40,"scale":2}}`),
-		json.RawMessage(`{"generation":7,"atlasSlots":300,"roi":{"y":2,"width":30,"height":40,"scale":2}}`),
-		json.RawMessage(`{"generation":7,"atlasSlots":300,"roi":{"x":1,"width":30,"height":40,"scale":2}}`),
-		json.RawMessage(`null`),
-	} {
-		if err := validateDocumentFrameIdentityStartReply(raw, 7, &reply); err == nil {
-			t.Fatalf("accepted invalid native metadata %s", raw)
-		}
-	}
-}
-
-// contract: diagnostics.capture-document-identity.stop-requires-issued-slots-field
-func TestDocumentFrameIdentityIssuedSlotsRequiresField(t *testing.T) {
-	for _, test := range []struct {
-		name string
-		raw  json.RawMessage
-		want uint64
-		bad  bool
-	}{
-		{name: "zero is valid", raw: json.RawMessage(`{"generation":7,"atlasSlots":300,"issuedSlots":0}`), want: 0},
-		{name: "positive is valid", raw: json.RawMessage(`{"generation":7,"atlasSlots":300,"issuedSlots":2}`), want: 2},
-		{name: "missing is invalid", raw: json.RawMessage(`{"generation":7,"atlasSlots":300}`), bad: true},
-		{name: "above atlas is invalid", raw: json.RawMessage(`{"generation":7,"atlasSlots":2,"issuedSlots":3}`), bad: true},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			got, err := documentFrameIdentityIssuedSlots(test.raw, 7)
-			if test.bad {
-				if err == nil {
-					t.Fatalf("accepted invalid issued slot reply %s as %d", test.raw, got)
-				}
-				return
-			}
-			if err != nil || got != test.want {
-				t.Fatalf("issued slots=%d error=%v, want %d", got, err, test.want)
-			}
-		})
-	}
-}
-
-// contract: diagnostics.capture-document-identity.start-rejects-invalid-parameters
-func TestCaptureDocumentIdentityStartRejectsInvalidParameters(t *testing.T) {
-	for _, raw := range []string{
-		`{"window":"window-a","generation":7}`,
-		`{"window":"window-a","surface":"","generation":7}`,
-		`{"window":"window-a","surface":"surface-a"}`,
-		`{"window":"window-a","surface":"surface-a","generation":0}`,
-		`{"window":"window-a","surface":"surface-a","generation":9007199254740992}`,
-		`{"window":"window-a","surface":"surface-a","generation":1.5}`,
-	} {
-		if _, err := parseCaptureDocumentIdentityRequest(json.RawMessage(raw)); err == nil {
-			t.Fatalf("accepted invalid identity start parameters %s", raw)
-		}
-	}
-}
-
-// contract: diagnostics.capture-document-identity.start-selects-one-source-per-capture
-func TestRecordingSelectsOneDocumentIdentitySource(t *testing.T) {
-	recording := Recording{directory: "frames", frameIdentity: true, documentIdentityAllowed: true}
-	active, source := recording.FrameIdentityState()
-	if !active || source != nil {
-		t.Fatalf("identity state before source active=%t source=%+v", active, source)
-	}
-	if err := recording.SelectFrameIdentitySource("surface-a", 7); err != nil {
-		t.Fatal(err)
-	}
-	if err := recording.SelectFrameIdentitySource("surface-b", 8); err == nil {
-		t.Fatal("capture accepted a second document source")
-	}
-	active, source = recording.FrameIdentityState()
-	if !active || source == nil || source.surface != "surface-a" || source.generation != 7 {
-		t.Fatalf("identity state after source active=%t source=%+v", active, source)
-	}
-	if recording.ClearFrameIdentitySource("surface-a", 8) {
-		t.Fatal("cleared a source using a different generation")
-	}
-	if !recording.ClearFrameIdentitySource("surface-a", 7) {
-		t.Fatal("did not clear the exact selected source")
-	}
-}
-
-// contract: diagnostics.capture-document-identity.start-requires-explicit-capture-endpoint
-func TestRecordingRejectsDocumentSourceForDragOwnedIdentityCapture(t *testing.T) {
-	recording := Recording{directory: "frames", frameIdentity: true}
-	if err := recording.SelectFrameIdentitySource("surface-a", 7); err == nil {
-		t.Fatal("drag-owned identity capture accepted a document source")
-	}
-}
-
-// contract: diagnostics.capture-document-identity.cleanup-source-survives-recording-stop
-func TestRecordingRetainsSelectedSourceUntilNativeRemoval(t *testing.T) {
-	recording := Recording{
-		identitySource: &documentFrameIdentitySource{surface: "surface-a", generation: 7},
-	}
-	active, source := recording.FrameIdentityState()
-	if active || source == nil || source.surface != "surface-a" || source.generation != 7 {
-		t.Fatalf("inactive identity state active=%t source=%+v", active, source)
-	}
-}
-
-// contract: diagnostics.capture-start.rejects-unconfirmed-identity-cleanup
-func TestRecordingRejectsStartWhileDocumentIdentityCleanupIsIncomplete(t *testing.T) {
-	probe := &captureStartProbe{}
-	recording := Recording{
-		identitySource: &documentFrameIdentitySource{surface: "surface-a", generation: 7},
-	}
-	err := recording.StartWithDocumentIdentity(probe, CaptureTarget{Window: 9}, filepath.Join(t.TempDir(), "frames"), testPlan, true, true)
-	if err == nil || !strings.Contains(err.Error(), "cleanup for surface \"surface-a\" generation 7 is incomplete") {
-		t.Fatalf("start error = %v, want incomplete prior cleanup", err)
-	}
-	if probe.frameIdentity {
-		t.Fatal("capture started while prior document identity cleanup was incomplete")
 	}
 }
 
