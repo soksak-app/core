@@ -4,7 +4,7 @@
 use std::path::{Component, Path};
 use std::sync::PoisonError;
 
-use crate::framework::{Manager, Window};
+use crate::framework::Window;
 use serde::{Deserialize, Serialize};
 
 use crate::windows::window_data;
@@ -80,10 +80,7 @@ pub fn place(window: &Window, request: FilePlaceRequest) -> Result<FilePlaced, S
     if root.is_empty() {
         return Err("file place: the window shows no project".to_string());
     }
-    let chosen = window
-        .app_handle()
-        .framework()
-        .save_file(window, &request.name, Some(Path::new(&root)))
+    let chosen = crate::dialog::save_path(window, &request.name, Some(Path::new(&root)))
         .map_err(|error| format!("file place: save panel: {error}"))?;
     let Some(chosen) = chosen else {
         return Ok(FilePlaced { path: None });

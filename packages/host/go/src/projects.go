@@ -333,7 +333,7 @@ func (h *Host) FolderChoose(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return framework.ChooseFolder(s.window, "프로젝트 폴더 선택")
+	return h.folderPath(ctx, s, "프로젝트 폴더 선택")
 }
 
 type CreateProject struct {

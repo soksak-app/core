@@ -455,10 +455,7 @@ pub fn record(app: &AppHandle, request: RecordRequest) -> Result<Value, String> 
 /// Shows the save panel with name attached to window and returns the chosen path, or `None` when the person
 /// cancelled.
 fn save_to(window: &Window, name: &str) -> Result<Option<std::path::PathBuf>, String> {
-    window
-        .app_handle()
-        .framework()
-        .save_file(window, name, None)
+    crate::dialog::save_path(window, name, None)
         .map_err(|error| format!("debug: save panel: {error}"))
 }
 

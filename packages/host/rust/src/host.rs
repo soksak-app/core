@@ -38,11 +38,11 @@ pub mod command_line;
 pub mod composition;
 pub mod crash_report;
 pub mod debug;
-pub mod dialog;
 pub mod debug_follow;
 pub mod deep_link;
 #[cfg(feature = "diagnostics")]
 pub mod diagnostics;
+pub mod dialog;
 pub mod documents;
 pub mod endpoint;
 pub mod endpoint_record;
@@ -439,6 +439,8 @@ pub fn setup(app: &AppHandle, setup: Setup) -> Result<(), Box<dyn std::error::Er
     let changed = app.clone();
     sidecars.on_closing_changed(move || crate::exposure::sidecars_changed(&changed));
     app.manage(sidecars);
+    // The dialogs of a window are held from its registration, whose close ends them.
+    exposure::hold_dialogs(app);
     let main = app
         .get_window("main")
         .ok_or("the configuration has no main window")?;

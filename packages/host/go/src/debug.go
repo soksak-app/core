@@ -437,14 +437,14 @@ func (h *Host) DebugRecord(requestJSON json.RawMessage) (map[string]any, error) 
 	return answer, nil
 }
 
-// debugSaveTo shows the save panel with name attached to the window of the call and returns the chosen path, or nil
-// when the person cancelled.
+// debugSaveTo asks where to save name for the window of the call, through its save panel or the client that watches its
+// host.dialog, and returns the chosen path, or nil for a cancel.
 func (h *Host) debugSaveTo(ctx context.Context, name string) (*string, error) {
 	s, err := h.surface(ctx)
 	if err != nil {
 		return nil, err
 	}
-	chosen, err := framework.SaveFile(s.window, name, "")
+	chosen, err := h.savePath(ctx, s, name, "")
 	if err != nil {
 		return nil, fmt.Errorf("debug: save panel: %w", err)
 	}

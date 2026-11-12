@@ -153,6 +153,9 @@ func Prepare(adapter Framework, assets fs.FS, options Options) (_ *Session, fail
 	session.host = host
 	host.endpoint = NewEndpoint(hostBackend{host})
 	host.buttons = NewButtons(func(value map[string]any) { host.endpoint.NotifyWatchers("host.buttons", value) })
+	host.dialogs = NewDialogs(func(window string, value map[string]any) {
+		host.endpoint.StatusChanged(window, "host.dialog", "", value)
+	})
 	info := EndpointInfo{Transport: address.Transport, Address: address.Address, PID: os.Getpid(),
 		Application: framework.ApplicationName(), Version: applicationVersion, Started: time.Now()}
 	if err := host.endpoint.Serve(listener, info, host.workspace.directory); err != nil {

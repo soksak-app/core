@@ -230,6 +230,7 @@ view는 그 표면의 네이티브 승인이 완료된 뒤에 코어·플러그�
 | status | `host.dock` | 애플리케이션 Dock 메뉴 항목 제목의 순서 목록 |
 | status | `host.log` | `{path, size, notices, coalesced}`: event log의 변경에 대한 가장 최근 알림([따라가기](debug.ko.md#파일)). `path`는 설정 폴더 아래의 event 파일(`logs/<name>`), `size`는 바이트 크기이고, `notices`는 시작 이후 발행한 알림 수로 250 ms에 하나까지이며, `coalesced`는 뒤의 알림에 합쳐진 알림 수다. 첫 알림 전의 값은 `{path: "", size: 0, notices: 0, coalesced: 0}`다. host는 알림마다 `host.log` 감시자에게 알린다. log만 읽는 호출의 기록을 뺀 모든 줄이 변경을 알리므로 알림 뒤 `log.query`를 요청하는 client가 다음 알림을 일으키지 않는다 |
 | status | `host.buttons` | `{mask}`: AppKit이 눌렸다고 보고하는 mouse 버튼(`+[NSEvent pressedMouseButtons]`: bit 0 왼쪽, bit 1 오른쪽, 그 위 bit는 다른 버튼). 호스트는 AppKit이 mouse 버튼의 누름이나 뗌을 애플리케이션에 전달할 때(local event monitor)와 다른 애플리케이션에 전달할 때(global event monitor) 마스크를 읽고, 마스크가 바뀌면 `host.buttons` 감시자에게 알린다. 그래서 다른 애플리케이션이 최전면인 동안의 사람의 버튼도 값을 바꾼다. 합성 `input.pointer` 누름과 뗌은 AppKit의 event 전달을 거치지 않고 뷰로 가므로 값을 바꾸지 않는다 |
+| status | `host.dialog` | `{pending: [{id, kind, suggestedName, directory, multiple, directories, url}]}`: client 가 이 status 를 watch 하는 동안 창이 요청한 [dialog](#dialog) |
 | status | `host.sidecars` | `{closing: [{sidecar, surface}], outdated: [{sidecar, running, installed, sessions}]}`: 호스트가 `closed`를 보냈고 사이드카가 아직 답하지 않은 표면([사이드카](sidecars.ko.md#메시지))과, 서비스가 설치된 것과 다른 version으로 도는 persistent 사이드카([persistent services](persistent-services.ko.md#updates)) |
 | command | `host.menu.select` | 애플리케이션 메뉴 항목 `{menu, title}`을 실행한다. 제목이 `menu`인 하위 메뉴에서 제목이 `title`인 항목이다 |
 | status | `host.menu` | 애플리케이션 메뉴. 구분선을 뺀 하위 메뉴마다 `[{title, items: [{title, key}]}]`이며, `key`는 수정 키 `ctrl`, `opt`, `shift`, `cmd`를 이 순서로 `+`로 이은 뒤 키를 붙인 단축키이거나 빈 문자열이다 |
@@ -252,6 +253,15 @@ view는 그 표면의 네이티브 승인이 완료된 뒤에 코어·플러그�
 
 window check 는 이것을 쓰지 않는다. check 는 사람의 창 뒤에서 돌고 가려진 창을 창 자체로 재므로(`diagnostics.window.draw-covered`) 창의 순서는 측정의 조건이 아니다. 창의 순서를 바꾸는 e2e check 나 `@soksak/window-check` 의 함수는 그것을 지키는 `packages/window-check` 의 test 에서 실패한다.
 
+### Dialog
+
+`host.dialog` 는 창이 요청한 dialog 에 사람이 panel 에 답하듯 client 가 답하게 한다. 그래서 파일을 저장하거나 여는 check 는 자기 폴더에서 그 일을 하고, 사람에게 panel 을 띄우거나 사람의 폴더에 쓰지 않는다.
+
+- client 가 하나라도 창의 `host.dialog` 를 watch 하는 동안, 창이 요청한 dialog 는 panel 을 띄우지 않는다. 그 요청은 `pending` 에서 `{id, kind, suggestedName, directory, multiple, directories, url}` 로 기다리고, watcher 는 새 값을 받는다. `kind` 는 host 의 save panel 과 folder panel(debug view 의 저장, project 안 파일 배치, project 폴더 선택)에 대해 `save` 나 `folder`, page 의 file input(`<input type=file>`)의 open panel 에 대해 `open`, page 의 다운로드 위치에 대해 `download` 다. `suggestedName` 은 panel 이 제안하는 이름, `directory` 는 panel 이 여는 폴더, `multiple` 과 `directories` 는 file input 이 받는 것, `url` 은 다운로드의 주소이며, 그 kind 에 없는 것은 `null` 이다.
+- `input.dialog.answer` 는 `paths` 로 고르고 `cancel: true` 로 취소한다. 호출자는 panel 의 선택이나 취소를 받듯 그 답을 받으므로, panel 뒤의 검사(파일이 project 안에 놓이는지 등)가 그대로 적용된다. 답은 사람의 panel 과 같은 검사를 거친다. `save` 와 `download` 는 있는 폴더 안의 절대 경로 하나를 받는다. 그 이름은 비지 않고 `:` 를 담지 않으며 `.` 로 시작하지 않고, 폴더를 가리키지 않으며, `replace` 가 true 가 아니면 있는 파일을 가리키지 않는다. `folder` 는 있는 폴더 하나를 받는다. `open` 은 있는 경로를 하나 이상 받고, `multiple` 이 아니면 하나만, `directories` 가 아니면 파일만 받는다. file input 의 `accept` type 은 답을 제한하지 않는다. WebKit 은 그것을 private interface 로만 panel 에 주기 때문이다. 거부된 답은 규칙과 경로를 말하고, 요청은 그대로 기다린다. `download` 의 답은 다운로드가 끝날 때 돌아오고, 실패한 다운로드는 그 오류와 함께 돌아온다.
+- 마지막 watch 의 끝(`status.unwatch` 또는 연결의 닫힘)과 창의 닫힘은 그 창에서 기다리는 모든 요청에 cancel 로 답한다. Wails 와 mygo host 에서는 요청한 page call 의 끝도 그 요청을 지운다.
+- watch 가 없으면 panel 은 사람에게 뜨고 사람의 것이다. 흉내 입력은 그것을 움직이지 않는다([virtual key window](#virtual-key-window)).
+
 ## 메서드
 
 클라이언트는 다음 JSON-RPC 2.0 메서드를 호출한다.
@@ -269,6 +279,7 @@ window check 는 이것을 쓰지 않는다. check 는 사람의 창 뒤에서 �
 | `element.act` | `{window, name, index?, action, value?, event?}` | `null`. `action`은 `click`, `input`, `dispatch` 중 하나다. 페이지는 `isTrusted`가 false인 합성 DOM 이벤트를 받는다 |
 | `input.pointer` | `{window, pointer?, x, y, phase, button?, deltaX?, deltaY?, clicks?, activate?}` | `null`. `pointer`는 입력의 pointer 이름으로, `a-z`, `0-9`, `-`로 된 1~32자이며 기본값은 `main`이다. 다른 값은 -32602를 반환한다([named pointers](#named-pointers)). 창 좌표를 쓴다. `phase`는 `move`, `down`, `drag`, `up`, `scroll` 중 하나다. `button`은 `left`(기본값) 또는 `right`다. `deltaX`, `deltaY`는 포인트 단위 스크롤 거리다. `clicks`는 `down`과 `up`에 적용하며 event의 click count로, 1(기본값)부터 3까지의 정수다. double click은 1로 `down`, `up`을 보낸 뒤 2로 `down`, `up`을 보낸다. `activate`는 `move`에 적용한다. 그 밖의 field는 -32602를 반환한다 |
 | `input.text` | `{window, phase, text?, selection?, replacement?}` | `null`. 조합의 한 단계를 창의 key responder의 text input client, 곧 first responder부터 위로 올라가며 marked text를 받는 가장 가까운 view에, 시스템 입력기가 활성 애플리케이션의 키 창에 주듯 준다. `mark`는 marked text `text`와 그 안의 선택 범위 `selection` `{start, length}`를 정하고(`setMarkedText:selectedRange:replacementRange:`, `selection`이 없으면 caret은 text 끝에 선다), `insert`는 `text`를 넣고 조합을 끝내며(`insertText:replacementRange:`), `unmark`는 marked text를 그대로 확정하고(`unmarkText`) `text`, `selection`, `replacement`를 받지 않는다. `replacement` `{start, length}`는 `mark`나 `insert`가 바꾸는 문서 text의 범위이고, 없으면 입력기처럼 marked text나 선택을 바꾼다. 범위는 UTF-16 code unit으로 센다. `selection`은 `mark`에만 쓰고 `text` 안에 있어야 한다. 창은 `input.key`처럼 키보드를 받는다: 실제로 활성이 아닌 애플리케이션에서는 [virtual key window](#virtual-key-window)가 된다. 그런 client가 없는 창은 -32602 `the window has no text input client that takes the text`를, 다른 잘못된 parameter는 -32602를 반환한다. Windows에서는 이 platform에 구현되지 않았다고 답한다 |
+| `input.dialog.answer` | `{window, id, paths?, cancel?, replace?}` | `null`. 창의 `host.dialog` 요청 `id` 에 문자열 배열 `paths` 로 답하고(save 와 download 는 `replace` 를 함께 받는다), `cancel: true` 로 취소한다([dialog](#dialog)). 비지 않은 `id` 가 없는 답, `paths` 와 `cancel` 을 함께 가진 답, 둘 다 없는 답, cancel 의 `replace`, 더 기다리지 않는 요청의 답, 요청이 받지 않는 답은 -32602 를 돌려준다 |
 | `input.key` | `{window, key, text?, modifiers?, phase}` | `null`. `key`는 키 이름(`Enter`, `Tab`, `Escape`, `Backspace`, `Delete`, `Space`, `ArrowLeft`, `ArrowRight`, `ArrowUp`, `ArrowDown`, `Home`, `End`, `PageUp`, `PageDown`) 또는 문자 하나다. `text`는 키가 입력하는 문자열이며, 없거나 비어 있으면 키 이름이 event의 문자를 정한다. `modifiers`는 `shift`, `control`, `option`, `command`의 배열이다. `phase`는 `down` 또는 `up`이다 |
 
 `index`는 0 이상의 정수이며, 타입이 다른 `index`를 준 요청은 -32602로 거부한다.

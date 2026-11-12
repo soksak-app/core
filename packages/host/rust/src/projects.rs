@@ -77,11 +77,7 @@ pub fn project_folder(app: &AppHandle, root: String) -> Result<Folder, String> {
 
 /// Opens the folder selection dialog and returns the selected path. It is None when canceled.
 pub fn folder_choose(window: &Window) -> Result<Option<String>, String> {
-    window
-        .app_handle()
-        .framework()
-        .choose_folder(window, "프로젝트 폴더 선택")
-        .map_err(|e| e.to_string())?
+    crate::dialog::folder_path(window, "프로젝트 폴더 선택")?
         .map(|path| {
             path.into_os_string()
                 .into_string()

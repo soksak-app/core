@@ -120,6 +120,17 @@ var hostStatus = map[string]hostEntry{
 		Description: "The mouse buttons that AppKit reports as pressed: {mask}, the NSEvent.pressedMouseButtons mask (bit 0 left, bit 1 right). It changes with a press or release of a person's button in any application; input.pointer refuses a press or release with 1007 while it is not 0.",
 		Schema:      map[string]any{"type": "object", "properties": map[string]any{"mask": map[string]any{"type": "integer"}}},
 	},
+	"host.dialog": {
+		Description: "The dialogs that the window asks for while a client watches this status: {pending: [{id, kind, suggestedName, directory, multiple, directories, url}]}. kind is save, folder, open or download. While a client watches it, the save panel and the folder panel of the host, the open panel of a file input of a page and the place of a download of a page show no panel: each waits here until input.dialog.answer answers it, the call that asked ends or the last watch ends, which answers it as cancelled.",
+		Schema: map[string]any{"type": "object", "properties": map[string]any{"pending": map[string]any{"type": "array", "items": map[string]any{
+			"type": "object", "properties": map[string]any{
+				"id": map[string]any{"type": "string"}, "kind": map[string]any{"type": "string", "enum": []any{"save", "folder", "open", "download"}},
+				"suggestedName": map[string]any{"type": []any{"string", "null"}}, "directory": map[string]any{"type": []any{"string", "null"}},
+				"multiple": map[string]any{"type": "boolean"}, "directories": map[string]any{"type": "boolean"},
+				"url": map[string]any{"type": []any{"string", "null"}},
+			},
+		}}}},
+	},
 	"host.log": {
 		Description: "The latest notice of a change of the event log: {path, size, notices, coalesced}. path is the event file under the configuration folder (logs/<name>) and size its size in bytes; notices counts the notices published since the start, at most one per 250 ms, and coalesced counts the announcements that were folded into a later notice. A line announces a change except the record of a call that only reads the log. The page follows the same notice with the host event debug-log-changed; a client queries log.query with since after a notice.",
 		Schema: map[string]any{"type": "object", "properties": map[string]any{
@@ -895,6 +906,8 @@ func (b hostBackend) HostStatus(window, name string) (any, error) {
 		return b.sidecarsState(), nil
 	case "host.buttons":
 		return b.h.buttons.Value(), nil
+	case "host.dialog":
+		return b.h.dialogs.Value(s.name), nil
 	case "host.log":
 		if b.h.logNotices == nil {
 			return nil, fmt.Errorf("the log notices are not started")
@@ -1151,6 +1164,24 @@ func (b hostBackend) Key(window string, input KeyInput) error {
 		return rpcError(codeInactive, "keys of an active application reach only its key window")
 	}
 	return delivered(result == platform.PointerDelivered, nil)
+}
+
+// HostWatched holds the dialogs of window while a client watches its host.dialog.
+func (b hostBackend) HostWatched(window, name string, on bool) {
+	if name == "host.dialog" {
+		b.h.dialogs.Watched(window, on)
+	}
+}
+
+// DialogAnswer answers a dialog request of window. An answer that the request does not take is refused with -32602.
+func (b hostBackend) DialogAnswer(window string, answer DialogAnswer) error {
+	if _, err := b.window(window); err != nil {
+		return err
+	}
+	if err := b.h.dialogs.Answer(window, answer); err != nil {
+		return rpcError(codeInvalidParams, "%v", err)
+	}
+	return nil
 }
 
 func (b hostBackend) Text(window string, input TextInput) error {

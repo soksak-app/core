@@ -9303,7 +9303,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/dialog.go", symbol: "func (d *Dialogs) Answer(window string, answer DialogAnswer) error {" },
       { file: "packages/host/go/src/dialog.go", symbol: "func DialogChoice(request DialogRequest, answer DialogAnswer) ([]string, error) {" },
       { file: "packages/host/rust/src/dialog.rs", symbol: "pub fn answer(&self, window: &str, answer: Answer) -> Result<(), String> {" },
-      { file: "packages/host/rust/src/dialog.rs", symbol: "pub fn choice(_request: &Request, answer: &Answer) -> Result<Vec<String>, String> {" },
+      { file: "packages/host/rust/src/dialog.rs", symbol: "pub fn choice(request: &Request, answer: &Answer) -> Result<Vec<String>, String> {" },
       { file: "packages/host/rust/src/exposure.rs", symbol: "pub fn dialog_answer(" },
     ],
     tests: [

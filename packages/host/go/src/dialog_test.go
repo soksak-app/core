@@ -190,7 +190,7 @@ func TestTheEndOfTheWatchCancelsTheHeldDialogs(t *testing.T) {
 }
 
 // The end of the call that asked, the end of its page call, removes its request.
-// contract: dialog.watch.end-cancels
+// contract: dialog.call.end-removes
 func TestTheEndOfTheCallRemovesItsRequest(t *testing.T) {
 	h, s, ctx, _, changes := dialogHost(t)
 	h.dialogs.Watched("w1", true)

@@ -48,8 +48,8 @@ func FilePlaceRelative(root, chosen string) (string, error) {
 	return filepath.ToSlash(relative), nil
 }
 
-// FilePlace is the page's filePlace call: it shows the save panel of the window in its project root with the name and
-// answers the chosen file relative to that root.
+// FilePlace is the page's filePlace call: it asks where to save the name in the project root of the window, through its save
+// panel or the client that watches its host.dialog, and answers the chosen file relative to that root.
 func (h *Host) FilePlace(ctx context.Context, requestJSON json.RawMessage) (FilePlaced, error) {
 	request, err := argument[FilePlaceRequest]("request", requestJSON)
 	if err != nil {
@@ -66,7 +66,7 @@ func (h *Host) FilePlace(ctx context.Context, requestJSON json.RawMessage) (File
 	if root == "" {
 		return FilePlaced{}, fmt.Errorf("file place: the window shows no project")
 	}
-	chosen, err := framework.SaveFile(s.window, request.Name, root)
+	chosen, err := h.savePath(ctx, s, request.Name, root)
 	if err != nil {
 		return FilePlaced{}, fmt.Errorf("file place: save panel: %w", err)
 	}

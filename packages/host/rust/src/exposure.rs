@@ -46,6 +46,15 @@ fn host_declarations() -> Value {
             "description": "The mouse buttons that AppKit reports as pressed: {mask}, the NSEvent.pressedMouseButtons mask (bit 0 left, bit 1 right). It changes with a press or release of a person's button in any application; input.pointer refuses a press or release with 1007 while it is not 0.",
             "schema": {"type": "object", "properties": {"mask": {"type": "integer"}}},
         }, {
+            "name": "host.dialog",
+            "description": "The dialogs that the window asks for while a client watches this status: {pending: [{id, kind, suggestedName, directory, multiple, directories, url}]}. kind is save, folder, open or download. While a client watches it, the save panel and the folder panel of the host, the open panel of a file input of a page and the place of a download of a page show no panel: each waits here until input.dialog.answer answers it, the call that asked ends or the last watch ends, which answers it as cancelled.",
+            "schema": {"type": "object", "properties": {"pending": {"type": "array", "items": {
+                "type": "object", "properties": {
+                    "id": {"type": "string"}, "kind": {"type": "string", "enum": ["save", "folder", "open", "download"]},
+                    "suggestedName": {"type": ["string", "null"]}, "directory": {"type": ["string", "null"]},
+                    "multiple": {"type": "boolean"}, "directories": {"type": "boolean"},
+                    "url": {"type": ["string", "null"]}}}}}},
+        }, {
             "name": "host.dock",
             "description": "The titles of the application's Dock menu items in order.",
             "schema": {"type": "array", "items": {"type": "string"}},
@@ -502,8 +511,44 @@ pub fn text_input(params: &Map<String, Value>) -> Result<TextInput, Failure> {
 }
 
 /// Reads the parameters of `input.dialog.answer`.
-pub fn dialog_answer(_params: &Map<String, Value>) -> Result<crate::dialog::Answer, Failure> {
-    Err(Failure::params("input.dialog.answer is not read"))
+pub fn dialog_answer(params: &Map<String, Value>) -> Result<crate::dialog::Answer, Failure> {
+    let id = match params.get("id") {
+        Some(Value::String(id)) if !id.is_empty() => id.clone(),
+        _ => return Err(Failure::params("id must be a non-empty string")),
+    };
+    let flag = |name: &str| match params.get(name) {
+        None => Ok(None),
+        Some(Value::Bool(on)) => Ok(Some(*on)),
+        Some(_) => Err(Failure::params(format!("{name} must be a boolean"))),
+    };
+    let cancel = flag("cancel")?.unwrap_or(false);
+    let replace = flag("replace")?;
+    let paths = match params.get("paths") {
+        None => None,
+        Some(Value::Array(paths)) => Some(
+            paths
+                .iter()
+                .map(|path| path.as_str().map(str::to_string))
+                .collect::<Option<Vec<String>>>()
+                .ok_or_else(|| Failure::params("paths must be an array of strings"))?,
+        ),
+        Some(_) => return Err(Failure::params("paths must be an array of strings")),
+    };
+    if cancel && paths.is_some() {
+        return Err(Failure::params("an answer gives paths or cancel, not both"));
+    }
+    if cancel && replace.is_some() {
+        return Err(Failure::params("a cancel takes no replace"));
+    }
+    let Some(paths) = paths.or_else(|| cancel.then(Vec::new)) else {
+        return Err(Failure::params("an answer gives paths or cancel: true"));
+    };
+    Ok(crate::dialog::Answer {
+        id,
+        paths,
+        cancel,
+        replace: replace.unwrap_or(false),
+    })
 }
 
 /// The document of a waiting request and the request whose handling forwarded it, if any.
@@ -1377,6 +1422,10 @@ pub(crate) fn window_closed(window: &Window) {
     if let Some(endpoint) = state.endpoint.get() {
         endpoint.notifier().ended(&main, None, "window-closed");
     }
+    // The dialogs that the window asked for end as cancelled (docs/spec/exposure.md#dialogs).
+    window
+        .state::<crate::dialog::Dialogs>()
+        .watched(&main, false);
     let surfaces = format!("surface-{main}-");
     state
         .relay
@@ -1447,6 +1496,41 @@ pub(crate) fn log_notice_changed(app: &AppHandle, notice: &crate::debug_follow::
         Ok(text) => notifier.notify_watchers("host.log", &text),
         Err(error) => log_error("host.log change", error.message),
     }
+}
+
+/// Holds the dialogs of the windows whose host.dialog a client watches. A changed value is sent to the watching
+/// connections by one thread in the order of the changes, because a write of the endpoint can wait for a connection
+/// (docs/spec/exposure.md#dialogs). It is called before endpoint.json is written.
+pub(crate) fn hold_dialogs(app: &AppHandle) {
+    let (send, receive) = mpsc::channel::<(String, Value)>();
+    let notifying = app.clone();
+    crate::routine::spawn_named("dialog-watch", move || {
+        for (window, value) in receive {
+            let Some(notifier) = notifying
+                .state::<Exposure>()
+                .endpoint
+                .get()
+                .map(Endpoint::notifier)
+            else {
+                log_error("host.dialog change", "the endpoint is not started");
+                continue;
+            };
+            match raw(&value) {
+                Ok(text) => notifier.changed(&window, "host.dialog", None, &text),
+                Err(error) => log_error("host.dialog change", error.message),
+            }
+        }
+    });
+    let send = Mutex::new(send);
+    app.manage(crate::dialog::Dialogs::new(move |window, value| {
+        let sender = send.lock();
+        // default: a lock that a panicking thread poisoned still holds the sender, which has no state a panic can leave
+        // inconsistent; the panic hook records the panic.
+        let sender = sender.unwrap_or_else(PoisonError::into_inner);
+        if let Err(error) = sender.send((window.to_string(), value)) {
+            log_error("host.dialog change", error);
+        }
+    }));
 }
 
 /// Installs the watch of host.buttons. A changed value is sent to the watching connections by one thread in the order
@@ -2850,6 +2934,15 @@ impl Host {
                 .try_state::<crate::buttons::Buttons>()
                 .map(|buttons| buttons.value())
                 .ok_or_else(|| internal("the mouse buttons are not watched")),
+            ("status.get", "host.dialog") => Ok(window
+                .state::<crate::dialog::Dialogs>()
+                .value(window.label())),
+            ("status.watch" | "status.unwatch", "host.dialog") => {
+                window
+                    .state::<crate::dialog::Dialogs>()
+                    .watched(window.label(), method == "status.watch");
+                Ok(Value::Null)
+            }
             ("status.get", "host.log") => self
                 .0
                 .try_state::<crate::LogNoticeState>()
@@ -3198,6 +3291,14 @@ impl Host {
             "input.pointer" => raw(&self.input_pointer(window, pointer(&params)?)?),
             "input.key" => raw(&self.input_key(window, key(&params)?)?),
             "input.text" => raw(&self.input_text(window, text_input(&params)?)?),
+            "input.dialog.answer" => {
+                let answer = dialog_answer(&params)?;
+                window
+                    .state::<crate::dialog::Dialogs>()
+                    .answer(window.label(), answer)
+                    .map_err(Failure::params)?;
+                raw(&Value::Null)
+            }
             "exposure.list" => {
                 let page_params = params.clone();
                 exposure_list(&params, || self.page(window, method, page_params, reply))

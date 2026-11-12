@@ -189,6 +189,10 @@ type Backend interface {
 	Key(window string, input KeyInput) error
 	// Text gives one step of a composition to the text input client of the key responder of a window.
 	Text(window string, input TextInput) error
+	// HostWatched tells the host that the first watch of its status name in window started (on) or that the last one ended.
+	HostWatched(window, name string, on bool)
+	// DialogAnswer answers a dialog request of window (docs/spec/exposure.md#dialogs).
+	DialogAnswer(window string, answer DialogAnswer) error
 }
 
 // SocketDirectory is the directory in which the application places its socket. It is under the temporary directory of the user.
@@ -1219,6 +1223,7 @@ func (e *Endpoint) notifyPage(t topic, on bool) error {
 		method, params := request(on)
 		_, err = e.backend.PageRequest(context.Background(), t.window, method, mustJSON(params))
 	case isHostName(t.name):
+		e.backend.HostWatched(t.window, t.name, on)
 	case on:
 		_, err = e.backend.PageRequest(context.Background(), t.window, "status.watch", mustJSON(t.watchParams()))
 	default:
@@ -1305,6 +1310,9 @@ var endpointMethods = map[string]endpointMethod{
 	"input.pointer": inputPointer,
 	"input.key":     inputKey,
 	"input.text":    inputText,
+
+	// input.dialog.answer answers a request of host.dialog (docs/spec/exposure.md#dialogs).
+	"input.dialog.answer": inputDialogAnswer,
 }
 
 // namePattern is the form of an entry name.
@@ -1623,6 +1631,39 @@ func (r *textRange) read(name string, limit int) (int, int, error) {
 		return 0, 0, rpcError(codeInvalidParams, "%s is outside the text", name)
 	}
 	return start, length, nil
+}
+
+// inputDialogAnswer reads {window, id, paths?, cancel?, replace?} and gives the answer to the host.
+func inputDialogAnswer(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
+	window, err := e.window(params)
+	if err != nil {
+		return nil, err
+	}
+	var fields struct {
+		ID      *string   `json:"id"`
+		Paths   *[]string `json:"paths"`
+		Cancel  *bool     `json:"cancel"`
+		Replace *bool     `json:"replace"`
+	}
+	if err := decode(params, &fields); err != nil {
+		return nil, err
+	}
+	if fields.ID == nil || *fields.ID == "" {
+		return nil, rpcError(codeInvalidParams, "id must be a non-empty string")
+	}
+	answer := DialogAnswer{ID: *fields.ID, Cancel: fields.Cancel != nil && *fields.Cancel, Replace: fields.Replace != nil && *fields.Replace}
+	switch {
+	case answer.Cancel && fields.Paths != nil:
+		return nil, rpcError(codeInvalidParams, "an answer gives paths or cancel, not both")
+	case answer.Cancel && fields.Replace != nil:
+		return nil, rpcError(codeInvalidParams, "a cancel takes no replace")
+	case !answer.Cancel && fields.Paths == nil:
+		return nil, rpcError(codeInvalidParams, "an answer gives paths or cancel: true")
+	}
+	if fields.Paths != nil {
+		answer.Paths = *fields.Paths
+	}
+	return nil, e.backend.DialogAnswer(window, answer)
 }
 
 func inputText(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {

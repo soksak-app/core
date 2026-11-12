@@ -71,6 +71,7 @@ const METHODS: &[&str] = &[
     "input.pointer",
     "input.key",
     "input.text",
+    "input.dialog.answer",
 ];
 
 /// The subscription methods that turn the diagnostic record on and off. They exist only in diagnostic builds.
