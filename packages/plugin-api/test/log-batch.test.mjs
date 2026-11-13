@@ -29,6 +29,18 @@ test("events emitted in one turn are relayed in one call, in order", async () =>
   assert.ok(calls[0].events.every((event) => Number.isInteger(event.mono_ns) && event.mono_ns > 0));
 });
 
+test("an event carries its fields as they were when it was emitted", async () => {
+  const calls = [];
+  const batcher = createEventBatcher({ writer: { layer: "page", member: "page", identity: PAGE }, call: answering(async (request) => { calls.push(request); }), report: assert.ifError });
+  const names = ["first"];
+  const fields = { names, get count() { return names.length; } };
+  batcher.emit("info", "page.test.state", fields);
+  // The state changes after the event and before its batch leaves.
+  names.push("second");
+  await settle();
+  assert.deepEqual(calls[0].events[0].fields, { names: ["first"], count: 1 }, "the batch read the fields when it left instead of at the event");
+});
+
 test("the shared batcher applies only the classifier and gate supplied by its consumer", async () => {
   const calls = [];
   const refused = [];

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- page log 의 event 가 batch 가 나간 시점의 상태 대신 보낸 시점의 field 를 담는다 (F805).
 - native capture 의 display-link callback 결정이 callback 이 읽는 값의 함수가 되고, native 시험이 arm64 와 Intel timebase 의 timestamp 데이터로 그것을 검사한다 (F795-6).
 - Rust 시험 파일 두 개가 Rust 형식 검사가 요구하는 형식을 따른다 (F804).
 - 두 host 가 UTF-8 이 아닌 view import map 을 같은 문구로 거부하고, 그 문구는 UTF-8 이 아닌 첫 byte 를 가리킨다 (F803).

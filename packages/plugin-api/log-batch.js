@@ -37,7 +37,9 @@ const CID = /^[^"\\\u0000-\u001f\u007f]+$/;
 function boundFields(fields) {
   const { text, truncated } = boundedJson(fields, FIELDS_LIMIT);
   if (text === undefined) return { stored: {}, bytes: 2 };
-  if (!truncated) return { stored: fields, bytes: byteLength(text) };
+  // The event stores the value of its fields at the time it was emitted: the text is read back, so a later change of the object or
+  // a getter that reads later state does not reach the batch.
+  if (!truncated) return { stored: JSON.parse(text), bytes: byteLength(text) };
   const { text: head } = cutBytes(text, HEAD_BYTES);
   return { stored: { head, truncated: true }, bytes: HEAD_BYTES + 32 };
 }

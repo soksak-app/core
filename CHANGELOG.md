@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- An event of the page log carries its fields as they were when it was emitted, instead of the state when its batch left (F805).
 - The decision of a display-link callback of the native capture is a function of the values that the callback reads, and a native test checks it on timestamp data of the arm64 and Intel timebases (F795-6).
 - Two Rust test files follow the format that the Rust format check requires (F804).
 - Both hosts refuse a view import map that is not UTF-8 with the same text, which names the first byte that is not UTF-8 (F803).
