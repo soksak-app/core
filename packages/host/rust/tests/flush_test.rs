@@ -9,7 +9,6 @@ mod child;
 mod folder;
 
 use std::io::Write;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 #[path = "support/records.rs"]
@@ -247,17 +246,14 @@ fn held_before_later_scenario() {
         release.display().to_string(),
     );
     // The sidecar writes on its way out, so it ignores the terminate signal of the stop and ends with its input.
-    let script = format!(
-        "#!/bin/sh\ntrap '' TERM\n\
-         dd bs=1 count=1 of={received_text} 2>/dev/null\necho > {taken_text}\nread _ < {release_text}\n\
-         IFS= read -r line; printf '%s\\n' \"$line\" >> {received_text}\n\
-         IFS= read -r line; printf '%s\\n' \"$line\" >> {received_text}\n\
-         dd bs=1 count=1 2>/dev/null >> {received_text}\necho > {room_text}\nread _ < {release_text}\n\
-         exec cat >> {received_text}\n"
+    directory.fixture(
+        "echo",
+        &format!(
+            "ignore-term\nread-byte {received_text}\nappend {taken_text}\nwait {release_text}\n\
+             keep-line {received_text}\nkeep-line {received_text}\nread-byte {received_text}\n\
+             append {room_text}\nwait {release_text}\ndrain {received_text}\n"
+        ),
     );
-    let echo_program = directory.path().join("echo");
-    std::fs::write(&echo_program, script).unwrap();
-    std::fs::set_permissions(&echo_program, std::fs::Permissions::from_mode(0o755)).unwrap();
     let sidecars = create(
         &files(r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#),
         directory.path(),
@@ -310,13 +306,13 @@ fn close_with_room_scenario() {
         .output()
         .expect("mkfifo failed");
     assert!(output.status.success(), "mkfifo failed");
-    let script = format!(
-        "#!/bin/sh\nread _ < {}\nwhile IFS= read -r line; do\n  printf '%s\\n' '{{\"surface\":\"s1\",\"body\":\"received\"}}'\ndone\n",
-        fifo_path.display()
+    directory.fixture(
+        "echo",
+        &format!(
+            "wait {}\non any reply {{\"surface\":\"s1\",\"body\":\"received\"}}\n",
+            fifo_path.display()
+        ),
     );
-    let echo_program = directory.path().join("echo");
-    std::fs::write(&echo_program, script).unwrap();
-    std::fs::set_permissions(&echo_program, std::fs::Permissions::from_mode(0o755)).unwrap();
     let sidecars = create(
         &files(r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#),
         directory.path(),
@@ -434,15 +430,15 @@ fn every_pending_reply_scenario() {
     make_fifos(&[&fifo_path, &taken]);
 
     let received = directory.path().join("received");
-    let script = format!(
-        "#!/bin/sh\ndd bs=1 count=1 of=/dev/null 2>/dev/null\necho > {}\nread _ < {}\nIFS= read -r _\nwhile IFS= read -r line; do\n  printf '%s\\n' \"$line\" >> {}\n  printf '%s\\n' '{{\"surface\":\"s1\",\"body\":\"received\"}}'\ndone\n",
-        taken.display(),
-        fifo_str,
-        received.display()
+    directory.fixture(
+        "echo",
+        &format!(
+            "read-byte /dev/null\nappend {}\nwait {}\nskip-line\non any keep-reply {} {{\"surface\":\"s1\",\"body\":\"received\"}}\n",
+            taken.display(),
+            fifo_str,
+            received.display()
+        ),
     );
-    let echo_program = directory.path().join("echo");
-    std::fs::write(&echo_program, script).unwrap();
-    std::fs::set_permissions(&echo_program, std::fs::Permissions::from_mode(0o755)).unwrap();
 
     let sidecars = create(
         &files(r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#),
@@ -643,14 +639,14 @@ fn order_is_correct_when_stop_flushes_buffered_messages() {
     let received = directory.path().join("received");
     // The sidecar ignores the terminate signal of the stop and takes the end of its input as its stop
     // (docs/spec/sidecars.md#declaration-and-startup), so it reads every line that the stop writes before it closes the input.
-    let script = format!(
-        "#!/bin/sh\ntrap '' TERM\nread _ < {}\nexec cat > {}\n",
-        fifo_str,
-        received.display()
+    directory.fixture(
+        "echo",
+        &format!(
+            "ignore-term\nwait {}\ndrain {}\n",
+            fifo_str,
+            received.display()
+        ),
     );
-    let echo_program = directory.path().join("echo");
-    std::fs::write(&echo_program, script).unwrap();
-    std::fs::set_permissions(&echo_program, std::fs::Permissions::from_mode(0o755)).unwrap();
 
     let sidecars = create(
         &files(r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#),

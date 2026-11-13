@@ -70,15 +70,16 @@ func TestAReplyHeldForTheQueueIsWrittenBeforeALaterLine(t *testing.T) {
 	}
 	received := filepath.Join(directory, "received")
 	// The sidecar writes on its way out, so it ignores the terminate signal of the stop and ends with its input.
-	script := "#!/bin/sh\ntrap '' TERM\n" +
-		"dd bs=1 count=1 of=" + received + " 2>/dev/null\necho > " + taken + "\nread _ < " + release + "\n" +
-		"IFS= read -r line; printf '%s\\n' \"$line\" >> " + received + "\n" +
-		"IFS= read -r line; printf '%s\\n' \"$line\" >> " + received + "\n" +
-		"dd bs=1 count=1 2>/dev/null >> " + received + "\necho > " + room + "\nread _ < " + release + "\n" +
-		"exec cat >> " + received + "\n"
-	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	support.Fixture(t, directory, "echo", "ignore-term\n"+
+		"read-byte "+received+"\n"+
+		"append "+taken+"\n"+
+		"wait "+release+"\n"+
+		"keep-line "+received+"\n"+
+		"keep-line "+received+"\n"+
+		"read-byte "+received+"\n"+
+		"append "+room+"\n"+
+		"wait "+release+"\n"+
+		"drain "+received+"\n")
 	sidecars, err := host.NewSidecars(support.Declare(directory, `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
 	if err != nil {
 		t.Fatal(err)
@@ -141,11 +142,12 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 	// The first line is larger than any pipe of the sidecar. The sidecar reads one byte of it and then waits for the release, so
 	// the writer is inside that line and takes no line out of the queue until the release: the queue stays full for every reply
 	// and close that follows. After the release the sidecar drops the rest of that line and keeps every line after it.
-	script := "#!/bin/sh\ntrap '' TERM\ndd bs=1 count=1 of=/dev/null 2>/dev/null\necho > " + taken + "\nread _ < " + fifo +
-		"\nIFS= read -r _\nexec cat > " + received + "\n"
-	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	support.Fixture(t, directory, "echo", "ignore-term\n"+
+		"read-byte /dev/null\n"+
+		"append "+taken+"\n"+
+		"wait "+fifo+"\n"+
+		"skip-line\n"+
+		"drain "+received+"\n")
 	sidecars, err := host.NewSidecars(support.Declare(directory, `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
 	if err != nil {
 		t.Fatal(err)
@@ -249,10 +251,8 @@ func TestACloseThatFindsRoomWritesNoBufferedRecord(t *testing.T) {
 	if err := syscall.Mkfifo(fifo, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	script := "#!/bin/sh\nread _ < " + fifo + "\nwhile IFS= read -r line; do\n  printf '%s\\n' '{\"surface\":\"s1\",\"body\":\"received\"}'\ndone\n"
-	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	support.Fixture(t, directory, "echo", "wait "+fifo+"\n"+
+		"on any reply {\"surface\":\"s1\",\"body\":\"received\"}\n")
 	sidecars, err := host.NewSidecars(support.Declare(directory, `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
 	if err != nil {
 		t.Fatal(err)
@@ -316,10 +316,9 @@ func TestOrderIsCorrectWhenStopFlushesBufferedMessages(t *testing.T) {
 		t.Fatal(err)
 	}
 	received := filepath.Join(directory, "received")
-	script := "#!/bin/sh\ntrap '' TERM\nread _ < " + fifo + "\nexec cat > " + received + "\n"
-	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	support.Fixture(t, directory, "echo", "ignore-term\n"+
+		"wait "+fifo+"\n"+
+		"drain "+received+"\n")
 	sidecars, err := host.NewSidecars(support.Declare(directory, `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
 	if err != nil {
 		t.Fatal(err)

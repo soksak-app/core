@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -27,6 +28,28 @@ const MessageLimit = 64 << 20
 // Declare is the declaration of one sidecar installed in directory.
 func Declare(directory, sidecar string) []host.SidecarDeclaration {
 	return []host.SidecarDeclaration{{Name: EchoSidecar, Folder: directory, Data: []byte(sidecar)}}
+}
+
+// Fixture installs the sidecar fixture program (docs/spec/cases/sidecars/fixture.sh) in directory as the executable named
+// executable: a symbolic link of that name points to the program, and the file control of the folder holds the control text
+// that the program reads beside its link. It fails the test on any error.
+func Fixture(t *testing.T, directory, executable, control string) {
+	t.Helper()
+	// The program is found from this file: support, tests, go, host, packages and the repository root.
+	_, here, _, _ := runtime.Caller(0)
+	program, err := filepath.Abs(filepath.Join(filepath.Dir(here), "..", "..", "..", "..", "..", "docs", "spec", "cases", "sidecars", "fixture.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(program); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(program, filepath.Join(directory, executable)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(directory, "control"), []byte(control), 0o644); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // FakeOwner is a window that records the sidecar events and the failure events it received.

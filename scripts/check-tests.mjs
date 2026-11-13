@@ -104,6 +104,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
     "packages/soksak/scripts/emit-dom-reference.mjs",
     "packages/soksak/scripts/fuzz.mjs",
   ], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
+  lane("sidecar fixture program", "shell", ["docs/spec/cases/sidecars/fixture.sh"], ["packages/host/go/tests/platform/darwin/system/flush_test.go"], { testLanguage: "go", sharedTests: true }),
   lane("build environment audit", "shell", ["scripts/check-tools.sh"], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/check-tools.sh"], {
     testLanguage: "js-ts", testExtensions: new Set([".mjs", ".sh"]), sharedTests: true,
   }),

@@ -1,0 +1,3 @@
+# Sidecar fixture
+
+`fixture.sh` is a POSIX sh program that speaks the sidecar wire as its control file directs; it is used by the Go and Rust host tests as a sidecar executable. Each test creates a folder for every declared sidecar, links the program there under the sidecar's executable name, and writes a `control` file in the same folder. The program reads `control` beside its link and performs the operations of the file in order, then answers the lines that it reads from standard input. The operations and the error format are listed at the top of `fixture.sh`. The lines of a control file are input data of the host code that the test judges, so the host must handle every line the program writes, and the program is not an implementation of the sidecar.

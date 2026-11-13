@@ -32,6 +32,21 @@ impl Folder {
     pub fn text(&self) -> &str {
         self.0.to_str().expect("UTF-8 path")
     }
+
+    /// Installs the sidecar fixture program (docs/spec/cases/sidecars/fixture.sh) in this folder as the executable named
+    /// `executable`: a symbolic link of that name points to the program, and the file `control` of the folder holds the control
+    /// text that the program reads beside its link. It panics on any error.
+    pub fn fixture(&self, executable: &str, control: &str) {
+        // The program is found from the manifest folder of the host package: rust, host, packages and the repository root.
+        let program = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../docs/spec/cases/sidecars/fixture.sh");
+        let program = program
+            .canonicalize()
+            .unwrap_or_else(|error| panic!("cannot find {}: {error}", program.display()));
+        std::os::unix::fs::symlink(&program, self.0.join(executable))
+            .unwrap_or_else(|error| panic!("cannot link {executable}: {error}"));
+        std::fs::write(self.0.join("control"), control)
+            .unwrap_or_else(|error| panic!("cannot write the control file: {error}"));
+    }
 }
 
 impl std::ops::Deref for Folder {
