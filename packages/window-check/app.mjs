@@ -800,17 +800,18 @@ export class Session {
    * unless it is ended the check cannot press in that window (1008). While a person holds a button, input.pointer
    * rejects a release with 1007, so the cleanup first waits by notification until host.buttons reports mask 0, then
    * sends the release and requires that it is delivered (docs/spec/exposure.md). It returns a line with the waited time
-   * for each ended press, and it reports the presses that it could not end together.
+   * for each ended press, in milliseconds on `clock` (performance.now by default), and it reports the presses that it
+   * could not end together.
    */
-  async releasePresses() {
+  async releasePresses({ clock = () => performance.now() } = {}) {
     const failures = [];
     const released = [];
     for (const { window, pointer, x, y, button } of [...this.presses.values()]) {
       const session = this.on(window);
       try {
-        const began = performance.now();
+        const began = clock();
         await session.until("host.buttons", (value) => value.mask === 0, "a mouse button stayed pressed");
-        const waited = Math.round(performance.now() - began);
+        const waited = Math.round(clock() - began);
         await session.pointer(x, y, "up", pointer === undefined ? { button } : { button, pointer });
         const of = pointer === undefined ? "" : ` of pointer ${pointer}`;
         released.push(`released open press: ${button}${of} at ${x},${y} in ${window} after host.buttons reported mask 0 (waited ${waited}ms)`);

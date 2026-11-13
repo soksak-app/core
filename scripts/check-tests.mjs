@@ -10633,7 +10633,7 @@ const FEATURE_LINKS = [
   {
     id: "F46",
     implementation: [
-      { file: "packages/window-check/app.mjs", symbol: "async releasePresses()" },
+      { file: "packages/window-check/app.mjs", symbol: "async releasePresses({ clock = () => performance.now() } = {})" },
     ],
     tests: [
       { file: "packages/window-check/test/pointer-presses.test.mjs", id: "a refused release keeps the press open until the held button is released" },
