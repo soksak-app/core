@@ -2,6 +2,7 @@ package host
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
@@ -209,46 +210,60 @@ func tracePresentationJoin(phase, surface string, generation, ticket uint64, joi
 	EmitHost(LevelDebug, "host.trace.view.presentation-join", fields)
 }
 
-// cancelTicket abandons joins of an aborted native layout. It does not write a presentation-abandoned event because that ticket did not commit.
+// cancelTicket abandons joins of an aborted native layout. It removes every wait of the ticket before it abandons their native joins.
+// It does not write a presentation-abandoned event because that ticket did not commit.
 func (w *presentationWait) cancelTicket(ticket uint64) error {
 	delete(w.pending, ticket)
 	var failures []string
-	for surface, join := range w.waiting {
-		if join.ticket != ticket {
+	for _, wait := range w.takeWaits(func(join presentationJoin) bool { return join.ticket == ticket }) {
+		if wait.join.abandon == nil {
 			continue
 		}
-		delete(w.waiting, surface)
-		if join.abandon != nil {
-			if err := join.abandon(); err != nil {
-				failures = append(failures, fmt.Sprintf("view %s: %v", surface, err))
-			}
+		if err := wait.join.abandon(); err != nil {
+			failures = append(failures, fmt.Sprintf("view %s: %v", wait.surface, err))
 		}
 	}
 	if len(failures) != 0 {
-		return fmt.Errorf("abandoning presentation joins for layout %d: %s", ticket, failures)
+		return fmt.Errorf("abandoning presentation joins for layout %d: %s", ticket, strings.Join(failures, "; "))
 	}
 	return nil
 }
 
-// cancelAll abandons every open layout join before the native owner cancels its layout.
+// cancelAll removes every open wait and pending layout before it abandons the native joins of the waits, which it does before the
+// native owner cancels its layout.
 func (w *presentationWait) cancelAll() error {
-	tickets := map[uint64]bool{}
-	for ticket := range w.pending {
-		tickets[ticket] = true
-	}
-	for _, join := range w.waiting {
-		tickets[join.ticket] = true
-	}
+	w.pending = nil
 	var failures []string
-	for ticket := range tickets {
-		if err := w.cancelTicket(ticket); err != nil {
-			failures = append(failures, err.Error())
+	for _, wait := range w.takeWaits(func(presentationJoin) bool { return true }) {
+		if wait.join.abandon == nil {
+			continue
+		}
+		if err := wait.join.abandon(); err != nil {
+			failures = append(failures, fmt.Sprintf("layout %d, view %s: %v", wait.join.ticket, wait.surface, err))
 		}
 	}
 	if len(failures) != 0 {
-		return fmt.Errorf("abandoning open presentation joins: %s", failures)
+		return fmt.Errorf("abandoning presentation joins: %s", strings.Join(failures, "; "))
 	}
 	return nil
+}
+
+// takenWait is a wait that takeWaits removed, with the surface of its view.
+type takenWait struct {
+	surface string
+	join    presentationJoin
+}
+
+// takeWaits removes the waits that match selects and returns them, so their native joins are abandoned with no wait of them left.
+func (w *presentationWait) takeWaits(selects func(presentationJoin) bool) []takenWait {
+	var taken []takenWait
+	for surface, join := range w.waiting {
+		if selects(join) {
+			taken = append(taken, takenWait{surface: surface, join: join})
+			delete(w.waiting, surface)
+		}
+	}
+	return taken
 }
 
 func (w *presentationWait) finishIfReady(ticket uint64) {

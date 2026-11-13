@@ -349,14 +349,16 @@ type pageLayoutEndPlatform struct {
 	pagelessPlatform
 	cancelled []platform.Window
 	keys      []platform.Window
+	queued    []func()
 }
 
 func (p *pageLayoutEndPlatform) KeysPageEnded(window platform.Window) {
 	p.keys = append(p.keys, window)
 }
 
+// EnqueueUI keeps the work for the test, which runs it as the UI thread runs the work that the host queued.
 func (p *pageLayoutEndPlatform) EnqueueUI(work func()) error {
-	work()
+	p.queued = append(p.queued, work)
 	return nil
 }
 
@@ -366,7 +368,8 @@ func (p *pageLayoutEndPlatform) CancelLayout(window platform.Window) error {
 }
 
 // The end of the web content process of the main page ends the page that holds the layout tickets of the window, so the host cancels
-// every layout transaction of the window in the turn in which it learns of that end (docs/spec/native-surfaces.md#layout-transaction).
+// every layout transaction of the window: it queues that cancel for the UI thread in the turn in which it learns of that end
+// (docs/spec/native-surfaces.md#layout-transaction).
 // contract: application.window.page-end-cancels-layout
 func TestTheEndOfThePageProcessCancelsTheLayoutOfItsWindow(t *testing.T) {
 	window := &eventWindow{pagelessWindow: pagelessWindow{native: platform.Window(7)}, listeners: map[WindowEvent][]func(){}}
@@ -379,6 +382,11 @@ func TestTheEndOfThePageProcessCancelsTheLayoutOfItsWindow(t *testing.T) {
 	for _, listener := range window.listeners[WindowWorkbenchEnded] {
 		listener()
 	}
+	if len(fake.cancelled) != 0 || len(fake.queued) != 1 {
+		t.Fatalf("the end of the page process cancelled the layouts of %v in its turn and queued %d works, want none cancelled and one queued",
+			fake.cancelled, len(fake.queued))
+	}
+	fake.queued[0]()
 	if len(fake.cancelled) != 1 || fake.cancelled[0] != platform.Window(7) {
 		t.Fatalf("the end of the page process cancelled the layouts of %v, want window 7 once", fake.cancelled)
 	}

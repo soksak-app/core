@@ -1,6 +1,7 @@
 package host
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
@@ -221,5 +222,70 @@ func TestTheCancelOfALayoutEndsTheRun(t *testing.T) {
 				t.Fatalf("after the cancel: running %v, events %v, want run-began then run-ended", s.running, frontend.events)
 			}
 		})
+	}
+}
+
+// contract: view.presentation-wait.ends, view.presentation-wait.cancel-clears-ticket
+// The cancel of a ticket removes the wait of that ticket before it abandons the native join of the wait, so an abandon that
+// reaches the host again finds no wait of the cancelled ticket, and the wait of another ticket stays.
+func TestCancellationRemovesOnlyItsTicketBeforeAbandoningTheNativeJoin(t *testing.T) {
+	isolateTraceRecords(t)
+	var w presentationWait
+	abandons := 0
+	w.beginFor("cancelled-surface", 41, 1, &presentationSignal{}, func() error {
+		if w.waits("cancelled-surface") {
+			t.Error("the native join was abandoned while the wait of its ticket remained")
+		}
+		abandons++
+		return nil
+	})
+	w.beginFor("other-surface", 42, 1, &presentationSignal{}, nil)
+	if err := w.cancelTicket(41); err != nil {
+		t.Fatalf("cancel ticket 41: %v", err)
+	}
+	if abandons != 1 || w.waits("cancelled-surface") || !w.waits("other-surface") {
+		t.Fatalf("after the cancel of ticket 41: %d abandons, cancelled waits %v, other waits %v; want 1, false, true",
+			abandons, w.waits("cancelled-surface"), w.waits("other-surface"))
+	}
+}
+
+// contract: view.presentation-wait.joins
+// The cancel of every layout of a window removes every wait before it abandons the native join of each, so no abandon finds a
+// wait that the cancel ends.
+func TestAWindowCancelRemovesAllWaitsBeforeAbandoningEachNativeJoin(t *testing.T) {
+	isolateTraceRecords(t)
+	var w presentationWait
+	abandons := 0
+	for surface, ticket := range map[string]uint64{"reload-first-surface": 51, "reload-second-surface": 52} {
+		w.beginFor(surface, ticket, 1, &presentationSignal{}, func() error {
+			if w.waits("reload-first-surface") || w.waits("reload-second-surface") {
+				t.Errorf("the native join of %s was abandoned while a wait of the cancel remained", surface)
+			}
+			abandons++
+			return nil
+		})
+	}
+	if err := w.cancelAll(); err != nil {
+		t.Fatalf("cancel all: %v", err)
+	}
+	if abandons != 2 {
+		t.Fatalf("the cancel of every layout abandoned %d native joins, want 2", abandons)
+	}
+}
+
+// contract: view.presentation-wait.cancel-clears-ticket
+// A failed abandon of a native join is reported with its layout and its view, in the text that both hosts give.
+func TestAFailedAbandonOfACancelNamesItsLayoutAndItsView(t *testing.T) {
+	isolateTraceRecords(t)
+	refused := func() error { return errors.New("the join ended") }
+	var ticket presentationWait
+	ticket.beginFor("refused-surface", 41, 1, &presentationSignal{}, refused)
+	if err := ticket.cancelTicket(41); err == nil || err.Error() != "abandoning presentation joins for layout 41: view refused-surface: the join ended" {
+		t.Fatalf("the cancel of ticket 41 answered %v", err)
+	}
+	var window presentationWait
+	window.beginFor("refused-surface", 51, 1, &presentationSignal{}, refused)
+	if err := window.cancelAll(); err == nil || err.Error() != "abandoning presentation joins: layout 51, view refused-surface: the join ended" {
+		t.Fatalf("the cancel of every layout answered %v", err)
 	}
 }

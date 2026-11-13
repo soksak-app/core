@@ -335,3 +335,40 @@ fn an_input_end_after_the_presentation_changes_nothing() {
     wait.mark_presented(SURFACE, GENERATION, TICKET);
     assert_eq!(wait.end(SURFACE, GENERATION, TICKET, "input"), Ok(false));
 }
+
+// contract: view.presentation-wait.cancel-clears-ticket
+#[test]
+fn a_failed_abandon_of_a_cancel_names_its_layout_and_its_view() {
+    let _trace = crate::performance::test_trace();
+    for (cancel, ticket, expected) in [
+        (
+            "ticket",
+            41,
+            "abandoning presentation joins for layout 41: view refused-surface: the join ended",
+        ),
+        (
+            "window",
+            51,
+            "abandoning presentation joins: layout 51, view refused-surface: the join ended",
+        ),
+    ] {
+        let wait = PresentationWait::default();
+        assert!(wait.begin("refused-surface", GENERATION, ticket));
+        assert!(wait.attach_abandon(
+            "refused-surface",
+            GENERATION,
+            ticket,
+            Box::new(|| Err("the join ended".to_string())),
+        ));
+        let answer = if cancel == "ticket" {
+            wait.abandon_ticket(ticket)
+        } else {
+            wait.abandon_all()
+        };
+        assert_eq!(
+            answer,
+            Err(expected.to_string()),
+            "the cancel of the {cancel}"
+        );
+    }
+}
