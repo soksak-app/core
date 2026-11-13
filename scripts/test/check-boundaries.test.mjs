@@ -169,12 +169,12 @@ test("boundary names distinguish declared window checks from core tests without 
     `${packageFile}:3: core source names ${scoped("sidecar-probe")}, which is not a core package`,
   ]);
 
-  const fake = [
+  const commented = [
     '// import { open } from "@soksak/window-check/app.mjs";',
     'const note = "open(context, application)";',
     `const dependency = "${scoped("sidecar-probe")}";`,
   ].join("\n");
-  assert.equal(checkNames(names, ["e2e/window-like.test.mjs"], () => fake).length, 1,
+  assert.equal(checkNames(names, ["e2e/window-like.test.mjs"], () => commented).length, 1,
     "comments and strings must not classify a package test as a window check");
   const shadowed = [
     'import { open as launch } from "@soksak/window-check/app.mjs";',
@@ -260,14 +260,14 @@ test("checkTestPathReads refuses a test that reads a path of another core packag
   ]);
 });
 
-test("checkTestPathReads does not refuse a path that a test names as the key of a fake source", () => {
+test("checkTestPathReads does not refuse a path that a test names as the key of a source map", () => {
   // The key of a map that a test passes to a checker names no file; only a line that reads a file is a read.
   const components = [
     { dir: "packages/plugin-api", kind: "core", name: scoped("plugin-api") },
     { dir: "packages/workbench", kind: "core", name: scoped("workbench") },
   ];
   const sources = {
-    "packages/plugin-api/test/fake.test.mjs": "const source = new Map([['packages/workbench/surface-modules.js', 'text']]);\n",
+    "packages/plugin-api/test/keys.test.mjs": "const source = new Map([['packages/workbench/surface-modules.js', 'text']]);\n",
     "packages/plugin-api/test/read.test.mjs": "const text = readFileSync(new URL('../../workbench/surface-modules.js', import.meta.url));\n",
   };
   const errors = checkTestPathReads(components, testFiles(Object.keys(sources)), (file) => sources[file]);

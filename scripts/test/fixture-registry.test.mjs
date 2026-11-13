@@ -70,13 +70,13 @@ test("the fixture registry packs every fixture plugin into the pack fixtures and
   const { plugins, sidecars } = fixtureSources();
   const out = mkdtempSync(join(tmpdir(), "fixture-registry-"));
   t.after(() => rmSync(out, { recursive: true, force: true }));
-  // Every read of the file system and every fetch of the build is recorded; node:fs named imports follow the mocked methods.
+  // Every read of the file system is recorded and passed on to the real function, so the build receives the real results; node:fs
+  // named imports follow the replaced methods. The module imports no network interface (checked below), so it fetches no address.
   const reads = [];
   for (const name of ["readFileSync", "readdirSync", "statSync", "lstatSync", "existsSync", "openSync", "cpSync", "copyFileSync"]) {
     const original = fs[name];
     mock.method(fs, name, (path, ...rest) => { reads.push(`${name} ${path}`); return original.call(fs, path, ...rest); });
   }
-  mock.method(globalThis, "fetch", (url) => { reads.push(`fetch ${url}`); throw new Error("the fixture registry fetched an address"); });
   syncBuiltinESMExports();
   const packed = [];
   const released = [];

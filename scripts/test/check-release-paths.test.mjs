@@ -76,7 +76,7 @@ test("minimum audit requires the declared minimum in Info.plist and the applicat
   assert.deepEqual(audit("<plist><dict></dict></plist>", []), ["app.app/Contents/Info.plist: LSMinimumSystemVersion is missing, not the macOS minimum 14.4"]);
 });
 
-/** Makes three fake bundles that hold an application executable and an extra executable. */
+/** Makes three bundle folders that hold an application executable and an extra executable, whose bytes the audit reads as data. */
 function bundles(t, extra = {}) {
   const dir = mkdtempSync(join(tmpdir(), "soksak-release-bundles-"));
   t.after(() => rmSync(dir, { recursive: true }));

@@ -636,13 +636,13 @@ test("each end-to-end target of the Makefile names prerequisites, a window-check
   }
 });
 
-test("the fixture registry of a prebuilt run builds the fake sidecars and the registry with the sok of the bundle and builds no sok", { timeout: 10000 }, () => {
+test("the fixture registry of a prebuilt run builds the sidecar fixtures and the registry with the sok of the bundle and builds no sok", { timeout: 10000 }, () => {
   const planned = spawnSync("make", ["--no-print-directory", "-n", "build-fixture-registry-from-sok", "FIXTURE_SOK=/candidate/sok", "FIXTURE_REGISTRY=/run/fixture-registry"],
     { encoding: "utf8" });
   assert.equal(planned.status, 0, planned.stderr);
   assert.match(planned.stdout, /node scripts\/fixture-registry\.mjs --sok "\/candidate\/sok" --out "\/run\/fixture-registry"/);
   assert.match(planned.stdout, /for dir in e2e\/fixtures\/sidecars\/\S+.*pnpm --dir "\$dir" run build[^\n]*\nnode scripts\/fixture-registry/,
-    "the fake sidecars build before the registry");
+    "the sidecar fixtures build before the registry");
   assert.doesNotMatch(planned.stdout, /soksak-sok|workspace-registry/);
   const debug = spawnSync("make", ["--no-print-directory", "-n", "build-fixture-registry"], { encoding: "utf8" });
   assert.equal(debug.status, 0, debug.stderr);

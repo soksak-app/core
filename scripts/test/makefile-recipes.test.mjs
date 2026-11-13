@@ -3,14 +3,19 @@
 // Makefile exports; and every recipe that runs $(MAKE) names a target of the Makefile that it runs.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 
 const root = resolve(import.meta.dirname, "../..");
 // The PATH of a shell that did not read the profile, which adds the cargo folder of rustup.
 const BARE_PATH = "/usr/bin:/bin";
+
+// The cargo of the toolchain that rustup selects. A test links this real executable into the cargo folder that it names.
+function realCargo() {
+  return execFileSync("rustup", ["which", "cargo"], { encoding: "utf8" }).trim();
+}
 
 test("managed mygo verification prepares declared native fixtures and selects CGO0", () => {
   const text = readFileSync(join(root, "Makefile"), "utf8");
@@ -89,28 +94,30 @@ function programs(line) {
 }
 
 test("a recipe line without shell characters runs CARGO when the PATH of make holds no cargo folder", (t) => {
-  // rustup installs cargo in $CARGO_HOME/bin, which is ~/.cargo/bin when CARGO_HOME is not set; the fake cargo in the cargo
-  // folder of HOME stands for its toolchain.
+  // rustup installs cargo in $CARGO_HOME/bin, which is ~/.cargo/bin when CARGO_HOME is not set; the cargo folder of HOME holds
+  // the real cargo of the toolchain.
   const { folder, probe } = cargoProbe(t);
   const home = join(folder, "home");
   mkdirSync(join(home, ".cargo", "bin"), { recursive: true });
-  writeFileSync(join(home, ".cargo", "bin", "cargo"), "#!/bin/sh\necho 'cargo 9.9.9 (the cargo of HOME)'\n");
-  chmodSync(join(home, ".cargo", "bin", "cargo"), 0o755);
+  const cargo = realCargo();
+  symlinkSync(cargo, join(home, ".cargo", "bin", "cargo"));
+  const version = execFileSync(cargo, ["--version"], { encoding: "utf8" }).trim();
   const result = make({ home }, ["Makefile", probe], "probe-cargo");
   assert.equal(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stdout, /^cargo 9\.9\.9 \(the cargo of HOME\)$/m, result.stdout + result.stderr);
+  assert.ok(result.stdout.split("\n").includes(version), result.stdout + result.stderr);
 });
 
 test("a recipe line runs the cargo of CARGO_HOME when CARGO_HOME is not the cargo folder of HOME", (t) => {
-  // A hosted runner sets CARGO_HOME to a folder outside HOME; the fake cargo there stands for its toolchain.
+  // A hosted runner sets CARGO_HOME to a folder outside HOME; the cargo folder there holds the real cargo of the toolchain.
   const { folder, probe } = cargoProbe(t);
   const cargoHome = join(folder, "cargo-home");
   mkdirSync(join(cargoHome, "bin"), { recursive: true });
-  writeFileSync(join(cargoHome, "bin", "cargo"), "#!/bin/sh\necho 'cargo 9.9.9 (the cargo of CARGO_HOME)'\n");
-  chmodSync(join(cargoHome, "bin", "cargo"), 0o755);
+  const cargo = realCargo();
+  symlinkSync(cargo, join(cargoHome, "bin", "cargo"));
+  const version = execFileSync(cargo, ["--version"], { encoding: "utf8" }).trim();
   const result = make({ home: "/nonexistent", cargoHome }, ["Makefile", probe], "probe-cargo");
   assert.equal(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stdout, /^cargo 9\.9\.9 \(the cargo of CARGO_HOME\)$/m, result.stdout + result.stderr);
+  assert.ok(result.stdout.split("\n").includes(version), result.stdout + result.stderr);
 });
 
 test("no recipe or variable of the Makefile runs cargo other than through CARGO", () => {

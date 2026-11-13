@@ -111,7 +111,7 @@ export async function e2ePlan({ root, configRoot, script, native, candidate, art
   }
   const appBinary = (app) => executables.get(app).application;
   // The debug run installs the fixture registry that `make build-fixture-registry` of E2E_BUILD wrote. A candidate or prebuilt run
-  // builds the fixture registry of this checkout, its fake sidecars first, into the configuration root with the sok of the first
+  // builds the fixture registry of this checkout, its sidecar fixtures first, into the configuration root with the sok of the first
   // application artifact, so it installs the fixtures of the candidate checkout with the installers of the candidate artifacts and reads no other
   // registry.
   const registryFolder = inputs ? join(configRoot, 'fixture-registry') : join(root, 'target', 'fixture-registry');

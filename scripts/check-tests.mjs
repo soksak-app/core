@@ -22,7 +22,7 @@ const languages = {
 };
 
 // The window checks and the manifests and modules of the plugins of their fixtures (e2e/fixtures/<check>/<plugin>/), which the
-// checks install into the applications, and the declarations and sources of the fake sidecars of those plugins
+// checks install into the applications, and the declarations and sources of the sidecar fixtures of those plugins
 // (e2e/fixtures/sidecars/<sidecar>/).
 const FIXTURE_TEST_EXTENSIONS = new Set([".mjs", ".js", ".json", ".html", ".rs"]);
 
@@ -1402,7 +1402,7 @@ const FEATURE_LINKS = [
     id: "F708",
     implementation: [{ file: "Makefile", symbol: "export CARGO := $(shell PATH=\"$(PATH)\" command -v cargo)" }],
     tests: [{ file: "scripts/test/makefile-recipes.test.mjs", id: "a recipe line without shell characters runs CARGO when the PATH of make holds no cargo folder" }],
-    expected: "The Makefile runs the cargo of the cargo folder of HOME when its PATH holds no cargo folder, which a fake cargo there shows without an installed Rust toolchain.",
+    expected: "The Makefile runs the cargo of the cargo folder of HOME when its PATH holds no cargo folder, which the real cargo of the toolchain linked there shows.",
     levels: ["unit"],
   },
   {
@@ -13843,7 +13843,7 @@ const FEATURE_LINKS = [
     id: "F239-162",
     implementation: [{ file: "e2e/supplier-draw.mjs", symbol: "export function supplierDrawDurations(" }],
     tests: [{ file: "e2e/test/supplier-draw.test.mjs", id: "supplier draw durations read the paint time of every frame record of the fixture sidecar" }],
-    expected: "Supplier draw measurements read the paint time of each frame record of the fake sidecar, reject invalid raster metrics and await stored records through log notifications.",
+    expected: "Supplier draw measurements read the paint time of each frame record of the sidecar fixture, reject invalid raster metrics and await stored records through log notifications.",
     levels: ["unit"],
   },
   {

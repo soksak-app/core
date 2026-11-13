@@ -707,7 +707,7 @@ test("window-source audit rejects a source path of another repository component"
     assert.match(errors[0], /source path of another repository component/);
   }
   assert.deepEqual(auditE2ESource('import { APPS } from "./app.mjs";', "e2e/fixture.test.mjs"), []);
-  // A fake sidecar of the core fixtures is part of the checks, not another component.
+  // A sidecar fixture of the core fixtures is part of the checks, not another component.
   assert.deepEqual(auditE2ESource('const SERVICE = join(ROOT, "e2e/fixtures/sidecars/rasterprobe");', "e2e/test/fixture.test.mjs"), []);
   assert.equal(auditE2ESource('const SERVICE = join(ROOT, "sidecars/rasterprobe");', "e2e/test/fixture.test.mjs").length, 1);
 });
