@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F767-2-2-2: layout package 는 window-check package 를 development dependency 로 선언하고 group 규칙을 그 이름으로 import 한다. 그래서 그 test 는 다른 package 의 경로를 읽지 않는다.
 - F767-4-4: Go host 의 service 교체 check 의 cleanup 은 자기가 시작한 service 의 state 를 10 ms 마다 읽지 않고 그 exit 를 기다린다.
 - F767-4-3: 두 host 의 buffer bound check 와 Go host 의 presentation stage check 는 읽는 state 를 1 ms 마다 읽지 않고 그 state 가 바뀌기를 기다린다.
 - F767-4-1-1: Rust host 의 endpoint check 는 쓰지 않는 type 을 더 import 하지 않는다. 그래서 `make check-rust-clippy` 가 통과한다.

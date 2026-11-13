@@ -16,11 +16,11 @@ const ROOT = new URL("../../../", import.meta.url).pathname;
 /** The package parts the suite reads. */
 export const PACKAGE_PARTS = ["dist", "test", "scripts", "src", "docs", "package.json", "tsconfig.json"];
 /**
- * The workspace root parts the suite reads: the execution evidence reader with its reporter, which judge each run of the copy,
- * and the bounded command group, which ends each run. Every file of the package parts that a module imports from outside the
- * package is one of these parts.
+ * The workspace root parts the suite reads: the execution evidence reader with its reporter, which judge each run of the copy.
+ * Every file of the package parts that a module imports from outside the package and outside its declared dependencies, which
+ * the linked node_modules holds, is one of these parts.
  */
-export const ROOT_PARTS = ["package.json", "Makefile", ".node-version", "docs/spec/cases/layout", "scripts/node-test-evidence.mjs", "scripts/test-event-reporter.mjs", "packages/window-check/process-group.mjs"];
+export const ROOT_PARTS = ["package.json", "Makefile", ".node-version", "docs/spec/cases/layout", "scripts/node-test-evidence.mjs", "scripts/test-event-reporter.mjs"];
 
 /**
  * Copies the parts into a new directory named with prefix; returns the copy's root and its package directory.

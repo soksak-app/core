@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
-import { cp, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -156,15 +156,15 @@ for (const [title, name, mutation, expectedCode, expectedOutput] of [
     const packageRoot = join(root, "packages/soksak");
     const selected = name.startsWith("required ");
     const testFile = selected ? "test/soksak.test.mjs" : "test/case.test.mjs";
-    for (const folder of ["dist", "test", "scripts", "src", "docs", "node_modules"]) await mkdir(join(packageRoot, folder), { recursive: true });
+    for (const folder of ["dist", "test", "scripts", "src", "docs"]) await mkdir(join(packageRoot, folder), { recursive: true });
+    // The command reads its declared dependencies, the group rule of @soksak/window-check among them, from the package's node_modules.
+    await symlink(fileURLToPath(new URL("../node_modules", import.meta.url)), join(packageRoot, "node_modules"));
     await mkdir(join(root, "scripts"));
     await mkdir(join(root, "docs/spec/cases/layout"), { recursive: true });
     for (const file of ["package.json", "Makefile", ".node-version"]) await writeFile(join(root, file), file === "package.json" ? '{"type":"module"}' : "");
     for (const file of ["package.json", "tsconfig.json"]) await writeFile(join(packageRoot, file), '{"type":"module"}');
     for (const file of ["check-breaks.mjs", "bounded.mjs", "mutation-runner.mjs", "required-breaks.mjs", "workspace-copy.mjs"]) await cp(new URL(`../scripts/${file}`, import.meta.url), join(packageRoot, "scripts", file));
     for (const file of ["node-test-evidence.mjs", "test-event-reporter.mjs"]) await cp(new URL(`../../../scripts/${file}`, import.meta.url), join(root, "scripts", file));
-    await mkdir(join(root, "packages/window-check"));
-    await cp(new URL("../../window-check/process-group.mjs", import.meta.url), join(root, "packages/window-check/process-group.mjs"));
     const original = mutation.source ?? "export const value = 1;";
     const entry = { id: selected ? "state" : "value", file: "dist/soksak.js", find: "export const value = 1;", to: "export const value = 2;", what: "return the wrong value", ...mutation };
     await writeFile(join(packageRoot, "scripts/breaks.mjs"), `export const BREAKS = ${JSON.stringify([entry])};`);

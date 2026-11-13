@@ -146,6 +146,9 @@ importers:
 
   packages/soksak:
     devDependencies:
+      '@soksak/window-check':
+        specifier: workspace:*
+        version: link:../window-check
       fake-indexeddb:
         specifier: ^6.2.5
         version: 6.2.5
