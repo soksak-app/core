@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -472,6 +473,27 @@ func stagedUpdate(t *testing.T, config string) string {
 	return bundle
 }
 
+// installFixture links the sidecar fixture program of the repository as the executable executable of directory, and writes the
+// control text control to the file control of directory, which the program reads beside its link. It fails the test on any error.
+func installFixture(t *testing.T, directory, executable, control string) {
+	t.Helper()
+	// The program is found from this file: system, darwin, platform, tests, mygo, host, packages and the repository root.
+	_, here, _, _ := runtime.Caller(0)
+	program, err := filepath.Abs(filepath.Join(filepath.Dir(here), "..", "..", "..", "..", "..", "..", "..", "docs", "spec", "cases", "sidecars", "fixture.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(program); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(program, filepath.Join(directory, executable)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(directory, "control"), []byte(control), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // contract: mygo.system.update-replaces-the-bundle
 func TestAnUpdateQuitsTheApplicationAndStartsTheCommandThatReplacesItsBundle(t *testing.T) {
 	// The host holds the configuration directory and the bundle with their symbolic links resolved.
@@ -486,8 +508,14 @@ func TestAnUpdateQuitsTheApplicationAndStartsTheCommandThatReplacesItsBundle(t *
 	bundle := stagedUpdate(t, config)
 	// The sok of the bundle writes the arguments of the command that replaces the bundle.
 	arguments := filepath.Join(t.TempDir(), "arguments")
-	script := fmt.Sprintf("#!/bin/sh\nprintf '%%s\\n' \"$@\" > '%s.part'\nmv '%s.part' '%s'\n", arguments, arguments, arguments)
-	if err := os.WriteFile(filepath.Join(filepath.Dir(executable), "sok"), []byte(script), 0o755); err != nil {
+	control := "record-argv " + arguments + "\nexit 0\n"
+	installFixture(t, filepath.Dir(executable), "sok", control)
+	// The update runs a copy of sok in the updates folder of the configuration directory, so the copy of the fixture program
+	// reads its control file there.
+	if err := os.MkdirAll(filepath.Join(config, "updates"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(config, "updates", "control"), []byte(control), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	run := startStep(t, "update", config, executable, updateBundle+"="+bundle)

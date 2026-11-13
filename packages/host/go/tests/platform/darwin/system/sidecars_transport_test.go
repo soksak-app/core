@@ -5,7 +5,6 @@ package system_test
 import (
 	"bufio"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net"
 	"os"
@@ -34,10 +33,7 @@ func TestPersistentServiceStartsInANewSession(t *testing.T) {
 	defer listener.Close()
 	pidPath := filepath.Join(executableDir, "pid")
 	environmentPath := filepath.Join(executableDir, "display-name")
-	script := fmt.Sprintf("#!/bin/sh\necho $$ > '%s'\nprintf '%%s' \"${SOKSAK_SIDECAR_DISPLAY_NAME-unset}\" > '%s'\nprintf '{\"protocol\":1,\"pid\":%%d,\"socket\":\"%s\",\"token\":\"harness-token\"}\\n' $$\nexec sleep 600\n", pidPath, environmentPath, socket)
-	if err := os.WriteFile(filepath.Join(executableDir, "service"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	support.Fixture(t, executableDir, "service", "record-pid "+pidPath+"\nrecord-env SOKSAK_SIDECAR_DISPLAY_NAME "+environmentPath+"\nendpoint "+socket+" harness-token\nsleep 600\n")
 	serverDone := make(chan error, 1)
 	go func() {
 		connection, err := listener.Accept()

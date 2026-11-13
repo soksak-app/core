@@ -11,7 +11,6 @@ mod endpoint_client;
 
 use endpoint_client::Connection;
 
-use std::os::unix::fs::PermissionsExt;
 use std::sync::{Arc, Mutex, mpsc};
 
 use serde_json::value::RawValue;
@@ -92,9 +91,7 @@ fn image_region_count_falls_back_when_removed() {
 fn sidecar_sessions_list_only_the_surfaces_that_sent() {
     let directory = folder::Folder::new();
     // The fixture keeps its standard input open, so the sessions stay running until the sidecars stop.
-    let program = directory.path().join("echo");
-    std::fs::write(&program, "#!/bin/sh\ncat > /dev/null\n").unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    directory.fixture("echo", "on any drop\n");
     let declarations = vec![SidecarDeclaration {
         name: ECHO.to_string(),
         folder: directory.path().to_path_buf(),
@@ -131,9 +128,7 @@ fn sidecar_sessions_list_only_the_surfaces_that_sent() {
 fn sidecar_session_and_pending_reply_counts_follow_the_owner() {
     let directory = folder::Folder::new();
     // The fixture keeps its standard input open, so the session stays running until the sidecars stop.
-    let program = directory.path().join("echo");
-    std::fs::write(&program, "#!/bin/sh\ncat > /dev/null\n").unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    directory.fixture("echo", "on any drop\n");
     let declarations = vec![SidecarDeclaration {
         name: ECHO.to_string(),
         folder: directory.path().to_path_buf(),

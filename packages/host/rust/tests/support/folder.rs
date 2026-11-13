@@ -45,7 +45,8 @@ impl Folder {
 /// `executable`, with the control text `control` in the file `control` of the directory. It panics on any error.
 pub fn install_fixture(directory: &Path, executable: &str, control: &str) {
     // The program is found from the manifest folder of the host package: rust, host, packages and the repository root.
-    let program = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../docs/spec/cases/sidecars/fixture.sh");
+    let program =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../docs/spec/cases/sidecars/fixture.sh");
     let program = program
         .canonicalize()
         .unwrap_or_else(|error| panic!("cannot find {}: {error}", program.display()));

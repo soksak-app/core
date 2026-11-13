@@ -4,8 +4,6 @@ package host_test
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -94,9 +92,7 @@ func TestAnEventOverTheSizeBoundIsStoredCutWithItsOriginalSize(t *testing.T) {
 func TestALineThatIsWrittenAtOnceStoresNoWriteWait(t *testing.T) {
 	log := support.UseRoomyEventLog(t)
 	directory := t.TempDir()
-	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte("#!/bin/sh\nexec cat > /dev/null\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	support.Fixture(t, directory, "echo", "on any drop\n")
 	sidecars, err := host.NewSidecars(support.Declare(directory, `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
 	if err != nil {
 		t.Fatal(err)

@@ -93,10 +93,7 @@ func echoSidecarsForImages(t *testing.T) (*host.Sidecars, string) {
 	t.Helper()
 	directory := t.TempDir()
 	record := filepath.Join(directory, "requests")
-	script := "#!/bin/sh\ncat | tee " + record + "\n"
-	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	support.Fixture(t, directory, "echo", "on any tee "+record+"\n")
 	sidecars, err := host.NewSidecars(declareImages(directory, `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
 	if err != nil {
 		t.Fatal(err)

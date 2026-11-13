@@ -9,7 +9,7 @@
 # Startup operations (before the first on-line; not allowed after it):
 #   record-pid PATH          write the process id
 #   append-pid PATH          append the process id
-#   record-argv PATH         write each argument of the program on its own line
+#   record-argv PATH         write each argument of the program on its own line, all at once
 #   record-env NAME PATH     write the value of the environment variable NAME, no newline
 #   touch PATH               create PATH when absent
 #   append PATH TEXT         append TEXT and a newline to PATH
@@ -26,7 +26,10 @@
 #   read-byte PATH           append one byte of standard input to PATH
 #   keep-line PATH           append one line of standard input to PATH, with its line break
 #   skip-line                read and discard one line of standard input
-#   drain PATH               replace the program with cat, which appends standard input to PATH
+#   echo-line                read one line of standard input and write it to standard output
+#   drain PATH               replace the program with cat, which appends standard input to PATH;
+#                            cat keeps the standard output of the program open on descriptor 4
+#                            until it ends, so the reader of the output sees no close before it
 #   sleep SECONDS            replace the program with sleep (never reads input)
 #   exit CODE                exit with CODE
 #   signal NAME              send the signal NAME to the program
@@ -44,13 +47,25 @@
 # "match GLOB" (the input line matches GLOB) or "any".
 # ACTION: echo | tee PATH | keep PATH | keep-reply PATH TEXT | drop | reply TEXT
 #         | reply-body SURFACE | pad SURFACE BYTES | flood COUNT TEXT | exit CODE
-#         | signal NAME | then OP (one operation of the startup list that does not
-#           read standard input: not record-argv, label, if-absent, if-present,
-#           read-byte, keep-line, skip-line or drain)
+#         | signal NAME | wrap SURFACE KEY | reply-raw SURFACE | reply-fields TEXT | then OP (one operation of the
+#           startup list that does not read standard input: not record-argv, label, if-absent,
+#           if-present, read-byte, keep-line, skip-line, echo-line or drain)
 # keep-reply appends the input line to PATH, then writes TEXT.
+# wrap writes {"surface":"SURFACE","body":{"KEY":<the input line>}} and does not end the
+# rule match: the next on-line that matches the same input line also applies. The other
+# actions end the match, so one input line gets one terminal action and any wrap rules
+# before it. SURFACE and KEY take no quote or backslash.
+# reply-raw writes {"surface":"SURFACE","body":<the input line>}: the input line is the body
+# as a JSON value. SURFACE takes no quote or backslash.
+# reply-fields writes TEXT with each {{NAME}} replaced by the value of the member NAME of the
+# input line: the text of a string member without its quotes, or the digits of a number
+# member; NAME takes letters, digits and _, and the last member of that name in the line is
+# read. An input line without the member is an error. Like wrap, it does not end the rule
+# match, so several reply-fields lines answer one input line in file order.
+# pad writes {"surface":"SURFACE","body":"..."} whose body holds BYTES characters x.
 # The operations that read standard input are startup-only because a line
 # rule runs while standard input is the rule table.
-# At-eof lines: "at-eof OP", OP is flood, write, append, exit, sleep or signal.
+# At-eof lines: "at-eof OP", OP is flood, write, append, exit, sleep, signal or wait.
 # At-eof lines run in file order when standard input ends; the default is exit 0.
 #
 # Errors: a malformed or unknown line is reported on standard error as
@@ -141,7 +156,7 @@ check_on() {
   esac
   take
   case $w in
-    echo|tee|keep|keep-reply|drop|reply|reply-body|pad|flood|exit|signal|then) ;;
+    echo|tee|keep|keep-reply|drop|reply|reply-body|reply-raw|reply-fields|pad|flood|exit|signal|wrap|then) ;;
     *) fail "unknown action: $w" ;;
   esac
 }
@@ -184,7 +199,7 @@ run_op() {
       while [ "$i" -lt "$count" ]; do printf '%s\n' "$rest"; i=$((i + 1)); done ;;
     pad) need_surface; surface=$w; need_num bytes; end; count=$w
       printf '{"surface":"%s","body":"' "$surface"
-      if [ "$count" -gt 0 ]; then printf '%0*d' "$count" 0; fi
+      if [ "$count" -gt 0 ]; then printf '%0*d' "$count" 0 | tr 0 x; fi
       printf '"}\n' ;;
     *) fail "unknown operation: $op" ;;
   esac
@@ -194,6 +209,7 @@ run_op() {
 apply_rules() {
   n=$1
   line=$2
+  matched=0
   while IFS= read -r rule; do
     [ -n "$rule" ] || continue
     lineno=${rule%% *}
@@ -222,15 +238,36 @@ apply_rules() {
         printf '{"surface":"%s","body":' "$w"
         json_string "$line"
         printf '}\n' ;;
-      then) run_op "$rest" ;;
-      *) run_op "$op $rest" ;;
+      reply-raw) need_surface; end
+        printf '{"surface":"%s","body":%s}\n' "$w" "$line" ;;
+      wrap) need_surface; surface=$w; need key; key=$w; end
+        case $key in ''|*'"'*|*'\'*) fail "wrap needs a key without quotes or backslashes: $key" ;; esac
+        printf '{"surface":"%s","body":{"%s":%s}}\n' "$surface" "$key" "$line"
+        matched=1
+        continue ;;
+      reply-fields) [ -n "$rest" ] || fail "reply-fields needs a reply text"
+        out=$rest
+        while :; do
+          case $out in *'{{'*'}}'*) ;; *) break ;; esac
+          key=${out#*'{{'}
+          key=${key%%'}}'*}
+          case $key in ''|*[!A-Za-z0-9_]*) fail "reply-fields takes member names of letters, digits and _: $key" ;; esac
+          value=$(printf '%s' "$line" | sed -n "s/.*\"$key\":\"\([^\"]*\)\".*/\1/p")
+          [ -n "$value" ] || value=$(printf '%s' "$line" | sed -n "s/.*\"$key\":\([0-9][0-9]*\).*/\1/p")
+          [ -n "$value" ] || fail "input line $n has no member $key"
+          out=${out%%"{{$key}}"*}$value${out#*"{{$key}}"}
+        done
+        printf '%s\n' "$out"
+        matched=1
+        continue ;;
+      then) run_op "$rest"; return 0 ;;
+      *) run_op "$op $rest"; return 0 ;;
     esac
     return 0
   done <<EOF
 $rules
 EOF
-  printf 'fixture: %s: input line %s matches no on-line\n' "$control" "$n" >&2
-  exit 2
+  [ "$matched" = 1 ] || { printf 'fixture: %s: input line %s matches no on-line\n' "$control" "$n" >&2; exit 2; }
 }
 
 # Continue the startup section at "label $1". The control file is read again
@@ -269,7 +306,7 @@ while IFS= read -r line <&3 || [ -n "$line" ]; do
       rules="$rules$lineno $line$NL" ;;
     at-eof)
       case ${rest%% *} in
-        flood|write|append|exit|sleep|signal) ;;
+        flood|write|append|exit|sleep|signal|wait) ;;
         *) fail "not an at-eof operation: ${rest%% *}" ;;
       esac
       eof_ops="$eof_ops$lineno $rest$NL" ;;
@@ -278,8 +315,8 @@ while IFS= read -r line <&3 || [ -n "$line" ]; do
       case $op in
         record-argv)
           need path; end
-          : > "$w" || fail "cannot write $w"
-          for a in "$@"; do printf '%s\n' "$a"; done >> "$w" || fail "cannot append to $w" ;;
+          # The arguments go to a part file that replaces PATH at once, so a reader sees all of them or none.
+          for a in "$@"; do printf '%s\n' "$a"; done > "$w.part" && mv "$w.part" "$w" || fail "cannot write $w" ;;
         label) need name; end ;;
         if-absent|if-present)
           need path; p=$w; need label; l=$w; end
@@ -291,9 +328,13 @@ while IFS= read -r line <&3 || [ -n "$line" ]; do
         keep-line) need path; end
           IFS= read -r stdin_line || fail "standard input ends before a line"
           printf '%s\n' "$stdin_line" >> "$w" || fail "cannot append to $w" ;;
+        echo-line) end
+          IFS= read -r stdin_line || fail "standard input ends before a line"
+          printf '%s\n' "$stdin_line" ;;
         skip-line) end
           IFS= read -r stdin_line || fail "standard input ends before a line" ;;
         drain) need path; end; : >> "$w" || fail "cannot append to $w"
+          exec 4>&1
           exec cat >> "$w" ;;
         *) run_op "$line" ;;
       esac ;;
