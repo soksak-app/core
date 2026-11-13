@@ -10,7 +10,7 @@ import { basename, dirname, join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 // The process table reader of the command supervisor: a process group is read from the table, because kill(-pgid, 0) on macOS
 // also answers for a group that holds only zombies (test-command.mjs).
-import { hasEnded, killGroup, processTable, runningMembers, stopGroup } from './test-command.mjs';
+import { hasEnded, killGroup, processTable, runningMembers, stopGroup } from '@soksak/window-check/process-group.mjs';
 import { EVENT_PREFIX } from './test-event-reporter.mjs';
 import { createNodeTestEvidence } from './node-test-evidence.mjs';
 import { linkerWarnings } from './macos-minimum.mjs';

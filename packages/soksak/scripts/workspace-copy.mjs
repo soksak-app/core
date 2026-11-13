@@ -20,7 +20,7 @@ export const PACKAGE_PARTS = ["dist", "test", "scripts", "src", "docs", "package
  * and the bounded command group, which ends each run. Every file of the package parts that a module imports from outside the
  * package is one of these parts.
  */
-export const ROOT_PARTS = ["package.json", "Makefile", ".node-version", "docs/spec/cases/layout", "scripts/node-test-evidence.mjs", "scripts/test-event-reporter.mjs", "scripts/test-command.mjs"];
+export const ROOT_PARTS = ["package.json", "Makefile", ".node-version", "docs/spec/cases/layout", "scripts/node-test-evidence.mjs", "scripts/test-event-reporter.mjs", "packages/window-check/process-group.mjs"];
 
 /**
  * Copies the parts into a new directory named with prefix; returns the copy's root and its package directory.

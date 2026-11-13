@@ -1438,7 +1438,7 @@ const FEATURE_LINKS = [
     id: "F669",
     implementation: [
       { file: "packages/soksak/scripts/bounded.mjs", symbol: "try { killGroup(child.pid); }" },
-      { file: "scripts/test-command.mjs", symbol: "export function killGroup(pgid, send = sendToGroup) {" },
+      { file: "packages/window-check/process-group.mjs", symbol: "export function killGroup(pgid, send = sendToGroup) {" },
     ],
     tests: [
       { file: "packages/soksak/test/mutation-runner.test.mjs", id: "a command group whose last member has ended but is not reaped ends without an error" },
@@ -6113,7 +6113,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F257-3",
-    implementation: [{ file: "scripts/test-command.mjs", symbol: "function signalRunningGroup" }],
+    implementation: [{ file: "packages/window-check/process-group.mjs", symbol: "export function signalGroup(pgid, signal, send = sendToGroup)" }],
     tests: [
       { file: "scripts/test/test-runner.test.mjs", id: "a refused group signal with no running member ends without error" },
       { file: "scripts/test/test-runner.test.mjs", id: "a refused group signal with a running member names it" },
@@ -9838,7 +9838,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F63",
-    implementation: [{ file: "scripts/test-command.mjs", symbol: "function groupMembers" }],
+    implementation: [{ file: "packages/window-check/process-group.mjs", symbol: "export function groupMembers(pgid)" }],
     tests: [
       { file: "scripts/test/test-command.test.mjs", id: "counts a process group that holds only zombies as gone after a denied probe" },
       { file: "scripts/test/test-command.test.mjs", id: "reads the members of a group from the real process table after a denied probe" },
@@ -11859,7 +11859,7 @@ const FEATURE_LINKS = [
     id: "F299",
     implementation: [
       { file: "scripts/test-runner.mjs", symbol: "function endGroup(pgid, leader)" },
-      { file: "scripts/test-command.mjs", symbol: "export function processTable()" },
+      { file: "packages/window-check/process-group.mjs", symbol: "export function processTable()" },
     ],
     tests: [
       { file: "scripts/test/test-runner.test.mjs", id: "a test process that exits and leaves no process in its group is ended without a read of the process table" },

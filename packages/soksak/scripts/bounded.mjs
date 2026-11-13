@@ -2,7 +2,7 @@
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { killGroup } from "../../../scripts/test-command.mjs";
+import { killGroup } from "../../window-check/process-group.mjs";
 
 export function runBounded(command, args, { timeout, cwd, stdout = "inherit", stderr = "inherit", signal, onSpawn } = {}) {
   if (!Number.isFinite(timeout) || timeout <= 0) throw new Error("The command deadline must be positive");

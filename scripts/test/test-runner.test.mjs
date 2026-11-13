@@ -8,7 +8,7 @@ import childProcess, { execFileSync, spawn, spawnSync } from "node:child_process
 import test from "node:test";
 
 import { EVENT_PREFIX } from "../test-event-reporter.mjs";
-import { killGroup, stopGroup } from "../test-command.mjs";
+import { killGroup, stopGroup } from "@soksak/window-check/process-group.mjs";
 import { runTests } from "../test-runner.mjs";
 
 const node = (name, source, extra = {}) => ({ name, command: process.execPath, args: ["-e", source], timeoutMs: 5000, ...extra });

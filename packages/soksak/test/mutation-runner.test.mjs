@@ -161,7 +161,9 @@ for (const [title, name, mutation, expectedCode, expectedOutput] of [
     for (const file of ["package.json", "Makefile", ".node-version"]) await writeFile(join(root, file), file === "package.json" ? '{"type":"module"}' : "");
     for (const file of ["package.json", "tsconfig.json"]) await writeFile(join(packageRoot, file), '{"type":"module"}');
     for (const file of ["check-breaks.mjs", "bounded.mjs", "mutation-runner.mjs", "required-breaks.mjs", "workspace-copy.mjs"]) await cp(new URL(`../scripts/${file}`, import.meta.url), join(packageRoot, "scripts", file));
-    for (const file of ["node-test-evidence.mjs", "test-command.mjs", "test-event-reporter.mjs"]) await cp(new URL(`../../../scripts/${file}`, import.meta.url), join(root, "scripts", file));
+    for (const file of ["node-test-evidence.mjs", "test-event-reporter.mjs"]) await cp(new URL(`../../../scripts/${file}`, import.meta.url), join(root, "scripts", file));
+    await mkdir(join(root, "packages/window-check"));
+    await cp(new URL("../../window-check/process-group.mjs", import.meta.url), join(root, "packages/window-check/process-group.mjs"));
     const original = mutation.source ?? "export const value = 1;";
     const entry = { id: selected ? "state" : "value", file: "dist/soksak.js", find: "export const value = 1;", to: "export const value = 2;", what: "return the wrong value", ...mutation };
     await writeFile(join(packageRoot, "scripts/breaks.mjs"), `export const BREAKS = ${JSON.stringify([entry])};`);

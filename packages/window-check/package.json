@@ -39,6 +39,7 @@
     "./display-refresh.mjs": "./display-refresh.mjs",
     "./project-resource.mjs": "./project-resource.mjs",
     "./process-table.mjs": "./process-table.mjs",
+    "./process-group.mjs": "./process-group.mjs",
     "./region-raster.mjs": "./region-raster.mjs",
     "./chains.mjs": "./chains.mjs",
     "./package.json": "./package.json"
@@ -80,6 +81,7 @@
     "layout-timing.mjs",
     "display-refresh.mjs",
     "project-resource.mjs",
+    "process-group.mjs",
     "process-table.mjs",
     "region-raster.mjs",
     "chains.mjs",

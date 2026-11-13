@@ -112,8 +112,8 @@ test("a command ends at its time limit, at an interrupt and with its status, and
  * that the child wrote, which `started` resolves with.
  */
 function programWithChild(t, marker) {
-  const child = `process.on("SIGTERM", () => {}); require("node:fs").writeFileSync(${JSON.stringify(marker)}, String(process.pid)); setInterval(() => {}, 1000);`;
-  const source = `require("node:child_process").spawn(process.execPath, ["-e", ${JSON.stringify(child)}], { stdio: "ignore" }); setInterval(() => {}, 1000);`;
+  const child = `process.on("SIGTERM", () => {}); require("node:fs").writeFileSync(${JSON.stringify(marker)}, String(process.pid)); setTimeout(() => {}, 2147483647);`;
+  const source = `require("node:child_process").spawn(process.execPath, ["-e", ${JSON.stringify(child)}], { stdio: "ignore" }); setTimeout(() => {}, 2147483647);`;
   const started = new Promise((resolve) => {
     const read = () => { try { const pid = Number(readFileSync(marker, "utf8")); if (pid > 0) { watcher.close(); resolve(pid); } } catch {} };
     const watcher = watch(join(marker, ".."), read);

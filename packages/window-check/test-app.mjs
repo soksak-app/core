@@ -33,6 +33,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { APP_NAMES, requiredApps } from "./app.mjs";
 import { untilFolderState } from "./folder-wait.mjs";
+import { signalGroup } from "./process-group.mjs";
 import { applicationBundle, applicationExecutables, extractApplication, listProcesses, quitKeys, releasePlatform, runPlatform,
   waitForLockRelease } from "./platform/platform.mjs";
 import { START_PROBE } from "./start.mjs";
@@ -270,7 +271,8 @@ export async function run(file, args, { cwd, env, signal, timeout, capture = fal
 
 /**
  * Sends `signal` to the process group of `child` and waits for the exit of `child`; the processes of the group that remain after
- * that exit get SIGKILL, because the program that started them ended without them.
+ * that exit get SIGKILL, because the program that started them ended without them. A group that runs nothing is no error
+ * (signalGroup of process-group.mjs).
  */
 async function endGroup(child, signal, exited) {
   signalGroup(child.pid, signal);
@@ -278,10 +280,6 @@ async function endGroup(child, signal, exited) {
   signalGroup(child.pid, "SIGKILL");
 }
 
-/** Sends `signal` to the process group `pgid`; a group that has no process left is no error. */
-function signalGroup(pgid, signal) {
-  try { process.kill(-pgid, signal); } catch (error) { if (error.code !== "ESRCH") throw error; }
-}
 
 /** The response of `url`, bounded by `timeout` and `signal`; another status than 2xx is an error that names the address. */
 async function fetchBounded(url, { timeout, signal, fetchImpl = fetch }) {
