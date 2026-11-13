@@ -6,6 +6,17 @@ import { classOf } from "./event-classes.js";
 import { emitEvent, flushEvents } from "./page-log.js";
 
 /**
+ * The fields of a `command` event of a timed operation: the name, the duration in microseconds between the instants started and
+ * finished, and the outcome {ok} or {ok: false, error}. A thrown value that is not an Error is recorded as its own text.
+ */
+export function commandFields(name, started, finished, outcome) {
+  const us = Math.round((finished - started) * 1000);
+  if (outcome.ok) return { name, us, ok: true };
+  // default: a thrown value that is not an Error is recorded as its own text.
+  return { name, us, ok: false, error: String(outcome.error?.message ?? outcome.error) };
+}
+
+/**
  * `call` sends a request of the switch `performance`; `events` is the event writer of the document, `{emit, flush}`, or null in a page
  * without a host. The events of the trace leave through the writer of the page records, which also reports a failed relay, so the
  * document states its clock once (docs/spec/logging.md#writers).
@@ -53,12 +64,10 @@ export function createTracer(call, events = null) {
     const started = performance.now();
     try {
       const result = await answer();
-      trace("command", { name, us: Math.round((performance.now() - started) * 1000), ok: true });
+      trace("command", commandFields(name, started, performance.now(), { ok: true }));
       return result;
     } catch (error) {
-      trace("command", { name, us: Math.round((performance.now() - started) * 1000), ok: false,
-        // default: a thrown value that is not an Error is recorded as its own text.
-        error: String(error?.message ?? error) });
+      trace("command", commandFields(name, started, performance.now(), { ok: false, error }));
       throw error;
     }
   };

@@ -4,7 +4,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createEventBatcher } from "@soksak/plugin-api/log-batch.js";
-import { createTracer } from "../performance.js";
+import { commandFields, createTracer } from "../performance.js";
 import { withoutClock } from "./support/records.mjs";
 import { classOf } from "../event-classes.js";
 import { logGate } from "../log-gate.js";
@@ -160,4 +160,10 @@ test("timed reports the duration and passes the result and failure through", asy
   assert.ok(Number.isFinite(events[0].fields.us), "the duration is a number of microseconds");
   assert.equal(events[1].fields.ok, false);
   assert.equal(events[1].fields.error, "boom");
+  // The duration is a function of the instants that the operation reports: 1.5 ms is 1500 microseconds.
+  assert.deepEqual(commandFields("core.ok", 10, 11.5, { ok: true }), { name: "core.ok", us: 1500, ok: true });
+  assert.deepEqual(commandFields("core.fail", 2, 2.25, { ok: false, error: new Error("boom") }),
+    { name: "core.fail", us: 250, ok: false, error: "boom" });
+  assert.deepEqual(commandFields("core.fail", 2, 2, { ok: false, error: "plain text" }),
+    { name: "core.fail", us: 0, ok: false, error: "plain text" });
 });
