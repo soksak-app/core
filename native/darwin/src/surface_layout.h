@@ -19,7 +19,9 @@ void surfaceLayoutCancel(void *owner);
 void surfaceLayoutCancelTicket(void *owner, uint64_t ticket);
 // Diagnostics only. Starts recording, for each layout transaction, the times of the begin, the app DOM presentation check, the commit, and the presentation check request
 // (ms, the same mach clock as the recording frames), the path that committed it, and how many of the CATransaction pairs of this
-// code besides the layout transaction were open at its commit. Clears the earlier recording.
+// code besides the layout transaction were open at its commit. Clears the earlier recording. While it records, the owner of
+// every layout transaction that commits is a window (NSWindow), whose screen gives the display refresh of the commit; without a
+// recording an owner is any pointer that names the transactions of one window.
 void surfaceLayoutTraceStart(void);
 // Number of values in the record of one transaction: ticket, begun, presented, committed, requested, commit path, open at commit,
 // flushed, displayed, refreshed. Committed is the commit of the layout transaction; flushed is the end of the commit of the

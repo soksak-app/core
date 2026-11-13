@@ -198,8 +198,10 @@ void surfaceLayoutTraceRefresh(double flushed, double timestamp, double target, 
 // ticket, has been sent to the render server, and then the display refresh of screen that carried it (SPTraceRefresh). A commit
 // nested in another open transaction is sent only with that one. A window on no screen has no display refresh, and its record
 // keeps none. The handler marks only a record of the running trace, so a handler of a stopped trace adds nothing to a later one.
-static void traceFlushed(uint64_t ticket, NSScreen *screen) {
+static void traceFlushed(uint64_t ticket, void *owner) {
     if (!trace) return;
+    // The owner of a transaction is a window only for the trace: it is read as one only while a trace runs.
+    NSScreen *screen = ((NSWindow *)owner).screen;
     NSUInteger generation = traceGeneration;
     void (^flushed)(void) = ^{
         if (!trace || traceGeneration != generation) return;
@@ -636,7 +638,7 @@ static void finishTransaction(void *owner, int path) {
     for (NSNumber *sent in tickets) {
         traceValue(sent.unsignedLongLongValue, 5, path);
         traceValue(sent.unsignedLongLongValue, 6, openTransactions - (holdOpen ? 1 : 0));
-        traceFlushed(sent.unsignedLongLongValue, ((NSWindow *)owner).screen);
+        traceFlushed(sent.unsignedLongLongValue, owner);
     }
     if (holdOpen && layouts.count == 0) {
         holdOpen = NO;
