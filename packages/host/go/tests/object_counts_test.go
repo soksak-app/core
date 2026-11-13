@@ -78,9 +78,7 @@ func TestImageRegionCountFallsBackWhenRemoved(t *testing.T) {
 func TestSidecarSessionAndPendingReplyCountsFollowTheOwner(t *testing.T) {
 	directory := t.TempDir()
 	// The fixture keeps its standard input open, so the session stays running until the surface is closed.
-	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte("#!/bin/sh\ncat > /dev/null\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	support.Fixture(t, directory, "echo", "on any drop\n")
 	sidecars, err := host.NewSidecars(support.Declare(directory, `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
 	if err != nil {
 		t.Fatal(err)
@@ -118,9 +116,7 @@ func TestSidecarSessionAndPendingReplyCountsFollowTheOwner(t *testing.T) {
 // contract: diagnostics.objects.sidecar-sessions-agree
 func TestSidecarSessionsListOnlyTheSurfacesThatSent(t *testing.T) {
 	directory := t.TempDir()
-	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte("#!/bin/sh\ncat > /dev/null\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	support.Fixture(t, directory, "echo", "on any drop\n")
 	sidecars, err := host.NewSidecars(support.Declare(directory, `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
 	if err != nil {
 		t.Fatal(err)

@@ -60,16 +60,11 @@ fn the_detached_relaunch_command_is_recorded_when_it_starts() {
         let config = PathBuf::from(config);
         let running = config.join("running/soksak.app");
         std::fs::create_dir_all(running.join("Contents/MacOS")).unwrap();
-        std::fs::write(
-            running.join("Contents/MacOS/sok"),
-            "#!/bin/sh\necho 'sok: the relaunch failed' >&2\nexit 1\n",
-        )
-        .unwrap();
-        let mut permissions = std::fs::metadata(running.join("Contents/MacOS/sok"))
-            .unwrap()
-            .permissions();
-        std::os::unix::fs::PermissionsExt::set_mode(&mut permissions, 0o755);
-        std::fs::set_permissions(running.join("Contents/MacOS/sok"), permissions).unwrap();
+        folder::install_fixture(
+            &running.join("Contents/MacOS"),
+            "sok",
+            "stderr sok: the relaunch failed\nexit 1\n",
+        );
         soksak_host::application_log::start_standard_error(&config, "check").unwrap();
         let writer = records::start_writer(&config);
         let mut command =

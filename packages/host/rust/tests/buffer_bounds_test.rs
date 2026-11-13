@@ -9,7 +9,6 @@ mod folder;
 mod records;
 
 use std::io::Write;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -104,20 +103,16 @@ impl Blocked {
             .expect("mkfifo failed");
         assert!(made.status.success());
         let received = directory.path().join("received");
-        // An ignored signal stays ignored across exec, so cat ignores it too.
-        let stop = if input_end_stops {
-            "trap '' TERM\n"
-        } else {
-            ""
-        };
-        let script = format!(
-            "#!/bin/sh\n{stop}read _ < {}\nexec cat > {}\n",
-            fifo.display(),
-            received.display()
+        // The sidecar ignores the terminate signal when input_end_stops is set, so the end of its input is its stop.
+        let stop = if input_end_stops { "ignore-term\n" } else { "" };
+        directory.fixture(
+            "echo",
+            &format!(
+                "{stop}wait {}\ndrain {}\n",
+                fifo.display(),
+                received.display()
+            ),
         );
-        let program = directory.path().join("echo");
-        std::fs::write(&program, script).unwrap();
-        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
         let declarations = vec![SidecarDeclaration {
             name: ECHO.to_string(),
             folder: directory.path().to_path_buf(),
@@ -474,9 +469,7 @@ fn a_line_that_is_written_at_once_stores_no_write_wait() {
     let config = folder::Folder::new();
     let log = roomy_writer(config.path());
     let directory = folder::Folder::new();
-    let program = directory.path().join("echo");
-    std::fs::write(&program, "#!/bin/sh\nexec cat > /dev/null\n").unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    directory.fixture("echo", "on any drop\n");
     let declarations = vec![SidecarDeclaration {
         name: ECHO.to_string(),
         folder: directory.path().to_path_buf(),

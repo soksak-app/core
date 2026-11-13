@@ -28,8 +28,11 @@ func requireEnded(t *testing.T, pid int) {
 
 // contract: sidecars.failure.oversize-message-terminates-and-notifies
 func TestOversizeSidecarMessageTerminatesAndNotifies(t *testing.T) {
-	script, _ := support.PaddedMessageScript(support.MessageLimit+1, "exec sleep 600")
-	sidecars, directory := support.ScriptSidecars(t, script)
+	directory := t.TempDir()
+	// The pad operation writes its byte count as the body, so the message is MessageLimit+1 bytes before its line break when the body
+	// takes the bytes that the prefix and the suffix of the message do not.
+	padding := support.MessageLimit + 1 - len(`{"surface":"s1","body":"`) - len(`"}`)
+	sidecars := support.FixtureSidecars(t, directory, "record-pid "+filepath.Join(directory, "pid")+"\non any pad s1 "+strconv.Itoa(padding)+"\n")
 	owner := support.NewFakeOwner("/projects/a")
 	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
@@ -44,7 +47,8 @@ func TestOversizeSidecarMessageTerminatesAndNotifies(t *testing.T) {
 // contract: sidecars.failure.invalid-message-terminates-and-notifies
 func TestInvalidSidecarMessageTerminatesAndNotifies(t *testing.T) {
 	for _, line := range []string{`not json`, `{"surface":"s1"}`} {
-		sidecars, directory := support.ScriptSidecars(t, "#!/bin/sh\necho $$ > DIR/pid\nread request\nprintf '%s\\n' '"+line+"'\nexec sleep 600\n")
+		directory := t.TempDir()
+		sidecars := support.FixtureSidecars(t, directory, "record-pid "+filepath.Join(directory, "pid")+"\nskip-line\nwrite "+line+"\nsleep 600\n")
 		owner := support.NewFakeOwner("/projects/a")
 		if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 			t.Fatal(err)
@@ -62,9 +66,8 @@ func TestInvalidSidecarMessageTerminatesAndNotifies(t *testing.T) {
 // contract: sidecars.stop.forgets-running-sidecars
 func TestCloseDuringStopSendsNothing(t *testing.T) {
 	directory := t.TempDir()
-	// The sidecar: at start it opens ended and release for reading and writing. It echoes the lines it received, and when the input ends it writes one line to ended and
-	// stays alive until one line arrives on release. The sidecar keeps both pipes open, so the line it wrote is not discarded and the opening side
-	// does not block. It ignores the terminate signal of the stop, so it ends with its input and its release.
+	// The sidecar: it echoes the lines it received. When its input ends it writes one line to ended, then stays alive until one line
+	// arrives on release. It ignores the terminate signal of the stop, so it ends with its input and its release.
 	ended := filepath.Join(directory, "ended")
 	release := filepath.Join(directory, "release")
 	for _, fifo := range []string{ended, release} {
@@ -72,25 +75,23 @@ func TestCloseDuringStopSendsNothing(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	script := "#!/bin/sh\ntrap '' TERM\nexec 3<>" + release + " 4<>" + ended + "\nwhile read line; do echo \"$line\"; done\n" +
-		"echo ended >&4\nread -r released <&3\nexit 0\n"
-	if err := os.WriteFile(filepath.Join(directory, "lingering"), []byte(script), 0o755); err != nil {
+	support.Fixture(t, directory, "lingering", "ignore-term\non any echo\nat-eof append "+ended+" ended\nat-eof wait "+release+"\n")
+	// The check holds the write end of release until the check ends, so the line that releaseSidecar writes stays in the FIFO until the sidecar reads it.
+	holdRelease, err := os.OpenFile(release, os.O_RDWR, 0)
+	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		if err := holdRelease.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	// Writes one line to release so that no sidecar remains even if the check ends midway.
 	var released sync.Once
 	releaseSidecar := func() {
 		released.Do(func() {
-			fifo, err := os.OpenFile(release, os.O_RDWR, 0)
-			if err != nil {
-				t.Errorf("open release: %v", err)
-				return
-			}
-			if _, err := fifo.Write([]byte("x\n")); err != nil {
+			if _, err := holdRelease.Write([]byte("x\n")); err != nil {
 				t.Errorf("write release: %v", err)
-			}
-			if err := fifo.Close(); err != nil {
-				t.Errorf("close release: %v", err)
 			}
 		})
 	}
@@ -138,10 +139,15 @@ func TestCloseDuringStopSendsNothing(t *testing.T) {
 // contract: sidecars.protocol.closed-surface-messages-are-discarded-and-unknown-ones-fail, sidecars.protocol.dropped-message-is-recorded, sidecars.image.retired-owner-dispositions
 func TestClosedSurfaceMessagesAreDiscardedAndUnknownOnesFail(t *testing.T) {
 	written := support.CaptureLog(t)
-	sidecars, directory := support.ScriptSidecars(t, "#!/bin/sh\necho $$ > DIR/pid\nread open1\nread open2\nread open3\nread closed2\n"+
-		"printf '%s\\n' '{\"surface\":\"s2\",\"body\":\"late\"}' '{\"surface\":\"s2\",\"body\":{\"image\":{\"name\":17}}}' '{\"surface\":\"s1\",\"body\":\"after\"}'\n"+
-		"read barrier\nprintf '{\"surface\":\"s1\",\"body\":{\"barrier\":%s}}\\n' \"$barrier\"\n"+
-		"printf '%s\\n' '{\"surface\":\"ghost\",\"body\":\"x\"}'\nexec sleep 600\n")
+	directory := t.TempDir()
+	// The first four input lines are the three opens and the close of s2. The three lines after them are written at once, and the
+	// fifth input line, the close of s3, is the barrier: it is wrapped as the body of s1, and the ghost message follows it.
+	sidecars := support.FixtureSidecars(t, directory, "record-pid "+filepath.Join(directory, "pid")+"\n"+
+		"skip-line\nskip-line\nskip-line\nskip-line\n"+
+		"write "+`{"surface":"s2","body":"late"}`+"\n"+
+		"write "+`{"surface":"s2","body":{"image":{"name":17}}}`+"\n"+
+		"write "+`{"surface":"s1","body":"after"}`+"\n"+
+		"on 1 wrap s1 barrier\non 1 then write "+`{"surface":"ghost","body":"x"}`+"\non any drop\n")
 	owner := support.NewFakeOwner("/projects/a")
 	for _, surface := range []string{"s1", "s2", "s3"} {
 		if err := sidecars.Send(owner, support.EchoSidecar, surface, json.RawMessage(`{"operation":"open"}`)); err != nil {
@@ -184,11 +190,12 @@ func TestClosedSurfaceMessagesAreDiscardedAndUnknownOnesFail(t *testing.T) {
 // contract: sidecars.stop.stdin-eof-cancels-late-image
 func TestStopCancelsAnImageEmittedAfterStdioSidecarInputCloses(t *testing.T) {
 	written := support.CaptureLog(t)
-	// The script ignores the terminate signal of the stop, so it emits its image after the end of its input; its answer to the
-	// open is the event that it set the trap and recorded its pid.
-	script := "#!/bin/sh\ntrap '' TERM\necho $$ > DIR/pid\nread open\nprintf '%s\\n' '{\"surface\":\"s2\",\"body\":\"ready\"}'\nread closed\ncat >/dev/null\n" +
-		"printf '%s\\n' '{\"surface\":\"s2\",\"body\":{\"image\":{\"format\":\"bgra8\",\"generation\":3,\"height\":10,\"name\":\"view\",\"raster\":4,\"scale\":1.0,\"sequence\":5,\"token\":{\"id\":7,\"kind\":\"iosurface-global\"},\"width\":10}}}'\n"
-	sidecars, directory := support.ScriptSidecars(t, script)
+	// The sidecar ignores the terminate signal of the stop, so it emits its image after the end of its input; its answer to the
+	// open is the event that it recorded its pid.
+	directory := t.TempDir()
+	image := `{"surface":"s2","body":{"image":{"format":"bgra8","generation":3,"height":10,"name":"view","raster":4,"scale":1.0,"sequence":5,"token":{"id":7,"kind":"iosurface-global"},"width":10}}}`
+	sidecars := support.FixtureSidecars(t, directory, "ignore-term\nrecord-pid "+filepath.Join(directory, "pid")+"\nskip-line\n"+
+		"write "+`{"surface":"s2","body":"ready"}`+"\nskip-line\non any drop\nat-eof write "+image+"\n")
 	owner := support.NewFakeOwner("/projects/a")
 	if err := sidecars.Send(owner, support.EchoSidecar, "s2", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
@@ -303,7 +310,8 @@ func nextFailure(t *testing.T, owner *support.FakeOwner) support.SidecarFailure 
 // running sidecar and ends its process group (docs/spec/sidecars.md#declaration-and-startup).
 // contract: sidecars.end.is-the-process-exit
 func TestASidecarThatExitsFailsWhileItsChildKeepsTheOutput(t *testing.T) {
-	sidecars, directory := support.ScriptSidecars(t, "#!/bin/sh\necho $$ > DIR/pid\ncat DIR/hold &\necho $! > DIR/child\nread request\nexit 3\n")
+	directory := t.TempDir()
+	sidecars := support.FixtureSidecars(t, directory, "record-pid "+filepath.Join(directory, "pid")+"\nholder "+filepath.Join(directory, "hold")+" "+filepath.Join(directory, "child")+"\nskip-line\nexit 3\n")
 	holdFIFO(t, directory, "hold")
 	fifo := childFIFO(t, directory, "child")
 	owner := support.NewFakeOwner("/projects/a")
@@ -327,9 +335,8 @@ func TestASidecarThatExitsFailsWhileItsChildKeepsTheOutput(t *testing.T) {
 // still in the group, the end of the group killed it before it wrote its process id, and the check waited for that id.
 // contract: sidecars.end.is-the-process-exit
 func TestASidecarThatExitsFailsWhileAProcessOutsideItsGroupKeepsTheOutput(t *testing.T) {
-	sidecars, directory := support.ScriptSidecars(t, "#!/bin/sh\necho $$ > DIR/pid\n"+
-		"/usr/bin/perl -MPOSIX -e 'pipe(my $r, my $w) or die; if (fork) { close $w; my $left = <$r>; exit } close $r; POSIX::setsid() or die; close $w; open(my $f, \">\", \"DIR/child\"); print $f $$; close $f; open(my $h, \"<\", \"DIR/hold\"); my $line = <$h>'\n"+
-		"read request\nexit 3\n")
+	directory := t.TempDir()
+	sidecars := support.FixtureSidecars(t, directory, "record-pid "+filepath.Join(directory, "pid")+"\ndetached "+filepath.Join(directory, "hold")+" "+filepath.Join(directory, "child")+"\nskip-line\nexit 3\n")
 	holdFIFO(t, directory, "hold")
 	fifo := childFIFO(t, directory, "child")
 	owner := support.NewFakeOwner("/projects/a")
@@ -348,7 +355,8 @@ func TestASidecarThatExitsFailsWhileAProcessOutsideItsGroupKeepsTheOutput(t *tes
 // open (docs/spec/sidecars.md#declaration-and-startup).
 // contract: sidecars.end.is-the-process-exit
 func TestAStopEndsBySidecarExitWhileItsChildKeepsTheOutput(t *testing.T) {
-	sidecars, directory := support.ScriptSidecars(t, "#!/bin/sh\necho $$ > DIR/pid\ncat DIR/hold &\necho $! > DIR/child\nexec cat >/dev/null\n")
+	directory := t.TempDir()
+	sidecars := support.FixtureSidecars(t, directory, "record-pid "+filepath.Join(directory, "pid")+"\nholder "+filepath.Join(directory, "hold")+" "+filepath.Join(directory, "child")+"\non any drop\n")
 	holdFIFO(t, directory, "hold")
 	fifo := childFIFO(t, directory, "child")
 	owner := support.NewFakeOwner("/projects/a")
@@ -367,7 +375,8 @@ func TestAStopEndsBySidecarExitWhileItsChildKeepsTheOutput(t *testing.T) {
 // at its exit (docs/spec/sidecars.md#declaration-and-startup).
 // contract: sidecars.stop.returns-at-once-outside-the-quit
 func TestAStopOutsideTheQuitReturnsBeforeTheExit(t *testing.T) {
-	sidecars, directory := support.ScriptSidecars(t, "#!/bin/sh\ntrap '' TERM\necho $$ > DIR/started\nread request\nread gate < DIR/gate\nexit 3\n")
+	directory := t.TempDir()
+	sidecars := support.FixtureSidecars(t, directory, "ignore-term\nrecord-pid "+filepath.Join(directory, "started")+"\nskip-line\nwait "+filepath.Join(directory, "gate")+"\nexit 3\n")
 	started := childFIFO(t, directory, "started")
 	gate := holdFIFO(t, directory, "gate")
 	owner := support.NewFakeOwner("/projects/a")
@@ -393,7 +402,8 @@ func TestAStopOutsideTheQuitReturnsBeforeTheExit(t *testing.T) {
 // contract: sidecars.stop.records-what-the-quit-waits-for
 func TestTheQuitRecordsTheProcessesThatItWaitsFor(t *testing.T) {
 	written := support.CaptureLog(t)
-	sidecars, directory := support.ScriptSidecars(t, "#!/bin/sh\necho $$ > DIR/started\nwhile read line; do echo \"$line\"; done\n")
+	directory := t.TempDir()
+	sidecars := support.FixtureSidecars(t, directory, "record-pid "+filepath.Join(directory, "started")+"\non any echo\n")
 	started := childFIFO(t, directory, "started")
 	owner := support.NewFakeOwner("/projects/a")
 	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
@@ -413,7 +423,8 @@ func TestTheQuitRecordsTheProcessesThatItWaitsFor(t *testing.T) {
 func TestTheQuitStopExitsAfterItsSidecars(t *testing.T) {
 	written := support.CaptureLog(t)
 	// The sidecar ignores the terminate signal and the end of its input and exits when the check opens its gate.
-	sidecars, directory := support.ScriptSidecars(t, "#!/bin/sh\ntrap '' TERM\necho $$ > DIR/started\nread request\nread gate < DIR/gate\nexit 0\n")
+	directory := t.TempDir()
+	sidecars := support.FixtureSidecars(t, directory, "ignore-term\nrecord-pid "+filepath.Join(directory, "started")+"\nskip-line\nwait "+filepath.Join(directory, "gate")+"\nexit 0\n")
 	started := childFIFO(t, directory, "started")
 	gate := holdFIFO(t, directory, "gate")
 	owner := support.NewFakeOwner("/projects/a")
@@ -447,7 +458,7 @@ func TestTheQuitStopExitsAfterItsSidecars(t *testing.T) {
 	if logged := written(); !strings.Contains(logged, want) {
 		t.Fatalf("log %q does not contain %q", logged, want)
 	}
-	empty, _ := support.ScriptSidecars(t, "#!/bin/sh\ncat\n")
+	empty := support.FixtureSidecars(t, t.TempDir(), "on any echo\n")
 	if !empty.QuitStop(false, func() { t.Error("the quit stop without a sidecar ran its end") }) {
 		t.Fatal("the quit stop without a sidecar refused the exit")
 	}
@@ -459,7 +470,8 @@ func TestTheQuitStopExitsAfterItsSidecars(t *testing.T) {
 func TestASecondQuitKillsTheSidecarsThatTheQuitStopWaitsFor(t *testing.T) {
 	written := support.CaptureLog(t)
 	// The sidecar ignores the terminate signal and the end of its input, and the check never opens its gate.
-	sidecars, directory := support.ScriptSidecars(t, "#!/bin/sh\ntrap '' TERM\necho $$ > DIR/started\nread request\nread gate < DIR/gate\nexit 0\n")
+	directory := t.TempDir()
+	sidecars := support.FixtureSidecars(t, directory, "ignore-term\nrecord-pid "+filepath.Join(directory, "started")+"\nskip-line\nwait "+filepath.Join(directory, "gate")+"\nexit 0\n")
 	started := childFIFO(t, directory, "started")
 	holdFIFO(t, directory, "gate")
 	owner := support.NewFakeOwner("/projects/a")

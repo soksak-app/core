@@ -22,9 +22,7 @@ func relaunchBundle(t *testing.T) (string, string) {
 	if err := os.MkdirAll(filepath.Join(running, "Contents", "MacOS"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(running, "Contents", "MacOS", "sok"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	support.Fixture(t, filepath.Join(running, "Contents", "MacOS"), "sok", "exit 0\n")
 	return running, filepath.Join(running, "Contents", "MacOS", "soksak-fixture")
 }
 

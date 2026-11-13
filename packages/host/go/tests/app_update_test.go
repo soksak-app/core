@@ -21,13 +21,20 @@ import (
 // that uses it; it returns the directory.
 func updateRegistry(t *testing.T, key string) string {
 	t.Helper()
+	// The executable of the bundle is the sidecar fixture program, read through a link to it.
+	fixture := t.TempDir()
+	support.Fixture(t, fixture, "soksak", "exit 0\n")
+	program, err := os.ReadFile(filepath.Join(fixture, "soksak"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	var buffer bytes.Buffer
 	writer := zip.NewWriter(&buffer)
 	for name, body := range map[string]string{
 		"soksak.app/Contents/Info.plist": `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict><key>CFBundleShortVersionString</key><string>0.0.9</string></dict></plist>`,
-		"soksak.app/Contents/MacOS/soksak": "#!/bin/sh\n",
+		"soksak.app/Contents/MacOS/soksak": string(program),
 	} {
 		file, err := writer.Create(name)
 		if err != nil {
@@ -94,9 +101,7 @@ func TestTheUpdateStartsSokFromACopyBesideTheUpdatesAndChecksTheStagedBundle(t *
 		t.Fatal(err)
 	}
 	executable := filepath.Join(running, "Contents", "MacOS", "soksak-fixture")
-	if err := os.WriteFile(filepath.Join(running, "Contents", "MacOS", "sok"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	support.Fixture(t, filepath.Join(running, "Contents", "MacOS"), "sok", "exit 0\n")
 	staged := filepath.Join(config, "updates", "0.0.9", "soksak.app")
 	if err := os.MkdirAll(filepath.Join(staged, "Contents"), 0o755); err != nil {
 		t.Fatal(err)
@@ -137,9 +142,7 @@ func TestTheDetachedUpdateCommandKeepsItsErrorsAndIsRecordedWhenItStarts(t *test
 		t.Fatal(err)
 	}
 	executable := filepath.Join(running, "Contents", "MacOS", "soksak-fixture")
-	if err := os.WriteFile(filepath.Join(running, "Contents", "MacOS", "sok"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	support.Fixture(t, filepath.Join(running, "Contents", "MacOS"), "sok", "exit 0\n")
 	staged := filepath.Join(config, "updates", "0.0.9", "soksak.app")
 	if err := os.MkdirAll(filepath.Join(staged, "Contents"), 0o755); err != nil {
 		t.Fatal(err)
@@ -156,7 +159,9 @@ func TestTheDetachedUpdateCommandKeepsItsErrorsAndIsRecordedWhenItStarts(t *test
 		t.Fatalf("the standard error of the command is %v, want the standard error of the host", command.Stderr)
 	}
 	log := support.StartWriter(t, config)
-	started := exec.Command("/bin/sh", "-c", "exit 0")
+	startedFolder := t.TempDir()
+	support.Fixture(t, startedFolder, "started", "exit 0\n")
+	started := exec.Command(filepath.Join(startedFolder, "started"))
 	if err := host.StartAppUpdate(started); err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +181,7 @@ func TestTheDetachedUpdateCommandKeepsItsErrorsAndIsRecordedWhenItStarts(t *test
 			seen = append(seen, event["fields"].(map[string]any))
 		}
 	}
-	if len(seen) != 1 || seen[0]["pid"] != float64(started.Process.Pid) || seen[0]["command"] != "/bin/sh -c exit 0" {
+	if len(seen) != 1 || seen[0]["pid"] != float64(started.Process.Pid) || seen[0]["command"] != started.String() {
 		t.Fatalf("host.update.start events = %v, want one for pid %d with the command line", seen, started.Process.Pid)
 	}
 }

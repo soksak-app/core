@@ -2,7 +2,6 @@ package support
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -50,6 +49,19 @@ func Fixture(t *testing.T, directory, executable, control string) {
 	if err := os.WriteFile(filepath.Join(directory, "control"), []byte(control), 0o644); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// FixtureSidecars declares the sidecar fixture installed in directory with the control text control, and returns its sidecars.
+// The sidecars are stopped when the test ends, also when the test fails.
+func FixtureSidecars(t *testing.T, directory, control string) *host.Sidecars {
+	t.Helper()
+	Fixture(t, directory, "sidecar", control)
+	sidecars, err := host.NewSidecars(Declare(directory, `{"executable":"sidecar","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(sidecars.Stop)
+	return sidecars
 }
 
 // FakeOwner is a window that records the sidecar events and the failure events it received.
@@ -116,33 +128,6 @@ func (o *FakeOwner) Failure(t *testing.T) SidecarFailure {
 		t.Fatal(err)
 	}
 	return failure
-}
-
-// ScriptSidecars creates a channel that declares a fake sidecar that runs script, and its directory.
-// DIR in script is replaced by that directory.
-func ScriptSidecars(t *testing.T, script string) (*host.Sidecars, string) {
-	t.Helper()
-	directory := t.TempDir()
-	script = strings.ReplaceAll(script, "DIR", directory)
-	if err := os.WriteFile(filepath.Join(directory, "fake"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	sidecars, err := host.NewSidecars(Declare(directory, `{"executable":"fake","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Even when the check fails, no fake sidecar process is left.
-	t.Cleanup(sidecars.Stop)
-	return sidecars, directory
-}
-
-// PaddedMessageScript is a script that reads one request, sends an s1 message of size bytes before the line break, and then runs then.
-// The body is one string and a shell pipeline writes it, so the script process waits until the write ends.
-func PaddedMessageScript(size int, then string) (string, int) {
-	prefix, suffix := `{"surface":"s1","body":"`, `"}`
-	padding := size - len(prefix) - len(suffix)
-	return fmt.Sprintf("#!/bin/sh\necho $$ > DIR/pid\nread request\nprintf '%%s' '%s'\nhead -c %d /dev/zero | tr '\\0' x\nprintf '%%s\\n' '%s'\n%s\n",
-		prefix, padding, suffix, then), padding
 }
 
 // ProcessID is the process id that the fake sidecar recorded.

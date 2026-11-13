@@ -1,4 +1,6 @@
-use std::os::unix::fs::PermissionsExt;
+#[path = "../tests/support/folder.rs"]
+mod folder;
+
 use std::sync::mpsc::{self, Receiver, Sender, sync_channel};
 use std::sync::{Arc, Mutex, Weak};
 
@@ -76,12 +78,10 @@ struct Fixture {
     failures: Receiver<Failure>,
 }
 
-fn fixture(script: &str, names: &[&str]) -> Fixture {
+fn fixture(control: &str, names: &[&str]) -> Fixture {
     let executable = tempfile::tempdir().unwrap();
     let config = tempfile::tempdir().unwrap();
-    let program = executable.path().join("echo");
-    std::fs::write(&program, script).unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    folder::install_fixture(executable.path(), "echo", control);
     let declarations: Vec<_> = names
         .iter()
         .map(|name| SidecarDeclaration {
@@ -114,24 +114,21 @@ fn fixture(script: &str, names: &[&str]) -> Fixture {
 }
 
 fn acknowledged_supplier() -> &'static str {
-    r##"#!/bin/sh
-while IFS= read -r request; do
-  id=$(printf '%s' "$request" | sed -n 's/.*"request":"\([^"]*\)".*/\1/p')
-  name=$(printf '%s' "$request" | sed -n 's/.*"name":"\([^"]*\)".*/\1/p')
-  generation=$(printf '%s' "$request" | sed -n 's/.*"generation":\([0-9]*\).*/\1/p')
-  printf '{"surface":"surface-a","body":{"image":{"detached":{"request":"%s","name":"%s","generation":%s,"ok":true,"result":"detached"}}}}\n' "$id" "$name" "$generation"
-  printf '{"surface":"surface-a","body":{"event":"after-detach","name":"%s"}}\n' "$name"
-done
-"##
+    concat!(
+        r#"on any reply-fields {"surface":"surface-a","body":{"image":{"detached":{"request":"{{request}}","name":"{{name}}","generation":{{generation}},"ok":true,"result":"detached"}}}}"#,
+        "\n",
+        r#"on any reply-fields {"surface":"surface-a","body":{"event":"after-detach","name":"{{name}}"}}"#,
+        "\n",
+    )
 }
 
 fn silent_supplier() -> &'static str {
-    "#!/bin/sh\nwhile IFS= read -r request; do :; done\n"
+    "on any drop\n"
 }
 
 /// A supplier that reads one request and exits without an acknowledgement.
 fn exiting_supplier() -> &'static str {
-    "#!/bin/sh\nIFS= read -r request\n"
+    "skip-line\nexit 0\n"
 }
 
 fn manager() -> (tempfile::TempDir, Sidecars<TestOwner>) {

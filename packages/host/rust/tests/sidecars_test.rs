@@ -1,11 +1,10 @@
-//! Sidecar channel tests. They use a fake window and shell script sidecars.
+//! Sidecar channel tests. They use a fake window and sidecars that run the sidecar fixture with control texts.
 
 #[path = "support/child.rs"]
 mod child;
 #[path = "support/folder.rs"]
 mod folder;
 
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
@@ -107,6 +106,18 @@ fn declare(files: &Files, folder: &Path) -> Vec<SidecarDeclaration> {
         .collect()
 }
 
+/// The declaration of the sidecar name whose sidecar.json is data, with its files in directory.
+fn declaration_in(name: &str, directory: &Path, data: &str) -> SidecarDeclaration {
+    SidecarDeclaration {
+        name: name.to_string(),
+        folder: directory.to_path_buf(),
+        data: data.as_bytes().to_vec(),
+        error: None,
+        version: "0.0.1".to_string(),
+        dependents: Vec::new(),
+    }
+}
+
 fn create(files: &Files, directory: &Path) -> Result<Sidecars<FakeOwner>, String> {
     Sidecars::new(&declare(files, directory), directory.to_path_buf())
 }
@@ -134,20 +145,17 @@ fn refusal(manifest: &str, config: &Path) -> String {
     error
 }
 
-/// Declares the fake sidecar @fixture/sidecar-echo, which prints the received line as it is and leaves it in the
+/// Declares the sidecar fixture @fixture/sidecar-echo, which prints the received line as it is and leaves it in the
 /// request record file.
 fn echo_sidecars() -> (Sidecars<FakeOwner>, folder::Folder) {
     let directory = folder::Folder::new();
     let record = directory.path().join("requests");
-    let program = directory.path().join("echo");
     // The sidecar records the lines that remain on its way out, so it ignores the terminate signal of the stop and ends
     // with its input.
-    std::fs::write(
-        &program,
-        format!("#!/bin/sh\ntrap '' TERM\ntee {}\n", record.display()),
-    )
-    .unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    directory.fixture(
+        "echo",
+        &format!("ignore-term\non any tee {}\n", record.display()),
+    );
     let sidecars = create(
         &files(r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#),
         directory.path(),
@@ -280,13 +288,10 @@ fn close_reaches_only_the_sidecar_that_holds_the_surface() {
         (&first, first.path().join("requests")),
         (&second, second.path().join("requests")),
     ] {
-        let program = dir.path().join("echo");
-        std::fs::write(
-            &program,
-            format!("#!/bin/sh\ntrap '' TERM\ntee {}\n", record.display()),
-        )
-        .unwrap();
-        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+        dir.fixture(
+            "echo",
+            &format!("ignore-term\non any tee {}\n", record.display()),
+        );
     }
     let declare_in = |name: &str, folder: &Path| SidecarDeclaration {
         name: name.to_string(),
@@ -376,16 +381,13 @@ fn a_missing_executable_fails() {
 fn a_sidecar_receives_the_log_directory() {
     let directory = folder::Folder::new();
     let record = directory.path().join("argv");
-    let program = directory.path().join("echo");
-    std::fs::write(
-        &program,
-        format!(
-            "#!/bin/sh\nprintf '%s\\n' \"$@\" > {}\nread request\nprintf '%s\\n' '{{\"surface\":\"s1\",\"body\":\"ok\"}}'\nexec cat\n",
+    directory.fixture(
+        "echo",
+        &format!(
+            "record-argv {}\nskip-line\nwrite {{\"surface\":\"s1\",\"body\":\"ok\"}}\non any echo\n",
             record.display()
         ),
-    )
-    .unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    );
     let created = create(
         &files(r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#),
         directory.path(),
@@ -409,13 +411,10 @@ fn a_sidecar_receives_the_log_directory() {
 fn declaring_adds_sidecars_installed_after_the_start() {
     let directory = folder::Folder::new();
     let record = directory.path().join("requests");
-    let program = directory.path().join("echo");
-    std::fs::write(
-        &program,
-        format!("#!/bin/sh\ntrap '' TERM\ntee {}\n", record.display()),
-    )
-    .unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    directory.fixture(
+        "echo",
+        &format!("ignore-term\non any tee {}\n", record.display()),
+    );
     let sidecars = create(&Vec::new(), directory.path()).unwrap();
     let (window, events) = owner("a", "/projects/a");
     let error = sidecars.send(&window, ECHO, "s1", &raw("{}")).unwrap_err();
@@ -522,20 +521,26 @@ fn an_unknown_transport_is_not_declared() {
 fn an_invalid_declaration_leaves_the_other_sidecars_declared() {
     const EARLIER: &str = "@fixture/sidecar-earlier";
     let directory = folder::Folder::new();
-    let program = directory.path().join("echo");
-    std::fs::write(&program, "#!/bin/sh\ntrap '' TERM\ncat\n").unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let fixture: Files = vec![
-        (
-            ECHO,
-            r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#
-                .to_string(),
-        ),
-        (EARLIER, r#"{"executable":"echo","protocol":1}"#.to_string()),
-    ];
-    let path = directory.path().join("sidecar.json").display().to_string();
+    directory.fixture("echo", "ignore-term\non any echo\n");
+    // The invalid declaration has a folder of its own. The host refuses it before it starts a program.
+    let earlier = folder::Folder::new();
+    let declarations = || {
+        vec![
+            declaration_in(
+                ECHO,
+                directory.path(),
+                r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#,
+            ),
+            declaration_in(
+                EARLIER,
+                earlier.path(),
+                r#"{"executable":"echo","protocol":1}"#,
+            ),
+        ]
+    };
+    let path = earlier.path().join("sidecar.json").display().to_string();
     let refused = format!("sidecar {EARLIER}: {path}: displayName is required");
-    let sidecars = create(&fixture, directory.path()).unwrap();
+    let sidecars = Sidecars::new(&declarations(), directory.path().to_path_buf()).unwrap();
     let (window, events) = owner("a", "/projects/a");
     assert_eq!(
         sidecars
@@ -548,9 +553,7 @@ fn an_invalid_declaration_leaves_the_other_sidecars_declared() {
         .unwrap();
     assert_eq!(events.recv().unwrap().surface, "s1");
     // A declaration after the start keeps the valid sidecar running and the invalid one undeclared.
-    sidecars
-        .declare(&declare(&fixture, directory.path()))
-        .unwrap();
+    sidecars.declare(&declarations()).unwrap();
     assert_eq!(
         sidecars
             .send(&window, EARLIER, "s2", &raw("{}"))
@@ -609,34 +612,30 @@ fn slow_sidecar_does_not_block_other_sends() {
     // sidecar, it eventually fails with an "is not keeping up" error. Even when the channel of the slow sidecar is full,
     // send() to the fast sidecar does not block.
 
-    let directory = folder::Folder::new();
-
     // The slow sidecar: it does not read stdin, so the pipe fills and it ends at the terminate signal of the stop. A
     // program that reads stdin, such as cat, has a read speed that depends on the load, so whether the channel fills is
     // not determined.
-    let slow_program = directory.path().join("slow");
-    std::fs::write(&slow_program, "#!/bin/sh\nexec sleep 600\n").unwrap();
-    std::fs::set_permissions(&slow_program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let slow = folder::Folder::new();
+    slow.fixture("slow", "sleep 600\n");
 
     // The fast sidecar: it prints the received line as it is.
-    let fast_program = directory.path().join("fast");
-    std::fs::write(&fast_program, "#!/bin/sh\ntee /dev/null\n").unwrap();
-    std::fs::set_permissions(&fast_program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let fast = folder::Folder::new();
+    fast.fixture("fast", "on any tee /dev/null\n");
 
     // A frontend that declares the two sidecars.
-    let files: Files = vec![
-        (
+    let declarations = vec![
+        declaration_in(
             "@fixture/sidecar-slow",
-            r#"{"executable":"slow","displayName":"soksak://sidecar/probe","protocol":1}"#
-                .to_string(),
+            slow.path(),
+            r#"{"executable":"slow","displayName":"soksak://sidecar/probe","protocol":1}"#,
         ),
-        (
+        declaration_in(
             "@fixture/sidecar-fast",
-            r#"{"executable":"fast","displayName":"soksak://sidecar/probe","protocol":1}"#
-                .to_string(),
+            fast.path(),
+            r#"{"executable":"fast","displayName":"soksak://sidecar/probe","protocol":1}"#,
         ),
     ];
-    let sidecars = create(&files, directory.path()).unwrap();
+    let sidecars = Sidecars::new(&declarations, slow.path().to_path_buf()).unwrap();
     let (owner, _events) = owner("a", "/projects/test");
 
     // The first send to the fast sidecar starts that process, so the send of property 1 goes to a running process.
@@ -694,13 +693,7 @@ fn stop_graceful_shutdown() {
 
     // The sidecar: it echoes the received line as it is and ends normally at stdin EOF. It ignores the terminate signal
     // of the stop, so it ends by its input.
-    let graceful_program = directory.path().join("graceful");
-    std::fs::write(
-        &graceful_program,
-        "#!/bin/sh\ntrap '' TERM\nwhile read line; do echo \"$line\"; done\nexit 0\n",
-    )
-    .unwrap();
-    std::fs::set_permissions(&graceful_program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    directory.fixture("graceful", "ignore-term\non any echo\nat-eof exit 0\n");
 
     let files: Files = vec![(
         "@fixture/sidecar-graceful",
@@ -758,14 +751,10 @@ fn stop_closes_unread_output() {
 
 fn stop_closes_unread_output_in_child() {
     let directory = folder::Folder::new();
-    let program = directory.path().join("talkative");
-    std::fs::write(
-        &program,
-        "#!/bin/sh\ntrap '' TERM\nwhile read line; do echo \"$line\"; done\n\
-         i=0\nwhile [ $i -lt 3000 ]; do echo '{\"surface\":\"s1\",\"closed\":true}'; i=$((i+1)); done\nexit 0\n",
-    )
-    .unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    directory.fixture(
+        "talkative",
+        "ignore-term\non any echo\nat-eof flood 3000 {\"surface\":\"s1\",\"closed\":true}\nat-eof exit 0\n",
+    );
     let files: Files = vec![(
         "@fixture/sidecar-talkative",
         r#"{"executable":"talkative","displayName":"soksak://sidecar/probe","protocol":1}"#
@@ -796,11 +785,15 @@ fn stop_reads_output_to_its_end() {
     // close sends when the application ends.
     let Some(stderr) = logged_by_child("stop_reads_output_to_its_end") else {
         records::capturing(|| {
-            let (sidecars, directory) = script_sidecars(
-                "#!/bin/sh\ntrap '' TERM\nclosed=\nwhile read line; do case \"$line\" in *'\"closed\":true'*) closed=1;; *) echo \"$line\";; esac; done\n\
-             [ -n \"$closed\" ] || exit 4\necho '{\"surface\":\"s1\",\"closed\":true}' || exit 5\n\
-             i=0\nwhile [ $i -lt 3000 ]; do echo '{\"surface\":\"s1\",\"body\":\"late\"}' || exit 5; i=$((i+1)); done\n\
-             echo finished > DIR/finished\nexit 0\n",
+            let (sidecars, directory) = fixture_sidecars(
+                r#"ignore-term
+on match *"closed":true* keep DIR/closed
+on any echo
+at-eof write {"surface":"s1","closed":true}
+at-eof flood 3000 {"surface":"s1","body":"late"}
+at-eof append DIR/finished finished
+at-eof exit 0
+"#,
             );
             let (window, events) = owner("a", "/projects/test");
             sidecars
@@ -814,6 +807,12 @@ fn stop_reads_output_to_its_end() {
             assert!(
                 matches!(&finished, Ok(text) if text == "finished\n"),
                 "the sidecar did not complete its writes on its way out: finished = {finished:?}"
+            );
+            // The sidecar records the close that it received before its input ended.
+            let closed = std::fs::read_to_string(directory.path().join("closed")).unwrap();
+            assert!(
+                closed.contains(r#""closed":true"#),
+                "the sidecar received no close before its input ended: {closed:?}"
             );
         });
         return;
@@ -831,10 +830,9 @@ fn stop_reports_exit_status() {
     // the same format by both hosts.
     let Some(stderr) = logged_by_child("stop_reports_exit_status") else {
         records::capturing(|| {
-            for ending in ["exit 3", "kill -HUP $$"] {
-                let (sidecars, _directory) = script_sidecars(&format!(
-                    "#!/bin/sh\ntrap '' TERM\nwhile read line; do echo \"$line\"; done\n{ending}\n"
-                ));
+            for ending in ["exit 3", "signal HUP"] {
+                let (sidecars, _directory) =
+                    fixture_sidecars(&format!("ignore-term\non any echo\nat-eof {ending}\n"));
                 let (window, events) = owner("a", "/projects/test");
                 sidecars
                     .send(&window, ECHO, "s1", &raw(r#"{"test":"data"}"#))
@@ -865,9 +863,8 @@ fn the_standard_error_of_a_sidecar_is_written_as_records() {
     let Some(stderr) = logged_by_child("the_standard_error_of_a_sidecar_is_written_as_records")
     else {
         records::capturing(|| {
-            let (sidecars, _directory) = script_sidecars(
-                "#!/bin/sh\necho 'first line' >&2\nprintf 'no line feed' >&2\nwhile read line; do echo \"$line\"; done\n",
-            );
+            let (sidecars, _directory) =
+                fixture_sidecars("stderr first line\nstderr-raw no line feed\non any echo\n");
             let (window, events) = owner("a", "/projects/test");
             sidecars
                 .send(&window, ECHO, "s1", &raw(r#"{"test":"data"}"#))
@@ -914,8 +911,11 @@ fn the_relay_records_every_message_with_its_whole_body() {
     }
     // Every request that the host sends to a sidecar and every message that it receives is a trace event with its whole
     // body, in the order of the relay (docs/spec/diagnostics.md).
-    let (sidecars, directory) = script_sidecars(
-        "#!/bin/sh\nread request\necho '{\"surface\":\"s1\",\"body\":{\"event\":\"state\",\"text\":\"\\ud55c\"}}'\nwhile read line; do :; done\n",
+    let (sidecars, directory) = fixture_sidecars(
+        r#"skip-line
+write {"surface":"s1","body":{"event":"state","text":"한"}}
+on any drop
+"#,
     );
     let events_directory = folder::Folder::new();
     let writer = records::start_writer(events_directory.path());
@@ -967,10 +967,10 @@ fn close_during_stop_sends_nothing() {
     // send nothing. When the application ends, the windows close together with stop and close their surfaces.
     use std::io::{BufRead, Write};
     let directory = folder::Folder::new();
-    // The sidecar: at the start it opens ended and release for writing and reading. It echoes the received line, and
-    // when the input ends it writes one line to ended and stays alive until one line arrives in release. The sidecar
-    // keeps both pipes open, so the line it wrote is not discarded and the side that opens them is not blocked. It
-    // ignores the terminate signal of the stop, so it ends with its input and its release.
+    // The sidecar: it echoes the received line, and when the input ends it writes one line to ended and then waits for
+    // one line in release. The write to ended waits until the check opens ended for reading, and the wait for release
+    // ends when the check writes a line to it. It ignores the terminate signal of the stop, so it ends with its input
+    // and its release.
     let ended = directory.path().join("ended");
     let release = directory.path().join("release");
     for fifo in [&ended, &release] {
@@ -982,31 +982,43 @@ fn close_during_stop_sends_nothing() {
             fifo.display()
         );
     }
-    let program = directory.path().join("lingering");
-    std::fs::write(
-        &program,
-        format!(
-            "#!/bin/sh\ntrap '' TERM\nexec 3<>{} 4<>{}\nwhile read line; do echo \"$line\"; done\n\
-             echo ended >&4\nread -r released <&3\nexit 0\n",
-            release.display(),
-            ended.display()
+    directory.fixture(
+        "lingering",
+        &format!(
+            "ignore-term\non any echo\nat-eof append {} ended\nat-eof wait {}\nat-eof exit 0\n",
+            ended.display(),
+            release.display()
         ),
-    )
-    .unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
-    // Writes one line to release so that no sidecar remains even if the check ends midway.
-    struct Release(std::path::PathBuf);
-    impl Drop for Release {
-        fn drop(&mut self) {
-            let mut fifo = std::fs::OpenOptions::new()
-                .read(true)
-                .write(true)
-                .open(&self.0)
-                .expect("open release");
-            fifo.write_all(b"x\n").expect("write release");
+    );
+    // Holds release open from before the start of the sidecar until the end of the check, so that the line written to it
+    // waits in the pipe until the sidecar opens it: a line written to a FIFO that no process holds open is discarded. It
+    // writes the line once, at the release of the check or at its end, so that no sidecar remains even if the check ends
+    // midway.
+    struct Release {
+        fifo: std::fs::File,
+        sent: bool,
+    }
+    impl Release {
+        fn send(&mut self) {
+            if !self.sent {
+                self.sent = true;
+                self.fifo.write_all(b"x\n").expect("write release");
+            }
         }
     }
-    let release = Release(release);
+    impl Drop for Release {
+        fn drop(&mut self) {
+            self.send();
+        }
+    }
+    let mut release = Release {
+        fifo: std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&release)
+            .expect("open release"),
+        sent: false,
+    };
     let files: Files = vec![(
         "@fixture/sidecar-lingering",
         r#"{"executable":"lingering","displayName":"soksak://sidecar/probe","protocol":1}"#
@@ -1042,7 +1054,7 @@ fn close_during_stop_sends_nothing() {
             Vec::<ClosingSurface>::new(),
             "closing during stop"
         );
-        drop(release);
+        release.send();
         stopping.join().expect("stop thread");
     });
 }
@@ -1055,7 +1067,7 @@ fn a_stop_terminates_a_sidecar_that_ignores_its_input() {
     let Some(stderr) = logged_by_child("a_stop_terminates_a_sidecar_that_ignores_its_input") else {
         records::capturing(|| {
             // The sidecar does not read stdin, so it keeps running after stdin EOF.
-            let (sidecars, directory) = script_sidecars("#!/bin/sh\nexec cat DIR/hold\n");
+            let (sidecars, directory) = fixture_sidecars("hold DIR/hold\n");
             let _hold = hold_fifo(directory.path(), "hold");
             let (window, _events) = owner("a", "/projects/test");
             sidecars
@@ -1080,9 +1092,8 @@ fn a_stop_terminates_a_sidecar_that_ignores_its_input() {
 #[test]
 fn a_stop_outside_the_quit_returns_before_the_exit() {
     use std::io::Write;
-    let (sidecars, directory) = script_sidecars(
-        "#!/bin/sh\ntrap '' TERM\necho $$ > DIR/started\nread request\nread gate < DIR/gate\nexit 3\n",
-    );
+    let (sidecars, directory) =
+        fixture_sidecars("ignore-term\nrecord-pid DIR/started\nskip-line\nwait DIR/gate\nexit 3\n");
     let started = child_fifo(directory.path(), "started");
     let mut gate = hold_fifo(directory.path(), "gate");
     let (window, _events) = owner("a", "/projects/a");
@@ -1113,9 +1124,7 @@ fn the_quit_records_the_processes_that_it_waits_for() {
     const STARTED: &str = "the check started the sidecar as process ";
     let Some(stderr) = logged_by_child("the_quit_records_the_processes_that_it_waits_for") else {
         records::capturing(|| {
-            let (sidecars, directory) = script_sidecars(
-                "#!/bin/sh\necho $$ > DIR/started\nwhile read line; do echo \"$line\"; done\n",
-            );
+            let (sidecars, directory) = fixture_sidecars("record-pid DIR/started\non any echo\n");
             let started = child_fifo(directory.path(), "started");
             let (window, _events) = owner("a", "/projects/a");
             sidecars
@@ -1149,8 +1158,8 @@ fn the_quit_stop_exits_after_its_sidecars() {
             use std::io::Write;
             // The sidecar ignores the terminate signal and the end of its input and exits when the check opens its
             // gate.
-            let (sidecars, directory) = script_sidecars(
-                "#!/bin/sh\ntrap '' TERM\necho $$ > DIR/started\nread request\nread gate < DIR/gate\nexit 0\n",
+            let (sidecars, directory) = fixture_sidecars(
+                "ignore-term\nrecord-pid DIR/started\nskip-line\nwait DIR/gate\nexit 0\n",
             );
             let started = child_fifo(directory.path(), "started");
             let mut gate = hold_fifo(directory.path(), "gate");
@@ -1183,7 +1192,7 @@ fn the_quit_stop_exits_after_its_sidecars() {
                 sidecars.quit_stop(false, || panic!("the end of an ended quit stop ran again")),
                 "the quit stop refused the exit after its sidecars exited"
             );
-            let (empty, _empty_directory) = script_sidecars("#!/bin/sh\ncat\n");
+            let (empty, _empty_directory) = fixture_sidecars("on any echo\n");
             assert!(
                 empty.quit_stop(false, || panic!(
                     "the quit stop without a sidecar ran its end"
@@ -1215,8 +1224,8 @@ fn a_second_quit_kills_the_sidecars_that_the_quit_stop_waits_for() {
     else {
         records::capturing(|| {
             // The sidecar ignores the terminate signal and the end of its input, and the check never opens its gate.
-            let (sidecars, directory) = script_sidecars(
-                "#!/bin/sh\ntrap '' TERM\necho $$ > DIR/started\nread request\nread gate < DIR/gate\nexit 0\n",
+            let (sidecars, directory) = fixture_sidecars(
+                "ignore-term\nrecord-pid DIR/started\nskip-line\nwait DIR/gate\nexit 0\n",
             );
             let started = child_fifo(directory.path(), "started");
             let _gate = hold_fifo(directory.path(), "gate");
@@ -1282,7 +1291,7 @@ fn logged_by_child(test: &str) -> Option<String> {
 /// The maximum size of one sidecar message line before the line feed (docs/spec/sidecars.md#messages).
 const MESSAGE_LIMIT: usize = 64 << 20;
 
-/// Ends the sidecar in drop so that no fake sidecar process remains even if the check ends or fails.
+/// Ends the sidecar in drop so that no sidecar process remains even if the check ends or fails.
 struct Stopping(Sidecars<FakeOwner>);
 
 impl std::ops::Deref for Stopping {
@@ -1298,40 +1307,34 @@ impl Drop for Stopping {
     }
 }
 
-/// Creates a channel that declares a fake sidecar running script, and its directory. DIR in script is replaced with
-/// that directory.
-fn script_sidecars(script: &str) -> (Stopping, folder::Folder) {
+/// Declares the sidecar fixture as the sidecar @fixture/sidecar-echo in a new folder, with the control text control. DIR in
+/// control is replaced with the path of that folder.
+fn fixture_sidecars(control: &str) -> (Stopping, folder::Folder) {
     let directory = folder::Folder::new();
-    let program = directory.path().join("fake");
-    std::fs::write(
-        &program,
-        script.replace("DIR", &directory.path().display().to_string()),
-    )
-    .unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    directory.fixture(
+        "fixture",
+        &control.replace("DIR", &directory.path().display().to_string()),
+    );
     let sidecars = create(
-        &files(r#"{"executable":"fake","displayName":"soksak://sidecar/probe","protocol":1}"#),
+        &files(r#"{"executable":"fixture","displayName":"soksak://sidecar/probe","protocol":1}"#),
         directory.path(),
     )
     .unwrap();
     (Stopping(sidecars), directory)
 }
 
-/// A script that reads one request, sends an s1 message of size bytes before the line feed, and runs then, and the
-/// number of characters of the body. The body is one string and a shell pipeline writes it, so the script process waits
-/// until the write ends.
-fn padded_message_script(size: usize, then: &str) -> (String, usize) {
+/// A control text that reads one request, sends an s1 message of size bytes before the line feed, and then runs then. The
+/// body of the message is a string of padding characters x, and the function returns the number of those characters.
+fn padded_message_control(size: usize, then: &str) -> (String, usize) {
     let (prefix, suffix) = (r#"{"surface":"s1","body":""#, r#""}"#);
     let padding = size - prefix.len() - suffix.len();
     (
-        format!(
-            "#!/bin/sh\necho $$ > DIR/pid\nread request\nprintf '%s' '{prefix}'\nhead -c {padding} /dev/zero | tr '\\0' x\nprintf '%s\\n' '{suffix}'\n{then}\n"
-        ),
+        format!("record-pid DIR/pid\nskip-line\npad s1 {padding}\n{then}\n"),
         padding,
     )
 }
 
-/// The process id that the fake sidecar recorded.
+/// The process id that the sidecar recorded.
 fn process_id(directory: &Path) -> i32 {
     std::fs::read_to_string(directory.join("pid"))
         .unwrap()
@@ -1354,8 +1357,8 @@ fn assert_ended(pid: i32) {
 // contract: sidecars.protocol.message-at-limit-is-delivered
 #[test]
 fn a_message_at_the_limit_is_delivered() {
-    let (script, padding) = padded_message_script(MESSAGE_LIMIT, "exec cat");
-    let (sidecars, _directory) = script_sidecars(&script);
+    let (control, padding) = padded_message_control(MESSAGE_LIMIT, "drain /dev/null");
+    let (sidecars, _directory) = fixture_sidecars(&control);
     let (window, events, failures) = failing_owner("a", "/projects/a");
     sidecars
         .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
@@ -1370,17 +1373,16 @@ fn a_message_at_the_limit_is_delivered() {
             && body[1..body.len() - 1].bytes().all(|b| b == b'x'),
         "message at the limit was changed"
     );
-    assert!(
-        failures.try_recv().is_err(),
-        "message at the limit produced a failure"
-    );
+    if let Ok(failure) = failures.try_recv() {
+        panic!("message at the limit produced a failure: {failure:?}");
+    }
 }
 
 // contract: sidecars.failure.oversize-message-terminates-and-notifies
 #[test]
 fn an_oversize_message_terminates_and_notifies() {
-    let (script, _) = padded_message_script(MESSAGE_LIMIT + 1, "exec sleep 600");
-    let (sidecars, directory) = script_sidecars(&script);
+    let (control, _) = padded_message_control(MESSAGE_LIMIT + 1, "sleep 600");
+    let (sidecars, directory) = fixture_sidecars(&control);
     let (window, _events, failures) = failing_owner("a", "/projects/a");
     sidecars
         .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
@@ -1403,8 +1405,8 @@ fn an_oversize_message_terminates_and_notifies() {
 #[test]
 fn an_invalid_message_terminates_and_notifies() {
     for line in ["not json", r#"{"surface":"s1"}"#] {
-        let (sidecars, directory) = script_sidecars(&format!(
-            "#!/bin/sh\necho $$ > DIR/pid\nread request\nprintf '%s\\n' '{line}'\nexec sleep 600\n"
+        let (sidecars, directory) = fixture_sidecars(&format!(
+            "record-pid DIR/pid\nskip-line\nwrite {line}\nsleep 600\n"
         ));
         let (window, _events, failures) = failing_owner("a", "/projects/a");
         sidecars
@@ -1429,8 +1431,13 @@ fn an_invalid_message_terminates_and_notifies() {
 #[test]
 fn an_output_close_notifies_each_surface() {
     // Each process answers its first line after it recorded its pid, so the answer is the event that the pid is recorded.
-    let (sidecars, directory) = script_sidecars(
-        "#!/bin/sh\necho $$ >> DIR/pids\nread first\nprintf '%s\\n' '{\"surface\":\"s1\",\"body\":\"recorded\"}'\nread second\nexit 3\n",
+    let (sidecars, directory) = fixture_sidecars(
+        r#"append-pid DIR/pids
+skip-line
+write {"surface":"s1","body":"recorded"}
+skip-line
+exit 3
+"#,
     );
     let (first, first_events, first_failures) = failing_owner("a", "/projects/a");
     let (second, _second_events, second_failures) = failing_owner("b", "/projects/b");
@@ -1476,8 +1483,16 @@ fn an_output_close_notifies_each_surface() {
 // contract: sidecars.protocol.closed-surface-messages-are-discarded-and-unknown-ones-fail
 #[test]
 fn closed_surface_messages_are_discarded_and_unknown_ones_fail() {
-    let (sidecars, directory) = script_sidecars(
-        "#!/bin/sh\necho $$ > DIR/pid\nread open1\nread open2\nread closed2\nprintf '%s\\n' '{\"surface\":\"s2\",\"body\":\"late\"}' '{\"surface\":\"s1\",\"body\":\"after\"}' '{\"surface\":\"ghost\",\"body\":\"x\"}'\nexec sleep 600\n",
+    let (sidecars, directory) = fixture_sidecars(
+        r#"record-pid DIR/pid
+skip-line
+skip-line
+skip-line
+write {"surface":"s2","body":"late"}
+write {"surface":"s1","body":"after"}
+write {"surface":"ghost","body":"x"}
+sleep 600
+"#,
     );
     let (window, events, failures) = failing_owner("a", "/projects/a");
     for surface in ["s1", "s2"] {
@@ -1509,19 +1524,17 @@ fn closed_surface_messages_are_discarded_and_unknown_ones_fail() {
     assert_ended(process_id(directory.path()));
 }
 
-/// The sidecar @fixture/sidecar-echo that runs script, and the channel that receives the value whenever closing
+/// The sidecar @fixture/sidecar-echo that runs the control text, and the channel that receives the value whenever closing
 /// changes.
 fn closing_sidecars(
-    script: &str,
+    control: &str,
 ) -> (
     std::sync::Arc<Sidecars<FakeOwner>>,
     Receiver<Vec<ClosingSurface>>,
     folder::Folder,
 ) {
     let directory = folder::Folder::new();
-    let program = directory.path().join("closing");
-    std::fs::write(&program, script).unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    directory.fixture("closing", control);
     let files: Files = vec![(
         ECHO,
         r#"{"executable":"closing","displayName":"soksak://sidecar/probe","protocol":1}"#
@@ -1548,7 +1561,7 @@ fn closing_of(surface: &str) -> Vec<ClosingSurface> {
 #[test]
 fn closed_surface_stays_closing_until_the_sidecar_answers() {
     // It returns the received line as it is. If it returns a closed line, that is the answer to closed.
-    let (sidecars, snapshots, _directory) = closing_sidecars("#!/bin/sh\ntee /dev/null\n");
+    let (sidecars, snapshots, _directory) = closing_sidecars("on any tee /dev/null\n");
     let (window, _events) = owner("a", "/projects/closing");
     sidecars
         .send(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
@@ -1565,8 +1578,10 @@ fn failed_close_answer_is_logged() {
     // The log is the standard error, so the same check runs in a child process and its output is read.
     if std::env::var_os("SOKSAK_CLOSE_LOG_CHILD").is_some() {
         records::capturing(|| {
-            let script = "#!/bin/sh\nwhile read line; do case \"$line\" in *closed*) printf '{\"surface\":\"s1\",\"closed\":true,\"error\":\"busy\"}\\n';; *) echo \"$line\";; esac; done\n";
-            let (sidecars, snapshots, _directory) = closing_sidecars(script);
+            let control = r#"on match *closed* reply {"surface":"s1","closed":true,"error":"busy"}
+on any echo
+"#;
+            let (sidecars, snapshots, _directory) = closing_sidecars(control);
             let (window, _events) = owner("a", "/projects/closing");
             sidecars
                 .send(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
@@ -1598,8 +1613,10 @@ fn failed_close_answer_is_logged() {
 fn failed_close_answer_is_logged_before_the_closing_entry_ends() {
     if std::env::var_os("SOKSAK_CLOSE_ORDER_CHILD").is_some() {
         records::capturing(|| {
-            let script = "#!/bin/sh\nwhile read line; do case \"$line\" in *closed*) printf '{\"surface\":\"s1\",\"closed\":true,\"error\":\"busy\"}\\n';; esac; done\n";
-            let (sidecars, _snapshots, _directory) = closing_sidecars(script);
+            let control = r#"on match *closed* reply {"surface":"s1","closed":true,"error":"busy"}
+on any drop
+"#;
+            let (sidecars, _snapshots, _directory) = closing_sidecars(control);
             let (ended, end) = channel();
             sidecars.on_status_changed(move |value| {
                 if value.closing.is_empty() {
@@ -1648,12 +1665,11 @@ fn declaration_replaces_a_sidecar_whose_folder_changed() {
     let folder = |name: &str| {
         let directory = root.path().join(name);
         std::fs::create_dir_all(&directory).unwrap();
-        let program = directory.join("answer");
-        let script = format!(
-            "#!/bin/sh\nwhile read line; do printf '{{\"surface\":\"s1\",\"body\":{{\"from\":\"{name}\"}}}}\\n'; done\n"
+        folder::install_fixture(
+            &directory,
+            "answer",
+            &format!("on any reply {{\"surface\":\"s1\",\"body\":{{\"from\":\"{name}\"}}}}\n"),
         );
-        std::fs::write(&program, script).unwrap();
-        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
         directory
     };
     let files: Files = vec![(
@@ -1690,8 +1706,11 @@ fn repeated_close_awaits_each_answer() {
     // The log is standard error, so the same check runs as a child process and its output is read.
     if std::env::var_os("SOKSAK_REPEATED_CLOSE_CHILD").is_some() {
         // The sidecar echoes requests and answers both closes of s1 after it has received the second one.
-        let script = "#!/bin/sh\nn=0\nwhile read line; do case \"$line\" in *closed*) n=$((n+1)); if [ $n -eq 2 ]; then printf '{\"surface\":\"s1\",\"closed\":true}\\n{\"surface\":\"s1\",\"closed\":true}\\n'; fi;; *) echo \"$line\";; esac; done\n";
-        let (sidecars, snapshots, _directory) = closing_sidecars(script);
+        let control = r#"on 2 drop
+on 4 flood 2 {"surface":"s1","closed":true}
+on any echo
+"#;
+        let (sidecars, snapshots, _directory) = closing_sidecars(control);
         let (window, events) = owner("a", "/projects/closing");
         for _ in 0..2 {
             sidecars
@@ -1731,7 +1750,10 @@ fn repeated_close_awaits_each_answer() {
 #[test]
 fn close_answer_for_an_open_surface_fails_the_sidecar() {
     let (sidecars, _snapshots, _directory) = closing_sidecars(
-        "#!/bin/sh\nread line\nprintf '{\"surface\":\"s1\",\"closed\":true}\\n'\nexec cat >/dev/null\n",
+        r#"skip-line
+write {"surface":"s1","closed":true}
+on any drop
+"#,
     );
     let (window, _events, failures) = failing_owner("a", "/projects/closing");
     sidecars
@@ -1746,8 +1768,7 @@ fn close_answer_for_an_open_surface_fails_the_sidecar() {
 #[test]
 fn ended_sidecar_leaves_no_closing_surface() {
     // It answers the first request, and when it receives closed it ends without answering.
-    let (sidecars, snapshots, _directory) =
-        closing_sidecars("#!/bin/sh\nread line\necho \"$line\"\nread line\nexit 0\n");
+    let (sidecars, snapshots, _directory) = closing_sidecars("on 1 echo\non 2 exit 0\n");
     let (window, _events) = owner("a", "/projects/closing");
     sidecars
         .send(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
@@ -1771,8 +1792,14 @@ fn a_dropped_sidecar_message_is_recorded() {
         )
         .unwrap();
         let writer = records::start_writer(std::path::Path::new(&config));
-        let (sidecars, _directory) = script_sidecars(
-            "#!/bin/sh\nread open1\nread open2\nread closed2\nprintf '%s\\n' '{\"surface\":\"s2\",\"body\":\"late\"}' '{\"surface\":\"s1\",\"body\":\"after\"}'\nexec cat >/dev/null\n",
+        let (sidecars, _directory) = fixture_sidecars(
+            r#"skip-line
+skip-line
+skip-line
+write {"surface":"s2","body":"late"}
+write {"surface":"s1","body":"after"}
+drain /dev/null
+"#,
         );
         let (window, events, _failures) = failing_owner("a", "/projects/a");
         for surface in ["s1", "s2"] {
@@ -1822,8 +1849,17 @@ fn the_lifetime_of_a_sidecar_is_recorded_as_events() {
         // The first process ends by itself with a status; the second ends when the host stops it. It ignores the
         // terminate signal of the stop, so it ends with its input and its status is 0. It answers its first line after
         // it set the trap, so the answer is the event that it ignores the signal.
-        let (sidecars, _directory) = script_sidecars(
-            "#!/bin/sh\nif [ ! -f DIR/ran ]; then touch DIR/ran; read first; exit 3; fi\ntrap '' TERM\nread first\nprintf '%s\\n' '{\"surface\":\"s2\",\"body\":\"trapped\"}'\ncat >/dev/null\n",
+        let (sidecars, _directory) = fixture_sidecars(
+            r#"if-present DIR/ran second
+touch DIR/ran
+skip-line
+exit 3
+label second
+ignore-term
+skip-line
+write {"surface":"s2","body":"trapped"}
+drain /dev/null
+"#,
         );
         let writer = records::start_writer(Path::new(&config));
         let (first, first_events, failures) = failing_owner("a", "/projects/a");
@@ -1887,7 +1923,7 @@ fn the_lifetime_of_a_sidecar_is_recorded_as_events() {
 fn the_sampler_names_a_running_sidecar_until_it_ends() {
     // The writer of the records and the trace switch belong to the process, so the scenario runs in a child process.
     if let Some(config) = std::env::var_os("SOKSAK_SAMPLER_CHILD") {
-        let (sidecars, _directory) = script_sidecars("#!/bin/sh\ncat >/dev/null\n");
+        let (sidecars, _directory) = fixture_sidecars("drain /dev/null\n");
         let writer = records::start_writer(Path::new(&config));
         soksak_host::performance::command(serde_json::json!({"action": "on"})).unwrap();
         records::wait_for_first_sample(Path::new(&config), &writer);
@@ -1941,7 +1977,7 @@ fn the_sampler_names_a_running_sidecar_until_it_ends() {
 fn a_request_with_cids_is_recorded_as_an_event() {
     // The writer of the records is shared by the process, so the scenario runs in a child process that nothing else writes in.
     if let Some(config) = std::env::var_os("SOKSAK_REQUEST_CHILD") {
-        let (sidecars, _directory) = script_sidecars("#!/bin/sh\ncat >/dev/null\n");
+        let (sidecars, _directory) = fixture_sidecars("drain /dev/null\n");
         let writer = records::start_writer(Path::new(&config));
         let (window, _events) = owner("a", "/projects/a");
         sidecars
@@ -1988,7 +2024,7 @@ fn a_request_with_cids_is_recorded_as_an_event() {
 // contract: sidecars.protocol.request-line-carries-cids
 #[test]
 fn a_request_carries_the_correlation_identifiers() {
-    let (sidecars, directory) = script_sidecars("#!/bin/sh\ntee DIR/requests\n");
+    let (sidecars, directory) = fixture_sidecars("on any tee DIR/requests\n");
     let (window, events) = owner("a", "/projects/a");
     sidecars
         .send_with_cids(
@@ -2013,17 +2049,16 @@ fn a_request_carries_the_correlation_identifiers() {
     );
 }
 
-/// A script that answers three requests: an error with identifiers, an answer with identifiers, and an error without, and then
-/// sends a message that is no reply.
-const REPLY_SCRIPT: &str = r#"#!/bin/sh
-read a
-printf '%s\n' '{"surface":"s1","cids":["b1.7","b1.8"],"body":{"id":1,"error":"unsupported operation"}}'
-read b
-printf '%s\n' '{"surface":"s1","cids":["b1.9"],"body":{"id":2,"ok":true}}'
-read c
-printf '%s\n' '{"surface":"s1","body":{"id":3,"error":{"reason":"no request"}}}'
-printf '%s\n' '{"surface":"s1","body":{"event":"state"}}'
-cat >/dev/null
+/// A control text that answers three requests: an error with identifiers, an answer with identifiers, and an error without,
+/// and then sends a message that is no reply.
+const REPLY_CONTROL: &str = r#"skip-line
+write {"surface":"s1","cids":["b1.7","b1.8"],"body":{"id":1,"error":"unsupported operation"}}
+skip-line
+write {"surface":"s1","cids":["b1.9"],"body":{"id":2,"ok":true}}
+skip-line
+write {"surface":"s1","body":{"id":3,"error":{"reason":"no request"}}}
+write {"surface":"s1","body":{"event":"state"}}
+drain /dev/null
 "#;
 
 /// Runs the scenario `name` of this file in a child process that nothing else writes in, with the configuration folder in the
@@ -2049,7 +2084,7 @@ fn replies_of_child(name: &str, variable: &str) -> (String, Vec<serde_json::Valu
 // contract: sidecars.protocol.reply-cids-reach-the-owner
 #[test]
 fn a_message_of_a_sidecar_reaches_its_owner_with_the_identifiers_of_its_request() {
-    let (sidecars, _directory) = script_sidecars(REPLY_SCRIPT);
+    let (sidecars, _directory) = fixture_sidecars(REPLY_CONTROL);
     let (window, events) = owner("a", "/projects/a");
     let body = raw(r#"{"operation":"input"}"#);
     sidecars
@@ -2075,7 +2110,7 @@ fn a_message_of_a_sidecar_reaches_its_owner_with_the_identifiers_of_its_request(
 fn a_reply_of_a_sidecar_is_recorded_with_the_identifiers_of_its_request() {
     // The writer of the records is shared by the process, so the scenario runs in a child process that nothing else writes in.
     if let Some(config) = std::env::var_os("SOKSAK_REPLY_CHILD") {
-        let (sidecars, _directory) = script_sidecars(REPLY_SCRIPT);
+        let (sidecars, _directory) = fixture_sidecars(REPLY_CONTROL);
         let writer = records::start_writer(Path::new(&config));
         let (window, events) = owner("a", "/projects/a");
         let body = raw(r#"{"operation":"input"}"#);
@@ -2142,8 +2177,7 @@ fn a_reply_of_a_sidecar_is_recorded_with_the_identifiers_of_its_request() {
 #[test]
 fn the_failure_of_a_sidecar_is_the_failed_reply_of_its_pending_requests() {
     if let Some(config) = std::env::var_os("SOKSAK_REPLY_FAILURE_CHILD") {
-        let (sidecars, _directory) =
-            script_sidecars("#!/bin/sh\nread first\nread second\nexit 3\n");
+        let (sidecars, _directory) = fixture_sidecars("skip-line\nskip-line\nexit 3\n");
         let writer = records::start_writer(Path::new(&config));
         let (window, _events, failures) = failing_owner("a", "/projects/a");
         let body = raw(r#"{"operation":"input"}"#);
@@ -2180,12 +2214,12 @@ fn the_failure_of_a_sidecar_is_the_failed_reply_of_its_pending_requests() {
 // contract: sidecars.image.closed-surface-is-answered
 #[test]
 fn an_image_of_a_closed_surface_is_answered_closed() {
-    // The script sends a transfer image of the closed surface s2, reads the answer of the host and returns it as a message
+    // The sidecar sends a transfer image of the closed surface s2, reads the answer of the host and returns it as a message
     // of s1.
-    let (sidecars, _directory) = script_sidecars(concat!(
-        "#!/bin/sh\nread open1\nread open2\nread closed2\n",
-        "printf '%s\\n' '{\"surface\":\"s2\",\"body\":{\"image\":{\"format\":\"bgra8\",\"generation\":3,\"height\":10,\"name\":\"view\",\"raster\":4,\"scale\":1.0,\"sequence\":5,\"token\":{\"id\":7,\"kind\":\"iosurface-global\"},\"width\":10}}}'\n",
-        "read answer\nprintf '{\"surface\":\"s1\",\"body\":%s}\\n' \"$answer\"\nexec cat >/dev/null\n",
+    let (sidecars, _directory) = fixture_sidecars(concat!(
+        "skip-line\nskip-line\nskip-line\n",
+        "write {\"surface\":\"s2\",\"body\":{\"image\":{\"format\":\"bgra8\",\"generation\":3,\"height\":10,\"name\":\"view\",\"raster\":4,\"scale\":1.0,\"sequence\":5,\"token\":{\"id\":7,\"kind\":\"iosurface-global\"},\"width\":10}}}\n",
+        "on 1 reply-raw s1\non any drop\n",
     ));
     let (window, events, _failures) = failing_owner("a", "/projects/a");
     for surface in ["s1", "s2"] {
@@ -2274,8 +2308,12 @@ fn standard_io_sidecar_first_answer_after_spawn_is_recorded() {
         );
         return;
     }
-    let (sidecars, directory) = script_sidecars(
-        "#!/bin/sh\necho $$ > DIR/pid\nread request\necho '{\"surface\":\"s1\",\"body\":{\"event\":\"state\"}}'\nwhile read line; do :; done\n",
+    let (sidecars, directory) = fixture_sidecars(
+        r#"record-pid DIR/pid
+skip-line
+write {"surface":"s1","body":{"event":"state"}}
+on any drop
+"#,
     );
     let events_directory = folder::Folder::new();
     let writer = records::start_writer(events_directory.path());
@@ -2312,9 +2350,16 @@ fn standard_io_sidecar_first_answer_after_spawn_is_recorded() {
     );
 }
 
-/// The failing restart script: each request gets an invalid message, unless the file ok exists in the folder; then the
-/// process answers its first request with that request and runs without failing.
-const RESTART_SCRIPT: &str = "#!/bin/sh\nread -r request\nif [ -f DIR/ok ]; then printf '%s\\n' \"$request\"; exec sleep 600; fi\nprintf 'not json\\n'\nexec sleep 600\n";
+/// The restart control: each request gets an invalid message, unless the file ok exists in the folder; then the process
+/// answers its first request with that request and runs without failing.
+const RESTART_CONTROL: &str = r#"if-absent DIR/ok invalid
+echo-line
+sleep 600
+label invalid
+skip-line
+write not json
+sleep 600
+"#;
 
 /// A clock that a restart-limit check moves. Its time is the base plus the offset that the check set.
 #[derive(Clone)]
@@ -2340,21 +2385,18 @@ impl RestartClock {
     }
 }
 
-/// Creates a channel that declares the restart script, which plugin-a lists in dependencies, with the injected clock,
-/// and its folder.
+/// Creates a channel that declares the sidecar fixture with the restart control, which plugin-a lists in dependencies,
+/// with the injected clock, and its folder.
 fn restart_sidecars(clock: &RestartClock) -> (Stopping, folder::Folder) {
     let directory = folder::Folder::new();
-    let program = directory.path().join("fake");
-    std::fs::write(
-        &program,
-        RESTART_SCRIPT.replace("DIR", &directory.path().display().to_string()),
-    )
-    .unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    directory.fixture(
+        "fixture",
+        &RESTART_CONTROL.replace("DIR", &directory.path().display().to_string()),
+    );
     let declarations = vec![SidecarDeclaration {
         name: ECHO.to_string(),
         folder: directory.path().to_path_buf(),
-        data: br#"{"executable":"fake","displayName":"soksak://sidecar/probe","protocol":1}"#
+        data: br#"{"executable":"fixture","displayName":"soksak://sidecar/probe","protocol":1}"#
             .to_vec(),
         error: None,
         version: "0.0.1".to_string(),
@@ -2622,7 +2664,7 @@ fn a_disconnect_record_names_how_the_connection_ended() {
     );
 }
 
-/// Makes the FIFO DIR/name to which a script writes the process id of a process that it started.
+/// Makes the FIFO DIR/name to which the sidecar writes the process id of a process that it started.
 fn child_fifo(directory: &Path, name: &str) -> std::path::PathBuf {
     let path = directory.join(name);
     let text = std::ffi::CString::new(path.display().to_string()).unwrap();
@@ -2648,11 +2690,11 @@ fn hold_fifo(directory: &Path, name: &str) -> std::fs::File {
         .unwrap()
 }
 
-/// The process id that a script writes to the FIFO path; the read ends when the script closes its write.
+/// The process id that the sidecar writes to the FIFO path; the read ends when the sidecar closes its write.
 fn child_pid(path: &Path) -> i32 {
     let text = std::fs::read_to_string(path).unwrap();
     let pid = text.trim().parse::<i32>().unwrap();
-    assert!(pid > 0, "the script wrote {text:?} as a process id");
+    assert!(pid > 0, "the sidecar wrote {text:?} as a process id");
     pid
 }
 
@@ -2710,8 +2752,12 @@ fn require_gone(pid: i32) {
 // contract: sidecars.end.is-the-process-exit
 #[test]
 fn a_sidecar_that_exits_fails_while_its_child_keeps_the_output() {
-    let (sidecars, directory) = script_sidecars(
-        "#!/bin/sh\necho $$ > DIR/pid\ncat DIR/hold &\necho $! > DIR/child\nread request\nexit 3\n",
+    let (sidecars, directory) = fixture_sidecars(
+        r#"record-pid DIR/pid
+holder DIR/hold DIR/child
+skip-line
+exit 3
+"#,
     );
     let _hold = hold_fifo(directory.path(), "hold");
     let fifo = child_fifo(directory.path(), "child");
@@ -2735,13 +2781,17 @@ fn a_sidecar_that_exits_fails_while_its_child_keeps_the_output() {
 // A process that left the process group of the sidecar and keeps its output open does not hold the end of the sidecar
 // (docs/spec/sidecars.md#declaration-and-startup).
 // The first perl process exits only after the second one left the group: it reads its end of a pipe whose write end the second
-// process closes after setsid. Without that order the script could read the request and exit while the second process was
+// process closes after setsid. Without that order the sidecar could read the request and exit while the second process was
 // still in the group, the end of the group killed it before it wrote its process id, and the check waited for that id.
 // contract: sidecars.end.is-the-process-exit
 #[test]
 fn a_sidecar_that_exits_fails_while_a_process_outside_its_group_keeps_the_output() {
-    let (sidecars, directory) = script_sidecars(
-        "#!/bin/sh\necho $$ > DIR/pid\n/usr/bin/perl -MPOSIX -e 'pipe(my $r, my $w) or die; if (fork) { close $w; my $left = <$r>; exit } close $r; POSIX::setsid() or die; close $w; open(my $f, \">\", \"DIR/child\"); print $f $$; close $f; open(my $h, \"<\", \"DIR/hold\"); my $line = <$h>'\nread request\nexit 3\n",
+    let (sidecars, directory) = fixture_sidecars(
+        r#"record-pid DIR/pid
+detached DIR/hold DIR/child
+skip-line
+exit 3
+"#,
     );
     let _hold = hold_fifo(directory.path(), "hold");
     let fifo = child_fifo(directory.path(), "child");
@@ -2765,8 +2815,11 @@ fn a_sidecar_that_exits_fails_while_a_process_outside_its_group_keeps_the_output
 // contract: sidecars.end.is-the-process-exit
 #[test]
 fn a_stop_ends_by_the_sidecar_exit_and_ends_its_process_group() {
-    let (sidecars, directory) = script_sidecars(
-        "#!/bin/sh\necho $$ > DIR/pid\ncat DIR/hold &\necho $! > DIR/child\nexec cat >/dev/null\n",
+    let (sidecars, directory) = fixture_sidecars(
+        r#"record-pid DIR/pid
+holder DIR/hold DIR/child
+drain /dev/null
+"#,
     );
     let _hold = hold_fifo(directory.path(), "hold");
     let fifo = child_fifo(directory.path(), "child");

@@ -6,6 +6,7 @@
 
 - The test of the empty native ring of the Go host pulls the ring in a child process of its own, because the earlier tests of the same process leave records in it (F798).
 - The test of the pack fixtures of the fixture registry expects the description that `scripts/fixture-registry.mjs` writes since F795-1; it had failed from F795-1 on (F795-1-1).
+- The sidecar peers of the Go, mygo and Rust host tests are the tracked fixture program `docs/spec/cases/sidecars/fixture.sh`, and no host test writes a program (F795-5).
 - `make repeat-rust` passes an absolute manifest to the documentation test command, which runs in the package folder, and the Rust workspace sets the lint `linker_info` to warn, so a Rust build prints the ld warning of an object built for a newer macOS version that the runners fail; both appeared when the runner tests ran the real cargo (F795-4).
 - The workbench tests run the real environment, settings, compositor, binder and source origin modules instead of replacing them with `mock.module`, and their fixture manifests satisfy the validator of the plugin interface (F795-7).
 - Korean agent guidance: the standard solution and the workaround are translated with the terms of the English text (F796).
