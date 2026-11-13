@@ -3,6 +3,7 @@
 package support
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/fsnotify/fsnotify"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/src/platform"
@@ -64,6 +66,26 @@ type SceneWorkbench struct {
 	holding bool
 	// drawing runs in the next draw of the scene (InNextDraw).
 	drawing func()
+	// recorded holds the functions that OnRecord added, each called after each record.
+	recorded map[uint64]func()
+	next     uint64
+}
+
+// OnRecord calls fn after each record of the workbench and returns the function that removes it.
+func (w *SceneWorkbench) OnRecord(fn func()) (off func()) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.recorded == nil {
+		w.recorded = make(map[uint64]func())
+	}
+	w.next++
+	id := w.next
+	w.recorded[id] = fn
+	return func() {
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		delete(w.recorded, id)
+	}
 }
 
 // InNextDraw has the next draw of the scene run step while it builds the frame, as the workbench of the application opens the layout
@@ -84,8 +106,15 @@ func (w *SceneWorkbench) HoldFirstScreen() {
 // Record adds one record.
 func (w *SceneWorkbench) Record(format string, values ...any) {
 	w.mu.Lock()
-	defer w.mu.Unlock()
 	w.records = append(w.records, fmt.Sprintf(format, values...))
+	recorded := make([]func(), 0, len(w.recorded))
+	for _, fn := range w.recorded {
+		recorded = append(recorded, fn)
+	}
+	w.mu.Unlock()
+	for _, fn := range recorded {
+		fn()
+	}
 }
 
 // Received returns the records in their order.
@@ -144,13 +173,150 @@ func (w *SceneWorkbench) Call(window host.Frontend, script string) {
 	w.Record("call %s %s", window.Name(), script)
 }
 
-// Wait waits for condition, which an event of the framework makes true, within the limit of a test.
-func Wait(t *testing.T, what string, condition func() bool) {
+// Subscribe adds fn to an event and returns the function that removes it, as the event methods of a window of the framework
+// (OnShow) and OnRecord of the fixture workbench do.
+type Subscribe func(fn func()) (off func())
+
+// Wait returns once condition holds. It reads condition at once and again after each event of sources, the events that change
+// what condition reads; it subscribes before the first read, so no event between the read and the wait is lost. A condition
+// that never holds leaves the check to the limit of its runner, and the log of the check names what it waited for.
+func Wait(t *testing.T, what string, condition func() bool, sources ...Subscribe) {
 	t.Helper()
-	for limit := time.Now().Add(10 * time.Second); !condition(); time.Sleep(5 * time.Millisecond) {
-		if time.Now().After(limit) {
-			t.Fatalf("%s did not happen within 10 s", what)
+	if len(sources) == 0 {
+		t.Fatalf("the wait for %s names no event", what)
+	}
+	changed := make(chan struct{}, 1)
+	for _, source := range sources {
+		off := source(func() {
+			select {
+			case changed <- struct{}{}:
+			default:
+			}
+		})
+		defer off()
+	}
+	if condition() {
+		return
+	}
+	t.Logf("waiting for %s", what)
+	for !condition() {
+		<-changed
+	}
+}
+
+// Poll returns once condition holds, for a state of which no event reports a change, which reason names; it reads condition at
+// each display refresh. A condition that never holds leaves the check to the limit of its runner.
+func Poll(t *testing.T, what, reason string, condition func() bool) {
+	t.Helper()
+	if condition() {
+		return
+	}
+	t.Logf("waiting for %s, read at each display refresh because %s", what, reason)
+	for !condition() {
+		time.Sleep(time.Second / 60)
+	}
+}
+
+// Changes is the source of Wait of the changes of the entries of directory: fsnotify reports each creation, write, rename and
+// removal of an entry. The watch ends with the test.
+func Changes(t *testing.T, directory string) Subscribe {
+	t.Helper()
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := watcher.Add(directory); err != nil {
+		t.Fatal(errors.Join(fmt.Errorf("watch %s: %w", directory, err), watcher.Close()))
+	}
+	var (
+		mu        sync.Mutex
+		listeners = map[uint64]func(){}
+		next      uint64
+	)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for {
+			select {
+			case _, open := <-watcher.Events:
+				if !open {
+					return
+				}
+				mu.Lock()
+				called := make([]func(), 0, len(listeners))
+				for _, fn := range listeners {
+					called = append(called, fn)
+				}
+				mu.Unlock()
+				for _, fn := range called {
+					fn()
+				}
+			case err, open := <-watcher.Errors:
+				if !open {
+					return
+				}
+				t.Errorf("watch %s: %v", directory, err)
+			}
 		}
+	}()
+	t.Cleanup(func() {
+		if err := watcher.Close(); err != nil {
+			t.Errorf("end the watch of %s: %v", directory, err)
+		}
+		<-done
+	})
+	return func(fn func()) func() {
+		mu.Lock()
+		defer mu.Unlock()
+		next++
+		id := next
+		listeners[id] = fn
+		return func() {
+			mu.Lock()
+			defer mu.Unlock()
+			delete(listeners, id)
+		}
+	}
+}
+
+// OnClosed is the source of Wait of the close of ended, as the end of a child process.
+func OnClosed(ended <-chan struct{}) Subscribe {
+	return func(fn func()) func() {
+		off := make(chan struct{})
+		go func() {
+			select {
+			case <-ended:
+				fn()
+			case <-off:
+			}
+		}()
+		return func() { close(off) }
+	}
+}
+
+// NextFrame returns the answer of a notice of the next frame of window. The main thread runs its queue in order, so the requests
+// that the caller made before (Invalidate) run before the notice: a window that holds its frames answers at once (mygo.PresentHeld),
+// and one that does not answers with the frame of a request.
+func NextFrame(t *testing.T, window *adapter.Frontend) mygo.Presentation {
+	t.Helper()
+	answered := make(chan mygo.Presentation, 1)
+	err := window.Window().AfterPresent(func(presented mygo.Presentation, failure error) {
+		if failure != nil {
+			t.Errorf("the notice of the frame of %s failed: %v", window.Name(), failure)
+		}
+		answered <- presented
+	})
+	if err != nil {
+		t.Fatalf("the notice of the frame of %s: %v", window.Name(), err)
+	}
+	return <-answered
+}
+
+// HoldsFrames fails unless the answer of the next frame of window (NextFrame) is that the window holds its frames.
+func HoldsFrames(t *testing.T, window *adapter.Frontend) {
+	t.Helper()
+	if presented := NextFrame(t, window); presented != mygo.PresentHeld {
+		t.Fatalf("window %s presented a frame (%v) while it holds its frames", window.Name(), presented)
 	}
 }
 

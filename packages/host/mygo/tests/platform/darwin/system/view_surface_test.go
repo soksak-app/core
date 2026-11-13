@@ -19,14 +19,13 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"testing"
 	"testing/fstest"
-	"time"
 	"unsafe"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"golang.org/x/sys/unix"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/src/platform"
@@ -185,13 +184,9 @@ func startViewSession() (*viewSession, error) {
 	// The workbench starts once the window drew its first frame and showed, and the start of a page ends the composition
 	// declarations and the surface preparations of the page before it. The workbench of the application makes its host calls only
 	// after its start, so the session waits for it before a test makes host calls.
-	select {
-	case err := <-workbench.started:
-		if err != nil {
-			return nil, fmt.Errorf("the workbench did not report that it is ready: %w", err)
-		}
-	case <-time.After(10 * time.Second):
-		return nil, fmt.Errorf("the workbench did not start within 10 s: %v", workbench.Received())
+	// A workbench that never starts leaves the check to the limit of its runner.
+	if err := <-workbench.started; err != nil {
+		return nil, fmt.Errorf("the workbench did not report that it is ready: %w", err)
 	}
 	return &viewSession{config: config, host: opened.Host(), workbench: workbench, window: window, system: system}, nil
 }
@@ -323,19 +318,49 @@ func TestE2EAViewPageShowsInASurfaceHostOfTheNativeView(t *testing.T) {
 	}
 }
 
+// awaitExit returns once the process pid ended. The process is no child of the test, so the kernel reports its exit through a kqueue
+// filter (EVFILT_PROC, NOTE_EXIT); a process that ended before the registration answers ESRCH.
+func awaitExit(t *testing.T, pid int) {
+	t.Helper()
+	queue, err := unix.Kqueue()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unix.Close(queue)
+	change := unix.Kevent_t{}
+	unix.SetKevent(&change, pid, unix.EVFILT_PROC, unix.EV_ADD|unix.EV_ONESHOT)
+	change.Fflags = unix.NOTE_EXIT
+	events := make([]unix.Kevent_t, 1)
+	for {
+		count, err := unix.Kevent(queue, []unix.Kevent_t{change}, events, nil)
+		switch {
+		case errors.Is(err, unix.EINTR):
+			continue
+		case errors.Is(err, unix.ESRCH):
+			return
+		case err != nil:
+			t.Fatalf("watch the exit of process %d: %v", pid, err)
+		case count == 1 && events[0].Flags&unix.EV_ERROR != 0 && unix.Errno(events[0].Data) == unix.ESRCH:
+			return
+		case count == 1 && events[0].Flags&unix.EV_ERROR != 0:
+			t.Fatalf("watch the exit of process %d: %v", pid, unix.Errno(events[0].Data))
+		case count == 1:
+			return
+		}
+	}
+}
+
 // Closing the last view ends its process.
 func TestE2EClosingTheLastViewEndsItsProcess(t *testing.T) {
 	session := viewHost(t)
 	session.layout(t, viewSurface("last", true))
 	var process int32
-	support.Wait(t, "the process of the view", func() bool {
+	support.Poll(t, "the process of the view", "the window facts read the native views from AppKit and WebKit, which report no change of them", func() bool {
 		process = session.row(t, "last").Process
 		return process != 0
 	})
 	session.layout(t)
-	support.Wait(t, "the end of the process of the last view", func() bool {
-		return errors.Is(syscall.Kill(int(process), 0), syscall.ESRCH)
-	})
+	awaitExit(t, int(process))
 }
 
 // A view page that holds the keyboard holds it again after a layout transaction hides and shows its surface.
@@ -346,7 +371,7 @@ func TestE2EAViewPageHoldsTheKeyboardAgainAfterItsSurfaceHidAndShowed(t *testing
 	element, _ := host.ElementOf(session.host, session.window, "keyboard")
 	session.window.Window().Focus()
 	mygo.RunOnMain(func() { session.system.FocusModal(unsafe.Pointer(element.Key), true) })
-	support.Wait(t, "the keyboard in the view page", func() bool { return session.row(t, "keyboard").Focused })
+	support.Poll(t, "the keyboard in the view page", "the window facts read the native views from AppKit and WebKit, which report no change of them", func() bool { return session.row(t, "keyboard").Focused })
 	session.layout(t, viewSurface("keyboard", false))
 	if session.row(t, "keyboard").Focused {
 		t.Fatal("the hidden view page holds the keyboard")
@@ -446,18 +471,18 @@ func TestE2EAReloadRequestStartsTheWorkbenchAgain(t *testing.T) {
 	// Registered after the cleanup layout, so it runs before it and writes the state that the failure left.
 	session.logOnFailure(t)
 	name := session.window.Name()
-	support.Wait(t, "the first start of the workbench", func() bool { return session.workbench.count("shown "+name) > 0 })
+	support.Wait(t, "the first start of the workbench", func() bool { return session.workbench.count("shown "+name) > 0 }, session.workbench.OnRecord)
 	builds, starts := session.workbench.count("build "+name), session.workbench.count("shown "+name)
 	session.layout(t, viewSurface("reloaded", true))
 	// The process of a view page starts after its layout, so the test waits for it: a process read as 0 would leave the end
 	// below unmeasured.
 	var row viewRow
-	support.Wait(t, "the process of the view", func() bool {
+	support.Poll(t, "the process of the view", "the window facts read the native views from AppKit and WebKit, which report no change of them", func() bool {
 		row = session.row(t, "reloaded")
 		return row.Process != 0
 	})
 	session.window.Emit("page-reload")
-	support.Wait(t, "the second start of the workbench", func() bool { return session.workbench.count("shown "+name) == starts+1 })
+	support.Wait(t, "the second start of the workbench", func() bool { return session.workbench.count("shown "+name) == starts+1 }, session.workbench.OnRecord)
 	if got := session.workbench.count("build " + name); got != builds+1 {
 		t.Fatalf("%d builds after the reload, want %d", got, builds+1)
 	}
@@ -471,9 +496,7 @@ func TestE2EAReloadRequestStartsTheWorkbenchAgain(t *testing.T) {
 	if slices.ContainsFunc(session.rows(t), func(other viewRow) bool { return other.View == row.View }) {
 		t.Fatal("the view page of the previous workbench is still in the native view of the window")
 	}
-	support.Wait(t, "the end of the view of the previous workbench", func() bool {
-		return errors.Is(syscall.Kill(int(row.Process), 0), syscall.ESRCH)
-	})
+	awaitExit(t, int(row.Process))
 }
 
 // call runs a host call of the workbench with its request.
@@ -501,13 +524,13 @@ func TestE2EADocumentRegionShowsInTheSurfaceHostOfItsView(t *testing.T) {
 		Regions: []host.CompositionPlacement{{Name: "page", Left: 10, Top: 20, Right: 30, Bottom: 40, Visible: true}}})
 	document.URL = "soksak://probe/ui/page.html"
 	session.call(t, session.host.DocumentLoad, document)
-	support.Wait(t, "the document region in the native view", func() bool {
+	support.Poll(t, "the document region in the native view", "the window facts read the native views from AppKit and WebKit, which report no change of them", func() bool {
 		return slices.ContainsFunc(session.rows(t), func(row viewRow) bool {
 			return row.Document && !row.Hidden && row.X == box.X+10 && row.Y == box.Y+20 && row.Width == box.W-40 && row.Height == box.H-60
 		})
 	})
 	session.layout(t)
-	support.Wait(t, "the end of the document region", func() bool {
+	support.Poll(t, "the end of the document region", "the window facts read the native views from AppKit and WebKit, which report no change of them", func() bool {
 		return !slices.ContainsFunc(session.rows(t), func(row viewRow) bool { return row.Document })
 	})
 }
@@ -549,7 +572,7 @@ func TestE2EALeasedImageRegionHoldsItsFrameWhilePresented(t *testing.T) {
 	t.Cleanup(close)
 	var width, height int
 	var scale float64
-	support.Wait(t, "the raster of the image region", func() bool {
+	support.Poll(t, "the raster of the image region", "the image region reports no change of its raster", func() bool {
 		var placed bool
 		mygo.RunOnMain(func() { width, height, scale, placed = session.system.RasterImage(image) })
 		return placed && width > 0 && height > 0
@@ -573,16 +596,16 @@ func TestE2EALeasedImageRegionHoldsItsFrameWhilePresented(t *testing.T) {
 		}
 	}
 	present(0)
-	support.Wait(t, "the mark of the presented frame", frames[0].InUse)
+	support.Poll(t, "the mark of the presented frame", "IOSurface reports no change of its use mark", frames[0].InUse)
 	present(1)
-	support.Wait(t, "the mark of the replacing frame", frames[1].InUse)
+	support.Poll(t, "the mark of the replacing frame", "IOSurface reports no change of its use mark", frames[1].InUse)
 	mu.Lock()
 	if !slices.Equal(released, []int{1}) {
 		t.Fatalf("the region released %v after the second frame", released)
 	}
 	mu.Unlock()
 	present(2)
-	support.Wait(t, "the mark of the replaced frame to clear", func() bool { return !frames[0].InUse() })
+	support.Poll(t, "the mark of the replaced frame to clear", "IOSurface reports no change of its use mark", func() bool { return !frames[0].InUse() })
 	close()
 	mu.Lock()
 	defer mu.Unlock()

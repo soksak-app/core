@@ -165,7 +165,8 @@ func TestTheMainThreadRunsNoCodeOutsideItsOwnStack(t *testing.T) {
 		}},
 		// The kernel delivers a signal that is sent to the process to a thread that does not block it, the main thread among
 		// them, and the Go signal handler runs on the signal stack of its thread, which the Go heap holds. The main thread
-		// waits in its run loop while a goroutine sends SIGCHLD and SIGURG to the process.
+		// waits in its run loop while a goroutine sends SIGCHLD and SIGURG to the process; the second and the spacing are the input
+		// of that load and order no step.
 		{"asynchronous signals", func() error {
 			pid := os.Getpid()
 			for start := time.Now(); time.Since(start) < time.Second; {

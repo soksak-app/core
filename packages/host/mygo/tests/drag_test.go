@@ -18,7 +18,7 @@ import (
 func TestE2EEachDeliveredDragIsOneStepOfItsCallback(t *testing.T) {
 	framework, _, window := support.Open(t, "drag")
 	window.Show()
-	support.Wait(t, "the show", window.Window().IsVisible)
+	support.Wait(t, "the show", window.Window().IsVisible, window.Window().OnShow)
 	system, err := platform.Current()
 	if err != nil {
 		t.Fatal(err)

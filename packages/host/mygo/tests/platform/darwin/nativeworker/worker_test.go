@@ -3,14 +3,12 @@
 package nativeworker_test
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 	"unsafe"
 
 	"github.com/ebitengine/purego"
@@ -85,9 +83,8 @@ func TestNativeCallbacksUseTheFrameworkWorker(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		defer cancel()
-		command := exec.CommandContext(ctx, executable, "-test.run=^TestNativeCallbacksUseTheFrameworkWorker$", "-test.v")
+		// A child that does not end leaves the check to the limit of its runner, which ends the processes of the check.
+		command := exec.Command(executable, "-test.run=^TestNativeCallbacksUseTheFrameworkWorker$", "-test.v")
 		command.Env = append(os.Environ(), childFlag+"=1")
 		output, err := command.CombinedOutput()
 		if err != nil {

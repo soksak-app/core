@@ -7,7 +7,6 @@ package adapter_test
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,7 +18,6 @@ import (
 	"syscall"
 	"testing"
 	"testing/fstest"
-	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -105,9 +103,8 @@ func TestTheTestApplicationReportsNativeStartupFailureBeforeRunningSelectedTests
 	if !filepath.IsAbs(library) {
 		t.Fatalf("test library path is not absolute: %s", library)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	command := exec.CommandContext(ctx, executable, "-test.run=^TestTheMygoFrameworkNamesTheApplicationOfTheEndpoint$", "-test.v")
+	// A child that does not end leaves the check to the limit of its runner, which ends the processes of the check.
+	command := exec.Command(executable, "-test.run=^TestTheMygoFrameworkNamesTheApplicationOfTheEndpoint$", "-test.v")
 	// A startup test must not accidentally enter a helper selected in its parent.
 	for _, entry := range os.Environ() {
 		name, _, _ := strings.Cut(entry, "=")
@@ -117,9 +114,6 @@ func TestTheTestApplicationReportsNativeStartupFailureBeforeRunningSelectedTests
 	}
 	command.Env = append(command.Env, "SOKSAK_NATIVE_LIBRARY="+library)
 	output, err := command.CombinedOutput()
-	if ctx.Err() != nil {
-		t.Fatalf("native startup failure did not return before the deadline: %v\n%s", ctx.Err(), output)
-	}
 	if err == nil {
 		t.Fatalf("selected framework test bypassed the invalid native provider:\n%s", output)
 	}
@@ -204,23 +198,30 @@ func TestARunPublishesTheEndpointWritesItsLogAndQuitsOnASignal(t *testing.T) {
 	if err := child.Start(); err != nil {
 		t.Fatal(err)
 	}
-	ended := make(chan error, 1)
-	go func() { ended <- child.Wait() }()
+	ended, exited := make(chan error, 1), make(chan struct{})
+	go func() {
+		ended <- child.Wait()
+		close(exited)
+	}()
 	var endpoint host.EndpointInfo
-	for limit := time.Now().Add(10 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+	support.Wait(t, "endpoint.json or the end of the application", func() bool {
 		data, err := os.ReadFile(filepath.Join(config, "endpoint.json"))
 		if err == nil && json.Unmarshal(data, &endpoint) == nil {
-			break
+			return true
 		}
 		select {
-		case failure := <-ended:
-			t.Fatalf("the application ended before it published its endpoint: %v\n%s%s", failure, output.String(), support.Logged(config))
+		case <-exited:
+			return true
 		default:
+			return false
 		}
-		if time.Now().After(limit) {
-			child.Process.Kill()
-			t.Fatalf("endpoint.json did not appear within 10 s\n%s%s", output.String(), support.Logged(config))
+	}, support.Changes(t, config), support.OnClosed(exited))
+	select {
+	case <-exited:
+		if endpoint.PID == 0 {
+			t.Fatalf("the application ended before it published its endpoint: %v\n%s%s", <-ended, output.String(), support.Logged(config))
 		}
+	default:
 	}
 	if endpoint.Application != "mygo" || endpoint.PID != child.Process.Pid {
 		t.Fatalf("the endpoint names %+v", endpoint)
@@ -229,14 +230,10 @@ func TestARunPublishesTheEndpointWritesItsLogAndQuitsOnASignal(t *testing.T) {
 	if err := child.Process.Signal(syscall.SIGTERM); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case failure := <-ended:
-		if failure != nil {
-			t.Fatalf("the application ended with %v after the signal\n%s%s", failure, output.String(), support.Logged(config))
-		}
-	case <-time.After(10 * time.Second):
-		child.Process.Kill()
-		t.Fatalf("the application did not end within 10 s of the signal\n%s%s", output.String(), support.Logged(config))
+	// An application that does not end leaves the check to the limit of its runner.
+	failure := <-ended
+	if failure != nil {
+		t.Fatalf("the application ended with %v after the signal\n%s%s", failure, output.String(), support.Logged(config))
 	}
 	records, err := filepath.Glob(filepath.Join(config, "logs", "host-*.jsonl"))
 	if err != nil || len(records) == 0 {
@@ -373,9 +370,9 @@ func TestMaximizeAndItsState(t *testing.T) {
 		t.Fatal("a new window is maximised, in full screen or minimised")
 	}
 	window.Maximize()
-	support.Wait(t, "the maximize", window.IsMaximized)
+	support.Wait(t, "the maximize", window.IsMaximized, window.Window().OnMaximize)
 	window.Unmaximize()
-	support.Wait(t, "the restore", func() bool { return !window.IsMaximized() })
+	support.Wait(t, "the restore", func() bool { return !window.IsMaximized() }, window.Window().OnUnmaximize)
 }
 
 // contract: application.framework.window-events-are-port-events
@@ -422,17 +419,17 @@ func TestARestartedWorkbenchDrawsNoFrameBeforeItsFirstScreen(t *testing.T) {
 	_, workbench, window := support.Open(t, "restarted")
 	window.Show()
 	draws := func() int { return strings.Count(strings.Join(workbench.Received(), "\n"), "draw restarted") }
-	support.Wait(t, "the start of the workbench", func() bool { return slices.Contains(workbench.Received(), "shown restarted") })
+	support.Wait(t, "the start of the workbench", func() bool { return slices.Contains(workbench.Received(), "shown restarted") }, workbench.OnRecord)
 	workbench.HoldFirstScreen()
 	window.StartWorkbench()
 	before := draws()
 	window.Window().Invalidate()
-	time.Sleep(250 * time.Millisecond)
+	support.HoldsFrames(t, window)
 	if drawn := draws() - before; drawn != 0 {
 		t.Fatalf("the window drew %d frames of its new workbench before its first screen", drawn)
 	}
 	mygo.RunOnMain(window.FirstScreen)
-	support.Wait(t, "the frame of the first screen", func() bool { return draws() > before })
+	support.Wait(t, "the frame of the first screen", func() bool { return draws() > before }, workbench.OnRecord)
 }
 
 // The first visible frame of a new window is the first screen of its workbench (docs/spec/native-host.md#page-start), so the window
@@ -442,14 +439,16 @@ func TestAWindowGoesOnTheScreenWithTheFirstScreenOfItsWorkbench(t *testing.T) {
 	_, workbench, window := support.Open(t, "first")
 	workbench.HoldFirstScreen()
 	window.Show()
-	support.Wait(t, "the start of the workbench", func() bool { return slices.Contains(workbench.Received(), "shown first") })
-	time.Sleep(250 * time.Millisecond)
+	support.Wait(t, "the start of the workbench", func() bool { return slices.Contains(workbench.Received(), "shown first") }, workbench.OnRecord)
+	// The window draws its frames off the screen until the first screen of its workbench.
+	window.Window().Invalidate()
+	support.NextFrame(t, window)
 	if window.Window().IsVisible() {
 		t.Fatal("the window went on the screen before the first screen of its workbench")
 	}
 	before := len(workbench.Received())
 	mygo.RunOnMain(window.FirstScreen)
-	support.Wait(t, "the window on the screen", window.Window().IsVisible)
+	support.Wait(t, "the window on the screen", window.Window().IsVisible, window.Window().OnShow)
 	if !slices.Contains(workbench.Received()[before:], "draw first") {
 		t.Fatalf("the window went on the screen without a frame of its first screen: %v", workbench.Received()[before:])
 	}
@@ -519,7 +518,7 @@ func TestAPreparationHoldsTheFramesOfItsWindowUntilItAsksForItsFrame(t *testing.
 	}
 	window.Show()
 	draws := func() int { return strings.Count(strings.Join(workbench.Received(), "\n"), "draw prepared") }
-	support.Wait(t, "the start of the workbench", func() bool { return slices.Contains(workbench.Received(), "shown prepared") })
+	support.Wait(t, "the start of the workbench", func() bool { return slices.Contains(workbench.Received(), "shown prepared") }, workbench.OnRecord)
 	system, err := platform.Current()
 	if err != nil {
 		t.Fatal(err)
@@ -535,7 +534,7 @@ func TestAPreparationHoldsTheFramesOfItsWindowUntilItAsksForItsFrame(t *testing.
 	}
 	before := draws()
 	window.Window().Invalidate()
-	time.Sleep(250 * time.Millisecond)
+	support.HoldsFrames(t, window)
 	if drawn := draws() - before; drawn != 0 {
 		t.Fatalf("the window drew %d frames in its preparation before it asked for the frame of the transaction", drawn)
 	}
@@ -544,7 +543,7 @@ func TestAPreparationHoldsTheFramesOfItsWindowUntilItAsksForItsFrame(t *testing.
 	if !committed {
 		t.Fatal("the transaction of the window did not commit")
 	}
-	support.Wait(t, "the frame after the transaction", func() bool { return draws() > before })
+	support.Wait(t, "the frame after the transaction", func() bool { return draws() > before }, workbench.OnRecord)
 }
 
 // contract: mygo.framework.frame-reports-reach-the-counters
@@ -570,7 +569,7 @@ func TestTheFrameReportsOfAWindowReachItsCounters(t *testing.T) {
 func TestAWorkbenchStartsAfterTheFirstFrameOfItsWindow(t *testing.T) {
 	_, workbench, window := support.Open(t, "started")
 	window.Show()
-	support.Wait(t, "the start of the workbench", func() bool { return slices.Contains(workbench.Received(), "shown started") })
+	support.Wait(t, "the start of the workbench", func() bool { return slices.Contains(workbench.Received(), "shown started") }, workbench.OnRecord)
 	records := workbench.Received()
 	drawn := slices.Index(records, "draw started")
 	if drawn < 0 || drawn > slices.Index(records, "shown started") {
@@ -580,26 +579,22 @@ func TestAWorkbenchStartsAfterTheFirstFrameOfItsWindow(t *testing.T) {
 
 // contract: mygo.framework.frame-reports-reach-the-counters
 func TestAShownWindowCountsItsFramesAndThenDrawsNone(t *testing.T) {
-	_, _, window := support.Open(t, "frames")
+	_, workbench, window := support.Open(t, "frames")
 	frames := window.Frames()
 	if frames == nil {
 		t.Fatal("a mygo window counts no frame")
 	}
 	window.Show()
-	support.Wait(t, "a window that settled after its frames", func() bool {
+	// The window shows after its first frame, and showing asks for one more. Each frame that builds records its draw, and a step of
+	// the main thread after it runs after the report of that frame; a settled window asked for no frame after its last one, so it
+	// draws none until a request.
+	support.Wait(t, "a window on the screen that settled after its frames", func() bool {
+		mygo.RunOnMain(func() {})
 		got := frames.Counters()
-		return *got.Frames > 0 && *got.CommandBuffers > 0 && *got.Settled
-	})
+		return window.Window().IsVisible() && *got.Frames > 0 && *got.CommandBuffers > 0 && *got.Settled
+	}, workbench.OnRecord, window.Window().OnShow)
 	if frames.Nodes() == 0 {
 		t.Fatal("a window that drew reports no nodes of its last build pass")
-	}
-	// The window shows after its first frame, and showing asks for one more.
-	time.Sleep(500 * time.Millisecond)
-	before := frames.Counters()
-	time.Sleep(time.Second)
-	after := frames.Counters()
-	if *after.Frames != *before.Frames || *after.CommandBuffers != *before.CommandBuffers {
-		t.Fatalf("a settled window went from %d frames and %d command buffers to %d and %d", *before.Frames, *before.CommandBuffers, *after.Frames, *after.CommandBuffers)
 	}
 }
 

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F767-4-5: the checks of the mygo host wait for the events of the states they judge, judge a frame by a presentation notice instead of a quiet time, and read a state that no event reports at each display refresh with the reason in their log.
 - F769-2: the native checks type with automatic spelling correction off, so the correction panel of AppKit, whose event loop waits for a person, no longer stops a check whose account turns the correction on.
 - F767-4-3-1: the wait for the line of a sidecar writer of the Rust host states why it reads the size of a poisoned lock.
 - F769-1-2: the check of the samples at the limit of a native test asks the platform module whether the platform records processes instead of reading the platform name.

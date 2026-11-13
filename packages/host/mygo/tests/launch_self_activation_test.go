@@ -32,6 +32,8 @@ func runSelfActivationHelper() {
 	framework := adapter.NewFramework(&support.SceneWorkbench{})
 	mygo.App.WhenReady(func() {
 		go func() {
+			// No event reports that the application will not activate itself, so the second is the input of the observation: an
+			// activation of its own arrives within it.
 			time.Sleep(time.Second)
 			fmt.Println("active", mygo.App.IsActive() || activated.Load())
 			framework.Quit()

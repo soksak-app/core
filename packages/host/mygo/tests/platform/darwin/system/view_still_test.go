@@ -63,7 +63,7 @@ func TestE2EAStillOfTheWindowShowsTheViewPage(t *testing.T) {
 	const r, g, b = 0x20, 0x40, 0x80
 	var seen [3]uint32
 	near := func(have, want uint32) bool { return have+8 >= want && have <= want+8 }
-	support.Wait(t, "the color of the view page in the picture of the window", func() bool {
+	support.Poll(t, "the color of the view page in the picture of the window", "a picture of the window is a capture, which reports no change of the window", func() bool {
 		seen = session.stillPixel(t)
 		return near(seen[0], r) && near(seen[1], g) && near(seen[2], b)
 	})

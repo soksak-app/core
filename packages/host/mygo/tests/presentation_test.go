@@ -9,7 +9,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo"
 
@@ -26,7 +25,7 @@ import (
 func TestE2EShowWaitsForTheFirstFrame(t *testing.T) {
 	_, workbench, window := support.Open(t, "show")
 	window.Show()
-	support.Wait(t, "the show", window.Window().IsVisible)
+	support.Wait(t, "the show", window.Window().IsVisible, window.Window().OnShow)
 	if !slices.Contains(workbench.Received(), "draw show") {
 		t.Fatalf("the window showed before it drew: %v", workbench.Received())
 	}
@@ -39,12 +38,12 @@ func TestE2EShowWaitsForTheFirstFrame(t *testing.T) {
 func TestE2EAWindowMovedBeforeItsFirstScreenKeepsItsFrame(t *testing.T) {
 	framework, workbench, below := support.Open(t, "below")
 	below.Show()
-	support.Wait(t, "the window below", below.Window().IsVisible)
+	support.Wait(t, "the window below", below.Window().IsVisible, below.Window().OnShow)
 	workbench.HoldFirstScreen()
 	above := framework.NewWindow(host.WindowOptions{Name: "above", Title: "soksak", Width: 400, Height: 300}).(*adapter.Frontend)
 	t.Cleanup(above.Window().Destroy)
 	above.Show()
-	support.Wait(t, "the start of the window above", func() bool { return slices.Contains(workbench.Received(), "shown above") })
+	support.Wait(t, "the start of the window above", func() bool { return slices.Contains(workbench.Received(), "shown above") }, workbench.OnRecord)
 	if above.Window().IsVisible() {
 		t.Fatal("the window above went on the screen before the first screen of its workbench")
 	}
@@ -52,7 +51,7 @@ func TestE2EAWindowMovedBeforeItsFirstScreenKeepsItsFrame(t *testing.T) {
 	above.SetSize(600, 500)
 	above.SetPosition(x-100, y-100)
 	mygo.RunOnMain(above.FirstScreen)
-	support.Wait(t, "the window above", above.Window().IsVisible)
+	support.Wait(t, "the window above", above.Window().IsVisible, above.Window().OnShow)
 	if ax, ay := above.Position(); ax != x-100 || ay != y-100 {
 		t.Fatalf("the window above went on the screen at %v,%v, not at the position %v,%v set before its first screen", ax, ay, x-100, y-100)
 	}
@@ -132,8 +131,15 @@ func TestE2ETheSettledPresentationCallsBackOnTheMainThread(t *testing.T) {
 	}
 }
 
-// quiet is the time in which a window that does not hold its frames draws a requested frame.
-const quiet = 250 * time.Millisecond
+// settledAfter fails unless the last frame of window, which ended before a step of the main thread that runs after it, asked for no
+// frame after it: a settled window draws no frame until a request.
+func settledAfter(t *testing.T, window *adapter.Frontend) {
+	t.Helper()
+	mygo.RunOnMain(func() {})
+	if got := window.Frames().Counters(); !*got.Settled {
+		t.Fatalf("window %s asked for a frame after its frame", window.Name())
+	}
+}
 
 // held opens a window of a framework whose surface layout transactions hold frames.
 func held(t *testing.T, name string) (*adapter.Framework, *support.SceneWorkbench, *adapter.Frontend) {
@@ -226,11 +232,12 @@ func draws(workbench *support.SceneWorkbench, name string) int {
 	return count
 }
 
-// drawsNothing fails when the window draws within quiet.
-func drawsNothing(t *testing.T, workbench *support.SceneWorkbench, name string) {
+// drawsNothing fails unless window holds its frames after the requests made before it (support.HoldsFrames) and drew none of them.
+func drawsNothing(t *testing.T, workbench *support.SceneWorkbench, window *adapter.Frontend) {
 	t.Helper()
+	name := window.Name()
 	before := draws(workbench, name)
-	time.Sleep(quiet)
+	support.HoldsFrames(t, window)
 	if after := draws(workbench, name); after != before {
 		t.Fatalf("window %s drew %d frames while it holds its frames", name, after-before)
 	}
@@ -254,13 +261,13 @@ func TestE2ETheNoticeHoldsTheFramesOfTheWindowUntilTheTransactionEnds(t *testing
 	if err := <-result; err != nil {
 		t.Fatalf("the notice failed: %v", err)
 	}
-	drawsNothing(t, workbench, "hold")
+	drawsNothing(t, workbench, window)
 	before := draws(workbench, "hold")
 	window.Window().Invalidate()
-	drawsNothing(t, workbench, "hold")
+	drawsNothing(t, workbench, window)
 	commit()
-	support.Wait(t, "the frame after the transaction", func() bool { return draws(workbench, "hold") > before })
-	time.Sleep(quiet)
+	support.Wait(t, "the frame after the transaction", func() bool { return draws(workbench, "hold") > before }, workbench.OnRecord)
+	settledAfter(t, window)
 	if count := draws(workbench, "hold") - before; count != 1 {
 		t.Fatalf("the window drew %d frames after the transaction, want one", count)
 	}
@@ -274,12 +281,12 @@ func TestE2EAResizeAndAZoomInATransactionDrawOneFrameAtTheEnd(t *testing.T) {
 	}
 	before := draws(workbench, "resize")
 	window.Window().SetSize(520, 410)
-	drawsNothing(t, workbench, "resize")
+	drawsNothing(t, workbench, window)
 	window.Window().Maximize()
-	drawsNothing(t, workbench, "resize")
+	drawsNothing(t, workbench, window)
 	commit()
-	support.Wait(t, "the frame after the transaction", func() bool { return draws(workbench, "resize") > before })
-	time.Sleep(quiet)
+	support.Wait(t, "the frame after the transaction", func() bool { return draws(workbench, "resize") > before }, workbench.OnRecord)
+	settledAfter(t, window)
 	if count := draws(workbench, "resize") - before; count != 1 {
 		t.Fatalf("the window drew %d frames after the transaction, want one", count)
 	}
@@ -297,13 +304,13 @@ func TestE2EATransactionHoldsTheOtherWindowsAndTheWindowsOpenedMeanwhile(t *test
 	second.Window().Invalidate()
 	third := framework.NewWindow(host.WindowOptions{Name: "third", Title: "soksak", Width: 400, Height: 300}).(*adapter.Frontend)
 	t.Cleanup(third.Window().Destroy)
-	drawsNothing(t, workbench, "second")
+	drawsNothing(t, workbench, second)
 	if count := draws(workbench, "third"); count != 0 {
 		t.Fatalf("the window opened meanwhile drew %d frames", count)
 	}
 	commit()
-	support.Wait(t, "the frame of the other window", func() bool { return draws(workbench, "second") > before })
-	support.Wait(t, "the first frame of the window opened meanwhile", func() bool { return draws(workbench, "third") > 0 })
+	support.Wait(t, "the frame of the other window", func() bool { return draws(workbench, "second") > before }, workbench.OnRecord)
+	support.Wait(t, "the first frame of the window opened meanwhile", func() bool { return draws(workbench, "third") > 0 }, workbench.OnRecord)
 }
 
 func TestE2EANewerPreparationReleasesTheHoldOfItsWindow(t *testing.T) {
@@ -338,13 +345,9 @@ func TestE2EAPreparationAfterTheFrameOfItsTransactionHearsThatFrame(t *testing.T
 	if failed != nil {
 		t.Fatal(failed)
 	}
-	select {
-	case err := <-result:
-		if err != nil {
-			t.Fatalf("the notice of the newer preparation failed: %v", err)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("the notice of the newer preparation did not come within 2 s: it waits for the commit")
+	// A notice that waits for the commit, which comes after it, leaves the check to the limit of its runner.
+	if err := <-result; err != nil {
+		t.Fatalf("the notice of the newer preparation failed: %v", err)
 	}
 	commit()
 	if err := presentation(t, window); err != nil {
@@ -366,13 +369,9 @@ func TestE2EAPreparationThatTakesOverTheLayoutOfAFrameHearsItsFrame(t *testing.T
 	opened := make(chan error, 1)
 	workbench.InNextDraw(func() { opened <- system.BeginLayout(window.NativeWindow(), 1, func(bool) {}) })
 	window.Window().SetSize(520, 410)
-	select {
-	case err := <-opened:
-		if err != nil {
-			t.Fatalf("the frame did not open the layout of its window: %v", err)
-		}
-	case <-time.After(10 * time.Second):
-		t.Fatal("the resized window drew no frame within 10 s")
+	// A frame that never comes leaves the check to the limit of its runner.
+	if err := <-opened; err != nil {
+		t.Fatalf("the frame did not open the layout of its window: %v", err)
 	}
 	commit := begin(t, window, 2)
 	window.Window().SetSize(560, 430)
@@ -382,13 +381,9 @@ func TestE2EAPreparationThatTakesOverTheLayoutOfAFrameHearsItsFrame(t *testing.T
 	if failed != nil {
 		t.Fatal(failed)
 	}
-	select {
-	case err := <-result:
-		if err != nil {
-			t.Fatalf("the notice of the preparation that took the layout over failed: %v", err)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("the notice of the preparation that took the layout over did not come within 2 s: it waits for the commit")
+	// A notice that waits for the commit, which comes after it, leaves the check to the limit of its runner.
+	if err := <-result; err != nil {
+		t.Fatalf("the notice of the preparation that took the layout over failed: %v", err)
 	}
 	commit()
 	if err := presentation(t, window); err != nil {
@@ -407,13 +402,9 @@ func TestE2EAFrameThatOpensTheLayoutLeavesItsWindowSettled(t *testing.T) {
 	opened := make(chan error, 1)
 	workbench.InNextDraw(func() { opened <- system.BeginLayout(window.NativeWindow(), 1, func(bool) {}) })
 	mygo.RunOnMain(window.Invalidate)
-	select {
-	case err := <-opened:
-		if err != nil {
-			t.Fatalf("the frame did not open the layout of its window: %v", err)
-		}
-	case <-time.After(10 * time.Second):
-		t.Fatal("the window drew no frame within 10 s")
+	// A frame that never comes leaves the check to the limit of its runner.
+	if err := <-opened; err != nil {
+		t.Fatalf("the frame did not open the layout of its window: %v", err)
 	}
 	// The step runs after the frame that opened the layout ended.
 	mygo.RunOnMain(func() {})
@@ -448,10 +439,12 @@ func TestE2ETheSettledPresentationWaitsForTheTransactionOfAnotherWindow(t *testi
 		t.Fatal(failed)
 	}
 	before := draws(workbench, "other")
+	// The transaction holds the frames of the other window, so its settled presentation cannot answer before the commit.
+	drawsNothing(t, workbench, other)
 	select {
 	case err := <-result:
 		t.Fatalf("the settled presentation answered %v during the transaction of the other window", err)
-	case <-time.After(quiet):
+	default:
 	}
 	commit()
 	if err := <-result; err != nil {

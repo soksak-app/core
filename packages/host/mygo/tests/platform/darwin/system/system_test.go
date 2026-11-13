@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -19,10 +20,10 @@ import (
 	"syscall"
 	"testing"
 	"testing/fstest"
-	"time"
 
 	"github.com/ebitengine/purego/objc"
 	"github.com/egoist/mygo"
+	"github.com/fsnotify/fsnotify"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	adapter "github.com/soksak-app/core/packages/host/mygo/src"
@@ -59,10 +60,11 @@ var steps = map[string]func(w *systemWorkbench, window host.Frontend){
 	},
 	"update": func(w *systemWorkbench, window host.Frontend) {
 		w.windowReady(window)
-		// The application takes a quit once it published its endpoint.
-		endpoint := filepath.Join(os.Getenv(systemHelper), "endpoint.json")
-		for _, err := os.Stat(endpoint); err != nil; _, err = os.Stat(endpoint) {
-			time.Sleep(10 * time.Millisecond)
+		// The application takes a quit once it published its endpoint, which fsnotify reports as an entry of the configuration
+		// directory.
+		if err := awaitEndpoint(os.Getenv(systemHelper)); err != nil {
+			fmt.Println("the endpoint did not appear:", err)
+			return
 		}
 		context := host.WithFrontend(context.Background(), window)
 		state, err := w.host.AppUpdateState(context)
@@ -152,6 +154,35 @@ func openURLs(values ...string) {
 	})
 }
 
+// awaitEndpoint returns once endpoint.json is an entry of the configuration directory config. fsnotify reports each change of an
+// entry of the directory, and the watch starts before the first look, so no change between the look and the wait is lost.
+func awaitEndpoint(config string) error {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return err
+	}
+	defer watcher.Close()
+	if err := watcher.Add(config); err != nil {
+		return err
+	}
+	endpoint := filepath.Join(config, "endpoint.json")
+	for {
+		if _, err := os.Stat(endpoint); err == nil {
+			return nil
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		select {
+		case _, open := <-watcher.Events:
+			if !open {
+				return fmt.Errorf("the watch of %s ended", config)
+			}
+		case err := <-watcher.Errors:
+			return err
+		}
+	}
+}
+
 // running is a child process of systemHelper and the lines of its standard output.
 type running struct {
 	child  *exec.Cmd
@@ -192,43 +223,30 @@ func startStep(t *testing.T, step, config, executable string, env ...string) *ru
 	return run
 }
 
-// expect returns the first line of the standard output that holds text, within the limit of a test. The lines arrive in the order of
+// expect returns the first line of the standard output that holds text. The lines arrive in the order of
 // the goroutines of the host, so a line that an earlier expect passed still counts.
 func (r *running) expect(t *testing.T, text string) string {
 	t.Helper()
 	if index := slices.IndexFunc(r.seen, func(line string) bool { return strings.Contains(line, text) }); index >= 0 {
 		return r.seen[index]
 	}
-	limit := time.After(10 * time.Second)
-	for {
-		select {
-		case line, open := <-r.lines:
-			if !open {
-				t.Fatalf("the application ended before it wrote %q, after %q\n%s", text, r.seen, support.Logged(r.config))
-			}
-			r.seen = append(r.seen, line)
-			if strings.Contains(line, text) {
-				return line
-			}
-		case <-limit:
-			t.Fatalf("the application did not write %q within 10 s, after %q\n%s", text, r.seen, support.Logged(r.config))
+	// An application that neither writes the line nor ends leaves the check to the limit of its runner.
+	for line := range r.lines {
+		r.seen = append(r.seen, line)
+		if strings.Contains(line, text) {
+			return line
 		}
 	}
+	t.Fatalf("the application ended before it wrote %q, after %q\n%s", text, r.seen, support.Logged(r.config))
+	return ""
 }
 
 // finished waits for the end of an application that quits by itself and returns its event log.
 func (r *running) finished(t *testing.T) string {
 	t.Helper()
-	limit := time.After(10 * time.Second)
-	for open := true; open; {
-		select {
-		case line, more := <-r.lines:
-			if open = more; open {
-				r.seen = append(r.seen, line)
-			}
-		case <-limit:
-			t.Fatalf("the application did not end within 10 s, after %q\n%s", r.seen, support.Logged(r.config))
-		}
+	// An application that does not end leaves the check to the limit of its runner.
+	for line := range r.lines {
+		r.seen = append(r.seen, line)
 	}
 	if failure := <-r.ended; failure != nil {
 		t.Fatalf("the application ended with %v, after %q\n%s", failure, r.seen, support.Logged(r.config))
@@ -243,7 +261,7 @@ func (r *running) quit(t *testing.T) string {
 	support.Wait(t, "endpoint.json", func() bool {
 		_, err := os.Stat(filepath.Join(r.config, "endpoint.json"))
 		return err == nil
-	})
+	}, support.Changes(t, r.config))
 	if err := r.child.Process.Signal(syscall.SIGTERM); err != nil {
 		t.Fatal(err)
 	}
@@ -387,7 +405,7 @@ func TestAFileDroppedOnAWindowReachesItsWorkbenchAsTheTextOfTheFileDropView(t *t
 			received = workbench.Received()[index]
 		}
 		return index >= 0
-	})
+	}, workbench.OnRecord)
 	// The port delivers the JSON text of the drop as its one value, and the workbench parses it, as the page does.
 	var drop struct {
 		URLs []string `json:"urls"`
@@ -481,7 +499,7 @@ func TestAnUpdateQuitsTheApplicationAndStartsTheCommandThatReplacesItsBundle(t *
 	support.Wait(t, "the command of the update", func() bool {
 		_, err := os.Stat(arguments)
 		return err == nil
-	})
+	}, support.Changes(t, filepath.Dir(arguments)))
 	data, err := os.ReadFile(arguments)
 	if err != nil {
 		t.Fatal(err)

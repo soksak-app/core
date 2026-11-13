@@ -35,16 +35,30 @@ func runLaunchHelper() {
 	mygo.App.WhenReady(func() {
 		go func() {
 			window := framework.NewWindow(host.WindowOptions{Name: "launch", Title: "soksak", Width: 400, Height: 300}).(*adapter.Frontend)
+			// The window reports its show and its focus (OnShow, OnFocus); each is subscribed before its request, so neither is lost.
+			shown, focused := make(chan struct{}, 1), make(chan struct{}, 1)
+			window.Window().OnShow(func() {
+				select {
+				case shown <- struct{}{}:
+				default:
+				}
+			})
+			window.Window().OnFocus(func() {
+				select {
+				case focused <- struct{}{}:
+				default:
+				}
+			})
 			window.Show()
-			for limit := time.Now().Add(10 * time.Second); !window.Window().IsVisible() && time.Now().Before(limit); time.Sleep(5 * time.Millisecond) {
-			}
+			<-shown
 			fmt.Println("visible", window.Window().IsVisible())
+			// No event reports that the system will not activate the application, so the second is the input of the observation:
+			// the activation that a launch brings arrives within it.
 			time.Sleep(time.Second)
 			fmt.Println("active", mygo.App.IsActive() || activated.Load())
 			// Focus is a request of the person, the one step that activates the application.
 			window.Focus()
-			for limit := time.Now().Add(10 * time.Second); !window.IsFocused() && time.Now().Before(limit); time.Sleep(5 * time.Millisecond) {
-			}
+			<-focused
 			fmt.Println("focused", window.IsFocused())
 			framework.Quit()
 		}()
