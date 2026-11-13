@@ -49,6 +49,21 @@ export function createMemorySaver({
   let timer = null;
   let pressure = { level: "normal", seq: 0 };
   let pressing = false;
+  // The runs of the deadline and of the pressure in progress, and the waits of idle for the end of the last one.
+  let running = 0;
+  let idleWaits = [];
+
+  /** Runs run, an unload run of the deadline or of the pressure, and resolves the waits of idle when the last run ends. */
+  function tracked(run) {
+    running++;
+    return run().finally(() => {
+      running--;
+      if (running > 0) return;
+      const waits = idleWaits;
+      idleWaits = [];
+      for (const resolve of waits) resolve();
+    });
+  }
 
   const delayMs = () => delay() * MINUTE;
   const sorted = (reasons) => ORDER.filter((reason) => reasons.has(reason));
@@ -87,7 +102,7 @@ export function createMemorySaver({
       earliest = Math.min(earliest, deadline(entry));
     }
     if (earliest === Infinity) return;
-    timer = setTimeout(fire, Math.max(0, earliest - now()));
+    timer = setTimeout(() => tracked(fire), Math.max(0, earliest - now()));
   }
 
   async function fire() {
@@ -284,13 +299,18 @@ export function createMemorySaver({
       }
       pressure = { level: report.level, seq: report.seq };
       changed();
-      if (pressure.level !== "normal") relieve();
+      if (pressure.level !== "normal") tracked(relieve);
     },
     /** Re-arms the scheduler after a setting changed. */
     settingsChanged() {
       arm();
-      if (pressure.level !== "normal") relieve();
+      if (pressure.level !== "normal") tracked(relieve);
     },
+    /**
+     * Resolves when no unload run of a deadline or of the pressure is in progress, at once when none is; a run that waits for
+     * a step of its dependencies resolves it only after that step.
+     */
+    idle: () => (running === 0 ? Promise.resolve() : new Promise((resolve) => idleWaits.push(resolve))),
     /** Re-arms the scheduler after a protection of a tab report or the mark changed. */
     protectionsChanged: () => arm(),
     /** Whether the memory saver knows the tab. */

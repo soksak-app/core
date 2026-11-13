@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F767-3-2-1: memory saver 는 deadline 이나 pressure 의 unload run 이 진행 중이지 않을 때 `idle` 을 resolve 하고, 그 check 는 microtask 40 개를 yield 하는 대신 그것을 기다린다.
 - F767-4-5: mygo host 의 check 는 판정하는 state 의 event 를 기다리고, 조용한 시간 대신 presentation notice 로 frame 을 판정하며, event 가 알리지 않는 state 는 display refresh 마다 읽고 그 이유를 log 에 적는다.
 - F769-2: native check 는 자동 맞춤법 교정을 끈 채로 입력한다. 그래서 계정에서 교정을 켠 경우에도 사람을 기다리는 AppKit 교정 panel 의 event loop 가 check 를 멈추지 않는다.
 - F767-4-3-1: Rust host 의 sidecar writer line 대기는 poison 된 lock 의 크기를 읽는 이유를 적는다.

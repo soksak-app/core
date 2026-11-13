@@ -9,8 +9,6 @@ const { createMemorySaver } = await import("../memory-saver.js");
 const { memoryPlacement } = await import("../memory-placement.js");
 
 const MINUTE = 60_000;
-// Lets the awaited steps of an attempt run; the fakes resolve in microtasks.
-const settle = async () => { for (let i = 0; i < 40; i++) await Promise.resolve(); };
 const pluginOf = (id) => (id.startsWith("u-") ? "undeclared" : id.startsWith("g-") ? "background" : "fixture");
 const tabs = (...ids) => ids.map((id) => ({ id, plugin: pluginOf(id), kind: "tab" }));
 const named = (name) => emitted.filter((entry) => entry.event === name).map((entry) => entry.fields);
@@ -49,10 +47,10 @@ test("the delay unloads a hidden tab and a show restores it", async () => {
   saver.observe(new Set(["a", "b"]), tabs("a", "b"));
   saver.observe(new Set(["b"]), tabs("a", "b"));
   mock.timers.tick(120 * MINUTE - 1);
-  await settle();
+  await saver.idle();
   assert.equal(saver.unloaded("a"), false);
   mock.timers.tick(1);
-  await settle();
+  await saver.idle();
   assert.equal(saver.unloaded("a"), true);
   assert.deepEqual(state.commits, [["a"]]);
   assert.deepEqual(named("workbench.tab.unloaded"), [{ tab: "a", plugin: "fixture", trigger: "delay" }]);
@@ -73,7 +71,7 @@ async function protectedBy(setup, options = {}) {
   saver.observe(new Set(["x"]), tabs("x", tab));
   for (let step = 0; step < 2; step++) {
     mock.timers.tick(120 * MINUTE);
-    await settle();
+    await saver.idle();
   }
   assert.equal(saver.unloaded(tab), false);
   assert.deepEqual(named("workbench.tab.unloaded"), []);
@@ -84,7 +82,7 @@ test("shown protects the shown tab", async () => {
   const { saver } = harness();
   saver.observe(new Set(["a"]), tabs("a"));
   mock.timers.tick(240 * MINUTE);
-  await settle();
+  await saver.idle();
   assert.equal(saver.unloaded("a"), false);
   assert.deepEqual(saver.reasons("a"), ["shown"]);
 });
@@ -142,7 +140,7 @@ test("an unload stores the session of the tab first, and a restore gives the reg
   });
   saver.observe(new Set(["b"]), tabs("a", "b"));
   mock.timers.tick(120 * MINUTE);
-  await settle();
+  await saver.idle();
   assert.equal(saver.unloaded("a"), true);
   assert.deepEqual(stored, ["a"]);
   assert.deepEqual(restored, []);
@@ -159,10 +157,10 @@ test("turning the setting on keeps the hidden time of each tab", async () => {
   state.enabled = true;
   saver.settingsChanged();
   mock.timers.tick(20 * MINUTE - 1);
-  await settle();
+  await saver.idle();
   assert.equal(saver.unloaded("a"), false);
   mock.timers.tick(1);
-  await settle();
+  await saver.idle();
   assert.equal(saver.unloaded("a"), true);
 });
 
@@ -172,45 +170,52 @@ test("a tab mounted without being shown takes its mount time as its hidden time"
   mock.timers.tick(30 * MINUTE);
   saver.observe(new Set(["x"]), tabs("x", "a"));
   mock.timers.tick(120 * MINUTE - 1);
-  await settle();
+  await saver.idle();
   assert.equal(saver.unloaded("a"), false);
   mock.timers.tick(1);
-  await settle();
+  await saver.idle();
   assert.equal(saver.unloaded("a"), true);
 });
 
 test("one critical report unloads hidden tabs one at a time, least recently shown first, until a normal report", async () => {
+  // Each commit waits for its gate; arrival resolves when the next commit asks for its gate.
   const gates = [];
-  const { saver } = harness({ commit: () => new Promise((resolve) => gates.push(resolve)) });
+  let arrived;
+  const arrival = () => new Promise((resolve) => { arrived = resolve; });
+  const { saver } = harness({ commit: () => new Promise((resolve) => { gates.push(resolve); arrived(); }) });
   // a, b and c are shown in this order and then hidden; recent does not protect under pressure.
   for (const id of ["c", "a", "b", "d"]) {
     saver.observe(new Set([id]), tabs("a", "b", "c", "d"));
     mock.timers.tick(MINUTE);
   }
+  let next = arrival();
   saver.pressure({ level: "critical", seq: 1 });
-  await settle();
+  await next;
   assert.equal(gates.length, 1);
+  next = arrival();
   gates[0]();
-  await settle();
+  await next;
   assert.equal(gates.length, 2);
+  next = arrival();
   gates[1]();
-  await settle();
+  await next;
   assert.equal(gates.length, 3);
   saver.pressure({ level: "normal", seq: 2 });
   gates[2]();
-  await settle();
+  await saver.idle();
   assert.deepEqual(named("workbench.tab.unloaded").map((fields) => [fields.tab, fields.trigger]),
     [["c", "pressure"], ["a", "pressure"], ["b", "pressure"]]);
   assert.equal(saver.unloaded("d"), false);
   // A normal report stops the unloads of a later critical report after the unload in progress.
   saver.observe(new Set(["a"]), tabs("a", "b", "c", "d"));
   saver.observe(new Set(["b"]), tabs("a", "b", "c", "d"));
+  next = arrival();
   saver.pressure({ level: "critical", seq: 3 });
-  await settle();
+  await next;
   assert.equal(gates.length, 4);
   saver.pressure({ level: "normal", seq: 4 });
   gates[3]();
-  await settle();
+  await saver.idle();
   assert.equal(gates.length, 4);
   assert.equal(named("workbench.tab.unloaded").length, 4);
 });
@@ -220,7 +225,7 @@ test("a pressure report without a candidate is workbench.tab.unload.skipped", as
   state.keeps.set("a", ["keep:busy"]);
   saver.observe(new Set(["x"]), tabs("a", "x"));
   saver.pressure({ level: "warn", seq: 7 });
-  await settle();
+  await saver.idle();
   assert.deepEqual(named("workbench.tab.unload.skipped"), [{ trigger: "pressure", seq: 7, reasons: ["shown", "keep:busy"] }]);
   assert.equal(saver.unloaded("a"), false);
 });
@@ -234,15 +239,17 @@ for (const [name, interrupt, reasons] of [
   ["a modified report", (saver, state) => { state.keeps.set("a", ["keep:modified"]); saver.protectionsChanged(); }, ["keep:modified"]],
 ]) {
   test(`${name} during a pending awaited step leaves the tab loaded`, async () => {
+    // asked resolves when the attempt reads the interactionState, which then waits for release.
     let release;
-    const { saver, state } = harness({ interaction: () => new Promise((resolve) => { release = resolve; }) });
+    let ask;
+    const asked = new Promise((resolve) => { ask = resolve; });
+    const { saver, state } = harness({ interaction: () => new Promise((resolve) => { release = resolve; ask(); }) });
     saver.observe(new Set(["x"]), tabs("a", "x"));
     mock.timers.tick(120 * MINUTE);
-    await settle();
-    assert.equal(typeof release, "function");
+    await asked;
     interrupt(saver, state);
     release(undefined);
-    await settle();
+    await saver.idle();
     assert.equal(saver.unloaded("a"), false);
     assert.deepEqual(state.commits, []);
     assert.deepEqual(named("workbench.tab.unload.skipped"), [{ trigger: "delay", seq: 0, reasons }]);
@@ -253,7 +260,7 @@ test("a commit after an unload neither declares the tab nor releases it as a clo
   const { saver } = harness();
   saver.observe(new Set(["x"]), tabs("a", "x"));
   mock.timers.tick(120 * MINUTE);
-  await settle();
+  await saver.idle();
   assert.equal(saver.unloaded("a"), true);
   const placed = saver.place([{ id: "x" }, { id: "a" }]);
   // The tab stays in the layout: it is among the retained surfaces, so the commit does not release it as a closed tab
@@ -351,7 +358,7 @@ test("the status lists each tab with its state, reasons and times", async () => 
     ],
   });
   mock.timers.tick(120 * MINUTE);
-  await settle();
+  await saver.idle();
   assert.deepEqual(saver.status().tabs[1], { tab: "a", plugin: "fixture", kind: "tab", state: "unloaded", reasons: [], hiddenAt: hidden,
     unloadAt: null, checkedAt: hidden + 120 * MINUTE });
 });
@@ -360,7 +367,7 @@ test("a rejected interactionState read ends the attempt with a reported failure 
   const { saver, state } = harness({ interaction: async () => { throw new Error("document region page is gone"); } });
   saver.observe(new Set(["b"]), tabs("a", "b"));
   mock.timers.tick(120 * MINUTE);
-  await settle();
+  await saver.idle();
   assert.equal(saver.unloaded("a"), false);
   assert.deepEqual(state.commits, []);
   assert.deepEqual(named("workbench.tab.unload.failed"),
@@ -368,10 +375,10 @@ test("a rejected interactionState read ends the attempt with a reported failure 
   assert.deepEqual(state.failures, ["memory saver: tab a: unload failed: document region page is gone"]);
   // A read that keeps failing runs once per delay, not again at the deadline that passed.
   mock.timers.tick(0);
-  await settle();
+  await saver.idle();
   assert.equal(state.failures.length, 1);
   mock.timers.tick(120 * MINUTE);
-  await settle();
+  await saver.idle();
   assert.equal(state.failures.length, 2);
   assert.deepEqual(state.states, []);
 });
@@ -385,21 +392,21 @@ for (const [step, options] of Object.entries({
     const { saver, state } = harness(options);
     saver.observe(new Set(["b"]), tabs("a", "b"));
     mock.timers.tick(120 * MINUTE);
-    await settle();
+    await saver.idle();
     const attempts = () => named("workbench.tab.unload.failed").length;
     assert.equal(attempts(), 1);
     // A tick of 0 runs a timer that the end of the attempt set for the same time.
     for (let turn = 0; turn < 5; turn++) {
       mock.timers.tick(0);
-      await settle();
+      await saver.idle();
     }
     assert.equal(attempts(), 1);
     assert.equal(saver.status().tabs.find(({ tab }) => tab === "a").unloadAt, 1_000_000 + 240 * MINUTE);
     mock.timers.tick(120 * MINUTE - 1);
-    await settle();
+    await saver.idle();
     assert.equal(attempts(), 1);
     mock.timers.tick(1);
-    await settle();
+    await saver.idle();
     assert.equal(attempts(), 2);
     assert.equal(saver.unloaded("a"), false);
     assert.ok(state.failures.length >= 2);
@@ -410,7 +417,7 @@ test("a shown unloaded tab is restoring until its surface mounts, and a failed r
   const { saver, state } = harness();
   saver.observe(new Set(["b"]), tabs("a", "b"));
   mock.timers.tick(120 * MINUTE);
-  await settle();
+  await saver.idle();
   saver.observe(new Set(["a"]), tabs("a", "b"));
   assert.deepEqual(state.states, [["a", "unloaded"], ["a", "restoring"]]);
   assert.deepEqual(named("workbench.tab.restored"), []);
@@ -435,7 +442,7 @@ test("a failed commit after the tab is marked returns it to loaded with a report
   });
   saver.observe(new Set(["b"]), tabs("a", "b"));
   mock.timers.tick(120 * MINUTE);
-  await settle();
+  await saver.idle();
   assert.equal(saver.unloaded("a"), false);
   assert.equal(saver.state("a"), "loaded");
   // The commit after the failure declares the surface of the tab again.
@@ -460,7 +467,7 @@ test("a refused session history keeps the restore open, and the later mount stil
   const { saver, state } = harness();
   saver.observe(new Set(["b"]), tabs("a", "b"));
   mock.timers.tick(120 * MINUTE);
-  await settle();
+  await saver.idle();
   saver.observe(new Set(["a"]), tabs("a", "b"));
   // The region refuses its history during the mount and attaches again without it.
   saver.historyRefused("a", "fixture", "document region page: interactionState is not a session history");
