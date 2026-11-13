@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- 한국어 agent guidance: 표준 해법과 workaround 를 영어 본문의 용어로 옮긴다 (F796).
 - 실제 입력의 규칙: test 는 데이터, fixture 입력 위의 실제 program, 답하는 tier 의 실제 platform, 선언된 지점의 fault injection 으로만 code 를 판정하고, wire consumer 는 producer 가 통과하는 계약 사례를 실행한다. agent guidance 는 더 이상 consumer test 가 fake 를 쓰게 하지 않는다 (F795-2).
 - fixture 이름: `e2e/fixtures` 의 fixture plugin 과 sidecar, `sok` 시험의 replay role, update 시험의 bundle fixture, debug 시험의 잘못된 PNG fixture 를 fake 대신 fixture 로 부른다 (F795-1).
 - F738-1: host contract 의 audit 는 test harness 없이 도는 Rust test target 의 시험을 세며, 그 target 을 Rust crate 의 manifest 에서 읽는다.
