@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -150,7 +150,8 @@ for (const [title, name, mutation, expectedCode, expectedOutput] of [
   ["required mutation command rejects invalid evidence and handles required baseline", "required baseline", { source: "export const value = 0;" }, 2, /FAIL baseline/],
 ]) {
   test(title, { timeout: 15000 }, async (t) => {
-    const root = await mkdtemp(join(tmpdir(), "soksak-break-command-"));
+    // Node resolves the path of the main module, so the command reads its repository at the real path of the folder.
+    const root = await realpath(await mkdtemp(join(tmpdir(), "soksak-break-command-")));
     t.after(() => rm(root, { recursive: true, force: true }));
     const packageRoot = join(root, "packages/soksak");
     const selected = name.startsWith("required ");

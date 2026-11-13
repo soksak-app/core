@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F770: mutation runner 의 break command check 는 evidence folder 를 임시 repository 의 실제 경로와 비교한다. 그래서 임시 folder 가 link 인 macOS 에서도 통과한다.
 - F767-4-2: 두 host 의 panic check 의 child process 는 10 초 sleep 뒤에 실패하는 대신, parent 가 열어 두는 standard input 의 끝을 기다린다.
 - F769-1-1: native 시험 한도의 sample check 는 각 platform 의 결과를 판정하며, 기록이 없는 platform 은 그 이름 붙은 오류로 통과한다.
 - F767-4-1: 두 host 의 endpoint check 는 10 ms 마다 log 를 읽는 대신 자기 record 를 담아 쓴 event writer 의 batch 를 기다린다.
