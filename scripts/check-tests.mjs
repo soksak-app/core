@@ -589,6 +589,18 @@ const FEATURE_LINKS = [
   },
 
   {
+    id: "F766",
+    implementation: [
+      { file: "packages/host/go/tests/platform/darwin/system/sidecars_test.go", symbol: "func TestASidecarThatExitsFailsWhileAProcessOutsideItsGroupKeepsTheOutput(t *testing.T) {" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/platform/darwin/system/sidecars_test.go", id: "TestASidecarThatExitsFailsWhileAProcessOutsideItsGroupKeepsTheOutput" },
+    ],
+    expected: "The second perl process of the Go check leaves the group before the script reads the request, so the end of the group does not kill it before it writes its process id.",
+    levels: ["unit"],
+  },
+
+  {
     id: "F765",
     implementation: [
       { file: "native/darwin/tests/input_panels_test.m", symbol: "static void whileTracking(NSMenu *menu, NSString *what, BOOL ends, BOOL *tracked, void (^attempt)(void)) {" },

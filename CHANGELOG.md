@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F766: the Go check of a sidecar that exits while a process outside its group keeps the output lets that process leave the group before the script exits, as the Rust check does, so the end of the group no longer kills it before it writes its process id.
 - F765: `input_panels_test` no longer cancels a context menu that its release ends, so the item that the menu runs at the end of its dismissal is no longer dropped in some runs.
 - F764: `image_region_test --activation` compares a recorded press origin with the location of the dispatched event, which AppKit computes from the location on the screen, so a machine with several displays no longer fails it.
 - F763: `surface_layout_test` judges the display refresh of the commit against the settled refresh by refresh, so the rounding between two times of one refresh no longer fails it.

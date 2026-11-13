@@ -322,10 +322,13 @@ func TestASidecarThatExitsFailsWhileItsChildKeepsTheOutput(t *testing.T) {
 
 // A process that left the process group of the sidecar and keeps its output open does not hold the end of the sidecar
 // (docs/spec/sidecars.md#declaration-and-startup).
+// The first perl process exits only after the second one left the group: it reads its end of a pipe whose write end the second
+// process closes after setsid. Without that order the script could read the request and exit while the second process was
+// still in the group, the end of the group killed it before it wrote its process id, and the check waited for that id.
 // contract: sidecars.end.is-the-process-exit
 func TestASidecarThatExitsFailsWhileAProcessOutsideItsGroupKeepsTheOutput(t *testing.T) {
 	sidecars, directory := support.ScriptSidecars(t, "#!/bin/sh\necho $$ > DIR/pid\n"+
-		"/usr/bin/perl -MPOSIX -e 'exit if fork; POSIX::setsid(); open(my $f, \">\", \"DIR/child\"); print $f $$; close $f; open(my $h, \"<\", \"DIR/hold\"); my $line = <$h>'\n"+
+		"/usr/bin/perl -MPOSIX -e 'pipe(my $r, my $w) or die; if (fork) { close $w; my $left = <$r>; exit } close $r; POSIX::setsid() or die; close $w; open(my $f, \">\", \"DIR/child\"); print $f $$; close $f; open(my $h, \"<\", \"DIR/hold\"); my $line = <$h>'\n"+
 		"read request\nexit 3\n")
 	holdFIFO(t, directory, "hold")
 	fifo := childFIFO(t, directory, "child")
