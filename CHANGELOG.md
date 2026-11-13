@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F767-4-1-1: the endpoint checks of the Rust host no longer import a type they do not use, so `make check-rust-clippy` passes.
 - F770: the break command checks of the mutation runner compare the evidence folder with the real path of their temporary repository, so they pass on macOS, where the temporary folder is a link.
 - F767-4-2: the child processes of the panic checks of both hosts wait for the end of their standard input, which the parent holds open, instead of failing after a sleep of 10 seconds.
 - F769-1-1: the check of the samples at the limit of a native test judges the result of each platform, and a platform without the records passes it with their named error.
