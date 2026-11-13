@@ -1,21 +1,23 @@
 // Verifies that `make -C native/darwin repeat` and `repeat-suite` name each native test when it starts and report its result and
-// elapsed time, as `make test` does through scripts/native-tests.mjs. The test executables are replaced by fake executables in a
-// temporary build folder: `make -o <file>` treats each fake as up to date, so the Makefile builds nothing and the fakes run as the
-// tests would.
+// elapsed time, as `make test` does through scripts/native-tests.mjs. The test executables are fixture programs of
+// scripts/test/fixtures/native-repeat, compiled by the real clang into a temporary build folder: `make -o <file>` treats each one as
+// up to date, so the Makefile builds nothing and the fixture programs run as the tests would.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 const native = resolve(import.meta.dirname, '../../native/darwin');
+const fixtures = fileURLToPath(new URL('./fixtures/native-repeat/', import.meta.url));
 
-function fake(directory, relative, body) {
-  const path = join(directory, relative);
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `#!/bin/sh\n${body}\n`);
-  chmodSync(path, 0o755);
+// Compiles the fixture program source of fixtures/native-repeat into <build>/<name> with clang.
+function compile(build, name, source) {
+  const path = join(build, name);
+  const result = spawnSync('clang', ['-o', path, join(fixtures, source)], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
   return path;
 }
 
@@ -40,24 +42,26 @@ function nativeTestEntries() {
 test('make repeat names the native test of each run, reports its result and elapsed time, and stops at a failed run', (t) => {
   const build = mkdtempSync(join(tmpdir(), 'soksak-native-repeat-'));
   t.after(() => rmSync(build, { recursive: true }));
-  const executable = fake(build, 'fake_test', 'counter="$0.count"; n=$(cat "$counter" 2>/dev/null || echo 0); n=$((n+1)); echo $n > "$counter"; echo "probe $n"; [ "$n" -lt 2 ]');
-  const result = spawnSync('make', ['-C', native, 'repeat', 'TEST=fake_test', 'COUNT=3', `BUILD=${build}`, '-o', executable], {
+  const executable = compile(build, 'repeat_probe_test', 'repeat_probe.c');
+  const result = spawnSync('make', ['-C', native, 'repeat', 'TEST=repeat_probe_test', 'COUNT=3', `BUILD=${build}`, '-o', executable], {
     encoding: 'utf8', timeout: 60000,
   });
-  assert.match(result.stdout, /^RUN  fake_test \(1 running, limit 120\.000s\)$/m, result.stdout + result.stderr);
-  assert.match(result.stdout, /^PASS fake_test \d+\.\d{3}s$/m, result.stdout + result.stderr);
-  assert.match(result.stdout, /^FAIL fake_test \d+\.\d{3}s exit 1$/m, result.stdout + result.stderr);
+  assert.match(result.stdout, /^RUN  repeat_probe_test \(1 running, limit 120\.000s\)$/m, result.stdout + result.stderr);
+  assert.match(result.stdout, /^PASS repeat_probe_test \d+\.\d{3}s$/m, result.stdout + result.stderr);
+  assert.match(result.stdout, /^FAIL repeat_probe_test \d+\.\d{3}s exit 1$/m, result.stdout + result.stderr);
   assert.match(result.stdout, /^  probe 2$/m, 'the output of the failed run is missing');
   assert.equal(result.stdout.split('\n').filter((line) => line.startsWith('RUN  ')).length, 2, result.stdout);
   assert.notEqual(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stderr, /FAIL: fake_test run 2 of 3; /, result.stdout + result.stderr);
+  assert.match(result.stderr, /FAIL: repeat_probe_test run 2 of 3; /, result.stdout + result.stderr);
 });
 
 test('test-app-activation-backspace-repeat forwards its focused variant and stops at its first failed run', (t) => {
   const build = mkdtempSync(join(tmpdir(), 'soksak-native-activation-repeat-'));
   t.after(() => rmSync(build, { recursive: true }));
-  const executable = fake(build, 'image_region_ime_test', 'counter="$0.count"; n=$(cat "$counter" 2>/dev/null || echo 0); n=$((n+1)); echo $n > "$counter"; echo "arg:$1 run:$n"; [ "$1" = "--backspace-trace-abc-baseline" ] && [ "$n" -lt 2 ]');
-  const probe = fake(build, 'ime_source_probe', 'echo \'{"source":"com.apple.inputmethod.Korean.2SetKorean","frontmostPID":100,"processPID":200}\'');
+  const executable = compile(build, 'image_region_ime_test', 'image_region_ime_test.c');
+  const probe = compile(build, 'ime_source_probe', 'ime_source_probe.c');
+  // The source probe fixture prints this snapshot, so the comparison after the run has the state that the run started with.
+  writeFileSync(`${probe}.snapshot`, '{"source":"com.apple.inputmethod.Korean.2SetKorean","frontmostPID":100,"processPID":200}\n');
   const evidence = join(build, 'evidence');
   const result = spawnSync('make', ['-C', native, 'test-app-activation-backspace-repeat', 'COUNT=3', `BUILD=${build}`, `ACTIVATION_REPEAT_EVIDENCE=${evidence}`, '-o', executable, '-o', probe], {
     encoding: 'utf8', timeout: 60000,
@@ -86,8 +90,9 @@ test('the activation repeat keeps its evidence under target/activation-repeat of
 test('the activation build alias resolves absolute targets without running either executable', (t) => {
   const build = mkdtempSync(join(tmpdir(), 'soksak-native-activation-build-'));
   t.after(() => rmSync(build, { recursive: true }));
-  const activation = fake(build, 'image_region_ime_test', 'touch "$0.executed"');
-  const probe = fake(build, 'ime_source_probe', 'touch "$0.executed"');
+  // The marker program creates <path>.executed when it runs, so a run of either target is visible after the build.
+  const activation = compile(build, 'image_region_ime_test', 'run_marker.c');
+  const probe = compile(build, 'ime_source_probe', 'run_marker.c');
   const result = spawnSync('make', ['-C', native, 'build-ime-activation-target', `BUILD=${build}`, '-o', activation, '-o', probe], {
     encoding: 'utf8', timeout: 60000,
   });
@@ -100,9 +105,14 @@ test('make repeat-suite shows the runner output of every run of the suite, and p
   const build = mkdtempSync(join(tmpdir(), 'soksak-native-suite-'));
   t.after(() => rmSync(build, { recursive: true }));
   const entries = nativeTestEntries();
+  // One compiled fixture program serves every entry: it prints the arguments that the runner passes after the executable name.
+  const program = compile(build, 'suite_probe', 'suite_probe.c');
   const executables = entries.map((entry) => {
-    const [name, ...args] = entry.split(',');
-    return fake(build, name, `echo "ran ${name} ${args.join(' ')}"`);
+    const name = entry.split(',')[0];
+    const path = join(build, name);
+    mkdirSync(dirname(path), { recursive: true });
+    copyFileSync(program, path);
+    return path;
   });
   // The runner gives each of the runs of the suite its own limit and reports it, so the run of the whole suite has no limit of
   // its own: one limit over every entry of NATIVE_TESTS would grow with the list and judge the load of the machine.
@@ -120,7 +130,7 @@ test('make repeat-suite shows the runner output of every run of the suite, and p
 test('make repeat in the process-identity package names its test of each run, reports its result and elapsed time, and stops at a failed run', (t) => {
   const build = mkdtempSync(join(tmpdir(), 'soksak-process-identity-repeat-'));
   t.after(() => rmSync(build, { recursive: true }));
-  const executable = fake(build, 'process_identity_test', 'counter="$0.count"; n=$(cat "$counter" 2>/dev/null || echo 0); n=$((n+1)); echo $n > "$counter"; echo "probe $n"; [ "$n" -lt 2 ]');
+  const executable = compile(build, 'process_identity_test', 'repeat_probe.c');
   const result = spawnSync('make', ['-C', join(native, 'process-identity'), 'repeat', 'TEST=process_identity_test', 'COUNT=3', `BUILD=${build}`, '-o', executable], {
     encoding: 'utf8', timeout: 60000,
   });

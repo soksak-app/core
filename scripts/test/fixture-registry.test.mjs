@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test, { mock } from "node:test";
 import { EventEmitter } from "node:events";
 
-import fs, { chmodSync, existsSync, globSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import fs, { chmodSync, copyFileSync, existsSync, globSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
@@ -14,6 +14,9 @@ import { FIXTURES, STEP_TIMEOUT_MS, WRONG_SHA256, buildFixtureRegistry, fixtureP
 
 const SHA = "a".repeat(64);
 const MODULE = fileURLToPath(new URL("../fixture-registry.mjs", import.meta.url));
+// The tracked inputs of the pack and release tests: the executable of a sidecar fixture and the prepack script of a slow plugin fixture.
+const SIDECAR_WORKER = fileURLToPath(new URL("./fixtures/fixture-registry/sidecar/bin/worker", import.meta.url));
+const HOLD_PACK = fileURLToPath(new URL("./fixtures/fixture-registry/hold.mjs", import.meta.url));
 const inside = (root, path) => {
   const rest = relative(root, resolve(path));
   return !rest.startsWith("..") && !isAbsolute(rest);
@@ -47,7 +50,7 @@ test("registry entries carry the declarations of package.json and the file URL a
   assert.equal(sidecarFileName("worker"), "worker");
 });
 
-test("the sources of the fixture registry are exactly the plugin folders and fake sidecar folders of e2e/fixtures", { timeout: 5000 }, () => {
+test("the sources of the fixture registry are exactly the plugin folders and sidecar fixture folders of e2e/fixtures",{ timeout: 5000 }, () => {
   const folders = (pattern) => globSync(pattern, { cwd: FIXTURES, exclude: (name) => name === "node_modules" || name === "target" })
     .map((file) => join(FIXTURES, dirname(file))).sort();
   const plugins = folders("**/plugin.json");
@@ -95,7 +98,7 @@ test("the fixture registry packs every fixture plugin into the pack fixtures and
   assert.deepEqual(reads.filter((read) => !inside(FIXTURES, read.replace(/^\S+ /, ""))), []);
   const ids = plugins.map((dir) => JSON.parse(readFileSync(join(dir, "plugin.json"), "utf8")).id);
   assert.deepEqual(JSON.parse(readFileSync(join(out, "packs", "fixtures.json"), "utf8")),
-    { name: "fixtures", description: "Every fake plugin of the core fixtures.", plugins: ids });
+    { name: "fixtures", description: "Every fixture plugin of the core fixtures.", plugins: ids });
   assert.deepEqual(fixturePluginIds(), ids, "fixturePluginIds names the plugins of the pack fixtures in its order");
   assert.deepEqual(fs.readdirSync(join(out, "plugins")).sort(), ids.map((id) => `${id}.json`).sort());
   assert.deepEqual(JSON.parse(readFileSync(join(out, "revoked.json"), "utf8")), { plugins: [], sidecars: [] });
@@ -107,7 +110,7 @@ test("the fixture registry packs every fixture plugin into the pack fixtures and
   assert.doesNotMatch(source, /https?:\/\/|\bfetch\(|target\/registry|workspace-registry/);
 });
 
-test("a fake sidecar of the fixtures is released with npm pack under its platform name and listed as the sidecar of its plugin", { timeout: 60000 }, async (t) => {
+test("a sidecar fixture of the fixtures is released with npm pack under its platform name and listed as the sidecar of its plugin", { timeout: 60000 }, async (t) => {
   const root = mkdtempSync(join(tmpdir(), "fixture-registry-root-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const sidecar = join(root, "sidecars", "worker");
@@ -115,7 +118,7 @@ test("a fake sidecar of the fixtures is released with npm pack under its platfor
   writeFileSync(join(sidecar, "package.json"), JSON.stringify({ name: "@sok-check/worker", version: "0.0.1", license: "MIT",
     repository: "git+https://example.invalid/core.git", files: ["sidecar.json", "bin"] }));
   writeFileSync(join(sidecar, "sidecar.json"), JSON.stringify({ protocol: 1, executable: "bin/worker" }));
-  writeFileSync(join(sidecar, "bin", "worker"), "#!/bin/sh\n");
+  copyFileSync(SIDECAR_WORKER, join(sidecar, "bin", "worker"));
   chmodSync(join(sidecar, "bin", "worker"), 0o755);
   const plugin = join(root, "probe", "user");
   mkdirSync(plugin, { recursive: true });
@@ -140,7 +143,7 @@ test("a fake sidecar of the fixtures is released with npm pack under its platfor
   assert.deepEqual(JSON.parse(readFileSync(join(out, "plugins", "user.json"), "utf8")).versions[0].sidecars, { "@sok-check/worker": "^0.0.1" });
 });
 
-test("a fake sidecar whose declared executable is not built is not released", { timeout: 5000 }, async (t) => {
+test("a sidecar fixture whose declared executable is not built is not released", { timeout: 5000 }, async (t) => {
   const root = mkdtempSync(join(tmpdir(), "fixture-registry-unbuilt-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const sidecar = join(root, "sidecars", "worker");
@@ -152,12 +155,13 @@ test("a fake sidecar whose declared executable is not built is not released", { 
   await assert.rejects(npmSidecarRelease(sidecar, out, { platform: "linux-x64" }),
     new RegExp(`pack sidecar ${sidecar}: sidecar.json executable bin/worker is not an executable file; build the sidecar first`));
   mkdirSync(join(sidecar, "bin"));
-  writeFileSync(join(sidecar, "bin", "worker"), "#!/bin/sh\n");
+  copyFileSync(SIDECAR_WORKER, join(sidecar, "bin", "worker"));
+  chmodSync(join(sidecar, "bin", "worker"), 0o644);
   await assert.rejects(npmSidecarRelease(sidecar, out, { platform: "linux-x64" }), /bin\/worker is not an executable file/);
   assert.equal(existsSync(out) ? readdirSync(out).length : 0, 0, "a release was written");
 });
 
-test("a build folder of a fake sidecar holds no fixture source", { timeout: 5000 }, (t) => {
+test("a build folder of a sidecar fixture holds no fixture source",{ timeout: 5000 }, (t) => {
   const root = mkdtempSync(join(tmpdir(), "fixture-registry-target-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const sidecar = join(root, "sidecars", "worker");
@@ -167,22 +171,16 @@ test("a build folder of a fake sidecar holds no fixture source", { timeout: 5000
   assert.deepEqual(fixtureSources(root), { plugins: [], sidecars: [sidecar] });
 });
 
-/** A fixtures root of one plugin and a folder that puts first on PATH a pnpm that sleeps; the test restores PATH. */
+/** A fixtures root of one plugin whose prepack script holds the real pnpm pack for 30 seconds, so the step limit ends the pack. */
 function slowPackFixture(t) {
   const work = mkdtempSync(join(tmpdir(), "fixture-registry-slow-"));
   const plugin = join(work, "fixtures", "probe");
   mkdirSync(plugin, { recursive: true });
   writeFileSync(join(plugin, "plugin.json"), JSON.stringify({ id: "probe", name: "Probe" }));
-  writeFileSync(join(plugin, "package.json"), JSON.stringify({ name: "@sok-check/probe", version: "0.0.1", repository: "https://example.invalid/core" }));
-  mkdirSync(join(work, "bin"));
-  writeFileSync(join(work, "bin", "pnpm"), "#!/bin/sh\nexec sleep 30\n");
-  chmodSync(join(work, "bin", "pnpm"), 0o755);
-  const path = process.env.PATH;
-  process.env.PATH = `${join(work, "bin")}:${path}`;
-  t.after(() => {
-    process.env.PATH = path;
-    rmSync(work, { recursive: true, force: true });
-  });
+  writeFileSync(join(plugin, "package.json"), JSON.stringify({ name: "@sok-check/probe", version: "0.0.1", repository: "https://example.invalid/core",
+    scripts: { prepack: "node hold.mjs" } }));
+  copyFileSync(HOLD_PACK, join(plugin, "hold.mjs"));
+  t.after(() => rmSync(work, { recursive: true, force: true }));
   return { root: join(work, "fixtures"), plugin, out: join(work, "registry") };
 }
 
