@@ -36,13 +36,19 @@ for (const app of Object.values(APPS)) {
     const focus = await s.collect("core.focus");
     for (const region of regions) {
       const point = center(await imageRect(s, region.surface));
+      const { pressFocus } = await s.get("rasterprobe.input", region.surface);
       await s.click(...point);
       // The press reaches the page through the region, and the page gives the region the focus with a view call that it makes
-      // in its pointerdown handler. The answer of the release follows the receipt of the press in the document, not that call,
-      // and the web view of the surface holds the first responder until the call arrives; the region holds the focus once it ran.
-      await s.until("host.window", (window) => window.responder?.surface === region.surface &&
+      // in its pointerdown handler. The host answers that call after it gave the region the keyboard or set the move to wait for
+      // the release of the press, and the click returns after its release was delivered, which runs a move that waits. So once
+      // the click returned and the page has the answer, the region holds the focus, and the check judges it there.
+      await s.until("rasterprobe.input", (input) => input.pressFocus > pressFocus,
+        `the page of ${region.surface} has no answer of the focus call of its press`, { surface: region.surface });
+      const window = await s.get("host.window");
+      assert.ok(window.responder?.surface === region.surface &&
         window.regions.some((shown) => shown.surface === region.surface && shown.focused),
-        `${region.surface} did not take the focus after its click`);
+        `${region.surface} did not take the focus after its click: responder ${JSON.stringify(window.responder)}, regions ` +
+        JSON.stringify(window.regions.map(({ surface, focused, visible }) => ({ surface, focused, visible }))));
     }
     const { displayed } = await s.presented();
     const stopped = await recording.stop({ after: displayed });

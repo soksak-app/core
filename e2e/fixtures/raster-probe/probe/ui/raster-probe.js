@@ -58,7 +58,8 @@ export async function startRasterProbe({ bridge, expose, document, view }) {
   const viewStatus = statusCell(null);
   const sessionStatus = statusCell(NO_SESSION);
   const frameStatus = statusCell(null);
-  const inputStatus = statusCell({ focused: false, transactions: 0, preedit: null, actions: [], errors: [], log: [], pointer: [] });
+  const inputStatus = statusCell({ focused: false, transactions: 0, preedit: null, actions: [], errors: [], log: [], pointer: [],
+    pressFocus: 0 });
   const changeInput = (change) => inputStatus.set({ ...inputStatus.read(), ...change(inputStatus.read()) });
 
   const measure = () => {
@@ -198,7 +199,12 @@ export async function startRasterProbe({ bridge, expose, document, view }) {
     changeInput(({ pointer: list }) => ({
       pointer: [...list, { type: event.type, button: event.button, trusted: event.isTrusted === true }].slice(-POINTER_LIMIT),
     }));
-    if (event.type === "pointerdown" && event.button === 0) image.focus().catch((error) => report(`focus on press: ${error.message}`));
+    // pressFocus counts the answers of the focus calls of the presses: the host answers a call after it gave the region the keyboard
+    // or set the move to wait for the release of the press (docs/spec/native-surfaces.md#keyboard-of-a-surface).
+    if (event.type === "pointerdown" && event.button === 0) {
+      image.focus().catch((error) => report(`focus on press: ${error.message}`))
+        .finally(() => changeInput(({ pressFocus }) => ({ pressFocus: pressFocus + 1 })));
+    }
   };
   element.addEventListener("pointerdown", pointer);
   element.addEventListener("pointerup", pointer);

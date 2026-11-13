@@ -1509,6 +1509,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F779-2",
+    implementation: [
+      { file: "e2e/fixtures/raster-probe/probe/ui/raster-probe.js", symbol: "pressFocus: 0 });" },
+    ],
+    tests: [
+      { file: "e2e/image-region-press-focus.test.mjs", id: "an image region press never moves focus to a view text field" },
+    ],
+    expected: "The check of image region presses waits for the answer of the focus call of each press and reads the focus once.",
+    levels: ["application"],
+  },
+  {
     id: "F779-1",
     implementation: [
       { file: "packages/window-check/app.mjs", symbol: "async checkEnded(t) {" },

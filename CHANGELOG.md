@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F779-2: the window check of image region presses waits for the answer of the focus call that the page makes on each press, which the host gives after the move of the keyboard applied or waits for the release, and then reads the focus once, so its wait ends by an event and not by the test limit.
 - F779-1: a window check that the test runner ends at its limit while it waits for a status names that status, the text of the wait and the last value that the status had.
 - F778: in a window run of 2026-11-14 `e2e/paint.test.mjs` and `e2e/plain-view.test.mjs` passed on the three hosts at a load average of 34 to 38, and the mygo `e2e/paint.test.mjs` passed three times.
 - F785: the mygo framework `v0.7.4-244-g4abb83d-soksak.13` that core pins applies a pointer event that reaches the window while a frame builds after that frame, so the press observer of the workbench no longer reads the element tree inside a frame; the frame record counts such an input in `Deferred`.
