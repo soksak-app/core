@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F765: `input_panels_test` 는 release 가 끝내는 context menu 를 더는 취소하지 않으므로, menu 가 닫기의 끝에 실행하는 항목이 일부 run 에서 버려지지 않는다.
 - F764: `image_region_test --activation` 은 기록된 press origin 을 AppKit 이 화면 위치로부터 계산한 dispatch 된 event 의 위치와 비교하므로, display 가 여러 대인 기기에서 더는 실패하지 않는다.
 - F763: `surface_layout_test` 는 commit 의 display refresh 를 settled refresh 와 refresh 로 판정하므로, 같은 refresh 의 두 시간 사이의 반올림이 더는 검사를 실패시키지 않는다.
 - F762: layout hold 의 끝이 되돌려 준 key 는 pointer 가 움직였어도 사용자 action 의 observer 에게 한 번 알려진다. AppKit 이 되돌린 key event 에 주는 위치가 더는 그 key 를 가리키는 데 쓰이지 않기 때문이다.

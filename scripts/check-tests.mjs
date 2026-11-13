@@ -589,6 +589,18 @@ const FEATURE_LINKS = [
   },
 
   {
+    id: "F765",
+    implementation: [
+      { file: "native/darwin/tests/input_panels_test.m", symbol: "static void whileTracking(NSMenu *menu, NSString *what, BOOL ends, BOOL *tracked, void (^attempt)(void)) {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/input_panels_test.m", id: "the release over the item of a context menu runs the item" },
+    ],
+    expected: "The panel check cancels only a menu that its input does not end, so a context menu runs the item of its release.",
+    levels: ["native"],
+  },
+
+  {
     id: "F764",
     implementation: [
       { file: "native/darwin/tests/image_region_test.m", symbol: "static NSEvent *dispatchQueuedEvent(NSEvent *event, NSEventMask mask) {" },

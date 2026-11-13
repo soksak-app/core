@@ -220,15 +220,18 @@ static NSWindow *menuWindow(NSWindow *except) {
     return nil;
 }
 
-// Runs attempt once the menu tracks, and ends the tracking after the events that attempt queued were handled: the tracking reads
-// the queued events before the run loop runs a block of the main queue.
-static void whileTracking(NSMenu *menu, NSString *what, BOOL *tracked, void (^attempt)(void)) {
+// Runs attempt once the menu tracks. A menu whose input ends it (ends) closes by that input: a release over an item dismisses the
+// menu and the menu runs the item when its dismissal ends (-[NSMenuTrackingSession performActionUponDismissal:]), which can come
+// after the next block of the main queue, so a cancel of the tracking in that block would drop the action of the item. A menu
+// whose input does not end it on this system has its tracking ended by the test after the events that attempt queued.
+static void whileTracking(NSMenu *menu, NSString *what, BOOL ends, BOOL *tracked, void (^attempt)(void)) {
     __block id observer = [NSNotificationCenter.defaultCenter addObserverForName:NSMenuDidBeginTrackingNotification object:menu
         queue:nil usingBlock:^(NSNotification *note_) {
             [NSNotificationCenter.defaultCenter removeObserver:observer];
             *tracked = YES;
             dispatch_async(dispatch_get_main_queue(), ^{
                 attempt();
+                if (ends) return;
                 dispatch_async(dispatch_get_main_queue(), ^{
                     if (menuWindow(nil)) note([NSString stringWithFormat:@"%@: the test ends the tracking that the input left", what]);
                     [menu cancelTracking];
@@ -305,7 +308,7 @@ int main(void) { @autoreleasepool {
     [context addItem:act];
     content.menu = context;
     BOOL tracked = NO;
-    whileTracking(context, @"context menu", &tracked, ^{
+    whileTracking(context, @"context menu", YES, &tracked, ^{
         NSWindow *shown = menuWindow(window);
         note([NSString stringWithFormat:@"context menu: %@", shown ? panelFacts(shown) : @"no menu window of the application"]);
         if (!shown) return;
@@ -334,7 +337,7 @@ int main(void) { @autoreleasepool {
     [content addSubview:popup];
     NSPoint at = pointOf(window, popup);
     tracked = NO;
-    whileTracking(popup.menu, @"pop-up menu", &tracked, ^{
+    whileTracking(popup.menu, @"pop-up menu", NO, &tracked, ^{
         sp_input_result up = sp_input_pointer_clicks(window, at.x, at.y, 3, 0, 1);
         note([NSString stringWithFormat:@"pop-up menu: release on the button %s", resultText(up)]);
         key(window, "ArrowDown", @"pop-up menu");
