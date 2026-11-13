@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F788: F778 의 기록은 2026-11-13 window run 의 `e2e/plain-view.test.mjs` 실패를 run, 부하, host 별로 적고, F778 의 어느 부분을 측정의 변경이 결정했는지 적는다.
 - F787: host 명세의 행 H86 은 page start 의 Go 시험이 window call 의 step 만 확인한다고 적는다. Go host 의 각 native window function 이 AppKit call 을 스스로 main thread 에서 실행하기 때문이다.
 - F774-2: Go host 는 계약대로 마지막 connection 의 press 보다 connection activity 를 먼저 놓는다. native 라이브러리는 activity 의 시작과 끝을 `native.connection.activity` 로 기록하고, 두 host 의 시험은 fake platform 대신 그 기록으로 순서를 판정한다.
 - F774-1: connection activity 의 Rust test 는 `tests/support/platform/connection_activity.rs` 를 거쳐 native call 을 읽으므로, `platform/<os>/` 밖에 OS cfg 가 없다.

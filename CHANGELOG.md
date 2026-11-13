@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F788: the record of F778 states the failures of `e2e/plain-view.test.mjs` in the window runs of 2026-11-13 by run, load and host, and which part of F778 the changes of the measurement decided.
 - F787: row H86 of the host specification states that the Go test of the page start checks only the steps of its window calls, because each native window function of the Go host runs its AppKit call on the main thread itself.
 - F774-2: the Go host releases the connection activity before the presses of the last connection, as the contract requires; the native library records each begin and end of the activity as `native.connection.activity`, and the tests of both hosts judge the order by that record instead of a fake platform.
 - F774-1: the Rust test of the connection activity reads the native call through `tests/support/platform/connection_activity.rs`, so no OS cfg is outside `platform/<os>/`.
