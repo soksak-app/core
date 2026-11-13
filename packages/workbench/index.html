@@ -241,7 +241,6 @@ function dormant(shown, holders = null) {
 /* The memory saver (docs/spec/plugins.md#memory-saver). It observes the commits once the tab state store is open, because
    its mark kept and the label cache of a tab that starts unloaded live in that store. */
 const memorySaver = createMemorySaver({
-  now: () => performance.now(),
   enabled: () => value("memorySaver"),
   delay: () => value("memorySaverDelay"),
   // The unload of a tab comes from surface.unload of its plugin and the unload of a section surface from its section, as the
