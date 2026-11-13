@@ -67,6 +67,7 @@ type Grid struct {
 	seq       int
 	sliceMemo map[string]bool
 	splitMemo map[string]bool
+	probes    int
 	paidBy    map[string]Paid
 	probing   bool
 	gap       float64
@@ -270,10 +271,17 @@ func (g *Grid) Resize(width, height float64) {
 	if !finite(width) || !finite(height) || width < 0 || height < 0 {
 		return
 	}
+	// The workbench sizes the plane in each frame; a size that does not change keeps the answers of CanSplit.
+	if width == g.w && height == g.h {
+		return
+	}
 	g.w = width
 	g.h = height
 	clear(g.splitMemo)
 }
+
+// Probes is the number of trial splits that CanSplit ran to answer: an answer that it kept runs none.
+func (g *Grid) Probes() int { return g.probes }
 
 // Width is the plane width in px.
 func (g *Grid) Width() float64 { return g.w }
@@ -1178,6 +1186,7 @@ func (g *Grid) CanSplit(id string, axis Axis) bool {
 			before := g.ToJSON()
 			seq := g.seq
 			g.probing = true
+			g.probes++
 			_, ok = g.Split(id, axis, SplitInit{})
 			g.restore(before)
 			g.probing = false
