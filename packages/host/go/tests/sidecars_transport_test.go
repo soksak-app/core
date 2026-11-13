@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -2157,12 +2158,23 @@ func serveReplaceService(t *testing.T, root, oldVersion, installedVersion string
 		if remaining, err := os.FindProcess(pid); err == nil {
 			_ = remaining.Kill()
 		}
-		// The host waits for its own child (cmd.Wait in the sidecar exit path), so this test does not reap the pid: a reap here could take
-		// that child. A killed child is reaped by the host; a zombie that remains is already ended, and ps reports its state as Z. The
-		// end of a process that is not a child of the test gives the test no event, so the cleanup polls its state until the kill ended
-		// it; a process that the kill does not end leaves the check to the limit of its runner.
-		for installedProcessRunning(pid) {
-			time.Sleep(10 * time.Millisecond)
+		// The host starts a persistent service and does not wait for it after its endpoint line, because the service lives longer
+		// than the host; the host runs in the test process, so the service is a child of that process, and the wait returns at its
+		// exit and reaps it. ECHILD answers for a service that the host reaped when it stopped the service before its endpoint
+		// line. A process that the kill does not end leaves the check to the limit of its runner.
+		var status syscall.WaitStatus
+		for {
+			_, err := syscall.Wait4(pid, &status, 0, nil)
+			if errors.Is(err, syscall.EINTR) {
+				continue
+			}
+			if err != nil && !errors.Is(err, syscall.ECHILD) {
+				t.Errorf("wait for the installed service %d: %v", pid, err)
+			}
+			break
+		}
+		if installedProcessRunning(pid) {
+			t.Errorf("the installed service %d runs after its end", pid)
 		}
 	})
 	service := &replaceService{listener: listener, second: make(chan struct{}), process: process, folder: folder}
