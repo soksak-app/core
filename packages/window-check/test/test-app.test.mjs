@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, watch, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -104,6 +105,52 @@ test("a command ends at its time limit, at an interrupt and with its status, and
     /was interrupted by SIGINT/);
   await assert.rejects(run(process.execPath, [], { cwd: tmpdir() }), /a command runs with a time limit/);
   await assert.rejects(step("pack checked", () => { throw new Error("no make"); }), /^Error: pack checked: no make$/);
+});
+
+/**
+ * The arguments of a program whose child ignores SIGTERM and writes its process id to `marker` once it waits, and the process id
+ * that the child wrote, which `started` resolves with.
+ */
+function programWithChild(t, marker) {
+  const child = `process.on("SIGTERM", () => {}); require("node:fs").writeFileSync(${JSON.stringify(marker)}, String(process.pid)); setInterval(() => {}, 1000);`;
+  const source = `require("node:child_process").spawn(process.execPath, ["-e", ${JSON.stringify(child)}], { stdio: "ignore" }); setInterval(() => {}, 1000);`;
+  const started = new Promise((resolve) => {
+    const read = () => { try { const pid = Number(readFileSync(marker, "utf8")); if (pid > 0) { watcher.close(); resolve(pid); } } catch {} };
+    const watcher = watch(join(marker, ".."), read);
+    read();
+  });
+  t.after(() => { try { process.kill(Number(readFileSync(marker, "utf8")), "SIGKILL"); } catch {} });
+  return { args: ["-e", source], started };
+}
+
+/**
+ * Whether the process `pid` still runs, from its ps(1) state: a process that SIGKILL ended is absent, a zombie (Z) or exiting (E),
+ * because the system ends it after the signal returns.
+ */
+const alive = (pid) => {
+  const result = spawnSync("ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8" });
+  const state = result.stdout.trim();
+  return state !== "" && !state.startsWith("Z") && !state.slice(1).includes("E");
+};
+
+test("a command at its limit ends with every process it started", { timeout: 30000 }, async (t) => {
+  const { args, started } = programWithChild(t, join(folder(t), "child"));
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const outcome = run(process.execPath, args, { cwd: tmpdir(), timeout: 5000 });
+  const child = await started;
+  t.mock.timers.tick(5000);
+  await assert.rejects(outcome, /did not end in 5s/);
+  assert.equal(alive(child), false, `the child ${child} of the command still runs`);
+});
+
+test("an interrupted command ends with every process it started, also one that ignores SIGTERM", { timeout: 30000 }, async (t) => {
+  const { args, started } = programWithChild(t, join(folder(t), "child"));
+  const interrupt = new AbortController();
+  const outcome = run(process.execPath, args, { cwd: tmpdir(), timeout: 60000, signal: interrupt.signal });
+  const child = await started;
+  interrupt.abort("SIGINT");
+  await assert.rejects(outcome, /was interrupted by SIGINT/);
+  assert.equal(alive(child), false, `the child ${child} of the command still runs`);
 });
 
 test("a download writes its file whole or leaves none", async (t) => {

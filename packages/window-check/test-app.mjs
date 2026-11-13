@@ -227,11 +227,12 @@ const describeEnd = (code, signal) => (code === null ? `signal ${signal}` : `sta
 
 /**
  * Runs `file` to its end, with its output on this output, or with `capture` its standard output as the result. It ends the program
- * and rejects after `timeout` milliseconds or at an abort of `signal`; another status than 0 rejects with the command.
+ * and rejects after `timeout` milliseconds or at an abort of `signal`; another status than 0 rejects with the command. The program
+ * runs in a process group of its own, so its end ends every process that it started.
  */
 export async function run(file, args, { cwd, env, signal, timeout, capture = false }) {
   if (!Number.isFinite(timeout) || timeout <= 0) throw new Error(`${file}: a command runs with a time limit`);
-  const child = spawn(file, args, { cwd, env: { ...process.env, ...env }, stdio: capture ? ["ignore", "pipe", "pipe"] : "inherit" });
+  const child = spawn(file, args, { cwd, env: { ...process.env, ...env }, stdio: capture ? ["ignore", "pipe", "pipe"] : "inherit", detached: true });
   let out = "";
   let err = "";
   if (capture) {
@@ -242,23 +243,24 @@ export async function run(file, args, { cwd, env, signal, timeout, capture = fal
   const exited = once(child, "exit");
   let timer;
   let abort;
+  // The signal that ends the group: a program at its limit is stopped where it waits, and an interrupted program runs its own cleanup.
+  let end = null;
   const limit = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`${command} did not end in ${timeout / 1000}s`)), timeout);
-    abort = () => reject(new Error(`${command} was interrupted by ${signal.reason}`));
+    timer = setTimeout(() => { end = "SIGKILL"; reject(new Error(`${command} did not end in ${timeout / 1000}s`)); }, timeout);
+    abort = () => { end = "SIGTERM"; reject(new Error(`${command} was interrupted by ${signal.reason}`)); };
     if (signal?.aborted) abort();
     else signal?.addEventListener("abort", abort, { once: true });
   });
   try {
-    const [code, end] = await Promise.race([
+    const [code, ended] = await Promise.race([
       exited,
       once(child, "error").then(([error]) => { throw new Error(`cannot start ${file}: ${error.message}`); }),
       limit,
     ]);
-    if (code !== 0) throw new Error(`${command} ended with ${describeEnd(code, end)}${err.trim() ? `: ${err.trim()}` : ""}`);
+    if (code !== 0) throw new Error(`${command} ended with ${describeEnd(code, ended)}${err.trim() ? `: ${err.trim()}` : ""}`);
     return out;
   } catch (error) {
-    // A program that the limit or the interrupt ends gets SIGTERM, so it runs its own cleanup, and SIGKILL after STOP_GRACE.
-    if (child.pid !== undefined && child.exitCode === null && child.signalCode === null) await ended(child, exited);
+    if (end !== null && child.exitCode === null && child.signalCode === null) await endGroup(child, end, exited);
     throw error;
   } finally {
     clearTimeout(timer);
@@ -266,23 +268,19 @@ export async function run(file, args, { cwd, env, signal, timeout, capture = fal
   }
 }
 
-/** The time that a program has to end after SIGTERM before it gets SIGKILL. */
-const STOP_GRACE = 30_000;
+/**
+ * Sends `signal` to the process group of `child` and waits for the exit of `child`; the processes of the group that remain after
+ * that exit get SIGKILL, because the program that started them ended without them.
+ */
+async function endGroup(child, signal, exited) {
+  signalGroup(child.pid, signal);
+  await exited;
+  signalGroup(child.pid, "SIGKILL");
+}
 
-/** Ends `child` with SIGTERM, and with SIGKILL when it has not exited after STOP_GRACE. */
-async function ended(child, exited) {
-  child.kill("SIGTERM");
-  let timer;
-  try {
-    await Promise.race([exited, new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new Error("the program did not end after SIGTERM")), STOP_GRACE);
-    })]);
-  } catch {
-    child.kill("SIGKILL");
-    await exited;
-  } finally {
-    clearTimeout(timer);
-  }
+/** Sends `signal` to the process group `pgid`; a group that has no process left is no error. */
+function signalGroup(pgid, signal) {
+  try { process.kill(-pgid, signal); } catch (error) { if (error.code !== "ESRCH") throw error; }
 }
 
 /** The response of `url`, bounded by `timeout` and `signal`; another status than 2xx is an error that names the address. */

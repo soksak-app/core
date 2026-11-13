@@ -589,6 +589,19 @@ const FEATURE_LINKS = [
   },
 
   {
+    id: "F767-2-2",
+    implementation: [
+      { file: "packages/window-check/test-app.mjs", symbol: "async function endGroup(child, signal, exited) {" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/test-app.test.mjs", id: "a command at its limit ends with every process it started" },
+      { file: "packages/window-check/test/test-app.test.mjs", id: "an interrupted command ends with every process it started, also one that ignores SIGTERM" },
+    ],
+    expected: "A command of the window-check harness runs in a process group of its own and ends with every process it started at its limit and at an interrupt, without a grace time.",
+    levels: ["unit"],
+  },
+
+  {
     id: "F769-1",
     implementation: [
       { file: "scripts/test-runner.mjs", symbol: "const sampleAtLimit = async () => {" },

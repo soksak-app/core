@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F767-2-2: the commands of the window-check harness run in a process group of their own and end with every process they started, at once at their limit and after their own cleanup at an interrupt, instead of SIGKILL 30 seconds after SIGTERM to the command alone.
 - F769-1: a native test of a run with a folder that reaches its limit leaves the stacks of its processes and of the web content and other services that the system started for them, with the state of each service, in the folder of the run.
 - F767-2-1: the command supervisor ends a command with SIGKILL at its limit and waits for the close of its output and the end of its group instead of grace, drain and signal timers, and it names a process outside the group that keeps the output open.
 - F767-3-1: fifteen workbench checks wait for the recorded call, reply, registration change or promise that their state follows, and the timeline check counts the timers of the view instead of its elapsed time.
