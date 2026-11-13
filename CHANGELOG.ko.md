@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F780: `diagnostics.drag` 의 native drag 는 사람처럼 매 누름 전에 경계 점으로 이동하므로, 활성이 아닌 application 은 제스처를 가상 키 창으로 받고, 사람이 누른 마우스 버튼은 더 이상 check 의 누름을 거절시키지 않는다.
 - F778: mygo 워크벤치 plane 을 지금 크기로 resize 하면 `CanSplit` 의 답을 지키므로, frame 은 더 이상 모든 카드의 두 축에 시험 split 을 돌리지 않는다. grid 의 `Probes` 가 그 시험 split 을 센다.
 - F778: mygo framework `v0.7.4-244-g4abb83d-soksak.12` 는 worker 를, 부하가 있는 기계에서 시스템이 다른 일 뒤에 돌리는 default class 대신, step 마다 worker 를 기다리는 main thread 의 quality of service 로 돌린다.
 - F778: 속도를 지키지 못한 window check drag 의 실패는 application 이 그 step 을 처리한 시간을 합, 개수, 가장 긴 것으로 말하므로, 느린 drag 는 application 안의 시간과 밖의 시간을 구분한다.

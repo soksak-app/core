@@ -9,6 +9,7 @@ import (
 	"math"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -572,6 +573,7 @@ func TestNativeDragDeliversThePressTheStepsAndTheReleaseOfEachRoundTrip(t *testi
 	}
 	trip := func(after int) []string {
 		return []string{
+			fmt.Sprintf("move 100,50 after %d", after),
 			fmt.Sprintf("down 100,50 after %d", after),
 			fmt.Sprintf("drag 110,46 after %d", after+1), fmt.Sprintf("drag 120,42 after %d", after+2),
 			fmt.Sprintf("drag 110,46 after %d", after+3), fmt.Sprintf("drag 100,50 after %d", after+4),
@@ -604,8 +606,8 @@ func TestNativeDragDeliversThePressTheStepsAndTheReleaseOfEachRoundTrip(t *testi
 	if err == nil || err.Error() != "native drag step 1: the window did not accept the input" {
 		t.Fatalf("native drag with a failing step: error %v", err)
 	}
-	if !reflect.DeepEqual(delivered, []string{"down", "drag", "up"}) {
-		t.Fatalf("native drag with a failing step delivered %v, want down, drag and the release up", delivered)
+	if !reflect.DeepEqual(delivered, []string{"move", "down", "drag", "up"}) {
+		t.Fatalf("native drag with a failing step delivered %v, want the move, down, drag and the release up", delivered)
 	}
 }
 
@@ -688,7 +690,7 @@ func TestANativeDragPressesOnlyAfterTheWindowPresentedItsLayout(t *testing.T) {
 		t.Fatalf("native drag: %v", err)
 	}
 	trip := func(answer int) []string {
-		return []string{fmt.Sprintf("presented %d", answer), "down", "drag", "drag", "drag", "drag", "up"}
+		return []string{"move", fmt.Sprintf("presented %d", answer), "down", "drag", "drag", "drag", "drag", "up"}
 	}
 	want := append(append(trip(1), trip(2)...), trip(3)...)
 	if !reflect.DeepEqual(events, want) {
@@ -716,7 +718,7 @@ func TestANativeDragPressesOnlyAfterTheWindowPresentedItsLayout(t *testing.T) {
 			events = append(events, input.Phase)
 			return nil
 		}, periodicStep(&waitNow, 16*time.Millisecond, nil), func() error {
-			if len(events) > 0 {
+			if slices.Contains(events, "up") {
 				return errors.New("the window did not present within 10s")
 			}
 			return nil
@@ -724,8 +726,8 @@ func TestANativeDragPressesOnlyAfterTheWindowPresentedItsLayout(t *testing.T) {
 	if err == nil || err.Error() != "native drag wait before the press of round trip 2: the window did not present within 10s" {
 		t.Fatalf("native drag with a failing wait: error %v", err)
 	}
-	if len(events) != 6 || events[5] != "up" {
-		t.Fatalf("native drag with a failing wait delivered %v, want only the first round trip", events)
+	if !reflect.DeepEqual(events, []string{"move", "down", "drag", "drag", "drag", "drag", "up", "move"}) {
+		t.Fatalf("native drag with a failing wait delivered %v, want the first round trip and the move before the second press", events)
 	}
 }
 

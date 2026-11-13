@@ -1232,6 +1232,19 @@ fn native_drag(
     for turn in 0..plan.times {
         let trip_start = steps;
         let waiting = clock();
+        // A person moves to the point before the press. An application that is not active takes the move into its virtual key
+        // window, so the press and the steps after it pass the application as a person's do and the buttons that a person
+        // holds do not enter the gesture (docs/spec/exposure.md#virtual-key-window).
+        deliver(input(0, from)).map_err(|error| {
+            Failure::new(
+                error.code,
+                format!(
+                    "native drag move before the press of round trip {}: {}",
+                    turn + 1,
+                    error.message
+                ),
+            )
+        })?;
         presented().map_err(|error| {
             Failure::new(
                 error.code,

@@ -129,6 +129,7 @@ fn native_drag_delivers_the_press_the_steps_and_the_release_of_each_round_trip()
                 "native drag input {pointer:?} activates or uses another button than the primary one"
             );
             let phase = match pointer.phase {
+                0 => "move",
                 1 => "down",
                 2 => "drag",
                 3 => "up",
@@ -151,6 +152,7 @@ fn native_drag_delivers_the_press_the_steps_and_the_release_of_each_round_trip()
     .expect("native drag");
     let trip = |after: u32| {
         vec![
+            format!("move 100,50 after {after}"),
             format!("down 100,50 after {after}"),
             format!("drag 110,46 after {}", after + 1),
             format!("drag 120,42 after {}", after + 2),
@@ -202,7 +204,11 @@ fn native_drag_delivers_the_press_the_steps_and_the_release_of_each_round_trip()
         error.message,
         "native drag step 1: the window did not accept the input"
     );
-    assert_eq!(*phases.borrow(), [1, 2, 3], "down, drag and the release up");
+    assert_eq!(
+        *phases.borrow(),
+        [0, 1, 2, 3],
+        "the move, down, drag and the release up"
+    );
 }
 
 // contract: diagnostics.drag.native-delivers-pointer-gesture
@@ -335,6 +341,7 @@ fn a_native_drag_presses_only_after_the_window_presented_its_layout() {
         times: 3,
     };
     let phase = |pointer: platform::Pointer| match pointer.phase {
+        0 => "move".to_string(),
         1 => "down".to_string(),
         2 => "drag".to_string(),
         3 => "up".to_string(),
@@ -361,6 +368,7 @@ fn a_native_drag_presses_only_after_the_window_presented_its_layout() {
     .expect("native drag");
     let mut want = Vec::new();
     for answer in 1..=3 {
+        want.push("move".to_string());
         want.push(format!("presented {answer}"));
         want.extend(["down", "drag", "drag", "drag", "drag", "up"].map(String::from));
     }
@@ -399,7 +407,7 @@ fn a_native_drag_presses_only_after_the_window_presented_its_layout() {
         },
         |previous| Ok(periodic_step(&now, previous, Duration::from_millis(10))),
         || {
-            if events.borrow().is_empty() {
+            if !events.borrow().iter().any(|phase| phase == "up") {
                 Ok(())
             } else {
                 Err(Failure::params("the window did not present within 10s"))
@@ -413,8 +421,8 @@ fn a_native_drag_presses_only_after_the_window_presented_its_layout() {
     );
     assert_eq!(
         *events.borrow(),
-        ["down", "drag", "drag", "drag", "drag", "up"],
-        "only the first round trip"
+        ["move", "down", "drag", "drag", "drag", "drag", "up", "move"],
+        "the first round trip and the move before the second press"
     );
 }
 

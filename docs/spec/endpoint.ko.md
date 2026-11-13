@@ -156,7 +156,7 @@ Still은 새 drawable을 식별하지 않으므로 두 still의 pixel이 같을 
 
 호스트는 캡처 같은 큰 데이터를 `<config-dir>/logs/captures` 아래 파일에 기록하고, 응답에는 파일 경로를 담는다. 요청자는 측정 후 캡처 파일을 삭제한다.
 
-`native` 없이 `diagnostics.drag`는 호스트가 정한 시각에 페이지의 기존 surface-input 경로로 단계를 전달한다. 네이티브 녹화는 해당 제스처의 합성을 측정하며 OS 마우스 버튼 전달을 증명하지 않는다. 합성 검사는 실제 카드 이동과 요청한 모든 왕복도 측정해야 한다. 네이티브 포인터 전달은 별도의 `input.pointer` 검사 대상이며, `native: true`인 `diagnostics.drag`는 제스처를 네이티브 포인터 입력으로 전달한다. mygo host는 페이지가 없어 항상 이렇게 `sp_input_pointer`로 전달하고 창이나 애플리케이션을 활성화하지 않으며, 각 입력은 전달하는 step의 nested step으로 mygo surface view에 닿는다. 응답에는 제스처의 `from`, `steps`, `took`, `asked`, `pressWaits`, `tripSteps`, workbench가 준 `boundary`, 각 step이 들어가서 callback이 돌아올 때까지의 밀리초인 `handled`가 있다.
+`native` 없이 `diagnostics.drag`는 호스트가 정한 시각에 페이지의 기존 surface-input 경로로 단계를 전달한다. 네이티브 녹화는 해당 제스처의 합성을 측정하며 OS 마우스 버튼 전달을 증명하지 않는다. 합성 검사는 실제 카드 이동과 요청한 모든 왕복도 측정해야 한다. 네이티브 포인터 전달은 별도의 `input.pointer` 검사 대상이며, `native: true`인 `diagnostics.drag`는 제스처를 네이티브 포인터 입력으로 전달한다. mygo host는 페이지가 없어 항상 이렇게 `sp_input_pointer`로 전달하고 창이나 애플리케이션을 활성화하지 않으며, 각 왕복은 사람이 누르기 전에 움직이듯 경계 점으로의 이동으로 시작하므로 누름은 [가상 키 창](exposure.ko.md#virtual-key-window)를 지나고 사람이 누른 버튼은 제스처에 들어가지 않는다. 각 입력은 전달하는 step의 nested step으로 mygo surface view에 닿는다. 응답에는 제스처의 `from`, `steps`, `took`, `asked`, `pressWaits`, `tripSteps`, workbench가 준 `boundary`, 각 step이 들어가서 callback이 돌아올 때까지의 밀리초인 `handled`가 있다.
 
 ## 클라이언트
 

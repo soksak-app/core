@@ -1457,6 +1457,19 @@ const FEATURE_LINKS = [
     levels: ["native", "unit"],
   },
   {
+    id: "F780",
+    implementation: [
+      { file: "packages/host/go/src/diagnostics.go", symbol: 'if err := deliver(input("move", from)); err != nil {' },
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "deliver(input(0, from)).map_err(|error| {" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestNativeDragDeliversThePressTheStepsAndTheReleaseOfEachRoundTrip" },
+      { file: "packages/host/rust/src/diagnostics_test.rs", id: "native_drag_delivers_the_press_the_steps_and_the_release_of_each_round_trip" },
+    ],
+    expected: "A native drag moves to the boundary point before each press, so the press passes the virtual key window and a button that a person holds does not refuse it.",
+    levels: ["unit"],
+  },
+  {
     id: "F729",
     implementation: [
       { file: "packages/workbench-mygo/src/shell.go", symbol: "func lineBox(size, multiple float32) float32 {" },

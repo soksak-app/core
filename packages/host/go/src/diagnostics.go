@@ -475,6 +475,12 @@ func nativeDrag(plan dragPlan, from point, clock func() time.Duration, deliver f
 	for turn := 0; turn < plan.Times; turn++ {
 		tripStart := steps
 		waiting := clock()
+		// A person moves to the point before the press. An application that is not active takes the move into its virtual key
+		// window, so the press and the steps after it pass the application as a person's do and the buttons that a person
+		// holds do not enter the gesture (docs/spec/exposure.md#virtual-key-window).
+		if err := deliver(input("move", from)); err != nil {
+			return nil, fmt.Errorf("native drag move before the press of round trip %d: %w", turn+1, err)
+		}
 		if err := presented(); err != nil {
 			return nil, fmt.Errorf("native drag wait before the press of round trip %d: %w", turn+1, err)
 		}
