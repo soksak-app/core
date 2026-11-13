@@ -589,6 +589,19 @@ const FEATURE_LINKS = [
   },
 
   {
+    id: "F767-2-1",
+    implementation: [
+      { file: "scripts/test-command.mjs", symbol: "async function cleanupGroup(pid) {" },
+    ],
+    tests: [
+      { file: "scripts/test/test-command.test.mjs", id: "ends at its limit with the cause when a process outside its group keeps the output open" },
+      { file: "scripts/test/test-command.test.mjs", id: "times out and reports timeout" },
+    ],
+    expected: "The supervisor sends SIGKILL at the limit, waits for the close of the output and the end of the group, and names a process outside the group that holds the output.",
+    levels: ["unit"],
+  },
+
+  {
     id: "F767-3-1",
     implementation: [
       { file: "packages/workbench/debug-ui.js", symbol: "debug.onChanged(({ path }) => {" },
@@ -1487,13 +1500,13 @@ const FEATURE_LINKS = [
       { file: "scripts/language-test-adapters.mjs", symbol: "function validateBuild(build, id) {" },
       { file: "scripts/language-test-adapters.mjs", symbol: "function unbuiltResult(caseSpec, build) {" },
       { file: "scripts/language-test-cases.json", symbol: "\"build\": { \"command\": \"cargo\"" },
-      { file: "scripts/test-command.mjs", symbol: "async function cleanupGroup(pid, termAlreadySent = false) {" },
+      { file: "scripts/test-command.mjs", symbol: "async function cleanupGroup(pid) {" },
     ],
     tests: [
       { file: "scripts/test/test-language-test-adapters.test.mjs", id: "a case builds before its test runs, so the limit of the case measures only the test" },
       { file: "scripts/test/test-language-test-adapters.test.mjs", id: "refuses a build without its own limit and names the case" },
       { file: "scripts/test/test-language-test-manifest.test.mjs", id: "each committed case of a compiled language declares its build, so the limit of the case measures only the test" },
-      { file: "scripts/test/test-command.test.mjs", id: "a refused SIGTERM at the limit to a group that holds only zombies still reports timeout" },
+      { file: "scripts/test/test-command.test.mjs", id: "a refused SIGKILL at the limit to a group that holds only zombies still reports timeout" },
       { file: "scripts/test/test-command.test.mjs", id: "counts a process group that holds only zombies as gone after a denied probe" },
     ],
     expected: "Each language case of a compiled language runs its declared build before its tests under a limit of its own, a failed build runs no test and reports its status, the limit of the case measures only the tests, and the command supervisor judges each group signal and probe by the rule of killGroup.",
@@ -9762,7 +9775,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "scripts/test/test-command.test.mjs", id: "counts a process group that holds only zombies as gone after a denied probe" },
       { file: "scripts/test/test-command.test.mjs", id: "reads the members of a group from the real process table after a denied probe" },
-      { file: "scripts/test/test-command.test.mjs", id: "does not convert denied cleanup verification after SIGKILL into success" },
+      { file: "scripts/test/test-command.test.mjs", id: "reports a refused SIGKILL of the cleanup while a member of the group runs" },
     ],
     expected: "A refused cleanup probe is decided from the process table: a group with no running member is cleaned, and a running member keeps the EPERM failure.",
     levels: ["unit"],

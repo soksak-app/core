@@ -125,26 +125,14 @@ export function killGroup(pgid, send = sendToGroup) {
 }
 
 /**
- * Ends the group pid of a supervised command after its leader ended or its limit passed: SIGTERM unless it was sent, then SIGKILL, each
- * followed by a wait of 150 ms for the group to run nothing. A group that still runs a member after both is an error that names the members.
+ * Ends the group pid of a supervised command after its leader ended, at its limit or at its cancellation: SIGKILL to the group, which no
+ * process can catch or ignore, and then a wait until the group runs nothing. No event reports the end of a process that is not a child of
+ * this process, so the wait reads the group at each 10 ms step until the system has ended every member; the wait has no limit of its own.
  */
-async function cleanupGroup(pid, termAlreadySent = false) {
-  const ended = async () => {
-    const deadline = performance.now() + 150;
-    do {
-      if (!groupRuns(pid)) return true;
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    } while (performance.now() < deadline);
-    return !groupRuns(pid);
-  };
+async function cleanupGroup(pid) {
   if (!groupRuns(pid)) return;
-  if (!termAlreadySent) signalRunningGroup(pid, 'SIGTERM', sendToGroup);
-  if (await ended()) return;
   killGroup(pid);
-  if (await ended()) return;
-  const error = new Error(`process group ${pid} survived cleanup; running: ${named(runningMembers(pid))}`);
-  error.code = 'PROCESS_GROUP_CLEANUP_FAILED';
-  throw error;
+  while (groupRuns(pid)) await new Promise((resolve) => setTimeout(resolve, 10));
 }
 
 export function runCommand(options) {
@@ -175,14 +163,11 @@ export function runCommand(options) {
   return new Promise((resolve) => {
     let timer;
     let heartbeat;
-    let forceKillTimer;
-    let signalFailureTimer;
-    let closeTimer;
     let finishing = false;
     let closeSeen = false;
     let leaderEnding = false;
+    let exited = false;
     let requestedStatus;
-    let termSent = false;
     let cleanupPromise;
     let exitCode;
     let exitSignal;
@@ -190,7 +175,7 @@ export function runCommand(options) {
     const stderrChunks = [];
 
     const beginCleanup = () => {
-      if (child?.pid && !cleanupPromise) cleanupPromise = cleanupGroup(child.pid, termSent);
+      if (child?.pid && !cleanupPromise) cleanupPromise = cleanupGroup(child.pid);
       return cleanupPromise ?? Promise.resolve();
     };
     const finish = async (finishedExitCode, finishedSignal, processError, skipCleanup = false) => {
@@ -198,9 +183,6 @@ export function runCommand(options) {
       finishing = true;
       clearTimeout(timer);
       clearInterval(heartbeat);
-      clearTimeout(forceKillTimer);
-      clearTimeout(signalFailureTimer);
-      clearTimeout(closeTimer);
       if (signal) signal.removeEventListener('abort', cancel);
       let cleanupError = null;
       if (!skipCleanup) {
@@ -220,44 +202,40 @@ export function runCommand(options) {
       }
       resolve(result);
     };
+    // A refused group signal leaves the group unended, but the leader is a child of this process. The runner ends the leader by its pid and
+    // finishes at its close, so the result does not return while the leader is still a child handle of this process. The group is not verified
+    // here, because a cleanup of a group whose signal was refused would repeat the refused signal.
     const reportSignalError = (error) => {
       callbackError = callbackError ?? error;
       process.stderr.write(`command process-group signal failed: ${error.message}\n`);
-      if (!signalFailureTimer) {
-        signalFailureTimer = setTimeout(() => {
-          if (!finishing) {
-            // A refused group signal leaves the group unended, but the leader is a child of this process. The runner ends the leader by its pid and
-            // finishes at its close, so the result does not return while the leader is still a child handle of this process. The group is not
-            // verified here, because a cleanup of a group whose signal was refused would repeat the refused signal.
-            leaderEnding = true;
-            child.stdout.destroy();
-            child.stderr.destroy();
-            child.once('close', () => finish(exitCode, exitSignal, error, true));
-            if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
-          }
-        }, 150);
-      }
+      if (finishing || leaderEnding) return;
+      leaderEnding = true;
+      child.stdout.destroy();
+      child.stderr.destroy();
+      if (closeSeen) finish(exitCode, exitSignal, error, true);
+      else child.once('close', () => finish(exitCode, exitSignal, error, true));
+      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
     };
     const cancel = () => terminate('cancelled');
     terminate = (status) => {
       if (finishing || requestedStatus) return;
       requestedStatus = status;
-      if (child?.pid) {
-        try {
-          signalRunningGroup(child.pid, 'SIGTERM', sendToGroup);
-          termSent = true;
-        } catch (error) {
-          reportSignalError(error);
-        }
-        forceKillTimer = setTimeout(() => {
-          if (!finishing && child?.pid) {
-            try {
-              killGroup(child.pid);
-            } catch (error) {
-              reportSignalError(error);
-            }
-          }
-        }, 100);
+      if (!child?.pid) return;
+      if (exited) {
+        // The group ended after the exit of the leader and the output stays open: a process outside the group holds it. The limit ends
+        // the wait for its end, and the result names the cause.
+        child.stdout.destroy();
+        child.stderr.destroy();
+        const running = groupRuns(child.pid) ? `; the group still runs: ${named(runningMembers(child.pid))}` : '; a process outside the group holds it';
+        const error = new Error(`the output of the command stayed open until its limit after its leader exited${running}`);
+        error.code = 'OUTPUT_HELD_OUTSIDE_GROUP';
+        finish(exitCode, exitSignal, error, true);
+        return;
+      }
+      try {
+        killGroup(child.pid);
+      } catch (error) {
+        reportSignalError(error);
       }
     };
 
@@ -279,22 +257,10 @@ export function runCommand(options) {
     child.once('exit', (leaderExitCode, leaderSignal) => {
       exitCode = leaderExitCode;
       exitSignal = leaderSignal;
-      clearTimeout(timer);
-      clearInterval(heartbeat);
-      const cleanup = beginCleanup();
-      cleanup.then(() => {
-        if (!closeSeen && !finishing) {
-          closeTimer = setTimeout(() => {
-            if (!closeSeen && !finishing) {
-              child.stdout.destroy();
-              child.stderr.destroy();
-              const error = new Error('child output streams did not drain after cleanup');
-              error.code = 'OUTPUT_DRAIN_TIMEOUT';
-              finish(exitCode, exitSignal, error, true);
-            }
-          }, 200);
-        }
-      }, (error) => {
+      exited = true;
+      // The end of the group closes every write end of the output that a member holds, and the close of the output finishes the command.
+      // The limit stays armed until that close, so an output that a process outside the group keeps open ends at the limit.
+      beginCleanup().catch((error) => {
         if (!closeSeen && !finishing) {
           child.stdout.destroy();
           child.stderr.destroy();
