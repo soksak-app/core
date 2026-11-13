@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F774: 부하 아래 window run 에서 check 가 연결된 동안 mygo host 는 scheduling priority 를 4 보다 높게 유지했고 stall 을 기록하지 않았다. `card-panels`, `card-tools-menu`, `image-region-press-focus`, `tab-press-keys` 는 세 host 에서 통과했다.
 - F774: host 는 endpoint connection 이 열려 있는 동안 system 의 user-initiated activity 를 쥐므로, window check 나 `sok` 가 답을 기다리는 동안 system 이 host 를 scheduling priority 4 의 background 에서 실행하지 않는다. 부하 아래 그런 mygo host 는 thread 가 CPU 를 40 ms 쓰는 동안 15.7 s 까지 멈췄다.
 - F777: capture check `e2e/capture-covered.test.mjs`, `capture-display-link`, `capture-lifecycle`, `capture-still` 은 비활성 application 을 요구하지 않고 capture 가 application 의 활성 상태를 그대로 두는지를 판정한다. 비활성 여부는 application 을 앞으로 가져오는 사람이 바꾼다. 네 check 는 세 host 의 window run 에서 통과했다.
 - F776: `e2e/card-panels.test.mjs` 의 fold control check 는 fold 가 표시된 뒤 control 을 다시 누르므로, 부하에서 그 누름이 더는 fold 의 hold 를 끝내지 않는다.

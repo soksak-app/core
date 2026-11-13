@@ -1439,6 +1439,24 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F774",
+    implementation: [
+      { file: "native/darwin/src/connection_activity.m", symbol: "void sp_connection_activity_hold(bool held) {" },
+      { file: "packages/host/go/src/endpoint.go", symbol: "func holdConnectionActivity(held bool) bool {" },
+      { file: "packages/host/rust/src/endpoint.rs", symbol: "fn hold_connection_activity(held: bool) -> bool {" },
+      { file: "native/darwin/src/stall_watch.m", symbol: "int sp_stall_schedule(int32_t *priority, uint64_t *cpu_ns) {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/connection_activity_test.m", id: "the hold begins the activity" },
+      { file: "packages/host/go/src/endpoint_activity_test.go", id: "TestTheEndpointHoldsTheActivityWhileAConnectionIsOpen" },
+      { file: "packages/host/rust/tests/endpoint_test.rs", id: "the_endpoint_holds_the_activity_while_a_connection_is_open" },
+      { file: "packages/host/go/tests/stall_watch_test.go", id: "TestAStallCarriesThePriorityAndItsEndTheCPUTimeOfTheStall" },
+      { file: "packages/host/rust/tests/stall_watch_test.rs", id: "a_stall_carries_the_priority_and_its_end_the_cpu_time_of_the_stall" },
+    ],
+    expected: "The host holds a user-initiated activity while an endpoint connection is open, so the system does not run it in the background while a client waits, and a stall record carries the scheduling priority and the CPU time of the process.",
+    levels: ["native", "unit"],
+  },
+  {
     id: "F777",
     implementation: [
       { file: "e2e/capture-covered.test.mjs", symbol: 'assert.equal(after.active, before.active, "the stills changed the activation of the application");' },
