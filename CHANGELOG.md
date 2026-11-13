@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F772: the checks of the mygo workbench that read many points of one frame share one image of that frame, because the mygo fork `v0.7.4-244-g4abb83d-soksak.12` that core pins converts the image of a frame once; three such checks fell from 30.3 s, 21.4 s and 10.1 s to 4.75 s, 0.64 s and 0.16 s on macOS 26.6 arm64.
 - F780: a native drag of `diagnostics.drag` moves to the boundary point before each press, as a person does, so an application that is not active takes the gesture into its virtual key window and a mouse button that a person holds no longer refuses the press of the check.
 - F778: a resize of the plane of the mygo workbench to the size that it has keeps the answers of `CanSplit`, so a frame no longer runs a trial split of each card on both axes; `Probes` of the grid counts those trial splits.
 - F778: the mygo framework `v0.7.4-244-g4abb83d-soksak.12` runs its worker at the quality of service of the main thread, which waits for the worker in each step, instead of the default class, which the system runs after other work on a loaded machine.

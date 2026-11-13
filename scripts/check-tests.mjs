@@ -1470,6 +1470,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F772",
+    implementation: [
+      { file: "packages/workbench-mygo/go.mod", symbol: "replace github.com/egoist/mygo => github.com/min-0-max/mygo" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/settings_modal_test.go", id: "TestAFocusedSwitchHasTheOutlineOfThePage" },
+      { file: "packages/workbench-mygo/tests/settings_modal_test.go", id: "TestKoreanTextBreaksAtTheSpaces" },
+      { file: "packages/workbench-mygo/tests/picker_test.go", id: "TestAQuestionBreaksAtTheSpaces" },
+    ],
+    expected: "The checks that read many points of one frame read one image of that frame from the pinned mygo fork.",
+    levels: ["unit"],
+  },
+  {
     id: "F729",
     implementation: [
       { file: "packages/workbench-mygo/src/shell.go", symbol: "func lineBox(size, multiple float32) float32 {" },

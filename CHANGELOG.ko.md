@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F772: 한 frame 의 여러 점을 읽는 mygo workbench check 는 그 frame 의 image 하나를 함께 쓴다. core 가 pin 한 mygo fork `v0.7.4-244-g4abb83d-soksak.12` 가 frame image 를 한 번만 변환하기 때문이다. 그런 check 세 개는 macOS 26.6 arm64 에서 30.3 s, 21.4 s, 10.1 s 에서 4.75 s, 0.64 s, 0.16 s 로 줄었다.
 - F780: `diagnostics.drag` 의 native drag 는 사람처럼 매 누름 전에 경계 점으로 이동하므로, 활성이 아닌 application 은 제스처를 가상 키 창으로 받고, 사람이 누른 마우스 버튼은 더 이상 check 의 누름을 거절시키지 않는다.
 - F778: mygo 워크벤치 plane 을 지금 크기로 resize 하면 `CanSplit` 의 답을 지키므로, frame 은 더 이상 모든 카드의 두 축에 시험 split 을 돌리지 않는다. grid 의 `Probes` 가 그 시험 split 을 센다.
 - F778: mygo framework `v0.7.4-244-g4abb83d-soksak.12` 는 worker 를, 부하가 있는 기계에서 시스템이 다른 일 뒤에 돌리는 default class 대신, step 마다 worker 를 기다리는 main thread 의 quality of service 로 돌린다.
