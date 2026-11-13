@@ -1509,6 +1509,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F778",
+    implementation: [
+      { file: "packages/host/go/src/diagnostics.go", symbol: "func nativeDrag(" },
+      { file: "packages/workbench-mygo/src/layout/grid.go", symbol: "func (g *Grid) Probes() int {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/layout/split_probes_test.go", id: "TestAResizeToTheSameSizeKeepsTheAnswersOfCanSplit" },
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestANativeDragStepFollowsTheStepBeforeItByOnePeriod" },
+      { file: "e2e/plain-view.test.mjs", id: "a view without plugin code draws within 40 ms during a drag and its new size within 100 ms of a card change" },
+    ],
+    expected: "The mygo host runs a drag at its asked rate and draws the content frames of a drag within 40 ms under the load at which the other hosts do.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F781",
     implementation: [
       { file: "packages/host/go/src/diagnostics.go", symbol: "func nativeDrag(" },
