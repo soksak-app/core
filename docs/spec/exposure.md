@@ -402,6 +402,8 @@ The page interface for surface pages is `page.exposure`: `register(kind, name)`,
 | 1011 | An open press of another pointer holds state that the input would share, so the input was not delivered; the message names that pointer and the state ([named pointers](#named-pointers)) |
 | -32000 | A registered command or status handler failed; `message` is its error message |
 
+A `command.run` of a host command name that the host does not declare fails with 1001 and the text `command <name> is not declared`. A `status.get`, `status.watch` or `status.unwatch` of a host status name that the host does not declare fails with 1001 and the text `status <name> is not declared`. The Go and Rust hosts send these texts exactly.
+
 A relayed request ends only by its reply or by the end of its peer, so its document sends no reply after its end, except to a request that the end of its endpoint connection ended. The host accepts a reply to a request that ended, writes it as the observation `exposure reply <id> arrived after its request ended`, and answers nothing; a reply to a request that the relay never sent fails with `exposure reply <id> has no matching request`.
 
 The [local endpoint](endpoint.md) closes the connection after an undeclared method.

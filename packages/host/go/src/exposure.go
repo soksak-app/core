@@ -1027,7 +1027,7 @@ func (b hostBackend) HostCommand(window, name string, params json.RawMessage, re
 			})
 		})
 	default:
-		return nil, rpcError(codeUnknownName, "unknown command %s", name)
+		return nil, rpcError(codeUnknownName, "command %s is not declared", name)
 	}
 	return nil, nil
 }

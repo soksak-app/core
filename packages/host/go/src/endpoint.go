@@ -1461,7 +1461,7 @@ func statusGet(e *Endpoint, _ *endpointConn, params json.RawMessage, reply *Repl
 	}
 	if isHostName(name) {
 		if _, ok := hostStatus[name]; !ok {
-			return nil, rpcError(codeUnknownName, "unknown status %s", name)
+			return nil, rpcError(codeUnknownName, "status %s is not declared", name)
 		}
 		return e.backend.HostStatus(window, name)
 	}
@@ -1477,7 +1477,7 @@ func watchTopic(e *Endpoint, params json.RawMessage, on bool) (topic, bool, erro
 	t := topic{window: window, name: name}
 	if isHostName(name) {
 		if _, ok := hostStatus[name]; !ok {
-			return topic{}, on, rpcError(codeUnknownName, "unknown status %s", name)
+			return topic{}, on, rpcError(codeUnknownName, "status %s is not declared", name)
 		}
 		return t, on, nil
 	}
@@ -1503,7 +1503,7 @@ func commandRun(e *Endpoint, _ *endpointConn, params json.RawMessage, reply *Rep
 	}
 	if isHostName(name) {
 		if _, ok := hostCommands[name]; !ok {
-			return nil, rpcError(codeUnknownName, "unknown command %s", name)
+			return nil, rpcError(codeUnknownName, "command %s is not declared", name)
 		}
 		var fields struct {
 			Params json.RawMessage `json:"params"`

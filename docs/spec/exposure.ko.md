@@ -402,6 +402,8 @@ AppKit과 WebKit은 일부 상태를 pointer마다가 아니라 창, 페이지, 
 | 1011 | 다른 pointer의 열린 누름이 입력이 공유할 상태를 쥐고 있어 입력을 전달하지 않음. 메시지는 그 pointer와 상태를 밝힌다([named pointers](#named-pointers)) |
 | -32000 | 등록된 명령이나 status 처리기가 실패함. `message`는 그 오류 메시지다 |
 
+host가 선언하지 않은 host 명령 이름의 `command.run`은 1001과 텍스트 `command <name> is not declared`로 실패한다. host가 선언하지 않은 host status 이름의 `status.get`, `status.watch`, `status.unwatch`는 1001과 텍스트 `status <name> is not declared`로 실패한다. Go와 Rust host는 이 텍스트를 그대로 보낸다.
+
 중계한 요청은 그 답이나 상대의 끝으로만 끝나므로, 그 문서는 끝난 요청에 답을 보내지 않는다. 예외는 endpoint 연결의 끝이 끝낸 요청이다. 호스트는 끝난 요청에 온 답을 받아 관찰 `exposure reply <id> arrived after its request ended`로 쓰고 아무것도 답하지 않는다. 중계가 보낸 적 없는 요청에 온 답은 `exposure reply <id> has no matching request`로 실패한다.
 
 [로컬 엔드포인트](endpoint.ko.md)는 선언되지 않은 메서드를 받으면 연결을 종료한다.

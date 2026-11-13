@@ -199,6 +199,18 @@ fn host_declarations() -> Value {
     })
 }
 
+/// The text of the 1001 error for a host name that the host does not declare for this request method. A command or a status
+/// names its kind, as the Go host does; the other names keep the name alone.
+fn undeclared_text(method: &str, name: &str) -> String {
+    match method {
+        "status.get" | "status.watch" | "status.unwatch" => {
+            format!("status {name} is not declared")
+        }
+        "command.run" => format!("command {name} is not declared"),
+        _ => format!("{name} is not declared"),
+    }
+}
+
 /// Checks that the name whose owner is host is declared for this request method. An undeclared name is 1001.
 pub fn check_host_name(method: &str, name: &str) -> Result<(), Failure> {
     let kind = match method {
@@ -214,10 +226,7 @@ pub fn check_host_name(method: &str, name: &str) -> Result<(), Failure> {
     if listed {
         Ok(())
     } else {
-        Err(Failure::new(
-            UNKNOWN_NAME,
-            format!("{name} is not declared"),
-        ))
+        Err(Failure::new(UNKNOWN_NAME, undeclared_text(method, name)))
     }
 }
 
@@ -3020,7 +3029,7 @@ impl Host {
         reply: Option<&crate::endpoint::ReplyScope>,
     ) -> Result<Value, Failure> {
         check_host_name(method, name)?;
-        let unknown = || Failure::new(UNKNOWN_NAME, format!("{name} is not declared"));
+        let unknown = || Failure::new(UNKNOWN_NAME, undeclared_text(method, name));
         match (method, name) {
             ("status.get", "host.window") => window_status(window),
             ("status.get", "host.screens") => {

@@ -490,13 +490,21 @@ func TestEndpointTargetParamsOrder(t *testing.T) {
 	}
 }
 
-// contract: endpoint.names.unknown-host-name-1001, endpoint.names.missing-name-invalid, endpoint.names.owner-form-required, endpoint.names.valid-name-examples, endpoint.input.pointer-invalid-phase
+// contract: endpoint.names.unknown-host-name-1001, endpoint.errors.unknown-name-text, endpoint.names.missing-name-invalid, endpoint.names.owner-form-required, endpoint.names.valid-name-examples, endpoint.input.pointer-invalid-phase
 func TestEndpointNameErrors(t *testing.T) {
 	_, address, _ := serve(t, newFakeBackend())
 	conn := dial(t, address)
 	got := call(t, conn, 1, "command.run", map[string]any{"window": "main", "name": "host.window.unknown"})
-	if got.Error == nil || got.Error.Code != 1001 {
-		t.Fatalf("unknown host name: %+v", got)
+	if got.Error == nil || got.Error.Code != 1001 || got.Error.Message != "command host.window.unknown is not declared" {
+		t.Fatalf("unknown host command: %+v", got)
+	}
+	got = call(t, conn, 4, "status.get", map[string]any{"window": "main", "name": "host.nope"})
+	if got.Error == nil || got.Error.Code != 1001 || got.Error.Message != "status host.nope is not declared" {
+		t.Fatalf("unknown host status get: %+v", got)
+	}
+	got = call(t, conn, 5, "status.watch", map[string]any{"window": "main", "name": "host.nope"})
+	if got.Error == nil || got.Error.Code != 1001 || got.Error.Message != "status host.nope is not declared" {
+		t.Fatalf("unknown host status watch: %+v", got)
 	}
 	got = call(t, conn, 2, "status.get", map[string]any{"window": "main"})
 	if got.Error == nil || got.Error.Code != -32602 {
