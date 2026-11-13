@@ -50,13 +50,17 @@ static BOOL waitForInputResult(SPInputResultWait *wait, NSString *what) {
 }
 
 // A posted event is in the queue of the application when postEvent returns, so taking it does not wait.
-static BOOL dispatchQueuedEvent(NSEvent *event, NSEventMask mask) {
+// Posts event, takes it from the queue and dispatches it, and answers the event that the application dispatched, or nil when it
+// dispatched another one. AppKit gives a posted mouse event the location in the window that it computes from the location on the
+// screen, which can differ from the location of the posted event by the rounding of that conversion, so a check of a location that
+// the dispatch recorded compares it with the location of the answered event.
+static NSEvent *dispatchQueuedEvent(NSEvent *event, NSEventMask mask) {
     [NSApp postEvent:event atStart:NO];
     NSEvent *dequeued = [NSApp nextEventMatchingMask:mask
         untilDate:NSDate.distantPast inMode:NSDefaultRunLoopMode dequeue:YES];
-    if (!dequeued) return NO;
+    if (!dequeued) return nil;
     [NSApp sendEvent:dequeued];
-    return NSApp.currentEvent == dequeued;
+    return NSApp.currentEvent == dequeued ? dequeued : nil;
 }
 
 // Waits until the application dispatched every event that is in its queue now: a marker event posted at the end of the
@@ -1716,7 +1720,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         NSEvent *beforeRepeatClick97 = [NSEvent otherEventWithType:NSEventTypeApplicationDefined location:NSZeroPoint
             modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
             context:nil subtype:0 data1:0 data2:0];
-        check(dispatchQueuedEvent(beforeRepeatClick97, NSEventMaskApplicationDefined)
+        check(dispatchQueuedEvent(beforeRepeatClick97, NSEventMaskApplicationDefined) != nil
             && NSApp.currentEvent.type == NSEventTypeApplicationDefined
             && !sp_input_press_origin_point(window, 0, NULL, NULL, NULL),
             @"press focus: a repeated click starts focused with no stale mouse context or press origin");
@@ -1872,16 +1876,23 @@ int main(int argc, char **argv) { @autoreleasepool {
                 collectedEvents, NSStringFromClass(window.firstResponder.class)]);
 
         focusHandler15.count = 0;
+        // The press that the application dispatches carries the location that AppKit computed (dispatchQueuedEvent).
+        __block NSPoint dispatchedDown15 = NSMakePoint(NAN, NAN);
+        id downMonitor15 = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown handler:^NSEvent *(NSEvent *event) {
+            dispatchedDown15 = event.locationInWindow;
+            return event;
+        }];
         [NSApp postEvent:downRoundTrip15 atStart:NO];
         eventWait(@"the posted press reaches the focus command of the page", ^BOOL { return focusHandler15.count > 0; });
+        [NSEvent removeMonitor:downMonitor15];
         check(focusHandler15.count == 1,
             [NSString stringWithFormat:@"press focus: the same-region pointerdown runs the page focus command once (got %lu)",
                 (unsigned long)focusHandler15.count]);
         double trackedX15 = 0, trackedY15 = 0;
         BOOL trackedOrigin15 = sp_input_press_origin_point(window, 0, &trackedX15, &trackedY15, NULL);
-        check(trackedOrigin15 && trackedX15 == inside15.x && trackedY15 == inside15.y,
+        check(trackedOrigin15 && trackedX15 == dispatchedDown15.x && trackedY15 == dispatchedDown15.y,
             [NSString stringWithFormat:@"press focus: AppKit tracks the physical down origin before the focus command (tracked %@ at %.2f,%.2f expected %@)",
-                trackedOrigin15 ? @"yes" : @"no", trackedX15, trackedY15, NSStringFromPoint(inside15)]);
+                trackedOrigin15 ? @"yes" : @"no", trackedX15, trackedY15, NSStringFromPoint(dispatchedDown15)]);
         [NSApp postEvent:upRoundTrip15 atStart:NO];
         waitForReleaseEnd(window, page, @"the posted release after the page focus command ends");
         BOOL reportedRoundTripLoss15 = NO;
@@ -1920,15 +1931,17 @@ int main(int argc, char **argv) { @autoreleasepool {
         if (sp_input_press_origin_point(window, 0, NULL, NULL, &staleCommandToken15))
             sp_input_press_origin_clear(window, 0, staleCommandToken15);
         unsigned long long monitorBeforeCommand15 = sp_observe_count("image_region.press_origin");
-        BOOL commandDownQueued15 = dispatchQueuedEvent(downCommand15, NSEventMaskLeftMouseDown);
+        NSEvent *commandDownDispatched15 = dispatchQueuedEvent(downCommand15, NSEventMaskLeftMouseDown);
+        BOOL commandDownQueued15 = commandDownDispatched15 != nil;
         double commandOriginX15 = 0, commandOriginY15 = 0;
         BOOL commandOrigin15 = sp_input_press_origin_point(window, 0, &commandOriginX15, &commandOriginY15, NULL);
         unsigned long long monitorAfterCommandDown15 = sp_observe_count("image_region.press_origin");
         check(commandDownQueued15 && monitorAfterCommandDown15 == monitorBeforeCommand15 + 1
-            && commandOrigin15 && commandOriginX15 == inside15.x && commandOriginY15 == inside15.y,
+            && commandOrigin15 && commandOriginX15 == commandDownDispatched15.locationInWindow.x
+            && commandOriginY15 == commandDownDispatched15.locationInWindow.y,
             @"press focus: queued physical press records its exact origin once");
         sp_region_focus(region15);
-        BOOL commandUpQueued15 = dispatchQueuedEvent(upCommand15, NSEventMaskLeftMouseUp);
+        BOOL commandUpQueued15 = dispatchQueuedEvent(upCommand15, NSEventMaskLeftMouseUp) != nil;
         commandOriginX15 = commandOriginY15 = 0;
         commandOrigin15 = sp_input_press_origin_point(window, 0, &commandOriginX15, &commandOriginY15, NULL);
         check(commandUpQueued15,
@@ -1954,15 +1967,17 @@ int main(int argc, char **argv) { @autoreleasepool {
         if (sp_input_press_origin_point(window, 0, NULL, NULL, &staleOutsideToken15))
             sp_input_press_origin_clear(window, 0, staleOutsideToken15);
         unsigned long long monitorBeforeOutside15 = sp_observe_count("image_region.press_origin");
-        BOOL outsideDownQueued15 = dispatchQueuedEvent(downOutsideRelease15, NSEventMaskLeftMouseDown);
+        NSEvent *outsideDownDispatched15 = dispatchQueuedEvent(downOutsideRelease15, NSEventMaskLeftMouseDown);
+        BOOL outsideDownQueued15 = outsideDownDispatched15 != nil;
         double outsideOriginX15 = 0, outsideOriginY15 = 0;
         BOOL outsideOrigin15 = sp_input_press_origin_point(window, 0, &outsideOriginX15, &outsideOriginY15, NULL);
         unsigned long long monitorAfterOutsideDown15 = sp_observe_count("image_region.press_origin");
         check(outsideDownQueued15 && monitorAfterOutsideDown15 == monitorBeforeOutside15 + 1
-            && outsideOrigin15 && outsideOriginX15 == inside15.x && outsideOriginY15 == inside15.y,
+            && outsideOrigin15 && outsideOriginX15 == outsideDownDispatched15.locationInWindow.x
+            && outsideOriginY15 == outsideDownDispatched15.locationInWindow.y,
             @"press focus: queued outside-release gesture records its inside press origin once");
         sp_region_focus(region15);
-        BOOL outsideUpQueued15 = dispatchQueuedEvent(upOutsideRelease15, NSEventMaskLeftMouseUp);
+        BOOL outsideUpQueued15 = dispatchQueuedEvent(upOutsideRelease15, NSEventMaskLeftMouseUp) != nil;
         outsideOriginX15 = outsideOriginY15 = 0;
         outsideOrigin15 = sp_input_press_origin_point(window, 0, &outsideOriginX15, &outsideOriginY15, NULL);
         check(outsideUpQueued15,

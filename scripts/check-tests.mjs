@@ -589,6 +589,19 @@ const FEATURE_LINKS = [
   },
 
   {
+    id: "F764",
+    implementation: [
+      { file: "native/darwin/tests/image_region_test.m", symbol: "static NSEvent *dispatchQueuedEvent(NSEvent *event, NSEventMask mask) {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_region_test.m", id: "press focus: queued physical press records its exact origin once" },
+      { file: "native/darwin/tests/image_region_test.m", id: "press focus: queued outside-release gesture records its inside press origin once" },
+    ],
+    expected: "The press focus checks compare a recorded press origin with the location of the event that the application dispatched.",
+    levels: ["native"],
+  },
+
+  {
     id: "F763",
     implementation: [
       { file: "native/darwin/tests/surface_layout_test.m", symbol: "static BOOL refreshNotAfter(double refresh, double other, double period) {" },

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F764: `image_region_test --activation` compares a recorded press origin with the location of the dispatched event, which AppKit computes from the location on the screen, so a machine with several displays no longer fails it.
 - F763: `surface_layout_test` judges the display refresh of the commit against the settled refresh by refresh, so the rounding between two times of one refresh no longer fails it.
 - F762: A key that the end of a layout hold gives back is told once to the observers of the actions of the user also when the pointer moved, because the location that AppKit gives the returned key event no longer names it.
 - F761: `window_titlebar_reload_test` reads the time of the title bar change in the ready answer of the start, right after the change, so the start transaction that begins before the change no longer fails it.
