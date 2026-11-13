@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F729: 2026-11-13 window run 에서 `e2e/design-hosts.test.mjs` 가 세 host 에서 통과했다.
 - F729: mygo 워크벤치의 text 줄은 page 의 줄을 WebKit 이 배치하는 것처럼 높이가 정수 point 이므로, line height 17.4 에서 세 줄로 접히는 설명은 모든 host 에서 51 point 높이다. mygo fork `v0.7.4-244-g4abb83d-soksak.11` 이 text 의 line height 를 내림하고, 워크벤치는 tab 의 가운데를 같은 규칙으로 놓는다.
 - F774: 부하 아래 window run 에서 check 가 연결된 동안 mygo host 는 scheduling priority 를 4 보다 높게 유지했고 stall 을 기록하지 않았다. `card-panels`, `card-tools-menu`, `image-region-press-focus`, `tab-press-keys` 는 세 host 에서 통과했다.
 - F774: host 는 endpoint connection 이 열려 있는 동안 system 의 user-initiated activity 를 쥐므로, window check 나 `sok` 가 답을 기다리는 동안 system 이 host 를 scheduling priority 4 의 background 에서 실행하지 않는다. 부하 아래 그런 mygo host 는 thread 가 CPU 를 40 ms 쓰는 동안 15.7 s 까지 멈췄다.
