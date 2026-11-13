@@ -1457,6 +1457,19 @@ const FEATURE_LINKS = [
     levels: ["native", "unit"],
   },
   {
+    id: "F729",
+    implementation: [
+      { file: "packages/workbench-mygo/src/shell.go", symbol: "func lineBox(size, multiple float32) float32 {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/design_match_test.go", id: "TestTheButtonsOfAnOrderRowStandAfterTheNameOfItsValueAtTheBodySize" },
+      { file: "packages/workbench-mygo/tests/design_match_settings_test.go", id: "TestTheFolderCaptionBreaksAfterItsSeparatorsInsideThePane" },
+      { file: "e2e/design-hosts.test.mjs", id: "every host places each workbench element of each state at the same place" },
+    ],
+    expected: "The mygo workbench places each element of each state where the Wails and Tauri pages place it, with text lines a whole number of points high.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F777",
     implementation: [
       { file: "e2e/capture-covered.test.mjs", symbol: 'assert.equal(after.active, before.active, "the stills changed the activation of the application");' },
