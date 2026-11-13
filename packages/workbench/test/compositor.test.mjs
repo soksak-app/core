@@ -1,8 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { JSDOM } from "jsdom";
+import { selectPageWire } from "@soksak/runtime";
+
+// The host module reads the host wire when it is first imported, so the first test selects its case before that import. Each test
+// selects its own case (docs/spec/cases/page-wire/README.md). The promise of setImmediate ends after the calls that the page started
+// in the current task have reached the wire.
+const sent = () => new Promise((resolve) => setImmediate(resolve));
 
 test("a layout published before drawing waits for the host's placement answer", async () => {
+  const wire = selectPageWire("compositor-placement-wait");
   const dom = new JSDOM(`<div id="plane"><div data-card-id="card">
     <div data-native-surface data-native-surface-id="surface" data-native-plugin="probe" data-native-layer="0"></div>
   </div></div>`, { url: "https://example.test/", pretendToBeVisual: true });
@@ -18,12 +25,13 @@ test("a layout published before drawing waits for the host's placement answer", 
   const { registerPlugin } = await import("../registry.js");
   registerPlugin({ id: "probe", surface: () => ({ module: "probe.js", composition: { kind: "dom" } }) });
   const { onCommit, placementPending, publishAhead, setSlotSurface } = await import("../compositor.js");
+  const { surfaces } = await import("../host.js");
   setSlotSurface(slot, { surfaceId: "surface", pluginId: "probe", composition: { kind: "dom" } });
-  let answer, prepared;
-  onCommit((record) => new Promise((resolve) => {
+  let prepared;
+  onCommit((record) => {
     prepared = record;
-    answer = () => resolve({ placements: record.surfaces.map((surface) => ({ id: surface.id, ...surface.applied })), deferred: [] });
-  }));
+    return surfaces.place(record);
+  });
 
   const pending = publishAhead(new Map([["card", { x: 20, y: 0, w: 180, h: 150 }]]),
     new Map([["card", { id: "surface", dim: false, inset: { left: 2, top: 30, width: 4, height: 50 }, grid: 2 }]]));
@@ -43,14 +51,15 @@ test("a layout published before drawing waits for the host's placement answer", 
   assert.equal(prepared.surfaces[0].visible, true,
     "native preparation keeps a surface whose future slot was measured visible at its new rectangle");
   assert.deepEqual(prepared.surfaces[0].declared, { x: 22, y: 30, w: 176, h: 100 });
-  // One microtask passes before the answer: a draw that the fault starts on an already settled promise runs in the microtask queued by
-  // its then (above), which is queued before this continuation (FIFO order of microtasks).
-  await Promise.resolve();
+  // The page sends the placement request in a task after the commit, so the call is in the wire once the task has ended. The
+  // order shows that the DOM drew only after the native placement answered: the answer is released right before it is given.
+  await sent();
+  assert.deepEqual(wire.calls.map(({ name }) => name), ["syncSurfaces"], "the page did not send the placement request");
   order.push("answered");
-  answer();
+  wire.release();
   const placed = await pending;
   assert.deepEqual(order, ["answered", "drawn"], "the DOM drew while the native placement was outstanding");
-  assert.deepEqual(placed, [{ id: "surface", x: 22, y: 30, w: 176, h: 100 }]);
+  assert.deepEqual(placed, [{ id: "surface", visible: true, scale: 2, x: 22, y: 30, w: 176, h: 100 }]);
   assert.equal(drawn, true);
   assert.equal(placementPending(), false, "the host answer seats the current commit");
 
@@ -58,24 +67,28 @@ test("a layout published before drawing waits for the host's placement answer", 
     new Map([["card", { id: "replacement", dim: false, inset: null }]]));
   assert.equal(typeof replacement?.then, "function", "replacing content must prepare the existing native view before drawing");
   assert.equal(prepared.surfaces[0].visible, false, "content with no matching future slot must be hidden before its card changes");
-  answer();
+  await sent();
+  wire.release();
   await replacement;
 
-  // A surface that has no card in the next layout is hidden too. The host requires visible to be a boolean.
+  // A surface that has no card in the next layout is hidden too. The host requires visible to be a boolean. The layout is the same as
+  // the replacement, so the page sends no request and the placement of the replacement stands.
   const removed = publishAhead(new Map(), new Map());
   assert.strictEqual(prepared.surfaces[0].visible, false, "content whose card leaves the layout must be hidden with a boolean");
-  answer();
   await removed;
   const resizedSidebar = publishAhead(new Map([["card", { x: 20, y: 0, w: 400, h: 150 }]]),
     new Map([["card", { id: "surface", dim: false, inset: { left: 192, top: 30, width: 194, height: 50 } }]]));
   assert.deepEqual(prepared.surfaces[0].declared, { x: 212, y: 30, w: 206, h: 100 },
     "native preparation reused the old sidebar width instead of the captured future inset");
-  answer();
+  await sent();
+  wire.release();
   await resizedSidebar;
+  wire.finish();
   dom.window.close();
 });
 
 test("a surface in a hidden fullscreen sibling stays mounted and becomes invisible", async () => {
+  const wire = selectPageWire("compositor-hidden-sibling-publish");
   const dom = new JSDOM(`<div id="plane"><div data-card-id="hidden-card" hidden>
     <div data-native-surface data-native-surface-id="hidden-surface" data-native-plugin="fullscreen-probe" data-native-layer="0"></div>
   </div></div>`, { pretendToBeVisual: true });
@@ -86,13 +99,14 @@ test("a surface in a hidden fullscreen sibling stays mounted and becomes invisib
   registerPlugin({ id: "fullscreen-probe", surface: () => ({ module: "probe.js", composition: { kind: "dom" } }) });
   const slot = document.querySelector("[data-native-surface]");
   const compositor = await import("../compositor.js?fullscreen-sibling");
+  const { surfaces } = await import("../host.js");
   compositor.setSlotSurface(slot, { surfaceId: "hidden-surface", pluginId: "fullscreen-probe", composition: { kind: "dom" } });
   let width = 100, height = 100;
   slot.getBoundingClientRect = () => ({left:0,top:0,width,height});
   let record;
   compositor.onCommit((value) => {
     record = value;
-    return { placements: value.surfaces.map((surface) => ({ id: surface.id, ...surface.applied })), deferred: [] };
+    return surfaces.place(value);
   });
   try {
     await compositor.publish();
@@ -116,6 +130,7 @@ test("a surface in a hidden fullscreen sibling stays mounted and becomes invisib
     height = 100;
     await compositor.publish();
     assert.equal(record.surfaces[0].visible, true, "restoring the slot height did not restore visibility");
+    wire.finish();
   } finally { dom.window.close(); }
 });
 

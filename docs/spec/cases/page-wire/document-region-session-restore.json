@@ -1,0 +1,13 @@
+{
+  "name": "document-region-session-restore",
+  "description": "The state read of each region of a tab gives the interactionState of the region with a session history, and an empty state for a region without one.",
+  "replay": false,
+  "reason": "The state read reads a document region of a window, which only the native host with a window produces (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "documentInteractionState", "payload": { "surface": "tab", "document": "page" } } },
+    { "reply": { "result": "AAAA" } },
+    { "call": { "name": "documentInteractionState", "payload": { "surface": "tab", "document": "empty" } } },
+    { "reply": { "result": "" } }
+  ]
+}

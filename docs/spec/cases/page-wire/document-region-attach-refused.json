@@ -1,0 +1,17 @@
+{
+  "name": "document-region-attach-refused",
+  "description": "The host refuses a restored interactionState, and the region then attaches again without it; a later attach of a region that fails is the error of that attach, and the state read of the attached region answers its state.",
+  "replay": false,
+  "reason": "The attach creates a document region of a window, which only the native host with a window produces (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "documentAttach", "payload": { "document": "page", "interactionState": "BAD", "surface": "tab" } } },
+    { "reply": { "error": "interactionState is not a session history" } },
+    { "call": { "name": "documentAttach", "payload": { "document": "page", "surface": "tab" } } },
+    { "reply": { "result": null } },
+    { "call": { "name": "documentInteractionState", "payload": { "surface": "tab", "document": "page" } } },
+    { "reply": { "result": "S" } },
+    { "call": { "name": "documentAttach", "payload": { "document": "side", "surface": "tab" } } },
+    { "reply": { "error": "region side is gone" } }
+  ]
+}

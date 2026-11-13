@@ -1,0 +1,17 @@
+{
+  "name": "document-region-reasons",
+  "description": "Each attached region of a tab is queried with its surface and document name, and the query replies of the regions give the reasons of the tab.",
+  "replay": false,
+  "reason": "The query reads the state of a document region of a window, which only the native host with a window produces (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "documentQuery", "payload": { "surface": "tab", "document": "page" } } },
+    { "reply": { "result": { "media": true, "capture": false, "form": false } } },
+    { "call": { "name": "documentQuery", "payload": { "surface": "tab", "document": "side" } } },
+    { "reply": { "result": { "media": false, "capture": true, "form": true } } },
+    { "call": { "name": "documentQuery", "payload": { "surface": "other", "document": "idle" } } },
+    { "reply": { "result": { "media": false, "capture": false, "form": false } } },
+    { "call": { "name": "documentQuery", "payload": { "surface": "tab", "document": "side" } } },
+    { "reply": { "result": { "media": false, "capture": true, "form": true } } }
+  ]
+}

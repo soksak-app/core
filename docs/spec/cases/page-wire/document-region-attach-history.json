@@ -1,0 +1,13 @@
+{
+  "name": "document-region-attach-history",
+  "description": "The attach of a region that has a stored session sends the interactionState with its document name and surface once, and the next attach of the same region sends the document name alone.",
+  "replay": false,
+  "reason": "The attach creates a document region of a window, which only the native host with a window produces (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "documentAttach", "payload": { "document": "page", "interactionState": "AAAA", "surface": "tab" } } },
+    { "reply": { "result": null } },
+    { "call": { "name": "documentAttach", "payload": { "document": "page", "surface": "tab" } } },
+    { "reply": { "result": null } }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "name": "document-region-session-none",
+  "description": "The state read of a region that has no session history answers an empty state, so the tab has no history.",
+  "replay": false,
+  "reason": "The state read reads a document region of a window, which only the native host with a window produces (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "documentInteractionState", "payload": { "surface": "tab", "document": "page" } } },
+    { "reply": { "result": "" } }
+  ]
+}

@@ -9,7 +9,7 @@ A case is one tracked JSON file in this directory. The consumer is the workbench
 ## File
 
 - The file name is `<name>.json`, and the `name` member equals the file name without `.json`.
-- One area per file name prefix: `log-`, `overlay-`, `workspace-`.
+- One area per file name prefix: `compositor-`, `document-region-`, `exposure-reply-`, `file-drop-`, `log-`, `overlay-`, `workspace-`.
 
 ## Members
 

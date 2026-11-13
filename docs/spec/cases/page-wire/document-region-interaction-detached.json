@@ -1,0 +1,13 @@
+{
+  "name": "document-region-interaction-detached",
+  "description": "A read of the state of a region is held by the host until the view of the tab restarts and attaches the same region name, and the held read then fails with the error of the detached region, while the later read fails with its own error.",
+  "replay": false,
+  "reason": "The state read reads a document region of a window, which only the native host with a window produces (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "documentInteractionState", "payload": { "surface": "tab", "document": "page" } } },
+    { "reply": { "error": "document \"page\" is not attached", "held": true } },
+    { "call": { "name": "documentInteractionState", "payload": { "surface": "tab", "document": "page" } } },
+    { "reply": { "error": "document page: the read failed" } }
+  ]
+}

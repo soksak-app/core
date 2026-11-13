@@ -1,0 +1,39 @@
+{
+  "name": "document-region-query-failure",
+  "description": "A failed query of a region is answered with its error, and the page records the error in the log batch after it reads the host clock five times.",
+  "replay": false,
+  "reason": "The query reads the state of a document region of a window, which only the native host with a window produces (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {
+    "ts-us": { "type": "integer", "example": 1791000000000456 },
+    "mono-ns": { "type": "integer", "example": 5000000789 },
+    "clock-trip-us": { "type": "integer", "example": 120, "source": "page" },
+    "clock-resolution-us": { "type": "integer", "example": 1, "source": "page" },
+    "page-start": { "type": "string", "example": "9b2f6c1e-4d7a-4e8b-9f3a-2c5d8e1a7b60", "source": "page" },
+    "clock-ts-us": { "type": "integer", "example": 1791000000000456, "source": "page" },
+    "clock-mono-ns": { "type": "integer", "example": 5000000789, "source": "page" },
+    "record-ts-us": { "type": "integer", "example": 1791000000000470, "source": "page" },
+    "record-mono-ns": { "type": "integer", "example": 5000000803, "source": "page" }
+  },
+  "steps": [
+    { "call": { "name": "documentQuery", "payload": { "surface": "tab", "document": "page" } } },
+    { "reply": { "error": "document page: the document region is closed" } },
+    { "call": { "name": "log", "payload": { "action": "clock" } } },
+    { "reply": { "result": { "ts_us": "$ts-us", "mono_ns": "$mono-ns" } } },
+    { "call": { "name": "log", "payload": { "action": "clock" } } },
+    { "reply": { "result": { "ts_us": "$ts-us", "mono_ns": "$mono-ns" } } },
+    { "call": { "name": "log", "payload": { "action": "clock" } } },
+    { "reply": { "result": { "ts_us": "$ts-us", "mono_ns": "$mono-ns" } } },
+    { "call": { "name": "log", "payload": { "action": "clock" } } },
+    { "reply": { "result": { "ts_us": "$ts-us", "mono_ns": "$mono-ns" } } },
+    { "call": { "name": "log", "payload": { "action": "clock" } } },
+    { "reply": { "result": { "ts_us": "$ts-us", "mono_ns": "$mono-ns" } } },
+    { "call": { "name": "log", "payload": {
+      "action": "batch",
+      "events": [
+        { "ts_us": "$clock-ts-us", "mono_ns": "$clock-mono-ns", "start": "$page-start", "level": "info", "event": "workbench.log.clock", "fields": { "trip_us": "$clock-trip-us", "resolution_us": "$clock-resolution-us" } },
+        { "ts_us": "$record-ts-us", "mono_ns": "$record-mono-ns", "start": "$page-start", "level": "error", "event": "workbench.record.error", "fields": { "where": "memory saver", "text": "tab tab: document page: the document region is closed" } }
+      ]
+    } } },
+    { "reply": { "result": null } }
+  ]
+}

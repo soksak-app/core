@@ -1,0 +1,7 @@
+{
+  "name": "document-region-none",
+  "description": "A page that calls no host method of the document regions has an empty case, which the page-wire reader accepts for a test that sends no call.",
+  "replay": true,
+  "variables": {},
+  "steps": []
+}

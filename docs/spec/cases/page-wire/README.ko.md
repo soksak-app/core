@@ -9,7 +9,7 @@ case는 이 디렉터리의 추적되는 JSON 파일 하나다. consumer는 work
 ## 파일
 
 - 파일 이름은 `<name>.json`이며, `name` 멤버는 `.json`을 뺀 파일 이름과 같다.
-- 파일 이름 접두사마다 한 영역을 둔다: `log-`, `overlay-`, `workspace-`.
+- 파일 이름 접두사마다 한 영역을 둔다: `compositor-`, `document-region-`, `exposure-reply-`, `file-drop-`, `log-`, `overlay-`, `workspace-`.
 
 ## 멤버
 

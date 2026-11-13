@@ -1,0 +1,33 @@
+{
+  "name": "compositor-hidden-sibling-publish",
+  "description": "The page publishes one DOM surface of a plugin in a hidden card, then after the card is shown, after its slot has zero width and after its slot has zero height, and the host answers each syncSurfaces call with the placement that it applied and each presentSurfaces call with the same placement.",
+  "replay": false,
+  "reason": "syncSurfaces and presentSurfaces place native surfaces in a window, and the Go producer runs only log and workspace calls without a window.",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "syncSurfaces", "payload": { "settled": true, "overlays": [], "surfaces": [{ "id": "hidden-surface", "dim": false, "plugin": "fullscreen-probe", "composition": { "kind": "dom" }, "visible": false, "x": 0, "y": 0, "w": 100, "h": 100 }], "titlebar": 40, "declarations": [], "viewport": { "width": 1024, "height": 768 } } } },
+    { "reply": { "result": { "ticket": 1, "placements": [{ "id": "hidden-surface", "visible": false, "x": 0, "y": 0, "w": 100, "h": 100 }], "chrome": { "controls": { "x": 0, "y": 0, "w": 0, "h": 0 }, "row": 40 } } } },
+    { "call": { "name": "presentSurfaces", "payload": { "ticket": 1, "placements": [{ "id": "hidden-surface", "visible": false, "x": 0, "y": 0, "w": 100, "h": 100 }], "settled": true } } },
+    { "reply": { "result": [{ "id": "hidden-surface", "visible": false, "x": 0, "y": 0, "w": 100, "h": 100 }] } },
+    { "call": { "name": "syncSurfaces", "payload": { "settled": true, "overlays": [], "surfaces": [{ "id": "hidden-surface", "dim": false, "plugin": "fullscreen-probe", "composition": { "kind": "dom" }, "visible": true, "x": 0, "y": 0, "w": 100, "h": 100 }], "titlebar": 40, "declarations": [], "viewport": { "width": 1024, "height": 768 } } } },
+    { "reply": { "result": { "ticket": 2, "placements": [{ "id": "hidden-surface", "visible": true, "scale": 2, "x": 0, "y": 0, "w": 100, "h": 100 }], "chrome": { "controls": { "x": 0, "y": 0, "w": 0, "h": 0 }, "row": 40 } } } },
+    { "call": { "name": "presentSurfaces", "payload": { "ticket": 2, "placements": [{ "id": "hidden-surface", "visible": true, "scale": 2, "x": 0, "y": 0, "w": 100, "h": 100 }], "settled": true } } },
+    { "reply": { "result": [{ "id": "hidden-surface", "visible": true, "scale": 2, "x": 0, "y": 0, "w": 100, "h": 100 }] } },
+    { "call": { "name": "syncSurfaces", "payload": { "settled": true, "overlays": [], "surfaces": [{ "id": "hidden-surface", "dim": false, "plugin": "fullscreen-probe", "composition": { "kind": "dom" }, "visible": false, "x": 0, "y": 0, "w": 0, "h": 100 }], "titlebar": 40, "declarations": [], "viewport": { "width": 1024, "height": 768 } } } },
+    { "reply": { "result": { "ticket": 3, "placements": [{ "id": "hidden-surface", "visible": false, "x": 0, "y": 0, "w": 0, "h": 100 }], "chrome": { "controls": { "x": 0, "y": 0, "w": 0, "h": 0 }, "row": 40 } } } },
+    { "call": { "name": "presentSurfaces", "payload": { "ticket": 3, "placements": [{ "id": "hidden-surface", "visible": false, "x": 0, "y": 0, "w": 0, "h": 100 }], "settled": true } } },
+    { "reply": { "result": [{ "id": "hidden-surface", "visible": false, "x": 0, "y": 0, "w": 0, "h": 100 }] } },
+    { "call": { "name": "syncSurfaces", "payload": { "settled": true, "overlays": [], "surfaces": [{ "id": "hidden-surface", "dim": false, "plugin": "fullscreen-probe", "composition": { "kind": "dom" }, "visible": true, "x": 0, "y": 0, "w": 100, "h": 100 }], "titlebar": 40, "declarations": [], "viewport": { "width": 1024, "height": 768 } } } },
+    { "reply": { "result": { "ticket": 4, "placements": [{ "id": "hidden-surface", "visible": true, "scale": 2, "x": 0, "y": 0, "w": 100, "h": 100 }], "chrome": { "controls": { "x": 0, "y": 0, "w": 0, "h": 0 }, "row": 40 } } } },
+    { "call": { "name": "presentSurfaces", "payload": { "ticket": 4, "placements": [{ "id": "hidden-surface", "visible": true, "scale": 2, "x": 0, "y": 0, "w": 100, "h": 100 }], "settled": true } } },
+    { "reply": { "result": [{ "id": "hidden-surface", "visible": true, "scale": 2, "x": 0, "y": 0, "w": 100, "h": 100 }] } },
+    { "call": { "name": "syncSurfaces", "payload": { "settled": true, "overlays": [], "surfaces": [{ "id": "hidden-surface", "dim": false, "plugin": "fullscreen-probe", "composition": { "kind": "dom" }, "visible": false, "x": 0, "y": 0, "w": 100, "h": 0 }], "titlebar": 40, "declarations": [], "viewport": { "width": 1024, "height": 768 } } } },
+    { "reply": { "result": { "ticket": 5, "placements": [{ "id": "hidden-surface", "visible": false, "x": 0, "y": 0, "w": 100, "h": 0 }], "chrome": { "controls": { "x": 0, "y": 0, "w": 0, "h": 0 }, "row": 40 } } } },
+    { "call": { "name": "presentSurfaces", "payload": { "ticket": 5, "placements": [{ "id": "hidden-surface", "visible": false, "x": 0, "y": 0, "w": 100, "h": 0 }], "settled": true } } },
+    { "reply": { "result": [{ "id": "hidden-surface", "visible": false, "x": 0, "y": 0, "w": 100, "h": 0 }] } },
+    { "call": { "name": "syncSurfaces", "payload": { "settled": true, "overlays": [], "surfaces": [{ "id": "hidden-surface", "dim": false, "plugin": "fullscreen-probe", "composition": { "kind": "dom" }, "visible": true, "x": 0, "y": 0, "w": 100, "h": 100 }], "titlebar": 40, "declarations": [], "viewport": { "width": 1024, "height": 768 } } } },
+    { "reply": { "result": { "ticket": 6, "placements": [{ "id": "hidden-surface", "visible": true, "scale": 2, "x": 0, "y": 0, "w": 100, "h": 100 }], "chrome": { "controls": { "x": 0, "y": 0, "w": 0, "h": 0 }, "row": 40 } } } },
+    { "call": { "name": "presentSurfaces", "payload": { "ticket": 6, "placements": [{ "id": "hidden-surface", "visible": true, "scale": 2, "x": 0, "y": 0, "w": 100, "h": 100 }], "settled": true } } },
+    { "reply": { "result": [{ "id": "hidden-surface", "visible": true, "scale": 2, "x": 0, "y": 0, "w": 100, "h": 100 }] } }
+  ]
+}

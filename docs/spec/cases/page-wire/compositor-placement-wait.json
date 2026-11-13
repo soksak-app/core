@@ -1,0 +1,15 @@
+{
+  "name": "compositor-placement-wait",
+  "description": "The page prepares three layouts of one DOM surface of a plugin, and the host answers each syncSurfaces call only after the test releases it, with the placement that it applied: a visible rectangle, a hidden rectangle, and a visible rectangle after the sidebar grew.",
+  "replay": false,
+  "reason": "syncSurfaces reserves the native placement of a window, and the Go producer runs only log and workspace calls without a window.",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "syncSurfaces", "payload": { "settled": true, "overlays": [], "surfaces": [{ "id": "surface", "dim": false, "plugin": "probe", "composition": { "kind": "dom" }, "visible": true, "x": 22, "y": 30, "w": 176, "h": 100 }], "declarations": [], "viewport": { "width": 1024, "height": 768 } } } },
+    { "reply": { "result": { "ticket": 1, "placements": [{ "id": "surface", "visible": true, "scale": 2, "x": 22, "y": 30, "w": 176, "h": 100 }], "chrome": { "controls": { "x": 0, "y": 0, "w": 0, "h": 0 }, "row": 40 } }, "held": true } },
+    { "call": { "name": "syncSurfaces", "payload": { "settled": true, "overlays": [], "surfaces": [{ "id": "surface", "dim": false, "plugin": "probe", "composition": { "kind": "dom" }, "visible": false, "x": 0, "y": 0, "w": 0, "h": 0 }], "declarations": [], "viewport": { "width": 1024, "height": 768 } } } },
+    { "reply": { "result": { "ticket": 2, "placements": [{ "id": "surface", "visible": false, "x": 0, "y": 0, "w": 0, "h": 0 }], "chrome": { "controls": { "x": 0, "y": 0, "w": 0, "h": 0 }, "row": 40 } }, "held": true } },
+    { "call": { "name": "syncSurfaces", "payload": { "settled": true, "overlays": [], "surfaces": [{ "id": "surface", "dim": false, "plugin": "probe", "composition": { "kind": "dom" }, "visible": true, "x": 212, "y": 30, "w": 206, "h": 100 }], "declarations": [], "viewport": { "width": 1024, "height": 768 } } } },
+    { "reply": { "result": { "ticket": 3, "placements": [{ "id": "surface", "visible": true, "scale": 2, "x": 212, "y": 30, "w": 206, "h": 100 }], "chrome": { "controls": { "x": 0, "y": 0, "w": 0, "h": 0 }, "row": 40 } }, "held": true } }
+  ]
+}
