@@ -1,270 +1,163 @@
-// Verifies that `make repeat-rust` names each test of a package when it starts, reports its result and elapsed time, and kills a
-// test at its own limit. The Rust toolchain is replaced by a fake `cargo`. `make` finds it on PATH and gets its HOME and its
-// CARGO_HOME in the same folder so that the cargo of `$(CARGO_HOME)/bin` does not shadow the fake; a script started directly gets
-// the fake as CARGO, the variable that the Makefile exports.
+// Verifies that `make repeat-rust` names each test of a package when it starts, reports its result and elapsed time, kills a test at
+// its own limit, selects the Cargo target and the features, forwards the profile and the deployment target, and fails a build whose
+// link reports an object newer than the link. The packages are the tracked fixture crates of scripts/test/fixtures/repeat-rust, each
+// a workspace of its own, built and run by the real cargo. Each run builds into a folder of its own (CARGO_TARGET_DIR).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cargoTargetArgs, runRustTests } from '../rust-tests.mjs';
 
 const root = resolve(import.meta.dirname, '../..');
+const manifest = 'scripts/test/fixtures/repeat-rust/Cargo.toml';
+const build = (name) => `scripts/test/fixtures/repeat-rust/${name}/Cargo.toml`;
 
-for (const profile of ['release', 'owner-custom']) {
-  test(`Rust CLI forwards ${profile} profile to build and both doctest paths`, (t) => {
-    const directory = fakeCargo(t);
-    const result = spawnSync(process.execPath, ['scripts/rust-tests.mjs', '--package', 'fixture', '--profile', profile,
-      '--test', 'src/lib.rs - doc_example (line 3)'], { cwd: root, env: { ...process.env, CARGO: join(directory, 'cargo') }, encoding: 'utf8', timeout: 60000 });
-    assert.equal(result.status, 0, result.stdout + result.stderr);
-    const calls = readFileSync(join(directory, 'args'), 'utf8').trim().split('\n');
-    const testCalls = calls.filter((line) => line.startsWith('test '));
-    assert.equal(testCalls.length, 3, 'build, doctest listing and actual doctest execution');
-    for (const call of testCalls) assert.ok(call.includes(`--profile ${profile}`), call);
-    assert.ok(calls.find((line) => line.startsWith('metadata '))?.includes('--profile') === false, 'metadata accepts no Cargo profile');
-  });
-}
-
-test('make repeat-rust forwards its explicit Cargo profile without changing test selection', (t) => {
-  const directory = fakeCargo(t);
-  const result = spawnSync('make', ['repeat-rust', 'PACKAGE=fixture', 'COUNT=1', 'RUST_PROFILE=release', 'TEST=src/lib.rs - doc_example (line 3)'],
-    { cwd: root, env: { ...process.env, HOME: directory, CARGO_HOME: join(directory, '.cargo'), PATH: `${directory}:${process.env.PATH}` }, encoding: 'utf8', timeout: 60000 });
-  assert.equal(result.status, 0, result.stdout + result.stderr);
-  for (const call of readFileSync(join(directory, 'args'), 'utf8').trim().split('\n').filter((line) => line.startsWith('test '))) {
-    assert.ok(call.includes('--profile release'), call);
-  }
-});
-
-test('runRustTests rejects empty and nonstring profiles before invoking Cargo', async (t) => {
-  const directory = fakeCargo(t), previous = process.env.CARGO;
-  process.env.CARGO = join(directory, 'cargo');
-  try {
-    for (const profile of ['', ' ', null, 1, false]) {
-      await assert.rejects(runRustTests({ manifest: 'Cargo.toml', package: 'fixture', profile, count: 1, timeoutMs: 1000, write() {} }), /--profile must be a nonempty Cargo profile name/);
-      assert.equal(existsSync(join(directory, 'args')), false, 'invalid profile reached Cargo');
-    }
-  } finally {
-    if (previous === undefined) delete process.env.CARGO; else process.env.CARGO = previous;
-  }
-});
-
-for (const stage of ['compiler', 'metadata']) {
-  test(`Rust owner CLI reports captured Cargo ${stage} failure output`, (t) => {
-    const { directory, targetLog } = targetCargo(t);
-    const detail = stage === 'compiler'
-      ? `${JSON.stringify({ reason: 'compiler-message', message: {
-        rendered: 'error[E0308]: mismatched fixture types\n --> fixture.rs:1:1\n',
-      } })}\n`
-      : 'fixture metadata error detail\n';
-    const artifact = `${JSON.stringify({ reason: 'compiler-artifact', profile: { test: true },
-      target: { name: 'fixture' }, executable: join(directory, 'library-test') })}\n`;
-    writeFileSync(join(directory, 'cargo'), `#!/usr/bin/env node
-const args = process.argv.slice(2);
-if ((args.includes('--message-format=json') && ${stage === 'compiler'}) || args[0] === 'metadata') {
-  process.stdout.write(${JSON.stringify(detail)});
-  process.stderr.write('fixture Cargo failed\\n');
-  process.exit(101);
-}
-if (args.includes('--message-format=json')) process.stdout.write(${JSON.stringify(artifact)});
-`);
-    const result = spawnSync(process.execPath, ['scripts/rust-tests.mjs',
-      '--manifest', join(directory, 'Cargo.toml'), '--package', 'fixture', '--test-target', 'lib'], {
-      cwd: root, env: { ...process.env, CARGO: join(directory, 'cargo') },
-      encoding: 'utf8', timeout: 10000,
-    });
-    assert.notEqual(result.status, 0, 'a failed discovery must fail the check');
-    assert.ok((result.stdout + result.stderr).includes(detail),
-      `captured Cargo diagnostic is missing: ${result.stdout}${result.stderr}`);
-    assert.equal(existsSync(targetLog), false, 'failed discovery must not start a test executable');
-  });
-}
-
-test('Rust owner CLI fails a test build whose link reports an object newer than the link, and names the object and both versions', (t) => {
-  const { directory, targetLog } = targetCargo(t);
-  const text = "linker stderr: ld: warning: object file (/target/ring/libring_core.a(curve25519.o)) was built for newer 'macOS' version (27.0) than being linked (11.0)";
-  const messages = [
-    JSON.stringify({ reason: 'compiler-message', message: { message: text, rendered: `warning: ${text}\n` } }),
-    JSON.stringify({ reason: 'compiler-artifact', profile: { test: true }, target: { name: 'fixture' }, executable: join(directory, 'library-test') }),
-  ].join('\n') + '\n';
-  const metadata = JSON.stringify({ packages: [{ name: 'fixture', manifest_path: join(directory, 'Cargo.toml'), targets: [{ kind: ['lib'] }] }] });
-  const script = [
-    '#!/usr/bin/env node',
-    'const args = process.argv.slice(2);',
-    `if (args[0] === 'metadata') process.stdout.write(${JSON.stringify(metadata)});`,
-    `else if (args.includes('--message-format=json')) process.stdout.write(${JSON.stringify(messages)});`,
-  ].join('\n');
-  writeFileSync(join(directory, 'cargo'), `${script}\n`);
-  const result = spawnSync(process.execPath, ['scripts/rust-tests.mjs',
-    '--manifest', join(directory, 'Cargo.toml'), '--package', 'fixture', '--test-target', 'lib'], {
-    cwd: root, env: { ...process.env, CARGO: join(directory, 'cargo') },
-    encoding: 'utf8', timeout: 10000,
-  });
-  assert.notEqual(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stderr, /ld built \/target\/ring\/libring_core\.a\(curve25519\.o\) for macOS 27\.0, newer than the macOS 11\.0 of the link/, result.stdout + result.stderr);
-  assert.equal(existsSync(targetLog), false, 'a test of a build with a linker failure ran');
-});
-
-// The fake cargo builds nothing and reports one test executable of the package `fixture` in the JSON form of `--no-run`, and its
-// manifest in `cargo metadata`. The executable lists two tests (`--list`) and runs the test named by `--exact`. The test named
-// beta hangs for 8 seconds, so only a kill at its limit ends it sooner. The library of the package has one documentation test,
-// listed by `cargo test --doc -- --list` and run by name with `cargo test --doc -- <name>`.
-function fakeCargo(t) {
+/** A folder that holds the Cargo target of one test, removed when the test ends. */
+function targetFolder(t) {
   const directory = mkdtempSync(join(tmpdir(), 'soksak-rust-repeat-'));
-  t.after(() => rmSync(directory, { recursive: true }));
-  const executable = join(directory, 'fixture-test');
-  writeFileSync(executable, `#!/bin/sh
-case "$1" in
-  --list) printf 'fixture::alpha: test\\nfixture::beta: test\\n\\n2 tests, 0 benchmarks\\n'; exit 0 ;;
-esac
-case "$2" in *beta*) sleep 8 ;; esac
-printf 'running 1 test\\ntest %s ... ok\\n\\ntest result: ok. 1 passed; 0 failed\\n' "$2"
-`);
-  chmodSync(executable, 0o755);
-  const cargo = join(directory, 'cargo');
-  writeFileSync(cargo, `#!/bin/sh
-printf '%s\\n' "$*" >> ${JSON.stringify(join(directory, 'args'))}
-case "$*" in
-  *--doc*--list*) printf 'src/lib.rs - doc_example (line 3): test\\n'; exit 0 ;;
-  *--doc*) printf 'running 1 test\\ntest result: ok. 1 passed; 0 failed\\n'; exit 0 ;;
-  *message-format=json*) printf '{"reason":"compiler-artifact","profile":{"test":true},"target":{"name":"fixture"},"executable":"${executable}"}\\n'; exit 0 ;;
-  metadata*) printf '{"packages":[{"name":"fixture","manifest_path":"${join(directory, 'Cargo.toml')}","targets":[{"kind":["lib"],"doctest":true}]}]}\\n'; exit 0 ;;
-  *--no-run*) exit 0 ;;
-esac
-exit 1
-`);
-  chmodSync(cargo, 0o755);
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
   return directory;
 }
 
-function targetCargo(t) {
-  const directory = mkdtempSync(join(tmpdir(), 'soksak-rust-target-repeat-'));
-  t.after(() => rmSync(directory, { recursive: true }));
-  const targetLog = join(directory, 'targets');
-  const binary = (name, testName) => {
-    const executable = join(directory, `${name}-test`);
-    writeFileSync(executable, `#!/bin/sh
-if [ "$1" = "--list" ]; then
-  printf 'list:${name}\\n' >> ${JSON.stringify(targetLog)}
-  printf '${testName}: test\\n\\n1 tests, 0 benchmarks\\n'
-  exit 0
-fi
-printf 'run:${name}\\n' >> ${JSON.stringify(targetLog)}
-printf 'running 1 test\\ntest %s ... ok\\n\\ntest result: ok. 1 passed; 0 failed\\n' "$2"
-`);
-    chmodSync(executable, 0o755);
-    return executable;
-  };
-  const library = binary('library', 'fixture::library_case');
-  const integration = binary('integration', 'fixture::integration_case');
-  const cargo = join(directory, 'cargo');
-  writeFileSync(cargo, `#!/bin/sh
-printf '%s\\n' "$*" >> ${JSON.stringify(join(directory, 'args'))}
-if [ -n "$SOKSAK_TEST_DEPLOYMENT_LOG" ]; then
-  printf '%s\\n' "\${MACOSX_DEPLOYMENT_TARGET-unset}" >> "$SOKSAK_TEST_DEPLOYMENT_LOG" || exit 1
-fi
-case "$*" in
-  *--doc*--list*) printf 'list:doctests\\n' >> ${JSON.stringify(targetLog)}; printf 'src/lib.rs - doc_example (line 3): test\\n'; exit 0 ;;
-  *--doc*) printf 'running 1 test\\ntest result: ok. 1 passed; 0 failed\\n'; exit 0 ;;
-  *message-format=json*)
-    case "$*" in
-      *--lib*) printf '{"reason":"compiler-artifact","profile":{"test":true},"target":{"name":"fixture","kind":["lib"]},"executable":"${library}"}\\n' ;;
-      *--test\\ integration*) printf '{"reason":"compiler-artifact","profile":{"test":true},"target":{"name":"integration","kind":["test"]},"executable":"${integration}"}\\n' ;;
-      *)
-        printf '{"reason":"compiler-artifact","profile":{"test":true},"target":{"name":"fixture","kind":["lib"]},"executable":"${library}"}\\n'
-        printf '{"reason":"compiler-artifact","profile":{"test":true},"target":{"name":"integration","kind":["test"]},"executable":"${integration}"}\\n' ;;
-    esac
-    exit 0 ;;
-  metadata*) printf '{"packages":[{"name":"fixture","manifest_path":"${join(directory, 'Cargo.toml')}","targets":[{"kind":["lib"],"doctest":true},{"kind":["test"],"name":"integration"}]}]}\\n'; exit 0 ;;
-  *--no-run*) exit 0 ;;
-esac
-exit 1
-`);
-  chmodSync(cargo, 0o755);
-  return { directory, targetLog };
+/** The test executables that cargo built into the `profile` folder of the target: `<target>-<16 hex digits>` files. */
+function testExecutables(target, profile = 'debug') {
+  const deps = join(target, profile, 'deps');
+  return existsSync(deps) ? readdirSync(deps).filter((name) => /^[a-z]+-[0-9a-f]{16}$/.test(name)) : [];
 }
 
-function selectedTargetTest(t, selection, argument, cargoArgs, expected) {
-  const { directory, targetLog } = targetCargo(t);
-  const result = spawnSync('make', [
-    'repeat-rust', 'PACKAGE=fixture', 'COUNT=1', `TEST=${argument}`, `TEST_TARGET=${selection}`,
-  ], {
-    cwd: root, env: { ...process.env, HOME: directory, CARGO_HOME: join(directory, '.cargo'), PATH: `${directory}:${process.env.PATH}` },
-    encoding: 'utf8', timeout: 60000,
+/** Runs `make` in the repository root with the Cargo target of the test and the manifest of the fixture (or of `file`). */
+function make(t, args, { file = manifest, env = {} } = {}) {
+  const target = targetFolder(t);
+  const result = spawnSync('make', [...args, `MANIFEST=${file}`], {
+    cwd: root, env: { ...process.env, CARGO_TARGET_DIR: target, ...env }, encoding: 'utf8', timeout: 240000,
   });
-  assert.equal(result.status, 0, result.stdout + result.stderr);
-  const cargoCalls = readFileSync(join(directory, 'args'), 'utf8').trim().split('\n')
-    .filter((call) => call.startsWith('test '));
-  assert.equal(cargoCalls.length, 1, JSON.stringify(cargoCalls));
-  assert.match(cargoCalls[0], /--no-run/, cargoCalls[0]);
-  assert.deepEqual(readFileSync(targetLog, 'utf8').trim().split('\n'), [`list:${expected}`, `run:${expected}`]);
-  for (const call of cargoCalls) assert.match(call, cargoArgs, call);
-  assert.doesNotMatch(readFileSync(join(directory, 'args'), 'utf8'), /--doc/);
+  return { ...result, target };
 }
 
-test('make repeat-rust selects only the lib Cargo target before discovery', (t) => {
-  selectedTargetTest(t, 'lib', 'fixture::library_case', /--lib/, 'library');
-});
-
-test('make repeat-rust selects only the test:integration Cargo target before discovery', (t) => {
-  selectedTargetTest(t, 'test:integration', 'fixture::integration_case', /--test integration/, 'integration');
-});
-
-test('make repeat-rust keeps package-wide target and doctest discovery by default', (t) => {
-  const { directory, targetLog } = targetCargo(t);
-  const result = spawnSync('make', ['repeat-rust', 'PACKAGE=fixture', 'COUNT=1'], {
-    cwd: root, env: { ...process.env, HOME: directory, CARGO_HOME: join(directory, '.cargo'), PATH: `${directory}:${process.env.PATH}` },
-    encoding: 'utf8', timeout: 60000,
+/** Runs the runner script with the arguments, the manifest of the fixture (or of `file`) and the Cargo target of the test. */
+function cli(t, args, { file = manifest, env = {} } = {}) {
+  const target = targetFolder(t);
+  const result = spawnSync(process.execPath, ['scripts/rust-tests.mjs', '--manifest', file, ...args], {
+    cwd: root, env: { ...process.env, MACOSX_DEPLOYMENT_TARGET: '14.4', CARGO_TARGET_DIR: target, ...env }, encoding: 'utf8', timeout: 240000,
   });
+  return { ...result, target };
+}
+
+const docTest = 'src/lib.rs - doc_example (line 3)';
+
+for (const profile of ['release', 'owner-custom']) {
+  test(`Rust CLI forwards ${profile} profile to build and both doctest paths`, { timeout: 240000 }, (t) => {
+    const result = cli(t, ['--package', 'fixture', '--profile', profile, '--test', docTest]);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.match(result.stdout, /^PASS src\/lib\.rs - doc_example \(line 3\) \d+\.\d{3}s$/m, result.stdout + result.stderr);
+    assert.ok(existsSync(join(result.target, profile, 'deps')), `the build did not use the ${profile} profile`);
+  });
+}
+
+test('make repeat-rust forwards its explicit Cargo profile without changing test selection', { timeout: 240000 }, (t) => {
+  const result = make(t, ['repeat-rust', 'PACKAGE=fixture', 'COUNT=1', 'RUST_PROFILE=release', `TEST=${docTest}`]);
   assert.equal(result.status, 0, result.stdout + result.stderr);
-  assert.deepEqual(readFileSync(targetLog, 'utf8').trim().split('\n'), [
-    'list:library', 'list:integration', 'list:doctests', 'run:library', 'run:integration',
-  ]);
-  const calls = readFileSync(join(directory, 'args'), 'utf8');
-  assert.match(calls, /--doc -- --list/);
-  assert.match(calls, /--doc -- src\/lib\.rs - doc_example \(line 3\)/);
+  assert.match(result.stdout, /^PASS src\/lib\.rs - doc_example \(line 3\) \d+\.\d{3}s$/m, result.stdout + result.stderr);
+  assert.doesNotMatch(result.stdout, /^RUN  fixture::/m, 'a test outside TEST ran');
+  assert.ok(existsSync(join(result.target, 'release', 'deps')), 'the build did not use the release profile');
 });
 
-test('make repeat-rust rejects an invalid Cargo target before invoking Cargo', (t) => {
-  const { directory } = targetCargo(t);
-  const result = spawnSync('make', [
-    'repeat-rust', 'PACKAGE=fixture', 'COUNT=1', 'TEST_TARGET=test:bad/name',
-  ], {
-    cwd: root, env: { ...process.env, HOME: directory, CARGO_HOME: join(directory, '.cargo'), PATH: `${directory}:${process.env.PATH}` },
-    encoding: 'utf8', timeout: 60000,
+test('runRustTests rejects empty and nonstring profiles before invoking Cargo', async (t) => {
+  const target = targetFolder(t);
+  const previous = process.env.CARGO_TARGET_DIR;
+  process.env.CARGO_TARGET_DIR = target;
+  t.after(() => {
+    if (previous === undefined) delete process.env.CARGO_TARGET_DIR;
+    else process.env.CARGO_TARGET_DIR = previous;
   });
+  for (const profile of ['', ' ', null, 1, false]) {
+    await assert.rejects(runRustTests({ manifest: join(root, manifest), package: 'fixture', profile, count: 1, timeoutMs: 1000, write() {} }), /--profile must be a nonempty Cargo profile name/);
+    assert.deepEqual(readdirSync(target), [], 'invalid profile reached Cargo');
+  }
+});
+
+test('Rust owner CLI reports captured Cargo compiler failure output', { timeout: 240000 }, (t) => {
+  const result = cli(t, ['--package', 'broken', '--test-target', 'lib'], { file: build('broken') });
+  assert.notEqual(result.status, 0, 'a failed build must fail the check');
+  assert.ok((result.stdout + result.stderr).includes('error[E0308]: mismatched types'), `captured Cargo diagnostic is missing: ${result.stdout}${result.stderr}`);
+  assert.deepEqual(testExecutables(result.target), [], 'a failed build left a test executable');
+});
+
+test('Rust owner CLI fails a test build whose link reports an object newer than the link, and names the object and both versions', { timeout: 240000 }, (t) => {
+  const result = make(t, ['repeat-rust', 'PACKAGE=linkwarn', 'COUNT=1', 'TEST_TARGET=lib'], { file: build('linkwarn') });
+  assert.notEqual(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stderr, /ld built \S+ for macOS 27\.0, newer than the macOS 14\.4 of the link/, result.stdout + result.stderr);
+  assert.doesNotMatch(result.stdout, /^RUN  /m, 'a test of a build with a linker failure ran');
+});
+
+test('Rust owner CLI reports captured Cargo metadata failure output', { timeout: 240000 }, (t) => {
+  // The fault injection point of the metadata stage names a manifest that does not exist; cargo metadata reports it, and the build
+  // of the test (the stage before) has already run with the manifest of the fixture.
+  const missing = join(targetFolder(t), 'missing', 'Cargo.toml');
+  const result = cli(t, ['--package', 'fixture', '--test-target', 'lib'], { env: { SOKSAK_FAULT_METADATA_MANIFEST: missing } });
+  assert.notEqual(result.status, 0, 'a failed discovery must fail the check');
+  assert.match(result.stderr, /manifest path `[^`]*missing\/Cargo\.toml` does not exist/, result.stdout + result.stderr);
+  assert.doesNotMatch(result.stdout, /^(RUN|PASS) /m, 'a test ran after the metadata stage failed');
+});
+
+test('make repeat-rust selects only the lib Cargo target before discovery', { timeout: 240000 }, (t) => {
+  const result = make(t, ['repeat-rust', 'PACKAGE=fixture', 'COUNT=1', 'TEST=fixture::library_case', 'TEST_TARGET=lib']);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /^PASS fixture::library_case \d+\.\d{3}s$/m, result.stdout + result.stderr);
+  assert.doesNotMatch(result.stdout, /^RUN  .*(integration_case|doc_example)/m, 'a test of another target ran');
+  const executables = testExecutables(result.target);
+  assert.ok(executables.length === 1 && executables[0].startsWith('fixture-'), `the built executables are ${executables}`);
+});
+
+test('make repeat-rust selects only the test:integration Cargo target before discovery', { timeout: 240000 }, (t) => {
+  const result = make(t, ['repeat-rust', 'PACKAGE=fixture', 'COUNT=1', 'TEST=fixture::integration_case', 'TEST_TARGET=test:integration']);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /^PASS fixture::integration_case \d+\.\d{3}s$/m, result.stdout + result.stderr);
+  assert.doesNotMatch(result.stdout, /^RUN  .*(library_case|doc_example)/m, 'a test of another target ran');
+  const executables = testExecutables(result.target);
+  assert.ok(executables.length === 1 && executables[0].startsWith('integration-'), `the built executables are ${executables}`);
+});
+
+test('make repeat-rust keeps package-wide target and doctest discovery by default', { timeout: 240000 }, (t) => {
+  const result = make(t, ['repeat-rust', 'PACKAGE=fixture', 'COUNT=1']);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  for (const name of ['fixture::library_case', 'fixture::integration_case', docTest]) {
+    assert.ok(result.stdout.split('\n').some((line) => line.startsWith('PASS ') && line.includes(name)), `${name} did not pass: ${result.stdout}`);
+  }
+});
+
+test('make repeat-rust rejects an invalid Cargo target before invoking Cargo', { timeout: 240000 }, (t) => {
+  const result = make(t, ['repeat-rust', 'PACKAGE=fixture', 'COUNT=1', 'TEST_TARGET=test:bad/name']);
   assert.notEqual(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stderr, /--test-target must be lib or test:<Cargo target name>/, result.stdout + result.stderr);
-  assert.equal(existsSync(join(directory, 'args')), false, 'Cargo ran before the target selector was rejected');
+  assert.equal(existsSync(join(result.target, 'debug')), false, 'Cargo ran before the target selector was rejected');
 });
 
-test('make repeat-rust rejects shell syntax in a Cargo target without executing it', (t) => {
-  const { directory } = targetCargo(t);
-  const marker = join(directory, 'injected-command-ran');
-  const result = spawnSync('make', [
-    'repeat-rust', 'PACKAGE=fixture', 'COUNT=1', `TEST_TARGET=test:bad'; touch ${marker}; #`,
-  ], {
-    cwd: root, env: { ...process.env, HOME: directory, CARGO_HOME: join(directory, '.cargo'), PATH: `${directory}:${process.env.PATH}` },
-    encoding: 'utf8', timeout: 60000,
+test('make repeat-rust rejects shell syntax in a Cargo target without executing it', { timeout: 240000 }, (t) => {
+  const target = targetFolder(t);
+  const marker = join(target, 'injected-command-ran');
+  const result = spawnSync('make', ['repeat-rust', 'PACKAGE=fixture', 'COUNT=1', `TEST_TARGET=test:bad'; touch ${marker}; #`, `MANIFEST=${manifest}`], {
+    cwd: root, env: { ...process.env, CARGO_TARGET_DIR: target }, encoding: 'utf8', timeout: 240000,
   });
   assert.equal(existsSync(marker), false, 'shell syntax in the selector ran as a command');
   assert.notEqual(result.status, 0, result.stdout + result.stderr);
-  assert.equal(existsSync(join(directory, 'args')), false, 'Cargo ran before the selector was rejected');
+  assert.equal(existsSync(join(target, 'debug')), false, 'Cargo ran before the selector was rejected');
 });
 
 test('runRustTests rejects an explicitly empty Cargo target before invoking Cargo', async (t) => {
-  const { directory } = targetCargo(t);
-  const previousCargo = process.env.CARGO;
-  process.env.CARGO = join(directory, 'cargo');
-  try {
-    await assert.rejects(runRustTests({
-      manifest: 'Cargo.toml', package: 'fixture', testTarget: '', count: 1, timeoutMs: 1000, write() {},
-    }), /--test-target must be lib or test:<Cargo target name>/);
-    assert.equal(existsSync(join(directory, 'args')), false, 'Cargo ran before the empty selector was rejected');
-  } finally {
-    if (previousCargo === undefined) delete process.env.CARGO;
-    else process.env.CARGO = previousCargo;
-  }
+  const target = targetFolder(t);
+  const previous = process.env.CARGO_TARGET_DIR;
+  process.env.CARGO_TARGET_DIR = target;
+  t.after(() => {
+    if (previous === undefined) delete process.env.CARGO_TARGET_DIR;
+    else process.env.CARGO_TARGET_DIR = previous;
+  });
+  await assert.rejects(runRustTests({
+    manifest: join(root, manifest), package: 'fixture', testTarget: '', count: 1, timeoutMs: 1000, write() {},
+  }), /--test-target must be lib or test:<Cargo target name>/);
+  assert.deepEqual(readdirSync(target), [], 'Cargo ran before the empty selector was rejected');
 });
 
 test('cargoTargetArgs rejects non-string selectors instead of coercing them', () => {
@@ -272,11 +165,8 @@ test('cargoTargetArgs rejects non-string selectors instead of coercing them', ()
   assert.throws(() => cargoTargetArgs({ toString: () => 'test:integration' }), /--test-target must be a string/);
 });
 
-test('make repeat-rust names each test when it starts, reports its result and elapsed time, and kills a test at its limit', (t) => {
-  const directory = fakeCargo(t);
-  const result = spawnSync('make', ['repeat-rust', 'PACKAGE=fixture', 'COUNT=1', 'TEST_TIMEOUT=2'], {
-    cwd: root, env: { ...process.env, HOME: directory, CARGO_HOME: join(directory, '.cargo'), PATH: `${directory}:${process.env.PATH}` }, encoding: 'utf8', timeout: 60000,
-  });
+test('make repeat-rust names each test when it starts, reports its result and elapsed time, and kills a test at its limit', { timeout: 240000 }, (t) => {
+  const result = make(t, ['repeat-rust', 'PACKAGE=fixture', 'COUNT=1', 'TEST_TIMEOUT=2']);
   assert.match(result.stdout, /^RUN  fixture::alpha \(1 running, limit 2\.000s\)$/m, result.stdout + result.stderr);
   assert.match(result.stdout, /^PASS fixture::alpha \d+\.\d{3}s$/m, result.stdout + result.stderr);
   assert.match(result.stdout, /^RUN  fixture::beta \(1 running, limit 2\.000s\)$/m, result.stdout + result.stderr);
@@ -288,60 +178,37 @@ test('make repeat-rust names each test when it starts, reports its result and el
   assert.match(result.stdout, /^FAIL: fixture run 1 of 1; load /m, result.stdout + result.stderr);
 });
 
-test('make repeat-rust passes its features to every cargo test call', (t) => {
-  const directory = fakeCargo(t);
-  const result = spawnSync('make', ['repeat-rust', 'PACKAGE=fixture', 'COUNT=1', 'FEATURES=diagnostics', 'TEST=fixture::alpha'], {
-    cwd: root, env: { ...process.env, HOME: directory, CARGO_HOME: join(directory, '.cargo'), PATH: `${directory}:${process.env.PATH}` }, encoding: 'utf8', timeout: 60000,
-  });
-  assert.equal(result.status, 0, result.stdout + result.stderr);
-  const calls = readFileSync(join(directory, 'args'), 'utf8').trim().split('\n').filter((call) => call.startsWith('test '));
-  assert.equal(calls.length, 1, JSON.stringify(calls));
-  for (const call of calls) assert.match(call, /--features diagnostics/, call);
+test('make repeat-rust passes its features to every cargo test call', { timeout: 240000 }, (t) => {
+  const withFeature = make(t, ['repeat-rust', 'PACKAGE=fixture', 'COUNT=1', 'FEATURES=diagnostics', 'TEST=fixture::feature_case']);
+  assert.equal(withFeature.status, 0, withFeature.stdout + withFeature.stderr);
+  assert.match(withFeature.stdout, /^PASS fixture::feature_case \d+\.\d{3}s$/m, withFeature.stdout + withFeature.stderr);
+  const withoutFeature = make(t, ['repeat-rust', 'PACKAGE=fixture', 'COUNT=1', 'TEST=fixture::feature_case']);
+  assert.notEqual(withoutFeature.status, 0, withoutFeature.stdout + withoutFeature.stderr);
+  assert.match(withoutFeature.stderr, /fixture has no test named fixture::feature_case/, withoutFeature.stdout + withoutFeature.stderr);
 });
 
-test('Rust repeat discovery locks Cargo test and metadata resolution', { timeout: 10000 }, (t) => {
-  const directory = fakeCargo(t);
-  const result = spawnSync(process.execPath, [
-    'scripts/rust-tests.mjs', '--manifest', join(directory, 'Cargo.toml'), '--package', 'fixture',
-    '--test-target', 'lib', '--test', 'fixture::alpha',
-  ], {
-    cwd: root, env: { ...process.env, CARGO: join(directory, 'cargo') },
-    encoding: 'utf8', timeout: 10000,
-  });
-  assert.equal(result.status, 0, result.stdout + result.stderr);
-  const calls = readFileSync(join(directory, 'args'), 'utf8').trim().split('\n');
-  assert.ok(calls.some((call) => /^test .*--locked/.test(call)), `Cargo test discovery did not lock resolution: ${calls.join('\n')}`);
-  assert.ok(calls.some((call) => /^metadata .*--locked/.test(call)), `Cargo metadata did not lock resolution: ${calls.join('\n')}`);
+test('Rust repeat discovery locks Cargo test and metadata resolution', { timeout: 240000 }, (t) => {
+  const result = cli(t, ['--package', 'unlocked', '--test-target', 'lib'], { file: build('unlocked') });
+  assert.notEqual(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout + result.stderr, /--locked/, result.stdout + result.stderr);
+  assert.equal(existsSync(join(root, 'scripts/test/fixtures/repeat-rust/unlocked/Cargo.lock')), false, '--locked wrote a lock file');
 });
 
-test('make repeat-rust runs each documentation test of the library with its own name, result and elapsed time', (t) => {
-  const directory = fakeCargo(t);
-  // The make target passes the name quoted: a doc-test name holds spaces and parentheses, which the recipe shell would split.
-  const result = spawnSync('make', ['repeat-rust', 'PACKAGE=fixture', 'COUNT=1', 'TEST=src/lib.rs - doc_example (line 3)', 'TEST_TIMEOUT=2'], {
-    cwd: root, env: { ...process.env, HOME: directory, CARGO_HOME: join(directory, '.cargo'), PATH: `${directory}:${process.env.PATH}` }, encoding: 'utf8', timeout: 60000,
-  });
+test('make repeat-rust runs each documentation test of the library with its own name, result and elapsed time', { timeout: 240000 }, (t) => {
+  // A documentation test is compiled by each run, so its limit is 60 seconds; the limit of the kill test is too short for a compile.
+  const result = make(t, ['repeat-rust', 'PACKAGE=fixture', 'COUNT=1', `TEST=${docTest}`, 'TEST_TIMEOUT=60']);
   assert.equal(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stdout, /^RUN  src\/lib\.rs - doc_example \(line 3\) \(1 running, limit 2\.000s\)$/m, result.stdout + result.stderr);
+  assert.match(result.stdout, /^RUN  src\/lib\.rs - doc_example \(line 3\) \(1 running, limit 60\.000s\)$/m, result.stdout + result.stderr);
   assert.match(result.stdout, /^PASS src\/lib\.rs - doc_example \(line 3\) \d+\.\d{3}s$/m, result.stdout + result.stderr);
-  const calls = readFileSync(join(directory, 'args'), 'utf8').trim().split('\n');
-  assert.ok(calls.some((call) => /--doc -- src\/lib\.rs - doc_example \(line 3\)$/.test(call)), JSON.stringify(calls));
 });
 
 for (const target of ['repeat-rust', 'test-rust-alone']) {
-  test(`make ${target} applies the declared deployment environment to every Cargo call`, { timeout: 60000 }, (t) => {
-    const { directory } = targetCargo(t);
-    const deploymentLog = join(directory, 'deployment-targets');
-    const args = [target, 'PACKAGE=fixture', 'MACOS_MINIMUM=14.4',
-      `PATH=${directory}:${process.env.PATH}`];
-    if (target === 'repeat-rust') args.push('COUNT=1', 'TEST=fixture::library_case', 'TEST_TARGET=lib');
-    const result = spawnSync('make', args, {
-      cwd: root,
-      env: { ...process.env, PATH: `${directory}:${process.env.PATH}`, MACOSX_DEPLOYMENT_TARGET: '10.9', SOKSAK_TEST_DEPLOYMENT_LOG: deploymentLog },
-      encoding: 'utf8', timeout: 60000,
-    });
+  test(`make ${target} applies the declared deployment environment to every Cargo call`, { timeout: 240000 }, (t) => {
+    const args = [target, 'PACKAGE=fixture', 'MACOS_MINIMUM=14.4'];
+    if (target === 'repeat-rust') args.push('COUNT=1', 'TEST=fixture::deployment_target', 'TEST_TARGET=lib');
+    // The fixture reads the deployment target that Cargo gave its build, so a build under 10.9 would fail the test.
+    const result = make(t, args, { env: { MACOSX_DEPLOYMENT_TARGET: '10.9' } });
     assert.equal(result.status, 0, result.stdout + result.stderr);
-    const targets = readFileSync(deploymentLog, 'utf8').trim().split('\n');
-    assert.ok(targets.length >= 2, `Cargo build and discovery were not observed: ${JSON.stringify(targets)}`);
-    assert.deepEqual([...new Set(targets)], ['14.4'], 'Cargo inherited a deployment target different from the declared build');
+    assert.match(result.stdout, /^PASS fixture::deployment_target \d+\.\d{3}s$/m, result.stdout + result.stderr);
   });
 }

@@ -7,7 +7,7 @@
 // Usage: node scripts/rust-tests.mjs --manifest <Cargo.toml> --package <package> [--features <list>] [--test-target lib|test:<name>] [--test <name>]
 //   [--profile <Cargo profile>] [--count <n>] [--timeout <seconds>]
 import { execFileSync } from 'node:child_process';
-import { dirname } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { loadavg } from 'node:os';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
@@ -62,7 +62,10 @@ export function cargoTargetArgs(target) {
 
 /** The package of the manifest, as `cargo metadata` describes it: its folder and whether its library has documentation tests. */
 async function packageOf(manifest, pkg) {
-  const metadata = JSON.parse(await cargo(['metadata', '--locked', '--no-deps', '--format-version', '1', '--manifest-path', manifest]));
+  // Fault injection point `packageOf`: SOKSAK_FAULT_METADATA_MANIFEST names the manifest that `cargo metadata` reads instead of the
+  // manifest of the run, so a test reaches the failure of the metadata stage through the real command.
+  const metadataManifest = process.env.SOKSAK_FAULT_METADATA_MANIFEST ?? manifest;
+  const metadata = JSON.parse(await cargo(['metadata', '--locked', '--no-deps', '--format-version', '1', '--manifest-path', metadataManifest]));
   const found = metadata.packages.find((item) => item.name === pkg);
   if (found === undefined) throw new Error(`${pkg} is not a package of ${manifest}`);
   return {
@@ -76,7 +79,9 @@ async function packageOf(manifest, pkg) {
  * `<executable> --exact <name>` or, for a documentation test, as `cargo test --doc -- <name>`. Resolves with the exit status: 0 when
  * every test of every run passed and ran.
  */
-export async function runRustTests({ manifest, package: pkg, features, profile, testTarget, test, count, timeoutMs, write }) {
+export async function runRustTests({ manifest: manifestPath, package: pkg, features, profile, testTarget, test, count, timeoutMs, write }) {
+  // Cargo runs in the folder of the package for the documentation tests, so the manifest is resolved before the run.
+  const manifest = resolve(manifestPath);
   if (profile !== undefined && (typeof profile !== 'string' || !/^[A-Za-z0-9_-]+$/.test(profile))) {
     throw new Error('--profile must be a nonempty Cargo profile name');
   }

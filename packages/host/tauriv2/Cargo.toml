@@ -32,3 +32,6 @@ windows = { version = "0.62", features = ["Win32_Foundation"] }
 [dev-dependencies]
 tauri = { version = "2", default-features = false, features = ["test"] }
 tempfile = "3"
+
+[lints]
+workspace = true

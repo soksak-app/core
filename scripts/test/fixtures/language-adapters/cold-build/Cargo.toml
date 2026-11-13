@@ -1,0 +1,8 @@
+[package]
+name = "cold-build"
+version = "0.0.1"
+edition = "2021"
+publish = false
+
+# The fixture is a workspace of its own, so the root workspace of the repository does not take it.
+[workspace]

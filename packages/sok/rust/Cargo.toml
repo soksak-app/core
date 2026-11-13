@@ -65,3 +65,6 @@ signal-hook = "0.3"
 # 검사 소유의 TLS server 의 인증서와 server 연결.
 rcgen = "0.14"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+
+[lints]
+workspace = true

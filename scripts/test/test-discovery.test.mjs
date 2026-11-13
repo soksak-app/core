@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -122,104 +122,48 @@ test("a Rust package lists its tests, each test runs by itself, and an ignored t
     [["fails", "fail"], ["passes", "pass"], ["skipped", "skip"]]);
 });
 
-test("Rust host discovery requires the existing locked dependency graph", { timeout: 10_000 }, async (t) => {
-  const root = folder();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  mkdirSync(join(root, "src"));
-  writeFileSync(join(root, "Cargo.toml"), '[package]\nname = "fixture"\nversion = "0.0.1"\nedition = "2021"\n\n[workspace]\n');
-  writeFileSync(join(root, "src", "lib.rs"), "pub fn one() -> u32 { 1 }\n");
-  const binary = join(root, "fixture-test");
-  writeFileSync(binary, '#!/bin/sh\nprintf "fixture::locked: test\\n\\n1 tests, 0 benchmarks\\n"\n');
-  chmodSync(binary, 0o755);
-  const cargo = join(root, "cargo");
-  writeFileSync(cargo, `#!/bin/sh
-case "$1" in
-  test) case " $* " in *" --locked "*) ;; *) echo "Rust discovery omitted --locked" >&2; exit 1 ;; esac
-    printf '%s\\n' '{"reason":"compiler-artifact","profile":{"test":true},"manifest_path":"${join(root, "Cargo.toml")}","target":{"name":"fixture","src_path":"${join(root, "src/lib.rs")}"},"executable":"${binary}"}' ;;
-  *) echo "unexpected cargo command: $*" >&2; exit 1 ;;
-esac
-`);
-  chmodSync(cargo, 0o755);
-  const lines = [];
-  await withCargoOf(root, async () => {
-    const { tests, failures } = await discoverRust({ packageName: "fixture", cwd: root, id: "locked", write: (line) => lines.push(line), timeoutMs: 1000 });
-    assert.deepEqual(failures, [], lines.join("\n"));
-    assert.deepEqual(tests.map((item) => item.testName), ["fixture::locked"]);
-  });
-});
+const fixtureRust = join(import.meta.dirname, "fixtures", "repeat-rust");
 
-/**
- * A folder with a fake `cargo` whose `test` builds the executable `deps/<id>` of the target folder `target` (or `elsewhere`
- * for the id `outside`) from `built/<id>` and records, before each build, which executables of earlier builds are still on
- * the disk.
- */
-function listOnlyFixture() {
-  const root = folder();
-  const target = join(root, "target");
-  mkdirSync(join(target, "deps"), { recursive: true });
-  mkdirSync(join(root, "elsewhere"));
-  mkdirSync(join(root, "built"));
-  writeFileSync(join(root, "Cargo.toml"), '[package]\nname = "fixture"\nversion = "0.0.1"\nedition = "2021"\n\n[workspace]\n');
-  writeFileSync(join(target, "deps", "libdependency-9f.rlib"), "");
-  for (const id of ["first", "second", "outside"]) {
-    const binary = join(root, "built", id);
-    writeFileSync(binary, `#!/bin/sh\nprintf "fixture::${id}: test\\n\\n1 tests, 0 benchmarks\\n"\n`);
-    chmodSync(binary, 0o755);
-  }
-  const cargo = join(root, "cargo");
-  writeFileSync(cargo, `#!/bin/sh
-case "$1" in
-  metadata) printf '%s\\n' '{"target_directory":"${target}"}' ;;
-  test) id=$(printf '%s' "$*" | sed 's/.*-p \\([a-z]*\\).*/\\1/')
-    for earlier in first second; do [ -e "${target}/deps/$earlier" ] && echo "$id sees $earlier" >> "${root}/seen"; done
-    dir=${target}/deps; [ "$id" = outside ] && dir=${root}/elsewhere
-    cp "${root}/built/$id" "$dir/$id"
-    printf '%s\\n' "{\\"reason\\":\\"compiler-artifact\\",\\"profile\\":{\\"test\\":true},\\"manifest_path\\":\\"${join(root, "Cargo.toml")}\\",\\"target\\":{\\"name\\":\\"fixture\\",\\"src_path\\":\\"${join(root, "src/lib.rs")}\\"},\\"executable\\":\\"$dir/$id\\"}" ;;
-  *) echo "unexpected cargo command: $*" >&2; exit 1 ;;
-esac
-`);
-  chmodSync(cargo, 0o755);
-  return { root, target };
-}
-
-/** Runs `body` with the fake cargo of `root` as CARGO, the cargo that the discovery runs. */
-async function withCargoOf(root, body) {
-  const oldCargo = process.env.CARGO;
-  process.env.CARGO = join(root, "cargo");
-  try {
-    return await body();
-  } finally {
-    if (oldCargo === undefined) delete process.env.CARGO;
-    else process.env.CARGO = oldCargo;
-  }
-}
-
-test("a Rust discovery that only lists removes the executable of a run before the next run builds", { timeout: 10_000 }, async (t) => {
-  const { root, target } = listOnlyFixture();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  const lines = [];
-  const listed = await withCargoOf(root, async () => {
-    const runs = [];
-    for (const id of ["first", "second"]) {
-      runs.push(await discoverRust({ packageName: id, cwd: root, id, write: (line) => lines.push(line), timeoutMs: 1000, listOnly: true }));
-    }
-    return runs;
-  });
-  assert.deepEqual(listed.map((run) => run.failures), [[], []], lines.join("\n"));
-  assert.deepEqual(listed.map((run) => run.tests.map((item) => item.testName)), [["fixture::first"], ["fixture::second"]]);
-  // The build of the second run saw no executable of the first; the libraries of the dependencies stay.
-  assert.equal(existsSync(join(root, "seen")) ? readFileSync(join(root, "seen"), "utf8") : "", "");
-  assert.deepEqual(readdirSync(join(target, "deps")), ["libdependency-9f.rlib"]);
-});
-
-test("a Rust discovery that only lists fails and removes nothing when an executable is outside the target folder", { timeout: 10_000 }, async (t) => {
-  const { root } = listOnlyFixture();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  const { tests, failures } = await withCargoOf(root, () => discoverRust({ packageName: "outside", cwd: root, id: "outside", write() {}, timeoutMs: 1000, listOnly: true }));
+test("Rust host discovery requires the existing locked dependency graph", { timeout: 240_000 }, async (t) => {
+  const target = folder();
+  t.after(() => rmSync(target, { recursive: true, force: true }));
+  const unlocked = join(import.meta.dirname, "fixtures", "repeat-rust", "unlocked");
+  const { tests, failures } = await discoverRust({ packageName: "unlocked", cwd: unlocked, env: { CARGO_TARGET_DIR: target }, id: "locked", write() {}, timeoutMs: 1000 });
   assert.deepEqual(tests, []);
-  assert.equal(failures.length, 1);
-  assert.match(failures[0], /^outside: the executable .*elsewhere\/outside is not in the target folder .*target$/);
-  assert.ok(existsSync(join(root, "elsewhere", "outside")));
+  assert.deepEqual(failures, ["locked: the build failed"]);
+  assert.equal(existsSync(join(unlocked, "Cargo.lock")), false, "--locked wrote a lock file");
+});
+
+test("a Rust discovery that only lists removes the executables of each run from the target folder", { timeout: 240_000 }, async (t) => {
+  const target = folder();
+  t.after(() => rmSync(target, { recursive: true, force: true }));
+  const lines = [];
+  const runs = [];
+  for (let run = 0; run < 2; run += 1) {
+    runs.push(await discoverRust({ packageName: "fixture", cwd: fixtureRust, env: { CARGO_TARGET_DIR: target }, id: "fixture", write: (line) => lines.push(line), timeoutMs: 20000, listOnly: true }));
+  }
+  assert.deepEqual(runs.map((run) => run.failures), [[], []], lines.join("\n"));
+  for (const run of runs) {
+    assert.deepEqual(run.tests.map((item) => item.testName).sort(), ["fixture::alpha", "fixture::beta", "fixture::deployment_target", "fixture::integration_case", "fixture::library_case"]);
+  }
+  // Each run removed its test executables; the libraries that the builds produced stay in the folder.
+  const deps = readdirSync(join(target, "debug", "deps"));
+  assert.deepEqual(deps.filter((name) => /^[a-z]+-[0-9a-f]{16}$/.test(name)), []);
+  assert.ok(deps.some((name) => /^libfixture-[0-9a-f]{16}\.rlib$/.test(name)), JSON.stringify(deps));
+});
+
+test("a Rust discovery that only lists fails and removes nothing when an executable is outside the target folder", { timeout: 240_000 }, async (t) => {
+  const target = folder();
+  const reported = folder();
+  t.after(() => { rmSync(target, { recursive: true, force: true }); rmSync(reported, { recursive: true, force: true }); });
+  // The injection point makes cargo metadata report a folder that is not the target folder of the build.
+  const { tests, failures } = await discoverRust({ packageName: "fixture", cwd: fixtureRust, env: { CARGO_TARGET_DIR: target, SOKSAK_FAULT_TARGET_DIRECTORY: reported }, id: "outside", write() {}, timeoutMs: 1000, listOnly: true });
+  assert.deepEqual(tests, []);
+  assert.ok(failures.length > 0, "no failure for the executables outside the target folder");
+  for (const failure of failures) assert.match(failure, new RegExp(`^outside: the executable .* is not in the target folder ${reported}$`), failure);
+  // Nothing was removed: the executables of the build stay in the folder of the build.
+  const deps = readdirSync(join(target, "debug", "deps"));
+  assert.ok(deps.some((name) => /^fixture-[0-9a-f]{16}$/.test(name)), JSON.stringify(deps));
 });
 
 test("a cargo line that starts with a brace but is not JSON fails with the line", async () => {

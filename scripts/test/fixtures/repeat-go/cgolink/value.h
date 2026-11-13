@@ -1,0 +1,1 @@
+int fixtureValue(void);

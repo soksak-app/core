@@ -6,9 +6,25 @@ import { existsSync } from 'node:fs';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { cargoCommand } from '@soksak/window-check/cargo.mjs';
 import { SUPPORTED_LANGUAGES, discoverLanguageCases, parseLanguageResult, runLanguageCases } from '../language-test-adapters.mjs';
 
-const command = (source) => ({ command: process.execPath, args: ['-e', source], timeoutMs: 30_000 });
+// The fixtures of the language adapter tests: the emitter program, its output files, the node test files and the cold-build crate.
+const fixtures = join(import.meta.dirname, 'fixtures', 'language-adapters');
+const emit = join(fixtures, 'emit.mjs');
+const output = (name) => join(fixtures, 'output', name);
+
+/** A case program: the emitter of the fixtures, run with the options `args` (see fixtures/language-adapters/emit.mjs). */
+const program = (...args) => ({ command: process.execPath, args: [emit, ...args], timeoutMs: 30_000 });
+
+/** A data file of the test in a folder of its own, removed when the test ends. */
+async function dataFile(t, name, text) {
+  const directory = await mkdtemp(join(tmpdir(), 'soksak-language-data-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const file = join(directory, name);
+  await writeFile(file, text);
+  return file;
+}
 
 test('the language adapter refuses to attribute a pass to inputs changed by its command', { timeout: 30000 }, async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'soksak-language-inputs-'));
@@ -18,13 +34,12 @@ test('the language adapter refuses to attribute a pass to inputs changed by its 
   git('config', 'user.email', 'evidence@example.invalid');
   git('config', 'user.name', 'evidence');
   await writeFile(join(root, 'source.txt'), 'tested content');
-  await writeFile(join(root, 'case.cjs'), "require('node:assert/strict').equal(require('node:fs').readFileSync('source.txt', 'utf8'), 'tested content'); require('node:fs').writeFileSync('source.txt', 'untested content'); console.log('PASS: input assertion');\n");
   await writeFile(join(root, 'package.json'), '{}');
   git('add', '.');
   git('commit', '-q', '-m', 'initial');
   const cases = discoverLanguageCases({ cases: [{ id: 'input-change', language: 'shell', command: process.execPath,
-    args: ['case.cjs'], cwd: root, timeoutMs: 10000, implementationFiles: [join(root, 'source.txt')],
-    testFiles: [join(root, 'case.cjs')], dependencyFiles: [join(root, 'package.json')], buildFlags: [] }] });
+    args: [join(fixtures, 'input-change.cjs')], cwd: root, timeoutMs: 10000, implementationFiles: [join(root, 'source.txt')],
+    testFiles: [join(fixtures, 'input-change.cjs')], dependencyFiles: [join(root, 'package.json')], buildFlags: [] }] });
   const result = await runLanguageCases(cases, { evidence: true, root });
   assert.equal(result.status, 'fail', 'a successful assertion against old content cannot validate new content');
   assert.equal(result.cases[0].evidence.commandResult.status, 'pass');
@@ -32,43 +47,40 @@ test('the language adapter refuses to attribute a pass to inputs changed by its 
   assert.match(result.cases[0].errors.join('\n'), /inputs changed during execution/);
 });
 
-async function nodeCase(t, source, flags = []) {
-  const directory = await mkdtemp(join(tmpdir(), 'soksak-language-node-'));
-  t.after(() => rm(directory, { recursive: true, force: true }));
-  const file = join(directory, 'probe.test.mjs');
-  await writeFile(file, `import { test, describe, it } from 'node:test';\n${source}\n`);
+/** A case of the Node adapter that runs the test file `name` of the node fixtures with the flags. */
+function nodeCase(name, flags = []) {
+  const file = join(fixtures, 'node', name);
   return { id: 'node-evidence', language: 'js-ts', command: '/usr/bin/env', args: ['-u', 'NODE_TEST_CONTEXT', process.execPath, '--test', '--test-reporter=tap', ...flags, file], timeoutMs: 30_000, testFiles: [file] };
 }
 
-for (const [label, source] of [
-  ['empty file', ''],
-  ['exit before registration', 'process.exit(0);'],
-  ['skipped suite beside a passing case', 'test("required", () => {}); describe.skip("omitted suite", () => { it("case", () => {}); });'],
-  ['todo case', 'test.todo("required");'],
-  ['failed case', 'test("required", () => { throw new Error("required failure"); });'],
-  ['cancelled case', 'test("required", { signal: AbortSignal.abort(new Error("cancelled fixture")) }, () => {});'],
+for (const [label, name] of [
+  ['empty file', 'empty.mjs'],
+  ['exit before registration', 'exit-before-registration.mjs'],
+  ['skipped suite beside a passing case', 'skipped-suite.mjs'],
+  ['todo case', 'todo.mjs'],
+  ['failed case', 'failed.mjs'],
+  ['cancelled case', 'cancelled.mjs'],
 ]) {
-  test(`the Node adapter rejects ${label}`, { timeout: 30_000 }, async (t) => {
-    const result = await runLanguageCases(discoverLanguageCases({ cases: [await nodeCase(t, source)] }));
+  test(`the Node adapter rejects ${label}`, { timeout: 30_000 }, async () => {
+    const result = await runLanguageCases(discoverLanguageCases({ cases: [nodeCase(name)] }));
     assert.equal(result.status, 'fail', JSON.stringify(result));
   });
 }
 
-test('the Node adapter accepts nested selected cases and rejects an empty selection', { timeout: 30_000 }, async (t) => {
-  const source = 'describe("selected suite", () => { it("selected case", () => {}); }); test("other", () => { throw new Error("unselected"); });';
-  const passing = await nodeCase(t, source, ['--test-name-pattern=selected']);
+test('the Node adapter accepts nested selected cases and rejects an empty selection', { timeout: 30_000 }, async () => {
+  const passing = nodeCase('selected.mjs', ['--test-name-pattern=selected']);
   const result = await runLanguageCases(discoverLanguageCases({ cases: [passing] }));
   assert.equal(result.status, 'pass', JSON.stringify(result));
   assert.equal(result.cases[0].actual.tests, 1);
-  const empty = await nodeCase(t, source, ['--test-name-pattern=missing']);
+  const empty = nodeCase('selected.mjs', ['--test-name-pattern=missing']);
   const missing = await runLanguageCases(discoverLanguageCases({ cases: [empty] }));
   assert.equal(missing.status, 'fail', JSON.stringify(missing));
   assert.match(missing.cases[0].errors.join('; '), /zero tests/);
 });
 
-test('the Node adapter refuses an empty selected file beside a passing file', { timeout: 30_000 }, async (t) => {
-  const passing = await nodeCase(t, 'test("required", () => {});');
-  const empty = await nodeCase(t, '');
+test('the Node adapter refuses an empty selected file beside a passing file', { timeout: 30_000 }, async () => {
+  const passing = nodeCase('passing.mjs');
+  const empty = nodeCase('empty.mjs');
   passing.args.push(empty.testFiles[0]);
   passing.testFiles.push(empty.testFiles[0]);
   const result = await runLanguageCases(discoverLanguageCases({ cases: [passing] }));
@@ -97,8 +109,8 @@ const goPassingEvents = [
 
 test('a case whose build reports an object newer than the link fails with the object and both versions', { timeout: 30_000 }, async () => {
   const warning = "ld: warning: object file (/target/ring/libring_core.a(curve25519.o)) was built for newer 'macOS' version (27.0) than being linked (11.0)";
-  const cases = discoverLanguageCases({ cases: [{ id: 'linked', language: 'go', ...command("console.log(JSON.stringify({ Action: 'pass', Test: 'TestLinked' }))"),
-    build: { command: process.execPath, args: ['-e', `console.error(${JSON.stringify(warning)})`], timeoutMs: 30_000 } }] });
+  const cases = discoverLanguageCases({ cases: [{ id: 'linked', language: 'go', ...program('--stdout', output('go-linked-pass.txt')),
+    build: { command: process.execPath, args: [emit, '--stderr', output('linked-warning.txt')], timeoutMs: 30_000 } }] });
   // The command forwards the build output; the test holds it, because the warning is the fixture of this case and not a link of the suite.
   const forwarded = [];
   const write = process.stderr.write;
@@ -141,14 +153,14 @@ for (const [name, events, expected, status] of [
     { Action: 'output', Package: 'fixture', Output: 'testing: warning: no tests to run\n' },
     { Action: 'pass', Package: 'fixture', Elapsed: 0.1 }], { tests: 0, skipped: 0 }, 'fail'],
 ]) {
-  test(name, { timeout: 10_000 }, async () => {
+  test(name, { timeout: 10_000 }, async (t) => {
     // Go emits package output and package skip as separate events. Only an event with Test names a test outcome.
-    const output = events.map((event) => JSON.stringify(event)).join('\n') + '\n';
-    const parsed = parseLanguageResult('go', output, '');
+    const text = events.map((event) => JSON.stringify(event)).join('\n') + '\n';
+    const parsed = parseLanguageResult('go', text, '');
     assert.equal(parsed.tests, expected.tests);
     assert.equal(parsed.skipped, expected.skipped);
-    const cases = discoverLanguageCases({ cases: [{ id: 'go-selection', language: 'go',
-      ...command(`process.stdout.write(${JSON.stringify(output)})`) }] });
+    const file = await dataFile(t, 'events.jsonl', text);
+    const cases = discoverLanguageCases({ cases: [{ id: 'go-selection', language: 'go', ...program('--stdout', file) }] });
     const result = await runLanguageCases(cases);
     assert.equal(result.status, status, JSON.stringify(result));
     if (expected.tests === 0) assert.match(result.cases[0].errors.join('; '), /zero tests reported/);
@@ -156,50 +168,40 @@ for (const [name, events, expected, status] of [
   });
 }
 
-/**
- * A fake cargo in a new folder: the first run compiles for compileMs and leaves its output, a later run finds the output and
- * compiles nothing, and a run without --no-run reports one passed test. It models a cold build that is longer than the limit
- * of the test run.
- */
-async function fakeCargo(t, compileMs) {
-  const directory = await mkdtemp(join(tmpdir(), 'soksak-language-build-'));
-  t.after(() => rm(directory, { recursive: true, force: true }));
-  const file = join(directory, 'cargo.cjs');
-  await writeFile(file, `const { existsSync, writeFileSync } = require('node:fs');
-const output = ${JSON.stringify(join(directory, 'built'))};
-if (!existsSync(output)) {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ${compileMs});
-  writeFileSync(output, '');
-}
-if (!process.argv.includes('--no-run')) console.log('test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out;');
-`);
-  return { file, output: join(directory, 'built') };
-}
-
-test('a case builds before its test runs, so the limit of the case measures only the test', { timeout: 30_000 }, async (t) => {
-  const cargo = await fakeCargo(t, 3000);
+test('a case builds before its test runs, so the limit of the case measures only the test', { timeout: 300_000 }, async (t) => {
+  // The build script of the cold-build crate sleeps 3 seconds, so a cold build of it is longer than the limit of the test (2 seconds).
+  const target = await mkdtemp(join(tmpdir(), 'soksak-language-cold-'));
+  t.after(() => rm(target, { recursive: true, force: true }));
+  const previous = process.env.CARGO_TARGET_DIR;
+  process.env.CARGO_TARGET_DIR = target;
+  t.after(() => {
+    if (previous === undefined) delete process.env.CARGO_TARGET_DIR;
+    else process.env.CARGO_TARGET_DIR = previous;
+  });
+  const crate = join(fixtures, 'cold-build');
+  const cargo = cargoCommand();
   const events = [];
-  const cases = discoverLanguageCases({ cases: [{ id: 'cold-build', language: 'rust', command: process.execPath, args: [cargo.file, 'test'],
-    timeoutMs: 2000, expectedTests: 1, build: { command: process.execPath, args: [cargo.file, 'test', '--no-run'], timeoutMs: 20_000 } }] });
+  const cases = discoverLanguageCases({ cases: [{ id: 'cold-build', language: 'rust', command: cargo, args: ['test', '--locked'], cwd: crate,
+    timeoutMs: 2000, expectedTests: 1, build: { command: cargo, args: ['test', '--locked', '--no-run'], cwd: crate, timeoutMs: 120_000 } }] });
   const result = await runLanguageCases(cases, { onEvent: (event) => events.push(event) });
   assert.equal(result.status, 'pass', JSON.stringify(result.cases[0].errors));
-  // The build waits 3000 ms and the limit of the test is 2000 ms, so a limit that included the build would end the case as a timeout.
+  // The build takes longer than the limit of the test, so a limit that included the build would end the case as a timeout.
   assert.equal(result.cases[0].build.status, 'pass');
   assert.deepEqual(events.filter((event) => event.type !== 'progress').map(({ type, phase }) => [phase, type]),
     [['build', 'start'], ['build', 'pass'], ['test', 'start'], ['test', 'pass']]);
 });
 
-for (const [label, build, status, error] of [
-  ['fails', `console.error('error[E0425]: cannot find value'); process.exit(101)`, 'fail', 'build status fail'],
-  ['passes its own limit', 'setInterval(() => {}, 1000)', 'timeout', 'build status timeout'],
+for (const [label, buildOptions, status, error] of [
+  ['fails', ['--stderr', output('compile-error.txt'), '--exit', '101'], 'fail', 'build status fail'],
+  ['passes its own limit', ['--hang'], 'timeout', 'build status timeout'],
 ]) {
   test(`a case whose build ${label} reports the build and runs no test`, { timeout: 30_000 }, async (t) => {
     const directory = await mkdtemp(join(tmpdir(), 'soksak-language-unbuilt-'));
     t.after(() => rm(directory, { recursive: true, force: true }));
     const ran = join(directory, 'ran');
     const cases = discoverLanguageCases({ cases: [{ id: 'unbuilt', language: 'rust', expectedTests: 1,
-      ...command(`require('node:fs').writeFileSync(${JSON.stringify(ran)}, ''); console.log('test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out;')`),
-      build: { command: process.execPath, args: ['-e', build], timeoutMs: 1000 } }] });
+      ...program('--touch', ran, '--stdout', output('rust-ok.txt')),
+      build: { command: process.execPath, args: [emit, ...buildOptions], timeoutMs: 1000 } }] });
     const result = await runLanguageCases(cases);
     assert.equal(result.status, 'fail');
     assert.equal(result.cases[0].build.status, status);
@@ -210,19 +212,17 @@ for (const [label, build, status, error] of [
 }
 
 test('refuses a build without its own limit and names the case', () => {
-  assert.throws(() => discoverLanguageCases({ cases: [{ id: 'no-build-limit', language: 'rust', ...command('process.exit(0)'),
+  assert.throws(() => discoverLanguageCases({ cases: [{ id: 'no-build-limit', language: 'rust', ...program(),
     build: { command: process.execPath, args: [] } }] }), /case no-build-limit\.build has no timeoutMs/);
-  assert.throws(() => discoverLanguageCases({ cases: [{ id: 'no-build-command', language: 'rust', ...command('process.exit(0)'),
+  assert.throws(() => discoverLanguageCases({ cases: [{ id: 'no-build-command', language: 'rust', ...program(),
     build: { args: [], timeoutMs: 1000 } }] }), /case no-build-command\.build\.command must be a non-empty string/);
 });
 
 for (const phase of ['test', 'build']) {
   test(`a case whose ${phase} prints a process warning of node fails with the warning`, { timeout: 30_000 }, async () => {
-    const warning = '(node:4242) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 end listeners added to [TestsStream].';
-    const print = `console.error(${JSON.stringify(warning)})`;
     const cases = discoverLanguageCases({ cases: [{ id: 'warned', language: 'shell',
-      ...command(`${phase === 'test' ? print : ''}; console.log('PASS: warned case')`),
-      ...(phase === 'build' ? { build: { command: process.execPath, args: ['-e', print], timeoutMs: 30_000 } } : {}) }] });
+      ...program('--stdout', output('pass-warned.txt'), ...(phase === 'test' ? ['--stderr', output('node-warning.txt')] : [])),
+      ...(phase === 'build' ? { build: { command: process.execPath, args: [emit, '--stderr', output('node-warning.txt')], timeoutMs: 30_000 } } : {}) }] });
     const result = await runLanguageCases(cases);
     assert.equal(result.status, 'fail', JSON.stringify(result.cases[0]));
     assert.ok(result.cases[0].errors.includes('node printed MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 end listeners added to [TestsStream].'),
@@ -231,21 +231,21 @@ for (const phase of ['test', 'build']) {
 }
 
 test('discovers all supported language cases, each with its own explicit limit', () => {
-  const cases = discoverLanguageCases({ cases: SUPPORTED_LANGUAGES.filter((language) => language !== 'application').map((language) => ({ id: language, language, ...command('process.exit(0)') })) });
+  const cases = discoverLanguageCases({ cases: SUPPORTED_LANGUAGES.filter((language) => language !== 'application').map((language) => ({ id: language, language, ...program() })) });
   assert.deepEqual(cases.map(({ language, timeoutMs }) => [language, timeoutMs]), [
     ['js-ts', 30_000], ['rust', 30_000], ['go', 30_000], ['objective-c', 30_000], ['shell', 30_000],
   ]);
 });
 
 test('refuses a case without its own limit and names the case', () => {
-  assert.throws(() => discoverLanguageCases({ cases: [{ id: 'no-limit', language: 'rust', command: process.execPath, args: ['-e', 'process.exit(0)'] }] }), /case no-limit has no timeoutMs/);
+  assert.throws(() => discoverLanguageCases({ cases: [{ id: 'no-limit', language: 'rust', command: process.execPath, args: [emit] }] }), /case no-limit has no timeoutMs/);
 });
 
 test('rejects empty, duplicate, unsupported, skipped, and invalid cases', () => {
   assert.throws(() => discoverLanguageCases({ cases: [] }), /at least one/);
-  assert.throws(() => discoverLanguageCases({ cases: [{ id: 'x', language: 'js-ts', ...command(''), expectedStatus: 'skip' }] }), /expectedStatus/);
-  assert.throws(() => discoverLanguageCases({ cases: [{ id: 'x', language: 'js-ts', ...command('process.exit(0)') }, { id: 'x', language: 'js-ts', ...command('process.exit(0)') }] }), /duplicate/);
-  assert.throws(() => discoverLanguageCases({ cases: [{ id: 'x', language: 'python', ...command('process.exit(0)') }] }), /unsupported/);
+  assert.throws(() => discoverLanguageCases({ cases: [{ id: 'x', language: 'js-ts', ...program(), expectedStatus: 'skip' }] }), /expectedStatus/);
+  assert.throws(() => discoverLanguageCases({ cases: [{ id: 'x', language: 'js-ts', ...program() }, { id: 'x', language: 'js-ts', ...program() }] }), /duplicate/);
+  assert.throws(() => discoverLanguageCases({ cases: [{ id: 'x', language: 'python', ...program() }] }), /unsupported/);
 });
 
 test('parses each language result and rejects zero, skipped, and crashed outcomes', async () => {
@@ -261,10 +261,10 @@ test('parses each language result and rejects zero, skipped, and crashed outcome
   });
 
   const cases = discoverLanguageCases({ cases: [
-    { id: 'pass', language: 'shell', ...command("console.log('PASS: required')") },
-    { id: 'zero', language: 'rust', ...command('process.exit(0)') },
+    { id: 'pass', language: 'shell', ...program('--stdout', output('pass-required.txt')) },
+    { id: 'zero', language: 'rust', ...program() },
     // A signal ends the case, whichever it is. SIGKILL leaves no crash report on the machine, as SIGABRT does at each run.
-    { id: 'crash', language: 'go', ...command('process.kill(process.pid, \'SIGKILL\')') },
+    { id: 'crash', language: 'go', ...program('--signal', 'SIGKILL') },
   ] });
   const result = await runLanguageCases(cases);
   assert.equal(result.status, 'fail');
@@ -273,14 +273,14 @@ test('parses each language result and rejects zero, skipped, and crashed outcome
   assert.match(result.cases.find((item) => item.id === 'crash').errors.join(' '), /process crashed with SIGKILL/);
 
   const skipped = await runLanguageCases(discoverLanguageCases({ cases: [
-    { id: 'mandatory-skip', language: 'rust', ...command("console.log('test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out;')") },
+    { id: 'mandatory-skip', language: 'rust', ...program('--stdout', output('rust-ignored.txt')) },
   ] }));
   assert.equal(skipped.status, 'fail');
   assert.match(skipped.cases[0].errors.join(' '), /skipped/);
 });
 
 test('reports expected and actual test counts without hiding mismatch', async () => {
-  const cases = discoverLanguageCases({ cases: [{ id: 'count', language: 'shell', expectedTests: 2, ...command("console.log('PASS: required')") }] });
+  const cases = discoverLanguageCases({ cases: [{ id: 'count', language: 'shell', expectedTests: 2, ...program('--stdout', output('pass-required.txt')) }] });
   const result = await runLanguageCases(cases);
   assert.equal(result.status, 'fail');
   assert.deepEqual(result.cases[0].expected, { status: 'pass', tests: 2 });

@@ -1,0 +1,6 @@
+{
+  "production": ["fixture.soksak/repeatgo/nativeprod"],
+  "test": [],
+  "callbackAbi": [],
+  "callbackWorker": []
+}

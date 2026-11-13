@@ -7,16 +7,16 @@
 // caller (MACOSX_DEPLOYMENT_TARGET, CGO_CFLAGS), and a build whose link reports an object newer than the link fails the run
 // (macos-minimum.mjs).
 // Usage: node scripts/go-tests.mjs --package <pattern> [--tags <tags>] [--test <regexp>] [--count <n>] [--timeout <seconds>]
-//   [--ldflags <flags>]
+//   [--ldflags <flags>] [--cgo-ldflags <flags>] [--native-packages <declaration.json>]
 import { execFileSync } from 'node:child_process';
 import { loadavg } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { runBuild } from './macos-minimum.mjs';
 import { runTests } from './test-runner.mjs';
 import { temporaryFolder } from './temporary-folder.mjs';
-import { resolveGoNativeInputs } from './go-repeat-inputs.mjs';
+import { readNativePackages, resolveGoNativeInputs } from './go-repeat-inputs.mjs';
 
 /** The limit of one test when `--timeout` is not given. */
 export const TEST_TIMEOUT_MS = 120_000;
@@ -40,8 +40,8 @@ function go(args, options = {}) {
  * as the test binary of its package with `-test.run ^<name>$`. Resolves with the exit status: 0 when every test of every run passed
  * and ran.
  */
-export async function runGoTests({ pattern, tags = '', test, count, timeoutMs, ldflags = '', cgoLdflags = '', cwd = process.cwd(), env = process.env, write }) {
-  const inputs = resolveGoNativeInputs({ patterns: [pattern], tags, cwd, env });
+export async function runGoTests({ pattern, tags = '', test, count, timeoutMs, ldflags = '', cgoLdflags = '', cwd = process.cwd(), env = process.env, native, write }) {
+  const inputs = resolveGoNativeInputs({ patterns: [pattern], tags, cwd, env, native });
   const selectedEnv = inputs.env;
   const linkerFlags = [ldflags, ...(inputs.cgoEnabled ? [cgoLdflags] : [])].filter(Boolean).join(' ');
   const tagArgs = tags ? ['-tags', tags] : [];
@@ -106,6 +106,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       timeout: { type: 'string' },
       ldflags: { type: 'string' },
       'cgo-ldflags': { type: 'string' },
+      'native-packages': { type: 'string' },
     },
   });
   if (values.package === undefined) throw new Error('--package is required');
@@ -117,6 +118,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
   runGoTests({
     pattern: values.package, tags: values.tags, test: values.test, count, timeoutMs, ldflags: values.ldflags, cgoLdflags: values['cgo-ldflags'],
+    native: values['native-packages'] === undefined ? undefined : readNativePackages(resolve(values['native-packages'])),
     write: (line) => process.stdout.write(`${line}\n`),
   }).then((code) => { process.exitCode = code; }, (error) => {
     process.stderr.write(`${error.message}\n`);

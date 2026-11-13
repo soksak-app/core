@@ -1,0 +1,11 @@
+[package]
+name = "linkwarn"
+version = "0.0.1"
+edition = "2021"
+publish = false
+
+[workspace]
+
+# The lint of the workspace of the repository (Cargo.toml) that prints the linker warning that the runner judges.
+[lints.rust]
+linker_info = "warn"

@@ -1,174 +1,147 @@
-// Verifies that `make repeat-go` names each test of a Go package when it starts, reports its result and elapsed time, kills a test at
-// its own limit, passes the build tags, and judges a package pattern by its test packages. The Go toolchain is replaced by a fake
-// `go` on PATH; `make` gets its HOME in the same folder. The fake `go test -c -o <file>` writes a test binary that lists two tests
-// (`-test.list`) and runs the test named by `-test.run`. FAKE_GO_MODE selects the packages that `go list` reports: `run` is one
-// package with a test file, `support` is a package without test files beside a package with one, and `nofiles` is one package
-// without test files.
+// Verifies that `make repeat-go` names each test of a Go package when it starts, reports its result and elapsed time, lets a test
+// end itself at its own limit with its stacks, passes the build tags, and judges a package pattern by its test packages. The
+// packages are the tracked fixture module scripts/test/fixtures/repeat-go, built and run by the real go toolchain. go.work of the
+// repository does not list the fixture, so each run selects it through a go.work file of its own folder (GOWORK). The native
+// environment is declared by the fixture declaration native-packages.json, and the cgo flags are observed through the map file
+// that the external linker writes.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const root = resolve(import.meta.dirname, '../..');
+const fixture = join(root, 'scripts/test/fixtures/repeat-go');
+const nativeDeclaration = join(fixture, 'native-packages.json');
 
-// The test named TestBeta hangs for 8 seconds, so only a kill at its limit ends it sooner; on SIGQUIT it prints a stack line and exits,
-// as a Go test binary prints the stacks of its goroutines.
-function fakeGo(t) {
+/** A folder holding a go.work that uses the fixture module, and the path of that go.work. */
+function workspaceFor(t) {
   const directory = mkdtempSync(join(tmpdir(), 'soksak-go-repeat-'));
-  t.after(() => rmSync(directory, { recursive: true }));
-  const go = join(directory, 'go');
-  writeFileSync(go, `#!/bin/sh
-printf '%s\\n' "$*" >> ${JSON.stringify(join(directory, 'args'))}
-printf '%s|%s|%s|%s\\n' "$*" "\${CGO_ENABLED-}" "\${SOKSAK_NATIVE_LIBRARY-}" "\${SOKSAK_NATIVE_TEST_LIBRARY-}" >> ${JSON.stringify(join(directory, 'go-env'))}
-case "$*" in
-  "env CGO_ENABLED") printf '%s\\n' "\${CGO_ENABLED:-1}"; exit 0 ;;
-  "list -deps"*)
-    if [ "$FAKE_GO_MODE" = "native" ]; then
-      printf '%s\\n' '{"ImportPath":"github.com/soksak-app/core/packages/host/mygo/src/platform/darwin/bindings"}' '{"ImportPath":"github.com/soksak-app/core/packages/host/mygo/tests/platform/darwin/bindings"}'
-    fi
-    exit 0 ;;
-  "list "*ImportPath*)
-    case "$FAKE_GO_MODE" in
-      nofiles) printf 'fixture/src\\t%s\\t0\\t0\\n' ${JSON.stringify(directory)}; exit 0 ;;
-      support) printf 'fixture/tests/support\\t%s\\t0\\t0\\nfixture/tests\\t%s\\t1\\t0\\n' ${JSON.stringify(directory)} ${JSON.stringify(directory)}; exit 0 ;;
-      *) printf 'fixture/src\\t%s\\t1\\t0\\n' ${JSON.stringify(directory)}; exit 0 ;;
-    esac ;;
-  "test -c"*) if [ -n "\${FAKE_GO_LINKER-}" ]; then printf '%s\\n' "$FAKE_GO_LINKER" >&2; fi; out=""; while [ $# -gt 0 ]; do if [ "$1" = "-o" ]; then out="$2"; fi; shift; done
-    cat > "$out" <<'BINARY'
-#!/bin/sh
-printf '%s\\n' "$*" >> ${JSON.stringify(join(directory, 'binary-args'))}
-printf '%s|%s|%s|%s\\n' "$*" "\${CGO_ENABLED-}" "\${SOKSAK_NATIVE_LIBRARY-}" "\${SOKSAK_NATIVE_TEST_LIBRARY-}" >> ${JSON.stringify(join(directory, 'binary-env'))}
-case "$1" in -test.list*) printf 'TestAlpha\\nTestBeta\\nBenchmarkGamma\\n'; exit 0 ;; esac
-name=$(printf '%s' "$2" | tr -d '^$')
-# TestBeta ends itself at its -test.timeout with its stacks, as the testing package of Go does, and records a signal it receives.
-case "$name" in TestBeta) trap 'printf "signalled\\n"' QUIT TERM
-  for arg in "$@"; do case "$arg" in -test.timeout=*ms) ms=\${arg#-test.timeout=}; ms=\${ms%ms} ;; esac; done
-  sleep "$(awk "BEGIN { print $ms / 1000 }")"; printf "panic: test timed out\\ngoroutine 1 [sleep]:\\n"; exit 2 ;; esac
-printf '=== RUN   %s\\n--- PASS: %s (0.00s)\\nPASS\\n' "$name" "$name"
-BINARY
-    chmod +x "$out"; exit 0 ;;
-esac
-exit 1
-`);
-  chmodSync(go, 0o755);
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const file = join(directory, 'go.work');
+  writeFileSync(file, `go 1.27.3\n\nuse ${relative(directory, fixture)}\n`);
+  return file;
+}
+
+/** Runs `make` with the arguments in the repository root, with the workspace of the fixture module. */
+function make(t, args) {
+  return spawnSync('make', args, {
+    cwd: root, env: { ...process.env, GOWORK: workspaceFor(t) }, encoding: 'utf8', timeout: 60000,
+  });
+}
+
+/** Runs the Go test runner script with the arguments, the workspace of the fixture module and the environment `env`. */
+function runGoTests(t, args, env = {}) {
+  return spawnSync(process.execPath, ['scripts/go-tests.mjs', ...args], {
+    cwd: root, env: { ...process.env, GOWORK: workspaceFor(t), ...env }, encoding: 'utf8', timeout: 240000,
+  });
+}
+
+/** A folder of the test, removed when the test ends. */
+function folderFor(t) {
+  const directory = mkdtempSync(join(tmpdir(), 'soksak-go-repeat-files-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
   return directory;
 }
 
-function makeGo(t, mode, target) {
-  const directory = fakeGo(t);
-  const result = spawnSync('make', target, {
-    cwd: root, env: { ...process.env, HOME: directory, PATH: `${directory}:${process.env.PATH}`, FAKE_GO_MODE: mode },
-    encoding: 'utf8', timeout: 60000,
-  });
-  return { ...result, directory };
-}
+const fixturePackage = (name) => `./scripts/test/fixtures/repeat-go/${name}`;
 
 test('make repeat-go names each test when it starts, reports its result and elapsed time, and a test at its limit ends itself with its stacks', (t) => {
-  const { stdout, stderr, status } = makeGo(t, 'run', ['repeat-go', 'PACKAGE=./fixture', 'COUNT=1', 'TEST_TIMEOUT=2']);
+  const { stdout, stderr, status } = make(t, ['repeat-go', `PACKAGE=${fixturePackage('run')}`, 'COUNT=1', 'TEST_TIMEOUT=2']);
   assert.match(stdout, /^RUN  TestAlpha \(1 running, limit 2\.000s\)$/m, stdout + stderr);
   assert.match(stdout, /^PASS TestAlpha \d+\.\d{3}s$/m, stdout + stderr);
   assert.match(stdout, /^RUN  TestBeta \(1 running, limit 2\.000s\)$/m, stdout + stderr);
   assert.match(stdout, /^TIME TestBeta \d+\.\d{3}s exceeded 2\.000s and ended itself with its stacks(?:; left running: .*)?$/m, stdout + stderr);
-  assert.doesNotMatch(stdout, /signalled/, `the runner signalled the test at its limit: ${stdout}`);
-  assert.match(stdout, /^  goroutine 1 \[sleep\]:$/m, `the stacks of the test over its limit are not in the output: ${stdout}`);
-  const killed = /^TIME TestBeta (\d+)\.\d{3}s/m.exec(stdout);
-  assert.ok(killed && Number(killed[1]) < 6, `TestBeta ran to its own sleep instead of its limit: ${stdout}`);
+  // The testing package of Go ends the test at its -test.timeout with this panic; the runner sends no signal at the limit.
+  assert.match(stdout, /^  panic: test timed out after 2s$/m, `the test did not end with the timeout panic of the testing package: ${stdout}`);
+  assert.doesNotMatch(stdout, /\bSIG[A-Z]+\b/, `the runner signalled the test at its limit: ${stdout}`);
+  assert.match(stdout, /^  goroutine \d+ \[sleep\]:$/m, `the stacks of the test over its limit are not in the output: ${stdout}`);
+  assert.match(stdout, /repeatgo\/run\.sleepInFixture/, `the stack of the test over its limit is not in the output: ${stdout}`);
+  const ended = /^TIME TestBeta (\d+)\.\d{3}s/m.exec(stdout);
+  assert.ok(ended && Number(ended[1]) < 6, `TestBeta ran to its own sleep instead of its limit: ${stdout}`);
   assert.doesNotMatch(stdout, /BenchmarkGamma/, 'a benchmark ran as a test');
   assert.notEqual(status, 0, stdout + stderr);
-  assert.match(stdout, /^FAIL: \.\/fixture run 1 of 1; load /m, stdout + stderr);
+  assert.match(stdout, /^FAIL: \S+ run 1 of 1; load /m, stdout + stderr);
 });
 
-test('make repeat-go passes the build tags to the list and the test build and selects the named tests', (t) => {
-  const directory = fakeGo(t);
-  const result = spawnSync('make', ['repeat-go', 'PACKAGE=./fixture', 'COUNT=1', 'TAGS=diagnostics', 'TEST=TestAlpha'], {
-    cwd: root, env: { ...process.env, HOME: directory, PATH: `${directory}:${process.env.PATH}`, FAKE_GO_MODE: 'run' }, encoding: 'utf8', timeout: 60000,
-  });
-  assert.equal(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stdout, /^PASS TestAlpha \d+\.\d{3}s$/m, result.stdout + result.stderr);
-  assert.doesNotMatch(result.stdout, /TestBeta/, 'a test outside TEST ran');
-  const calls = readFileSync(join(directory, 'args'), 'utf8').trim().split('\n');
-  assert.ok(calls.some((call) => /^list -tags diagnostics /.test(call)), JSON.stringify(calls));
-  assert.ok(calls.some((call) => /^test -c .*-tags diagnostics/.test(call)), JSON.stringify(calls));
+test('make repeat-go builds a package whose test file has a build tag only with the tag, and passes the tag to the list and the test build', (t) => {
+  const without = make(t, ['repeat-go', `PACKAGE=${fixturePackage('tagged')}`, 'COUNT=1', 'TEST=TestTagged']);
+  assert.notEqual(without.status, 0, without.stdout + without.stderr);
+  assert.match(without.stderr, /has no test files built with tags ''/, without.stdout + without.stderr);
+  const withTag = make(t, ['repeat-go', `PACKAGE=${fixturePackage('tagged')}`, 'COUNT=1', 'TAGS=diagnostics', 'TEST=TestTagged']);
+  assert.equal(withTag.status, 0, withTag.stdout + withTag.stderr);
+  assert.match(withTag.stdout, /^PASS TestTagged \d+\.\d{3}s$/m, withTag.stdout + withTag.stderr);
+});
+
+test('make repeat-go selects only the named tests', (t) => {
+  const { stdout, stderr, status } = make(t, ['repeat-go', `PACKAGE=${fixturePackage('run')}`, 'COUNT=1', 'TEST=TestAlpha']);
+  assert.equal(status, 0, stdout + stderr);
+  assert.match(stdout, /^PASS TestAlpha \d+\.\d{3}s$/m, stdout + stderr);
+  assert.doesNotMatch(stdout, /TestBeta/, 'a test outside TEST ran');
 });
 
 test('make repeat-go gives each test the deadline of its limit', (t) => {
-  const { stdout, stderr, status, directory } = makeGo(t, 'run', ['repeat-go', 'PACKAGE=./fixture', 'COUNT=1', 'TEST=TestAlpha', 'TEST_TIMEOUT=7']);
+  const { stdout, stderr, status } = make(t, ['repeat-go', `PACKAGE=${fixturePackage('deadline')}`, 'COUNT=1', 'TEST=TestDeadline', 'TEST_TIMEOUT=7']);
   assert.equal(status, 0, stdout + stderr);
-  const runs = readFileSync(join(directory, 'binary-args'), 'utf8').trim().split('\n').filter((line) => line.startsWith('-test.run'));
-  assert.ok(runs.length === 1 && runs[0].split(' ').includes('-test.timeout=7000ms'), `the test binary did not receive the deadline of its limit: ${JSON.stringify(runs)}`);
+  assert.match(stdout, /^PASS TestDeadline \d+\.\d{3}s$/m, stdout + stderr);
 });
 
 test('make repeat-go fails a package whose test files are not built', (t) => {
-  const { stdout, stderr, status } = makeGo(t, 'nofiles', ['repeat-go', 'PACKAGE=./fixture/src', 'COUNT=1', 'TEST=TestAlpha']);
+  const { stdout, stderr, status } = make(t, ['repeat-go', `PACKAGE=${fixturePackage('plain')}`, 'COUNT=1', 'TEST=TestAlpha']);
   assert.notEqual(status, 0, stdout + stderr);
   assert.match(stderr, /has no test files built with tags ''/, stdout + stderr);
 });
 
 test('make repeat-go passes a pattern whose tested package passed while a support package has no test files', (t) => {
-  const { stdout, stderr, status } = makeGo(t, 'support', ['repeat-go', 'PACKAGE=./fixture/tests/...', 'COUNT=1', 'TEST=TestAlpha']);
+  const { stdout, stderr, status } = make(t, ['repeat-go', `PACKAGE=${fixturePackage('tests')}/...`, 'COUNT=1', 'TEST=TestAlpha']);
   assert.equal(status, 0, stdout + stderr);
   assert.match(stdout, /^PASS TestAlpha \d+\.\d{3}s$/m, stdout + stderr);
   assert.match(stdout, /1 of 1 runs pass/, stdout + stderr);
 });
 
 test('make repeat-go fails a test build whose link reports an object newer than the link, and names the object and both versions', (t) => {
-  const directory = fakeGo(t);
-  const warning = "ld: warning: object file (/tmp/go-link-1/000029.o) was built for newer 'macOS' version (27.0) than being linked (14.4)";
-  const result = spawnSync('make', ['repeat-go', 'PACKAGE=./fixture', 'COUNT=1', 'TEST=TestAlpha'], {
-    cwd: root, env: { ...process.env, HOME: directory, PATH: `${directory}:${process.env.PATH}`, FAKE_GO_MODE: 'run', FAKE_GO_LINKER: warning },
-    encoding: 'utf8', timeout: 60000,
-  });
+  const result = make(t, ['repeat-go', `PACKAGE=${fixturePackage('cgolink')}`, 'COUNT=1', 'TEST=TestAlpha']);
   assert.notEqual(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stderr, /ld built \/tmp\/go-link-1\/000029\.o for macOS 27\.0, newer than the macOS 14\.4 of the link/, result.stdout + result.stderr);
+  assert.match(result.stderr, /ld built \S+ for macOS 27\.0, newer than the macOS 14\.4 of the link/, result.stdout + result.stderr);
   assert.doesNotMatch(result.stdout, /^RUN  TestAlpha/m, 'a test of a build with a linker failure ran');
 });
 
 test('make repeat-go fails a run in which no test matched', (t) => {
-  const { stdout, stderr, status } = makeGo(t, 'run', ['repeat-go', 'PACKAGE=./fixture', 'COUNT=1', 'TEST=TestMissing']);
+  const { stdout, stderr, status } = make(t, ['repeat-go', `PACKAGE=${fixturePackage('run')}`, 'COUNT=1', 'TEST=TestMissing']);
   assert.notEqual(status, 0, stdout + stderr);
   assert.match(stderr, /no test matching TestMissing/, stdout + stderr);
 });
 
-
 test('Go test runner preserves the selected native environment through graph, build, listing and execution without cgo-only flags in CGO0', (t) => {
-  const directory = fakeGo(t);
+  const directory = folderFor(t);
   const production = join(directory, 'declared-production.dylib');
-  const fixture = join(directory, 'declared-test.dylib');
+  const testLibrary = join(directory, 'declared-test.dylib');
   writeFileSync(production, 'production artifact');
-  writeFileSync(fixture, 'test artifact');
-  const result = spawnSync(process.execPath, ['scripts/go-tests.mjs', '--package', './fixture', '--test', 'TestAlpha', '--count', '1', '--timeout', '5', '--ldflags=-X fixture.value=generic', '--cgo-ldflags=-extldflags forbidden-cgo-linker'], {
-    cwd: root, env: { ...process.env, PATH: `${directory}:${process.env.PATH}`, FAKE_GO_MODE: 'native', CGO_ENABLED: '0', SOKSAK_NATIVE_LIBRARY: production, SOKSAK_NATIVE_TEST_LIBRARY: fixture },
-    encoding: 'utf8', timeout: 30000,
-  });
+  writeFileSync(testLibrary, 'test artifact');
+  const report = join(directory, 'report.txt');
+  const map = join(directory, 'cgo0.map');
+  const result = runGoTests(t, ['--package', fixturePackage('nativeprod'), '--test', 'TestNativeEnvironment', '--count', '1', '--timeout', '60',
+    '--native-packages', nativeDeclaration, '--ldflags=-X fixture.soksak/repeatgo/nativeprod.value=generic', `--cgo-ldflags=-extldflags -Wl,-map,${map}`],
+  { CGO_ENABLED: '0', SOKSAK_NATIVE_LIBRARY: production, SOKSAK_NATIVE_TEST_LIBRARY: testLibrary, SOKSAK_FIXTURE_REPORT: report });
   assert.equal(result.status, 0, result.stdout + result.stderr);
-  const calls = readFileSync(join(directory, 'args'), 'utf8');
-  assert.match(calls, /list -deps.*-test.*-json/);
-  const build = calls.split('\n').find((line) => line.startsWith('test -c'));
-  assert.ok(build.includes('-X fixture.value=generic'), build);
-  assert.ok(!build.includes('forbidden-cgo-linker'), build);
-  for (const file of ['go-env', 'binary-env']) {
-    const seen = readFileSync(join(directory, file), 'utf8').trim().split('\n');
-    assert.ok(seen.length >= 2, `${file}: ${seen}`);
-    for (const call of seen) assert.ok(call.endsWith(`|0|${production}|${fixture}`), call);
-  }
+  // The report is written by the test binary, which received the environment of the selected profile.
+  assert.equal(readFileSync(report, 'utf8'), `CGO_ENABLED=0\nSOKSAK_NATIVE_LIBRARY=${production}\nSOKSAK_NATIVE_TEST_LIBRARY=${testLibrary}\nvalue=generic\n`);
+  assert.equal(existsSync(map), false, 'a CGO0 build applied the cgo linker flags');
 });
 
-test('Go test runner keeps generic linker flags and separately applies cgo linker flags only to a CGO1 build', (t) => {
-  const directory = fakeGo(t);
-  const result = spawnSync(process.execPath, ['scripts/go-tests.mjs', '--package', './fixture', '--test', 'TestAlpha', '--count', '1', '--timeout', '5', '--ldflags=-X fixture.value=generic', '--cgo-ldflags=-extldflags selected-cgo-linker'], {
-    cwd: root, env: { ...process.env, PATH: `${directory}:${process.env.PATH}`, FAKE_GO_MODE: 'run', CGO_ENABLED: '1' }, encoding: 'utf8', timeout: 30000,
-  });
+test('Go test runner keeps generic linker flags and applies cgo linker flags to a CGO1 build', (t) => {
+  const map = join(folderFor(t), 'cgo1.map');
+  const result = runGoTests(t, ['--package', fixturePackage('cgomap'), '--test', 'TestFlags', '--count', '1', '--timeout', '60',
+    '--ldflags=-X fixture.soksak/repeatgo/cgomap.value=generic', `--cgo-ldflags=-extldflags -Wl,-map,${map}`], { CGO_ENABLED: '1' });
   assert.equal(result.status, 0, result.stdout + result.stderr);
-  const build = readFileSync(join(directory, 'args'), 'utf8').split('\n').find((line) => line.startsWith('test -c'));
-  assert.ok(build.includes('-X fixture.value=generic') && build.includes('-extldflags selected-cgo-linker'), build);
+  assert.match(result.stdout, /^PASS TestFlags \d+\.\d{3}s$/m, result.stdout + result.stderr);
+  assert.ok(existsSync(map) && statSync(map).size > 0, 'a CGO1 build did not apply the cgo linker flags');
 });
 
 test('native input diagnostics print only the native and cgo whitelist', (t) => {
-  const directory = fakeGo(t);
-  const result = spawnSync(process.execPath, ['scripts/go-repeat-inputs.mjs', './fixture'], {
-    cwd: root, env: { ...process.env, PATH: `${directory}:${process.env.PATH}`, FAKE_GO_MODE: 'run', CGO_ENABLED: '0', SOKSAK_UNRELATED_SECRET: 'private-diagnostic-sentinel' },
+  const result = spawnSync(process.execPath, ['scripts/go-repeat-inputs.mjs', fixturePackage('run')], {
+    cwd: root, env: { ...process.env, GOWORK: workspaceFor(t), CGO_ENABLED: '0', SOKSAK_UNRELATED_SECRET: 'private-diagnostic-sentinel' },
     encoding: 'utf8', timeout: 30000,
   });
   assert.equal(result.status, 0, result.stdout + result.stderr);

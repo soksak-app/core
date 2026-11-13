@@ -1,0 +1,17 @@
+{
+  "production": [
+    "github.com/soksak-app/core/packages/host/mygo/src/platform/darwin/bindings",
+    "github.com/soksak-app/core/packages/host/go/tests/platform/darwin/standalone/dynamic"
+  ],
+  "test": [
+    "github.com/soksak-app/core/packages/host/mygo/tests/platform/darwin/bindings",
+    "github.com/soksak-app/core/packages/host/go/tests/platform/darwin/standalone/testdynamic",
+    "github.com/soksak-app/core/packages/host/go/tests/platform/darwin/testlibrary"
+  ],
+  "callbackAbi": [
+    "github.com/soksak-app/core/packages/host/mygo/tests/platform/darwin/nativecallback"
+  ],
+  "callbackWorker": [
+    "github.com/soksak-app/core/packages/host/mygo/tests/platform/darwin/nativeworker"
+  ]
+}

@@ -98,7 +98,10 @@ async function cargoTargetDirectory({ cwd, env }) {
   const environment = env ? { ...process.env, ...env } : process.env;
   const { stdout } = await execFileAsync(cargoCommand(environment), ['metadata', '--format-version', '1', '--no-deps', '--locked'],
     { cwd, env: environment, maxBuffer: 1 << 26 });
-  const { target_directory: targetDir } = JSON.parse(stdout);
+  const { target_directory: reported } = JSON.parse(stdout);
+  // Fault injection point `cargoTargetDirectory`: SOKSAK_FAULT_TARGET_DIRECTORY replaces the target folder that cargo metadata reports,
+  // so a test reaches the failure of an executable outside the target folder through the real discovery.
+  const targetDir = environment.SOKSAK_FAULT_TARGET_DIRECTORY ?? reported;
   if (typeof targetDir !== 'string' || !isAbsolute(targetDir)) throw new Error(`cargo metadata has no absolute target directory: ${targetDir}`);
   return targetDir;
 }

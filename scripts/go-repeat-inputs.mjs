@@ -6,18 +6,25 @@ import { readFileSync, statSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const HOST = 'github.com/soksak-app/core/packages/host/';
-const PRODUCTION_DYNAMIC = new Set([
-  HOST + 'mygo/src/platform/darwin/bindings',
-  HOST + 'go/tests/platform/darwin/standalone/dynamic',
-]);
-const TEST_DYNAMIC = new Set([
-  HOST + 'mygo/tests/platform/darwin/bindings',
-  HOST + 'go/tests/platform/darwin/standalone/testdynamic',
-  HOST + 'go/tests/platform/darwin/testlibrary',
-]);
-const CALLBACK_ABI = HOST + 'mygo/tests/platform/darwin/nativecallback';
-const CALLBACK_WORKER = HOST + 'mygo/tests/platform/darwin/nativeworker';
+// The native packages of the repository, declared in scripts/go-native-packages.json.
+const DECLARATION = fileURLToPath(new URL('./go-native-packages.json', import.meta.url));
+const NATIVE_KEYS = ['production', 'test', 'callbackAbi', 'callbackWorker'];
+
+/**
+ * Reads a declaration of native packages: a JSON object whose keys are production, test, callbackAbi and callbackWorker, each an
+ * array of import paths. A package under the production or test key selects its artifact when a test executable links it.
+ */
+export function readNativePackages(file = DECLARATION) {
+  const declared = JSON.parse(readFileSync(file, 'utf8'));
+  const keys = declared !== null && typeof declared === 'object' && !Array.isArray(declared) ? Object.keys(declared).sort() : [];
+  if (keys.join(',') !== [...NATIVE_KEYS].sort().join(',')) throw new Error(`${file} must declare exactly ${NATIVE_KEYS.join(', ')}`);
+  for (const key of NATIVE_KEYS) {
+    if (!Array.isArray(declared[key]) || declared[key].some((id) => typeof id !== 'string' || id.length === 0)) {
+      throw new Error(`${file} ${key} must be an array of import paths`);
+    }
+  }
+  return Object.fromEntries(NATIVE_KEYS.map((key) => [key, new Set(declared[key])]));
+}
 const STATIC_INPUTS = [
   ['soksak-darwin', 'SOKSAK_DARWIN_LIBRARY'],
   ['soksak-host-test', 'SOKSAK_HOST_TEST_LIBRARY'],
@@ -64,7 +71,7 @@ function artifact(path, name) {
  * `run` has execFileSync's signature and exists for deterministic owner tests.
  * Returns a complete selected environment; never mutates the caller's object.
  */
-export function resolveGoNativeInputs({ patterns, tags = '', cwd = process.cwd(), env = process.env, run = execFileSync }) {
+export function resolveGoNativeInputs({ patterns, tags = '', cwd = process.cwd(), env = process.env, run = execFileSync, native = readNativePackages() }) {
   const selected = { ...env };
   const execute = (command, args) => String(run(command, args, {
     cwd, env: selected, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'],
@@ -100,10 +107,10 @@ export function resolveGoNativeInputs({ patterns, tags = '', cwd = process.cwd()
     if (cgoEnabled) for (const name of node.CgoPkgConfig ?? []) pkgConfig.add(name);
   }
   const needs = [];
-  if ([...PRODUCTION_DYNAMIC].some((id) => imports.has(id))) needs.push(['SOKSAK_NATIVE_LIBRARY', 'soksak-darwin', 'dynamic_library']);
-  if ([...TEST_DYNAMIC].some((id) => imports.has(id))) needs.push(['SOKSAK_NATIVE_TEST_LIBRARY', 'soksak-host-test', 'dynamic_library']);
-  if (imports.has(CALLBACK_ABI)) needs.push(['SOKSAK_NATIVE_CALLBACK_ABI_LIBRARY', 'soksak-host-test', 'callback_abi_library']);
-  if (imports.has(CALLBACK_WORKER)) needs.push(['SOKSAK_NATIVE_CALLBACK_WORKER_LIBRARY', 'soksak-host-test', 'callback_worker_library']);
+  if ([...native.production].some((id) => imports.has(id))) needs.push(['SOKSAK_NATIVE_LIBRARY', 'soksak-darwin', 'dynamic_library']);
+  if ([...native.test].some((id) => imports.has(id))) needs.push(['SOKSAK_NATIVE_TEST_LIBRARY', 'soksak-host-test', 'dynamic_library']);
+  if ([...native.callbackAbi].some((id) => imports.has(id))) needs.push(['SOKSAK_NATIVE_CALLBACK_ABI_LIBRARY', 'soksak-host-test', 'callback_abi_library']);
+  if ([...native.callbackWorker].some((id) => imports.has(id))) needs.push(['SOKSAK_NATIVE_CALLBACK_WORKER_LIBRARY', 'soksak-host-test', 'callback_worker_library']);
   // Validate every explicit override before querying any absent artifact. Empty
   // values are explicit errors, not permission to choose a different artifact.
   for (const [variable] of needs) {
