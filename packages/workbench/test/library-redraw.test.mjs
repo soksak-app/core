@@ -33,7 +33,7 @@ test("a library render keeps the controls of unchanged project cards in the docu
   const { createLibrary } = await import("../library.js?redraw");
   const library = createLibrary(document.getElementById("library"));
   library.render();
-  await new Promise((resolve) => setImmediate(resolve));
+  await library.idle();
   const controls = [...document.querySelectorAll(".library-project button")];
   assert.ok(controls.length >= 2, "the library drew no card controls");
   const removed = [];
@@ -44,7 +44,7 @@ test("a library render keeps the controls of unchanged project cards in the docu
   });
   watch.observe(document.body, { childList: true, subtree: true });
   library.render();
-  await new Promise((resolve) => setImmediate(resolve));
+  await library.idle();
   for (const record of watch.takeRecords()) for (const node of record.removedNodes) {
     if (node.nodeType === 1 && (node.matches?.("button") || node.querySelector?.("button"))) removed.push(node.className);
   }

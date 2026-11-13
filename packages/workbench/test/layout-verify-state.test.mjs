@@ -13,10 +13,10 @@ const dom = new JSDOM('<header></header><div id="applicationError"></div>');
 globalThis.document = dom.window.document;
 globalThis.requestAnimationFrame = (run) => run(0);
 
-/** Finishes the microtasks and the reporting of the layout queue up to the next macrotask. */
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
-
-/** Creates the page layout whose presentation fails while fail is true. */
+/**
+ * Creates the page layout whose presentation fails while fail is true. Each wait for the surfaces is kept in state.waited, so a test
+ * awaits the promise that the page awaits; a reaction that the page attached earlier runs before the test continues.
+ */
 function layoutWith(state) {
   return createPageLayout({
     document,
@@ -24,7 +24,7 @@ function layoutWith(state) {
     withdrawError: createErrorWithdrawal({ document, changed: () => {} }),
     setVerify: () => {},
     log: () => {},
-    surfaces: { waitPresented: () => state.presented?.() ?? Promise.resolve() },
+    surfaces: { waitPresented: () => { state.waited = state.presented?.() ?? Promise.resolve(); return state.waited; } },
     plane: {},
     compositor: { publishAhead: () => (state.fail ? Promise.reject(new Error(TIMEOUT)) : Promise.resolve()), cancelPrepared: async () => {} },
     textSize: () => 1,
@@ -57,7 +57,7 @@ test("a presentation after a failed presentation withdraws the error of that fai
   page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
   await page.presented();
   page.clearFailure();
-  await settle();
+  await state.waited;
   assert.equal(document.getElementById("applicationError"), null, "the banner keeps the failure of a layout that recovered");
 });
 
@@ -72,7 +72,7 @@ test("a presentation after a failed presentation leaves another error in the ban
   page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
   await page.presented();
   page.clearFailure();
-  await settle();
+  await state.waited;
   assert.equal(document.getElementById("applicationError")?.textContent, "another failure");
   document.getElementById("applicationError").remove();
 });
@@ -85,13 +85,13 @@ test("while a surface has not presented, the presentation of another render leav
   await page.presented();
   state.fail = false;
   page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
-  await settle();
+  await page.drawn();
   page.clearFailure();
-  await settle();
+  // The wait for the surface is pending until presentedNow, so the banner keeps the failure after clearFailure.
   assert.equal(page.failure(), null, "a later presentation must end the failure of the page layout");
   assert.match(document.getElementById("applicationError")?.textContent ?? "", /did not present/, "the error is still true");
   presentedNow();
-  await settle();
+  await state.waited;
   assert.equal(document.getElementById("applicationError"), null, "the surface presented and the banner kept the failure");
 });
 
@@ -104,11 +104,12 @@ test("a wait for the surfaces that fails leaves the failure, and the next presen
   await page.presented();
   state.fail = false;
   page.clearFailure();
-  await settle();
+  // The wait rejects with the failure; the page handles that rejection, so the test only observes that it ended.
+  await state.waited.catch(() => {});
   assert.match(document.getElementById("applicationError")?.textContent ?? "", /did not present/);
   assert.equal(asked, 1, "a failed wait asked the surfaces again before the next presented render");
   page.clearFailure();
-  await settle();
+  await state.waited;
   assert.equal(asked, 2);
   assert.equal(document.getElementById("applicationError"), null);
 });
@@ -120,11 +121,10 @@ test("a layout that fails during the wait keeps its failure", async () => {
   page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
   await page.presented();
   page.clearFailure();
-  await settle();
   page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
-  await settle();
+  await page.drawn();
   presentedNow();
-  await settle();
+  await state.waited;
   assert.match(document.getElementById("applicationError")?.textContent ?? "", /did not present/);
   document.getElementById("applicationError").remove();
 });
@@ -148,7 +148,7 @@ test("an error of another source with the text of the failure stays in the banne
   const text = document.getElementById("applicationError").textContent;
   createErrorDisplay({ document, changed: () => {} })(text);
   page.clearFailure();
-  await settle();
+  await state.waited;
   assert.equal(document.getElementById("applicationError")?.textContent, text);
   document.getElementById("applicationError").remove();
 });

@@ -34,15 +34,14 @@ test("a missing project folder is reported once across project list changes, and
   } });
   const { createLibrary } = await import("../library.js?folders-once");
   const library = createLibrary(document.getElementById("library"));
-  const settle = () => new Promise((resolve) => setImmediate(resolve));
   const written = () => reports.filter((line) => line.startsWith("library project /work/missing: "));
   library.render();
-  await settle();
+  await library.idle();
   // The project list changes three times. Each change checks the folder again and renders the library.
   for (let i = 0; i < 3; i++) {
     library.refreshFolders();
     library.render();
-    await settle();
+    await library.idle();
   }
   assert.deepEqual(written(), ["library project /work/missing: 폴더가 없습니다."],
     "the missing folder error is not written once");
@@ -50,7 +49,7 @@ test("a missing project folder is reported once across project list changes, and
   missing = false;
   library.refreshFolders();
   library.render();
-  await settle();
+  await library.idle();
   const card = document.querySelector('[data-project-id="prj-a"]');
   assert.equal(card.querySelector(".library-project__missing"), null, "the error of a folder that appeared again is still shown");
   assert.equal(card.querySelector('[data-expose="core.library.open"]').disabled, false);
@@ -58,7 +57,7 @@ test("a missing project folder is reported once across project list changes, and
   missing = true;
   library.refreshFolders();
   library.render();
-  await settle();
+  await library.idle();
   assert.equal(written().length, 2, "the error of a folder that disappeared again is not written");
   dom.window.close();
 });
@@ -96,7 +95,7 @@ test("a project whose folder cannot be read shows the reason in the library and 
   const { createLibrary } = await import("../library.js?folders");
   const library = createLibrary(document.getElementById("library"));
   library.render();
-  await new Promise((resolve) => setImmediate(resolve));
+  await library.idle();
   const state = library.state();
   assert.deepEqual(state.folderErrors, { "prj-a": "project directory does not exist: /work/missing" });
   const card = document.querySelector('[data-project-id="prj-a"]');

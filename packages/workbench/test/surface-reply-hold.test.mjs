@@ -2,8 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createSurfaceReplyHold } from "../surface-reply-hold.js";
 
-const settle = () => new Promise((resolve) => setImmediate(resolve));
-
 /* A fake transport that records the replies sent and the function that ends each transmission. */
 function fakeSend(name, sent) {
   let finish;
@@ -23,7 +21,6 @@ test("a held surface reply is sent only after the host reports the surface close
   let answered = false;
   const result = hold.gate("tab-a", reply.send).then((value) => { answered = value; });
   await hold.held("tab-a");
-  await settle();
   assert.deepEqual(sent, [], "the reply was sent while the surface was open");
   const closed = hold.closed("tab-a");
   assert.deepEqual(sent, ["reply 7"]);
@@ -64,12 +61,13 @@ test("held waits for a held reply and fails without a hold or when the surface c
   const hold = createSurfaceReplyHold(() => Promise.resolve());
   assert.throws(() => hold.held("tab-a"), /^Error: exposure replies of surface "tab-a" are not held$/);
   hold.hold("tab-a");
-  let waited = false;
-  const waiting = hold.held("tab-a").then(() => { waited = true; });
-  await settle();
-  assert.equal(waited, false, "held answered before a reply was held");
+  // The order of the gate and of the answer of held shows that held answers only after a reply was held.
+  const order = [];
+  const waiting = hold.held("tab-a").then(() => { order.push("held"); });
+  order.push("gate");
   const reply = hold.gate("tab-a", () => Promise.resolve("ok"));
   await waiting;
+  assert.deepEqual(order, ["gate", "held"], "held answered before a reply was held");
   await hold.closed("tab-a");
   assert.equal(await reply, "ok");
   hold.hold("tab-b");
@@ -96,12 +94,11 @@ test("a released surface sends its held replies in order and writes the line of 
   const first = fakeSend("reply 1", sent);
   const second = fakeSend("reply 2", sent);
   const answers = [hold.gate("tab-a", first.send), hold.gate("tab-a", second.send)];
-  await settle();
   assert.deepEqual(sent, [], "a reply was sent while the surface was held");
   const released = hold.released("tab-a");
   assert.deepEqual(sent, ["reply 1", "reply 2"], "the release did not send the held replies in the order held");
   first.finish().resolve("one");
-  await settle();
+  assert.equal(await answers[0], "one");
   assert.deepEqual(lines, [], "the line was written before the host answered every reply");
   second.finish().resolve("two");
   await released;

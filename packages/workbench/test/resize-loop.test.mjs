@@ -30,6 +30,17 @@ function fakeView() {
   return { window, observers, frame, frames, task };
 }
 
+/** Resolves when the mutation records of target that happen after this call are delivered to a MutationObserver of the test. */
+function delivered(window, target) {
+  return new Promise((resolve) => {
+    const observer = new window.MutationObserver(() => {
+      observer.disconnect();
+      resolve();
+    });
+    observer.observe(target, { subtree: true, childList: true, attributes: true, characterData: true });
+  });
+}
+
 test("the observations delivered in the frame after a loop error are reported", () => {
   const { window, observers, frame } = fakeView();
   const reported = [];
@@ -109,15 +120,16 @@ test("each DOM change is reported in the callback slot of the round it happened 
   new window.ResizeObserver(() => {});
   const entry = { target: plane, contentRect: { width: 188, height: 498 } };
 
+  const recorded = delivered(window, plane);
   observers[0].callback([entry], observers[0]);
-  await new Promise((resolve) => queueMicrotask(resolve));
+  await recorded;
   observers[1].callback([entry], observers[1]);
   observers[2].callback([entry], observers[2]);
   window.dispatchEvent(new window.ErrorEvent("error", { message: "ResizeObserver loop completed with undelivered notifications." }));
-  // What a task after the end of the observation round changed is not a change inside the round.
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  // A change after the loop error is not a change inside the round.
+  const hidden = delivered(window, plane);
   plane.hidden = true;
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await hidden;
   frame();
   frame();
 
@@ -144,8 +156,10 @@ test("a body dataset write inside a callback slot is reported with the stack of 
   body.dataset.screen = "workspace";
   const plane = window.document.getElementById("plane");
   new window.ResizeObserver(() => queueMicrotask(() => { body.dataset.screen = "library"; delete body.dataset.dragging; }));
+  // The writes run in a microtask of the callback; the delivery of their records to the test observer follows them.
+  const written = delivered(window, body);
   observers[0].callback([{ target: plane, contentRect: { width: 188, height: 498 } }], observers[0]);
-  await new Promise((resolve) => queueMicrotask(resolve));
+  await written;
   window.dispatchEvent(new window.ErrorEvent("error", { message: "ResizeObserver loop completed with undelivered notifications." }));
   frame();
   frame();

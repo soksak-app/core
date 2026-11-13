@@ -84,13 +84,19 @@ test("quit flushes the pending writes at once", async (t) => {
   assert.equal(store.puts.length, 1, "the flushed write is not repeated");
 });
 
-test("an entry is removed only after the layout write that drops its tab is confirmed", async () => {
+test("an entry is removed only after the layout write that drops its tab is confirmed", { timeout: 1000 }, async () => {
   const store = fakeStore({ format: 1, tabs: { a: { kept: true }, b: { kept: true } } });
   const states = await open(store);
+  // The layout write is a thenable: the await of removeAfter calls its then, which resolves parked, so the check
+  // follows the point where removeAfter waits for the confirmation.
+  let parked;
+  const waiting = new Promise((resolve) => { parked = resolve; });
   let confirm;
-  const layout = new Promise((resolve) => { confirm = resolve; });
+  const layout = { then(resolve) { confirm = resolve; parked(); } };
   const removal = states.removeAfter(layout, ["a"]);
-  await new Promise((resolve) => setImmediate(resolve));
+  await waiting;
+  // The writes that were queued before the check are done, so a removal that did not wait for the confirmation is in store.puts.
+  await states.flush();
   assert.deepEqual(store.puts, [], "nothing is removed before the layout write is confirmed");
   assert.deepEqual(states.entry("a"), { kept: true });
   confirm();

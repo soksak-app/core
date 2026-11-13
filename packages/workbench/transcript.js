@@ -36,6 +36,10 @@ export function createTranscript(send, reportError = (error) => console.error("t
       // default: a rejection value may not be an Error, so the value itself is written.
       }, (error) => reportError(new Error(`host ${name} failed before transcript: ${error?.message ?? error}`)));
     },
+    /**
+     * Resolves when the lines whose replies had appeared before the call are delivered; a reply that appears after the call is not waited for.
+     */
+    idle: () => sent,
   };
 }
 

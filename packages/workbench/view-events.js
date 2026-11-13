@@ -40,7 +40,7 @@ const statusData = (name, surface, value) => (surface === undefined ? { name, va
  *     report      report(text): receives the text of a push that the host refused
  *
  * Returns {native(name), sidecarMessage(id, name), sidecarFailure(id), textSize(), settings(), data(), logLevels(), statusWatch(name, surface),
- * statusUnwatch(name, surface), restart(), close()}. A subscription call resolves with null, and a second call for the same name or id registers
+ * statusUnwatch(name, surface), idle(), restart(), close()}. A subscription call resolves with null, and a second call for the same name or id registers
  * nothing; a status watch is keyed by its name and its surface.
  * restart() ends current subscriptions and invalidates pending deliveries while allowing the new document to subscribe again. An unwatch
  * of a name that is not watched ends nothing and resolves with null. A refusal after document or surface end is canceled; a refusal while
@@ -196,6 +196,10 @@ export function createViewSubscriptions({ native, sidecar, textSize, settings, d
       deliveredStatus.delete(key);
       return Promise.resolve(off()).then(() => null);
     },
+    /**
+     * Resolves when every event forwarded before the call is delivered or canceled; an event forwarded after the call is not waited for.
+     */
+    idle: () => delivery,
     async restart() {
       if (closed) throw new Error("view subscriptions are closed");
       generation += 1;

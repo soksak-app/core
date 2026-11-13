@@ -8,20 +8,22 @@ import { createViewCommands } from "../view-commands.js";
 function setup({ post = async () => {} } = {}) {
   const posted = [];
   const reports = [];
+  // arrival() gives a promise that resolves when the next request is posted to the view.
+  let arrived = () => {};
   const commands = createViewCommands({
     plugin: "probe",
-    post: async (message) => { posted.push(message); return post(message); },
+    post: async (message) => { posted.push(message); arrived(); return post(message); },
     report: (event) => reports.push(event),
   });
-  return { commands, posted, reports };
+  const arrival = () => new Promise((resolve) => { arrived = resolve; });
+  return { commands, posted, reports, arrival };
 }
 
-const tick = () => new Promise((resolve) => setImmediate(resolve));
-
 test("a command run is posted to the view and resolves with the result of its reply", async () => {
-  const { commands, posted } = setup();
+  const { commands, posted, arrival } = setup();
+  const sent = arrival();
   const result = commands.run("probe.run", { a: 1 });
-  await tick();
+  await sent;
   assert.equal(posted.length, 1);
   assert.equal(posted[0].command, "probe.run");
   assert.deepEqual(posted[0].params, { a: 1 });
@@ -30,9 +32,10 @@ test("a command run is posted to the view and resolves with the result of its re
 });
 
 test("a reply with an error rejects the command run with its message", async () => {
-  const { commands, posted } = setup();
+  const { commands, posted, arrival } = setup();
+  const sent = arrival();
   const result = commands.run("probe.run", null);
-  await tick();
+  await sent;
   commands.receive({ surface: "probe-surface", plugin: "probe", id: posted[0].id, error: { code: -32000, message: "boom" } });
   await assert.rejects(result, { message: "boom" });
 });
@@ -59,10 +62,11 @@ test("createViewCommands takes no time limit of a command", () => {
 
 // contract: exposure.command.ends-by-reply-or-peer-end
 test("a command without a reply starts no timer and stays open until the surface closes", async (t) => {
-  const { commands, posted, reports } = setup();
+  const { commands, posted, reports, arrival } = setup();
   const timers = t.mock.method(globalThis, "setTimeout");
+  const sent = arrival();
   const result = commands.run("probe.run", null);
-  await tick();
+  await sent;
   assert.equal(posted.length, 1, "the command was not posted to the view");
   assert.equal(timers.mock.callCount(), 0, "the command layer of a view started a timer for a command");
   assert.deepEqual(reports.map((event) => event.kind), ["open-calls"]);
@@ -72,27 +76,30 @@ test("a command without a reply starts no timer and stays open until the surface
 });
 
 test("closing the surface rejects the open command runs and reports the peer loss", async () => {
-  const { commands, reports } = setup();
+  const { commands, reports, arrival } = setup();
+  const sent = arrival();
   const result = commands.run("probe.run", null);
-  await tick();
+  await sent;
   commands.close();
   await assert.rejects(result, { message: "command probe.run ended: surface-closed" });
   assert.ok(reports.some((event) => event.kind === "peer-lost" && event.reason === "surface-closed"));
 });
 
 test("a command run that carries the cids of its cause posts them with the request", async () => {
-  const { commands, posted } = setup();
+  const { commands, posted, arrival } = setup();
+  const sent = arrival();
   const result = commands.run("probe.run", null, ["p1700000000000.7"]);
-  await tick();
+  await sent;
   assert.deepEqual(posted[0].cids, ["p1700000000000.7"]);
   commands.receive({ surface: "probe-surface", plugin: "probe", id: posted[0].id, result: null });
   await result;
 });
 
 test("a command run without cids posts a request without the cids member", async () => {
-  const { commands, posted } = setup();
+  const { commands, posted, arrival } = setup();
+  const sent = arrival();
   const result = commands.run("probe.run", null);
-  await tick();
+  await sent;
   assert.equal("cids" in posted[0], false);
   commands.receive({ surface: "probe-surface", plugin: "probe", id: posted[0].id, result: null });
   await result;

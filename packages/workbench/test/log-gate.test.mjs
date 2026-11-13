@@ -9,7 +9,6 @@ import { classOf } from "../event-classes.js";
 import { withoutClock } from "./support/records.mjs";
 import { pageIdentity } from "../page-identity.js";
 
-const settle = () => new Promise((resolve) => setImmediate(resolve));
 const hostClock = { ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 };
 const answering = (inner) => (request) => (request.action === "clock" ? Promise.resolve(hostClock) : inner(withoutClock(request)));
 
@@ -100,33 +99,38 @@ test("an event that the catalog does not declare is not gated, and the report of
   assert.deepEqual(batches.flatMap((request) => request.events).map((event) => event.event), ["workbench.log.gated", "plugin.editor.opened"]);
 });
 
-test("the counts of a closed gate leave each second and at a flush, not with each batch", async (t) => {
+test("the counts of a closed gate leave each second and at a flush, not with each batch", { timeout: 2000 }, async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const gate = createLogGate();
   gate.set({ ...everything, call: "info" });
   const batches = [];
+  // relayed resolves at the next batch that the page relays; each batch resolves the promise that the test awaits next.
+  let relayed = () => {};
+  const nextRelay = () => new Promise((resolve) => { relayed = resolve; });
   let clock = 0;
   const batcher = createEventBatcher({ writer: { layer: "workbench", member: "start", identity: pageIdentity },
-    call: answering(async (request) => { batches.push(request); }), report: assert.ifError, classify: classOf, gate, now: () => clock,
+    call: answering(async (request) => { batches.push(request); relayed(); }), report: assert.ifError, classify: classOf, gate, now: () => clock,
   });
   const gatedOf = () => batches.flatMap((request) => request.events).filter((event) => event.event === "workbench.log.gated").map((event) => event.fields);
   // Ten batches within 900 ms each carry an event and follow refused events.
   for (let round = 0; round < 10; round += 1) {
     clock = round * 100;
+    const relay = nextRelay();
     batcher.emit("debug", "workbench.call", { name: "x" });
     batcher.emit("debug", "workbench.call", { name: "x" });
     batcher.emit("info", "workbench.start", { started_at: 1, url: "u" });
-    await settle();
+    await relay;
   }
   assert.deepEqual(gatedOf(), [], "the counts left with a batch within a second");
-  // The timer was armed at the first refusal, at the time 0, for the end of the second.
+  // The timer was armed at the first refusal, at the time 0, for the end of the second. Only that timer sends a batch
+  // before the second ends, and it has not fired at the time 999, so the check follows the tick without a wait.
   clock = 999;
   t.mock.timers.tick(999);
-  await settle();
   assert.deepEqual(gatedOf(), [], "the counts left before the second ended");
   clock = 1000;
+  const reported = nextRelay();
   t.mock.timers.tick(1);
-  await settle();
+  await reported;
   assert.deepEqual(gatedOf(), [{ class: "call", level: "debug", count: 20 }]);
   clock = 1100;
   batcher.emit("debug", "workbench.call", { name: "x" });

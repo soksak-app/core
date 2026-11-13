@@ -8,26 +8,24 @@ import { createTracer } from "../performance.js";
 import { withoutClock } from "./support/records.mjs";
 import { classOf } from "../event-classes.js";
 import { logGate } from "../log-gate.js";
+import { flushEvents } from "../page-log.js";
 import { pageIdentity } from "../page-identity.js";
 // The events below the level error are stored only in the debug state (docs/spec/settings.md, the section of core.settings.debug), which these tests
 // examine, so the state of every class at trace is set here.
 logGate.set({ lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" });
 
-const settle = () => new Promise((resolve) => setImmediate(resolve));
 
 // The request for the clocks of the host is answered here; the batches are what the tests assert.
 const answering = (inner) => (request) => (request.action === "clock" ? Promise.resolve({ ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 }) : inner(withoutClock(request)));
 /** The event writer of a document, as the page records have it, over the call log; report receives a failed relay. */
 const writer = (log, report) => createEventBatcher({ writer: { layer: "workbench", member: "start", identity: pageIdentity }, call: answering(log), report, classify: classOf, gate: logGate });
 
-/** A tracer whose switch calls and batch calls are recorded in the order they happen. */
+/** A tracer whose switch calls and batch calls are recorded in the order they happen; batcher is its event writer, whose flush ends the relay of the events queued so far. */
 function recorded(overrides = {}) {
   const calls = [];
-  const tracer = createTracer(
-    overrides.switch ?? (async (request) => { calls.push(["switch", request.action]); }),
-    writer(overrides.log ?? (async (request) => { calls.push(["log", request.events]); }), overrides.report ?? assert.ifError),
-  );
-  return { calls, tracer };
+  const batcher = writer(overrides.log ?? (async (request) => { calls.push(["log", request.events]); }), overrides.report ?? assert.ifError);
+  const tracer = createTracer(overrides.switch ?? (async (request) => { calls.push(["switch", request.action]); }), batcher);
+  return { calls, tracer, batcher };
 }
 
 test("a start of the page reports the stored switch to the host even when it is off", async () => {
@@ -47,18 +45,18 @@ test("disabled page tracing does not format or relay a focus event", async (t) =
   const page = await import("../performance.js?disabled-focus");
   let formatted = 0;
   page.trace("focus", { get target() { formatted++; return "address"; } });
-  await settle();
+  await flushEvents();
   assert.equal(calls.length, 0, "disabled tracing relayed a focus event");
   assert.equal(formatted, 0, "disabled tracing formatted a focus event");
 });
 
 test("a layout phase uses the frame gate while the performance trace is off", async () => {
-  const { calls, tracer } = recorded();
+  const { calls, tracer, batcher } = recorded();
   logGate.set({ lifecycle: "off", input: "off", call: "off", io: "off", frame: "trace" });
   try {
     tracer.trace("layout", { phase: "queued", id: 1, t: 2 });
     tracer.trace("focus", { phase: "in" });
-    await settle();
+    await batcher.flush();
     const events = calls.filter(([kind]) => kind === "log").flatMap(([, batch]) => batch);
     assert.ok(events.some(({ event, fields }) => event === "workbench.trace.layout"
       && fields.phase === "queued" && fields.id === 1 && fields.t === 2),
@@ -71,12 +69,12 @@ test("a layout phase uses the frame gate while the performance trace is off", as
 });
 
 test("a closed frame gate does not format or relay a layout phase", async () => {
-  const { calls, tracer } = recorded();
+  const { calls, tracer, batcher } = recorded();
   logGate.set({ lifecycle: "off", input: "off", call: "off", io: "off", frame: "off" });
   let formatted = 0;
   try {
     tracer.trace("layout", { get phase() { formatted++; return "queued"; }, id: 1, t: 2 });
-    await settle();
+    await batcher.flush();
     const events = calls.filter(([kind]) => kind === "log").flatMap(([, batch]) => batch);
     assert.equal(events.some(({ event }) => event === "workbench.trace.layout"), false,
       "a closed frame gate stores no layout phase");
@@ -87,11 +85,11 @@ test("a closed frame gate does not format or relay a layout phase", async () => 
 });
 
 test("an enabled trace relays its events of one turn in one log call, and the line has no timestamp of its own", async () => {
-  const { calls, tracer } = recorded();
+  const { calls, tracer, batcher } = recorded();
   await tracer.setEnabled(true);
   tracer.trace("action", { kind: "resize", width: 1200 });
   tracer.trace("focus", { phase: "in" });
-  await settle();
+  await batcher.flush();
   const logs = calls.filter(([kind]) => kind === "log");
   assert.equal(logs.length, 1, "the events of one turn travel in one call");
   const [first, second] = logs[0][1];
@@ -103,23 +101,26 @@ test("an enabled trace relays its events of one turn in one log call, and the li
   assert.equal(second.event, "workbench.trace.focus");
 });
 
-test("disabling stops new events at once and waits for the events that were accepted", async () => {
+test("disabling stops new events at once and waits for the events that were accepted", { timeout: 1000 }, async () => {
   let release;
+  // relayStarted resolves when the batch call of the accepted event starts; that call stays pending until release.
+  let started;
+  const relayStarted = new Promise((resolve) => { started = resolve; });
   const calls = [];
   const tracer = createTracer(
     async (request) => { calls.push(request.action); },
-    writer((request) => { calls.push("log"); return new Promise((resolve) => { release = resolve; }); }, assert.ifError),
+    writer((request) => { calls.push("log"); started(); return new Promise((resolve) => { release = resolve; }); }, assert.ifError),
   );
   await tracer.setEnabled(true);
   tracer.trace("focus", {});
-  await settle();
+  await relayStarted;
   const disabling = tracer.setEnabled(false);
   tracer.trace("focus", {});
-  await settle();
-  assert.deepEqual(calls, ["on", "log"], "the switch went off before the accepted event was relayed");
+  // The mark of the release orders the switch after the relay of the accepted event, and the event traced while disabling is not relayed.
+  calls.push("released");
   release();
   await disabling;
-  assert.deepEqual(calls, ["on", "log", "off"]);
+  assert.deepEqual(calls, ["on", "log", "released", "off"], "the switch went off before the accepted event was relayed");
 });
 
 test("a failed relay is reported with its event count and a failed switch rejects", async () => {

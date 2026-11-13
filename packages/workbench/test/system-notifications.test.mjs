@@ -17,7 +17,7 @@ function fixture() {
   return { calls, selected, notifications, set: (entries) => { current = new Map(entries); } };
 }
 
-test("a new or changed notice is posted once with the tab name, and a removed notice is removed", async () => {
+test("a new or changed notice is posted once with the tab name, and a removed notice is removed", () => {
   const { calls, notifications, set } = fixture();
   set([["tab-a", "build finished"]]);
   notifications.sync();
@@ -26,7 +26,7 @@ test("a new or changed notice is posted once with the tab name, and a removed no
   notifications.sync();
   set([["tab-b", "done"]]);
   notifications.sync();
-  await Promise.resolve();
+  // The post and remove calls of the host are recorded when sync makes them, so the calls are complete once sync has run.
   assert.deepEqual(calls, [
     ["post", { surface: "tab-a", title: "name of tab-a", body: "build finished" }],
     ["post", { surface: "tab-a", title: "name of tab-a", body: "tests failed" }],
@@ -45,10 +45,14 @@ test("an activated notification selects its tab, and a failed post becomes the s
     select: async (tab) => { selected.push(tab); },
   });
   let changed = 0;
-  notifications.onChange(() => changed++);
+  // The first change is the state change below. The second change is the failed post, which the state reports after the rejection.
+  const failure = new Promise((resolve) => notifications.onChange(() => {
+    changed++;
+    if (changed === 2) resolve();
+  }));
   notifications.setState({ authorization: "authorized", error: null });
   notifications.sync();
-  await new Promise((resolve) => setImmediate(resolve));
+  await failure;
   assert.deepEqual(notifications.state(),
     { authorization: "authorized", error: "post: notification title must be 1 to 256 characters", posted: [] });
   assert.equal(changed, 2);
@@ -64,7 +68,7 @@ test("while permission is denied a notice tooltip ends with the denied line", ()
   assert.equal(DENIED_LINE, "System notifications are turned off for this application.");
 });
 
-test("posted lists the tabs whose notification the center accepted until the notification is removed", async () => {
+test("posted lists the tabs whose notification the center accepted until the notification is removed", () => {
   const { notifications, set } = fixture();
   set([["tab-a", "one"], ["tab-b", "two"]]);
   notifications.sync();
@@ -74,8 +78,8 @@ test("posted lists the tabs whose notification the center accepted until the not
   notifications.posted({ surface: "tab-a" });
   assert.deepEqual(notifications.state().posted, ["tab-b", "tab-a"]);
   set([["tab-a", "one"]]);
+  // The removal of an accepted notice is applied by sync itself, so the list is complete once sync has run.
   notifications.sync();
-  await Promise.resolve();
   assert.deepEqual(notifications.state().posted, ["tab-a"]);
   notifications.setState({ authorization: "authorized", error: null });
   assert.deepEqual(notifications.state().posted, ["tab-a"], "a permission change keeps the posted tabs");

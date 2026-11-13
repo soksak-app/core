@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHook, executionAsyncId } from "node:async_hooks";
 import test from "node:test";
 import { createLayoutQueue, drawPrepared, nextTask } from "../layout-queue.js";
 
@@ -29,9 +30,11 @@ test("a new layout cannot run before the active presentation finishes", async ()
   let finish;
   const gate = new Promise((resolve) => { finish = resolve; });
   const calls = [];
-  const first = queue.run(async () => { calls.push(1); await gate; calls.push(2); });
+  const started = Promise.withResolvers();
+  const first = queue.run(async () => { calls.push(1); started.resolve(); await gate; calls.push(2); });
   const second = queue.run(() => { calls.push(3); });
-  await Promise.resolve();
+  // The second layout cannot start before the first ends, and the first ends only after the gate opens.
+  await started.promise;
   assert.deepEqual(calls, [1]);
   finish();
   await Promise.all([first, second]);
@@ -58,13 +61,14 @@ test("a newer waiting layout replaces the older waiting layout and reports it", 
 
 // A preparation reply can be fulfilled at any microtask checkpoint, so the drawing runs in the next task, not at that checkpoint.
 // A task does not run between a rendering update and its observation round, and it does not wait for a screen update the way an animation frame does (F43, F92).
-test("a prepared draw runs in the next task, not in the checkpoint that answered its preparation", { timeout: 5000 }, async () => {
+test("a prepared draw runs in the next task, not in the checkpoint that answered its preparation", { timeout: 5000 }, async (t) => {
+  // The type of the resource whose callback runs the work: a message task runs it as MESSAGEPORT, a microtask as PROMISE or Microtask.
+  const types = new Map();
+  const hook = createHook({ init(id, type) { types.set(id, type); } }).enable();
+  t.after(() => hook.disable());
   const calls = [];
-  const waiting = nextTask(() => calls.push("work"));
-  for (let checkpoint = 0; checkpoint < 5; checkpoint++) await Promise.resolve();
-  assert.deepEqual(calls, [], "the work ran in the microtask checkpoint that scheduled it");
-  await waiting;
-  assert.deepEqual(calls, ["work"]);
+  await nextTask(() => calls.push(types.get(executionAsyncId())));
+  assert.deepEqual(calls, ["MESSAGEPORT"], "the work ran in a microtask checkpoint and not in a message task");
 });
 
 test("a prepared draw that throws fails its task wait with that error", { timeout: 5000 }, async () => {
@@ -78,14 +82,16 @@ test("the wait for the drawn layout continues through a layout that a newer layo
   let slots = ["tab-a", "tab-b"];
   let release;
   const gate = new Promise((resolve) => { release = resolve; });
-  const active = queue.run(async () => { await gate; });
+  const started = Promise.withResolvers();
+  const active = queue.run(async () => { started.resolve(); await gate; });
   // The layout that the first close scheduled after it released tab-a.
   queue.run(() => { slots = ["tab-b"]; });
   let read = null;
   const waiting = queue.wait().then(() => { read = slots; });
   // The layout that the next close scheduled after it released tab-b replaces the awaited layout.
   const newest = queue.run(() => { slots = []; });
-  await new Promise((resolve) => setImmediate(resolve));
+  // The wait awaits the newest layout, which runs only after the active layout ends at the gate.
+  await started.promise;
   assert.equal(read, null, `the wait ended before the newest layout drew and read ${JSON.stringify(read)}`);
   release();
   await Promise.all([active, newest, waiting]);

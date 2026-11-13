@@ -9,20 +9,24 @@ test("settling waits for the calls already sent and refuses every later call at 
   const sent = [];
   const answers = [];
   const seen = [];
+  // sentBoth resolves when the transport has received the second call, which is sent after the first one.
+  let arrived;
+  const sentBoth = new Promise((resolve) => { arrived = resolve; });
   observeHostCalls((call) => seen.push(call));
   const calls = settlingCalls((name) => {
     sent.push(name);
+    if (sent.length === 2) arrived();
     return new Promise((resolve, reject) => answers.push({ resolve, reject }));
   });
   const first = calls.call("first");
   const second = calls.call("second");
-  await Promise.resolve();
+  await sentBoth;
   let settled = false;
   calls.settle().then(() => { settled = true; });
   await assert.rejects(calls.call("later"), { message: "host call later: the page is reloading" });
   answers[0].resolve("one");
   assert.equal(await first, "one");
-  await Promise.resolve();
+  // Nothing can end the settling before the second call is answered, so the check follows the answer of the first call.
   assert.equal(settled, false, "settling ended before every sent call was answered");
   answers[1].reject(new Error("refused"));
   await assert.rejects(second, /refused/);

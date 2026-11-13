@@ -41,6 +41,8 @@ test("a later view event waits for the earlier event delivery", async () => {
   const delivered = [];
   let releaseFirst;
   const firstDelivery = new Promise((resolve) => { releaseFirst = resolve; });
+  let firstStarted;
+  const firstPushed = new Promise((resolve) => { firstStarted = resolve; });
   const native = (name, listener) => {
     listeners.set(name, listener);
     return Promise.resolve(() => {});
@@ -50,7 +52,10 @@ test("a later view event waits for the earlier event delivery", async () => {
     sidecar: null,
     push: async (event, data) => {
       started.push(data.id);
-      if (data.id === 1) await firstDelivery;
+      if (data.id === 1) {
+        firstStarted();
+        await firstDelivery;
+      }
       delivered.push(data.id);
     },
     report: () => {},
@@ -58,11 +63,10 @@ test("a later view event waits for the earlier event delivery", async () => {
   await subs.native("input");
   listeners.get("input")({ id: 1 });
   listeners.get("input")({ id: 2 });
-  await new Promise((resolve) => setImmediate(resolve));
+  await firstPushed;
   assert.deepEqual(started, [1], "the second delivery must remain queued while the first is pending");
   releaseFirst();
-  await new Promise((resolve) => setImmediate(resolve));
-  await new Promise((resolve) => setImmediate(resolve));
+  await subs.idle();
   assert.deepEqual(started, [1, 2]);
   assert.deepEqual(delivered, [1, 2]);
   await subs.close();
@@ -75,7 +79,7 @@ test("a native subscription is registered once and pushes each event of its name
   await first;
   assert.equal(await subs.native("probe.changed"), null);
   listeners.get("native:probe.changed")({ surface: "probe-surface", count: 1 });
-  await new Promise((resolve) => setImmediate(resolve));
+  await subs.idle();
   assert.deepEqual(pushed, [{ event: "probe.changed", data: { surface: "probe-surface", count: 1 } }]);
 });
 
@@ -92,7 +96,7 @@ test("a log levels subscription pushes each change of the stored levels once and
   stored = { ...stored, frame: "debug" };
   changed();
   changed();
-  await new Promise((resolve) => setImmediate(resolve));
+  await subs.idle();
   assert.deepEqual(pushed, [{ event: "log.levels", data: { lifecycle: "error", input: "error", call: "error", io: "error", frame: "debug" } }]);
   await subs.close();
   assert.equal(changed, null, "the close ends the subscription");
@@ -106,7 +110,7 @@ test("a sidecar message subscription adds the host route of the view once, a res
   await subs.sidecarFailure("probe-surface");
   assert.deepEqual(routes, ["on fixture-sidecar probe-surface"], "the host posts the messages, so the page adds one route and pushes none");
   listeners.get("sidecar.onFailure:probe-surface")("exited");
-  await new Promise((resolve) => setImmediate(resolve));
+  await subs.idle();
   assert.deepEqual(pushed, [{ event: "sidecar.failure", data: { id: "probe-surface", reason: "exited" } }]);
   await subs.restart();
   assert.deepEqual(routes, ["on fixture-sidecar probe-surface", "off fixture-sidecar probe-surface"], "a restart removes the route");
@@ -121,12 +125,12 @@ test("an event for a view whose surface is left out is canceled without a push, 
     cancel: (event) => canceled.push(event) });
   await subs.native("probe.event");
   f.listeners.get("native:probe.event")({ n: 1 });
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await subs.idle();
   assert.deepEqual(f.pushed, [], "a left-out view received an event");
   assert.deepEqual(canceled, ["probe.event"]);
   left = false;
   f.listeners.get("native:probe.event")({ n: 2 });
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await subs.idle();
   assert.deepEqual(f.pushed, [{ event: "probe.event", data: { n: 2 } }]);
 });
 
@@ -138,7 +142,7 @@ test("a push that the host refuses is reported with its text", async () => {
   });
   await subs.native("probe.changed");
   listeners.get("native:probe.changed")({ surface: "probe-surface" });
-  await new Promise((resolve) => setImmediate(resolve));
+  await subs.idle();
   assert.deepEqual(reports, ["view event probe.changed: probe-surface has no ready document"]);
 });
 
@@ -152,7 +156,7 @@ test("a text size subscription is registered once and pushes each change of the 
   const deliver = listeners.get("textSize:change");
   assert.equal(typeof deliver, "function");
   deliver(1.5);
-  await new Promise((resolve) => setImmediate(resolve));
+  await subs.idle();
   assert.deepEqual(pushed, [{ event: "textSize", data: 1.5 }]);
   await subs.close();
 });
@@ -162,7 +166,7 @@ test("a settings subscription is registered once and pushes each change of the s
   const subs = createViewSubscriptions({ native: null, sidecar: null, textSize: null, settings, push: async (event, data) => { pushed.push({ event, data }); }, report: () => {} });
   assert.equal(await subs.settings(), null);
   listeners.get("settings:change")({ home: "" });
-  await new Promise((resolve) => setImmediate(resolve));
+  await subs.idle();
   assert.deepEqual(pushed, [{ event: "settings", data: { home: "" } }]);
   await subs.close();
 });
@@ -174,7 +178,7 @@ test("a data subscription is registered once and pushes the key of each change o
   assert.equal(await subs.data(), null);
   assert.equal(await subs.data(), null);
   listeners.get("data:change")("marks");
-  await new Promise((resolve) => setImmediate(resolve));
+  await subs.idle();
   assert.deepEqual(pushed, [{ event: "data", data: { key: "marks" } }]);
   await subs.close();
   assert.deepEqual(off, ["data:change"]);
@@ -187,7 +191,7 @@ test("closing the surface ends every subscription, and an event after it is push
   await subs.close();
   assert.deepEqual(off, ["native:probe.changed"]);
   listeners.get("native:probe.changed")({ surface: "probe-surface" });
-  await new Promise((resolve) => setImmediate(resolve));
+  await subs.idle();
   assert.deepEqual(pushed, []);
 });
 
@@ -205,7 +209,7 @@ test("a status watch pushes each value of its name as the status event and ends 
   assert.equal(await subs.statusWatch("core.grid"), null, "a second watch of the same name registers nothing");
   observed.get("core.grid")({ tabs: 2 }, "core");
   observed.get("core.grid")({ tabs: 3 }, "core");
-  await new Promise((resolve) => setImmediate(resolve));
+  await subs.idle();
   assert.deepEqual(pushed, [
     { event: "status", data: { name: "core.grid", value: { tabs: 2 } } },
     { event: "status", data: { name: "core.grid", value: { tabs: 3 } } },
@@ -237,7 +241,7 @@ test("a status watch with a surface follows the status on that surface, keyed by
   assert.deepEqual(observations, ["probe.lines spc-aaaaaa/left/files.tree", "probe.lines tab-a"]);
   observed.get("probe.lines spc-aaaaaa/left/files.tree")(["section"], "spc-aaaaaa/left/files.tree");
   observed.get("probe.lines tab-a")(["tab"], "tab-a");
-  await new Promise((resolve) => setImmediate(resolve));
+  await subs.idle();
   assert.deepEqual(pushed, [
     { event: "status", data: { name: "probe.lines", surface: "spc-aaaaaa/left/files.tree", value: ["section"] } },
     { event: "status", data: { name: "probe.lines", surface: "tab-a", value: ["tab"] } },
@@ -307,19 +311,19 @@ test("a status watch holds the values of a run and delivers the newest at its en
   await subs.statusWatch("core.grid");
   active = true;
   observer({ w: 1 });
-  await new Promise(setImmediate);
+  await subs.idle();
   assert.deepEqual(f.pushed.map(({ data }) => data.value), [{ w: 1 }], "the first value of a watch waited for the end of a run");
   observer({ w: 2 });
   observer({ w: 3 });
-  await new Promise(setImmediate);
+  await subs.idle();
   assert.equal(f.pushed.length, 1, "a value of a run was delivered during the run");
   assert.deepEqual(canceled, ["status"], "a value that a newer value replaced has no record");
   active = false;
   ended();
-  await new Promise(setImmediate);
+  await subs.idle();
   assert.deepEqual(f.pushed.map(({ data }) => data.value), [{ w: 1 }, { w: 3 }], "the newest value was not delivered at the end of the run");
   observer({ w: 4 });
-  await new Promise(setImmediate);
+  await subs.idle();
   assert.deepEqual(f.pushed.at(-1).data.value, { w: 4 }, "a value after the run was not delivered at once");
 
   active = true;
@@ -327,7 +331,7 @@ test("a status watch holds the values of a run and delivers the newest at its en
   await subs.statusUnwatch("core.grid");
   active = false;
   ended();
-  await new Promise(setImmediate);
+  await subs.idle();
   assert.deepEqual(f.pushed.at(-1).data.value, { w: 4 }, "a held value was delivered after its unwatch");
   assert.deepEqual(f.failures, []);
 });
@@ -345,7 +349,7 @@ test("each start of a run is pushed to the view as the event run-start, and a cl
     },
   });
   started();
-  await new Promise(setImmediate);
+  await subs.idle();
   assert.deepEqual(f.pushed.map(({ event, data }) => [event, data]), [["run-start", {}]]);
   await subs.close();
   assert.equal(started, null, "the listener of the start of a run ends with the subscriptions");

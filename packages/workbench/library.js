@@ -175,6 +175,9 @@ export function createLibrary(root, rendered = () => {}) {
   const checks=new Map();
   let checkCount=0;
   let foldersFor=null;
+  // The folder checks in progress, and the waits of idle for the end of the last one.
+  let checking=0;
+  let idleWaits=[];
   function checkFolders(all) {
     const roots=all.map(p=>p.root).join('\n');
     if(foldersFor===roots) return;
@@ -184,6 +187,7 @@ export function createLibrary(root, rendered = () => {}) {
     for(const project of all) {
       const check=++checkCount;
       checks.set(project.root, check);
+      checking++;
       windows.folder(project.root).then(
         ()=>{ settleFolder(project.root, check, {error:null}); },
         (reason)=>{ settleFolder(project.root, check, {error:String(reason.message)}); },
@@ -192,9 +196,18 @@ export function createLibrary(root, rendered = () => {}) {
   }
   /** Stores the answer of a check. The answer of a check that a later check of the same path replaced, or of a removed path, is ignored. */
   function settleFolder(root, check, result) {
-    if(checks.get(root)!==check) return;
-    folders.set(root, result);
-    render();
+    try {
+      if(checks.get(root)!==check) return;
+      folders.set(root, result);
+      render();
+    } finally {
+      checking--;
+      if(checking===0) {
+        const waits=idleWaits;
+        idleWaits=[];
+        for(const resolve of waits) resolve();
+      }
+    }
   }
   /** The project list changed. Checks the folders again. */
   function refreshFolders() { foldersFor=null; }
@@ -550,6 +563,11 @@ export function createLibrary(root, rendered = () => {}) {
   // The plugin page redraws the state that plugins-changed and each action changed.
   onPluginOperations(()=>{ if(page==='plugins') render(); });
   onContributionsChange(()=>{ if(page==='plugins') render(); });
-  return {render, refreshFolders, state, actions};
+  /**
+   * Resolves when no folder check is in progress, at once when none is. A check that a render starts while the wait is pending
+   * delays the resolution until that check settles.
+   */
+  const idle=()=>(checking===0 ? Promise.resolve() : new Promise((resolve)=>idleWaits.push(resolve)));
+  return {render, refreshFolders, state, actions, idle};
 }
 

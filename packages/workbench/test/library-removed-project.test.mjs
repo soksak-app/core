@@ -34,23 +34,22 @@ test("a removed project hides its folder error, and the error is written again w
   } });
   const { createLibrary } = await import("../library.js?removed-project");
   const library = createLibrary(document.getElementById("library"));
-  const settle = () => new Promise((resolve) => setImmediate(resolve));
   const written = () => reports.filter((line) => line.startsWith("library project /work/missing: "));
   // The project is added and its folder is missing. The error is written once.
   library.render();
-  await settle();
+  await library.idle();
   assert.equal(written().length, 1, "the missing folder error is not written when the project is added");
   // The project leaves the library list. Its card and its folder result are removed.
   listed = [];
   library.refreshFolders();
   library.render();
-  await settle();
+  await library.idle();
   assert.equal(document.querySelector('[data-project-id="prj-a"]'), null, "the card of a removed project is still shown");
   // The same project is added again with the same missing folder. The error is written again.
   listed = [project];
   library.refreshFolders();
   library.render();
-  await settle();
+  await library.idle();
   assert.equal(written().length, 2, "the error of a project added again is not written");
   dom.window.close();
 });
