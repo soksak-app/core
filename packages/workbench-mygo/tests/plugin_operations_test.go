@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/egoist/mygo/ui"
 	"image/color"
+	"math"
 	"slices"
 	"strings"
 	"testing"
@@ -544,7 +545,8 @@ func TestThePlaceholderStandsAsThePageStandsIt(t *testing.T) {
 	if got := button.Y - (line.Bounds.Y + line.Bounds.H); got < margin+gap-0.01 || got > margin+gap+0.01 {
 		t.Fatalf("the button stands %v under the line %+v", got, line.Bounds)
 	}
-	if want := float32(size * lineHeight); line.Bounds.H < want-0.5 || line.Bounds.H > want+0.5 {
+	// A line box takes the whole points of its line height (docs/spec/settings.md#layout-values).
+	if want := float32(math.Floor(size * lineHeight)); math.Abs(float64(line.Bounds.H-want)) > .01 {
 		t.Fatalf("the line is %v high, want %v", line.Bounds.H, want)
 	}
 }

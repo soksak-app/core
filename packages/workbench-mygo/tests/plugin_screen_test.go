@@ -313,8 +313,8 @@ func TestTheDescriptionAndContributionLinesOfACardAreNamedElements(t *testing.T)
 	if about := positional(t, tt, "core.library.plugins.about", 1); about.Label != "Second tool" {
 		t.Fatalf("the second description line is %q", about.Label)
 	}
-	// Caption 10 at the line height 1.45 of drawPlugins.
-	const line = 10 * 1.45
+	// Caption 10 at the line height 1.45 of drawPlugins, a line box of the whole points of 14.5.
+	const line = 14
 	for index, want := range []string{"db.items 기여 1: 연결됨", "db.items 기여 2: no label"} {
 		node := positional(t, tt, "core.library.plugins.contribution", index)
 		if node.Label != want || math.Abs(float64(node.Bounds.H)-line) > 0.01 {
@@ -333,8 +333,9 @@ func TestADescriptionBreaksAtTheSpaceBeforeAWordWithAPoint(t *testing.T) {
 		"versions": []any{map[string]any{"version": "0.0.40", "engines": map[string]string{"soksak": "*"}, "sidecars": map[string]string{}}}}}
 	f := pluginShell(t, &pluginsHost{registry: "file:///registry/index.json", index: index}, `{"plugins":[]}`)
 	f.run("core.library.page", map[string]string{"page": "plugins"})
-	// Five lines of the small size 11 at the line height 1.45, in the description width 259 of a card of four columns.
-	const lines = 5 * 11 * 1.45
+	// Five lines of the small size 11 at the line height 1.45, each a line box of the whole points of 15.95, in the description
+	// width 259 of a card of four columns.
+	const lines = 5 * 15
 	if box := f.box("core.library.plugins.about", "layoutprobe"); math.Abs(float64(box.W)-259) > 0.01 || math.Abs(float64(box.H)-lines) > 0.01 {
 		t.Fatalf("the description is %v wide and %v high, want 259 wide and %v high", box.W, box.H, lines)
 	}

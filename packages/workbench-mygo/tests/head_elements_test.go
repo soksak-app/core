@@ -153,7 +153,8 @@ func TestTheWholeOfACardTabIsItsButton(t *testing.T) {
 	pad, _ := declared.Metric("tab-pad-y")
 	line, _ := declared.Metric("line-height")
 	small, _ := declared.Metric("text-small-at-base")
-	if want := 2*pad + small*line; math.Abs(float64(box.H)-want) > .01 {
+	// A line box takes the whole points of its line height (docs/spec/settings.md#layout-values).
+	if want := 2*pad + math.Floor(small*line+1e-3); math.Abs(float64(box.H)-want) > .01 {
 		t.Fatalf("the tab is %v high, the page %v", box.H, want)
 	}
 	f.tester.ClickAt(box.X+1, box.Y+1)

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F729: a text line of the mygo workbench is a whole number of points high, as WebKit lays out a line of the pages, so a description that wraps to three lines at the line height 17.4 is 51 points high on every host; the mygo fork `v0.7.4-244-g4abb83d-soksak.11` floors the line height of a text and the workbench places the middle of a tab by the same rule.
 - F774: in a window run under load the mygo host held its scheduling priority above 4 while a check was connected and recorded no stall; `card-panels`, `card-tools-menu`, `image-region-press-focus` and `tab-press-keys` passed on the three hosts.
 - F774: the host holds a user-initiated activity of the system while an endpoint connection is open, so the system no longer runs the host in the background at the scheduling priority 4 while a window check or `sok` waits for its answers; under load such a mygo host had stalled for up to 15.7 s while its threads ran 40 ms of CPU.
 - F777: the capture checks `e2e/capture-covered.test.mjs`, `capture-display-link`, `capture-lifecycle` and `capture-still` judge that a capture leaves the activation of the application as it was, instead of requiring an inactive application, which a person who brings the application forward changes. The four checks passed in a window run on the three hosts.

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"path"
 	"slices"
 	"sync/atomic"
@@ -79,6 +80,12 @@ type environmentGrid struct {
 	Xs    []float64         `json:"xs"`
 	Ys    []float64         `json:"ys"`
 	Cards []json.RawMessage `json:"cards"`
+}
+
+// lineBox returns the height of a line of text of size at the line height multiple, as the text of the fork lays it out and as
+// a line box of WebKit is: the whole points of size × multiple (17.4 is a line of 17).
+func lineBox(size, multiple float32) float32 {
+	return float32(math.Floor(float64(size*multiple) + 1e-3))
 }
 
 // metrics are the chrome metrics that the shell draws with.

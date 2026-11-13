@@ -188,7 +188,7 @@ func (s *Shell) drawBarTab(c *ui.Context, tab barTab) {
 	m := s.metrics
 	size := s.frameFont(s.textControl())
 	pad := s.frameLength(m.chromeGap)
-	line := size * m.lineHeight
+	line := lineBox(size, m.lineHeight)
 	high := s.frameLength(m.spaceTabH)
 	holder := ui.Box(c.Key(tab.key)).Shrink(0)
 	color, fill := s.barTabColors(tab, holder.Hovered())

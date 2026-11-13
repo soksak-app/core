@@ -352,8 +352,10 @@ func TestTheEmptyLibraryNamesTheStart(t *testing.T) {
 // A project whose folder cannot be read shows the reason, cannot be opened, and can be removed.
 func TestTheEmptyLibraryTakesTheHeightOfThePage(t *testing.T) {
 	f := newShell(t, &storedHost{})
-	// .library-empty: two paddings of 16, h2 at .83em above, the larger of the margins between h2 and p, and 1em under p.
-	if box := f.box("core.library.empty", ""); box.H < 102 || box.H > 104 {
+	// .library-empty: two paddings of 16, h2 of 13 at .83em above, its line of 18 (the whole points of 13 × 1.45), the larger of the
+	// margins between h2 and p (12), the line of 17 of p of 12 and 1em under p, as the page lays it out.
+	const page = 16 + 13*.83 + 18 + 12 + 17 + 12 + 16
+	if box := f.box("core.library.empty", ""); math.Abs(float64(box.H)-page) > .01 {
 		t.Fatalf("the empty library is %+v", box)
 	}
 }

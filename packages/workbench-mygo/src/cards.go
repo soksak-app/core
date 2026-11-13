@@ -452,7 +452,7 @@ func (s *Shell) tabName(tab layout.Tab) string {
 func (s *Shell) drawTab(c *ui.Context, card string, tab layout.Tab, on bool, size, width float32) {
 	m := s.metrics
 	name := s.tabName(tab)
-	line := size * m.lineHeight
+	line := lineBox(size, m.lineHeight)
 	family := s.fontFamily()
 	mark := spanWidth(c, ui.Span{Text: tabCloseMark, Size: size, Font: family})
 	holder := ui.Box(c.Key("tab-" + tab.ID)).Shrink(0)
@@ -489,7 +489,7 @@ func (s *Shell) drawTab(c *ui.Context, card string, tab layout.Tab, on bool, siz
 			ui.Box(c).Absolute().Left(m.tabPadX).Top(m.tabPadY + (line-m.noticeDot)/2).Children(func() { s.noticeMark(c, tab.ID) })
 		}
 		closing := s.binder.Press(c, "core.card.tab-close", "core.tab.close", tab.ID, tabParam{tab.ID})
-		closing.Absolute().Top(m.tabPadY + (line-size*m.lineHeightTight)/2).Right(m.tabPadX).PaddingX(m.tabXPad).Radius(s.radiusSmall()).Label("닫기").Tooltip("닫기")
+		closing.Absolute().Top(m.tabPadY + (line-lineBox(size, m.lineHeightTight))/2).Right(m.tabPadX).PaddingX(m.tabXPad).Radius(s.radiusSmall()).Label("닫기").Tooltip("닫기")
 		if closing.Hovered() {
 			closing.Background(faded(s.palette.No, m.tabXHoverMix))
 		} else {

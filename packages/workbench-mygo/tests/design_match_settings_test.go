@@ -70,7 +70,9 @@ func TestTheFolderCaptionBreaksAfterItsSeparatorsInsideThePane(t *testing.T) {
 	values := status[map[string]any](t, f.shellFixture, "core.settings")["values"].(map[string]any)
 	stack := catalog.Stack(values["font"].(string))
 	size := float32(values["size"].(float64) * small / base)
-	layout := ui.ShapeRichTextWith([]ui.Span{{Text: root, Font: stack, Size: size}}, ui.Font{Family: stack, Size: size, LineHeight: float32(leading)},
+	// A line box takes the whole points of its line height (docs/spec/settings.md#layout-values).
+	line := float32(math.Floor(float64(size)*leading + 1e-3))
+	layout := ui.ShapeRichTextWith([]ui.Span{{Text: root, Font: stack, Size: size}}, ui.Font{Family: stack, Size: size, LineHeight: line / size},
 		ui.TextShape{Width: pane.W, KeepAll: true})
 	lines := layout.Lines()
 	if len(lines) < 3 {
