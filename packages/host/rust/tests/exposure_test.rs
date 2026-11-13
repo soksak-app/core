@@ -867,12 +867,32 @@ fn pointer_held_message_names_the_holding_pointer_and_its_reason() {
 #[test]
 fn undeclared_host_names_are_unknown() {
     for (method, name, text) in [
-        ("command.run", "host.nope", "command host.nope is not declared"),
-        ("status.get", "host.nope", "status host.nope is not declared"),
-        ("status.watch", "host.nope", "status host.nope is not declared"),
-        ("command.run", "host.window", "command host.window is not declared"),
+        (
+            "command.run",
+            "host.nope",
+            "command host.nope is not declared",
+        ),
+        (
+            "status.get",
+            "host.nope",
+            "status host.nope is not declared",
+        ),
+        (
+            "status.watch",
+            "host.nope",
+            "status host.nope is not declared",
+        ),
+        (
+            "command.run",
+            "host.window",
+            "command host.window is not declared",
+        ),
         // The host declares no element entry, so an element request for a host name is an unknown name.
-        ("element.rect", "host.buttons", "host.buttons is not declared"),
+        (
+            "element.rect",
+            "host.buttons",
+            "host.buttons is not declared",
+        ),
         ("element.act", "host.window", "host.window is not declared"),
     ] {
         let failure = exposure::check_host_name(method, name).unwrap_err();

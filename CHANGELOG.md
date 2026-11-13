@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- Two Rust test files follow the format that the Rust format check requires (F804).
 - Both hosts refuse a view import map that is not UTF-8 with the same text, which names the first byte that is not UTF-8 (F803).
 - A refused start of the memory pressure source in the Go host no longer replaces the report of the running source, so no level after it is lost (F802).
 - The Go core root resolver and view import map text are functions of the configuration folder and the bundled frontend, and the memory pressure tests run the real source of the platform in a child process of the system tier instead of a stand-in source (F795-9).

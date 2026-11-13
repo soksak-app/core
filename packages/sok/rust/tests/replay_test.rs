@@ -187,7 +187,12 @@ fn replay_reports_equal_when_every_stored_hash_is_the_replayed_one() {
 #[test]
 fn replay_reports_a_rejected_file() {
     let old = "{\"ts_us\":1,\"mono_ns\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"sidecar\",\"event\":\"log.open\",\"fields\":{\"schema\":2}}\n";
-    let config = replay_config("replay-rejected", &standard_events(), REPLAY_FIXTURE, "probe");
+    let config = replay_config(
+        "replay-rejected",
+        &standard_events(),
+        REPLAY_FIXTURE,
+        "probe",
+    );
     write_file(&config.join("logs/files-old.jsonl"), old, 0o644);
     let (stdout, stderr, code) = run_replay(&config, &["s1"]);
     assert!(
@@ -458,7 +463,12 @@ fn replay_refuses_what_it_cannot_compare() {
         );
     }
     // A session whose sidecar events come from two roles has no single replay executable.
-    let config = replay_config("replay-two-roles", &standard_events(), REPLAY_FIXTURE, "probe");
+    let config = replay_config(
+        "replay-two-roles",
+        &standard_events(),
+        REPLAY_FIXTURE,
+        "probe",
+    );
     write_file(
         &config.join("logs/other-b1.jsonl"),
         &event_file(
@@ -626,7 +636,12 @@ fn replay_refuses_a_page_frame_that_names_no_segment_of_the_session() {
     // The screen message carries the segment, so a page frame without it is refused in a session with one segment too.
     let mut events = standard_events();
     events.page[0] = events.page[0].replacen(r#""segment":"b1","#, "", 1);
-    let config = replay_config("replay-segment-errors-single", &events, REPLAY_FIXTURE, "probe");
+    let config = replay_config(
+        "replay-segment-errors-single",
+        &events,
+        REPLAY_FIXTURE,
+        "probe",
+    );
     let (_, stderr, code) = run_replay(&config, &["s1"]);
     let want =
         "sok: replay session s1: the page frame record at sequence 2 has no fields.segment\n";
