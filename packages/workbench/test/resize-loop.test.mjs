@@ -24,11 +24,16 @@ function fakeView() {
       this.port2 = { postMessage: () => messages.push(port1) };
     }
   };
-  window.performance.now = () => 1234.56;
   const frame = () => frames.splice(0).forEach((fn) => fn());
   const task = () => messages.splice(0).forEach((port) => port.onmessage?.({}));
   return { window, observers, frame, frames, task };
 }
+
+// The reading of the clock in each record is passed in, so every record of a test reads the same instant.
+const at = () => 1234.56;
+
+/** Starts the recorder of window with the reading `at`; locate and trace take their defaults when they are omitted. */
+const watch = (window, reported, locate, trace) => watchResizeLoop(window, (line) => reported.push(line), locate, trace, at);
 
 /** Resolves when the mutation records of target that happen after this call are delivered to a MutationObserver of the test. */
 function delivered(window, target) {
@@ -44,7 +49,7 @@ function delivered(window, target) {
 test("the observations delivered in the frame after a loop error are reported", () => {
   const { window, observers, frame } = fakeView();
   const reported = [];
-  watchResizeLoop(window, (line) => reported.push(line), () => "page@wails://localhost/page.js:1:1");
+  watch(window, reported, () => "page@wails://localhost/page.js:1:1");
   const delivered = [];
   new window.ResizeObserver((entries) => delivered.push(entries.length));
   const plane = window.document.getElementById("plane");
@@ -68,7 +73,7 @@ test("the observations delivered in the frame after a loop error are reported", 
 test("another error does not start a record", () => {
   const { window, frame } = fakeView();
   const reported = [];
-  watchResizeLoop(window, (line) => reported.push(line));
+  watch(window, reported);
   window.dispatchEvent(new window.ErrorEvent("error", { message: "something else" }));
   frame();
   frame();
@@ -78,7 +83,7 @@ test("another error does not start a record", () => {
 test("the callbacks that ran in the frame of a loop error are reported with the code that created each observer", () => {
   const { window, observers, frame } = fakeView();
   const reported = [];
-  watchResizeLoop(window, (line) => reported.push(line), () => "probe@wails://localhost/probe.js:7:3");
+  watch(window, reported, () => "probe@wails://localhost/probe.js:7:3");
   new window.ResizeObserver(() => {});
   const plane = window.document.getElementById("plane");
   observers[0].callback([{ target: plane, contentRect: { width: 600, height: 400 } }], observers[0]);
@@ -95,7 +100,7 @@ test("the callbacks that ran in the frame of a loop error are reported with the 
 test("the callbacks of an earlier frame are not reported with a loop error", () => {
   const { window, observers, task } = fakeView();
   const reported = [];
-  watchResizeLoop(window, (line) => reported.push(line), () => "probe@wails://localhost/probe.js:7:3");
+  watch(window, reported, () => "probe@wails://localhost/probe.js:7:3");
   new window.ResizeObserver(() => {});
   const plane = window.document.getElementById("plane");
   observers[0].callback([{ target: plane, contentRect: { width: 600, height: 400 } }], observers[0]);
@@ -111,7 +116,7 @@ test("each DOM change is reported in the callback slot of the round it happened 
   const { window, observers, frame } = fakeView();
   const reported = [];
   let made = 0;
-  watchResizeLoop(window, (line) => reported.push(line), () => `probe@wails://localhost/probe.js:${++made}:1`);
+  watch(window, reported, () => `probe@wails://localhost/probe.js:${++made}:1`);
   const plane = window.document.getElementById("plane");
   // The change records of callback 1 are delivered to the MutationObserver at the microtask checkpoint after that callback.
   new window.ResizeObserver(() => plane.setAttribute("data-height", "517"));
@@ -149,7 +154,7 @@ test("each DOM change is reported in the callback slot of the round it happened 
 test("a body dataset write inside a callback slot is reported with the stack of the code that wrote it", async () => {
   const { window, observers, frame } = fakeView();
   const reported = [];
-  watchResizeLoop(window, (line) => reported.push(line), () => "probe@wails://localhost/probe.js:1:1",
+  watch(window, reported, () => "probe@wails://localhost/probe.js:1:1",
     () => "drawBars@wails://localhost/index.html:419:30 < @wails://localhost/projects.js:64:5");
   const body = window.document.body;
   // A write outside the round is not recorded.
@@ -175,7 +180,7 @@ test("a body dataset write inside a callback slot is reported with the stack of 
 test("a callback round requests no animation frame and the next task ends its slots", () => {
   const { window, observers, frames, task } = fakeView();
   const reported = [];
-  watchResizeLoop(window, (line) => reported.push(line), () => "probe@wails://localhost/probe.js:7:3");
+  watch(window, reported, () => "probe@wails://localhost/probe.js:7:3");
   new window.ResizeObserver(() => {});
   const plane = window.document.getElementById("plane");
   observers[0].callback([{ target: plane, contentRect: { width: 600, height: 400 } }], observers[0]);

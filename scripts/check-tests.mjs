@@ -4442,11 +4442,11 @@ const FEATURE_LINKS = [
   {
     id: "F546",
     implementation: [
-      { file: "packages/plugin-api/log-batch.js", symbol: "if (gatedTimer || sending || gated.size === 0) return;" },
+      { file: "packages/plugin-api/log-batch.js", symbol: "if (gatedTimer || wait === null) return;" },
     ],
     tests: [
-      { file: "packages/plugin-api/test/log-batch.test.mjs", id: "the report of the counts arms no timer while a batch is in flight" },
-      { file: "packages/plugin-api/test/log-batch.test.mjs", id: "a count refused while a batch is in flight waits for the rest of its interval after the batch" },
+      { file: "packages/plugin-api/test/log-batch.test.mjs", id: "counts held while a batch is in flight arm no timer until the batch ends" },
+      { file: "packages/plugin-api/test/log-batch.test.mjs", id: "the wait for the counts of the gate is the rest of their interval, and no timer is armed while a batch is in flight" },
     ],
     expected: "The report of the gate counts of a page arms no timer while a batch is in flight.",
     levels: ["unit"],
@@ -4995,7 +4995,7 @@ const FEATURE_LINKS = [
   {
     id: "F239-302",
     implementation: [
-      { file: "packages/workbench/ids.js", symbol: "export function issueId(kind, taken)" },
+      { file: "packages/workbench/ids.js", symbol: "export function issueId(kind, taken, random" },
       { file: "packages/workbench/plane.js", symbol: "const tabTaken = " },
     ],
     tests: [
