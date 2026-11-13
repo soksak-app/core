@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F767-3-2-3: 꺼진 page trace 의 check 는 trace 가 만들지 않는 host call 을 세는 대신 tracer 가 queue 하는 event 를 기록하고 하나도 없기를 요구하며, view subscription 은 그 cancel 과 report 가 throw 하지 않는다고 적는다.
 - F767-3-2-2: workbench 의 check 18 개는 settle 대신 fake 의 호출, view subscription·transcript·library 의 선언된 `idle`, 또는 event 의 순서를 기다리고, `nextTask` 의 check 는 message task 가 work 를 실행하기를 요구한다.
 - F767-6: product 의 timer 와 retry 는 각각 spec 이 정한 규칙이거나 event 를 기다리는 것이며, bounded command runner 의 parent poll 은 Node 에 parent process 종료 event 가 없다는 이유를 적는다.
 - F767-3-2-1: memory saver 는 deadline 이나 pressure 의 unload run 이 진행 중이지 않을 때 `idle` 을 resolve 하고, 그 check 는 microtask 40 개를 yield 하는 대신 그것을 기다린다.

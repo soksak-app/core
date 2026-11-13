@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F767-3-2-3: the check of a disabled page trace records the events that the tracer queues and requires none, instead of counting host calls that a trace never makes; the view subscriptions state that their cancel and report do not throw.
 - F767-3-2-2: eighteen checks of the workbench wait for the call of a fake, a declared `idle` of the view subscriptions, the transcript and the library, or the order of their events, instead of a settle; the check of `nextTask` requires that a message task runs the work.
 - F767-6: the timers and retries of the product are each a rule that a specification states or a wait for an event; the parent poll of the bounded command runner states that Node has no event for the end of the parent process.
 - F767-3-2-1: the memory saver resolves `idle` when no unload run of a deadline or of the pressure is in progress, and its checks wait for it instead of yielding 40 microtasks.

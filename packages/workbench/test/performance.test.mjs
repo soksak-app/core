@@ -8,7 +8,6 @@ import { createTracer } from "../performance.js";
 import { withoutClock } from "./support/records.mjs";
 import { classOf } from "../event-classes.js";
 import { logGate } from "../log-gate.js";
-import { flushEvents } from "../page-log.js";
 import { pageIdentity } from "../page-identity.js";
 // The events below the level error are stored only in the debug state (docs/spec/settings.md, the section of core.settings.debug), which these tests
 // examine, so the state of every class at trace is set here.
@@ -42,10 +41,18 @@ test("disabled page tracing does not format or relay a focus event", async (t) =
   t.mock.module("@soksak/runtime", { exports: {
     host: { call: async (name, params) => { calls.push({ name, params }); } },
   } });
+  // The page tracer queues its events through emitEvent of the page log; the fake records each event and builds its payload, as
+  // a gate that stores the event does, so a queued event and a formatted payload are both seen.
+  const emitted = [];
+  const actualLog = await import("../page-log.js");
+  t.mock.module("../page-log.js", { exports: { ...actualLog, emitEvent: (level, event, fields) => {
+    emitted.push(event);
+    if (typeof fields === "function") fields();
+  } } });
   const page = await import("../performance.js?disabled-focus");
   let formatted = 0;
   page.trace("focus", { get target() { formatted++; return "address"; } });
-  await flushEvents();
+  assert.deepEqual(emitted, [], "disabled tracing queued a focus event");
   assert.equal(calls.length, 0, "disabled tracing relayed a focus event");
   assert.equal(formatted, 0, "disabled tracing formatted a focus event");
 });

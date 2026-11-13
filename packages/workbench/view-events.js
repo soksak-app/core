@@ -38,6 +38,9 @@ const statusData = (name, surface, value) => (surface === undefined ? { name, va
  *                 the host has closed or will close the view, and a section that is drawn again in the same drawing receives the next event
  *     cancel      cancel(event): records a delivery canceled by document or surface end
  *     report      report(text): receives the text of a push that the host refused
+ *   cancel and report do not throw: every delivery waits for the one before it, so a throw of either would end the deliveries
+ *   that follow. The surface modules give an emitEvent of the level debug and a dispatch of an ErrorEvent, which hands an
+ *   exception of a listener to the error event of the window instead of throwing it.
  *
  * Returns {native(name), sidecarMessage(id, name), sidecarFailure(id), textSize(), settings(), data(), logLevels(), statusWatch(name, surface),
  * statusUnwatch(name, surface), idle(), restart(), close()}. A subscription call resolves with null, and a second call for the same name or id registers
