@@ -589,6 +589,19 @@ const FEATURE_LINKS = [
   },
 
   {
+    id: "F767-1",
+    implementation: [
+      { file: "scripts/test-runner.mjs", symbol: "function endGroup(pgid, leader) {" },
+    ],
+    tests: [
+      { file: "scripts/test/test-runner.test.mjs", id: "a test over its limit is stopped before the process table is read, and its elapsed time is taken at the stop" },
+      { file: "scripts/test/test-language-test-adapters.test.mjs", id: "a case builds before its test runs, so the limit of the case measures only the test" },
+    ],
+    expected: "The runner checks judge the stop before the table read by the state of the test process and the elapsed time by the clock of that read, and no check compares elapsed time with a bound.",
+    levels: ["unit"],
+  },
+
+  {
     id: "F766",
     implementation: [
       { file: "packages/host/go/tests/platform/darwin/system/sidecars_test.go", symbol: "func TestASidecarThatExitsFailsWhileAProcessOutsideItsGroupKeepsTheOutput(t *testing.T) {" },

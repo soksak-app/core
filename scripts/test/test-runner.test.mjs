@@ -233,8 +233,8 @@ test("a process that outlives its test process is ended at that exit, and the fa
   ], { concurrency: 1, defaultTimeoutMs: 20000 });
   const result = results.get("outlives");
   assert.equal(result.status, "fail", result.detail);
+  // A runner that waited for the end of the output instead of the exit would end the test at its limit, as a timeout.
   assert.match(result.detail, /^left running after exit: pid \d+ /, result.detail);
-  assert.ok(result.elapsedMs < 15000, `the process ran ${result.elapsedMs} ms, to its limit instead of its exit`);
 });
 
 test("a test that writes its stacks at its own limit is a timeout whose output keeps the stacks, and it receives no signal", async () => {
@@ -248,7 +248,6 @@ test("a test that writes its stacks at its own limit is a timeout whose output k
   assert.match(result.output, /^goroutine 1 \[the stacks\]$/m, result.output);
   assert.doesNotMatch(result.output, /signalled/, result.output);
   assert.match(lines.find((line) => line.startsWith("TIME hangs")), /^TIME hangs \d+\.\d{3}s exceeded 1\.000s and ended itself with its stacks$/);
-  assert.ok(result.elapsedMs >= 1000 && result.elapsedMs < 5000, `the test ran ${result.elapsedMs} ms against its limit of 1000 ms`);
 });
 
 test("a test that writes its stacks at its own limit and fails before that limit is a failure", async () => {
@@ -266,19 +265,19 @@ test("a test that does not end itself at its own limit is ended at the stack lim
   assert.equal(result.status, "timeout", result.detail);
   assert.match(result.detail, /^exceeded 0\.500s and did not end itself with its stacks within 10\.000s; it was killed$/, result.detail);
   assert.doesNotMatch(result.output, /signalled/, result.output);
-  assert.ok(result.elapsedMs >= 10500, `the test ended after ${result.elapsedMs} ms, before its limit and the stack limit`);
 });
 
-// Blocks the event loop of the runner from the start of a test that writes `marker` and exits until the test exited and `ms` passed,
-// as a runner whose own process stalls, so the limit of the test passes while its exit waits for the runner.
+// Blocks the event loop of the runner from the start of a test that writes its process id to `marker` and exits until the test exited
+// and `ms` passed, as a runner whose own process stalls, so the limit of the test passes while its exit waits for the runner. The loop of
+// this process is the loop that is blocked, so no event can end the wait: it reads the marker and then the state of the process, which
+// stays a zombie until the runner reaps it, and `ms` is the stall that the check sets as its input.
 async function stalledRun(item, marker, ms) {
   const pending = run([item], { concurrency: 1 });
   const start = performance.now();
-  while (!existsSync(marker) || performance.now() - start < ms) {
-    if (performance.now() - start > 30000) throw new Error("the test process wrote no marker within 30 s");
-  }
-  const until = performance.now() + 300;
-  while (performance.now() < until) {}
+  let pid = "";
+  while (pid === "") pid = existsSync(marker) ? readFileSync(marker, "utf8") : "";
+  while (!spawnSync("ps", ["-o", "stat=", "-p", pid], { encoding: "utf8" }).stdout.trim().startsWith("Z")) {}
+  while (performance.now() - start < ms) {}
   return pending;
 }
 
@@ -286,7 +285,7 @@ test("a test that exited while the runner stalled past its limit has its own res
   const folder = mkdtempSync(join(tmpdir(), "runner-stall-"));
   try {
     const marker = join(folder, "exited");
-    const source = `require("node:fs").writeFileSync(${JSON.stringify(marker)}, ""); process.exit(0)`;
+    const source = `require("node:fs").writeFileSync(${JSON.stringify(marker)}, String(process.pid)); process.exit(0)`;
     const { results } = await stalledRun(node("exits", source, { timeoutMs: 300 }), marker, 1000);
     const result = results.get("exits");
     assert.equal(result.status, "pass", result.detail);
@@ -301,7 +300,7 @@ test("a test that writes its stacks at its own limit and passed while the runner
   const folder = mkdtempSync(join(tmpdir(), "runner-stall-"));
   try {
     const marker = join(folder, "exited");
-    const source = `require("node:fs").writeFileSync(${JSON.stringify(marker)}, ""); process.exit(0)`;
+    const source = `require("node:fs").writeFileSync(${JSON.stringify(marker)}, String(process.pid)); process.exit(0)`;
     const { results } = await stalledRun(node("passes", source, { timeoutMs: 300, stacksAtLimit: true }), marker, 1000);
     const result = results.get("passes");
     assert.equal(result.status, "pass", result.detail);
@@ -316,19 +315,28 @@ test("stacksAtLimit needs a limit of the test", async () => {
 });
 
 test("a test over its limit is stopped before the process table is read, and its elapsed time is taken at the stop", async () => {
-  // The runner reads the process table with `ps` at the limit. This `ps` takes 5 seconds, as a read under load can, so a runner that
-  // reads the table before it stops the group runs the test for about 7 seconds in all.
+  // The runner reads the process table with `ps` at the limit. This `ps` writes the state of the test process and the time at which it
+  // began, so the check sees that the test process was stopped (T) when the table was read and that the elapsed time of the test ends
+  // before that read. The read takes 5 seconds, as a read under load can, so an elapsed time taken after the read ends after its start.
   const directory = mkdtempSync(join(tmpdir(), "soksak-runner-ps-"));
   const ps = join(directory, "ps");
-  writeFileSync(ps, "#!/bin/sh\nsleep 5\nexec /bin/ps \"$@\"\n");
+  const pidFile = join(directory, "pid");
+  const reads = join(directory, "reads");
+  writeFileSync(ps, `#!/bin/sh\nif [ "$1" = -A ]; then\n  printf '%s %s\\n' "$(${JSON.stringify(process.execPath)} -p 'Math.floor(performance.timeOrigin + performance.now())')" ` +
+    `"$(/bin/ps -o stat= -p "$(cat ${JSON.stringify(pidFile)})")" >> ${JSON.stringify(reads)}\n  sleep 5\nfi\nexec /bin/ps "$@"\n`);
   chmodSync(ps, 0o755);
   const saved = process.env.PATH;
   process.env.PATH = `${directory}:${saved}`;
   try {
-    const { results } = await run([node("slow", sleeping(60000), { timeoutMs: 2000 })], { concurrency: 1 });
+    const before = Math.ceil(performance.timeOrigin + performance.now());
+    const source = `require("node:fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); ${sleeping(60000)}`;
+    const { results } = await run([node("slow", source, { timeoutMs: 2000 })], { concurrency: 1 });
     const result = results.get("slow");
     assert.equal(result.status, "timeout", result.detail);
-    assert.ok(result.elapsedMs < 6000, `the test ran ${result.elapsedMs} ms against its limit of 2000 ms while the process table was read`);
+    const [read, state] = readFileSync(reads, "utf8").split("\n")[0].split(" ");
+    assert.match(state, /^T/, `the test process was in state ${state} when the process table was read`);
+    assert.ok(result.elapsedMs <= Number(read) - before,
+      `the elapsed time ${result.elapsedMs} ms ends after the read of the process table, ${Number(read) - before} ms after the start`);
   } finally {
     process.env.PATH = saved;
     rmSync(directory, { recursive: true, force: true });
