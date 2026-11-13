@@ -96,6 +96,9 @@ var records struct {
 	bufferBytes int
 	// lost counts the records that the full buffer refused, for each channel of the writer.
 	lost [sok.ChannelCount]struct{ count, bytes uint64 }
+	// appended is closed when the start buffer takes its next record, and nil while no check waits for one: a check of the
+	// package waits on it for a record that a goroutine writes after it handed its result on.
+	appended chan struct{}
 }
 
 // EmitClosed stores the event `log.closed` of the host process that ends (docs/spec/logging.md#policy) with cause and the
@@ -268,6 +271,10 @@ func storeEvent(level Level, layer, name, place string, cids []string, fields js
 		}
 		records.buffer = append(records.buffer, bufferedRecord{tsMicros: now, monoNs: mono, cids: cids, layer: layer, level: level, event: name, fields: fields, produced: produced})
 		records.bufferBytes += size
+		if records.appended != nil {
+			close(records.appended)
+			records.appended = nil
+		}
 		return
 	}
 	if _, err := records.log.EmitRelayed(RelayedEvent{TsMicros: now, MonoNs: mono, Layer: layer, Level: level, Event: name, Cids: cids, Fields: fields, Produced: produced}); err != nil {

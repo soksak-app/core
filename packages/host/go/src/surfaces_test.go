@@ -1638,13 +1638,9 @@ func TestAPresentationRecordsEachOfItsStagesInOrder(t *testing.T) {
 		t.Fatalf("the present failed: %v", err)
 	}
 	want := []string{"present-prepare-ui", "present-dom-register-ui", "present-dom-callback", "present-raster-wait", "present-commit-ui"}
-	var records []map[string]any
-	// The callback and the commit write their records after they hand their result on, and no event reports those writes, so
-	// the buffer is read until it holds a record of every stage; a stage that writes no record leaves the check to the limit
-	// of its runner.
-	for records = bufferedTraces(t, "host.frame.surface.dispatch"); len(records) < len(want); time.Sleep(time.Millisecond) {
-		records = bufferedTraces(t, "host.frame.surface.dispatch")
-	}
+	// The callback and the commit write their records after they hand their result on, so the check waits until the buffer
+	// holds a record of every stage.
+	records := awaitTraces(t, "host.frame.surface.dispatch", len(want))
 	entered := func(record map[string]any) uint64 {
 		text, _ := record["entered_ns"].(string)
 		value, err := strconv.ParseUint(text, 10, 64)

@@ -12,7 +12,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, RecvError, SyncSender, TryRecvError, TrySendError, sync_channel};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError, RwLock};
 use std::time::{Duration, Instant};
@@ -919,18 +919,47 @@ fn shut_down_writer(name: &str, writer: &mut dyn PersistentStream) {
     }
 }
 
+/// The size in bytes of the line that a writer is writing, 0 between lines; each change wakes the waits of `wait_above`.
+#[derive(Default)]
+struct LineWrite {
+    size: Mutex<usize>,
+    changed: Condvar,
+}
+
+impl LineWrite {
+    fn set(&self, size: usize) {
+        // default: a lock that a panicking thread poisoned still holds the size, which the call replaces; the panic hook
+        // records the panic.
+        *self.size.lock().unwrap_or_else(PoisonError::into_inner) = size;
+        self.changed.notify_all();
+    }
+
+    /// Returns once the size passes `above`.
+    fn wait_above(&self, above: usize) {
+        // default: a lock that a panicking thread poisoned still holds the size, which is only read; the panic hook records
+        // the panic.
+        let mut size = self.size.lock().unwrap_or_else(PoisonError::into_inner);
+        while *size <= above {
+            size = self
+                .changed
+                .wait(size)
+                .unwrap_or_else(PoisonError::into_inner);
+        }
+    }
+}
+
 fn write_line(
     stdin: &mut ChildStdin,
     name: &str,
     line: &QueuedLine,
-    writing: &AtomicUsize,
+    writing: &LineWrite,
     terminated: &AtomicBool,
     clock: &Clock,
 ) -> bool {
     let started = clock();
-    writing.store(line.bytes.len(), Ordering::Release);
+    writing.set(line.bytes.len());
     let written = stdin.write_all(&line.bytes);
-    writing.store(0, Ordering::Release);
+    writing.set(0);
     if let Err(e) = written {
         if terminated.load(Ordering::Acquire) {
             crate::application_log::log_info(
@@ -950,13 +979,13 @@ fn write_socket_line(
     stream: &mut dyn PersistentStream,
     name: &str,
     line: &QueuedLine,
-    writing: &AtomicUsize,
+    writing: &LineWrite,
     clock: &Clock,
 ) -> bool {
     let started = clock();
-    writing.store(line.bytes.len(), Ordering::Release);
+    writing.set(line.bytes.len());
     let written = stream.write_all(&line.bytes).and_then(|_| stream.flush());
-    writing.store(0, Ordering::Release);
+    writing.set(0);
     if let Err(error) = written {
         log_error(&format!("sidecar {name}"), format!("write: {error}"));
         return false;
@@ -1279,7 +1308,7 @@ struct Process {
     exit: Option<Arc<ProcessExit>>,
     outbox: SyncSender<Outgoing>, // channel with capacity 256
     /// The size in bytes of the line that the writer is writing, and 0 between lines.
-    writing: Arc<AtomicUsize>,
+    writing: Arc<LineWrite>,
     persistent: Option<PersistentConnection>,
     /// The surfaces that sent a request to this process. They are the surfaces to which a failure is reported.
     surfaces: HashSet<String>,
@@ -2868,21 +2897,26 @@ impl<O: Owner> Sidecars<O> {
         Ok(total)
     }
 
-    /// The size in bytes of the line that the writer of the running sidecar `name` is writing, and 0 between lines; a
-    /// sidecar that reads nothing keeps its writer inside one line once its input is full.
-    pub fn writing(&self, name: &str) -> Result<usize, String> {
-        let state = self
-            .core
-            .state
-            .lock()
-            // default: a lock that a panicking thread poisoned still holds the sidecar state, which is only read; the
-            // panic hook records the panic.
-            .unwrap_or_else(PoisonError::into_inner);
-        let process = state
-            .running
-            .get(name)
-            .ok_or_else(|| format!("sidecar {name} is not running"))?;
-        Ok(process.writing.load(Ordering::Acquire))
+    /// Returns once the writer of the running sidecar `name` writes a line larger than `above` bytes. A check uses it to know
+    /// that the writer is inside the write of a line that the pipe of the sidecar cannot take, so it takes no more lines from
+    /// the queue; a writer that never writes such a line leaves the check to the limit of its runner.
+    pub fn await_writing(&self, name: &str, above: usize) -> Result<(), String> {
+        let writing = {
+            let state = self
+                .core
+                .state
+                .lock()
+                // default: a lock that a panicking thread poisoned still holds the sidecar state, which is only read; the
+                // panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner);
+            let process = state
+                .running
+                .get(name)
+                .ok_or_else(|| format!("sidecar {name} is not running"))?;
+            Arc::clone(&process.writing)
+        };
+        writing.wait_above(above);
+        Ok(())
     }
 
     /// Whether a plugin declares the sidecar `name`; a sidecar that no plugin declares any more ended with the removal of
@@ -3530,7 +3564,7 @@ impl<O: Owner> Core<O> {
         // accepted them (write_in_order). When the channel ends, it writes the held items that remain before it closes stdin.
         let write_name = name.to_string();
         let state_clone = Arc::clone(&core.state);
-        let writing = Arc::new(AtomicUsize::new(0));
+        let writing = Arc::new(LineWrite::default());
         let write_writing = Arc::clone(&writing);
         let terminated = Arc::new(AtomicBool::new(false));
         let write_terminated = Arc::clone(&terminated);
@@ -3822,7 +3856,7 @@ impl<O: Owner> Core<O> {
         let connected = Arc::new(AtomicBool::new(true));
         let write_name = name.to_string();
         let write_state = Arc::clone(&core.state);
-        let writing = Arc::new(AtomicUsize::new(0));
+        let writing = Arc::new(LineWrite::default());
         let write_writing = Arc::clone(&writing);
         let socket: PersistentSocket = Arc::new(Mutex::new(
             stream

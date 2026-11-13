@@ -3,7 +3,6 @@ use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixListener;
 use std::path::Path;
-use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::{Receiver, TryRecvError, channel, sync_channel};
 use std::thread::JoinHandle;
 
@@ -12,7 +11,7 @@ use crate::test_folder::Folder;
 use std::sync::{Arc, Mutex};
 
 use super::{
-    Failure, ImageEnvelopeDecision, Message, Outgoing, Owner, Process, ResponseError,
+    Failure, ImageEnvelopeDecision, LineWrite, Message, Outgoing, Owner, Process, ResponseError,
     ResponseSender, Sidecars, try_handle_image_envelope,
 };
 
@@ -50,7 +49,7 @@ fn native_view_removal_still_closes_a_standard_io_session() {
                 child: None,
                 exit: None,
                 outbox: sender,
-                writing: Arc::new(AtomicUsize::new(0)),
+                writing: Arc::new(LineWrite::default()),
                 persistent: None,
                 surfaces: HashSet::from([surface.into()]),
                 closed_surfaces: HashSet::new(),
@@ -646,7 +645,7 @@ pub(crate) fn mounted_project_probe_wire<O: Owner>(
             child: None,
             exit: None,
             outbox: sender,
-            writing: Arc::new(AtomicUsize::new(0)),
+            writing: Arc::new(LineWrite::default()),
             persistent: None,
             surfaces: HashSet::new(),
             closed_surfaces: HashSet::new(),
@@ -715,7 +714,7 @@ pub(crate) fn background_race_sidecars<O: Owner>(
             child: None,
             exit: None,
             outbox: sender,
-            writing: Arc::new(AtomicUsize::new(0)),
+            writing: Arc::new(LineWrite::default()),
             persistent: None,
             surfaces: HashSet::new(),
             closed_surfaces: HashSet::new(),

@@ -137,13 +137,11 @@ impl Blocked {
                 .unwrap();
         }
         // A line larger than the pipe of the sidecar (64 KiB at most on macOS) keeps the writer inside its write, so it takes
-        // no more lines from the queue; a surface line of a long root does the same. No event reports the start of a write,
-        // so the fixture waits on the state of the writer.
+        // no more lines from the queue; a surface line of a long root does the same. The fixture waits until the writer starts
+        // that line.
         let blocker = raw(&format!(r#"{{"data":"{}"}}"#, "b".repeat(2 << 20)));
         sidecars.send(&owner, ECHO, "s1", &blocker).unwrap();
-        while sidecars.writing(ECHO).unwrap() <= 64 << 10 {
-            std::thread::sleep(Duration::from_millis(1));
-        }
+        sidecars.await_writing(ECHO, 64 << 10).unwrap();
         let big = raw(&format!(r#"{{"data":"{}"}}"#, "x".repeat(20 * 1024)));
         let mut full = false;
         for _ in 0..4000 {

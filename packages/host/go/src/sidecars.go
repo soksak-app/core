@@ -110,7 +110,7 @@ type sidecar struct {
 	readyRecorded bool
 	outbox        chan queuedLine
 	// writing is the size in bytes of the line that the writer is writing, and 0 between lines.
-	writing atomic.Int64
+	writing lineWrite
 	// terminated is true once the stop sent the terminate signal to the process group: a line that the writer could not
 	// write after it is a line that the stop ended, not a failure.
 	terminated atomic.Bool
@@ -808,16 +808,54 @@ func (c *Sidecars) sendAtRootGuarded(ctx context.Context, owner SidecarOwner, na
 	}
 }
 
-// Writing returns the size in bytes of the line that the writer of the running sidecar name is writing, and 0 between lines; a
-// sidecar that reads nothing keeps its writer inside one line once its input is full.
-func (c *Sidecars) Writing(name string) (int, error) {
+// AwaitWriting returns once the writer of the running sidecar name writes a line larger than above bytes. A check uses it to
+// know that the writer is inside the write of a line that the pipe of the sidecar cannot take, so it takes no more lines from
+// the queue; a writer that never writes such a line leaves the check to the limit of its runner.
+func (c *Sidecars) AwaitWriting(name string, above int) error {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	process, ok := c.running[name]
+	c.mu.Unlock()
 	if !ok {
-		return 0, fmt.Errorf("sidecar %s is not running", name)
+		return fmt.Errorf("sidecar %s is not running", name)
 	}
-	return int(process.writing.Load()), nil
+	process.writing.await(above)
+	return nil
+}
+
+// lineWrite is the size in bytes of the line that a writer is writing, 0 between lines; each change wakes the waits of await.
+// The zero value is ready.
+type lineWrite struct {
+	mu   sync.Mutex
+	size int
+	// changed is closed at the next change and replaced by the next wait.
+	changed chan struct{}
+}
+
+func (w *lineWrite) set(size int) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.size = size
+	if w.changed != nil {
+		close(w.changed)
+		w.changed = nil
+	}
+}
+
+// await returns once the size passes above.
+func (w *lineWrite) await(above int) {
+	for {
+		w.mu.Lock()
+		if w.size > above {
+			w.mu.Unlock()
+			return
+		}
+		if w.changed == nil {
+			w.changed = make(chan struct{})
+		}
+		changed := w.changed
+		w.mu.Unlock()
+		<-changed
+	}
 }
 
 // SendResponse passes a reply (such as an image return) to the sidecar.
@@ -2235,8 +2273,8 @@ func (c *Sidecars) writePersistent(process *sidecar) {
 
 func (c *Sidecars) writePersistentLine(process *sidecar, line queuedLine) bool {
 	started := c.now()
-	process.writing.Store(int64(len(line.bytes)))
-	defer process.writing.Store(0)
+	process.writing.set(len(line.bytes))
+	defer process.writing.set(0)
 	if _, err := process.conn.Write(line.bytes); err != nil {
 		LogError("sidecar "+process.name, fmt.Sprintf("write: %v", err))
 		return false
@@ -2248,8 +2286,8 @@ func (c *Sidecars) writePersistentLine(process *sidecar, line queuedLine) bool {
 
 func (c *Sidecars) writeLine(process *sidecar, line queuedLine) bool {
 	started := c.now()
-	process.writing.Store(int64(len(line.bytes)))
-	defer process.writing.Store(0)
+	process.writing.set(len(line.bytes))
+	defer process.writing.set(0)
 	if _, err := process.stdin.Write(line.bytes); err != nil {
 		if process.terminated.Load() {
 			LogInfo("sidecar "+process.name, "the stop ended the process before a line was written")

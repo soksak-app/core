@@ -27,6 +27,37 @@ func bufferedTraces(t *testing.T, event string) []map[string]any {
 	t.Helper()
 	records.Lock()
 	defer records.Unlock()
+	return tracesOf(t, event)
+}
+
+// awaitTraces returns the fields of the buffered records of event once the start buffer holds at least count of them. Each
+// record that the buffer takes wakes the wait (records.appended); a record that never comes leaves the check to the limit of
+// its runner.
+func awaitTraces(t *testing.T, event string, count int) []map[string]any {
+	t.Helper()
+	for {
+		found, appended := func() ([]map[string]any, chan struct{}) {
+			records.Lock()
+			defer records.Unlock()
+			found := tracesOf(t, event)
+			if len(found) >= count {
+				return found, nil
+			}
+			if records.appended == nil {
+				records.appended = make(chan struct{})
+			}
+			return nil, records.appended
+		}()
+		if appended == nil {
+			return found
+		}
+		<-appended
+	}
+}
+
+// tracesOf returns the fields of each buffered record of event; the caller holds the lock of the records.
+func tracesOf(t *testing.T, event string) []map[string]any {
+	t.Helper()
 	var found []map[string]any
 	for _, record := range records.buffer {
 		if record.event != event {

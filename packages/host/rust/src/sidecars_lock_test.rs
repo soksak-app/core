@@ -9,7 +9,7 @@ use std::time::Instant;
 use serde_json::value::RawValue;
 
 use super::{
-    Event, Failure, Message, Outgoing, Owner, ReplyWaiters, Revival, Sidecars,
+    Event, Failure, LineWrite, Message, Outgoing, Owner, ReplyWaiters, Revival, Sidecars,
     await_replaced_service, close_answer, close_persistent_owner, fail, fail_requests,
     notify_connection, record_reply, revive_attempt,
 };
@@ -92,9 +92,9 @@ fn a_poisoned_state_lock_still_answers_the_sidecar_queries() {
         "the closing list was not read while the state lock was poisoned"
     );
     assert_eq!(
-        sidecars.writing("missing"),
+        sidecars.await_writing("missing", 0),
         Err("sidecar missing is not running".to_string()),
-        "the writer size was not read while the state lock was poisoned"
+        "the writer was not looked up while the state lock was poisoned"
     );
     assert_eq!(
         sidecars.replace("missing"),
@@ -275,7 +275,7 @@ fn fast_close_answer_preserves_both_closing_transitions() {
                 child: None,
                 exit: None,
                 outbox,
-                writing: Arc::new(AtomicUsize::new(0)),
+                writing: Arc::new(LineWrite::default()),
                 persistent: None,
                 surfaces: ["tab-standard".into()].into(),
                 closed_surfaces: Default::default(),
@@ -332,7 +332,7 @@ fn status_only_consumer_receives_stop_closing_removal() {
                 child: None,
                 exit: None,
                 outbox,
-                writing: Arc::new(AtomicUsize::new(0)),
+                writing: Arc::new(LineWrite::default()),
                 persistent: None,
                 surfaces: ["tab-standard".into()].into(),
                 closed_surfaces: Default::default(),
@@ -377,7 +377,7 @@ fn detach_notification_contains_the_complete_final_status() {
                 child: None,
                 exit: None,
                 outbox,
-                writing: Arc::new(AtomicUsize::new(0)),
+                writing: Arc::new(LineWrite::default()),
                 persistent: None,
                 surfaces: ["tab-standard".into()].into(),
                 closed_surfaces: Default::default(),
@@ -391,7 +391,7 @@ fn detach_notification_contains_the_complete_final_status() {
                 child: None,
                 exit: None,
                 outbox: persistent_outbox,
-                writing: Arc::new(AtomicUsize::new(0)),
+                writing: Arc::new(LineWrite::default()),
                 persistent: Some(super::PersistentConnection {
                     version: Some("old".into()),
                     close_waiters: Default::default(),
@@ -455,7 +455,7 @@ fn outdated_fixture(
                 child: None,
                 exit: None,
                 outbox,
-                writing: Arc::new(AtomicUsize::new(0)),
+                writing: Arc::new(LineWrite::default()),
                 persistent: Some(super::PersistentConnection {
                     version: Some(running.into()),
                     close_waiters: Default::default(),
