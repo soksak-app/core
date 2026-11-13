@@ -1435,6 +1435,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F773",
+    implementation: [{ file: "packages/workbench/test/support/drained.mjs", symbol: "export const drained = () => {" }],
+    tests: [
+      { file: "packages/workbench/test/drained.test.mjs", id: "drained ends after a long chain of microtasks and the next ticks they queue" },
+      { file: "packages/workbench/test/drained.test.mjs", id: "drained fails while mock.timers mocks setImmediate" },
+    ],
+    expected: "A negative check of work that runs in microtasks waits for the end of the microtask queue, which ends after every queued microtask and fails while setImmediate is mocked.",
+    levels: ["unit"],
+  },
+  {
     id: "F769",
     implementation: [{ file: "native/darwin/tests/support/no_activation.m", symbol: "static void typeWithoutCorrection(void) {" }],
     tests: [

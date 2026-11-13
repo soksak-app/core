@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F773: negative workbench check 가 기다리는 microtask queue 의 끝은 `setImmediate` 를 mock 하는 check 에서 실패하고, verification specification 은 그것이 그런 check 의 event 인 이유와 포함하지 않는 것을 말한다.
 - F767-3-2-4: 남은 workbench check 는 settle 대신 선언된 `idle`, page log 의 flush 또는 microtask queue 의 끝을 기다리고, 각 negative check 와 order check 는 자기가 거부하는 product fault 에서 실패한다.
 - F771: mygo still check 는 still 을 읽기 전에 layout transaction 이 window 를 release 하기와 다음 frame 을 기다린다. window server 는 그 frame 과 함께만 window 를 화면에 두기 때문이다.
 - F767-3-2-3: 꺼진 page trace 의 check 는 trace 가 만들지 않는 host call 을 세는 대신 tracer 가 queue 하는 event 를 기록하고 하나도 없기를 요구하며, view subscription 은 그 cancel 과 report 가 throw 하지 않는다고 적는다.
