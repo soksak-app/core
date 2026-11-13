@@ -35,7 +35,8 @@ export function runBounded(command, args, { timeout, cwd, stdout = "inherit", st
       return [name, handler];
     });
     const deadline = setTimeout(() => stop("deadline"), timeout);
-    // There is no parent-exit event when the harness is killed outright.
+    // Node has no event for the end of the parent process, and a harness that is killed outright closes no stream that this process
+    // reads, so the parent identity is read every 500 ms: it changes when the parent ends and the process is given to another parent.
     const orphaned = setInterval(() => { if (process.ppid !== parent) stop("orphaned"); }, 500);
     signal?.addEventListener("abort", cancel, { once: true });
     child.once("error", (failure) => { reason = "spawn-error"; error = `${failure.code}: ${failure.message}`; });
