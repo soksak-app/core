@@ -1,0 +1,49 @@
+{
+  "name": "host-chrome-handover",
+  "description": "The page hands over a preparation to the next preparation, which commits it, cancels a handed-over preparation that the next preparation refused, and cancels a handed-over preparation when no handover follows.",
+  "replay": false,
+  "reason": "The producer runs only the calls log and workspace (docs/spec/cases/page-wire/README.md#producer-runs), and this case holds the calls syncSurfaces, cancelSurfaces and presentSurfaces.",
+  "steps": [
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": { "settled": true, "overlays": [], "surfaces": [], "titlebar": 40, "declarations": [] }
+      }
+    },
+    { "reply": { "result": { "ticket": 1, "placements": [], "chrome": { "controls": { "x": 13, "y": 13, "w": 54, "h": 14 }, "row": 40 } } } },
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": { "settled": true, "overlays": [], "surfaces": [], "titlebar": 40, "declarations": [] }
+      }
+    },
+    { "reply": { "result": { "ticket": 2, "placements": [], "chrome": { "controls": { "x": 13, "y": 13, "w": 54, "h": 14 }, "row": 40 } } } },
+    { "call": { "name": "presentSurfaces", "payload": { "ticket": 2, "placements": [], "settled": true } } },
+    { "reply": { "result": [] } },
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": { "settled": true, "overlays": [], "surfaces": [], "titlebar": 41, "declarations": [] }
+      }
+    },
+    { "reply": { "result": { "ticket": 3, "placements": [], "chrome": { "controls": { "x": 13, "y": 13, "w": 54, "h": 14 }, "row": 41 } } } },
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": { "settled": true, "overlays": [], "surfaces": [], "titlebar": 99, "declarations": [] }
+      }
+    },
+    { "reply": { "error": "preparation refused" } },
+    { "call": { "name": "cancelSurfaces", "payload": { "ticket": 3 } } },
+    { "reply": { "result": null } },
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": { "settled": true, "overlays": [], "surfaces": [], "titlebar": 42, "declarations": [] }
+      }
+    },
+    { "reply": { "result": { "ticket": 4, "placements": [], "chrome": { "controls": { "x": 13, "y": 13, "w": 54, "h": 14 }, "row": 42 } } } },
+    { "call": { "name": "cancelSurfaces", "payload": { "ticket": 4 } } },
+    { "reply": { "result": null } }
+  ]
+}

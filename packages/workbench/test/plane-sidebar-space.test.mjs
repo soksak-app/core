@@ -5,7 +5,6 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { registerPlugin, registerSection } from "../registry.js";
 
 const pluginId = "fixture-space";
 const setId = "fixture-space-set";
@@ -28,41 +27,27 @@ test("a sidebar draws the section surface ids of the space of the held layout wh
   style.textContent = ".card { --bw: 1px; --divider: 1px; }";
   document.head.appendChild(style);
 
+  // The page has no host in this test, so it is not native: the surfaces are placeholders, and no call reaches a host.
+  // Without a host, report writes the error to console.error and stores no record, so the test keeps this replacement of
+  // the report to observe the errors that the plane reports.
   const reports = [];
   const actualHost = await import("../host.js");
   t.mock.module("../host.js", { exports: { ...actualHost, report: (line) => reports.push(line) } });
-  // The project state already shows the library: no project and no space.
-  const actualProjects = await import("../projects.js");
-  t.mock.module("../projects.js", { exports: { ...actualProjects, active: () => null, inLibrary: () => true } });
-  t.mock.module("../surface-modules.js", { exports: {
-    mountedSurface: () => null,
-    surfaceForTab: (tab) => ({ module: "/fixture.js", composition: { kind: "dom" }, surfaceId: tab.id,
-      pluginId: tab.plugin, declarations: {}, sidecars: [] }),
-    mountSurface: () => Promise.resolve(),
-    disposeSurface: () => Promise.resolve(), placePluginPlaceholder: () => {},
-  } });
-  t.mock.module("../compositor.js", { exports: { ...(await import("../compositor.js")), setSlotSurface: () => {}, clearSlotSurface: () => {} } });
-  t.mock.module("../environment.js", { exports: {
-    environment: () => ({ workspace: { focus: "main", grid: {
+  // The environment of the page: the plugin with its section, and the sidebar set that names the section. The environment is
+  // installed before the page draws, and no project is open, so the project state shows the library.
+  const { installEnvironment } = await import("../environment.js");
+  assert.deepEqual(installEnvironment({
+    runtime: "runtime",
+    workspace: { focus: "main", grid: {
       xs: [0, 1], ys: [0, 1],
       cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: pluginId, title: "main" }] }],
-    } } }),
-    pluginUnits: () => [{ id: pluginId, name: "Fixture", description: "검사용 표면.", surface: true, sections: [] }],
-    refusedPlugins: () => new Set(),
-  } });
-  const sets = [{ id: setId, title: "Fixture", layout: "list", sections: [`${pluginId}.tree`] }];
-  const actualSettings = await import("../settings.js");
-  t.mock.module("../settings.js", { exports: { projectSidebars: () => ({ sets: [], links: [] }), ...actualSettings,
-    value: (key) => (key === "sets" ? sets : actualSettings.value(key)) } });
-  registerPlugin({
-    id: pluginId, name: "Fixture", mark: "f", svg: "<path/>", ink: null, background: null, drop: null,
-    surface: (surfaceId) => ({ module: "/fixture.js", composition: { kind: "dom" }, surfaceId, pluginId,
-      declarations: {}, sidecars: [] }),
-  });
-  const composition = { kind: "view", page: "ui/tree.html" };
-  registerSection({ id: `${pluginId}.tree`, name: "Tree", composition, height: "fill", plugin: pluginId,
-    surface: (surfaceId, start) => ({ composition, surfaceId, pluginId, declarations: {}, sidecars: [], diagnostics: null,
-      unload: false, params: null, section: start }) });
+    } },
+    sidebars: { sets: [{ id: setId, title: "Fixture", layout: "list", sections: [`${pluginId}.tree`] }], links: [] },
+  }, { plugins: [{ id: pluginId, package: "@fixture/space", version: "0.0.1", manifest: {
+    id: pluginId, name: "Fixture", description: "검사용 표면.", mark: "f", icon: "<path/>",
+    surface: { composition: { kind: "view", page: "ui/index.html" } },
+    sections: [{ id: `${pluginId}.tree`, name: "Tree", height: "fill", composition: { kind: "view", page: "ui/tree.html" } }],
+  } }] }), [], "the fixture environment refused a plugin");
 
   const { registry } = await import("../exposure.js");
   registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);

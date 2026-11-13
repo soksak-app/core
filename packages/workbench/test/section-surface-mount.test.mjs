@@ -3,28 +3,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { registerPlugin } from "../registry.js";
-import { seedSourceOrigins } from "../source-origins.js";
-import { setSurfaceTextSize } from "../text-size.js";
+import { selectPageWire } from "@soksak/runtime";
+
+// The host calls of the mount are answered by the page-wire case of each test (docs/spec/cases/page-wire/README.md). A case is selected
+// before the first module that imports host.js is imported, because host.js reads the host when it is imported.
+const firstWire = selectPageWire("section-surface-mount-declare");
+const { registerPlugin } = await import("../registry.js");
+const { seedSourceOrigins } = await import("../source-origins.js");
+const { setSurfaceTextSize } = await import("../text-size.js");
 
 setSurfaceTextSize(() => 1);
 
-test("a section surface mounts with an origin that records no directory", { timeout: 5000 }, async (t) => {
+test("a section surface mounts with an origin that records no directory", { timeout: 5000 }, async () => {
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
-  const actualHost = await import("../host.js");
-  t.mock.module("../host.js", { exports: {
-    ...actualHost,
-    native: true,
-    onSurfacePrepared: () => () => {},
-    surfaceContextRuntime: (surface, declarations) => {
-      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
-      return { ...runtime, native: { ...runtime.native, on: async () => () => {}, call: async () => null } };
-    },
-  } });
   const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?section-mount");
   const pluginId = "fixture-section-plugin";
   const surfaceId = "spc-aaaaaa/left/fixture-section-plugin.tree";
@@ -40,24 +35,16 @@ test("a section surface mounts with an origin that records no directory", { time
     await disposeSurface(surfaceId);
     dom.window.close();
   }
+  firstWire.finish();
 });
 
-test("a surface that a new drawing mounts again reports its state to the new drawing", { timeout: 5000 }, async (t) => {
+test("a surface that a new drawing mounts again reports its state to the new drawing", { timeout: 5000 }, async () => {
+  const wire = selectPageWire("section-surface-mount-remount");
   const dom = new JSDOM("<main><div id=first></div><div id=second></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
-  const actualHost = await import("../host.js");
-  t.mock.module("../host.js", { exports: {
-    ...actualHost,
-    native: true,
-    onSurfacePrepared: () => () => {},
-    surfaceContextRuntime: (surface, declarations) => {
-      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
-      return { ...runtime, native: { ...runtime.native, on: async () => () => {}, call: async () => null } };
-    },
-  } });
   const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?section-remount");
   const pluginId = "fixture-redrawn-plugin";
   const surfaceId = "spc-aaaaaa/right/fixture-redrawn-plugin.tabs";
@@ -81,4 +68,5 @@ test("a surface that a new drawing mounts again reports its state to the new dra
     await disposeSurface(surfaceId);
     dom.window.close();
   }
+  wire.finish();
 });

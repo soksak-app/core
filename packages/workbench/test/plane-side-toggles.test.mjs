@@ -6,7 +6,6 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { registerPlugin } from "../registry.js";
 
 const pluginId = "fixture-side-toggles";
 const setId = "fixture-set";
@@ -34,34 +33,25 @@ test("a draw keeps the pressed card header fold control in the document", { time
   style.textContent = ".card { --bw: 1px; --divider: 1px; }";
   document.head.appendChild(style);
 
+  // The page has no host in this test, so it is not native. Without a host, report writes the error to console.error and stores no record,
+  // so the test keeps this replacement of the report to observe the errors that the plane reports (the same as plane-sidebar-space.test.mjs).
   const reports = [];
   const actualHost = await import("../host.js");
   t.mock.module("../host.js", { exports: { ...actualHost, report: (line) => reports.push(line) } });
-  t.mock.module("../surface-modules.js", { exports: {
-    mountedSurface: () => null,
-    surfaceForTab: (tab) => ({ module: "/fixture.js", composition: { kind: "dom" }, surfaceId: tab.id,
-      pluginId: tab.plugin, declarations: {}, sidecars: [] }),
-    mountSurface: () => Promise.resolve(),
-    disposeSurface: () => Promise.resolve(), placePluginPlaceholder: () => {},
-  } });
-  t.mock.module("../environment.js", { exports: {
-    environment: () => ({ workspace: { focus: "main", grid: {
+  // The environment of the page: the plugin with its card tab, and the sidebar set that the card header shows at the top and left sides.
+  // The environment is installed before the page draws, and no project is open.
+  const { installEnvironment } = await import("../environment.js");
+  assert.deepEqual(installEnvironment({
+    runtime: "runtime",
+    workspace: { focus: "main", grid: {
       xs: [0, 1], ys: [0, 1],
       cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: pluginId, title: "main" }] }],
-    } } }),
-    pluginUnits: () => [{ id: pluginId, name: "Fixture", description: "검사용 표면.", surface: true, sections: [] }],
-    refusedPlugins: () => new Set(),
-  } });
-  // One set without sections. It is attached to the top and left sides of the card.
-  const actualSettings = await import("../settings.js");
-  const sets = [{ id: setId, title: "Fixture", layout: "list", sections: [] }];
-  t.mock.module("../settings.js", { exports: { ...actualSettings,
-    value: (key) => (key === "sets" ? sets : actualSettings.value(key)) } });
-  registerPlugin({
-    id: pluginId, name: "Fixture", mark: "f", svg: "<path/>", ink: null, background: null, drop: null,
-    surface: (surfaceId) => ({ module: "/fixture.js", composition: { kind: "dom" }, surfaceId, pluginId,
-      declarations: {}, sidecars: [] }),
-  });
+    } },
+    sidebars: { sets: [{ id: setId, title: "Fixture", layout: "list", sections: [] }], links: [] },
+  }, { plugins: [{ id: pluginId, package: "@fixture/side-toggles", version: "0.0.1", manifest: {
+    id: pluginId, name: "Fixture", description: "검사용 표면.", mark: "f", icon: "<path/>",
+    surface: { composition: { kind: "view", page: "ui/index.html" } },
+  } }] }), [], "the fixture environment refused a plugin");
 
   const { registry } = await import("../exposure.js");
   registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);

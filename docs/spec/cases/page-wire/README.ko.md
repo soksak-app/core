@@ -9,7 +9,7 @@ case는 이 디렉터리의 추적되는 JSON 파일 하나다. consumer는 work
 ## 파일
 
 - 파일 이름은 `<name>.json`이며, `name` 멤버는 `.json`을 뺀 파일 이름과 같다.
-- 파일 이름 접두사마다 한 영역을 둔다: `compositor-`, `document-region-`, `exposure-reply-`, `file-drop-`, `log-`, `overlay-`, `workspace-`.
+- 파일 이름 접두사는 호출의 영역(`log-`, `overlay-`, `workspace-`)이거나 case 를 재생하는 시험 파일 이름에서 `.test.mjs` 를 뺀 것이다(예: `exposure.test.mjs` 의 trace 시험은 `exposure-trace-`).
 
 ## 멤버
 
@@ -48,6 +48,7 @@ workbench 테스트 runtime(`packages/workbench/test/runtime/page-wire.js`이며
 - reader의 `calls` 목록은 page의 모든 호출을 담으므로, 테스트가 기대하는 호출과 비교할 수 있다.
 - `release()`는 가장 오래 붙잡힌 응답을 settle한다.
 - `deliverNotice()`는 다음 step을 실행한다. 그 step은 notice여야 하며, page가 그 event에 등록한 각 listener를 호출한다. listener가 없는 notice는 failure다. 테스트는 host가 notice를 보낼 시점에 이를 전달한다.
+- 환경 변수 `PAGE_WIRE_TRACE=1`이면 reader가 page가 보내는 각 호출을 맞든 틀리든 표준 오류에 쓴다. case를 쓰는 사람은 이것으로 page의 호출 순서를 읽는다.
 - `finish()`는 남은 failure가 있거나, 실행되지 않은 step이 있거나, 풀리지 않은 응답이 있으면 throw한다. 테스트는 본문 끝에서 이를 호출한다.
 
 ## Producer 실행

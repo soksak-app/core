@@ -5,7 +5,6 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { registerPlugin } from "../registry.js";
 
 const pluginId = "fixture-placeholder-error";
 const missingId = "fixture-not-registered";
@@ -39,45 +38,26 @@ test("a placeholder whose install state cannot be read is an error shown once, a
   const reports = [];
   const actualHost = await import("../host.js");
   t.mock.module("../host.js", { exports: { ...actualHost, report: (line) => reports.push(line) } });
-  // The calls of the error display path, so the test sees each show and each withdrawal of a place.
-  const errorCalls = [];
-  const actualErrors = await import("../shown-errors.js");
-  t.mock.module("../shown-errors.js", { exports: {
-    showError: (element, where, text, detail) => {
-      errorCalls.push({ kind: "show", where, text });
-      return actualErrors.showError(element, where, text, detail);
-    },
-    hideError: (element, where) => {
-      errorCalls.push({ kind: "hide", where });
-      return actualErrors.hideError(element, where);
-    },
-  } });
-  // The plugin state cannot be read, so the placeholder of a tab whose plugin is not loaded has the reason unread.
+  // The plugin state cannot be read, so the placeholder of a tab whose plugin is not loaded has the reason unread. A read of the plugin state needs
+  // the host, which this page does not have without a page-wire case; the failure is therefore given by this replacement.
   const actualInstalled = await import("../installed-plugins.js");
   t.mock.module("../installed-plugins.js", { exports: { ...actualInstalled,
     pluginOperations: { hosted: true, failure: () => ({ kind: "state", message: readFailure }), status: () => ({ plugins: [] }) },
   } });
-  // The test does not load surface modules. The placeholder joins the slot of its tab, and the mounted surface of the registered plugin is only recorded.
-  t.mock.module("../surface-modules.js", { exports: {
-    mountedSurface: () => null,
-    surfaceForTab: (tab) => ({ module: "/fixture.js", composition: { kind: "dom" }, surfaceId: tab.id,
-      pluginId: tab.plugin, declarations: {}, sidecars: [] }),
-    mountSurface: () => Promise.resolve(),
-    disposeSurface: () => Promise.resolve(), focusSurface: () => true,
-    placePluginPlaceholder: (slot, surfaceId, element) => slot.append(element),
-  } });
-  // The card of the layout holds a tab of a plugin that is not registered and a tab of a registered plugin.
-  t.mock.module("../environment.js", { exports: { refusedPlugins: () => new Set(),
-    environment: () => ({ workspace: { focus: "main", grid: {
+  // The card of the layout holds a tab of a plugin that is not installed and a tab of an installed plugin.
+  const { installEnvironment } = await import("../environment.js");
+  installEnvironment({
+    runtime: "runtime",
+    workspace: { focus: "main", grid: {
       xs: [0, 1], ys: [0, 1],
       cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: missingId, title: "gone" }, { plugin: pluginId, title: "main" }] }],
-    } } }),
-    pluginUnits: () => [{ id: pluginId, name: "Fixture", description: "검사용 표면.", surface: true, sections: [] }],
-  } });
-  registerPlugin({
-    id: pluginId, name: "Fixture", mark: "f", svg: "<path/>", ink: null, background: null, drop: null,
-    surface: (surfaceId) => ({ module: "/fixture.js", composition: { kind: "dom" }, surfaceId, pluginId,
-      declarations: {}, sidecars: [] }),
+    } },
+    sidebars: { sets: [], links: [] },
+  }, {
+    plugins: [{ id: pluginId, package: "@fixture/surface", version: "0.0.1", manifest: {
+      id: pluginId, name: "Fixture", description: "검사용 표면.", mark: "f", icon: "<path/>",
+      surface: { composition: { kind: "view", page: "ui/page.html" } },
+    } }],
   });
 
   // The card elements connect only to declared core commands.
@@ -96,8 +76,8 @@ test("a placeholder whose install state cannot be read is an error shown once, a
     const where = `surface ${missingTab} placeholder`;
     const text = `${missingId} 플러그인의 설치 상태를 읽지 못했습니다.`;
     assert.equal(plane.currentGrid().card("main").data.activeId, missingTab, "the placeholder tab is not the active tab");
-    const shows = errorCalls.filter((call) => call.kind === "show");
-    assert.deepEqual(shows, [{ kind: "show", where, text }], "the unread placeholder did not show exactly one error for its surface");
+    // The error of the placeholder is shown on its surface once, and the line is written to the application log once.
+    assert.equal(document.querySelectorAll(`[data-error="${where}"]`).length, 1, "the unread placeholder did not show exactly one error for its surface");
     assert.deepEqual(reports, [`${where}: ${text}`], "the unread placeholder did not write its error to the application log");
     const shownLine = document.querySelector(`[data-error="${where}"]`);
     assert.equal(shownLine?.textContent, text, "the unread placeholder is not shown on the screen");
@@ -107,8 +87,8 @@ test("a placeholder whose install state cannot be read is an error shown once, a
     // The receiver holds the draw of the closing layout until the native preparation finishes, so the test runs it here.
     assert.notEqual(held, null, "closing the tab did not hold a layout draw");
     drawHeld();
-    assert.ok(errorCalls.some((call) => call.kind === "hide" && call.where === where), "closing the surface did not withdraw its error");
-    assert.equal(errorCalls.filter((call) => call.kind === "show").length, 1, "withdrawing the error wrote it again");
+    assert.equal(document.querySelector(`[data-error="${where}"]`), null, "closing the surface did not withdraw its error");
+    assert.deepEqual(reports, [`${where}: ${text}`], "withdrawing the error wrote it again");
   } finally {
     dom.window.close();
   }

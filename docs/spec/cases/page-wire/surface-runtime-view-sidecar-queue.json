@@ -1,0 +1,15 @@
+{
+  "name": "surface-runtime-view-sidecar-queue",
+  "description": "A window send to a sidecar is outstanding while a view sends two sidecar messages with their source authority; the view messages reach the host after the window send is answered, in the order of their generations, each with the authority it was sent with.",
+  "replay": false,
+  "reason": "sidecarSend and viewSidecarSend deliver bodies to a running sidecar process, which the producer does not start.",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "sidecarSend", "payload": { "sidecar": "@fixture/typed-shared-queue", "surface": "background", "body": { "operation": "blocking" }, "cids": [] } } },
+    { "reply": { "result": null, "held": true } },
+    { "call": { "name": "viewSidecarSend", "payload": { "source": "same-source", "surface": "same-source", "generation": 41, "sidecar": "@fixture/typed-shared-queue", "body": { "operation": "old-A" }, "cids": ["a"] } } },
+    { "reply": { "result": null } },
+    { "call": { "name": "viewSidecarSend", "payload": { "source": "same-source", "surface": "same-source", "generation": 42, "sidecar": "@fixture/typed-shared-queue", "body": { "operation": "new-B" }, "cids": ["b"] } } },
+    { "reply": { "result": null } }
+  ]
+}

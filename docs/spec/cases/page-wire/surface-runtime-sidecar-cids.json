@@ -1,0 +1,11 @@
+{
+  "name": "surface-runtime-sidecar-cids",
+  "description": "A surface sends its body to the sidecar that its declaration names, with the correlation identifier of the input that it continues, and the host answers the send with null.",
+  "replay": false,
+  "reason": "sidecarSend delivers the body to a running sidecar process of the declared sidecar, which the producer does not start.",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "sidecarSend", "payload": { "sidecar": "@fixture/sidecar", "surface": "chained-surface", "body": { "operation": "input" }, "cids": ["b1.7"] } } },
+    { "reply": { "result": null } }
+  ]
+}

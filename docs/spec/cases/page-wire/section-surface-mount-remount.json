@@ -1,0 +1,11 @@
+{
+  "name": "section-surface-mount-remount",
+  "description": "A section surface mounts its view by declaring the composition of its page once, and a drawing that mounts the same surface again sends no call.",
+  "replay": false,
+  "reason": "The composition declaration names a view of a window, and the Go producer runs only the log and workspace calls without a window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "compositionDeclare", "payload": { "plugin": "fixture-redrawn-plugin", "composition": { "kind": "view", "page": "ui/tabs.html" }, "surface": "spc-aaaaaa/right/fixture-redrawn-plugin.tabs" } } },
+    { "reply": { "result": null } }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "name": "surface-runtime-no-host-calls",
+  "description": "A surface runtime that holds only registrations, disposals and rejected sidecar requests sends no call to the host.",
+  "replay": true,
+  "variables": {},
+  "steps": []
+}

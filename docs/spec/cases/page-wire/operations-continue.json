@@ -1,0 +1,15 @@
+{
+  "name": "operations-continue",
+  "description": "The page sends the calls that continue an operation with their identifiers: a call that the host answers, a call that the host refuses, and a call without identifiers.",
+  "replay": false,
+  "reason": "The case calls pluginsRun, which only the native host with the plugin registry answers (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "pluginsRun", "payload": { "action": "install", "plugin": "tty" }, "cids": ["p1.1"] } },
+    { "reply": { "result": null } },
+    { "call": { "name": "bad", "cids": ["p1.2"] } },
+    { "reply": { "error": "refused" } },
+    { "call": { "name": "plain", "payload": 1 } },
+    { "reply": { "result": null } }
+  ]
+}

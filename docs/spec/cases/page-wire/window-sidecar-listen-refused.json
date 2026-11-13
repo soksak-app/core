@@ -1,0 +1,11 @@
+{
+  "name": "window-sidecar-listen-refused",
+  "description": "The host refuses the registration of the session tab-refused of the sidecar @x/refused, and the page rejects the listener with the refusal.",
+  "replay": false,
+  "reason": "The case records a refusal that the host gives for a registration the producer cannot make refused on demand: the case states the reply without a declared sidecar state that the producer builds (docs/spec/cases/page-wire/README.md#limits).",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "sidecarListen", "payload": { "sidecar": "@x/refused", "id": "tab-refused", "on": true } } },
+    { "reply": { "error": "sidecar listen refused", "held": true } }
+  ]
+}

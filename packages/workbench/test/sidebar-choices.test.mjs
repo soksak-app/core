@@ -1,6 +1,6 @@
 // Checks that the tab chosen and the sections collapsed in each sidebar are stored in the space and applied again (docs/spec/projects.md#persistence).
 import assert from "node:assert/strict";
-import test, { mock } from "node:test";
+import test from "node:test";
 import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
 
@@ -10,15 +10,14 @@ globalThis.document = dom.window.document;
 globalThis.ErrorEvent = dom.window.ErrorEvent;
 globalThis.dispatchEvent = () => true;
 
-// The section surfaces mount through the compositor and the surface modules, which are fakes at the boundary of the module.
-mock.module("../compositor.js", { namedExports: { setSlotSurface: () => {}, clearSlotSurface: () => {} } });
-mock.module("../surface-modules.js", { namedExports: { mountSurface: () => Promise.resolve() } });
-
+// The section surfaces mount through the real compositor and surface modules. Without a host (no page-wire case is selected), a
+// section surface draws its placeholder, which names its plugin, so the plugin of the sections is registered.
 const { registry } = await import("../exposure.js");
-const { registerSection } = await import("../registry.js");
+const { registerPlugin, registerSection } = await import("../registry.js");
 const sections = await import("../sidebar-sections.js");
 
 registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
+registerPlugin({ id: "probe", name: "Probe", mark: "p", svg: "<path/>", ink: null, drop: null, background: null, surface: () => null });
 const surface = (surfaceId, section) => ({ composition: { kind: "view", page: "ui/section.html" }, surfaceId, pluginId: "probe",
   declarations: {}, sidecars: [], diagnostics: null, unload: false, params: null, section });
 registerSection({ id: "probe.one", name: "하나", height: "fill", plugin: "probe", surface });

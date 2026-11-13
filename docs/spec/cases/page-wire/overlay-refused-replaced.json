@@ -1,0 +1,28 @@
+{
+  "name": "overlay-refused-replaced",
+  "description": "The page opens the menu modal, then opens the dialog modal before the menu show is answered; the host refuses the menu show, so the page writes the failure to the log in one batch, hides the menu after the refusal, and then shows the dialog, which the host answers with its rectangle, and the page hides the dialog.",
+  "replay": false,
+  "reason": "overlayShow opens a native modal view in the window, and only the native host with a window produces its refusal (docs/operations/examples.md#test-kinds).",
+  "variables": {
+    "page-identity": { "type": "string", "example": "e3a1c7d2-5b9f-4e0a-8d2c-6f1b3a9e7c40", "source": "page" },
+    "record-ts-us": { "type": "integer", "example": 1791000000000470, "source": "page" },
+    "record-mono-ns": { "type": "integer", "example": 5000000803, "source": "page" }
+  },
+  "steps": [
+    { "call": { "name": "overlayShow", "payload": { "id": "menu", "title": "Menu", "rect": { "x": 0, "y": 0, "w": 10, "h": 10 }, "mode": "menu", "card": { "x": 0, "y": 0, "w": 0, "h": 0 }, "className": "", "html": "", "css": "", "border": "rgb(7, 8, 9)", "radius": 4 } } },
+    { "reply": { "error": "create modal webview: refused", "held": true } },
+    { "call": { "name": "log", "payload": {
+      "action": "batch",
+      "events": [
+        { "ts_us": "$record-ts-us", "mono_ns": "$record-mono-ns", "start": "$page-identity", "level": "error", "event": "workbench.record.error", "fields": { "where": "host overlayShow failed", "text": "Error: create modal webview: refused" } }
+      ]
+    } } },
+    { "reply": { "result": null } },
+    { "call": { "name": "overlayHide", "payload": "menu" } },
+    { "reply": { "result": null, "held": true } },
+    { "call": { "name": "overlayShow", "payload": { "id": "dialog", "title": "Dialog", "rect": { "x": 0, "y": 0, "w": 1024, "h": 768 }, "mode": "dialog", "card": { "x": 0, "y": 0, "w": 0, "h": 0 }, "className": "", "html": "", "css": "", "border": "rgb(1, 2, 3)", "radius": 0 } } },
+    { "reply": { "result": { "x": 0, "y": 0, "w": 10, "h": 10 } } },
+    { "call": { "name": "overlayHide", "payload": "dialog" } },
+    { "reply": { "result": null } }
+  ]
+}

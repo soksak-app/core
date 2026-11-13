@@ -1,0 +1,11 @@
+{
+  "name": "surface-runtime-sidecar-failure",
+  "description": "The host reports two failures of the sidecar of a surface: the first reaches the failure handler of the surface, and the second, after the handler is removed, is raised as a page error of the window.",
+  "replay": false,
+  "reason": "The sidecar-failure notice comes from a sidecar process that the producer does not start.",
+  "variables": {},
+  "steps": [
+    { "notice": { "event": "sidecar-failure", "payload": { "sidecar": "@fixture/failing", "surface": "failing-surface", "reason": "message exceeds 67108864 bytes" } } },
+    { "notice": { "event": "sidecar-failure", "payload": { "sidecar": "@fixture/failing", "surface": "failing-surface", "reason": "output closed: exit status 3" } } }
+  ]
+}

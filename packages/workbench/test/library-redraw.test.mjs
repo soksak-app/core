@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { selectPageWire } from "@soksak/runtime";
 import { installExposure } from "../exposure.js";
 import exposureFile from "../exposure.json" with { type: "json" };
 
@@ -53,28 +54,25 @@ test("a library render keeps the controls of unchanged project cards in the docu
 });
 
 test("a plugin page render keeps the controls of unchanged plugin cards in the document", async (t) => {
+  // The plugin state, the outdated sidecars and the application state are the host replies of the case. The case is selected before the
+  // plugin modules are imported, because the plugin operations take the host of the page when they are made.
+  const wire = selectPageWire("library-redraw-plugins");
   const dom = new JSDOM("<body><div id=library></div></body>");
   globalThis.document = dom.window.document;
   globalThis.location = dom.window.location;
   const { begin } = await import("../projects.js");
   begin({ common: {}, projects: [], open: [] });
   t.mock.module("../plane.js", { namedExports: { fresh: () => ({}) } });
-  t.mock.module("@soksak/runtime", { namedExports: { host: null, windows: { createsFolders: false, folder: async (root) => ({ root }) } } });
-  const status = { registry: "file:///registry/index.json", error: null, restart: false, operation: null, outdated: [], updates: [], plugins: [
-    { id: "tty", name: "터미널", description: "", state: "loaded", installed: { version: "0.1.0", enabled: true }, latest: "0.1.0", sidecars: [] },
-  ] };
-  t.mock.module("../installed-plugins.js", { namedExports: {
-    pluginOperations: { hosted: true, status: () => status, failure: () => null, refresh: async () => {}, refreshOutdated: async () => {} },
-    onPluginOperations: () => {},
-    appUpdate: { status: () => ({ version: null, available: null, operation: null, error: null }), refresh: async () => {} },
-  } });
   const { createLibrary } = await import("../library.js?redraw-plugins");
   const library = createLibrary(document.getElementById("library"));
   await library.actions.page("plugins");
+  // The replies of the host settle after one turn of the page, which the library reads before it draws the rows.
+  await new Promise((resolve) => setImmediate(resolve));
   library.render();
   const buttons = [...document.querySelectorAll('[data-expose="core.library.plugins.action"]')];
   assert.ok(buttons.length > 0, "the plugin page drew no action controls");
   library.render();
   assert.ok(buttons.every((button) => button.isConnected), "a render of unchanged plugins took action controls out of the document");
+  wire.finish();
   dom.window.close();
 });

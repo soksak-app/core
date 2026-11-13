@@ -1,0 +1,107 @@
+{
+  "name": "host-chrome-title-bar",
+  "description": "The page prepares a layout of one dom surface with the title bar height of the layout, presents each prepared ticket, and sends the same request again only after the page forgot it; each sync reply gives the window button region of its title bar.",
+  "replay": false,
+  "reason": "The producer runs only the calls log and workspace (docs/spec/cases/page-wire/README.md#producer-runs), and this case holds the calls syncSurfaces and presentSurfaces.",
+  "steps": [
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": {
+          "settled": true,
+          "overlays": [],
+          "surfaces": [{ "id": "surface", "dim": false, "composition": { "kind": "dom" }, "visible": true, "x": 1, "y": 2, "w": 3, "h": 4 }],
+          "titlebar": 54,
+          "declarations": [],
+          "viewport": { "width": 800, "height": 600 }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ticket": 1,
+          "placements": [{ "id": "surface", "x": 1, "y": 2, "w": 3, "h": 4, "visible": true, "scale": 2 }],
+          "chrome": { "controls": { "x": 13, "y": 20, "w": 54, "h": 14 }, "row": 54 }
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "presentSurfaces",
+        "payload": {
+          "ticket": 1,
+          "placements": [{ "id": "surface", "x": 1, "y": 2, "w": 3, "h": 4, "visible": true, "scale": 2 }],
+          "settled": true
+        }
+      }
+    },
+    { "reply": { "result": [{ "id": "surface", "x": 1, "y": 2, "w": 3, "h": 4, "visible": true, "scale": 2 }] } },
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": {
+          "settled": true,
+          "overlays": [],
+          "surfaces": [{ "id": "surface", "dim": false, "composition": { "kind": "dom" }, "visible": true, "x": 1, "y": 2, "w": 3, "h": 4 }],
+          "titlebar": 40,
+          "declarations": [],
+          "viewport": { "width": 800, "height": 600 }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ticket": 2,
+          "placements": [{ "id": "surface", "x": 1, "y": 2, "w": 3, "h": 4, "visible": true, "scale": 2 }],
+          "chrome": { "controls": { "x": 13, "y": 13, "w": 54, "h": 14 }, "row": 40 }
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "presentSurfaces",
+        "payload": {
+          "ticket": 2,
+          "placements": [{ "id": "surface", "x": 1, "y": 2, "w": 3, "h": 4, "visible": true, "scale": 2 }],
+          "settled": true
+        }
+      }
+    },
+    { "reply": { "result": [{ "id": "surface", "x": 1, "y": 2, "w": 3, "h": 4, "visible": true, "scale": 2 }] } },
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": {
+          "settled": true,
+          "overlays": [],
+          "surfaces": [{ "id": "surface", "dim": false, "composition": { "kind": "dom" }, "visible": true, "x": 1, "y": 2, "w": 3, "h": 4 }],
+          "titlebar": 40,
+          "declarations": [],
+          "viewport": { "width": 800, "height": 600 }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ticket": 3,
+          "placements": [{ "id": "surface", "x": 1, "y": 2, "w": 3, "h": 4, "visible": true, "scale": 2 }],
+          "chrome": { "controls": { "x": 13, "y": 13, "w": 54, "h": 14 }, "row": 40 }
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "presentSurfaces",
+        "payload": {
+          "ticket": 3,
+          "placements": [{ "id": "surface", "x": 1, "y": 2, "w": 3, "h": 4, "visible": true, "scale": 2 }],
+          "settled": true
+        }
+      }
+    },
+    { "reply": { "result": [{ "id": "surface", "x": 1, "y": 2, "w": 3, "h": 4, "visible": true, "scale": 2 }] } }
+  ]
+}

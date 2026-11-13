@@ -1,0 +1,15 @@
+{
+  "name": "surface-runtime-sidecar-order",
+  "description": "Two surfaces send to the same sidecar: the host receives the sends one at a time in send order, and each send is answered with null after the test releases it.",
+  "replay": false,
+  "reason": "sidecarSend delivers the body to a running sidecar process of the declared sidecar, which the producer does not start.",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "sidecarSend", "payload": { "sidecar": "@fixture/ordered", "surface": "ordered-a", "body": { "operation": "selection.start" }, "cids": [] } } },
+    { "reply": { "result": null, "held": true } },
+    { "call": { "name": "sidecarSend", "payload": { "sidecar": "@fixture/ordered", "surface": "ordered-a", "body": { "operation": "selection.update" }, "cids": [] } } },
+    { "reply": { "result": null, "held": true } },
+    { "call": { "name": "sidecarSend", "payload": { "sidecar": "@fixture/ordered", "surface": "ordered-b", "body": { "operation": "open" }, "cids": [] } } },
+    { "reply": { "result": null, "held": true } }
+  ]
+}

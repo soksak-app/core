@@ -55,25 +55,15 @@ test("the placeholder reasons that are designed states write no error", { timeou
     pluginOperations: { get hosted() { return state.hosted; }, failure: () => null, status: () => ({ plugins: state.rows }) },
     onPluginOperations: (fn) => { listeners.push(fn); },
   } });
-  // The test does not load surface modules. The placeholder replaces the one of its tab in the slot, as the surface modules do.
-  t.mock.module("../surface-modules.js", { exports: {
-    mountedSurface: () => null,
-    surfaceForTab: (tab) => ({ module: "/fixture.js", composition: { kind: "dom" }, surfaceId: tab.id,
-      pluginId: tab.plugin, declarations: {}, sidecars: [] }),
-    mountSurface: () => Promise.resolve(),
-    disposeSurface: () => Promise.resolve(), focusSurface: () => true,
-    placePluginPlaceholder: (slot, surfaceId, element) => {
-      for (const old of slot.querySelectorAll("[data-plugin-placeholder]")) old.remove();
-      slot.append(element);
-    },
-  } });
-  t.mock.module("../environment.js", { exports: { refusedPlugins: () => new Set(),
-    environment: () => ({ workspace: { focus: "main", grid: {
+  // The environment of the page: one tab of a plugin that is not installed in the environment, so the plugin is not loaded.
+  const { installEnvironment } = await import("../environment.js");
+  assert.deepEqual(installEnvironment({
+    runtime: "runtime",
+    workspace: { focus: "main", grid: {
       xs: [0, 1], ys: [0, 1],
       cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: pluginId, title: "gone" }] }],
-    } } }),
-    pluginUnits: () => [],
-  } });
+    } },
+  }, { plugins: [] }), [], "the fixture environment refused a plugin");
 
   // The card elements connect only to declared core commands.
   const { registry } = await import("../exposure.js");

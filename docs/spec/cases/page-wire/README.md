@@ -9,7 +9,7 @@ A case is one tracked JSON file in this directory. The consumer is the workbench
 ## File
 
 - The file name is `<name>.json`, and the `name` member equals the file name without `.json`.
-- One area per file name prefix: `compositor-`, `document-region-`, `exposure-reply-`, `file-drop-`, `log-`, `overlay-`, `workspace-`.
+- The prefix of a file name is the area of the calls (`log-`, `overlay-`, `workspace-`) or the name of the test file that plays the case, without `.test.mjs` (for example `exposure-trace-` for the trace tests of `exposure.test.mjs`).
 
 ## Members
 
@@ -48,6 +48,7 @@ The workbench test runtime (`packages/workbench/test/runtime/page-wire.js`, sele
 - The `calls` list of the reader holds every call of the page, so a test can compare it with the calls it expects.
 - `release()` settles the oldest held reply.
 - `deliverNotice()` plays the next step, which must be a notice, and calls each listener that the page registered for its event; a notice without a listener is a failure. The test delivers a notice at the point where the host would send it.
+- With the environment variable `PAGE_WIRE_TRACE=1`, the reader writes each call that the page sends to the standard error, matched or not, so the author of a case reads the order of the calls of the page.
 - `finish()` throws when a failure was kept, when a step of the case was not played or when a held reply was not released. A test calls it at the end of its body.
 
 ## Producer runs

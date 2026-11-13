@@ -1,0 +1,11 @@
+{
+  "name": "section-surface-mount-declare",
+  "description": "A section surface mounts its view by declaring the composition of its page to the host with its surface id, and the page sends no other call.",
+  "replay": false,
+  "reason": "The composition declaration names a view of a window, and the Go producer runs only the log and workspace calls without a window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "compositionDeclare", "payload": { "plugin": "fixture-section-plugin", "composition": { "kind": "view", "page": "ui/tree.html" }, "surface": "spc-aaaaaa/left/fixture-section-plugin.tree" } } },
+    { "reply": { "result": null } }
+  ]
+}

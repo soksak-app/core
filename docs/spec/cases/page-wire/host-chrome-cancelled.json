@@ -1,0 +1,26 @@
+{
+  "name": "host-chrome-cancelled",
+  "description": "The page cancels its open preparation once, sends the equal request again after the cancel, and presents it; a cancel of a presented preparation sends no call.",
+  "replay": false,
+  "reason": "The producer runs only the calls log and workspace (docs/spec/cases/page-wire/README.md#producer-runs), and this case holds the calls syncSurfaces, cancelSurfaces and presentSurfaces.",
+  "steps": [
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": { "settled": true, "overlays": [], "surfaces": [], "titlebar": 40, "declarations": [] }
+      }
+    },
+    { "reply": { "result": { "ticket": 1, "placements": [], "chrome": { "controls": { "x": 13, "y": 13, "w": 54, "h": 14 }, "row": 40 } } } },
+    { "call": { "name": "cancelSurfaces", "payload": { "ticket": 1 } } },
+    { "reply": { "result": null } },
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": { "settled": true, "overlays": [], "surfaces": [], "titlebar": 40, "declarations": [] }
+      }
+    },
+    { "reply": { "result": { "ticket": 2, "placements": [], "chrome": { "controls": { "x": 13, "y": 13, "w": 54, "h": 14 }, "row": 40 } } } },
+    { "call": { "name": "presentSurfaces", "payload": { "ticket": 2, "placements": [], "settled": true } } },
+    { "reply": { "result": [] } }
+  ]
+}

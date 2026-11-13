@@ -4,7 +4,6 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { registerPlugin } from "../registry.js";
 
 const pluginId = "fixture-text-scope";
 
@@ -28,38 +27,26 @@ test("the scope of a pressed card ends with the card and its space", { timeout: 
   style.textContent = ".card { --bw: 1px; --divider: 1px; }";
   document.head.appendChild(style);
 
-  t.mock.module("../surface-modules.js", { exports: {
-    mountedSurface: () => null,
-    mountSurface: () => Promise.resolve(), disposeSurface: () => Promise.resolve(),
-    placePluginPlaceholder: () => {},
-    surfaceForTab: (tab) => ({ module: "/fixture.js", composition: { kind: "dom" }, surfaceId: tab.id,
-      pluginId: tab.plugin, params: tab.params ?? null, declarations: {}, sidecars: [] }),
-  } });
-  t.mock.module("../environment.js", { exports: { refusedPlugins: () => new Set(),
-    environment: () => ({ workspace: { focus: "main", grid: {
+  // The environment file lays out the two cards, and the installed plugin is a view: without a native host the page draws its view
+  // as a placeholder (surface-modules.js), so no surface is mounted.
+  const { installEnvironment } = await import("../environment.js");
+  const installErrors = installEnvironment({
+    runtime: "runtime",
+    workspace: { focus: "main", grid: {
       xs: [0, 0.5, 1], ys: [0, 1],
       cards: [
         { id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: pluginId, title: "main" }] },
         { id: "other", c0: 1, c1: 2, r0: 0, r1: 1, tabs: [{ plugin: pluginId, title: "other" }] },
       ],
-    } } }),
-    pluginUnits: () => [{ id: pluginId, name: "Fixture", description: "검사용 표면.", surface: true, sections: [] }],
-  } });
-  registerPlugin({
-    id: pluginId, name: "Fixture", mark: "f", svg: "<path/>", ink: null, background: null, drop: null,
-    surface: (surfaceId) => ({ module: "/fixture.js", composition: { kind: "dom" }, surfaceId, pluginId,
-      declarations: {}, sidecars: [] }),
-  });
+    } },
+    sidebars: { sets: [], links: [] },
+  }, { plugins: [{ id: pluginId, package: `@fixture/${pluginId}`, version: "0.0.1", manifest: {
+    id: pluginId, name: "Fixture", description: "검사용 표면.", mark: "f", icon: "<path d='M0 0h1v1H0z'/>",
+    surface: { composition: { kind: "view", page: "ui/page.html" } },
+  } }] });
+  assert.deepEqual(installErrors, [], "the plugin of the test is not loaded");
   const { registry } = await import("../exposure.js");
   registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
-
-  const memory = { common: {}, projects: [] };
-  const settings = await import("../settings.js");
-  await settings.connectSettings({
-    snapshot: async () => structuredClone(memory),
-    settings: async (_id, values) => { memory.common = { ...memory.common, ...values }; },
-    onChange: () => () => {},
-  });
   const plane = await import("../plane.js");
   const { setTextScope, textScope } = await import("../text-size.js");
 

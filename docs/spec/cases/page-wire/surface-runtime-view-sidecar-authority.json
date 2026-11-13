@@ -1,0 +1,7 @@
+{
+  "name": "surface-runtime-view-sidecar-authority",
+  "description": "A view sidecar request that lacks its generation, has a generation of zero, or names another surface is refused before it reaches the host, so the page sends no call.",
+  "replay": true,
+  "variables": {},
+  "steps": []
+}

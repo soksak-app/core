@@ -1,0 +1,11 @@
+{
+  "name": "surface-runtime-exposure-reply",
+  "description": "A surface answers an exposure request of the host for its command with the result of the command, and the host answers the reply with null; the reply names the logical surface of the request.",
+  "replay": false,
+  "reason": "The exposure request reaches the page from the host for a surface that the application mounts, which the producer does not mount.",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "exposureReply", "payload": { "id": 17, "result": "ok", "surface": "reply-scope-surface" } } },
+    { "reply": { "result": null } }
+  ]
+}

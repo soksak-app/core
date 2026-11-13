@@ -5,7 +5,6 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { registerPlugin } from "../registry.js";
 
 const pluginId = "fixture-frame-text";
 
@@ -36,18 +35,19 @@ test("a frame factor change prepares the row of the next draw and writes the fac
     surfaceForTab: (tab) => ({ module: "/fixture.js", composition: { kind: "dom" }, surfaceId: tab.id,
       pluginId: tab.plugin, params: tab.params ?? null, declarations: {}, sidecars: [] }),
   } });
-  t.mock.module("../environment.js", { exports: { refusedPlugins: () => new Set(),
-    environment: () => ({ workspace: { focus: "main", grid: {
+  // The environment and the plugin are installed through the environment module, as the page installs them at its start.
+  const { installEnvironment } = await import("../environment.js");
+  installEnvironment({
+    runtime: "runtime",
+    workspace: { focus: "main", grid: {
       xs: [0, 1], ys: [0, 1],
       cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: pluginId, title: "main" }] }],
-    } } }),
-    pluginUnits: () => [{ id: pluginId, name: "Fixture", description: "검사용 표면.", surface: true, sections: [] }],
-  } });
-  registerPlugin({
-    id: pluginId, name: "Fixture", mark: "f", svg: "<path/>", ink: null, background: null, drop: null,
-    surface: (surfaceId) => ({ module: "/fixture.js", composition: { kind: "dom" }, surfaceId, pluginId,
-      declarations: {}, sidecars: [] }),
-  });
+    } },
+    sidebars: { sets: [], links: [] },
+  }, { plugins: [{ id: pluginId, package: `@fixture/${pluginId}`, version: "0.0.1", manifest: {
+    id: pluginId, name: "Fixture", description: "검사용 표면.", mark: "f", icon: "<path/>",
+    surface: { composition: { kind: "view", page: "ui/page.html" } },
+  } }] });
   const { registry } = await import("../exposure.js");
   registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
 

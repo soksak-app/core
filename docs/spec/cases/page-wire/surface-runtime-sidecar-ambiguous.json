@@ -1,0 +1,7 @@
+{
+  "name": "surface-runtime-sidecar-ambiguous",
+  "description": "A surface whose declaration names no sidecar sends no call to the host when its sidecar access is requested.",
+  "replay": true,
+  "variables": {},
+  "steps": []
+}

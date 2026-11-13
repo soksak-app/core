@@ -1,0 +1,7 @@
+{
+  "name": "native-paint-clip-none",
+  "description": "A page that paints the native paint holes of its surfaces sends no host call, because each commit of the layout is answered by the test before the host would be asked.",
+  "replay": true,
+  "variables": {},
+  "steps": []
+}

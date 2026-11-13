@@ -1,0 +1,14 @@
+{
+  "name": "source-origins-ingress",
+  "description": "The host sends a view source registration before its query answer, and the page keeps it until the answer seeds the source generations; the page then applies the kept registration, applies a later end, and reports a registration without a surface as an error event of its window.",
+  "replay": false,
+  "reason": "The case delivers the lifecycle notices of the host, and the Go producer runs no window and refuses a notice (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {},
+  "steps": [
+    { "notice": { "event": "view-source-registered", "payload": { "plugin": "probe", "surface": "probe-view", "generation": 5 } } },
+    { "call": { "name": "viewSourceOrigins" } },
+    { "reply": { "result": { "floor": 4, "views": {} } } },
+    { "notice": { "event": "view-source-ended", "payload": { "plugin": "probe", "surface": "probe-view", "generation": 5 } } },
+    { "notice": { "event": "view-source-registered", "payload": { "plugin": "probe", "generation": 6 } } }
+  ]
+}

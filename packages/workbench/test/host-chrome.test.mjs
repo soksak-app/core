@@ -3,8 +3,166 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { JSDOM } from "jsdom";
+import { selectPageWire } from "@soksak/runtime";
 import { clockAnswer, recordsOf } from "./support/records.mjs";
 const emptySurfaceDeclarations = { status: [], commands: [], element: [] };
+
+test("the preparation carries the title bar height and the presented chrome is the committed one", async () => {
+  // The host replies of the case give the window button region of each preparation, which the page reads after its presentation.
+  const wire = selectPageWire("host-chrome-title-bar");
+  const dom = new JSDOM('<div id="plane"></div>');
+  globalThis.document = dom.window.document;
+  const { chrome, surfaces } = await import("../host.js");
+  const calls = wire.calls;
+  const record = (titlebar, drawn, viewport = { width: 800, height: 600 }) => ({
+    surfaces: [{
+      id: "surface", dim: false, visible: true,
+      surface: { module: "surface-module", composition: { kind: "dom" } },
+      applied: { x: 1, y: 2, w: 3, h: 4 },
+    }],
+    settled: true, drawn, titlebar, viewport,
+  });
+  try {
+    assert.equal("titlebar" in chrome, false, "the page has no title bar request apart from the preparation");
+    assert.equal(chrome.presented(), null, "no preparation has been presented");
+
+    const prepared = await surfaces.place(record(54, false));
+    assert.deepEqual(prepared.placements, [{ id: "surface", visible: true, scale: 2, x: 1, y: 2, w: 3, h: 4 }],
+      "the answer keeps the scale whose device pixels the host fitted the surface to");
+    assert.deepEqual(calls.map((c) => c.name), ["syncSurfaces"]);
+    assert.equal(calls[0].payload.titlebar, 54, "the preparation carries the row of the next draw");
+    assert.deepEqual(calls[0].payload.viewport, { width: 800, height: 600 }, "the preparation carries the viewport of its layout");
+    assert.deepEqual(calls[0].payload.declarations, [], "a request without views must carry its empty declaration table");
+    assert.equal(chrome.presented(), null, "a preparation is not the committed state before its presentation");
+
+    await surfaces.place(record(54, true));
+    assert.deepEqual(calls.map((c) => c.name), ["syncSurfaces", "presentSurfaces"],
+      "the draw makes no request other than the presentation");
+    assert.deepEqual(Object.keys(calls[1].payload).sort(), ["placements", "settled", "ticket"],
+      "the presentation sends the prepared ticket and placements");
+    assert.deepEqual(chrome.presented(), { controls: { x: 13, y: 20, w: 54, h: 14 }, row: 54 });
+
+    // The preparation of the next layout does not change the committed state until its presentation is confirmed.
+    await surfaces.place(record(40, false));
+    assert.equal(calls.at(-1).payload.titlebar, 40);
+    assert.equal(chrome.presented().row, 54, "an unpresented preparation replaced the committed chrome");
+    await surfaces.place(record(40, true));
+    assert.equal(chrome.presented().row, 40);
+
+    // The same request is not sent again. When the state of the window changed without a request (a window that left full screen), the same
+    // request is sent after forget.
+    calls.length = 0;
+    await surfaces.place(record(40, false));
+    assert.deepEqual(calls, [], "an unchanged request was sent");
+    // The viewport tells the host the size that the layout was made at; a layout at another size that places the same is no change.
+    await surfaces.place(record(40, false, { width: 900, height: 600 }));
+    assert.deepEqual(calls, [], "a request that changed only its viewport was sent");
+    surfaces.forget();
+    await surfaces.place(record(40, false));
+    await surfaces.place(record(40, true));
+    assert.deepEqual(calls.map((c) => c.name), ["syncSurfaces", "presentSurfaces"],
+      "a forgotten request was not sent again");
+    assert.equal(calls[0].payload.titlebar, 40);
+  } finally {
+    dom.window.close();
+  }
+  wire.finish();
+});
+
+test("a release during an open preparation presents that preparation as settled without a second synchronization", { timeout: 5000 }, async () => {
+  const wire = selectPageWire("host-chrome-release-open");
+  const dom = new JSDOM('<div id="plane"></div>');
+  globalThis.document = dom.window.document;
+  const { surfaces } = await import("../host.js?release");
+  const calls = wire.calls;
+  const record = (drawn, settled) => ({ surfaces: [], settled, drawn, titlebar: 40 });
+  try {
+    await surfaces.place(record(false, false));
+    await surfaces.place(record(true, true));
+    assert.deepEqual(calls.map((c) => c.name), ["syncSurfaces", "presentSurfaces"],
+      "the settled value alone sent a second synchronization of an open preparation");
+    assert.deepEqual([calls[1].payload.ticket, calls[1].payload.settled], [1, true],
+      "the open preparation was not presented as settled");
+    await surfaces.place(record(false, false));
+    await surfaces.place(record(true, false));
+    calls.length = 0;
+    await surfaces.place(record(true, true));
+    assert.deepEqual(calls.map((c) => c.name), ["syncSurfaces", "presentSurfaces"],
+      "a release after the presentation of an equal placement did not end the run");
+    assert.equal(calls[1].payload.settled, true);
+  } finally {
+    dom.window.close();
+  }
+  wire.finish();
+});
+
+test("a cancelled preparation sends its ticket once and the next equal request is sent again", { timeout: 5000 }, async () => {
+  const wire = selectPageWire("host-chrome-cancelled");
+  const dom = new JSDOM('<div id="plane"></div>');
+  globalThis.document = dom.window.document;
+  const { surfaces } = await import("../host.js?cancel");
+  const calls = wire.calls;
+  const record = (drawn) => ({ surfaces: [], settled: true, drawn, titlebar: 40 });
+  try {
+    await surfaces.cancelPrepared({ handover: false });
+    assert.deepEqual(calls, [], "no preparation is open");
+    await surfaces.place(record(false));
+    await surfaces.cancelPrepared({ handover: false });
+    assert.deepEqual(calls.map((c) => c.name), ["syncSurfaces", "cancelSurfaces"]);
+    assert.deepEqual(calls[1].payload, { ticket: 1 });
+    await surfaces.cancelPrepared({ handover: false });
+    assert.equal(calls.length, 2, "a cancelled preparation is not cancelled again");
+    await surfaces.place(record(false));
+    await surfaces.place(record(true));
+    assert.deepEqual(calls.slice(2).map((c) => c.name), ["syncSurfaces", "presentSurfaces"], "the equal request after a cancellation was not sent");
+    await surfaces.cancelPrepared({ handover: false });
+    assert.equal(calls.length, 4, "a presented preparation is not cancelled");
+  } finally {
+    dom.window.close();
+  }
+  wire.finish();
+});
+
+// A handed-over preparation stays open for the next preparation of the window, which places every surface again and commits
+// both with its own presentation (F484). Every exit ends it: a failed next preparation and a cancel without a handover cancel it.
+test("a handed-over preparation sends no cancel and only a failed or cancelled next preparation ends it", { timeout: 5000 }, async () => {
+  const wire = selectPageWire("host-chrome-handover");
+  const dom = new JSDOM('<div id="plane"></div>');
+  globalThis.document = dom.window.document;
+  const { surfaces } = await import("../host.js?handover");
+  const calls = wire.calls;
+  const record = (drawn, titlebar = 40) => ({ surfaces: [], settled: true, drawn, titlebar });
+  const names = () => calls.map((c) => c.name);
+  try {
+    await surfaces.place(record(false));
+    await surfaces.cancelPrepared({ handover: true });
+    assert.deepEqual(names(), ["syncSurfaces"], "a handed-over preparation was cancelled and committed");
+    await surfaces.place(record(false));
+    await surfaces.place(record(true));
+    await surfaces.cancelPrepared({ handover: false });
+    assert.deepEqual(names(), ["syncSurfaces", "syncSurfaces", "presentSurfaces"],
+      "the next preparation did not take over the handed-over preparation");
+
+    calls.length = 0;
+    await surfaces.place(record(false, 41));
+    await surfaces.cancelPrepared({ handover: true });
+    await assert.rejects(surfaces.place(record(false, 99)), /preparation refused/);
+    assert.deepEqual(names(), ["syncSurfaces", "syncSurfaces", "cancelSurfaces"], "a failed next preparation left the handed-over one open");
+    assert.deepEqual(calls[2].payload, { ticket: 3 });
+    await surfaces.cancelPrepared({ handover: false });
+    assert.equal(calls.length, 3, "the cancel after a failed preparation sent a call or found an open preparation");
+
+    calls.length = 0;
+    await surfaces.place(record(false, 42));
+    await surfaces.cancelPrepared({ handover: true });
+    await surfaces.cancelPrepared({ handover: false });
+    assert.deepEqual(names(), ["syncSurfaces", "cancelSurfaces"], "a cancel without a handover left the handed-over preparation open");
+    assert.deepEqual(calls[1].payload, { ticket: 4 });
+  } finally {
+    dom.window.close();
+  }
+  wire.finish();
+});
 
 test("a view surface carries its start values in the preparation and a surface without them carries none", async (t) => {
   const dom = new JSDOM('<div id="plane"></div>');
@@ -57,85 +215,6 @@ test("a view surface carries its start values in the preparation and a surface w
       origin: calls[0].request.surfaces[0].start.origin, project: calls[0].request.surfaces[0].start.project },
     { params: start.params, origin: start.origin, project: start.project });
     assert.equal("start" in calls[0].request.surfaces[1], false);
-  } finally {
-    dom.window.close();
-  }
-});
-
-test("the preparation carries the title bar height and the presented chrome is the committed one", async (t) => {
-  const dom = new JSDOM('<div id="plane"></div>');
-  globalThis.document = dom.window.document;
-  const calls = [];
-  let prepared = 0;
-  t.mock.module("@soksak/runtime", { namedExports: { host: {
-    on: () => {},
-    page: (path) => path,
-    call: async (name, request) => {
-      calls.push({ name, request });
-      if (name === "log") return clockAnswer(name, request);
-      if (name === "syncSurfaces") {
-        prepared++;
-        return {
-          ticket: prepared,
-          placements: [{ id: "surface", x: 1, y: 2, w: 3, h: 4, visible: true, scale: 2 }],
-          // The window button region that the host read after it set the title bar inside the transaction: the 14 pt buttons are centered in the row.
-          chrome: { controls: { x: 13, y: (request.titlebar - 14) / 2, w: 54, h: 14 }, row: request.titlebar },
-        };
-      }
-      if (name === "presentSurfaces") return request.placements;
-      throw new Error(`unexpected host call ${name}`);
-    },
-  } } });
-  const { chrome, surfaces } = await import("../host.js");
-  const record = (titlebar, drawn, viewport = { width: 800, height: 600 }) => ({
-    surfaces: [{
-      id: "surface", dim: false, visible: true,
-      surface: { module: "surface-module", composition: { kind: "dom" } },
-      applied: { x: 1, y: 2, w: 3, h: 4 },
-    }],
-    settled: true, drawn, titlebar, viewport,
-  });
-  try {
-    assert.equal("titlebar" in chrome, false, "the page has no title bar request apart from the preparation");
-    assert.equal(chrome.presented(), null, "no preparation has been presented");
-
-    const prepared = await surfaces.place(record(54, false));
-    assert.deepEqual(prepared.placements, [{ id: "surface", visible: true, scale: 2, x: 1, y: 2, w: 3, h: 4 }],
-      "the answer keeps the scale whose device pixels the host fitted the surface to");
-    assert.deepEqual(calls.map((c) => c.name), ["syncSurfaces"]);
-    assert.equal(calls[0].request.titlebar, 54, "the preparation carries the row of the next draw");
-    assert.deepEqual(calls[0].request.viewport, { width: 800, height: 600 }, "the preparation carries the viewport of its layout");
-    assert.deepEqual(calls[0].request.declarations, [], "a request without views must carry its empty declaration table");
-    assert.equal(chrome.presented(), null, "a preparation is not the committed state before its presentation");
-
-    await surfaces.place(record(54, true));
-    assert.deepEqual(calls.map((c) => c.name), ["syncSurfaces", "presentSurfaces"],
-      "the draw makes no request other than the presentation");
-    assert.deepEqual(Object.keys(calls[1].request).sort(), ["placements", "settled", "ticket"],
-      "the presentation sends the prepared ticket and placements");
-    assert.deepEqual(chrome.presented(), { controls: { x: 13, y: 20, w: 54, h: 14 }, row: 54 });
-
-    // The preparation of the next layout does not change the committed state until its presentation is confirmed.
-    await surfaces.place(record(40, false));
-    assert.equal(calls.at(-1).request.titlebar, 40);
-    assert.equal(chrome.presented().row, 54, "an unpresented preparation replaced the committed chrome");
-    await surfaces.place(record(40, true));
-    assert.equal(chrome.presented().row, 40);
-
-    // The same request is not sent again. When the state of the window changed without a request (a window that left full screen), the same
-    // request is sent after forget.
-    calls.length = 0;
-    await surfaces.place(record(40, false));
-    assert.deepEqual(calls, [], "an unchanged request was sent");
-    // The viewport tells the host the size that the layout was made at; a layout at another size that places the same is no change.
-    await surfaces.place(record(40, false, { width: 900, height: 600 }));
-    assert.deepEqual(calls, [], "a request that changed only its viewport was sent");
-    surfaces.forget();
-    await surfaces.place(record(40, false));
-    await surfaces.place(record(40, true));
-    assert.deepEqual(calls.map((c) => c.name), ["syncSurfaces", "presentSurfaces"],
-      "a forgotten request was not sent again");
-    assert.equal(calls[0].request.titlebar, 40);
   } finally {
     dom.window.close();
   }
@@ -335,148 +414,6 @@ test("an initial placement defers an unmounted view until its drawn commit", asy
     assert.deepEqual(calls.filter(({ name }) => name === "syncSurfaces").at(-1).request.surfaces.map(({ id }) => [id]),
       [["view-mount-order"]], "the declared view was not sent after mount registration");
     assert.deepEqual(order, ["hold:view-mount-order", "syncSurfaces", "composition:view-mount-order", "syncSurfaces", "presentSurfaces"]);
-  } finally {
-    dom.window.close();
-  }
-});
-
-test("a release during an open preparation presents that preparation as settled without a second synchronization", { timeout: 5000 }, async (t) => {
-  const dom = new JSDOM('<div id="plane"></div>');
-  globalThis.document = dom.window.document;
-  const calls = [];
-  let ticket = 0;
-  t.mock.module("../surface-modules.js", { namedExports: {
-    mountedSurface: () => null,
-    compositionState: () => ({ state: "declared" }),
-  } });
-  t.mock.module("@soksak/runtime", { namedExports: { host: {
-    on: () => {},
-    page: (path) => path,
-    call: async (name, request) => {
-      if (name === "log") return clockAnswer(name, request);
-      calls.push({ name, request });
-      if (name === "syncSurfaces") return { ticket: ++ticket, placements: [], chrome: { controls: { x: 13, y: 13, w: 54, h: 14 }, row: request.titlebar } };
-      if (name === "presentSurfaces") return request.placements;
-      throw new Error(`unexpected host call ${name}`);
-    },
-  } } });
-  const { surfaces } = await import("../host.js?release");
-  const record = (drawn, settled) => ({ surfaces: [], settled, drawn, titlebar: 40 });
-  try {
-    await surfaces.place(record(false, false));
-    await surfaces.place(record(true, true));
-    assert.deepEqual(calls.map((c) => c.name), ["syncSurfaces", "presentSurfaces"],
-      "the settled value alone sent a second synchronization of an open preparation");
-    assert.deepEqual([calls[1].request.ticket, calls[1].request.settled], [1, true],
-      "the open preparation was not presented as settled");
-    await surfaces.place(record(false, false));
-    await surfaces.place(record(true, false));
-    calls.length = 0;
-    await surfaces.place(record(true, true));
-    assert.deepEqual(calls.map((c) => c.name), ["syncSurfaces", "presentSurfaces"],
-      "a release after the presentation of an equal placement did not end the run");
-    assert.equal(calls[1].request.settled, true);
-  } finally {
-    dom.window.close();
-  }
-});
-
-test("a cancelled preparation sends its ticket once and the next equal request is sent again", { timeout: 5000 }, async (t) => {
-  const dom = new JSDOM('<div id="plane"></div>');
-  globalThis.document = dom.window.document;
-  const calls = [];
-  let ticket = 0;
-  t.mock.module("../surface-modules.js", { namedExports: {
-    mountedSurface: () => null,
-    compositionState: () => ({ state: "declared" }),
-  } });
-  t.mock.module("@soksak/runtime", { namedExports: { host: {
-    on: () => {},
-    page: (path) => path,
-    call: async (name, request) => {
-      if (name === "log") return clockAnswer(name, request);
-      calls.push({ name, request });
-      if (name === "syncSurfaces") return { ticket: ++ticket, placements: [], chrome: { controls: { x: 13, y: 13, w: 54, h: 14 }, row: request.titlebar } };
-      if (name === "presentSurfaces") return request.placements;
-      if (name === "cancelSurfaces") return null;
-      throw new Error(`unexpected host call ${name}`);
-    },
-  } } });
-  const { surfaces } = await import("../host.js?cancel");
-  const record = (drawn) => ({ surfaces: [], settled: true, drawn, titlebar: 40 });
-  try {
-    await surfaces.cancelPrepared({ handover: false });
-    assert.deepEqual(calls, [], "no preparation is open");
-    await surfaces.place(record(false));
-    await surfaces.cancelPrepared({ handover: false });
-    assert.deepEqual(calls.map((c) => c.name), ["syncSurfaces", "cancelSurfaces"]);
-    assert.deepEqual(calls[1].request, { ticket: 1 });
-    await surfaces.cancelPrepared({ handover: false });
-    assert.equal(calls.length, 2, "a cancelled preparation is not cancelled again");
-    await surfaces.place(record(false));
-    await surfaces.place(record(true));
-    assert.deepEqual(calls.slice(2).map((c) => c.name), ["syncSurfaces", "presentSurfaces"], "the equal request after a cancellation was not sent");
-    await surfaces.cancelPrepared({ handover: false });
-    assert.equal(calls.length, 4, "a presented preparation is not cancelled");
-  } finally {
-    dom.window.close();
-  }
-});
-
-// A handed-over preparation stays open for the next preparation of the window, which places every surface again and commits
-// both with its own presentation (F484). Every exit ends it: a failed next preparation and a cancel without a handover cancel it.
-test("a handed-over preparation sends no cancel and only a failed or cancelled next preparation ends it", { timeout: 5000 }, async (t) => {
-  const dom = new JSDOM('<div id="plane"></div>');
-  globalThis.document = dom.window.document;
-  const calls = [];
-  let ticket = 0;
-  t.mock.module("../surface-modules.js", { namedExports: {
-    mountedSurface: () => null,
-    compositionState: () => ({ state: "declared" }),
-  } });
-  t.mock.module("@soksak/runtime", { namedExports: { host: {
-    on: () => {},
-    page: (path) => path,
-    call: async (name, request) => {
-      if (name === "log") return clockAnswer(name, request);
-      calls.push({ name, request });
-      if (name === "syncSurfaces") {
-        if (request.titlebar === 99) throw new Error("preparation refused");
-        return { ticket: ++ticket, placements: [], chrome: { controls: { x: 13, y: 13, w: 54, h: 14 }, row: request.titlebar } };
-      }
-      if (name === "presentSurfaces") return request.placements;
-      if (name === "cancelSurfaces") return null;
-      throw new Error(`unexpected host call ${name}`);
-    },
-  } } });
-  const { surfaces } = await import("../host.js?handover");
-  const record = (drawn, titlebar = 40) => ({ surfaces: [], settled: true, drawn, titlebar });
-  const names = () => calls.map((c) => c.name);
-  try {
-    await surfaces.place(record(false));
-    await surfaces.cancelPrepared({ handover: true });
-    assert.deepEqual(names(), ["syncSurfaces"], "a handed-over preparation was cancelled and committed");
-    await surfaces.place(record(false));
-    await surfaces.place(record(true));
-    await surfaces.cancelPrepared({ handover: false });
-    assert.deepEqual(names(), ["syncSurfaces", "syncSurfaces", "presentSurfaces"],
-      "the next preparation did not take over the handed-over preparation");
-
-    calls.length = 0;
-    await surfaces.place(record(false, 41));
-    await surfaces.cancelPrepared({ handover: true });
-    await assert.rejects(surfaces.place(record(false, 99)), /preparation refused/);
-    assert.deepEqual(names(), ["syncSurfaces", "syncSurfaces", "cancelSurfaces"], "a failed next preparation left the handed-over one open");
-    assert.deepEqual(calls[2].request, { ticket: 3 });
-    await surfaces.cancelPrepared({ handover: false });
-    assert.equal(calls.length, 3, "the cancel after a failed preparation sent a call or found an open preparation");
-
-    calls.length = 0;
-    await surfaces.place(record(false, 42));
-    await surfaces.cancelPrepared({ handover: true });
-    await surfaces.cancelPrepared({ handover: false });
-    assert.deepEqual(names(), ["syncSurfaces", "cancelSurfaces"], "a cancel without a handover left the handed-over preparation open");
-    assert.deepEqual(calls[1].request, { ticket: 4 });
   } finally {
     dom.window.close();
   }

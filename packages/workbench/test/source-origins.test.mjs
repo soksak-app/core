@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import test, { mock } from "node:test";
+import test from "node:test";
+import { JSDOM } from "jsdom";
+import { selectPageWire } from "@soksak/runtime";
 
 import { endSourceOrigin, onSourceOriginEnded, onSourceOriginRegistered, registerSourceOrigin, seedSourceOrigins, sourceOrigin } from "../source-origins.js";
 
@@ -64,30 +66,25 @@ test("a seed with a generation above its floor or a non-view entry is refused", 
 });
 
 test("the ingress applies the lifecycle events that arrive before the host seed, and then the later ones", async (t) => {
-  const listeners = new Map();
-  let answer = null;
+  // The host notices and the query answer are played by the case of this test (docs/spec/cases/page-wire/README.md). The case is
+  // selected before the ingress module is imported, because the module reads the host when it runs.
+  const wire = selectPageWire("source-origins-ingress");
+  // The page reports a refused lifecycle event as an error event of its window.
+  const { window } = new JSDOM("");
   const dispatched = [];
-  globalThis.dispatchEvent = (event) => { dispatched.push(event.message); return true; };
-  globalThis.ErrorEvent = class { constructor(type, init) { this.message = init.message; } };
-  mock.module("@soksak/runtime", { namedExports: { host: {
-    call: (name) => {
-      assert.equal(name, "viewSourceOrigins");
-      return answer;
-    },
-    on: (name, listener) => {
-      listeners.set(name, listener);
-      return Promise.resolve(() => listeners.delete(name));
-    },
-  } } });
-  const origins = await import("../source-origins.js?ingress");
+  window.addEventListener("error", (event) => dispatched.push(event.message));
+  globalThis.dispatchEvent = window.dispatchEvent.bind(window);
+  globalThis.ErrorEvent = window.ErrorEvent;
   t.after(() => { delete globalThis.dispatchEvent; delete globalThis.ErrorEvent; });
+  const origins = await import("../source-origins.js?ingress");
   const started = origins.startSourceOriginIngress();
-  listeners.get("view-source-registered")({ plugin: "probe", surface: "probe-view", generation: 5 });
-  answer = Promise.resolve({ floor: 4, views: {} });
+  // The registration arrives before the query answer, so the module keeps it until the seed is applied.
+  wire.deliverNotice();
   await started;
   assert.equal(origins.sourceOrigin("probe", "probe-view"), 5, "the event received before the seed was not applied");
-  listeners.get("view-source-ended")({ plugin: "probe", surface: "probe-view", generation: 5 });
+  wire.deliverNotice();
   assert.equal(origins.sourceOrigin("probe", "probe-view"), undefined, "a later end event was not applied");
-  listeners.get("view-source-registered")({ plugin: "probe", generation: 6 });
+  wire.deliverNotice();
   assert.deepEqual(dispatched, ["source origin ingress: view source lifecycle event of probe requires a surface"]);
+  wire.finish();
 });

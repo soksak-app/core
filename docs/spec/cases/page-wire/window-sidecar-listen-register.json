@@ -1,0 +1,15 @@
+{
+  "name": "window-sidecar-listen-register",
+  "description": "The page registers the first listener of the session tab-a of the sidecar @x/side with the host and receives its messages until the registration is applied; the page then removes the registration when its last listener ends.",
+  "replay": false,
+  "reason": "The case delivers sidecar-message notices to the page, and the Go producer runs no window to receive a notice (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "sidecarListen", "payload": { "sidecar": "@x/side", "id": "tab-a", "on": true } } },
+    { "reply": { "result": null, "held": true } },
+    { "notice": { "event": "sidecar-message", "payload": { "sidecar": "@x/side", "surface": "tab-a", "body": { "n": 1 } } } },
+    { "notice": { "event": "sidecar-message", "payload": { "sidecar": "@x/side", "surface": "tab-b", "body": { "n": 2 } } } },
+    { "call": { "name": "sidecarListen", "payload": { "sidecar": "@x/side", "id": "tab-a", "on": false } } },
+    { "reply": { "result": null } }
+  ]
+}

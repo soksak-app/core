@@ -1,0 +1,12 @@
+{
+  "name": "surface-runtime-sidecar-failure-unhandled",
+  "description": "A background surface sends to its sidecar; the host reports a failure of that sidecar for the surface, which has no failure handler, so the failure is raised as a page error.",
+  "replay": false,
+  "reason": "The sidecar-failure notice comes from a sidecar process that the producer does not start.",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "sidecarSend", "payload": { "sidecar": "@fixture/background", "surface": "background-tab", "body": { "operation": "open" }, "cids": [] } } },
+    { "reply": { "result": null } },
+    { "notice": { "event": "sidecar-failure", "payload": { "sidecar": "@fixture/background", "surface": "background-tab", "reason": "invalid message: body is missing" } } }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "name": "surface-runtime-exposure-reply-gate",
+  "description": "A surface answers an exposure request of the host, and the reply is sent to the host only after the installed reply gate releases it; the host answers the reply with null.",
+  "replay": false,
+  "reason": "The exposure request reaches the page from the host for a surface that the application mounts, which the producer does not mount.",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "exposureReply", "payload": { "id": 18, "result": "ok", "surface": "gated-reply-surface" } } },
+    { "reply": { "result": null } }
+  ]
+}

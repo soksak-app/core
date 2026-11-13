@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- workbench 시험 파일 40 개가 더 page 의 실제 host, window, log, trace module 을 실행하고 그 module 을 대체하는 대신 page-wire case 를 재생하며, 시험 runtime 이 선택된 case 위에서 native runtime 의 window interface 를 page 에 주고, page-wire reader 가 `PAGE_WIRE_TRACE=1` 이면 page 의 각 호출을 쓴다 (F795-10).
 - page log 의 event 가 batch 가 나간 시점의 상태 대신 보낸 시점의 field 를 담는다 (F805).
 - native capture 의 display-link callback 결정이 callback 이 읽는 값의 함수가 되고, native 시험이 arm64 와 Intel timebase 의 timestamp 데이터로 그것을 검사한다 (F795-6).
 - Rust 시험 파일 두 개가 Rust 형식 검사가 요구하는 형식을 따른다 (F804).

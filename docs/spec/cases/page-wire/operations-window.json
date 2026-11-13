@@ -1,0 +1,25 @@
+{
+  "name": "operations-window",
+  "description": "The page asks the host for the window and project operations with their identifiers, and publishes the project shown by the window with no identifiers.",
+  "replay": false,
+  "reason": "The case calls windowNew, projectOpen and projectRemoveAsk, which only the native host with windows answers (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "windowNew", "cids": ["p1.7"] } },
+    { "reply": { "result": null } },
+    { "call": { "name": "windowClose", "cids": ["p1.7"] } },
+    { "reply": { "result": null } },
+    { "call": { "name": "windowCloseKept", "cids": ["p1.7"] } },
+    { "reply": { "result": null } },
+    { "call": { "name": "projectOpen", "payload": { "id": "prj", "root": "/r", "separate": false, "geometry": null }, "cids": ["p1.7"] } },
+    { "reply": { "result": { "local": true } } },
+    { "call": { "name": "projectShown", "payload": { "project": { "id": "prj", "root": "/r", "title": "t" } } } },
+    { "reply": { "result": null } },
+    { "call": { "name": "projectShown", "payload": { "project": null } } },
+    { "reply": { "result": null } },
+    { "call": { "name": "projectRelease", "payload": "prj", "cids": ["p1.7"] } },
+    { "reply": { "result": null } },
+    { "call": { "name": "projectRemoveAsk", "payload": "prj", "cids": ["p1.7"] } },
+    { "reply": { "result": true } }
+  ]
+}

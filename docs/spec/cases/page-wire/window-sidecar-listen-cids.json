@@ -1,0 +1,15 @@
+{
+  "name": "window-sidecar-listen-cids",
+  "description": "The page registers the session tab-cids of the sidecar @x/cids, receives a message with the identifiers of the request it answers and a message without identifiers, and then removes the registration.",
+  "replay": false,
+  "reason": "The case delivers sidecar-message notices to the page, and the Go producer runs no window to receive a notice (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "sidecarListen", "payload": { "sidecar": "@x/cids", "id": "tab-cids", "on": true } } },
+    { "reply": { "result": null } },
+    { "notice": { "event": "sidecar-message", "payload": { "sidecar": "@x/cids", "surface": "tab-cids", "cids": ["b1.7"], "body": { "ack": true } } } },
+    { "notice": { "event": "sidecar-message", "payload": { "sidecar": "@x/cids", "surface": "tab-cids", "body": { "event": "state" } } } },
+    { "call": { "name": "sidecarListen", "payload": { "sidecar": "@x/cids", "id": "tab-cids", "on": false } } },
+    { "reply": { "result": null } }
+  ]
+}

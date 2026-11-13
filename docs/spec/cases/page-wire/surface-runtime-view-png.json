@@ -1,0 +1,13 @@
+{
+  "name": "surface-runtime-view-png",
+  "description": "A view reads the PNG of the clipboard into its binary store, and then persists the PNG of a binary id; the host answers each call with null and each call names the surface of the view.",
+  "replay": false,
+  "reason": "clipboardReadViewPNG and clipboardPersistViewPNG use the clipboard and the binary store of the application, which the producer does not run.",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "clipboardReadViewPNG", "payload": { "userInitiated": true, "surface": "view-surface" } } },
+    { "reply": { "result": null } },
+    { "call": { "name": "clipboardPersistViewPNG", "payload": { "binary": "0123456789abcdef0123456789abcdef", "surface": "view-surface" } } },
+    { "reply": { "result": null } }
+  ]
+}

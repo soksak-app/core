@@ -1,0 +1,10 @@
+{
+  "name": "surface-runtime-event-subscription",
+  "description": "A surface subscribes to the native event shell-status, and the host delivers that event for the surface, which the listener of the surface receives.",
+  "replay": false,
+  "reason": "The host delivers shell-status to the listeners of a window, and the producer runs without a window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {},
+  "steps": [
+    { "notice": { "event": "shell-status", "payload": { "surface": "event-ready-surface", "state": "ready" } } }
+  ]
+}

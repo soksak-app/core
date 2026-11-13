@@ -1,0 +1,11 @@
+{
+  "name": "operations-settings",
+  "description": "The page writes a change of the settings file of a project: the changed values are the patch and the removed keys, and the write carries the identifiers of the change.",
+  "replay": false,
+  "reason": "The case writes the settings of a project, and the Go producer builds no project in the registry for it (docs/spec/cases/page-wire/README.md#limits).",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "workspace", "payload": { "kind": "settings", "id": "prj", "patch": { "gap": 8 }, "remove": ["radius"] }, "cids": ["p1.9"] } },
+    { "reply": { "result": null } }
+  ]
+}

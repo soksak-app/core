@@ -1,0 +1,35 @@
+{
+  "name": "host-chrome-release-open",
+  "description": "The page prepares an unsettled layout without surfaces, presents the open preparation as settled after the release without a second sync, and syncs and presents a later release of an equal layout.",
+  "replay": false,
+  "reason": "The producer runs only the calls log and workspace (docs/spec/cases/page-wire/README.md#producer-runs), and this case holds the calls syncSurfaces and presentSurfaces.",
+  "steps": [
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": { "settled": false, "overlays": [], "surfaces": [], "titlebar": 40, "declarations": [] }
+      }
+    },
+    { "reply": { "result": { "ticket": 1, "placements": [], "chrome": { "controls": { "x": 13, "y": 13, "w": 54, "h": 14 }, "row": 40 } } } },
+    { "call": { "name": "presentSurfaces", "payload": { "ticket": 1, "placements": [], "settled": true } } },
+    { "reply": { "result": [] } },
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": { "settled": false, "overlays": [], "surfaces": [], "titlebar": 40, "declarations": [] }
+      }
+    },
+    { "reply": { "result": { "ticket": 2, "placements": [], "chrome": { "controls": { "x": 13, "y": 13, "w": 54, "h": 14 }, "row": 40 } } } },
+    { "call": { "name": "presentSurfaces", "payload": { "ticket": 2, "placements": [], "settled": false } } },
+    { "reply": { "result": [] } },
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": { "settled": true, "overlays": [], "surfaces": [], "titlebar": 40, "declarations": [] }
+      }
+    },
+    { "reply": { "result": { "ticket": 3, "placements": [], "chrome": { "controls": { "x": 13, "y": 13, "w": 54, "h": 14 }, "row": 40 } } } },
+    { "call": { "name": "presentSurfaces", "payload": { "ticket": 3, "placements": [], "settled": true } } },
+    { "reply": { "result": [] } }
+  ]
+}

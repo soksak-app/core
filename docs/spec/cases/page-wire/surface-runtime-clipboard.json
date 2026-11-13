@@ -1,0 +1,11 @@
+{
+  "name": "surface-runtime-clipboard",
+  "description": "A surface writes a text to the clipboard, and the host answers the write with null; the call carries the text as its payload and no surface field.",
+  "replay": false,
+  "reason": "clipboardWriteText writes the clipboard of the application, which the producer does not run.",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "clipboardWriteText", "payload": "copied" } },
+    { "reply": { "result": null } }
+  ]
+}

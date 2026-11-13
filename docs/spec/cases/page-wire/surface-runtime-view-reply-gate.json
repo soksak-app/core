@@ -1,0 +1,11 @@
+{
+  "name": "surface-runtime-view-reply-gate",
+  "description": "A view answers a forwarded exposure request through its native exposureReply call, and the reply is sent to the host only after the installed reply gate releases it; the host answers the reply with null.",
+  "replay": false,
+  "reason": "A view answers a forwarded exposure request of the host, which the producer does not forward to a view.",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "exposureReply", "payload": { "id": 19, "result": "ok", "surface": "gated-view-surface" } } },
+    { "reply": { "result": null } }
+  ]
+}
