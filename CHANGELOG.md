@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F761: `window_titlebar_reload_test` reads the time of the title bar change in the ready answer of the start, right after the change, so the start transaction that begins before the change no longer fails it.
 - F760: A native check that dispatches its events handles the open-application Apple event of its launch and opens nothing, so it no longer activates its process and takes the front from another application; the system activation of a check process is written as an `ACTIVATED:` line.
 - F746: A still of a recording is compressed on its worker and only its encoded frame waits for the writer, which holds at most 128 MiB of them; at most 8 stills are in flight, a lost still is a warning of the recording, the stop requests the stills that are due, and the window server reads of the recording and of the window facts no longer run on the main thread.
 - F746: An endpoint connection holds the 258 replies that one page answer can release instead of closing; `diagnostics.layout.trace` traces the layouts of a window on every host, and the window checks judge layout timing from it; a release is awaited only for a press that reached the page of its region; mygo soksak.8 and soksak.9 answer single-value methods on the calling thread and stop the timers of a closed window.

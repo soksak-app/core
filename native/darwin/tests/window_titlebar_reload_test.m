@@ -114,8 +114,10 @@ static NSString *page(const uint8_t *color) {
     if (start && reload) {
         fprintf(stdout, "observe: the start document of the reloaded page is requested while the web view %s loading\n",
             webView.loading ? "is" : "is not");
-        set = CACurrentMediaTime() * 1000;
+        // The start changes the title bar inside its transaction and answers ready right after the change, so the time of
+        // the answer is the time of the change.
         surfaceLayoutStartPage(window, 301, kNewRow, ^(const char *problem) {
+            self->set = CACurrentMediaTime() * 1000;
             self->ready = YES;
             self->failure = problem ? [[NSString alloc] initWithUTF8String:problem] : nil;
         });

@@ -589,6 +589,18 @@ const FEATURE_LINKS = [
   },
 
   {
+    id: "F761",
+    implementation: [
+      { file: "native/darwin/tests/window_titlebar_reload_test.m", symbol: "self->set = CACurrentMediaTime() * 1000;" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/window_titlebar_reload_test.m", id: "the trace records the start transaction begun before the title bar change and committed " },
+    ],
+    expected: "The reload check reads the time of the title bar change in the ready answer of the start and judges begun, set, committed and ended in that order.",
+    levels: ["native"],
+  },
+
+  {
     id: "F760",
     implementation: [
       { file: "native/darwin/tests/support/no_activation.m", symbol: "- (void)handleOpenApplication:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)reply {" },
