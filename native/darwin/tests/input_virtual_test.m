@@ -644,9 +644,17 @@ int main(void) { @autoreleasepool {
     sp_input_result movedIntoArea = sp_input_pointer(rects, 300, 150, 0, 0, 0, 0);
     check(movedIntoArea == SP_INPUT_DELIVERED && cursorIs(rects, @"openHand"),
         [NSString stringWithFormat:@"a tracking area that the point enters updates the cursor (%s)", sp_input_virtual_cursor(rects)]);
-    sp_input_result movedBack = sp_input_pointer(rects, 100, 150, 0, 0, 0, 0);
+    __block sp_input_result movedBack = SP_INPUT_REJECTED;
+    NSArray<NSDictionary *> *cursorEvents = capturedEvents(^{ movedBack = sp_input_pointer(rects, 100, 150, 0, 0, 0, 0); });
     check(movedBack == SP_INPUT_DELIVERED && cursorIs(rects, @"crosshair"),
         [NSString stringWithFormat:@"the cursor rect sets its cursor again (%s)", sp_input_virtual_cursor(rects)]);
+    // Each change of the cursor of the virtual key window names the cursor and the code that set it.
+    NSMutableArray<NSString *> *cursorReasons = [NSMutableArray array];
+    for (NSDictionary *event in cursorEvents) {
+        if ([event[@"name"] isEqual:@"native.input.virtual"] && [event[@"fields"][@"phase"] isEqual:@"cursor"]) [cursorReasons addObject:event[@"fields"][@"reason"]];
+    }
+    check(cursorReasons.count == 1 && [cursorReasons[0] hasPrefix:@"crosshair from input_virtual_test "],
+        [NSString stringWithFormat:@"the change of the cursor is recorded with its setter (%@)", cursorReasons]);
     sp_input_virtual_end("no state");
     check(sp_input_virtual_cursor(rects) == NULL, @"a window that is no longer the virtual key window has no cursor");
     check(NSCursor.currentCursor != NSCursor.crosshairCursor && NSCursor.currentCursor != NSCursor.openHandCursor,

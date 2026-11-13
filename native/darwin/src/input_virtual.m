@@ -212,12 +212,43 @@ static void cursorChanged(NSWindow *window) {
 
 // The cursor that the application sets while the virtual key window answers is the cursor of that window: the system cursor of a
 // person does not change, and +[NSCursor currentCursor] answers the cursor of the window.
+static NSString *cursorName(NSCursor *cursor);
+
+// Writes a change of the cursor of the virtual key window as native.input.virtual of the phase cursor: the reason names the
+// cursor and the frames that called -[NSCursor set], so the record shows which code set each cursor that a check reads. The
+// frames are read only when the gate stores the record.
+static void recordCursor(NSCursor *cursor) {
+    if (!sp_event_gate(SP_CLASS_LIFECYCLE, SP_EVENT_INFO)) return;
+    NSArray<NSString *> *stack = NSThread.callStackSymbols;
+    NSMutableArray<NSString *> *callers = [NSMutableArray array];
+    // Frame 0 is this function and frame 1 is keepCursor.
+    for (NSUInteger index = 2; index < stack.count && callers.count < 4; index++) {
+        NSMutableArray<NSString *> *parts = [NSMutableArray array];
+        for (NSString *part in [stack[index] componentsSeparatedByString:@" "]) if (part.length) [parts addObject:part];
+        // A frame reads "<index> <image> <address> <symbol> + <offset>".
+        if (parts.count < 4) continue;
+        NSUInteger end = [parts indexOfObject:@"+"];
+        NSRange symbol = NSMakeRange(3, (end == NSNotFound ? parts.count : end) - 3);
+        [callers addObject:[NSString stringWithFormat:@"%@ %@", parts[1], [[parts subarrayWithRange:symbol] componentsJoinedByString:@" "]]];
+    }
+    NSString *reason = [NSString stringWithFormat:@"%@ from %@", cursorName(cursor), [callers componentsJoinedByString:@" < "]];
+    NSError *error = nil;
+    NSData *json = [NSJSONSerialization dataWithJSONObject:@{@"phase": @"cursor", @"reason": reason} options:0 error:&error];
+    if (!json) {
+        NSLog(@"the cursor record cannot be serialized: %@", error);
+        return;
+    }
+    sp_event(SP_CLASS_LIFECYCLE, SP_EVENT_INFO, "native.input.virtual",
+        [[[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding] autorelease].UTF8String);
+}
+
 static void keepCursor(NSCursor *self, SEL selector) {
     NSWindow *window = NSThread.isMainThread ? answering() : nil;
     if (!window) { appKitCursorSet(self, selector); return; }
     if (virtualCursor == self) return;
     [virtualCursor release];
     virtualCursor = [self retain];
+    recordCursor(self);
     cursorChanged(window);
 }
 
