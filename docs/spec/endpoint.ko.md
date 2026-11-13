@@ -18,7 +18,7 @@ macOS 호스트가 이 명세를 구현하며 [기능 상태](../features.ko.md)
 
 구현 위치: 각 [네이티브 호스트](hosts.ko.md)의 `src/platform/<os>/endpoint.*`.
 
-Endpoint connection이 열려 있는 동안 host는 platform의 connection activity를 쥔다. macOS에서는 `NSProcessInfo`의 user-initiated activity(`NSActivityUserInitiatedAllowingIdleSystemSleep`, `native/darwin/src/connection_activity.h`)다. System은 활성이 아니고 창을 보이지 않는 application을 background에서 scheduling priority 4로 실행한다. 다른 process의 부하 아래에서 그런 host는 window check의 요청에 15 s 넘게 지나서 답했고, 그동안 그 thread들은 CPU를 40 ms 썼다. 연결된 client는 답을 기다리므로 host는 client가 연결되어 있는 동안 background에서 실행되지 않는다. Host는 첫 connection을 등록할 때 activity를 쥐고 마지막 connection을 제거할 때 놓으므로, 아무것도 연결되지 않은 host는 system이 정하는 대로 실행된다. 이 activity는 system의 idle sleep을 허용한다. Windows에는 아직 구현이 없고 요청은 `connection activity is not implemented on windows`를 돌려주며, host는 그것을 error `endpoint activity`로 쓴다.
+Endpoint connection이 열려 있는 동안 host는 platform의 connection activity를 쥔다. macOS에서는 `NSProcessInfo`의 user-initiated activity(`NSActivityUserInitiatedAllowingIdleSystemSleep`, `native/darwin/src/connection_activity.h`)다. System은 활성이 아니고 창을 보이지 않는 application을 background에서 scheduling priority 4로 실행한다. 다른 process의 부하 아래에서 그런 host는 window check의 요청에 15 s 넘게 지나서 답했고, 그동안 그 thread들은 CPU를 40 ms 썼다. 연결된 client는 답을 기다리므로 host는 client가 연결되어 있는 동안 background에서 실행되지 않는다. Host는 첫 connection을 등록할 때 activity를 쥐고 마지막 connection을 제거할 때 놓으므로, 아무것도 연결되지 않은 host는 system이 정하는 대로 실행된다. 마지막 connection이 끝나면 그 connection의 press를 풀기 전에 activity를 놓는다. Native 라이브러리는 activity의 시작과 끝마다 `held`를 담은 `native.connection.activity`를 lifecycle `info` event로 기록한다. 이 activity는 system의 idle sleep을 허용한다. Windows에는 아직 구현이 없고 요청은 `connection activity is not implemented on windows`를 돌려주며, host는 그것을 error `endpoint activity`로 쓴다.
 
 ## 주소 확인
 

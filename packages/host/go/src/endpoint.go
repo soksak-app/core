@@ -1216,10 +1216,10 @@ func (e *Endpoint) drain(t topic) {
 // the release to the page. When no one closed the connection first, reason is the reason for closing.
 func (e *Endpoint) drop(c *endpointConn, reason string) {
 	c.close(reason)
-	// The close releases the presses that the connection owns, in its turn (docs/spec/exposure.md#methods).
-	e.releasePresses(c)
 	e.mu.Lock()
 	delete(e.conns, c)
+	// The end of the last connection releases the activity before the presses of the connection are released
+	// (docs/spec/endpoint.md#transport).
 	if len(e.conns) == 0 && e.activity {
 		e.activity = !holdConnectionActivity(false)
 	}
@@ -1228,6 +1228,8 @@ func (e *Endpoint) drop(c *endpointConn, reason string) {
 		held = append(held, t)
 	}
 	e.mu.Unlock()
+	// The close releases the presses that the connection owns, in its turn (docs/spec/exposure.md#methods).
+	e.releasePresses(c)
 	for _, t := range held {
 		e.enqueue(t, false, func() {
 			if err := e.change(c, t, false); err != nil {

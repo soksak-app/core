@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F774-2: the Go host releases the connection activity before the presses of the last connection, as the contract requires; the native library records each begin and end of the activity as `native.connection.activity`, and the tests of both hosts judge the order by that record instead of a fake platform.
 - F774-1: the Rust test of the connection activity reads the native call through `tests/support/platform/connection_activity.rs`, so no OS cfg is outside `platform/<os>/`.
 - F779-2: the window check of image region presses waits for the answer of the focus call that the page makes on each press, which the host gives after the move of the keyboard applied or waits for the release, and then reads the focus once, so its wait ends by an event and not by the test limit.
 - F779-1: a window check that the test runner ends at its limit while it waits for a status names that status, the text of the wait and the last value that the status had.

@@ -4316,6 +4316,24 @@
       },
       "description": "The host started the detached command that replaces the application bundle."
     },
+    "native.connection.activity": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "held": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "held"
+        ]
+      },
+      "description": "The host began (`held` true) or ended (`held` false) the connection activity of the process, which it holds while an endpoint connection is open (docs/spec/endpoint.md#transport)."
+    },
     "native.app.activated": {
       "layer": "native",
       "class": "lifecycle",
