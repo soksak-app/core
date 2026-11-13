@@ -1,0 +1,11 @@
+{
+  "name": "ordered-calls-answered-show",
+  "description": "The page opens the menu modal of the element menu with its title, rectangle, markup, border colour and corner radius, and the host answers the show after the test releases the held reply.",
+  "replay": false,
+  "reason": "overlayShow opens a native modal view in the window, and only the native host with a window produces its answer (docs/operations/examples.md#test-kinds).",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "overlayShow", "payload": { "id": "menu", "title": "Menu", "rect": { "x": 0, "y": 0, "w": 10, "h": 10 }, "mode": "menu", "card": { "x": 0, "y": 0, "w": 0, "h": 0 }, "className": "", "html": "", "css": "", "border": "rgb(7, 8, 9)", "radius": 4 } } },
+    { "reply": { "result": { "x": 0, "y": 0, "w": 10, "h": 10 }, "held": true } }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "name": "keyboard-decided-call-order",
+  "description": "The page opens the menu modal, and the host holds its answer; the decided keyboard call of a surface goes out while that answer is held and the host holds its answer too, and an ordered keyboard call to another surface goes out only after both answers.",
+  "replay": false,
+  "reason": "overlayShow opens a native modal view and surfaceFocus gives the keyboard of the window to a surface, and only the native host with a window produces their answers (the native tier of docs/operations/examples.md#test-kinds).",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "overlayShow", "payload": { "id": "menu", "title": "Menu", "rect": { "x": 0, "y": 0, "w": 10, "h": 10 }, "mode": "menu", "card": { "x": 0, "y": 0, "w": 0, "h": 0 }, "className": "", "html": "", "css": "", "border": "rgb(7, 8, 9)", "radius": 4 } } },
+    { "reply": { "result": null, "held": true } },
+    { "call": { "name": "surfaceFocus", "payload": { "surface": "tab-a", "decided": true } } },
+    { "reply": { "result": null, "held": true } },
+    { "call": { "name": "surfaceFocus", "payload": { "surface": "tab-b" } } },
+    { "reply": { "result": null } }
+  ]
+}

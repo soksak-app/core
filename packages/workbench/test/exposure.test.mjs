@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { EXPOSURE_ERRORS, surfaceDocumentEntry, validateExposureFile } from "@soksak/plugin-api";
+import { selectPageWire } from "@soksak/runtime";
 
 // A fake document and fake plugin declarations. They use no real plugin name.
 const dom = new JSDOM(`<body>
@@ -12,7 +13,39 @@ const dom = new JSDOM(`<body>
 globalThis.window = dom.window;
 globalThis.document = dom.window.document;
 
+// The trace of the page leaves through the host wire, and the trace module reads the wire when it is imported, so the modules are
+// imported while a case without calls is selected. Each test that traces selects its own case (docs/spec/cases/page-wire/README.md).
+const imports = selectPageWire("exposure-none");
 const { createRegistry, installExposure, isSectionSurface, markViewSurface, registry, registerSurfacePort, dispatchSurfaceRequest } = await import("../exposure.js");
+const { setTraceEnabled } = await import("../performance.js");
+const { flushEvents } = await import("../page-log.js");
+const { logGate } = await import("../log-gate.js");
+imports.finish();
+
+/** The fields of each trace event of the name that the page sent in its log batches, in the order of the batches. */
+const tracedEvents = (wire, event) => wire.calls
+  .filter(({ name, payload }) => name === "log" && payload.action === "batch")
+  .flatMap(({ payload }) => payload.events)
+  .filter((record) => record.event === `workbench.trace.${event}`)
+  .map((record) => record.fields);
+
+/**
+ * Runs body with the trace switched on through the case of the name, sends the batches and switches the trace off. The events of
+ * the trace are at the level debug of the classes call and frame, so the policy stores that level while the trace is on, as the
+ * debug setting of the person does.
+ */
+async function withTrace(name, body) {
+  const wire = selectPageWire(name);
+  logGate.set({ lifecycle: "error", input: "error", call: "debug", io: "error", frame: "debug" });
+  await setTraceEnabled(true);
+  try {
+    await body(wire);
+  } finally {
+    await setTraceEnabled(false);
+    logGate.set({ lifecycle: "error", input: "error", call: "error", io: "error", frame: "error" });
+  }
+  wire.finish();
+}
 
 test("mounted surface exposure routes through its registered module and releases ownership", async () => {
   const received = [];
@@ -62,52 +95,6 @@ const coreExposes = () => ({
   ],
 });
 
-test("command timing names endpoint and UI commands at the registry boundary", async (t) => {
-  const names = [];
-  t.mock.module("../performance.js", { exports: {
-    timed: async (name, answer) => { names.push(name); return answer(); },
-    trace: () => {},
-  } });
-  const { createRegistry: createTimedRegistry } = await import("../exposure.js?command-timing");
-  const made = createTimedRegistry();
-  made.declare("core", coreExposes());
-  made.command("core.fixture.add", ({ n }) => n + 1);
-  assert.deepEqual(await made.handle({ method: "command.run", params: {
-    name: "core.fixture.add", params: { n: 2 },
-  } }), { result: 3 });
-  assert.equal(await made.run("core.fixture.add", { n: 3 }), 4);
-  assert.deepEqual(names, ["core.fixture.add", "core.fixture.add"]);
-});
-
-test("registration tracing attributes core loss to its document and live request callback", async (t) => {
-  const records = [];
-  t.mock.module("../performance.js", { exports: {
-    timed: async (_name, answer) => answer(),
-    trace: (event, fields) => { records.push({ event, ...fields }); },
-  } });
-  const { createRegistry: createObservedRegistry, registerSurfacePort: registerObservedPort } = await import("../exposure.js?registration-timeline");
-  const made = createObservedRegistry();
-  made.declare("core", coreExposes());
-  made.declare("probe", probeExposes());
-  made.configure({ surfacePlugin: () => "probe" });
-  const surface = "registration-timeline-surface";
-  const remove = registerObservedPort(surface, async () => {});
-  try {
-    made.registered({ surface, kind: "status", name: "core.surface.document" });
-    made.registered({ surface, closed: true });
-    made.registered({ surface, kind: "status", name: "probe.lines" });
-    assert.deepEqual(records.map((record) => record.phase), ["registered", "closed", "registered"]);
-    assert.equal(records[1].event, "surface.registration");
-    assert.equal(records[1].hasPort, true, "the close lost its live callback attribution");
-    assert.equal(records[1].timeOrigin, performance.timeOrigin);
-    assert.deepEqual(records[1].names, ["status core.surface.document"], "the close lost the removed core names");
-    made.unregisterSurface(surface);
-    assert.equal(records.at(-1).phase, "disposed");
-    assert.deepEqual(records.at(-1).names, ["status probe.lines"]);
-  } finally {
-    remove();
-  }
-});
 const probeExposes = () => ({
   status: [{ name: "probe.lines", description: "Lines.", schema: { type: "array" } }],
   commands: [{ name: "probe.send", description: "Sends.", params: { type: "object" }, result: {} }],
@@ -132,6 +119,56 @@ function coreRegistry(host, report = (error) => { throw error; }) {
   made.declare("probe", probeExposes());
   return made;
 }
+
+// The trace tests run before the tests that gate events: the count of gated events leaves with a later batch, and a trace case
+// records the batches of its own events only.
+test("command timing names endpoint and UI commands at the registry boundary", () => withTrace("exposure-trace-command", async (wire) => {
+  const made = createRegistry();
+  made.declare("core", coreExposes());
+  made.command("core.fixture.add", ({ n }) => n + 1);
+  assert.deepEqual(await made.handle({ method: "command.run", params: {
+    name: "core.fixture.add", params: { n: 2 },
+  } }), { result: 3 });
+  assert.equal(await made.run("core.fixture.add", { n: 3 }), 4);
+  await flushEvents();
+  assert.deepEqual(tracedEvents(wire, "command").map(({ name }) => name), ["core.fixture.add", "core.fixture.add"]);
+}));
+
+test("registration tracing attributes core loss to its document and live request callback", () => withTrace("exposure-trace-registration", async (wire) => {
+  const records = [];
+  const traced = async () => {
+    await flushEvents();
+    records.splice(0, records.length, ...tracedEvents(wire, "surface.registration").map((fields) => ({ event: "surface.registration", ...fields })));
+  };
+  const registerObservedPort = registerSurfacePort;
+  const made = createRegistry();
+  made.declare("core", coreExposes());
+  made.declare("probe", probeExposes());
+  made.configure({ surfacePlugin: () => "probe" });
+  const surface = "registration-timeline-surface";
+  const remove = registerObservedPort(surface, async () => {});
+  try {
+    made.registered({ surface, kind: "status", name: "core.surface.document" });
+    made.registered({ surface, closed: true });
+    made.registered({ surface, kind: "status", name: "probe.lines" });
+    await traced();
+    assert.deepEqual(records.map((record) => record.phase), ["registered", "closed", "registered"]);
+    assert.equal(records[1].event, "surface.registration");
+    assert.equal(records[1].hasPort, true, "the close lost its live callback attribution");
+    assert.equal(records[1].timeOrigin, performance.timeOrigin);
+    assert.deepEqual(records[1].names, ["status core.surface.document"], "the close lost the removed core names");
+    made.unregisterSurface(surface);
+    await traced();
+    assert.equal(records.at(-1).phase, "disposed");
+    assert.deepEqual(records.at(-1).names, ["status probe.lines"]);
+  } finally {
+    remove();
+  }
+}));
+test("a value that no watch takes is recorded in the trace with its reason", () => withTrace("exposure-trace-dropped", async (wire) => {
+  const createTracedRegistry = createRegistry;
+  const host = fakeHost(() => ({ result: null }));
+
 
 test("the core declaration file is valid and every main-page entry is registered by core-exposure.js or marked in markup", () => {
   const file = JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8"));
@@ -839,12 +876,6 @@ test("an observation whose watch the surface refuses reports the error with its 
   assert.deepEqual(reported, ["probe.lines on tab-a: reader crashed"], "the refused watch was not reported with its surface");
 });
 
-test("a value that no watch takes is recorded in the trace with its reason", async (t) => {
-  const traced = [];
-  const performance = await import("../performance.js");
-  t.mock.module("../performance.js", { exports: { ...performance, trace: (name, fields) => { traced.push([name, fields]); } } });
-  const { createRegistry: createTracedRegistry } = await import("../exposure.js?dropped-change");
-  const host = fakeHost(() => ({ result: null }));
   const made = createTracedRegistry({ call: host.call, report: (error) => { throw error; } });
   made.declare("core", coreExposes());
   made.declare("probe", probeExposes());
@@ -854,12 +885,13 @@ test("a value that no watch takes is recorded in the trace with its reason", asy
   await made.handle({ method: "status.watch", params: { name: "probe.lines" } });
   made.changed({ surface: "tab-a", name: "probe.lines", value: ["b"], version: 2 });
   made.changed({ surface: "tab-a", name: "probe.lines", value: ["a"], version: 1 });
-  const dropped = traced.filter(([name]) => name === "surface.change.dropped").map(([, fields]) => fields);
+  await flushEvents();
+  const dropped = tracedEvents(wire, "surface.change.dropped");
   assert.deepEqual(dropped, [
     { surface: "tab-a", name: "probe.lines", version: 1, reason: "no watch" },
     { surface: "tab-a", name: "probe.lines", version: 1, reason: "older than version 2" },
   ]);
-});
+}));
 
 // An open dialog makes the elements outside it inert (docs/spec/exposure.md). A surface document stands behind it as a whole.
 test("an open dialog refuses an action on a core element and a surface element, and keeps their rectangles", { timeout: 5000 }, async () => {

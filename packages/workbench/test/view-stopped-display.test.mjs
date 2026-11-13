@@ -1,18 +1,20 @@
 // Checks that the error of a view that stopped its restarts is shown on its card through the error display, and that it is cleared when the
-// card is shown again (docs/spec/native-surfaces.md#view-surfaces). The host report is a fake, so the test runs without a host.
+// card is shown again (docs/spec/native-surfaces.md#view-surfaces). The error is written to the log through the page-wire case of the test.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { viewStopState } from "../view-calls.js";
+import { selectPageWire } from "@soksak/runtime";
 
 const REASON = "the view failed 4 times within 300 seconds and is created again when its tab is reopened";
 
-test("the stop of a view shows its reason on the card and the reopened card clears it", async (t) => {
-  const reports = [];
-  t.mock.module("../host.js", { namedExports: { report: (line) => reports.push(line) } });
+test("the stop of a view shows its reason on the card and the reopened card clears it", async () => {
+  // The case selects the host of the page before the modules that read it are imported, because the page reads the host when it is imported.
+  const wire = selectPageWire("view-stopped-display-error");
+  const { viewStopState } = await import("../view-calls.js");
   const dom = new JSDOM(`<section data-card-id="card-1"><div data-native-surface-id="probe-surface"></div><footer class="status"></footer></section>`);
   globalThis.document = dom.window.document;
   const { setSurfaceStatus } = await import("../surface-status.js?display");
+  const { flushEvents } = await import("../page-log.js");
   const status = document.querySelector(".status");
   try {
     setSurfaceStatus(status, "probe-surface", { phase: "loading" });
@@ -22,11 +24,19 @@ test("the stop of a view shows its reason on the card and the reopened card clea
     assert.equal(indicator.hidden, false, "the error is visible on the card");
     assert.match(indicator.textContent, /the view failed 4 times within 300 seconds/);
     assert.equal(indicator.dataset.error, "surface status card-1 probe-surface", "the error uses the display path of its card");
+    // The record leaves in the batch of the page log, which the flush waits for.
+    await flushEvents();
+    const reports = wire.calls
+      .filter(({ name, payload }) => name === "log" && payload.action === "batch")
+      .flatMap(({ payload }) => payload.events)
+      .filter(({ event }) => event.startsWith("workbench.record."))
+      .map(({ fields }) => `${fields.where}: ${fields.text}`);
     assert.deepEqual(reports, ["surface status card-1 probe-surface: 표면 오류 · " + REASON]);
 
     setSurfaceStatus(status, "probe-surface", { phase: "loading" });
     assert.equal(indicator.dataset.error, undefined, "showing the card again clears the error");
     assert.equal(indicator.textContent, "불러오는 중");
+    wire.finish();
   } finally {
     dom.window.close();
   }

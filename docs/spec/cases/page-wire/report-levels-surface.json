@@ -1,0 +1,24 @@
+{
+  "name": "report-levels-surface",
+  "description": "A surface module reports its composition failure through its runtime, and the page sends the error record in one log batch; the clock of the page is already anchored, so the batch carries no clock answer.",
+  "replay": true,
+  "variables": {
+    "page-identity": { "type": "string", "example": "5a0c9e7b-1f2d-4c3e-8b4a-6d7e8f901234", "source": "page" },
+    "ts-us-1": { "type": "integer", "example": 1791000000000471, "source": "page" },
+    "mono-ns-1": { "type": "integer", "example": 5000000811, "source": "page" }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            { "ts_us": "$ts-us-1", "mono_ns": "$mono-ns-1", "start": "$page-identity", "level": "error", "event": "workbench.record.error", "fields": { "where": "surface composition failed", "text": "probe" } }
+          ]
+        }
+      }
+    },
+    { "reply": { "result": null } }
+  ]
+}

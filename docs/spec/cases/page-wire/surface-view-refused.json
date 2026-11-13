@@ -1,0 +1,7 @@
+{
+  "name": "surface-view-refused",
+  "description": "The page sends no call when it mounts a view tab whose stored origin is refused: the refusal is kept on the tab, and the view is not started.",
+  "replay": true,
+  "variables": {},
+  "steps": []
+}

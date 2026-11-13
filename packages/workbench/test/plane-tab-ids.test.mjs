@@ -4,43 +4,50 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { registerPlugin } from "../registry.js";
 
 const owner = "fixture-ids";
 
-test("a new tab avoids the ids of held surfaces, stored tabs and tabs issued before it", { timeout: 5000 }, async (t) => {
-  const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
-  const dom = new JSDOM(markup, { url: "http://localhost/" });
-  dom.window.matchMedia = (query) => ({ media: query, matches: true,
-    addEventListener: () => {}, removeEventListener: () => {} });
-  globalThis.window = dom.window;
-  globalThis.document = dom.window.document;
-  globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
-  globalThis.CSS = dom.window.CSS;
+// The page of the window is drawn in this document, which the plane reads at its import (plane.js).
+const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+const dom = new JSDOM(markup, { url: "http://localhost/" });
+dom.window.matchMedia = (query) => ({ media: query, matches: true,
+  addEventListener: () => {}, removeEventListener: () => {} });
+globalThis.window = dom.window;
+globalThis.document = dom.window.document;
+globalThis.location = dom.window.location;
+globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
+globalThis.CSS = dom.window.CSS;
 
-  t.mock.module("../surface-modules.js", { exports: {
-    mountSurface: () => Promise.resolve(), disposeSurface: () => Promise.resolve(), mountedSurface: () => null,
-    placePluginPlaceholder: () => {}, surfaceForTab: () => null,
-  } });
-  t.mock.module("../projects.js", { exports: {
-    initialProjectContextReady: () => true,
-    initialProjectContextFailed: () => false,
-    waitForInitialProjectContext: () => Promise.resolve(),
-    storedTabTaken: (id) => id === "tab-bbbbbb",
-  } });
-  t.mock.module("../environment.js", { exports: {
-    environment: () => ({ workspace: { focus: "main", grid: {
-      xs: [0, 1], ys: [0, 1],
-      cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [
-        { plugin: owner, title: "first" }, { plugin: owner, title: "second" }] }],
-    } } }),
-    pluginUnits: () => [{ id: owner, name: "Ids", description: "검사용 표면.", surface: true, sections: [] }],
-    refusedPlugins: () => new Set(),
-  } });
+const { installEnvironment } = await import("../environment.js");
+const { registerPlugin } = await import("../registry.js");
+const { begin } = await import("../projects.js");
+const waits = await import("../image-detach-waits.js");
+const plane = await import("../plane.js");
+
+const environmentFile = {
+  runtime: "runtime",
+  workspace: { focus: "main", grid: {
+    xs: [0, 1], ys: [0, 1],
+    cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [
+      { plugin: owner, title: "first" }, { plugin: owner, title: "second" }] }],
+  } },
+  sidebars: { sets: [], links: [] },
+};
+
+// A stored project whose layout holds the tab tab-bbbbbb; the window knows its tabs from the project list it starts with.
+const storedProject = {
+  id: "prj-aaaaaa",
+  spaces: [{ id: "spc-aaaaaa", layout: { focusedId: "stored", named: 0, state: { xs: [0, 1], ys: [0, 1], cards: [
+    { id: "stored", c0: 0, c1: 1, r0: 0, r1: 1, data: { tabs: [{ id: "tab-bbbbbb", plugin: owner, title: "stored" }], activeId: "tab-bbbbbb" } },
+  ] } } }],
+  activeSpaceId: "spc-aaaaaa",
+  named: 0,
+};
+
+test("a new tab avoids the ids of held surfaces, stored tabs and tabs issued before it", { timeout: 5000 }, () => {
+  installEnvironment(environmentFile, { plugins: [] });
   registerPlugin({ id: owner, name: "Ids", mark: "i", svg: "<path/>", ink: null, drop: null, surface: () => null });
-
-  const waits = await import("../image-detach-waits.js");
-  const plane = await import("../plane.js");
+  begin({ common: {}, open: [], projects: [storedProject] });
   waits.holdImageDetachSurfaces(["tab-aaaaaa"]);
   // The first tab draws the held id, then the stored id, then tab-cccccc; the second tab draws the held id, then the id
   // that the first tab took, then tab-dddddd.

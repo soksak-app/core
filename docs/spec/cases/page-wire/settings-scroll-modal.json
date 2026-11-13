@@ -1,0 +1,46 @@
+{
+  "name": "settings-scroll-modal",
+  "description": "The page opens the settings dialog in the native modal, and the host reports the scroll position of its content as the answer of the modal: the page keeps each reported number, negative values included, and refuses each value that is not a number.",
+  "replay": false,
+  "reason": "overlayShow opens a native modal view in the window, and the answers of the modal (overlay-pick) reach the page only from a window, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {
+    "modal-html": {
+      "type": "string",
+      "example": "<header class=\"set-card__head\" data-grip></header>",
+      "source": "page"
+    },
+    "modal-css": {
+      "type": "string",
+      "example": ".set-card {border-top-color: rgb(1, 2, 3); background-color: rgb(4, 5, 6);}",
+      "source": "page"
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "overlayShow",
+        "payload": {
+          "id": "settings",
+          "title": "설정",
+          "rect": { "x": 0, "y": 0, "w": 800, "h": 600 },
+          "mode": "dialog",
+          "card": { "x": 0, "y": 0, "w": 0, "h": 0 },
+          "className": "set-card",
+          "html": "$modal-html",
+          "css": "$modal-css",
+          "border": "rgb(1, 2, 3)",
+          "radius": 0
+        }
+      }
+    },
+    { "reply": { "result": null } },
+    { "notice": { "event": "overlay-pick", "payload": { "id": "settings", "key": "scroll", "value": "12" } } },
+    { "notice": { "event": "overlay-pick", "payload": { "id": "settings", "key": "scroll", "value": "-2" } } },
+    { "notice": { "event": "overlay-pick", "payload": { "id": "settings", "key": "scroll", "value": "-3.5" } } },
+    { "notice": { "event": "overlay-pick", "payload": { "id": "settings", "key": "scroll", "value": "0" } } },
+    { "notice": { "event": "overlay-pick", "payload": { "id": "settings", "key": "scroll", "value": "abc" } } },
+    { "notice": { "event": "overlay-pick", "payload": { "id": "settings", "key": "scroll", "value": "NaN" } } },
+    { "notice": { "event": "overlay-pick", "payload": { "id": "settings", "key": "scroll", "value": "Infinity" } } },
+    { "notice": { "event": "overlay-pick", "payload": { "id": "settings", "key": "scroll", "value": "" } } }
+  ]
+}

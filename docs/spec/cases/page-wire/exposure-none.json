@@ -1,0 +1,7 @@
+{
+  "name": "exposure-none",
+  "description": "The exposure tests import the modules of the page while this case is selected; the page sends no call while it imports them.",
+  "replay": true,
+  "variables": {},
+  "steps": []
+}

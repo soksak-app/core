@@ -1,0 +1,12 @@
+{
+  "name": "observe-drag-ticks",
+  "description": "The host delivers the steps of a native drag as the notice diagnostics-tick: two steps that each end a leg, then a step that the host could not pace with its error text; the page sends no call for them.",
+  "replay": false,
+  "reason": "diagnostics-tick is a notice that the host sends for a drag of a window, and the Go producer runs without a window and cannot deliver it (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {},
+  "steps": [
+    { "notice": { "event": "diagnostics-tick", "payload": { "fraction": 1, "last": true } } },
+    { "notice": { "event": "diagnostics-tick", "payload": { "fraction": 1, "last": true } } },
+    { "notice": { "event": "diagnostics-tick", "payload": { "error": "the window is on no display with a refresh rate" } } }
+  ]
+}

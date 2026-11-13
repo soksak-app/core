@@ -1,0 +1,7 @@
+{
+  "name": "plugin-records-trace-off",
+  "description": "A plugin of the page with the performance trace off sends no call to the host: its trace event is not built and not sent, and no log batch leaves the page.",
+  "replay": true,
+  "variables": {},
+  "steps": []
+}

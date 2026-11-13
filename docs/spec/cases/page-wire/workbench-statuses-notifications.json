@@ -1,0 +1,13 @@
+{
+  "name": "workbench-statuses-notifications",
+  "description": "The page reads the notification authorization of the host when the core exposure is imported, and sends no other call while the workbench statuses are read.",
+  "replay": false,
+  "reason": "The producer runs only the calls log and workspace without a window (docs/spec/cases/page-wire/README.md#producer-runs), and the call notificationState is not one of them.",
+  "variables": {
+    "authorization": { "type": "string", "example": "notDetermined" }
+  },
+  "steps": [
+    { "call": { "name": "notificationState" } },
+    { "reply": { "result": { "authorization": "$authorization", "error": null } } }
+  ]
+}

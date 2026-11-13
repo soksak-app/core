@@ -1,0 +1,84 @@
+{
+  "name": "installed-plugins-follow-change",
+  "description": "The page reads the plugin state and the outdated sidecars once after it subscribes, and after the notice plugins-changed reads both again; the state holds the plugin a at the first read and the plugins a and b at the second.",
+  "replay": false,
+  "reason": "The case delivers the plugins-changed notice of the host, and the Go producer runs no window and refuses a notice (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+    {
+      "call": {
+        "name": "pluginsState"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "registry": null,
+          "index": null,
+          "installed": {
+            "plugins": {
+              "a": {
+                "version": "0.0.1",
+                "enabled": true,
+                "sidecars": {}
+              }
+            },
+            "sidecars": {}
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "sidecarsOutdated"
+      }
+    },
+    {
+      "reply": {
+        "result": []
+      }
+    },
+    {
+      "notice": {
+        "event": "plugins-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "pluginsState"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "registry": null,
+          "index": null,
+          "installed": {
+            "plugins": {
+              "a": {
+                "version": "0.0.1",
+                "enabled": true,
+                "sidecars": {}
+              },
+              "b": {
+                "version": "0.0.1",
+                "enabled": true,
+                "sidecars": {}
+              }
+            },
+            "sidecars": {}
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "sidecarsOutdated"
+      }
+    },
+    {
+      "reply": {
+        "result": []
+      }
+    }
+  ]
+}

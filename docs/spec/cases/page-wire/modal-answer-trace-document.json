@@ -1,0 +1,12 @@
+{
+  "name": "modal-answer-trace-document",
+  "description": "The page opens the menu modal, and the modal document reports its state; the state report is not an answer, so the page writes no trace event and sends no log batch.",
+  "replay": false,
+  "reason": "The case opens a native modal view and delivers its state notice, and only the native host with a window produces them (the native tier of docs/operations/examples.md#test-kinds).",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "overlayShow", "payload": { "id": "menu", "title": "Menu", "rect": { "x": 0, "y": 0, "w": 10, "h": 10 }, "mode": "menu", "card": { "x": 0, "y": 0, "w": 0, "h": 0 }, "className": "", "html": "", "css": "", "border": "rgb(7, 8, 9)", "radius": 4 } } },
+    { "reply": { "result": null } },
+    { "notice": { "event": "overlay-pick", "payload": { "id": "menu", "key": "document", "value": "{}" } } }
+  ]
+}

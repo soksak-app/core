@@ -1,0 +1,7 @@
+{
+  "name": "page-error-display",
+  "description": "The page sends no call while its error display reads the error events of the window; the location of an error is kept as the detail of its display.",
+  "replay": true,
+  "variables": {},
+  "steps": []
+}

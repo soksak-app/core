@@ -1,0 +1,184 @@
+{
+  "name": "exposure-trace-registration",
+  "description": "The exposure of a page turns the trace on and sends a surface.registration trace record that names the entries of the surface at the moment it registered them.",
+  "replay": false,
+  "reason": "performance turns the trace of the host on and off, and the Go producer runs only log and workspace calls without a window.",
+  "variables": {
+    "ts-us-1": {
+      "type": "integer",
+      "example": 1791000000003507,
+      "source": "page"
+    },
+    "mono-ns-1": {
+      "type": "integer",
+      "example": 5003051227,
+      "source": "page"
+    },
+    "page-identity": {
+      "type": "string",
+      "example": "40d423ee-20cc-4003-a967-c64a77e628b0",
+      "source": "page"
+    },
+    "time-origin": {
+      "type": "number",
+      "example": 1794612053926.292,
+      "source": "page"
+    },
+    "ts-us-2": {
+      "type": "integer",
+      "example": 1791000000003559,
+      "source": "page"
+    },
+    "mono-ns-2": {
+      "type": "integer",
+      "example": 5003103310,
+      "source": "page"
+    },
+    "ts-us-3": {
+      "type": "integer",
+      "example": 1791000000003677,
+      "source": "page"
+    },
+    "mono-ns-3": {
+      "type": "integer",
+      "example": 5003221852,
+      "source": "page"
+    },
+    "ts-us-4": {
+      "type": "integer",
+      "example": 1791000000004685,
+      "source": "page"
+    },
+    "mono-ns-4": {
+      "type": "integer",
+      "example": 5004229393,
+      "source": "page"
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "performance",
+        "payload": {
+          "action": "on"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-1",
+              "mono_ns": "$mono-ns-1",
+              "start": "$page-identity",
+              "level": "debug",
+              "event": "workbench.trace.surface.registration",
+              "fields": {
+                "phase": "registered",
+                "surface": "registration-timeline-surface",
+                "timeOrigin": "$time-origin",
+                "hasPort": true,
+                "kind": "status",
+                "name": "core.surface.document",
+                "names": [
+                  "status core.surface.document"
+                ]
+              }
+            },
+            {
+              "ts_us": "$ts-us-2",
+              "mono_ns": "$mono-ns-2",
+              "start": "$page-identity",
+              "level": "debug",
+              "event": "workbench.trace.surface.registration",
+              "fields": {
+                "phase": "closed",
+                "surface": "registration-timeline-surface",
+                "timeOrigin": "$time-origin",
+                "hasPort": true,
+                "names": [
+                  "status core.surface.document"
+                ]
+              }
+            },
+            {
+              "ts_us": "$ts-us-3",
+              "mono_ns": "$mono-ns-3",
+              "start": "$page-identity",
+              "level": "debug",
+              "event": "workbench.trace.surface.registration",
+              "fields": {
+                "phase": "registered",
+                "surface": "registration-timeline-surface",
+                "timeOrigin": "$time-origin",
+                "hasPort": true,
+                "kind": "status",
+                "name": "probe.lines",
+                "names": [
+                  "status probe.lines"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-4",
+              "mono_ns": "$mono-ns-4",
+              "start": "$page-identity",
+              "level": "debug",
+              "event": "workbench.trace.surface.registration",
+              "fields": {
+                "phase": "disposed",
+                "surface": "registration-timeline-surface",
+                "timeOrigin": "$time-origin",
+                "hasPort": true,
+                "names": [
+                  "status probe.lines"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "performance",
+        "payload": {
+          "action": "off"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ]
+}

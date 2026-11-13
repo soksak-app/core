@@ -1,0 +1,41 @@
+{
+  "name": "page-clock-statement",
+  "description": "The page turns its trace on, anchors its clock with five clock requests, and sends in one batch the clock statement, the record of the start and the trace event, each stamped with its own readings; then the page turns its trace off.",
+  "replay": false,
+  "reason": "The switch of the trace is the call performance, which the Go producer does not run (it runs only the calls log and workspace, docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {
+    "ts-us": { "type": "integer", "example": 1791000000000456 },
+    "mono-ns": { "type": "integer", "example": 5000000789 },
+    "page-identity": { "type": "string", "example": "6f1d0c2e-5a7b-4e8f-9c3d-2b1a0f9e8d7c", "source": "page" },
+    "clock-ts-us": { "type": "integer", "example": 1791000000000456, "source": "page" },
+    "clock-mono-ns": { "type": "integer", "example": 5000000789, "source": "page" },
+    "clock-trip-us": { "type": "integer", "example": 40, "source": "page" },
+    "clock-resolution-us": { "type": "integer", "example": 1, "source": "page" },
+    "start-ts-us": { "type": "integer", "example": 1791000000001000, "source": "page" },
+    "start-mono-ns": { "type": "integer", "example": 5000001000000, "source": "page" },
+    "trace-ts-us": { "type": "integer", "example": 1791000000002000, "source": "page" },
+    "trace-mono-ns": { "type": "integer", "example": 5000002000000, "source": "page" }
+  },
+  "steps": [
+    { "call": { "name": "performance", "payload": { "action": "on" } } },
+    { "reply": { "result": null } },
+    { "call": { "name": "log", "payload": { "action": "clock" } } },
+    { "reply": { "result": { "ts_us": "$ts-us", "mono_ns": "$mono-ns" } } },
+    { "call": { "name": "log", "payload": { "action": "clock" } } },
+    { "reply": { "result": { "ts_us": "$ts-us", "mono_ns": "$mono-ns" } } },
+    { "call": { "name": "log", "payload": { "action": "clock" } } },
+    { "reply": { "result": { "ts_us": "$ts-us", "mono_ns": "$mono-ns" } } },
+    { "call": { "name": "log", "payload": { "action": "clock" } } },
+    { "reply": { "result": { "ts_us": "$ts-us", "mono_ns": "$mono-ns" } } },
+    { "call": { "name": "log", "payload": { "action": "clock" } } },
+    { "reply": { "result": { "ts_us": "$ts-us", "mono_ns": "$mono-ns" } } },
+    { "call": { "name": "log", "payload": { "action": "batch", "events": [
+      { "ts_us": "$clock-ts-us", "mono_ns": "$clock-mono-ns", "start": "$page-identity", "level": "info", "event": "workbench.log.clock", "fields": { "trip_us": "$clock-trip-us", "resolution_us": "$clock-resolution-us" } },
+      { "ts_us": "$start-ts-us", "mono_ns": "$start-mono-ns", "start": "$page-identity", "level": "info", "event": "workbench.start", "fields": { "started_at": 1, "url": "wails://localhost/" } },
+      { "ts_us": "$trace-ts-us", "mono_ns": "$trace-mono-ns", "start": "$page-identity", "level": "debug", "event": "workbench.trace.surface.mount", "fields": { "plugin": "probe", "surface": "tab-a", "ms": 1 } }
+    ] } } },
+    { "reply": { "result": null } },
+    { "call": { "name": "performance", "payload": { "action": "off" } } },
+    { "reply": { "result": null } }
+  ]
+}

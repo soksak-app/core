@@ -1,20 +1,17 @@
 // Checks that an error shown on screen is written to the application log at that moment.
 import assert from "node:assert/strict";
-import { mock, test } from "node:test";
-import { clockAnswer, recordsOf, shownRecord } from "./support/records.mjs";
+import { test } from "node:test";
+import { selectPageWire } from "@soksak/runtime";
+import { recordsOf, shownRecord } from "./support/records.mjs";
 
-const lines = [];
-mock.module("@soksak/runtime", { namedExports: { host: {
-  on: () => {},
-  page: (path) => path,
-  call: async (name, payload) => { if (clockAnswer(name, payload)) return clockAnswer(name, payload); for (const record of recordsOf(name, payload)) lines.push(shownRecord(record)); },
-} } });
+// The case selects the host of the page before the modules below are imported, because the page reads the host when it is imported.
+const wire = selectPageWire("shown-errors-record");
 const { JSDOM } = await import("jsdom");
 const { document } = new JSDOM("<p></p>").window;
 const { hideError, showError } = await import("../shown-errors.js");
 const { flushEvents } = await import("../page-log.js");
 
-test("an error shown on the screen is logged once until it changes or clears", async () => {
+test("an error shown on the screen is logged once until it changes or clears", { timeout: 5000 }, async () => {
   const el = document.querySelector("p");
   showError(el, "library", "folder is missing");
   assert.equal(el.textContent, "folder is missing");
@@ -25,7 +22,8 @@ test("an error shown on the screen is logged once until it changes or clears", a
   assert.equal(el.dataset.error, undefined);
   showError(el, "library", "registry failed");
   await flushEvents();
-  assert.deepEqual(lines.splice(0), [
+  assert.deepEqual(wire.calls.flatMap(({ name, payload }) => recordsOf(name, payload)).map(shownRecord), [
     "error workbench library: folder is missing", "error workbench library: registry failed", "error workbench library: registry failed",
   ]);
+  wire.finish();
 });

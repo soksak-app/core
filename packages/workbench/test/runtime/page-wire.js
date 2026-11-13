@@ -191,6 +191,8 @@ export function openPageWire(name) {
   const call = (callName, payload, options) => {
     const sent = onTheWire(callName, payload, options?.cids);
     calls.push(sent);
+    // PAGE_WIRE_TRACE=1 writes each call that the page sends, matched or not, so the author of a case reads the order of the page.
+    if (process.env.PAGE_WIRE_TRACE === "1") process.stderr.write(`page-wire ${name} step ${cursor}: ${JSON.stringify(sent)}\n`);
     const step = steps[cursor];
     if (!step) return Promise.reject(fail(`the page called ${JSON.stringify(sent)} after the last step of the case`));
     if (!("call" in step)) return Promise.reject(fail(`the page called ${JSON.stringify(sent)} where the case has ${JSON.stringify(step)}`));

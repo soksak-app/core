@@ -3,34 +3,22 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { registerPlugin } from "../registry.js";
-import { restoreOrigin, viewRefusal } from "../tab-reports.js";
-import { setSurfaceTextSize } from "../text-size.js";
+import { selectPageWire } from "@soksak/runtime";
+
+// The page modules read the host when they are imported, so the case is selected before the first import. A refused view sends no call.
+const wire = selectPageWire("surface-view-refused");
+const { registerPlugin } = await import("../registry.js");
+const { restoreOrigin, viewRefusal } = await import("../tab-reports.js");
+const { setSurfaceTextSize } = await import("../text-size.js");
 
 setSurfaceTextSize(() => 1);
 
-test("mounting a view whose stored origin is refused leaves the view out and does not throw", { timeout: 5000 }, async (t) => {
+test("mounting a view whose stored origin is refused leaves the view out and does not throw", { timeout: 5000 }, async () => {
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
-  const started = [];
-  const actualHost = await import("../host.js");
-  t.mock.module("../host.js", { exports: {
-    ...actualHost,
-    native: true,
-    onSurfacePrepared: () => () => {},
-    surfaceContextRuntime: (surface, declarations) => {
-      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
-      return { ...runtime, native: { ...runtime.native, on: async () => () => {}, call: async (name) => {
-        if (name === "viewReply") started.push(name);
-        return null;
-      } } };
-    },
-  } });
-  const actualProjects = await import("../projects.js");
-  t.mock.module("../projects.js", { exports: { ...actualProjects, active: () => null, tabStateStore: () => null, tabStatesReady: async () => null } });
   const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-refused");
   const pluginId = "fixture-refused-view";
   const surfaceId = "tab-refused-view";
@@ -48,4 +36,5 @@ test("mounting a view whose stored origin is refused leaves the view out and doe
     await disposeSurface(surfaceId);
     dom.window.close();
   }
+  wire.finish();
 });

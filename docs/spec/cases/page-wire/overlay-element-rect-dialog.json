@@ -1,0 +1,14 @@
+{
+  "name": "overlay-element-rect-dialog",
+  "description": "The page opens the dialog modal of the settings element, which spans the whole window, and the host answers the call with null; the modal document reports the place of its element core.settings-modal.set, and the page closes the modal by its element id, which the host answers with null.",
+  "replay": false,
+  "reason": "overlayShow opens a native modal view in the window, and the modal document sends its state through the overlay-pick notice; only the native host with a window produces them (the native tier of docs/operations/examples.md#test-kinds).",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "overlayShow", "payload": { "id": "settings", "title": "Settings", "rect": { "x": 0, "y": 0, "w": 800, "h": 600 }, "mode": "dialog", "card": { "x": 0, "y": 0, "w": 0, "h": 0 }, "className": "", "html": "<button id=\"switch\" data-expose=\"core.settings-modal.set\"></button>", "css": "", "border": "rgb(1, 2, 3)", "radius": 0 } } },
+    { "reply": { "result": null } },
+    { "notice": { "event": "overlay-pick", "payload": { "id": "settings", "key": "document", "value": "{\"elements\":[{\"name\":\"core.settings-modal.set\",\"x\":468,\"y\":115,\"width\":40,\"height\":22}]}" } } },
+    { "call": { "name": "overlayHide", "payload": "settings" } },
+    { "reply": { "result": null } }
+  ]
+}

@@ -1,0 +1,74 @@
+{
+  "name": "installed-plugins-activation-window-active",
+  "description": "Each window-active notice of the host makes the page read the plugin state and then the application update, and the page records the window event and, after the state is read, the registry reread with its update count; the first batch also carries the clock record of the page.",
+  "replay": false,
+  "reason": "The notice window-active reaches only the listeners of a window, and the Go producer runs no window and refuses a case with a notice (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {
+    "ts-us": { "type": "integer", "example": 1791000000000456 },
+    "mono-ns": { "type": "integer", "example": 5000000789 },
+    "page-identity": { "type": "string", "example": "5d0c3a7e-8b1f-4c2a-9e6d-1f3b5a7c9e02", "source": "page" },
+    "trip-us": { "type": "integer", "example": 120, "source": "page" },
+    "resolution-us": { "type": "integer", "example": 1, "source": "page" },
+    "clock-ts-us": { "type": "integer", "example": 1791000000000456, "source": "page" },
+    "clock-mono-ns": { "type": "integer", "example": 5000000789, "source": "page" },
+    "active-ts-us": { "type": "integer", "example": 1791000000000470, "source": "page" },
+    "active-mono-ns": { "type": "integer", "example": 5000000803, "source": "page" },
+    "reread-ts-us": { "type": "integer", "example": 1791000000000480, "source": "page" },
+    "reread-mono-ns": { "type": "integer", "example": 5000000813, "source": "page" },
+    "active2-ts-us": { "type": "integer", "example": 1791000000000900, "source": "page" },
+    "active2-mono-ns": { "type": "integer", "example": 5000001233, "source": "page" },
+    "reread2-ts-us": { "type": "integer", "example": 1791000000000910, "source": "page" },
+    "reread2-mono-ns": { "type": "integer", "example": 5000001243, "source": "page" }
+  },
+  "steps": [
+    { "notice": { "event": "window-active" } },
+    { "call": { "name": "pluginsState" } },
+    { "reply": { "result": { "registry": null, "index": null, "installed": { "plugins": {}, "sidecars": {} } } } },
+    { "call": { "name": "appUpdateState" } },
+    { "reply": { "result": { "version": "0.0.8", "available": null } } },
+    { "call": { "name": "log", "payload": { "action": "clock" } } },
+    { "reply": { "result": { "ts_us": "$ts-us", "mono_ns": "$mono-ns" } } },
+    { "call": { "name": "log", "payload": { "action": "clock" } } },
+    { "reply": { "result": { "ts_us": "$ts-us", "mono_ns": "$mono-ns" } } },
+    { "call": { "name": "log", "payload": { "action": "clock" } } },
+    { "reply": { "result": { "ts_us": "$ts-us", "mono_ns": "$mono-ns" } } },
+    { "call": { "name": "log", "payload": { "action": "clock" } } },
+    { "reply": { "result": { "ts_us": "$ts-us", "mono_ns": "$mono-ns" } } },
+    { "call": { "name": "log", "payload": { "action": "clock" } } },
+    { "reply": { "result": { "ts_us": "$ts-us", "mono_ns": "$mono-ns" } } },
+    { "call": { "name": "log", "payload": {
+      "action": "batch",
+      "events": [
+        { "ts_us": "$clock-ts-us", "mono_ns": "$clock-mono-ns", "start": "$page-identity", "level": "info", "event": "workbench.log.clock", "fields": { "trip_us": "$trip-us", "resolution_us": "$resolution-us" } },
+        { "ts_us": "$active-ts-us", "mono_ns": "$active-mono-ns", "start": "$page-identity", "level": "info", "event": "workbench.window.active", "fields": {} }
+      ]
+    } } },
+    { "reply": { "result": null } },
+    { "call": { "name": "log", "payload": {
+      "action": "batch",
+      "events": [
+        { "ts_us": "$reread-ts-us", "mono_ns": "$reread-mono-ns", "start": "$page-identity", "level": "info", "event": "workbench.plugins.reread", "fields": { "updates": 0 } }
+      ]
+    } } },
+    { "reply": { "result": null } },
+    { "notice": { "event": "window-active" } },
+    { "call": { "name": "pluginsState" } },
+    { "reply": { "result": { "registry": null, "index": null, "installed": { "plugins": {}, "sidecars": {} } } } },
+    { "call": { "name": "appUpdateState" } },
+    { "reply": { "result": { "version": "0.0.8", "available": null } } },
+    { "call": { "name": "log", "payload": {
+      "action": "batch",
+      "events": [
+        { "ts_us": "$active2-ts-us", "mono_ns": "$active2-mono-ns", "start": "$page-identity", "level": "info", "event": "workbench.window.active", "fields": {} }
+      ]
+    } } },
+    { "reply": { "result": null } },
+    { "call": { "name": "log", "payload": {
+      "action": "batch",
+      "events": [
+        { "ts_us": "$reread2-ts-us", "mono_ns": "$reread2-mono-ns", "start": "$page-identity", "level": "info", "event": "workbench.plugins.reread", "fields": { "updates": 0 } }
+      ]
+    } } },
+    { "reply": { "result": null } }
+  ]
+}

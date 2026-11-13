@@ -1,24 +1,23 @@
 // The replies of modal documents that the host relays (docs/spec/native-host.md): a reply of a modal that the page does not
 // show, or that has no receiver, is dropped and recorded as `workbench.overlay.dropped`, never dropped without a record.
 import assert from "node:assert/strict";
-import { mock, test } from "node:test";
+import { test } from "node:test";
+import { selectPageWire } from "@soksak/runtime";
 
-const listeners = {};
-const recorded = [];
-mock.module("@soksak/runtime", { namedExports: { host: {
-  on: (name, listener) => { listeners[name] = listener; return Promise.resolve(() => {}); },
-  page: (path) => path,
-  call: async () => {},
-} } });
-const real = await import("../page-log.js?real");
-mock.module("../page-log.js", { namedExports: {
-  ...real,
-  emitEvent: (level, event, fields) => { recorded.push({ level, event, fields }); return true; },
-} });
-await import("../host.js");
-
-test("a reply of a modal that the page does not show is recorded as workbench.overlay.dropped", () => {
-  recorded.length = 0;
-  listeners["overlay-pick"]({ id: "debug", key: "save-all", value: "" });
-  assert.deepEqual(recorded, [{ level: "info", event: "workbench.overlay.dropped", fields: { id: "debug", shown: "", key: "save-all" } }]);
+test("a reply of a modal that the page does not show is recorded as workbench.overlay.dropped", async () => {
+  // The case selects the host of the page before the host module and the page log are imported, because the page reads the host when it is imported.
+  const wire = selectPageWire("overlay-pick-dropped");
+  const { logGate } = await import("../log-gate.js");
+  // The event is stored at the level info, so it reaches the host in the batch of the page.
+  logGate.set({ lifecycle: "error", input: "info", call: "error", io: "error", frame: "error" });
+  const { flushEvents } = await import("../page-log.js");
+  await import("../host.js");
+  wire.deliverNotice();
+  await flushEvents();
+  const recorded = wire.calls
+    .filter(({ name, payload }) => name === "log" && payload.action === "batch")
+    .flatMap(({ payload }) => payload.events)
+    .filter(({ event }) => event.startsWith("workbench.overlay."));
+  assert.deepEqual(recorded.map(({ level, event, fields }) => ({ level, event, fields })), [{ level: "info", event: "workbench.overlay.dropped", fields: { id: "debug", shown: "", key: "save-all" } }]);
+  wire.finish();
 });

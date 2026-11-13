@@ -1,0 +1,14 @@
+{
+  "name": "overlay-paint-clip",
+  "description": "The page opens the dialog modal of the settings element, which spans the whole window, with its markup, title, border colour and the styles of its document without the native paint clip, and the host answers the call with null.",
+  "replay": false,
+  "reason": "overlayShow opens a native modal view in the window, and only the native host with a window produces its answer (the native tier of docs/operations/examples.md#test-kinds).",
+  "variables": {
+    "css": { "type": "string", "example": ".card { color: red; }", "source": "page" },
+    "border": { "type": "string", "example": "rgb(0, 0, 0)", "source": "page" }
+  },
+  "steps": [
+    { "call": { "name": "overlayShow", "payload": { "id": "settings", "title": "설정", "rect": { "x": 0, "y": 0, "w": 800, "h": 600 }, "mode": "dialog", "card": { "x": 0, "y": 0, "w": 0, "h": 0 }, "className": "", "html": "x", "css": "$css", "border": "$border", "radius": 0 } } },
+    { "reply": { "result": null } }
+  ]
+}

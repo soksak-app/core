@@ -15,11 +15,12 @@ test("the folder caption of the project scope breaks after each separator and hy
   globalThis.window = dom.window;
   globalThis.CSS = dom.window.CSS ?? { escape: (text) => text };
   globalThis.addEventListener = dom.window.addEventListener.bind(dom.window);
-  t.mock.module("../compositor.js", { exports: { ...await import("../compositor.js"), standIn: () => {} } });
-  t.mock.module("../environment.js", { exports: { pluginUnits: () => [] } });
+  // The active project is the project that the window shows. Its activation runs the layout listener of the plane (projects.js onSwitch), which
+  // this unit test does not start, so the test gives the active project its root.
   t.mock.module("../projects.js", { exports: { ...await import("../projects.js"), active: () => ({ root }) } });
-  const settings = await import("../settings.js");
-  t.mock.module("../settings.js", { exports: { ...settings, settingProject: () => "fixture" } });
+  // The settings of the project scope are the settings of the snapshot of the project, as the start document gives them (beginSettings).
+  const { beginSettings } = await import("../settings.js");
+  beginSettings({ common: {}, projects: [{ id: "fixture", root, title: "fixture", spaces: [], settings: {} }] }, "fixture");
   const { registry } = await import("../exposure.js");
   registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
   const ui = await import("../settings-ui.js?folder");

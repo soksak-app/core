@@ -6,8 +6,11 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { EXPOSURE_ERRORS } from "@soksak/plugin-api";
+import { selectPageWire } from "@soksak/runtime";
 
-test("core.window.workbench, core.workbench.error and core.workbench.audit describe the workbench and the page names are refused", { timeout: 5000 }, async (t) => {
+test("core.window.workbench, core.workbench.error and core.workbench.audit describe the workbench and the page names are refused", { timeout: 5000 }, async () => {
+  // The case selects the host of the page before the modules below are imported, because the page reads the host when it is imported.
+  const wire = selectPageWire("workbench-statuses-notifications");
   const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   const dom = new JSDOM(markup, { url: "http://localhost/" });
   dom.window.matchMedia = (query) => ({ media: query, matches: true,
@@ -22,8 +25,6 @@ test("core.window.workbench, core.workbench.error and core.workbench.audit descr
   globalThis.devicePixelRatio = 2;
   globalThis.innerWidth = 1200;
   globalThis.innerHeight = 800;
-  const actualHost = await import("../host.js");
-  t.mock.module("../host.js", { exports: { ...actualHost, report: () => {}, log: () => {} } });
   const { registry } = await import("../exposure.js");
   registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
   const { pageIdentity } = await import("../page-identity.js");
@@ -72,6 +73,7 @@ test("core.window.workbench, core.workbench.error and core.workbench.audit descr
     for (const name of ["core.window.document", "core.page.error", "core.page.audit"]) {
       assert.equal((await get(name)).error?.code, EXPOSURE_ERRORS.unknownName, `${name} is still declared`);
     }
+    wire.finish();
   } finally {
     dom.window.close();
   }
