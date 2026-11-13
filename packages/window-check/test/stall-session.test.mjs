@@ -13,6 +13,8 @@ delete process.env.SOKSAK_RUN_FOLDER;
 
 // The sample processes that the session started and not yet ended, as their execFile callbacks.
 const running = [];
+// Called after each sample process starts, so that a test waits for the start of the samples instead of for a delay.
+let sampleStarted = () => {};
 mock.module("node:child_process", {
   namedExports: {
     ...childProcess,
@@ -23,6 +25,7 @@ mock.module("node:child_process", {
       }
       if (command !== "/usr/bin/sandbox-exec" || args[2] !== "/usr/bin/sample") throw new Error(`unexpected execFile: ${command}`);
       running.push({ pid: Number(args[3]), file: args[args.indexOf("-file") + 1], callback });
+      sampleStarted();
     },
   },
 });
@@ -36,7 +39,16 @@ const SAMPLE_REPORT = "Sort by top of stack, same collapsed (when >= 5):\n      
 
 const settle = async () => { for (let turn = 0; turn < 20; turn++) await new Promise((resolve) => setImmediate(resolve)); };
 
-// A session whose request answers when the check calls answer, after the stall timer has started the samples.
+// Resolves when the host and its page sample processes have started. The session gives its requests a stall delay of zero,
+// so the stall timer starts both samples in the turn after the request.
+function samplesStarted() {
+  return new Promise((resolve) => {
+    sampleStarted = () => { if (running.length === 2) resolve(); };
+  });
+}
+
+// A session whose request answers when the check calls answer. Its stall delay is zero (the option stallAfter), so a
+// pending request starts its samples at once.
 function stalledSession(t) {
   const configDir = mkdtempSync(join(tmpdir(), "soksak-stall-session-"));
   // The host of a running application holds the logs folder of its configuration, where the samples write their reports.
@@ -50,7 +62,7 @@ function stalledSession(t) {
       return new Promise((resolve) => { answer = resolve; });
     },
   };
-  const session = new Session({ name: "probe", configDir }, client);
+  const session = new Session({ name: "probe", configDir }, client, { stallAfter: 0 });
   return { session, answer: (value) => answer(value) };
 }
 
@@ -59,13 +71,12 @@ function probe() {
   return { diagnostics, check: { name: "probe check", passed: true, diagnostic: (line) => diagnostics.push(line) } };
 }
 
-test("the session finish waits for a stall sample that a request answered after STALL_AFTER started", async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
+test("the session finish waits for a stall sample that a request answered after its stall delay started", async (t) => {
   running.length = 0;
   const { session, answer } = stalledSession(t);
+  const started = samplesStarted();
   const reply = session.request("host.window.reload");
-  t.mock.timers.tick(3000);
-  await settle();
+  await started;
   assert.deepEqual(running.map(({ pid }) => pid), [20, 21], "the stall timer started the host and page samples");
   answer({ done: true });
   assert.deepEqual(await reply, { done: true });
@@ -83,19 +94,18 @@ test("the session finish waits for a stall sample that a request answered after 
   await finish;
   const logs = join(session.app.configDir, "logs").replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
   assert.deepEqual(diagnostics.filter((line) => line.startsWith("stall sample")).map((line) => new RegExp(
-    `^stall sample: probe host\\.window\\.reload still pending after 3000 ms; the host's threads at that moment: ` +
+    `^stall sample: probe host\\.window\\.reload still pending after 0 ms; the host's threads at that moment: ` +
     `${logs}/stall-20-\\d+\\.txt, ${logs}/stall-20-\\d+-page-21\\.txt; host\\.stall\\.dump at b1:4; running host calls of main: wait_presented 3\\.0s$`).test(line)), [true]);
 });
 
 // A stall sample is a record of the check, as a recording is: a sample that a loaded machine or the sample tool cannot finish
 // is reported with its reason, and the result of the check stays the result of what it checked (F775).
 test("the session finish reports a stall sample that failed and does not fail the check for it", async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
   running.length = 0;
   const { session, answer } = stalledSession(t);
+  const started = samplesStarted();
   const reply = session.request("host.window.reload");
-  t.mock.timers.tick(3000);
-  await settle();
+  await started;
   answer({ done: true });
   await reply;
   const { diagnostics, check } = probe();
@@ -104,5 +114,5 @@ test("the session finish reports a stall sample that failed and does not fail th
   for (const { callback } of running) callback(error, "", "sample cannot examine process\n");
   await finish;
   assert.deepEqual(diagnostics.filter((line) => line.startsWith("stall sample") || line.startsWith("cleanup failed")),
-    ["stall sample: probe host.window.reload still pending after 3000 ms; sampling the host failed: the host 20 and its pages were not sampled: sample 20 exited with 1: sample cannot examine process; sample 21 exited with 1: sample cannot examine process"]);
+    ["stall sample: probe host.window.reload still pending after 0 ms; sampling the host failed: the host 20 and its pages were not sampled: sample 20 exited with 1: sample cannot examine process; sample 21 exited with 1: sample cannot examine process"]);
 });

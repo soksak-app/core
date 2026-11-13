@@ -5,6 +5,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+// Active timers of the process, by the runtime's own list: a timer that the code under test starts is listed until it fires.
+const activeTimeouts = () => process.getActiveResourcesInfo().filter((name) => name === "Timeout").length;
+
 const { createRegistry } = await import("../exposure.js");
 
 function deferred() {
@@ -35,10 +38,10 @@ test("a core command starts no timer and answers the result of its handler when 
   made.declare("core", coreExposes());
   const handler = heldHandler();
   made.command("core.fixture.slow", handler.run);
-  const timers = t.mock.method(globalThis, "setTimeout");
+  const timers = activeTimeouts();
   const answer = made.handle({ method: "command.run", params: { name: "core.fixture.slow", params: {} } });
   await handler.entered;
-  assert.equal(timers.mock.callCount(), 0, "the main page started a timer for a core command");
+  assert.ok(activeTimeouts() <= timers, "the main page started a timer for a core command");
   handler.reply.resolve(7);
   assert.deepEqual(await answer, { result: 7 });
 });
@@ -49,10 +52,10 @@ test("a plugin command that a state module runs in the main page starts no timer
   made.declare("probe", pluginExposes());
   const handler = heldHandler();
   made.plugin("probe").command("probe.wait", handler.run);
-  const timers = t.mock.method(globalThis, "setTimeout");
+  const timers = activeTimeouts();
   const answer = made.handle({ method: "command.run", params: { name: "probe.wait", params: {} } });
   await handler.entered;
-  assert.equal(timers.mock.callCount(), 0, "the main page started a timer for the handler of a state module");
+  assert.ok(activeTimeouts() <= timers, "the main page started a timer for the handler of a state module");
   handler.reply.resolve({ waited: true });
   assert.deepEqual(await answer, { result: { waited: true } });
 });

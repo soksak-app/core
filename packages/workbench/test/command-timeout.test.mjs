@@ -3,9 +3,12 @@ import { test } from "node:test";
 import { JSDOM } from "jsdom";
 import { EXPOSURE_ERRORS } from "@soksak/plugin-api";
 
+// Active timers of the process, by the runtime's own list: a timer that the code under test starts is listed until it fires.
+const activeTimeouts = () => process.getActiveResourcesInfo().filter((name) => name === "Timeout").length;
+
 // A command that this document answers has no time limit: the reply of its handler, an error of its handler or the end of its
 // peer ends it, and a core command then answers after its layout presents (`timeout` in docs/spec/exposure.md). Each handler and
-// presentation here is a deferred that the test settles, and setTimeout is watched so that the test finds that no timer is started.
+// presentation here is a deferred that the test settles, and the active timers of the process are counted before and after, so that the test finds that no timer is started.
 const dom = new JSDOM("<body></body>", { url: "https://example.test/" });
 globalThis.window = dom.window;
 globalThis.document = dom.window.document;
@@ -44,7 +47,7 @@ test("a main-page command waits for its handler and then for its presentation, a
   let enter;
   const entered = new Promise((resolve) => { enter = resolve; });
   made.command("core.fixture.drawn", () => { enter(); return handler.promise; });
-  const timers = t.mock.method(globalThis, "setTimeout");
+  const timers = activeTimeouts();
   let answered = false;
   const running = made.run("core.fixture.drawn", {}).finally(() => { answered = true; });
   await entered;
@@ -53,7 +56,7 @@ test("a main-page command waits for its handler and then for its presentation, a
   assert.equal(answered, false, "the command answered before its layout presented");
   presentation.resolve();
   assert.equal(await running, 9);
-  assert.equal(timers.mock.callCount(), 0, "the main page started a timer for a command");
+  assert.ok(activeTimeouts() <= timers, "the main page started a timer for a command");
 });
 
 test("a handler that throws fails its command with its own error and starts no timer", async (t) => {
@@ -61,10 +64,10 @@ test("a handler that throws fails its command with its own error and starts no t
   declare(made, "core.fixture.throws", "core.fixture.rejects");
   made.command("core.fixture.throws", () => { throw new Error("fixture handler failed"); });
   made.command("core.fixture.rejects", () => Promise.reject(new Error("fixture handler rejected")));
-  const timers = t.mock.method(globalThis, "setTimeout");
+  const timers = activeTimeouts();
   await assert.rejects(made.run("core.fixture.throws", {}), /fixture handler failed/);
   await assert.rejects(made.run("core.fixture.rejects", {}), /fixture handler rejected/);
-  assert.equal(timers.mock.callCount(), 0, "the main page started a timer for a command");
+  assert.ok(activeTimeouts() <= timers, "the main page started a timer for a command");
   const answer = await made.handle({ method: "command.run", params: { name: "core.fixture.throws", params: {} } });
   assert.equal(answer.error.code, EXPOSURE_ERRORS.failed);
 });

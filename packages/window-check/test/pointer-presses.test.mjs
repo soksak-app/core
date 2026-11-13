@@ -97,10 +97,7 @@ test("a check session releases the press of each named pointer", async () => {
   ]);
 });
 
-test("a refused release keeps the press open until the held button is released", async (t) => {
-  // Stops the time functions so that a time limit cannot create progress. The cleanup progresses only by the
-  // notification of host.buttons.
-  t.mock.timers.enable({ apis: ["setTimeout", "setInterval", "Date"] });
+test("a refused release keeps the press open until the held button is released", async () => {
   const client = fakeClient(heldRefuses);
   const s = new Session(app, client);
   await s.pointer(10, 20, "down");
@@ -113,7 +110,9 @@ test("a refused release keeps the press open until the held button is released",
   const sent = client.requests.length;
   let ended = false;
   let released;
-  const release = s.releasePresses().then((lines) => { ended = true; released = lines; });
+  // The clock gives the instant before and after the wait for host.buttons, so the waited time is the difference of the instants.
+  const instants = [1000, 1234];
+  const release = s.releasePresses({ clock: () => instants.shift() }).then((lines) => { ended = true; released = lines; });
   await settle();
   assert.equal(ended, false, "the cleanup ended while the button was held");
   assert.deepEqual(client.requests.slice(sent), [{ method: "status.watch", window: "main", name: "host.buttons" }],
@@ -122,8 +121,8 @@ test("a refused release keeps the press open until the held button is released",
   await release;
   // A press that the cleanup ended remains as a diagnostic of the check, so the output of the window run shows that the
   // wait for the release ran.
-  assert.equal(released.length, 1);
-  assert.match(released[0], /^released open press: left at 10,20 in main after host\.buttons reported mask 0 \(waited \d+ms\)$/);
+  assert.deepEqual(released, ["released open press: left at 10,20 in main after host.buttons reported mask 0 (waited 234ms)"]);
+  assert.deepEqual(instants, [], "the clock was read before and after the wait");
   assert.deepEqual(client.requests.slice(sent), [
     { method: "status.watch", window: "main", name: "host.buttons" },
     { method: "input.pointer", window: "main", x: 10, y: 20, phase: "up", button: "left" },

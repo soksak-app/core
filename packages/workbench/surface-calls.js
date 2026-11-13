@@ -10,6 +10,14 @@ import { logGate } from "./log-gate.js";
 import { pageIdentity } from "./page-identity.js";
 
 /**
+ * The event `workbench.call` of a host call that began at the instant started and ended at finished (milliseconds of the
+ * monotonic clock). ok is whether the call answered; failure is {error, code} of a call that did not.
+ */
+export function callRecord(name, args, started, finished, ok, failure = {}) {
+  return callEvent({ name, args, micros: Math.round((finished - started) * 1000), ok, ...failure });
+}
+
+/**
  * `send(name, ...args)` sends one host call by its name and arguments and returns its answer; `log(request)` sends the request
  * of the host call `log`, which is not recorded because a recorded `log` call would record itself; `listen(name, fn)` calls `fn`
  * with the body of each host event of that name. A relay of events that fails is written to the console of the document, which
@@ -42,7 +50,7 @@ export function surfaceCalls({ send, log, listen }) {
       const ended = (ok, failure) => {
         // The gate is asked before the arguments are serialized: a call that the policy does not store costs one branch and is counted.
         if (!batcher.gate("call", ok ? "debug" : "warn")) return;
-        const { level, event, fields, cids } = callEvent({ name, args, micros: Math.round((performance.now() - started) * 1000), ok, ...failure });
+        const { level, event, fields, cids } = callRecord(name, args, started, performance.now(), ok, failure);
         // events: workbench.call
         batcher.emit(level, event, fields, cids);
       };

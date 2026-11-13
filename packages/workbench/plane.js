@@ -150,8 +150,8 @@ let named = 0;
 // detach; the tabs of the plane are issued or stored tabs.
 const issuedTabIds = new Set();
 const tabTaken = (id) => issuedTabIds.has(id) || storedTabTaken(id) || imageDetachHold(id) !== null;
-function tab(plugin, title, params) {
-  const id = issueId("tab", tabTaken);
+function tab(plugin, title, params, random) {
+  const id = issueId("tab", tabTaken, random);
   issuedTabIds.add(id);
   return params === null ? { id, plugin, title } : { id, plugin, title, params };
 }
@@ -224,13 +224,13 @@ function releaseKept(side) {
 }
 
 /** It builds the layout of a new space from workspace.grid of environment.json. Tab ids are issued anew. */
-function initial() {
+function initial(random) {
   const { grid: declared } = environment().workspace;
   const cards = declared.cards.map(({ tabs, ...card }) => {
     if (!tabs) return { ...card };
     // A tab of a new space has no source tab, so it records null (docs/spec/projects.md#tab-origin).
     const made = tabs.map((t) => {
-      const opened = tab(t.plugin, t.title, null);
+      const opened = tab(t.plugin, t.title, null, random);
       recordOrigin(opened.id, null, "new space");
       return opened;
     });
@@ -1668,9 +1668,9 @@ export function adopt(kept, space) {
   settle();
 }
 
-/** Returns an empty space state. A new space starts with this value. */
-export const fresh = () => ({
-  state: initial(),
+/** Returns an empty space state. A new space starts with this value. `random` is the random source of its tab ids (ids.js), the platform source by default. */
+export const fresh = (random) => ({
+  state: initial(random),
   focusedId: environment().workspace.focus,
   windowSidebars: Object.fromEntries(environment().workspace.grid.cards
     .filter(card => windowSidebar(card.id))

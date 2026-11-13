@@ -28,15 +28,33 @@ mock.module("node:child_process", {
 const { whilePending } = await import("../app.mjs");
 const { sampleProcess } = await import("../stall-sample.mjs");
 
-test("a failed sample of a pending request is named in the report instead of hiding it", async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
+// The shell tests give whilePending a stall delay of 0 (or the planned length of a drag, for its text), so the stall timer fires on
+// the next timer turn, and they wait on the promise or the report that the shell returns, never on a sleep. The decisions that
+// depend on the instant are judged by the pure functions stallDeadline and stallDue on the instants they receive.
+test("a failed sample of a pending request is named in the report instead of hiding it", { timeout: 10000 }, async () => {
   const reports = [];
-  const held = [];
+  const held = Promise.withResolvers();
   void whilePending(new Promise(() => {}), "probe", async () => { throw new Error("sample: no such process"); },
-    (text) => reports.push(text), (started) => held.push(started));
-  t.mock.timers.tick(3000);
-  await assert.rejects(held[0], /^Error: probe still pending after 3000 ms; sampling the host failed: sample: no such process$/);
-  assert.deepEqual(reports, ["probe still pending after 3000 ms; sampling the host failed: sample: no such process"]);
+    (text) => reports.push(text), (started) => held.resolve(started), 0, 0);
+  await assert.rejects(held.promise, /^Error: probe still pending after 0 ms; sampling the host failed: sample: no such process$/);
+  assert.deepEqual(reports, ["probe still pending after 0 ms; sampling the host failed: sample: no such process"]);
+});
+
+test("the stall deadline and the stall line are functions of the instants and the outcome that they receive", async () => {
+  const { stallDeadline, stallDue } = await import("../stall-sample.mjs");
+  const { stallLine } = await import("../app.mjs");
+  // The sample starts `after` (STALL_AFTER by default) after the planned length of the request, from the instant that it started.
+  assert.equal(stallDeadline(0, 0), 3000);
+  assert.equal(stallDeadline(1000, 1440), 5440);
+  assert.equal(stallDeadline(1000, 1440, 0), 2440);
+  assert.equal(stallLine("probe", 0, 3000, { error: new Error("sample: no such process") }),
+    "probe still pending after 3000 ms; sampling the host failed: sample: no such process");
+  assert.equal(stallLine("mygo diagnostics.drag", 1440, 3000, { text: "stacks" }),
+    "mygo diagnostics.drag still pending 3000 ms after its planned 1440 ms; the host's threads at that moment: stacks");
+  assert.equal(stallDue({ started: 0, planned: 0, pending: true, at: 2999 }), false);
+  assert.equal(stallDue({ started: 0, planned: 0, pending: true, at: 3000 }), true);
+  // An answered request is never sampled, at any instant.
+  assert.equal(stallDue({ started: 0, planned: 0, pending: false, at: 1e9 }), false);
 });
 
 test("a request of a session has no time limit and takes no options", async (t) => {
@@ -98,9 +116,8 @@ test("a state at the limit that does not finish does not hold the end of the pro
   assert.equal(error.message, "ended by SIGTERM at its limit of 100 ms; standard error: none; at the limit: not read within 100 ms");
 });
 
-test("the limit of a process holds while a check moves mocked timers", { timeout: 5000 }, async (t) => {
+test("a process at its limit with no state reader is reported without a state", { timeout: 5000 }, async () => {
   const { runProcess } = await import("../stall-sample.mjs");
-  t.mock.timers.enable({ apis: ["setTimeout"] });
   const { error } = await runProcess("/bin/sh", ["-c", "exec sleep 5"], { limitMs: 100, atLimit: null });
   assert.equal(error.message, "ended by SIGTERM at its limit of 100 ms; standard error: none");
 });
@@ -202,20 +219,19 @@ test("the dump event takes no limit", async () => {
     /^TypeError: announceStall takes no limit/);
 });
 
-test("a request pending past 3 s starts the host and page samples in the same turn", async (t) => {
+test("a pending request starts the host and page samples together when its stall is due", { timeout: 10000 }, async () => {
   const { sampleStall } = await import("../stall-sample.mjs");
-  t.mock.timers.enable({ apis: ["setTimeout"] });
   const started = [];
   const sample = async () => (await sampleStall({ host: 10, pages: [12, 13], directory: "/x/logs", time: 7,
     sample: (pid, file) => { started.push(pid); return file; }, flock: async () => null })).join(", ");
+  const reported = Promise.withResolvers();
   const reports = [];
-  void whilePending(new Promise(() => {}), "wailsv3 status.get host.windows", sample, (text) => reports.push(text), () => {});
-  t.mock.timers.tick(2999);
-  assert.deepEqual(started, []);
-  t.mock.timers.tick(1);
+  void whilePending(new Promise(() => {}), "wailsv3 status.get host.windows", sample, (text) => { reports.push(text); reported.resolve(); },
+    () => {}, 0, 0);
+  // The host and both page samples start in the turn of the stall timer, before the report that follows them.
+  await reported.promise;
   assert.deepEqual(started, [10, 12, 13]);
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.deepEqual(reports, ["wailsv3 status.get host.windows still pending after 3000 ms; the host's threads at that moment: /x/logs/stall-10-7.txt, /x/logs/stall-10-7-page-12.txt, /x/logs/stall-10-7-page-13.txt"]);
+  assert.deepEqual(reports, ["wailsv3 status.get host.windows still pending after 0 ms; the host's threads at that moment: /x/logs/stall-10-7.txt, /x/logs/stall-10-7-page-12.txt, /x/logs/stall-10-7-page-13.txt"]);
 });
 
 test("the planned length of a request is the length of its drag or the wait of its stop, and none for any other", async () => {
@@ -229,50 +245,52 @@ test("the planned length of a request is the length of its drag or the wait of i
   assert.equal(plannedLength("status.get", { name: "core.verify" }, 5000), 0);
 });
 
-test("a drag being measured is not sampled: its stall counts 3 s from the end of its planned length", async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
+test("a drag being measured is reported with the planned length of the drag and its stall after it", { timeout: 10000 }, async () => {
   const { plannedLength } = await import("../stall-sample.mjs");
   const plan = { axis: "x", line: 2, dx: -250, dy: 0, ms: 48, times: 15 };
   const planned = plannedLength("diagnostics.drag", plan);
-  let sampled = 0;
+  const reported = Promise.withResolvers();
   const reports = [];
-  void whilePending(new Promise(() => {}), "mygo diagnostics.drag", async () => { sampled++; return "stacks"; },
-    (text) => reports.push(text), () => {}, planned);
-  // The drag runs its 1440 ms and 3 s beyond them without a sample: no sample overlaps the steps that the drag measures.
-  t.mock.timers.tick(planned + 2999);
-  assert.equal(sampled, 0);
-  t.mock.timers.tick(1);
-  assert.equal(sampled, 1);
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.deepEqual(reports, ["mygo diagnostics.drag still pending 3000 ms after its planned 1440 ms; the host's threads at that moment: stacks"]);
+  void whilePending(new Promise(() => {}), "mygo diagnostics.drag", async () => "stacks",
+    (text) => { reports.push(text); reported.resolve(); }, () => {}, planned, 0);
+  await reported.promise;
+  assert.deepEqual(reports, ["mygo diagnostics.drag still pending 0 ms after its planned 1440 ms; the host's threads at that moment: stacks"]);
 });
 
-test("a session request of a drag takes the planned length of the drag before its stall", async (t) => {
+test("a session request of a drag names the planned length of the drag in its stall line", { timeout: 10000 }, async (t) => {
   const { mkdtempSync, rmSync } = await import("node:fs");
   const { join } = await import("node:path");
   const { tmpdir } = await import("node:os");
   const { Session } = await import("../app.mjs");
   const configDir = mkdtempSync(join(tmpdir(), "soksak-stall-plan-"));
   t.after(() => rmSync(configDir, { recursive: true }));
-  t.mock.timers.enable({ apis: ["setTimeout"] });
-  const s = new Session({ name: "mygo", configDir }, { endpoint: { pid: ABSENT_HOST }, request: () => new Promise(() => {}) });
+  // The stall delay is a declared option of the session, so the stall line is reported without waiting for STALL_AFTER.
+  const s = new Session({ name: "mygo", configDir }, { endpoint: { pid: ABSENT_HOST }, request: () => new Promise(() => {}) }, { stallAfter: 0 });
+  const stalled = Promise.withResolvers();
+  s.step = (what) => { if (what.includes("still pending")) stalled.resolve(what); };
   void s.request("diagnostics.drag", { axis: "x", line: 2, dx: -250, dy: 0, ms: 48, times: 15 });
-  t.mock.timers.tick(3000);
-  assert.equal(s.stallSamples.size, 0, "the drag was sampled at 3 s, inside its planned 1440 ms and 3 s");
-  t.mock.timers.tick(1440);
-  assert.equal(s.stallSamples.size, 1, "the drag was not sampled 3 s after its planned length");
-  await Promise.all([...s.stallSamples]);
+  const line = await stalled.promise;
+  assert.match(line, /^mygo diagnostics\.drag still pending 0 ms after its planned 1440 ms; /);
+  assert.equal(s.stallSamples.size, 1);
+  assert.throws(() => new Session({ name: "mygo", configDir }, {}, { stallAfter: -1 }), /^Error: Session needs a stall delay of 0 or more ms$/);
 });
 
-test("a request that answers before 3 s does not start a sample", async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
+test("a drag being measured is not sampled before 3 s after the end of its planned length", async () => {
+  const { plannedLength, stallDue } = await import("../stall-sample.mjs");
+  const planned = plannedLength("diagnostics.drag", { axis: "x", line: 2, dx: -250, dy: 0, ms: 48, times: 15 });
+  assert.equal(stallDue({ started: 0, planned, pending: true, at: 4439 }), false);
+  assert.equal(stallDue({ started: 0, planned, pending: true, at: 4440 }), true);
+});
+
+test("a request that answers before its stall is due does not start a sample", { timeout: 10000 }, async () => {
+  const { stallDue } = await import("../stall-sample.mjs");
   let sampled = 0;
-  const answer = whilePending(new Promise((resolve) => setTimeout(() => resolve(5), 1000)), "probe",
-    async () => { sampled++; return ""; }, () => {}, () => {});
-  t.mock.timers.tick(1000);
+  // The finally of whilePending clears the stall timer in a microtask that runs before the next timer turn, so the answer wins
+  // without a sleep. The instant of the deadline is judged by stallDue, not by the wall clock.
+  const answer = whilePending(Promise.resolve(5), "probe", async () => { sampled++; return ""; }, () => {}, () => {}, 0, 0);
   assert.equal(await answer, 5);
-  t.mock.timers.tick(10_000);
   assert.equal(sampled, 0);
+  assert.equal(stallDue({ started: 0, planned: 0, pending: false, at: 3000 }), false);
 });
 
 

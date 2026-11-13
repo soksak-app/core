@@ -399,80 +399,58 @@ test("a fixture step event passes a gate that refuses every lifecycle info event
     [{ step: "settings.set", phase: "start" }]);
 });
 
-test("the report of the counts arms no timer while a batch is in flight", async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
-  const armed = t.mock.method(globalThis, "setTimeout");
-  let clock = 0;
+test("counts held while a batch is in flight arm no timer until the batch ends", { timeout: 5000 }, async () => {
+  const armed = [];
+  // The recorder passes each request to the platform timer unchanged and records the delay that the batcher asks for.
+  const timer = (callback, ms) => {
+    armed.push(ms);
+    return setTimeout(callback, ms);
+  };
   const batches = [];
   const answers = [];
+  const firstSent = Promise.withResolvers();
+  const secondSent = Promise.withResolvers();
   const batcher = createEventBatcher({ writer: { layer: "page", member: "page", identity: PAGE },
     call: answering((request) => {
       batches.push(request);
+      if (batches.length === 1) firstSent.resolve();
+      if (batches.length === 2) secondSent.resolve(request);
       return new Promise((resolve) => answers.push(resolve));
     }),
     report: assert.ifError,
     classify: () => "call",
     gate: { enabled: () => false },
-    now: () => clock,
+    now: () => 0,
+    timer,
+    gatedReportMs: 0,
   });
-  const interval = async () => {
-    clock += 1000;
-    t.mock.timers.tick(1000);
-    await settle();
-  };
-  // The first count leaves in a batch that the host does not answer yet, and a second count waits for its interval.
+  // The first count is due at once: its timer reports it, and the batch that carries it stays in flight until it is answered.
   batcher.emit("debug", "page.test.call");
-  await interval();
-  assert.equal(batches.length, 1);
+  await firstSent.promise;
+  assert.deepEqual(armed, [0]);
   batcher.emit("debug", "page.test.call");
-  const before = armed.mock.callCount();
-  await interval();
-  for (let turn = 0; turn < 10; turn++) {
-    t.mock.timers.tick(0);
-    await settle();
-  }
-  assert.equal(armed.mock.callCount(), before, "a timer was armed while the batch was in flight");
-  assert.equal(batches.length, 1);
-  // The end of the batch sends the count that is due, and then no count and no timer remain.
+  await settle();
+  await settle();
+  assert.deepEqual(armed, [0], "a timer was armed while the batch was in flight");
+  assert.equal(batches.length, 1, "a count left while the batch was in flight");
+  // The end of the batch sends the count that is held, and no timer is armed for it while its batch is in flight.
   answers[0]();
-  await settle();
-  assert.equal(batches.length, 2);
+  const second = await secondSent.promise;
+  assert.deepEqual(second.events.map(({ event, fields }) => [event, fields.count]), [["page.log.gated", 1]]);
   answers[1]();
-  await settle();
-  assert.equal(armed.mock.callCount(), before, "a timer was armed after the counts left");
+  await batcher.flush();
 });
 
-test("a count refused while a batch is in flight waits for the rest of its interval after the batch", async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
-  let clock = 0;
-  const batches = [];
-  const answers = [];
-  const batcher = createEventBatcher({ writer: { layer: "page", member: "page", identity: PAGE },
-    call: answering((request) => {
-      batches.push(request);
-      return new Promise((resolve) => answers.push(resolve));
-    }),
-    report: assert.ifError,
-    classify: () => "call",
-    gate: { enabled: () => false },
-    now: () => clock,
-  });
-  batcher.emit("debug", "page.test.call");
-  clock += 1000;
-  t.mock.timers.tick(1000);
-  await settle();
-  assert.equal(batches.length, 1);
-  batcher.emit("debug", "page.test.call");
-  clock += 400;
-  t.mock.timers.tick(400);
-  answers[0]();
-  await settle();
-  assert.equal(batches.length, 1, "the count left before its interval ended");
-  clock += 600;
-  t.mock.timers.tick(600);
-  await settle();
-  assert.equal(batches.length, 2);
-  assert.deepEqual(batches[1].events.map(({ event, fields }) => [event, fields.count]), [["page.log.gated", 1]]);
-  answers[1]();
-  await settle();
+test("the wait for the counts of the gate is the rest of their interval, and no timer is armed while a batch is in flight", async () => {
+  const { gatedWait } = await import("../log-batch.js");
+  // A count is due at once when its interval has passed since the last report.
+  assert.equal(gatedWait({ counted: true, sending: false, gatedAt: 0, at: 1000, interval: 1000 }), 0);
+  // A count refused while a batch was in flight waits for the rest of the interval that began at the report.
+  assert.equal(gatedWait({ counted: true, sending: false, gatedAt: 1000, at: 1400, interval: 1000 }), 600);
+  assert.equal(gatedWait({ counted: true, sending: false, gatedAt: 1000, at: 2400, interval: 1000 }), 0);
+  // A batch in flight holds no timer, and a gate with no held count arms none.
+  assert.equal(gatedWait({ counted: true, sending: true, gatedAt: 0, at: 0, interval: 1000 }), null);
+  assert.equal(gatedWait({ counted: false, sending: false, gatedAt: 0, at: 0, interval: 1000 }), null);
+  // The interval is one second unless the batcher declares another.
+  assert.equal(gatedWait({ counted: true, sending: false, gatedAt: 0, at: 0 }), 1000);
 });

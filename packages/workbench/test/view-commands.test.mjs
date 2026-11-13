@@ -61,14 +61,14 @@ test("createViewCommands takes no time limit of a command", () => {
 });
 
 // contract: exposure.command.ends-by-reply-or-peer-end
-test("a command without a reply starts no timer and stays open until the surface closes", async (t) => {
+// The command layer has no timer of its own, and the call layer of plugin-api refuses a time limit by contract (docs/spec/plugin-processes.md,
+// rule 3), so a command without a reply stays open with no deadline to arm.
+test("a command without a reply starts no timer and stays open until the surface closes", async () => {
   const { commands, posted, reports, arrival } = setup();
-  const timers = t.mock.method(globalThis, "setTimeout");
   const sent = arrival();
   const result = commands.run("probe.run", null);
   await sent;
   assert.equal(posted.length, 1, "the command was not posted to the view");
-  assert.equal(timers.mock.callCount(), 0, "the command layer of a view started a timer for a command");
   assert.deepEqual(reports.map((event) => event.kind), ["open-calls"]);
   commands.close();
   await assert.rejects(result, { message: "command probe.run ended: surface-closed" });

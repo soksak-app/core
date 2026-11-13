@@ -100,8 +100,7 @@ test("an event that the catalog does not declare is not gated, and the report of
   assert.deepEqual(batches.flatMap((request) => request.events).map((event) => event.event), ["workbench.log.gated", "plugin.editor.opened"]);
 });
 
-test("the counts of a closed gate leave each second and at a flush, not with each batch", { timeout: 2000 }, async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
+test("the counts of a closed gate leave each second and at a flush, not with each batch", { timeout: 2000 }, async () => {
   const gate = createLogGate();
   gate.set({ ...everything, call: "info" });
   const batches = [];
@@ -109,8 +108,11 @@ test("the counts of a closed gate leave each second and at a flush, not with eac
   let relayed = () => {};
   const nextRelay = () => new Promise((resolve) => { relayed = resolve; });
   let clock = 0;
+  // The report timer is a declared parameter of the batcher: the test records the delay that the batcher arms and fires the callback itself.
+  const armed = [];
+  const timer = (callback, ms) => { armed.push({ callback, ms }); };
   const batcher = createEventBatcher({ writer: { layer: "workbench", member: "start", identity: pageIdentity },
-    call: answering(async (request) => { batches.push(request); relayed(); }), report: assert.ifError, classify: classOf, gate, now: () => clock,
+    call: answering(async (request) => { batches.push(request); relayed(); }), report: assert.ifError, classify: classOf, gate, now: () => clock, timer,
   });
   const gatedOf = () => batches.flatMap((request) => request.events).filter((event) => event.event === "workbench.log.gated").map((event) => event.fields);
   // Ten batches within 900 ms each carry an event and follow refused events.
@@ -122,16 +124,14 @@ test("the counts of a closed gate leave each second and at a flush, not with eac
     batcher.emit("info", "workbench.start", { started_at: 1, url: "u" });
     await relay;
   }
-  assert.deepEqual(gatedOf(), [], "the counts left with a batch within a second");
-  // The timer was armed at the first refusal, at the time 0, for the end of the second. Only that timer sends a batch before the
-  // second ends; a timer that fired at the time 999 sends it in the microtasks after the tick, which end before drained resolves.
-  clock = 999;
-  t.mock.timers.tick(999);
+  // The batch that relayed the last event arms the timer after its relay returns; drained ends the microtasks of that batch first.
   await drained();
-  assert.deepEqual(gatedOf(), [], "the counts left before the second ended");
+  assert.deepEqual(gatedOf(), [], "the counts left with a batch within a second");
+  // The timer was armed at the first refusal, at the time 0, for the end of the second; no other timer is armed while it waits.
+  assert.deepEqual(armed.map((entry) => entry.ms), [1000]);
   clock = 1000;
   const reported = nextRelay();
-  t.mock.timers.tick(1);
+  armed[0].callback();
   await reported;
   assert.deepEqual(gatedOf(), [{ class: "call", level: "debug", count: 20 }]);
   clock = 1100;

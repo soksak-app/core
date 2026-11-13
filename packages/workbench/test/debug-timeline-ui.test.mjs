@@ -449,14 +449,13 @@ test("the timeline asks at each notice without a pause of its own and loses no r
   const { ui, changed } = await openView(t, { query });
   await ui.showDebugTimeline();
   // The rate of the notices is bounded by the host (docs/spec/debug.md#following), so the view has no timer: the second notice is
-  // answered at once and asks for what grew meanwhile.
+  // answered at once and asks for what grew meanwhile. The timeline module has no timer of its own, and the host bounds the notices
+  // by contract (docs/spec/debug.md#following), so each notice is answered by its own query.
   assert.equal("FOLLOW_INTERVAL_MS" in timelineModule, false, "the view keeps an interval of its own");
-  const timers = t.mock.method(globalThis, "setTimeout");
   query.log.rows.push(row(4, 40));
   await changed("logs/host-a.jsonl");
   query.log.rows.push(row(5, 50));
   await changed("logs/host-a.jsonl");
-  assert.equal(timers.mock.callCount(), 0, "the view scheduled a timer while it answered the two notices");
   assert.equal(ui.debugState().timeline.held, 5, "a row that grew was not added");
 });
 

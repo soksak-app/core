@@ -60,9 +60,10 @@ function changes(list) {
 /**
  * Replaces the ResizeObserver of view with a subclass that records, and sends the mutations of each callback slot of the frame with the loop error, the
  * mutations after the round, and the observations delivered in the next frame through report(line). Only observers created after the replacement are recorded. The code that wrote
- * the dataset of body inside a slot is sent as the stack of trace().
+ * the dataset of body inside a slot is sent as the stack of trace(). The reading of the clock in each record is now(), which reads the
+ * clock of view by default.
  */
-export function watchResizeLoop(view, report, locate = creator, trace = callStack) {
+export function watchResizeLoop(view, report, locate = creator, trace = callStack, now = () => view.performance.now()) {
   const Native = view.ResizeObserver;
   let collected = null;
   // Mutations not yet delivered at the first callback of this frame. Records delivered before the first callback cannot be
@@ -114,7 +115,7 @@ export function watchResizeLoop(view, report, locate = creator, trace = callStac
   view.ResizeObserver = class extends Native {
     constructor(callback) {
       // It also records the time when the observer was created. An observer created during the observation round defers part of its first observation to the next frame (F32).
-      const label = `${locate()} created at ${view.performance.now().toFixed(1)}ms`;
+      const label = `${locate()} created at ${now().toFixed(1)}ms`;
       super((entries, observer) => {
         if (collected) {
           for (const entry of entries) collected.push(sized(entry));
@@ -122,7 +123,7 @@ export function watchResizeLoop(view, report, locate = creator, trace = callStac
         // Records before this callback belong to the previous slot, or to the changes before the round if this is the first callback.
         take(current());
         // The time uses the same clock as the layout stages of the performance trace. It matches the callbacks of the frame with the error against the layout draw.
-        slots.push({ ran: `${label} at ${view.performance.now().toFixed(1)}ms on ${[...entries].map(sized).join(", ")}`, changed: [], writes: [] });
+        slots.push({ ran: `${label} at ${now().toFixed(1)}ms on ${[...entries].map(sized).join(", ")}`, changed: [], writes: [] });
         if (!clearing) {
           clearing = true;
           const channel = new view.MessageChannel();

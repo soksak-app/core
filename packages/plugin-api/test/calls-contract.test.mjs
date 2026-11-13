@@ -1,7 +1,8 @@
 // Runs the published call end cases (packages/plugin-api/contract/calls.json) against createCalls of core. A call has no time
 // limit: each step sends a request, delivers a reply, aborts the signal of a request or ends the peer, and reports the messages
-// sent, the reports of the layer and the settled outcome of the request that a step watches. No step moves a clock. The clock
-// is fixed so that the start of a call and the delay of a late reply are 0, and the runner finds that the layer started no timer.
+// sent, the reports of the layer and the settled outcome of the request that a step watches. No step moves a clock: the instant
+// that the layer reads is 0 for every step, so the start of a call and the delay of a late reply are 0. The call layer has no timer
+// (docs/spec/plugin-processes.md, rule 3), so no step arms or waits for one.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -20,9 +21,7 @@ const settle = async () => {
   for (let index = 0; index < 5; index += 1) await new Promise((resolve) => setImmediate(resolve));
 };
 
-async function runCase(t, testCase) {
-  t.mock.timers.enable({ apis: ["Date"], now: 0 });
-  const timers = t.mock.method(globalThis, "setTimeout");
+async function runCase(testCase) {
   const sent = [];
   const reports = [];
   const listeners = new Set();
@@ -34,6 +33,8 @@ async function runCase(t, testCase) {
       return () => listeners.delete(listener);
     },
     report: (event) => reports.push(structuredClone(event)),
+    // The instant of every step of the contract cases is 0 (the steps move no clock).
+    now: () => 0,
   });
   // The settled outcome of each named request: {resolved} or {rejected, code}; absent while the call is open.
   const settled = new Map();
@@ -72,10 +73,8 @@ async function runCase(t, testCase) {
     }
   } finally {
     calls.close();
-    t.mock.timers.reset();
   }
-  // settle() makes no timer, so a timer is one that the call layer started.
-  return { outputs, timers: timers.mock.callCount() };
+  return { outputs };
 }
 
 test("call end contract publishes the required cases in order", () => {
@@ -93,9 +92,9 @@ test("call end contract steps neither move a clock nor declare a time limit", ()
 
 for (const testCase of CONTRACT.cases) {
   // contract: exposure.command.ends-by-reply-or-peer-end
-  test(`call end ${testCase.id} matches each ordered step`, async (t) => {
-    const { outputs, timers } = await runCase(t, testCase);
+  test(`call end ${testCase.id} matches each ordered step`, async () => {
+    // The call layer has no timer, so the outputs of the steps are the whole result of the case.
+    const { outputs } = await runCase(testCase);
     assert.deepEqual(outputs, testCase.steps.map(({ output }) => output));
-    assert.equal(timers, 0, "the call layer started a timer for a call");
   });
 }

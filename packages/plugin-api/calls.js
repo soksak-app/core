@@ -48,10 +48,11 @@ function callError(message, fields) {
  *     send        send(message): sends one message to the peer synchronously; throws when it cannot
  *     onMessage   onMessage(listener): delivers each message from the peer to listener; returns the unsubscribe function
  *     report      report(event): receives the counts and the changes of the open calls
+ *     now         now(): the wall clock in milliseconds that marks the start of a call and the arrival of a late reply
  *
  * Returns {request, peerLost, openCalls, close}.
  */
-export function createCalls({ plugin, send, onMessage, report }) {
+export function createCalls({ plugin, send, onMessage, report, now = () => Date.now() }) {
   if (typeof plugin !== "string" || plugin === "") throw new TypeError("createCalls requires the plugin id");
   if (typeof send !== "function" || typeof onMessage !== "function" || typeof report !== "function") {
     throw new TypeError("createCalls requires the send, onMessage and report functions");
@@ -98,7 +99,7 @@ export function createCalls({ plugin, send, onMessage, report }) {
     if (!open.has(message.id)) {
       const late = ended.get(message.id);
       if (!late) throw new Error(`call reply ${message.id} has no matching request`);
-      report({ kind: "late-reply", plugin, command: late.command, delay: Date.now() - late.sent });
+      report({ kind: "late-reply", plugin, command: late.command, delay: now() - late.sent });
       return;
     }
     if ("error" in message && typeof message.error?.message !== "string") {
@@ -127,9 +128,9 @@ export function createCalls({ plugin, send, onMessage, report }) {
     const { signal, cids } = options;
     if (signal?.aborted) return Promise.reject(callError("cancelled", { reason: "cancelled" }));
     const id = ++lastId;
-    const now = Date.now();
+    const sent = now();
     return new Promise((resolve, reject) => {
-      const call = { command, resolve, reject, sent: now, started: now, detach: () => {} };
+      const call = { command, resolve, reject, sent, started: sent, detach: () => {} };
       open.set(id, call);
       if (signal) {
         const onAbort = () => cancel(id);

@@ -397,19 +397,20 @@ const MENUS = { language: "en", menus: [
   { title: "File", items: [{ title: "Close Window", key: "cmd+w" }] },
 ] };
 
-test("quit deadline covers connection and closes a client that arrives after expiry", async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
+// The quit limit is a declared parameter of quitApplication, so the expiry is reached in 1 s of real time.
+const QUIT_TEST_LIMIT_MS = 1000;
+
+test("quit deadline covers connection and closes a client that arrives after expiry", { timeout: 10000 }, async (t) => {
   const configDir = workspace(t), child = { exitCode: 0, signalCode: null };
-  let arrive, calls = 0, closed = 0, settled = false;
+  let arrive, calls = 0, closed = 0;
   const client = { request: async (method) => { calls++; return method === "status.get" ? MENUS : null; }, close() { closed++; } };
-  const pending = quitApplication({ app: "fixture", platform: "darwin", by: "menu", configDir }, new Map([["fixture", child]]), 0, () => {}, () => new Promise((resolve) => { arrive = resolve; }));
-  const observed = pending.then(() => ({ ok: true }), (error) => ({ error }));
-  observed.then(() => { settled = true; });
-  t.after(async () => { arrive(client); await observed; });
-  t.mock.timers.tick(60_000);
-  await new Promise(setImmediate);
-  assert.equal(settled, true, "connection bypassed the existing 60-second quit deadline");
-  assert.match((await observed).error.message, /quit.*60s/i);
+  const pending = quitApplication({ app: "fixture", platform: "darwin", by: "menu", configDir }, new Map([["fixture", child]]), 0, () => {},
+    () => new Promise((resolve) => { arrive = resolve; }), undefined, QUIT_TEST_LIMIT_MS);
+  t.after(async () => { arrive(client); await pending.catch(() => {}); });
+  // The deadline rejects the step while the connection is still pending.
+  const error = await pending.then(() => null, (failure) => failure);
+  assert.ok(error, "connection bypassed the quit deadline");
+  assert.match(error.message, /quit.*1s/i);
   arrive(client);
   await new Promise(setImmediate);
   assert.equal(calls, 0, "a late connection dispatched a quit after the step had expired");
@@ -417,7 +418,6 @@ test("quit deadline covers connection and closes a client that arrives after exp
 });
 
 test("quit deadline closes a pending RPC and runs the remaining quit and process audit", { timeout: 10000 }, async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
   const firstDir = workspace(t), nextDir = workspace(t);
   let release, entered;
   const requested = new Promise((resolve) => { entered = resolve; });
@@ -433,14 +433,13 @@ test("quit deadline closes a pending RPC and runs the remaining quit and process
   const processes = async ({ platform }) => { listed.push(platform); return []; };
   const pending = runPlan([item("first", firstDir), item("next", nextDir), { name: "remaining processes", phase: "cleanup", kind: "remaining", paths: [], platform: "darwin" }],
     { write, children: new Map([["first", { exitCode: 0, signalCode: null }], ["next", { exitCode: 0, signalCode: null }]]), connectClient: async ({ configDir }) => configDir === firstDir ? first : next,
-      processes });
+      processes, quitLimitMs: QUIT_TEST_LIMIT_MS });
   t.after(async () => { release(null); await pending; });
   await requested;
-  t.mock.timers.tick(60_000);
-  // The pending Quit RPC stays pending: the plan ends without it, or the test reaches its limit.
+  // The pending Quit RPC stays pending until the quit limit of the step expires in real time.
   const failures = await pending;
   assert.equal(failures.length, 1);
-  assert.match(failures[0], /quit first:.*60s/);
+  assert.match(failures[0], /quit first:.*1s/);
   assert.equal(firstClosed, 1);
   assert.equal(nextClosed, 1);
   assert.ok(lines.some((line) => line.startsWith("passed quit next")), lines.join("\n"));

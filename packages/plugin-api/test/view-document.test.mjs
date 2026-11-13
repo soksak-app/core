@@ -98,11 +98,15 @@ test("the bridge registers the actual view document without plugin exposure setu
   view.document.elementFromPoint = (x, y) => x === 20 && y === 30 ? view.document.body : null;
   assert.equal(await request("command.run", "core.surface.hit", { params: { x: 20, y: 30 } }), true);
   assert.equal(await request("command.run", "core.surface.hit", { params: { x: 0, y: 0 } }), false);
-  view.performance.now = () => 1234.5;
   // The view start installs sokView; its page identity names the document, which performance.timeOrigin does not.
   view.sokView = { page: "page-probe" };
-  assert.deepEqual(await request("command.run", "core.surface.clock", { params: {} }),
-    { page: "page-probe", timeOrigin: view.performance.timeOrigin, now: 1234.5 }, "the clock command reads the document clock");
+  // The clock command reads the clock of the document during the request, so its reading lies between two readings of that clock.
+  const before = view.performance.now();
+  const clock = await request("command.run", "core.surface.clock", { params: {} });
+  const after = view.performance.now();
+  assert.deepEqual({ page: clock.page, timeOrigin: clock.timeOrigin }, { page: "page-probe", timeOrigin: view.performance.timeOrigin },
+    "the clock command reads the document identity");
+  assert.ok(clock.now >= before && clock.now <= after, `the clock command read ${clock.now}, outside the readings ${before} to ${after}`);
   delete view.sokView;
   await assert.rejects(request("command.run", "core.surface.clock", { params: {} }), /the view document has no page identity/);
 });

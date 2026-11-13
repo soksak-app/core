@@ -52,6 +52,16 @@ const UNGATED = ["start", "fixture.step"];
 const named = (value) => typeof value === "string" && value !== "";
 
 /**
+ * The milliseconds until the counts of the gate are reported by a timer, or null when no timer is armed. A batch in flight holds
+ * no timer: its end sends a count that is due or waits for the rest of the interval, which starts at `gatedAt`, the reading of the
+ * last report. `at` is the reading now, and `interval` is the interval in milliseconds.
+ */
+export function gatedWait({ counted, sending, gatedAt, at, interval = GATED_REPORT_MS }) {
+  if (!counted || sending) return null;
+  return Math.max(0, interval - (at - gatedAt));
+}
+
+/**
  * The page has no wall clock or monotonic clock in microseconds: `Date.now()` has a resolution of a millisecond, and
  * `performance.now()` counts from the start of the document at the resolution that the engine allows. An event stores the
  * reading of `performance.now()` when it is queued. Before the first batch leaves, the page reads the clocks of the host with
@@ -65,7 +75,8 @@ const named = (value) => typeof value === "string" && value !== "";
  * `{layer: "workbench", member: "start", identity}` and a view page `{layer: "page", member: "page", identity}`.
  */
 export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENTS, maxBytes = DEFAULT_MAX_BYTES,
-  now = () => performance.now(), classify = () => undefined, gate = null, writer }) {
+  now = () => performance.now(), timer = (callback, ms) => setTimeout(callback, ms), gatedReportMs = GATED_REPORT_MS,
+  classify = () => undefined, gate = null, writer }) {
   if (!named(writer?.layer) || !named(writer?.member) || !named(writer?.identity)) {
     throw new TypeError(`createEventBatcher requires the writer {layer, member, identity} of the document as non-empty strings, found ${JSON.stringify(writer)}`);
   }
@@ -86,7 +97,7 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
   // so one timer waits for it while counts are held.
   let gatedAt = now();
   let gatedTimer = false;
-  const gatedDue = () => gated.size > 0 && now() - gatedAt >= GATED_REPORT_MS;
+  const gatedDue = () => gated.size > 0 && now() - gatedAt >= gatedReportMs;
   let scheduled = false;
   let sending = null;
   let anchor = null;
@@ -180,12 +191,14 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
 
   // A batch in flight holds no timer: the end of that batch sends a count that is due or waits for the rest of the interval.
   const awaitGated = () => {
-    if (gatedTimer || sending || gated.size === 0) return;
+    const wait = gatedWait({ counted: gated.size > 0, sending: sending !== null, gatedAt, at: now(), interval: gatedReportMs });
+    if (gatedTimer || wait === null) return;
     gatedTimer = true;
-    setTimeout(() => {
+    // `timer(callback, ms)` arms the report of the counts; the platform timer is the default.
+    timer(() => {
       gatedTimer = false;
       send().then(awaitGated, report);
-    }, Math.max(0, GATED_REPORT_MS - (now() - gatedAt)));
+    }, wait);
   };
 
   const schedule = () => {

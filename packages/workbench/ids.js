@@ -21,15 +21,17 @@ const PREFIX = {
 
 /**
  * Generates and returns one identifier of `kind` for which `taken(id)` is false. Random ids of 30 bits can repeat, and
- * an id that another target already holds would address both, so a taken id is drawn again.
+ * an id that another target already holds would address both, so a taken id is drawn again. `random(buf)` fills buf with the
+ * bytes of one draw; the platform random source is the default.
  */
-export function issueId(kind, taken) {
+export function issueId(kind, taken, random = (buf) => crypto.getRandomValues(buf)) {
   const prefix = PREFIX[kind];
   if (!prefix) throw new Error(`unknown id kind: ${kind}`);
   if (typeof taken !== "function") throw new TypeError(`issueId(${kind}) needs a check of the taken ids, not ${taken}`);
+  if (typeof random !== "function") throw new TypeError(`issueId(${kind}) needs a random source function, not ${random}`);
   const buf = new Uint8Array(LEN);
   for (;;) {
-    crypto.getRandomValues(buf);
+    random(buf);
     let body = "";
     for (const b of buf) body += ALPHABET[b % 32];
     if (!taken(prefix + body)) return prefix + body;

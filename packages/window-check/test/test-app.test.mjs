@@ -135,10 +135,9 @@ const alive = (pid) => {
 
 test("a command at its limit ends with every process it started", { timeout: 30000 }, async (t) => {
   const { args, started } = programWithChild(t, join(folder(t), "child"));
-  t.mock.timers.enable({ apis: ["setTimeout"] });
+  // The limit is the real 5 s of the run; the test waits on the rejection of the run, not on a fake clock.
   const outcome = run(process.execPath, args, { cwd: tmpdir(), timeout: 5000 });
   const child = await started;
-  t.mock.timers.tick(5000);
   await assert.rejects(outcome, /did not end in 5s/);
   assert.equal(alive(child), false, `the child ${child} of the command still runs`);
 });

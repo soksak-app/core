@@ -113,6 +113,22 @@ export function plannedLength(method, params, displayed) {
 }
 
 /**
+ * The instant at which a request that started at `started` (milliseconds of performance.now) with the planned length `planned` is
+ * sampled while it is still pending: `after` (STALL_AFTER by default) after its planned length.
+ */
+export function stallDeadline(started, planned, after = STALL_AFTER) {
+  return started + planned + after;
+}
+
+/**
+ * Whether a request is sampled at the instant `at`: it is still pending and its stall deadline has come. An answered request is
+ * never sampled, at any instant.
+ */
+export function stallDue({ started, planned, pending, at, after = STALL_AFTER }) {
+  return pending && at >= stallDeadline(started, planned, after);
+}
+
+/**
  * Writes the thread stacks of process pid to file and returns file. It fails with the reason when sample fails, and a
  * sample that stalls leaves the stacks of its own process next to file.
  *

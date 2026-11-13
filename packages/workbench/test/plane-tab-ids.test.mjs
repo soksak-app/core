@@ -45,8 +45,7 @@ test("a new tab avoids the ids of held surfaces, stored tabs and tabs issued bef
   // The first tab draws the held id, then the stored id, then tab-cccccc; the second tab draws the held id, then the id
   // that the first tab took, then tab-dddddd.
   const draws = [0, 1, 2, 0, 2, 3];
-  t.mock.method(crypto, "getRandomValues", (buf) => buf.fill(draws.shift()));
-  const fresh = plane.fresh();
+  const fresh = plane.fresh((buf) => buf.fill(draws.shift()));
   assert.deepEqual(fresh.state.cards[0].data.tabs.map((tab) => tab.id), ["tab-cccccc", "tab-dddddd"]);
   assert.deepEqual(draws, []);
 });

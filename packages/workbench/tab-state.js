@@ -19,50 +19,28 @@ export function checkTabStateDocument(document) {
 }
 
 /**
- * Reads the store and returns its entries. store has tabState() and tabStatePut(tab, entry);
- * failed reports a failed write through the error display; unloadOf(plugin) returns the
- * surface.unload declaration of a plugin.
+ * The decisions of the tab state store as a function of the instants that each call receives. A change of a tab is written
+ * COALESCE_MS after its first pending change; a call returns the actions that the shell runs, in order:
+ *   {type: "write", tab, entry}                 store the entry of tab; null removes its entry from the file;
+ *   {type: "event", level, event, fields}       an event of the page log;
+ *   {type: "failed", error}                     a failed write for the error display of the page.
+ * `deadline()` is the earliest instant at which a pending write is due, or null; the shell runs `due` at that instant, because
+ * elapsed time has no event source.
  */
-export async function openTabStates({ store, failed, unloadOf }) {
-  const entries = new Map(Object.entries(checkTabStateDocument(await store.tabState())));
+export function tabStateCore(initial) {
+  const entries = new Map(initial);
+  // tab -> the instant at which its pending entry is written
   const pending = new Map();
-  let writing = Promise.resolve();
 
-  function put(tab) {
-    // default: a tab without an entry is written as null, which removes its entry from the file.
-    const entry = entries.get(tab) ?? null;
-    writing = writing.then(async () => {
-      try {
-        const bytes = await store.tabStatePut(tab, entry);
-        emitEvent("debug", "workbench.tab.state.stored", { tab, bytes });
-      } catch (error) {
-        failed(new Error(`tab state of ${tab}: ${error.message}`));
-      }
-    });
-    return writing;
-  }
+  // default: a tab without an entry is written as null, which removes its entry from the file.
+  const write = (tab) => ({ type: "write", tab, entry: entries.get(tab) ?? null });
 
-  function schedule(tab) {
-    if (pending.has(tab)) return;
-    pending.set(tab, setTimeout(() => { pending.delete(tab); put(tab); }, COALESCE_MS));
-  }
-
-  // Sets (value) or removes (undefined) one field of the entry of tab; an entry without fields is removed.
-  function change(tab, field, value) {
-    const entry = { ...entries.get(tab) };
-    if (value === undefined) delete entry[field];
-    else entry[field] = value;
-    if (Object.keys(entry).length) entries.set(tab, entry);
-    else entries.delete(tab);
-    schedule(tab);
-  }
-
-  function remove(tab) {
-    clearTimeout(pending.get(tab));
+  // The write that removes the entry of tab, which is no longer pending.
+  const remove = (tab) => {
     pending.delete(tab);
     entries.delete(tab);
-    return put(tab);
-  }
+    return [write(tab)];
+  };
 
   return {
     /** The entry of tab, or null. */
@@ -71,6 +49,98 @@ export async function openTabStates({ store, failed, unloadOf }) {
     /** The cached label of tab, or null. */
     // default: a tab without an entry or a label shows no cached label.
     label: (tab) => entries.get(tab)?.label ?? null,
+    /** Whether tab has an entry or a pending write. */
+    known: (tab) => entries.has(tab) || pending.has(tab),
+    /** Sets (value) or removes (undefined) one field of the entry of tab at the instant at; an entry without fields is removed. */
+    change(tab, field, value, at) {
+      const entry = { ...entries.get(tab) };
+      if (value === undefined) delete entry[field];
+      else entry[field] = value;
+      if (Object.keys(entry).length) entries.set(tab, entry);
+      else entries.delete(tab);
+      if (!pending.has(tab)) pending.set(tab, at + COALESCE_MS);
+    },
+    /** The writes whose instant is not later than at; each write is taken once. */
+    due(at) {
+      const tabs = [...pending].filter(([, instant]) => instant <= at).map(([tab]) => tab);
+      for (const tab of tabs) pending.delete(tab);
+      return tabs.map(write);
+    },
+    /** The writes of every pending entry now (quit). */
+    flush() {
+      const tabs = [...pending.keys()];
+      pending.clear();
+      return tabs.map(write);
+    },
+    /** The write that removes the entry of tab. */
+    remove,
+    /** Removes each entry that kept(id) does not keep, with an event per entry. */
+    reconcile(kept) {
+      const orphans = [...entries.keys()].filter((tab) => !kept(tab));
+      return [
+        ...orphans.map((tab) => ({ type: "event", level: "info", event: "workbench.tab.state.orphan", fields: { tab } })),
+        ...orphans.flatMap(remove),
+      ];
+    },
+    /** The actions of a write that the store confirmed with its bytes. */
+    written: (tab, bytes) => [{ type: "event", level: "debug", event: "workbench.tab.state.stored", fields: { tab, bytes } }],
+    /** The actions of a write that the store refused. */
+    failed: (tab, error) => [{ type: "failed", error: new Error(`tab state of ${tab}: ${error.message}`) }],
+    /** The earliest instant of a pending write, or null when none is pending. */
+    deadline: () => (pending.size ? Math.min(...pending.values()) : null),
+  };
+}
+
+/**
+ * Reads the store and returns its entries. store has tabState() and tabStatePut(tab, entry);
+ * failed reports a failed write through the error display; unloadOf(plugin) returns the
+ * surface.unload declaration of a plugin.
+ */
+export async function openTabStates({ store, failed, unloadOf }) {
+  const core = tabStateCore(Object.entries(checkTabStateDocument(await store.tabState())));
+  let timer = null;
+  let writing = Promise.resolve();
+
+  function perform(actions) {
+    for (const action of actions) {
+      if (action.type === "write") {
+        writing = writing.then(async () => {
+          try {
+            const bytes = await store.tabStatePut(action.tab, action.entry);
+            perform(core.written(action.tab, bytes));
+          } catch (error) {
+            perform(core.failed(action.tab, error));
+          }
+        });
+      } else if (action.type === "event") emitEvent(action.level, action.event, action.fields);
+      else if (action.type === "failed") failed(action.error);
+      else throw new Error(`tab state action ${action.type} is not declared`);
+    }
+  }
+
+  // The one timer of the earliest pending write, re-armed after each change of the entries.
+  function arm() {
+    clearTimeout(timer);
+    timer = null;
+    const next = core.deadline();
+    if (next === null) return;
+    timer = setTimeout(() => {
+      timer = null;
+      perform(core.due(performance.now()));
+      arm();
+    }, Math.max(0, next - performance.now()));
+  }
+
+  function change(tab, field, value) {
+    core.change(tab, field, value, performance.now());
+    arm();
+  }
+
+  return {
+    /** The entry of tab, or null. */
+    entry: (tab) => core.entry(tab),
+    /** The cached label of tab, or null. */
+    label: (tab) => core.label(tab),
     /** Stores the state {format, value} that the plugin of tab wrote. */
     write: (tab, state) => change(tab, "state", state),
     /** Sets or clears the mark kept of tab. */
@@ -83,20 +153,20 @@ export async function openTabStates({ store, failed, unloadOf }) {
     /** Removes the entries of tabs after the layout write that drops them is confirmed; a refused write removes none. */
     async removeAfter(layoutWrite, tabs) {
       await layoutWrite;
-      await Promise.all(tabs.filter((tab) => entries.has(tab) || pending.has(tab)).map(remove));
+      for (const tab of tabs.filter((id) => core.known(id))) perform(core.remove(tab));
+      arm();
+      await writing;
     },
     /** Removes each entry that kept(id) does not keep (storedSurfaceKept of section-surfaces.js), with an event per entry. */
     async reconcile(kept) {
-      const orphans = [...entries.keys()].filter((tab) => !kept(tab));
-      for (const tab of orphans) emitEvent("info", "workbench.tab.state.orphan", { tab });
-      await Promise.all(orphans.map(remove));
+      perform(core.reconcile(kept));
+      arm();
+      await writing;
     },
     /** Writes every pending entry now; the page calls it at quit. */
     flush() {
-      const tabs = [...pending.keys()];
-      for (const tab of tabs) clearTimeout(pending.get(tab));
-      pending.clear();
-      for (const tab of tabs) put(tab);
+      perform(core.flush());
+      arm();
       return writing;
     },
     /** Resolves when the writes started so far have ended. */
