@@ -25,6 +25,10 @@ node_actual=$(node --version 2>/dev/null || true)
 node_platform=$(node -p process.platform 2>/dev/null || true)
 node_arch=$(node -p process.arch 2>/dev/null || true)
 pnpm_actual=$(pnpm --version 2>/dev/null || true)
+# Fault injection point checkToolsVersions: SOKSAK_FAULT_NODE_VERSION and SOKSAK_FAULT_PNPM_VERSION replace the versions that node --version
+# and pnpm --version report, so a test reaches the version comparison for a version that the installed tools do not have.
+if [ -n "${SOKSAK_FAULT_NODE_VERSION-}" ]; then node_actual=$SOKSAK_FAULT_NODE_VERSION; fi
+if [ -n "${SOKSAK_FAULT_PNPM_VERSION-}" ]; then pnpm_actual=$SOKSAK_FAULT_PNPM_VERSION; fi
 node_major=${node_actual#v}; node_major=${node_major%%.*}
 if [ "$node_major" != "${node_expected%%.*}" ] || [ "$node_platform" != "$platform" ] || [ "$node_arch" != "$arch" ] || [ "${pnpm_actual%%.*}" != "${pnpm_expected%%.*}" ]; then
   printf 'TOOLCHAIN_MISMATCH: expected node=v%s.x pnpm=%s.x runtime=%s/%s; actual node=%s pnpm=%s runtime=%s/%s\n' \

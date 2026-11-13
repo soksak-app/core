@@ -130,7 +130,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Go native package declaration", "declaration", ["scripts/go-native-packages.json"], ["scripts/test/go-repeat-inputs.test.mjs", "scripts/test/repeat-go.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Go repeat tests", "js-ts", ["scripts/go-tests.mjs"], ["scripts/test/repeat-go.test.mjs", "scripts/test/fixtures/repeat-go/**/*"], { sharedTests: true, testExtensions: new Set([".mjs", ".go", ".mod", ".json", ".c", ".h"]) }),
   lane("Node repeat tests", "js-ts", ["scripts/repeat-node.mjs"], ["scripts/test/repeat-node.test.mjs"]),
-  lane("benchmark runner tests", "js-ts", ["scripts/benchmarks.mjs"], ["scripts/test/benchmarks.test.mjs"]),
+  lane("benchmark runner tests", "js-ts", ["scripts/benchmarks.mjs"], ["scripts/test/benchmarks.test.mjs", "scripts/test/fixtures/benchmarks/**/*"], { testExtensions: new Set([".mjs", ".go", ".mod", ".c", ".h", ".rs", ".toml", ".lock"]) }),
   lane("Go repeat inputs", "js-ts", ["scripts/go-repeat-inputs.mjs"], ["scripts/test/go-repeat-inputs.test.mjs"], { sharedTests: true }),
   lane("Temporary folders of runs", "js-ts", ["scripts/temporary-folder.mjs"], ["scripts/test/temporary-folder.test.mjs"]),
   lane("fixture registry", "js-ts", ["scripts/fixture-registry.mjs"], ["scripts/test/fixture-registry.test.mjs"]),
@@ -11764,7 +11764,7 @@ const FEATURE_LINKS = [
   {
     id: "F279",
     implementation: [{ file: "Makefile", symbol: "E2E_REGISTRY_TLS_PARSE = node -e" }],
-    tests: [{ file: "scripts/test/create-test-certificates.test.mjs", id: "the registry TLS target fails and names the file when openssl writes no certificate" }],
+    tests: [{ file: "scripts/test/create-test-certificates.test.mjs", id: "the registry TLS target fails and names the file when the authority file holds no certificate" }],
     expected: "The registry TLS target reports the errors of openssl, parses each certificate, and fails and removes its folder when a certificate does not parse.",
     levels: ["unit"],
   },

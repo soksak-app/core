@@ -15,11 +15,11 @@ else
 fi
 
 # A pnpm installed as a standalone executable outside an npm package, such as pnpm/action-setup on a GitHub runner, is also a matching toolchain when it reports that version.
+# The installed pnpm is linked from a folder of its own, so the check runs the real executable from a location outside the npm package.
 standalone=$(mktemp -d)
 trap 'rm -rf "$standalone"' EXIT
 declared=$(node -p 'require("./package.json").packageManager.slice("pnpm@".length)')
-printf '#!/bin/sh\nprintf "%%s\\n" %s\n' "$declared" > "$standalone/pnpm"
-chmod +x "$standalone/pnpm"
+ln -s "$(command -v pnpm)" "$standalone/pnpm"
 if ready=$(PATH="$standalone:$PATH" sh scripts/check-tools.sh 2>&1); then
   printf 'PASS: a standalone pnpm executable of the declared version is accepted\n'
 else
@@ -27,27 +27,25 @@ else
   printf 'FAIL: a standalone pnpm executable of the declared version exited %s: %s\n' "$status" "$ready"
   exit 1
 fi
-# A build needs the major version of a tool, so another minor or patch version is a matching toolchain.
-printf '#!/bin/sh\nprintf "%%s\\n" %s.999.0\n' "${declared%%.*}" > "$standalone/pnpm"
-if ready=$(PATH="$standalone:$PATH" sh scripts/check-tools.sh 2>&1); then
+# A build needs the major version of a tool, so another minor or patch version is a matching toolchain. The installed pnpm reports only its own
+# version, so the check takes the pnpm version from its declared fault injection point.
+if ready=$(SOKSAK_FAULT_PNPM_VERSION="${declared%%.*}.999.0" sh scripts/check-tools.sh 2>&1); then
   printf 'PASS: a pnpm executable of the declared major version is accepted\n'
 else
   status=$?
   printf 'FAIL: a pnpm executable of the declared major version exited %s: %s\n' "$status" "$ready"
   exit 1
 fi
-printf '#!/bin/sh\ncase "$1" in --version) printf "v%s.999.0\\n" ;; *) exec "%s" "$@" ;; esac\n' "$(cut -d. -f1 .node-version)" "$(command -v node)" > "$standalone/node"
-chmod +x "$standalone/node"
-if ready=$(PATH="$standalone:$PATH" sh scripts/check-tools.sh 2>&1); then
+# The node check also compares the major version only. The installed node reports only its own version, so the check takes the node version
+# from its declared fault injection point.
+if ready=$(SOKSAK_FAULT_NODE_VERSION="v$(cut -d. -f1 .node-version).999.0" sh scripts/check-tools.sh 2>&1); then
   printf 'PASS: a node executable of the declared major version is accepted\n'
 else
   status=$?
   printf 'FAIL: a node executable of the declared major version exited %s: %s\n' "$status" "$ready"
   exit 1
 fi
-rm "$standalone/node"
-printf '#!/bin/sh\nprintf "0.0.1\\n"\n' > "$standalone/pnpm"
-if other=$(PATH="$standalone:$PATH" sh scripts/check-tools.sh 2>&1); then
+if other=$(SOKSAK_FAULT_PNPM_VERSION=0.0.1 sh scripts/check-tools.sh 2>&1); then
   printf 'FAIL: a pnpm executable of another version was accepted\n'
   exit 1
 else
