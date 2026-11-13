@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F794: the test of `make repeat-suite` has no limit over the whole suite; the runner gives each run its own limit.
 - F790: the Go host removes every wait of a layout cancel before it abandons the native joins of the waits, as the Rust host does, and reports a failed abandon in the text of the Rust host; its test of the end of a page sees the cancel of the layouts queued for the UI thread.
 - F788: the record of F778 states the failures of `e2e/plain-view.test.mjs` in the window runs of 2026-11-13 by run, load and host, and which part of F778 the changes of the measurement decided.
 - F787: row H86 of the host specification states that the Go test of the page start checks only the steps of its window calls, because each native window function of the Go host runs its AppKit call on the main thread itself.

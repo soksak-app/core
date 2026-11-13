@@ -104,8 +104,10 @@ test('make repeat-suite shows the runner output of every run of the suite, and p
     const [name, ...args] = entry.split(',');
     return fake(build, name, `echo "ran ${name} ${args.join(' ')}"`);
   });
+  // The runner gives each of the runs of the suite its own limit and reports it, so the run of the whole suite has no limit of
+  // its own: one limit over every entry of NATIVE_TESTS would grow with the list and judge the load of the machine.
   const result = spawnSync('make', ['-C', native, 'repeat-suite', 'COUNT=1', `BUILD=${build}`, ...executables.flatMap((path) => ['-o', path])], {
-    encoding: 'utf8', timeout: 120000,
+    encoding: 'utf8',
   });
   assert.equal(result.status, 0, result.stdout + result.stderr);
   for (const entry of entries) {

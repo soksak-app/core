@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F794: `make repeat-suite` 의 시험은 suite 전체의 limit 을 두지 않는다. runner 가 각 run 에 자기 limit 을 준다.
 - F790: Go host 는 Rust host 처럼 layout cancel 의 모든 wait 를 지운 뒤 wait 의 native join 을 abandon 하고, 실패한 abandon 을 Rust host 의 문구로 보고한다. page 끝의 시험은 layout 의 cancel 이 UI thread 로 미뤄지는 것을 본다.
 - F788: F778 의 기록은 2026-11-13 window run 의 `e2e/plain-view.test.mjs` 실패를 run, 부하, host 별로 적고, F778 의 어느 부분을 측정의 변경이 결정했는지 적는다.
 - F787: host 명세의 행 H86 은 page start 의 Go 시험이 window call 의 step 만 확인한다고 적는다. Go host 의 각 native window function 이 AppKit call 을 스스로 main thread 에서 실행하기 때문이다.

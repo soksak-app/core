@@ -1439,6 +1439,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F794",
+    implementation: [{ file: "native/darwin/Makefile", symbol: "repeat-suite: $(addprefix $(BUILD)/,$(NATIVE_TEST_EXECUTABLES))" }],
+    tests: [{ file: "scripts/test/native-repeat.test.mjs", id: "make repeat-suite shows the runner output of every run of the suite, and passes when each test passes" }],
+    expected: "The test of make repeat-suite runs every entry of NATIVE_TESTS with the limit that the runner gives each run and no limit over the whole suite.",
+    levels: ["unit"],
+  },
+  {
     id: "F790",
     implementation: [
       { file: "packages/host/go/src/presentation_wait.go", symbol: "func (w *presentationWait) cancelAll() error {" },
