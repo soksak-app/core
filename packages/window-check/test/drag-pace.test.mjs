@@ -24,7 +24,7 @@ const plan = { axis: "x", line: 0, dx: 10, dy: 0, ms: 400, times: 2 };
 
 test("a drag that is not paced fails at once with its took, asked, press waits, range and load", { timeout: 5000 }, async () => {
   const calls = [];
-  const slow = { took: 1700, asked: 800, pressWaits: [4, 31] };
+  const slow = { took: 1700, asked: 800, pressWaits: [4, 31], handled: [400.4, 300.2, 2] };
   const failure = await drag(session([slow, { took: 800, asked: 800, pressWaits: [3, 5] }], calls), plan)
     .then(() => null, (error) => error.message);
   assert.notEqual(failure, null, "a drag that took 1700ms for 800ms passed after a second drag");
@@ -32,6 +32,7 @@ test("a drag that is not paced fails at once with its took, asked, press waits, 
   assert.match(failure, /took 1700ms for 800ms/);
   assert.match(failure, /between 640ms and 1000ms/);
   assert.match(failure, /pressWaits \[4,31\]/);
+  assert.match(failure, /handled 703ms in 3 steps, the longest 400ms/);
   assert.match(failure, /1-minute load average \d+(\.\d+)?/);
   assert.match(failure, /a slow drag passing is not a pass/);
 });
@@ -41,4 +42,10 @@ test("a drag that is paced passes after one gesture", { timeout: 5000 }, async (
   const result = await drag(session([{ took: 900, asked: 800, pressWaits: [3, 5] }], calls), plan);
   assert.equal(result.took, 900);
   assert.equal(calls.filter((method) => method === "diagnostics.drag").length, 1);
+});
+
+test("a drag that is not paced and reports no handling says so", { timeout: 5000 }, async () => {
+  const failure = await drag(session([{ took: 1700, asked: 800, pressWaits: [4, 31] }], []), plan)
+    .then(() => null, (error) => error.message);
+  assert.match(failure, /handled not reported/);
 });

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F778: 속도를 지키지 못한 window check drag 의 실패는 application 이 그 step 을 처리한 시간을 합, 개수, 가장 긴 것으로 말하므로, 느린 drag 는 application 안의 시간과 밖의 시간을 구분한다.
 - F729: 2026-11-13 window run 에서 `e2e/design-hosts.test.mjs` 가 세 host 에서 통과했다.
 - F729: mygo 워크벤치의 text 줄은 page 의 줄을 WebKit 이 배치하는 것처럼 높이가 정수 point 이므로, line height 17.4 에서 세 줄로 접히는 설명은 모든 host 에서 51 point 높이다. mygo fork `v0.7.4-244-g4abb83d-soksak.11` 이 text 의 line height 를 내림하고, 워크벤치는 tab 의 가운데를 같은 규칙으로 놓는다.
 - F774: 부하 아래 window run 에서 check 가 연결된 동안 mygo host 는 scheduling priority 를 4 보다 높게 유지했고 stall 을 기록하지 않았다. `card-panels`, `card-tools-menu`, `image-region-press-focus`, `tab-press-keys` 는 세 host 에서 통과했다.

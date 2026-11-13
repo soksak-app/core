@@ -1414,7 +1414,7 @@ export async function drag(s, plan, { capture = false } = {}) {
     throw new Error(
       `the drag did not run at the rate it was asked to: it took ${result.took}ms for ${result.asked}ms, not between ` +
         `${Math.round(result.asked / MARGIN)}ms and ${Math.round(result.asked * MARGIN)}ms; pressWaits ` +
-        `${JSON.stringify(result.pressWaits ?? null)}; 1-minute load average ${loadavg()[0].toFixed(2)}. The steps come ` +
+        `${JSON.stringify(result.pressWaits ?? null)}; ${handling(result.handled)}; 1-minute load average ${loadavg()[0].toFixed(2)}. The steps come ` +
         "from the host, whose clock is not held wherever the window is. Nothing was measured: an unrendered area " +
         "shows itself at the speed a person drags at, and a slow drag passing is not a pass.",
     );
@@ -1423,6 +1423,17 @@ export async function drag(s, plan, { capture = false } = {}) {
 }
 
 const MARGIN = 1.25;
+
+/**
+ * The time that the application spent handling the steps of a drag, from `handled`, the milliseconds of each step that the
+ * reply of diagnostics.drag carries (docs/spec/endpoint.md): a slow drag whose steps took the time inside the application
+ * differs from one whose host clock ran late.
+ */
+function handling(handled) {
+  if (!Array.isArray(handled) || handled.length === 0) return "handled not reported";
+  const sum = handled.reduce((total, ms) => total + ms, 0);
+  return `handled ${Math.round(sum)}ms in ${handled.length} steps, the longest ${Math.round(Math.max(...handled))}ms`;
+}
 
 const paced = ({ took, asked }) => took <= asked * MARGIN && took >= asked / MARGIN;
 
