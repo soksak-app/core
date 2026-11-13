@@ -1,7 +1,6 @@
 package host_test
 
 import (
-	"errors"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -9,6 +8,7 @@ import (
 	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
+	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
 // neverWaits is the run loop of a main thread that always handles an event.
@@ -149,47 +149,6 @@ func TestABlockedMainThreadIsRecordedWithItsStacksAndItsEnd(t *testing.T) {
 	}
 }
 
-// firstStall runs the watch with a main thread that never takes a task, and returns the fields of the first host.stall record.
-// The first beat is late by extra.
-func firstStall(t *testing.T, extra time.Duration) map[string]any {
-	t.Helper()
-	clock := newSteppedTime(t)
-	records := newStallRecords()
-	stop := host.StartStallWatch(host.StallWatchOptions{
-		// The main thread never answers, so the time of the answer stays the time of the first heartbeat, the start of the clock.
-		Heartbeat:  func() (time.Duration, time.Duration) { return clock.clock(), 0 },
-		AwaitAwake: neverWaits,
-		Schedule:   foreground,
-		Sample:     func(string) error { return nil },
-		Folder:     t.TempDir(),
-		EmitHost:   records.emit,
-		Clock:      clock.clock,
-		Wait:       clock.wait,
-	})
-	defer stop()
-	clock.requirePark(t, "beat")
-	for beat := 1; beat <= 4; beat++ {
-		clock.beat(t, extra, "beat")
-		extra = 0
-		records.mu.Lock()
-		var name string
-		var fields map[string]any
-		if len(records.names) > 0 {
-			name, fields = records.names[0], records.fields[0]
-		}
-		records.mu.Unlock()
-		switch name {
-		case "":
-		case "host.stall":
-			return fields
-		default:
-			t.Fatalf("the first record is %s, want host.stall", name)
-		}
-	}
-	t.Fatal("no host.stall record after 4 beats of a main thread that never answers")
-	return nil
-}
-
 // int64Field returns a field of a record, which the watch stores as an int64.
 func int64Field(t *testing.T, fields map[string]any, key string) int64 {
 	t.Helper()
@@ -198,30 +157,6 @@ func int64Field(t *testing.T, fields map[string]any, key string) int64 {
 		t.Fatalf("host.stall field %s is %v (%T), want an int64", key, fields[key], fields[key])
 	}
 	return value
-}
-
-// contract: host.stall.watch-late-separates-scheduling
-func TestAStallOfAnUnscheduledProcessCarriesItsLatenessInTheWatch(t *testing.T) {
-	// The first beat is 1600 ms late for the watch and for the main thread alike, so the stall is seen at 1850 ms.
-	fields := firstStall(t, 1600*time.Millisecond)
-	if got := int64Field(t, fields, "late_ms"); got != 1850 {
-		t.Fatalf("late_ms %d, want 1850", got)
-	}
-	if got := int64Field(t, fields, "watch_late_ms"); got != 1600 {
-		t.Fatalf("watch_late_ms %d, want 1600", got)
-	}
-}
-
-// contract: host.stall.watch-late-separates-blocked-main
-func TestAStallOfABlockedMainThreadHasNoLatenessInTheWatch(t *testing.T) {
-	// The watch wakes on every beat; the main thread never runs the heartbeat, so the stall is seen at 1000 ms.
-	fields := firstStall(t, 0)
-	if got := int64Field(t, fields, "late_ms"); got != 1000 {
-		t.Fatalf("late_ms %d, want 1000", got)
-	}
-	if got := int64Field(t, fields, "watch_late_ms"); got != 0 {
-		t.Fatalf("watch_late_ms %d, want 0", got)
-	}
 }
 
 // contract: host.stall.sample-keeps-the-watch-running
@@ -571,77 +506,18 @@ func TestStoppingTheWatchWaitsForTheRunningSample(t *testing.T) {
 	}
 }
 
-// scheduleReads is a schedule that returns its readings in order, one for each read.
-type scheduleReads struct {
-	mu       sync.Mutex
-	readings []uint64
-	failure  error
-}
-
-func (r *scheduleReads) read() (int32, uint64, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.failure != nil {
-		return 0, 0, r.failure
-	}
-	cpu := r.readings[0]
-	r.readings = r.readings[1:]
-	return 4, cpu, nil
-}
-
-// stallAndResume runs the watch through one stall of a held main thread and its end with the schedule, and returns the fields of
-// host.stall and of host.stall.resumed.
-func stallAndResume(t *testing.T, schedule func() (int32, uint64, error)) (stall, resumed map[string]any) {
-	t.Helper()
-	clock := newSteppedTime(t)
-	loop := newFakeRunLoop(clock)
-	loop.wake(false)
-	records := newStallRecords()
-	stop := host.StartStallWatch(host.StallWatchOptions{
-		Heartbeat:  loop.heartbeat,
-		AwaitAwake: loop.awaitAwake,
-		Schedule:   schedule,
-		Sample:     func(string) error { return nil },
-		Folder:     t.TempDir(),
-		EmitHost:   records.emit,
-		Clock:      clock.clock,
-		Wait:       clock.wait,
-	})
-	defer stop()
-	clock.requirePark(t, "beat")
-	clock.beats(t, 2)
-	loop.wake(true)
-	clock.beats(t, 4)
-	records.await(t, "host.stall,host.stall.sampled")
-	loop.wake(false)
-	clock.beats(t, 1)
-	records.require(t, "host.stall,host.stall.sampled,host.stall.resumed")
-	records.mu.Lock()
-	defer records.mu.Unlock()
-	return records.fields[0], records.fields[2]
-}
-
-// A stall of a process that the system runs in the background, which used 30 ms of CPU time while it lasted.
-// contract: host.stall.carries-priority, host.stall.resumed-carries-cpu
-func TestAStallCarriesThePriorityAndItsEndTheCPUTimeOfTheStall(t *testing.T) {
-	schedule := &scheduleReads{readings: []uint64{uint64(100 * time.Millisecond), uint64(130 * time.Millisecond)}}
-	stall, resumed := stallAndResume(t, schedule.read)
-	if got := int64Field(t, stall, "priority"); got != 4 {
-		t.Fatalf("priority %d, want 4", got)
-	}
-	if got := int64Field(t, resumed, "cpu_ms"); got != 30 {
-		t.Fatalf("cpu_ms %d, want 30", got)
-	}
-}
-
 // contract: host.stall.carries-priority
-func TestAStallWhoseScheduleCannotBeReadLeavesTheFieldsOut(t *testing.T) {
-	schedule := &scheduleReads{failure: errors.New("process schedule: errno 3")}
-	stall, resumed := stallAndResume(t, schedule.read)
-	if _, has := stall["priority"]; has {
-		t.Fatalf("host.stall %v carries a priority that was not read", stall)
+func TestThePlatformReadsTheScheduleAndTheCPUTimeOfTheProcessThatAStallCarries(t *testing.T) {
+	system, err := platform.Current()
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, has := resumed["cpu_ms"]; has {
-		t.Fatalf("host.stall.resumed %v carries a CPU time that was not read", resumed)
+	_, first, err := system.StallSchedule()
+	if err != nil {
+		t.Fatalf("the schedule of the process: %v", err)
+	}
+	_, second, err := system.StallSchedule()
+	if err != nil || second < first {
+		t.Fatalf("the CPU time of the process moved from %d to %d, %v", first, second, err)
 	}
 }

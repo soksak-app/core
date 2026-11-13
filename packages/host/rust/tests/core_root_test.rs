@@ -12,7 +12,6 @@ use std::sync::{Arc, Mutex};
 
 use soksak_host::event_record::use_host_event_log;
 use soksak_host::installed::{self, CoreRootFile};
-use soksak_host::platform::{CoreRootHost, CoreRootResolver};
 
 /// Serializes the tests that attach the writer of the records, which is one value of the process.
 static LOG_LOCK: Mutex<()> = Mutex::new(());
@@ -384,42 +383,16 @@ fn core_root_fails_a_malformed_core_root_file() {
     }
 }
 
-/// The platform fake that keeps the core root resolver that the host registers.
-struct FakeCoreRoot {
-    resolver: Mutex<Option<CoreRootResolver>>,
-    map: Mutex<Option<String>>,
-}
-
-impl CoreRootHost for FakeCoreRoot {
-    fn set_core_root(&self, resolve: CoreRootResolver) -> Result<(), String> {
-        *self.resolver.lock().unwrap() = Some(resolve);
-        Ok(())
-    }
-
-    fn set_view_import_map(&self, map: &str) -> Result<(), String> {
-        *self.map.lock().unwrap() = Some(map.to_string());
-        Ok(())
-    }
-}
-
-/// Registers the core root of config with a fake platform, then resolves one request through the resolver of the host.
-fn resolve_through_platform(config: &Path, plugin: &str, url_path: &str) -> Option<CoreRootFile> {
-    let platform = FakeCoreRoot {
-        resolver: Mutex::new(None),
-        map: Mutex::new(None),
-    };
-    installed::register_core_root(&platform, config.to_path_buf(), Arc::new(core_frontend))
-        .expect("the host registers the core root");
-    let resolver = platform.resolver.lock().unwrap();
-    let resolver = resolver
-        .as_ref()
-        .expect("the host registered no core root resolver");
+/// Resolves one request of a view with the core root resolver of the configuration folder. The resolver is a function of its
+/// inputs, the folder and the bundled frontend, so the request needs no platform.
+fn resolve_request(config: &Path, plugin: &str, url_path: &str) -> Option<CoreRootFile> {
+    let resolver = installed::core_root_resolver(config.to_path_buf(), Arc::new(core_frontend));
     resolver(plugin, url_path)
 }
 
 // contract: document.core-root.native
 #[test]
-fn core_root_resolver_answers_a_view_through_the_platform() {
+fn core_root_resolver_answers_a_view() {
     let config = core_root_fixture();
     let cases = [
         (
@@ -440,7 +413,7 @@ fn core_root_resolver_answers_a_view_through_the_platform() {
     ];
     for (plugin, url_path, content) in cases {
         assert_eq!(
-            resolve_through_platform(config.path(), plugin, url_path),
+            resolve_request(config.path(), plugin, url_path),
             Some(CoreRootFile {
                 data: content.as_bytes().to_vec(),
                 content_type: "text/javascript",
@@ -452,17 +425,17 @@ fn core_root_resolver_answers_a_view_through_the_platform() {
 
 // contract: document.core-root.native
 #[test]
-fn core_root_resolver_refuses_a_path_through_the_platform() {
+fn core_root_resolver_refuses_a_path() {
     let config = core_root_fixture();
     let written = records_of(|| {
         assert_eq!(
-            resolve_through_platform(config.path(), "provider", "/runtime/index.js"),
+            resolve_request(config.path(), "provider", "/runtime/index.js"),
             None
         );
     });
     assert_refusal_recorded(&written, "provider", "/runtime/index.js");
     assert_eq!(
-        resolve_through_platform(
+        resolve_request(
             config.path(),
             "nobody",
             "/modules/@soksak/plugin-api/index.js"
@@ -478,7 +451,7 @@ fn core_root_resolver_reports_a_granted_file_that_is_missing() {
     std::fs::remove_file(config.path().join("plugins/view/1.0.0/ui/item.js")).unwrap();
     let written = records_of(|| {
         assert_eq!(
-            resolve_through_platform(config.path(), "provider", "/modules/plugin-view/ui/item.js"),
+            resolve_request(config.path(), "provider", "/modules/plugin-view/ui/item.js"),
             None
         );
     });
@@ -495,32 +468,21 @@ const VIEW_IMPORTS_TEXT: &str =
 
 // contract: document.view-import-map.native
 #[test]
-fn view_import_map_is_set_from_the_staged_file() {
-    let platform = FakeCoreRoot {
-        resolver: Mutex::new(None),
-        map: Mutex::new(None),
-    };
-    let frontend: installed::CoreFrontend = Arc::new(|name: &str| {
-        (name == "view-imports.json").then(|| VIEW_IMPORTS_TEXT.as_bytes().to_vec())
-    });
-    installed::register_view_import_map(&platform, frontend)
-        .expect("the host sets the view import map");
+fn view_import_map_is_read_from_the_staged_file() {
+    let frontend =
+        |name: &str| (name == "view-imports.json").then(|| VIEW_IMPORTS_TEXT.as_bytes().to_vec());
     assert_eq!(
-        platform.map.lock().unwrap().as_deref(),
-        Some(VIEW_IMPORTS_TEXT)
+        installed::view_import_map_text(&frontend),
+        Ok(VIEW_IMPORTS_TEXT.to_string())
     );
 }
 
 // contract: document.view-import-map.native
 #[test]
 fn view_import_map_fails_without_the_staged_file() {
-    let platform = FakeCoreRoot {
-        resolver: Mutex::new(None),
-        map: Mutex::new(None),
-    };
-    let frontend: installed::CoreFrontend = Arc::new(|_: &str| None);
+    let frontend = |_: &str| -> Option<Vec<u8>> { None };
     assert!(
-        installed::register_view_import_map(&platform, frontend).is_err(),
+        installed::view_import_map_text(&frontend).is_err(),
         "a bundled frontend without view-imports.json sets no view import map"
     );
 }

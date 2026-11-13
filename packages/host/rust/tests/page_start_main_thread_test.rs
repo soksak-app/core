@@ -19,6 +19,9 @@ mod menu {
 #[allow(dead_code)]
 mod test_framework;
 
+#[path = "support/main_thread.rs"]
+mod main_thread;
+
 use test_framework::Task;
 
 /// Sends the last task to the loop of the main thread when it is dropped, at the end of the start thread or at its panic.
@@ -97,37 +100,5 @@ const TESTS: &[(&str, fn() -> Result<(), String>)] = &[(
 )];
 
 fn main() {
-    let arguments: Vec<String> = std::env::args().skip(1).collect();
-    if arguments.iter().any(|argument| argument == "--list") {
-        for (name, _) in TESTS {
-            println!("{name}: test");
-        }
-        return;
-    }
-    let exact = arguments
-        .iter()
-        .position(|argument| argument == "--exact")
-        .and_then(|at| arguments.get(at + 1));
-    let (mut passed, mut failed) = (0, 0);
-    for (name, run) in TESTS
-        .iter()
-        .filter(|(name, _)| exact.is_none_or(|exact| exact == name))
-    {
-        match run() {
-            Ok(()) => {
-                println!("test {name} ... ok");
-                passed += 1;
-            }
-            Err(error) => {
-                println!("test {name} ... FAILED: {error}");
-                failed += 1;
-            }
-        }
-    }
-    // The summary line of the harness, which the runner reads.
-    let result = if failed == 0 { "ok" } else { "FAILED" };
-    println!("test result: {result}. {passed} passed; {failed} failed");
-    if failed > 0 {
-        std::process::exit(1);
-    }
+    main_thread::run(TESTS);
 }

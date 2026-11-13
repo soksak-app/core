@@ -13,7 +13,7 @@ use serde_json::value::RawValue;
 use soksak_sok::install::{InstalledState, PluginFiles};
 
 use crate::application_log::log_error;
-use crate::platform::CoreRootHost;
+use crate::platform::{CoreRootHost, CoreRootResolver};
 use crate::sidecars::{Owner, SidecarDeclaration, Sidecars};
 
 /// The path through which the page reads the list of installed plugins.
@@ -382,25 +382,31 @@ pub fn core_root(
     }))
 }
 
-/// Registers the core root resolver of the configuration folder with the platform. The resolver answers each request of a view
-/// with core_root, and an error of core_root is written to the application log and answered not found.
 /// The bundled frontend as the core root reads it: the bytes of a file by its name without a leading slash.
 pub type CoreFrontend = Arc<dyn Fn(&str) -> Option<Vec<u8>> + Send + Sync>;
 
-pub fn register_core_root(
-    platform: &dyn CoreRootHost,
-    config_dir: PathBuf,
-    frontend: CoreFrontend,
-) -> Result<(), String> {
-    platform.set_core_root(Box::new(move |plugin, url_path| {
-        match core_root(&config_dir, plugin, url_path, &*frontend) {
+/// Returns the core root resolver of the configuration folder. The resolver answers each request of a view with core_root,
+/// and an error of core_root is written to the application log and answered not found. The inputs are data: the folder and
+/// the bundled frontend, so the resolver is tested without a platform.
+pub fn core_root_resolver(config_dir: PathBuf, frontend: CoreFrontend) -> CoreRootResolver {
+    Box::new(
+        move |plugin, url_path| match core_root(&config_dir, plugin, url_path, &*frontend) {
             Ok(file) => file,
             Err(error) => {
                 log_error("core root", error);
                 None
             }
-        }
-    }))
+        },
+    )
+}
+
+/// Registers the core root resolver of the configuration folder with the platform (core_root_resolver).
+pub fn register_core_root(
+    platform: &dyn CoreRootHost,
+    config_dir: PathBuf,
+    frontend: CoreFrontend,
+) -> Result<(), String> {
+    platform.set_core_root(core_root_resolver(config_dir, frontend))
 }
 
 /// Writes the refusal of url_path for plugin as an error record and returns the not found result.
@@ -577,19 +583,23 @@ pub fn apply_plugin_event_classes(log: &crate::event_log::EventLog, config_dir: 
 /// @soksak/plugin-api (VIEW_IMPORTS_FILE), so the host holds no copy of the map.
 const VIEW_IMPORTS_FILE: &str = "view-imports.json";
 
+/// Returns the view import map text of the application: view-imports.json of the bundled frontend. A missing file, or a file
+/// that is not UTF-8, is an error.
+pub fn view_import_map_text(frontend: &dyn Fn(&str) -> Option<Vec<u8>>) -> Result<String, String> {
+    let data = frontend(VIEW_IMPORTS_FILE).ok_or_else(|| {
+        format!("{VIEW_IMPORTS_FILE}: the view import map is missing from the bundled frontend")
+    })?;
+    String::from_utf8(data)
+        .map_err(|error| format!("{VIEW_IMPORTS_FILE}: the view import map is not UTF-8: {error}"))
+}
+
 /// Sets the view import map of the application from view-imports.json of the bundled frontend. The native view handler inserts the
 /// map into each view page (docs/spec/plugin-processes.md, rule 4). A missing file is an error.
 pub fn register_view_import_map(
     platform: &dyn CoreRootHost,
     frontend: CoreFrontend,
 ) -> Result<(), String> {
-    let data = (*frontend)(VIEW_IMPORTS_FILE).ok_or_else(|| {
-        format!("{VIEW_IMPORTS_FILE}: the view import map is missing from the bundled frontend")
-    })?;
-    let text = String::from_utf8(data).map_err(|error| {
-        format!("{VIEW_IMPORTS_FILE}: the view import map is not UTF-8: {error}")
-    })?;
-    platform.set_view_import_map(&text)
+    platform.set_view_import_map(&view_import_map_text(&*frontend)?)
 }
 
 #[cfg(test)]

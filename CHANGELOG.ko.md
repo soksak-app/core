@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- Go host 의 stall watch 가 각 beat 를 읽은 값으로 한 함수에서 결정하고 읽은 값의 table 이 그것을 시험하며, Rust core root resolver 와 view import map 텍스트가 설정 폴더와 번들된 frontend 의 함수가 되어, 그 시험이 대역 platform 대신 실제 입력을 준다 (F795-9).
 - page-wire case 가 host 가 page 의 listener 에 보내는 notice, 시험이 푸는 응답, page 가 고르는 값을 기록하고, workbench 의 dialog 시험이 `@soksak/runtime` 을 대체하는 대신 `overlay-` case 를 재생한다 (F795-10).
 - Go host 의 recording 과 view 실패 시험이 실패하는 대역 대신 diagnostic build 의 선언된 fault point `SOKSAK_FAULT_CAPTURE_OPEN`, `SOKSAK_FAULT_CAPTURE_START`, `SOKSAK_FAULT_CAPTURE_STOP`, `SOKSAK_FAULT_VIEW_STEP` 을 설정하고, endpoint 시험은 실제 연결을 실패시킨다 (F795-6).
 - 두 host 가 시작하는 각 sidecar process 의 첫 출력 줄을 trace event `host.trace.sidecar.ready` 대신 `info` 수준의 `host.sidecar.first_output`(`name`, `pid`, `ms`)으로 기록하므로, run 이 sidecar 가 언제 시작했고 언제 처음 답했는지 보여 준다 (F797).
