@@ -1200,9 +1200,10 @@ struct NativeDragPlan {
 /// of the step before it, and answers that time, and presented returns when the window has presented its
 /// current layout; it runs before each press, because a press goes where the last frame drew. A failed input after a press
 /// releases the button at the last point, so no press stays open in the window. The reply is {from, steps, took, asked,
-/// pressWaits, tripSteps}: took is the time from the first press to the last release without the waits before the presses,
+/// pressWaits, tripSteps, deliveries}: took is the time from the first press to the last release without the waits before the presses,
 /// asked the time that the steps ask (times × 2 × ms), and pressWaits the wait before each press, all in milliseconds, and
-/// tripSteps the number of steps of each round trip.
+/// tripSteps the number of steps of each round trip, and deliveries the milliseconds of the delivery of each press, step and
+/// release, under press, step and release.
 fn native_drag(
     plan: &NativeDragPlan,
     from: (f64, f64),
@@ -1228,6 +1229,11 @@ fn native_drag(
     let mut waited = Duration::ZERO;
     let mut press_waits = Vec::with_capacity(plan.times as usize);
     let mut trip_steps = Vec::with_capacity(plan.times as usize);
+    // The milliseconds of the delivery of each press, step and release, so a reply tells the time that the window took to
+    // receive the inputs from the time between the steps.
+    let mut press_deliveries = Vec::with_capacity(plan.times as usize);
+    let mut step_deliveries = Vec::new();
+    let mut release_deliveries = Vec::with_capacity(plan.times as usize);
     let mut steps: u64 = 0;
     for turn in 0..plan.times {
         let trip_start = steps;
@@ -1261,7 +1267,9 @@ fn native_drag(
         // The period of a step runs from the time of the press or of the step before it, so the delivery of an input,
         // which is inside the period, does not lengthen the step (docs/spec/diagnostics.md).
         let mut previous = clock();
-        deliver(input(1, from)).map_err(|error| {
+        let delivered = deliver(input(1, from));
+        press_deliveries.push((clock() - previous).as_millis() as u64);
+        delivered.map_err(|error| {
             Failure::new(
                 error.code,
                 format!(
@@ -1294,7 +1302,10 @@ fn native_drag(
                 let elapsed = (clock() - leg_start).as_secs_f64() / span;
                 let reached = elapsed.min(1.0);
                 last = at(if back { 1.0 - reached } else { reached });
-                if let Err(error) = deliver(input(2, last)) {
+                let start = clock();
+                let delivered = deliver(input(2, last));
+                step_deliveries.push((clock() - start).as_millis() as u64);
+                if let Err(error) = delivered {
                     let mut message = format!("native drag step {steps}: {}", error.message);
                     if let Err(released) = deliver(input(3, last)) {
                         message = format!(
@@ -1309,7 +1320,10 @@ fn native_drag(
                 }
             }
         }
-        deliver(input(3, from)).map_err(|error| {
+        let start = clock();
+        let delivered = deliver(input(3, from));
+        release_deliveries.push((clock() - start).as_millis() as u64);
+        delivered.map_err(|error| {
             Failure::new(
                 error.code,
                 format!(
@@ -1328,6 +1342,7 @@ fn native_drag(
         "asked": ((plan.times * 2) as f64 * plan.ms).round() as u64,
         "pressWaits": press_waits,
         "tripSteps": trip_steps,
+        "deliveries": {"press": press_deliveries, "step": step_deliveries, "release": release_deliveries},
     }))
 }
 

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F782: `diagnostics.drag` 의 native drag 는 각 누름, 단계, 뗌의 전달 밀리초인 `deliveries` 로 응답하고, 속도가 맞지 않은 window check drag 의 실패는 그 합과 최댓값을 말하므로, 느린 drag 는 창이 입력을 받는 데 걸린 시간을 알린다.
 - F781: `diagnostics.drag` 의 native drag 는 나가는 구간을 누름 시각에, 돌아오는 구간을 마지막 나가는 단계의 시각에 시작하므로, 각 단계는 누름 또는 이전 단계에서 한 표시 주기 뒤에 오고 입력 전달이 더 이상 drag 를 늘리지 않는다.
 - F772: 한 frame 의 여러 점을 읽는 mygo workbench check 는 그 frame 의 image 하나를 함께 쓴다. core 가 pin 한 mygo fork `v0.7.4-244-g4abb83d-soksak.12` 가 frame image 를 한 번만 변환하기 때문이다. 그런 check 세 개는 macOS 26.6 arm64 에서 30.3 s, 21.4 s, 10.1 s 에서 4.75 s, 0.64 s, 0.16 s 로 줄었다.
 - F780: `diagnostics.drag` 의 native drag 는 사람처럼 매 누름 전에 경계 점으로 이동하므로, 활성이 아닌 application 은 제스처를 가상 키 창으로 받고, 사람이 누른 마우스 버튼은 더 이상 check 의 누름을 거절시키지 않는다.

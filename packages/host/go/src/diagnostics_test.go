@@ -675,6 +675,11 @@ func TestANativeDragStepFollowsTheStepBeforeItByOnePeriod(t *testing.T) {
 	if took, ok := result["took"].(int64); !ok || took != 148 {
 		t.Fatalf("native drag took %#v ms, want 148 ms: the deliveries are inside the periods", result["took"])
 	}
+	deliveries, ok := result["deliveries"].(map[string][]int64)
+	want := map[string][]int64{"press": {5, 5}, "step": {5, 5, 5, 5, 5, 5, 5, 5}, "release": {5, 5}}
+	if !ok || !reflect.DeepEqual(deliveries, want) {
+		t.Fatalf("native drag deliveries %#v, want the 5 ms of each press, step and release %v", result["deliveries"], want)
+	}
 }
 
 // contract: diagnostics.drag.native-delivers-pointer-gesture

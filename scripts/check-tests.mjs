@@ -1457,6 +1457,21 @@ const FEATURE_LINKS = [
     levels: ["native", "unit"],
   },
   {
+    id: "F782",
+    implementation: [
+      { file: "packages/host/go/src/diagnostics.go", symbol: "func nativeDrag(" },
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn native_drag(" },
+      { file: "packages/window-check/app.mjs", symbol: "function delivering(deliveries) {" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestANativeDragStepFollowsTheStepBeforeItByOnePeriod" },
+      { file: "packages/host/rust/src/diagnostics_test.rs", id: "a_native_drag_step_follows_the_step_before_it_by_one_period" },
+      { file: "packages/window-check/test/drag-pace.test.mjs", id: "a drag that is not paced fails at once with its took, asked, press waits, range and load" },
+    ],
+    expected: "A native drag answers the milliseconds of the delivery of each press, step and release, and a slow drag states them.",
+    levels: ["unit"],
+  },
+  {
     id: "F781",
     implementation: [
       { file: "packages/host/go/src/diagnostics.go", symbol: "func nativeDrag(" },

@@ -456,9 +456,10 @@ func parseDragNative(params json.RawMessage) (bool, error) {
 // after previous, the host time of the step before it, and answers that time, and presented returns when
 // the window has presented its current layout; it runs before each press, because a press goes where the last frame
 // drew. A failed input after a press releases the button at the last point, so no press stays open in the window. The
-// reply is {from, steps, took, asked, pressWaits, tripSteps}: took is the time from the first press to the last release without
+// reply is {from, steps, took, asked, pressWaits, tripSteps, deliveries}: took is the time from the first press to the last release without
 // the waits before the presses, on clock, the clock of the host, asked the time that the steps ask, and pressWaits the wait before
-// each press, all in milliseconds, and tripSteps the number of steps of each round trip.
+// each press, all in milliseconds, tripSteps the number of steps of each round trip, and deliveries the milliseconds of the
+// delivery of each press, step and release, under press, step and release.
 func nativeDrag(plan dragPlan, from point, clock func() time.Duration, deliver func(PointerInput) error, step func(previous time.Duration) (time.Duration, error), presented func() error) (map[string]any, error) {
 	span := float64(plan.MS) * float64(time.Millisecond)
 	at := func(fraction float64) point {
@@ -471,6 +472,15 @@ func nativeDrag(plan dragPlan, from point, clock func() time.Duration, deliver f
 	var waited time.Duration
 	pressWaits := make([]int64, 0, plan.Times)
 	tripSteps := make([]int, 0, plan.Times)
+	deliveries := map[string][]int64{"press": {}, "step": {}, "release": {}}
+	// timed delivers an input of kind and adds the milliseconds of its delivery to deliveries, so a reply tells the time
+	// that the window took to receive the inputs from the time between the steps.
+	timed := func(kind string, input PointerInput) error {
+		start := clock()
+		err := deliver(input)
+		deliveries[kind] = append(deliveries[kind], (clock() - start).Milliseconds())
+		return err
+	}
 	steps := 0
 	for turn := 0; turn < plan.Times; turn++ {
 		tripStart := steps
@@ -490,7 +500,7 @@ func nativeDrag(plan dragPlan, from point, clock func() time.Duration, deliver f
 		// The period of a step runs from the time of the press or of the step before it, so the delivery of an input, which
 		// is inside the period, does not lengthen the step (docs/spec/diagnostics.md).
 		previous := clock()
-		if err := deliver(input("down", from)); err != nil {
+		if err := timed("press", input("down", from)); err != nil {
 			return nil, fmt.Errorf("native drag press of round trip %d: %w", turn+1, err)
 		}
 		last := from
@@ -516,7 +526,7 @@ func nativeDrag(plan dragPlan, from point, clock func() time.Duration, deliver f
 					fraction = 1 - fraction
 				}
 				last = at(fraction)
-				if err := deliver(input("drag", last)); err != nil {
+				if err := timed("step", input("drag", last)); err != nil {
 					err = fmt.Errorf("native drag step %d: %w", steps, err)
 					if released := deliver(input("up", last)); released != nil {
 						err = fmt.Errorf("%w; release after the failed step: %v", err, released)
@@ -528,13 +538,14 @@ func nativeDrag(plan dragPlan, from point, clock func() time.Duration, deliver f
 				}
 			}
 		}
-		if err := deliver(input("up", from)); err != nil {
+		if err := timed("release", input("up", from)); err != nil {
 			return nil, fmt.Errorf("native drag release of round trip %d: %w", turn+1, err)
 		}
 		tripSteps = append(tripSteps, steps-tripStart)
 	}
 	return map[string]any{"from": from, "steps": steps, "took": (clock() - began - waited).Milliseconds(),
-		"asked": plan.Times * 2 * plan.MS, "pressWaits": pressWaits, "tripSteps": tripSteps}, nil
+		"asked": plan.Times * 2 * plan.MS, "pressWaits": pressWaits, "tripSteps": tripSteps,
+		"deliveries": deliveries}, nil
 }
 
 // nextStep waits with sleep until one period after previous, the host time of the step before, and answers the host time of

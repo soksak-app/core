@@ -1414,7 +1414,7 @@ export async function drag(s, plan, { capture = false } = {}) {
     throw new Error(
       `the drag did not run at the rate it was asked to: it took ${result.took}ms for ${result.asked}ms, not between ` +
         `${Math.round(result.asked / MARGIN)}ms and ${Math.round(result.asked * MARGIN)}ms; pressWaits ` +
-        `${JSON.stringify(result.pressWaits ?? null)}; ${handling(result.handled)}; 1-minute load average ${loadavg()[0].toFixed(2)}. The steps come ` +
+        `${JSON.stringify(result.pressWaits ?? null)}; ${handling(result.handled)}; ${delivering(result.deliveries)}; 1-minute load average ${loadavg()[0].toFixed(2)}. The steps come ` +
         "from the host, whose clock is not held wherever the window is. Nothing was measured: an unrendered area " +
         "shows itself at the speed a person drags at, and a slow drag passing is not a pass.",
     );
@@ -1433,6 +1433,21 @@ function handling(handled) {
   if (!Array.isArray(handled) || handled.length === 0) return "handled not reported";
   const sum = handled.reduce((total, ms) => total + ms, 0);
   return `handled ${Math.round(sum)}ms in ${handled.length} steps, the longest ${Math.round(Math.max(...handled))}ms`;
+}
+
+/**
+ * The time that the window took to receive the inputs of a native drag, from `deliveries`, the milliseconds of the delivery
+ * of each press, step and release that the reply of diagnostics.drag carries (docs/spec/endpoint.md): a slow drag whose
+ * inputs waited for the window differs from one whose steps came late.
+ */
+function delivering(deliveries) {
+  if (!deliveries) return "deliveries not reported";
+  const part = (name, values) => {
+    const sum = values.reduce((total, ms) => total + ms, 0);
+    return `${name} in ${sum}ms, the longest ${values.length === 0 ? 0 : Math.max(...values)}ms`;
+  };
+  return `delivered ${part("presses", deliveries.press)}, ${part("steps", deliveries.step)}, ` +
+    part("releases", deliveries.release);
 }
 
 const paced = ({ took, asked }) => took <= asked * MARGIN && took >= asked / MARGIN;

@@ -94,6 +94,11 @@ fn a_native_drag_step_follows_the_step_before_it_by_one_period() {
         Some(148),
         "native drag took, want 148 ms: the deliveries are inside the periods"
     );
+    assert_eq!(
+        result["deliveries"],
+        json!({"press": [5, 5], "step": [5, 5, 5, 5, 5, 5, 5, 5], "release": [5, 5]}),
+        "native drag deliveries, want the 5 ms of each press, step and release"
+    );
 }
 
 // contract: diagnostics.drag.native-delivers-pointer-gesture
