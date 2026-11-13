@@ -2668,8 +2668,9 @@ func disconnectFields(name string, pid int, stopping bool, violation, end string
 	return map[string]any{"name": name, "pid": pid, "stopping": stopping, "violation": violation, "end": end, "waiting": waiting}
 }
 
-// recordReady writes the event host.trace.sidecar.ready for the first message line that a process spawned by the host sends. Its ms is the time from
-// the spawn to that line, and it is written once for each spawn. A process that another host started has no spawn time, so it writes nothing.
+// recordReady writes the event host.sidecar.first_output for the first message line that a process spawned by the host sends. Its ms is the time from
+// the spawn to that line, and it is written once for each spawn. A process that another host started has no spawn time, so it writes nothing. The
+// event is not a trace event, so it is stored without the performance trace (docs/spec/logging.md#entrances).
 func recordReady(process *sidecar) {
 	if process.spawnedAt.IsZero() || process.readyRecorded {
 		return
@@ -2679,8 +2680,8 @@ func recordReady(process *sidecar) {
 	if !process.persistent {
 		pid = process.cmd.Process.Pid
 	}
-	EmitHost(LevelDebug, "host.trace.sidecar.ready", map[string]any{
-		"sidecar": process.name, "pid": pid, "ms": float64(time.Since(process.spawnedAt)) / float64(time.Millisecond),
+	EmitHost(LevelInfo, "host.sidecar.first_output", map[string]any{
+		"name": process.name, "pid": pid, "ms": float64(time.Since(process.spawnedAt)) / float64(time.Millisecond),
 	})
 }
 

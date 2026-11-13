@@ -1319,16 +1319,12 @@ func TestAResponseToASidecarThatEndedIsTheEndedError(t *testing.T) {
 	}
 }
 
-// contract: sidecars.trace.first-answer-after-spawn-is-recorded
+// contract: sidecars.lifetime.first-output-after-spawn-is-recorded
 func TestStandardIOSidecarFirstAnswerAfterSpawnIsRecorded(t *testing.T) {
 	directory := t.TempDir()
 	sidecars := fixtureSidecars(t, directory, "record-pid "+filepath.Join(directory, "pid")+"\n"+
 		`on 1 reply {"surface":"s1","body":{"event":"state"}}`+"\non any drop\n")
 	log := support.UseEventLog(t)
-	if _, err := host.PerformanceCommand(map[string]any{"action": "on"}); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _, _ = host.PerformanceCommand(map[string]any{"action": "off"}) })
 	owner := support.NewFakeOwner("/projects/test")
 	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"input"}`)); err != nil {
 		t.Fatalf("send: %v", err)
@@ -1338,21 +1334,66 @@ func TestStandardIOSidecarFirstAnswerAfterSpawnIsRecorded(t *testing.T) {
 	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
-	var ready map[string]any
+	pid := float64(support.ProcessID(t, directory))
+	var start, first map[string]any
 	for _, record := range readEventLog(t, log.Path()) {
-		if record["event"] == "host.trace.sidecar.ready" {
-			ready = record
+		switch record["event"] {
+		case "host.sidecar.start":
+			start = record
+		case "host.sidecar.first_output":
+			first = record
 		}
 	}
-	if ready == nil {
-		t.Fatal("the first answer after the spawn was not recorded")
+	if start == nil {
+		t.Fatal("the start of the sidecar process was not recorded")
 	}
-	fields, _ := ready["fields"].(map[string]any)
-	if ready["level"] != "debug" || fields["sidecar"] != support.EchoSidecar || fields["pid"] != float64(support.ProcessID(t, directory)) {
-		t.Fatalf("ready event = %v", ready)
+	if first == nil {
+		t.Fatal("the first output after the spawn was not recorded")
+	}
+	startFields, _ := start["fields"].(map[string]any)
+	if startFields["name"] != support.EchoSidecar || startFields["pid"] != pid {
+		t.Fatalf("start event = %v, want the sidecar and pid %v", start, pid)
+	}
+	if first["level"] != "info" {
+		t.Fatalf("first output event = %v, want level info", first)
+	}
+	fields, _ := first["fields"].(map[string]any)
+	if fields["name"] != support.EchoSidecar || fields["pid"] != pid {
+		t.Fatalf("first output event = %v, want the sidecar and pid %v", first, pid)
 	}
 	if ms, ok := fields["ms"].(float64); !ok || ms < 0 {
 		t.Fatalf("ms = %v, want a number of milliseconds from the spawn", fields["ms"])
+	}
+	startSeq, okStart := start["seq"].(float64)
+	firstSeq, okFirst := first["seq"].(float64)
+	if !okStart || !okFirst || firstSeq <= startSeq {
+		t.Fatalf("first output seq %v is not after the start seq %v", first["seq"], start["seq"])
+	}
+}
+
+// contract: sidecars.lifetime.first-output-after-spawn-is-recorded
+func TestSidecarWithoutAnswerRecordsStartAndNoFirstOutput(t *testing.T) {
+	sidecars := fixtureSidecars(t, t.TempDir(), "on any drop\n")
+	log := support.UseEventLog(t)
+	owner := support.NewFakeOwner("/projects/test")
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"input"}`)); err != nil {
+		t.Fatalf("send: %v", err)
+	}
+	sidecars.Stop()
+	if err := log.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	var start map[string]any
+	for _, record := range readEventLog(t, log.Path()) {
+		switch record["event"] {
+		case "host.sidecar.start":
+			start = record
+		case "host.sidecar.first_output":
+			t.Fatalf("a sidecar that wrote no line has the first output event %v", record)
+		}
+	}
+	if start == nil {
+		t.Fatal("the start of the sidecar process was not recorded")
 	}
 }
 

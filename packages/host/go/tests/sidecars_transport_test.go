@@ -2862,7 +2862,7 @@ func TestPersistentConnectionsAreRecordedAsEvents(t *testing.T) {
 	}
 }
 
-// contract: sidecars.trace.first-answer-after-spawn-is-recorded
+// contract: sidecars.lifetime.first-output-after-spawn-is-recorded
 func TestPersistentSpawnedServiceFirstAnswerAfterSpawnIsRecorded(t *testing.T) {
 	config := t.TempDir()
 	folder := t.TempDir()
@@ -2917,10 +2917,6 @@ func TestPersistentSpawnedServiceFirstAnswerAfterSpawnIsRecorded(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _, _ = host.PerformanceCommand(map[string]any{"action": "off"}) })
-	if _, err := host.PerformanceCommand(map[string]any{"action": "on"}); err != nil {
-		t.Fatal(err)
-	}
 	owner := &support.HarnessOwner{Root: "/only", Seen: make(chan SidecarMessage, 8)}
 	if err := sidecars.Send(owner, "fixture-service", "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
@@ -2940,18 +2936,18 @@ func TestPersistentSpawnedServiceFirstAnswerAfterSpawnIsRecorded(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var ready map[string]any
+	var first map[string]any
 	for _, event := range support.ReadEvents(t, support.EventLogPath(t, config)) {
-		if event["event"] == "host.trace.sidecar.ready" {
-			ready = event
+		if event["event"] == "host.sidecar.first_output" {
+			first = event
 		}
 	}
-	if ready == nil {
+	if first == nil {
 		t.Fatal("the first answer after the spawn of the service was not recorded")
 	}
-	fields, _ := ready["fields"].(map[string]any)
-	if ready["level"] != "debug" || fields["sidecar"] != "fixture-service" || fields["pid"] != float64(pid) {
-		t.Fatalf("ready event = %v", ready)
+	fields, _ := first["fields"].(map[string]any)
+	if first["level"] != "info" || fields["name"] != "fixture-service" || fields["pid"] != float64(pid) {
+		t.Fatalf("first output event = %v", first)
 	}
 	if ms, ok := fields["ms"].(float64); !ok || ms < 0 {
 		t.Fatalf("ms = %v, want a number of milliseconds from the spawn", fields["ms"])

@@ -655,10 +655,7 @@ fn persistent_transport_replaces_endpoint_left_by_a_dead_service() {
     )
     .unwrap();
 
-    executable_directory.fixture(
-        "echo",
-        &format!("write {}\nexit 0\n", replacement_endpoint),
-    );
+    executable_directory.fixture("echo", &format!("write {}\nexit 0\n", replacement_endpoint));
     let fixture = files(
         r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
     );
@@ -2302,7 +2299,11 @@ fn a_stop_ends_a_start_whose_service_prints_no_endpoint() {
     let _hold = hold_pipe(&hold);
     executable_directory.fixture(
         "echo",
-        &format!("record-pid {}\nhold {}\n", started.display(), hold.display()),
+        &format!(
+            "record-pid {}\nhold {}\n",
+            started.display(),
+            hold.display()
+        ),
     );
     let config_directory = folder::Folder::new();
     let fixture = files(
@@ -2538,10 +2539,7 @@ fn persistent_service_starts_in_a_new_session() {
 fn persistent_start_fails_when_the_service_log_cannot_open() {
     let executable_directory = folder::Folder::new();
     let started = executable_directory.path().join("started");
-    executable_directory.fixture(
-        "echo",
-        &format!("touch {}\nexit 0\n", started.display()),
-    );
+    executable_directory.fixture("echo", &format!("touch {}\nexit 0\n", started.display()));
     let config_directory = folder::Folder::new();
     // If logs is a file, the log directory cannot be created.
     std::fs::write(config_directory.path().join("logs"), "").unwrap();
@@ -3666,7 +3664,7 @@ fn persistent_connections_are_recorded_as_events() {
     assert_eq!(sampled, 1, "samples that name the service");
 }
 
-// contract: sidecars.trace.first-answer-after-spawn-is-recorded
+// contract: sidecars.lifetime.first-output-after-spawn-is-recorded
 #[test]
 fn persistent_spawned_service_first_answer_after_spawn_is_recorded() {
     // The writer of the records is shared by the process, so the scenario runs in a child process that nothing else writes in.
@@ -3707,7 +3705,6 @@ fn persistent_spawned_service_first_answer_after_spawn_is_recorded() {
             }
         });
         let writer = records::start_writer(Path::new(&config));
-        soksak_host::performance::command(serde_json::json!({"action": "on"})).unwrap();
         let fixture = files(
             r#"{"executable":"service","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
         );
@@ -3723,7 +3720,6 @@ fn persistent_spawned_service_first_answer_after_spawn_is_recorded() {
         events.recv().unwrap(); // the echo
         sidecars.stop();
         service.join().unwrap();
-        soksak_host::performance::command(serde_json::json!({"action": "off"})).unwrap();
         writer.flush().unwrap();
         let pid: i64 = std::fs::read_to_string(&pid_path)
             .unwrap()
@@ -3732,17 +3728,17 @@ fn persistent_spawned_service_first_answer_after_spawn_is_recorded() {
             .unwrap();
         let records_of_the_run = records::read_events(writer.path());
         soksak_host::event_record::use_host_event_log(None);
-        let ready = records_of_the_run
+        let first = records_of_the_run
             .iter()
-            .find(|record| record["event"] == "host.trace.sidecar.ready")
+            .find(|record| record["event"] == "host.sidecar.first_output")
             .expect("the first answer after the spawn of the service was not recorded");
-        assert_eq!(ready["level"], "debug");
-        assert_eq!(ready["fields"]["sidecar"], ECHO);
-        assert_eq!(ready["fields"]["pid"].as_i64(), Some(pid));
+        assert_eq!(first["level"], "info");
+        assert_eq!(first["fields"]["name"], ECHO);
+        assert_eq!(first["fields"]["pid"].as_i64(), Some(pid));
         assert!(
-            ready["fields"]["ms"].as_f64().is_some_and(|ms| ms >= 0.0),
+            first["fields"]["ms"].as_f64().is_some_and(|ms| ms >= 0.0),
             "ms = {}, want a number of milliseconds from the spawn",
-            ready["fields"]["ms"]
+            first["fields"]["ms"]
         );
         return;
     }
@@ -3843,10 +3839,7 @@ fn a_persistent_service_end_stops_the_restarts_before_the_spawn() {
         let _trace = records::trace_on();
         let executable_directory = folder::Folder::new();
         let runs = executable_directory.path().join("runs");
-        executable_directory.fixture(
-            "echo",
-            &format!("append {} run\nexit 0\n", runs.display()),
-        );
+        executable_directory.fixture("echo", &format!("append {} run\nexit 0\n", runs.display()));
         let config_directory = folder::Folder::new();
         let fixture = files(
             r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,

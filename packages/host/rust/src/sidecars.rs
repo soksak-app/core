@@ -4737,23 +4737,23 @@ fn relay<O: Owner>(
 }
 
 /// The spawn of a process that the host started, with its pid. The first message line that the process sends after the spawn is
-/// written as the event `host.trace.sidecar.ready` (docs/spec/host-contract.md#contract-cases).
+/// written as the event `host.sidecar.first_output` (docs/spec/logging.md#entrances).
 struct ReadyClock {
     spawned: Instant,
     pid: u32,
 }
 
-/// Writes `host.trace.sidecar.ready` with the time from the spawn to the first message line of the process in milliseconds, once for each spawn.
+/// Writes `host.sidecar.first_output` with the time from the spawn to the first message line of the process in milliseconds, once for each spawn.
 /// A process that the host did not spawn has no clock, so it writes nothing.
 fn record_ready(clock: &mut Option<ReadyClock>, sidecar: &str) {
     let Some(clock) = clock.take() else {
         return;
     };
     emit_host(
-        Level::Debug,
-        "host.trace.sidecar.ready",
+        Level::Info,
+        "host.sidecar.first_output",
         serde_json::json!({
-            "sidecar": sidecar,
+            "name": sidecar,
             "pid": clock.pid,
             "ms": clock.spawned.elapsed().as_secs_f64() * 1000.0,
         }),

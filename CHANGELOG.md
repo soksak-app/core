@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- Both hosts record the first output line of each sidecar process that they start as `host.sidecar.first_output` (`name`, `pid`, `ms`) at the level `info`, in place of the trace event `host.trace.sidecar.ready`, so a run shows when a sidecar started and when it first answered (F797).
 - The client, mcp, window-check, test-app, B3 run and `sok` tests play the endpoint contract cases of `docs/spec/cases/endpoint` with case players that answer only the frames of a case and report each difference, the Go and Rust host tests replay the cases of the unit tier, and the fake endpoint of `@soksak/client/testing` is removed (F795-8).
 - A B3 run waits for its activated window through `status.watch` of `host.window` instead of reading the status every 100 ms for 5 s; a covered window writes a waiting line until the window is uncovered or the run is interrupted (F801).
 - The Rust `sok` checks the points of `sok input gesture` before it asks the application for its windows, so a usage error opens no endpoint connection, as in the Go `sok` (F800).

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- 두 host 가 시작하는 각 sidecar process 의 첫 출력 줄을 trace event `host.trace.sidecar.ready` 대신 `info` 수준의 `host.sidecar.first_output`(`name`, `pid`, `ms`)으로 기록하므로, run 이 sidecar 가 언제 시작했고 언제 처음 답했는지 보여 준다 (F797).
 - client, mcp, window-check, test-app, B3 run 과 `sok` 시험이 사례의 frame 에만 답하고 각 차이를 보고하는 case player 로 `docs/spec/cases/endpoint` 의 endpoint 계약 사례를 재생하고, Go 와 Rust host 시험이 unit tier 의 사례를 재생하며, `@soksak/client/testing` 의 fake endpoint 는 제거되었다 (F795-8).
 - B3 run 이 활성화한 창을 5 초 동안 100 ms 마다 status 를 읽는 대신 `host.window` 의 `status.watch` 로 기다린다. 가려진 창은 가려짐이 풀리거나 run 이 interrupt 될 때까지 기다림 줄을 쓴다 (F801).
 - Rust `sok` 이 애플리케이션에 창 목록을 묻기 전에 `sok input gesture` 의 점을 검사하므로, Go `sok` 처럼 사용법 오류가 endpoint 연결을 열지 않는다 (F800).

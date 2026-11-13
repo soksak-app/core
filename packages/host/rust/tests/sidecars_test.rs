@@ -2286,26 +2286,36 @@ fn a_response_to_a_sidecar_that_ended_is_the_ended_error() {
     }
 }
 
-// contract: sidecars.trace.first-answer-after-spawn-is-recorded
+/// Reports whether this process is the child that runs the check `test` (marked by the environment variable `marker`). In the
+/// parent it runs that child and fails the check when the child fails. The writer of the records belongs to the process, so a
+/// check that writes records runs in a child process that nothing else shares it with.
+fn in_writer_child(test: &str, marker: &str) -> bool {
+    if std::env::var_os(marker).is_some() {
+        return true;
+    }
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", test, "--nocapture", "--test-threads=1"])
+        .env(marker, "1")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "the child check {test} failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    false
+}
+
+const FIXTURE_SIDECAR: &str =
+    r#"{"executable":"fixture","displayName":"soksak://sidecar/probe","protocol":1}"#;
+
+// contract: sidecars.lifetime.first-output-after-spawn-is-recorded
 #[test]
 fn standard_io_sidecar_first_answer_after_spawn_is_recorded() {
-    // The switch of the trace belongs to the process, so the check runs in a child process that nothing else shares it with.
-    if std::env::var_os("SOKSAK_READY_TRACE_CHILD").is_none() {
-        let output = std::process::Command::new(std::env::current_exe().unwrap())
-            .args([
-                "--exact",
-                "standard_io_sidecar_first_answer_after_spawn_is_recorded",
-                "--nocapture",
-                "--test-threads=1",
-            ])
-            .env("SOKSAK_READY_TRACE_CHILD", "1")
-            .output()
-            .unwrap();
-        assert!(
-            output.status.success(),
-            "the child check failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+    if !in_writer_child(
+        "standard_io_sidecar_first_answer_after_spawn_is_recorded",
+        "SOKSAK_FIRST_OUTPUT_CHILD",
+    ) {
         return;
     }
     let (sidecars, directory) = fixture_sidecars(
@@ -2317,36 +2327,72 @@ on any drop
     );
     let events_directory = folder::Folder::new();
     let writer = records::start_writer(events_directory.path());
-    soksak_host::performance::command(serde_json::json!({"action": "on"})).unwrap();
     let (window, events) = owner("a", "/projects/test");
     sidecars
         .send(&window, ECHO, "s1", &raw(r#"{"operation":"input"}"#))
         .unwrap();
     events.recv().expect("no event; the test stalled");
     sidecars.stop();
-    // Turning the trace off joins the sampler, so no process that it started outlives the check.
-    soksak_host::performance::command(serde_json::json!({"action": "off"})).unwrap();
     writer.flush().unwrap();
     let records_of_the_run = records::read_events(writer.path());
     soksak_host::event_record::use_host_event_log(None);
-    assert!(
-        !soksak_host::performance::sampler_running(),
-        "the check left the sampler of the trace running"
-    );
-    let ready = records_of_the_run
+    let pid = i64::from(process_id(directory.path()));
+    let start = records_of_the_run
         .iter()
-        .find(|record| record["event"] == "host.trace.sidecar.ready")
-        .expect("the first answer after the spawn was not recorded");
-    assert_eq!(ready["level"], "debug");
-    assert_eq!(ready["fields"]["sidecar"], ECHO);
-    assert_eq!(
-        ready["fields"]["pid"].as_i64(),
-        Some(i64::from(process_id(directory.path())))
+        .find(|record| record["event"] == "host.sidecar.start")
+        .expect("the start of the sidecar process was not recorded");
+    assert_eq!(start["fields"]["name"], ECHO);
+    assert_eq!(start["fields"]["pid"].as_i64(), Some(pid));
+    let first = records_of_the_run
+        .iter()
+        .find(|record| record["event"] == "host.sidecar.first_output")
+        .expect("the first output after the spawn was not recorded");
+    assert_eq!(first["level"], "info");
+    assert_eq!(first["fields"]["name"], ECHO);
+    assert_eq!(first["fields"]["pid"].as_i64(), Some(pid));
+    assert!(
+        first["fields"]["ms"].as_f64().is_some_and(|ms| ms >= 0.0),
+        "ms = {}, want a number of milliseconds from the spawn",
+        first["fields"]["ms"]
     );
     assert!(
-        ready["fields"]["ms"].as_f64().is_some_and(|ms| ms >= 0.0),
-        "ms = {}, want a number of milliseconds from the spawn",
-        ready["fields"]["ms"]
+        first["seq"].as_u64() > start["seq"].as_u64(),
+        "the first output seq {} is not after the start seq {}",
+        first["seq"],
+        start["seq"]
+    );
+}
+
+// contract: sidecars.lifetime.first-output-after-spawn-is-recorded
+#[test]
+fn sidecar_without_answer_records_start_and_no_first_output() {
+    if !in_writer_child(
+        "sidecar_without_answer_records_start_and_no_first_output",
+        "SOKSAK_SILENT_CHILD",
+    ) {
+        return;
+    }
+    let (sidecars, _directory) = fixture_sidecars("on any drop\n");
+    let events_directory = folder::Folder::new();
+    let writer = records::start_writer(events_directory.path());
+    let (window, _events) = owner("a", "/projects/test");
+    sidecars
+        .send(&window, ECHO, "s1", &raw(r#"{"operation":"input"}"#))
+        .unwrap();
+    sidecars.stop();
+    writer.flush().unwrap();
+    let records_of_the_run = records::read_events(writer.path());
+    soksak_host::event_record::use_host_event_log(None);
+    let started = records_of_the_run
+        .iter()
+        .any(|record| record["event"] == "host.sidecar.start");
+    assert!(started, "the start of the sidecar process was not recorded");
+    let answered = records_of_the_run
+        .iter()
+        .any(|record| record["event"] == "host.sidecar.first_output");
+    assert!(
+        !answered,
+        "a sidecar that wrote no line has the first output event"
     );
 }
 
