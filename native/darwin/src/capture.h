@@ -59,5 +59,35 @@ double sp_capture_clock(void);
 // and writes it to path as PNG. It fails as sp_capture_open does, and when the window server gives no image.
 bool sp_capture_still(long windowNumber, const char *path, char **error);
 
+// The values of one display-link callback, as the callback reads them: the timestamp (a prior refresh), the target timestamp (a
+// forecast) and the duration of CADisplayLink in seconds; CACurrentMediaTime() of the sample and the raw Mach ticks read before
+// the callback and after the sample; the Mach timebase; and the values of the previous accepted observation, where a zero
+// timebase or callback time means there is none.
+typedef struct {
+    double timestamp;
+    double targetTimestamp;
+    double duration;
+    double mediaClockTime;
+    uint64_t callbackTime;
+    uint64_t mediaClockAfter;
+    uint32_t timebaseNumerator;
+    uint32_t timebaseDenominator;
+    uint32_t previousTimebaseNumerator;
+    uint32_t previousTimebaseDenominator;
+    uint64_t previousTimestampMach;
+    uint64_t previousCallbackTime;
+} SPDisplayLinkSample;
+
+// Whether the values of a callback are in order (valid), with the Mach ticks of its timestamp and target timestamp; both are 0
+// when the values are not in order.
+typedef struct {
+    bool valid;
+    uint64_t timestampMach;
+    uint64_t targetMach;
+} SPDisplayLinkDecision;
+
+// Decides one display-link callback from its values. The values are data: no clock or window is read.
+SPDisplayLinkDecision sp_capture_display_link_decision(SPDisplayLinkSample sample);
+
 // Injects a capture failure on the calling thread for lifecycle cleanup tests.
 void sp_capture_test_report_error(const char *message);

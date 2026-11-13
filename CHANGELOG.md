@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- The decision of a display-link callback of the native capture is a function of the values that the callback reads, and a native test checks it on timestamp data of the arm64 and Intel timebases (F795-6).
 - Two Rust test files follow the format that the Rust format check requires (F804).
 - Both hosts refuse a view import map that is not UTF-8 with the same text, which names the first byte that is not UTF-8 (F803).
 - A refused start of the memory pressure source in the Go host no longer replaces the report of the running source, so no level after it is lost (F802).

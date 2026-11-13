@@ -56,6 +56,40 @@ static NSString *tickString(uint64_t ticks) {
     return [NSString stringWithFormat:@"%llu", (unsigned long long)ticks];
 }
 
+// The decision of one display-link callback (SPCaptureRecording recordDisplayLinkTimestamp). It is a function of the values it
+// receives, so a test passes timestamps and production passes the values of CADisplayLink and of the Mach clock.
+SPDisplayLinkDecision sp_capture_display_link_decision(SPDisplayLinkSample sample) {
+    bool valid = isfinite(sample.timestamp) && isfinite(sample.targetTimestamp) && isfinite(sample.duration)
+        && isfinite(sample.mediaClockTime) && sample.timestamp > 0 && sample.targetTimestamp > sample.timestamp && sample.duration > 0
+        && sample.mediaClockTime > 0 && sample.callbackTime > 0 && sample.mediaClockAfter >= sample.callbackTime
+        && sample.timebaseNumerator != 0 && sample.timebaseDenominator != 0
+        && (sample.previousTimebaseNumerator == 0
+            || (sample.timebaseNumerator == sample.previousTimebaseNumerator
+                && sample.timebaseDenominator == sample.previousTimebaseDenominator))
+        && (sample.previousCallbackTime == 0 || sample.callbackTime > sample.previousCallbackTime);
+    long double timestampRaw = (long double)sample.timestamp * 1e9L * (long double)sample.timebaseDenominator
+        / (long double)sample.timebaseNumerator;
+    long double targetRaw = (long double)sample.targetTimestamp * 1e9L * (long double)sample.timebaseDenominator
+        / (long double)sample.timebaseNumerator;
+    long double mediaRaw = (long double)sample.mediaClockTime * 1e9L * (long double)sample.timebaseDenominator
+        / (long double)sample.timebaseNumerator;
+    long double mediaRounding = fabsl((long double)nextafter(sample.mediaClockTime, INFINITY) - (long double)sample.mediaClockTime)
+        * 1e9L * (long double)sample.timebaseDenominator / (long double)sample.timebaseNumerator + 1;
+    valid = valid && isfinite((double)timestampRaw) && isfinite((double)targetRaw)
+        && isfinite((double)mediaRaw)
+        && timestampRaw > 0 && timestampRaw < (long double)UINT64_MAX
+        && targetRaw > timestampRaw && targetRaw < (long double)UINT64_MAX;
+    long double roundedTimestamp = roundl(timestampRaw);
+    long double roundedTarget = roundl(targetRaw);
+    uint64_t timestampMach = valid && roundedTimestamp < (long double)UINT64_MAX ? (uint64_t)roundedTimestamp : 0;
+    uint64_t targetMach = valid && roundedTarget < (long double)UINT64_MAX ? (uint64_t)roundedTarget : 0;
+    valid = valid && timestampMach > sample.previousTimestampMach
+        && targetMach > timestampMach && timestampMach <= sample.callbackTime
+        && mediaRaw + mediaRounding >= (long double)sample.callbackTime
+        && mediaRaw <= (long double)sample.mediaClockAfter + mediaRounding;
+    return (SPDisplayLinkDecision){ .valid = valid, .timestampMach = timestampMach, .targetMach = targetMach };
+}
+
 // Runs block on the main thread and returns after it ran. The capture reads AppKit windows only on the main thread; the
 // callers that wait (the host's capture calls) run on threads that the main thread never waits for.
 static void onMain(void (^block)(void)) {
@@ -664,32 +698,24 @@ static void emitLifecycle(SPCaptureRecording *recording, NSString *phase, uint8_
             self.omittedDisplayLinkObservations++;
             return nil;
         }
-        BOOL valid = isfinite(timestamp) && isfinite(targetTimestamp) && isfinite(duration)
-            && isfinite(mediaClockTime) && timestamp > 0 && targetTimestamp > timestamp && duration > 0
-            && mediaClockTime > 0 && callbackTime > 0 && mediaClockAfter >= callbackTime
-            && timebase.numer != 0 && timebase.denom != 0
-            && (self.displayLinkTimebaseNumerator == 0
-                || (timebase.numer == self.displayLinkTimebaseNumerator
-                    && timebase.denom == self.displayLinkTimebaseDenominator))
-            && (self.lastDisplayLinkCallbackTime == 0 || callbackTime > self.lastDisplayLinkCallbackTime);
-        long double timestampRaw = (long double)timestamp * 1e9L * (long double)timebase.denom / (long double)timebase.numer;
-        long double targetRaw = (long double)targetTimestamp * 1e9L * (long double)timebase.denom / (long double)timebase.numer;
-        long double mediaRaw = (long double)mediaClockTime * 1e9L * (long double)timebase.denom / (long double)timebase.numer;
-        long double mediaRounding = fabsl((long double)nextafter(mediaClockTime, INFINITY) - (long double)mediaClockTime)
-            * 1e9L * (long double)timebase.denom / (long double)timebase.numer + 1;
-        valid = valid && isfinite((double)timestampRaw) && isfinite((double)targetRaw)
-            && isfinite((double)mediaRaw)
-            && timestampRaw > 0 && timestampRaw < (long double)UINT64_MAX
-            && targetRaw > timestampRaw && targetRaw < (long double)UINT64_MAX;
-        long double roundedTimestamp = roundl(timestampRaw);
-        long double roundedTarget = roundl(targetRaw);
-        uint64_t timestampMach = valid && roundedTimestamp < (long double)UINT64_MAX ? (uint64_t)roundedTimestamp : 0;
-        uint64_t targetMach = valid && roundedTarget < (long double)UINT64_MAX ? (uint64_t)roundedTarget : 0;
-        valid = valid && timestampMach > self.lastDisplayLinkTimestampMach
-            && targetMach > timestampMach && timestampMach <= callbackTime
-            && mediaRaw + mediaRounding >= (long double)callbackTime
-            && mediaRaw <= (long double)mediaClockAfter + mediaRounding;
-        if (!valid) {
+        SPDisplayLinkSample sample = {
+            .timestamp = timestamp,
+            .targetTimestamp = targetTimestamp,
+            .duration = duration,
+            .mediaClockTime = mediaClockTime,
+            .callbackTime = callbackTime,
+            .mediaClockAfter = mediaClockAfter,
+            .timebaseNumerator = timebase.numer,
+            .timebaseDenominator = timebase.denom,
+            .previousTimebaseNumerator = self.displayLinkTimebaseNumerator,
+            .previousTimebaseDenominator = self.displayLinkTimebaseDenominator,
+            .previousTimestampMach = self.lastDisplayLinkTimestampMach,
+            .previousCallbackTime = self.lastDisplayLinkCallbackTime,
+        };
+        SPDisplayLinkDecision decision = sp_capture_display_link_decision(sample);
+        uint64_t timestampMach = decision.timestampMach;
+        uint64_t targetMach = decision.targetMach;
+        if (!decision.valid) {
             BOOL firstFailure = ![self.displayLinkState isEqual:@"incomplete"];
             self.displayLinkState = @"incomplete";
             self.displayLinkReason = [NSString stringWithFormat:

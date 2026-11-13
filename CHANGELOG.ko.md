@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- native capture 의 display-link callback 결정이 callback 이 읽는 값의 함수가 되고, native 시험이 arm64 와 Intel timebase 의 timestamp 데이터로 그것을 검사한다 (F795-6).
 - Rust 시험 파일 두 개가 Rust 형식 검사가 요구하는 형식을 따른다 (F804).
 - 두 host 가 UTF-8 이 아닌 view import map 을 같은 문구로 거부하고, 그 문구는 UTF-8 이 아닌 첫 byte 를 가리킨다 (F803).
 - Go host 의 memory pressure source 의 거부된 시작이 실행 중인 source 의 report 를 더 이상 바꾸지 않으므로, 그 뒤의 level 이 사라지지 않는다 (F802).

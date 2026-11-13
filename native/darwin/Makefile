@@ -376,6 +376,7 @@ NATIVE_TESTS = observe_test \
   capture_pressure_test \
   capture_storage_test \
   capture_metadata_test \
+  capture_display_link_test \
   capture_frame_test \
   dock_menu_test \
   appearance_test \
