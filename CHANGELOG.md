@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F738: a check of the Rust host runs on the main thread of its own process and requires that the start of a page runs as a step of the main thread, as the start of the first page of a window must; a check of the Go host library requires the same of the window calls of the start of a page.
 - F773: the end of the microtask queue that the negative workbench checks wait for fails in a check that mocks `setImmediate`, and the verification specification states why it is the event of such a check and what it does not cover.
 - F767-3-2-4: the remaining workbench checks wait for a declared `idle`, the page log flush or the end of the microtask queue instead of a settle, and each negative and order check fails under the product fault that it rejects.
 - F771: the mygo still check waits for the release of the window by its layout transaction and for its next frame before it reads the still, because the window server puts the window on the screen only with that frame.

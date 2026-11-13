@@ -24,6 +24,14 @@ required-features = ["host-test"]
 name = "fatal_signal_test"
 required-features = ["host-test"]
 
+# The page start calls the native layout, which runs only on the main thread, and the test harness runs each test on a
+# thread of its own, so this target runs its tests on the main thread of its process; it answers --list and --exact as the
+# harness does.
+[[test]]
+name = "page_start_main_thread_test"
+harness = false
+required-features = ["host-test"]
+
 # A measurement prints numbers and asserts nothing (docs/spec/logging.md#writers).
 [[bench]]
 name = "event_log_benchmark"

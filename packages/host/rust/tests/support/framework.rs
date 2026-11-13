@@ -15,11 +15,16 @@ use crate::framework::{
 /// The display name of the test framework, the end of a window title.
 pub const DISPLAY_NAME: &str = "Fixture";
 
+/// A task that the framework runs.
+pub type Task = Box<dyn FnOnce() + Send>;
+
 /// The framework of the tests. A task that a test queued runs before the next post, as the main thread runs a task that
 /// was queued ahead of the posted one.
 #[derive(Default)]
 pub struct Fixture {
     queued: Mutex<Option<Box<dyn FnOnce() + Send>>>,
+    // The loop of the main thread of a test that runs its posts there (post_to); without it a post runs at once on its caller.
+    main: Mutex<Option<(std::thread::ThreadId, Sender<Task>)>>,
     callback_guard: Mutex<Option<Arc<Mutex<()>>>>,
     windows: Mutex<Vec<Arc<dyn Frontend>>>,
 }
@@ -38,6 +43,14 @@ impl Fixture {
     /// Runs task before the next post.
     pub fn queue(&self, task: impl FnOnce() + Send + 'static) {
         *self.queued.lock().unwrap_or_else(PoisonError::into_inner) = Some(Box::new(task));
+    }
+    /// Sends each later post from another thread to main, the loop of the main thread of the test, which is the thread that
+    /// calls this, and runs a post of that thread at once, as the framework of an application does on its main thread.
+    // The tests of the library run every post at once; only the main-thread tests of the feature host-test call it.
+    #[allow(dead_code)]
+    pub fn post_to(&self, main: Sender<Task>) {
+        *self.main.lock().unwrap_or_else(PoisonError::into_inner) =
+            Some((std::thread::current().id(), main));
     }
 }
 
@@ -58,6 +71,23 @@ impl Framework for Fixture {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .take();
+        let main = self
+            .main
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
+        if let Some((thread, main)) = main
+            && thread != std::thread::current().id()
+        {
+            return main
+                .send(Box::new(move || {
+                    if let Some(queued) = queued {
+                        queued();
+                    }
+                    task();
+                }))
+                .map_err(|_| Error::from("the main thread of the test ended before a post"));
+        }
         if let Some(queued) = queued {
             queued();
         }

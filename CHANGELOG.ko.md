@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F738: Rust host 의 check 하나가 자기 process 의 main thread 에서 돌며, 창의 첫 page 의 start 가 그래야 하듯 page start 가 main thread 의 step 으로 도는지 요구한다. Go host library 의 check 하나는 page start 의 창 호출에 같은 것을 요구한다.
 - F773: negative workbench check 가 기다리는 microtask queue 의 끝은 `setImmediate` 를 mock 하는 check 에서 실패하고, verification specification 은 그것이 그런 check 의 event 인 이유와 포함하지 않는 것을 말한다.
 - F767-3-2-4: 남은 workbench check 는 settle 대신 선언된 `idle`, page log 의 flush 또는 microtask queue 의 끝을 기다리고, 각 negative check 와 order check 는 자기가 거부하는 product fault 에서 실패한다.
 - F771: mygo still check 는 still 을 읽기 전에 layout transaction 이 window 를 release 하기와 다음 frame 을 기다린다. window server 는 그 frame 과 함께만 window 를 화면에 두기 때문이다.

@@ -548,9 +548,10 @@ fn remove_window_records(registry: &Windows, label: &str) -> bool {
     windows.is_empty() && registry.quit.active()
 }
 
-/// Registers records as the records of the window of label, without the native steps of register.
-#[cfg(test)]
-pub(crate) fn register_records(registry: &Windows, label: &str, records: Arc<WindowData>) {
+/// Registers records as the records of the window of label, without the native steps of register. The tests of the library
+/// and the main-thread tests of the feature host-test, which run the host on the main thread of their own process, call it.
+#[cfg(any(test, feature = "host-test"))]
+pub fn register_records(registry: &Windows, label: &str, records: Arc<WindowData>) {
     registry
         .windows
         .lock()
