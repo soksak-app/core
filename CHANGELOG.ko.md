@@ -5,6 +5,7 @@
 ## 미배포
 
 - `make check-tests` 가 시험과 기록의 module 교체, timer 교체, 전역 method 교체, inline program, PATH 의 도구, 대역 이름을 찾고 종류별 개수를 출력한다 (F795-11).
+- workbench 의 log policy 시험이 `@soksak/runtime` 을 바꾸는 대신 기록된 page wire case 를 재생하고, `TestPageWire` 가 그 case 를 Go host 의 log 와 workspace 동작에 실행한다 (F795-10).
 - Go host 의 빈 native ring 시험이 자기 child process 에서 ring 을 읽는다. 같은 process 의 앞선 시험이 ring 에 기록을 남기기 때문이다 (F798).
 - fixture registry 의 pack fixture 시험이 F795-1 부터 `scripts/fixture-registry.mjs` 가 쓰는 설명을 기대한다. 그 시험은 F795-1 부터 실패하고 있었다 (F795-1-1).
 - Go, mygo, Rust host 시험의 sidecar 상대편이 추적되는 fixture program `docs/spec/cases/sidecars/fixture.sh` 이고, 어떤 host 시험도 program 을 쓰지 않는다 (F795-5).

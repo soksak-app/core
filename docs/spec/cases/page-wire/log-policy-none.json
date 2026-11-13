@@ -1,0 +1,7 @@
+{
+  "name": "log-policy-none",
+  "description": "A page that changes no log policy and no setting sends no call of the log. The case has no steps, so a call of the page fails the case.",
+  "replay": true,
+  "variables": {},
+  "steps": []
+}

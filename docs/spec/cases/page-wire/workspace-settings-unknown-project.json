@@ -1,0 +1,10 @@
+{
+  "name": "workspace-settings-unknown-project",
+  "description": "The workspace call with the kind settings and a project identifier that the registry does not hold is refused with the unknown project error, and no settings file is written.",
+  "replay": true,
+  "variables": {},
+  "steps": [
+    { "call": { "name": "workspace", "payload": { "kind": "settings", "id": "prj", "patch": { "gap": 8 }, "remove": ["radius"] }, "cids": ["p1.9"] } },
+    { "reply": { "error": "unknown project: prj" } }
+  ]
+}

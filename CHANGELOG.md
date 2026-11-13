@@ -5,6 +5,7 @@
 ## Unreleased
 
 - `make check-tests` finds the module replacements, timer replacements, replacements of global methods, inline programs, tools on PATH and names of stand-ins of the tests and records, and prints the count of each kind (F795-11).
+- The log policy tests of the workbench play recorded page wire cases, which `TestPageWire` runs against the log and workspace operations of the Go host, instead of replacing `@soksak/runtime` (F795-10).
 - The test of the empty native ring of the Go host pulls the ring in a child process of its own, because the earlier tests of the same process leave records in it (F798).
 - The test of the pack fixtures of the fixture registry expects the description that `scripts/fixture-registry.mjs` writes since F795-1; it had failed from F795-1 on (F795-1-1).
 - The sidecar peers of the Go, mygo and Rust host tests are the tracked fixture program `docs/spec/cases/sidecars/fixture.sh`, and no host test writes a program (F795-5).

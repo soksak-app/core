@@ -166,6 +166,13 @@ func newHost(directory string, quit *Quit) (*Host, error) {
 	return h, nil
 }
 
+// NewHostWithoutWindows returns the host of the configuration directory without a framework adapter, a window, an endpoint, sidecars
+// and an event writer: those are the fields that Prepare sets, and they stay zero here. The workspace storage and the bindings of the
+// host run on it, so the page-wire cases run their workspace calls through Bindings.Call (docs/spec/cases/page-wire/README.md).
+func NewHostWithoutWindows(configDirectory string) (*Host, error) {
+	return newHost(configDirectory, &Quit{})
+}
+
 func (h *Host) surface(ctx context.Context) (*Surfaces, error) {
 	win, ok := frontendOf(ctx)
 	if !ok {

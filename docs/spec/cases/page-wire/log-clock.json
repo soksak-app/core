@@ -1,0 +1,13 @@
+{
+  "name": "log-clock",
+  "description": "The call log with the action clock answers the clocks of the host: the wall clock in microseconds and the monotonic clock in nanoseconds. The answer is the ClockReading of the host log relay.",
+  "replay": true,
+  "variables": {
+    "ts-us": { "type": "integer", "example": 1791000000000456 },
+    "mono-ns": { "type": "integer", "example": 5000000789 }
+  },
+  "steps": [
+    { "call": { "name": "log", "payload": { "action": "clock" } } },
+    { "reply": { "result": { "ts_us": "$ts-us", "mono_ns": "$mono-ns" } } }
+  ]
+}

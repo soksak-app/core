@@ -1,0 +1,13 @@
+{
+  "name": "log-policy-cids",
+  "description": "The call log with the action policy carries the identifiers of a settings change in the payload and writes the policy file. A policy without a change carries no identifiers, and the next write answers nothing.",
+  "replay": true,
+  "writer": { "policy": true },
+  "variables": {},
+  "steps": [
+    { "call": { "name": "log", "payload": { "action": "policy", "classes": { "lifecycle": "error", "input": "error", "call": "debug", "io": "error", "frame": "error" }, "cids": ["p1.2"] } } },
+    { "reply": { "result": null } },
+    { "call": { "name": "log", "payload": { "action": "policy", "classes": { "lifecycle": "error", "input": "error", "call": "trace", "io": "error", "frame": "error" } } } },
+    { "reply": { "result": null } }
+  ]
+}

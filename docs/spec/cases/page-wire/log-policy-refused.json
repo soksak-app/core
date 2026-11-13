@@ -1,0 +1,11 @@
+{
+  "name": "log-policy-refused",
+  "description": "The call log with the action policy is refused with the error of the event writer when the writer has no policy file. The reply is the error text of the host.",
+  "replay": true,
+  "writer": { "policy": false },
+  "variables": {},
+  "steps": [
+    { "call": { "name": "log", "payload": { "action": "policy", "classes": { "lifecycle": "error", "input": "error", "call": "warn", "io": "error", "frame": "error" } } } },
+    { "reply": { "error": "this event writer has no policy file" } }
+  ]
+}
