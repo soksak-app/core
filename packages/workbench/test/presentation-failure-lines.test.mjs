@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { JSDOM } from "jsdom";
-import { clockAnswer, recordsOf, settled, shownRecord } from "./support/records.mjs";
+import { clockAnswer, recordsOf, shownRecord } from "./support/records.mjs";
 
 const TIMEOUT = "the current image raster did not present within 10s; pending tab-1/view generation 2 raster 1 sequence 0 presented 0/0 surface visible";
 
@@ -35,6 +35,7 @@ test("one presentation timeout writes one workbench error line", async () => {
     },
   } } });
   const { report, surfaces } = await import("../host.js");
+  const { flushEvents } = await import("../page-log.js");
   const { createErrorDisplay, createPageLayout } = await import("../page-layout.js");
   const { connectExposure, registry } = await import("../exposure.js");
 
@@ -49,8 +50,10 @@ test("one presentation timeout writes one workbench error line", async () => {
   // The presentation that the render of the plane committed (onRender of index.html). It requests the presentation of the drawn layout from the host.
   let rendered = Promise.resolve();
   const showError = createErrorDisplay({ document, changed: () => {} });
+  // The layout queue shows the failure before it calls setVerify with the failed row, so the failure is queued when this resolves.
+  const failed = Promise.withResolvers();
   const page = createPageLayout({
-    document, showError, setVerify: () => {}, log: () => {}, surfaces,
+    document, showError, setVerify: (rows) => { if (rows.some((row) => !row.ok)) failed.resolve(); }, log: () => {}, surfaces,
     plane: {},
     compositor: { publishAhead: () => surfaces.place(record) },
     textSize: () => 1,
@@ -68,7 +71,8 @@ test("one presentation timeout writes one workbench error line", async () => {
   });
 
   assert.equal(await registry.run("core.fixture.split"), null);
-  await new Promise((resolve) => setImmediate(resolve));
+  await failed.promise;
+  await flushEvents();
   assert.deepEqual(lines, [`error workbench workbench: surface presentation failed: ${TIMEOUT}`],
     "one presentation timeout must write exactly the line of the display that shows it");
   dom.window.close();

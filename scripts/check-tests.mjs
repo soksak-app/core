@@ -1435,6 +1435,27 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F771",
+    implementation: [{ file: "packages/host/mygo/src/frontend.go", symbol: "func (f *Frontend) WhenReleased(run func()) {" }],
+    tests: [{ file: "packages/host/mygo/tests/platform/darwin/system/view_still_test.go", id: "TestE2EAStillOfTheWindowShowsTheViewPage" }],
+    expected: "The still check of a view session waits for the release of the window by its layout transaction and for its next frame, so the window server lists the window on the screen when the check reads the still.",
+    levels: ["native"],
+  },
+  {
+    id: "F767",
+    implementation: [
+      { file: "packages/workbench/memory-saver.js", symbol: "idle: () => (running === 0 ? Promise.resolve() : new Promise((resolve) => idleWaits.push(resolve)))," },
+      { file: "packages/workbench/layout-queue.js", symbol: "export async function drawPrepared({" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/memory-saver.test.mjs", id: "the delay unloads a hidden tab and a show restores it" },
+      { file: "packages/workbench/test/layout-preparation.test.mjs", id: "the document waits for native preparation before drawing and retains the presentation barrier" },
+      { file: "packages/workbench/test/layout-failure-lines.test.mjs", id: "the last placement answers after the layout that waited behind the running layout" },
+    ],
+    expected: "The checks wait for the event of the state they judge instead of a sleep, a poll or a settle, and a negative or order check fails under the product fault that it rejects.",
+    levels: ["unit"],
+  },
+  {
     id: "F770",
     implementation: [{ file: "packages/soksak/scripts/mutation-runner.mjs", symbol: "export function evidenceFolder(root, prefix, env = process.env) {" }],
     tests: [
@@ -4028,7 +4049,7 @@ const FEATURE_LINKS = [
     id: "F555",
     implementation: [
       { file: "packages/workbench/host-store.js", symbol: "reading = this.snapshot();" },
-      { file: "packages/workbench/projects.js", symbol: "store.onChange((read) => { reread(read).catch(failed); });" },
+      { file: "packages/workbench/projects.js", symbol: "store.onChange((read) => { rereadChange(read).catch(failed); });" },
       { file: "packages/workbench/settings.js", symbol: "async function refresh(read = () => store.snapshot())" },
     ],
     tests: [

@@ -26,7 +26,8 @@ test("the header fullscreen control precedes close and runs its declared command
     const observer = new dom.window.MutationObserver((records) => stableMutations.push(...records));
     observer.observe(toolbar, { attributes: true, subtree: true, attributeFilter: ["disabled", "title", "aria-label"] });
     tools.updateCardTools(toolbar, { canClose: true, canSplitX: true, canSplitY: true, fullscreen: false });
-    await Promise.resolve();
+    // The update is synchronous, so its mutation records are queued by the time it completes; takeRecords reads them directly.
+    stableMutations.push(...observer.takeRecords());
     observer.disconnect();
     assert.deepEqual(stableMutations.map(({ attributeName }) => attributeName), [],
       "an unchanged update must not rewrite tool availability or labels");

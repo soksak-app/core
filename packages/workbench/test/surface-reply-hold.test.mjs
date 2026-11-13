@@ -61,11 +61,14 @@ test("held waits for a held reply and fails without a hold or when the surface c
   const hold = createSurfaceReplyHold(() => Promise.resolve());
   assert.throws(() => hold.held("tab-a"), /^Error: exposure replies of surface "tab-a" are not held$/);
   hold.hold("tab-a");
-  // The order of the gate and of the answer of held shows that held answers only after a reply was held.
+  // The gate call runs in a microtask queued after the then of held. A held that resolved before any reply was held answers first.
   const order = [];
   const waiting = hold.held("tab-a").then(() => { order.push("held"); });
-  order.push("gate");
-  const reply = hold.gate("tab-a", () => Promise.resolve("ok"));
+  let reply;
+  queueMicrotask(() => {
+    order.push("gate");
+    reply = hold.gate("tab-a", () => Promise.resolve("ok"));
+  });
   await waiting;
   assert.deepEqual(order, ["gate", "held"], "held answered before a reply was held");
   await hold.closed("tab-a");

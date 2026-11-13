@@ -123,13 +123,11 @@ test("navigation commits of a tab are coalesced to one write per second; a title
   await sessions.idle();
   assert.deepEqual(store.puts, []);
   t.mock.timers.tick(1);
-  await new Promise(setImmediate);
   await sessions.idle();
   assert.deepEqual(store.puts.map((put) => put.tab).sort(), ["tab-a", "tab-b"]);
   store.puts.length = 0;
   sessions.navigated("tab-a", "page", { index: 1, entries: [{ url: "https://a.test/", title: "A" }, { url: "https://a.test/2", title: "renamed" }] });
   t.mock.timers.tick(1000);
-  await new Promise(setImmediate);
   await sessions.idle();
   assert.deepEqual(store.puts, []);
   // The window save of a quit writes every tab with attached regions.
@@ -147,7 +145,6 @@ test("each read of the sessions of a tab records its cause", async (t) => {
   const reads = () => emitted.filter((entry) => entry.event === "workbench.tab.session.read").map((entry) => entry.fields);
   sessions.navigated("tab-a", "page", { index: 0, entries: [{ url: "https://a.test/", title: "" }] });
   t.mock.timers.tick(1000);
-  await new Promise(setImmediate);
   await sessions.idle();
   await sessions.flush();
   await sessions.capture("tab-a", "unload");
@@ -206,7 +203,6 @@ test("a failed coalesced write is shown through the error display", async (t) =>
   regions.attached("tab-a", "page");
   sessions.navigated("tab-a", "page", { index: 0, entries: [{ url: "https://a.test/", title: "" }] });
   t.mock.timers.tick(1000);
-  await new Promise(setImmediate);
   await sessions.idle();
   assert.deepEqual(failures, ["tab session of tab-a: disk full"]);
 });

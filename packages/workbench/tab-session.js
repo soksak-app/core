@@ -29,6 +29,8 @@ export function createTabSessions({ store, interaction, tabs, failed }) {
   // The tabs whose file was removed: a tab id is never issued again, so a later state of a closing region writes nothing.
   const removed = new Set();
   let writing = Promise.resolve();
+  // The reads and writes that are running; idle waits for them.
+  const running = new Set();
 
   // Queues one write of tab after the earlier writes; the returned promise rejects when this write fails. The queue
   // resolves to the error of a failed write instead of rejecting, so the next write still runs.
@@ -41,8 +43,16 @@ export function createTabSessions({ store, interaction, tabs, failed }) {
     return next.then((error) => { if (error) throw error; });
   }
 
+  // Registers an operation for idle; the entry ends when the operation settles, whether it fulfils or rejects.
+  function track(operation) {
+    const ended = operation.then(() => {}, () => {});
+    running.add(ended);
+    ended.then(() => running.delete(ended));
+    return operation;
+  }
+
   // Reads the regions of tab and stores those of at most SESSION_LIMIT bytes; a tab without regions writes nothing.
-  async function capture(tab, cause) {
+  async function readAndStore(tab, cause) {
     if (!CAUSES.has(cause)) throw new Error(`tab session of ${tab}: the read names no known cause: ${cause}`);
     clearTimeout(pending.get(tab));
     pending.delete(tab);
@@ -59,7 +69,7 @@ export function createTabSessions({ store, interaction, tabs, failed }) {
     await put(tab, Object.keys(regions).length ? regions : null);
   }
 
-  const reported = (tab, cause) => capture(tab, cause).catch((error) => failed(new Error(`tab session of ${tab}: ${error.message}`)));
+  const reported = (tab, cause) => track(readAndStore(tab, cause).catch((error) => failed(new Error(`tab session of ${tab}: ${error.message}`))));
 
   function remove(tab) {
     clearTimeout(pending.get(tab));
@@ -92,7 +102,7 @@ export function createTabSessions({ store, interaction, tabs, failed }) {
       pending.set(tab, setTimeout(() => { reported(tab, "navigation"); }, COALESCE_MS));
     },
     /** Writes the session of tab now for cause; the memory saver calls it before an unload, and a failure fails the unload. */
-    capture,
+    capture: (tab, cause) => track(readAndStore(tab, cause)),
     /** Removes the files of tabs after the layout write that drops them is confirmed; a refused write removes none. */
     async removeAfter(layoutWrite, dropped) {
       await layoutWrite;
@@ -108,7 +118,10 @@ export function createTabSessions({ store, interaction, tabs, failed }) {
     async flush() {
       await Promise.all(tabs().map((tab) => reported(tab, "flush")));
     },
-    /** Resolves when the writes started so far have ended. */
-    idle: () => writing,
+    /**
+     * Resolves when the reads and the writes started so far have ended: the sessions that a timer or a flush started, and
+     * the writes that these reads queued. A read or write started after the call is not waited for.
+     */
+    idle: () => Promise.all([...running]).then(() => writing),
   };
 }

@@ -1,7 +1,7 @@
 // Checks that an error shown on screen is written to the application log at that moment.
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
-import { clockAnswer, recordsOf, settled, shownRecord } from "./support/records.mjs";
+import { clockAnswer, recordsOf, shownRecord } from "./support/records.mjs";
 
 const lines = [];
 mock.module("@soksak/runtime", { namedExports: { host: {
@@ -12,6 +12,7 @@ mock.module("@soksak/runtime", { namedExports: { host: {
 const { JSDOM } = await import("jsdom");
 const { document } = new JSDOM("<p></p>").window;
 const { hideError, showError } = await import("../shown-errors.js");
+const { flushEvents } = await import("../page-log.js");
 
 test("an error shown on the screen is logged once until it changes or clears", async () => {
   const el = document.querySelector("p");
@@ -23,7 +24,7 @@ test("an error shown on the screen is logged once until it changes or clears", a
   hideError(el, "library");
   assert.equal(el.dataset.error, undefined);
   showError(el, "library", "registry failed");
-  await settled();
+  await flushEvents();
   assert.deepEqual(lines.splice(0), [
     "error workbench library: folder is missing", "error workbench library: registry failed", "error workbench library: registry failed",
   ]);

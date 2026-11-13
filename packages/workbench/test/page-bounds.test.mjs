@@ -2,7 +2,7 @@
 // fields of an event of a plugin and the bytes of the queue are cut or refused by the page, before the host receives them.
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
-import { clockAnswer, settled, withoutClock } from "./support/records.mjs";
+import { clockAnswer, withoutClock } from "./support/records.mjs";
 
 const calls = [];
 mock.module("@soksak/runtime", { namedExports: { host: {
@@ -13,7 +13,7 @@ mock.module("@soksak/runtime", { namedExports: { host: {
     calls.push({ name, payload: withoutClock(payload) });
   },
 } } });
-const { reportRecord, emitEvent } = await import("../page-log.js");
+const { reportRecord, emitEvent, flushEvents } = await import("../page-log.js");
 const { logGate } = await import("../log-gate.js");
 // The events below the level error are stored only in the debug state (docs/spec/settings.md, the section of core.settings.debug), which these tests
 // examine, so the state of every class at trace is set here.
@@ -44,7 +44,7 @@ test("the fields of an event of a plugin over 65536 bytes are replaced by their 
   });
   emitEvent("info", "plugin.test.big", { data: array });
   emitEvent("info", "plugin.test.small", { data: "x" });
-  await settled();
+  await flushEvents();
   const [big, small] = events();
   assert.deepEqual(Object.keys(big.fields).sort(), ["head", "truncated"]);
   assert.equal(big.fields.truncated, true);

@@ -5,6 +5,7 @@ import { registerPlugin } from "../registry.js";
 import { recordOrigin } from "../tab-reports.js";
 import { setSurfaceTextSize } from "../text-size.js";
 import { pageIdentity } from "../page-identity.js";
+import { drained } from "./support/drained.mjs";
 
 setSurfaceTextSize(() => 1);
 
@@ -288,9 +289,10 @@ test("a rejected view listener registration releases successful listeners and re
   dom.window.cancelAnimationFrame = () => {};
   const registrationError = new Error("view-process-ended registration failed");
   const removed = [];
-  const unhandled = [];
-  const onUnhandled = (error) => unhandled.push(error);
-  process.on("unhandledRejection", onUnhandled);
+  // Resolves when the five successful registrations are released.
+  const allReleased = Promise.withResolvers();
+  // A rejection that escapes as an unhandled promise fails the test through the test runner, which reports each unhandled
+  // rejection of the run as a failure, whenever Node emits it.
   const actualHost = await import("../host.js");
   t.mock.module("../host.js", { exports: {
     ...actualHost,
@@ -300,7 +302,10 @@ test("a rejected view listener registration releases successful listeners and re
       const runtime = actualHost.surfaceContextRuntime(surface, declarations);
       return { ...runtime, native: { ...runtime.native, on: (name) => {
         if (name === "view-process-ended") return Promise.resolve().then(() => { throw registrationError; });
-        return Promise.resolve(() => removed.push(name));
+        return Promise.resolve(() => {
+          removed.push(name);
+          if (removed.length === 5) allReleased.resolve();
+        });
       }, call: async () => null } };
     },
   } });
@@ -325,15 +330,13 @@ test("a rejected view listener registration releases successful listeners and re
     assert.equal(mountResult.reason, registrationError, "mount must preserve the original listener error");
     assert.equal(waitResult.status, "rejected", "listener setup failure must reject composition wait");
     assert.equal(waitResult.reason, registrationError, "composition wait must preserve the original listener error");
-    await new Promise((resolve) => setImmediate(resolve));
+    await allReleased.promise;
     assert.deepEqual([...removed].sort(), ["view-call", "view-presentation-abandoned", "view-reply", "view-responsiveness", "view-stopped"].sort(),
       "every successful listener registration must be released");
     assert.equal(mountedSurface(id), null, "failed mount retained its mounted entry");
     assert.equal(slot.querySelector(".surface-module-host"), null, "failed mount retained its host");
-    assert.deepEqual(unhandled, [], "listener rejection escaped as an unhandled promise");
   } finally {
     await disposeSurface(id);
-    process.off("unhandledRejection", onUnhandled);
     dom.window.close();
   }
 });
@@ -351,14 +354,20 @@ test("disposing a mount releases resolved listeners before pending registration 
   const registrationError = new Error("view-process-ended registration failed after dispose");
   const removed = [];
   const reports = [];
+  // Waiters of the reports: each report calls the waiters, and until resolves when the predicate holds.
+  const reportWaiters = [];
+  const untilReported = (predicate) => new Promise((resolve) => {
+    const check = () => (predicate() ? resolve() : reportWaiters.push(check));
+    check();
+  });
   const originalDispatchEvent = globalThis.dispatchEvent;
   globalThis.dispatchEvent = (event) => {
     reports.push(event.message);
+    for (const check of reportWaiters.splice(0)) check();
     return originalDispatchEvent?.call(globalThis, event) ?? true;
   };
-  const unhandled = [];
-  const onUnhandled = (error) => unhandled.push(error);
-  process.on("unhandledRejection", onUnhandled);
+  // A rejection that escapes as an unhandled promise fails the test through the test runner, which reports each unhandled
+  // rejection of the run as a failure, whenever Node emits it.
   const actualHost = await import("../host.js");
   t.mock.module("../host.js", { exports: {
     ...actualHost,
@@ -401,15 +410,14 @@ test("disposing a mount releases resolved listeners before pending registration 
     const [mountResult] = await Promise.allSettled([mount]);
     assert.equal(mountResult.status, "fulfilled", "disposing the mount must retain its cancellation result");
     assert.equal(mountResult.value, null, "a mount that the dispose cancelled resolved with a value");
-    await new Promise((resolve) => setImmediate(resolve));
+    await untilReported(() => reports.includes("native listener cleanup: late listener cleanup failed")
+      && reports.includes(`view listener registration after dispose: ${registrationError.message}`));
     assert.ok(reports.some((message) => message === "native listener cleanup: late listener cleanup failed"),
       "a late cleanup error must be reported");
     assert.ok(reports.some((message) => message === `view listener registration after dispose: ${registrationError.message}`),
       "a registration failure after disposal must be reported without changing cancellation");
-    assert.deepEqual(unhandled, [], "pending listener outcomes must not become unhandled");
   } finally {
     await disposeSurface(id);
-    process.off("unhandledRejection", onUnhandled);
     globalThis.dispatchEvent = originalDispatchEvent;
     dom.window.close();
   }
@@ -422,13 +430,14 @@ test("a listener failure before readiness reports an error and releases the view
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
   let rejectProcessEnded;
+  // Resolves when the view-process-ended registration starts.
+  const processEndedStarted = Promise.withResolvers();
   const registrationError = new Error("view-process-ended registration failed before ready");
   const removed = [];
   const states = [];
   let compositionCalls = 0;
-  const unhandled = [];
-  const onUnhandled = (error) => unhandled.push(error);
-  process.on("unhandledRejection", onUnhandled);
+  // A rejection that escapes as an unhandled promise fails the test through the test runner, which reports each unhandled
+  // rejection of the run as a failure, whenever Node emits it.
   const actualHost = await import("../host.js");
   t.mock.module("../host.js", { exports: {
     ...actualHost,
@@ -437,7 +446,10 @@ test("a listener failure before readiness reports an error and releases the view
     surfaceContextRuntime: (surface, declarations) => {
       const runtime = actualHost.surfaceContextRuntime(surface, declarations);
       return { ...runtime, native: { ...runtime.native, on: (name) => {
-        if (name === "view-process-ended") return new Promise((_, reject) => { rejectProcessEnded = reject; });
+        if (name === "view-process-ended") {
+          processEndedStarted.resolve();
+          return new Promise((_, reject) => { rejectProcessEnded = reject; });
+        }
         return Promise.resolve(() => removed.push(name));
       }, call: async (name) => {
         if (name === "compositionDeclare") compositionCalls += 1;
@@ -460,20 +472,17 @@ test("a listener failure before readiness reports an error and releases the view
   try {
     authorizeSurface(id);
     const mounting = mountSurface(slot, surface, { onState: (state) => states.push(state) });
-    await new Promise((resolve) => setImmediate(resolve));
+    await processEndedStarted.promise;
     rejectProcessEnded(registrationError);
     await assert.rejects(mounting, /view-process-ended registration failed before ready/);
     await assert.rejects(waitSurfaceCompositionDeclared(id), /view-process-ended registration failed before ready/);
-    await new Promise((resolve) => setImmediate(resolve));
     assert.equal(states.at(-1).phase, "error", "a post-readiness listener failure must reach surface status");
     assert.equal(states.at(-1).error, registrationError);
     assert.deepEqual([...removed].sort(), ["view-call", "view-presentation-abandoned", "view-reply", "view-responsiveness", "view-stopped"].sort());
     assert.equal(compositionCalls, 0, "a view with an incomplete listener setup declared its composition");
     assert.equal(mountedSurface(id), null, "post-readiness failure retained the mounted entry");
-    assert.deepEqual(unhandled, [], "post-readiness listener rejection became unhandled");
   } finally {
     await disposeSurface(id);
-    process.off("unhandledRejection", onUnhandled);
     dom.window.close();
   }
 });
@@ -526,7 +535,7 @@ test("disposing a surface ends its already-waiting composition declaration", { t
       (error) => { waitOutcome = { status: "rejected", error }; },
     );
     await disposeSurface(id);
-    await new Promise((resolve) => setImmediate(resolve));
+    await wait;
     assert.equal(waitOutcome?.status, "rejected", "dispose did not end the existing composition wait");
     assert.match(waitOutcome.error.message, new RegExp(`surface ${id} was disposed before declaring composition`));
 
@@ -606,7 +615,6 @@ test("a drawn wait records a listener failure before the native view is declared
     rejectProcessEnded(registrationError);
     await errorReported;
     await assert.rejects(failedMount, /view-process-ended registration failed before ready/);
-    await new Promise((resolve) => setImmediate(resolve));
     assert.equal(mountedSurface(id), null, "the failed view registration mounted a native surface");
     assert.equal(slot.dataset.nativeSurfaceId, id, "the drawn layout no longer names the failed surface");
     assert.deepEqual(events.filter(({ event }) => event === "workbench.surface.mount.failed"), [{
@@ -619,13 +627,16 @@ test("a drawn wait records a listener failure before the native view is declared
     authorizeSurface(id);
     const retry = mountSurface(slot, surface);
     await heldCompositionStarted;
-    let drawnOutcome = null;
-    const retryDraw = page.drawn().then(() => { drawnOutcome = "ready"; }, (error) => { drawnOutcome = error; });
-    await new Promise((resolve) => setImmediate(resolve));
-    assert.equal(drawnOutcome, null, "a pending retry inherited the earlier failed attempt");
+    // The retry draws after the composition finished, and not with the earlier failed attempt. The draw runs in microtasks until it
+    // waits for the answer of the composition, so after the end of the microtask queue a draw that did not wait for it has ended.
+    const order = [];
+    const retryDraw = page.drawn().then(() => { order.push("ready"); }, (error) => { order.push(error); });
+    await drained();
+    assert.deepEqual(order, [], "the retry drew before its composition finished");
+    order.push("finished");
     finishComposition(null);
     await Promise.all([retry, retryDraw]);
-    assert.equal(drawnOutcome, "ready", "a successful retry did not replace the failed outcome");
+    assert.deepEqual(order, ["finished", "ready"], "a pending retry inherited the earlier failed attempt");
     await disposeSurface(id);
     await assert.rejects(page.drawn(), new RegExp(`surface ${id} is not mounted`),
       "normal disposal retained the completed mount registration");
@@ -642,7 +653,8 @@ test("removing a pre-readiness listener failure from the desired plane clears it
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
   let rejectProcessEnded;
-  let errorState = false;
+  let resolveErrorState;
+  const errorStateSeen = new Promise((resolve) => { resolveErrorState = resolve; });
   const actualHost = await import("../host.js");
   t.mock.module("../host.js", { exports: {
     ...actualHost,
@@ -677,11 +689,10 @@ test("removing a pre-readiness listener failure from the desired plane clears it
   });
   try {
     authorizeSurface(id);
-    const mounting = mountSurface(slot, surface, { onState: (state) => { if (state.phase === "error") errorState = true; } });
+    const mounting = mountSurface(slot, surface, { onState: (state) => { if (state.phase === "error") resolveErrorState(); } });
     rejectProcessEnded(new Error("listener failed before plane departure"));
-    while (!errorState) await new Promise((resolve) => setImmediate(resolve));
+    await errorStateSeen;
     await assert.rejects(mounting, /listener failed before plane departure/);
-    await new Promise((resolve) => setImmediate(resolve));
     await assert.rejects(page.drawn(), /listener failed before plane departure/);
     await disposeSurfacesExcept(new Set());
     await assert.rejects(page.drawn(), new RegExp(`surface ${id} is not mounted`));
@@ -731,6 +742,13 @@ test("a disposed pending listener setup cannot replace a newer attempt", { timeo
   const { mountSurface, authorizeSurface, disposeSurface, mountedSurface } = await import("../surface-modules.js?view-old-failure");
   const { createPageLayout } = await import("../page-layout.js?view-old-failure");
   const id = "fixture-view-old-failure";
+  // Resolves when the handler of the old listener failure reports it after the dispose.
+  const oldFailureReported = Promise.withResolvers();
+  const originalDispatchEvent = globalThis.dispatchEvent;
+  globalThis.dispatchEvent = (event) => {
+    if (event.message === "view listener registration after dispose: old disposed listener failed") oldFailureReported.resolve();
+    return originalDispatchEvent?.call(globalThis, event) ?? true;
+  };
   recordOrigin(id, null, "test fixture");
   registerPlugin({ id, surface: () => null });
   const slot = document.querySelector("#slot");
@@ -756,18 +774,18 @@ test("a disposed pending listener setup cannot replace a newer attempt", { timeo
     const newMount = mountSurface(slot, surface, { onState: (state) => { if (state.phase === "error") resolveErrorState(state); } });
     const current = mountedSurface(id);
     rejectOld(new Error("old disposed listener failed"));
-    await new Promise((resolve) => setImmediate(resolve));
+    await oldFailureReported.promise;
     assert.equal(mountedSurface(id), current, "an old listener failure removed the newer mounted attempt");
     assert.deepEqual(events.filter(({ event }) => event === "workbench.surface.mount.failed"), [],
       "a listener rejection after normal dispose was classified as a failed mount");
     rejectNew(new Error("new listener failed before readiness"));
     await errorReported;
     await assert.rejects(newMount, /new listener failed before readiness/);
-    await new Promise((resolve) => setImmediate(resolve));
     assert.equal(events.filter(({ event }) => event === "workbench.surface.mount.failed").at(-1)?.fields.attempt, 2,
       "the new mount failure was attributed to the old attempt");
     await assert.rejects(page.drawn(), /mount attempt 2 failed during mount: new listener failed before readiness/);
   } finally {
+    globalThis.dispatchEvent = originalDispatchEvent;
     await disposeSurface(id);
     dom.window.close();
   }

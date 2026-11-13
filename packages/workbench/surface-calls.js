@@ -18,7 +18,8 @@ import { pageIdentity } from "./page-identity.js";
  * `followPolicy()` puts the policy in force of the host in the gate of the document (docs/spec/logging.md#policy): the action
  * `policy-read` once and each later host event `log-policy`. The runtime calls it at the load of a document of a surface or a
  * modal; the main page puts the policy of its setting in the gate itself. Until the read answers, the default policy is in force;
- * an event that arrived first is newer than the read, so the read then changes nothing.
+ * an event that arrived first is newer than the read, so the read then changes nothing. It returns a promise that resolves when the
+ * read answered and its policy is in force, or its failure was reported.
  */
 export function surfaceCalls({ send, log, listen }) {
   const report = (error) => console.error(error.message);
@@ -34,7 +35,7 @@ export function surfaceCalls({ send, log, listen }) {
     followPolicy() {
       let announced = false;
       Promise.resolve(listen("log-policy", ({ classes }) => { announced = true; apply(classes); })).catch(report);
-      Promise.resolve(log({ action: "policy-read" })).then((answer) => { if (!announced) apply(answer?.classes); }).catch(report);
+      return Promise.resolve(log({ action: "policy-read" })).then((answer) => { if (!announced) apply(answer?.classes); }).catch(report);
     },
     call(name, ...args) {
       const started = performance.now();

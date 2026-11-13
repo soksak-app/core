@@ -57,11 +57,13 @@ async function harness(t, { refuse = new Set() } = {}) {
   const listeners = new Map();
   const calls = [];
   const sent = [];
+  // The order of the sidecar sends and of the marks that a check writes (order), in the order they happened.
+  const order = [];
   const actualHost = await import("../host.js");
   t.mock.module("../host.js", { exports: {
     ...actualHost,
     // The private view sidecar bridge records each send of a view that reaches a sidecar.
-    sendViewSidecar: async ({ body }) => { sent.push(body); return null; },
+    sendViewSidecar: async ({ body }) => { sent.push(body); order.push(["send", body.op]); return null; },
     native: true,
     documents,
     onSurfacePrepared: () => () => {},
@@ -95,7 +97,7 @@ async function harness(t, { refuse = new Set() } = {}) {
     await until(() => calls.some((call) => call.name === "viewReply" && call.payload.id === id));
     return calls.find((call) => call.name === "viewReply" && call.payload.id === id).payload;
   };
-  return { modules, calls, sent, deliver, viewCall, page: pageIdentity, slot: document.querySelector("#slot"), close: () => dom.window.close() };
+  return { modules, calls, sent, order, deliver, viewCall, page: pageIdentity, slot: document.querySelector("#slot"), close: () => dom.window.close() };
 }
 
 const expectedReply = (host, id, result) => ({ id, result, page: host.page, generation: 1 });
@@ -242,7 +244,7 @@ test("a tab state write that a view sent before its dispose and that runs after 
   // The write of a declaring view waits for the tab state store, so it runs after the dispose that starts at once.
   const late = h.deliver("tab.state.write", { page: 9 });
   await h.modules.disposeSurface(id, { mode: "unload" });
-  for (let turn = 0; turn < 10; turn += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+  await h.modules.viewCallsIdle();
   assert.deepEqual(h.calls.filter(({ name, payload }) => name === "viewReply" && payload.id === late), [],
     "a write that runs after the dispose was answered");
   assert.deepEqual(store.entry(id).state, { format: 2, value: { page: 1 } });
@@ -290,13 +292,13 @@ test("a region query of a view that a running place leaves out waits for the pla
     // The host closes the regions of the left-out view before its reply, so a query that starts now must not reach them.
     interaction = documentRegions.interaction(id);
     reasons = documentRegions.reasons(id);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.deepEqual(regionQueries, [], "a region query reached the host while the place that closes the region runs");
+    // The order list holds the place end before any query: a query that reached the host during the place is listed before it.
+    regionQueries.push(["placeEnd"]);
     return null;
   }, { retain: new Set() });
   assert.equal(await interaction, undefined);
   assert.deepEqual(await reasons, []);
-  assert.deepEqual(regionQueries, [], "a region query reached the regions of a released view");
+  assert.deepEqual(regionQueries, [["placeEnd"]], "a region query reached the regions of a released view or ran while the place ran");
   await disposeSurface(id);
   h.close();
 });
@@ -318,13 +320,14 @@ test("a region query of a view waits for a failed place that left the view out a
   let interaction;
   await assert.rejects(placeSurfaces(async () => {
     interaction = documentRegions.interaction(id);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.deepEqual(regionQueries, [], "a region query reached the host while the place that closes the region runs");
+    // The order list holds the place end before any query: a query that reached the host during the place is listed before it.
+    regionQueries.push(["placeEnd"]);
     throw failure;
   }, { retain: new Set() }), (error) => error === failure);
   // A failed place keeps the view and its regions, so the waiting query reads them.
   assert.deepEqual(await interaction, { page: "AAAA" });
-  assert.deepEqual(regionQueries, [["documentInteractionState", id, "page"]]);
+  assert.deepEqual(regionQueries, [["placeEnd"], ["documentInteractionState", id, "page"]],
+    "a region query reached the host while the place that closes the region runs");
   await disposeSurface(id);
   h.close();
 });
@@ -342,19 +345,20 @@ test("a sidecar send of a view waits for a failed place that leaves the view out
   let during;
   await assert.rejects(h.modules.placeSurfaces(async () => {
     during = h.viewCall("runtime.sidecar.send", send("input"));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.deepEqual(h.sent, [], "a sidecar send left while the place ran");
+    // The order list holds the place end before any send: a send that left during the place is listed before it.
+    h.order.push(["placeEnd"]);
     throw new Error("host.place refused the layout");
   }, { retain: new Set() }), /host.place refused the layout/);
   assert.equal((await during).error, undefined, "the held send was refused after the failed place");
   assert.deepEqual(h.sent.map(({ op }) => op), ["input"]);
+  assert.deepEqual(h.order, [["placeEnd"], ["send", "input"]], "a sidecar send left while the place ran");
   // The place ends the sidecar sessions of the view that it leaves out, so a send held by that place is not sent after it.
   assert.equal(await h.modules.placeSurfaces(async () => {
     h.deliver("runtime.sidecar.send", send("end"));
-    await new Promise((resolve) => setTimeout(resolve, 0));
     return "placed";
   }, { retain: new Set() }), "placed");
-  for (let turn = 0; turn < 10; turn += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+  // The held send ends cancelled, without a reply, when the place releases the view: viewCallsIdle waits for that end.
+  await h.modules.viewCallsIdle();
   assert.equal(h.modules.mountedSurface(id), null);
   assert.deepEqual(h.sent.map(({ op }) => op), ["input"], "a send reached the sidecar after the place ended its sessions");
   h.close();
@@ -366,15 +370,25 @@ test("a view mount that a dispose ends before its authorization resolves null an
   const id = "view-dispose-before-authorization";
   recordOrigin(id, null, "test fixture");
   seedSourceOrigins({ floor: 1, views: { [id]: 1 } });
+  // The mount puts the element of the surface into the slot before it waits for its authorization; the dispose follows that insertion.
+  const inserted = new Promise((resolve) => {
+    const observer = new h.slot.ownerDocument.defaultView.MutationObserver(() => {
+      if (!h.slot.querySelector(`[data-surface="${id}"]`)) return;
+      observer.disconnect();
+      resolve();
+    });
+    observer.observe(h.slot, { childList: true, subtree: true });
+  });
   const mounting = h.modules.mountSurface(h.slot, viewOf(id, "fixture-plain", false));
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await inserted;
   await h.modules.disposeSurface(id);
   assert.equal(h.slot.querySelector(`[data-surface="${id}"]`), null, "the surface was not removed before its authorization");
   // The mount ends only by its resolution, so the resolution is the event that the check waits for.
   const outcome = await mounting.then((value) => ({ value }), (error) => ({ error: error.message }));
   assert.deepEqual(outcome, { value: null }, "the mount that the dispose ended did not resolve");
+  // The resolution of the mount ends the only path that declares its composition, and the dispose dropped the authorization gate
+  // that the mount waited for, so the authorization after it reaches no mount.
   h.modules.authorizeSurface(id);
-  await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(h.calls.filter(({ name }) => name === "compositionDeclare").length, 0, "a disposed mount declared its composition");
   h.close();
 });
@@ -387,11 +401,11 @@ test("a view declares its composition only after the host authorizes its surface
   reports.recordOrigin(id, null, "test fixture");
   seedSourceOrigins({ floor: 1, views: { [id]: 1 } });
   const mounted = mountSurface(h.slot, viewOf(id, "fixture-plain", false));
-  await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.equal(h.calls.filter((call) => call.name === "compositionDeclare").length, 0, "the view declared before authorization");
+  const authorizedAt = h.calls.length;
   authorizeSurface(id);
   await mounted;
   await waitSurfaceCompositionDeclared(id);
+  assert.equal(h.calls.slice(0, authorizedAt).filter((call) => call.name === "compositionDeclare").length, 0, "the view declared before authorization");
   assert.equal(h.calls.filter((call) => call.name === "compositionDeclare").length, 1);
   await disposeSurface(id);
   h.close();
@@ -488,7 +502,6 @@ test("a later retained mount waits for the preceding placement release", { timeo
     await mountSurface(h.slot, viewOf(id, "fixture-plain", false));
   }, { retain: new Set([id]) });
   try {
-    await new Promise((resolve) => setImmediate(resolve));
     release();
     await Promise.all([previous, next]);
     assert.deepEqual(order, ["previous placed", "next prepare"]);

@@ -19,8 +19,10 @@ registry.declare("core", {
   element: [],
 });
 const calls = [];
-registry.command("core.fixture.press", (params) => { calls.push(["press", params]); return "pressed"; });
-registry.command("core.fixture.put", (params) => { calls.push(["put", params]); });
+// Each test sets onCall to the function that it waits for; the fakes call it with the parameters of every run.
+let onCall = () => {};
+registry.command("core.fixture.press", (params) => { calls.push(["press", params]); onCall(params); return "pressed"; });
+registry.command("core.fixture.put", (params) => { calls.push(["put", params]); onCall(params); });
 
 registry.declare("fixture", {
   status: [],
@@ -28,7 +30,6 @@ registry.declare("fixture", {
   element: [],
 });
 
-const settle = () => new Promise((resolve) => setImmediate(resolve));
 const event = (type) => new dom.window.Event(type, { bubbles: true });
 
 test("bind marks the element and runs the command with its parameters on click", async () => {
@@ -37,8 +38,9 @@ test("bind marks the element and runs the command with its parameters on click",
   document.body.append(button);
   assert.equal(button.dataset.command, "core.fixture.press");
   assert.deepEqual(JSON.parse(button.dataset.params), { id: "a" });
+  const pressed = new Promise((resolve) => { onCall = resolve; });
   button.click();
-  await settle();
+  await pressed;
   assert.deepEqual(calls, [["press", { id: "a" }]]);
 });
 
@@ -48,8 +50,9 @@ test("bind with a parameter function computes the parameters when the element is
   const button = bind(document.createElement("button"), "core.fixture.press", () => ({ id }));
   assert.equal(button.dataset.params, undefined);
   id = "second";
+  const pressed = new Promise((resolve) => { onCall = resolve; });
   button.click();
-  await settle();
+  await pressed;
   assert.deepEqual(calls, [["press", { id: "second" }]]);
 });
 
@@ -63,6 +66,8 @@ test("delegate runs clicks, changes, and live inputs of marked descendants with 
   root.append(press, field, live);
   document.body.append(root);
   delegate(root);
+  // The runs start in order and take the same path, so the live input's run is the last one that the clicks and changes start.
+  const liveRun = new Promise((resolve) => { onCall = (params) => { if (params.key === "live") resolve(); }; });
   press.click();
   field.value = "typed";
   field.dispatchEvent(event("input"));
@@ -70,7 +75,7 @@ test("delegate runs clicks, changes, and live inputs of marked descendants with 
   live.value = "now";
   live.dispatchEvent(event("input"));
   field.click();
-  await settle();
+  await liveRun;
   assert.deepEqual(calls, [
     ["press", { id: "b" }],
     ["put", { key: "k", text: "typed" }],

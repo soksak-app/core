@@ -21,6 +21,3 @@ export const withoutClock = (request) => (request?.action === "batch"
 
 /** The record as the line `<level> workbench <where>: <text>`. */
 export const shownRecord = (record) => `${record.level} workbench ${record.where}: ${record.text}`;
-
-/** Waits until the batches that the page queued in this turn were relayed. */
-export const settled = () => new Promise((resolve) => setImmediate(resolve));

@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { JSDOM } from "jsdom";
-import { clockAnswer, recordsOf, settled } from "./support/records.mjs";
+import { clockAnswer, recordsOf } from "./support/records.mjs";
 const emptySurfaceDeclarations = { status: [], commands: [], element: [] };
 
 test("a view surface carries its start values in the preparation and a surface without them carries none", async (t) => {
@@ -555,7 +555,8 @@ test("a view preparation notifies its prepared listeners, presents each ticket o
         await surfaces.place(changed);
         await assert.rejects(surfaces.place({ ...changed, drawn: true }), /injected presentSurfaces failure/);
       }
-      await settled();
+      // The page log that host.js loaded relays the records of the turn; a record of the rejection would be among them.
+      await (await import("../page-log.js")).flushEvents();
       assert.deepEqual(calls.flatMap((call) => recordsOf(call.name, call.request)), [],
         `the ${stage} rejection that the placing caller received was written again`);
       calls.length = 0;

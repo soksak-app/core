@@ -18,6 +18,8 @@ test("view placement waits for the latest host theme reply", { timeout: 5000 }, 
   globalThis.document = dom.window.document;
   const calls = [];
   const themeReplies = [];
+  let firstThemeSent;
+  const firstThemeStarted = new Promise((resolve) => { firstThemeSent = resolve; });
   let secondThemeSent;
   const secondThemeStarted = new Promise((resolve) => { secondThemeSent = resolve; });
   t.mock.module("../page-log.js", { namedExports: {
@@ -31,6 +33,7 @@ test("view placement waits for the latest host theme reply", { timeout: 5000 }, 
       calls.push({ name, request });
       if (name === "setTheme") return new Promise((resolve) => {
         themeReplies.push({ scheme: request.scheme, resolve });
+        if (request.scheme === "first") firstThemeSent();
         if (request.scheme === "second") secondThemeSent();
       });
       if (name === "syncSurfaces") return Promise.resolve(frame(request));
@@ -42,7 +45,7 @@ test("view placement waits for the latest host theme reply", { timeout: 5000 }, 
   try {
     const first = surfaces.theme({ scheme: "first", tokens: { "--bg": "#111" } });
     const placing = surfaces.place(viewRecord());
-    await Promise.resolve();
+    await firstThemeStarted;
     assert.deepEqual(calls.map(({ name }) => name), ["setTheme"], "the view placement started before the first theme reply");
 
     const second = surfaces.theme({ scheme: "second", tokens: { "--bg": "#222" } });
@@ -64,6 +67,8 @@ test("view placement rechecks the theme after its reply continuation", { timeout
   const calls = [];
   const order = [];
   const themeReplies = [];
+  let firstThemeSent;
+  const firstThemeStarted = new Promise((resolve) => { firstThemeSent = resolve; });
   let secondThemeSent;
   const secondThemeStarted = new Promise((resolve) => { secondThemeSent = resolve; });
   t.mock.module("../page-log.js", { namedExports: {
@@ -78,6 +83,7 @@ test("view placement rechecks the theme after its reply continuation", { timeout
       order.push(name);
       if (name === "setTheme") return new Promise((resolve) => {
         themeReplies.push({ scheme: request.scheme, resolve });
+        if (request.scheme === "first") firstThemeSent();
         if (request.scheme === "second") secondThemeSent();
       });
       if (name === "syncSurfaces") return Promise.resolve(frame(request));
@@ -89,7 +95,7 @@ test("view placement rechecks the theme after its reply continuation", { timeout
   try {
     const first = surfaces.theme({ scheme: "first", tokens: {} });
     const placing = surfaces.place(viewRecord());
-    await Promise.resolve();
+    await firstThemeStarted;
     assert.deepEqual(calls.map(({ name }) => name), ["setTheme"]);
 
     const second = first.then(() => {

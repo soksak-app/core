@@ -35,16 +35,22 @@ test("a layout published before drawing waits for the host's placement answer", 
   assert.deepEqual(prepared.viewport, { width: 1024, height: 768 }, "the prediction does not carry the viewport of its layout");
   assert.equal(placementPending(), true, "the current DOM commit is waiting for the host placement answer");
   let drawn = false;
-  pending.then(() => { drawn = true; });
-  await Promise.resolve();
-  assert.equal(drawn, false, "the DOM must wait while the native placement is outstanding");
+  // The order shows that the DOM drew only after the native placement answered: the answer is pushed right before it is given.
+  const order = [];
+  pending.then(() => { drawn = true; order.push("drawn"); });
   // A preparation is applied inside the layer transaction of the window and does not appear on screen before the commit. When a surface
   // whose position was measured is hidden, the visible surface on screen cannot receive input in the meantime (docs/spec/native-surfaces.md).
   assert.equal(prepared.surfaces[0].visible, true,
     "native preparation keeps a surface whose future slot was measured visible at its new rectangle");
   assert.deepEqual(prepared.surfaces[0].declared, { x: 22, y: 30, w: 176, h: 100 });
+  // One microtask passes before the answer: a draw that the fault starts on an already settled promise runs in the microtask queued by
+  // its then (above), which is queued before this continuation (FIFO order of microtasks).
+  await Promise.resolve();
+  order.push("answered");
   answer();
-  assert.deepEqual(await pending, [{ id: "surface", x: 22, y: 30, w: 176, h: 100 }]);
+  const placed = await pending;
+  assert.deepEqual(order, ["answered", "drawn"], "the DOM drew while the native placement was outstanding");
+  assert.deepEqual(placed, [{ id: "surface", x: 22, y: 30, w: 176, h: 100 }]);
   assert.equal(drawn, true);
   assert.equal(placementPending(), false, "the host answer seats the current commit");
 

@@ -8,7 +8,6 @@ import { JSDOM } from "jsdom";
 import { registerPlugin } from "../registry.js";
 
 const pluginId = "fixture-keyboard";
-const flush = () => new Promise((done) => setImmediate(done));
 
 /** The page over a host that records the keyboard calls. The modules hold their state for the whole file. */
 async function page() {
@@ -87,12 +86,11 @@ async function page() {
   const heldSurfaces = () => plane.currentGrid().cards.flatMap((card) => card.data.tabs.map((tab) => tab.id));
   /** Draws what a path changed and answers the placement, as the commit of the page does. */
   const placed = async () => {
-    await flush();
+    await keyboard.idle();
     plane.settle();
     held?.();
-    await flush();
-    keyboard.keyboardPlaced(shownSurfaces(), heldSurfaces());
-    await flush();
+    await keyboard.idle();
+    await keyboard.keyboardPlaced(shownSurfaces(), heldSurfaces());
   };
   const ringSurface = () => plane.currentGrid().card(plane.focused()).data.activeId;
   const openProject = () => {
@@ -107,7 +105,7 @@ async function page() {
     await placed();
     calls.length = 0;
   };
-  return { calls, decisions, ends, flush, focusAnswer, heldSurfaces, held: () => held, keyboard, modal, openProject, placed, plane,
+  return { calls, decisions, ends, idle: () => keyboard.idle(), focusAnswer, heldSurfaces, held: () => held, keyboard, modal, openProject, placed, plane,
     reset, ringSurface, shownSurfaces };
 }
 
@@ -131,7 +129,7 @@ const paths = {
   "restoring a space": async (b) => {
     const kept = b.plane.capture();
     b.plane.clear();
-    await b.flush();
+    await b.idle();
     b.calls.length = 0;
     b.plane.adopt(kept, "spc-aaaaaa");
     await b.placed();
@@ -183,15 +181,15 @@ const paths = {
   "closing a modal": async (b) => {
     b.modal.open = { id: "pickerLayer" };
     for (const fn of b.modal.listeners) fn();
-    await b.flush();
+    await b.idle();
     b.calls.length = 0;
     b.modal.open = null;
     for (const fn of b.modal.listeners) fn();
-    await b.flush();
+    await b.idle();
   },
   "AppKit moving the keyboard to the workbench": async (b) => {
     b.keyboard.keyboardResponder({ owner: "workbench" });
-    await b.flush();
+    await b.idle();
   },
 };
 
@@ -207,7 +205,7 @@ for (const [name, path] of Object.entries(paths)) {
 test("a surface that no placement shows yet takes the keyboard when a placement shows it", { timeout: 5000 }, async () => {
   await b.reset();
   const tab = b.plane.addTabTo(b.plane.focused(), pluginId, null);
-  await b.flush();
+  await b.idle();
   assert.ok(!b.calls.includes(tab.tab ?? tab), "the keyboard went to a surface that no placement shows");
   await b.placed();
   assert.equal(b.calls.at(-1), b.ringSurface());
@@ -222,7 +220,7 @@ test("a press on a tab whose surface the host holds sends the call before the pl
   b.calls.length = 0;
   const tab = tabElement(hidden);
   press(tab, "pointerdown");
-  await b.flush();
+  await b.idle();
   assert.deepEqual(b.calls, [hidden], "the keyboard call of the press waited for the placement");
   press(tab, "pointerup");
   await b.placed();
@@ -232,7 +230,7 @@ test("each decision of the keyboard is recorded with its cause", { timeout: 5000
   await b.reset();
   const before = b.ringSurface();
   b.plane.addTabTo(b.plane.focused(), pluginId, null);
-  await b.flush();
+  await b.idle();
   const added = b.ringSurface();
   assert.deepEqual(b.decisions.at(-1), { level: "debug", cause: "ring", target: added, sent: before, owed: true, decided: false, decision: "wait" },
     "the new tab waits for the placement that holds it");
@@ -240,7 +238,7 @@ test("each decision of the keyboard is recorded with its cause", { timeout: 5000
   assert.equal(b.decisions.at(-1).cause, "placed");
   assert.equal(b.decisions.at(-1).decision, "send");
   b.keyboard.keyboardResponder({ owner: "workbench" });
-  await b.flush();
+  await b.idle();
   assert.deepEqual(b.decisions.at(-1), { level: "debug", cause: "responder", target: added, sent: added, owed: true, decided: false, decision: "send" });
 });
 
@@ -277,7 +275,7 @@ test("a release while the ring is on a surface that the host does not hold decid
   await b.reset();
   const before = b.ringSurface();
   b.plane.addTabTo(b.plane.focused(), pluginId, null);
-  await b.flush();
+  await b.idle();
   const added = b.ringSurface();
   b.ends.length = 0;
   b.calls.length = 0;
@@ -294,7 +292,7 @@ test("a release while a keyboard call has no answer sends its decided call", { t
   await b.reset();
   const release = holdFocus();
   b.plane.focusCard(otherCard(b));
-  await b.flush();
+  await b.idle();
   b.ends.length = 0;
   press(document.body, "pointerdown");
   press(document.body, "pointerup");
@@ -307,7 +305,7 @@ test("a release while a modal is open decides for the ring and the modal keeps t
   await b.reset();
   b.modal.open = { id: "pickerLayer" };
   for (const fn of b.modal.listeners) fn();
-  await b.flush();
+  await b.idle();
   b.ends.length = 0;
   b.calls.length = 0;
   press(document.body, "pointerdown");
@@ -316,7 +314,7 @@ test("a release while a modal is open decides for the ring and the modal keeps t
   assert.equal(b.decisions.at(-1).decision, "modal");
   b.modal.open = null;
   for (const fn of b.modal.listeners) fn();
-  await b.flush();
+  await b.idle();
   assert.equal(b.calls.at(-1), b.ringSurface(), "the close of the modal did not give the keyboard back to the ring");
 });
 
@@ -337,14 +335,14 @@ test("a modal keeps the keyboard until it closes", { timeout: 5000 }, async () =
   assert.deepEqual(b.calls, [], "the workbench moved the keyboard out of an open modal");
   b.modal.open = null;
   for (const fn of b.modal.listeners) fn();
-  await b.flush();
+  await b.idle();
   assert.equal(b.calls.at(-1), b.ringSurface());
 });
 
 test("the library keeps the keyboard with the workbench", { timeout: 5000 }, async () => {
   await b.reset();
   b.plane.clear();
-  await b.flush();
+  await b.idle();
   assert.deepEqual(b.calls, [null]);
 });
 
@@ -355,7 +353,7 @@ test("a card without a surface leaves the keyboard with the workbench", { timeou
   const orphan = { ...card.data.tabs[0], id: "tab-orphan", plugin: missing };
   b.plane.currentGrid().setData(card.id, { tabs: [...card.data.tabs, orphan], activeId: orphan.id });
   b.plane.focusCard(card.id);
-  await b.flush();
+  await b.idle();
   assert.equal(b.calls.at(-1), null);
 });
 
@@ -365,14 +363,14 @@ test("an editable element of the workbench holds the keyboard while it has the f
   document.body.appendChild(input);
   b.calls.length = 0;
   input.focus();
-  await b.flush();
+  await b.idle();
   assert.deepEqual(b.calls, [null], "the rename field did not take the keyboard");
   b.keyboard.keyboardResponder({ owner: "workbench" });
-  await b.flush();
+  await b.idle();
   assert.deepEqual(b.calls, [null], "the workbench took the keyboard from its own field");
   input.blur();
   input.remove();
-  await b.flush();
+  await b.idle();
   assert.equal(b.calls.at(-1), b.ringSurface());
 });
 
@@ -383,10 +381,10 @@ test("a press on a tab leaves no element focus, and the Tab key keeps its stop",
   // The Tab key moves the focus without a press, and a first responder in the workbench does not take that stop away.
   tab.tabIndex = 0;
   tab.focus();
-  await b.flush();
+  await b.idle();
   b.calls.length = 0;
   b.keyboard.keyboardResponder({ owner: "workbench" });
-  await b.flush();
+  await b.idle();
   assert.deepEqual(b.calls, []);
   assert.equal(document.activeElement, tab);
 });
@@ -424,13 +422,13 @@ function holdFocus() {
 
 /** Answers a drawn placement and tells whether the placement ended before the host answered the keyboard call. */
 async function placementEnd() {
-  await b.flush();
+  await b.idle();
   b.plane.settle();
   b.held()?.();
-  await b.flush();
+  await b.idle();
   let ended = false;
   const end = Promise.resolve(b.keyboard.keyboardPlaced(b.shownSurfaces(), b.heldSurfaces())).then(() => { ended = true; });
-  await b.flush();
+  await b.idle();
   return { end, ended: () => ended };
 }
 
@@ -449,7 +447,7 @@ test("a placement ends when the host answered the keyboard call that went before
   await b.reset();
   const release = holdFocus();
   b.plane.focusCard(otherCard(b));
-  await b.flush();
+  await b.idle();
   assert.equal(b.calls.at(-1), b.ringSurface(), "the move of the ring sent no keyboard call ahead of the placement");
   const { end, ended } = await placementEnd();
   assert.equal(ended(), false, "the placement ended before the host answered the keyboard call");

@@ -2,7 +2,7 @@
 // reloads its own window still answers (docs/spec/installation.md#applying-a-change).
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
-import { clockAnswer, settled } from "./support/records.mjs";
+import { clockAnswer } from "./support/records.mjs";
 
 const handlers = new Map();
 const calls = [];
@@ -13,6 +13,7 @@ mock.module("@soksak/runtime", { namedExports: { host: {
 } } });
 const { connectExposure, registry, whenRepliesSent } = await import("../exposure.js");
 const { logGate } = await import("../log-gate.js");
+const { flushEvents } = await import("../page-log.js");
 // The events below the level error are stored only in the debug state (docs/spec/settings.md, the section of core.settings.debug), which these tests
 // examine, so the state of every class at trace is set here.
 logGate.set({ lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" });
@@ -23,12 +24,14 @@ test("whenRepliesSent resolves after the reply of a running command request is s
     params: { type: "object", properties: {} }, result: { type: "null" },
   }] });
   let release;
-  registry.command("core.fixture.wait", () => new Promise((resolve) => { release = resolve; }));
+  let started;
+  const running = new Promise((resolve) => { started = resolve; });
+  registry.command("core.fixture.wait", () => new Promise((resolve) => { release = resolve; started(); }));
   await connectExposure({ settled: async () => {}, report: () => {} });
   handlers.get("exposure-request")({ id: 7, method: "command.run", params: { name: "core.fixture.wait", params: {} } });
   let sent = false;
   const waiting = whenRepliesSent().then(() => { sent = calls.some(([name, payload]) => name === "exposureReply" && payload.id === 7); });
-  await new Promise((resolve) => setImmediate(resolve));
+  await running;
   assert.equal(calls.some(([name]) => name === "exposureReply"), false, "the command answered before the test released it");
   release(null);
   await waiting;
@@ -47,7 +50,8 @@ test("a command request is the event workbench.command with its name, duration a
   handlers.get("exposure-request")({ id: 21, method: "command.run", params: { name: "core.fixture.fine", params: {} } });
   handlers.get("exposure-request")({ id: 22, method: "command.run", params: { name: "core.fixture.broken", params: {} } });
   await whenRepliesSent();
-  await settled();
+  // The events of both commands are queued before their replies, so the promise of flushEvents covers their relay.
+  await flushEvents();
   const events = calls.filter(([name]) => name === "log").flatMap(([, payload]) => payload.events ?? []).filter(({ event }) => event === "workbench.command");
   // An event is stored when its command ends, so the order is the order of the ends.
   assert.deepEqual(events.map(({ level, fields }) => [level, fields.name, fields.ok, fields.error]).sort((a, b) => a[1].localeCompare(b[1])), [

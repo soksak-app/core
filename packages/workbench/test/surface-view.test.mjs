@@ -6,6 +6,7 @@ import { endSourceOrigin, registerSourceOrigin, seedSourceOrigins, sourceOrigin 
 import { recordOrigin } from "../tab-reports.js";
 import { setSurfaceTextSize } from "../text-size.js";
 import { pageIdentity } from "../page-identity.js";
+import { drained } from "./support/drained.mjs";
 
 setSurfaceTextSize(() => 1);
 
@@ -68,7 +69,7 @@ test("a queued view call from a retired source generation does not reach the rep
       } } };
     },
   } });
-  const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-source-generation");
+  const { mountSurface, authorizeSurface, disposeSurface , viewCallsIdle } = await import("../surface-modules.js?view-source-generation");
   const pluginId = "fixture-generation-plugin";
   const surfaceId = "fixture-generation-surface";
   recordOrigin(surfaceId, null, "test fixture");
@@ -79,11 +80,11 @@ test("a queued view call from a retired source generation does not reach the rep
     seedViewSource(pluginId, surfaceId);
     await mountSurface(document.querySelector("#slot"), surface);
     listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, generation: 1, id: 1, command: "runtime.settings.read", params: null });
-    await new Promise((resolve) => setImmediate(resolve));
+    await viewCallsIdle();
     assert.deepEqual(replies, [], "the old view call reached the replacement command layer");
 
     listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, generation: 2, id: 2, command: "runtime.settings.read", params: null });
-    await new Promise((resolve) => setImmediate(resolve));
+    await viewCallsIdle();
     assert.deepEqual(replies, [{ id: 2, result: {}, page: pageOf(dom), generation: 2 }], "the current view call did not reply with its source identity");
   } finally {
     await disposeSurface(surfaceId);
@@ -121,7 +122,7 @@ test("a view mount waits for its actual source registration before serving the f
       } } };
     },
   } });
-  const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = await import("../surface-modules.js?view-delayed-source-origin");
+  const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared , viewCallsIdle } = await import("../surface-modules.js?view-delayed-source-origin");
   const pluginId = "fixture-view-delayed-origin";
   const surfaceId = "fixture-view-delayed-origin-surface";
   recordOrigin(surfaceId, null, "test fixture");
@@ -134,7 +135,7 @@ test("a view mount waits for its actual source registration before serving the f
     await waitSurfaceCompositionDeclared(surfaceId);
     assert.equal(calls.some(({ name }) => name === "viewRequest"), false, "mount invented a view command generation");
     listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, generation: 1, id: 1, command: "runtime.settings.read", params: null });
-    await new Promise((resolve) => setImmediate(resolve));
+    await viewCallsIdle();
     assert.deepEqual(replies, [], "an unregistered generation was served");
     assert.equal(registerSourceOrigin(pluginId, surfaceId, 1), true, "the native source registration was not accepted");
     assert.equal(endSourceOrigin(pluginId, surfaceId, 1), true, "the source end did not retire its exact generation");
@@ -143,7 +144,7 @@ test("a view mount waits for its actual source registration before serving the f
     assert.equal(registerSourceOrigin(pluginId, surfaceId, 2), true, "the replacement source registration was not accepted");
     listeners.get("view-process-ended")({ surface: surfaceId, plugin: pluginId, generation: 1 });
     listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, generation: 2, id: 2, command: "runtime.settings.read", params: null });
-    await new Promise((resolve) => setImmediate(resolve));
+    await viewCallsIdle();
     assert.deepEqual(replies, [{ id: 2, result: {}, page: pageOf(dom), generation: 2 }], "the first current call was not served after actual registration");
   } finally {
     await disposeSurface(surfaceId);
@@ -270,7 +271,11 @@ test("a view declares its composition only after native call listeners are ready
       } } };
     },
   } });
-  t.mock.module("../environment.js", { exports: { ...actualEnvironment, pluginDiagnostics: async () => null } });
+  let diagnosticsCalled;
+  const diagnosticsStarted = new Promise((resolve) => { diagnosticsCalled = resolve; });
+  let releaseDiagnostics;
+  const diagnostics = new Promise((resolve) => { releaseDiagnostics = resolve; });
+  t.mock.module("../environment.js", { exports: { ...actualEnvironment, pluginDiagnostics: () => { diagnosticsCalled(); return diagnostics; } } });
   const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = await import("../surface-modules.js?view-listener-ready");
   const pluginId = "fixture-view-listener-ready";
   const surfaceId = "fixture-view-listener-ready-surface";
@@ -283,13 +288,18 @@ test("a view declares its composition only after native call listeners are ready
     mounting = mountSurface(document.querySelector("#slot"), surface);
     authorizeSurface(surfaceId);
     await viewCallRegistration;
-    await new Promise((resolve) => setImmediate(resolve));
-    assert.equal(calls.some(({ name }) => name === "compositionDeclare"), false,
-      "composition was declared before the native view-call listener registration settled");
-
+    await diagnosticsStarted;
+    // The mount awaits the diagnostics before it awaits the listener registrations. This test waits on the same promise after the
+    // mount's continuation, so the mount's continuation runs first (FIFO microtasks) and the mark follows any declaration it makes.
+    releaseDiagnostics(null);
+    await diagnostics;
+    // The registrations settle after this mark: a declaration recorded before the mark came before their settlement.
+    const settledAt = calls.length;
     for (const finish of registrations.splice(0)) finish();
     await mounting;
     await waitSurfaceCompositionDeclared(surfaceId);
+    assert.equal(calls.slice(0, settledAt).some(({ name }) => name === "compositionDeclare"), false,
+      "composition was declared before the native view-call listener registration settled");
     assert.ok(listeners.has("view-call"), "view-call listener was not ready when composition was declared");
     assert.ok(listeners.has("view-reply"), "view-reply listener was not ready when composition was declared");
     const call = listeners.get("view-call");
@@ -391,13 +401,15 @@ test("a page-start view waits for the initial project context and a disposed pre
     seedSourceOrigins({ floor: 1, views: { [disposedId]: 1, [currentId]: 1 } });
     authorizeSurface(disposedId);
     obsoleteMount = mountSurface(document.querySelector("#slot"), surface(disposedId));
-    await new Promise((resolve) => setImmediate(resolve));
-    assert.equal(calls.some(({ name }) => name === "compositionDeclare"), false,
-      "the startup preview declared native composition before projectShown committed the project root");
 
     await disposeSurface(disposedId);
     authorizeSurface(currentId);
     currentMount = mountSurface(document.querySelector("#slot"), surface(currentId));
+    // The mount runs in microtasks until it waits for the project context, so after the end of the microtask queue a mount that
+    // did not wait for it has declared its composition.
+    await drained();
+    assert.equal(calls.some(({ name }) => name === "compositionDeclare"), false,
+      "the startup preview declared native composition before projectShown committed the project root");
     commitProject({ id: "prj-startup", root: "/work/startup" });
     await obsoleteMount;
     await currentMount;
@@ -574,7 +586,7 @@ test("a view call writes receipt and reply records with its source generation", 
   const emitted = [];
   const actualPageLog = await import("../page-log.js");
   t.mock.module("../page-log.js", { exports: { ...actualPageLog, emitEvent: (level, event, fields) => emitted.push({ level, event, fields }) } });
-  const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-records");
+  const { mountSurface, authorizeSurface, disposeSurface , viewCallsIdle } = await import("../surface-modules.js?view-records");
   const pluginId = "fixture-records-view";
   const surfaceId = "fixture-records-view-surface";
   recordOrigin(surfaceId, null, "test fixture");
@@ -586,9 +598,9 @@ test("a view call writes receipt and reply records with its source generation", 
     seedViewSource(pluginId, surfaceId);
     await mountSurface(document.querySelector("#slot"), surface, { onState: () => {} });
     listeners.get("view-call")({ generation: 1, id: 7, command: "runtime.settings.read", params: null });
-    // The reply is sent after the call has settled, so the test waits for the viewReply call.
+    // The reply is sent after the call has settled, and the emitted reply record follows the send: viewCallsIdle waits for both.
     await replyArrived;
-    await new Promise((resolve) => setImmediate(resolve));
+    await viewCallsIdle();
     assert.deepEqual(emitted.filter(({ event }) => event === "workbench.view.call"), [{ level: "debug", event: "workbench.view.call",
       fields: { plugin: pluginId, surface: surfaceId, generation: 1, id: 7, command: "runtime.settings.read" } }]);
     assert.deepEqual(emitted.filter(({ event }) => event === "workbench.view.reply"), [{ level: "debug", event: "workbench.view.reply",
@@ -633,7 +645,7 @@ test("a view subscription to the text size resolves with a result", { timeout: 5
   const emitted = [];
   const actualPageLog = await import("../page-log.js");
   t.mock.module("../page-log.js", { exports: { ...actualPageLog, emitEvent: (level, event, fields) => emitted.push({ level, event, fields }) } });
-  const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-text-size");
+  const { mountSurface, authorizeSurface, disposeSurface , viewCallsIdle } = await import("../surface-modules.js?view-text-size");
   const pluginId = "fixture-text-size-view";
   const surfaceId = "fixture-text-size-view-surface";
   recordOrigin(surfaceId, null, "test fixture");
@@ -646,7 +658,7 @@ test("a view subscription to the text size resolves with a result", { timeout: 5
     await mountSurface(document.querySelector("#slot"), surface, { onState: () => {} });
     listeners.get("view-call")({ id: 8, command: "runtime.textSize.on", params: null });
     await replyArrived;
-    await new Promise((resolve) => setImmediate(resolve));
+    await viewCallsIdle();
     assert.deepEqual(emitted.filter(({ event }) => event === "workbench.view.reply"), [{ level: "debug", event: "workbench.view.reply",
       fields: { plugin: pluginId, surface: surfaceId, generation: 1, id: 8, outcome: "result" } }]);
     assert.deepEqual(replies.map(({ id, result }) => ({ id, result })), [{ id: 8, result: null }]);
@@ -675,7 +687,7 @@ test("a view watch of a core status delivers the value and the changes of the co
         listeners.set(name, listener);
         return () => {};
       }, call: async (name, payload) => {
-        if (name === "viewEvent" && payload.event === "status") events.push(payload.data);
+        if (name === "viewEvent" && payload.event === "status") { events.push(payload.data); recorded(); }
         return null;
       } } };
     },
@@ -693,17 +705,15 @@ test("a view watch of a core status delivers the value and the changes of the co
   registerPlugin({ id: pluginId, surface: () => null });
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], element: [] }, sidecars: [],
     composition: { kind: "view", page: "ui/page.html" } };
-  const settle = () => new Promise((resolve) => setImmediate(resolve));
   try {
     authorizeSurface(surfaceId);
     seedViewSource(pluginId, surfaceId);
     await mountSurface(document.querySelector("#slot"), surface, { onState: () => {} });
     listeners.get("view-call")({ id: 9, command: "runtime.status.watch", params: { name } });
-    await settle();
-    await settle();
+    await until(() => events.length >= 1);
     grid = { cards: ["a", "b"] };
     for (const fn of gridListeners) fn(grid);
-    await settle();
+    await until(() => events.length >= 2);
     assert.deepEqual(events, [{ name, value: { cards: ["a"] } }, { name, value: { cards: ["a", "b"] } }],
       `the view received ${JSON.stringify(events)}`);
   } finally {
@@ -1007,7 +1017,7 @@ test("a view process end removes its status registrations and preserves replacem
     });
   });
   // The registry notifies its registration listeners after each change, so the registration is awaited by its change.
-  const settleRegistration = (present) => {
+  const untilRegistration = (present) => {
     const stop = registry.onRegistrationChange(recorded);
     return until(() => registry.registrants("status", statusId).includes(surfaceId) === present).finally(stop);
   };
@@ -1016,18 +1026,18 @@ test("a view process end removes its status registrations and preserves replacem
     seedViewSource(pluginId, surfaceId, 1);
     await mountSurface(document.querySelector("#slot"), surface);
     registerStatus(1, 1);
-    await settleRegistration(true);
+    await untilRegistration(true);
 
     assert.equal(endSourceOrigin(pluginId, surfaceId, 1), true, "the current source generation did not end");
     assert.deepEqual(registry.registrants("status", statusId), [], "the ended view registration remained available before process-end cleanup");
     assert.deepEqual(registrationObservations.at(-1), { registrants: [], generation: undefined }, "observers saw an ended generation with a live registration");
     listeners.get("view-process-ended")({ surface: surfaceId, plugin: pluginId, generation: 1 });
-    await settleRegistration(false);
+    await untilRegistration(false);
     assert.equal(sourceOrigin(pluginId, surfaceId), undefined, "the ended generation remains current");
 
     assert.equal(registerSourceOrigin(pluginId, surfaceId, 2), true, "the replacement source generation did not register");
     registerStatus(2, 2);
-    await settleRegistration(true);
+    await untilRegistration(true);
 
     assert.equal(endSourceOrigin(pluginId, surfaceId, 1), false, "a delayed old end retired the replacement generation");
     listeners.get("view-process-ended")({ surface: surfaceId, plugin: pluginId, generation: 1 });
@@ -1076,7 +1086,7 @@ test("the dispose of a view removes its registrations before the same surface is
   const registerStatus = (id) => listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, generation: 1, id,
     command: "runtime.native.call", params: { name: "registered", payload: { kind: "status", name: statusId } } });
   // The registry notifies its registration listeners after each change, so the registration is awaited by its change.
-  const settleRegistration = (present) => {
+  const untilRegistration = (present) => {
     const stop = registry.onRegistrationChange(recorded);
     return until(() => registry.registrants("status", statusId).includes(surfaceId) === present).finally(stop);
   };
@@ -1085,7 +1095,7 @@ test("the dispose of a view removes its registrations before the same surface is
     seedViewSource(pluginId, surfaceId, 1);
     await mountSurface(document.querySelector("#slot"), surface);
     registerStatus(1);
-    await settleRegistration(true);
+    await untilRegistration(true);
 
     await disposeSurface(surfaceId);
     assert.equal(sourceOrigin(pluginId, surfaceId), 1, "the view process of the fixture ended with the dispose");
@@ -1096,7 +1106,7 @@ test("the dispose of a view removes its registrations before the same surface is
     authorizeSurface(surfaceId);
     await mountSurface(document.querySelector("#slot"), surface);
     registerStatus(2);
-    await settleRegistration(true);
+    await untilRegistration(true);
     assert.deepEqual(registry.registrants("status", statusId), [surfaceId], "the next mount did not register again");
   } finally {
     await disposeSurface(surfaceId);
@@ -1195,14 +1205,13 @@ test("a view sends only to a sidecar its surface declares and a send to another 
       };
     },
   } });
-  const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-sidecar");
+  const { mountSurface, authorizeSurface, disposeSurface , viewCallsIdle } = await import("../surface-modules.js?view-sidecar");
   const pluginId = "fixture-view-sidecar";
   const surfaceId = "fixture-view-sidecar-surface";
   recordOrigin(surfaceId, null, "test fixture");
   registerPlugin({ id: pluginId, surface: () => null });
   const composition = { kind: "view", page: "ui/page.html" };
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], element: [] }, sidecars: ["fixture-sidecar"], composition };
-  const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
   const sendFrom = (id, sidecar) => listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, id, command: "runtime.sidecar.send",
     params: { id: surfaceId, sidecar, body: { n: id }, cids: [] } });
   try {
@@ -1210,12 +1219,12 @@ test("a view sends only to a sidecar its surface declares and a send to another 
     seedViewSource(pluginId, surfaceId);
     await mountSurface(document.querySelector("#slot"), surface);
     sendFrom(1, "other-sidecar");
-    await settle();
+    await viewCallsIdle();
     assert.deepEqual(replies.at(-1), { id: 1, error: { code: -32000, message: `surface ${surfaceId} cannot send to sidecar other-sidecar` }, page: pageOf(dom), generation: 1 },
       "a send to an undeclared sidecar was not refused with its reason");
     assert.deepEqual(sent, [], "a send to an undeclared sidecar reached a sidecar");
     sendFrom(2, "fixture-sidecar");
-    await settle();
+    await viewCallsIdle();
     assert.deepEqual(replies.at(-1), { id: 2, result: null, page: pageOf(dom), generation: 1 }, "a send to the declared sidecar was refused");
     assert.deepEqual(sent, [{ id: surfaceId, body: { n: 2 }, cids: [] }]);
   } finally {
@@ -1262,7 +1271,7 @@ test("the region calls of a view run the page operations of its surface", { time
   const composition = { kind: "view", page: "ui/page.html", regions: [{ name: "doc", kind: "document", input: "native" }], overlays: [] };
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], element: [] }, sidecars: [], composition };
   const replies = () => calls.filter(({ name }) => name === "viewReply").map(({ payload }) => payload);
-  const settle = (count) => until(() => replies().length >= count);
+  const untilReplies = (count) => until(() => replies().length >= count);
   try {
     authorizeSurface(surfaceId);
     seedViewSource(pluginId, surfaceId);
@@ -1270,10 +1279,10 @@ test("the region calls of a view run the page operations of its surface", { time
     const call = listeners.get("view-call");
     call({ surface: surfaceId, plugin: pluginId, id: 1, command: "composition.declaration", params: null });
     call({ surface: surfaceId, plugin: pluginId, id: 2, command: "document.attach", params: { name: "doc", surface: "other" } });
-    await settle(2);
+    await untilReplies(2);
     call({ surface: surfaceId, plugin: pluginId, id: 3, command: "composition.place", params: {
       regions: [{ name: "doc", left: 1, top: 2, right: 3, bottom: 4, visible: true }], overlays: [] } });
-    await settle(3);
+    await untilReplies(3);
     assert.deepEqual(replies(), [
       { id: 1, result: { kind: "view", regions: composition.regions, overlays: [] }, page: pageOf(dom), generation: 1, surface: surfaceId },
       { id: 2, result: { history: false }, page: pageOf(dom), generation: 1, surface: surfaceId },
@@ -1329,13 +1338,13 @@ test("a view process end forgets the regions that its surface attached", { timeo
   const composition = { kind: "view", page: "ui/page.html", regions: [{ name: "doc", kind: "document", input: "native" }], overlays: [] };
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], element: [] }, sidecars: [], composition };
   const replies = () => calls.filter(({ name }) => name === "viewReply").map(({ payload }) => payload);
-  const settle = (count) => until(() => replies().length >= count);
+  const untilReplies = (count) => until(() => replies().length >= count);
   try {
     authorizeSurface(surfaceId);
     seedViewSource(pluginId, surfaceId);
     await mountSurface(document.querySelector("#slot"), surface);
     listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, id: 1, command: "document.attach", params: { name: "doc" } });
-    await settle(1);
+    await untilReplies(1);
     assert.deepEqual(documentRegions.tabs(), [surfaceId], "the attached region is recorded before the process end");
     const ended = listeners.get("view-process-ended");
     assert.ok(ended, "the view subscribes to view-process-ended");
@@ -1404,7 +1413,7 @@ test("a view process end cancels its pending work across restart and accepts new
   } });
   const actualPageLog = await import("../page-log.js");
   t.mock.module("../page-log.js", { exports: { ...actualPageLog, emitEvent: (level, event, fields) => emitted.push({ level, event, fields }) } });
-  const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-process-end-pending-work");
+  const { mountSurface, authorizeSurface, disposeSurface , viewCallsIdle } = await import("../surface-modules.js?view-process-end-pending-work");
   const pluginId = "fixture-view-process-generation";
   const surfaceId = "fixture-view-process-generation-surface";
   recordOrigin(surfaceId, null, "test fixture");
@@ -1413,14 +1422,14 @@ test("a view process end cancels its pending work across restart and accepts new
     sidecars: ["fixture-sidecar"], composition: { kind: "view", page: "ui/page.html" } };
   const routes = () => calls.filter(({ name }) => name === "viewSidecarRoute")
     .map(({ payload }) => ({ generation: payload.generation, sidecar: payload.sidecar, id: payload.id, on: payload.on }));
-  const settle = (condition) => until(condition);
+  const untilCondition = (condition) => until(condition);
   try {
     authorizeSurface(surfaceId);
     seedViewSource(pluginId, surfaceId);
     await mountSurface(document.querySelector("#slot"), surface);
     const call = nativeListeners.get("view-call");
     call({ generation: 1, id: 10, command: "runtime.sidecar.on", params: { id: "probe", sidecar: "fixture-sidecar" } });
-    await settle(() => replies.some(({ id }) => id === 10));
+    await untilCondition(() => replies.some(({ id }) => id === 10));
     call({ generation: 1, id: 11, command: "runtime.sidecar.send", params: { id: surfaceId, sidecar: "fixture-sidecar", body: { id: "old" } } });
     await oldSendStartedPromise;
     const ended = nativeListeners.get("view-process-ended");
@@ -1431,10 +1440,10 @@ test("a view process end cancels its pending work across restart and accepts new
 
     // A restarted document sends a new subscription before the old call settles.
     call({ surface: surfaceId, generation: 2, id: 12, command: "runtime.sidecar.on", params: { id: "probe", sidecar: "fixture-sidecar" } });
-    await settle(() => replies.some(({ id }) => id === 12));
+    await untilCondition(() => replies.some(({ id }) => id === 12));
     newDocumentReady = true;
     resolveOldSend(null);
-    await new Promise((resolve) => setImmediate(resolve));
+    await viewCallsIdle();
 
     assert.deepEqual({
       staleReplies: replies.filter(({ id }) => id === 11),
@@ -1471,6 +1480,7 @@ test("a view surface mounted again after its dispose registers its port while th
   // The registration of view-call settles only when the test releases it, as a native listener does under load.
   let attempt = 0;
   const releases = [];
+  const lateListenerRemoved = Promise.withResolvers();
   const activeListeners = new Set();
   const actualHost = await import("../host.js");
   t.mock.module("../host.js", { exports: {
@@ -1481,13 +1491,17 @@ test("a view surface mounted again after its dispose registers its port while th
       const runtime = actualHost.surfaceContextRuntime(surface, declarations);
       return { ...runtime, native: { ...runtime.native, on: (name, listener) => {
         const key = `${attempt}:${name}`;
+        const mountAttempt = attempt;
         if (name !== "view-call") {
           activeListeners.add(key);
           return Promise.resolve(() => activeListeners.delete(key));
         }
         return new Promise((resolve) => releases.push(() => {
           activeListeners.add(key);
-          resolve(() => activeListeners.delete(key));
+          resolve(() => {
+            activeListeners.delete(key);
+            if (mountAttempt === 1) lateListenerRemoved.resolve();
+          });
         }));
       }, call: async () => null } };
     },
@@ -1518,7 +1532,7 @@ test("a view surface mounted again after its dispose registers its port while th
     await waitSurfaceCompositionDeclared(surfaceId);
     assert.ok(activeListeners.has("2:view-call"), "the replacement composition did not wait for its own listener");
     releases[0]();
-    await new Promise((resolve) => setImmediate(resolve));
+    await lateListenerRemoved.promise;
     assert.deepEqual([...activeListeners].filter((key) => key.endsWith(":view-call")), ["2:view-call"],
       "the late listener of the disposed mount stayed active or removed the replacement listener");
   } finally {
@@ -1636,7 +1650,7 @@ test("closing a view cancels a pending call reply and removes its sidecar route"
   const previousDispatch = globalThis.dispatchEvent;
   globalThis.ErrorEvent = dom.window.ErrorEvent;
   globalThis.dispatchEvent = (event) => { reported.push(event.message); recorded(); return true; };
-  const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-close-pending-delivery");
+  const { mountSurface, authorizeSurface, disposeSurface , viewCallsIdle } = await import("../surface-modules.js?view-close-pending-delivery");
   const pluginId = "fixture-close-pending-view";
   const surfaceId = "fixture-close-pending-surface";
   recordOrigin(surfaceId, null, "test fixture");
@@ -1649,13 +1663,13 @@ test("closing a view cancels a pending call reply and removes its sidecar route"
     await mountSurface(document.querySelector("#slot"), surface);
     const call = listeners.get("view-call");
     call({ generation: 1, id: 10, command: "runtime.sidecar.on", params: { id: "probe", sidecar: "fixture-sidecar" } });
-    await new Promise((resolve) => setImmediate(resolve));
+    await viewCallsIdle();
     call({ generation: 1, id: 11, command: "runtime.sidecar.send", params: { id: surfaceId, sidecar: "fixture-sidecar", body: { n: 2 } } });
     await sendStartedPromise;
     await disposeSurface(surfaceId);
     ended = true;
     resolveSend(null);
-    await new Promise((resolve) => setImmediate(resolve));
+    await viewCallsIdle();
     assert.deepEqual({
       staleHostCalls,
       reported,
@@ -1970,7 +1984,9 @@ test("a view declares its composition only after a place that left it out has it
     authorizeSurface(surfaceId);
     seedViewSource(pluginId, surfaceId);
     mounting = mountSurface(document.querySelector("#slot"), surface);
-    for (let turn = 0; turn < 20; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+    // The mount runs in microtasks until it waits for the reply of the place, so after the end of the microtask queue a mount that
+    // did not wait for that reply has declared its composition.
+    await drained();
     assert.equal(calls.some(({ name }) => name === "compositionDeclare"), false,
       "the view declared its composition while a place that left it out had no reply");
     // A refused place removes nothing in the host, so its end also releases the declaration.

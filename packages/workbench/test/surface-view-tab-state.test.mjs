@@ -8,6 +8,7 @@ import { registerPlugin } from "../registry.js";
 import { registerSourceOrigin } from "../source-origins.js";
 import { recordOrigin } from "../tab-reports.js";
 import { setSurfaceTextSize } from "../text-size.js";
+import { drained } from "./support/drained.mjs";
 
 setSurfaceTextSize(() => 1);
 
@@ -25,6 +26,8 @@ test("a view call of a surface with surface.unload waits for the tab state store
   let viewCallListenerReady;
   const viewCallListenerRegistered = new Promise((resolve) => { viewCallListenerReady = resolve; });
   const replies = [];
+  // The order of the store opening and of the replies: no reply may come before the store opens.
+  const order = [];
   // Resolves when the view has received count replies.
   const replyWaiters = [];
   const recordedReply = () => { for (const check of replyWaiters.splice(0)) check(); };
@@ -44,7 +47,7 @@ test("a view call of a surface with surface.unload waits for the tab state store
         if (name === "view-call") viewCallListenerReady();
         return () => {};
       }, call: async (name, payload) => {
-        if (name === "viewReply") { replies.push(payload); recordedReply(); }
+        if (name === "viewReply") { replies.push(payload); order.push("reply"); recordedReply(); }
         return null;
       } } };
     },
@@ -78,15 +81,18 @@ test("a view call of a surface with surface.unload waits for the tab state store
     call(1, "tab.state.read", null);
     call(2, "tab.title", "Early");
     call(3, "tab.state.write", { page: 4 });
-    // The store is still opening: no reply of the calls has been sent.
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    assert.deepEqual(replies, [], "a call was answered before the tab state store opened");
+    // A call runs in microtasks until it waits for the tab state store, so after the end of the microtask queue a call that did not
+    // wait for the store has replied.
+    await drained();
+    assert.deepEqual(order, [], "a call was answered before the tab state store opened");
     const labels = [];
     const writes = [];
     storeNow = { entry: () => null, cacheLabel: (...label) => labels.push(label), write: (...write) => writes.push(write) };
+    order.push("opened");
     openStore();
     await mounted;
     await untilReplies(3);
+    assert.deepEqual(order, ["opened", "reply", "reply", "reply"], "a call was answered before the tab state store opened");
     assert.deepEqual(replies.map(({ id, result, error }) => ({ id, result: result ?? null, error: error ?? null })),
       [1, 2, 3].map((id) => ({ id, result: null, error: null })));
     assert.deepEqual(labels, [[surfaceId, pluginId, "Early"]], "the title sent before the store opened left no label");

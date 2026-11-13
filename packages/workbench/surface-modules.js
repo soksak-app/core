@@ -42,6 +42,16 @@ const authorization = new Map();
 const viewStartProjects = new Map();
 // The listeners (surfaceId, error) of the end of each mount; error is null for a mount that ended.
 const mountListeners = new Set();
+// The view calls that run from their receipt to their reply or to their cancellation (viewCallsIdle).
+const runningViewCalls = new Set();
+
+/**
+ * Resolves when every view call that the page received before this call has ended: each call is answered with a reply, or is
+ * cancelled without one. A call received after this call is not waited for.
+ */
+export function viewCallsIdle() {
+  return Promise.all([...runningViewCalls]);
+}
 
 /** Adds a listener of the end of each mount, which the memory saver reads for a restore; returns its removal. */
 export function onSurfaceMounted(listener) {
@@ -664,7 +674,7 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
       }
       return answerViewCall(event, receivedOptions);
     };
-    (surface.unload ? tabStatesReady().then(runCall) : runCall()).then(
+    const answered = (surface.unload ? tabStatesReady().then(runCall) : runCall()).then(
       // default: a handler that returns no value replies with null, which is the result of a call without a value.
       (result) => ({ id: event.id, result: result ?? null }),
       // default: a rejection that is not an Error replies with its text.
@@ -694,6 +704,8 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
       // default: a refusal that is not an Error carries its value as the text.
       dispatchEvent(new ErrorEvent("error", { message: `view call ${event.id} reply: ${error?.message ?? error}` }));
     });
+    runningViewCalls.add(answered);
+    answered.then(() => runningViewCalls.delete(answered));
   });
   registrations.push(answering);
   const ending = scoped.native.on("view-process-ended", (event) => {

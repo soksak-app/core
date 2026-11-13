@@ -472,9 +472,9 @@ test("a watched surface status receives the values that the surface sends, and n
   const made = coreRegistry(host);
   made.configure({ surfacePlugin: () => "probe" });
   made.registered({ surface: "tab-a", kind: "status", name: "probe.lines" });
+  // Both watch requests have resolved, so the forwards they start have been made; no request of the module waits for a change.
   assert.deepEqual(await made.handle({ method: "status.watch", params: { name: "probe.lines" } }), { result: null });
   assert.deepEqual(await made.handle({ method: "status.watch", params: { name: "probe.lines" } }), { result: null });
-  await new Promise((resolve) => setImmediate(resolve));
   const forwarded = (method) => host.calls.filter(([name, arg]) => name === "exposureForward" && arg.method === method);
   assert.deepEqual(forwarded("status.next"), [], "a watch sends no request that waits for a change");
   assert.equal(forwarded("status.watch").length, 1, "a second watch is not forwarded");
@@ -502,12 +502,14 @@ test("a status change that the host refuses is reported with the status name", a
       ? Promise.reject(new Error("argument request.value is missing"))
       : host.call(name, arg),
   };
-  const made = coreRegistry(refusing, (error) => reported.push(error.message));
+  let refused;
+  const refusal = new Promise((resolve) => { refused = resolve; });
+  const made = coreRegistry(refusing, (error) => { reported.push(error.message); refused(); });
   made.configure({ surfacePlugin: () => "probe" });
   made.registered({ surface: "tab-a", kind: "status", name: "probe.lines" });
   assert.deepEqual(await made.handle({ method: "status.watch", params: { name: "probe.lines" } }), { result: null });
   made.changed({ surface: "tab-a", name: "probe.lines", value: null, version: 1 });
-  await new Promise((resolve) => setImmediate(resolve));
+  await refusal;
   assert.deepEqual(reported, ["status probe.lines change was refused: argument request.value is missing"]);
   assert.throws(() => createRegistry({ call: refusing.call }), /a registry with a host call needs report\(error\)/);
 });
@@ -548,12 +550,12 @@ test("an observation of a surface that ended is no failure, and its watch is for
   made.configure({ surfacePlugin: () => "probe", failed: (error) => { failures.push(error.message); return true; } });
   made.registered({ surface: "tab-a", kind: "status", name: "probe.lines" });
   const stop = made.observe("probe.lines", "tab-a", () => {}, { exact: true });
-  await new Promise((resolve) => setImmediate(resolve));
+  await made.idle();
   assert.deepEqual(failures, [], "the end of the surface is not a failure of the observation");
 
   refuse = false;
   made.registered({ surface: "tab-a", kind: "status", name: "probe.lines" });
-  await new Promise((resolve) => setImmediate(resolve));
+  await made.idle();
   assert.equal(host.calls.filter(([name, arg]) => name === "exposureForward" && arg.method === "status.watch").length, 2,
     "the watch is forwarded again when the surface registers");
   stop();
@@ -567,7 +569,7 @@ test("an observation that another error refuses is reported as a failure", async
   made.configure({ surfacePlugin: () => "probe", failed: (error) => { failures.push(error.message); return true; } });
   made.registered({ surface: "tab-a", kind: "status", name: "probe.lines" });
   const stop = made.observe("probe.lines", "tab-a", () => {}, { exact: true });
-  await new Promise((resolve) => setImmediate(resolve));
+  await made.idle();
   assert.deepEqual(failures, ["probe.lines on tab-a: the read threw"]);
   stop();
 });
@@ -639,15 +641,21 @@ test("a core command answers after the configured settling work", async () => {
   const made = createRegistry();
   made.declare("core", coreExposes());
   made.command("core.fixture.add", ({ n }) => n + 1);
-  let release;
-  const drawing = new Promise((resolve) => { release = resolve; });
-  made.configure({ settled: () => drawing });
-  let answered = false;
-  const answer = made.run("core.fixture.add", { n: 1 }).then((value) => { answered = true; return value; });
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(answered, false, "the command answered before the settling work finished");
-  release();
+  // The settling work is a thenable: the command must await it, and the mark of its then shows that it did. A command that does not
+  // await it answers with no mark before its answer, whatever the timing of the test.
+  const order = [];
+  let release = null;
+  let finished = false;
+  const drawing = { then(resolve) { order.push("awaited"); if (finished) resolve(); else release = resolve; } };
+  let settling;
+  const reached = new Promise((resolve) => { settling = resolve; });
+  made.configure({ settled: () => { settling(); return drawing; } });
+  const answer = made.run("core.fixture.add", { n: 1 }).then((value) => { order.push("answered"); return value; });
+  await reached;
+  finished = true;
+  release?.();
   assert.equal(await answer, 2);
+  assert.deepEqual(order, ["awaited", "answered"], "the command answered before the settling work was awaited");
 });
 
 test("a handled settling failure is reported and does not reject the state-changing command", async () => {
@@ -675,18 +683,17 @@ test("observe follows a surface status in the page, switches surfaces on registr
   made.configure({ surfacePlugin: () => "probe", preferred: () => [] });
   const seen = [];
   const stop = made.observe("probe.lines", "tab-b", (value, surface) => seen.push([surface, value]));
-  await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(seen, [[null, null]], "without a registered surface the observer receives null");
   made.registered({ surface: "tab-a", kind: "status", name: "probe.lines" });
-  await new Promise((resolve) => setImmediate(resolve));
+  await made.idle();
   assert.deepEqual(seen.at(-1), ["tab-a", ["tab-a first"]], "the only registered surface is followed");
   made.registered({ surface: "tab-b", kind: "status", name: "probe.lines" });
-  await new Promise((resolve) => setImmediate(resolve));
+  await made.idle();
   assert.deepEqual(seen.at(-1), ["tab-b", ["tab-b first"]], "the requested surface is followed once it registers");
   const changes = host.calls.filter(([name]) => name === "exposureChanged");
   assert.equal(changes.length, 0, "a page observer sends no exposureChanged");
   stop();
-  await new Promise((resolve) => setImmediate(resolve));
+  await made.idle();
   const unwatched = host.calls.filter(([name, arg]) => name === "exposureForward" && arg.method === "status.unwatch")
     .map(([, arg]) => arg.surface);
   assert.deepEqual(unwatched, ["tab-a", "tab-b"]);
@@ -773,17 +780,17 @@ test("observe reports a failed watch, value read, or release instead of hiding i
   made.configure({ surfacePlugin: () => "probe", failed: (error) => failures.push(error.message) });
   made.registered({ surface: "tab-a", kind: "status", name: "probe.lines" });
   const stopA = made.observe("probe.lines", "tab-a", () => {});
-  await new Promise((resolve) => setImmediate(resolve));
+  await made.idle();
   assert.deepEqual(failures, ["probe.lines on tab-a: watch lost"]);
   stopA();
   made.registered({ surface: "tab-b", kind: "status", name: "probe.lines" });
   const stopB = made.observe("probe.lines", "tab-b", () => {});
   const stopC = made.observe("probe.lines", "tab-b", () => {});
-  await new Promise((resolve) => setImmediate(resolve));
+  await made.idle();
   assert.deepEqual(failures.slice(1), ["probe.lines on tab-b: read lost"], "a joined observer reports a failed read");
   stopB();
   stopC();
-  await new Promise((resolve) => setImmediate(resolve));
+  await made.idle();
   assert.deepEqual(failures.slice(2), ["probe.lines on tab-b: unwatch lost"]);
 });
 
@@ -806,12 +813,12 @@ test("a plugin state registers entries in the page that answer before surfaces a
   assert.equal(made.list().status.find((entry) => entry.name === "probe.lines").registered, true);
   const seen = [];
   const stop = made.observe("probe.lines", "tab-a", (value, source) => seen.push([source, value]));
-  await new Promise((resolve) => setImmediate(resolve));
+  await made.idle();
   lines = ["y"];
   for (const fn of listeners) fn(lines);
   assert.deepEqual(seen, [["state", ["x"]], ["state", ["y"]]]);
+  // clear() reselects the surfaces synchronously, so the observer has received null when clear() has completed.
   state.clear();
-  await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(seen.at(-1), [null, null], "the observer loses the status when the state is cleared");
   assert.equal(listeners.size, 0, "clearing stops the observer's subscription");
   stop();
@@ -828,7 +835,7 @@ test("an observation whose watch the surface refuses reports the error with its 
   made.configure({ surfacePlugin: () => "probe", preferred: () => [], failed: (error) => reported.push(error.message) });
   made.registered({ surface: "tab-a", kind: "status", name: "probe.lines" });
   made.observe("probe.lines", "tab-a", () => {});
-  await new Promise((resolve) => setImmediate(resolve));
+  await made.idle();
   assert.deepEqual(reported, ["probe.lines on tab-a: reader crashed"], "the refused watch was not reported with its surface");
 });
 

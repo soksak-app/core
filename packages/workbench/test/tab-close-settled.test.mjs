@@ -22,10 +22,13 @@ test("core.tab.close answers after the tab close and its draw", { timeout: 5000 
   // The tab close stays in release until the test ends it. The order of the commands is recorded.
   const events = [];
   let finishClose;
+  let arrived;
+  const closeArrival = new Promise((resolve) => { arrived = resolve; });
   const actualPlane = await import("../plane.js");
   t.mock.module("../plane.js", { exports: { ...actualPlane,
     closeTabById: (tab) => {
       events.push(`close ${tab}`);
+      arrived();
       return new Promise((resolve) => { finishClose = () => { events.push(`closed ${tab}`); resolve({ closed: true }); }; });
     },
   } });
@@ -37,15 +40,15 @@ test("core.tab.close answers after the tab close and its draw", { timeout: 5000 
       library: { state: () => null }, renames: { state: () => null }, chrome: () => null,
       drawn: async () => { events.push("settled"); },
     });
-    let answered = false;
-    const answer = registry.run("core.tab.close", { tab: "tab-a" }).then(() => { answered = true; });
-    // Runs all pending microtasks. While the release has not finished, the command does not answer and does not start the drawing wait.
-    await new Promise((resolve) => setImmediate(resolve));
-    assert.deepEqual(events, ["close tab-a"], "the command waited for the draw before the tab close finished");
-    assert.equal(answered, false, "the command answered before the tab close finished");
+    const answer = registry.run("core.tab.close", { tab: "tab-a" }).then(() => { events.push("answered"); });
+    // The release has not finished, so the command has neither answered nor started the drawing wait. Each of those would appear
+    // in the order before the mark of the release.
+    await closeArrival;
+    events.push("released");
     finishClose();
     await answer;
-    assert.deepEqual(events, ["close tab-a", "closed tab-a", "settled"]);
+    assert.deepEqual(events, ["close tab-a", "released", "closed tab-a", "settled", "answered"],
+      "the command drew or answered before the tab close finished");
   } finally {
     dom.window.close();
   }

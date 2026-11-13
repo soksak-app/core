@@ -3,7 +3,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { surfaceCalls } from "../surface-calls.js";
-import { settled, withoutClock } from "./support/records.mjs";
+import { logGate } from "../log-gate.js";
+import { withoutClock } from "./support/records.mjs";
 
 const TRACE = { lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" };
 const ERRORS = { lifecycle: "error", input: "error", call: "error", io: "error", frame: "error" };
@@ -11,26 +12,31 @@ const ERRORS = { lifecycle: "error", input: "error", call: "error", io: "error",
 // The fake host answers the action policy-read with the classes given, and `emit` sends the host event log-policy to the document.
 // The events below the level error are stored only in the debug state (docs/spec/settings.md, the section of core.settings.debug),
 // which most tests examine, so the host answers every class at trace by default.
-function setup(send, classes = TRACE) {
+// read, when given, holds the answer of the read of the policy until it resolves.
+function setup(send, classes = TRACE, read = null) {
   const requests = [];
   const listeners = new Map();
   const calls = surfaceCalls({
     send,
     log: async (request) => {
       if (request.action === "clock") return { ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 };
-      if (request.action === "policy-read") return { classes };
+      if (request.action === "policy-read") {
+        if (read) await read;
+        return { classes };
+      }
       requests.push(withoutClock(request));
     },
     listen: (name, fn) => { listeners.set(name, fn); },
   });
-  calls.followPolicy();
+  // policy resolves when the read of the policy answered and its policy is in force.
+  const policy = calls.followPolicy();
   const emit = (name, payload) => listeners.get(name)(payload);
-  return { calls, requests, emit, events: () => requests.flatMap((request) => request.events) };
+  return { calls, requests, emit, policy, events: () => requests.flatMap((request) => request.events) };
 }
 
 test("a document applies the policy that the host reads at its load, and each later event log-policy", async () => {
-  const { calls, emit, events } = setup(async () => "answer", ERRORS);
-  await settled();
+  const { calls, emit, events, policy } = setup(async () => "answer", ERRORS);
+  await policy;
   await calls.call("documentAttach", { document: "d" });
   await calls.record("error", "workbench.record.error", { where: "workbench", text: "first" });
   assert.deepEqual(events().map((event) => event.event), ["workbench.record.error"], "the default policy stores no workbench.call of level debug");
@@ -42,8 +48,15 @@ test("a document applies the policy that the host reads at its load, and each la
 });
 
 test("the policy that the host reads at the load is in force before the first call", async () => {
-  const { calls, events } = setup(async () => "answer");
-  await settled();
+  // The gate starts at the default policy, and the read answers only when the check releases it, so the policy that the gate has at
+  // the end of the wait comes from that answer.
+  logGate.set(ERRORS);
+  const read = Promise.withResolvers();
+  const { calls, events, policy } = setup(async () => "answer", TRACE, read.promise);
+  assert.deepEqual(logGate.classes(), ERRORS, "the policy changed before the read answered");
+  read.resolve();
+  await policy;
+  assert.deepEqual(logGate.classes(), TRACE, "the wait for the policy ended before the answer of the read was in force");
   await calls.call("documentLoad", { document: "d" });
   await calls.record("info", "workbench.record.info", {});
   assert.deepEqual(events().map((event) => event.event), ["workbench.call", "workbench.record.info"]);

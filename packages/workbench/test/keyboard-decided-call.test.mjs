@@ -23,7 +23,7 @@ mock.module("@soksak/runtime", { namedExports: { host: {
   },
   reload: () => {},
 } } });
-const { overlay, surfaces } = await import("../host.js");
+const { orderedCallsAnswered, overlay, surfaces } = await import("../host.js");
 
 // The number of calls the host has received, and the waiters for a count of them.
 let received = 0;
@@ -32,11 +32,11 @@ const untilReceived = (count) => new Promise((resolve) => {
   const check = () => (received >= count ? resolve() : arrivals.push(check));
   check();
 });
-// Lets the microtasks of the ordered-call queue run for a negative check.
-const turns = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 test("a decided call goes out while an earlier ordered call has no answer, and a later ordered call follows its answer", async () => {
   overlay.show(document.getElementById("menu"), { x: 0, y: 0, w: 10, h: 10 }, () => {});
+  // The promise of the queue at this point ends when the show is answered, which is the last ordered call sent so far.
+  const showAnswered = orderedCallsAnswered();
   await untilReceived(1);
   assert.deepEqual(pending.map((call) => call.name), ["overlayShow"]);
   surfaces.focus("tab-a", true);
@@ -44,8 +44,9 @@ test("a decided call goes out while an earlier ordered call has no answer, and a
   assert.deepEqual(pending[1].request, { surface: "tab-a", decided: true });
   surfaces.focus("tab-b");
   pending.shift().resolve({ x: 0, y: 0, w: 10, h: 10 });
-  // The next ordered call is sent in the microtasks after this answer. No call marks that point, so the check runs after the queue drains.
-  await turns();
+  // The ordered call tab-b is queued behind the show and the decided call. showAnswered ends with the show, so the check runs
+  // after the queue has sent every call that the show allows, and the decided call is still unanswered.
+  await showAnswered;
   assert.deepEqual(pending.map((call) => call.name), ["surfaceFocus"], "an ordered call went out before the host answered the decided call");
   pending.shift().resolve();
   await untilReceived(3);

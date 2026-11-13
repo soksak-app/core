@@ -93,7 +93,6 @@ test("a held tab is neither mounted nor given a background session until its det
     const [shown, hidden] = fresh.state.cards[0].data.tabs.map((tab) => tab.id);
     waits.holdImageDetachSurfaces([shown, hidden]);
     plane.adopt(fresh, "spc-aaaaaa");
-    await new Promise((resolve) => setImmediate(resolve));
     const slot = document.querySelector('[data-card-id="main"] .slot');
     assert.equal(mounted.has(shown), false, "a tab whose detach is pending was mounted");
     assert.equal(slot.dataset.nativeSurfaceId, undefined, "a tab whose detach is pending was placed as a native surface");
@@ -102,14 +101,12 @@ test("a held tab is neither mounted nor given a background session until its det
 
     assert.equal(waits.imageDetachEnded({ surface: shown, error: null }), true);
     plane.settle();
-    await new Promise((resolve) => setImmediate(resolve));
     assert.ok(mounted.has(shown), "the end of the detach did not mount the shown tab");
     assert.equal(slot.dataset.nativeSurfaceId, shown);
     assert.equal(opens(hidden), 0, "the end of another tab opened the session of a tab still pending");
 
     assert.equal(waits.imageDetachEnded({ surface: hidden, error: "image detach sidecar s surface t image v generation 1 request r rejected: staleGeneration" }), true);
     plane.settle();
-    await new Promise((resolve) => setImmediate(resolve));
     assert.equal(opens(hidden), 0, "a tab whose detach failed got a background open");
     plane.selectTab(hidden);
     assert.equal(mounted.has(hidden), false, "a tab whose detach failed was mounted");

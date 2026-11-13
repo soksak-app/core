@@ -97,6 +97,9 @@ const saves = [];
 plane.hold = () => {
   plane.gate = new Promise((resolve) => { plane.release = resolve; });
 };
+// Resolves when the next plane clear starts (plane.empty).
+let clearStarted = null;
+const emptyStarts = () => new Promise((resolve) => { clearStarted = resolve; });
 projects.onSwitch({
   check: (layout) => { if (layout === plane.rejected) throw new Error("fixture layout cannot be opened"); },
   save: (path) => {
@@ -113,6 +116,7 @@ projects.onSwitch({
   settleTabs: async () => true,
   empty: async (show) => {
     plane.events.push("empty started");
+    clearStarted?.();
     await plane.gate;
     plane.drawing = true;
     plane.layout = null;
@@ -137,22 +141,22 @@ const store = {
   onChange: () => {},
 };
 
-test("opening a project while the library is still clearing the plane loads it after the clearing", async () => {
+test("opening a project while the library is still clearing the plane loads it after the clearing", { timeout: 5000 }, async () => {
   await projects.initialise(store);
   await projects.activate(PROJECT.id);
   assert.deepEqual(plane.layout, PROJECT.spaces[0].layout);
 
   plane.events.length = 0;
   plane.hold();
+  const emptying = emptyStarts();
   const browsing = projects.browse();
   const opening = projects.activate(PROJECT.id);
-  // The fake store and the fake runtime all finish within microtasks. After waiting for the next macrotask,
-  // all work that the clear did not block has finished.
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.deepEqual(plane.events, ["empty started"], "the project was loaded while the plane was being cleared");
+  // The clear holds the plane until the release. The mark of the release is in the order, so the load must follow it.
+  await emptying;
+  plane.events.push("released");
   plane.release();
   await Promise.all([browsing, opening]);
-  assert.deepEqual(plane.events, ["empty started", "emptied", "load"]);
+  assert.deepEqual(plane.events, ["empty started", "released", "emptied", "load"], "the project was loaded while the plane was being cleared");
   assert.deepEqual(plane.layout, PROJECT.spaces[0].layout);
   await projects.flush();
 });
@@ -392,7 +396,7 @@ test("a project that the start document drew falls back to the library when its 
   assert.deepEqual(reported, ["project directory does not exist: /work/missing"], "the failed start activation was not reported once");
 });
 
-test("a project removed from the registry by another window ends in the window that shows it as closing its tab does", async () => {
+test("a project removed from the registry by another window ends in the window that shows it as closing its tab does", { timeout: 5000 }, async () => {
   /** A project with one tab in one card. */
   const project = (id, tab) => ({ ...structuredClone(PROJECT), id, root: `/work/${id}`, spaces: [
     { id: `spc-${id}`, title: "SPACE1", layout: { state: { cards: [{ id: `card-${id}`, data: { tabs: [{ id: tab, plugin: "fixture" }] } }] } } },
@@ -408,15 +412,14 @@ test("a project removed from the registry by another window ends in the window t
   // This window shows two projects as tabs, and prj-shown is active. prj-other is the project of another window.
   await projects.activate("prj-next");
   await projects.activate("prj-shown");
-  // Another window deletes prj-shown, and the store notifies this window of the change. The fake store and the fake runtime finish within microtasks, so
-  // after waiting for the next macrotask, the handling of the notification has finished.
+  // Another window deletes prj-shown, and the store notifies this window of the change. projects.idle resolves when the handling of the notification has finished.
   const removeElsewhere = async (id) => {
     listed = listed.filter((item) => item.id !== id);
     retained.length = 0;
     patches.length = 0;
     plane.events.length = 0;
     notify();
-    await new Promise((resolve) => setImmediate(resolve));
+    await projects.idle();
   };
   await removeElsewhere("prj-shown");
   assert.equal(projects.all().some((item) => item.id === "prj-shown"), false);
@@ -436,7 +439,7 @@ test("a project removed from the registry by another window ends in the window t
   await projects.flush();
 });
 
-test("an activation received while a removed project is clearing waits for the clear", async () => {
+test("an activation received while a removed project is clearing waits for the clear", { timeout: 5000 }, async () => {
   const project = (id, tab) => ({ ...structuredClone(PROJECT), id, root: `/work/${id}`, spaces: [
     { id: `spc-${id}`, title: "SPACE1", layout: { state: { cards: [{ id: `card-${id}`, data: { tabs: [{ id: tab, plugin: "fixture" }] } }] } } },
   ], activeSpaceId: `spc-${id}` });
@@ -453,18 +456,37 @@ test("an activation received while a removed project is clearing waits for the c
   plane.events.length = 0;
   plane.hold();
   listed = [next];
+  const emptying = emptyStarts();
   notify();
-  await new Promise((resolve) => setImmediate(resolve));
+  await emptying;
   assert.deepEqual(plane.events, ["empty started"], "removal did not begin clearing the active project");
 
-  const activation = projects.activate(next.id);
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.deepEqual(plane.events, ["empty started"], "activation loaded a project before the prior clear finished");
-  plane.release();
-  await activation;
-  await new Promise((resolve) => setImmediate(resolve));
+  // The step runner sees the activation start its wait for the turn before it. A race of that turn against a resolved mark answers
+  // the turn when it had already ended and the mark while it is pending, because the reaction of a settled promise is queued first.
+  const pending = Symbol("pending");
+  let turnWaited;
+  const turnStarted = new Promise((resolve) => { turnWaited = resolve; });
+  projects.runSteps(async (step, work) => {
+    const result = work();
+    if (step === "projects.turn") {
+      const state = await Promise.race([result, Promise.resolve(pending)]);
+      plane.events.push(state === pending ? "turn waits for the clear" : "turn did not wait");
+      turnWaited();
+    }
+    return result;
+  });
+  try {
+    const activation = projects.activate(next.id);
+    await turnStarted;
+    plane.events.push("released");
+    plane.release();
+    await activation;
+    await projects.idle();
+  } finally {
+    projects.runSteps(null);
+  }
 
-  assert.deepEqual(plane.events, ["empty started", "emptied", "load"],
+  assert.deepEqual(plane.events, ["empty started", "turn waits for the clear", "released", "emptied", "load"],
     "the removed-project clear ran after the replacement project was loaded");
   assert.equal(projects.active()?.id, next.id);
   assert.equal(projects.inLibrary(), false);
@@ -475,7 +497,7 @@ test("an activation received while a removed project is clearing waits for the c
 // rendering update. If the switch to the library happens in that reaction, elements of the work area that the observation round
 // already delivered (the file tree, the terminal screen) become 0x0 and a loop error occurs (F43). The switch must happen in the drawing that clears the plane,
 // that is, in the next task, which runs outside the observation round.
-test("browsing shows the library in the draw that empties the plane, not where a later host reply resolves", async () => {
+test("browsing shows the library in the draw that empties the plane, not where a later host reply resolves", { timeout: 5000 }, async () => {
   await projects.initialise(store);
   await projects.activate(PROJECT.id);
   let screen = "workspace";
@@ -488,16 +510,16 @@ test("browsing shows the library in the draw that empties the plane, not where a
   });
   // The host reply of the settings project selection is fulfilled at the checkpoint after the callback of the file tree observer.
   const reply = Promise.withResolvers();
-  selection = () => reply.promise;
+  const asked = Promise.withResolvers();
+  selection = () => { asked.resolve(); return reply.promise; };
   try {
     const browsing = projects.browse();
-    await new Promise((resolve) => setImmediate(resolve));
+    await asked.promise;
     // Observation round: the tree callback runs, and the held reply is fulfilled at that checkpoint.
     inRound = true;
     reply.resolve();
-    await new Promise((resolve) => setImmediate(resolve));
-    inRound = false;
     await browsing;
+    inRound = false;
     assert.deepEqual(switches, ["library in the empty draw"], "the library screen was not drawn by the draw that empties the plane");
   } finally {
     selection = async () => {};
@@ -609,9 +631,10 @@ test("a project close that waits names each awaited step it started and has not 
     }
   });
   plane.hold();
+  const emptying = emptyStarts();
   const closing = projects.close(PROJECT.id);
-  // The fake store and the fake runtime finish within microtasks, so after the next macrotask only the held clearing waits.
-  await new Promise((resolve) => setImmediate(resolve));
+  // The held clearing is the step that the close waits for. Once it starts, the records name each step that has not ended.
+  await emptying;
   const pending = records.filter(([step, phase]) => phase === "start" && !records.some((item) => item[0] === step && item[1] === "end"))
     .map(([step]) => step);
   assert.deepEqual(pending, ["projects.close.refresh", "projects.read.empty"],
@@ -621,7 +644,7 @@ test("a project close that waits names each awaited step it started and has not 
   projects.runSteps(null);
 });
 
-test("a registry read after the write of this window draws nothing, and a read that finds a change draws once", async () => {
+test("a registry read after the write of this window draws nothing, and a read that finds a change draws once", { timeout: 5000 }, async () => {
   const project = structuredClone(PROJECT);
   const other = { ...structuredClone(PROJECT), id: "prj-other", root: "/work/other", title: "other" };
   const listed = [project, other];
@@ -636,34 +659,33 @@ test("a registry read after the write of this window draws nothing, and a read t
   await projects.flush();
   let draws = 0;
   projects.onChange(() => { draws += 1; });
-  const settled = async () => { for (let turn = 0; turn < 5; turn++) await new Promise((resolve) => setImmediate(resolve)); };
   try {
     const space = projects.addSpace({ state: { cards: [], name: "two" } });
     assert.equal(draws, 1, "the addition draws its space");
     await projects.flush();
-    await settled();
+    await projects.idle();
     assert.equal(draws, 1, "the read that the write of this window caused drew an unchanged registry");
     assert.ok(projects.active().spaces.some((item) => item.id === space.id));
 
     other.title = "renamed elsewhere";
     notify();
-    await settled();
+    await projects.idle();
     assert.equal(draws, 2, "the title that another window changed");
     assert.equal(projects.all().find((item) => item.id === other.id).title, "renamed elsewhere");
 
     open = [other.id];
     notify();
-    await settled();
+    await projects.idle();
     assert.equal(draws, 3, "the project that another window opened");
     notify();
-    await settled();
+    await projects.idle();
     assert.equal(draws, 3, "a read that found the same registry");
   } finally {
     projects.onChange(() => {});
   }
 });
 
-test("a change of the store is read through the read of that change", async () => {
+test("a change of the store is read through the read of that change", { timeout: 5000 }, async () => {
   let notify = null;
   let snapshots = 0;
   await projects.initialise({
@@ -677,12 +699,12 @@ test("a change of the store is read through the read of that change", async () =
     reads += 1;
     return { common: {}, projects: [structuredClone(PROJECT)], open: [] };
   });
-  for (let turn = 0; turn < 5; turn++) await new Promise((resolve) => setImmediate(resolve));
+  await projects.idle();
   assert.equal(reads, 1, "the read of the change");
   assert.equal(snapshots, 0, "no read of its own");
 });
 
-test("a registry read that waited behind another read finds what the host holds at its turn", async () => {
+test("a registry read that waited behind another read finds what the host holds at its turn", { timeout: 5000 }, async () => {
   const { HostWorkspaceStore } = await import("../host-store.js");
   const listed = [structuredClone(PROJECT)];
   const answer = () => ({ common: {}, projects: structuredClone(listed), open: [] });
@@ -704,7 +726,6 @@ test("a registry read that waited behind another read finds what the host holds 
   // The settings of the window start the read of each change.
   let settings = null;
   shared.onChange((read) => { settings = read(); });
-  const settled = async () => { for (let turn = 0; turn < 5; turn++) await new Promise((resolve) => setImmediate(resolve)); };
   // The first read holds the registry reads of this window while the read of the second change ends.
   let release = null;
   held = new Promise((resolve) => { release = resolve; });
@@ -714,20 +735,21 @@ test("a registry read that waited behind another read finds what the host holds 
   // Another window adds a project after that read ended, and its change has not arrived yet.
   listed.push({ ...structuredClone(PROJECT), id: "prj-later", root: "/work/later", title: "later" });
   release();
-  await settled();
+  await projects.idle();
   assert.ok(projects.all().some((item) => item.id === "prj-later"), "the second registry read reads at its turn");
 });
 
-test("the registry and the settings of a window call the host once for one change", async () => {
+test("the registry and the settings of a window call the host once for one change", { timeout: 5000 }, async () => {
   const { HostWorkspaceStore } = await import("../host-store.js");
   const listeners = [];
   let calls = 0;
+  // The answer of the host waits for gate. The read of the initialisation is answered at once.
+  let gate = Promise.resolve();
   const host = {
     on: (name, fn) => { listeners.push(fn); },
-    // The host answers on a later turn of the event loop, after the page ran every waiting promise.
     call: async () => {
       calls += 1;
-      await new Promise((resolve) => setImmediate(resolve));
+      await gate;
       return { common: {}, projects: [structuredClone(PROJECT)], open: [] };
     },
   };
@@ -735,7 +757,11 @@ test("the registry and the settings of a window call the host once for one chang
   await projects.initialise({ ...store, snapshot: () => shared.snapshot(), onChange: (fn) => shared.onChange(fn) });
   shared.onChange((read) => { read(); });
   calls = 0;
+  // The test releases the answer of the host after the page ran every waiting read of the change.
+  let answerNow = null;
+  gate = new Promise((resolve) => { answerNow = resolve; });
   listeners[0]();
-  for (let turn = 0; turn < 5; turn++) await new Promise((resolve) => setImmediate(resolve));
+  answerNow();
+  await projects.idle();
   assert.equal(calls, 1);
 });

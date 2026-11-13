@@ -19,8 +19,6 @@ registry.declare("core", {
   element: [],
 });
 
-const settle = () => new Promise((resolve) => setImmediate(resolve));
-
 test("Escape in an open native menu answers core.modal.dismiss and the answer runs that command through the registry", async () => {
   const calls = [];
   registry.command("core.modal.dismiss", () => { calls.push("dismiss"); });
@@ -30,8 +28,8 @@ test("Escape in an open native menu answers core.modal.dismiss and the answer ru
   assert.deepEqual(answers, [["core.modal.dismiss", ""]]);
   // The receiver of a native picker runs the answered command with the registry run of the page.
   const { pickerAnswer } = await import("../picker-layer.js");
-  pickerAnswer(["a:t1"], run)(answers[0][0]);
-  await settle();
+  // The returned promise is the run of the command, so the awaited answer ends when the command has run.
+  await pickerAnswer(["a:t1"], run)(answers[0][0]);
   assert.deepEqual(calls, ["dismiss"]);
 });
 

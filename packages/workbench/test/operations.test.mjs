@@ -3,7 +3,7 @@
 // the operation out, so the call (`workbench.call`) and the host (`host.binding.call`) are joined to the operation by it.
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
-import { clockAnswer, settled, withoutClock } from "./support/records.mjs";
+import { clockAnswer, withoutClock } from "./support/records.mjs";
 
 const calls = [];
 mock.module("@soksak/runtime", { namedExports: { host: {
@@ -12,7 +12,7 @@ mock.module("@soksak/runtime", { namedExports: { host: {
   call: async (name, payload) => { calls.push([name, withoutClock(payload)]); return clockAnswer(name, payload); },
 } } });
 const { beginOperation } = await import("../operations.js");
-await import("../page-log.js");
+const { flushEvents } = await import("../page-log.js");
 const { createPluginOperations } = await import("../plugin-operations.js");
 const { createAppUpdate } = await import("../app-update.js");
 const { hostWindows } = await import("../host-windows.js");
@@ -30,7 +30,7 @@ test("an operation starts with an identifier of the page and the first event of 
   calls.length = 0;
   const first = beginOperation("workbench.plugin.operation", { action: "install", plugin: "tty" });
   const second = beginOperation("workbench.plugin.operation", { action: "remove", plugin: "tty" });
-  await settled();
+  await flushEvents();
   assert.match(first[0], /^p[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.\d+$/);
   assert.notEqual(first[0], second[0]);
   assert.deepEqual(events().map(({ level, event, fields, cids }) => [level, event, fields, cids]), [
@@ -63,7 +63,7 @@ test("a plugin operation is stored first and carried out with the same identifie
   const host = { calls: [], async call(name, arg, options) { host.calls.push([name, arg, options]); return name === "pluginsState" ? { installed: { plugins: {}, sidecars: {} }, index: null, registry: null } : undefined; } };
   const operations = createPluginOperations({ host, loaded: () => [], refused: () => new Set(), changed: () => {} });
   await operations.run("install", "tty");
-  await settled();
+  await flushEvents();
   const [operation] = events().filter(({ event }) => event === "workbench.plugin.operation");
   assert.deepEqual(operation.fields, { action: "install", plugin: "tty" });
   const run = host.calls.find(([name]) => name === "pluginsRun");
@@ -82,7 +82,7 @@ test("the application update passes one identifier to its stage and its apply", 
   const update = createAppUpdate({ host, changed: () => {} });
   await update.refresh();
   await update.update();
-  await settled();
+  await flushEvents();
   const [operation] = events().filter(({ event }) => event === "workbench.update.operation");
   assert.deepEqual(operation.fields, { action: "update", version: "0.0.9" });
   assert.deepEqual(host.calls.filter(([name]) => name === "appUpdateStage" || name === "appUpdateApply"), [

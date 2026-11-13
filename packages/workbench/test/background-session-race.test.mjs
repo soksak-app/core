@@ -33,12 +33,19 @@ test("a background session whose tab closes before its subscription finished end
   // The subscription of a listener finishes only when the test lets it.
   const listeners = new Map();
   const pending = [];
-  const sends = [];
+  // The order of the sends and of the steps of the test. A send that a step causes comes after the mark of that step.
+  const order = [];
+  // Resolves when the session ends the subscription of its listener.
+  let unsubscribe;
+  const unsubscribed = new Promise((resolve) => { unsubscribe = resolve; });
   const port = {
-    send: (surface) => { sends.push(surface); return Promise.resolve({}); },
+    send: (surface) => { order.push(`open ${surface}`); return Promise.resolve({}); },
     on: (surface, listener) => new Promise((resolve) => {
       listeners.set(surface, listener);
-      pending.push(() => resolve(() => { if (listeners.get(surface) === listener) listeners.delete(surface); }));
+      pending.push(() => resolve(() => {
+        if (listeners.get(surface) === listener) listeners.delete(surface);
+        unsubscribe();
+      }));
     }),
   };
   const reports = [];
@@ -76,14 +83,15 @@ test("a background session whose tab closes before its subscription finished end
     const hidden = plane.currentGrid().card("main").data.tabs[1].id;
     assert.ok(listeners.has(hidden), "the tab without a surface got no background session");
     // The host delivers the reply of the open only to a registered listener, so the open waits for the subscription
-    // (docs/spec/sidecars.md#page-interface).
-    await new Promise((resolve) => setImmediate(resolve));
-    assert.deepEqual(sends, [], "a background session sent its open before its subscription finished");
+    // (docs/spec/sidecars.md#page-interface). The subscription finishes after the mark of its release, so an open that came
+    // before the mark is out of order.
     // The tab closes while the subscription of its listener has not finished.
     await plane.closeTabById(hidden);
+    order.push("finished");
     for (const finish of pending.splice(0)) finish();
-    await new Promise((resolve) => setImmediate(resolve));
+    await unsubscribed;
     assert.ok(!listeners.has(hidden), `the listener of the closed tab ${hidden} stayed subscribed`);
+    assert.deepEqual(order, ["finished"], "a background session sent its open before or after its subscription finished");
     assert.deepEqual(reports, []);
   } finally {
     plane.clear?.();

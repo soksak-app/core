@@ -26,7 +26,9 @@ test("settling waits for the calls already sent and refuses every later call at 
   await assert.rejects(calls.call("later"), { message: "host call later: the page is reloading" });
   answers[0].resolve("one");
   assert.equal(await first, "one");
-  // Nothing can end the settling before the second call is answered, so the check follows the answer of the first call.
+  // The settling ends in the microtask that its last answer queues. One microtask passes after the answer of the first call, so a
+  // settling that ended at that answer has set settled before the check (FIFO order of microtasks).
+  await Promise.resolve();
   assert.equal(settled, false, "settling ended before every sent call was answered");
   answers[1].reject(new Error("refused"));
   await assert.rejects(second, /refused/);

@@ -33,8 +33,9 @@ test("a change before the subscription is applied, and a newer change during the
   assert.deepEqual(seen, [["a"]], "the change made before the subscription was not applied");
   // The host installs `b` while the first apply runs; the event starts no second apply at the same time.
   installed.plugins.b = { version: "0.0.1", enabled: true, sidecars: {} };
-  const event = handlers.get("plugins-changed")();
+  // The wait for the second start is registered before the event, so a second apply that starts during the event is recorded in order.
   const secondApply = arrival();
+  const event = handlers.get("plugins-changed")();
   order.push("first ended");
   finishes[0]({ reloaded: false });
   await secondApply;

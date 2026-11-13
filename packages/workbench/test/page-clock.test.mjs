@@ -3,7 +3,7 @@
 // through one writer.
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
-import { clockAnswer, settled } from "./support/records.mjs";
+import { clockAnswer } from "./support/records.mjs";
 
 const batches = [];
 mock.module("@soksak/runtime", { namedExports: { host: {
@@ -25,7 +25,7 @@ test("the main page states its clock once for the events of its records and of i
   await setTraceEnabled(true);
   emitEvent("info", "workbench.start", { started_at: 1, url: "wails://localhost/" });
   trace("surface.mount", { plugin: "probe", surface: "tab-a", ms: 1 });
-  await settled();
+  await flushEvents();
   await flushEvents();
   await setTraceEnabled(false);
   const events = batches.flat();

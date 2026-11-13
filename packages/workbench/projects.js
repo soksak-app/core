@@ -302,7 +302,7 @@ async function initialiseWindow(storage, unloadOf) {
   } catch (error) {
     failed(error);
   }
-  store.onChange((read) => { reread(read).catch(failed); });
+  store.onChange((read) => { rereadChange(read).catch(failed); });
   await windows.onActivate((id) => activateHere(id).catch(failed));
   await windows.onCloseRequest(() => closeWindow().catch(failed));
   await windows.onRemoveProjectRequest((id) => answerRemoval(id).catch(failed));
@@ -361,6 +361,28 @@ async function reread(read) {
   const next = local()[0];
   if (next) await activate(next.id);
 }
+
+// The reads of changes of the store that are in progress, and the waits of idle for the end of the last one.
+let rereading = 0;
+let idleWaits = [];
+
+/** Runs reread for one change of the store, and resolves the waits of idle when the last read ends. */
+function rereadChange(read) {
+  rereading += 1;
+  return reread(read).finally(() => {
+    rereading -= 1;
+    if (rereading > 0) return;
+    const waits = idleWaits;
+    idleWaits = [];
+    for (const resolve of waits) resolve();
+  });
+}
+
+/**
+ * Resolves when no read of a change of the store is in progress, at once when none is. The read of a change ends after the
+ * activation that it starts, so the resolution follows the opening of a project that another window opened.
+ */
+export const idle = () => (rereading === 0 ? Promise.resolve() : new Promise((resolve) => idleWaits.push(resolve)));
 
 // default: a read that no change of the store gave reads the store itself.
 async function readProjects(readSnapshot = () => store.snapshot()) {

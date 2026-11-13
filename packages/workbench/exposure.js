@@ -108,6 +108,21 @@ export function createRegistry({ call = null, report = null } = {}) {
   let forwards = 0;
   /* Observers that follow a surface status inside this document. Section modules use them. */
   const observers = new Set();
+  /* The observation chains in progress (a watch, a value read or a release that an observer started), and the waits of idle for the last one. */
+  let running = 0;
+  let idleWaits = [];
+
+  /** Tracks one observation chain until its callbacks have run, and resolves the waits of idle when the last chain ends. */
+  function tracked(chain) {
+    running++;
+    return chain.finally(() => {
+      running--;
+      if (running > 0) return;
+      const waits = idleWaits;
+      idleWaits = [];
+      for (const resolve of waits) resolve();
+    });
+  }
   /* Callbacks that reselect sources when an entry registration changes. */
   const registrationListeners = new Set();
   /* Entries that plugin state modules registered in this document: for each plugin id, the entry table and the read and subscribe of statuses. */
@@ -323,7 +338,7 @@ export function createRegistry({ call = null, report = null } = {}) {
     const key = watchKey(observer.name, watch.surface);
     if (following.get(key) !== watch) return;
     following.delete(key);
-    release(watch, observer.name).catch(observeFailed(observer.name, watch.surface));
+    tracked(release(watch, observer.name).catch(observeFailed(observer.name, watch.surface)));
   }
 
   /** Decides again which surface an observer follows. When the surface changes, the watch moves. */
@@ -335,9 +350,9 @@ export function createRegistry({ call = null, report = null } = {}) {
       observer.surface = "state";
       observer.pageEntry = pageEntry;
       observer.stopPage = pageEntry.subscribe((value) => observer.fn(value, "state"));
-      Promise.resolve().then(() => pageEntry.read()).then((value) => {
+      tracked(Promise.resolve().then(() => pageEntry.read()).then((value) => {
         if (observer.pageEntry === pageEntry) observer.fn(value, "state");
-      }, observeFailed(observer.name, "state"));
+      }, observeFailed(observer.name, "state")));
       return;
     }
     const surface = target("status", observer.name, observer.wanted, observer.exact);
@@ -355,18 +370,18 @@ export function createRegistry({ call = null, report = null } = {}) {
     if (watch) {
       watch.local.add(observer.listener);
       observer.watch = watch;
-      forward(surface, "status.get", { name }).then((value) => {
+      tracked(forward(surface, "status.get", { name }).then((value) => {
         if (observer.watch === watch) observer.fn(value, surface);
-      }, observeFailed(name, surface));
+      }, observeFailed(name, surface)));
       return;
     }
     watch = { surface, requested: surface, name, version: 0, external: false, local: new Set([observer.listener]) };
     following.set(key, watch);
     observer.watch = watch;
-    forward(surface, "status.watch", { name }).catch((error) => {
+    tracked(forward(surface, "status.watch", { name }).catch((error) => {
       if (following.get(key) === watch) following.delete(key);
       observeFailed(name, surface)(error);
-    });
+    }));
   }
 
   const registrationChanged = () => {
@@ -502,6 +517,12 @@ export function createRegistry({ call = null, report = null } = {}) {
         detach(observer);
       };
     },
+
+    /**
+     * Resolves when no observation chain is in progress: the watch, the value read or the release that an observer started has
+     * ended, after the observer received its value. It resolves at once when no chain is in progress.
+     */
+    idle: () => (running === 0 ? Promise.resolve() : new Promise((resolve) => idleWaits.push(resolve))),
 
     /** Whether the name is declared. */
     declared: (kind, name) => declared.has(declarationKey(kind, name)),

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { JSDOM } from "jsdom";
+import { drained } from "./support/drained.mjs";
 
 const calls = [];
 let registerEventListener;
@@ -10,11 +11,27 @@ let answerCall;
 const nativeListeners = [];
 /* Used when the test decides the completion of a listener installation. Without it, the installation ends immediately. */
 let installListener;
+/* The waiters of untilCall that the host has not satisfied yet. */
+let callWaiters = [];
+/* Ends the waiters whose count of calls of their name the host has received. */
+function resolveCallWaiters() {
+  callWaiters = callWaiters.filter((waiter) => {
+    if (calls.filter(([name]) => name === waiter.name).length < waiter.count) return true;
+    waiter.resolve();
+    return false;
+  });
+}
+/* Resolves when the host has received count calls of the name. calls keeps every call, so the count is exact. */
+const untilCall = (name, count = 1) => new Promise((resolve) => {
+  callWaiters.push({ name, count, resolve });
+  resolveCallWaiters();
+});
 mock.module("@soksak/runtime", {
   namedExports: {
     host: {
       call: async (name, payload) => {
         calls.push([name, payload]);
+        resolveCallWaiters();
         return answerCall ? answerCall(name, payload) : null;
       },
       on: (name, callback) => {
@@ -130,7 +147,7 @@ test("surface exposure replies retain the logical surface scope", async () => {
   assert.equal(await dispatchSurfaceRequest({
     surface, id: 17, method: "command.run", params: { name: `${plugin}.ping`, params: {} },
   }), true);
-  await new Promise((resolve) => setImmediate(resolve));
+  await untilCall("exposureReply");
   assert.deepEqual(calls, [["exposureReply", { id: 17, result: "ok", surface }]]);
   await runtime.exposure.dispose();
   dom.window.close();
@@ -152,17 +169,23 @@ test("an installed reply gate decides when a surface exposure reply is sent", as
   registry.declare(plugin, declarations);
   registry.configure({ surfacePlugin: (id) => id === surface ? plugin : null });
   const gated = [];
-  gateSurfaceReplies((id, send) => new Promise((resolve) => gated.push({ id, send: () => resolve(send()) })));
+  let gateArrived;
+  const holding = new Promise((resolve) => { gateArrived = resolve; });
+  gateSurfaceReplies((id, send) => new Promise((resolve) => {
+    gated.push({ id, send: () => resolve(send()) });
+    gateArrived();
+  }));
   try {
     const runtime = surfaceContextRuntime({ surfaceId: surface }, declarations);
     await runtime.exposure.command(`${plugin}.ping`, () => "ok");
     calls.length = 0;
     await dispatchSurfaceRequest({ surface, id: 18, method: "command.run", params: { name: `${plugin}.ping`, params: {} } });
-    await new Promise((resolve) => setImmediate(resolve));
+    // The gate receives the reply before it can be sent, so the check runs once the gate holds it.
+    await holding;
     assert.deepEqual(calls, [], "the gate did not hold the reply");
     assert.deepEqual(gated.map((entry) => entry.id), [surface]);
     gated[0].send();
-    await new Promise((resolve) => setImmediate(resolve));
+    await untilCall("exposureReply");
     assert.deepEqual(calls, [["exposureReply", { id: 18, result: "ok", surface }]]);
     await runtime.exposure.dispose();
   } finally {
@@ -178,12 +201,17 @@ test("an installed reply gate decides when the exposure reply of a view is sent"
   const { gateSurfaceReplies } = await import("../exposure.js");
   const surface = "gated-view-surface";
   const gated = [];
-  gateSurfaceReplies((id, send) => new Promise((resolve) => gated.push({ id, send: () => resolve(send()) })));
+  let gateArrived;
+  const holding = new Promise((resolve) => { gateArrived = resolve; });
+  gateSurfaceReplies((id, send) => new Promise((resolve) => {
+    gated.push({ id, send: () => resolve(send()) });
+    gateArrived();
+  }));
   try {
     calls.length = 0;
     const runtime = surfaceContextRuntime({ surfaceId: surface });
     const sent = runtime.native.call("exposureReply", { id: 19, result: "ok" });
-    await new Promise((resolve) => setImmediate(resolve));
+    await holding;
     assert.deepEqual(calls, [], "the gate did not hold the reply of the view");
     assert.deepEqual(gated.map((entry) => entry.id), [surface]);
     gated[0].send();
@@ -208,7 +236,7 @@ test("surface sidecar sends reach the host one at a time in send order", async (
   ];
   const operations = () => calls.filter(([name]) => name === "sidecarSend").map(([, payload]) => payload.body.operation);
   for (const expected of [["selection.start"], ["selection.start", "selection.update"], ["selection.start", "selection.update", "open"]]) {
-    await new Promise((resolve) => setImmediate(resolve));
+    await untilCall("sidecarSend", expected.length);
     assert.deepEqual(operations(), expected, "a send reached the host before the previous send finished");
     pending.shift()();
   }
@@ -325,15 +353,20 @@ test("a sidecar failure without a handler becomes a page error", async () => {
 
 test("the first sidecar request waits until the failure listener is installed", async () => {
   let install;
+  let installStarted;
+  const installing = new Promise((resolve) => { installStarted = resolve; });
   installListener = (name) => name === "sidecar-failure"
-    ? new Promise((resolve) => { install = () => resolve(() => {}); })
+    ? new Promise((resolve) => { install = () => resolve(() => {}); installStarted(); })
     : Promise.resolve(() => {});
   try {
     // Only this test uses its own copy of the module, because the failure listener is installed once per module.
     const { windowSidecar } = await import("../host.js?test=failure-listener-order");
     calls.length = 0;
     const sent = windowSidecar("@fixture/ordered-failure").send("first-tab", { operation: "open" });
-    await new Promise((resolve) => setImmediate(resolve));
+    // The installation has started and is not finished. The send runs in microtasks until it waits for the installation, so after
+    // the end of the microtask queue a send that did not wait for it has called the host.
+    await installing;
+    await drained();
     assert.deepEqual(calls.filter(([name]) => name === "sidecarSend"), [], "no request before the failure listener is installed");
     assert.equal(typeof install, "function", "the failure listener installation started");
     install();

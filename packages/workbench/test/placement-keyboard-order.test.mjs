@@ -58,11 +58,13 @@ test("a placement that removes a surface waits for the keyboard call to it that 
   shapes.clear("shape");
   const focused = surfaces.focus("tab-a");
   const removing = surfaces.place(record(["tab-b"]));
-  await new Promise((done) => setImmediate(done));
-  assert.deepEqual(calls, ["syncSurfaces", "clearShape"], "the placement removed tab-a before the keyboard call to it reached the host");
+  // The removal of tab-a is the second syncSurfaces. It must come after the keyboard call to tab-a, so the order of the calls judges it.
   release(null);
-  await Promise.all([focused, removing]);
-  assert.deepEqual(calls, ["syncSurfaces", "clearShape", "surfaceFocus tab-a", "syncSurfaces"]);
+  // The order is judged before the answers: a host that refuses the call to the removed surface fails the answer, and the order shows why.
+  const answers = await Promise.allSettled([focused, removing]);
+  assert.deepEqual(calls, ["syncSurfaces", "clearShape", "surfaceFocus tab-a", "syncSurfaces"],
+    "the placement removed tab-a before the keyboard call to it reached the host");
+  assert.deepEqual(answers.map(({ status }) => status), ["fulfilled", "fulfilled"], "the host refused a call of the placement");
   assert.deepEqual(reports, []);
 });
 

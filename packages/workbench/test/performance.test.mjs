@@ -123,9 +123,12 @@ test("disabling stops new events at once and waits for the events that were acce
   await relayStarted;
   const disabling = tracer.setEnabled(false);
   tracer.trace("focus", {});
-  // The mark of the release orders the switch after the relay of the accepted event, and the event traced while disabling is not relayed.
-  calls.push("released");
-  release();
+  // The release runs in a microtask queued after the switch work of setEnabled(false), so a switch that went off without waiting for the relay
+  // records "off" before "released". The event traced while disabling is not relayed.
+  queueMicrotask(() => {
+    calls.push("released");
+    release();
+  });
   await disabling;
   assert.deepEqual(calls, ["on", "log", "released", "off"], "the switch went off before the accepted event was relayed");
 });

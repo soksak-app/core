@@ -3,7 +3,7 @@
 // and relayed to the host in a batch through the call `log`.
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
-import { settled, withoutClock } from "./support/records.mjs";
+import { withoutClock } from "./support/records.mjs";
 
 const calls = [];
 let failing = null;
@@ -17,7 +17,7 @@ mock.module("@soksak/runtime", { namedExports: { host: {
     calls.push({ name, payload: withoutClock(payload) });
   },
 } } });
-const { reportRecord } = await import("../page-log.js");
+const { reportRecord, flushEvents } = await import("../page-log.js");
 const { logGate } = await import("../log-gate.js");
 // The events below the level error are stored only in the debug state (docs/spec/settings.md, the section of core.settings.debug), which these tests
 // examine, so the state of every class at trace is set here.
@@ -72,7 +72,7 @@ test("emitEvent queues an event of a plugin with its level, name and fields in t
   calls.length = 0;
   emitEvent("debug", "plugin.fixture.input", { key: "a", surface: "tab-1" });
   emitEvent("warn", "plugin.fixture.slow", { us: 9 });
-  await settled();
+  await flushEvents();
   assert.deepEqual(events().map((event) => [event.level, event.event, event.fields]), [
     ["debug", "plugin.fixture.input", { key: "a", surface: "tab-1" }],
     ["warn", "plugin.fixture.slow", { us: 9 }],
@@ -94,7 +94,7 @@ test("captureConsole records what the page writes to its console and keeps the c
   target.info("note", 1);
   target.log("plain");
   target.debug(undefined, null, "d");
-  await settled();
+  await flushEvents();
   assert.deepEqual(written.map(([kind]) => kind), ["error", "warn", "info", "log", "debug"], "the original methods still ran once each");
   assert.deepEqual(events().map((event) => [event.level, event.event, event.fields.text]), [
     ["warn", "workbench.console.error", 'failed: {"code":7} Error: boom'],
@@ -115,7 +115,7 @@ test("a failed relay is reported on the original console and does not become a c
     captureConsole(target);
     failing = new Error("host closed");
     emitEvent("info", "plugin.fixture.x", {});
-    await settled();
+    await flushEvents();
     failing = null;
   } finally {
     console.error = original;
@@ -135,7 +135,7 @@ test("every host call is the event workbench.call with its name, arguments, dura
   await wrapped.call("overlayUpdate", { id: "debug", html: "<p></p>" });
   await wrapped.call("overlayPlace", { id: "debug", rect: { x: 0, y: 0, w: 1, h: 1 } });
   await wrapped.call("big", { text: "x".repeat(5000) });
-  await settled();
+  await flushEvents();
   const seen = events().filter(({ event }) => event === "workbench.call");
   assert.deepEqual(seen.map(({ level, fields }) => [level, fields.name, fields.args, fields.ok, fields.error, fields.truncated]), [
     ["debug", "good", '[{"a":1}]', true, undefined, false],
@@ -148,7 +148,6 @@ test("every host call is the event workbench.call with its name, arguments, dura
 test("a host call that the policy does not store is not built into an event, and the page reports the count as workbench.log.gated", async () => {
   const { settlingCalls } = await import("../host-calls.js");
   const { logGate } = await import("../log-gate.js");
-  const { flushEvents } = await import("../page-log.js");
   const policy = { lifecycle: "trace", input: "trace", call: "warn", io: "trace", frame: "trace" };
   logGate.set(policy);
   try {
@@ -162,7 +161,7 @@ test("a host call that the policy does not store is not built into an event, and
     await wrapped.call("good", watched);
     await assert.rejects(wrapped.call("bad", { b: 2 }), /refused/);
     await flushEvents();
-    await settled();
+    await flushEvents();
     const seen = events().filter(({ event }) => event === "workbench.call" || event === "workbench.log.gated");
     // The report of the count leaves each second and at a flush; its sum is the exact number of the calls that the gate refused.
     const gatedCount = seen.filter(({ event }) => event === "workbench.log.gated").reduce((sum, { fields }) => sum + fields.count, 0);
@@ -179,7 +178,7 @@ test("the start of a document of the workbench is the event workbench.start with
   const { recordWorkbenchStart } = await import("../page-log.js");
   calls.length = 0;
   recordWorkbenchStart({ href: "app://workbench/index.html?window=w1" }, 1791500000000.5);
-  await settled();
+  await flushEvents();
   assert.deepEqual(events().map((event) => [event.level, event.event, event.fields]), [
     ["info", "workbench.start", { started_at: 1791500000000.5, url: "app://workbench/index.html?window=w1" }],
   ]);
@@ -199,7 +198,7 @@ test("the text of a console call is cut at 8192 bytes while it is serialized, an
   target.log("é".repeat(10000));
   target.info(array);
   target.debug("short");
-  await settled();
+  await flushEvents();
   const [text, structure, short] = events().map((event) => event.fields);
   assert.equal(text.truncated, true);
   assert.ok(Buffer.byteLength(text.text) <= 8192 && Buffer.byteLength(text.text) >= 8190, `${Buffer.byteLength(text.text)} bytes`);
@@ -216,7 +215,7 @@ test("a console argument that JSON cannot serialize is recorded as a marker with
   const cyclic = {};
   cyclic.self = cyclic;
   target.log("state", cyclic);
-  await settled();
+  await flushEvents();
   // The reason is the message of the TypeError that the bounded serializer throws for a cycle.
   assert.deepEqual(events().map((event) => event.fields.text), ['state {"unserializable":"Converting circular structure to JSON"}']);
 });

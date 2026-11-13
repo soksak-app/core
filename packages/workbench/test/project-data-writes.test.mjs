@@ -67,6 +67,16 @@ projects.onSwitch({
 
 // The patches that the store took and has not answered, and the listener of its changes.
 const patches = [];
+// The calls of store.patch and the answers, in order: a test compares this order in its negative checks.
+const order = [];
+// The number of calls of store.patch so far, and the waits that resolve when the number reaches their count.
+let calls = 0;
+let callWaits = [];
+/** Resolves when store.patch has been called count times in all, at once when it has. */
+const patchCalled = (count) => new Promise((resolve) => {
+  if (calls >= count) resolve();
+  else callWaits.push({ count, resolve });
+});
 let changedStore = () => {};
 const store = {
   snapshot: async () => ({ common: {}, projects: structuredClone(stored), open: [] }),
@@ -75,19 +85,27 @@ const store = {
   tabSession: async () => null,
   tabSessionPut: async () => null,
   tabSessions: async () => [],
-  patch: (id, patch) => new Promise((resolve, reject) => { patches.push({ id, patch, resolve, reject }); }),
+  patch: (id, patch) => new Promise((resolve, reject) => {
+    patches.push({ id, patch, resolve, reject });
+    order.push("patch");
+    calls += 1;
+    callWaits = callWaits.filter((wait) => {
+      if (calls < wait.count) return true;
+      wait.resolve();
+      return false;
+    });
+  }),
   add: async () => {},
   remove: async () => {},
   onChange: (fn) => { changedStore = fn; },
 };
-const settle = () => new Promise((resolve) => setImmediate(resolve));
 
 /** Stores the oldest patch and answers it. */
-async function answer() {
+function answer() {
   const { patch, resolve } = patches.shift();
   stored[0].plugins = structuredClone(patch.plugins);
+  order.push("answer");
   resolve();
-  await settle();
 }
 
 declareProjectData("probe", { first: { schema: { type: "string" }, default: "" }, second: { schema: { type: "string" }, default: "" },
@@ -97,67 +115,77 @@ await projects.initialise(store);
 const data = () => viewDataOf(project, "probe");
 
 // contract: project-data.write.keeps-the-keys-before-it
-test("two writes in a row keep both keys, and the store takes them in order", async () => {
+test("two writes in a row keep both keys, and the store takes them in order", { timeout: 5000 }, async () => {
+  const start = calls;
+  order.length = 0;
   const first = data().set("first", "one");
   const second = data().set("second", "two");
-  await settle();
-  assert.equal(patches.length, 1, "the second write reached the store before the store answered the first");
-  await answer();
-  assert.equal(patches.length, 1, "the second write did not follow the answer of the first");
-  await answer();
+  await patchCalled(start + 1);
+  answer();
+  await patchCalled(start + 2);
+  answer();
   await Promise.all([first, second]);
+  // The second write is sent only after the store answers the first one.
+  assert.deepEqual(order, ["patch", "answer", "patch", "answer"], "the second write reached the store before the store answered the first");
   assert.deepEqual(stored[0].plugins.probe, { first: { format: 1, value: "one" }, second: { format: 1, value: "two" } });
 });
 
 // contract: project-data.write.outran-read-keeps-the-write
-test("a read of the store that a write outran keeps the write", async () => {
+test("a read of the store that a write outran keeps the write", { timeout: 5000 }, async () => {
   const heard = [];
   const stop = onDataChange((_project, _plugin, key) => heard.push(key));
+  const start = calls;
   const third = data().set("third", "three");
-  await settle();
+  await patchCalled(start + 1);
   changedStore();
-  await settle();
+  await projects.idle();
   assert.equal(data().get("third"), "three", "the read took the write back out of the project");
   assert.deepEqual(heard, [], "a view heard a change of a key that nobody changed");
-  await answer();
+  answer();
   await third;
   assert.deepEqual(heard, ["third"]);
   stop();
 });
 
 // contract: project-data.write.refusal-answers-the-view
-test("a write that the store refuses answers the view and leaves the project as it was", async () => {
+test("a write that the store refuses answers the view and leaves the project as it was", { timeout: 5000 }, async () => {
+  const start = calls;
   const refused = data().set("first", "lost");
-  await settle();
+  await patchCalled(start + 1);
   assert.equal(data().get("first"), "lost");
   patches.shift().reject(new Error("the disk is full"));
   await assert.rejects(refused, /the disk is full/);
   assert.equal(data().get("first"), "one");
 });
 
-test("a refused write under a later write stays in the record of that later write", async () => {
+test("a refused write under a later write stays in the record of that later write", { timeout: 5000 }, async () => {
+  const start = calls;
   const refused = data().set("first", "kept");
   const later = data().set("second", "later");
-  await settle();
+  await patchCalled(start + 1);
   patches.shift().reject(new Error("the disk is full"));
   await assert.rejects(refused, /the disk is full/);
-  await settle();
+  await patchCalled(start + 2);
   assert.equal(data().get("first"), "kept");
-  await answer();
+  answer();
   await later;
   assert.equal(stored[0].plugins.probe.first.value, "kept");
 });
 
 // contract: project-data.replace.changed-value-writes-nothing
-test("two replaces from one read keep the first, and the second answers false and writes nothing", async () => {
+test("two replaces from one read keep the first, and the second answers false and writes nothing", { timeout: 5000 }, async () => {
+  const start = calls;
+  order.length = 0;
   const base = data().get("third");
   const first = data().replace("third", base, "first change");
   const second = data().replace("third", base, "second change");
-  assert.equal(await second, false);
-  await settle();
-  assert.equal(patches.length, 1, "the second replace reached the store");
-  await answer();
+  // A refused replace settles at its call, so it is the first of the race; a replace that waits for the store is not settled yet.
+  assert.equal(await Promise.race([second, Promise.resolve("pending")]), false, "the second replace waited for the store");
+  await patchCalled(start + 1);
+  answer();
   assert.equal(await first, true);
+  // The second replace would be a second patch after the answer; the order holds only the first patch and its answer.
+  assert.deepEqual(order, ["patch", "answer"], "the second replace reached the store");
   assert.equal(data().get("third"), "first change");
 });
 
@@ -165,39 +193,44 @@ test("two replaces from one read keep the first, and the second answers false an
 async function storePoint(text) {
   stored[0].plugins = { ...stored[0].plugins, ordered: { point: { format: 1, value: JSON.parse(text) } } };
   changedStore();
-  await settle();
+  await projects.idle();
 }
 
 // contract: project-data.replace.compares-json-values
-test("a replace compares JSON values, whatever the form of their text", async () => {
+test("a replace compares JSON values, whatever the form of their text", { timeout: 5000 }, async () => {
   declareProjectData("ordered", { point: { schema: { type: "object" }, default: {} } });
   const ordered = viewDataOf(project, "ordered");
   for (const { stored: text, base, same } of VALUES) {
     await storePoint(text);
+    const start = calls;
     const replaced = ordered.replace("point", JSON.parse(base), { next: 1 });
-    await settle();
-    if (same) await answer();
+    if (same) {
+      await patchCalled(start + 1);
+      answer();
+    }
     assert.equal(await replaced, same, `${text} against ${base}`);
   }
 });
 
 // contract: project-data.replace.read-value-is-its-base
-test("the value that a read answered is a base that a replace accepts", async () => {
+test("the value that a read answered is a base that a replace accepts", { timeout: 5000 }, async () => {
   const ordered = viewDataOf(project, "ordered");
   for (const { stored: text } of VALUES) {
     await storePoint(text);
+    const start = calls;
     const replaced = ordered.replace("point", JSON.parse(JSON.stringify(ordered.get("point"))), { next: 1 });
-    await settle();
-    await answer();
+    await patchCalled(start + 1);
+    answer();
     assert.equal(await replaced, true, text);
   }
 });
 
 // contract: project-data.replace.refusal-answers-the-view
-test("a replace that the store refuses answers the view and leaves the value", async () => {
+test("a replace that the store refuses answers the view and leaves the value", { timeout: 5000 }, async () => {
+  const start = calls;
   const before = data().get("third");
   const refused = data().replace("third", before, "lost");
-  await settle();
+  await patchCalled(start + 1);
   patches.shift().reject(new Error("the disk is full"));
   await assert.rejects(refused, /the disk is full/);
   assert.equal(data().get("third"), before);

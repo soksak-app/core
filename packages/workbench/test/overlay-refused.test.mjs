@@ -36,8 +36,6 @@ mock.module("@soksak/runtime", { namedExports: { host: {
 } } });
 const { modalState, orderedCallsAnswered, overlay } = await import("../host.js");
 
-// Lets the microtasks of the ordered-call queue run for the drain of a queue of calls that the test answers in turn.
-const turns = () => new Promise((resolve) => setTimeout(resolve, 0));
 const rect = { x: 0, y: 0, w: 10, h: 10 };
 
 test("a refused overlayShow closes the modal it showed and calls refused with the reason", async () => {
@@ -67,10 +65,12 @@ test("a refusal of a modal that another show replaced changes nothing", async ()
   await untilReceived(2);
   assert.equal(modalState()?.id, "dialog", "the refusal of the replaced modal closed the one on display");
   assert.deepEqual(refusals, []);
-  while (pending.length) {
-    pending.shift().resolve(rect);
-    await turns();
-  }
+  // The replaced modal hides, and the show of the dialog is the call after that answer.
+  assert.deepEqual(pending.map((call) => call.name), ["overlayHide"]);
+  pending.shift().resolve(rect);
+  await untilReceived(3);
+  assert.deepEqual(pending.map((call) => call.name), ["overlayShow"]);
+  pending.shift().resolve(rect);
   const before = received;
   overlay.hide();
   await untilReceived(before + 1);

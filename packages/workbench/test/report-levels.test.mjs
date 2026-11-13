@@ -3,7 +3,7 @@
 // the level.
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
-import { clockAnswer, recordsOf, settled, shownRecord } from "./support/records.mjs";
+import { clockAnswer, recordsOf, shownRecord } from "./support/records.mjs";
 
 const lines = [];
 mock.module("@soksak/runtime", { namedExports: { host: {

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createLayoutQueue, drawPrepared } from "../layout-queue.js";
+import { drained } from "./support/drained.mjs";
 
 // Runs the drawing order that the document queues for each layout with a fake preparation, drawing, and presentation.
 function fixture() {
@@ -44,8 +45,11 @@ test("the document waits for native preparation before drawing and retains the p
   let nextStarted = false;
   const next = f.layouts.run(() => { nextStarted = true; });
   f.frame(); await f.drawn.promise;
-  // The presentation is requested after the draw. Until it resolves, the layout and the next layout cannot complete.
+  // The presentation is requested after the draw. Until it resolves, the layout and the next layout cannot complete. The queue
+  // completes a layout and starts the next one in microtasks, so after the end of the microtask queue a layout that did not wait
+  // for the presentation has completed.
   await f.presenting.promise;
+  await drained();
   try {
     assert.deepEqual(f.calls, ["prepare", "draw"]);
     assert.equal(completed, false, "the layout queue released before matching presentation");

@@ -5,7 +5,8 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { JSDOM } from "jsdom";
-import { clockAnswer, recordsOf, settled, shownRecord } from "./support/records.mjs";
+import { clockAnswer, recordsOf, shownRecord } from "./support/records.mjs";
+import { drained } from "./support/drained.mjs";
 
 const TIMEOUT = "the current image raster did not present within 10s; pending tab-1/view generation 2 raster 1 sequence 0 presented 0/0 surface visible";
 
@@ -21,6 +22,7 @@ mock.module("@soksak/runtime", { namedExports: { host: {
   },
 } } });
 const { report, surfaces } = await import("../host.js");
+const { flushEvents } = await import("../page-log.js");
 const { createErrorDisplay, createPageLayout, placementLast, reportUncaught } = await import("../page-layout.js");
 const { hideError } = await import("../shown-errors.js");
 const { connectExposure, registry } = await import("../exposure.js");
@@ -54,9 +56,6 @@ await connectExposure({ settled: page.drawn, report });
 /** The plane schedules a layout. The preparation of that layout fails. */
 const schedule = () => { page.onLayout(new Map(), () => {}, new Map(), 40, () => true); };
 
-/** Finishes all microtasks and the reporting of unhandled rejections up to the next macrotask. */
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
-
 test("a layout failure of a project switch started from the interface writes one workbench error line", async () => {
   reportRejectionsAsPage();
   lines.length = 0;
@@ -64,15 +63,18 @@ test("a layout failure of a project switch started from the interface writes one
     name: "core.fixture.activate", description: "Activates.", params: { type: "object", properties: {} }, result: { type: "null" },
   }] });
   // A project switch schedules the loaded layout on the plane, waits for its presentation, and then replies (showProject of projects.js).
+  // The command resolves `completed` after its layout presented or failed; the failure is queued before the presentation answers.
+  const completed = Promise.withResolvers();
   registry.command("core.fixture.activate", async () => {
     schedule();
     await page.presented();
+    completed.resolve();
     return null;
   });
   bind(document.getElementById("projectTab"), "core.fixture.activate");
   document.getElementById("projectTab").click();
-  await settle();
-  await settle();
+  await completed.promise;
+  await flushEvents();
   assert.deepEqual(lines, [`error workbench workbench: surface presentation failed: ${TIMEOUT}`],
     "one layout failure of a project switch must write exactly the line of the layout queue that shows it");
 });
@@ -84,6 +86,7 @@ test("a layout failure that no command waits for writes one workbench error line
   lines.length = 0;
   schedule();
   assert.equal(await page.presented(), false, "a failed layout was reported as presented");
+  await flushEvents();
   assert.deepEqual(lines, [`error workbench workbench: surface presentation failed: ${TIMEOUT}`],
     "one layout failure of a gesture must write exactly the line of the layout queue that shows it");
 });
@@ -100,30 +103,40 @@ test("a successful presentation reports completion", async () => {
 // The host asks it before it waits for the presentation of the window (workbench.placement.last).
 test("the last placement answers after the layout that waited behind the running layout", async () => {
   const opened = [];
+  // begun[i] resolves when the preparation of the i-th layout starts.
+  const begun = (index) => (begins[index] ??= Promise.withResolvers()).promise;
+  const begins = [];
   const page = createPageLayout({
     document, showError, setVerify: () => {}, log: () => {}, surfaces: { waitPresented: async () => {} },
     plane: {}, compositor: {
-      publishAhead: () => new Promise((resolve, reject) => opened.push({ resolve, reject })),
+      publishAhead: () => new Promise((resolve, reject) => {
+        opened.push({ resolve, reject });
+        (begins[opened.length - 1] ??= Promise.withResolvers()).resolve();
+      }),
       cancelPrepared: async () => {},
     }, textSize: () => 1, rendered: async () => {},
     waitSurfaceCompositionAnswered: async () => {},
   });
   const layout = () => page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
   layout();
-  await settle();
+  await begun(0);
   layout();
-  let ended = false;
-  const wait = placementLast().then((answer) => { ended = true; return answer; });
+  // The wait ends after the layout that waited behind the running layout, not with the running one. The running layout has ended
+  // when the waiting one starts its preparation, and a wait that followed the running layout answers in the microtasks of that end,
+  // so after the end of the microtask queue such a wait has answered.
+  let answered = false;
+  const wait = placementLast().then((answer) => { answered = true; return answer; });
   opened[0].resolve({});
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await begun(1);
   assert.equal(opened.length, 2, "the waiting layout did not start after the running layout");
-  assert.equal(ended, false, "the wait ended with the layout that ran when the next one arrived");
+  await drained();
+  assert.equal(answered, false, "the wait ended with the layout that ran when the next one arrived");
   opened[1].resolve({});
   assert.equal(await wait, null);
 
   layout();
   const failed = placementLast();
-  await settle();
+  await begun(2);
   opened[2].reject(new Error(TIMEOUT));
   await assert.rejects(failed, (error) => error.message === TIMEOUT);
 });

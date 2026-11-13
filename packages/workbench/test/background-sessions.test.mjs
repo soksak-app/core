@@ -36,9 +36,18 @@ test("a background session opens only for a tab without a mounted surface and en
   // The sidecar port of the window: the test records each send and keeps the listener of each surface, so it can deliver the
   // notice of a new connection that the host sends after the persistent service was respawned.
   const sends = [];
+  // The order of the sends and of the steps of the test. A send that a step causes comes after the mark of that step.
+  const order = [];
+  let opened;
+  const openArrival = new Promise((resolve) => { opened = resolve; });
   const listeners = new Map();
   const port = {
-    send: (surface, body) => { sends.push({ surface, body }); return Promise.resolve({}); },
+    send: (surface, body) => {
+      sends.push({ surface, body });
+      order.push(`${body.operation} ${surface}`);
+      opened();
+      return Promise.resolve({});
+    },
     on: (surface, listener) => {
       listeners.set(surface, listener);
       return Promise.resolve(() => { if (listeners.get(surface) === listener) listeners.delete(surface); });
@@ -105,22 +114,25 @@ test("a background session opens only for a tab without a mounted surface and en
     assert.equal(sends.length, 0, "the preview opened a background session before the project context was committed");
     projectContextReady = true;
     commitProjectContext();
-    await new Promise((resolve) => setImmediate(resolve));
     // After projectShown commits, the hidden tab has no surface and gets its background session.
+    await openArrival;
     assert.equal(opens(hidden), 1, "the tab without a surface got no background open");
     assert.deepEqual(decisions(hidden), ["open:absent"]);
 
     // A tab of another plugin is shown in the card. The surface of the first tab stays mounted and keeps its session.
+    order.push("added");
     plane.addTabTo("main", other);
     assert.ok(mounted.has(shown), "the surface of the hidden tab was released");
     assert.equal(opens(shown), 0, `a background open was sent for the mounted surface ${shown}`);
     assert.deepEqual(decisions(shown), ["skip:mounted"]);
 
     // The tab that had a background session is shown: its surface mounts and owns the session from then on.
+    order.push("selected");
     plane.selectTab(hidden);
     assert.ok(mounted.has(hidden), "selecting the tab did not mount its surface");
     assert.deepEqual(decisions(hidden), ["open:absent", "stop:mounted"]);
     // A respawned service announces the new connection; only a background session reopens, and this tab has none any more.
+    order.push("reconnected");
     listeners.get(hidden)?.({ event: "connection", connected: true });
     assert.equal(opens(hidden), 1, `the shown tab ${hidden} got a background open after the reconnection`);
     assert.deepEqual(reports, []);
@@ -137,13 +149,19 @@ test("a background session opens only for a tab without a mounted surface and en
     failedContextPlane.adopt(failedContextPlane.fresh(), "spc-aaaaaa");
     assert.equal(sends.length, beforeFailedContext, "a preview opened a background session while failed initialization was still pending");
     projectContextFailed = true;
+    // The observer of the pending context is a reaction that the adopt registered first. This reaction is registered after it,
+    // so it runs after the observer has handled the rejection.
+    const observerHandled = projectContext.then(() => {}, () => {});
+    order.push("rejected");
     rejectProjectContext(new Error("initial project context failed"));
-    await new Promise((resolve) => setImmediate(resolve));
+    await observerHandled;
     failedContextPlane.settle();
-    await new Promise((resolve) => setImmediate(resolve));
     assert.equal(sends.length, beforeFailedContext, "a later redraw opened a background session after startup context failure");
     assert.deepEqual(reports, [], "the background observer duplicated the initialization error report");
     failedContextPlane.clear?.();
+    // No send came after a step that could not cause it, and the opens of the mounted surface never came at all.
+    assert.deepEqual(order, [`open ${hidden}`, "added", "selected", "reconnected", "rejected"],
+      "a background open came out of order or for a surface that holds its own session");
   } finally {
     plane.clear?.();
   }

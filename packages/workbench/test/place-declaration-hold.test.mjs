@@ -11,6 +11,8 @@ test("a preparation holds the declaration of each view it leaves out until the h
   const dom = new JSDOM('<div id="plane"></div>');
   globalThis.document = dom.window.document;
   const holds = [];
+  // The order of the reply of the host and of the end of the hold.
+  const order = [];
   let replySync;
   const syncReplied = new Promise((resolve) => { replySync = resolve; });
   let syncSent;
@@ -23,8 +25,8 @@ test("a preparation holds the declaration of each view it leaves out until the h
     mountedSurface: (id) => (id === "mounted-view" ? { surfaceId: id, disposed: false } : null),
     compositionState: () => ({ state: "declared" }),
     holdCompositionDeclarations: (ids, place) => {
-      const hold = { ids: [...ids], ended: false };
-      place.then(() => { hold.ended = true; }, () => { hold.ended = true; });
+      const hold = { ids: [...ids] };
+      place.then(() => { order.push("hold ended"); }, () => { order.push("hold ended"); });
       holds.push(hold);
     },
   } });
@@ -50,12 +52,11 @@ test("a preparation holds the declaration of each view it leaves out until the h
     const request = await syncStarted;
     assert.deepEqual(request.surfaces.map(({ id }) => id), ["mounted-view"], "the preparation sent an unmounted view");
     assert.deepEqual(holds.map(({ ids }) => ids), [["cold-view"]], "the preparation did not hold the declaration of the view it left out");
-    await new Promise((resolve) => setImmediate(resolve));
-    assert.equal(holds[0].ended, false, "the hold ended before the host replied to the preparation");
+    // The reply is the mark before the hold may end, so the order shows the hold ended after the reply and not before it.
+    order.push("reply sent");
     replySync();
     await placing;
-    await new Promise((resolve) => setImmediate(resolve));
-    assert.equal(holds[0].ended, true, "the hold did not end with the reply of the preparation");
+    assert.deepEqual(order, ["reply sent", "hold ended"], "the hold did not end with the reply of the preparation");
   } finally {
     replySync();
     dom.window.close();

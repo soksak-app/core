@@ -80,6 +80,8 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
   const { authorizeSurface, surfacePlacementsForHost, viewStartProjectOf, viewStartValues } = await import("../surface-modules.js");
   const { recordOrigin } = await import("../tab-reports.js");
   const { surfaces: hostSurfaces } = await import("../host.js");
+  // The records of the frame gate are queued and relayed in batches; flushEvents ends when every queued record was relayed.
+  const { flushEvents } = await import("../page-log.js");
   const holdNextSync = () => {
     let resolveAnswer;
     let resolveStarted;
@@ -142,7 +144,7 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
     } finally {
       logGate.set(previousLogPolicy);
     }
-    await new Promise((resolve) => setImmediate(resolve));
+    await flushEvents();
     const initialSync = hostCalls.filter(({ name }) => name === "syncSurfaces").at(-1);
     assert.ok(Array.isArray(initialSync.request.declarations), "the wire request omitted its declaration table");
     assert.equal(Number.isSafeInteger(initialSync.request.surfaces[0].start.declarations), true,
@@ -168,7 +170,7 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
       logGate.set({ ...priorTracePolicy, frame: "trace" });
       opensBeforeCompletion.resolve(syncReply(openingRequest));
       await openingPlacement;
-      await new Promise((resolve) => setImmediate(resolve));
+      await flushEvents();
       const afterOpening = surfaceSyncEvents();
       assert.equal(afterOpening.length, 2,
         "a frame gate opened while sync was pending must record the completed request");
@@ -182,7 +184,7 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
       logGate.set({ ...priorTracePolicy, frame: "off" });
       closesBeforeCompletion.resolve(syncReply(closingRequest));
       await closingPlacement;
-      await new Promise((resolve) => setImmediate(resolve));
+      await flushEvents();
       assert.equal(surfaceSyncEvents().length, 2,
         "a frame gate closed while sync was pending must omit the completed request record");
     } finally {

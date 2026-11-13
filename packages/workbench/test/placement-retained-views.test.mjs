@@ -515,7 +515,10 @@ test("an unloaded cold view is classified before a drawn host placement", async 
     let initialized = false;
     let resolveReady;
     const ready = new Promise((resolve) => { resolveReady = resolve; });
+    // The order of the drawn placement: observed is listed when the placement observes its record, which the placement does after ready.
+    let order = null;
     const observe = (_record, tabs) => {
+      if (order) order.push("observed");
       if (initialized) memory.observe(new Set(), tabs.map(({ id, plugin }) => ({ id, plugin, kind: "tab" })));
     };
     const undrawn = { surfaces: [], settled: true, drawn: false, titlebar: 40 };
@@ -535,19 +538,24 @@ test("an unloaded cold view is classified before a drawn host placement", async 
       "an undrawn preparation sent a cold hidden view");
     assert.equal(mounted.has(cold.id), false, "an undrawn preparation mounted a cold hidden view");
 
-    let classificationFinished = false;
+    // The order shows that the drawn placement observed its record and ended after the startup classification, which is marked right
+    // before ready resolves. The placement is started before the mark, and one microtask passes before the mark: a placement that
+    // did not wait for ready has observed its record by then, so observed is listed before ready.
+    order = [];
     const drawn = { surfaces: [], settled: true, drawn: true, titlebar: 40 };
     const classifiedPlacement = memoryPlacement(drawn, candidates, { ready, saver: memory, observe, start: (entries) => entries }).then((value) => {
-      classificationFinished = true;
+      order.push("finished");
       return value;
     });
-    await Promise.resolve();
-    assert.equal(classificationFinished, false, "drawn placement did not wait for startup memory classification");
     memory.observe(new Set(), [{ id: cold.id, plugin: cold.plugin, kind: "tab" }]);
+    order.push("classified");
     memory.classify();
+    await Promise.resolve();
+    order.push("ready");
     initialized = true;
     resolveReady();
     const classified = await classifiedPlacement;
+    assert.deepEqual(order, ["classified", "ready", "observed", "finished"], "drawn placement did not wait for startup memory classification");
     const answer = await placeCompositorRecord(drawn, classified.surfaces,
       (request) => host.surfaces.place(request), ["placement-probe"], {
         mountedSurface: (id) => mounted.has(id) ? { surfaceId: id, disposed: false } : null,

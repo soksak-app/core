@@ -23,6 +23,9 @@ let sent = null;
 let flight = Promise.resolve();
 /* The targets of the keyboard calls that the host has not answered. */
 const unanswered = [];
+/* The follows that are queued and have not run, and the waits of idle for the last one. */
+let queued = 0;
+let idleWaits = [];
 
 const editable = (element) => element !== null && element.matches("input, textarea, select, [contenteditable]");
 
@@ -83,13 +86,29 @@ function follow(cause) {
   send(surface);
 }
 
+/** Queues the follow of a cause, which runs after the current synchronous step, and counts it until it runs. */
+function queueFollow(cause) {
+  queued++;
+  queueMicrotask(() => {
+    try {
+      follow(cause);
+    } finally {
+      queued--;
+      if (queued > 0) return;
+      const waits = idleWaits;
+      idleWaits = [];
+      for (const resolve of waits) resolve();
+    }
+  });
+}
+
 /** Registers the function that reads the active surface of the card with the ring, null without one. */
 export function followRing(read) {
   ringSurface = read;
   // The close of a modal changes the state before it queues its host call, and this call follows that one.
-  onModalState(() => queueMicrotask(() => follow("modal")));
+  onModalState(() => queueFollow("modal"));
   document.addEventListener("focusin", () => follow("focusin"));
-  document.addEventListener("focusout", () => queueMicrotask(() => follow("focusout")));
+  document.addEventListener("focusout", () => queueFollow("focusout"));
   // The listener of the capture phase sees every release of the document, whatever element takes it or captures the pointer.
   document.addEventListener("pointerup", (event) => { if (event.button === 0) keyboardPressed(); }, true);
 }
@@ -117,7 +136,15 @@ export function keyboardPressed() {
 /** The ring moved, so the keyboard moves even to the target that it had. It follows the state that the move leaves. */
 export function keyboardOwed() {
   owed = true;
-  queueMicrotask(() => follow("ring"));
+  queueFollow("ring");
+}
+
+/**
+ * Resolves when no follow of the keyboard is queued, at once when none is. Each call that the state asks for has been sent to the
+ * host by then; the answers of the calls are the flight that keyboardPlaced returns.
+ */
+export function idle() {
+  return queued === 0 ? Promise.resolve() : new Promise((resolve) => idleWaits.push(resolve));
 }
 
 /**

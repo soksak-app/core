@@ -82,7 +82,8 @@ test("a held layout draw survives the close of a card it contains", { timeout: 5
     observer.observe(stableCard, { attributes: true, subtree: true, attributeFilter: stableAttributes });
     plane.settle();
     held.draw();
-    await Promise.resolve();
+    // The records not yet delivered are read synchronously, so the check does not yield before it judges the redraw.
+    stableMutations.push(...observer.takeRecords());
     observer.disconnect();
     assert.deepEqual(stableMutations.map(({ attributeName }) => attributeName), [],
       "an unchanged redraw must not rewrite stable card or slot state attributes");
@@ -106,7 +107,7 @@ test("a held layout draw survives the close of a card it contains", { timeout: 5
     textZoomObserver.observe(stableCard, { attributes: true, attributeFilter: ["data-text-zoom", "style"] });
     const replacementTab = plane.addTabTo("main", pluginId, null);
     held.draw();
-    await Promise.resolve();
+    textZoomMutations.push(...textZoomObserver.takeRecords());
     textZoomObserver.disconnect();
     assert.equal(textZoomSetCalls, 0, "an unchanged card text factor must not call CSSStyleDeclaration.setProperty");
     assert.deepEqual(textZoomMutations.map(({ attributeName }) => attributeName), [],

@@ -8,6 +8,7 @@ import { createEventBatcher } from "@soksak/plugin-api/log-batch.js";
 import { classOf } from "../event-classes.js";
 import { withoutClock } from "./support/records.mjs";
 import { pageIdentity } from "../page-identity.js";
+import { drained } from "./support/drained.mjs";
 
 const hostClock = { ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 };
 const answering = (inner) => (request) => (request.action === "clock" ? Promise.resolve(hostClock) : inner(withoutClock(request)));
@@ -122,10 +123,11 @@ test("the counts of a closed gate leave each second and at a flush, not with eac
     await relay;
   }
   assert.deepEqual(gatedOf(), [], "the counts left with a batch within a second");
-  // The timer was armed at the first refusal, at the time 0, for the end of the second. Only that timer sends a batch
-  // before the second ends, and it has not fired at the time 999, so the check follows the tick without a wait.
+  // The timer was armed at the first refusal, at the time 0, for the end of the second. Only that timer sends a batch before the
+  // second ends; a timer that fired at the time 999 sends it in the microtasks after the tick, which end before drained resolves.
   clock = 999;
   t.mock.timers.tick(999);
+  await drained();
   assert.deepEqual(gatedOf(), [], "the counts left before the second ended");
   clock = 1000;
   const reported = nextRelay();
