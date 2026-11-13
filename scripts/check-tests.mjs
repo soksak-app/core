@@ -1509,6 +1509,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F779-1",
+    implementation: [
+      { file: "packages/window-check/app.mjs", symbol: "async checkEnded(t) {" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/wait-ended.test.mjs", id: "a check that the test runner ended while it waited for a status names the wait and the last value" },
+    ],
+    expected: "A check that the test runner ends at its limit names each wait that has not ended and the last value of its status.",
+    levels: ["unit"],
+  },
+  {
     id: "F778",
     implementation: [
       { file: "packages/host/go/src/diagnostics.go", symbol: "func nativeDrag(" },

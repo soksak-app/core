@@ -568,6 +568,9 @@ export class Session {
     this.unanswered = new Map();
     // The moment the session opened. step writes the time of each step from it.
     this.started = performance.now();
+    // The waits of until that have not ended, each {name, message, seen, last}: the status, the text of the wait and the last
+    // value that the status had. checkEnded names them when the test runner ends the check at its limit.
+    this.waits = new Set();
   }
 
   /**
@@ -578,7 +581,13 @@ export class Session {
    * leaves no record: a request that it left in flight can still be answered.
    */
   async checkEnded(t) {
-    if (t.error?.failureType !== "testTimeoutFailure" || this.unanswered.size === 0) return;
+    if (t.error?.failureType !== "testTimeoutFailure") return;
+    // A wait has no time limit, so the end of the check at its limit is the event that shows a status that did not come.
+    for (const wait of this.waits) {
+      const last = wait.seen ? `the last value was ${JSON.stringify(wait.last)}` : "no value came";
+      t.diagnostic?.(`${this.app.name}: the check ended at its limit while it waited for ${wait.name}: ${wait.message}; ${last}`);
+    }
+    if (this.unanswered.size === 0) return;
     const requests = [...this.unanswered.values()].join(", ");
     // Each sample ends by the end of its sample process, and a request pending after STALL_AFTER started it long before the limit.
     const records = (await Promise.all([...this.stallSamples])).map(({ line, error }) => line ?? error.message);
@@ -1106,7 +1115,14 @@ export class Session {
     if (Object.keys(rest).length > 0) throw new TypeError(`until ${name} has no option ${Object.keys(rest).join(", ")}`);
     if (surface !== undefined) await this.registered(surface, [`status ${name}`]);
     this.step(`until ${name}`);
-    return this.client.watch(this.window, name, predicate, { surface }).catch((error) => {
+    const wait = { name, message, seen: false, last: undefined };
+    this.waits.add(wait);
+    const seen = (value) => {
+      wait.seen = true;
+      wait.last = value;
+      return predicate(value);
+    };
+    return this.client.watch(this.window, name, seen, { surface }).finally(() => this.waits.delete(wait)).catch((error) => {
       // When the watch or the first value request fails, the error names the status. The code stays unchanged.
       if (error instanceof EndpointError) error.message = `${this.app.name} status ${name}: ${error.message}`;
       // A watch that ended by the close of the connection or by an error of the predicate names what did not arrive.

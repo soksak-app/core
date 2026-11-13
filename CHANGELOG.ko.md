@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F779-1: test runner 가 status 를 기다리는 window check 를 시간 제한에서 끝내면, check 는 그 status, wait 의 text, status 의 마지막 값을 밝힌다.
 - F778: 2026-11-14 window run 에서 `e2e/paint.test.mjs` 와 `e2e/plain-view.test.mjs` 는 load average 34 에서 38 사이에서 세 host 모두 통과했고, mygo `e2e/paint.test.mjs` 는 세 번 통과했다.
 - F785: core 가 pin 한 mygo framework `v0.7.4-244-g4abb83d-soksak.13` 은 frame 을 만드는 동안 창에 닿은 pointer event 를 그 frame 뒤에 적용하므로, workbench 의 누름 observer 는 더 이상 frame 안에서 element tree 를 읽지 않는다. frame record 는 그런 입력을 `Deferred` 로 센다.
 - F784: 두 host 의 layout trace 는 누름이나 key event 가 hold 된 layout transaction 을 끝내는 commit path `input` 에 이름을 붙이므로, 누름이 hold 된 layout 을 끝낸 drag 는 더 이상 알 수 없는 commit path 로 실패하지 않는다.
