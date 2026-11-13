@@ -943,6 +943,8 @@ impl LineWrite {
             size = self
                 .changed
                 .wait(size)
+                // default: a wait whose lock a panicking thread poisoned still holds the size, which is only read; the panic
+                // hook records the panic.
                 .unwrap_or_else(PoisonError::into_inner);
         }
     }

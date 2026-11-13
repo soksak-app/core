@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F767-4-3-1: Rust host 의 sidecar writer line 대기는 poison 된 lock 의 크기를 읽는 이유를 적는다.
 - F769-1-2: native 시험 한도의 sample check 는 platform 이름을 읽지 않고 platform module 에 그 platform 이 process 를 기록하는지 묻는다.
 - F767-2-2-2: layout package 는 window-check package 를 development dependency 로 선언하고 group 규칙을 그 이름으로 import 한다. 그래서 그 test 는 다른 package 의 경로를 읽지 않는다.
 - F767-4-4: Go host 의 service 교체 check 의 cleanup 은 자기가 시작한 service 의 state 를 10 ms 마다 읽지 않고 그 exit 를 기다린다.
