@@ -1457,6 +1457,19 @@ const FEATURE_LINKS = [
     levels: ["native", "unit"],
   },
   {
+    id: "F781",
+    implementation: [
+      { file: "packages/host/go/src/diagnostics.go", symbol: "func nativeDrag(" },
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn native_drag(" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestANativeDragStepFollowsTheStepBeforeItByOnePeriod" },
+      { file: "packages/host/rust/src/diagnostics_test.rs", id: "a_native_drag_step_follows_the_step_before_it_by_one_period" },
+    ],
+    expected: "Each step of a native drag comes one display period after the press or the step before it.",
+    levels: ["unit"],
+  },
+  {
     id: "F780",
     implementation: [
       { file: "packages/host/go/src/diagnostics.go", symbol: 'if err := deliver(input("move", from)); err != nil {' },

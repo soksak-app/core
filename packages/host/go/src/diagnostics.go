@@ -487,17 +487,18 @@ func nativeDrag(plan dragPlan, from point, clock func() time.Duration, deliver f
 		wait := clock() - waiting
 		waited += wait
 		pressWaits = append(pressWaits, wait.Milliseconds())
+		// The period of a step runs from the time of the press or of the step before it, so the delivery of an input, which
+		// is inside the period, does not lengthen the step (docs/spec/diagnostics.md).
+		previous := clock()
 		if err := deliver(input("down", from)); err != nil {
 			return nil, fmt.Errorf("native drag press of round trip %d: %w", turn+1, err)
 		}
 		last := from
 		// Each leg runs until its elapsed time reaches plan.MS, so the position follows the time of the host and
-		// not a count of steps fixed in advance. The steps are the refreshes that the window presented.
+		// not a count of steps fixed in advance. The steps are the refreshes that the window presented. The out leg starts at
+		// the time of the press and the back leg at the time of the last step of the out leg.
 		for _, back := range []bool{false, true} {
-			legStart := clock()
-			// The period of a step runs from the time of the step before it, so the delivery of an input, which is inside the
-			// period, does not lengthen the step (docs/spec/diagnostics.md).
-			previous := legStart
+			legStart := previous
 			for {
 				taken, err := step(previous)
 				if err != nil {

@@ -1258,6 +1258,9 @@ fn native_drag(
         let wait = clock() - waiting;
         waited += wait;
         press_waits.push(wait.as_millis() as u64);
+        // The period of a step runs from the time of the press or of the step before it, so the delivery of an input,
+        // which is inside the period, does not lengthen the step (docs/spec/diagnostics.md).
+        let mut previous = clock();
         deliver(input(1, from)).map_err(|error| {
             Failure::new(
                 error.code,
@@ -1269,11 +1272,9 @@ fn native_drag(
             )
         })?;
         let mut last = from;
+        // The out leg starts at the time of the press and the back leg at the time of the last step of the out leg.
         for back in [false, true] {
-            let leg_start = clock();
-            // The period of a step runs from the time of the step before it, so the delivery of an input, which is inside
-            // the period, does not lengthen the step (docs/spec/diagnostics.md).
-            let mut previous = leg_start;
+            let leg_start = previous;
             loop {
                 previous = match step(previous) {
                     Ok(taken) => taken,

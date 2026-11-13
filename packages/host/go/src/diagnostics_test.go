@@ -638,17 +638,24 @@ func TestANativeDragStepFollowsTheStepBeforeItByOnePeriod(t *testing.T) {
 		t.Fatalf("a step whose time passed was taken at %v after the waits %v, want 120ms without a wait", at, slept)
 	}
 
-	// Each input takes 5 ms to deliver. Every round trip is a press, two legs of 32 ms whose steps come 16 ms apart, the last
-	// step of each leg delivered 5 ms after its time, and a release: 5 + 37 + 37 + 5 ms.
+	// Each input takes 5 ms to deliver. Every round trip is a press, two legs of 32 ms whose steps come 16 ms apart, the out
+	// leg from the time of the press and the back leg from the time of the last step of the out leg, the last step of the
+	// back leg delivered 5 ms after its time, and a release: 32 + 32 + 5 + 5 ms.
 	var now time.Duration
-	var stepped []time.Duration
+	var pressed, stepped []time.Duration
+	var times []time.Duration
 	result, err := nativeDrag(dragPlan{Axis: "x", Line: 3, DX: 20, MS: 32, Times: 2}, point{X: 100, Y: 50}, func() time.Duration { return now },
-		func(PointerInput) error {
+		func(input PointerInput) error {
+			if input.Phase == "down" {
+				pressed = append(pressed, now)
+				times = append(times, now)
+			}
 			now += 5 * time.Millisecond
 			return nil
 		}, func(previous time.Duration) (time.Duration, error) {
 			taken, err := periodicStep(&now, 16*time.Millisecond, nil)(previous)
-			stepped = append(stepped, taken-previous)
+			stepped = append(stepped, taken-times[len(times)-1])
+			times = append(times, taken)
 			return taken, err
 		}, func() error { return nil })
 	if err != nil {
@@ -656,14 +663,17 @@ func TestANativeDragStepFollowsTheStepBeforeItByOnePeriod(t *testing.T) {
 	}
 	for i, gap := range stepped {
 		if gap != 16*time.Millisecond {
-			t.Fatalf("step %d came %v after the step before it, want one period of 16ms; steps %v", i+1, gap, stepped)
+			t.Fatalf("step %d came %v after the press or the step before it, want one period of 16ms; steps %v", i+1, gap, stepped)
 		}
+	}
+	if len(pressed) != 2 {
+		t.Fatalf("native drag pressed at %v, want two presses", pressed)
 	}
 	if result["steps"] != 8 {
 		t.Fatalf("native drag steps %v, want 2 steps in each of the 4 legs", result["steps"])
 	}
-	if took, ok := result["took"].(int64); !ok || took != 168 {
-		t.Fatalf("native drag took %#v ms, want 168 ms: the deliveries are inside the periods", result["took"])
+	if took, ok := result["took"].(int64); !ok || took != 148 {
+		t.Fatalf("native drag took %#v ms, want 148 ms: the deliveries are inside the periods", result["took"])
 	}
 }
 

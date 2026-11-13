@@ -49,9 +49,12 @@ fn a_native_drag_step_follows_the_step_before_it_by_one_period() {
     assert!(slept.borrow().is_empty(), "a step whose time passed waits");
 
     // Each input takes 5 ms to deliver. Every round trip is a press, two legs of 32 ms whose steps come 16 ms apart, the
-    // last step of each leg delivered 5 ms after its time, and a release: 5 + 37 + 37 + 5 ms.
+    // out leg from the time of the press and the back leg from the time of the last step of the out leg, the last step of
+    // the back leg delivered 5 ms after its time, and a release: 32 + 32 + 5 + 5 ms.
     let now = Cell::new(Duration::ZERO);
     let gaps = RefCell::new(Vec::new());
+    let times = RefCell::new(Vec::new());
+    let presses = Cell::new(0);
     let result = native_drag(
         &NativeDragPlan {
             dx: 20.0,
@@ -61,13 +64,19 @@ fn a_native_drag_step_follows_the_step_before_it_by_one_period() {
         },
         (100.0, 50.0),
         || now.get(),
-        |_| {
+        |input| {
+            if input.phase == 1 {
+                presses.set(presses.get() + 1);
+                times.borrow_mut().push(now.get());
+            }
             now.set(now.get() + ms(5));
             Ok(())
         },
         |previous| {
             let taken = periodic_step(&now, previous, ms(16));
-            gaps.borrow_mut().push(taken - previous);
+            let before = *times.borrow().last().expect("a press before the step");
+            gaps.borrow_mut().push(taken - before);
+            times.borrow_mut().push(taken);
             Ok(taken)
         },
         || Ok(()),
@@ -75,14 +84,15 @@ fn a_native_drag_step_follows_the_step_before_it_by_one_period() {
     .expect("native drag");
     assert!(
         gaps.borrow().iter().all(|gap| *gap == ms(16)),
-        "each step one period of 16 ms after the step before it: {:?}",
+        "each step one period of 16 ms after the press or the step before it: {:?}",
         gaps.borrow()
     );
+    assert_eq!(presses.get(), 2, "two presses");
     assert_eq!(result["steps"], json!(8), "2 steps in each of the 4 legs");
     assert_eq!(
         result["took"].as_u64(),
-        Some(168),
-        "native drag took, want 168 ms: the deliveries are inside the periods"
+        Some(148),
+        "native drag took, want 148 ms: the deliveries are inside the periods"
     );
 }
 
