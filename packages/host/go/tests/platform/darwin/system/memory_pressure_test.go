@@ -85,8 +85,24 @@ func relayScenario() error {
 	if err == nil {
 		return errors.New("a second start of the memory pressure source was accepted")
 	}
-	_, err = fmt.Println(memoryPressureRefused + err.Error())
-	return err
+	if _, err := fmt.Println(memoryPressureRefused + err.Error()); err != nil {
+		return err
+	}
+	// The running source keeps its report: a level injected after the refused start reaches the first emit, never the emit of
+	// the refused start.
+	refused := make(chan emitted, 1)
+	if err := host.StartMemoryPressure(system, func(name string, payload any) { refused <- emitted{name, payload} }); err == nil {
+		return errors.New("a third start of the memory pressure source was accepted")
+	}
+	if err := system.InjectMemoryPressure("critical"); err != nil {
+		return err
+	}
+	select {
+	case report := <-sent:
+		return writeEmitted(report)
+	case report := <-refused:
+		return fmt.Errorf("the emit of a refused start received %v", report.payload)
+	}
 }
 
 // seqOrderScenario holds the emit of the first report, injects two levels and then releases the emit. The injections return
@@ -163,8 +179,8 @@ func TestMemoryPressureRelaysLevelAndSeq(t *testing.T) {
 		{"memory-pressure", memoryPressurePayload{"warn", 1}},
 		{"memory-pressure", memoryPressurePayload{"normal", 2}},
 	}
-	if len(lines) != len(want)+1 {
-		t.Fatalf("the child wrote %d lines, want %d reports and the refusal: %q", len(lines), len(want), lines)
+	if len(lines) != len(want)+2 {
+		t.Fatalf("the child wrote %d lines, want %d reports, the refusal and the report after it: %q", len(lines), len(want), lines)
 	}
 	for i, w := range want {
 		if got := decodeMemoryPressureLine(t, lines[i]); got != w {
@@ -174,6 +190,9 @@ func TestMemoryPressureRelaysLevelAndSeq(t *testing.T) {
 	refusal, found := strings.CutPrefix(lines[len(want)], memoryPressureRefused)
 	if !found || refusal != "failed to start the memory pressure source" {
 		t.Fatalf("a refused source returned %q", lines[len(want)])
+	}
+	if got, w := decodeMemoryPressureLine(t, lines[len(want)+1]), (memoryPressureLine{"memory-pressure", memoryPressurePayload{"critical", 3}}); got != w {
+		t.Fatalf("after a refused start the source sent %#v, want %#v to the first emit", got, w)
 	}
 }
 

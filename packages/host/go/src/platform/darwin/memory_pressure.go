@@ -17,11 +17,14 @@ func goHost_memory_pressure(level *byte, seq uint64) {
 	memoryPressureReport(native.GoString(level), uint64(seq))
 }
 
+// OnMemoryPressure starts the source of the process and sets report after the start succeeds: the native owner keeps one source,
+// so a refused start leaves the report of the running source in place. The source reports on the main queue, so no report runs
+// before the function is set.
 func (implementation) OnMemoryPressure(report func(level string, seq uint64)) error {
-	memoryPressureReport = report
 	if !native.StartMemoryPressure() {
 		return errors.New("failed to start the memory pressure source")
 	}
+	memoryPressureReport = report
 	return nil
 }
 

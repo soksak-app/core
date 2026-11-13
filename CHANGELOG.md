@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- A refused start of the memory pressure source in the Go host no longer replaces the report of the running source, so no level after it is lost (F802).
 - The Go core root resolver and view import map text are functions of the configuration folder and the bundled frontend, and the memory pressure tests run the real source of the platform in a child process of the system tier instead of a stand-in source (F795-9).
 - The tests of the document regions, the file drop records, the exposure replies and the compositor placement wait play page-wire cases against the real host module of the page instead of replacing it (F795-10).
 - The stall watch of the Go host decides each beat from its readings in one function that a table of readings tests, and the Rust core root resolver and view import map text are functions of the configuration folder and the bundled frontend, so their tests give real inputs instead of a stand-in platform (F795-9).
