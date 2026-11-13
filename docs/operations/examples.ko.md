@@ -92,6 +92,19 @@ test는 unit test이거나 end-to-end 검사다. end-to-end 검사는 CI runner�
 
 저장소의 CI와 release job은 자기 unit test와 구조 검사만 실행하고 workspace의 다른 저장소를 checkout하지 않는다. end-to-end 검사는 display가 있는 컴퓨터에서 make로 로컬에서만 실행한다. make target의 이름이 그 검사의 종류를 정한다: 이름이 `test-app` 또는 `benchmark-`로 시작하는 target은 end-to-end 검사를 실행하고, `test`와 그 밖의 test target은 unit test만 실행한다. `scripts/test/test-kinds.test.mjs`가 target, `@soksak/e2e`의 test script(`node --test test/`, 창 검사 helper의 unit test), 어떤 workflow도 그 target이나 창 검사 script를 부르지 않음을 검사한다.
 
+test는 실제 입력으로만 code를 판정한다. 실제 입력은 다음 넷 중 하나다.
+
+1. 데이터: 값, 시각, 파일, byte, 기록된 event. 시간에 의존하는 동작은 받는 시각의 함수이고 production이 clock을 넘긴다. platform의 답으로 결과를 계산하는 로직은 그 답의 함수이고, 그 test는 실제 platform이 준 답이나 platform interface가 문서로 정한 답을 넘긴다.
+2. fixture 입력 위의 실제 program: 추적되는 fixture 입력 위의 실제 도구(go, cargo, clang, ar, pnpm, sample) 또는 fixture program. fixture program은 소유 패키지 test의 fixtures folder에 있는 추적되는 source 파일로, 선언된 wire를 말하고 그 답은 입력에서 나온다. test는 program source를 inline으로 쓰지 않고, fixture program은 입력과 상관없이 미리 정한 답을 보내지 않는다.
+3. 실제 platform, 그것이 답하는 tier에서: AppKit, WebKit, native library, main thread는 답에 frame을 보여 주는 display가 필요 없으면 unit tier(`NATIVE_TESTS`, host test)에서, display의 presentation 시각이나 window server image가 필요하면 end-to-end tier에서 실행한다.
+4. 실제 system이 요청대로 내지 않는 실패를 위한, 실제 code 경로의 선언된 지점의 fault injection. 그 지점은 code에 이름이 있고, test는 실제 경로로 그 지점에 닿는다.
+
+판정되는 code의 출력을 기록하는 object는 판정되는 code를 막지 않고, 판정되는 code가 읽는 값을 돌려주지 않고, 받는 모든 입력을 보관하고, test가 예상하지 않은 입력에 test를 실패시킬 때만 허용된다. 판정되는 code가 부르고 test가 정한 대로 답하는 그 밖의 object는 대체물이다. test는 판정되는 code의 일부를 그런 object로 바꾸지 않고, module(`mock.module`)이나 전역 함수를 바꾸지 않고, clock이나 timer를 가짜로 만들지 않고, 다른 도구처럼 답하는 도구를 PATH에 두지 않는다.
+
+wire의 consumer(client, `mcp`, window-check session, `sok`, workbench page, plugin)는 그 wire의 공통 계약 사례를 실행한다. 계약 사례는 소유 패키지가 실제 producer에 대해 실행하고 consumer가 producer의 답으로 읽는 추적되는 case 파일이다. 실제 producer가 통과하지 않는 case는 producer나 case의 결함이다. 문서 구조는 jsdom에서 시험할 수 있고, layout, paint, 입력, native composition은 end-to-end tier에서 시험한다.
+
+규칙의 이유: 대역은 자기 test가 정한 대로 답하므로 실제 구현이 다르게 동작해도 그 test는 통과한다. queue에 넣은 일을 바로 실행한 Go platform 대역은 실제 platform이 그 일을 queue에 넣는 동안 통과했다(F790). 규칙의 적대 review는 네 반론에 답했다. 입력을 막거나 버리는 기록 object는 판정되는 code를 바꾸므로 대체물이다. 고정된 답을 inline으로 쓴 program은 fixture program이 아닌 대체물이다. AppKit과 WebKit은 이미 unit tier에서 답하므로 platform 의존 test는 CI를 떠나지 않는다. consumer는 다른 패키지의 producer를 실행할 수 없으므로 producer가 통과하는 계약 사례에서 답을 읽는다.
+
 ## 창 검사
 
 하나의 check가 여러 애플리케이션 session을 열면 test가 소유한 하나의 정리 hook이 등록 순서대로 모든 session을 끝낸다. 앞선 session이 실패해도 나머지 session은 전체 정리, 애플리케이션 오류·recording 감사와 endpoint 연결·window-check slot 해제를 수행한다. 각 실패를 diagnostic으로 남기고, 모든 session이 끝난 뒤 실패 하나는 원래 오류로, 여러 실패는 함께 보고한다. open이 거부되면 해당 session을 즉시 정리하며 두 번 정리하지 않는다.

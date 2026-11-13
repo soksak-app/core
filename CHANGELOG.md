@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- Rule of real inputs: a test judges code only with data, a real program on fixture input, the real platform in the tier where it answers, or a fault injection at a declared point; a wire consumer runs the contract cases that the producer passes; the agent guidance no longer lets a consumer test use fakes (F795-2).
 - Fixture names: the fixture plugins and sidecars of `e2e/fixtures`, the replay role of the `sok` tests, the bundle fixtures of the update tests and the invalid PNG fixture of the debug tests are named fixtures instead of fakes (F795-1).
 - F738-1: the audit of the host contract counts the tests of a Rust test target that runs without the test harness, which it reads from the manifests of the Rust crates.
 - F779-5: the unit test of the raster probe fixture expects the count of the answered focus calls of the presses.
