@@ -393,6 +393,9 @@ for (const app of Object.values(APPS)) {
     await s.click(left.x + left.width / 2, left.y + left.height / 2);
     await s.until("core.grid", (value) => value.cards.find((item) => item.id === own)?.sidebars.left?.collapsed === true,
       "the header control did not fold the left sidebar");
+    // The grid reports the fold before its layout presents; the second press waits for that presentation, so it does not end
+    // the hold of the fold (docs/spec/native-surfaces.md#layout-transaction).
+    await s.presented();
     await s.click(left.x + left.width / 2, left.y + left.height / 2);
     await s.until("core.grid", (value) => value.cards.find((item) => item.id === own)?.sidebars.left?.collapsed === false,
       "the header control did not open the folded left sidebar again");

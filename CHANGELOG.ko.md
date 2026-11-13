@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F776: `e2e/card-panels.test.mjs` 의 fold control check 는 fold 가 표시된 뒤 control 을 다시 누르므로, 부하에서 그 누름이 더는 fold 의 hold 를 끝내지 않는다.
 - F775: 기계나 sample 도구가 끝내지 못한 stall sample 은 이유와 함께 `stall sample:` 진단으로 알리고 더는 window check 를 실패시키지 않는다. sample 은 녹화처럼 check 의 기록이기 때문이다.
 - F756-4: virtual key window 의 cursor 가 바뀔 때마다 phase `cursor` 의 `native.input.virtual` 을 남긴다. 그 reason 은 cursor 와 `-[NSCursor set]` 을 부른 frame 최대 네 개를 밝히므로, 실패한 cursor check 의 log 는 그것이 읽은 cursor 를 정한 code 를 밝힌다.
 - F774: 두 host 의 `host.stall` 은 process 의 scheduling priority 인 `priority` 를 가지고(시스템이 process 를 background 로 돌리면 4), `host.stall.resumed` 는 정지 동안 process 가 쓴 CPU 시간인 `cpu_ms` 를 가진다. 그래서 정지 기록만으로 시스템이 돌리지 않은 process 와 돈 process 가 구별된다. native 함수 `sp_stall_schedule` 이 둘을 읽고, 읽지 못하면 error 기록 `stall watch` 가 된다.
