@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F738-1: host contract 의 audit 는 test harness 없이 도는 Rust test target 의 시험을 세며, 그 target 을 Rust crate 의 manifest 에서 읽는다.
 - F779-5: raster probe fixture 의 unit test 는 누름의 답한 focus call 수를 기대한다.
 - F774-3: Go 와 Rust CLI 와 page 의 event class table, `@soksak/window-check` 의 catalog 가 `native.connection.activity` 를 담는다.
 - F794: `make repeat-suite` 의 시험은 suite 전체의 limit 을 두지 않는다. runner 가 각 run 에 자기 limit 을 준다.

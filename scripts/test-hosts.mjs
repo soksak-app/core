@@ -9,6 +9,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync, realpathSync, statfsSync } from 'node:fs';
 import { isAbsolute, join, posix, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parse as parseToml } from 'smol-toml';
 import { cpus } from 'node:os';
 import { tableCells } from './markdown-table.mjs';
 import { auditStatus, discoverGo, discoverRust } from './test-discovery.mjs';
@@ -85,7 +86,7 @@ export function ownerOfFile(file) {
  * directory (Go) or the crate directory (Rust) that the caller computes from the file; each test carries it, so a result is
  * matched only with items of the same owner.
  */
-export function parseDeclarations(source, language, file, owner = ownerOfFile(file)) {
+export function parseDeclarations(source, language, file, owner = ownerOfFile(file), { harnessLess = false } = {}) {
   const pattern = TEST_FUNCTION[language];
   if (!pattern) throw new Error(`unsupported language ${language}`);
   const tests = [];
@@ -107,7 +108,9 @@ export function parseDeclarations(source, language, file, owner = ownerOfFile(fi
       return;
     }
     const match = line.match(pattern);
-    if (match && (language === 'go' || attributes.some((attribute) => TEST_ATTRIBUTE.test(attribute.text)))) {
+    // A Rust test target without the test harness lists its tests itself, so a function that carries a contract declaration is
+    // one of its tests without a test attribute.
+    if (match && (language === 'go' || attributes.some((attribute) => TEST_ATTRIBUTE.test(attribute.text)) || (harnessLess && pending))) {
       if (pending) {
         for (const attribute of attributes) {
           if (!ALLOWED_ATTRIBUTES.some((allowed) => allowed.test(attribute.text))) {
@@ -437,7 +440,7 @@ function rustSourceFiles() {
  * fail explicitly instead of assigning an annotation by directory or platform name.
  */
 export function selectRustDeclarations(items, sourceFiles) {
-  const parsedFiles = sourceFiles.map(({ file, owner, source }) => ({ file, parsed: parseDeclarations(source, 'rust', file, owner) }));
+  const parsedFiles = sourceFiles.map(({ file, owner, source, harnessLess = false }) => ({ file, parsed: parseDeclarations(source, 'rust', file, owner, { harnessLess }) }));
   const parsed = parsedFiles.flatMap(({ parsed: source }) => source.tests);
   const byOwnerAndName = new Map();
   for (const declaration of parsed) {
@@ -486,11 +489,31 @@ export function selectRustDeclarations(items, sourceFiles) {
 }
 
 function rustSourceDeclarations() {
+  const harnessLess = harnessLessTestFiles();
   return rustSourceFiles().map((file) => ({
     file,
     owner: crateOwnerOf(file),
     source: readFileSync(join(ROOT, file), 'utf8'),
+    harnessLess: harnessLess.has(file),
   }));
+}
+
+/** The Rust crates of the hosts and the CLI, whose manifests declare their test targets. */
+const RUST_CRATES = ['packages/host/rust', 'packages/host/tauriv2', 'packages/sok/rust'];
+
+/**
+ * The source files of the test targets that the manifests of the Rust crates declare with `harness = false`, as paths from the
+ * root of the repository.
+ */
+export function harnessLessTestFiles(root = ROOT, crates = RUST_CRATES) {
+  const files = new Set();
+  for (const crate of crates) {
+    const manifest = parseToml(readFileSync(join(root, crate, 'Cargo.toml'), 'utf8'));
+    for (const target of manifest.test ?? []) {
+      if (target.harness === false) files.add(posix.join(crate, target.path ?? `tests/${target.name}.rs`));
+    }
+  }
+  return files;
 }
 
 /** The declarations of the test sources of one host, read without running test bodies. */

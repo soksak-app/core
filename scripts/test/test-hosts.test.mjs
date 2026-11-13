@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { cargoCommand } from '@soksak/window-check/cargo.mjs';
-import { auditDeclarations, auditHostContract, parseContractCases, GO_RUNS, RUST_RUNS, groupResults, goTestSourceFilesForRun, parseDeclarations, selectRustDeclarations, uncoveredCases } from '../test-hosts.mjs';
+import { auditDeclarations, auditHostContract, parseContractCases, GO_RUNS, RUST_RUNS, groupResults, goTestSourceFilesForRun, harnessLessTestFiles, parseDeclarations, selectRustDeclarations, uncoveredCases } from '../test-hosts.mjs';
 
 const SPEC = `# Hosts
 
@@ -335,6 +335,7 @@ test('every Go test function of the tests of the Go language host library and th
 
 test('every contract case of each host scope has a declaring test in the current sources', () => {
   const cases = parseContractCases(readFileSync(new URL('../../docs/spec/host-contract.md', import.meta.url), 'utf8'));
+  const harnessLess = harnessLessTestFiles();
   const sourcesOf = (roots, suffix) => {
     const tests = [];
     const errors = [];
@@ -342,7 +343,8 @@ test('every contract case of each host scope has a declaring test in the current
       for (const file of readdirSync(fileURLToPath(new URL(`../../${root}/`, import.meta.url)), { recursive: true })) {
         if (!file.endsWith(suffix)) continue;
         const path = `${root}/${file}`;
-        const parsed = parseDeclarations(readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8'), suffix === '.rs' ? 'rust' : 'go', path);
+        const parsed = parseDeclarations(readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8'), suffix === '.rs' ? 'rust' : 'go', path,
+          undefined, { harnessLess: harnessLess.has(path) });
         tests.push(...parsed.tests);
         errors.push(...parsed.errors);
       }
@@ -562,4 +564,25 @@ test('a run removes its build folder', () => {
   } finally {
     rmSync(temporary, { recursive: true, force: true });
   }
+});
+
+test('a function with a contract declaration is a test of a Rust target without the test harness and of no other target', () => {
+  const source = '// contract: area.shared\nfn shared() -> Result<(), String> {\n    Ok(())\n}\n\nfn main() {}\n';
+  const harnessLess = parseDeclarations(source, 'rust', 'tests/main_thread_test.rs', '.', { harnessLess: true });
+  assert.deepEqual(harnessLess.errors, []);
+  assert.deepEqual(harnessLess.tests.map((test) => [test.name, test.cases]), [['shared', ['area.shared']]]);
+  assert.deepEqual(parseDeclarations(source, 'rust', 'tests/a_test.rs', '.').errors,
+    ['tests/a_test.rs:1 contract declaration is not attached to a test function']);
+});
+
+test('the test targets without the test harness are read from the manifests of the Rust crates', () => {
+  const root = mkdtempSync(join(tmpdir(), 'harness-less-'));
+  try {
+    mkdirSync(join(root, 'crate'));
+    writeFileSync(join(root, 'crate', 'Cargo.toml'), '[package]\nname = "crate"\n\n[[test]]\nname = "with_harness_test"\n\n[[test]]\nname = "main_thread_test"\nharness = false\n\n[[test]]\nname = "placed"\npath = "checks/placed.rs"\nharness = false\n');
+    assert.deepEqual([...harnessLessTestFiles(root, ['crate'])], ['crate/tests/main_thread_test.rs', 'crate/checks/placed.rs']);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+  assert.ok(harnessLessTestFiles().has('packages/host/rust/tests/page_start_main_thread_test.rs'));
 });

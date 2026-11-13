@@ -1466,6 +1466,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F738-1",
+    implementation: [{ file: "scripts/test-hosts.mjs", symbol: "export function harnessLessTestFiles(root = ROOT, crates = RUST_CRATES) {" }],
+    tests: [
+      { file: "scripts/test/test-hosts.test.mjs", id: "a function with a contract declaration is a test of a Rust target without the test harness and of no other target" },
+      { file: "scripts/test/test-hosts.test.mjs", id: "the test targets without the test harness are read from the manifests of the Rust crates" },
+      { file: "scripts/test/test-hosts.test.mjs", id: "every contract case of each host scope has a declaring test in the current sources" },
+    ],
+    expected: "The host contract audit counts a function with a contract declaration as a test in a Rust test target that its manifest declares without the test harness, and in no other target.",
+    levels: ["unit"],
+  },
+  {
     id: "F790",
     implementation: [
       { file: "packages/host/go/src/presentation_wait.go", symbol: "func (w *presentationWait) cancelAll() error {" },
