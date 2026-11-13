@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F778: the mygo framework `v0.7.4-244-g4abb83d-soksak.12` runs its worker at the quality of service of the main thread, which waits for the worker in each step, instead of the default class, which the system runs after other work on a loaded machine.
 - F778: the failure of a window check drag that is not paced states the time that the application handled its steps, in total, by count and the longest, so a slow drag tells the time inside the application from the time outside it.
 - F729: in a window run of 2026-11-13 `e2e/design-hosts.test.mjs` passed on the three hosts.
 - F729: a text line of the mygo workbench is a whole number of points high, as WebKit lays out a line of the pages, so a description that wraps to three lines at the line height 17.4 is 51 points high on every host; the mygo fork `v0.7.4-244-g4abb83d-soksak.11` floors the line height of a text and the workbench places the middle of a tab by the same rule.
