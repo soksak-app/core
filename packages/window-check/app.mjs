@@ -9,7 +9,7 @@ import { loadavg, tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { connect, EndpointError } from "@soksak/client";
-import { STALL_AFTER, announceStall, pageProcesses, plannedLength, sampleStall } from "./stall-sample.mjs";
+import { STALL_AFTER, announceStall, pageProcesses, plannedLength, sampleStall, stallDeadline } from "./stall-sample.mjs";
 import { untilEndpoint } from "./endpoint-wait.mjs";
 import { joinedFailure } from "./failure.mjs";
 import { endWatches } from "./folder-wait.mjs";
@@ -1238,34 +1238,45 @@ function compact(object) {
 }
 
 /**
- * Returns the promise unchanged and records the host threads when it is still pending STALL_AFTER after its planned length
- * `planned` (F69), the milliseconds that plannedLength gives the request. The record ends no wait. A request still pending then
- * starts the host and page samples in the same turn, so a stall keeps its stacks, and a request that runs as planned, as a drag
- * whose pace a check measures, is never sampled while it runs.
+ * Returns the promise unchanged and records the host threads when it is still pending `after` (STALL_AFTER by default) after its
+ * planned length `planned` (F69), the milliseconds that plannedLength gives the request; stallDue decides that sample. The record ends
+ * no wait. A request still pending then starts the host and page samples in the same turn, so a stall keeps its stacks, and a request
+ * that runs as planned, as a drag whose pace a check measures, is never sampled while it runs.
  * The sample goes on after the promise answers, so hold receives its promise, which resolves to the reported line or rejects
  * with the reason of the failed sample; the session waits for it. The line also goes to report.
  */
-export function whilePending(promise, what, sample, report, hold, planned = 0) {
+export function whilePending(promise, what, sample, report, hold, planned = 0, after = STALL_AFTER) {
   if (typeof report !== "function") throw new Error("whilePending needs a report function");
   if (typeof hold !== "function") throw new Error("whilePending needs a hold function");
   if (typeof planned !== "number" || !Number.isFinite(planned) || planned < 0) throw new Error("whilePending needs a planned length of 0 or more ms");
+  if (typeof after !== "number" || !Number.isFinite(after) || after < 0) throw new Error("whilePending needs a stall delay of 0 or more ms");
+  const started = performance.now();
   const stall = setTimeout(() => {
-    const pending = planned === 0 ? `${what} still pending after ${STALL_AFTER} ms`
-      : `${what} still pending ${STALL_AFTER} ms after its planned ${planned} ms`;
     hold(sample().then(
       (text) => {
-        const line = `${pending}; the host's threads at that moment: ${text}`;
+        const line = stallLine(what, planned, after, { text });
         report(line);
         return line;
       },
       (error) => {
-        const line = `${pending}; sampling the host failed: ${error.message}`;
+        const line = stallLine(what, planned, after, { error });
         report(line);
         throw new Error(line);
       },
     ));
-  }, planned + STALL_AFTER);
+  }, stallDeadline(started, planned, after) - performance.now());
   return promise.finally(() => clearTimeout(stall));
+}
+
+/**
+ * The line of a stall of `what` with the planned length `planned` and the stall delay `after`: the threads that the sample recorded,
+ * or the reason why the sample failed (`outcome` is {text} or {error}).
+ */
+export function stallLine(what, planned, after, outcome) {
+  const pending = planned === 0 ? `${what} still pending after ${after} ms`
+    : `${what} still pending ${after} ms after its planned ${planned} ms`;
+  if (outcome.error) return `${pending}; sampling the host failed: ${outcome.error.message}`;
+  return `${pending}; the host's threads at that moment: ${outcome.text}`;
 }
 
 /** Returns the code of the EndpointError when the request fails, and null when it succeeds. */
