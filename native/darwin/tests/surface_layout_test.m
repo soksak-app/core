@@ -404,6 +404,13 @@ static void checkQueuedTicketCancel(WKWebViewConfiguration *configuration) {
     [window release];
 }
 
+// Whether refresh names the same display refresh as other or an earlier one. A refresh of the trace is computed on the grid of a
+// refresh callback and another refresh is read from another callback, so two times of one refresh can differ by the rounding of
+// that computation; refreshes lie a period apart, so a time less than half a period after other names the refresh of other.
+static BOOL refreshNotAfter(double refresh, double other, double period) {
+    return refresh - other < period / 2;
+}
+
 // The composition of the real DOM bounds and the native region must keep both bounds during preparation. Controls the
 // commit after the display confirmation and also records the frames of the transaction in progress. With pageChange NO the
 // page draws nothing and the transaction narrows only the native plane, committed at once. The layout trace of the transaction
@@ -504,10 +511,11 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration, BOOL
         check(traced == 1 && timeline[1] <= timeline[7] && timeline[7] <= ended, [NSString stringWithFormat:
             @"%@: the trace records when the commit of ticket 107 was sent to the render server (begun %.3f, flushed %.3f, "
             "presented by %.3f)", variant, timeline[1], timeline[7], ended]);
-        check(traced == 1 && timeline[7] <= timeline[8] && timeline[8] <= shown, [NSString stringWithFormat:
-            @"%@: the trace records the display refresh that carried the commit of ticket 107, after it was sent and not after the "
-            "refresh of the settled composition (flushed %.3f, displayed %.3f, settled refresh %.3f)", variant, timeline[7],
-            timeline[8], shown]);
+        check(traced == 1 && timeline[7] <= timeline[8] && refreshNotAfter(timeline[8], shown, timeline[8] - timeline[9]),
+            [NSString stringWithFormat:@"%@: the trace records the display refresh that carried the commit of ticket 107, after "
+                "it was sent and not after the refresh of the settled composition (flushed %.6f, displayed %.6f, settled refresh "
+                "%.6f, displayed after it by %.3e, refreshed %.6f)", variant, timeline[7], timeline[8], shown, timeline[8] - shown,
+                timeline[9]]);
         // The callback that read the display refresh came after the flush and after the refresh before it, so that refresh is
         // before the one that carried the commit and not later than the callback, which was before the stop.
         check(traced == 1 && timeline[9] < timeline[8] && timeline[9] <= CACurrentMediaTime() * 1000,
@@ -924,8 +932,18 @@ static void checkTraceRefreshGrid(void) {
     }
 }
 
+// A refresh time of the trace that its computation rounded past the time that another callback read for the same refresh names
+// that refresh, and the time of the next refresh names a later one.
+static void checkRefreshOrder(void) {
+    double settled = 37608470.53375;
+    check(refreshNotAfter(nextafter(settled, INFINITY), settled, 8.333),
+        @"a refresh time rounded past the settled refresh names the settled refresh");
+    check(!refreshNotAfter(settled + 8.333, settled, 8.333), @"the refresh after the settled refresh is after it");
+}
+
 int main(void) { @autoreleasepool {
     checkTraceRefreshGrid();
+    checkRefreshOrder();
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];

@@ -589,6 +589,19 @@ const FEATURE_LINKS = [
   },
 
   {
+    id: "F763",
+    implementation: [
+      { file: "native/darwin/tests/surface_layout_test.m", symbol: "static BOOL refreshNotAfter(double refresh, double other, double period) {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/surface_layout_test.m", id: "a refresh time rounded past the settled refresh names the settled refresh" },
+      { file: "native/darwin/tests/surface_layout_test.m", id: "the refresh after the settled refresh is after it" },
+    ],
+    expected: "The layout check compares the refresh of a trace record with the settled refresh by refresh, so two times of one refresh name the same refresh.",
+    levels: ["native"],
+  },
+
+  {
     id: "F762",
     implementation: [
       { file: "native/darwin/src/surface_layout.m", symbol: "if (key) return identity;" },

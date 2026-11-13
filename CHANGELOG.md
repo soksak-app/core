@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F763: `surface_layout_test` judges the display refresh of the commit against the settled refresh by refresh, so the rounding between two times of one refresh no longer fails it.
 - F762: A key that the end of a layout hold gives back is told once to the observers of the actions of the user also when the pointer moved, because the location that AppKit gives the returned key event no longer names it.
 - F761: `window_titlebar_reload_test` reads the time of the title bar change in the ready answer of the start, right after the change, so the start transaction that begins before the change no longer fails it.
 - F760: A native check that dispatches its events handles the open-application Apple event of its launch and opens nothing, so it no longer activates its process and takes the front from another application; the system activation of a check process is written as an `ACTIVATED:` line.
