@@ -7,7 +7,30 @@
 #![allow(dead_code)]
 
 use std::path::Path;
-use std::process::Output;
+use std::process::{Command, Output, Stdio};
+
+/// The output of `command` while this process holds the standard input of the child open, so a child that waits for the end of
+/// its input (`wait_for_end`) waits until it ends itself; a child that never ends leaves the check to the limit of its runner.
+pub fn output_with_open_input(command: &mut Command) -> Output {
+    let mut child = command
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let input = child.stdin.take();
+    let output = child.wait_with_output().unwrap();
+    drop(input);
+    output
+}
+
+/// Waits for the end of the standard input, which the parent holds open while it waits for the child
+/// (`output_with_open_input`). The read blocks in a system call until an end that the child expects, such as a panic hook that
+/// ends the process, ends it; reaching the end of the input is the failure, with status 4.
+pub fn wait_for_end() -> ! {
+    let _ = std::io::Read::read_to_end(&mut std::io::stdin(), &mut Vec::new());
+    std::process::exit(4);
+}
 
 /// Fails with the cause of the child when it did not succeed: its exit status, its output and error output, and every standard
 /// error file and event log in the `logs` folder of `config`, its configuration folder.

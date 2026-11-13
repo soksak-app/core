@@ -589,6 +589,19 @@ const FEATURE_LINKS = [
   },
 
   {
+    id: "F767-4-2",
+    implementation: [
+      { file: "packages/host/rust/tests/support/child.rs", symbol: "pub fn wait_for_end() -> ! {" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/routine_test.go", id: "TestAPanicOfAGoroutineIsRecordedAsAnEventBeforeTheProcessEnds" },
+      { file: "packages/host/rust/tests/routine_test.rs", id: "a_panic_of_a_thread_is_recorded_as_an_event_before_the_process_ends" },
+    ],
+    expected: "A child process of the panic checks that its entrance ends waits for the end of its standard input, which the parent holds open, instead of a sleep after which it fails.",
+    levels: ["unit"],
+  },
+
+  {
     id: "F767-4-1",
     implementation: [
       { file: "packages/host/go/tests/support/event_log.go", symbol: "func CaptureLogAwait(t *testing.T) (written func() string, await func(text string) string) {" },

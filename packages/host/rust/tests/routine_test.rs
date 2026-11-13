@@ -1,10 +1,12 @@
 //! The entrance of the threads of the host (docs/spec/hosts.md#process-lifecycle): a panic of a thread that started through
 //! `spawn_named` is the event `host.panic` in the event log before the process ends with status 101.
 
+#[path = "support/child.rs"]
+mod child;
 #[path = "support/folder.rs"]
 mod folder;
 
-use std::process::{Command, Stdio};
+use std::process::Command;
 
 #[path = "support/records.rs"]
 mod records;
@@ -26,22 +28,20 @@ fn a_panic_of_a_thread_is_recorded_as_an_event_before_the_process_ends() {
         }
         let _writer = records::start_writer(std::path::Path::new(&config));
         let _ = spawn_named("probe", || panic!("the window has no content view")).join();
-        // The entrance ends the process; reaching the end of the wait is the failure.
-        std::thread::sleep(std::time::Duration::from_secs(10));
-        std::process::exit(4);
+        // The entrance ends the process; the child waits for the end of its input until then.
+        child::wait_for_end();
     }
     let config = folder::Folder::new();
-    let output = Command::new(std::env::current_exe().unwrap())
-        .args([
-            "--exact",
-            "a_panic_of_a_thread_is_recorded_as_an_event_before_the_process_ends",
-            "--nocapture",
-            "--test-threads=1",
-        ])
-        .env(CHILD, config.path())
-        .stdin(Stdio::null())
-        .output()
-        .unwrap();
+    let output = child::output_with_open_input(
+        Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "a_panic_of_a_thread_is_recorded_as_an_event_before_the_process_ends",
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env(CHILD, config.path()),
+    );
     assert_eq!(
         output.status.code(),
         Some(101),

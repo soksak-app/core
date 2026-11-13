@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F767-4-2: the child processes of the panic checks of both hosts wait for the end of their standard input, which the parent holds open, instead of failing after a sleep of 10 seconds.
 - F769-1-1: the check of the samples at the limit of a native test judges the result of each platform, and a platform without the records passes it with their named error.
 - F767-4-1: the endpoint checks of both hosts wait for the written batch of the event writer that holds their record instead of reading the log every 10 ms.
 - F767-5: the presentation order check starts each draw of its page at the acknowledgement of the draw before it instead of after fixed pauses, and judges that order.

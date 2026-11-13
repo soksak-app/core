@@ -1,6 +1,8 @@
 //! The panic hook of the host records a panic as the event `host.panic` without waiting for the writer on the panicking
 //! thread, which can be the thread of the interface (docs/spec/hosts.md#process-lifecycle).
 
+#[path = "support/child.rs"]
+mod child;
 #[path = "support/folder.rs"]
 mod folder;
 
@@ -61,22 +63,20 @@ fn the_panic_hook_does_not_wait_for_the_writer_and_the_record_is_stored_before_t
         // The harness has printed the name of the test without a line feed, so the value starts its own line.
         println!("\nhook_ms={}", started.elapsed().as_millis());
         drop(release);
-        // The record ends the process once the writer stored it; reaching the end of the wait is the failure.
-        std::thread::sleep(Duration::from_secs(10));
-        std::process::exit(4);
+        // The record ends the process once the writer stored it; the child waits for the end of its input until then.
+        child::wait_for_end();
     }
     let config = folder::Folder::new();
-    let output = Command::new(std::env::current_exe().unwrap())
+    let output = child::output_with_open_input(
+        Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
             "the_panic_hook_does_not_wait_for_the_writer_and_the_record_is_stored_before_the_process_ends",
             "--nocapture",
             "--test-threads=1",
         ])
-        .env(CHILD, config.path())
-        .stdin(Stdio::null())
-        .output()
-        .unwrap();
+        .env(CHILD, config.path()),
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert_eq!(
         output.status.code(),
@@ -132,22 +132,21 @@ fn a_panic_before_the_writer_exists_is_stored_when_the_writer_opens() {
         })
         .unwrap();
         use_host_event_log(Some(Arc::new(log)));
-        // The record ends the process with PANIC_STATUS once the writer stored it; reaching the end of the wait is the failure.
-        std::thread::sleep(Duration::from_secs(10));
-        std::process::exit(4);
+        // The record ends the process with PANIC_STATUS once the writer stored it; the child waits for the end of its input
+        // until then.
+        child::wait_for_end();
     }
     let config = folder::Folder::new();
-    let output = Command::new(std::env::current_exe().unwrap())
-        .args([
-            "--exact",
-            "a_panic_before_the_writer_exists_is_stored_when_the_writer_opens",
-            "--nocapture",
-            "--test-threads=1",
-        ])
-        .env(BEFORE_WRITER_CHILD, config.path())
-        .stdin(Stdio::null())
-        .output()
-        .unwrap();
+    let output = child::output_with_open_input(
+        Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "a_panic_before_the_writer_exists_is_stored_when_the_writer_opens",
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env(BEFORE_WRITER_CHILD, config.path()),
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert_eq!(
         output.status.code(),

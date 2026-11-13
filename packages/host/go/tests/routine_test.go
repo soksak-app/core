@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
-	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/src/routine"
@@ -27,14 +26,20 @@ func TestAPanicOfAGoroutineIsRecordedAsAnEventBeforeTheProcessEnds(t *testing.T)
 		}
 		host.UseHostEventLog(log)
 		routine.Go("probe", func() { panic("the window has no content view") })
-		// The entrance ends the process; reaching the end of the wait is the failure. The wait bounds a child that hangs: a
-		// goroutine that waits without end would meet the deadlock report of the Go runtime, which ends with the status of a panic.
-		time.Sleep(10 * time.Second)
+		// The entrance ends the process; the read blocks in a system call until then, so the runtime reports no deadlock.
+		// Reaching its end is the failure.
+		io.ReadAll(os.Stdin)
 		os.Exit(4)
 	}
 	config := t.TempDir()
 	command := exec.Command(os.Args[0], "-test.run=^TestAPanicOfAGoroutineIsRecordedAsAnEventBeforeTheProcessEnds$")
 	command.Env = append(os.Environ(), routineChild+"="+config)
+	// The parent holds the standard input of the child open until the child ended.
+	stdin, err := command.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stdin.Close()
 	output, err := command.CombinedOutput()
 	var ended *exec.ExitError
 	if !errors.As(err, &ended) || ended.ExitCode() != 2 {
@@ -90,13 +95,20 @@ func TestAPanicBeforeTheWriterExistsIsRecordedWhenTheWriterOpens(t *testing.T) {
 			os.Exit(3)
 		}
 		host.UseHostEventLog(log)
-		// The entrance ends the process once the record is stored; reaching the end of the wait is the failure.
-		time.Sleep(10 * time.Second)
+		// The entrance ends the process; the read blocks in a system call until then, so the runtime reports no deadlock.
+		// Reaching its end is the failure.
+		io.ReadAll(os.Stdin)
 		os.Exit(4)
 	}
 	config := t.TempDir()
 	command := exec.Command(os.Args[0], "-test.run=^TestAPanicBeforeTheWriterExistsIsRecordedWhenTheWriterOpens$")
 	command.Env = append(os.Environ(), routineBeforeWriterChild+"="+config)
+	// The parent holds the standard input of the child open until the child ended.
+	stdin, err := command.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stdin.Close()
 	output, err := command.CombinedOutput()
 	var ended *exec.ExitError
 	if !errors.As(err, &ended) || ended.ExitCode() != 2 {
