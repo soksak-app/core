@@ -448,7 +448,7 @@ fn plan(
                         field: None,
                     })
                 }
-                "gesture" => gesture(a, window()?),
+                "gesture" => gesture(a, window),
                 "key" => {
                     let key = a.required("key")?;
                     let phase = a.required("phase")?;
@@ -501,7 +501,10 @@ fn plan(
 
 /// Plans `input gesture`: `down` at the first point of `--points`, a `drag` to each later point and `up` at the last point,
 /// each an `input.pointer` request of the same pointer and button (docs/spec/cli.md).
-fn gesture(a: &Arguments, window: String) -> Result<Request, Error> {
+fn gesture(
+    a: &Arguments,
+    window: impl FnOnce() -> Result<String, Error>,
+) -> Result<Request, Error> {
     if let Some(button) = a.values.get("button")
         && button != "left"
         && button != "right"
@@ -510,6 +513,8 @@ fn gesture(a: &Arguments, window: String) -> Result<Request, Error> {
     }
     let clicks = a.number("clicks")?;
     let points = points(&a.required("points")?)?;
+    // The window is asked for after the arguments are checked, so a usage error opens no connection.
+    let window = window()?;
     let last = points.len() - 1;
     let step = |phase: &str, (x, y): (f64, f64), clicks: Option<Value>| {
         compact(vec![

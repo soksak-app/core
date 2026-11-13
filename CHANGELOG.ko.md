@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- Rust `sok` 이 애플리케이션에 창 목록을 묻기 전에 `sok input gesture` 의 점을 검사하므로, Go `sok` 처럼 사용법 오류가 endpoint 연결을 열지 않는다 (F800).
 - Go host 와 Rust host 가 선언하지 않은 host command 이름에 `command <name> is not declared` 로, 선언하지 않은 host status 이름에 `status <name> is not declared` 로 답한다. Go host 는 `unknown command <name>` 으로 답했었다 (F799).
 - `make check-tests` 가 시험과 기록의 module 교체, timer 교체, 전역 method 교체, inline program, PATH 의 도구, 대역 이름을 찾고 종류별 개수를 출력한다 (F795-11).
 - workbench 의 log policy 시험이 `@soksak/runtime` 을 바꾸는 대신 기록된 page wire case 를 재생하고, `TestPageWire` 가 그 case 를 Go host 의 log 와 workspace 동작에 실행한다 (F795-10).

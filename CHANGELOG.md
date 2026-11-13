@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- The Rust `sok` checks the points of `sok input gesture` before it asks the application for its windows, so a usage error opens no endpoint connection, as in the Go `sok` (F800).
 - The Go and Rust hosts answer an undeclared host command name with `command <name> is not declared` and an undeclared host status name with `status <name> is not declared`; the Go host had answered `unknown command <name>` (F799).
 - `make check-tests` finds the module replacements, timer replacements, replacements of global methods, inline programs, tools on PATH and names of stand-ins of the tests and records, and prints the count of each kind (F795-11).
 - The log policy tests of the workbench play recorded page wire cases, which `TestPageWire` runs against the log and workspace operations of the Go host, instead of replacing `@soksak/runtime` (F795-10).

@@ -50,6 +50,8 @@
 
 명령은 결과를 표준 출력에 JSON으로 쓰며, 결과가 없는 명령은 `null`을 쓴다. 오류는 표준 오류에 `sok: <message>`로 쓰고, endpoint 오류 코드가 있으면 괄호 안에 함께 쓴다. 실패한 파일 작업은 파일과 소문자로 시작하는 운영체제 이유를 `<경로>: <이유>`로 적으며, 두 구현의 문구가 같다. 종료 상태는 성공 0, 실패한 명령 1, 사용법 오류 2이며, 사용법 오류는 사용법도 출력한다. sok이 오류를 표준 오류에 쓰지 못하면 종료 상태는 3이고, 명령이나 그 goroutine, thread가 panic하면 4이다([event log](#event-log)). 실패한 쓰기나 풀기 뒤의 정리가 실패하면 오류에 `; cleanup <path>: <reason>`을, 닫지 못한 임시 파일은 `; close <path>: <reason>`을 덧붙인다. 애플리케이션과의 연결을 닫지 못하면 `endpoint connection: <reason>`을 보고한다.
 
+sok은 애플리케이션에 연결하기 전에 명령의 인자를 검사하므로, 사용법 오류는 endpoint 연결을 열지 않고 요청도 보내지 않는다.
+
 `process wait`는 1부터 2147483647까지의 process ID를 반드시 받는다. 기다림에는 시간 제한이 없다. 운영체제가 PID가 없거나 종료 event가 발생했다고 보고하면 `{"pid": <pid>, "ended": true}`를 출력하고, `sok`이 받은 SIGINT나 SIGTERM은 exit 1, 표준 출력 없음, `process <pid> wait was interrupted by <SIGINT or SIGTERM>`으로 기다림을 끝낸다. 그래서 호출자는 `sok watch`를 끝내듯 signal로 기다림을 끝낸다. 지원하지 않는 process wait를 포함한 platform 오류는 명령 실패로 보고한다. 이 명령은 process ID를 기다리며, 임의의 PID 재사용을 넘어 process identity를 보장하지 않는다.
 
 `process wait`는 `--help`와 `--config-dir` 밖의 option을 받지 않으며, `--timeout-ms` 같은 알 수 없는 option은 모든 명령에서처럼 exit 2로 끝난다. 이 명령은 다른 CLI 명령과 같은 option parser를 사용한다. 다른 boolean flag와 같이 반복한 `--help`는 같은 flag를 한 번 설정한 것처럼 처리하고, value option을 반복하면 거부한다.
