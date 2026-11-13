@@ -2,14 +2,14 @@
 // events of one turn travel in one `log` request, and the records of the document keep their order among the calls.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { surfaceCalls } from "../surface-calls.js";
+import { callRecord, surfaceCalls } from "../surface-calls.js";
 import { logGate } from "../log-gate.js";
 import { withoutClock } from "./support/records.mjs";
 
 const TRACE = { lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" };
 const ERRORS = { lifecycle: "error", input: "error", call: "error", io: "error", frame: "error" };
 
-// The fake host answers the action policy-read with the classes given, and `emit` sends the host event log-policy to the document.
+// The host answers the action policy-read with the classes given, and `emit` sends the host event log-policy to the document.
 // The events below the level error are stored only in the debug state (docs/spec/settings.md, the section of core.settings.debug),
 // which most tests examine, so the host answers every class at trace by default.
 // read, when given, holds the answer of the read of the policy until it resolves.
@@ -72,6 +72,14 @@ test("a call returns its answer and is recorded after it ended, with the duratio
   assert.equal(fields.args, '[{"document":"d"}]');
   assert.equal(fields.ok, true);
   assert.ok(Number.isInteger(fields.micros) && fields.micros >= 0);
+  // The duration is a function of the instants of the call: 10 ms to 10.75 ms is 750 microseconds.
+  const timed = callRecord("documentAttach", [{ document: "d" }], 10, 10.75, true);
+  assert.equal(timed.fields.micros, 750);
+  assert.equal(timed.level, "debug");
+  const refused = callRecord("documentAttach", [], 1, 1, false, { error: "refused", code: -32000 });
+  assert.equal(refused.level, "warn");
+  assert.equal(refused.fields.micros, 0);
+  assert.equal(refused.fields.error, "-32000: refused", "a failure keeps the code of the host");
 });
 
 test("a rejected call and a call that throws before sending are warn events, and the caller gets the same error", async () => {
