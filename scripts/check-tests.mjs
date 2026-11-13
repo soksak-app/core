@@ -1435,6 +1435,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F770",
+    implementation: [{ file: "packages/soksak/scripts/mutation-runner.mjs", symbol: "export function evidenceFolder(root, prefix, env = process.env) {" }],
+    tests: [
+      { file: "packages/soksak/test/mutation-runner.test.mjs", id: "required mutation command rejects invalid evidence and handles assertion" },
+      { file: "packages/soksak/test/mutation-runner.test.mjs", id: "required mutation command rejects invalid evidence and handles required baseline" },
+    ],
+    expected: "The break command checks create their temporary repository at its real path, so the evidence folder that check-breaks names under target/mutation-runs of the repository it resolves matches the folder that the checks expect, also where the temporary folder is a link.",
+    levels: ["unit"],
+  },
+  {
     id: "F669",
     implementation: [
       { file: "packages/soksak/scripts/bounded.mjs", symbol: "try { killGroup(child.pid); }" },
