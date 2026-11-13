@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -44,16 +45,38 @@ type pageWireWriter struct {
 	Policy bool `json:"policy"`
 }
 
-// pageWireVariableSpec is a value that the host chooses. The producer accepts any value of Type; Example is the value of the reader.
+// pageWireVariableSpec is a value that the host or the page chooses. Type is one type name or a list of them. The producer accepts any
+// value of the type in a reply, and it sends Example in place of a page variable of a call; Source is "host" (the default) or "page".
 type pageWireVariableSpec struct {
-	Type    string          `json:"type"`
+	Type    json.RawMessage `json:"type"`
 	Example json.RawMessage `json:"example"`
+	Source  string          `json:"source"`
 }
 
-// pageWireStep is one call step or one reply step.
+// types returns the type names of the variable.
+func (spec pageWireVariableSpec) types() []string {
+	var many []string
+	if err := json.Unmarshal(spec.Type, &many); err == nil {
+		return many
+	}
+	var one string
+	if err := json.Unmarshal(spec.Type, &one); err == nil {
+		return []string{one}
+	}
+	return nil
+}
+
+// pageWireStep is one call step, one reply step or one notice step.
 type pageWireStep struct {
-	Call  *pageWireCall  `json:"call"`
-	Reply *pageWireReply `json:"reply"`
+	Call   *pageWireCall   `json:"call"`
+	Reply  *pageWireReply  `json:"reply"`
+	Notice *pageWireNotice `json:"notice"`
+}
+
+// pageWireNotice is a notice that the host sends to the listeners of the page.
+type pageWireNotice struct {
+	Event   string          `json:"event"`
+	Payload json.RawMessage `json:"payload"`
 }
 
 type pageWireCall struct {
@@ -62,10 +85,12 @@ type pageWireCall struct {
 	Cids    []string        `json:"cids"`
 }
 
-// pageWireReply holds either the result, which is null when the host answers nothing, or the error text.
+// pageWireReply holds either the result, which is null when the host answers nothing, or the error text. Held is the reader's: the reader
+// settles a held reply when the test releases it, and the producer compares the reply as any other.
 type pageWireReply struct {
 	Result json.RawMessage `json:"result"`
 	Error  *string         `json:"error"`
+	Held   bool            `json:"held"`
 }
 
 // TestPageWire runs each page-wire case of the folder with replay true, one subtest per case.
@@ -114,6 +139,13 @@ func runPageWireCase(t *testing.T, name, file string) {
 		}
 		t.Skip(kase.Reason)
 	}
+	// The producer runs the calls of the host without a window, and a notice reaches only the listeners of a window, so a case with a
+	// notice is replayed in the tier that has windows.
+	for i, step := range kase.Steps {
+		if step.Notice != nil {
+			t.Fatalf("%s: step %d is a notice, which this producer cannot observe; the case needs replay false and the reason", file, i)
+		}
+	}
 	if len(kase.Steps)%2 != 0 {
 		t.Fatalf("%s: the steps are not call and reply pairs", file)
 	}
@@ -134,7 +166,11 @@ func runPageWireCase(t *testing.T, name, file string) {
 		}
 		var args []json.RawMessage
 		if call.Payload != nil {
-			args = []json.RawMessage{call.Payload}
+			payload, err := pageWireExamples(call.Payload, kase.Variables)
+			if err != nil {
+				t.Fatalf("step %d: %v", i, err)
+			}
+			args = []json.RawMessage{payload}
 		}
 		result, err := pageWireInvoke(context.Background(), writer, bindings, call.Name, args, call.Cids)
 		if reply.Error != nil {
@@ -248,8 +284,8 @@ func pageWireMatch(path string, want, got any, variables map[string]pageWireVari
 		if !declared {
 			return fmt.Sprintf("%s: the variable %s is not declared", path, text)
 		}
-		if !pageWireHasType(got, spec.Type) {
-			return fmt.Sprintf("%s is %v, the variable %s has the type %s", path, got, text, spec.Type)
+		if !slices.ContainsFunc(spec.types(), func(typ string) bool { return pageWireHasType(got, typ) }) {
+			return fmt.Sprintf("%s is %v, the variable %s has the type %s", path, got, text, string(spec.Type))
 		}
 		return ""
 	}
@@ -303,9 +339,63 @@ func pageWireMatch(path string, want, got any, variables map[string]pageWireVari
 	return ""
 }
 
-// pageWireHasType reports whether value is a JSON value of the type of a variable: integer, number, string or boolean.
+// pageWireExamples returns the payload of a call with each page variable replaced by its example: the page chooses those values, and the
+// producer sends the example as the value the page chose.
+func pageWireExamples(payload json.RawMessage, variables map[string]pageWireVariableSpec) (json.RawMessage, error) {
+	value, err := decodeWithNumbers(payload)
+	if err != nil {
+		return nil, fmt.Errorf("the payload is not JSON: %v", err)
+	}
+	var replace func(any) (any, error)
+	replace = func(value any) (any, error) {
+		switch v := value.(type) {
+		case string:
+			if !pageWireVariable.MatchString(v) {
+				return v, nil
+			}
+			spec, declared := variables[v[1:]]
+			if !declared || spec.Source != "page" {
+				return nil, fmt.Errorf("the call uses %s, which is not a declared page variable", v)
+			}
+			return json.RawMessage(spec.Example), nil
+		case map[string]any:
+			for key, item := range v {
+				replaced, err := replace(item)
+				if err != nil {
+					return nil, err
+				}
+				v[key] = replaced
+			}
+		case []any:
+			for i, item := range v {
+				replaced, err := replace(item)
+				if err != nil {
+					return nil, err
+				}
+				v[i] = replaced
+			}
+		}
+		return value, nil
+	}
+	replaced, err := replace(value)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(replaced)
+}
+
+// pageWireHasType reports whether value is a JSON value of the type of a variable: integer, number, string, boolean, object, array or
+// null.
 func pageWireHasType(value any, typ string) bool {
 	switch typ {
+	case "object":
+		_, ok := value.(map[string]any)
+		return ok
+	case "array":
+		_, ok := value.([]any)
+		return ok
+	case "null":
+		return value == nil
 	case "integer":
 		number, ok := value.(json.Number)
 		if !ok {

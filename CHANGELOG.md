@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- A page-wire case records the notices that the host sends to the listeners of the page, replies that the test releases and values that the page chooses, and the dialog tests of the workbench play the `overlay-` cases instead of replacing `@soksak/runtime` (F795-10).
 - The recording and view failure tests of the Go host set the declared fault points `SOKSAK_FAULT_CAPTURE_OPEN`, `SOKSAK_FAULT_CAPTURE_START`, `SOKSAK_FAULT_CAPTURE_STOP` and `SOKSAK_FAULT_VIEW_STEP` of the diagnostic build instead of stand-ins that fail, and the endpoint tests fail a real connection (F795-6).
 - Both hosts record the first output line of each sidecar process that they start as `host.sidecar.first_output` (`name`, `pid`, `ms`) at the level `info`, in place of the trace event `host.trace.sidecar.ready`, so a run shows when a sidecar started and when it first answered (F797).
 - The client, mcp, window-check, test-app, B3 run and `sok` tests play the endpoint contract cases of `docs/spec/cases/endpoint` with case players that answer only the frames of a case and report each difference, the Go and Rust host tests replay the cases of the unit tier, and the fake endpoint of `@soksak/client/testing` is removed (F795-8).

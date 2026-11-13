@@ -1,0 +1,7 @@
+{
+  "name": "overlay-none",
+  "description": "A page without an open modal sends no call to the host while it checks which elements are behind a dialog.",
+  "replay": true,
+  "variables": {},
+  "steps": []
+}

@@ -12,13 +12,16 @@ export const windows = null;
 
 /**
  * Makes the page-wire case of the name the host of the workbench until the returned finish is called. The test selects the case before
- * it imports or calls a module that reads host, and finish checks that every step of the case was played.
+ * it imports or calls a module that reads host, and finish checks that every step of the case was played. release settles the oldest
+ * held reply, and deliverNotice delivers the next notice of the case to the listeners of the page.
  */
 export function selectPageWire(name) {
   const wire = openPageWire(name);
   host = { call: wire.call, on: wire.on };
   return {
     calls: wire.calls,
+    release: wire.release,
+    deliverNotice: wire.deliverNotice,
     finish() {
       host = null;
       wire.finish();

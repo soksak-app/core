@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- page-wire case 가 host 가 page 의 listener 에 보내는 notice, 시험이 푸는 응답, page 가 고르는 값을 기록하고, workbench 의 dialog 시험이 `@soksak/runtime` 을 대체하는 대신 `overlay-` case 를 재생한다 (F795-10).
 - Go host 의 recording 과 view 실패 시험이 실패하는 대역 대신 diagnostic build 의 선언된 fault point `SOKSAK_FAULT_CAPTURE_OPEN`, `SOKSAK_FAULT_CAPTURE_START`, `SOKSAK_FAULT_CAPTURE_STOP`, `SOKSAK_FAULT_VIEW_STEP` 을 설정하고, endpoint 시험은 실제 연결을 실패시킨다 (F795-6).
 - 두 host 가 시작하는 각 sidecar process 의 첫 출력 줄을 trace event `host.trace.sidecar.ready` 대신 `info` 수준의 `host.sidecar.first_output`(`name`, `pid`, `ms`)으로 기록하므로, run 이 sidecar 가 언제 시작했고 언제 처음 답했는지 보여 준다 (F797).
 - client, mcp, window-check, test-app, B3 run 과 `sok` 시험이 사례의 frame 에만 답하고 각 차이를 보고하는 case player 로 `docs/spec/cases/endpoint` 의 endpoint 계약 사례를 재생하고, Go 와 Rust host 시험이 unit tier 의 사례를 재생하며, `@soksak/client/testing` 의 fake endpoint 는 제거되었다 (F795-8).
