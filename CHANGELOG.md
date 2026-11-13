@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F779-5: the unit test of the raster probe fixture expects the count of the answered focus calls of the presses.
 - F774-3: the event class tables of the Go and Rust CLI and of the page, and the catalog of `@soksak/window-check`, hold `native.connection.activity`.
 - F794: the test of `make repeat-suite` has no limit over the whole suite; the runner gives each run its own limit.
 - F790: the Go host removes every wait of a layout cancel before it abandons the native joins of the waits, as the Rust host does, and reports a failed abandon in the text of the Rust host; its test of the end of a page sees the cancel of the layouts queued for the UI thread.

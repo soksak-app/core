@@ -222,7 +222,7 @@ test("the probe forwards region input with its cids, follows the text size and o
   fake.imageHandlers.get("input")({ type: "input", actions: [{ type: "insert", text: "a" }], preedit: { text: "" }, errors: [], cids: ["n.7"] });
   assert.deepEqual(fake.sent[1], { surface: "tab-9", body: { operation: "input", sequence: 1, actions: [{ type: "insert", text: "a" }], preedit: { text: "" } }, cids: ["n.7"] });
   assert.deepEqual(fake.statuses.get("rasterprobe.input").read(), { focused: true, transactions: 1, preedit: { text: "" }, actions: [{ type: "insert", text: "a" }], errors: [],
-    log: [{ sequence: 1, cids: ["n.7"], actions: [{ type: "insert", text: "a" }], preedit: { text: "" }, errors: [], received: null, receivedCids: null, frame: null }], pointer: [] });
+    log: [{ sequence: 1, cids: ["n.7"], actions: [{ type: "insert", text: "a" }], preedit: { text: "" }, errors: [], received: null, receivedCids: null, frame: null }], pointer: [], pressFocus: 0 });
 
   fake.textSize(1.5);
   assert.deepEqual(fake.sent[2].body, { operation: "textSize", factor: 1.5 });

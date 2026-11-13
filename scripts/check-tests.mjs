@@ -1459,6 +1459,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F779-5",
+    implementation: [{ file: "e2e/fixtures/raster-probe/probe/ui/raster-probe.js", symbol: "pressFocus: 0 });" }],
+    tests: [{ file: "e2e/test/raster-probe-fixture.test.mjs", id: "the probe forwards region input with its cids, follows the text size and opens again on a connection notice" }],
+    expected: "The unit test of the raster probe fixture expects the status rasterprobe.input with its count pressFocus.",
+    levels: ["unit"],
+  },
+  {
     id: "F790",
     implementation: [
       { file: "packages/host/go/src/presentation_wait.go", symbol: "func (w *presentationWait) cancelAll() error {" },

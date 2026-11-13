@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F779-5: raster probe fixture 의 unit test 는 누름의 답한 focus call 수를 기대한다.
 - F774-3: Go 와 Rust CLI 와 page 의 event class table, `@soksak/window-check` 의 catalog 가 `native.connection.activity` 를 담는다.
 - F794: `make repeat-suite` 의 시험은 suite 전체의 limit 을 두지 않는다. runner 가 각 run 에 자기 limit 을 준다.
 - F790: Go host 는 Rust host 처럼 layout cancel 의 모든 wait 를 지운 뒤 wait 의 native join 을 abandon 하고, 실패한 abandon 을 Rust host 의 문구로 보고한다. page 끝의 시험은 layout 의 cancel 이 UI thread 로 미뤄지는 것을 본다.
