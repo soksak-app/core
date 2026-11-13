@@ -584,7 +584,7 @@ test("an observation chooses no surface that a drawing or a place left out, so n
   const chosen = [];
   made.observe("probe.lines", "tab-b", (value, from) => exact.push([value, from]), { exact: true });
   made.observe("probe.lines", undefined, (value, from) => chosen.push(from));
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  // observe forwards its watch to the host before it returns, so the recorded calls hold every watch that the observations start.
   const watched = host.calls.filter(([name, arg]) => name === "exposureForward" && arg.method === "status.watch").map(([, arg]) => arg.surface);
   assert.deepEqual(watched, ["tab-a"], "a watch was forwarded to a surface that is left out");
   assert.deepEqual(exact, [[null, null]], "an exact observation of a left-out surface follows no surface");

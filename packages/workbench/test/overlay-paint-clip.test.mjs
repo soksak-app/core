@@ -13,16 +13,26 @@ globalThis.innerHeight = 600;
 // This is a list that a WebKit document has and jsdom does not.
 document.adoptedStyleSheets = [];
 const calls = [];
+const arrivals = [];
 mock.module("@soksak/runtime", { namedExports: { host: {
   on: () => {},
   page: (path) => path,
-  call: async (name, payload) => { calls.push([name, payload]); },
+  call: async (name, payload) => {
+    calls.push([name, payload]);
+    for (const check of arrivals.splice(0)) check();
+  },
 } } });
 const { overlay } = await import("../host.js");
 
+// Resolves when the host has received a call of the name.
+const untilCalled = (name) => new Promise((resolve) => {
+  const check = () => (calls.some(([called]) => called === name) ? resolve() : arrivals.push(check));
+  check();
+});
+
 test("the dialog document receives the page styles without the native paint clip", async () => {
   overlay.show(document.getElementById("settings"), { x: 0, y: 0, w: 800, h: 600 }, () => {});
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await untilCalled("overlayShow");
   const [, payload] = calls.find(([name]) => name === "overlayShow");
   assert.match(payload.css, /\.card \{ color: red; \}/);
   assert.doesNotMatch(payload.css, /clip-path/, "the main page's native paint clip was copied into the dialog document");

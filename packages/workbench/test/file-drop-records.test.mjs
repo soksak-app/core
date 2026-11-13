@@ -38,16 +38,13 @@ test("a failed file drop is reported with its reason and every drop is logged", 
       drawn: async () => {},
     });
     assert.equal(typeof dropped, "function", "the drop handler was not installed");
-    const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+    // dropFiles logs and reports each of these drops before its first await, because each one throws before the command is run.
     dropped("not json");
-    await settle();
     assert.equal(reported.length, 1, `reported ${JSON.stringify(reported)}`);
     assert.match(reported[0], /^drop: Unexpected token/);
     dropped(JSON.stringify({ urls: [], x: 1, y: 2 }));
-    await settle();
     assert.deepEqual(reported.slice(1), ["drop: the application sent an invalid file drop"]);
     dropped(JSON.stringify({ urls: ["file:///a.txt"], x: 5, y: 6 }));
-    await settle();
     assert.deepEqual(reported.slice(2), ["drop: no surface is under the drop point"]);
     assert.deepEqual(logged, [
       "drop: received not json",

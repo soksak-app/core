@@ -66,11 +66,7 @@ test("the page drag presses at the point that diagnostics.drag.boundary answers"
 test("a host tick that reports a step it could not pace rejects the page drag", async () => {
   inputs.length = 0;
   const drag = methods.get("diagnostics.drag")({ axis: "x", line: 3, dx: 20, dy: 0, ms: 16, times: 1 });
-  let settled = false;
-  drag.then(() => { settled = true; }, () => { settled = true; });
   hostEvents.get("diagnostics-tick")({ error: "the window is on no display with a refresh rate" });
-  // One macrotask lets a rejection settle; a drag that is still pending here is a failure, not a hang.
-  await new Promise((done) => setTimeout(done, 0));
-  assert.equal(settled, true, "the drag is still pending after the host reported a step it could not pace");
+  // The drag ends only by its rejection, so the rejection is the event that the check waits for.
   await assert.rejects(drag, { message: "the window is on no display with a refresh rate" });
 });

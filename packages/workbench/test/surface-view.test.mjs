@@ -27,6 +27,18 @@ function pageOf(dom) {
   return pageIdentity;
 }
 
+// The waiters of the recorded calls and replies. A mock calls recorded after each record, and until resolves when its predicate holds.
+const recordWaiters = [];
+function recorded() {
+  for (const check of recordWaiters.splice(0)) check();
+}
+function until(predicate) {
+  return new Promise((resolve) => {
+    const check = () => (predicate() ? resolve() : recordWaiters.push(check));
+    check();
+  });
+}
+
 test("a queued view call from a retired source generation does not reach the replacement command layer", { timeout: 5000 }, async (t) => {
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
@@ -51,7 +63,7 @@ test("a queued view call from a retired source generation does not reach the rep
         listeners.set(name, listener);
         return () => {};
       }, call: async (name, payload) => {
-        if (name === "viewReply") replies.push(payload);
+        if (name === "viewReply") replies.push(payload); recorded();
         return null;
       } } };
     },
@@ -99,8 +111,8 @@ test("a view mount waits for its actual source registration before serving the f
         listeners.set(name, listener);
         return () => listeners.delete(name);
       }, call: async (name, payload) => {
-        calls.push({ name, payload });
-        if (name === "viewReply") replies.push(payload);
+        calls.push({ name, payload }); recorded();
+        if (name === "viewReply") replies.push(payload); recorded();
         if (name === "compositionDeclare") {
           assert.ok(listeners.has("view-call"), "view-call listener was not installed before composition declaration");
           assert.ok(listeners.has("view-reply"), "view-reply listener was not installed before composition declaration");
@@ -159,7 +171,7 @@ test("a retained view reads the text scale of its stored owner card", { timeout:
         listeners.set(name, listener);
         return () => listeners.delete(name);
       }, call: async (name, payload) => {
-        if (name === "viewReply") replies.push(payload);
+        if (name === "viewReply") replies.push(payload); recorded();
         return null;
       } } };
     },
@@ -187,14 +199,14 @@ test("a retained view reads the text scale of its stored owner card", { timeout:
     });
     listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, generation: 1,
       id: 1, command: "runtime.textSize.read", params: null });
-    for (let turn = 0; replies.length === 0 && turn < 10; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+    await until(() => replies.length >= 1);
     assert.deepEqual(replies, [{ id: 1, result: 1.875, page: pageOf(dom), generation: 1 }],
       "a cold retained view did not read frame scale multiplied by its stored owner-card scale");
     frameFactor = 2;
     ownerCard.data.textSize = 1.5;
     listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, generation: 1,
       id: 2, command: "runtime.textSize.read", params: null });
-    for (let turn = 0; replies.length < 2 && turn < 10; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+    await until(() => replies.length >= 2);
     assert.deepEqual(replies, [
       { id: 1, result: 1.875, page: pageOf(dom), generation: 1 },
       { id: 2, result: 1.875, page: pageOf(dom), generation: 1 },
@@ -202,11 +214,11 @@ test("a retained view reads the text scale of its stored owner card", { timeout:
     liveScale = 3;
     listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, generation: 1,
       id: 3, command: "runtime.textSize.read", params: null });
-    for (let turn = 0; replies.length < 3 && turn < 10; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+    await until(() => replies.length >= 3);
     liveScale = null;
     listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, generation: 1,
       id: 4, command: "runtime.textSize.read", params: null });
-    for (let turn = 0; replies.length < 4 && turn < 10; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+    await until(() => replies.length >= 4);
     assert.deepEqual(replies, [
       { id: 1, result: 1.875, page: pageOf(dom), generation: 1 },
       { id: 2, result: 1.875, page: pageOf(dom), generation: 1 },
@@ -252,8 +264,8 @@ test("a view declares its composition only after native call listeners are ready
           resolve(() => { if (listeners.get(name) === listener) listeners.delete(name); });
         }));
       }, call: async (name, payload) => {
-        calls.push({ name, payload });
-        if (name === "viewReply") replies.push(payload);
+        calls.push({ name, payload }); recorded();
+        if (name === "viewReply") replies.push(payload); recorded();
         return null;
       } } };
     },
@@ -283,7 +295,7 @@ test("a view declares its composition only after native call listeners are ready
     const call = listeners.get("view-call");
     call({ surface: surfaceId, plugin: pluginId, generation: 1, id: 1, command: "runtime.textSize.read", params: null });
     call({ surface: surfaceId, plugin: pluginId, generation: 1, id: 2, command: "runtime.native.on", params: { name: "exposure-request" } });
-    for (let turn = 0; replies.length < 2 && turn < 10; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+    await until(() => replies.length >= 2);
     assert.deepEqual(replies, [
       { id: 1, result: 1, page: pageOf(dom), generation: 1 },
       { id: 2, result: null, page: pageOf(dom), generation: 1 },
@@ -314,7 +326,7 @@ test("mounting a view surface imports no module and declares its view compositio
       const runtime = actualHost.surfaceContextRuntime(surface, declarations);
       // The view answers its calls on view-call, which the fake host does not deliver, so its listener is a no-op.
       return { ...runtime, native: { ...runtime.native, on: async () => () => {}, call: async (name, payload) => {
-        calls.push({ name, payload });
+        calls.push({ name, payload }); recorded();
         return null;
       } } };
     },
@@ -359,7 +371,7 @@ test("a page-start view waits for the initial project context and a disposed pre
     surfaceContextRuntime: (surface, declarations) => {
       const runtime = actualHost.surfaceContextRuntime(surface, declarations);
       return { ...runtime, native: { ...runtime.native, on: async () => () => {}, call: async (name, payload) => {
-        calls.push({ name, payload });
+        calls.push({ name, payload }); recorded();
         return null;
       } } };
     },
@@ -420,7 +432,7 @@ test("a view surface reports phase ready after its view declares its composition
     surfaceContextRuntime: (surface, declarations) => {
       const runtime = actualHost.surfaceContextRuntime(surface, declarations);
       return { ...runtime, native: { ...runtime.native, on: async () => () => {}, call: async (name, payload) => {
-        calls.push({ name, payload });
+        calls.push({ name, payload }); recorded();
         return null;
       } } };
     },
@@ -552,7 +564,7 @@ test("a view call writes receipt and reply records with its source generation", 
         return () => {};
       }, call: async (name, payload) => {
         if (name === "viewReply") {
-          replies.push(payload);
+          replies.push(payload); recorded();
           replied();
         }
         return null;
@@ -611,7 +623,7 @@ test("a view subscription to the text size resolves with a result", { timeout: 5
         return () => {};
       }, call: async (name, payload) => {
         if (name === "viewReply") {
-          replies.push(payload);
+          replies.push(payload); recorded();
           replied();
         }
         return null;
@@ -907,7 +919,7 @@ test("a view registers its exposure through the page and its port consumes forwa
         return () => {};
       }, call: async (name, payload) => {
         // The surface runtime scopes every host call with the surface id, as surfaceContextRuntime.invoke does.
-        calls.push({ name, payload: { ...(payload ?? {}), surface: surface.surfaceId } });
+        calls.push({ name, payload: { ...(payload ?? {}), surface: surface.surfaceId } }); recorded();
         return null;
       } } };
     },
@@ -932,7 +944,7 @@ test("a view registers its exposure through the page and its port consumes forwa
     await mountSurface(document.querySelector("#slot"), surface);
     listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, id: 1, command: "runtime.native.call",
       params: { name: "registered", payload: { kind: "status", name: `${pluginId}.lines` } } });
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await until(() => calls.some(({ name }) => name === "exposureRegister"));
     assert.deepEqual(registry.registrants("status", `${pluginId}.lines`), [surfaceId], "the registration did not reach the registry");
     assert.deepEqual(calls.filter(({ name }) => name === "exposureRegister"), [{
       name: "exposureRegister", payload: { kind: "status", name: `${pluginId}.lines`, surface: surfaceId },
@@ -969,7 +981,7 @@ test("a view process end removes its status registrations and preserves replacem
         listeners.set(name, listener);
         return () => {};
       }, call: async (name, payload) => {
-        calls.push({ name, payload: { ...(payload ?? {}), surface: surface.surfaceId } });
+        calls.push({ name, payload: { ...(payload ?? {}), surface: surface.surfaceId } }); recorded();
         return null;
       } } };
     },
@@ -994,12 +1006,10 @@ test("a view process end removes its status registrations and preserves replacem
       generation: sourceOrigin(pluginId, surfaceId),
     });
   });
-  const settleRegistration = async (present) => {
-    for (let turn = 0; turn < 100; turn += 1) {
-      if (registry.registrants("status", statusId).includes(surfaceId) === present) return;
-      await new Promise((resolve) => setTimeout(resolve, 5));
-    }
-    assert.equal(registry.registrants("status", statusId).includes(surfaceId), present, "the exposure registration did not settle");
+  // The registry notifies its registration listeners after each change, so the registration is awaited by its change.
+  const settleRegistration = (present) => {
+    const stop = registry.onRegistrationChange(recorded);
+    return until(() => registry.registrants("status", statusId).includes(surfaceId) === present).finally(stop);
   };
   try {
     authorizeSurface(surfaceId);
@@ -1065,12 +1075,10 @@ test("the dispose of a view removes its registrations before the same surface is
     composition: { kind: "view", page: "ui/page.html" } };
   const registerStatus = (id) => listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, generation: 1, id,
     command: "runtime.native.call", params: { name: "registered", payload: { kind: "status", name: statusId } } });
-  const settleRegistration = async (present) => {
-    for (let turn = 0; turn < 100; turn += 1) {
-      if (registry.registrants("status", statusId).includes(surfaceId) === present) return;
-      await new Promise((resolve) => setTimeout(resolve, 5));
-    }
-    assert.equal(registry.registrants("status", statusId).includes(surfaceId), present, "the exposure registration did not settle");
+  // The registry notifies its registration listeners after each change, so the registration is awaited by its change.
+  const settleRegistration = (present) => {
+    const stop = registry.onRegistrationChange(recorded);
+    return until(() => registry.registrants("status", statusId).includes(surfaceId) === present).finally(stop);
   };
   try {
     authorizeSurface(surfaceId);
@@ -1117,7 +1125,7 @@ test("a view watch of a status that the exposure does not declare is refused wit
         listeners.set(name, listener);
         return () => {};
       }, call: async (name, payload) => {
-        calls.push({ name, payload: { ...(payload ?? {}), surface: surface.surfaceId } });
+        calls.push({ name, payload: { ...(payload ?? {}), surface: surface.surfaceId } }); recorded();
         return null;
       } } };
     },
@@ -1137,7 +1145,7 @@ test("a view watch of a status that the exposure does not declare is refused wit
     seedViewSource(pluginId, surfaceId);
     await mountSurface(document.querySelector("#slot"), surface);
     listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, id: 3, command: "runtime.status.watch", params: { name: `${pluginId}.missing` } });
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await until(() => calls.some(({ name, payload }) => name === "viewReply" && payload?.id === 3));
     assert.deepEqual(calls.filter(({ name }) => name === "viewReply"), [{
       name: "viewReply",
       payload: { id: 3, error: { code: -32000, message: `view call runtime.status.watch ${pluginId}.missing is not a declared status` }, generation: 1, surface: surfaceId, page: pageIdentity },
@@ -1172,7 +1180,7 @@ test("a view sends only to a sidecar its surface declares and a send to another 
           listeners.set(name, listener);
           return () => {};
         }, call: async (name, payload) => {
-          if (name === "viewReply") replies.push(payload);
+          if (name === "viewReply") replies.push(payload); recorded();
           return null;
         } },
         // The sidecar port of the surface records the sends that reach a sidecar.
@@ -1238,7 +1246,7 @@ test("the region calls of a view run the page operations of its surface", { time
         return () => {};
       }, call: async (name, payload) => {
         // The surface runtime scopes every host call with the surface id, as surfaceContextRuntime.invoke does.
-        calls.push({ name, payload: { ...(payload ?? {}), surface: surface.surfaceId } });
+        calls.push({ name, payload: { ...(payload ?? {}), surface: surface.surfaceId } }); recorded();
         return null;
       } } };
     },
@@ -1254,9 +1262,7 @@ test("the region calls of a view run the page operations of its surface", { time
   const composition = { kind: "view", page: "ui/page.html", regions: [{ name: "doc", kind: "document", input: "native" }], overlays: [] };
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], element: [] }, sidecars: [], composition };
   const replies = () => calls.filter(({ name }) => name === "viewReply").map(({ payload }) => payload);
-  const settle = async (count) => {
-    for (let turn = 0; turn < 100 && replies().length < count; turn += 1) await new Promise((resolve) => setTimeout(resolve, 5));
-  };
+  const settle = (count) => until(() => replies().length >= count);
   try {
     authorizeSurface(surfaceId);
     seedViewSource(pluginId, surfaceId);
@@ -1308,7 +1314,7 @@ test("a view process end forgets the regions that its surface attached", { timeo
         listeners.set(name, listener);
         return () => {};
       }, call: async (name, payload) => {
-        calls.push({ name, payload: { ...(payload ?? {}), surface: surface.surfaceId } });
+        calls.push({ name, payload: { ...(payload ?? {}), surface: surface.surfaceId } }); recorded();
         return null;
       } } };
     },
@@ -1323,9 +1329,7 @@ test("a view process end forgets the regions that its surface attached", { timeo
   const composition = { kind: "view", page: "ui/page.html", regions: [{ name: "doc", kind: "document", input: "native" }], overlays: [] };
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], element: [] }, sidecars: [], composition };
   const replies = () => calls.filter(({ name }) => name === "viewReply").map(({ payload }) => payload);
-  const settle = async (count) => {
-    for (let turn = 0; turn < 100 && replies().length < count; turn += 1) await new Promise((resolve) => setTimeout(resolve, 5));
-  };
+  const settle = (count) => until(() => replies().length >= count);
   try {
     authorizeSurface(surfaceId);
     seedViewSource(pluginId, surfaceId);
@@ -1377,10 +1381,10 @@ test("a view process end cancels its pending work across restart and accepts new
             return () => nativeListeners.delete(name);
           },
           call: async (name, payload) => {
-            calls.push({ name, payload });
+            calls.push({ name, payload }); recorded();
             if (name === "viewReply") {
-              replies.push(payload);
-              if (payload.id === 11 && newDocumentReady) calls.push({ name: "staleReplyReachedReplacement", payload });
+              replies.push(payload); recorded();
+              if (payload.id === 11 && newDocumentReady) calls.push({ name: "staleReplyReachedReplacement", payload }); recorded();
             }
             return null;
           },
@@ -1409,10 +1413,7 @@ test("a view process end cancels its pending work across restart and accepts new
     sidecars: ["fixture-sidecar"], composition: { kind: "view", page: "ui/page.html" } };
   const routes = () => calls.filter(({ name }) => name === "viewSidecarRoute")
     .map(({ payload }) => ({ generation: payload.generation, sidecar: payload.sidecar, id: payload.id, on: payload.on }));
-  const settle = async (condition) => {
-    for (let turn = 0; turn < 100 && !condition(); turn += 1) await new Promise((resolve) => setTimeout(resolve, 5));
-    assert.ok(condition(), "the view-process operation settled");
-  };
+  const settle = (condition) => until(condition);
   try {
     authorizeSurface(surfaceId);
     seedViewSource(pluginId, surfaceId);
@@ -1556,7 +1557,7 @@ test("a view reply the host refuses is reported through the page error path", { 
   const previousError = globalThis.ErrorEvent;
   const previousDispatch = globalThis.dispatchEvent;
   globalThis.ErrorEvent = dom.window.ErrorEvent;
-  globalThis.dispatchEvent = (event) => { reported.push(event.message); return true; };
+  globalThis.dispatchEvent = (event) => { reported.push(event.message); recorded(); return true; };
   const { registry } = await import("../exposure.js");
   const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-reply-report");
   const pluginId = "fixture-reply";
@@ -1573,7 +1574,7 @@ test("a view reply the host refuses is reported through the page error path", { 
     await mountSurface(document.querySelector("#slot"), surface);
     listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, id: 3, command: "runtime.native.call",
       params: { name: "registered", payload: { kind: "status", name: `${pluginId}.none` } } });
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await until(() => reported.includes("view call 3 reply: host refused the reply"));
     assert.ok(reported.includes("view call 3 reply: host refused the reply"),
       `the refused reply was not reported: ${JSON.stringify(reported)}`);
   } finally {
@@ -1634,7 +1635,7 @@ test("closing a view cancels a pending call reply and removes its sidecar route"
   const previousError = globalThis.ErrorEvent;
   const previousDispatch = globalThis.dispatchEvent;
   globalThis.ErrorEvent = dom.window.ErrorEvent;
-  globalThis.dispatchEvent = (event) => { reported.push(event.message); return true; };
+  globalThis.dispatchEvent = (event) => { reported.push(event.message); recorded(); return true; };
   const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-close-pending-delivery");
   const pluginId = "fixture-close-pending-view";
   const surfaceId = "fixture-close-pending-surface";
@@ -1736,7 +1737,7 @@ test("a view surface mounts with the core surface entries that exposure.json dec
     surfaceContextRuntime: (surface, declarations) => {
       const runtime = actualHost.surfaceContextRuntime(surface, declarations);
       return { ...runtime, native: { ...runtime.native, on: async () => () => {}, call: async (name, payload) => {
-        calls.push({ name, payload });
+        calls.push({ name, payload }); recorded();
         return null;
       } } };
     },
@@ -1814,7 +1815,8 @@ test("a view mount, its core registration and its command registration share one
     assert.equal(await dispatchSurfaceRequest({ surface: surfaceId, id: 1, method: "status.get", params: { name: "core.surface.document" } }),
       true, "the core entry of the view surface is not served by its page");
     listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, id: 2, command: "runtime.command.register", params: { name: command } });
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    const stopNames = registry.onRegistrationChange(recorded);
+    await until(() => registry.namesOf(surfaceId).includes(`command ${command}`)).finally(stopNames);
     assert.ok(registry.namesOf(surfaceId).includes(`command ${command}`), `the view command is not registered: ${JSON.stringify(registry.namesOf(surfaceId))}`);
   } finally {
     await disposeSurface(surfaceId);
@@ -1842,8 +1844,9 @@ test("a forwarded run of a command that the view registered runs on the page por
       const runtime = actualHost.surfaceContextRuntime(surface, declarations);
       return { ...runtime, native: { ...runtime.native, on: async (name, listener) => {
         listeners.set(name, listener);
+        recorded();
         return () => {};
-      }, call: async (name, payload) => { calls.push([name, payload]); return null; } } };
+      }, call: async (name, payload) => { calls.push([name, payload]); recorded(); return null; } } };
     },
   } });
   const exposureFile = (await import("../exposure.json", { with: { type: "json" } })).default;
@@ -1869,17 +1872,18 @@ test("a forwarded run of a command that the view registered runs on the page por
     assert.equal(await dispatchSurfaceRequest({ surface: surfaceId, id: 1, method: "status.get", params: { name: "core.surface.document" } }),
       true, "the core entry of the view surface is not served by its page");
     listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, id: 2, command: "runtime.command.register", params: { name: command } });
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    const stopNames = registry.onRegistrationChange(recorded);
+    await until(() => registry.namesOf(surfaceId).includes(`command ${command}`)).finally(stopNames);
     assert.ok(registry.namesOf(surfaceId).includes(`command ${command}`), `the view command is not registered: ${JSON.stringify(registry.namesOf(surfaceId))}`);
     listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, id: 3, command: "runtime.native.on", params: { name: "exposure-request" } });
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await until(() => listeners.has("exposure-request"));
     const forwarded = listeners.get("exposure-request");
     assert.equal(typeof forwarded, "function", "the view did not subscribe to its exposure requests");
     calls.length = 0;
     const run = { surface: surfaceId, id: 4, method: "command.run", params: { name: command, params: {} } };
     forwarded(run);
     assert.equal(await dispatchSurfaceRequest(run), true);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await until(() => calls.some(([name]) => name === "viewRequest"));
     assert.deepEqual(calls.filter(([name]) => name === "viewRequest").map(([, payload]) => payload.command), [command],
       "the forwarded command run did not reach the view as a command request");
     assert.deepEqual(calls.filter(([name, payload]) => name === "viewEvent" && payload.event === "exposure-request"), [],
@@ -1945,7 +1949,7 @@ test("a view declares its composition only after a place that left it out has it
     surfaceContextRuntime: (surface, declarations) => {
       const runtime = actualHost.surfaceContextRuntime(surface, declarations);
       return { ...runtime, native: { ...runtime.native, on: async () => () => {}, call: async (name, payload) => {
-        calls.push({ name, payload });
+        calls.push({ name, payload }); recorded();
         return null;
       } } };
     },

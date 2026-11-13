@@ -32,6 +32,18 @@ const documents = {
 };
 
 let instance = 0;
+// The waiters of the recorded host calls. The mock of each harness calls recorded after each call, and until resolves when its predicate holds.
+const callWaiters = [];
+function recorded() {
+  for (const check of callWaiters.splice(0)) check();
+}
+function until(predicate) {
+  return new Promise((resolve) => {
+    const check = () => (predicate() ? resolve() : callWaiters.push(check));
+    check();
+  });
+}
+
 /**
  * Mounts the view of a surface on a fake native host and returns the view call, host call and sidecar send records of that host.
  * refuse names the host calls that the fake host refuses.
@@ -63,6 +75,7 @@ async function harness(t, { refuse = new Set() } = {}) {
         },
         call: async (name, payload) => {
           calls.push({ name, payload });
+          recorded();
           if (refuse.has(name)) throw new Error(`the host refused ${name}`);
           return null;
         } } };
@@ -79,12 +92,8 @@ async function harness(t, { refuse = new Set() } = {}) {
   // Sends one view call and resolves with the reply that the view receives.
   const viewCall = async (command, params, generation = 1) => {
     const id = deliver(command, params, generation);
-    for (let turn = 0; turn < 100; turn += 1) {
-      const reply = calls.find((call) => call.name === "viewReply" && call.payload.id === id);
-      if (reply) return reply.payload;
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
-    throw new Error(`view call ${command} got no reply`);
+    await until(() => calls.some((call) => call.name === "viewReply" && call.payload.id === id));
+    return calls.find((call) => call.name === "viewReply" && call.payload.id === id).payload;
   };
   return { modules, calls, sent, deliver, viewCall, page: pageIdentity, slot: document.querySelector("#slot"), close: () => dom.window.close() };
 }
@@ -361,8 +370,8 @@ test("a view mount that a dispose ends before its authorization resolves null an
   await new Promise((resolve) => setTimeout(resolve, 0));
   await h.modules.disposeSurface(id);
   assert.equal(h.slot.querySelector(`[data-surface="${id}"]`), null, "the surface was not removed before its authorization");
-  const outcome = await Promise.race([mounting.then((value) => ({ value }), (error) => ({ error: error.message })),
-    new Promise((resolve) => setTimeout(() => resolve("pending"), 200))]);
+  // The mount ends only by its resolution, so the resolution is the event that the check waits for.
+  const outcome = await mounting.then((value) => ({ value }), (error) => ({ error: error.message }));
   assert.deepEqual(outcome, { value: null }, "the mount that the dispose ended did not resolve");
   h.modules.authorizeSurface(id);
   await new Promise((resolve) => setTimeout(resolve, 0));

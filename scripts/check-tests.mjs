@@ -589,6 +589,18 @@ const FEATURE_LINKS = [
   },
 
   {
+    id: "F767-3-1",
+    implementation: [
+      { file: "packages/workbench/debug-ui.js", symbol: "debug.onChanged(({ path }) => {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "the timeline asks at each notice without a pause of its own and loses no row" },
+    ],
+    expected: "The workbench checks wait for the call, reply, registration change or promise that their state follows, and the timeline check counts the timers of the view.",
+    levels: ["unit"],
+  },
+
+  {
     id: "F767-1",
     implementation: [
       { file: "scripts/test-runner.mjs", symbol: "function endGroup(pgid, leader) {" },

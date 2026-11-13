@@ -25,6 +25,13 @@ test("a view call of a surface with surface.unload waits for the tab state store
   let viewCallListenerReady;
   const viewCallListenerRegistered = new Promise((resolve) => { viewCallListenerReady = resolve; });
   const replies = [];
+  // Resolves when the view has received count replies.
+  const replyWaiters = [];
+  const recordedReply = () => { for (const check of replyWaiters.splice(0)) check(); };
+  const untilReplies = (count) => new Promise((resolve) => {
+    const check = () => (replies.length >= count ? resolve() : replyWaiters.push(check));
+    check();
+  });
   const actualHost = await import("../host.js");
   t.mock.module("../host.js", { exports: {
     ...actualHost,
@@ -37,7 +44,7 @@ test("a view call of a surface with surface.unload waits for the tab state store
         if (name === "view-call") viewCallListenerReady();
         return () => {};
       }, call: async (name, payload) => {
-        if (name === "viewReply") replies.push(payload);
+        if (name === "viewReply") { replies.push(payload); recordedReply(); }
         return null;
       } } };
     },
@@ -79,7 +86,7 @@ test("a view call of a surface with surface.unload waits for the tab state store
     storeNow = { entry: () => null, cacheLabel: (...label) => labels.push(label), write: (...write) => writes.push(write) };
     openStore();
     await mounted;
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await untilReplies(3);
     assert.deepEqual(replies.map(({ id, result, error }) => ({ id, result: result ?? null, error: error ?? null })),
       [1, 2, 3].map((id) => ({ id, result: null, error: null })));
     assert.deepEqual(labels, [[surfaceId, pluginId, "Early"]], "the title sent before the store opened left no label");

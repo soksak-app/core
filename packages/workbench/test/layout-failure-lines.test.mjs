@@ -83,8 +83,6 @@ test("a layout failure that no command waits for writes one workbench error line
   hideError(banner, "workbench");
   lines.length = 0;
   schedule();
-  await settle();
-  await settle();
   assert.equal(await page.presented(), false, "a failed layout was reported as presented");
   assert.deepEqual(lines, [`error workbench workbench: surface presentation failed: ${TIMEOUT}`],
     "one layout failure of a gesture must write exactly the line of the layout queue that shows it");

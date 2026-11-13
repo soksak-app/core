@@ -17,24 +17,34 @@ const answerLog = (request) => {
   logged.push(JSON.stringify(request));
   return Promise.resolve();
 };
+// The names of the ordered calls in the order the host received them, and the waiters for a count of them.
+const received = [];
+const arrivals = [];
+const untilReceived = (count) => new Promise((resolve) => {
+  const check = () => (received.length >= count ? resolve() : arrivals.push(check));
+  check();
+});
 mock.module("@soksak/runtime", { namedExports: { host: {
   on: () => Promise.resolve(() => {}),
   page: (path) => path,
-  call: (name, request) => name === "log" ? answerLog(request)
-    : new Promise((resolve, reject) => pending.push({ name, request, resolve, reject })),
+  call: (name, request) => {
+    if (name === "log") return answerLog(request);
+    received.push(name);
+    const call = new Promise((resolve, reject) => pending.push({ name, request, resolve, reject }));
+    for (const check of arrivals.splice(0)) check();
+    return call;
+  },
   reload: () => {},
 } } });
 const { orderedCallsAnswered, overlay } = await import("../host.js");
 
-// Lets the ordered calls that wait be sent.
-const turns = () => new Promise((resolve) => setTimeout(resolve, 0));
-
 test("the wait of the ordered calls ends after the host answered the show of a modal", async () => {
+  received.length = 0;
   const el = document.getElementById("menu");
   overlay.show(el, { x: 0, y: 0, w: 10, h: 10 }, () => {});
   let answered = false;
   const wait = orderedCallsAnswered().then(() => { answered = true; });
-  await turns();
+  await untilReceived(1);
   assert.deepEqual(pending.map((call) => call.name), ["overlayShow"]);
   assert.equal(answered, false, "the wait ended before the host answered the show of the modal");
   pending.shift().resolve({ x: 0, y: 0, w: 10, h: 10 });
@@ -43,14 +53,15 @@ test("the wait of the ordered calls ends after the host answered the show of a m
 });
 
 test("a show that failed ends the wait too, so the command still answers", async () => {
+  received.length = 0;
   const el = document.getElementById("menu");
   overlay.show(el, { x: 0, y: 0, w: 10, h: 10 }, () => {});
   const wait = orderedCallsAnswered();
-  await turns();
+  await untilReceived(1);
   // The show replaces the open modal, so its hide goes first.
   assert.deepEqual(pending.map((call) => call.name), ["overlayHide"]);
   pending.shift().resolve();
-  await turns();
+  await untilReceived(2);
   assert.deepEqual(pending.map((call) => call.name), ["overlayShow"]);
   pending.shift().reject(new Error("create modal webview: refused"));
   await wait;

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F767-3-1: fifteen workbench checks wait for the recorded call, reply, registration change or promise that their state follows, and the timeline check counts the timers of the view instead of its elapsed time.
 - F767-1: the runner and adapter checks decide by status, detail and the order of events instead of elapsed time, so a loaded machine no longer passes or fails them by its load.
 - F766: the Go check of a sidecar that exits while a process outside its group keeps the output lets that process leave the group before the script exits, as the Rust check does, so the end of the group no longer kills it before it writes its process id.
 - F765: `input_panels_test` no longer cancels a context menu that its release ends, so the item that the menu runs at the end of its dismissal is no longer dropped in some runs.

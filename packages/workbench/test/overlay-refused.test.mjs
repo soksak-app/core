@@ -15,28 +15,40 @@ globalThis.innerHeight = dom.window.innerHeight;
 
 // The host answers each ordered call when the test lets it, and answers the application log at once.
 const pending = [];
+// The number of ordered calls the host has received, and the waiters for a count of them.
+let received = 0;
+const arrivals = [];
+const untilReceived = (count) => new Promise((resolve) => {
+  const check = () => (received >= count ? resolve() : arrivals.push(check));
+  check();
+});
 mock.module("@soksak/runtime", { namedExports: { host: {
   on: () => Promise.resolve(() => {}),
   page: (path) => path,
-  call: (name, request) => name === "log"
-    ? Promise.resolve(request.action === "clock" ? { ts_us: 1, mono_ns: 1 } : undefined)
-    : new Promise((resolve, reject) => pending.push({ name, request, resolve, reject })),
+  call: (name, request) => {
+    if (name === "log") return Promise.resolve(request.action === "clock" ? { ts_us: 1, mono_ns: 1 } : undefined);
+    received += 1;
+    const call = new Promise((resolve, reject) => pending.push({ name, request, resolve, reject }));
+    for (const check of arrivals.splice(0)) check();
+    return call;
+  },
   reload: () => {},
 } } });
 const { modalState, orderedCallsAnswered, overlay } = await import("../host.js");
 
-// Lets the ordered calls that wait be sent.
+// Lets the microtasks of the ordered-call queue run for the drain of a queue of calls that the test answers in turn.
 const turns = () => new Promise((resolve) => setTimeout(resolve, 0));
 const rect = { x: 0, y: 0, w: 10, h: 10 };
 
 test("a refused overlayShow closes the modal it showed and calls refused with the reason", async () => {
+  received = 0;
   const refusals = [];
   overlay.show(document.getElementById("menu"), rect, () => {}, (reason) => refusals.push([reason.message, modalState()]));
   assert.equal(modalState()?.id, "menu", "the modal is open from show()");
-  await turns();
+  await untilReceived(1);
   assert.deepEqual(pending.map((call) => call.name), ["overlayShow"]);
   pending.shift().reject(new Error("create modal webview: refused"));
-  await turns();
+  await untilReceived(2);
   assert.equal(modalState(), null, "core.modal still names the modal whose show the host refused");
   assert.deepEqual(refusals, [["create modal webview: refused", null]], "refused ran once, after the modal closed");
   assert.deepEqual(pending.map((call) => call.name), ["overlayHide"], "the refused modal closes as hide() does");
@@ -45,21 +57,23 @@ test("a refused overlayShow closes the modal it showed and calls refused with th
 });
 
 test("a refusal of a modal that another show replaced changes nothing", async () => {
+  received = 0;
   const refusals = [];
   overlay.show(document.getElementById("menu"), rect, () => {}, (reason) => refusals.push(reason.message));
   overlay.show(document.getElementById("dialog"), rect, () => {}, (reason) => refusals.push(reason.message));
-  await turns();
+  await untilReceived(1);
   assert.deepEqual(pending.map((call) => call.name), ["overlayShow"]);
   pending.shift().reject(new Error("create modal webview: refused"));
-  await turns();
+  await untilReceived(2);
   assert.equal(modalState()?.id, "dialog", "the refusal of the replaced modal closed the one on display");
   assert.deepEqual(refusals, []);
   while (pending.length) {
     pending.shift().resolve(rect);
     await turns();
   }
+  const before = received;
   overlay.hide();
-  await turns();
+  await untilReceived(before + 1);
   pending.shift().resolve();
   await orderedCallsAnswered();
 });

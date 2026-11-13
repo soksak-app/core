@@ -268,7 +268,6 @@ for (const [name, element] of Object.entries(pressTargets)) {
     press(target, "pointerdown");
     press(target, "pointerup");
     assert.deepEqual(b.ends, [b.ringSurface()], "the release did not send its decided call to the ring in its dispatch");
-    await new Promise((done) => setTimeout(done, 10));
     await b.placed();
     assert.equal(b.ends.length, 1, `the decided calls of the press: ${JSON.stringify(b.ends)}`);
   });

@@ -9,12 +9,15 @@ test("a switch reaches the drawing before the settings write, and answers after 
   const memory = { common: {}, projects: [] };
   const order = [];
   let answer = null;
+  let writeStarted = null;
+  const written = new Promise((resolve) => { writeStarted = resolve; });
   const { connectSettings, onSettingsChange, set: change, value } = await import("../settings.js?test=switch-order");
   try {
     await connectSettings({
       snapshot: async () => structuredClone(memory),
       settings: (id, values) => {
         order.push(`write ${JSON.stringify(values)}`);
+        writeStarted();
         return new Promise((resolve) => { answer = () => { memory.common = { ...memory.common, ...values }; resolve(); }; });
       },
       onChange: () => () => {},
@@ -23,7 +26,8 @@ test("a switch reaches the drawing before the settings write, and answers after 
     let answered = false;
     const pending = change({ left: false }, "common", "core.settings.set").then(() => { answered = true; });
     assert.deepEqual(order, ["draw left false"], "the change reached the drawing after the write started");
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    // The write starts after the snapshot is read, and the settings mock reports its start.
+    await written;
     assert.deepEqual(order, ["draw left false", 'write {"left":false}']);
     assert.equal(answered, false, "the change answered before the host wrote the settings");
     answer();
