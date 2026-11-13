@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- `make check-tests` finds the module replacements, timer replacements, replacements of global methods, inline programs, tools on PATH and names of stand-ins of the tests and records, and prints the count of each kind (F795-11).
 - The test of the empty native ring of the Go host pulls the ring in a child process of its own, because the earlier tests of the same process leave records in it (F798).
 - The test of the pack fixtures of the fixture registry expects the description that `scripts/fixture-registry.mjs` writes since F795-1; it had failed from F795-1 on (F795-1-1).
 - `make repeat-rust` passes an absolute manifest to the documentation test command, which runs in the package folder, and the Rust workspace sets the lint `linker_info` to warn, so a Rust build prints the ld warning of an object built for a newer macOS version that the runners fail; both appeared when the runner tests ran the real cargo (F795-4).

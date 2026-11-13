@@ -1,0 +1,6 @@
+import { test } from "node:test";
+const fakeClient = { send: () => "ok" };
+// The stub answers every request with the same reply.
+test("sends the request through the client", () => {
+  fakeClient.send();
+});

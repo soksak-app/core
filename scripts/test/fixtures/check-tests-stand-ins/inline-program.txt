@@ -1,0 +1,13 @@
+import { chmodSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { test } from "node:test";
+test("runs a shell program written by the test", () => {
+  writeFileSync(program, "#!/bin/sh\ncat\n");
+  chmodSync(program, 0o755);
+  spawnSync(program, { input: "x" });
+});
+test("runs a script program written by the test", () => {
+  writeFileSync(program, "console.log('x')");
+  chmodSync(program, 0o755);
+  spawnSync(process.execPath, [program]);
+});

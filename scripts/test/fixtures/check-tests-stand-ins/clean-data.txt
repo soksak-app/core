@@ -1,0 +1,7 @@
+import { readFileSync, writeFileSync } from "node:fs";
+import { test } from "node:test";
+test("writes the bytes of a recorded event", () => {
+  const at = new Date("2026-01-01T00:00:00Z");
+  writeFileSync(target, readFileSync(recorded));
+  writeFileSync(target, JSON.stringify({ at: at.toISOString() }));
+});

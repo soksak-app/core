@@ -1,0 +1,4 @@
+import { test } from "node:test";
+test("reads the body of a fixed response", (t) => {
+  t.mock.method(globalThis, "fetch", async () => new Response("ok"));
+});

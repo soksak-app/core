@@ -1,0 +1,4 @@
+import { test } from "node:test";
+test("runs the retry after a fixed delay", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+});

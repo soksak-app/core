@@ -1,0 +1,6 @@
+import { delimiter } from "node:path";
+import { test } from "node:test";
+test("adds a system folder to the search path", () => {
+  const env = { ...process.env, PATH: `/usr/local/bin${delimiter}${process.env.PATH}` };
+  return env;
+});

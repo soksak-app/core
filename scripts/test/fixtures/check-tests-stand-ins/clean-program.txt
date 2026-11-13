@@ -1,0 +1,14 @@
+import { chmodSync, copyFileSync, mkdtempSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { join, dirname } from "node:path";
+import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
+import { test } from "node:test";
+const fixtures = join(dirname(fileURLToPath(import.meta.url)), "..", "echo-program.txt");
+test("runs the echo fixture program on its input", () => {
+  const program = join(mkdtempSync(join(tmpdir(), "echo-")), "echo");
+  copyFileSync(fixtures, program);
+  chmodSync(program, 0o755);
+  const result = spawnSync(process.execPath, [program], { input: "hello", env: { ...process.env, PATH: process.env.PATH } });
+  if (result.status !== 0) throw new Error(`echo exited with ${result.status}`);
+});
