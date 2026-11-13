@@ -257,6 +257,24 @@ test("a drag being measured is reported with the planned length of the drag and 
   assert.deepEqual(reports, ["mygo diagnostics.drag still pending 0 ms after its planned 1440 ms; the host's threads at that moment: stacks"]);
 });
 
+test("a session request of a drag names the planned length of the drag in its stall line", { timeout: 10000 }, async (t) => {
+  const { mkdtempSync, rmSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { tmpdir } = await import("node:os");
+  const { Session } = await import("../app.mjs");
+  const configDir = mkdtempSync(join(tmpdir(), "soksak-stall-plan-"));
+  t.after(() => rmSync(configDir, { recursive: true }));
+  // The stall delay is a declared option of the session, so the stall line is reported without waiting for STALL_AFTER.
+  const s = new Session({ name: "mygo", configDir }, { endpoint: { pid: ABSENT_HOST }, request: () => new Promise(() => {}) }, { stallAfter: 0 });
+  const stalled = Promise.withResolvers();
+  s.step = (what) => { if (what.includes("still pending")) stalled.resolve(what); };
+  void s.request("diagnostics.drag", { axis: "x", line: 2, dx: -250, dy: 0, ms: 48, times: 15 });
+  const line = await stalled.promise;
+  assert.match(line, /^mygo diagnostics\.drag still pending 0 ms after its planned 1440 ms; /);
+  assert.equal(s.stallSamples.size, 1);
+  assert.throws(() => new Session({ name: "mygo", configDir }, {}, { stallAfter: -1 }), /^Error: Session needs a stall delay of 0 or more ms$/);
+});
+
 test("a drag being measured is not sampled before 3 s after the end of its planned length", async () => {
   const { plannedLength, stallDue } = await import("../stall-sample.mjs");
   const planned = plannedLength("diagnostics.drag", { axis: "x", line: 2, dx: -250, dy: 0, ms: 48, times: 15 });

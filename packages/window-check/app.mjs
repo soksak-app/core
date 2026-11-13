@@ -541,9 +541,14 @@ async function settleStallSamples(t, session) {
 
 /** The connection to one application. A request targets one window. */
 export class Session {
-  constructor(app, client) {
+  /**
+   * `options.stallAfter` is the delay after the planned length of a request when its stall is sampled (STALL_AFTER by default).
+   */
+  constructor(app, client, { stallAfter = STALL_AFTER } = {}) {
+    if (typeof stallAfter !== "number" || !Number.isFinite(stallAfter) || stallAfter < 0) throw new Error("Session needs a stall delay of 0 or more ms");
     this.app = app;
     this.client = client;
+    this.stallAfter = stallAfter;
     this.window = "main";
     this.cleanups = [];
     this.recordings = new Set();
@@ -744,7 +749,7 @@ export class Session {
     }).finally(() => this.unanswered.delete(key));
     return whilePending(answer, what, sample, (text) => this.step(text),
       (started) => this.stallSamples.add(started.then((line) => ({ line }), (error) => ({ error }))),
-      plannedLength(method, params, this.displayed));
+      plannedLength(method, params, this.displayed), this.stallAfter);
   }
 
   get(name, surface) {
