@@ -191,39 +191,10 @@ func TestCoreRootFailsAMalformedCoreRootFile(t *testing.T) {
 	}
 }
 
-// coreRootHost is the platform fake that keeps the core root resolver and the view import map that the host registers.
-type coreRootHost struct {
-	resolve   platform.CoreRootResolver
-	importMap string
-}
-
-func (h *coreRootHost) SetViewImportMap(text string) error {
-	h.importMap = text
-	return nil
-}
-
-func (h *coreRootHost) SetCoreRoot(resolve platform.CoreRootResolver) error {
-	h.resolve = resolve
-	return nil
-}
-
-// registeredCoreRoot registers the core root of config with a fake platform and returns the resolver of the host.
-func registeredCoreRoot(t *testing.T, config string) platform.CoreRootResolver {
-	t.Helper()
-	fake := &coreRootHost{}
-	if err := host.RegisterCoreRoot(fake, config, coreFrontend()); err != nil {
-		t.Fatalf("the host did not register the core root: %v", err)
-	}
-	if fake.resolve == nil {
-		t.Fatal("the host registered no core root resolver")
-	}
-	return fake.resolve
-}
-
 // contract: document.core-root.native
-func TestCoreRootResolverAnswersAViewThroughThePlatform(t *testing.T) {
+func TestCoreRootResolverAnswersAView(t *testing.T) {
 	config := coreRootFixture(t)
-	resolve := registeredCoreRoot(t, config)
+	resolve := host.CoreRootResolver(config, coreFrontend())
 
 	data, contentType, found := resolve("provider", "/modules/plugin-view/ui/item.js")
 	if !found || string(data) != "export const item = 1;" || contentType != "text/javascript" {
@@ -240,9 +211,9 @@ func TestCoreRootResolverAnswersAViewThroughThePlatform(t *testing.T) {
 }
 
 // contract: document.core-root.native
-func TestCoreRootResolverRefusesAPathThroughThePlatform(t *testing.T) {
+func TestCoreRootResolverRefusesAPath(t *testing.T) {
 	config := coreRootFixture(t)
-	resolve := registeredCoreRoot(t, config)
+	resolve := host.CoreRootResolver(config, coreFrontend())
 	written := support.CaptureLog(t)
 
 	if _, _, found := resolve("provider", "/runtime/index.js"); found {
@@ -262,7 +233,7 @@ func TestCoreRootResolverReportsAGrantedFileThatIsMissing(t *testing.T) {
 	if err := os.Remove(filepath.Join(config, "plugins/view/1.0.0/ui/item.js")); err != nil {
 		t.Fatal(err)
 	}
-	resolve := registeredCoreRoot(t, config)
+	resolve := host.CoreRootResolver(config, coreFrontend())
 	written := support.CaptureLog(t)
 
 	if _, _, found := resolve("provider", "/modules/plugin-view/ui/item.js"); found {
@@ -278,20 +249,24 @@ const viewImportsText = `{"imports":{"soksak":"soksak://core/modules/soksak/dist
 
 // contract: document.view-import-map.native
 func TestViewImportMapIsSetFromTheStagedFile(t *testing.T) {
-	fake := &coreRootHost{}
 	frontend := coreFrontend()
 	frontend["view-imports.json"] = &fstest.MapFile{Data: []byte(viewImportsText)}
-	if err := host.RegisterViewImportMap(fake, frontend); err != nil {
-		t.Fatalf("the host did not set the view import map: %v", err)
+	text, err := host.ViewImportMapText(frontend)
+	if err != nil {
+		t.Fatalf("the host did not read the view import map: %v", err)
 	}
-	if fake.importMap != viewImportsText {
-		t.Fatalf("the host set %q, want %q", fake.importMap, viewImportsText)
+	if text != viewImportsText {
+		t.Fatalf("the host read %q, want %q", text, viewImportsText)
 	}
 }
 
 // contract: document.view-import-map.native
 func TestViewImportMapFailsWithoutTheStagedFile(t *testing.T) {
-	if err := host.RegisterViewImportMap(&coreRootHost{}, coreFrontend()); err == nil {
+	system, err := platform.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := host.RegisterViewImportMap(system, coreFrontend()); err == nil {
 		t.Fatal("a bundled frontend without view-imports.json sets no view import map")
 	}
 }

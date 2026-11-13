@@ -1,89 +1,13 @@
-// Memory pressure relay tests (docs/spec/hosts.md#memory-pressure). A fake source stands for the native owner, which the native
-// test memory_pressure_test checks.
+// Memory pressure level tests (docs/spec/hosts.md#memory-pressure). The relay of the reports of the native source runs on the
+// main thread and is tested in tests/platform/darwin/system.
 package host_test
 
 import (
 	"encoding/json"
-	"errors"
-	"reflect"
 	"testing"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 )
-
-// fakeMemoryPressureSource keeps the report function that the host registers.
-type fakeMemoryPressureSource struct {
-	report func(level string, seq uint64)
-	err    error
-}
-
-func (f *fakeMemoryPressureSource) OnMemoryPressure(report func(level string, seq uint64)) error {
-	f.report = report
-	return f.err
-}
-
-// contract: host.memory-pressure.relays-level-and-seq
-func TestMemoryPressureRelaysLevelAndSeq(t *testing.T) {
-	type emitted struct {
-		name    string
-		payload any
-	}
-	sent := make(chan emitted, 4)
-	source := &fakeMemoryPressureSource{}
-	if err := host.StartMemoryPressure(source, func(name string, payload any) { sent <- emitted{name, payload} }); err != nil {
-		t.Fatal(err)
-	}
-	if source.report == nil {
-		t.Fatal("the host registered no report function")
-	}
-	source.report("warn", 1)
-	source.report("normal", 2)
-	for _, want := range []emitted{
-		{"memory-pressure", map[string]any{"level": "warn", "seq": uint64(1)}},
-		{"memory-pressure", map[string]any{"level": "normal", "seq": uint64(2)}},
-	} {
-		got := <-sent
-		if !reflect.DeepEqual(got, want) {
-			t.Fatalf("sent %#v, want %#v", got, want)
-		}
-	}
-	failing := &fakeMemoryPressureSource{err: errors.New("failed to start the memory pressure source")}
-	if err := host.StartMemoryPressure(failing, func(string, any) {}); err == nil || err.Error() != "failed to start the memory pressure source" {
-		t.Fatalf("a refused source returned %v", err)
-	}
-}
-
-// contract: host.memory-pressure.relays-level-and-seq
-func TestMemoryPressureReportsArriveInSeqOrderWithoutWaiting(t *testing.T) {
-	release := make(chan struct{})
-	sent := make(chan string, 4)
-	source := &fakeMemoryPressureSource{}
-	if err := host.StartMemoryPressure(source, func(name string, payload any) {
-		level := payload.(map[string]any)["level"].(string)
-		if level == "critical" {
-			<-release
-		}
-		sent <- level
-	}); err != nil {
-		t.Fatal(err)
-	}
-	reported := make(chan struct{})
-	go func() {
-		source.report("critical", 1)
-		source.report("normal", 2)
-		close(reported)
-	}()
-	// The emit of the first report is held, so a report that waits for it does not return, and the check stops at the
-	// limit of its runner.
-	<-reported
-	close(release)
-	for _, want := range []string{"critical", "normal"} {
-		got := <-sent
-		if got != want {
-			t.Fatalf("emitted %q, want %q in seq order", got, want)
-		}
-	}
-}
 
 // contract: diagnostics.memory-pressure.level-validates
 func TestMemoryPressureLevelValidates(t *testing.T) {

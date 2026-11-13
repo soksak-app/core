@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- Go core root resolver 와 view import map 텍스트가 설정 폴더와 번들된 frontend 의 함수가 되고, memory pressure 시험이 대역 source 대신 system tier 의 자식 process 에서 platform 의 실제 source 를 실행한다 (F795-9).
 - document region, file drop 기록, exposure 응답, compositor 배치 대기 시험이 page 의 실제 host module 을 대체하는 대신 page-wire case 를 재생한다 (F795-10).
 - Go host 의 stall watch 가 각 beat 를 읽은 값으로 한 함수에서 결정하고 읽은 값의 table 이 그것을 시험하며, Rust core root resolver 와 view import map 텍스트가 설정 폴더와 번들된 frontend 의 함수가 되어, 그 시험이 대역 platform 대신 실제 입력을 준다 (F795-9).
 - page-wire case 가 host 가 page 의 listener 에 보내는 notice, 시험이 푸는 응답, page 가 고르는 값을 기록하고, workbench 의 dialog 시험이 `@soksak/runtime` 을 대체하는 대신 `overlay-` case 를 재생한다 (F795-10).

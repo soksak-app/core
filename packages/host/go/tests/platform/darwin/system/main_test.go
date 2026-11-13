@@ -5,6 +5,7 @@
 package system_test
 
 import (
+	"fmt"
 	"os"
 	"runtime"
 	"testing"
@@ -23,6 +24,13 @@ func TestMain(m *testing.M) {
 	if directory := os.Getenv(terminationStart); directory != "" {
 		quitAfterTheStart(directory)
 		return
+	}
+	if scenario := os.Getenv(memoryPressureChild); scenario != "" {
+		if err := runMemoryPressureChild(scenario); err != nil {
+			fmt.Println(err)
+			os.Exit(2)
+		}
+		os.Exit(0)
 	}
 	os.Exit(m.Run())
 }

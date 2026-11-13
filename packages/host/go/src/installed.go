@@ -356,17 +356,23 @@ func coreTarget(configDir, plugin, urlPath string, frontend fs.FS) (CoreRootFile
 	return CoreRootFile{Data: data, ContentType: coreContentType(urlPath)}, true, nil
 }
 
-// RegisterCoreRoot registers the core root resolver of the configuration folder with the platform. The resolver answers each
-// request of a view with CoreRoot. An error of CoreRoot is written to the application log, and the request is answered not found.
-func RegisterCoreRoot(system platform.CoreRootHost, configDir string, frontend fs.FS) error {
-	return system.SetCoreRoot(func(plugin, urlPath string) ([]byte, string, bool) {
+// CoreRootResolver returns the core root resolver of the configuration folder. The resolver answers each request of a view with
+// CoreRoot. An error of CoreRoot is written to the application log, and the request is answered not found. The inputs are data,
+// so the resolver is tested without a platform.
+func CoreRootResolver(configDir string, frontend fs.FS) platform.CoreRootResolver {
+	return func(plugin, urlPath string) ([]byte, string, bool) {
 		file, found, err := CoreRoot(configDir, plugin, urlPath, frontend)
 		if err != nil {
 			LogError("core root", err)
 			return nil, "", false
 		}
 		return file.Data, file.ContentType, found
-	})
+	}
+}
+
+// RegisterCoreRoot registers the core root resolver of the configuration folder with the platform (CoreRootResolver).
+func RegisterCoreRoot(system platform.CoreRootHost, configDir string, frontend fs.FS) error {
+	return system.SetCoreRoot(CoreRootResolver(configDir, frontend))
 }
 
 // refuseCoreRoot writes the refusal of urlPath for plugin as an error record and returns the not found result.
@@ -601,12 +607,22 @@ func ApplyPluginEventClasses(log *EventLog, configDir string) {
 // @soksak/plugin-api (VIEW_IMPORTS_FILE), so the host holds no copy of the map.
 const viewImportsFile = "view-imports.json"
 
-// RegisterViewImportMap sets the view import map of the application from view-imports.json of the bundled frontend. The native
-// view handler inserts the map into each view page (docs/spec/plugin-processes.md, rule 4). A missing file is an error.
-func RegisterViewImportMap(system platform.CoreRootHost, frontend fs.FS) error {
+// ViewImportMapText returns the text of the view import map of the application: view-imports.json of the bundled frontend. A
+// missing file is an error.
+func ViewImportMapText(frontend fs.FS) (string, error) {
 	data, err := fs.ReadFile(frontend, viewImportsFile)
 	if err != nil {
-		return fmt.Errorf("%s: the view import map is missing from the bundled frontend: %w", viewImportsFile, err)
+		return "", fmt.Errorf("%s: the view import map is missing from the bundled frontend: %w", viewImportsFile, err)
 	}
-	return system.SetViewImportMap(string(data))
+	return string(data), nil
+}
+
+// RegisterViewImportMap sets the view import map of the application from ViewImportMapText. The native view handler inserts the
+// map into each view page (docs/spec/plugin-processes.md, rule 4). A missing file is an error.
+func RegisterViewImportMap(system platform.CoreRootHost, frontend fs.FS) error {
+	text, err := ViewImportMapText(frontend)
+	if err != nil {
+		return err
+	}
+	return system.SetViewImportMap(text)
 }
