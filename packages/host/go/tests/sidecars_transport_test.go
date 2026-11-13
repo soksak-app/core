@@ -686,7 +686,7 @@ func TestPersistentTransportReplacesEndpointLeftByDeadService(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer listener.Close()
-	stale := exec.Command("/bin/sh", "-c", "exit 0")
+	stale := exec.Command("/usr/bin/true")
 	if err := stale.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -713,10 +713,7 @@ func TestPersistentTransportReplacesEndpointLeftByDeadService(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	program := filepath.Join(executableDir, "service")
-	if err := os.WriteFile(program, []byte(fmt.Sprintf("#!/bin/sh\nprintf '%%s\\n' '%s'\n", replacementJSON)), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	support.Fixture(t, executableDir, "service", "write "+string(replacementJSON)+"\nexit 0\n")
 
 	serverDone := make(chan error, 1)
 	go func() {
@@ -1319,9 +1316,7 @@ func TestPersistentConnectionNoticeReachesOnlyTheSurfacesThatSent(t *testing.T) 
 	}()
 
 	folder := t.TempDir()
-	if err := os.WriteFile(filepath.Join(folder, "stdio"), []byte("#!/bin/sh\nexec cat\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	support.Fixture(t, folder, "stdio", "on any echo\n")
 	declarations := append(support.HarnessDeclarations(folder), SidecarDeclaration{Name: "fixture-stdio", Folder: folder,
 		Data: []byte(`{"executable":"stdio","displayName":"soksak://sidecar/probe","protocol":1}`)})
 	sidecars, err := NewSidecars(declarations, root)
@@ -1564,9 +1559,7 @@ func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 		}
 	}()
 	folder := t.TempDir()
-	if err := os.WriteFile(filepath.Join(folder, "fast"), []byte("#!/bin/sh\ntee /dev/null\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	support.Fixture(t, folder, "fast", "on any echo\n")
 	declarations := append(support.HarnessDeclarations(folder), SidecarDeclaration{Name: "fixture-fast", Folder: folder,
 		Data: []byte(`{"executable":"fast","displayName":"soksak://sidecar/probe","protocol":1}`)})
 	sidecars, err := NewSidecars(declarations, root)
@@ -1764,10 +1757,7 @@ func TestAStopEndsAStartWhoseServicePrintsNoEndpoint(t *testing.T) {
 	}
 	hold := filepath.Join(folder, "hold")
 	holdPipe(t, hold)
-	script := "#!/bin/sh\necho $$ > " + started + "\nexec cat " + hold + "\n"
-	if err := os.WriteFile(filepath.Join(folder, "service"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	support.Fixture(t, folder, "service", "record-pid "+started+"\nhold "+hold+"\n")
 	root := t.TempDir()
 	sidecars, err := NewSidecars(support.HarnessDeclarations(folder), root)
 	if err != nil {
@@ -1807,9 +1797,7 @@ func TestAStopEndsAStartWhoseServicePrintsNoEndpoint(t *testing.T) {
 // contract: log.service.standard-error-goes-to-service-log
 func TestPersistentServiceWritesItsStandardErrorToItsLog(t *testing.T) {
 	folder := t.TempDir()
-	if err := os.WriteFile(filepath.Join(folder, "service"), []byte("#!/bin/sh\necho service line >&2\nexit 0\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	support.Fixture(t, folder, "service", "stderr service line\nexit 0\n")
 	config := t.TempDir()
 	sidecars, err := NewSidecars(support.HarnessDeclarations(folder), config)
 	if err != nil {
@@ -1833,9 +1821,7 @@ func TestPersistentServiceWritesItsStandardErrorToItsLog(t *testing.T) {
 func TestPersistentStartFailsWhenTheServiceLogCannotOpen(t *testing.T) {
 	folder := t.TempDir()
 	started := filepath.Join(folder, "started")
-	if err := os.WriteFile(filepath.Join(folder, "service"), []byte("#!/bin/sh\ntouch "+started+"\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	support.Fixture(t, folder, "service", "touch "+started+"\nexit 0\n")
 	config := t.TempDir()
 	// When logs is a file, the log directory cannot be created.
 	if err := os.WriteFile(filepath.Join(config, "logs"), nil, 0o600); err != nil {
@@ -1859,9 +1845,7 @@ func TestPersistentStartFailsWhenTheServiceLogCannotOpen(t *testing.T) {
 // contract: sidecars-transport.startup.exits-before-endpoint
 func TestPersistentStartFailsWhenTheServiceExitsBeforeItsEndpoint(t *testing.T) {
 	folder := t.TempDir()
-	if err := os.WriteFile(filepath.Join(folder, "service"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	support.Fixture(t, folder, "service", "exit 0\n")
 	sidecars, err := NewSidecars(support.HarnessDeclarations(folder), t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -2139,10 +2123,7 @@ func serveReplaceService(t *testing.T, root, oldVersion, installedVersion string
 	}
 	folder := t.TempDir()
 	installedPID := filepath.Join(folder, "installed.pid")
-	script := "#!/bin/sh\necho $$ > " + installedPID + "\nprintf '{\"protocol\":1,\"pid\":%s,\"socket\":\"" + socket + "\",\"token\":\"harness-token\"}\\n' \"$$\"\nexec sleep 20\n"
-	if err := os.WriteFile(filepath.Join(folder, "service"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	support.Fixture(t, folder, "service", "record-pid "+installedPID+"\nendpoint "+socket+" harness-token\nsleep 20\n")
 	// The installed service process that the host starts for the fixture ends with the test.
 	t.Cleanup(func() {
 		data, err := os.ReadFile(installedPID)
@@ -2893,11 +2874,7 @@ func TestPersistentSpawnedServiceFirstAnswerAfterSpawnIsRecorded(t *testing.T) {
 	// The service that the host spawns prints its endpoint and records its process id; the listener of this check serves it.
 	// It stays alive until the check ends, so the host does not treat it as a stale endpoint (ServiceProcessExists).
 	pidPath := filepath.Join(folder, "pid")
-	script := fmt.Sprintf("#!/bin/sh\necho $$ > %s\necho '{\"protocol\":1,\"pid\":'$$',\"socket\":\"%s\",\"token\":\"harness-token\"}'\nexec sleep 600\n",
-		pidPath, socket)
-	if err := os.WriteFile(filepath.Join(folder, "service"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	support.Fixture(t, folder, "service", "record-pid "+pidPath+"\nendpoint "+socket+" harness-token\nsleep 600\n")
 	// The spawned service is ended by this check when the check ends, whatever its result.
 	t.Cleanup(func() {
 		data, err := os.ReadFile(pidPath)
@@ -3017,9 +2994,7 @@ func TestPersistentServiceEndStopsTheRestartsBeforeTheSpawn(t *testing.T) {
 	root := t.TempDir()
 	folder := t.TempDir()
 	runs := filepath.Join(folder, "runs")
-	if err := os.WriteFile(filepath.Join(folder, "service"), []byte("#!/bin/sh\necho run >> '"+runs+"'\nexit 0\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	support.Fixture(t, folder, "service", "append "+runs+" run\nexit 0\n")
 	declarations := support.HarnessDeclarations(folder)
 	declarations[0].Dependents = []string{"plugin-a"}
 	sidecars, err := NewSidecars(declarations, root)

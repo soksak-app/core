@@ -31,6 +31,14 @@
 #   exit CODE                exit with CODE
 #   signal NAME              send the signal NAME to the program
 #   hold PATH                replace the program with cat PATH (never reads input)
+#   endpoint SOCKET TOKEN    write the endpoint JSON of protocol 1 with the process id,
+#                            SOCKET and TOKEN; SOCKET and TOKEN take no quote or backslash
+#   hold-memory BYTES SECONDS  replace the program with perl, which holds BYTES of memory and
+#                            sleeps SECONDS (never reads input)
+#
+# A control file without an exit, sleep, hold, drain or on-line reads standard input
+# until its end, and that reading blocks while the input stays open. A program that a
+# test expects to end at once after its startup list ends with an exit operation.
 #
 # On-lines: "on SEL ACTION ARGS". SEL is N (the N-th input line, 1-based),
 # "match GLOB" (the input line matches GLOB) or "any".
@@ -164,6 +172,11 @@ run_op() {
     stderr-raw) printf '%s' "$rest" >&2 ;;
     write|reply) printf '%s\n' "$rest" ;;
     hold) need path; end; exec cat "$w" ;;
+    endpoint) need socket; socket=$w; need token; token=$w; end
+      case $socket$token in *'"'*|*'\'*) fail "endpoint takes no quote or backslash" ;; esac
+      printf '{"protocol":1,"pid":%s,"socket":"%s","token":"%s"}\n' "$$" "$socket" "$token" ;;
+    hold-memory) need_num bytes; bytes=$w; need_num seconds; seconds=$w; end
+      exec /usr/bin/perl -e '$x = "a" x $ARGV[0]; sleep $ARGV[1]' "$bytes" "$seconds" ;;
     sleep) need_num seconds; end; exec sleep "$w" ;;
     exit) need_num code; end; [ "$w" -le 255 ] || fail "exit code above 255: $w"; exit "$w" ;;
     signal) need name; end; kill -"$w" $$ || fail "cannot send signal $w" ;;

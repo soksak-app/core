@@ -3,7 +3,6 @@
 #[path = "support/folder.rs"]
 mod folder;
 
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
@@ -93,16 +92,13 @@ fn sidecar_process_does_not_receive_its_display_name_from_the_host() {
     let executable_directory = folder::Folder::new();
     let config_directory = folder::Folder::new();
     let display_name_path = executable_directory.path().join("display-name");
-    let program = executable_directory.path().join("echo");
-    std::fs::write(
-        &program,
-        format!(
-            "#!/bin/sh\nprintf '%s' \"$SOKSAK_SIDECAR_DISPLAY_NAME\" > '{}'\nread request\nprintf '%s\\n' '{{\"surface\":\"s1\",\"body\":\"ok\"}}'\nexec cat\n",
+    executable_directory.fixture(
+        "echo",
+        &format!(
+            "record-env SOKSAK_SIDECAR_DISPLAY_NAME {}\nskip-line\nwrite {{\"surface\":\"s1\",\"body\":\"ok\"}}\non any echo\n",
             display_name_path.display()
         ),
-    )
-    .unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    );
     let fixture =
         files(r#"{"executable":"echo","protocol":1,"displayName":"soksak://sidecar/probe"}"#);
     let sidecars = Sidecars::new(
@@ -644,11 +640,7 @@ fn persistent_transport_replaces_endpoint_left_by_a_dead_service() {
         "socket": socket_path,
         "token": token
     });
-    let stale_child = Command::new("/bin/sh")
-        .arg("-c")
-        .arg("exit 0")
-        .spawn()
-        .unwrap();
+    let stale_child = Command::new("/usr/bin/true").spawn().unwrap();
     let stale_pid = stale_child.id();
     let _ = stale_child.wait_with_output().unwrap();
     std::fs::write(
@@ -663,13 +655,10 @@ fn persistent_transport_replaces_endpoint_left_by_a_dead_service() {
     )
     .unwrap();
 
-    let program = executable_directory.path().join("echo");
-    std::fs::write(
-        &program,
-        format!("#!/bin/sh\nprintf '%s\\n' '{}'\n", replacement_endpoint),
-    )
-    .unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    executable_directory.fixture(
+        "echo",
+        &format!("write {}\nexit 0\n", replacement_endpoint),
+    );
     let fixture = files(
         r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
     );
@@ -1231,17 +1220,20 @@ fn persistent_stop_answers_a_discarded_image_before_service_shutdown() {
 fn stdio_stop_cancels_an_image_emitted_after_stdin_eof() {
     let executable_directory = folder::Folder::new();
     let config_directory = folder::Folder::new();
-    let program = executable_directory.path().join("echo");
     let emitted = executable_directory.path().join("late-image-emitted");
-    // The script ignores the terminate signal of the stop, so it emits its image after the end of its input; its answer
-    // to the open is the event that it set the trap.
-    let script = format!(
-        "#!/bin/sh\ntrap '' TERM\nprintf '%s\\n' \"$$\" > '{}'\nread open\nprintf '%s\\n' '{{\"surface\":\"surface\",\"body\":{{\"event\":\"opened\"}}}}'\nread close\ncat >/dev/null\nprintf '%s\\n' '{{\"surface\":\"surface\",\"body\":{{\"image\":{{\"format\":\"bgra8\",\"generation\":3,\"height\":10,\"name\":\"view\",\"raster\":4,\"scale\":1.0,\"sequence\":5,\"token\":{{\"id\":7,\"kind\":\"iosurface-global\"}},\"width\":10}}}}}}'\nprintf emitted > '{}'\n",
-        executable_directory.path().join("pid").display(),
-        emitted.display(),
+    // The program ignores the terminate signal of the stop, so it emits its image after the end of its input; its answer
+    // to the open is the event that it set the trap. The image is written at the end of the input, and the emitted file is
+    // appended at the same point.
+    executable_directory.fixture(
+        "echo",
+        &format!(
+            "ignore-term\nrecord-pid {}\nskip-line\nwrite {{\"surface\":\"surface\",\"body\":{{\"event\":\"opened\"}}}}\nskip-line\non any drop\n\
+             at-eof write {{\"surface\":\"surface\",\"body\":{{\"image\":{{\"format\":\"bgra8\",\"generation\":3,\"height\":10,\"name\":\"view\",\"raster\":4,\"scale\":1.0,\"sequence\":5,\"token\":{{\"id\":7,\"kind\":\"iosurface-global\"}},\"width\":10}}}}}}\n\
+             at-eof append {} emitted\n",
+            executable_directory.path().join("pid").display(),
+            emitted.display(),
+        ),
     );
-    std::fs::write(&program, script).unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
     let fixture =
         files(r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#);
     let sidecars = Sidecars::new(
@@ -1734,9 +1726,7 @@ fn write_service_endpoint(service_directory: &Path, socket_path: &Path, token: &
 #[test]
 fn persistent_connection_notice_reaches_only_the_surfaces_that_sent() {
     let executable_directory = folder::Folder::new();
-    let stdio = executable_directory.path().join("stdio");
-    std::fs::write(&stdio, "#!/bin/sh\nexec cat\n").unwrap();
-    std::fs::set_permissions(&stdio, std::fs::Permissions::from_mode(0o755)).unwrap();
+    executable_directory.fixture("stdio", "on any echo\n");
     let config_directory = folder::Folder::new();
     let service_directory = config_directory.path().join("services/echo");
     std::fs::create_dir_all(&service_directory).unwrap();
@@ -1982,9 +1972,7 @@ fn persistent_transport_fails_the_connection_on_an_oversize_line() {
 #[test]
 fn persistent_start_does_not_delay_other_sidecars() {
     let executable_directory = folder::Folder::new();
-    let fast = executable_directory.path().join("fast");
-    std::fs::write(&fast, "#!/bin/sh\ntee /dev/null\n").unwrap();
-    std::fs::set_permissions(&fast, std::fs::Permissions::from_mode(0o755)).unwrap();
+    executable_directory.fixture("fast", "on any echo\n");
     let config_directory = folder::Folder::new();
     let service_directory = config_directory.path().join("services/echo");
     std::fs::create_dir_all(&service_directory).unwrap();
@@ -2312,17 +2300,10 @@ fn a_stop_ends_a_start_whose_service_prints_no_endpoint() {
     assert_eq!(unsafe { libc::mkfifo(started_name.as_ptr(), 0o600) }, 0);
     let hold = executable_directory.path().join("hold");
     let _hold = hold_pipe(&hold);
-    let service = executable_directory.path().join("echo");
-    std::fs::write(
-        &service,
-        format!(
-            "#!/bin/sh\necho $$ > '{}'\nexec cat '{}'\n",
-            started.display(),
-            hold.display()
-        ),
-    )
-    .unwrap();
-    std::fs::set_permissions(&service, std::fs::Permissions::from_mode(0o755)).unwrap();
+    executable_directory.fixture(
+        "echo",
+        &format!("record-pid {}\nhold {}\n", started.display(), hold.display()),
+    );
     let config_directory = folder::Folder::new();
     let fixture = files(
         r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
@@ -2427,9 +2408,7 @@ fn a_message_of_a_persistent_service_reaches_its_owner_with_the_identifiers_of_i
 #[test]
 fn persistent_service_writes_its_standard_error_to_its_log() {
     let executable_directory = folder::Folder::new();
-    let service = executable_directory.path().join("echo");
-    std::fs::write(&service, "#!/bin/sh\necho service line >&2\nexit 0\n").unwrap();
-    std::fs::set_permissions(&service, std::fs::Permissions::from_mode(0o755)).unwrap();
+    executable_directory.fixture("echo", "stderr service line\nexit 0\n");
     let config_directory = folder::Folder::new();
     let fixture = files(
         r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
@@ -2475,18 +2454,15 @@ fn persistent_service_starts_in_a_new_session() {
     let listener = UnixListener::bind(&socket_path).unwrap();
     let pid_path = executable_directory.path().join("pid");
     let display_name_path = executable_directory.path().join("display-name");
-    let service = executable_directory.path().join("echo");
-    std::fs::write(
-        &service,
-        format!(
-            "#!/bin/sh\necho $$ > '{}'\nprintf '%s' \"${{SOKSAK_SIDECAR_DISPLAY_NAME-unset}}\" > '{}'\nprintf '{{\"protocol\":1,\"pid\":%d,\"socket\":\"{}\",\"token\":\"session-token\"}}\\n' $$\nexec sleep 600\n",
+    executable_directory.fixture(
+        "echo",
+        &format!(
+            "record-pid {}\nrecord-env SOKSAK_SIDECAR_DISPLAY_NAME {}\nendpoint {} session-token\nsleep 600\n",
             pid_path.display(),
             display_name_path.display(),
             socket_path.display()
         ),
-    )
-    .unwrap();
-    std::fs::set_permissions(&service, std::fs::Permissions::from_mode(0o755)).unwrap();
+    );
     let fixture = files(
         r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
     );
@@ -2562,13 +2538,10 @@ fn persistent_service_starts_in_a_new_session() {
 fn persistent_start_fails_when_the_service_log_cannot_open() {
     let executable_directory = folder::Folder::new();
     let started = executable_directory.path().join("started");
-    let service = executable_directory.path().join("echo");
-    std::fs::write(
-        &service,
-        format!("#!/bin/sh\ntouch {}\n", started.display()),
-    )
-    .unwrap();
-    std::fs::set_permissions(&service, std::fs::Permissions::from_mode(0o755)).unwrap();
+    executable_directory.fixture(
+        "echo",
+        &format!("touch {}\nexit 0\n", started.display()),
+    );
     let config_directory = folder::Folder::new();
     // If logs is a file, the log directory cannot be created.
     std::fs::write(config_directory.path().join("logs"), "").unwrap();
@@ -2595,9 +2568,7 @@ fn persistent_start_fails_when_the_service_log_cannot_open() {
 #[test]
 fn persistent_start_fails_when_the_service_exits_before_its_endpoint() {
     let executable_directory = folder::Folder::new();
-    let service = executable_directory.path().join("echo");
-    std::fs::write(&service, "#!/bin/sh\nexit 0\n").unwrap();
-    std::fs::set_permissions(&service, std::fs::Permissions::from_mode(0o755)).unwrap();
+    executable_directory.fixture("echo", "exit 0\n");
     let config_directory = folder::Folder::new();
     let fixture = files(
         r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
@@ -2824,18 +2795,19 @@ fn serve_replace_service(
     // With held bytes, the installed process touches that much memory before it sleeps. Ending such a process takes the
     // time that the kernel needs to release the memory, so the process is still listed for a while after SIGKILL.
     let holder = if held_bytes == 0 {
-        "exec sleep 20".to_string()
+        "sleep 20".to_string()
     } else {
-        format!("exec perl -e '$x = \"a\" x {held_bytes}; sleep 20'")
+        format!("hold-memory {held_bytes} 20")
     };
-    let script = format!(
-        "#!/bin/sh\necho $$ > '{}'\nprintf '{{\"protocol\":1,\"pid\":%s,\"socket\":\"{}\",\"token\":\"replace-token\"}}\\n' \"$$\"\n{holder}\n",
-        installed_pid_path.display(),
-        socket_path.display()
+    folder::install_fixture(
+        executable_directory,
+        "echo",
+        &format!(
+            "record-pid {}\nendpoint {} replace-token\n{holder}\n",
+            installed_pid_path.display(),
+            socket_path.display()
+        ),
     );
-    let executable = executable_directory.join("echo");
-    std::fs::write(&executable, script).unwrap();
-    std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755)).unwrap();
     let endpoint = serde_json::json!({
         "protocol": 1,
         "pid": process_id,
@@ -3707,14 +3679,14 @@ fn persistent_spawned_service_first_answer_after_spawn_is_recorded() {
         let listener = UnixListener::bind(&socket_path).unwrap();
         // The service that the host spawns prints its endpoint, records its process id and ends; the listener of this check serves it.
         let pid_path = executable_directory.path().join("pid");
-        let script = format!(
-            "#!/bin/sh\necho $$ > {}\necho '{{\"protocol\":1,\"pid\":'$$',\"socket\":\"{}\",\"token\":\"ready-token\"}}'\n",
-            pid_path.display(),
-            socket_path.display()
+        executable_directory.fixture(
+            "service",
+            &format!(
+                "record-pid {}\nendpoint {} ready-token\nexit 0\n",
+                pid_path.display(),
+                socket_path.display()
+            ),
         );
-        let program = executable_directory.path().join("service");
-        std::fs::write(&program, script).unwrap();
-        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
         let service = thread::spawn(move || {
             let (mut stream, _) = listener.accept().unwrap();
             stream
@@ -3871,13 +3843,10 @@ fn a_persistent_service_end_stops_the_restarts_before_the_spawn() {
         let _trace = records::trace_on();
         let executable_directory = folder::Folder::new();
         let runs = executable_directory.path().join("runs");
-        let program = executable_directory.path().join("echo");
-        std::fs::write(
-            &program,
-            format!("#!/bin/sh\necho run >> '{}'\nexit 0\n", runs.display()),
-        )
-        .unwrap();
-        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+        executable_directory.fixture(
+            "echo",
+            &format!("append {} run\nexit 0\n", runs.display()),
+        );
         let config_directory = folder::Folder::new();
         let fixture = files(
             r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
@@ -4101,13 +4070,11 @@ fn persistent_protocol_violations_stop_the_restarts() {
 fn image_detach_acknowledgements_are_not_delivered_as_surface_messages() {
     let executable_directory = folder::Folder::new();
     let config_directory = folder::Folder::new();
-    let program = executable_directory.path().join("echo");
-    std::fs::write(
-        &program,
-        "#!/bin/sh\nwhile IFS= read -r request; do\n  printf '%s\\n' '{\"surface\":\"surface-1\",\"body\":{\"image\":{\"detached\":{\"request\":\"detach-1\",\"name\":\"region\",\"generation\":1,\"ok\":true,\"result\":\"detached\"}}}}'\n  printf '%s\\n' '{\"surface\":\"surface-1\",\"body\":{\"event\":\"after-detach\"}}'\ndone\n",
-    )
-    .unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    // The program answers the one request of the check with the acknowledgement and then an event, and drops the lines after it.
+    executable_directory.fixture(
+        "echo",
+        "skip-line\nwrite {\"surface\":\"surface-1\",\"body\":{\"image\":{\"detached\":{\"request\":\"detach-1\",\"name\":\"region\",\"generation\":1,\"ok\":true,\"result\":\"detached\"}}}}\nwrite {\"surface\":\"surface-1\",\"body\":{\"event\":\"after-detach\"}}\non any drop\n",
+    );
     let fixture =
         files(r#"{"executable":"echo","protocol":1,"displayName":"soksak://sidecar/probe"}"#);
     let sidecars = Sidecars::new(
