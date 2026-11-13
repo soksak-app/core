@@ -4,6 +4,8 @@ package host_test
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -12,8 +14,21 @@ import (
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
+// emptyNativeRingChild marks the child process that pulls the native ring: the ring and its loss counts belong to the process,
+// and an earlier test of the same process may leave records in them, so only a process that no earlier test used has an empty
+// ring.
+const emptyNativeRingChild = "SOKSAK_EMPTY_NATIVE_RING_CHILD"
+
 // contract: log.native.platform-pulls-the-ring
 func TestThePlatformPullsAnEmptyNativeRingAsZeroBytesAndNoLoss(t *testing.T) {
+	if os.Getenv(emptyNativeRingChild) == "" {
+		command := exec.Command(os.Args[0], "-test.run", "^TestThePlatformPullsAnEmptyNativeRingAsZeroBytesAndNoLoss$", "-test.count=1")
+		command.Env = append(os.Environ(), emptyNativeRingChild+"=1")
+		if output, err := command.CombinedOutput(); err != nil {
+			t.Fatalf("the child that pulls the native ring ended with %v: %s", err, output)
+		}
+		return
+	}
 	system, err := platform.Current()
 	if err != nil {
 		t.Fatal(err)
