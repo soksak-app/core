@@ -138,8 +138,13 @@ test("a native test of a run over its limit leaves the stacks of its processes i
   const code = await runNativeTests({ dir, list: ["slow_test"], run: { id: "run", folder: runFolder }, timeoutMs: 300,
     write: (line) => lines.push(line) });
   assert.equal(code, 1);
-  const line = lines.find((entry) => entry.startsWith("TIME slow_test"));
-  const match = /^TIME slow_test [0-9.]+s exceeded 0\.300s and was killed; samples: ([^;]+); services: [^;]+(?:; left running: .*)?$/.exec(line ?? "");
+  const line = lines.find((entry) => entry.startsWith("TIME slow_test")) ?? "";
+  // A platform that does not implement the records of the stacks names that in the result (scripts/platform/platform.js).
+  if (process.platform !== "darwin") {
+    assert.match(line, new RegExp(`; samples: none; services: none; sample errors: processStacks is not implemented on ${process.platform};`), JSON.stringify(lines));
+    return;
+  }
+  const match = /^TIME slow_test [0-9.]+s exceeded 0\.300s and was killed; samples: ([^;]+); services: [^;]+(?:; left running: .*)?$/.exec(line);
   assert.ok(match, JSON.stringify(lines));
   for (const path of match[1].split(", ")) {
     assert.ok(path.startsWith(`${runFolder}/`), `${path} is not in the folder of the run`);

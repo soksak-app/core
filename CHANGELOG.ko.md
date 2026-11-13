@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F769-1-1: native 시험 한도의 sample check 는 각 platform 의 결과를 판정하며, 기록이 없는 platform 은 그 이름 붙은 오류로 통과한다.
 - F767-4-1: 두 host 의 endpoint check 는 10 ms 마다 log 를 읽는 대신 자기 record 를 담아 쓴 event writer 의 batch 를 기다린다.
 - F767-5: presentation order check 는 page 의 각 draw 를 정해진 pause 대신 앞 draw 의 acknowledgement 에서 시작하고 그 순서를 판정한다.
 - F767-2-2: window-check harness 의 command 는 자기 process group 에서 실행되고, limit 에서는 곧바로, interrupt 에서는 자기 cleanup 뒤에 자기가 시작한 모든 process 와 함께 끝난다. 전에는 command 에만 SIGTERM 을 보내고 30 초 뒤 SIGKILL 을 보냈다.

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F769-1-1: the check of the samples at the limit of a native test judges the result of each platform, and a platform without the records passes it with their named error.
 - F767-4-1: the endpoint checks of both hosts wait for the written batch of the event writer that holds their record instead of reading the log every 10 ms.
 - F767-5: the presentation order check starts each draw of its page at the acknowledgement of the draw before it instead of after fixed pauses, and judges that order.
 - F767-2-2: the commands of the window-check harness run in a process group of their own and end with every process they started, at once at their limit and after their own cleanup at an interrupt, instead of SIGKILL 30 seconds after SIGTERM to the command alone.
