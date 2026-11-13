@@ -589,6 +589,18 @@ const FEATURE_LINKS = [
   },
 
   {
+    id: "F762",
+    implementation: [
+      { file: "native/darwin/src/surface_layout.m", symbol: "if (key) return identity;" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/surface_layout_observe_test.m", id: "the kept key is told once, also after it came back" },
+    ],
+    expected: "A key that the end of a layout hold gives back is told once whatever the location of the pointer at its new dispatch.",
+    levels: ["native"],
+  },
+
+  {
     id: "F761",
     implementation: [
       { file: "native/darwin/tests/window_titlebar_reload_test.m", symbol: "self->set = CACurrentMediaTime() * 1000;" },

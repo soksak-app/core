@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F762: layout hold 의 끝이 되돌려 준 key 는 pointer 가 움직였어도 사용자 action 의 observer 에게 한 번 알려진다. AppKit 이 되돌린 key event 에 주는 위치가 더는 그 key 를 가리키는 데 쓰이지 않기 때문이다.
 - F761: `window_titlebar_reload_test` 는 title bar 변경의 시간을 변경 바로 뒤에 오는 start 의 ready 답에서 읽는다. 그래서 변경 전에 시작하는 start transaction 이 더는 검사를 실패시키지 않는다.
 - F760: 이벤트를 dispatch 하는 native 검사는 launch 의 open-application Apple event 를 처리하고 아무것도 열지 않는다. 그래서 더는 자기 프로세스를 활성화해 다른 애플리케이션의 앞자리를 빼앗지 않는다. 검사 프로세스의 system 활성화는 `ACTIVATED:` 줄로 기록된다.
 - F746: 녹화의 still 은 자기 worker 에서 압축되고 encoded frame 만 writer 를 기다리며, writer 는 그것을 최대 128 MiB 까지 쥔다. In flight 인 still 은 최대 8개이고, 잃은 still 은 녹화의 warn 이며, stop 은 때가 된 still 을 요청하고, 녹화와 window facts 의 window server 읽기는 더는 main thread 에서 돌지 않는다.

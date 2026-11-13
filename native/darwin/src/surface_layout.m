@@ -415,16 +415,18 @@ static void endHoldByInput(void);
 static NSMutableArray *actionObservers;
 
 // The told press and key events that a release gave back to the queue, each as its owner and its content. -[NSApplication
-// postEvent:atStart:] hands the event back as another object with the same content, so the content names it. The end of the
-// release of owner comes after its events in the queue, so it forgets what of owner did not come back, as an event that a
-// tracking loop discarded.
+// postEvent:atStart:] hands the event back as another object with the same content, so the content names it. A key event that
+// comes back carries the location of the pointer at its new dispatch, so the content of a key event holds no location. The end
+// of the release of owner comes after its events in the queue, so it forgets what of owner did not come back, as an event that
+// a tracking loop discarded.
 static NSMutableArray<NSArray *> *returnedActions;
 
 static NSString *actionContent(NSEvent *event) {
     BOOL key = event.type == NSEventTypeKeyDown || event.type == NSEventTypeKeyUp || event.type == NSEventTypeFlagsChanged;
-    return [NSString stringWithFormat:@"%lu %.9f %ld %lu %ld %.3f %.3f", (unsigned long)event.type, event.timestamp,
-        (long)event.windowNumber, (unsigned long)event.modifierFlags, key ? (long)event.keyCode : (long)event.buttonNumber,
-        event.locationInWindow.x, event.locationInWindow.y];
+    NSString *identity = [NSString stringWithFormat:@"%lu %.9f %ld %lu %ld", (unsigned long)event.type, event.timestamp,
+        (long)event.windowNumber, (unsigned long)event.modifierFlags, key ? (long)event.keyCode : (long)event.buttonNumber];
+    if (key) return identity;
+    return [identity stringByAppendingFormat:@" %.3f %.3f", event.locationInWindow.x, event.locationInWindow.y];
 }
 
 static void markReturnedAction(void *owner, NSEvent *event) {
