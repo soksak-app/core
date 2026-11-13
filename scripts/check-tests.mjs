@@ -1435,6 +1435,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F769",
+    implementation: [{ file: "native/darwin/tests/support/no_activation.m", symbol: "static void typeWithoutCorrection(void) {" }],
+    tests: [
+      { file: "native/darwin/tests/document_report_test.m", id: "the check types with automatic spelling correction off" },
+      { file: "scripts/test/test-runner.test.mjs", id: "a test with samplesAtLimit leaves the stacks of its processes and of their services at its limit" },
+    ],
+    expected: "A native check types with automatic spelling correction off, and a native check that reaches its limit leaves the stacks of its process and the state of its web content processes.",
+    levels: ["native", "unit"],
+  },
+  {
     id: "F771",
     implementation: [{ file: "packages/host/mygo/src/frontend.go", symbol: "func (f *Frontend) WhenReleased(run func()) {" }],
     tests: [{ file: "packages/host/mygo/tests/platform/darwin/system/view_still_test.go", id: "TestE2EAStillOfTheWindowShowsTheViewPage" }],
