@@ -1,0 +1,20 @@
+{
+  "name": "mcp-exposure-without-element",
+  "description": "An exposure.list reply without the element list is not a list of the exposure, and the server rejects it when it builds the tools.",
+  "replay": false,
+  "reason": "The host always holds the element list in exposure.list (packages/host/go/src/endpoint.go:1451 adds it when the page omits it), so the host never gives this reply. The case checks the rejection of a reply that lacks the list.",
+  "variables": {
+    "exposure": {
+      "type": "object",
+      "keys": ["status", "commands"],
+      "example": {
+        "status": [{ "name": "core.screen", "description": "Current screen.", "schema": { "type": "string" }, "registered": true }],
+        "commands": []
+      }
+    }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "exposure.list", "params": { "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": "$exposure" } }
+  ]
+}

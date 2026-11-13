@@ -1,0 +1,12 @@
+{
+  "name": "element-rect-and-act",
+  "description": "element.rect answers the rectangle of an element entry, and element.act performs an action on it. The element is addressed by its name and index.",
+  "replay": false,
+  "reason": "The element must be shown by the page, and its rectangle and the action it performs depend on the state of the page; the replay does not arrange that state.",
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "element.rect", "params": { "window": "main", "name": "core.tab", "index": 1 } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": { "x": 10, "y": 20, "width": 30, "height": 40, "zoom": 1, "role": null, "document": { "x": 0, "y": 0 } } } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "element.act", "params": { "window": "main", "name": "core.tab", "action": "click" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": null } }
+  ]
+}

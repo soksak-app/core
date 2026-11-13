@@ -1,0 +1,15 @@
+{
+  "name": "window-check-test-mark-start-end",
+  "description": "A window check marks the start and the end of a test. diagnostics.test.mark stores each mark in the event log and answers the position of the record as boot and seq (diagnostics.go:1476-1488).",
+  "replay": true,
+  "variables": {
+    "start-mark": { "type": "object", "keys": ["boot", "seq"], "example": { "boot": "1-2", "seq": 7 } },
+    "end-mark": { "type": "object", "keys": ["boot", "seq"], "example": { "boot": "1-2", "seq": 9 } }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "diagnostics.test.mark", "params": { "window": "main", "kind": "start", "name": "check a", "run": "run-1" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": "$start-mark" } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "diagnostics.test.mark", "params": { "window": "main", "kind": "end", "name": "check a", "run": "run-1", "result": "fail" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$end-mark" } }
+  ]
+}

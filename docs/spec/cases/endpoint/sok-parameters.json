@@ -1,0 +1,83 @@
+{
+  "name": "sok-parameters",
+  "description": "A command without --window first asks windows.list for the only window, then sends its method with the parameters of its flags to that window on the same connection. Each command ends with the close of its connection by the client.",
+  "replay": false,
+  "reason": "The frames press keys, text and the pointer in the window of the application, and the case needs no page of its own; the window check does not send them.",
+  "variables": {
+    "title": { "type": "string", "example": "soksak" },
+    "project": { "type": ["string", "null"], "example": null },
+    "key": { "type": "boolean", "example": false },
+    "ready": { "type": "boolean", "example": true },
+    "value": { "type": "any", "example": null },
+    "exposures": { "type": "any", "example": null },
+    "rect": { "type": "any", "example": null },
+    "acted": { "type": "any", "example": null }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "status.get", "params": { "name": "core.screen", "surface": "tab-1", "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$value" } },
+    { "close": "client" },
+
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "exposure.list", "params": { "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$exposures" } },
+    { "close": "client" },
+
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "element.rect", "params": { "index": 2, "name": "core.card", "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$rect" } },
+    { "close": "client" },
+
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "element.act", "params": { "action": "input", "name": "fixture.input", "value": "ls", "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$acted" } },
+    { "close": "client" },
+
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "element.act", "params": { "action": "dispatch", "event": { "key": "a", "type": "keydown" }, "name": "x.y", "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$acted" } },
+    { "close": "client" },
+
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "input.pointer", "params": { "activate": true, "phase": "move", "window": "main", "x": 1.5, "y": 2 } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": null } },
+    { "close": "client" },
+
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "input.pointer", "params": { "clicks": 2, "phase": "down", "window": "main", "x": 1, "y": 2 } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": null } },
+    { "close": "client" },
+
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "input.pointer", "params": { "phase": "drag", "pointer": "second", "window": "main", "x": 3, "y": 4 } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": null } },
+    { "close": "client" },
+
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "input.key", "params": { "key": "a", "modifiers": ["shift", "command"], "phase": "down", "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": null } },
+    { "close": "client" },
+
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "input.text", "params": { "phase": "mark", "replacement": { "length": 3, "start": 2 }, "selection": { "length": 1, "start": 0 }, "text": "한글", "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": null } },
+    { "close": "client" },
+
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "input.text", "params": { "phase": "unmark", "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": null } },
+    { "close": "client" }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "name": "sok-watch-ends-after-change",
+  "description": "A status watch on a surface prints the value that status.get returns, then each status.changed of its status. A status.ended of another status of the same surface does not end it; a status.ended that names its status and surface ends the watch with an error.",
+  "replay": false,
+  "reason": "status.ended is sent when the producer of the status ends, which the window check does not end on demand.",
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.watch", "params": { "name": "core.screen", "surface": "tab-1", "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "status.get", "params": { "name": "core.screen", "surface": "tab-1", "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": 1 } },
+    { "notify": { "jsonrpc": "2.0", "method": "status.changed", "params": { "name": "core.screen", "surface": "tab-1", "value": 2, "window": "main" } } },
+    { "notify": { "jsonrpc": "2.0", "method": "status.ended", "params": { "name": "core.other", "reason": "surface-closed", "surface": "tab-1", "window": "main" } } },
+    { "notify": { "jsonrpc": "2.0", "method": "status.ended", "params": { "name": "core.screen", "reason": "surface-closed", "surface": "tab-1", "window": "main" } } },
+    { "close": "host" }
+  ]
+}

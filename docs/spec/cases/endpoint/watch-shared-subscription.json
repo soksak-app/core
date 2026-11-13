@@ -1,0 +1,27 @@
+{
+  "name": "watch-shared-subscription",
+  "description": "Two watches of one status share one status.watch. Each watch reads its own value, the first to end does not unwatch, and the last one ends the subscription with status.unwatch.",
+  "replay": false,
+  "reason": "The second watch resolves from a status.changed notification, and the replay cannot change the status of the application on demand.",
+  "variables": {
+    "screen": { "type": "object", "keys": ["screen", "modal"], "example": { "screen": "workspace", "modal": null } },
+    "screen-library": { "type": "object", "keys": ["screen", "modal"], "example": { "screen": "library", "modal": null } },
+    "title": { "type": "string", "example": "soksak" },
+    "project": { "type": ["string", "null"], "example": null },
+    "key": { "type": "boolean", "example": true },
+    "ready": { "type": "boolean", "example": true }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.watch", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "status.get", "params": { "window": "main", "name": "core.screen" } } },
+    { "send": { "jsonrpc": "2.0", "id": 3, "method": "status.get", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$screen" } },
+    { "reply": { "jsonrpc": "2.0", "id": 3, "result": "$screen" } },
+    { "send": { "jsonrpc": "2.0", "id": 4, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 4, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } },
+    { "notify": { "jsonrpc": "2.0", "method": "status.changed", "params": { "window": "main", "name": "core.screen", "value": "$screen-library" } } },
+    { "send": { "jsonrpc": "2.0", "id": 5, "method": "status.unwatch", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 5, "result": null } }
+  ]
+}

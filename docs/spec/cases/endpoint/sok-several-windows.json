@@ -1,0 +1,27 @@
+{
+  "name": "sok-several-windows",
+  "description": "With two windows and no --window or --project, the command ends before its method; --project selects the window whose project folder is the same folder through a symbolic link; --window with --project ends before it connects.",
+  "replay": false,
+  "reason": "The case needs a second window with a project folder, which the window check application does not open.",
+  "variables": {
+    "project": { "type": "string", "example": "/fixture/project" },
+    "value": { "type": "any", "example": "ok" }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [
+      { "window": "main", "title": "soksak", "project": null, "key": true, "ready": true },
+      { "window": "project-a", "title": "project", "project": "$project", "key": false, "ready": true }
+    ] } },
+    { "close": "client" },
+
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [
+      { "window": "main", "title": "soksak", "project": null, "key": true, "ready": true },
+      { "window": "project-a", "title": "project", "project": "$project", "key": false, "ready": true }
+    ] } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "status.get", "params": { "name": "core.screen", "window": "project-a" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$value" } },
+    { "close": "client" }
+  ]
+}

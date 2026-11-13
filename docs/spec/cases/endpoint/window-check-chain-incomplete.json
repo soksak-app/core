@@ -1,0 +1,24 @@
+{
+  "name": "window-check-chain-incomplete",
+  "description": "A chain that lacks an event waits on the watch of host.log, and the close of the connection ends the wait with the events that the chain lacks. The client sends no status.unwatch on a closed connection.",
+  "replay": false,
+  "reason": "The rows are the events that the fixture writes to the event log of the application, so the replay on another application finds other rows.",
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.get", "params": { "window": "main", "name": "host.log" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": { "path": "logs/host-b.jsonl", "size": 240, "notices": 0, "coalesced": 0 } } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "log.query", "params": { "channel": "all", "event": "workbench.plugin.operation", "since": {} } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": { "rows": [
+      { "role": "host", "boot": "b", "file": "logs/host-b.jsonl", "offset": 0, "event": { "ts_us": 1791000000000001, "seq": 1, "level": "info", "layer": "host", "event": "workbench.plugin.operation", "cids": ["p1.6"], "fields": { "action": "install", "plugin": "x" } } }
+    ], "next": null, "tail": { "host-b": 2 }, "scanned": { "logs": 1, "segments": 1, "read": 2, "lines": 2, "rebuilt": 0 }, "rejected": null } } },
+    { "send": { "jsonrpc": "2.0", "id": 3, "method": "log.query", "params": { "channel": "all", "cid": "p1.6" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 3, "result": { "rows": [
+      { "role": "host", "boot": "b", "file": "logs/host-b.jsonl", "offset": 0, "event": { "ts_us": 1791000000000001, "seq": 1, "level": "info", "layer": "host", "event": "workbench.plugin.operation", "cids": ["p1.6"], "fields": { "action": "install", "plugin": "x" } } },
+      { "role": "host", "boot": "b", "file": "logs/host-b.jsonl", "offset": 120, "event": { "ts_us": 1791000000000002, "seq": 2, "level": "info", "layer": "host", "event": "workbench.call", "cids": ["p1.6"] } }
+    ], "next": null, "tail": { "host-b": 2 }, "scanned": { "logs": 1, "segments": 1, "read": 2, "lines": 2, "rebuilt": 0 }, "rejected": null } } },
+    { "send": { "jsonrpc": "2.0", "id": 4, "method": "status.watch", "params": { "window": "main", "name": "host.log" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 4, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 5, "method": "status.get", "params": { "window": "main", "name": "host.log" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 5, "result": { "path": "logs/host-b.jsonl", "size": 240, "notices": 0, "coalesced": 0 } } },
+    { "close": "client" }
+  ]
+}

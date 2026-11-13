@@ -1,0 +1,16 @@
+{
+  "name": "closed-by-host-pending",
+  "description": "Requests that have no reply yet are rejected when the host closes the connection. Requests sent after the close are rejected without a send.",
+  "replay": false,
+  "reason": "The host closes a connection with requests that still wait for a reply only when the connection ends, which the replay cannot force on the application.",
+  "variables": {
+    "screen": { "type": "object", "keys": ["screen", "modal"], "example": { "screen": "workspace", "modal": null } }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "status.watch", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 3, "method": "status.get", "params": { "window": "main", "name": "core.screen" } } },
+    { "close": "host" }
+  ]
+}

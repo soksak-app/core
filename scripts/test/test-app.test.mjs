@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { startFakeEndpoint } from "@soksak/client/testing";
+import { startCasePlayer } from "@soksak/client/testing";
 import { e2ePlan, finishCandidate, finishRoot, newConfigRoot, remainingProcesses, runPlan, validateOrdinaryArtifacts, quitApplication } from "../test-app.mjs";
 import { applicationArtifact, applicationExecutables } from "../platform/platform.js";
 import { fixturePluginIds } from "../fixture-registry.mjs";
@@ -275,14 +275,14 @@ test("the test-app plan carries platform operations as neutral steps, with no qu
 
 test("a quit step quits through the platform operation of its platform and fails with the named error on a platform without it", { timeout: 10000 }, async (t) => {
   const app = await quittingApplication(t);
-  const fake = await startFakeEndpoint({});
-  t.after(() => fake.close());
+  const player = await startCasePlayer("no-request");
+  t.after(() => player.close());
   for (const platform of ["linux", "win32"]) {
-    const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", platform, by: "key", app: "app", configDir: fake.configDir }],
+    const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", platform, by: "key", app: "app", configDir: player.configDir }],
       { write: () => {}, children: new Map([["app", app]]) });
     assert.deepEqual(failures, [`quit app: quitApplication is not implemented on ${platform}`]);
   }
-  assert.deepEqual(fake.requests, [], "a platform without the quit operation sends no request");
+  assert.deepEqual(player.requests, [], "a platform without the quit operation sends no request");
 });
 
 test("a native step and a remaining step fail with the named error on a platform without the operation, and are not skipped", { timeout: 10000 }, async () => {
@@ -458,53 +458,46 @@ async function quittingApplication(t) {
 
 test("a quit step by the menu selects the Quit item that host.menu lists and passes when the application exits with status 0", { timeout: 10000 }, async (t) => {
   const app = await quittingApplication(t);
-  const fake = await startFakeEndpoint({
-    "status.get": (params) => { assert.equal(params.name, "host.menu"); return MENUS; },
-    "command.run": (params) => {
-      assert.deepEqual([params.name, params.params], ["host.menu.select", { menu: "soksak", title: "Quit soksak" }]);
-      app.kill("SIGTERM");
-      return null;
-    },
-  });
-  t.after(() => fake.close());
-  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", platform: "darwin", by: "menu", app: "app", configDir: fake.configDir }],
+  const player = await startCasePlayer("scripts-quit-menu");
+  t.after(() => player.close());
+  // The application ends after the reply to host.menu.select, as the Quit item ends it.
+  player.events.on("request", (message) => { if (message.method === "command.run") app.kill("SIGTERM"); });
+  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", platform: "darwin", by: "menu", app: "app", configDir: player.configDir }],
     { write: () => {}, children: new Map([["app", app]]) });
   assert.deepEqual(failures, []);
-  assert.deepEqual(fake.requests.map((request) => request.method), ["status.get", "command.run"]);
+  assert.deepEqual(player.requests.map((request) => request.method), ["status.get", "command.run"]);
+  assert.deepEqual(player.requests.map((request) => [request.params.name, request.params.params]),
+    [["host.menu", undefined], ["host.menu.select", { menu: "soksak", title: "Quit soksak" }]]);
 });
 
 test("a quit step by the key sends Command+Q down and up to the window and passes when the application exits with status 0", { timeout: 10000 }, async (t) => {
   const app = await quittingApplication(t);
-  const keys = [];
-  const fake = await startFakeEndpoint({
-    "windows.list": () => [{ window: "w1" }],
-    "input.key": (params) => {
-      keys.push(params);
-      if (params.phase === "up") app.kill("SIGTERM");
-      return null;
-    },
-  });
-  t.after(() => fake.close());
-  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", platform: "darwin", by: "key", app: "app", configDir: fake.configDir }],
+  const player = await startCasePlayer("scripts-quit-key");
+  t.after(() => player.close());
+  // The application ends after the reply to the key up, as the quit of Command+Q ends it.
+  player.events.on("request", (message) => { if (message.method === "input.key" && message.params.phase === "up") app.kill("SIGTERM"); });
+  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", platform: "darwin", by: "key", app: "app", configDir: player.configDir }],
     { write: () => {}, children: new Map([["app", app]]) });
   assert.deepEqual(failures, []);
+  const keys = player.requests.filter((request) => request.method === "input.key").map((request) => request.params);
   assert.deepEqual(keys, ["down", "up"].map((phase) => ({ window: "w1", key: "q", text: "q", modifiers: ["command"], phase })));
 });
 
 test("a quit step fails when the application ends with another status than 0 after its Quit item", { timeout: 10000 }, async (t) => {
   const app = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
-  const fake = await startFakeEndpoint({ "status.get": () => MENUS, "command.run": () => { app.kill("SIGTERM"); return null; } });
-  t.after(() => fake.close());
-  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", platform: "darwin", by: "menu", app: "app", configDir: fake.configDir }],
+  const player = await startCasePlayer("scripts-quit-menu");
+  t.after(() => player.close());
+  player.events.on("request", (message) => { if (message.method === "command.run") app.kill("SIGTERM"); });
+  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", platform: "darwin", by: "menu", app: "app", configDir: player.configDir }],
     { write: () => {}, children: new Map([["app", app]]) });
   assert.deepEqual(failures, ["quit app: the application ended with signal SIGTERM"]);
 });
 
 test("a quit step fails when the application menu has no item with the key equivalent cmd+q", { timeout: 10000 }, async (t) => {
   const app = await quittingApplication(t);
-  const fake = await startFakeEndpoint({ "status.get": () => ({ language: "en", menus: [MENUS.menus[1]] }) });
-  t.after(() => fake.close());
-  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", platform: "darwin", by: "menu", app: "app", configDir: fake.configDir }],
+  const player = await startCasePlayer("scripts-quit-menu-no-key");
+  t.after(() => player.close());
+  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", platform: "darwin", by: "menu", app: "app", configDir: player.configDir }],
     { write: () => {}, children: new Map([["app", app]]) });
   assert.deepEqual(failures, ["quit app: the application menu has no item with the key equivalent cmd+q"]);
 });
@@ -513,11 +506,11 @@ test("a quit step ends when the process that holds the configuration lock exits,
   // diagnostics.host.relaunch replaces the started application with a new process, which owns process.lock (docs/spec/endpoint.md).
   const started = spawn(process.execPath, ["-e", ""], { stdio: "ignore" });
   await new Promise((resolve) => started.once("exit", resolve));
-  const fake = await startFakeEndpoint({ "status.get": () => MENUS, "command.run": () => null });
-  t.after(() => fake.close());
+  const player = await startCasePlayer("scripts-quit-menu");
+  t.after(() => player.close());
   // The lock release wait of the platform is replaced by one that returns when the holder exits, as the kernel wakes the wait of the
   // platform when the owner of the lock exits (scripts/test/platform/darwin/end-to-end.test.mjs checks the wait of macOS).
-  const lock = join(fake.configDir, "process.lock");
+  const lock = join(player.configDir, "process.lock");
   writeFileSync(lock, "");
   const holder = spawn(process.execPath, ["-e", "process.stdout.write('held'); setTimeout(() => {}, 400)"], { stdio: ["ignore", "pipe", "ignore"] });
   t.after(() => holder.kill());
@@ -525,7 +518,7 @@ test("a quit step ends when the process that holds the configuration lock exits,
   await new Promise((resolve) => holder.stdout.once("data", resolve));
   const waits = [];
   const lockRelease = async (path, seconds, { platform }) => { waits.push([path, seconds, platform]); await holderExit; return true; };
-  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", platform: "darwin", by: "menu", app: "app", configDir: fake.configDir }],
+  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", platform: "darwin", by: "menu", app: "app", configDir: player.configDir }],
     { write: () => {}, children: new Map([["app", started]]), lockRelease });
   assert.deepEqual(failures, []);
   assert.deepEqual(waits, [[lock, 60, "darwin"]]);

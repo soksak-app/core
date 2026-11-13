@@ -1,0 +1,10 @@
+{
+  "name": "command-run-host-reload",
+  "description": "command.run of host.window.reload starts the workbench of the window again and answers null.",
+  "replay": false,
+  "reason": "host.window.reload restarts the workbench of the window, which the replay does not restart on demand.",
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "command.run", "params": { "window": "main", "name": "host.window.reload" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": null } }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "name": "exposure-list",
+  "description": "exposure.list of a window answers an object with the lists status, commands and element. Each list holds the entries that the window declares.",
+  "replay": true,
+  "variables": {
+    "exposure": {
+      "type": "object",
+      "keys": ["status", "commands", "element"],
+      "example": {
+        "status": [],
+        "commands": [],
+        "element": [{ "name": "core.tab", "description": "A tab.", "many": true, "registered": true }]
+      }
+    }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "exposure.list", "params": { "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": "$exposure" } }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "name": "mcp-tools-list",
+  "description": "tools/list of sok-mcp without a window option reads windows.list for the selected window, then exposure.list of that window, and builds the tools from the three lists of the exposure.",
+  "replay": true,
+  "variables": {
+    "title": { "type": "string", "example": "soksak" },
+    "project": { "type": ["string", "null"], "example": null },
+    "key": { "type": "boolean", "example": true },
+    "ready": { "type": "boolean", "example": true },
+    "exposure": {
+      "type": "object",
+      "keys": ["status", "commands", "element"],
+      "example": {
+        "status": [
+          { "name": "core.screen", "description": "Current screen.", "schema": { "type": "string" }, "registered": true },
+          { "name": "host.window", "description": "Window state.", "schema": { "type": "object" }, "registered": true }
+        ],
+        "commands": [
+          {
+            "name": "core.project.open",
+            "description": "Opens a project.",
+            "params": { "type": "object", "properties": { "root": { "type": "string" } } },
+            "result": { "type": "null" },
+            "registered": true
+          },
+          { "name": "host.window.reload", "description": "Starts the workbench of the window again.", "params": { "type": "object" }, "result": { "type": "null" }, "registered": true }
+        ],
+        "element": [{ "name": "core.tab", "description": "A tab.", "many": true, "registered": true }]
+      }
+    }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "exposure.list", "params": { "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$exposure" } }
+  ]
+}

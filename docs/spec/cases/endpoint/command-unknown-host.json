@@ -1,0 +1,9 @@
+{
+  "name": "command-unknown-host",
+  "description": "command.run of a host command that the host does not declare is answered with the error 1001 and the text command <name> is not declared.",
+  "replay": true,
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "command.run", "params": { "window": "main", "name": "host.window.unknown" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "error": { "code": 1001, "message": "command host.window.unknown is not declared" } } }
+  ]
+}

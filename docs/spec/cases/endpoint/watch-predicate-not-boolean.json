@@ -1,0 +1,40 @@
+{
+  "name": "watch-predicate-not-boolean",
+  "description": "Five watches whose predicate answers a value that is not a boolean. Each watch ends with its status.unwatch, and the next watch is sent after that unwatch is answered.",
+  "replay": true,
+  "variables": {
+    "screen": { "type": "object", "keys": ["screen", "modal"], "example": { "screen": "workspace", "modal": null } }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.watch", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "status.get", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$screen" } },
+    { "send": { "jsonrpc": "2.0", "id": 3, "method": "status.unwatch", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 3, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 4, "method": "status.watch", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 4, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 5, "method": "status.get", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 5, "result": "$screen" } },
+    { "send": { "jsonrpc": "2.0", "id": 6, "method": "status.unwatch", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 6, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 7, "method": "status.watch", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 7, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 8, "method": "status.get", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 8, "result": "$screen" } },
+    { "send": { "jsonrpc": "2.0", "id": 9, "method": "status.unwatch", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 9, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 10, "method": "status.watch", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 10, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 11, "method": "status.get", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 11, "result": "$screen" } },
+    { "send": { "jsonrpc": "2.0", "id": 12, "method": "status.unwatch", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 12, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 13, "method": "status.watch", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 13, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 14, "method": "status.get", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 14, "result": "$screen" } },
+    { "send": { "jsonrpc": "2.0", "id": 15, "method": "status.unwatch", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 15, "result": null } }
+  ]
+}

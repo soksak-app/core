@@ -1,0 +1,19 @@
+{
+  "name": "mcp-watch-next-change",
+  "description": "status_watch_once without equals returns the value of the next status.changed notification of the watched status. The status.get reply that arrives after the notification is ignored, and the watch ends with status.unwatch.",
+  "replay": false,
+  "reason": "The notification follows a change of the status value, which the replay cannot change on demand. The MCP test checks that the server returns the notified value unchanged, and that value is a string, while the core.screen status of the workbench is an object (packages/workbench/core-exposure.js:334).",
+  "variables": {
+    "screen": { "type": "any", "example": "home" },
+    "next": { "type": "any", "example": "project" }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.watch", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "status.get", "params": { "window": "main", "name": "core.screen" } } },
+    { "notify": { "jsonrpc": "2.0", "method": "status.changed", "params": { "window": "main", "name": "core.screen", "value": "$next" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$screen" } },
+    { "send": { "jsonrpc": "2.0", "id": 3, "method": "status.unwatch", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 3, "result": null } }
+  ]
+}

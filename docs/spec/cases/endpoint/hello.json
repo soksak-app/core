@@ -1,0 +1,15 @@
+{
+  "name": "hello",
+  "description": "The first request of a connection, windows.list, is answered at once with the window of the main page. The endpoint has no hello method, so the first exchange of a connection is this request.",
+  "replay": true,
+  "variables": {
+    "title": { "type": "string", "example": "soksak" },
+    "project": { "type": ["string", "null"], "example": null },
+    "key": { "type": "boolean", "example": true },
+    "ready": { "type": "boolean", "example": true }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } }
+  ]
+}

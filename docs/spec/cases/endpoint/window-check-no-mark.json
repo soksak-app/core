@@ -1,0 +1,6 @@
+{
+  "name": "window-check-no-mark",
+  "description": "A window check without a run identifier sends no diagnostics.test.mark, and a run identifier without a run folder is refused before any request is sent.",
+  "replay": true,
+  "steps": []
+}

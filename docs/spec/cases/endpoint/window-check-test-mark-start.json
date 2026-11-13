@@ -1,0 +1,12 @@
+{
+  "name": "window-check-test-mark-start",
+  "description": "A window check marks the start of a test with its run identifier, and the host answers the position of the record as boot and seq (diagnostics.go:1476-1488).",
+  "replay": true,
+  "variables": {
+    "start-mark": { "type": "object", "keys": ["boot", "seq"], "example": { "boot": "1-2", "seq": 7 } }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "diagnostics.test.mark", "params": { "window": "main", "kind": "start", "name": "check a", "run": "run-1" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": "$start-mark" } }
+  ]
+}

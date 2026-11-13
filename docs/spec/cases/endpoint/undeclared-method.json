@@ -1,0 +1,9 @@
+{
+  "name": "undeclared-method",
+  "description": "A request for a method that the endpoint does not declare closes the connection without a response.",
+  "replay": true,
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "nothing" } },
+    { "close": "host" }
+  ]
+}

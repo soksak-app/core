@@ -1,0 +1,16 @@
+{
+  "name": "mcp-watch-connection-closed",
+  "description": "A status_watch_once whose value never satisfies its equals value waits until the host closes the connection, and the server reports the end as a tool error.",
+  "replay": false,
+  "reason": "The replay cannot close the connection of the application on demand. The MCP test also passes the status value through unchanged, and that value is a string, while the core.screen status of the workbench is an object (packages/workbench/core-exposure.js:334).",
+  "variables": {
+    "screen": { "type": "any", "example": "home" }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.watch", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "status.get", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$screen" } },
+    { "close": "host" }
+  ]
+}

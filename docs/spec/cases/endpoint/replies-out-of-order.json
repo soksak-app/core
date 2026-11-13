@@ -1,0 +1,19 @@
+{
+  "name": "replies-out-of-order",
+  "description": "Replies are matched to requests by id, and a reply may arrive before an earlier request is answered.",
+  "replay": false,
+  "reason": "The order of two replies depends on when the page answers status.get, and the application cannot be made to answer in this order on demand.",
+  "variables": {
+    "screen": { "type": "object", "keys": ["screen", "modal"], "example": { "screen": "workspace", "modal": null } },
+    "title": { "type": "string", "example": "soksak" },
+    "project": { "type": ["string", "null"], "example": null },
+    "key": { "type": "boolean", "example": true },
+    "ready": { "type": "boolean", "example": true }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.get", "params": { "window": "main", "name": "core.screen" } } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": "$screen" } }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "name": "watch-until-close",
+  "description": "A watch whose value never satisfies its predicate stays subscribed until the client closes the connection. The client sends no status.unwatch on a closed connection.",
+  "replay": true,
+  "variables": {
+    "screen": { "type": "object", "keys": ["screen", "modal"], "example": { "screen": "workspace", "modal": null } },
+    "title": { "type": "string", "example": "soksak" },
+    "project": { "type": ["string", "null"], "example": null },
+    "key": { "type": "boolean", "example": true },
+    "ready": { "type": "boolean", "example": true }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.watch", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "status.get", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$screen" } },
+    { "send": { "jsonrpc": "2.0", "id": 3, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 3, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } },
+    { "close": "client" }
+  ]
+}

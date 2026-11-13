@@ -1,0 +1,14 @@
+{
+  "name": "status-get-failed-page",
+  "description": "A status.get that the page answers with an error rejects the watch with that error, and the watch unwatches.",
+  "replay": false,
+  "reason": "The page answers status.get with 1003 only while it is not ready, which the replay cannot produce on demand.",
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.watch", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "status.get", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "error": { "code": 1003, "message": "the main page is not ready" } } },
+    { "send": { "jsonrpc": "2.0", "id": 3, "method": "status.unwatch", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 3, "result": null } }
+  ]
+}

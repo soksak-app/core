@@ -18,6 +18,6 @@
   "exports": {
     ".": "./client.js",
     "./frame.js": "./frame.js",
-    "./testing": "./testing/fake-endpoint.js"
+    "./testing": "./testing/case-player.js"
   }
 }

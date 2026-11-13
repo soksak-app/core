@@ -1,0 +1,12 @@
+{
+  "name": "status-unknown-name",
+  "description": "status.watch of a name that no status declares is answered with the error 1001 and the name in its text.",
+  "replay": true,
+  "variables": {
+    "message": { "type": "string", "example": "unknown status core.missing" }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.watch", "params": { "window": "main", "name": "core.missing" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "error": { "code": 1001, "message": "$message" } } }
+  ]
+}

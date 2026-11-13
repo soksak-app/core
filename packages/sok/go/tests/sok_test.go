@@ -1,21 +1,19 @@
 package tests
 
-// Checks the contract of sok (docs/spec/cli.md) with a fake endpoint. The endpoint opens a Unix socket, writes
-// endpoint.json, records the requests it receives and returns the responses that were set.
+// Checks the contract of sok (docs/spec/cli.md) against the endpoint contract cases of docs/spec/cases/endpoint. Each test that needs
+// an endpoint plays the case of its name with the case player (case_player_test.go), which writes endpoint.json, answers only the
+// frames that the case contains and reports every difference when the test ends.
 
 import (
 	"bytes"
-	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
 	"syscall"
 	"testing"
 
@@ -23,119 +21,6 @@ import (
 	_ "github.com/soksak-app/core/packages/sok/go/src/platform/darwin"
 	_ "github.com/soksak-app/core/packages/sok/go/src/platform/linux"
 )
-
-type fakeEndpoint struct {
-	configDir string
-	mu        sync.Mutex
-	requests  []map[string]any
-	// connections is the number of connections that the endpoint accepted.
-	connections int
-}
-
-// answer is the response to a method and params. result is the original JSON, and the response is an error response
-// when code is not 0. after is the notification to send after the response, and when closeAfter is true the connection
-// is closed after the response (and the notification).
-type answer struct {
-	result     string
-	code       int
-	message    string
-	after      []string
-	closeAfter bool
-}
-
-func writeFrame(conn net.Conn, body []byte) {
-	header := make([]byte, 4)
-	binary.BigEndian.PutUint32(header, uint32(len(body)))
-	conn.Write(append(header, body...))
-}
-
-func startEndpoint(t *testing.T, respond func(method string, params map[string]any) answer) *fakeEndpoint {
-	t.Helper()
-	// A Unix socket path is limited to 104 bytes. The test runner gives the process a short TMPDIR under /tmp, so the
-	// socket folder lies there.
-	socketDir, err := os.MkdirTemp("", "sok")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := os.RemoveAll(socketDir); err != nil {
-			t.Errorf("cannot remove %s: %v", socketDir, err)
-		}
-	})
-	address := filepath.Join(socketDir, "e.sock")
-	listener, err := net.Listen("unix", address)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { listener.Close() })
-	fake := &fakeEndpoint{configDir: t.TempDir()}
-	endpoint, _ := json.Marshal(map[string]any{"transport": "unix", "address": address, "pid": os.Getpid()})
-	if err := os.WriteFile(filepath.Join(fake.configDir, "endpoint.json"), endpoint, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	go func() {
-		for {
-			conn, err := listener.Accept()
-			if err != nil {
-				return
-			}
-			fake.mu.Lock()
-			fake.connections++
-			fake.mu.Unlock()
-			go func() {
-				defer conn.Close()
-				for {
-					header := make([]byte, 4)
-					if _, err := io.ReadFull(conn, header); err != nil {
-						return
-					}
-					body := make([]byte, binary.BigEndian.Uint32(header))
-					if _, err := io.ReadFull(conn, body); err != nil {
-						return
-					}
-					var request map[string]any
-					json.Unmarshal(body, &request)
-					fake.mu.Lock()
-					fake.requests = append(fake.requests, request)
-					fake.mu.Unlock()
-					params, _ := request["params"].(map[string]any)
-					reply := respond(request["method"].(string), params)
-					id := request["id"]
-					if reply.code != 0 {
-						out, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": id, "error": map[string]any{"code": reply.code, "message": reply.message}})
-						writeFrame(conn, out)
-					} else {
-						writeFrame(conn, []byte(fmt.Sprintf(`{"jsonrpc":"2.0","id":%v,"result":%s}`, id, reply.result)))
-					}
-					for _, notification := range reply.after {
-						writeFrame(conn, []byte(notification))
-					}
-					if reply.closeAfter {
-						return
-					}
-				}
-			}()
-		}
-	}()
-	return fake
-}
-
-func (f *fakeEndpoint) methods() []string {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	methods := []string{}
-	for _, request := range f.requests {
-		methods = append(methods, request["method"].(string))
-	}
-	return methods
-}
-
-func (f *fakeEndpoint) last() map[string]any {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	params, _ := f.requests[len(f.requests)-1]["params"].(map[string]any)
-	return params
-}
 
 // pathsDir is the paths.d slot that the path entry checks change.
 var pathsDir = "/nonexistent/paths.d"
@@ -145,8 +30,6 @@ func run(args ...string) (int, string, string) {
 	code := sok.Run(args, &stdout, &stderr, sok.Options{Identifier: "com.soksak.test", PathsDir: pathsDir, CoreVersion: "0.0.2"})
 	return code, stdout.String(), stderr.String()
 }
-
-const oneWindow = `[{"window":"main","title":"t","project":null,"key":false,"ready":true}]`
 
 // contract: cli.usage.unknown-command-exits-2
 func TestUnknownCommandExitsWithUsage(t *testing.T) {
@@ -182,10 +65,8 @@ func TestMissingEndpointReportsTheApplicationIsNotRunning(t *testing.T) {
 
 // contract: cli.output.indents-result-keeping-key-order
 func TestResultIsIndentedInTheEndpointKeyOrder(t *testing.T) {
-	fake := startEndpoint(t, func(method string, _ map[string]any) answer {
-		return answer{result: `{"zeta":1,"alpha":[],"mid":{"b":true,"a":null},"list":[1,"x"],"empty":{}}`}
-	})
-	code, stdout, stderr := run("windows", "--config-dir", fake.configDir)
+	player := playCase(t, "sok-status-value")
+	code, stdout, stderr := run("status", "core.screen", "--window", "main", "--config-dir", player.configDir)
 	want := "{\n  \"zeta\": 1,\n  \"alpha\": [],\n  \"mid\": {\n    \"b\": true,\n    \"a\": null\n  },\n  \"list\": [\n    1,\n    \"x\"\n  ],\n  \"empty\": {}\n}\n"
 	if code != 0 || stdout != want {
 		t.Fatalf("code %d stderr %q stdout %q", code, stderr, stdout)
@@ -194,12 +75,7 @@ func TestResultIsIndentedInTheEndpointKeyOrder(t *testing.T) {
 
 // contract: cli.window.single-window-is-default, cli.requests.carry-command-parameters
 func TestTheOnlyWindowIsUsedAndParametersAreSent(t *testing.T) {
-	fake := startEndpoint(t, func(method string, _ map[string]any) answer {
-		if method == "windows.list" {
-			return answer{result: oneWindow}
-		}
-		return answer{result: "null"}
-	})
+	player := playCase(t, "sok-parameters")
 	cases := []struct {
 		args   []string
 		method string
@@ -218,12 +94,12 @@ func TestTheOnlyWindowIsUsedAndParametersAreSent(t *testing.T) {
 		{[]string{"input", "text", "--phase", "unmark"}, "input.text", `{"phase":"unmark","window":"main"}`},
 	}
 	for _, c := range cases {
-		code, stdout, stderr := run(append(c.args, "--config-dir", fake.configDir)...)
+		code, stdout, stderr := run(append(c.args, "--config-dir", player.configDir)...)
 		if code != 0 || stdout != "null\n" {
 			t.Fatalf("%v: code %d stdout %q stderr %q", c.args, code, stdout, stderr)
 		}
-		methods := fake.methods()
-		got, _ := json.Marshal(fake.last())
+		methods := player.methods()
+		got, _ := json.Marshal(player.last())
 		if methods[len(methods)-1] != c.method || string(got) != c.params {
 			t.Fatalf("%v: sent %s %s, want %s %s", c.args, methods[len(methods)-1], got, c.method, c.params)
 		}
@@ -237,22 +113,16 @@ func TestSeveralWindowsNeedSelection(t *testing.T) {
 	if err := os.Symlink(project, alias); err != nil {
 		t.Fatal(err)
 	}
-	windows, _ := json.Marshal([]map[string]any{{"window": "main", "project": nil}, {"window": "project-a", "project": project}})
-	fake := startEndpoint(t, func(method string, _ map[string]any) answer {
-		if method == "windows.list" {
-			return answer{result: string(windows)}
-		}
-		return answer{result: `"ok"`}
-	})
-	code, _, stderr := run("status", "core.screen", "--config-dir", fake.configDir)
+	player := playCase(t, "sok-several-windows", withText("project", project))
+	code, _, stderr := run("status", "core.screen", "--config-dir", player.configDir)
 	if code != 2 || !strings.HasPrefix(stderr, "sok: the application has 2 windows (main, project-a); select one with --window or --project\n") {
 		t.Fatalf("code %d stderr %q", code, stderr)
 	}
-	code, stdout, stderr := run("status", "core.screen", "--project", alias, "--config-dir", fake.configDir)
-	if code != 0 || stdout != "\"ok\"\n" || fake.last()["window"] != "project-a" {
-		t.Fatalf("code %d stdout %q stderr %q params %v", code, stdout, stderr, fake.last())
+	code, stdout, stderr := run("status", "core.screen", "--project", alias, "--config-dir", player.configDir)
+	if code != 0 || stdout != "\"ok\"\n" || player.last()["window"] != "project-a" {
+		t.Fatalf("code %d stdout %q stderr %q params %v", code, stdout, stderr, player.last())
 	}
-	code, _, stderr = run("status", "core.screen", "--window", "main", "--project", project, "--config-dir", fake.configDir)
+	code, _, stderr = run("status", "core.screen", "--window", "main", "--project", project, "--config-dir", player.configDir)
 	if code != 2 || !strings.HasPrefix(stderr, "sok: --window and --project select the window in two ways; give one\n") {
 		t.Fatalf("code %d stderr %q", code, stderr)
 	}
@@ -260,34 +130,21 @@ func TestSeveralWindowsNeedSelection(t *testing.T) {
 
 // contract: cli.error.reports-endpoint-code
 func TestEndpointErrorsCarryTheirCode(t *testing.T) {
-	fake := startEndpoint(t, func(method string, _ map[string]any) answer {
-		return answer{code: 1003, message: "page entries are not ready"}
-	})
-	code, stdout, stderr := run("status", "core.screen", "--window", "main", "--config-dir", fake.configDir)
-	if code != 1 || stdout != "" || stderr != "sok: page entries are not ready (1003)\n" {
+	player := playCase(t, "sok-error-code")
+	code, stdout, stderr := run("status", "core.screen", "--window", "main", "--config-dir", player.configDir)
+	if code != 1 || stdout != "" || stderr != "sok: send request 1: the main page is not ready (1003)\n" {
 		t.Fatalf("code %d stdout %q stderr %q", code, stdout, stderr)
 	}
 }
 
 // contract: cli.status.watch-prints-value-and-changes
 func TestWatchPrintsTheValueAndEachChange(t *testing.T) {
-	changed := func(name, value string) string {
-		return fmt.Sprintf(`{"jsonrpc":"2.0","method":"status.changed","params":{"window":"main","name":%q,"value":%s}}`, name, value)
-	}
-	fake := startEndpoint(t, func(method string, _ map[string]any) answer {
-		switch method {
-		case "status.watch":
-			return answer{result: "null"}
-		case "status.get":
-			return answer{result: `{"screen": "library"}`, after: []string{changed("other", "1"), changed("core.screen", `{"screen": "workspace"}`)}, closeAfter: true}
-		}
-		return answer{code: -32601, message: "unexpected " + method}
-	})
-	code, stdout, stderr := run("status", "core.screen", "--window", "main", "--watch", "--config-dir", fake.configDir)
+	player := playCase(t, "sok-watch-changes")
+	code, stdout, stderr := run("status", "core.screen", "--window", "main", "--watch", "--config-dir", player.configDir)
 	if stdout != "{\"screen\":\"library\"}\n{\"screen\":\"workspace\"}\n" || code != 1 || stderr != "sok: endpoint connection closed\n" {
 		t.Fatalf("code %d stdout %q stderr %q", code, stdout, stderr)
 	}
-	if got := strings.Join(fake.methods(), ","); got != "status.watch,status.get" {
+	if got := strings.Join(player.methods(), ","); got != "status.watch,status.get" {
 		t.Fatalf("methods %s", got)
 	}
 }
@@ -296,20 +153,8 @@ func TestWatchPrintsTheValueAndEachChange(t *testing.T) {
 // a status.ended of another status does not.
 // contract: endpoint.status.ended-ends-a-watch
 func TestAWatchEndsWhenItsProducerEnds(t *testing.T) {
-	ended := func(name string) string {
-		return fmt.Sprintf(`{"jsonrpc":"2.0","method":"status.ended","params":{"window":"main","name":%q,"surface":"tab","reason":"surface-closed"}}`, name)
-	}
-	fake := startEndpoint(t, func(method string, _ map[string]any) answer {
-		switch method {
-		case "status.watch":
-			return answer{result: "null"}
-		case "status.get":
-			// The endpoint closes after the notifications, so a watch that ignores status.ended ends with the close instead.
-			return answer{result: "1", after: []string{ended("fixture.other"), ended("fixture.value")}, closeAfter: true}
-		}
-		return answer{code: -32601, message: "unexpected " + method}
-	})
-	code, stdout, stderr := run("status", "fixture.value", "--window", "main", "--surface", "tab", "--watch", "--config-dir", fake.configDir)
+	player := playCase(t, "sok-watch-ends")
+	code, stdout, stderr := run("status", "fixture.value", "--window", "main", "--surface", "tab", "--watch", "--config-dir", player.configDir)
 	if code != 1 || stdout != "1\n" || stderr != "sok: status fixture.value ended: surface-closed\n" {
 		t.Fatalf("code %d stdout %q stderr %q, want 1, the value and the end of the watch", code, stdout, stderr)
 	}
@@ -319,26 +164,20 @@ func TestAWatchEndsWhenItsProducerEnds(t *testing.T) {
 // nothing.
 // contract: cli.input.gesture-sends-one-press-on-one-connection
 func TestAGestureSendsItsStepsOnOneConnection(t *testing.T) {
-	fake := startEndpoint(t, func(method string, _ map[string]any) answer {
-		if method == "input.pointer" {
-			return answer{result: "null"}
-		}
-		return answer{code: -32601, message: "unexpected " + method}
-	})
-	code, stdout, stderr := run("input", "gesture", "--window", "main", "--pointer", "second", "--clicks", "2", "--points", "10,20;30,40;50,60", "--config-dir", fake.configDir)
+	player := playCase(t, "sok-gesture")
+	code, stdout, stderr := run("input", "gesture", "--window", "main", "--pointer", "second", "--clicks", "2", "--points", "10,20;30,40;50,60", "--config-dir", player.configDir)
 	if code != 0 || stdout != "" || stderr != "" {
 		t.Fatalf("code %d stdout %q stderr %q, want 0 and no output", code, stdout, stderr)
 	}
-	fake.mu.Lock()
-	defer fake.mu.Unlock()
-	if fake.connections != 1 {
-		t.Fatalf("the gesture used %d connections, want 1", fake.connections)
+	if n := player.connectionCount(); n != 1 {
+		t.Fatalf("the gesture used %d connections, want 1", n)
 	}
 	want := []string{"down 10 20 2", "drag 30 40 <nil>", "drag 50 60 <nil>", "up 50 60 2"}
-	if len(fake.requests) != len(want) {
-		t.Fatalf("requests %v, want %v", fake.requests, want)
+	frames := player.frames()
+	if len(frames) != len(want) {
+		t.Fatalf("requests %v, want %v", frames, want)
 	}
-	for n, request := range fake.requests {
+	for n, request := range frames {
 		params, _ := request["params"].(map[string]any)
 		got := fmt.Sprintf("%v %v %v %v", params["phase"], params["x"], params["y"], params["clicks"])
 		if request["method"] != "input.pointer" || got != want[n] || params["pointer"] != "second" || params["window"] != "main" {
@@ -350,17 +189,12 @@ func TestAGestureSendsItsStepsOnOneConnection(t *testing.T) {
 // A gesture step that fails ends the command with the error of the step and its number.
 // contract: cli.input.gesture-step-failure-ends-the-command
 func TestAGestureStepThatFailsEndsTheCommand(t *testing.T) {
-	fake := startEndpoint(t, func(method string, params map[string]any) answer {
-		if method == "input.pointer" && params["phase"] == "drag" {
-			return answer{code: 1007, message: "held"}
-		}
-		return answer{result: "null"}
-	})
-	code, _, stderr := run("input", "gesture", "--window", "main", "--points", "1,2;3,4", "--config-dir", fake.configDir)
+	player := playCase(t, "sok-gesture-failure")
+	code, _, stderr := run("input", "gesture", "--window", "main", "--points", "1,2;3,4", "--config-dir", player.configDir)
 	if code != 1 || stderr != "sok: gesture step 2: held (1007)\n" {
 		t.Fatalf("code %d stderr %q, want 1 and the error of step 2", code, stderr)
 	}
-	if got := strings.Join(fake.methods(), ","); got != "input.pointer,input.pointer" {
+	if got := strings.Join(player.methods(), ","); got != "input.pointer,input.pointer" {
 		t.Fatalf("methods %s, want the down and the failed drag", got)
 	}
 }
@@ -381,49 +215,14 @@ func TestTheDefaultConfigurationDirectoryIsTheApplications(t *testing.T) {
 	}
 }
 
-// declared is a fake endpoint that reports one declared command. exposure.list returns that command, and command.run
-// returns the parameters it received.
-func declared(t *testing.T) *fakeEndpoint {
-	exposures := `{"status":[],"commands":[{"name":"fixture.do","description":"d","params":{"type":"object","properties":{` +
-		`"text":{"type":"string"},"count":{"type":"number"},"whole":{"type":"integer"},"flag":{"type":"boolean"},` +
-		`"choice":{"enum":["one","two"]},"maybe":{"type":["string","null"]},"object":{"type":"object"},"list":{"type":"array"}}},` +
-		`"result":{"type":"object"}},{"name":"fixture.none","description":"n","params":{"type":"object","properties":{}}}],"element":[]}`
-	return startEndpoint(t, func(method string, params map[string]any) answer {
-		switch method {
-		case "windows.list":
-			return answer{result: oneWindow}
-		case "exposure.list":
-			return answer{result: exposures}
-		case "command.run":
-			out, _ := json.Marshal(params)
-			return answer{result: string(out)}
-		}
-		return answer{code: -32601, message: "unexpected " + method}
-	})
-}
-
 // contract: cli.command.host-command-without-page
 func TestAHostCommandIsCheckedAgainstTheHostEntriesWithoutThePage(t *testing.T) {
-	host := `{"status":[],"commands":[{"name":"host.quit","description":"q","params":{"type":"object","properties":{}},"registered":true}],"element":[]}`
-	fake := startEndpoint(t, func(method string, params map[string]any) answer {
-		switch method {
-		case "windows.list":
-			return answer{result: oneWindow}
-		case "exposure.list":
-			if params["owner"] == "host" {
-				return answer{result: host}
-			}
-			return answer{code: 1003, message: "the main page is not ready"}
-		case "command.run":
-			return answer{result: "null"}
-		}
-		return answer{code: -32601, message: "unexpected " + method}
-	})
-	code, _, stderr := run("host.quit", "--config-dir", fake.configDir)
+	player := playCase(t, "sok-host-command")
+	code, _, stderr := run("host.quit", "--config-dir", player.configDir)
 	if code != 0 {
 		t.Fatalf("code %d stderr %q", code, stderr)
 	}
-	sent, _ := json.Marshal(fake.last())
+	sent, _ := json.Marshal(player.last())
 	if string(sent) != `{"name":"host.quit","params":{},"window":"main"}` {
 		t.Fatalf("sent %s", sent)
 	}
@@ -431,19 +230,19 @@ func TestAHostCommandIsCheckedAgainstTheHostEntriesWithoutThePage(t *testing.T) 
 
 // contract: cli.command.flags-from-schema
 func TestDeclaredCommandFlagsFollowTheSchema(t *testing.T) {
-	fake := declared(t)
+	player := playCase(t, "sok-declared-flags")
 	code, stdout, stderr := run("fixture.do", "--text=--x", "--count=1.5", "--whole", "3", "--flag", "--choice", "two",
-		"--maybe", "null", "--object", `{"a":1}`, "--list", "[1]", "--surface", "tab-1", "--config-dir", fake.configDir)
+		"--maybe", "null", "--object", `{"a":1}`, "--list", "[1]", "--surface", "tab-1", "--config-dir", player.configDir)
 	if code != 0 {
 		t.Fatalf("code %d stderr %q", code, stderr)
 	}
-	sent, _ := json.Marshal(fake.last())
+	sent, _ := json.Marshal(player.last())
 	want := `{"name":"fixture.do","params":{"choice":"two","count":1.5,"flag":true,"list":[1],"maybe":null,"object":{"a":1},"text":"--x","whole":3},"surface":"tab-1","window":"main"}`
 	if string(sent) != want || !strings.HasPrefix(stdout, "{\n  \"name\": \"fixture.do\"") {
 		t.Fatalf("sent %s stdout %q", sent, stdout)
 	}
-	code, _, stderr = run("fixture.do", "--params", `{"text":"x"}`, "--config-dir", fake.configDir)
-	sent, _ = json.Marshal(fake.last())
+	code, _, stderr = run("fixture.do", "--params", `{"text":"x"}`, "--config-dir", player.configDir)
+	sent, _ = json.Marshal(player.last())
 	if code != 0 || string(sent) != `{"name":"fixture.do","params":{"text":"x"},"window":"main"}` {
 		t.Fatalf("code %d stderr %q sent %s", code, stderr, sent)
 	}
@@ -451,35 +250,38 @@ func TestDeclaredCommandFlagsFollowTheSchema(t *testing.T) {
 
 // contract: cli.command.rejects-undeclared-or-invalid-values
 func TestDeclaredCommandRejectsBadFlagsBeforeSending(t *testing.T) {
-	fake := declared(t)
-	cases := map[string][]string{
-		"sok: --nope is not a parameter of fixture.do; its parameters are choice, count, flag, list, maybe, object, text, whole\n": {"fixture.do", "--nope", "1"},
-		"sok: --choice must be one of one, two\n": {"fixture.do", "--choice", "three"},
-		"sok: --whole must be integer\n":          {"fixture.do", "--whole", "1.5"},
-		"sok: --count must be number\n":           {"fixture.do", "--count", "x"},
-		"sok: --object must be object\n":          {"fixture.do", "--object", "[1]"},
-		"sok: unexpected argument yes\n":          {"fixture.do", "--flag", "yes"},
-		"sok: --text needs a value\n":             {"fixture.do", "--text"},
-		"sok: --params gives the whole parameter object and cannot be combined with parameter flags\n": {"fixture.do", "--params", "{}", "--text", "x"},
-		"sok: fixture.gone is not a declared command of window main; sok commands lists them\n":        {"fixture.gone"},
+	player := playCase(t, "sok-declared-rejects")
+	cases := []struct {
+		want string
+		args []string
+	}{
+		{"sok: --nope is not a parameter of fixture.do; its parameters are choice, count, flag, list, maybe, object, text, whole\n", []string{"fixture.do", "--nope", "1"}},
+		{"sok: --choice must be one of one, two\n", []string{"fixture.do", "--choice", "three"}},
+		{"sok: --whole must be integer\n", []string{"fixture.do", "--whole", "1.5"}},
+		{"sok: --count must be number\n", []string{"fixture.do", "--count", "x"}},
+		{"sok: --object must be object\n", []string{"fixture.do", "--object", "[1]"}},
+		{"sok: unexpected argument yes\n", []string{"fixture.do", "--flag", "yes"}},
+		{"sok: --text needs a value\n", []string{"fixture.do", "--text"}},
+		{"sok: --params gives the whole parameter object and cannot be combined with parameter flags\n", []string{"fixture.do", "--params", "{}", "--text", "x"}},
+		{"sok: fixture.gone is not a declared command of window main; sok commands lists them\n", []string{"fixture.gone"}},
 	}
-	for want, args := range cases {
-		code, stdout, stderr := run(append(args, "--config-dir", fake.configDir)...)
-		if code != 2 || stdout != "" || !strings.HasPrefix(stderr, want) {
-			t.Fatalf("%v: code %d stdout %q stderr %q", args, code, stdout, stderr)
+	for _, c := range cases {
+		code, stdout, stderr := run(append(c.args, "--config-dir", player.configDir)...)
+		if code != 2 || stdout != "" || !strings.HasPrefix(stderr, c.want) {
+			t.Fatalf("%v: code %d stdout %q stderr %q", c.args, code, stdout, stderr)
 		}
 	}
-	for _, method := range fake.methods() {
+	for _, method := range player.methods() {
 		if method == "command.run" {
-			t.Fatalf("a rejected command was sent: %v", fake.methods())
+			t.Fatalf("a rejected command was sent: %v", player.methods())
 		}
 	}
 }
 
 // contract: cli.commands.lists-declared-commands
 func TestCommandsListsTheDeclaredCommandsInOrder(t *testing.T) {
-	fake := declared(t)
-	code, stdout, stderr := run("commands", "--config-dir", fake.configDir)
+	player := playCase(t, "sok-commands")
+	code, stdout, stderr := run("commands", "--config-dir", player.configDir)
 	var commands []map[string]any
 	if err := json.Unmarshal([]byte(stdout), &commands); err != nil || code != 0 {
 		t.Fatalf("code %d stderr %q stdout %q", code, stderr, stdout)
@@ -549,16 +351,7 @@ func TestAnInterruptEndsAWatchThatWaitsInAWrite(t *testing.T) {
 			sok.Options{Identifier: "com.soksak.test", PathsDir: pathsDir, CoreVersion: "0.0.2"}))
 	}
 	// The value is larger than the buffer of a pipe, so its write waits while nothing reads the pipe.
-	value := `"` + strings.Repeat("x", 1<<20) + `"`
-	fake := startEndpoint(t, func(method string, _ map[string]any) answer {
-		switch method {
-		case "status.watch":
-			return answer{result: "null"}
-		case "status.get":
-			return answer{result: value}
-		}
-		return answer{code: -32601, message: "unexpected " + method}
-	})
+	player := playCase(t, "sok-interrupt-watch", withText("value", strings.Repeat("x", 1<<20)))
 	unread, stdout, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
@@ -566,7 +359,7 @@ func TestAnInterruptEndsAWatchThatWaitsInAWrite(t *testing.T) {
 	defer unread.Close()
 	var stderr strings.Builder
 	cmd := exec.Command(os.Args[0], "-test.run=^TestAnInterruptEndsAWatchThatWaitsInAWrite$")
-	cmd.Env = append(os.Environ(), watchChild+"="+fake.configDir)
+	cmd.Env = append(os.Environ(), watchChild+"="+player.configDir)
 	cmd.Stdout, cmd.Stderr = stdout, &stderr
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)

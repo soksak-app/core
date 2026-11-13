@@ -3377,6 +3377,7 @@ dependencies = [
  "block2",
  "crc32fast",
  "flate2",
+ "hex",
  "http",
  "libc",
  "mach2",

@@ -1,0 +1,9 @@
+{
+  "name": "command-window-missing",
+  "description": "command.run that names a window which does not exist is answered with the error 1003, after the name is checked.",
+  "replay": true,
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "command.run", "params": { "window": "gone", "name": "host.window.reload" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "error": { "code": 1003, "message": "window \"gone\" does not exist" } } }
+  ]
+}

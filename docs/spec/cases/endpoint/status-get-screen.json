@@ -1,0 +1,12 @@
+{
+  "name": "status-get-screen",
+  "description": "status.get reads the value of a page status of a window.",
+  "replay": true,
+  "variables": {
+    "screen": { "type": "object", "keys": ["screen", "modal"], "example": { "screen": "workspace", "modal": null } }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.get", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": "$screen" } }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "name": "closed-by-client-pending",
+  "description": "A request that has no reply yet is rejected on the client when the client closes the connection. The host sends nothing for the closed connection.",
+  "replay": true,
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
+    { "close": "client" }
+  ]
+}

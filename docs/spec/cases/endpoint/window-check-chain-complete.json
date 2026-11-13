@@ -1,0 +1,20 @@
+{
+  "name": "window-check-chain-complete",
+  "description": "A chain whose events are all in the log is found by its first event with the fields and read by its correlation identifier, without a wait on host.log. The log.query pages follow the answer of the host (packages/sok/go/src/log_query.go:284-311).",
+  "replay": false,
+  "reason": "The rows are the events that the fixture writes to the event log of the application, so the replay on another application finds other rows.",
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.get", "params": { "window": "main", "name": "host.log" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": { "path": "logs/host-b.jsonl", "size": 360, "notices": 0, "coalesced": 0 } } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "log.query", "params": { "channel": "all", "event": "workbench.plugin.operation", "since": { "host-b": 0 } } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": { "rows": [
+      { "role": "host", "boot": "b", "file": "logs/host-b.jsonl", "offset": 0, "event": { "ts_us": 1791000000000001, "seq": 1, "level": "info", "layer": "host", "event": "workbench.plugin.operation", "cids": ["p1.1"], "fields": { "action": "install", "plugin": "x" } } }
+    ], "next": null, "tail": { "host-b": 3 }, "scanned": { "logs": 1, "segments": 1, "read": 3, "lines": 3, "rebuilt": 0 }, "rejected": null } } },
+    { "send": { "jsonrpc": "2.0", "id": 3, "method": "log.query", "params": { "channel": "all", "cid": "p1.1" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 3, "result": { "rows": [
+      { "role": "host", "boot": "b", "file": "logs/host-b.jsonl", "offset": 0, "event": { "ts_us": 1791000000000001, "seq": 1, "level": "info", "layer": "host", "event": "workbench.plugin.operation", "cids": ["p1.1"], "fields": { "action": "install", "plugin": "x" } } },
+      { "role": "host", "boot": "b", "file": "logs/host-b.jsonl", "offset": 120, "event": { "ts_us": 1791000000000002, "seq": 2, "level": "info", "layer": "host", "event": "workbench.call", "cids": ["p1.1"] } },
+      { "role": "host", "boot": "b", "file": "logs/host-b.jsonl", "offset": 240, "event": { "ts_us": 1791000000000003, "seq": 3, "level": "info", "layer": "host", "event": "host.binding.call", "cids": ["p1.1"] } }
+    ], "next": null, "tail": { "host-b": 3 }, "scanned": { "logs": 1, "segments": 1, "read": 3, "lines": 3, "rebuilt": 0 }, "rejected": null } } }
+  ]
+}

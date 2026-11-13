@@ -1,0 +1,13 @@
+{
+  "name": "sok-gesture-failure",
+  "description": "A gesture step that the host refuses with the error 1007 ends the command at that step; sok prints the step number, the message and the code, and sends no later step.",
+  "replay": false,
+  "reason": "The refusal 1007 needs a press that another pointer holds, which the window check does not make on demand.",
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "input.pointer", "params": { "phase": "down", "window": "main", "x": 1, "y": 2 } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "input.pointer", "params": { "phase": "drag", "window": "main", "x": 3, "y": 4 } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "error": { "code": 1007, "message": "held" } } },
+    { "close": "client" }
+  ]
+}

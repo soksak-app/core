@@ -1,0 +1,19 @@
+{
+  "name": "mcp-reconnect",
+  "description": "After the host closes the connection, the next request of the server opens a new connection to the endpoint.json of the configuration directory and sends its request there.",
+  "replay": false,
+  "reason": "The host closes the connection of a client only when the application ends the connection, which the replay cannot force on demand.",
+  "variables": {
+    "title": { "type": "string", "example": "soksak" },
+    "project": { "type": ["string", "null"], "example": null },
+    "key": { "type": "boolean", "example": true },
+    "ready": { "type": "boolean", "example": true }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } },
+    { "close": "host" },
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } }
+  ]
+}

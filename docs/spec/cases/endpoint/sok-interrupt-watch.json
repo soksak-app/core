@@ -1,0 +1,16 @@
+{
+  "name": "sok-interrupt-watch",
+  "description": "A status watch whose printed value is larger than a pipe buffer waits in its write while the reader does not read; SIGINT closes the connection, and the watch ends with status 0.",
+  "replay": false,
+  "reason": "The value must be larger than the pipe buffer of the test, and the signal ends the client, which the window check does not do.",
+  "variables": {
+    "value": { "type": "string", "example": "x" }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.watch", "params": { "name": "fixture.value", "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "status.get", "params": { "name": "fixture.value", "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$value" } },
+    { "close": "client" }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "name": "sok-declared-flags",
+  "description": "A declared command takes its flags as parameters of the schema of exposure.list (text, count, whole, flag, choice, maybe, object, list), sends them with the --surface of the command, and prints the result; --params sends the parameter object as it is.",
+  "replay": false,
+  "reason": "The command fixture.do exists only in the fixture of this case, and the window check application does not declare it.",
+  "variables": {
+    "exposures": {
+      "type": "object",
+      "keys": ["status", "commands", "element"],
+      "example": {
+        "status": [],
+        "commands": [
+          {
+            "name": "fixture.do",
+            "description": "d",
+            "params": { "type": "object", "properties": { "text": { "type": "string" }, "count": { "type": "number" }, "whole": { "type": "integer" }, "flag": { "type": "boolean" }, "choice": { "enum": ["one", "two"] }, "maybe": { "type": ["string", "null"] }, "object": { "type": "object" }, "list": { "type": "array" } } },
+            "result": { "type": "object" }
+          },
+          { "name": "fixture.none", "description": "n", "params": { "type": "object", "properties": {} } }
+        ],
+        "element": []
+      }
+    }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "main", "title": "t", "project": null, "key": false, "ready": true }] } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "exposure.list", "params": { "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$exposures" } },
+    { "send": { "jsonrpc": "2.0", "id": 3, "method": "command.run", "params": { "name": "fixture.do", "params": { "choice": "two", "count": 1.5, "flag": true, "list": [1], "maybe": null, "object": { "a": 1 }, "text": "--x", "whole": 3 }, "surface": "tab-1", "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 3, "result": { "name": "fixture.do", "params": { "choice": "two", "count": 1.5, "flag": true, "list": [1], "maybe": null, "object": { "a": 1 }, "text": "--x", "whole": 3 }, "surface": "tab-1", "window": "main" } } },
+    { "close": "client" },
+
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "main", "title": "t", "project": null, "key": false, "ready": true }] } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "exposure.list", "params": { "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$exposures" } },
+    { "send": { "jsonrpc": "2.0", "id": 3, "method": "command.run", "params": { "name": "fixture.do", "params": { "text": "x" }, "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 3, "result": { "name": "fixture.do", "params": { "text": "x" }, "window": "main" } } },
+    { "close": "client" }
+  ]
+}

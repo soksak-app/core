@@ -1,0 +1,21 @@
+{
+  "name": "mcp-exposure-without-params",
+  "description": "An exposure.list reply whose command entry has no params schema is rejected by the server when it builds the tools.",
+  "replay": false,
+  "reason": "Each command declaration holds its params schema (docs/spec/exposure.md#entry-fields, the params column of the entry table), so a page does not declare a command without one and the host does not give this reply. The case checks the rejection of a reply without the schema.",
+  "variables": {
+    "exposure": {
+      "type": "object",
+      "keys": ["status", "commands", "element"],
+      "example": {
+        "status": [],
+        "commands": [{ "name": "core.project.open", "description": "Opens a project.", "result": { "type": "null" }, "registered": true }],
+        "element": [{ "name": "core.tab", "description": "A tab.", "many": true, "registered": true }]
+      }
+    }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "exposure.list", "params": { "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": "$exposure" } }
+  ]
+}

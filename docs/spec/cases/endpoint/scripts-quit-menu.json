@@ -1,0 +1,15 @@
+{
+  "name": "scripts-quit-menu",
+  "description": "status.get of host.menu answers the application menu, and command.run of host.menu.select performs the Quit item of the menu soksak and answers null. This is the menu quit of the end-to-end run.",
+  "replay": false,
+  "reason": "host.menu.select performs the Quit item, which ends the application, so the replay cannot run it on demand.",
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.get", "params": { "window": "main", "name": "host.menu" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": { "language": "en", "menus": [
+      { "title": "soksak", "items": [{ "title": "About soksak", "key": "" }, { "title": "Quit soksak", "key": "cmd+q" }] },
+      { "title": "File", "items": [{ "title": "Close Window", "key": "cmd+w" }] }
+    ] } } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "command.run", "params": { "window": "main", "name": "host.menu.select", "params": { "menu": "soksak", "title": "Quit soksak" } } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": null } }
+  ]
+}

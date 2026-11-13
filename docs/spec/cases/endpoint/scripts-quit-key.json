@@ -1,0 +1,14 @@
+{
+  "name": "scripts-quit-key",
+  "description": "The key quit of the end-to-end run: windows.list answers the windows, and input.key down and up of Command+Q to the first window each answer null.",
+  "replay": false,
+  "reason": "Command+Q quits the application, so the replay cannot send the key on demand.",
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list", "params": {} } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "w1", "title": "soksak", "project": null, "key": true, "ready": true }] } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "input.key", "params": { "window": "w1", "key": "q", "text": "q", "modifiers": ["command"], "phase": "down" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 3, "method": "input.key", "params": { "window": "w1", "key": "q", "text": "q", "modifiers": ["command"], "phase": "up" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 3, "result": null } }
+  ]
+}

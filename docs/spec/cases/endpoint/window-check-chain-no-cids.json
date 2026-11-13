@@ -1,0 +1,14 @@
+{
+  "name": "window-check-chain-no-cids",
+  "description": "A first event of a chain that matches the fields but has no correlation identifier is refused, because the chain cannot read its events without one.",
+  "replay": false,
+  "reason": "The row is an event that the fixture writes to the event log of the application, so the replay on another application finds other rows.",
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.get", "params": { "window": "main", "name": "host.log" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": { "path": "logs/host-b.jsonl", "size": 120, "notices": 0, "coalesced": 0 } } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "log.query", "params": { "channel": "all", "event": "workbench.plugin.operation", "since": {} } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": { "rows": [
+      { "role": "host", "boot": "b", "file": "logs/host-b.jsonl", "offset": 0, "event": { "ts_us": 1791000000000001, "seq": 1, "level": "info", "layer": "host", "event": "workbench.plugin.operation", "fields": { "action": "install", "plugin": "x" } } }
+    ], "next": null, "tail": { "host-b": 1 }, "scanned": { "logs": 1, "segments": 1, "read": 1, "lines": 1, "rebuilt": 0 }, "rejected": null } } }
+  ]
+}

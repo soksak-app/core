@@ -1,0 +1,10 @@
+{
+  "name": "watch-status-watch-unanswered",
+  "description": "A status.watch that has no answer when the host closes the connection. The watch rejects with the close, and no status.unwatch is sent.",
+  "replay": false,
+  "reason": "The host closes a connection whose status.watch is unanswered only when the connection ends, which the replay cannot force on the application.",
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.watch", "params": { "window": "main", "name": "core.screen" } } },
+    { "close": "host" }
+  ]
+}

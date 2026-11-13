@@ -6,19 +6,23 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
+import { connect } from "@soksak/client";
+import { startCasePlayer } from "@soksak/client/testing";
+
 import { finishSession, Session } from "../app.mjs";
 
-function fakeClient(positions) {
-  const requests = [];
-  return {
-    requests,
-    request: async (method, params) => {
-      requests.push({ method, ...params });
-      if (method !== "diagnostics.test.mark") throw new Error(`unexpected ${method}`);
-      return positions.shift();
-    },
-  };
+// Starts the case player of the case and connects the client of the package to it. Closing the player throws when the case was not
+// played to its end.
+async function play(t, name) {
+  const server = await startCasePlayer(name);
+  t.after(() => server.close());
+  const client = await connect({ configDir: server.configDir });
+  t.after(() => client.close());
+  return { server, client };
 }
+
+// The requests that the client sent to the player, each as the object of its method and params.
+const sent = (server) => server.requests.map(({ method, params }) => ({ method, ...params }));
 
 /** Runs body with the run variables set (or removed) and restores them afterwards. */
 async function withRun(run, folder, body) {
@@ -39,13 +43,13 @@ const marks = (folder) => readFileSync(join(folder, "marks.jsonl"), "utf8").trim
 test("markTest sends the mark with the run identifier and appends its position to marks.jsonl", async (t) => {
   const folder = mkdtempSync(join(tmpdir(), "soksak-marks-"));
   t.after(() => rmSync(folder, { recursive: true }));
-  const client = fakeClient([{ boot: "1-2", seq: 7 }, { boot: "1-2", seq: 9 }]);
+  const { server, client } = await play(t, "window-check-test-mark-start-end");
   const session = new Session({ name: "fixture", configDir: "/config/a" }, client);
   await withRun("run-1", folder, async () => {
     assert.deepEqual(await session.markTest("start", "check a"), { boot: "1-2", seq: 7 });
     await session.markTest("end", "check a", "fail");
   });
-  assert.deepEqual(client.requests.map(({ window, ...rest }) => rest), [
+  assert.deepEqual(sent(server).map(({ window, ...rest }) => rest), [
     { method: "diagnostics.test.mark", kind: "start", name: "check a", run: "run-1" },
     { method: "diagnostics.test.mark", kind: "end", name: "check a", run: "run-1", result: "fail" },
   ]);
@@ -60,7 +64,8 @@ test("markTest sends the mark with the run identifier and appends its position t
 test("expectError and expectEvent append their declaration to marks.jsonl while a run is kept, and only then", async (t) => {
   const folder = mkdtempSync(join(tmpdir(), "soksak-marks-"));
   t.after(() => rmSync(folder, { recursive: true }));
-  const session = new Session({ name: "fixture", configDir: "/config/a" }, fakeClient([{ boot: "1-2", seq: 7 }]));
+  const { client } = await play(t, "window-check-test-mark-start");
+  const session = new Session({ name: "fixture", configDir: "/config/a" }, client);
   await withRun("run-1", folder, async () => {
     await session.markTest("start", "check a");
     session.expectError(/cannot open: .*/i);
@@ -75,7 +80,7 @@ test("expectError and expectEvent append their declaration to marks.jsonl while 
   assert.equal(session.expectedErrors.length, 1);
   // Without a run identifier the declaration is kept in the session only; the runner of this file may set one in the environment.
   await withRun(undefined, undefined, async () => {
-    const other = new Session({ name: "fixture", configDir: "/config/a" }, fakeClient([]));
+    const other = new Session({ name: "fixture", configDir: "/config/a" }, client);
     other.expectError(/x/);
     assert.equal(other.expectedErrors.length, 1);
     assert.throws(() => other.expectEvent(""), /event name/);
@@ -85,20 +90,22 @@ test("expectError and expectEvent append their declaration to marks.jsonl while 
 test("markTest does nothing without a run identifier", async (t) => {
   const folder = mkdtempSync(join(tmpdir(), "soksak-marks-"));
   t.after(() => rmSync(folder, { recursive: true }));
-  const client = fakeClient([]);
+  const { server, client } = await play(t, "window-check-no-mark");
   const session = new Session({ name: "fixture", configDir: "/config/a" }, client);
   await withRun(undefined, folder, async () => {
     assert.equal(await session.markTest("start", "check a"), null);
   });
-  assert.equal(client.requests.length, 0);
+  assert.equal(sent(server).length, 0);
   assert.equal(existsSync(join(folder, "marks.jsonl")), false);
 });
 
-test("a run identifier without a run folder is an error", async () => {
-  const session = new Session({ name: "fixture" }, fakeClient([{ boot: "b", seq: 1 }]));
+test("a run identifier without a run folder is an error", async (t) => {
+  const { server, client } = await play(t, "window-check-no-mark");
+  const session = new Session({ name: "fixture" }, client);
   await withRun("run-1", undefined, async () => {
     await assert.rejects(session.markTest("start", "check a"), /SOKSAK_RUN_FOLDER/);
   });
+  assert.equal(sent(server).length, 0);
 });
 
 /** A configuration folder whose event log holds only log.open, so the error audit of finishSession finds nothing. */
@@ -114,7 +121,7 @@ for (const [passed, result] of [[true, "pass"], [false, "fail"]]) {
   test(`finishSession marks the end after the cleanups as ${result} when the check body ${passed ? "passed" : "failed"}`, async (t) => {
     const folder = mkdtempSync(join(tmpdir(), "soksak-marks-"));
     t.after(() => rmSync(folder, { recursive: true }));
-    const client = fakeClient([{ boot: "b", seq: 3 }]);
+    const { server, client } = await play(t, `window-check-test-mark-${result}`);
     const session = new Session({ name: "fixture", configDir: configWithLog(folder) }, client);
     const order = [];
     session.cleanup(() => order.push("cleanup"));
@@ -125,7 +132,7 @@ for (const [passed, result] of [[true, "pass"], [false, "fail"]]) {
       await finishSession(probe, session, () => order.push("close"));
     });
     assert.deepEqual(order, ["cleanup", "close"]);
-    assert.equal(client.requests.at(-1).result, result);
+    assert.equal(sent(server).at(-1).result, result);
     assert.equal(marks(folder)[0].kind, "end");
   });
 }

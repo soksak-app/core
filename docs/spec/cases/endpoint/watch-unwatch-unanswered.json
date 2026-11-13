@@ -1,0 +1,23 @@
+{
+  "name": "watch-unwatch-unanswered",
+  "description": "A watch resolves with its value before the status.unwatch of the watch is answered. The unwatch is sent after the value, and a later request is answered before the unwatch reply.",
+  "replay": false,
+  "reason": "The host answers status.unwatch after the page answers, so a reply to a later request can precede it, and the replay cannot hold that order on demand.",
+  "variables": {
+    "screen": { "type": "object", "keys": ["screen", "modal"], "example": { "screen": "workspace", "modal": null } },
+    "title": { "type": "string", "example": "soksak" },
+    "project": { "type": ["string", "null"], "example": null },
+    "key": { "type": "boolean", "example": true },
+    "ready": { "type": "boolean", "example": true }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.watch", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "status.get", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$screen" } },
+    { "send": { "jsonrpc": "2.0", "id": 3, "method": "status.unwatch", "params": { "window": "main", "name": "core.screen" } } },
+    { "send": { "jsonrpc": "2.0", "id": 4, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 4, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } },
+    { "reply": { "jsonrpc": "2.0", "id": 3, "result": null } }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "name": "mcp-tools-call",
+  "description": "Each tool call of sok-mcp sends the endpoint method that it maps to, with the window of the call and its arguments, and answers the reply of the method. A window option selects the window without windows.list.",
+  "replay": false,
+  "reason": "The calls change the project of the window and the state of the page and of the native input, which the replay does not change on demand. The status, command and element values are passed through unchanged by the server, and the example values are the ones the MCP test checks.",
+  "variables": {
+    "title": { "type": "string", "example": "soksak" },
+    "project": { "type": ["string", "null"], "example": null },
+    "key": { "type": "boolean", "example": true },
+    "ready": { "type": "boolean", "example": true },
+    "screen": { "type": "any", "example": "home" },
+    "opened": { "type": "any", "example": { "opened": "/p" } },
+    "rect": {
+      "type": "object",
+      "keys": ["x", "y", "width", "height", "zoom", "role", "document", "index"],
+      "example": { "x": 10, "y": 20, "width": 30, "height": 40, "zoom": 1, "role": null, "document": { "x": 0, "y": 0 }, "index": 1 }
+    }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "status.get", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$screen" } },
+    { "send": { "jsonrpc": "2.0", "id": 3, "method": "status.get", "params": { "window": "main", "name": "core.screen", "surface": "tab-a" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 3, "result": "$screen" } },
+    { "send": { "jsonrpc": "2.0", "id": 4, "method": "command.run", "params": { "window": "main", "name": "core.project.open", "params": { "root": "/p" } } } },
+    { "reply": { "jsonrpc": "2.0", "id": 4, "result": "$opened" } },
+    { "send": { "jsonrpc": "2.0", "id": 5, "method": "element.rect", "params": { "window": "main", "name": "core.tab", "index": 1 } } },
+    { "reply": { "jsonrpc": "2.0", "id": 5, "result": "$rect" } },
+    { "send": { "jsonrpc": "2.0", "id": 6, "method": "element.act", "params": { "window": "main", "name": "core.tab", "action": "input", "value": "v" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 6, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 7, "method": "input.pointer", "params": { "window": "main", "x": 1, "y": 2, "phase": "move" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 7, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 8, "method": "input.pointer", "params": { "window": "main", "x": 1, "y": 2, "phase": "down", "button": "right" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 8, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 9, "method": "input.pointer", "params": { "window": "main", "x": 1, "y": 2, "phase": "move", "activate": true } } },
+    { "reply": { "jsonrpc": "2.0", "id": 9, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 10, "method": "input.pointer", "params": { "window": "main", "x": 1, "y": 2, "phase": "down", "clicks": 2 } } },
+    { "reply": { "jsonrpc": "2.0", "id": 10, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 11, "method": "input.key", "params": { "window": "main", "key": "Enter", "phase": "down", "modifiers": ["shift"] } } },
+    { "reply": { "jsonrpc": "2.0", "id": 11, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 12, "method": "input.text", "params": { "window": "main", "phase": "mark", "text": "한", "selection": { "start": 0, "length": 1 } } } },
+    { "reply": { "jsonrpc": "2.0", "id": 12, "result": null } }
+  ]
+}

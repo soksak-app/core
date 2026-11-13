@@ -494,23 +494,33 @@ export async function readDisplay(configDir) {
 /**
  * Makes the first window of the application of a configuration folder the window that a person sees. A window opens behind the front
  * window, and a covered window measures another state, so a run activates it through input.pointer before its first target. A refused
- * activation fails with its message, and a window that stays covered after waitMs fails.
+ * activation fails with its message. The run then watches host.window until the window reports occluded false; a window that is still
+ * covered writes the line `waiting window <window> reports occluded <value> after its activation`, and the interrupt of the run ends
+ * that wait with a failure that names the window.
  */
-export async function activateWindow(configDir, { waitMs = 5000 } = {}) {
+export async function activateWindow(configDir, { write = () => {}, interrupted } = {}) {
   const client = await connect({ configDir });
+  const stop = () => client.close();
+  interrupted?.addEventListener('abort', stop, { once: true });
+  if (interrupted?.aborted) stop();
+  let covered = null;
   try {
     const [{ window }] = await client.request('windows.list');
-    const read = () => client.request('status.get', { window, name: 'host.window' });
-    const { content } = await read();
+    const { content } = await client.request('status.get', { window, name: 'host.window' });
     await client.request('input.pointer', { window, x: content.width / 2, y: 4, phase: 'move', activate: true });
-    const until = performance.now() + waitMs;
-    let status = await read();
-    while (status.occluded !== false && performance.now() < until) {
-      await new Promise((resolve) => { setTimeout(resolve, 100); });
-      status = await read();
+    try {
+      await client.watch(window, 'host.window', (status) => {
+        if (status.occluded === false) return true;
+        if (covered === null) write(`waiting window ${window} reports occluded ${status.occluded} after its activation`);
+        covered = status.occluded;
+        return false;
+      });
+    } catch (error) {
+      if (interrupted?.aborted) throw new Error(`interrupted by ${interrupted.reason} while window ${window} reports occluded ${covered} after its activation`);
+      throw error;
     }
-    if (status.occluded !== false) throw new Error(`window ${window} reports occluded ${status.occluded} after its activation`);
   } finally {
+    interrupted?.removeEventListener('abort', stop);
     client.close();
   }
 }
@@ -620,7 +630,7 @@ export async function runUnit(unit, context) {
         plugins = surfacePlugins(record, (path) => readJson(join(configDir, path, 'plugin.json')));
         shown = await display(configDir);
         failures.push(...displayFailures(goals, shown));
-        if (failures.length === 0) await activate(configDir);
+        if (failures.length === 0) await activate(configDir, { write, interrupted });
       } catch (error) {
         failures.push(error.message);
       }

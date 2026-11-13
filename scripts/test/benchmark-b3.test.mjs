@@ -4,7 +4,6 @@
 // for each run of fixture applications, and the session folder that make check-b3 reads.
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { connect } from "@soksak/client";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -14,7 +13,7 @@ import { policyOfSetting } from "@soksak/window-check/log-policy.mjs";
 import { judgeSession, readGoals, readSession } from "../b3-judge.mjs";
 import {
   appendRecord, b3Folder, baselineRecordFile, buildSteps, applicationsOf, attributionUnits, baselineCheckoutFailures, baselinePluginFailures, createSession, fseventsdCores, installedReleases, parseSwapUsage,
-  readBaselineRecord, readCheckout, readTargetOutput, runUnit, scenarioTargets, sessionUnits, sidecarReleaseFailures,
+  activateWindow, readBaselineRecord, readCheckout, readTargetOutput, runUnit, scenarioTargets, sessionUnits, sidecarReleaseFailures,
   surfacePlugins, targetCommand, traceStateOf, unitPlan,
 } from "../benchmark-b3.mjs";
 import { traceSettings } from "../measure-trace.mjs";
@@ -392,17 +391,6 @@ test("a benchmark records its verdict as a measurement, and a target that exits 
   assert.deepEqual(read({ dragCpuSeconds: 1 }, 0).failures, [`G4-S5-view-drag: ${target} wrote no measurement verdict`]);
 });
 
-/** The occluded of the first window of the application of configDir. */
-async function readOccluded(configDir) {
-  const client = await connect({ configDir });
-  try {
-    const [{ window }] = await client.request("windows.list");
-    return (await client.request("status.get", { window, name: "host.window" })).occluded;
-  } finally {
-    client.close();
-  }
-}
-
 /**
  * The process list of the platform for the fixture applications of `session`, in the records of listProcesses: each application whose
  * endpoint.json names a process that still runs, with the command line that started it.
@@ -431,8 +419,10 @@ function fixtureProcesses(session) {
  * in its environment, the readings of the start conditions and the process list are injected, and each target writes, under the
  * measurement key of each entry of its row, the reading of `values` for the id of that entry.
  */
-function fixtureContext(t, { refreshRate = 120, backingScale = 2, exit = false, values = {} } = {}) {
-  const environment = { B3_FIXTURE_REFRESH_RATE: String(refreshRate), B3_FIXTURE_BACKING_SCALE: String(backingScale), B3_FIXTURE_EXIT: exit ? "1" : "0" };
+function fixtureContext(t, { refreshRate = 120, backingScale = 2, exit = false, values = {}, kase = "b3-run" } = {}) {
+  const environment = {
+    B3_FIXTURE_REFRESH_RATE: String(refreshRate), B3_FIXTURE_BACKING_SCALE: String(backingScale), B3_FIXTURE_EXIT: exit ? "1" : "0", B3_FIXTURE_CASE: kase,
+  };
   const saved = Object.fromEntries(Object.keys(environment).map((key) => [key, process.env[key]]));
   Object.assign(process.env, environment);
   t.after(() => { for (const [key, value] of Object.entries(saved)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
@@ -464,7 +454,7 @@ function fixtureContext(t, { refreshRate = 120, backingScale = 2, exit = false, 
 
 test("a run of a fixture application fails on a display at another backing scale and quits the application, and no process of it remains", { timeout: 30000 }, async (t) => {
   for (const [refreshRate, backingScale, expected] of [[120, 1, "the backing scale of the window is 1, expected 2"]]) {
-    const { context, application, lines, targets, session } = fixtureContext(t, { refreshRate, backingScale });
+    const { context, application, lines, targets, session } = fixtureContext(t, { refreshRate, backingScale, kase: "b3-run-other-display" });
     const records = await runUnit({ scenarios: ["S0"], run: 1, application }, context);
     assert.deepEqual(records.map((record) => record.failures), [[expected]], lines.join("\n"));
     assert.deepEqual(targets, [], "a run on a display outside the conditions measures nothing");
@@ -484,31 +474,48 @@ test("a run of a fixture application that exits before it writes its endpoint fa
 });
 
 test("a window that opens behind the front is activated before the first target of a run", { timeout: 30000 }, async (t) => {
-  const { context, application, targets } = fixtureContext(t);
-  const before = [];
+  const { context, application, targets, lines } = fixtureContext(t);
+  const order = [];
+  context.activate = async (configDir, options) => {
+    await activateWindow(configDir, options);
+    order.push("activated");
+  };
   const runTarget = context.runTarget;
   context.runTarget = async (command, options) => {
-    before.push(await readOccluded(command.argv.find((word) => word.startsWith("CONFIG=")).slice("CONFIG=".length)));
+    order.push("target");
     return runTarget(command, options);
   };
   const [record] = await runUnit({ scenarios: ["S0"], run: 1, application }, context);
   assert.ok(targets.length > 0, JSON.stringify(record.failures));
-  assert.deepEqual([...new Set(before)], [false], "a target reads a covered window, which fails its reading of occluded");
+  assert.equal(order[0], "activated", order.join(" "));
+  assert.ok(order.slice(1).every((step) => step === "target"), order.join(" "));
+  // The application exits with status 0 only when the client played every frame of the case b3-run, which reports the window
+  // occluded false after its activation.
+  assert.ok(lines.some((line) => line.startsWith("passed quit mygo ")), lines.join("\n"));
 });
 
-test("a run whose activation is refused or whose window stays covered fails and measures nothing", { timeout: 30000 }, async (t) => {
-  for (const [variable, expected] of [["B3_FIXTURE_ACTIVATION_FAILS", /the window is not active/], ["B3_FIXTURE_COVERED", /window main reports occluded true after its activation/]]) {
-    process.env[variable] = "1";
-    try {
-      const { context, application, targets } = fixtureContext(t);
-      const [record] = await runUnit({ scenarios: ["S0"], run: 1, application }, context);
-      assert.equal(record.failures.length, 1, JSON.stringify(record.failures));
-      assert.match(record.failures[0], expected);
-      assert.deepEqual(targets, []);
-    } finally {
-      delete process.env[variable];
-    }
-  }
+test("a run whose activation is refused fails and measures nothing", { timeout: 30000 }, async (t) => {
+  const { context, application, targets, lines } = fixtureContext(t, { kase: "b3-run-activation-refused" });
+  const [record] = await runUnit({ scenarios: ["S0"], run: 1, application }, context);
+  assert.equal(record.failures.length, 1, JSON.stringify(record.failures));
+  assert.match(record.failures[0], /the window is not active/);
+  assert.deepEqual(targets, []);
+  assert.ok(lines.some((line) => line.startsWith("passed quit mygo ")), lines.join("\n"));
+});
+
+test("a run whose window stays covered after its activation waits on its watch until the interrupt and measures nothing", { timeout: 30000 }, async (t) => {
+  const { context, application, targets, lines } = fixtureContext(t, { kase: "b3-run-covered" });
+  const interrupt = new AbortController();
+  const write = context.write;
+  context.interrupted = interrupt.signal;
+  context.write = (line) => {
+    write(line);
+    if (line.startsWith("waiting window main reports occluded true after its activation")) interrupt.abort("SIGINT");
+  };
+  const [record] = await runUnit({ scenarios: ["S0"], run: 1, application }, context);
+  assert.deepEqual(record.failures, ["interrupted by SIGINT while window main reports occluded true after its activation"]);
+  assert.deepEqual(targets, []);
+  assert.ok(lines.some((line) => line.startsWith("passed quit mygo ")), lines.join("\n"));
 });
 
 test("a run that starts outside the run conditions starts no application", { timeout: 10000 }, async (t) => {

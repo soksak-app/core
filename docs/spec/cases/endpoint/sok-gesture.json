@@ -1,0 +1,17 @@
+{
+  "name": "sok-gesture",
+  "description": "An input gesture sends its steps on one connection: down at the first point with the clicks, a drag to each later point, and up at the last point with the clicks. Each step gets a null reply.",
+  "replay": false,
+  "reason": "The frames press and move the pointer in the window of the application.",
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "input.pointer", "params": { "clicks": 2, "phase": "down", "pointer": "second", "window": "main", "x": 10, "y": 20 } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "input.pointer", "params": { "phase": "drag", "pointer": "second", "window": "main", "x": 30, "y": 40 } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 3, "method": "input.pointer", "params": { "phase": "drag", "pointer": "second", "window": "main", "x": 50, "y": 60 } } },
+    { "reply": { "jsonrpc": "2.0", "id": 3, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 4, "method": "input.pointer", "params": { "clicks": 2, "phase": "up", "pointer": "second", "window": "main", "x": 50, "y": 60 } } },
+    { "reply": { "jsonrpc": "2.0", "id": 4, "result": null } },
+    { "close": "client" }
+  ]
+}

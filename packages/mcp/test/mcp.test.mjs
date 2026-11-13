@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
-// The fake endpoint is imported by a relative path so that the test runs before pnpm install.
-import { sampleHandlers, startFakeEndpoint } from "@soksak/client/testing";
+// The case player replays the endpoint contract cases of docs/spec/cases/endpoint, which the host answers.
+import { startCasePlayer } from "@soksak/client/testing";
 
 const server = fileURLToPath(new URL("../mcp.js", import.meta.url));
 const modernMeta = {
@@ -69,12 +69,27 @@ function startMcp(t, args) {
   };
 }
 
-async function fixture(t, args = []) {
-  const sample = sampleHandlers();
-  const endpoint = await startFakeEndpoint(sample.handlers);
+// Starts the player of a case and closes it after the test. Closing throws when the case was not played to its end.
+async function play(t, name) {
+  const endpoint = await startCasePlayer(name);
   t.after(() => endpoint.close());
+  return endpoint;
+}
+
+/** Resolves when the player receives a request that satisfies the predicate. Call it before the request is sent. */
+const requested = (endpoint, predicate) => new Promise((resolve) => {
+  const listener = (message) => {
+    if (!predicate(message)) return;
+    endpoint.events.off("request", listener);
+    resolve(message);
+  };
+  endpoint.events.on("request", listener);
+});
+
+async function fixture(t, name, args = []) {
+  const endpoint = await play(t, name);
   const mcp = startMcp(t, ["--config-dir", endpoint.configDir, ...args]);
-  return { sample, endpoint, mcp };
+  return { endpoint, mcp };
 }
 
 function parseText(result) {
@@ -83,7 +98,7 @@ function parseText(result) {
 }
 
 test("legacy initialize handshake then tools/list", async (t) => {
-  const { mcp } = await fixture(t);
+  const { mcp } = await fixture(t, "mcp-tools-list");
   const init = await mcp.request("initialize", {
     protocolVersion: "2025-11-25",
     capabilities: {},
@@ -114,7 +129,7 @@ test("legacy initialize handshake then tools/list", async (t) => {
 });
 
 test("server/discover lists the supported versions", async (t) => {
-  const { mcp } = await fixture(t);
+  const { mcp } = await fixture(t, "no-request");
   const reply = await mcp.modern("server/discover");
   assert.equal(reply.result.resultType, "complete");
   assert.deepEqual(reply.result.supportedVersions, ["2026-07-28", "2025-11-25"]);
@@ -123,7 +138,7 @@ test("server/discover lists the supported versions", async (t) => {
 });
 
 test("modern tools/list generates schemas from exposure.list of the key window", async (t) => {
-  const { endpoint, mcp } = await fixture(t);
+  const { endpoint, mcp } = await fixture(t, "mcp-tools-list");
   const reply = await mcp.modern("tools/list");
   assert.equal(reply.result.resultType, "complete");
   const tools = Object.fromEntries(reply.result.tools.map((tool) => [tool.name, tool]));
@@ -143,13 +158,13 @@ test("modern tools/list generates schemas from exposure.list of the key window",
 });
 
 test("--window selects the window without windows.list", async (t) => {
-  const { endpoint, mcp } = await fixture(t, ["--window", "main"]);
+  const { endpoint, mcp } = await fixture(t, "exposure-list", ["--window", "main"]);
   await mcp.modern("tools/list");
   assert.deepEqual(endpoint.requests.map((m) => m.method), ["exposure.list"]);
 });
 
 test("tools/call maps tools to endpoint methods", async (t) => {
-  const { endpoint, mcp } = await fixture(t, ["--window", "main"]);
+  const { endpoint, mcp } = await fixture(t, "mcp-tools-call", ["--window", "main"]);
   const call = async (name, args) => {
     const reply = await mcp.modern("tools/call", { name, arguments: args });
     assert.equal(reply.result.resultType, "complete");
@@ -188,25 +203,25 @@ test("tools/call maps tools to endpoint methods", async (t) => {
 });
 
 test("status_watch_once with equals returns the current value", async (t) => {
-  const { mcp } = await fixture(t);
+  const { endpoint, mcp } = await fixture(t, "mcp-watch-current-value");
+  const unwatched = requested(endpoint, (m) => m.method === "status.unwatch");
   const reply = await mcp.modern("tools/call", { name: "status_watch_once", arguments: { name: "core.screen", equals: "home" } });
+  await unwatched;
   assert.equal(parseText(reply.result), "home");
 });
 
 test("status_watch_once without equals returns the next change", async (t) => {
-  const { sample, endpoint, mcp } = await fixture(t, ["--window", "main"]);
-  const got = endpoint.nextRequest("status.get");
-  const waiting = mcp.modern("tools/call", { name: "status_watch_once", arguments: { name: "core.screen" } });
-  await got;
-  sample.set("core.screen", "project");
-  const reply = await waiting;
+  const { endpoint, mcp } = await fixture(t, "mcp-watch-next-change", ["--window", "main"]);
+  const unwatched = requested(endpoint, (m) => m.method === "status.unwatch");
+  const reply = await mcp.modern("tools/call", { name: "status_watch_once", arguments: { name: "core.screen" } });
+  await unwatched;
   assert.equal(parseText(reply.result), "project");
 });
 
 // The wait of status_watch_once has no time limit, as the watch of the client (status.watch in docs/spec/exposure.md): the value
 // or the end of the connection ends it.
 test("status_watch_once declares no timeout", async (t) => {
-  const { mcp } = await fixture(t);
+  const { mcp } = await fixture(t, "mcp-tools-list");
   const reply = await mcp.modern("tools/list");
   const tool = reply.result.tools.find((entry) => entry.name === "status_watch_once");
   assert.equal(Object.hasOwn(tool.inputSchema.properties, "timeout"), false, "the input schema declares timeout");
@@ -214,7 +229,7 @@ test("status_watch_once declares no timeout", async (t) => {
 });
 
 test("status_watch_once refuses a timeout argument and watches nothing", async (t) => {
-  const { endpoint, mcp } = await fixture(t, ["--window", "main"]);
+  const { endpoint, mcp } = await fixture(t, "no-request", ["--window", "main"]);
   const reply = await mcp.modern("tools/call", { name: "status_watch_once", arguments: { name: "core.screen", equals: "home", timeout: 50 } });
   assert.equal(reply.error?.code, -32602, `a timeout argument was accepted: ${JSON.stringify(reply)}`);
   assert.match(reply.error.message, /\btimeout\b/);
@@ -222,42 +237,42 @@ test("status_watch_once refuses a timeout argument and watches nothing", async (
 });
 
 test("status_watch_once waits until the end of the connection and reports it as a tool error", async (t) => {
-  const { endpoint, mcp } = await fixture(t, ["--window", "main"]);
+  const { endpoint, mcp } = await fixture(t, "mcp-watch-connection-closed", ["--window", "main"]);
   const got = endpoint.nextRequest("status.get");
   let settled = false;
   const waiting = mcp.modern("tools/call", { name: "status_watch_once", arguments: { name: "core.screen", equals: "never" } })
     .finally(() => { settled = true; });
   await got;
   assert.equal(settled, false, "the wait ended before an event that decides it");
-  for (const connection of endpoint.connections) connection.socket.destroy();
+  // The case closes the connection from the host after the status.get reply, so the wait ends by the close.
   const reply = await waiting;
   assert.equal(reply.result.isError, true);
   assert.match(reply.result.content[0].text, /connection closed/);
 });
 
 test("endpoint errors become tool errors with the code", async (t) => {
-  const { mcp } = await fixture(t);
+  const { mcp } = await fixture(t, "error-window-missing");
   const reply = await mcp.modern("tools/call", { name: "status_get", arguments: { window: "gone", name: "core.screen" } });
   assert.equal(reply.result.isError, true);
   assert.match(reply.result.content[0].text, /\(1003\)$/);
 });
 
 test("an inactive window error is returned with its message as-is", async (t) => {
-  const { sample, mcp } = await fixture(t, ["--window", "main"]);
-  sample.state.key = false;
+  const { mcp } = await fixture(t, "mcp-input-pointer-inactive", ["--window", "main"]);
   const reply = await mcp.modern("tools/call", { name: "input_pointer", arguments: { x: 1, y: 1, phase: "move" } });
   assert.equal(reply.result.isError, true);
-  assert.equal(reply.result.content[0].text, "window main is not the key window; pass activate to make it key (1006)");
+  // Both hosts answer a move to a window that is not the key window with this text (errInactive in packages/host/go/src/exposure.go).
+  assert.equal(reply.result.content[0].text, "the window is not active (1006)");
 });
 
 test("an unknown tool is an invalid params error", async (t) => {
-  const { mcp } = await fixture(t);
+  const { mcp } = await fixture(t, "no-request");
   const reply = await mcp.modern("tools/call", { name: "eval", arguments: {} });
   assert.equal(reply.error.code, -32602);
 });
 
 test("protocol version checks", async (t) => {
-  const { mcp } = await fixture(t);
+  const { mcp } = await fixture(t, "no-request");
   const missing = await mcp.request("tools/list", {});
   assert.equal(missing.error.code, -32602);
   const unsupported = await mcp.request("tools/list", { _meta: { ...modernMeta, "io.modelcontextprotocol/protocolVersion": "1900-01-01" } });
@@ -269,7 +284,7 @@ test("protocol version checks", async (t) => {
 });
 
 test("malformed input returns JSON-RPC errors and the server keeps running", async (t) => {
-  const { mcp } = await fixture(t);
+  const { mcp } = await fixture(t, "no-request");
   mcp.send("{not json");
   mcp.send("[1]");
   const reply = await mcp.modern("server/discover");
@@ -278,15 +293,11 @@ test("malformed input returns JSON-RPC errors and the server keeps running", asy
 });
 
 test("a stopped application is reported and the next call reconnects", async (t) => {
-  const { endpoint, mcp } = await fixture(t);
+  const { mcp } = await fixture(t, "mcp-reconnect");
   assert.equal(parseText((await mcp.modern("tools/call", { name: "windows_list", arguments: {} })).result)[0].window, "main");
-  const logged = mcp.stderrLine(/connection closed/);
-  for (const connection of endpoint.connections) connection.socket.destroy();
-  // Sends the next request after the MCP server received the connection end.
-  await logged;
-  const reconnected = endpoint.nextConnection();
+  // The case closes the connection from the host after the first reply, so the server logs the end before the next request.
+  await mcp.stderrLine(/connection closed/);
   const again = await mcp.modern("tools/call", { name: "windows_list", arguments: {} });
-  await reconnected;
   assert.equal(parseText(again.result)[0].window, "main");
 });
 
@@ -298,26 +309,18 @@ test("a missing endpoint.json is reported as a tools/list error", async (t) => {
 });
 
 test("the server exits when stdin closes", async (t) => {
-  const { mcp } = await fixture(t);
+  const { mcp } = await fixture(t, "no-request");
   await mcp.modern("server/discover");
   mcp.child.stdin.end();
   assert.equal(await mcp.exited, 0);
 });
 
 test("tools/list reports an exposure.list without a list or a command params schema instead of filling them in", async (t) => {
-  for (const [label, change, message] of [
-    ["no element list", (entries) => { delete entries.element; }, /exposure.list has no element list/],
-    ["no params schema", (entries) => { delete entries.commands[0].params; }, /declares no params schema/],
+  for (const [label, name, message] of [
+    ["no element list", "mcp-exposure-without-element", /exposure.list has no element list/],
+    ["no params schema", "mcp-exposure-without-params", /declares no params schema/],
   ]) {
-    const sample = sampleHandlers();
-    const list = sample.handlers["exposure.list"];
-    sample.handlers["exposure.list"] = (params) => {
-      const entries = structuredClone(list(params));
-      change(entries);
-      return entries;
-    };
-    const endpoint = await startFakeEndpoint(sample.handlers);
-    t.after(() => endpoint.close());
+    const endpoint = await play(t, name);
     const mcp = startMcp(t, ["--config-dir", endpoint.configDir, "--window", "main"]);
     const reply = await mcp.modern("tools/list");
     assert.match(JSON.stringify(reply), message, `${label}: ${JSON.stringify(reply)}`);

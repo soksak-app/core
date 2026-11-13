@@ -1,0 +1,20 @@
+{
+  "name": "watch-from-status-changed",
+  "description": "A watch resolves from a status.changed notification that satisfies its predicate, and a value that does not satisfy it keeps the watch open. The status.get reply that arrives after the value is ignored.",
+  "replay": false,
+  "reason": "The notification follows a change of the status value, and the replay cannot change the status of the application on demand.",
+  "variables": {
+    "screen": { "type": "object", "keys": ["screen", "modal"], "example": { "screen": "workspace", "modal": null } },
+    "screen-library": { "type": "object", "keys": ["screen", "modal"], "example": { "screen": "library", "modal": null } }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.watch", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "status.get", "params": { "window": "main", "name": "core.screen" } } },
+    { "notify": { "jsonrpc": "2.0", "method": "status.changed", "params": { "window": "main", "name": "core.screen", "value": "$screen-library" } } },
+    { "notify": { "jsonrpc": "2.0", "method": "status.changed", "params": { "window": "main", "name": "core.screen", "value": "$screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$screen-library" } },
+    { "send": { "jsonrpc": "2.0", "id": 3, "method": "status.unwatch", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 3, "result": null } }
+  ]
+}

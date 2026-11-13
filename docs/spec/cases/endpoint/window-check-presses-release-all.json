@@ -1,0 +1,32 @@
+{
+  "name": "window-check-presses-release-all",
+  "description": "A check session that left two presses open waits through status.watch of host.buttons until it reports mask 0, unwatches, and then sends the release of each press at its position, in the order the presses were sent.",
+  "replay": false,
+  "reason": "The case sends native pointer input, and the replay cannot undo the press or the release that the input delivers.",
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "input.pointer", "params": { "window": "main", "x": 10, "y": 20, "phase": "down" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "input.pointer", "params": { "window": "second", "x": 30, "y": 40, "phase": "down", "button": "right" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 3, "method": "input.pointer", "params": { "window": "main", "x": 5, "y": 6, "phase": "down", "button": "right" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 3, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 4, "method": "input.pointer", "params": { "window": "main", "x": 5, "y": 6, "phase": "up", "button": "right" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 4, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 5, "method": "status.watch", "params": { "window": "main", "name": "host.buttons" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 5, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 6, "method": "status.get", "params": { "window": "main", "name": "host.buttons" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 6, "result": { "mask": 0 } } },
+    { "send": { "jsonrpc": "2.0", "id": 7, "method": "status.unwatch", "params": { "window": "main", "name": "host.buttons" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 7, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 8, "method": "input.pointer", "params": { "window": "main", "x": 10, "y": 20, "phase": "up", "button": "left" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 8, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 9, "method": "status.watch", "params": { "window": "second", "name": "host.buttons" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 9, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 10, "method": "status.get", "params": { "window": "second", "name": "host.buttons" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 10, "result": { "mask": 0 } } },
+    { "send": { "jsonrpc": "2.0", "id": 11, "method": "status.unwatch", "params": { "window": "second", "name": "host.buttons" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 11, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 12, "method": "input.pointer", "params": { "window": "second", "x": 30, "y": 40, "phase": "up", "button": "right" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 12, "result": null } }
+  ]
+}

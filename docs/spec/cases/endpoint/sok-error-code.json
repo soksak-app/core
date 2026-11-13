@@ -1,0 +1,11 @@
+{
+  "name": "sok-error-code",
+  "description": "A status.get that the host cannot send to a page that is not ready is answered with the error 1003 and its message, and sok prints the message with the code.",
+  "replay": false,
+  "reason": "The page of the main window must not be ready for the error to occur, and the window check application has a ready page.",
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.get", "params": { "name": "core.screen", "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "error": { "code": 1003, "message": "send request 1: the main page is not ready" } } },
+    { "close": "client" }
+  ]
+}

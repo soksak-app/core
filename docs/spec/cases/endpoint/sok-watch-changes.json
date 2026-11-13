@@ -1,0 +1,20 @@
+{
+  "name": "sok-watch-changes",
+  "description": "A status watch without a surface prints the value that status.get returns and then each status.changed of its own status; a status.changed of another status is not printed. The host closes the connection after its notifications.",
+  "replay": false,
+  "reason": "The status.changed notifications follow changes that the page makes, and a status of another name changes only when the test changes it.",
+  "variables": {
+    "screen": { "type": "object", "keys": ["screen"], "example": { "screen": "library" } },
+    "changed": { "type": "object", "keys": ["screen"], "example": { "screen": "workspace" } },
+    "other": { "type": "any", "example": 1 }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.watch", "params": { "name": "core.screen", "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "status.get", "params": { "name": "core.screen", "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$screen" } },
+    { "notify": { "jsonrpc": "2.0", "method": "status.changed", "params": { "name": "other", "value": "$other", "window": "main" } } },
+    { "notify": { "jsonrpc": "2.0", "method": "status.changed", "params": { "name": "core.screen", "value": "$changed", "window": "main" } } },
+    { "close": "host" }
+  ]
+}

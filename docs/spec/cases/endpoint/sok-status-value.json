@@ -1,0 +1,12 @@
+{
+  "name": "sok-status-value",
+  "description": "A status command with --window sends status.get without a window lookup, and the value that the host returns is printed as indented JSON in the order of its keys.",
+  "replay": true,
+  "variables": {
+    "value": { "type": "any", "example": { "zeta": 1, "alpha": [], "mid": { "b": true, "a": null }, "list": [1, "x"], "empty": {} } }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.get", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": "$value" } }
+  ]
+}

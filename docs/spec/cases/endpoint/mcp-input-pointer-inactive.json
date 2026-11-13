@@ -1,0 +1,10 @@
+{
+  "name": "mcp-input-pointer-inactive",
+  "description": "input.pointer with a move to a window that is not the key window is answered with the error 1006 and the message of the host, which the server returns as the text of the tool error.",
+  "replay": false,
+  "reason": "The host answers 1006 only while the window is not the key window, and the replay cannot change the key window on demand.",
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "input.pointer", "params": { "window": "main", "x": 1, "y": 1, "phase": "move" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "error": { "code": 1006, "message": "the window is not active" } } }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "name": "notifications-until-unsubscribe",
+  "description": "Each status.changed notification of a watch reaches the listeners of the client. Notifications that arrive after a listener unsubscribes do not reach it.",
+  "replay": false,
+  "reason": "A status.changed notification follows a change of the status value, and the replay cannot change the status of the application on demand.",
+  "variables": {
+    "screen": { "type": "object", "keys": ["screen", "modal"], "example": { "screen": "workspace", "modal": null } },
+    "title": { "type": "string", "example": "soksak" },
+    "project": { "type": ["string", "null"], "example": null },
+    "key": { "type": "boolean", "example": true },
+    "ready": { "type": "boolean", "example": true }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.watch", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": null } },
+    { "notify": { "jsonrpc": "2.0", "method": "status.changed", "params": { "window": "main", "name": "core.screen", "value": "$screen" } } },
+    { "notify": { "jsonrpc": "2.0", "method": "status.changed", "params": { "window": "main", "name": "core.screen", "value": "$screen" } } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } }
+  ]
+}

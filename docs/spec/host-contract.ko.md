@@ -380,6 +380,8 @@ fn invalid_json_closes_connection() {
 | `endpoint.transport.closing-a-disconnected-connection-succeeds` | socket이 이미 끊긴 연결을 닫으면 성공한다. 다른 shutdown 오류는 보고한다. | tauriv2 only: Rust host는 socket을 명시적으로 shutdown하며 끊긴 socket을 보고하고, Go는 shutdown 없이 연결을 닫는다 |
 | `endpoint.transport.non-jsonrpc-object-closes` | JSON-RPC 2.0 요청이 아닌 JSON 프레임은 응답 없이 연결을 닫는다. | all |
 | `endpoint.transport.undeclared-method-closes` | 선언되지 않은 메서드는 응답 없이 연결을 닫고 workbench에 아무것도 전달하지 않는다. | all |
+| `endpoint.transport.length-over-limit-closes` | 길이가 16 MiB 를 넘는 frame 은 응답 없이 연결을 닫는다. | all |
+| `endpoint.cases.replayed-cases-are-covered` | host unit tier 가 replay 하는 `docs/spec/cases/endpoint` 의 각 endpoint case 는 host 시험의 case runner 가 재생하거나 그 이유와 함께 runner 밖으로 나열되고, 나열된 각 case 는 case 파일이 있다. | all |
 | `endpoint.transport.close-reason-is-recorded` | 닫히는 연결은 소켓을 닫기 전에 `info host endpoint: connection closed: <reason>`을 쓴다. reason은 한도를 넘은 frame, JSON-RPC 2.0 요청이 아닌 frame(본문 포함), 선언되지 않은 메서드, peer의 종료다. | all |
 | `endpoint.no-result.is-recorded` | 오류 1005로 끝나는 endpoint 요청은 client가 오류를 받기 전에 `error host endpoint no result: <method>: <message>`를 쓴다. | all |
 | `endpoint.diagnostics.methods-exist-only-in-diagnostic-builds` | 릴리스 빌드에서 diagnostics.transcript는 연결을 닫고 workbench에 닿지 않으며, 진단 빌드에서는 응답된다. | all |

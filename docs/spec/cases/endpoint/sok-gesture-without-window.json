@@ -1,0 +1,33 @@
+{
+  "name": "sok-gesture-without-window",
+  "description": "An input gesture without --window first asks windows.list for the only window and sends its steps on that connection: down at the first point with the button, a drag to each later point, and up at the last point. A gesture with --clicks and no pointer or button sends its down and up with the clicks on a second connection, which also asks windows.list first.",
+  "replay": false,
+  "reason": "The frames press and move the pointer in the window of the application.",
+  "variables": {
+    "title": { "type": "string", "example": "soksak" },
+    "project": { "type": ["string", "null"], "example": null },
+    "key": { "type": "boolean", "example": false },
+    "ready": { "type": "boolean", "example": true }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "input.pointer", "params": { "button": "right", "phase": "down", "pointer": "second", "window": "main", "x": 1, "y": 2 } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 3, "method": "input.pointer", "params": { "button": "right", "phase": "drag", "pointer": "second", "window": "main", "x": 3.5, "y": 4 } } },
+    { "reply": { "jsonrpc": "2.0", "id": 3, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 4, "method": "input.pointer", "params": { "button": "right", "phase": "drag", "pointer": "second", "window": "main", "x": 5, "y": 6 } } },
+    { "reply": { "jsonrpc": "2.0", "id": 4, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 5, "method": "input.pointer", "params": { "button": "right", "phase": "up", "pointer": "second", "window": "main", "x": 5, "y": 6 } } },
+    { "reply": { "jsonrpc": "2.0", "id": 5, "result": null } },
+    { "close": "client" },
+
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "input.pointer", "params": { "clicks": 2, "phase": "down", "window": "main", "x": 7, "y": 8 } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 3, "method": "input.pointer", "params": { "clicks": 2, "phase": "up", "window": "main", "x": 7, "y": 8 } } },
+    { "reply": { "jsonrpc": "2.0", "id": 3, "result": null } },
+    { "close": "client" }
+  ]
+}

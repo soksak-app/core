@@ -1,0 +1,12 @@
+{
+  "name": "window-check-presses-late-document",
+  "description": "A press and its release that the document received late are answered with 1005 and the text that the document did not receive the input. The press state of the window changes as delivered, so the press is open after the down and ended after the up.",
+  "replay": false,
+  "reason": "The case sends native pointer input, and the replay cannot undo the press that the input delivers.",
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "input.pointer", "params": { "window": "main", "x": 10, "y": 20, "phase": "down" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "error": { "code": 1005, "message": "the document did not receive the input" } } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "input.pointer", "params": { "window": "main", "x": 10, "y": 20, "phase": "up" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "error": { "code": 1005, "message": "the document did not receive the input" } } }
+  ]
+}

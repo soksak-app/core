@@ -1,0 +1,12 @@
+{
+  "name": "scripts-quit-menu-no-key",
+  "description": "status.get of host.menu answers a menu without an item whose key equivalent is cmd+q, so the menu quit of the end-to-end run has no item to select and reads no further request.",
+  "replay": false,
+  "reason": "The application menu of every host has the Quit item with the key equivalent cmd+q, so the replay cannot answer a menu without it.",
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.get", "params": { "window": "main", "name": "host.menu" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": { "language": "en", "menus": [
+      { "title": "File", "items": [{ "title": "Close Window", "key": "cmd+w" }] }
+    ] } } }
+  ]
+}

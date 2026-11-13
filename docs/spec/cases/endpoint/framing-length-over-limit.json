@@ -1,0 +1,9 @@
+{
+  "name": "framing-length-over-limit",
+  "description": "A length prefix above the 16 MiB maximum closes the connection.",
+  "replay": true,
+  "steps": [
+    { "send": { "raw_hex": "ffffffff" } },
+    { "close": "host" }
+  ]
+}

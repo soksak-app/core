@@ -1,0 +1,9 @@
+{
+  "name": "error-invalid-params",
+  "description": "A name that does not have the form <owner>.<name> is answered with the invalid-params error -32602, before the window is looked up.",
+  "replay": true,
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.get", "params": { "window": "main", "name": "core" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "error": { "code": -32602, "message": "name is required and must have the form <owner>.<name>" } } }
+  ]
+}

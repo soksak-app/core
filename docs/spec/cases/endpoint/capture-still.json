@@ -1,0 +1,12 @@
+{
+  "name": "capture-still",
+  "description": "diagnostics.capture.still writes a still image of the window without activating it and answers the path of the image.",
+  "replay": true,
+  "variables": {
+    "path": { "type": "string", "example": "/config/captures/still-main-1.png" }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "diagnostics.capture.still", "params": { "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": { "path": "$path" } } }
+  ]
+}

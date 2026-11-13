@@ -1,0 +1,17 @@
+{
+  "name": "watch-surface-changes",
+  "description": "A watch with a surface receives the status.changed notifications of that surface only. Notifications without a surface and of another surface do not reach it.",
+  "replay": false,
+  "reason": "The notifications follow changes of the surface status, and the replay cannot change the status of a surface on demand.",
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.watch", "params": { "window": "main", "name": "probe.lines", "surface": "tab-a" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "status.get", "params": { "window": "main", "name": "probe.lines", "surface": "tab-a" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": [] } },
+    { "notify": { "jsonrpc": "2.0", "method": "status.changed", "params": { "window": "main", "name": "probe.lines", "value": ["x"] } } },
+    { "notify": { "jsonrpc": "2.0", "method": "status.changed", "params": { "window": "main", "name": "probe.lines", "surface": "tab-b", "value": ["x"] } } },
+    { "notify": { "jsonrpc": "2.0", "method": "status.changed", "params": { "window": "main", "name": "probe.lines", "surface": "tab-a", "value": ["x", "y"] } } },
+    { "send": { "jsonrpc": "2.0", "id": 3, "method": "status.unwatch", "params": { "window": "main", "name": "probe.lines", "surface": "tab-a" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 3, "result": null } }
+  ]
+}

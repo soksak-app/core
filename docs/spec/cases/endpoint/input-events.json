@@ -1,0 +1,14 @@
+{
+  "name": "input-events",
+  "description": "input.pointer, input.key and input.text deliver native input to the window and answer null when the input is delivered.",
+  "replay": false,
+  "reason": "The input changes the state of the page, and the replay cannot undo that change on demand.",
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "input.pointer", "params": { "window": "main", "x": 1, "y": 2, "phase": "move" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "input.key", "params": { "window": "main", "key": "a", "phase": "down" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 3, "method": "input.text", "params": { "window": "main", "text": "a" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 3, "result": null } }
+  ]
+}

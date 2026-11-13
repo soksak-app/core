@@ -1,0 +1,6 @@
+{
+  "name": "no-request",
+  "description": "A client that sends no request. Its tests check the reading of endpoint.json and the refusal of a watch before any request is sent.",
+  "replay": true,
+  "steps": []
+}

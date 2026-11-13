@@ -1,0 +1,19 @@
+{
+  "name": "sok-capture-still",
+  "description": "The capture command lists the windows, then sends diagnostics.capture.still for the only window and prints the path that the host answers.",
+  "replay": true,
+  "variables": {
+    "title": { "type": "string", "example": "soksak" },
+    "project": { "type": ["string", "null"], "example": null },
+    "key": { "type": "boolean", "example": false },
+    "ready": { "type": "boolean", "example": true },
+    "path": { "type": "string", "example": "/config/captures/still-main-1.png" }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "diagnostics.capture.still", "params": { "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": { "path": "$path" } } },
+    { "close": "client" }
+  ]
+}

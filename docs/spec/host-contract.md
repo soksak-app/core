@@ -378,6 +378,8 @@ Items:
 | `endpoint.transport.closing-a-disconnected-connection-succeeds` | Closing a connection whose socket is already disconnected succeeds; other shutdown errors are reported. | tauriv2 only: the Rust host shuts the socket down explicitly, which reports a disconnected socket, while Go closes the connection without a shutdown |
 | `endpoint.transport.non-jsonrpc-object-closes` | A JSON frame that is not a JSON-RPC 2.0 request closes the connection without a reply. | all |
 | `endpoint.transport.undeclared-method-closes` | An undeclared method closes the connection without a reply, and nothing reaches the workbench. | all |
+| `endpoint.transport.length-over-limit-closes` | A frame whose length is over 16 MiB closes the connection without a reply. | all |
+| `endpoint.cases.replayed-cases-are-covered` | Each endpoint case of `docs/spec/cases/endpoint` that the host unit tier replays is played by the case runner of the host tests or listed outside it with its reason, and each listed case has a case file. | all |
 | `endpoint.transport.close-reason-is-recorded` | A connection that closes writes `info host endpoint: connection closed: <reason>` before the socket closes, with the reason of an oversized frame, a frame that is not a JSON-RPC 2.0 request (with its body), an undeclared method, or the peer. | all |
 | `endpoint.no-result.is-recorded` | A request of the endpoint that ends with the error 1005 writes `error host endpoint no result: <method>: <message>` before the client receives the error. | all |
 | `endpoint.diagnostics.methods-exist-only-in-diagnostic-builds` | In a release build diagnostics.transcript closes the connection and reaches no workbench; in a diagnostic build it is answered. | all |

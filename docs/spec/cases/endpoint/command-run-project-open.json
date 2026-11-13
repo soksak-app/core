@@ -1,0 +1,13 @@
+{
+  "name": "command-run-project-open",
+  "description": "command.run of a core command runs it in the window and answers its result.",
+  "replay": false,
+  "reason": "core.project.open changes the project of the window, which the replay does not change on demand.",
+  "variables": {
+    "result": { "type": "any", "example": null }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "command.run", "params": { "window": "main", "name": "core.project.open", "params": { "root": "/config/projects/case" } } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": "$result" } }
+  ]
+}

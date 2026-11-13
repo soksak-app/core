@@ -4,6 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
+import { connect } from "@soksak/client";
+import { startCasePlayer } from "@soksak/client/testing";
+
 import { Session } from "../app.mjs";
 
 /**
@@ -61,8 +64,21 @@ const app = { name: "fixture", configDir: mkdtempSync(join(tmpdir(), "soksak-poi
 process.once("exit", () => rmSync(app.configDir, { recursive: true, force: true }));
 const open = (s) => [...(s.presses?.values() ?? [])];
 
-test("a check session releases every press it left open", async () => {
-  const client = fakeClient();
+// Starts the case player of the case and connects the client of the package to it. Closing the player throws when the case was not
+// played to its end.
+async function play(t, name) {
+  const server = await startCasePlayer(name);
+  t.after(() => server.close());
+  const client = await connect({ configDir: server.configDir });
+  t.after(() => client.close());
+  return { server, client };
+}
+
+// The requests that the client sent to the player, each as the object of its method and params.
+const sent = (server) => server.requests.map(({ method, params }) => ({ method, ...params }));
+
+test("a check session releases every press it left open", async (t) => {
+  const { server, client } = await play(t, "window-check-presses-release-all");
   const s = new Session(app, client);
   await s.pointer(10, 20, "down");
   await s.on("second").pointer(30, 40, "down", { button: "right" });
@@ -74,14 +90,14 @@ test("a check session releases every press it left open", async () => {
   ]);
   await s.releasePresses();
   assert.deepEqual(open(s), []);
-  assert.deepEqual(client.requests.filter((request) => request.method === "input.pointer").slice(-2), [
+  assert.deepEqual(sent(server).filter((request) => request.method === "input.pointer").slice(-2), [
     { method: "input.pointer", window: "main", x: 10, y: 20, phase: "up", button: "left" },
     { method: "input.pointer", window: "second", x: 30, y: 40, phase: "up", button: "right" },
   ]);
 });
 
-test("a check session releases the press of each named pointer", async () => {
-  const client = fakeClient();
+test("a check session releases the press of each named pointer", async (t) => {
+  const { server, client } = await play(t, "window-check-presses-named-pointers");
   const s = new Session(app, client);
   await s.pointer(10, 20, "down", { pointer: "first" });
   await s.pointer(30, 40, "down", { pointer: "second" });
@@ -91,7 +107,7 @@ test("a check session releases the press of each named pointer", async () => {
   ]);
   await s.releasePresses();
   assert.deepEqual(open(s), []);
-  assert.deepEqual(client.requests.filter((request) => request.method === "input.pointer").slice(-2), [
+  assert.deepEqual(sent(server).filter((request) => request.method === "input.pointer").slice(-2), [
     { method: "input.pointer", window: "main", x: 10, y: 20, phase: "up", button: "left", pointer: "first" },
     { method: "input.pointer", window: "main", x: 30, y: 40, phase: "up", button: "left", pointer: "second" },
   ]);
@@ -175,8 +191,8 @@ test("a release that is refused after the buttons are released reports the press
   await assert.rejects(s.releasePresses(), /the synthetic left press at 10,20 in main stayed open: .*pressedMouseButtons/);
 });
 
-test("a press or release that the document received late still changes the open presses", async () => {
-  const client = fakeClient(() => 1005);
+test("a press or release that the document received late still changes the open presses", async (t) => {
+  const { client } = await play(t, "window-check-presses-late-document");
   const s = new Session(app, client);
   await assert.rejects(s.pointer(10, 20, "down"), /did not receive/);
   assert.deepEqual(open(s), [{ window: "main", x: 10, y: 20, button: "left" }]);

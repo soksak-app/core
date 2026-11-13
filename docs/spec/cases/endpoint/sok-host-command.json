@@ -1,0 +1,15 @@
+{
+  "name": "sok-host-command",
+  "description": "A command of the host (host.*) is checked against the host entries of exposure.list with owner host, and then runs with the window of the only window and empty parameters.",
+  "replay": false,
+  "reason": "command.run of host.quit ends the application, so the window check does not send it.",
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "main", "title": "t", "project": null, "key": false, "ready": true }] } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "exposure.list", "params": { "owner": "host", "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": { "status": [], "commands": [{ "name": "host.quit", "description": "q", "params": { "type": "object", "properties": {} }, "registered": true }], "element": [] } } },
+    { "send": { "jsonrpc": "2.0", "id": 3, "method": "command.run", "params": { "name": "host.quit", "params": {}, "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 3, "result": null } },
+    { "close": "client" }
+  ]
+}

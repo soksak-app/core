@@ -1,0 +1,21 @@
+{
+  "name": "sok-gesture-failure-without-window",
+  "description": "A gesture without --window asks windows.list first. A gesture step that the host refuses with the error 1007 ends the command at that step; sok prints the step number, the message and the code, and sends no later step. The message is the one that the host builds for a press that the mask of the pressed buttons rejects.",
+  "replay": false,
+  "reason": "The refusal 1007 needs a press that another pointer holds, which the window check does not make on demand.",
+  "variables": {
+    "title": { "type": "string", "example": "soksak" },
+    "project": { "type": ["string", "null"], "example": null },
+    "key": { "type": "boolean", "example": false },
+    "ready": { "type": "boolean", "example": true }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "input.pointer", "params": { "phase": "down", "window": "main", "x": 1, "y": 2 } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 3, "method": "input.pointer", "params": { "phase": "drag", "window": "main", "x": 3, "y": 4 } } },
+    { "reply": { "jsonrpc": "2.0", "id": 3, "error": { "code": 1007, "message": "AppKit reports NSEvent.pressedMouseButtons mask 0x1 while no application is frontmost; the synthetic press or release was not delivered" } } },
+    { "close": "client" }
+  ]
+}

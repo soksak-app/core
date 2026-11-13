@@ -1,0 +1,19 @@
+{
+  "name": "unwatch-refused-not-ready",
+  "description": "A status.unwatch that the host refuses with 1003 ends the watch on the host. The client keeps the value of the watch and the connection.",
+  "replay": false,
+  "reason": "The host refuses status.unwatch only while the main page is not ready, which the replay cannot produce on demand.",
+  "variables": {
+    "screen": { "type": "object", "keys": ["screen", "modal"], "example": { "screen": "workspace", "modal": null } }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.watch", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "status.get", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$screen" } },
+    { "send": { "jsonrpc": "2.0", "id": 3, "method": "status.unwatch", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 3, "error": { "code": 1003, "message": "the main page is not ready" } } },
+    { "send": { "jsonrpc": "2.0", "id": 4, "method": "status.get", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 4, "result": "$screen" } }
+  ]
+}

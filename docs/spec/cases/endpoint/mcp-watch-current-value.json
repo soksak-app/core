@@ -1,0 +1,23 @@
+{
+  "name": "mcp-watch-current-value",
+  "description": "status_watch_once with equals, without a window option: the server reads windows.list, then watches the status, reads its current value and ends the watch with status.unwatch.",
+  "replay": false,
+  "reason": "The MCP test checks that the server returns the value unchanged. Its value is a string, while the core.screen status of the workbench is an object (packages/workbench/core-exposure.js:334), so the replay cannot give the value that the test checks.",
+  "variables": {
+    "title": { "type": "string", "example": "soksak" },
+    "project": { "type": ["string", "null"], "example": null },
+    "key": { "type": "boolean", "example": true },
+    "ready": { "type": "boolean", "example": true },
+    "screen": { "type": "any", "example": "home" }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "status.watch", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 3, "method": "status.get", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 3, "result": "$screen" } },
+    { "send": { "jsonrpc": "2.0", "id": 4, "method": "status.unwatch", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 4, "result": null } }
+  ]
+}

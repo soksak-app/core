@@ -1,0 +1,9 @@
+{
+  "name": "error-window-missing",
+  "description": "A request that names a window which does not exist is answered with the error 1003 and the window name in its text.",
+  "replay": true,
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.get", "params": { "window": "gone", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "error": { "code": 1003, "message": "window \"gone\" does not exist" } } }
+  ]
+}

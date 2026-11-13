@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- client, mcp, window-check, test-app, B3 run 과 `sok` 시험이 사례의 frame 에만 답하고 각 차이를 보고하는 case player 로 `docs/spec/cases/endpoint` 의 endpoint 계약 사례를 재생하고, Go 와 Rust host 시험이 unit tier 의 사례를 재생하며, `@soksak/client/testing` 의 fake endpoint 는 제거되었다 (F795-8).
+- B3 run 이 활성화한 창을 5 초 동안 100 ms 마다 status 를 읽는 대신 `host.window` 의 `status.watch` 로 기다린다. 가려진 창은 가려짐이 풀리거나 run 이 interrupt 될 때까지 기다림 줄을 쓴다 (F801).
 - Rust `sok` 이 애플리케이션에 창 목록을 묻기 전에 `sok input gesture` 의 점을 검사하므로, Go `sok` 처럼 사용법 오류가 endpoint 연결을 열지 않는다 (F800).
 - Go host 와 Rust host 가 선언하지 않은 host command 이름에 `command <name> is not declared` 로, 선언하지 않은 host status 이름에 `status <name> is not declared` 로 답한다. Go host 는 `unknown command <name>` 으로 답했었다 (F799).
 - `make check-tests` 가 시험과 기록의 module 교체, timer 교체, 전역 method 교체, inline program, PATH 의 도구, 대역 이름을 찾고 종류별 개수를 출력한다 (F795-11).

@@ -1,0 +1,9 @@
+{
+  "name": "framing-invalid-json",
+  "description": "A body that is not valid JSON closes the connection. The frame is a length of 4 and the body {bad.",
+  "replay": true,
+  "steps": [
+    { "send": { "raw_hex": "000000047b626164" } },
+    { "close": "host" }
+  ]
+}

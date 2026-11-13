@@ -1,0 +1,23 @@
+{
+  "name": "b3-run-other-display",
+  "description": "A benchmark run reads the display of the window, which is outside the run conditions, and quits the application without an activation.",
+  "replay": false,
+  "reason": "The frames activate and quit the application that the benchmark run starts.",
+  "variables": {
+    "title": { "type": "string", "example": "fixture" },
+    "scale": { "type": "number", "example": 2 },
+    "refresh-rate": { "type": "number", "example": 120 }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "main", "title": "$title", "project": null, "key": true, "ready": true }] } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "status.get", "params": { "window": "main", "name": "host.window" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": { "scale": "$scale", "refreshRate": "$refresh-rate", "content": { "width": 1200, "height": 760 }, "occluded": true, "active": false } } },
+    { "close": "client" },
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.get", "params": { "window": "main", "name": "host.menu" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": { "language": "en", "menus": [{ "title": "fixture", "items": [{ "title": "Quit fixture", "key": "cmd+q" }] }] } } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "command.run", "params": { "window": "main", "name": "host.menu.select", "params": { "menu": "fixture", "title": "Quit fixture" } } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": null } },
+    { "close": "host" }
+  ]
+}

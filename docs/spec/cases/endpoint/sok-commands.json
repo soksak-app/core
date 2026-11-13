@@ -1,0 +1,35 @@
+{
+  "name": "sok-commands",
+  "description": "The commands command lists the commands of the exposure of the only window, in the order that exposure.list gives them.",
+  "replay": true,
+  "variables": {
+    "title": { "type": "string", "example": "t" },
+    "project": { "type": ["string", "null"], "example": null },
+    "key": { "type": "boolean", "example": false },
+    "ready": { "type": "boolean", "example": true },
+    "exposures": {
+      "type": "object",
+      "keys": ["status", "commands", "element"],
+      "example": {
+        "status": [],
+        "commands": [
+          {
+            "name": "fixture.do",
+            "description": "d",
+            "params": { "type": "object", "properties": { "text": { "type": "string" }, "count": { "type": "number" }, "whole": { "type": "integer" }, "flag": { "type": "boolean" }, "choice": { "enum": ["one", "two"] }, "maybe": { "type": ["string", "null"] }, "object": { "type": "object" }, "list": { "type": "array" } } },
+            "result": { "type": "object" }
+          },
+          { "name": "fixture.none", "description": "n", "params": { "type": "object", "properties": {} } }
+        ],
+        "element": []
+      }
+    }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "exposure.list", "params": { "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$exposures" } },
+    { "close": "client" }
+  ]
+}

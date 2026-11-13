@@ -1,0 +1,9 @@
+{
+  "name": "framing-not-object",
+  "description": "A JSON value that is not a JSON-RPC 2.0 object closes the connection. The frame is a length of 3 and the array [1].",
+  "replay": true,
+  "steps": [
+    { "send": { "raw_hex": "000000035b315d" } },
+    { "close": "host" }
+  ]
+}

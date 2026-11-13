@@ -1,0 +1,12 @@
+{
+  "name": "window-check-test-mark-pass",
+  "description": "A window check marks the end of a test whose body passed with the result pass, and the host answers the position of the record as boot and seq (diagnostics.go:1476-1488).",
+  "replay": true,
+  "variables": {
+    "end-mark": { "type": "object", "keys": ["boot", "seq"], "example": { "boot": "b", "seq": 3 } }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "diagnostics.test.mark", "params": { "window": "main", "kind": "end", "name": "check a", "run": "run-1", "result": "pass" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": "$end-mark" } }
+  ]
+}
