@@ -1457,6 +1457,17 @@ const FEATURE_LINKS = [
     levels: ["native", "unit"],
   },
   {
+    id: "F785",
+    implementation: [
+      { file: "packages/workbench-mygo/go.mod", symbol: "replace github.com/egoist/mygo => github.com/min-0-max/mygo" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/pointer_test.go", id: "TestPointerSequenceReportsAPressAndItsClick" },
+    ],
+    expected: "The press observer of the workbench reads the element tree of the pinned mygo fork outside a frame.",
+    levels: ["unit"],
+  },
+  {
     id: "F784",
     implementation: [
       { file: "packages/host/go/src/platform/darwin/capture.go", symbol: "abi.SURFACE_LAYOUT_COMMIT_INPUT:" },

@@ -24,4 +24,4 @@ require (
 // notification center delegate, draws while a window is occluded, and builds
 // a frame that an open transaction of the application keeps from a drawable
 // to draw it after the commit.
-replace github.com/egoist/mygo => github.com/min-0-max/mygo v0.7.4-244-g4abb83d-soksak.12
+replace github.com/egoist/mygo => github.com/min-0-max/mygo v0.7.4-244-g4abb83d-soksak.13

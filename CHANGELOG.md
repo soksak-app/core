@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F785: the mygo framework `v0.7.4-244-g4abb83d-soksak.13` that core pins applies a pointer event that reaches the window while a frame builds after that frame, so the press observer of the workbench no longer reads the element tree inside a frame; the frame record counts such an input in `Deferred`.
 - F784: the layout trace of both hosts names the commit path `input`, by which a press or a key event ends a held layout transaction, so a drag whose press ended a held layout no longer fails with an unknown commit path.
 - F783: `took` of a native drag of `diagnostics.drag` is the sum over the round trips of the time from the press to the delivery of the last step, as a drag of the page times its legs, so the delivery of a release, in which the pointer does not move, no longer makes a drag of a busy window slow; `deliveries` still states it.
 - F782: a native drag of `diagnostics.drag` answers `deliveries`, the milliseconds of the delivery of each press, step and release, and the failure of a window check drag that is not paced states their totals and longest values, so a slow drag tells the time that the window took to receive its inputs.
